@@ -26,6 +26,7 @@ beforeEach(() => {
   process.env = {
     ...originalEnv,
     PERSONAL_AGENT_DISABLE_DAEMON_EVENTS: '1',
+    PI_SESSION_DIR: createTempDir('pi-session-')
   };
 });
 

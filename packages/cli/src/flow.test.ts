@@ -2,7 +2,7 @@ import { chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from '
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runCli } from './index.js';
 
 const originalEnv = process.env;
@@ -63,6 +63,7 @@ beforeEach(() => {
   process.env = {
     ...originalEnv,
     PERSONAL_AGENT_DISABLE_DAEMON_EVENTS: '1',
+    PI_SESSION_DIR: createTempDir('pi-session-')
   };
 });
 
@@ -86,7 +87,6 @@ describe('CLI command flows', () => {
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
-    process.env.PERSONAL_AGENT_SKIP_EXTENSION_INSTALL = '1';
 
     expect(await runCli(['profile', 'use', 'datadog'])).toBe(0);
 
@@ -109,21 +109,28 @@ describe('CLI command flows', () => {
     expect(loggedArgs).toContain('Say ok');
   });
 
-  it('returns non-zero for invalid profile usage and unknown run profile', async () => {
+  it('defaults to run when invoked with no args and passes unknown args through to pi', async () => {
     const repo = createTestRepo();
     const stateRoot = createTempDir('personal-agent-cli-state-');
-    const fakePiBinDir = createFakePiBinary(join(createTempDir('personal-agent-cli-log-'), 'pi-args.log'));
+    const runLogDir = createTempDir('personal-agent-cli-log-');
+    const argsLogPath = join(runLogDir, 'pi-args.log');
+    const fakePiBinDir = createFakePiBinary(argsLogPath);
 
     process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
-    process.env.PERSONAL_AGENT_SKIP_EXTENSION_INSTALL = '1';
 
-    expect(await runCli(['profile', 'use'])).toBe(1);
-    expect(await runCli(['run', '--profile', 'missing', '--', '-p', 'hello'])).toBe(1);
+    expect(await runCli([])).toBe(0);
+    expect(await runCli(['-p', 'hello from pa'])).toBe(0);
+
+    const loggedArgs = readFileSync(argsLogPath, 'utf-8');
+    expect(loggedArgs).toContain('--model');
+    expect(loggedArgs).toContain('--thinking');
+    expect(loggedArgs).toContain('-p');
+    expect(loggedArgs).toContain('hello from pa');
   });
 
-  it('runs doctor success and failure paths', async () => {
+  it('returns non-zero for invalid profile usage and rejects doctor --profile flag', async () => {
     const repo = createTestRepo();
     const stateRoot = createTempDir('personal-agent-cli-state-');
     const fakePiBinDir = createFakePiBinary(join(createTempDir('personal-agent-cli-log-'), 'pi-args.log'));
@@ -131,9 +138,63 @@ describe('CLI command flows', () => {
     process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
-    process.env.PERSONAL_AGENT_SKIP_EXTENSION_INSTALL = '1';
 
-    expect(await runCli(['doctor', '--profile', 'datadog'])).toBe(0);
-    expect(await runCli(['doctor', '--profile', 'missing'])).toBe(1);
+    expect(await runCli(['profile', 'use'])).toBe(1);
+    expect(await runCli(['doctor', '--profile', 'datadog'])).toBe(1);
+  });
+
+  it('runs doctor success and failure paths based on configured profile', async () => {
+    const repo = createTestRepo();
+    const stateRoot = createTempDir('personal-agent-cli-state-');
+    const configDir = createTempDir('personal-agent-cli-config-');
+    const fakePiBinDir = createFakePiBinary(join(createTempDir('personal-agent-cli-log-'), 'pi-args.log'));
+
+    process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
+    process.env.PERSONAL_AGENT_REPO_ROOT = repo;
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_CONFIG_FILE = join(configDir, 'config.json');
+
+    expect(await runCli(['profile', 'use', 'datadog'])).toBe(0);
+    expect(await runCli(['doctor'])).toBe(0);
+
+    writeFileSync(process.env.PERSONAL_AGENT_CONFIG_FILE, JSON.stringify({ defaultProfile: 'missing' }));
+    expect(await runCli(['doctor'])).toBe(1);
+  });
+
+  it('prints human-friendly daemon status by default', async () => {
+    const stateRoot = createTempDir('personal-agent-cli-state-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
+      logs.push(String(message ?? ''));
+    });
+
+    expect(await runCli(['daemon'])).toBe(0);
+
+    expect(logs.some((line) => line.includes('personal-agentd: stopped'))).toBe(true);
+    expect(logs.some((line) => line.includes('hint: pa daemon start'))).toBe(true);
+
+    logSpy.mockRestore();
+  });
+
+  it('prints daemon status as json when requested', async () => {
+    const stateRoot = createTempDir('personal-agent-cli-state-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
+      logs.push(String(message ?? ''));
+    });
+
+    expect(await runCli(['daemon', '--json'])).toBe(0);
+
+    expect(logs.some((line) => line.includes('"running": false'))).toBe(true);
+
+    logSpy.mockRestore();
+  });
+
+  it('routes gateway commands through the CLI registry', async () => {
+    expect(await runCli(['gateway', 'help'])).toBe(0);
   });
 });
