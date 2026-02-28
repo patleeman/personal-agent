@@ -487,12 +487,66 @@ async function memoryCommand(args: string[]): Promise<number> {
   }
 
   if (subcommand === 'status') {
-    const result = spawnSync('qmd', ['status'], { encoding: 'utf-8' });
-    if (result.error) {
+    // Get qmd status
+    const qmdResult = spawnSync('qmd', ['status'], { encoding: 'utf-8' });
+    if (qmdResult.error) {
       throw new Error('Failed to run qmd. Is it installed?');
     }
-    console.log(result.stdout || result.stderr);
-    return result.status ?? 0;
+
+    // Get daemon memory module status
+    const { getDaemonStatus, loadDaemonConfig } = await import('@personal-agent/daemon');
+    const config = loadDaemonConfig();
+    const daemonStatus = await getDaemonStatus(config);
+    const memoryModule = daemonStatus.modules.find((m) => m.name === 'memory');
+    const detail = memoryModule?.detail as {
+      scannedSessions?: number;
+      summarizedSessions?: number;
+      skippedSessions?: number;
+      failedSessions?: number;
+      needsEmbedding?: boolean;
+      dirty?: boolean;
+      lastScanAt?: string;
+      lastQmdEmbedAt?: string;
+    } | undefined;
+
+    // Count actual session files
+    const sessionDir = config.modules.memory.sessionSource;
+    const sessionFiles = existsSync(sessionDir) 
+      ? spawnSync('find', [sessionDir, '-name', '*.jsonl', '-type', 'f'], { encoding: 'utf-8' }).stdout.split('\n').filter(Boolean)
+      : [];
+
+    // Count summary files  
+    const summaryDir = config.modules.memory.summaryDir;
+    const summaryFiles = existsSync(summaryDir)
+      ? spawnSync('find', [summaryDir, '-name', '*.md', '-type', 'f'], { encoding: 'utf-8' }).stdout.split('\n').filter(Boolean)
+      : [];
+
+    // Calculate unindexed
+    const totalSessions = sessionFiles.length;
+    const summarized = detail?.summarizedSessions ?? summaryFiles.length;
+    const unindexed = Math.max(0, totalSessions - summarized);
+
+    console.log(chalk.bold('Memory Status'));
+    console.log('');
+
+    console.log(chalk.bold('Sessions:'));
+    console.log(`  Total session files: ${totalSessions}`);
+    console.log(`  Summarized: ${summarized}`);
+    console.log(`  Unindexed (not yet summarized): ${unindexed > 0 ? chalk.yellow(unindexed) : chalk.green(unindexed)}`);
+    console.log(`  Failed: ${detail?.failedSessions ?? 0}`);
+    console.log('');
+
+    console.log(chalk.bold('Index Status:'));
+    console.log(`  Needs embedding: ${detail?.needsEmbedding ? chalk.yellow('yes') : chalk.green('no')}`);
+    console.log(`  Dirty (pending update): ${detail?.dirty ? chalk.yellow('yes') : chalk.green('no')}`);
+    console.log(`  Last scan: ${detail?.lastScanAt ? new Date(detail.lastScanAt).toLocaleString() : chalk.dim('never')}`);
+    console.log(`  Last embed: ${detail?.lastQmdEmbedAt ? new Date(detail.lastQmdEmbedAt).toLocaleString() : chalk.dim('never')}`);
+    console.log('');
+
+    console.log(chalk.bold('qmd Status:'));
+    console.log(qmdResult.stdout || qmdResult.stderr);
+
+    return qmdResult.status ?? 0;
   }
 
   throw new Error(`Unknown memory subcommand: ${subcommand}`);
