@@ -335,7 +335,20 @@ async function runCommand(args: string[]): Promise<number> {
 async function profileCommand(args: string[]): Promise<number> {
   const [subcommand, value] = args;
 
-  if (!subcommand || subcommand === 'list') {
+  if (!subcommand) {
+    console.log(`Usage: pa profile [list|show|use]
+
+Manage profile settings
+
+Commands:
+  list           List available profiles
+  show [name]    Show profile details
+  use <name>     Set default profile
+`);
+    return 0;
+  }
+
+  if (subcommand === 'list') {
     printProfileList();
     return 0;
   }
@@ -420,7 +433,22 @@ async function printDaemonStatusHumanReadable(): Promise<void> {
 async function daemonCommand(args: string[]): Promise<number> {
   const [subcommand] = args;
 
-  if (!subcommand || subcommand === 'status' || subcommand === '--json') {
+  if (!subcommand) {
+    console.log(`Usage: pa daemon [status|start|stop|restart|logs]
+
+Manage personal-agent daemon
+
+Commands:
+  status [--json]  Show daemon status (optionally as JSON)
+  start            Start the daemon
+  stop             Stop the daemon
+  restart          Restart the daemon
+  logs             Show log file location
+`);
+    return 0;
+  }
+
+  if (subcommand === 'status' || subcommand === '--json') {
     if (hasOption(args, '--json')) {
       console.log(await daemonStatusJson());
     } else {
@@ -464,7 +492,21 @@ async function daemonCommand(args: string[]): Promise<number> {
 async function memoryCommand(args: string[]): Promise<number> {
   const [subcommand, ...rest] = args;
 
-  if (!subcommand || subcommand === 'list') {
+  if (!subcommand) {
+    console.log(`Usage: pa memory [list|query|search|status]
+
+Query memory (conversation summaries)
+
+Commands:
+  list              List memory collections and files
+  query <text>      Semantic search with query expansion + reranking
+  search <text>     Full-text keyword search (BM25)
+  status            Show comprehensive memory status
+`);
+    return 0;
+  }
+
+  if (subcommand === 'list') {
     const result = spawnSync('qmd', ['ls'], { encoding: 'utf-8' });
     if (result.error) {
       throw new Error('Failed to run qmd. Is it installed?');
