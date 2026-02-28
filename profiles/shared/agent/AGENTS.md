@@ -254,23 +254,74 @@ Simple beats clever every single time.
 
 ---
 
-# Security Guidelines
+# Memory
 
-## Core Principles
+You have access to a memory system containing summaries of past conversations.
+The memory is stored via `qmd` and contains indexed conversation summaries.
 
-1. **Never commit secrets** - Use environment variables
-2. **Validate all user input** - Trust nothing from outside
-3. **Use parameterized queries** - Prevent SQL injection
-4. **Sanitize HTML output** - Prevent XSS
-5. **Require authentication** - Protect all sensitive endpoints
-6. **Rate limit auth endpoints** - Prevent brute force
+## When to Use Memory
 
-## Quick Checks
+- When the user refers to previous work, discussions, or decisions
+- When you need context about past projects or code changes
+- When the user asks "remember when..." or "what did we do about..."
+- When starting work on a project that may have prior context
 
-Before committing security-sensitive code:
-- [ ] No hardcoded API keys, passwords, or tokens
-- [ ] User inputs validated at boundaries
-- [ ] Database queries use parameterized/ORM queries
-- [ ] User-generated HTML is sanitized or escaped
-- [ ] Admin/destructive endpoints require auth
-- [ ] Auth endpoints have rate limiting
+## How to Search Memory
+
+Use the `bash` tool to query memory:
+
+```bash
+# Basic search - returns top 5 results with snippets
+qmd query "your search query here"
+
+# Get more results
+qmd query "your search query" -n 10
+
+# Get full documents instead of snippets
+qmd query "your search query" --full
+
+# Output as markdown for easier reading
+qmd query "your search query" --md
+
+# Filter to conversation collection only
+qmd query "your search query" -c conversations
+```
+
+## Understanding qmd Output
+
+qmd returns results in this format:
+- **docid**: Unique identifier for the conversation
+- **score**: Relevance score (higher is better)
+- **filepath**: Path to the summary file
+- **snippet**: Relevant excerpt from the conversation
+
+Example output:
+```
+docid: abc123, score: 0.92, filepath: /path/to/summary.md
+Context: [lines 15-25]
+---
+Discussed the authentication flow for the API gateway...
+---
+```
+
+## Memory Contents
+
+Memory contains:
+- Summaries of past coding sessions
+- Key decisions and design discussions
+- Project context and requirements
+- Previous solutions to similar problems
+
+Memory does NOT contain:
+- The current session (still in progress)
+- Sessions less than 30 minutes old
+- Raw conversation transcripts (only AI-generated summaries)
+
+## Best Practices
+
+1. **Search before assuming** - If the user refers to something you don't recall, search memory first
+2. **Use specific keywords** - Search for project names, file names, or unique terms
+3. **Iterate on queries** - If first search returns nothing, try different keywords
+4. **Read full summaries** - Use `--full` flag to get complete context when needed
+
+
