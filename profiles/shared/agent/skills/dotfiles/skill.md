@@ -9,7 +9,7 @@ Make changes to the user's dotfiles, then commit and push.
 
 ## Dotfiles Location
 
-The user's dotfiles are located at: `/Users/patrick/dotfiles`
+The user's dotfiles are located at: `/Users/<username>/dotfiles`
 
 ## Workflow
 
@@ -27,7 +27,7 @@ Parse what the user wants to change in their dotfiles. This could be:
 Navigate to the dotfiles directory and make the requested changes:
 
 ```bash
-cd /Users/patrick/dotfiles
+cd /Users/<username>/dotfiles
 ```
 
 Read relevant files, then edit or create as needed.
@@ -36,8 +36,8 @@ Read relevant files, then edit or create as needed.
 
 Review what was changed:
 ```bash
-git -C /Users/patrick/dotfiles status
-git -C /Users/patrick/dotfiles diff
+git -C /Users/<username>/dotfiles status
+git -C /Users/<username>/dotfiles diff
 ```
 
 ### 4. Commit and Push
@@ -45,7 +45,7 @@ git -C /Users/patrick/dotfiles diff
 Stage, commit with a descriptive message, and push:
 
 ```bash
-cd /Users/patrick/dotfiles && git add -A && git commit -m "$(cat <<'EOF'
+cd /Users/<username>/dotfiles && git add -A && git commit -m "$(cat <<'EOF'
 <type>: <description>
 EOF
 )" && git push

@@ -1,7 +1,7 @@
 {
-  "lastChangelogVersion": "0.52.12",
-  "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.3-codex",
-  "defaultThinkingLevel": "xhigh",
+  "lastChangelogVersion": "0.52.9",
+  "defaultProvider": "kimi-coding",
+  "defaultModel": "k2p5",
+  "defaultThinkingLevel": "off",
   "theme": "cobalt2"
 }

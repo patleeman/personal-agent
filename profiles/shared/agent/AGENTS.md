@@ -108,6 +108,17 @@ const validated = schema.parse(input);
 - Fail fast with clear validation errors
 - Trust internal code—don't validate between your own functions
 
+### Documentation
+
+**Documentation rot is real. Only write what won't go stale.**
+
+- **No file trees** - they're outdated the moment you write them
+- **No verbose READMEs** - link to code, don't duplicate it
+- **No architecture diagrams in markdown** - use actual tools or don't bother
+- **Code should be self-documenting** - good names > comments
+- **Comments explain "why", code shows "how"** - if you need to explain what code does, rewrite it
+- **Keep docs near the code** - separate doc files are orphaned doc files
+
 ### Code Quality Basics
 
 Before shipping code:
@@ -263,76 +274,3 @@ Before committing security-sensitive code:
 - [ ] User-generated HTML is sanitized or escaped
 - [ ] Admin/destructive endpoints require auth
 - [ ] Auth endpoints have rate limiting
-
-## Secret Management
-
-```typescript
-// NEVER
-const apiKey = "sk-proj-xxxxx"
-
-// ALWAYS
-const apiKey = process.env.OPENAI_API_KEY
-if (!apiKey) throw new Error('OPENAI_API_KEY not configured')
-```
-
-## Comprehensive Security Audit
-
-For a full security review of your codebase, use the Security Review skill:
-```
-/skill:security-review
-```
-
-This will scan for OWASP Top 10 vulnerabilities, hardcoded secrets, missing authentication, and other security issues. Use this before production deploys or when handling sensitive data.
-
-## If You Find a Security Issue
-
-1. **STOP** - Don't commit the vulnerable code
-2. **Fix CRITICAL issues immediately** - Exposed secrets, SQL injection, missing auth
-3. **Rotate exposed secrets** - Assume they're compromised
-4. **Run `/skill:security-review`** - Check for similar issues elsewhere
-
----
-
-# Testing Guidelines
-
-- Write tests for new functionality.
-- Maintain existing test coverage.
-- Fix broken tests before committing.
-- Aim for 90%+ coverage on new code.
-
-## Skills
-
-The following shared skills are available via `/skill:name`:
-
-| Skill | Command | Purpose |
-|-------|---------|---------|
-| Backfill Tests | `/skill:backfill-tests` | Analyze coverage and backfill missing tests |
-| Checkpoint | `/skill:checkpoint` | Create a checkpoint of current work |
-| Code Review | `/skill:code-review` | Code review checklists and patterns |
-| Code Review Subagent | `/skill:code-review-subagent` | Spawn sub-agent for code review |
-| Color Palette | `/skill:color-palette` | Generate color palettes |
-| Create PRs | `/skill:create-prs` | Create pull requests |
-| Dotfiles | `/skill:dotfiles` | Dotfiles management tasks |
-| Frontend Design | `/skill:frontend-design` | Frontend design guidelines |
-| Learn | `/skill:learn` | Extract reusable patterns from sessions |
-| MCP Builder | `/skill:mcp-builder` | Build MCP servers |
-| React Best Practices | `/skill:react-best-practices` | React-specific guidelines |
-| Security Review | `/skill:security-review` | Security review checklist |
-| Skill Creator | `/skill:skill-creator` | Create new skills |
-| TDD Feature | `/skill:tdd-feature` | Build features with spec-based TDD |
-| TDD | `/skill:tdd` | Enforce test-driven development |
-| Web Design Guidelines | `/skill:web-design-guidelines` | Web design patterns |
-| Wrapup | `/skill:wrapup` | Summarize and wrap up work |
-
-## Project Rules
-
-Project-specific rules can be added in `.pi/AGENTS.md` or `AGENTS.md` in the project directory. These will be concatenated with this global file.
-
-## See Also
-
-- `~/.pi/agent/skills/` - Shared Pi skills
-- Datadog layered override is managed in dotfiles at `datadog/home/.pi/agent/AGENTS.md`
-
-## Editor Compatibility
-
-Primary target is Pi (`~/.pi/agent/AGENTS.md`).

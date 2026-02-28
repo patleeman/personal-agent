@@ -14,22 +14,8 @@ So each extension here uses `index.ts` as the entrypoint.
 extensions/
 ├── package.json
 ├── README.md
-├── todos/
-│   └── index.ts
-├── review/
-│   └── index.ts
-├── plan/
-│   ├── index.ts
-│   ├── README.md
-│   ├── PLAN_EXTENSION.md
-│   └── TESTING_PLAN.md
-├── context-bar-footer/
-│   └── index.ts
-├── web-tools/
-│   └── index.ts
-├── custom-status-bar/
-│   └── index.ts
-└── memory/
+├── context-bar.ts
+└── web-tools/
     └── index.ts
 ```
 

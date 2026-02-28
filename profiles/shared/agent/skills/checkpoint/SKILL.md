@@ -1,19 +1,11 @@
 ---
 name: checkpoint
-description: Quickly commit and push the agent's current work. Stages only files modified by the agent, creates a descriptive commit message, and pushes to current branch.
+description: Commit the agent's current work. Stages only files modified by the agent.
 ---
 
 # Checkpoint
 
-Commit and push the agent's work in progress.
-
-## What This Does
-
-1. Review git status to see modified files
-2. Stage only files the agent modified during this session
-3. Review staged changes
-4. Create a descriptive commit message based on changes
-5. Commit and push to current branch (or set upstream if new branch)
+Create a focused commit for the agent's current work.
 
 ## Workflow
 
@@ -33,7 +25,7 @@ Only stage files the agent modified:
 git add <file1> <file2> <file3>
 ```
 
-**Do NOT use `git add .` or `git add -A`** - only stage specific files you changed.
+**Do NOT use `git add .` or `git add -A`** — only stage specific files you changed.
 
 ### 3. Review Staged Changes
 
@@ -45,59 +37,34 @@ Confirm only intended files are staged.
 
 ### 4. Create Commit Message
 
-Analyze the changes and write a clear, concise commit message:
-
 ```
 <type>: <brief description>
 
 <optional detailed explanation if needed>
 ```
 
-**Types:**
-- `feat:` - New feature
-- `fix:` - Bug fix
-- `refactor:` - Code restructuring
-- `docs:` - Documentation
-- `test:` - Tests
-- `chore:` - Maintenance
+**Types:** `feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`
 
-**Examples:**
-- `feat: add security-review skill for vulnerability scanning`
-- `fix: correct SQL injection in user search endpoint`
-- `refactor: simplify grug.md testing guidelines`
-- `docs: update README with setup instructions`
-
-### 5. Commit & Push
+### 5. Commit
 
 ```bash
-git commit -m "$(cat <<'EOF'
-<commit message here>
-EOF
-)"
-
-git push
+git commit -m "<commit message>"
 ```
 
-If branch has no upstream:
+### 6. Report
+
+Provide the commit SHA to the user:
+
 ```bash
-git push -u origin $(git branch --show-current)
+git rev-parse HEAD
 ```
 
 ## Important Notes
 
-- **Only commit agent's changes** - Don't stage unrelated files
-- **Don't use --no-verify** - Let hooks run
-- **Check for conflicts** - If push fails due to remote changes, inform user
-- **Never force push** - Use regular push only
-- **Keep commits focused** - One logical change per checkpoint
-
-## When to Use
-
-Use `/checkpoint` when:
-- Agent completed a logical unit of work
-- User asks to "checkpoint", "commit", or "save progress"
-- About to switch context or work on something else
-- Changes are in a good state to preserve
+- **Only commit agent's changes** — don't stage unrelated files
+- **Keep commits focused** — one logical change per checkpoint
+- **Don't use --no-verify** — let hooks run
+- **Do not push unless the user asks**
 
 ## What Not to Checkpoint
 
