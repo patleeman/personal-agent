@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractProfileFlag, parseCommand } from './args.js';
+import { parseCommand } from './args.js';
 
 describe('parseCommand', () => {
   it('defaults to run when no command is provided', () => {
@@ -22,24 +22,12 @@ describe('parseCommand', () => {
       args: ['--profile', 'shared'],
     });
   });
-});
 
-describe('extractProfileFlag', () => {
-  it('extracts --profile and leaves remaining args', () => {
-    expect(extractProfileFlag(['--profile', 'datadog', '--model', 'kimi-coding/k2p5'])).toEqual({
-      profile: 'datadog',
-      remainingArgs: ['--model', 'kimi-coding/k2p5'],
+  it('supports caller-provided commands for plugin registration', () => {
+    expect(parseCommand(['gateway', 'start'], ['run', 'gateway'])).toEqual({
+      command: 'gateway',
+      args: ['start'],
     });
   });
-
-  it('returns undefined profile when absent', () => {
-    expect(extractProfileFlag(['--thinking', 'off'])).toEqual({
-      profile: undefined,
-      remainingArgs: ['--thinking', 'off'],
-    });
-  });
-
-  it('throws when --profile is missing value', () => {
-    expect(() => extractProfileFlag(['--profile'])).toThrow('--profile requires a value');
-  });
 });
+

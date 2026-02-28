@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'child_process';
-import { existsSync } from 'fs';
+import { existsSync, realpathSync } from 'fs';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import { Command, CommanderError } from 'commander';
+import chalk from 'chalk';
 import {
   bootstrapStateOrThrow,
   preparePiAgentDir,
@@ -22,41 +24,18 @@ import {
 import {
   daemonStatusJson,
   emitDaemonEventNonFatal,
+  getDaemonStatus,
   loadDaemonConfig,
+  pingDaemon,
   readDaemonPid,
   resolveDaemonPaths,
   startDaemonDetached,
   stopDaemonGracefully,
+  type DaemonStatus,
 } from '@personal-agent/daemon';
-import { extractProfileFlag, hasOption, parseCommand } from './args.js';
+import { registerGatewayCliCommands, type RegisteredCliCommand } from '@personal-agent/gateway';
+import { hasOption } from './args.js';
 import { readConfig, setDefaultProfile } from './config.js';
-
-function printHelp(): void {
-  console.log(`personal-agent
-
-Commands:
-  personal-agent run [--profile <name>] [pi args...]  Run pi with personal-agent profile resources
-  personal-agent profile list                          List available profiles
-  personal-agent profile show [name]                  Show resolved profile details
-  personal-agent profile use <name>                   Set default profile
-  personal-agent doctor [--profile <name>]            Validate local setup
-  personal-agent daemon start                         Start personal-agentd in background
-  personal-agent daemon stop                          Stop personal-agentd
-  personal-agent daemon status                        Print daemon status JSON
-  personal-agent daemon restart                       Restart personal-agentd
-  personal-agent daemon logs                          Print daemon log path and pid
-
-Examples:
-  personal-agent run
-  personal-agent run --profile datadog
-  personal-agent run --profile shared -- --model kimi-coding/k2p5
-  personal-agent profile list
-  personal-agent profile use datadog
-  personal-agent doctor
-  personal-agent daemon start
-  personal-agent daemon status
-`);
-}
 
 function ensurePiInstalled(): void {
   const result = spawnSync('pi', ['--version'], { encoding: 'utf-8' });
@@ -66,25 +45,8 @@ function ensurePiInstalled(): void {
 }
 
 function ensureExtensionDependencies(profile: ReturnType<typeof resolveResourceProfile>): void {
-  if (process.env.PERSONAL_AGENT_SKIP_EXTENSION_INSTALL === '1') {
-    return;
-  }
-
   const dependencyDirs = getExtensionDependencyDirs(profile);
   const missingDirs = dependencyDirs.filter((dir) => !existsSync(join(dir, 'node_modules')));
-
-  if (missingDirs.length === 0) {
-    return;
-  }
-
-  const allowAutoInstall = process.env.PERSONAL_AGENT_INSTALL_EXTENSION_DEPS === '1';
-
-  if (!allowAutoInstall) {
-    throw new Error(
-      `Extension dependencies are missing in: ${missingDirs.join(', ')}. ` +
-      `Install them manually (trusted profiles only), or set PERSONAL_AGENT_INSTALL_EXTENSION_DEPS=1 to auto-install.`
-    );
-  }
 
   for (const dir of missingDirs) {
     console.log(`Installing extension dependencies in ${dir} ...`);
@@ -99,11 +61,7 @@ function ensureExtensionDependencies(profile: ReturnType<typeof resolveResourceP
   }
 }
 
-function resolveProfileName(explicitProfile?: string): string {
-  if (explicitProfile) {
-    return explicitProfile;
-  }
-
+function resolveProfileName(): string {
   const config = readConfig();
   return config.defaultProfile;
 }
@@ -222,19 +180,21 @@ function printProfileList(): void {
   const config = readConfig();
 
   if (profiles.length === 0) {
-    console.log('No profiles found under profiles/.');
+    console.log(chalk.yellow('No profiles found under profiles/.'));
     return;
   }
 
-  console.log('Profiles:');
+  console.log(chalk.bold('Profiles:'));
   for (const profile of profiles) {
-    const marker = profile === config.defaultProfile ? '*' : ' ';
-    console.log(` ${marker} ${profile}`);
+    const isDefault = profile === config.defaultProfile;
+    const marker = isDefault ? chalk.green('*') : chalk.dim(' ');
+    const name = isDefault ? chalk.green(profile) : profile;
+    console.log(` ${marker} ${name}`);
   }
 }
 
 function showProfile(name?: string): void {
-  const profileName = resolveProfileName(name);
+  const profileName = name ?? resolveProfileName();
   const resolved = resolveResourceProfile(profileName);
 
   const payload = {
@@ -254,19 +214,32 @@ function showProfile(name?: string): void {
   console.log(JSON.stringify(payload, null, 2));
 }
 
-async function doctor(explicitProfile?: string): Promise<number> {
-  const profileName = resolveProfileName(explicitProfile);
+function doctorError(label: string, message: string): void {
+  console.error(`${chalk.red('✗')} ${chalk.bold(label)}: ${message}`);
+}
+
+function doctorOk(label: string, value?: string | number | boolean): void {
+  if (value === undefined) {
+    console.log(`${chalk.green('✓')} ${chalk.bold(label)}`);
+    return;
+  }
+
+  console.log(`${chalk.green('✓')} ${chalk.bold(label)}: ${value}`);
+}
+
+async function doctor(): Promise<number> {
+  const profileName = resolveProfileName();
 
   try {
     ensurePiInstalled();
   } catch (error) {
-    console.error(`✗ pi binary: ${(error as Error).message}`);
+    doctorError('pi binary', (error as Error).message);
     return 1;
   }
 
   const profiles = listProfiles();
   if (profiles.length === 0) {
-    console.error('✗ profiles: none found');
+    doctorError('profiles', 'none found');
     return 1;
   }
 
@@ -274,7 +247,7 @@ async function doctor(explicitProfile?: string): Promise<number> {
   try {
     resolvedProfile = resolveResourceProfile(profileName);
   } catch (error) {
-    console.error(`✗ profile: ${(error as Error).message}`);
+    doctorError('profile', (error as Error).message);
     return 1;
   }
 
@@ -283,14 +256,14 @@ async function doctor(explicitProfile?: string): Promise<number> {
   try {
     validateStatePathsOutsideRepo(statePaths, resolvedProfile.repoRoot);
   } catch (error) {
-    console.error(`✗ runtime paths: ${(error as Error).message}`);
+    doctorError('runtime paths', (error as Error).message);
     return 1;
   }
 
   try {
     await bootstrapStateOrThrow(statePaths);
   } catch (error) {
-    console.error(`✗ bootstrap: ${(error as Error).message}`);
+    doctorError('bootstrap', (error as Error).message);
     return 1;
   }
 
@@ -300,32 +273,26 @@ async function doctor(explicitProfile?: string): Promise<number> {
   const runtimeAuth = runtime.authFile;
   const legacyAuth = join(homedir(), '.pi', 'agent', 'auth.json');
 
-  console.log('✓ pi binary');
-  console.log(`✓ profile: ${resolvedProfile.name}`);
-  console.log(`✓ layers: ${resolvedProfile.layers.map((layer) => layer.name).join(' -> ')}`);
-  console.log(`✓ runtime root: ${statePaths.root}`);
-  console.log(`✓ runtime agent dir: ${runtime.agentDir}`);
-  console.log(`✓ extensions: ${resolvedProfile.extensionDirs.length}`);
-  console.log(`✓ skills: ${resolvedProfile.skillDirs.length}`);
-  console.log(`✓ prompts: ${resolvedProfile.promptDirs.length}`);
-  console.log(`✓ themes: ${resolvedProfile.themeDirs.length}`);
-  console.log(`✓ runtime auth present: ${existsSync(runtimeAuth)}`);
-  console.log(`✓ legacy auth present: ${existsSync(legacyAuth)}`);
+  doctorOk('pi binary');
+  doctorOk('profile', resolvedProfile.name);
+  doctorOk('layers', resolvedProfile.layers.map((layer) => layer.name).join(' -> '));
+  doctorOk('runtime root', statePaths.root);
+  doctorOk('runtime agent dir', runtime.agentDir);
+  doctorOk('extensions', resolvedProfile.extensionDirs.length);
+  doctorOk('skills', resolvedProfile.skillDirs.length);
+  doctorOk('prompts', resolvedProfile.promptDirs.length);
+  doctorOk('themes', resolvedProfile.themeDirs.length);
+  doctorOk('runtime auth present', existsSync(runtimeAuth));
+  doctorOk('legacy auth present', existsSync(legacyAuth));
 
   return 0;
 }
 
 async function runCommand(args: string[]): Promise<number> {
-  if (hasOption(args, '--help') || hasOption(args, '-h')) {
-    printHelp();
-    return 0;
-  }
-
-  const profileFlag = extractProfileFlag(args);
-  const profileName = resolveProfileName(profileFlag.profile);
-  const passthroughArgs = profileFlag.remainingArgs[0] === '--'
-    ? profileFlag.remainingArgs.slice(1)
-    : profileFlag.remainingArgs;
+  const profileName = resolveProfileName();
+  const passthroughArgs = args[0] === '--'
+    ? args.slice(1)
+    : args;
 
   return runPi(profileName, passthroughArgs);
 }
@@ -354,37 +321,96 @@ async function profileCommand(args: string[]): Promise<number> {
     }
 
     setDefaultProfile(value);
-    console.log(`Default profile set to: ${value}`);
+    console.log(`${chalk.green('✓')} ${chalk.bold('Default profile set to')}: ${chalk.cyan(value)}`);
     return 0;
   }
 
   throw new Error(`Unknown profile subcommand: ${subcommand}`);
 }
 
+function formatTimestamp(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString();
+}
+
+function printDaemonModules(modules: DaemonStatus['modules']): void {
+  if (modules.length === 0) {
+    console.log(`${chalk.bold('modules')}: ${chalk.dim('none')}`);
+    return;
+  }
+
+  console.log(chalk.bold('modules:'));
+  for (const module of modules) {
+    const state = module.enabled ? chalk.green('enabled') : chalk.gray('disabled');
+    const errorSuffix = module.lastError
+      ? `${chalk.red(', error=')}${chalk.red(module.lastError)}`
+      : '';
+
+    console.log(`  ${chalk.cyan('•')} ${chalk.bold(module.name)} (${state}, handled=${module.handledEvents}${errorSuffix})`);
+  }
+}
+
+async function printDaemonStatusHumanReadable(): Promise<void> {
+  const config = loadDaemonConfig();
+  const daemonPaths = resolveDaemonPaths(config.ipc.socketPath);
+  const running = await pingDaemon(config);
+
+  if (!running) {
+    console.log(`${chalk.yellow('◉')} ${chalk.bold('personal-agentd')}: ${chalk.red('stopped')}`);
+    console.log(`${chalk.dim('socket')}: ${daemonPaths.socketPath}`);
+    console.log(`${chalk.dim('log')}: ${daemonPaths.logFile}`);
+    console.log(`${chalk.blue('hint')}: ${chalk.cyan('pa daemon start')}`);
+    return;
+  }
+
+  const status = await getDaemonStatus(config);
+
+  console.log(`${chalk.green('◉')} ${chalk.bold('personal-agentd')}: ${chalk.green('running')}`);
+  console.log(`${chalk.dim('pid')}: ${status.pid}`);
+  console.log(`${chalk.dim('started')}: ${formatTimestamp(status.startedAt)}`);
+  console.log(`${chalk.dim('socket')}: ${status.socketPath}`);
+  console.log(`${chalk.dim('log')}: ${daemonPaths.logFile}`);
+  console.log(
+    `${chalk.bold('queue')}: pending=${status.queue.currentDepth}/${status.queue.maxDepth}, ` +
+    `processed=${status.queue.processedEvents}, dropped=${status.queue.droppedEvents}`,
+  );
+
+  printDaemonModules(status.modules);
+}
+
 async function daemonCommand(args: string[]): Promise<number> {
   const [subcommand] = args;
 
-  if (!subcommand || subcommand === 'status') {
-    console.log(await daemonStatusJson());
+  if (!subcommand || subcommand === 'status' || subcommand === '--json') {
+    if (hasOption(args, '--json')) {
+      console.log(await daemonStatusJson());
+    } else {
+      await printDaemonStatusHumanReadable();
+    }
+
     return 0;
   }
 
   if (subcommand === 'start') {
     await startDaemonDetached();
-    console.log('personal-agentd start requested');
+    console.log(`${chalk.green('✓')} ${chalk.bold('personal-agentd')} start requested`);
     return 0;
   }
 
   if (subcommand === 'stop') {
     await stopDaemonGracefully();
-    console.log('personal-agentd stop requested');
+    console.log(`${chalk.green('✓')} ${chalk.bold('personal-agentd')} stop requested`);
     return 0;
   }
 
   if (subcommand === 'restart') {
     await stopDaemonGracefully();
     await startDaemonDetached();
-    console.log('personal-agentd restart requested');
+    console.log(`${chalk.green('✓')} ${chalk.bold('personal-agentd')} restart requested`);
     return 0;
   }
 
@@ -392,50 +418,201 @@ async function daemonCommand(args: string[]): Promise<number> {
     const config = loadDaemonConfig();
     const daemonPaths = resolveDaemonPaths(config.ipc.socketPath);
     const pid = await readDaemonPid();
-    console.log(`logFile=${daemonPaths.logFile}`);
-    console.log(`pid=${pid ?? 'unknown'}`);
+    console.log(`${chalk.bold('log file')}: ${daemonPaths.logFile}`);
+    console.log(`${chalk.bold('pid')}: ${pid ?? chalk.dim('unknown')}`);
     return 0;
   }
 
   throw new Error(`Unknown daemon subcommand: ${subcommand}`);
 }
 
+type CommandHandler = (args: string[]) => Promise<number>;
+
+interface CliCommandDefinition {
+  name: string;
+  description: string;
+  usage?: string;
+  run: CommandHandler;
+}
+
+function normalizeCommandUsage(command: Pick<RegisteredCliCommand, 'name' | 'usage'>): string {
+  const usage = command.usage.trim();
+  if (usage.startsWith('pa ')) {
+    return usage.slice(3);
+  }
+
+  if (usage.length > 0) {
+    return usage;
+  }
+
+  return `${command.name} [args...]`;
+}
+
+function buildCommandDefinitions(): CliCommandDefinition[] {
+  const definitions: CliCommandDefinition[] = [
+    {
+      name: 'run',
+      usage: 'run [args...]',
+      description: 'Run pi with configured profile resources',
+      run: runCommand,
+    },
+    {
+      name: 'profile',
+      usage: 'profile [args...]',
+      description: 'Manage profile settings',
+      run: profileCommand,
+    },
+    {
+      name: 'doctor',
+      usage: 'doctor [args...]',
+      description: 'Validate local setup',
+      run: async (args) => {
+        if (hasOption(args, '--profile')) {
+          throw new Error('doctor no longer accepts --profile. Set it once with: pa profile use <name>');
+        }
+
+        return doctor();
+      },
+    },
+    {
+      name: 'daemon',
+      usage: 'daemon [args...]',
+      description: 'Manage personal-agent daemon',
+      run: daemonCommand,
+    },
+  ];
+
+  registerGatewayCliCommands((command) => {
+    if (definitions.some((definition) => definition.name === command.name)) {
+      throw new Error(`Cannot register duplicate CLI command: ${command.name}`);
+    }
+
+    definitions.push({
+      name: command.name,
+      usage: normalizeCommandUsage(command),
+      description: command.description,
+      run: command.run,
+    });
+  });
+
+  return definitions;
+}
+
+function normalizeActionArgs(values: unknown[]): string[] {
+  if (values.length === 0) {
+    return [];
+  }
+
+  const positionalValues = values.slice(0, -1);
+
+  if (positionalValues.length === 1 && Array.isArray(positionalValues[0])) {
+    return positionalValues[0].map((entry) => String(entry));
+  }
+
+  return positionalValues
+    .filter((entry) => entry !== undefined)
+    .map((entry) => String(entry));
+}
+
+function createProgram(definitions: CliCommandDefinition[], setExitCode: (code: number) => void): Command {
+  const program = new Command();
+
+  program
+    .name('pa')
+    .description('Personal Agent CLI')
+    .showHelpAfterError()
+    .addHelpText(
+      'after',
+      `
+Examples:
+  pa
+  pa -p "hello"
+  pa run -- --model kimi-coding/k2p5
+  pa profile use datadog
+  pa profile list
+  pa doctor
+  pa gateway telegram start
+  pa gateway discord start
+  pa daemon start
+  pa daemon status
+`,
+    )
+    .configureOutput({
+      outputError: (message, write) => {
+        write(chalk.red(message));
+      },
+    })
+    .exitOverride();
+
+  for (const definition of definitions) {
+    program
+      .command(definition.usage ?? `${definition.name} [args...]`)
+      .description(definition.description)
+      .allowUnknownOption(true)
+      .allowExcessArguments(true)
+      .action(async (...actionArgs: unknown[]) => {
+        const args = normalizeActionArgs(actionArgs);
+        setExitCode(await definition.run(args));
+      });
+  }
+
+  return program;
+}
+
 export async function runCli(argv: string[] = process.argv.slice(2)): Promise<number> {
   try {
-    const parsed = parseCommand(argv);
+    const definitions = buildCommandDefinitions();
+    const knownCommands = new Set(definitions.map((definition) => definition.name));
 
-    if (parsed.command === 'help') {
-      printHelp();
-      return 0;
+    if (argv.length === 0) {
+      return runCommand([]);
     }
 
-    if (parsed.command === 'run') {
-      return await runCommand(parsed.args);
+    let exitCode = 0;
+    const program = createProgram(definitions, (code) => {
+      exitCode = code;
+    });
+
+    const firstArg = argv[0];
+    const isHelpRequest = firstArg === '--help' || firstArg === '-h' || firstArg === 'help';
+
+    if (!isHelpRequest && !knownCommands.has(firstArg)) {
+      return runCommand(argv);
     }
 
-    if (parsed.command === 'profile') {
-      return await profileCommand(parsed.args);
-    }
-
-    if (parsed.command === 'doctor') {
-      const profileFlag = extractProfileFlag(parsed.args);
-      return await doctor(profileFlag.profile);
-    }
-
-    if (parsed.command === 'daemon') {
-      return await daemonCommand(parsed.args);
-    }
-
-    printHelp();
-    return 1;
+    await program.parseAsync(argv, { from: 'user' });
+    return exitCode;
   } catch (error) {
-    console.error((error as Error).message);
+    if (error instanceof CommanderError) {
+      if (error.code === 'commander.helpDisplayed') {
+        return 0;
+      }
+
+      console.error(chalk.red(error.message));
+      return error.exitCode ?? 1;
+    }
+
+    console.error(chalk.red((error as Error).message));
     return 1;
   }
 }
 
-const entryFile = process.argv[1] ? resolve(process.argv[1]) : undefined;
-const moduleFile = resolve(fileURLToPath(import.meta.url));
+function resolveExecutablePath(path: string): string {
+  const resolvedPath = resolve(path);
+
+  if (!existsSync(resolvedPath)) {
+    return resolvedPath;
+  }
+
+  try {
+    return realpathSync(resolvedPath);
+  } catch {
+    return resolvedPath;
+  }
+}
+
+const entryFile = process.argv[1] ? resolveExecutablePath(process.argv[1]) : undefined;
+const moduleFile = resolveExecutablePath(fileURLToPath(import.meta.url));
 
 if (entryFile === moduleFile) {
   runCli().then((code) => {

@@ -1,16 +1,11 @@
-export type CliCommand = 'run' | 'profile' | 'doctor' | 'daemon' | 'help';
-
 export interface ParsedCommand {
-  command: CliCommand;
+  command: string;
   args: string[];
 }
 
-export interface ProfileFlagResult {
-  profile?: string;
-  remainingArgs: string[];
-}
+const DEFAULT_KNOWN_COMMANDS = ['run', 'profile', 'doctor', 'daemon'];
 
-export function parseCommand(argv: string[]): ParsedCommand {
+export function parseCommand(argv: string[], knownCommands: string[] = DEFAULT_KNOWN_COMMANDS): ParsedCommand {
   if (argv.length === 0) {
     return { command: 'run', args: [] };
   }
@@ -21,34 +16,11 @@ export function parseCommand(argv: string[]): ParsedCommand {
     return { command: 'help', args: rest };
   }
 
-  if (first === 'run' || first === 'profile' || first === 'doctor' || first === 'daemon') {
+  if (knownCommands.includes(first)) {
     return { command: first, args: rest };
   }
 
   return { command: 'run', args: argv };
-}
-
-export function extractProfileFlag(args: string[]): ProfileFlagResult {
-  const remainingArgs: string[] = [];
-  let profile: string | undefined;
-
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-
-    if (arg === '--profile') {
-      const value = args[i + 1];
-      if (!value) {
-        throw new Error('--profile requires a value');
-      }
-      profile = value;
-      i += 1;
-      continue;
-    }
-
-    remainingArgs.push(arg);
-  }
-
-  return { profile, remainingArgs };
 }
 
 export function hasOption(args: string[], option: string): boolean {
