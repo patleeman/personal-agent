@@ -1,122 +1,92 @@
-# Personal Agent Architecture
+# Personal-Agent Architecture
 
-## Overview
+## Goal
 
-This document defines the system architecture for a personal AI agent. The architecture separates concerns into distinct modules with clear boundaries and contracts to ensure maintainability, testability, and safe evolution.
+`personal-agent` is a thin application layer on top of Pi:
 
-## Core Modules
+- repo-managed resources (profiles, skills, extensions, themes, prompts)
+- local-only runtime state (auth, sessions, cache)
+- wrapper CLI + Telegram bridge using the same profile/runtime plumbing
 
-### 1. Profile Model (`/profile`)
+No symlink chains and no manual "apply/syncback" workflow.
 
-**Responsibility:** Define and validate user profile data structures.
+## Package boundaries
 
-**In-boundaries:**
-- Profile schema definitions
-- Field validation logic
-- Default value computation
-- Schema versioning metadata
+## `@personal-agent/core`
 
-**Out-boundaries:**
-- Does NOT handle persistence
-- Does NOT handle runtime state
-- Does NOT execute migrations
+Owns **runtime state safety** and **profile data merge primitives**:
 
-**Data ownership:** Owns the shape and validation rules of profile data, but not the stored instances.
+- profile data schema + validation + merge engine (`packages/core/src/profile/*`)
+- runtime path resolution (`packages/core/src/runtime/paths.ts`)
+- runtime bootstrap checks (`packages/core/src/runtime/bootstrap.ts`)
+- Pi runtime dir preparation (`packages/core/src/runtime/agent-dir.ts`)
 
-### 2. Runtime State (`/runtime`)
+Out of scope:
 
-**Responsibility:** Manage ephemeral execution state during agent operations.
+- profile filesystem discovery
+- CLI command parsing
+- Telegram transport
 
-**In-boundaries:**
-- Session context
-- Active tool invocations
-- Conversation history (in-memory)
-- Temporary computation results
+## `@personal-agent/resources`
 
-**Out-boundaries:**
-- Does NOT persist data directly
-- Does NOT define profile schemas
-- Does NOT handle long-term storage
+Owns **repo profile discovery and materialization**:
 
-**Data ownership:** Owns transient operational state only. Delegates persistence to the Persistence module.
+- list/resolve profiles from `profiles/*/agent`
+- merge layered `settings.json` and `models.json`
+- combine AGENTS/SYSTEM/APPEND_SYSTEM into runtime agent dir
+- produce Pi CLI resource args (`--skill`, `-e`, `--theme`, ...)
 
-### 3. Persistence (`/persistence`)
+Layer order:
 
-**Responsibility:** Handle all data storage and retrieval operations.
+1. `shared`
+2. selected profile (for example `datadog`)
+3. optional local overlay (`~/.config/personal-agent/local`)
 
-**In-boundaries:**
-- Profile storage/retrieval
-- Migration state tracking
-- Configuration persistence
-- Audit logging
+## `@personal-agent/cli`
 
-**Out-boundaries:**
-- Does NOT define profile schemas (uses Profile Model)
-- Does NOT manage runtime session state
-- Does NOT execute business logic
+Owns user-facing local commands:
 
-**Data ownership:** Owns storage mechanisms and migration state, but delegates schema validation to Profile Model.
+- `personal-agent run`
+- `personal-agent profile list/show/use`
+- `personal-agent doctor`
 
-### 4. Migration Engine (`/migrations`)
+Responsibilities:
 
-**Responsibility:** Execute schema and data transformations safely.
+- select profile
+- ensure runtime state is writable and outside repo
+- materialize profile into runtime Pi agent dir
+- launch `pi` with deterministic resource flags
 
-**In-boundaries:**
-- Forward migration execution
-- Rollback capability
-- Migration state validation
-- Compatibility checking
+## `@personal-agent/bridge-telegram`
 
-**Out-boundaries:**
-- Does NOT define target schemas (uses Profile Model)
-- Does NOT manage runtime state
-- Does NOT handle general persistence
+Owns Telegram daemon transport:
 
-**Data ownership:** Owns migration scripts and execution state, delegates data access to Persistence module.
+- allowlist-based access control
+- one Pi session file per chat
+- reuse core/runtime/resources logic
+- invoke `pi -p --session <chat-session>` for replies
 
-## Module Interaction Contract
+## Runtime ownership model
 
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Profile Model │────▶│   Persistence   │◀────│ Migration Engine│
-│   (schema)      │     │   (storage)     │     │   (transforms)  │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-         │                       │                       │
-         │                       ▼                       │
-         │              ┌─────────────────┐              │
-         └─────────────▶│ Runtime State   │◀─────────────┘
-                        │ (operations)    │
-                        └─────────────────┘
-```
+### Repo-managed (versioned)
 
-### Allowed Data Flows
+- `profiles/shared/agent/**`
+- `profiles/datadog/agent/**`
+- package source and tests
 
-1. **Profile Model → Persistence:** Schema definitions for storage validation
-2. **Profile Model → Migration Engine:** Target schema for migrations
-3. **Profile Model → Runtime State:** Schema for runtime validation of loaded profiles
-4. **Persistence → Runtime State:** Hydrated data for operations
-5. **Migration Engine → Persistence:** Read existing data, write transformed data
-6. **Runtime State → Persistence:** Request persistence of operational results
+### Local mutable (not versioned)
 
-### Forbidden Couplings
+Default root: `~/.local/state/personal-agent`
 
-- Runtime State cannot import Migration Engine directly
-- Persistence cannot define its own schema validation (must use Profile Model)
-- Migration Engine cannot access Runtime State
-- Profile Model cannot depend on Persistence or Runtime State
+- `pi-agent/auth.json`
+- `pi-agent/sessions/**`
+- `pi-agent/*` runtime artifacts
+- telegram session files under runtime session directory
 
-## Data Ownership Summary
+## Data flow
 
-| Module | Owns | Delegates |
-|--------|------|-----------|
-| Profile Model | Schema, validation, defaults | Storage, runtime, migrations |
-| Runtime State | Session context, temporary data | Persistence, schema validation |
-| Persistence | Storage mechanisms, migration state | Schema validation, business logic |
-| Migration Engine | Migration scripts, execution state | Data access, schema definitions |
-
-## Version Compatibility
-
-- **Schema version:** Defined in Profile Model, format `major.minor.patch`
-- **Migration version:** Matches target schema version
-- **Runtime compatibility:** Runtime State must support current and previous schema version
-- **Persistence compatibility:** Storage layer must support all schema versions with migrations
+1. User selects profile (`shared`/`datadog`)
+2. resources resolves profile layers from repo + optional local overlay
+3. core validates/bootstrap runtime paths
+4. resources materializes merged runtime config into runtime Pi agent dir
+5. cli/telegram execute Pi with the same resolved profile resources

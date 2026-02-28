@@ -1,0 +1,15 @@
+{
+  "name": "pi-agent-extensions",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@huggingface/tokenizers": "^0.1.1",
+    "@mozilla/readability": "^0.6.0",
+    "jsdom": "^28.0.0",
+    "onnxruntime-node": "^1.23.2",
+    "turndown": "^7.2.2"
+  },
+  "devDependencies": {
+    "@types/turndown": "^5.0.6"
+  }
+}

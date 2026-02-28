@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+profiles/**/node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+packages/*/dist/
+profiles/**/dist/
+profiles/**/build/
+
+# Local runtime / temp
+.taskfactory/
+.pi/
+
+# OS/editor
+.DS_Store
+
+# Logs
+*.log

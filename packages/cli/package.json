@@ -21,7 +21,8 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
-    "@personal-agent/core": "*"
+    "@personal-agent/core": "*",
+    "@personal-agent/resources": "*"
   },
   "devDependencies": {}
 }

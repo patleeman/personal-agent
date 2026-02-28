@@ -17,8 +17,6 @@
     "test": "vitest run",
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
-  "dependencies": {
-    "@personal-agent/core": "*"
-  },
+  "dependencies": {},
   "devDependencies": {}
 }

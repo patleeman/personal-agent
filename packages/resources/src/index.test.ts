@@ -1,8 +1,138 @@
-import { describe, it, expect } from 'vitest';
-import { resourcesHello } from './index.js';
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync } from 'fs';
+import { rm } from 'fs/promises';
+import { dirname, join } from 'path';
+import { tmpdir } from 'os';
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  buildPiResourceArgs,
+  listProfiles,
+  materializeProfileToAgentDir,
+  mergeJsonFiles,
+  resolveResourceProfile,
+} from './index.js';
 
-describe('resources', () => {
-  it('should return resources message', () => {
-    expect(resourcesHello()).toMatch(/Resources using schema \d+\.\d+\.\d+/);
+const tempDirs: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+});
+
+function createTempRepo(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'personal-agent-resources-'));
+  tempDirs.push(dir);
+  return dir;
+}
+
+function writeFile(path: string, content: string): void {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, content);
+}
+
+describe('resources profile loader', () => {
+  it('lists available profiles', () => {
+    const repo = createTempRepo();
+    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'profiles/datadog/agent/AGENTS.md'), '# Datadog\n');
+
+    const profiles = listProfiles({ repoRoot: repo });
+    expect(profiles).toEqual(['datadog', 'shared']);
+  });
+
+  it('resolves layered profile with shared + overlay + local', () => {
+    const repo = createTempRepo();
+    const local = mkdtempSync(join(tmpdir(), 'personal-agent-local-'));
+    tempDirs.push(local);
+
+    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'profiles/shared/agent/extensions/index.ts'), 'export default {}\n');
+    writeFile(join(repo, 'profiles/shared/agent/settings.json'), JSON.stringify({ a: 1, nested: { one: true } }));
+
+    writeFile(join(repo, 'profiles/datadog/agent/AGENTS.md'), '# Datadog\n');
+    writeFile(join(repo, 'profiles/datadog/agent/settings.json'), JSON.stringify({ nested: { two: true } }));
+
+    writeFile(join(local, 'agent/AGENTS.md'), '# Local\n');
+    writeFile(join(local, 'agent/settings.json'), JSON.stringify({ localOnly: true }));
+
+    const resolved = resolveResourceProfile('datadog', {
+      repoRoot: repo,
+      localProfileDir: local,
+    });
+
+    expect(resolved.layers.map((layer) => layer.name)).toEqual(['shared', 'datadog', 'local']);
+    expect(resolved.extensionDirs.length).toBe(1);
+    expect(resolved.settingsFiles.length).toBe(3);
+    expect(resolved.agentsFiles.length).toBe(3);
+  });
+
+  it('merges json files in layer order', () => {
+    const repo = createTempRepo();
+    const fileA = join(repo, 'a.json');
+    const fileB = join(repo, 'b.json');
+
+    writeFile(fileA, JSON.stringify({ one: 1, nested: { a: true }, array: [1, 2] }));
+    writeFile(fileB, JSON.stringify({ two: 2, nested: { b: true }, array: [3] }));
+
+    const merged = mergeJsonFiles([fileA, fileB]);
+    expect(merged).toEqual({
+      one: 1,
+      two: 2,
+      nested: { a: true, b: true },
+      array: [3],
+    });
+  });
+
+  it('materializes merged files into runtime agent dir', () => {
+    const repo = createTempRepo();
+    const runtime = mkdtempSync(join(tmpdir(), 'personal-agent-runtime-'));
+    tempDirs.push(runtime);
+
+    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'profiles/shared/agent/APPEND_SYSTEM.md'), 'shared append\n');
+    writeFile(join(repo, 'profiles/shared/agent/settings.json'), JSON.stringify({ shared: true }));
+    writeFile(join(repo, 'profiles/shared/agent/models.json'), JSON.stringify({ providers: { a: {} } }));
+
+    writeFile(join(repo, 'profiles/datadog/agent/AGENTS.md'), '# Datadog\n');
+    writeFile(join(repo, 'profiles/datadog/agent/settings.json'), JSON.stringify({ datadog: true }));
+
+    const resolved = resolveResourceProfile('datadog', { repoRoot: repo });
+    const result = materializeProfileToAgentDir(resolved, runtime);
+
+    expect(result.writtenFiles.length).toBeGreaterThan(0);
+    expect(result.writtenFiles.some((path) => path.endsWith('/AGENTS.md'))).toBe(true);
+    expect(result.writtenFiles.some((path) => path.endsWith('/settings.json'))).toBe(true);
+    expect(result.writtenFiles.some((path) => path.endsWith('/models.json'))).toBe(true);
+  });
+
+  it('removes stale runtime files when profile no longer provides them', () => {
+    const repo = createTempRepo();
+    const runtime = mkdtempSync(join(tmpdir(), 'personal-agent-runtime-'));
+    tempDirs.push(runtime);
+
+    writeFile(join(runtime, 'SYSTEM.md'), 'stale system\n');
+
+    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+
+    const resolved = resolveResourceProfile('shared', { repoRoot: repo });
+    materializeProfileToAgentDir(resolved, runtime);
+
+    expect(existsSync(join(runtime, 'SYSTEM.md'))).toBe(false);
+  });
+
+  it('builds pi args from resource directories', () => {
+    const repo = createTempRepo();
+    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'profiles/shared/agent/extensions/index.ts'), 'export default {}\n');
+    writeFile(join(repo, 'profiles/shared/agent/skills/test/SKILL.md'), '# Skill\n');
+    writeFile(join(repo, 'profiles/shared/agent/prompts/review.md'), 'review\n');
+    writeFile(join(repo, 'profiles/shared/agent/themes/theme.json'), '{}\n');
+
+    const resolved = resolveResourceProfile('shared', { repoRoot: repo });
+    const args = buildPiResourceArgs(resolved);
+
+    expect(args).toContain('--no-extensions');
+    expect(args).toContain('-e');
+    expect(args).toContain('--skill');
+    expect(args).toContain('--prompt-template');
+    expect(args).toContain('--theme');
   });
 });

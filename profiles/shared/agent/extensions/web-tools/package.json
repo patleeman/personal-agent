@@ -1,0 +1,11 @@
+{
+  "name": "web-tools-extension",
+  "version": "1.0.0",
+  "description": "Web tools extension for Pi",
+  "type": "module",
+  "dependencies": {
+    "jsdom": "^24.0.0",
+    "@mozilla/readability": "^0.5.0",
+    "turndown": "^7.1.2"
+  }
+}

@@ -10,7 +10,11 @@
     "build": "tsc --build",
     "lint": "eslint packages --ext .ts",
     "test": "vitest run",
-    "clean": "npm run clean --workspaces --if-present && rm -f tsconfig.tsbuildinfo"
+    "clean": "npm run clean --workspaces --if-present && rm -f tsconfig.tsbuildinfo",
+    "run": "node packages/cli/dist/index.js run",
+    "doctor": "node packages/cli/dist/index.js doctor",
+    "profile:list": "node packages/cli/dist/index.js profile list",
+    "telegram": "node packages/bridge-telegram/dist/index.js"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

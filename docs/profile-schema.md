@@ -1,165 +1,71 @@
 # Profile Schema
 
-## Schema Version
+This document describes the **resource profile** schema used by `@personal-agent/resources`.
 
-**Current version:** `1.0.0`
+## Directory schema
 
-Version follows semantic versioning:
-- **Major:** Breaking schema changes requiring migration
-- **Minor:** Additive changes (new optional fields)
-- **Patch:** Documentation fixes, no structural changes
+A profile is a directory under `profiles/<name>/agent`.
 
-## Core Profile Fields
+Required baseline:
 
-### Required Fields
+- `profiles/shared/agent` must exist
 
-| Field | Type | Description | Validation |
-|-------|------|-------------|------------|
-| `id` | `string` | Unique profile identifier | UUID v4 format, immutable |
-| `version` | `string` | Schema version | Must match semver, auto-set on create |
-| `createdAt` | `ISO8601` | Creation timestamp | Auto-set, immutable |
-| `updatedAt` | `ISO8601` | Last modification timestamp | Auto-updated on change |
+Optional overlays:
 
-### Identity Fields
+- `profiles/<name>/agent` (for example `profiles/datadog/agent`)
+- local overlay directory (default `~/.config/personal-agent/local`)
 
-| Field | Type | Required | Default | Validation |
-|-------|------|----------|---------|------------|
-| `name` | `string` | Yes | — | 1-100 characters, trimmed |
-| `email` | `string` | No | `null` | Valid email format if present |
-| `timezone` | `string` | No | `"UTC"` | IANA timezone identifier |
-| `locale` | `string` | No | `"en-US"` | BCP 47 language tag |
+## Supported files and directories
 
-### Preference Fields
+Inside each `agent/` layer:
 
-| Field | Type | Required | Default | Validation |
-|-------|------|----------|---------|------------|
-| `theme` | `enum` | No | `"system"` | `"light"`, `"dark"`, `"system"` |
-| `notifications` | `object` | No | See below | Nested notification preferences |
-| `privacy` | `object` | No | See below | Nested privacy settings |
+- `settings.json` (optional)
+- `models.json` (optional)
+- `AGENTS.md` (optional)
+- `SYSTEM.md` (optional)
+- `APPEND_SYSTEM.md` (optional)
+- `extensions/` (optional)
+- `skills/` (optional)
+- `prompts/` (optional)
+- `themes/` (optional)
 
-#### Notification Preferences (nested)
+## Layer precedence
 
-```typescript
-{
-  email: boolean,      // default: true
-  push: boolean,       // default: true
-  digest: "daily" | "weekly" | "never"  // default: "daily"
-}
-```
+Merge order is deterministic:
 
-#### Privacy Settings (nested)
+1. `shared`
+2. selected profile overlay
+3. local overlay
 
-```typescript
-{
-  analytics: boolean,  // default: true
-  shareUsage: boolean  // default: false
-}
-```
+Higher layers override lower layers.
 
-### Agent Configuration Fields
+## Merge semantics
 
-| Field | Type | Required | Default | Validation |
-|-------|------|----------|---------|------------|
-| `modelPreferences` | `object` | No | See below | Preferred AI models per task type |
-| `toolPermissions` | `object` | No | See below | Allowed tool categories |
-| `customInstructions` | `string` | No | `""` | Max 4000 characters |
+### JSON files (`settings.json`, `models.json`)
 
-#### Model Preferences (nested)
+- object keys are merged recursively
+- arrays are replaced by higher layer arrays
+- scalar values are replaced by higher layer values
 
-```typescript
-{
-  default: string,           // default: "claude-sonnet-4-20250514"
-  coding: string | null,     // default: null (uses default)
-  analysis: string | null,   // default: null (uses default)
-  creative: string | null    // default: null (uses default)
-}
-```
+### Markdown files
 
-#### Tool Permissions (nested)
+- `AGENTS.md`: all existing layers are concatenated (shared → overlay → local)
+- `APPEND_SYSTEM.md`: all existing layers are concatenated in same order
+- `SYSTEM.md`: highest-precedence existing file wins (local > overlay > shared)
 
-```typescript
-{
-  webSearch: boolean,        // default: true
-  codeExecution: boolean,    // default: false
-  fileSystem: boolean,       // default: true
-  externalApis: boolean      // default: false
-}
-```
+## Discovery semantics
 
-## Validation Rules
+For each resolved layer:
 
-### Field-Level Validation
+- `skills/` directories are collected and passed as `--skill <dir>`
+- extension entry files are discovered from `extensions/` (`*.ts`, `*.js`, or `<name>/index.ts|js`)
+- prompt templates are discovered as markdown files under `prompts/`
+- themes are discovered as json files under `themes/`
+- deduplication is path-based, preserving first-seen order
 
-1. **String fields:** Trim whitespace before validation
-2. **Enum fields:** Must match exactly one allowed value
-3. **Nested objects:** Validate recursively, reject unknown keys
-4. **Timestamps:** Must be valid ISO8601 with timezone
+## Validation rules
 
-### Profile-Level Validation
-
-1. **Immutable fields:** `id`, `createdAt` cannot change after creation
-2. **Version updates:** `updatedAt` must advance on every modification, must be >= `createdAt`
-3. **Schema compatibility:** `version` must be compatible with current runtime
-
-### Default Behavior
-
-- Missing optional fields inherit defaults at runtime
-- Explicit `null` overrides defaults (field remains unset)
-- Empty strings are valid unless minimum length specified
-- Nested objects merge with defaults (shallow merge)
-
-## Schema Evolution
-
-### Backward Compatibility
-
-- **Minor versions:** Additive only, old profiles valid under new schema
-- **Major versions:** Breaking changes, migration required
-- **Default strategy:** New optional fields with sensible defaults
-
-### Deprecation
-
-- Deprecated fields remain in schema for 2 major versions
-- Access to deprecated fields logs warning
-- Migration path documented in migration strategy
-
-## Example Profile
-
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "version": "1.0.0",
-  "createdAt": "2024-01-15T09:30:00Z",
-  "updatedAt": "2024-06-20T14:22:00Z",
-  "name": "Jane Developer",
-  "email": "jane@example.com",
-  "timezone": "America/New_York",
-  "locale": "en-US",
-  "theme": "dark",
-  "notifications": {
-    "email": true,
-    "push": false,
-    "digest": "weekly"
-  },
-  "privacy": {
-    "analytics": true,
-    "shareUsage": false
-  },
-  "modelPreferences": {
-    "default": "claude-sonnet-4-20250514",
-    "coding": "claude-opus-4-20250514"
-  },
-  "toolPermissions": {
-    "webSearch": true,
-    "codeExecution": true,
-    "fileSystem": true,
-    "externalApis": false
-  },
-  "customInstructions": "Prefer concise responses. Use TypeScript for code examples."
-}
-```
-
-## Version History
-
-| Version | Date | Changes |
-|---------|------|---------|
-| 1.0.0 | 2024-06-01 | Initial schema definition |
+- `shared` profile must exist or resolution fails
+- selected profile must exist when explicitly requested (except `shared`)
+- local overlay is optional and only included when directory exists
+- non-existent optional files are ignored
