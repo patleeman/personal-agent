@@ -2,16 +2,23 @@
   "name": "@personal-agent/cli",
   "version": "0.1.0",
   "description": "Personal agent CLI",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
     "personal-agent": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc && echo '#!/usr/bin/env node' | cat - dist/index.js > temp && mv temp dist/index.js && chmod +x dist/index.js",
+    "build": "tsc --build && echo '#!/usr/bin/env node' | cat - dist/index.js > temp && mv temp dist/index.js && chmod +x dist/index.js",
     "lint": "eslint src --ext .ts",
     "test": "vitest run",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
     "@personal-agent/core": "*"

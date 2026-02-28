@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hello } from './index';
+import { hello } from './index.js';
 
 describe('core', () => {
   it('should return hello message', () => {

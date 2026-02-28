@@ -7,10 +7,10 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspace=@personal-agent/core && npm run build --workspaces --if-present",
-    "lint": "npm run lint --workspaces --if-present",
+    "build": "tsc --build",
+    "lint": "eslint packages --ext .ts",
     "test": "npm run test --workspaces --if-present",
-    "clean": "npm run clean --workspaces --if-present"
+    "clean": "npm run clean --workspaces --if-present && rm -f tsconfig.tsbuildinfo"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

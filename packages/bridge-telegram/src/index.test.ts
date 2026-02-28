@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { telegramHello } from './index';
+import { telegramHello } from './index.js';
 
 describe('bridge-telegram', () => {
   it('should return telegram message', () => {
