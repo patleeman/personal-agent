@@ -461,6 +461,43 @@ async function daemonCommand(args: string[]): Promise<number> {
   throw new Error(`Unknown daemon subcommand: ${subcommand}`);
 }
 
+async function memoryCommand(args: string[]): Promise<number> {
+  const [subcommand, ...rest] = args;
+
+  if (!subcommand || subcommand === 'list') {
+    const result = spawnSync('qmd', ['ls'], { encoding: 'utf-8' });
+    if (result.error) {
+      throw new Error('Failed to run qmd. Is it installed?');
+    }
+    console.log(result.stdout || result.stderr);
+    return result.status ?? 0;
+  }
+
+  if (subcommand === 'query' || subcommand === 'search') {
+    const query = rest.join(' ');
+    if (!query) {
+      throw new Error(`Usage: pa memory ${subcommand} <query>`);
+    }
+    const result = spawnSync('qmd', [subcommand, query], { encoding: 'utf-8' });
+    if (result.error) {
+      throw new Error('Failed to run qmd. Is it installed?');
+    }
+    console.log(result.stdout || result.stderr);
+    return result.status ?? 0;
+  }
+
+  if (subcommand === 'status') {
+    const result = spawnSync('qmd', ['status'], { encoding: 'utf-8' });
+    if (result.error) {
+      throw new Error('Failed to run qmd. Is it installed?');
+    }
+    console.log(result.stdout || result.stderr);
+    return result.status ?? 0;
+  }
+
+  throw new Error(`Unknown memory subcommand: ${subcommand}`);
+}
+
 type CommandHandler = (args: string[]) => Promise<number>;
 
 interface CliCommandDefinition {
@@ -514,6 +551,12 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       usage: 'daemon [args...]',
       description: 'Manage personal-agent daemon',
       run: daemonCommand,
+    },
+    {
+      name: 'memory',
+      usage: 'memory [list|query|search|status] [args...]',
+      description: 'Query memory (conversation summaries)',
+      run: memoryCommand,
     },
   ];
 
@@ -570,6 +613,8 @@ Examples:
   pa gateway discord start
   pa daemon start
   pa daemon status
+  pa memory list
+  pa memory query "authentication flow"
 `,
     )
     .configureOutput({
