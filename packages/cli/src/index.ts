@@ -376,58 +376,107 @@ Commands:
   throw new Error(`Unknown profile subcommand: ${subcommand}`);
 }
 
-function formatTimestamp(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
+async function printMemoryModuleStatus(module: DaemonStatus['modules'][0]): Promise<void> {
+  const detail = module.detail as {
+    scannedSessions?: number;
+    summarizedSessions?: number;
+    skippedSessions?: number;
+    failedSessions?: number;
+    needsEmbedding?: boolean;
+    dirty?: boolean;
+    lastScanAt?: string;
+    lastError?: string;
+  } | undefined;
+
+  // Get actual counts from filesystem for accuracy
+  const { loadDaemonConfig } = await import('@personal-agent/daemon');
+  const config = loadDaemonConfig();
+
+  const sessionDir = config.modules.memory.sessionSource;
+  const summaryDir = config.modules.memory.summaryDir;
+
+  const sessionFiles = existsSync(sessionDir)
+    ? spawnSync('find', [sessionDir, '-name', '*.jsonl', '-type', 'f'], { encoding: 'utf-8' }).stdout.split('\n').filter(Boolean)
+    : [];
+
+  // Only count summaries in workspace subdirectories (not root level files like 1.md)
+  const summaryFiles = existsSync(summaryDir)
+    ? spawnSync('find', [summaryDir, '-mindepth', '2', '-name', '*.md', '-type', 'f'], { encoding: 'utf-8' }).stdout.split('\n').filter(Boolean)
+    : [];
+
+  const total = sessionFiles.length;
+  const indexed = summaryFiles.length;
+  const failed = detail?.failedSessions ?? 0;
+  const percent = total > 0 ? Math.round((indexed / total) * 100) : 0;
+
+  let statusText: string;
+  if (percent === 100 && !detail?.needsEmbedding && !detail?.dirty) {
+    statusText = chalk.green(`${percent}% indexed`);
+  } else if (percent > 0) {
+    statusText = chalk.yellow(`${percent}% indexed`);
+  } else {
+    statusText = chalk.gray('not indexed');
   }
 
-  return parsed.toLocaleString();
+  console.log(`  ${chalk.cyan('•')} Memory: ${statusText} (${indexed}/${total} conversations)`);
+
+  if (failed > 0) {
+    console.log(`    ${chalk.red('⚠')} ${failed} failed to index`);
+  }
+  if (detail?.needsEmbedding) {
+    console.log(`    ${chalk.yellow('⏳')} Waiting for embedding`);
+  }
+  if (detail?.dirty) {
+    console.log(`    ${chalk.yellow('⏳')} Updates pending`);
+  }
+  if (module.lastError || detail?.lastError) {
+    console.log(`    ${chalk.red('✗')} Error: ${module.lastError || detail?.lastError}`);
+  }
 }
 
-function printDaemonModules(modules: DaemonStatus['modules']): void {
+function printMaintenanceModuleStatus(module: DaemonStatus['modules'][0]): void {
+  console.log(`  ${chalk.cyan('•')} Maintenance: ${module.enabled ? chalk.green('active') : chalk.gray('disabled')}`);
+  if (module.lastError) {
+    console.log(`    ${chalk.red('✗')} Error: ${module.lastError}`);
+  }
+}
+
+async function printDaemonModules(modules: DaemonStatus['modules']): Promise<void> {
   if (modules.length === 0) {
-    console.log(`${chalk.bold('modules')}: ${chalk.dim('none')}`);
+    console.log(chalk.dim('No modules loaded'));
     return;
   }
 
-  console.log(chalk.bold('modules:'));
   for (const module of modules) {
-    const state = module.enabled ? chalk.green('enabled') : chalk.gray('disabled');
-    const errorSuffix = module.lastError
-      ? `${chalk.red(', error=')}${chalk.red(module.lastError)}`
-      : '';
-
-    console.log(`  ${chalk.cyan('•')} ${chalk.bold(module.name)} (${state}, handled=${module.handledEvents}${errorSuffix})`);
+    if (module.name === 'memory') {
+      await printMemoryModuleStatus(module);
+    } else if (module.name === 'maintenance') {
+      printMaintenanceModuleStatus(module);
+    }
   }
 }
 
 async function printDaemonStatusHumanReadable(): Promise<void> {
   const config = loadDaemonConfig();
-  const daemonPaths = resolveDaemonPaths(config.ipc.socketPath);
   const running = await pingDaemon(config);
 
   if (!running) {
-    console.log(`${chalk.yellow('◉')} ${chalk.bold('personal-agentd')}: ${chalk.red('stopped')}`);
-    console.log(`${chalk.dim('socket')}: ${daemonPaths.socketPath}`);
-    console.log(`${chalk.dim('log')}: ${daemonPaths.logFile}`);
-    console.log(`${chalk.blue('hint')}: ${chalk.cyan('pa daemon start')}`);
+    console.log(`${chalk.red('✗')} Daemon is stopped`);
+    console.log(`  Run ${chalk.cyan('pa daemon start')} to start it`);
     return;
   }
 
   const status = await getDaemonStatus(config);
+  const uptime = Date.now() - new Date(status.startedAt).getTime();
+  const uptimeMinutes = Math.floor(uptime / 60000);
+  const uptimeText = uptimeMinutes < 60
+    ? `${uptimeMinutes}m`
+    : `${Math.floor(uptimeMinutes / 60)}h ${uptimeMinutes % 60}m`;
 
-  console.log(`${chalk.green('◉')} ${chalk.bold('personal-agentd')}: ${chalk.green('running')}`);
-  console.log(`${chalk.dim('pid')}: ${status.pid}`);
-  console.log(`${chalk.dim('started')}: ${formatTimestamp(status.startedAt)}`);
-  console.log(`${chalk.dim('socket')}: ${status.socketPath}`);
-  console.log(`${chalk.dim('log')}: ${daemonPaths.logFile}`);
-  console.log(
-    `${chalk.bold('queue')}: ${status.queue.currentDepth} pending, ` +
-    `${status.queue.processedEvents} processed, ${status.queue.droppedEvents} dropped`,
-  );
+  console.log(`${chalk.green('✓')} Daemon running (pid ${status.pid}, up ${uptimeText})`);
+  console.log('');
 
-  printDaemonModules(status.modules);
+  await printDaemonModules(status.modules);
 }
 
 async function daemonCommand(args: string[]): Promise<number> {
