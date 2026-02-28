@@ -6,6 +6,11 @@ import { join } from 'path';
 import { spawn, spawnSync } from 'child_process';
 import TelegramBot from 'node-telegram-bot-api';
 import {
+  Client,
+  GatewayIntentBits,
+  Partials,
+} from 'discord.js';
+import {
   bootstrapStateOrThrow,
   preparePiAgentDir,
   resolveStatePaths,
@@ -27,12 +32,21 @@ export interface TelegramBridgeConfig {
   workingDirectory: string;
 }
 
+export interface DiscordBridgeConfig {
+  token: string;
+  profile: string;
+  allowlist: Set<string>;
+  workingDirectory: string;
+}
+
 export interface TelegramMessageLike {
   chat: { id: number };
   text?: string;
 }
 
 type SendMessageFn = (chatId: number, text: string) => Promise<unknown>;
+
+type SendTextFn = (text: string) => Promise<unknown>;
 
 type SendChatActionFn = (chatId: number, action: 'typing') => Promise<unknown>;
 
@@ -63,9 +77,47 @@ export interface QueuedTelegramMessageHandler {
   waitForIdle: (chatId?: string) => Promise<void>;
 }
 
+export interface DiscordMessageLike {
+  channelId: string;
+  content?: string;
+  authorIsBot?: boolean;
+  sendMessage: SendTextFn;
+  sendTyping: () => Promise<unknown>;
+}
+
+export interface CreateDiscordMessageHandlerOptions {
+  allowlist: Set<string>;
+  profileName: string;
+  agentDir: string;
+  discordSessionDir: string;
+  workingDirectory: string;
+  runPrompt: RunPromptFn;
+  sessionFileExists?: (path: string) => boolean;
+  removeSessionFile?: (path: string) => Promise<void>;
+  maxPendingPerChannel?: number;
+}
+
+export interface QueuedDiscordMessageHandler {
+  handleMessage: (message: DiscordMessageLike) => void;
+  waitForIdle: (channelId?: string) => Promise<void>;
+}
+
 const DEFAULT_PI_TIMEOUT_MS = 180_000;
 const DEFAULT_PI_MAX_OUTPUT_BYTES = 200_000;
 const DEFAULT_MAX_PENDING_PER_CHAT = 20;
+const DEFAULT_MAX_PENDING_PER_CHANNEL = 20;
+
+const GATEWAY_PROVIDERS = ['telegram', 'discord'] as const;
+
+export type GatewayProvider = (typeof GATEWAY_PROVIDERS)[number];
+
+type ResolvedProfile = ReturnType<typeof resolveResourceProfile>;
+
+interface PreparedGatewayRuntime {
+  resolvedProfile: ResolvedProfile;
+  statePaths: ReturnType<typeof resolveStatePaths>;
+  runtime: Awaited<ReturnType<typeof preparePiAgentDir>>;
+}
 
 export function parseAllowlist(value: string | undefined): Set<string> {
   if (!value) return new Set<string>();
@@ -78,7 +130,7 @@ export function parseAllowlist(value: string | undefined): Set<string> {
   );
 }
 
-export function splitTelegramMessage(text: string, chunkSize = 3900): string[] {
+function splitMessage(text: string, chunkSize = 3900): string[] {
   if (text.length <= chunkSize) return [text];
 
   const chunks: string[] = [];
@@ -90,6 +142,10 @@ export function splitTelegramMessage(text: string, chunkSize = 3900): string[] {
   }
 
   return chunks;
+}
+
+export function splitTelegramMessage(text: string, chunkSize = 3900): string[] {
+  return splitMessage(text, chunkSize);
 }
 
 function applyModelDefaults(args: string[], settings: Record<string, unknown>): string[] {
@@ -113,26 +169,9 @@ function applyModelDefaults(args: string[], settings: Record<string, unknown>): 
   return output;
 }
 
-function ensureExtensionDependencies(profile: ReturnType<typeof resolveResourceProfile>): void {
-  if (process.env.PERSONAL_AGENT_SKIP_EXTENSION_INSTALL === '1') {
-    return;
-  }
-
+function ensureExtensionDependencies(profile: ResolvedProfile): void {
   const dependencyDirs = getExtensionDependencyDirs(profile);
   const missingDirs = dependencyDirs.filter((dir) => !existsSync(join(dir, 'node_modules')));
-
-  if (missingDirs.length === 0) {
-    return;
-  }
-
-  const allowAutoInstall = process.env.PERSONAL_AGENT_INSTALL_EXTENSION_DEPS === '1';
-
-  if (!allowAutoInstall) {
-    throw new Error(
-      `Extension dependencies are missing in: ${missingDirs.join(', ')}. ` +
-      `Install them manually (trusted profiles only), or set PERSONAL_AGENT_INSTALL_EXTENSION_DEPS=1 to auto-install.`
-    );
-  }
 
   for (const dir of missingDirs) {
     const result = spawnSync('npm', ['install', '--silent', '--no-package-lock'], {
@@ -149,7 +188,7 @@ function ensureExtensionDependencies(profile: ReturnType<typeof resolveResourceP
 async function runPiPrintPrompt(options: {
   prompt: string;
   sessionFile: string;
-  profile: ReturnType<typeof resolveResourceProfile>;
+  profile: ResolvedProfile;
   agentDir: string;
   cwd: string;
 }): Promise<string> {
@@ -248,10 +287,32 @@ async function runPiPrintPrompt(options: {
   });
 }
 
-async function sendLongMessage(sendMessage: SendMessageFn, chatId: number, text: string): Promise<void> {
-  const chunks = splitTelegramMessage(text || '(empty response)');
+async function prepareGatewayRuntime(profileName: string): Promise<PreparedGatewayRuntime> {
+  const resolvedProfile = resolveResourceProfile(profileName);
+  const statePaths = resolveStatePaths();
+
+  validateStatePathsOutsideRepo(statePaths, resolvedProfile.repoRoot);
+  await bootstrapStateOrThrow(statePaths);
+
+  const runtime = await preparePiAgentDir({
+    statePaths,
+    copyLegacyAuth: true,
+  });
+
+  materializeProfileToAgentDir(resolvedProfile, runtime.agentDir);
+  ensureExtensionDependencies(resolvedProfile);
+
+  return {
+    resolvedProfile,
+    statePaths,
+    runtime,
+  };
+}
+
+async function sendLongText(sendMessage: SendTextFn, text: string): Promise<void> {
+  const chunks = splitMessage(text || '(empty response)');
   for (const chunk of chunks) {
-    await sendMessage(chatId, chunk);
+    await sendMessage(chunk);
   }
 }
 
@@ -324,7 +385,7 @@ async function processTelegramMessage(
       },
     });
 
-    await sendLongMessage(options.sendMessage, message.chat.id, output || '(no output)');
+    await sendLongText((chunk) => options.sendMessage(message.chat.id, chunk), output || '(no output)');
   } catch (error) {
     await emitDaemonEventNonFatal({
       type: 'session.processing.failed',
@@ -406,7 +467,7 @@ export function createQueuedTelegramMessageHandler(
   };
 }
 
-async function createConfigFromEnv(): Promise<TelegramBridgeConfig> {
+async function createTelegramConfigFromEnv(): Promise<TelegramBridgeConfig> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) {
     throw new Error('TELEGRAM_BOT_TOKEN is required');
@@ -430,20 +491,8 @@ async function createConfigFromEnv(): Promise<TelegramBridgeConfig> {
 }
 
 export async function startTelegramBridge(config?: TelegramBridgeConfig): Promise<void> {
-  const effectiveConfig = config ?? await createConfigFromEnv();
-  const resolvedProfile = resolveResourceProfile(effectiveConfig.profile);
-  const statePaths = resolveStatePaths();
-
-  validateStatePathsOutsideRepo(statePaths, resolvedProfile.repoRoot);
-  await bootstrapStateOrThrow(statePaths);
-
-  const runtime = await preparePiAgentDir({
-    statePaths,
-    copyLegacyAuth: true,
-  });
-
-  materializeProfileToAgentDir(resolvedProfile, runtime.agentDir);
-  ensureExtensionDependencies(resolvedProfile);
+  const effectiveConfig = config ?? await createTelegramConfigFromEnv();
+  const { resolvedProfile, statePaths, runtime } = await prepareGatewayRuntime(effectiveConfig.profile);
 
   const telegramSessionDir = join(statePaths.session, 'telegram');
   await mkdir(telegramSessionDir, { recursive: true });
@@ -482,8 +531,468 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
   console.log(`Allowed chats: ${[...effectiveConfig.allowlist].join(', ')}`);
 }
 
+async function processDiscordMessage(
+  options: CreateDiscordMessageHandlerOptions,
+  message: DiscordMessageLike,
+): Promise<void> {
+  if (message.authorIsBot) {
+    return;
+  }
+
+  const channelId = message.channelId;
+
+  if (!options.allowlist.has(channelId)) {
+    await message.sendMessage('This channel is not allowed.');
+    return;
+  }
+
+  const text = message.content?.trim();
+  if (!text) {
+    await message.sendMessage('Please send text messages only.');
+    return;
+  }
+
+  const sessionFile = join(options.discordSessionDir, `${channelId}.jsonl`);
+  const sessionFileExists = options.sessionFileExists ?? existsSync;
+  const removeSessionFile = options.removeSessionFile ?? ((path: string) => rm(path, { force: true }));
+
+  if (text === '/new') {
+    if (sessionFileExists(sessionFile)) {
+      await removeSessionFile(sessionFile);
+    }
+
+    await emitDaemonEventNonFatal({
+      type: 'session.closed',
+      source: 'gateway',
+      payload: {
+        sessionFile,
+        profile: options.profileName,
+        cwd: options.workingDirectory,
+        reason: 'discord-new-command',
+      },
+    });
+
+    await message.sendMessage('Started a new session.');
+    return;
+  }
+
+  if (text === '/status') {
+    await message.sendMessage(
+      `profile=${options.profileName}\nagentDir=${options.agentDir}\nsession=${sessionFile}`,
+    );
+    return;
+  }
+
+  await message.sendTyping();
+
+  try {
+    const output = await options.runPrompt({
+      prompt: text,
+      sessionFile,
+      cwd: options.workingDirectory,
+    });
+
+    await emitDaemonEventNonFatal({
+      type: 'session.updated',
+      source: 'gateway',
+      payload: {
+        sessionFile,
+        profile: options.profileName,
+        cwd: options.workingDirectory,
+        channelId,
+      },
+    });
+
+    await sendLongText(message.sendMessage, output || '(no output)');
+  } catch (error) {
+    await emitDaemonEventNonFatal({
+      type: 'session.processing.failed',
+      source: 'gateway',
+      payload: {
+        sessionFile,
+        profile: options.profileName,
+        cwd: options.workingDirectory,
+        channelId,
+        message: (error as Error).message,
+      },
+    });
+
+    await message.sendMessage(`Error: ${(error as Error).message}`);
+  }
+}
+
+export function createQueuedDiscordMessageHandler(
+  options: CreateDiscordMessageHandlerOptions,
+): QueuedDiscordMessageHandler {
+  const channelQueue = new Map<string, Promise<void>>();
+  const pendingPerChannel = new Map<string, number>();
+  const maxPendingPerChannel = options.maxPendingPerChannel ?? DEFAULT_MAX_PENDING_PER_CHANNEL;
+
+  const enqueue = (channelId: string, task: () => Promise<void>) => {
+    const previous = channelQueue.get(channelId) ?? Promise.resolve();
+
+    const next = previous
+      .then(task)
+      .catch((error) => {
+        console.error(`[discord:${channelId}]`, error);
+      })
+      .finally(() => {
+        if (channelQueue.get(channelId) === next) {
+          channelQueue.delete(channelId);
+        }
+      });
+
+    channelQueue.set(channelId, next);
+  };
+
+  return {
+    handleMessage(message: DiscordMessageLike): void {
+      if (message.authorIsBot) {
+        return;
+      }
+
+      const channelId = message.channelId;
+      const pending = pendingPerChannel.get(channelId) ?? 0;
+
+      if (pending >= maxPendingPerChannel) {
+        void message.sendMessage(
+          `Too many pending messages for this channel (limit: ${maxPendingPerChannel}). Please wait and try again.`,
+        );
+        return;
+      }
+
+      pendingPerChannel.set(channelId, pending + 1);
+
+      enqueue(channelId, async () => {
+        try {
+          await processDiscordMessage(options, message);
+        } finally {
+          const nextPending = (pendingPerChannel.get(channelId) ?? 1) - 1;
+          if (nextPending <= 0) {
+            pendingPerChannel.delete(channelId);
+          } else {
+            pendingPerChannel.set(channelId, nextPending);
+          }
+        }
+      });
+    },
+
+    async waitForIdle(channelId?: string): Promise<void> {
+      if (channelId) {
+        await (channelQueue.get(channelId) ?? Promise.resolve());
+        return;
+      }
+
+      await Promise.all([...channelQueue.values()]);
+    },
+  };
+}
+
+async function createDiscordConfigFromEnv(): Promise<DiscordBridgeConfig> {
+  const token = process.env.DISCORD_BOT_TOKEN;
+  if (!token) {
+    throw new Error('DISCORD_BOT_TOKEN is required');
+  }
+
+  const profile = process.env.PERSONAL_AGENT_PROFILE || 'shared';
+  const allowlist = parseAllowlist(process.env.PERSONAL_AGENT_DISCORD_ALLOWLIST);
+
+  if (allowlist.size === 0) {
+    throw new Error('PERSONAL_AGENT_DISCORD_ALLOWLIST is required (comma-separated channel IDs)');
+  }
+
+  const workingDirectory = process.env.PERSONAL_AGENT_DISCORD_CWD || process.cwd();
+
+  return {
+    token,
+    profile,
+    allowlist,
+    workingDirectory,
+  };
+}
+
+function hasDiscordChannelMessaging(channel: unknown): channel is {
+  send: (text: string) => Promise<unknown>;
+  sendTyping: () => Promise<unknown>;
+} {
+  if (!channel || typeof channel !== 'object') {
+    return false;
+  }
+
+  const candidate = channel as Record<string, unknown>;
+  return typeof candidate.send === 'function' && typeof candidate.sendTyping === 'function';
+}
+
+export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<void> {
+  const effectiveConfig = config ?? await createDiscordConfigFromEnv();
+  const { resolvedProfile, statePaths, runtime } = await prepareGatewayRuntime(effectiveConfig.profile);
+
+  const discordSessionDir = join(statePaths.session, 'discord');
+  await mkdir(discordSessionDir, { recursive: true });
+
+  const configuredMaxPendingPerChannel = Number(
+    process.env.PERSONAL_AGENT_DISCORD_MAX_PENDING_PER_CHANNEL ?? DEFAULT_MAX_PENDING_PER_CHANNEL,
+  );
+
+  const maxPendingPerChannel = Number.isFinite(configuredMaxPendingPerChannel) && configuredMaxPendingPerChannel > 0
+    ? Math.floor(configuredMaxPendingPerChannel)
+    : DEFAULT_MAX_PENDING_PER_CHANNEL;
+
+  const handler = createQueuedDiscordMessageHandler({
+    allowlist: effectiveConfig.allowlist,
+    profileName: effectiveConfig.profile,
+    agentDir: runtime.agentDir,
+    discordSessionDir,
+    workingDirectory: effectiveConfig.workingDirectory,
+    maxPendingPerChannel,
+    runPrompt: ({ prompt, sessionFile, cwd }) => runPiPrintPrompt({
+      prompt,
+      sessionFile,
+      profile: resolvedProfile,
+      agentDir: runtime.agentDir,
+      cwd,
+    }),
+  });
+
+  const client = new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.DirectMessages,
+      GatewayIntentBits.MessageContent,
+    ],
+    partials: [Partials.Channel],
+  });
+
+  client.on('messageCreate', (message) => {
+    if (!hasDiscordChannelMessaging(message.channel)) {
+      return;
+    }
+
+    handler.handleMessage({
+      channelId: message.channelId,
+      content: message.content,
+      authorIsBot: message.author?.bot ?? false,
+      sendMessage: (text) => message.channel.send(text),
+      sendTyping: () => message.channel.sendTyping(),
+    });
+  });
+
+  client.once('ready', () => {
+    console.log(`Discord bridge started (profile=${effectiveConfig.profile})`);
+    console.log(`Allowed channels: ${[...effectiveConfig.allowlist].join(', ')}`);
+  });
+
+  client.on('error', (error) => {
+    console.error('Discord bridge error:', error);
+  });
+
+  await client.login(effectiveConfig.token);
+}
+
+function isGatewayProvider(value: string | undefined): value is GatewayProvider {
+  if (!value) {
+    return false;
+  }
+
+  return (GATEWAY_PROVIDERS as readonly string[]).includes(value);
+}
+
+function isHelpToken(value: string | undefined): boolean {
+  return value === 'help' || value === '--help' || value === '-h';
+}
+
+function isStartToken(value: string | undefined): boolean {
+  return value === 'start';
+}
+
+function ensureNoExtraGatewayArgs(args: string[], expectedLength: number, command: string): void {
+  if (args.length <= expectedLength) {
+    return;
+  }
+
+  throw new Error(`Too many arguments for \`${command}\``);
+}
+
+export interface ParsedGatewayCliArgs {
+  action: 'start' | 'help';
+  provider?: GatewayProvider;
+}
+
+export function parseGatewayCliArgs(args: string[]): ParsedGatewayCliArgs {
+  const [first, second] = args;
+
+  if (!first) {
+    return {
+      action: 'start',
+      provider: 'telegram',
+    };
+  }
+
+  if (isHelpToken(first)) {
+    ensureNoExtraGatewayArgs(args, 1, 'pa gateway help');
+    return {
+      action: 'help',
+    };
+  }
+
+  if (isStartToken(first)) {
+    if (!second) {
+      return {
+        action: 'start',
+        provider: 'telegram',
+      };
+    }
+
+    if (!isGatewayProvider(second)) {
+      throw new Error(`Unknown gateway provider: ${second}`);
+    }
+
+    ensureNoExtraGatewayArgs(args, 2, `pa gateway start ${second}`);
+
+    return {
+      action: 'start',
+      provider: second,
+    };
+  }
+
+  if (isGatewayProvider(first)) {
+    if (!second) {
+      return {
+        action: 'start',
+        provider: first,
+      };
+    }
+
+    if (isStartToken(second)) {
+      ensureNoExtraGatewayArgs(args, 2, `pa gateway ${first} start`);
+      return {
+        action: 'start',
+        provider: first,
+      };
+    }
+
+    if (isHelpToken(second)) {
+      ensureNoExtraGatewayArgs(args, 2, `pa gateway ${first} help`);
+      return {
+        action: 'help',
+        provider: first,
+      };
+    }
+
+    throw new Error(`Unknown ${first} subcommand: ${second}`);
+  }
+
+  throw new Error(`Unknown gateway subcommand: ${first}`);
+}
+
+async function startGateway(provider: GatewayProvider): Promise<void> {
+  if (provider === 'telegram') {
+    await startTelegramBridge();
+    return;
+  }
+
+  await startDiscordBridge();
+}
+
+function printGatewayHelp(provider?: GatewayProvider): void {
+  if (provider === 'telegram') {
+    console.log(`pa gateway telegram
+
+Commands:
+  pa gateway telegram start    Start Telegram bridge in foreground
+  pa gateway telegram help     Show Telegram gateway help
+
+Environment:
+  TELEGRAM_BOT_TOKEN
+  PERSONAL_AGENT_TELEGRAM_ALLOWLIST
+  PERSONAL_AGENT_PROFILE (optional, default: shared)
+  PERSONAL_AGENT_TELEGRAM_CWD (optional, default: current working directory)
+  PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT (optional, default: 20)
+`);
+    return;
+  }
+
+  if (provider === 'discord') {
+    console.log(`pa gateway discord
+
+Commands:
+  pa gateway discord start     Start Discord bridge in foreground
+  pa gateway discord help      Show Discord gateway help
+
+Environment:
+  DISCORD_BOT_TOKEN
+  PERSONAL_AGENT_DISCORD_ALLOWLIST
+  PERSONAL_AGENT_PROFILE (optional, default: shared)
+  PERSONAL_AGENT_DISCORD_CWD (optional, default: current working directory)
+  PERSONAL_AGENT_DISCORD_MAX_PENDING_PER_CHANNEL (optional, default: 20)
+`);
+    return;
+  }
+
+  console.log(`pa gateway
+
+Commands:
+  pa gateway [start]                 Start Telegram bridge in foreground
+  pa gateway telegram [start|help]   Telegram gateway commands
+  pa gateway discord [start|help]    Discord gateway commands
+  pa gateway start <provider>        Start specific provider (telegram|discord)
+  pa gateway help                    Show gateway help
+
+Shared Environment:
+  PERSONAL_AGENT_PROFILE (optional, default: shared)
+  PERSONAL_AGENT_PI_TIMEOUT_MS (optional, default: 180000)
+  PERSONAL_AGENT_PI_MAX_OUTPUT_BYTES (optional, default: 200000)
+`);
+}
+
+async function runGatewayCommand(args: string[]): Promise<number> {
+  const parsed = parseGatewayCliArgs(args);
+
+  if (parsed.action === 'help') {
+    printGatewayHelp(parsed.provider);
+    return 0;
+  }
+
+  await startGateway(parsed.provider ?? 'telegram');
+  return 0;
+}
+
+export interface RegisteredCliCommand {
+  name: string;
+  usage: string;
+  description: string;
+  run: (args: string[]) => Promise<number>;
+}
+
+export type CliCommandRegistrar = (command: RegisteredCliCommand) => void;
+
+export function registerGatewayCliCommands(register: CliCommandRegistrar): void {
+  register({
+    name: 'gateway',
+    usage: 'pa gateway [telegram|discord] [start|help]',
+    description: 'Run messaging gateway commands',
+    run: runGatewayCommand,
+  });
+}
+
+async function startGatewayFromEnv(): Promise<void> {
+  const providerValue = process.env.PERSONAL_AGENT_GATEWAY_PROVIDER?.trim().toLowerCase();
+
+  if (!providerValue) {
+    await startTelegramBridge();
+    return;
+  }
+
+  if (!isGatewayProvider(providerValue)) {
+    throw new Error(`Unsupported PERSONAL_AGENT_GATEWAY_PROVIDER: ${providerValue}`);
+  }
+
+  await startGateway(providerValue);
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
-  startTelegramBridge().catch((error) => {
+  startGatewayFromEnv().catch((error) => {
     console.error((error as Error).message);
     process.exit(1);
   });
