@@ -1,0 +1,17 @@
+{
+  "name": "@personal-agent/bridge-telegram",
+  "version": "0.1.0",
+  "description": "Telegram bridge for personal agent",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@personal-agent/core": "*"
+  },
+  "devDependencies": {}
+}

@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "declaration": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "paths": {
+      "@personal-agent/core": ["./packages/core/src"],
+      "@personal-agent/cli": ["./packages/cli/src"],
+      "@personal-agent/resources": ["./packages/resources/src"],
+      "@personal-agent/bridge-telegram": ["./packages/bridge-telegram/src"]
+    },
+    "baseUrl": "."
+  },
+  "exclude": ["node_modules", "dist"]
+}
