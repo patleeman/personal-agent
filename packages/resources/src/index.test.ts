@@ -71,6 +71,34 @@ describe('resources profile loader', () => {
     expect(resolved.agentsFiles.length).toBe(3);
   });
 
+  it('layers shared and profile skills for datadog even without overlay AGENTS.md', () => {
+    const repo = createTempRepo();
+
+    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'profiles/shared/agent/skills/shared-skill/SKILL.md'), '# Shared Skill\n');
+    writeFile(join(repo, 'profiles/datadog/agent/skills/dd-skill/SKILL.md'), '# Datadog Skill\n');
+
+    const resolved = resolveResourceProfile('datadog', { repoRoot: repo });
+
+    expect(resolved.layers.map((layer) => layer.name)).toEqual(['shared', 'datadog']);
+    expect(resolved.agentsFiles).toEqual([join(repo, 'profiles/shared/agent/AGENTS.md')]);
+    expect(resolved.skillDirs).toEqual([
+      join(repo, 'profiles/shared/agent/skills'),
+      join(repo, 'profiles/datadog/agent/skills'),
+    ]);
+
+    const args = buildPiResourceArgs(resolved);
+    const skillArgs = args
+      .map((value, index) => ({ value, index }))
+      .filter((entry) => entry.value === '--skill')
+      .map((entry) => args[entry.index + 1]);
+
+    expect(skillArgs).toEqual([
+      join(repo, 'profiles/shared/agent/skills'),
+      join(repo, 'profiles/datadog/agent/skills'),
+    ]);
+  });
+
   it('merges json files in layer order', () => {
     const repo = createTempRepo();
     const fileA = join(repo, 'a.json');
