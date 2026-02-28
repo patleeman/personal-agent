@@ -1,5 +1,5 @@
-import { hello } from '@personal-agent/core';
+import { SCHEMA_VERSION } from '@personal-agent/core';
 
 export function resourcesHello(): string {
-  return `${hello()} - resources`;
+  return `Resources using schema ${SCHEMA_VERSION}`;
 }
