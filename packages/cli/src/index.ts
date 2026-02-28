@@ -5,6 +5,7 @@ import { existsSync, realpathSync } from 'fs';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import { createInterface } from 'readline';
 import { Command, CommanderError } from 'commander';
 import chalk from 'chalk';
 import {
@@ -41,6 +42,39 @@ function ensurePiInstalled(): void {
   const result = spawnSync('pi', ['--version'], { encoding: 'utf-8' });
   if (result.error || result.status !== 0) {
     throw new Error('`pi` command not found. Install with: npm install -g @mariozechner/pi-coding-agent');
+  }
+}
+
+function promptUser(question: string): Promise<string> {
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim().toLowerCase());
+    });
+  });
+}
+
+async function maybeStartDaemon(): Promise<void> {
+  const config = loadDaemonConfig();
+  const running = await pingDaemon(config);
+
+  if (running) {
+    return;
+  }
+
+  console.log(chalk.yellow('⚠ Daemon is not running.'));
+  const answer = await promptUser('Would you like to start it? [Y/n] ');
+
+  if (answer === '' || answer === 'y' || answer === 'yes') {
+    await startDaemonDetached();
+    console.log(chalk.green('✓ Daemon started'));
+    // Give daemon a moment to initialize
+    await new Promise((resolve) => setTimeout(resolve, 500));
   }
 }
 
@@ -104,6 +138,7 @@ async function runPi(profileName: string, piArgs: string[]): Promise<number> {
   validateStatePathsOutsideRepo(statePaths, resolvedProfile.repoRoot);
 
   ensurePiInstalled();
+  await maybeStartDaemon();
 
   return runPiWithResolvedProfile(resolvedProfile, piArgs);
 }
