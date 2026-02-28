@@ -698,14 +698,15 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
     const definitions = buildCommandDefinitions();
     const knownCommands = new Set(definitions.map((definition) => definition.name));
 
-    if (argv.length === 0) {
-      return runCommand([]);
-    }
-
     let exitCode = 0;
     const program = createProgram(definitions, (code) => {
       exitCode = code;
     });
+
+    if (argv.length === 0) {
+      await program.parseAsync(['--help'], { from: 'user' });
+      return 0;
+    }
 
     const firstArg = argv[0];
     const isHelpRequest = firstArg === '--help' || firstArg === '-h' || firstArg === 'help';
