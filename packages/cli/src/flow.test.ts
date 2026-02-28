@@ -60,7 +60,10 @@ echo "ok"
 }
 
 beforeEach(() => {
-  process.env = { ...originalEnv };
+  process.env = {
+    ...originalEnv,
+    PERSONAL_AGENT_DISABLE_DAEMON_EVENTS: '1',
+  };
 });
 
 afterEach(async () => {

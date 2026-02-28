@@ -1,7 +1,7 @@
 {
-  "name": "@personal-agent/cli",
+  "name": "@personal-agent/gateway",
   "version": "0.1.0",
-  "description": "Personal agent CLI",
+  "description": "Telegram gateway for personal agent",
   "type": "module",
   "exports": {
     ".": {
@@ -12,7 +12,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "personal-agent": "./dist/index.js"
+    "personal-agent-telegram": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc --build",
@@ -23,7 +23,10 @@
   "dependencies": {
     "@personal-agent/core": "*",
     "@personal-agent/daemon": "*",
-    "@personal-agent/resources": "*"
+    "@personal-agent/resources": "*",
+    "node-telegram-bot-api": "^0.66.0"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@types/node-telegram-bot-api": "^0.64.7"
+  }
 }

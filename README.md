@@ -9,8 +9,9 @@ A personal application layer over Pi that keeps:
 
 - `@personal-agent/core` — runtime path/bootstrap + profile data merge engine
 - `@personal-agent/resources` — profile discovery/materialization + Pi resource args
+- `@personal-agent/daemon` — shared background daemon (`personal-agentd`) with event bus + modules
 - `@personal-agent/cli` — `personal-agent` wrapper command
-- `@personal-agent/bridge-telegram` — Telegram daemon (`personal-agent-telegram`)
+- `@personal-agent/gateway` — Telegram gateway (`personal-agent-telegram`)
 
 ## Quickstart
 
@@ -50,7 +51,23 @@ personal-agent run
 personal-agent profile list
 personal-agent profile use datadog
 personal-agent doctor
+personal-agent daemon start
+personal-agent daemon status
 ```
+
+## Daemon
+
+`personal-agentd` runs background modules (memory, maintenance) behind a local event bus.
+
+CLI surface:
+
+- `personal-agent daemon start`
+- `personal-agent daemon stop`
+- `personal-agent daemon status`
+- `personal-agent daemon restart`
+- `personal-agent daemon logs`
+
+When daemon is unavailable, clients warn and continue (non-fatal).
 
 ## Telegram bridge
 
@@ -93,5 +110,7 @@ Optional local overlay:
 See docs:
 
 - `docs/architecture.md`
+- `docs/daemon-architecture.md`
+- `docs/memory-package.md`
 - `docs/profile-schema.md`
 - `docs/migration-strategy.md`

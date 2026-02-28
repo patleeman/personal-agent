@@ -18,6 +18,7 @@ import {
   mergeJsonFiles,
   resolveResourceProfile,
 } from '@personal-agent/resources';
+import { emitDaemonEventNonFatal } from '@personal-agent/daemon';
 
 export interface TelegramBridgeConfig {
   token: string;
@@ -279,6 +280,18 @@ async function processTelegramMessage(
     if (sessionFileExists(sessionFile)) {
       await removeSessionFile(sessionFile);
     }
+
+    await emitDaemonEventNonFatal({
+      type: 'session.closed',
+      source: 'gateway',
+      payload: {
+        sessionFile,
+        profile: options.profileName,
+        cwd: options.workingDirectory,
+        reason: 'telegram-new-command',
+      },
+    });
+
     await options.sendMessage(message.chat.id, 'Started a new session.');
     return;
   }
@@ -300,8 +313,31 @@ async function processTelegramMessage(
       cwd: options.workingDirectory,
     });
 
+    await emitDaemonEventNonFatal({
+      type: 'session.updated',
+      source: 'gateway',
+      payload: {
+        sessionFile,
+        profile: options.profileName,
+        cwd: options.workingDirectory,
+        chatId,
+      },
+    });
+
     await sendLongMessage(options.sendMessage, message.chat.id, output || '(no output)');
   } catch (error) {
+    await emitDaemonEventNonFatal({
+      type: 'session.processing.failed',
+      source: 'gateway',
+      payload: {
+        sessionFile,
+        profile: options.profileName,
+        cwd: options.workingDirectory,
+        chatId,
+        message: (error as Error).message,
+      },
+    });
+
     await options.sendMessage(message.chat.id, `Error: ${(error as Error).message}`);
   }
 }

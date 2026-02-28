@@ -1,7 +1,7 @@
 {
-  "name": "@personal-agent/bridge-telegram",
+  "name": "@personal-agent/daemon",
   "version": "0.1.0",
-  "description": "Telegram bridge for personal agent",
+  "description": "personal-agent background daemon",
   "type": "module",
   "exports": {
     ".": {
@@ -12,7 +12,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "personal-agent-telegram": "./dist/index.js"
+    "personal-agentd": "./dist/index.js"
   },
   "scripts": {
     "build": "tsc --build",
@@ -21,11 +21,7 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
-    "@personal-agent/core": "*",
-    "@personal-agent/resources": "*",
-    "node-telegram-bot-api": "^0.66.0"
+    "@personal-agent/core": "*"
   },
-  "devDependencies": {
-    "@types/node-telegram-bot-api": "^0.64.7"
-  }
+  "devDependencies": {}
 }

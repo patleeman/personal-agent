@@ -9,6 +9,7 @@ describe('parseCommand', () => {
   it('detects explicit commands', () => {
     expect(parseCommand(['profile', 'list'])).toEqual({ command: 'profile', args: ['list'] });
     expect(parseCommand(['doctor'])).toEqual({ command: 'doctor', args: [] });
+    expect(parseCommand(['daemon', 'status'])).toEqual({ command: 'daemon', args: ['status'] });
     expect(parseCommand(['run', '--profile', 'shared'])).toEqual({
       command: 'run',
       args: ['--profile', 'shared'],

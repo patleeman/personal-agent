@@ -1,9 +1,22 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createQueuedTelegramMessageHandler,
   parseAllowlist,
   splitTelegramMessage,
 } from './index.js';
+
+const originalEnv = process.env;
+
+beforeEach(() => {
+  process.env = {
+    ...originalEnv,
+    PERSONAL_AGENT_DISABLE_DAEMON_EVENTS: '1',
+  };
+});
+
+afterEach(() => {
+  process.env = originalEnv;
+});
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve = () => {};

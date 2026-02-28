@@ -19,6 +19,15 @@ import {
   mergeJsonFiles,
   resolveResourceProfile,
 } from '@personal-agent/resources';
+import {
+  daemonStatusJson,
+  emitDaemonEventNonFatal,
+  loadDaemonConfig,
+  readDaemonPid,
+  resolveDaemonPaths,
+  startDaemonDetached,
+  stopDaemonGracefully,
+} from '@personal-agent/daemon';
 import { extractProfileFlag, hasOption, parseCommand } from './args.js';
 import { readConfig, setDefaultProfile } from './config.js';
 
@@ -31,6 +40,11 @@ Commands:
   personal-agent profile show [name]                  Show resolved profile details
   personal-agent profile use <name>                   Set default profile
   personal-agent doctor [--profile <name>]            Validate local setup
+  personal-agent daemon start                         Start personal-agentd in background
+  personal-agent daemon stop                          Stop personal-agentd
+  personal-agent daemon status                        Print daemon status JSON
+  personal-agent daemon restart                       Restart personal-agentd
+  personal-agent daemon logs                          Print daemon log path and pid
 
 Examples:
   personal-agent run
@@ -39,6 +53,8 @@ Examples:
   personal-agent profile list
   personal-agent profile use datadog
   personal-agent doctor
+  personal-agent daemon start
+  personal-agent daemon status
 `);
 }
 
@@ -113,6 +129,16 @@ function applyDefaultModelArgs(args: string[], settings: Record<string, unknown>
   return output;
 }
 
+function extractSessionFile(args: string[]): string | undefined {
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--session') {
+      return args[i + 1];
+    }
+  }
+
+  return undefined;
+}
+
 async function runPi(profileName: string, piArgs: string[]): Promise<number> {
   const resolvedProfile = resolveResourceProfile(profileName);
   const statePaths = resolveStatePaths();
@@ -161,7 +187,34 @@ async function runPiWithResolvedProfile(
     throw result.error;
   }
 
-  return result.status ?? 1;
+  const sessionFile = extractSessionFile(withDefaults);
+  const statusCode = result.status ?? 1;
+
+  if (statusCode === 0) {
+    await emitDaemonEventNonFatal({
+      type: sessionFile ? 'session.closed' : 'pi.run.completed',
+      source: 'cli',
+      payload: {
+        profile: resolvedProfile.name,
+        cwd: process.cwd(),
+        sessionFile,
+      },
+    });
+  }
+
+  if (statusCode !== 0) {
+    await emitDaemonEventNonFatal({
+      type: 'pi.run.failed',
+      source: 'cli',
+      payload: {
+        profile: resolvedProfile.name,
+        cwd: process.cwd(),
+        statusCode,
+      },
+    });
+  }
+
+  return statusCode;
 }
 
 function printProfileList(): void {
@@ -308,6 +361,45 @@ async function profileCommand(args: string[]): Promise<number> {
   throw new Error(`Unknown profile subcommand: ${subcommand}`);
 }
 
+async function daemonCommand(args: string[]): Promise<number> {
+  const [subcommand] = args;
+
+  if (!subcommand || subcommand === 'status') {
+    console.log(await daemonStatusJson());
+    return 0;
+  }
+
+  if (subcommand === 'start') {
+    await startDaemonDetached();
+    console.log('personal-agentd start requested');
+    return 0;
+  }
+
+  if (subcommand === 'stop') {
+    await stopDaemonGracefully();
+    console.log('personal-agentd stop requested');
+    return 0;
+  }
+
+  if (subcommand === 'restart') {
+    await stopDaemonGracefully();
+    await startDaemonDetached();
+    console.log('personal-agentd restart requested');
+    return 0;
+  }
+
+  if (subcommand === 'logs') {
+    const config = loadDaemonConfig();
+    const daemonPaths = resolveDaemonPaths(config.ipc.socketPath);
+    const pid = await readDaemonPid();
+    console.log(`logFile=${daemonPaths.logFile}`);
+    console.log(`pid=${pid ?? 'unknown'}`);
+    return 0;
+  }
+
+  throw new Error(`Unknown daemon subcommand: ${subcommand}`);
+}
+
 export async function runCli(argv: string[] = process.argv.slice(2)): Promise<number> {
   try {
     const parsed = parseCommand(argv);
@@ -328,6 +420,10 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
     if (parsed.command === 'doctor') {
       const profileFlag = extractProfileFlag(parsed.args);
       return await doctor(profileFlag.profile);
+    }
+
+    if (parsed.command === 'daemon') {
+      return await daemonCommand(parsed.args);
     }
 
     printHelp();

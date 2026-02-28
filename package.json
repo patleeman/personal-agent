@@ -14,7 +14,8 @@
     "run": "node packages/cli/dist/index.js run",
     "doctor": "node packages/cli/dist/index.js doctor",
     "profile:list": "node packages/cli/dist/index.js profile list",
-    "telegram": "node packages/bridge-telegram/dist/index.js"
+    "daemon": "node packages/daemon/dist/index.js",
+    "telegram": "node packages/gateway/dist/index.js"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

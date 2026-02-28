@@ -1,4 +1,4 @@
-export type CliCommand = 'run' | 'profile' | 'doctor' | 'help';
+export type CliCommand = 'run' | 'profile' | 'doctor' | 'daemon' | 'help';
 
 export interface ParsedCommand {
   command: CliCommand;
@@ -21,7 +21,7 @@ export function parseCommand(argv: string[]): ParsedCommand {
     return { command: 'help', args: rest };
   }
 
-  if (first === 'run' || first === 'profile' || first === 'doctor') {
+  if (first === 'run' || first === 'profile' || first === 'doctor' || first === 'daemon') {
     return { command: first, args: rest };
   }
 
