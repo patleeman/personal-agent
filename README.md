@@ -31,6 +31,18 @@ node packages/cli/dist/index.js run
 node packages/cli/dist/index.js run --profile datadog
 ```
 
+If a profile contains extension packages with dependencies, install those dependencies explicitly (trusted profiles only), for example:
+
+```bash
+cd profiles/shared/agent/extensions && npm install
+```
+
+Or opt in to one-time auto-install at runtime:
+
+```bash
+PERSONAL_AGENT_INSTALL_EXTENSION_DEPS=1 personal-agent run
+```
+
 After packaging/installing CLI binary:
 
 ```bash
@@ -51,6 +63,10 @@ Optional:
 
 - `PERSONAL_AGENT_PROFILE` (default: `shared`)
 - `PERSONAL_AGENT_TELEGRAM_CWD` (working directory for Pi calls)
+- `PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT` (default: `20`)
+- `PERSONAL_AGENT_PI_TIMEOUT_MS` (default: `180000`)
+- `PERSONAL_AGENT_PI_MAX_OUTPUT_BYTES` (default: `200000`)
+- `PERSONAL_AGENT_INSTALL_EXTENSION_DEPS=1` (opt-in auto-install for trusted extension deps)
 
 Run bridge:
 

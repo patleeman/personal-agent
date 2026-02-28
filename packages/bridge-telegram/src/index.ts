@@ -54,12 +54,17 @@ export interface CreateTelegramMessageHandlerOptions {
   runPrompt: RunPromptFn;
   sessionFileExists?: (path: string) => boolean;
   removeSessionFile?: (path: string) => Promise<void>;
+  maxPendingPerChat?: number;
 }
 
 export interface QueuedTelegramMessageHandler {
   handleMessage: (message: TelegramMessageLike) => void;
   waitForIdle: (chatId?: string) => Promise<void>;
 }
+
+const DEFAULT_PI_TIMEOUT_MS = 180_000;
+const DEFAULT_PI_MAX_OUTPUT_BYTES = 200_000;
+const DEFAULT_MAX_PENDING_PER_CHAT = 20;
 
 export function parseAllowlist(value: string | undefined): Set<string> {
   if (!value) return new Set<string>();
@@ -113,12 +118,22 @@ function ensureExtensionDependencies(profile: ReturnType<typeof resolveResourceP
   }
 
   const dependencyDirs = getExtensionDependencyDirs(profile);
+  const missingDirs = dependencyDirs.filter((dir) => !existsSync(join(dir, 'node_modules')));
 
-  for (const dir of dependencyDirs) {
-    if (existsSync(join(dir, 'node_modules'))) {
-      continue;
-    }
+  if (missingDirs.length === 0) {
+    return;
+  }
 
+  const allowAutoInstall = process.env.PERSONAL_AGENT_INSTALL_EXTENSION_DEPS === '1';
+
+  if (!allowAutoInstall) {
+    throw new Error(
+      `Extension dependencies are missing in: ${missingDirs.join(', ')}. ` +
+      `Install them manually (trusted profiles only), or set PERSONAL_AGENT_INSTALL_EXTENSION_DEPS=1 to auto-install.`
+    );
+  }
+
+  for (const dir of missingDirs) {
     const result = spawnSync('npm', ['install', '--silent', '--no-package-lock'], {
       cwd: dir,
       stdio: 'inherit',
@@ -153,6 +168,18 @@ async function runPiPrintPrompt(options: {
     settings,
   );
 
+  const configuredTimeoutMs = Number(process.env.PERSONAL_AGENT_PI_TIMEOUT_MS ?? DEFAULT_PI_TIMEOUT_MS);
+  const timeoutMs = Number.isFinite(configuredTimeoutMs) && configuredTimeoutMs > 0
+    ? Math.floor(configuredTimeoutMs)
+    : DEFAULT_PI_TIMEOUT_MS;
+
+  const configuredMaxOutputBytes = Number(
+    process.env.PERSONAL_AGENT_PI_MAX_OUTPUT_BYTES ?? DEFAULT_PI_MAX_OUTPUT_BYTES,
+  );
+  const maxOutputBytes = Number.isFinite(configuredMaxOutputBytes) && configuredMaxOutputBytes > 0
+    ? Math.floor(configuredMaxOutputBytes)
+    : DEFAULT_PI_MAX_OUTPUT_BYTES;
+
   return new Promise((resolve, reject) => {
     const child = spawn('pi', args, {
       cwd: options.cwd,
@@ -165,25 +192,57 @@ async function runPiPrintPrompt(options: {
 
     let stdout = '';
     let stderr = '';
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
+    let settled = false;
+
+    const finalize = (resolver: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutHandle);
+      resolver();
+    };
+
+    const fail = (message: string) => {
+      child.kill('SIGTERM');
+      finalize(() => reject(new Error(message)));
+    };
+
+    const timeoutHandle = setTimeout(() => {
+      fail(`pi timed out after ${timeoutMs}ms`);
+    }, timeoutMs);
 
     child.stdout.on('data', (chunk: Buffer | string) => {
-      stdout += chunk.toString();
+      const text = chunk.toString();
+      stdout += text;
+      stdoutBytes += Buffer.byteLength(text);
+
+      if (stdoutBytes > maxOutputBytes) {
+        fail(`pi stdout exceeded ${maxOutputBytes} bytes`);
+      }
     });
 
     child.stderr.on('data', (chunk: Buffer | string) => {
-      stderr += chunk.toString();
+      const text = chunk.toString();
+      stderr += text;
+      stderrBytes += Buffer.byteLength(text);
+
+      if (stderrBytes > maxOutputBytes) {
+        fail(`pi stderr exceeded ${maxOutputBytes} bytes`);
+      }
     });
 
     child.on('error', (error) => {
-      reject(error);
+      finalize(() => reject(error));
     });
 
     child.on('close', (code) => {
       if (code !== 0) {
-        reject(new Error(stderr.trim() || `pi exited with code ${code}`));
+        finalize(() => reject(new Error(stderr.trim() || `pi exited with code ${code}`)));
         return;
       }
-      resolve(stdout.trim());
+
+      finalize(() => resolve(stdout.trim()));
     });
   });
 }
@@ -251,6 +310,8 @@ export function createQueuedTelegramMessageHandler(
   options: CreateTelegramMessageHandlerOptions,
 ): QueuedTelegramMessageHandler {
   const chatQueue = new Map<string, Promise<void>>();
+  const pendingPerChat = new Map<string, number>();
+  const maxPendingPerChat = options.maxPendingPerChat ?? DEFAULT_MAX_PENDING_PER_CHAT;
 
   const enqueue = (chatId: string, task: () => Promise<void>) => {
     const previous = chatQueue.get(chatId) ?? Promise.resolve();
@@ -272,7 +333,30 @@ export function createQueuedTelegramMessageHandler(
   return {
     handleMessage(message: TelegramMessageLike): void {
       const chatId = String(message.chat.id);
-      enqueue(chatId, () => processTelegramMessage(options, message));
+      const pending = pendingPerChat.get(chatId) ?? 0;
+
+      if (pending >= maxPendingPerChat) {
+        void options.sendMessage(
+          message.chat.id,
+          `Too many pending messages for this chat (limit: ${maxPendingPerChat}). Please wait and try again.`,
+        );
+        return;
+      }
+
+      pendingPerChat.set(chatId, pending + 1);
+
+      enqueue(chatId, async () => {
+        try {
+          await processTelegramMessage(options, message);
+        } finally {
+          const nextPending = (pendingPerChat.get(chatId) ?? 1) - 1;
+          if (nextPending <= 0) {
+            pendingPerChat.delete(chatId);
+          } else {
+            pendingPerChat.set(chatId, nextPending);
+          }
+        }
+      });
     },
 
     async waitForIdle(chatId?: string): Promise<void> {
@@ -330,12 +414,21 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
   const bot = new TelegramBot(effectiveConfig.token, { polling: true });
 
+  const configuredMaxPendingPerChat = Number(
+    process.env.PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT ?? DEFAULT_MAX_PENDING_PER_CHAT,
+  );
+
+  const maxPendingPerChat = Number.isFinite(configuredMaxPendingPerChat) && configuredMaxPendingPerChat > 0
+    ? Math.floor(configuredMaxPendingPerChat)
+    : DEFAULT_MAX_PENDING_PER_CHAT;
+
   const handler = createQueuedTelegramMessageHandler({
     allowlist: effectiveConfig.allowlist,
     profileName: effectiveConfig.profile,
     agentDir: runtime.agentDir,
     telegramSessionDir,
     workingDirectory: effectiveConfig.workingDirectory,
+    maxPendingPerChat,
     sendMessage: (chatId, text) => bot.sendMessage(chatId, text),
     sendChatAction: (chatId, action) => bot.sendChatAction(chatId, action),
     runPrompt: ({ prompt, sessionFile, cwd }) => runPiPrintPrompt({

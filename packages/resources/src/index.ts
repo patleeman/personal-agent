@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
-import { dirname, join, resolve } from 'path';
+import { dirname, join, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -36,13 +36,23 @@ export interface ResolveProfileOptions {
 }
 
 function readJsonFile(path: string): Record<string, unknown> {
-  return JSON.parse(readFileSync(path, 'utf-8')) as Record<string, unknown>;
+  try {
+    return JSON.parse(readFileSync(path, 'utf-8')) as Record<string, unknown>;
+  } catch (error) {
+    throw new Error(`Failed to read JSON file ${path}: ${(error as Error).message}`);
+  }
 }
+
+const DANGEROUS_MERGE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 function deepMerge(base: Record<string, unknown>, overlay: Record<string, unknown>): Record<string, unknown> {
   const output: Record<string, unknown> = { ...base };
 
   for (const [key, value] of Object.entries(overlay)) {
+    if (DANGEROUS_MERGE_KEYS.has(key)) {
+      continue;
+    }
+
     if (Array.isArray(value)) {
       output[key] = [...value];
       continue;
@@ -53,7 +63,7 @@ function deepMerge(base: Record<string, unknown>, overlay: Record<string, unknow
       if (current && typeof current === 'object' && !Array.isArray(current)) {
         output[key] = deepMerge(current as Record<string, unknown>, value as Record<string, unknown>);
       } else {
-        output[key] = { ...(value as Record<string, unknown>) };
+        output[key] = deepMerge({}, value as Record<string, unknown>);
       }
       continue;
     }
@@ -187,14 +197,36 @@ function discoverFilesWithExtensions(rootDir: string, extensions: string[]): str
   return dedupe(output);
 }
 
+function validateProfileName(profileName: string): void {
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9-_]*$/.test(profileName)) {
+    throw new Error(
+      `Invalid profile name "${profileName}". ` +
+      'Profile names may only include letters, numbers, dashes, and underscores.',
+    );
+  }
+}
+
+function assertPathWithinRoot(path: string, root: string, label: string): string {
+  const resolvedPath = resolve(path);
+  const resolvedRoot = resolve(root);
+
+  if (resolvedPath === resolvedRoot || resolvedPath.startsWith(`${resolvedRoot}${sep}`)) {
+    return resolvedPath;
+  }
+
+  throw new Error(`${label} path is outside ${resolvedRoot}: ${resolvedPath}`);
+}
+
 export function resolveResourceProfile(
   name: string,
   options: ResolveProfileOptions = {},
 ): ResolvedResourceProfile {
   const profileName = name || 'shared';
+  validateProfileName(profileName);
+
   const repoRoot = getRepoRoot(options.repoRoot);
   const profilesRoot = join(repoRoot, 'profiles');
-  const sharedAgentDir = join(profilesRoot, 'shared', 'agent');
+  const sharedAgentDir = assertPathWithinRoot(join(profilesRoot, 'shared', 'agent'), profilesRoot, 'Shared profile');
 
   if (!existsSync(sharedAgentDir)) {
     throw new Error(`Shared profile not found: ${sharedAgentDir}`);
@@ -203,10 +235,16 @@ export function resolveResourceProfile(
   const layers: ProfileLayer[] = [{ name: 'shared', agentDir: resolve(sharedAgentDir) }];
 
   if (profileName !== 'shared') {
-    const overlayDir = join(profilesRoot, profileName, 'agent');
+    const overlayDir = assertPathWithinRoot(
+      join(profilesRoot, profileName, 'agent'),
+      profilesRoot,
+      `Profile ${profileName}`,
+    );
+
     if (!existsSync(overlayDir)) {
       throw new Error(`Profile not found: ${profileName} (${overlayDir})`);
     }
+
     layers.push({ name: profileName, agentDir: resolve(overlayDir) });
   }
 

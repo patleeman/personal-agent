@@ -11,7 +11,8 @@ import {
   validateStatePathsOutsideRepo,
   type RuntimeStatePaths,
 } from './paths.js';
-import { homedir } from 'os';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'fs';
+import { homedir, tmpdir } from 'os';
 import { join } from 'path';
 
 describe('getDefaultStateRoot', () => {
@@ -156,6 +157,28 @@ describe('isPathInRepo', () => {
     expect(isPathInRepo('/home/user/project-data', repoRoot)).toBe(false);
     expect(isPathInRepo('/home/user/project_backup', repoRoot)).toBe(false);
   });
+
+  it('canonicalizes dot segments before comparison', () => {
+    const repoRoot = '/home/user/project';
+    expect(isPathInRepo('/home/user/project/../outside', repoRoot)).toBe(false);
+    expect(isPathInRepo('/home/user/project/../project/cache', repoRoot)).toBe(true);
+  });
+
+  it('resolves symlink targets before comparison', () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'pa-paths-symlink-'));
+
+    try {
+      const repoRoot = join(tempRoot, 'repo');
+      const symlinkPath = join(tempRoot, 'repo-link');
+
+      mkdirSync(repoRoot, { recursive: true });
+      symlinkSync(repoRoot, symlinkPath);
+
+      expect(isPathInRepo(join(symlinkPath, 'state'), repoRoot)).toBe(true);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('validateStatePathsOutsideRepo', () => {
@@ -168,6 +191,17 @@ describe('validateStatePathsOutsideRepo', () => {
     };
 
     expect(() => validateStatePathsOutsideRepo(paths, '/home/user/project')).not.toThrow();
+  });
+
+  it('should throw when root path is in repo', () => {
+    const paths: RuntimeStatePaths = {
+      root: '/home/user/project/.state',
+      auth: '/tmp/auth',
+      session: '/tmp/session',
+      cache: '/tmp/cache',
+    };
+
+    expect(() => validateStatePathsOutsideRepo(paths, '/home/user/project')).toThrow('State root');
   });
 
   it('should throw when auth path is in repo', () => {
@@ -219,6 +253,7 @@ describe('validateStatePathsOutsideRepo', () => {
     }
 
     expect(error).toBeDefined();
+    expect(error!.message).toContain('State root');
     expect(error!.message).toContain('Auth path');
     expect(error!.message).toContain('Session path');
     expect(error!.message).toContain('Cache path');

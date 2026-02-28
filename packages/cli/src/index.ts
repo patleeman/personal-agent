@@ -55,11 +55,22 @@ function ensureExtensionDependencies(profile: ReturnType<typeof resolveResourceP
   }
 
   const dependencyDirs = getExtensionDependencyDirs(profile);
+  const missingDirs = dependencyDirs.filter((dir) => !existsSync(join(dir, 'node_modules')));
 
-  for (const dir of dependencyDirs) {
-    const nodeModulesDir = join(dir, 'node_modules');
-    if (existsSync(nodeModulesDir)) continue;
+  if (missingDirs.length === 0) {
+    return;
+  }
 
+  const allowAutoInstall = process.env.PERSONAL_AGENT_INSTALL_EXTENSION_DEPS === '1';
+
+  if (!allowAutoInstall) {
+    throw new Error(
+      `Extension dependencies are missing in: ${missingDirs.join(', ')}. ` +
+      `Install them manually (trusted profiles only), or set PERSONAL_AGENT_INSTALL_EXTENSION_DEPS=1 to auto-install.`
+    );
+  }
+
+  for (const dir of missingDirs) {
     console.log(`Installing extension dependencies in ${dir} ...`);
     const result = spawnSync('npm', ['install', '--silent', '--no-package-lock'], {
       cwd: dir,

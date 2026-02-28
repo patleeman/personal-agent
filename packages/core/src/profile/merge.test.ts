@@ -139,6 +139,34 @@ describe('mergeProfiles', () => {
         digest: 'daily', // from shared
       });
     });
+
+    it('fills missing nested keys from defaults when lower layer is partial', () => {
+      const result = mergeProfiles({
+        shared: basePartial({
+          notifications: { email: false },
+          privacy: { analytics: false },
+          toolPermissions: { webSearch: false },
+        }),
+      });
+
+      expect(result.notifications).toEqual({
+        email: false,
+        push: true,
+        digest: 'daily',
+      });
+
+      expect(result.privacy).toEqual({
+        analytics: false,
+        shareUsage: false,
+      });
+
+      expect(result.toolPermissions).toEqual({
+        webSearch: false,
+        codeExecution: false,
+        fileSystem: true,
+        externalApis: false,
+      });
+    });
     
     it('should merge privacy settings across layers', () => {
       const result = mergeProfiles({
@@ -340,7 +368,7 @@ describe('mergeProfiles', () => {
       
       expect(result.createdAt).toBeDefined();
       expect(result.updatedAt).toBeDefined();
-      expect(result.createdAt >= before || result.createdAt <= after).toBeTruthy();
+      expect(result.createdAt >= before && result.createdAt <= after).toBeTruthy();
     });
   });
   
@@ -566,6 +594,25 @@ describe('validateProfile', () => {
     const result = validateProfile({});
     expect(result.valid).toBe(false);
     expect(result.errors.length).toBeGreaterThan(0);
+  });
+
+  it('should reject profiles with missing required nested fields', () => {
+    const profile = mergeProfiles({ shared: basePartial() });
+
+    const invalidProfile = {
+      ...profile,
+      notifications: { email: true },
+      modelPreferences: { default: 'model-x' },
+    };
+
+    const result = validateProfile(invalidProfile);
+
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((error) => error.field === 'notifications.push')).toBe(true);
+    expect(result.errors.some((error) => error.field === 'notifications.digest')).toBe(true);
+    expect(result.errors.some((error) => error.field === 'modelPreferences.coding')).toBe(true);
+    expect(result.errors.some((error) => error.field === 'modelPreferences.analysis')).toBe(true);
+    expect(result.errors.some((error) => error.field === 'modelPreferences.creative')).toBe(true);
   });
   
   it('should reject invalid UUID', () => {

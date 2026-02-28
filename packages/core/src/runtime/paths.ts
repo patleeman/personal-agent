@@ -11,8 +11,9 @@
  * - PERSONAL_AGENT_CACHE_PATH: Override cache directory
  */
 
+import { existsSync, realpathSync } from 'fs';
 import { homedir } from 'os';
-import { join } from 'path';
+import { basename, dirname, join, resolve } from 'path';
 
 /**
  * Default state root directory (outside repo)
@@ -66,11 +67,46 @@ export function resolveStatePaths(): RuntimeStatePaths {
  * Check if a path is within the repository
  * Used to prevent accidental state storage in managed files
  */
+function canonicalizePath(path: string): string {
+  const absolutePath = resolve(path);
+
+  if (existsSync(absolutePath)) {
+    try {
+      return realpathSync(absolutePath);
+    } catch {
+      return absolutePath;
+    }
+  }
+
+  const missingSegments: string[] = [];
+  let current = absolutePath;
+
+  while (!existsSync(current)) {
+    const parent = dirname(current);
+    if (parent === current) {
+      return absolutePath;
+    }
+
+    missingSegments.unshift(basename(current));
+    current = parent;
+  }
+
+  let canonicalBase = current;
+
+  try {
+    canonicalBase = realpathSync(current);
+  } catch {
+    // Keep non-canonical existing base when realpath resolution fails.
+  }
+
+  return missingSegments.reduce((acc, segment) => join(acc, segment), canonicalBase);
+}
+
 export function isPathInRepo(targetPath: string, repoRoot: string = process.cwd()): boolean {
-  const normalizedTarget = targetPath.replace(/\\/g, '/').replace(/\/$/, '');
-  const normalizedRepo = repoRoot.replace(/\\/g, '/').replace(/\/$/, '');
-  
-  return normalizedTarget.startsWith(normalizedRepo + '/') || normalizedTarget === normalizedRepo;
+  const normalizedTarget = canonicalizePath(targetPath).replace(/\\/g, '/').replace(/\/$/, '');
+  const normalizedRepo = canonicalizePath(repoRoot).replace(/\\/g, '/').replace(/\/$/, '');
+
+  return normalizedTarget === normalizedRepo || normalizedTarget.startsWith(`${normalizedRepo}/`);
 }
 
 /**
@@ -82,7 +118,11 @@ export function validateStatePathsOutsideRepo(
   repoRoot: string = process.cwd()
 ): void {
   const violations: string[] = [];
-  
+
+  if (isPathInRepo(paths.root, repoRoot)) {
+    violations.push(`State root "${paths.root}" is inside repository`);
+  }
+
   if (isPathInRepo(paths.auth, repoRoot)) {
     violations.push(`Auth path "${paths.auth}" is inside repository`);
   }

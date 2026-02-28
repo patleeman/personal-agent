@@ -25,7 +25,112 @@ const DEFAULT_MERGE_OPTIONS: Required<MergeOptions> = {
   nullClearsValue: true,
 };
 
+function resolveBooleanValue(
+  lower: unknown,
+  higher: unknown,
+  defaultValue: boolean,
+  nullClearsValue: boolean,
+): boolean {
+  if (higher !== undefined) {
+    if (higher === null) {
+      if (nullClearsValue) return defaultValue;
+    } else if (typeof higher === 'boolean') {
+      return higher;
+    }
+  }
 
+  if (lower !== undefined) {
+    if (lower === null) {
+      if (nullClearsValue) return defaultValue;
+    } else if (typeof lower === 'boolean') {
+      return lower;
+    }
+  }
+
+  return defaultValue;
+}
+
+function resolveDigestValue(
+  lower: unknown,
+  higher: unknown,
+  defaultValue: NotificationPreferences['digest'],
+  nullClearsValue: boolean,
+): NotificationPreferences['digest'] {
+  const isDigest = (value: unknown): value is NotificationPreferences['digest'] =>
+    value === 'daily' || value === 'weekly' || value === 'never';
+
+  if (higher !== undefined) {
+    if (higher === null) {
+      if (nullClearsValue) return defaultValue;
+    } else if (isDigest(higher)) {
+      return higher;
+    }
+  }
+
+  if (lower !== undefined) {
+    if (lower === null) {
+      if (nullClearsValue) return defaultValue;
+    } else if (isDigest(lower)) {
+      return lower;
+    }
+  }
+
+  return defaultValue;
+}
+
+function resolveRequiredStringValue(
+  lower: unknown,
+  higher: unknown,
+  defaultValue: string,
+  nullClearsValue: boolean,
+): string {
+  if (higher !== undefined) {
+    if (higher === null) {
+      if (nullClearsValue) return defaultValue;
+    } else if (typeof higher === 'string') {
+      return higher;
+    }
+  }
+
+  if (lower !== undefined) {
+    if (lower === null) {
+      if (nullClearsValue) return defaultValue;
+    } else if (typeof lower === 'string') {
+      return lower;
+    }
+  }
+
+  return defaultValue;
+}
+
+function resolveNullableStringValue(
+  lower: unknown,
+  higher: unknown,
+  defaultValue: string | null,
+  nullClearsValue: boolean,
+): string | null {
+  if (higher !== undefined) {
+    if (higher === null) {
+      return nullClearsValue ? defaultValue : null;
+    }
+
+    if (typeof higher === 'string') {
+      return higher;
+    }
+  }
+
+  if (lower !== undefined) {
+    if (lower === null) {
+      return nullClearsValue ? defaultValue : null;
+    }
+
+    if (typeof lower === 'string') {
+      return lower;
+    }
+  }
+
+  return defaultValue;
+}
 
 /**
  * Merge notification preferences
@@ -35,20 +140,25 @@ function mergeNotifications(
   higher: Partial<NotificationPreferences> | undefined,
   nullClearsValue: boolean
 ): NotificationPreferences {
-  const base = (lower as NotificationPreferences) ?? DEFAULTS.notifications;
-  
-  if (higher === undefined) return base;
-  
   return {
-    email: higher.email !== undefined 
-      ? (higher.email === null && nullClearsValue ? DEFAULTS.notifications.email : higher.email as boolean)
-      : base.email,
-    push: higher.push !== undefined
-      ? (higher.push === null && nullClearsValue ? DEFAULTS.notifications.push : higher.push as boolean)
-      : base.push,
-    digest: higher.digest !== undefined
-      ? (higher.digest === null && nullClearsValue ? DEFAULTS.notifications.digest : higher.digest as NotificationPreferences['digest'])
-      : base.digest,
+    email: resolveBooleanValue(
+      lower?.email,
+      higher?.email,
+      DEFAULTS.notifications.email,
+      nullClearsValue,
+    ),
+    push: resolveBooleanValue(
+      lower?.push,
+      higher?.push,
+      DEFAULTS.notifications.push,
+      nullClearsValue,
+    ),
+    digest: resolveDigestValue(
+      lower?.digest,
+      higher?.digest,
+      DEFAULTS.notifications.digest,
+      nullClearsValue,
+    ),
   };
 }
 
@@ -60,17 +170,19 @@ function mergePrivacy(
   higher: Partial<PrivacySettings> | undefined,
   nullClearsValue: boolean
 ): PrivacySettings {
-  const base = (lower as PrivacySettings) ?? DEFAULTS.privacy;
-  
-  if (higher === undefined) return base;
-  
   return {
-    analytics: higher.analytics !== undefined
-      ? (higher.analytics === null && nullClearsValue ? DEFAULTS.privacy.analytics : higher.analytics as boolean)
-      : base.analytics,
-    shareUsage: higher.shareUsage !== undefined
-      ? (higher.shareUsage === null && nullClearsValue ? DEFAULTS.privacy.shareUsage : higher.shareUsage as boolean)
-      : base.shareUsage,
+    analytics: resolveBooleanValue(
+      lower?.analytics,
+      higher?.analytics,
+      DEFAULTS.privacy.analytics,
+      nullClearsValue,
+    ),
+    shareUsage: resolveBooleanValue(
+      lower?.shareUsage,
+      higher?.shareUsage,
+      DEFAULTS.privacy.shareUsage,
+      nullClearsValue,
+    ),
   };
 }
 
@@ -82,23 +194,31 @@ function mergeModelPreferences(
   higher: Partial<ModelPreferences> | undefined,
   nullClearsValue: boolean
 ): ModelPreferences {
-  const base = (lower as ModelPreferences) ?? DEFAULTS.modelPreferences;
-  
-  if (higher === undefined) return base;
-  
   return {
-    default: higher.default !== undefined && higher.default !== null
-      ? higher.default as string
-      : base.default,
-    coding: higher.coding !== undefined
-      ? (higher.coding === null && nullClearsValue ? DEFAULTS.modelPreferences.coding : higher.coding as string | null)
-      : base.coding,
-    analysis: higher.analysis !== undefined
-      ? (higher.analysis === null && nullClearsValue ? DEFAULTS.modelPreferences.analysis : higher.analysis as string | null)
-      : base.analysis,
-    creative: higher.creative !== undefined
-      ? (higher.creative === null && nullClearsValue ? DEFAULTS.modelPreferences.creative : higher.creative as string | null)
-      : base.creative,
+    default: resolveRequiredStringValue(
+      lower?.default,
+      higher?.default,
+      DEFAULTS.modelPreferences.default,
+      nullClearsValue,
+    ),
+    coding: resolveNullableStringValue(
+      lower?.coding,
+      higher?.coding,
+      DEFAULTS.modelPreferences.coding,
+      nullClearsValue,
+    ),
+    analysis: resolveNullableStringValue(
+      lower?.analysis,
+      higher?.analysis,
+      DEFAULTS.modelPreferences.analysis,
+      nullClearsValue,
+    ),
+    creative: resolveNullableStringValue(
+      lower?.creative,
+      higher?.creative,
+      DEFAULTS.modelPreferences.creative,
+      nullClearsValue,
+    ),
   };
 }
 
@@ -110,23 +230,31 @@ function mergeToolPermissions(
   higher: Partial<ToolPermissions> | undefined,
   nullClearsValue: boolean
 ): ToolPermissions {
-  const base = (lower as ToolPermissions) ?? DEFAULTS.toolPermissions;
-  
-  if (higher === undefined) return base;
-  
   return {
-    webSearch: higher.webSearch !== undefined
-      ? (higher.webSearch === null && nullClearsValue ? DEFAULTS.toolPermissions.webSearch : higher.webSearch as boolean)
-      : base.webSearch,
-    codeExecution: higher.codeExecution !== undefined
-      ? (higher.codeExecution === null && nullClearsValue ? DEFAULTS.toolPermissions.codeExecution : higher.codeExecution as boolean)
-      : base.codeExecution,
-    fileSystem: higher.fileSystem !== undefined
-      ? (higher.fileSystem === null && nullClearsValue ? DEFAULTS.toolPermissions.fileSystem : higher.fileSystem as boolean)
-      : base.fileSystem,
-    externalApis: higher.externalApis !== undefined
-      ? (higher.externalApis === null && nullClearsValue ? DEFAULTS.toolPermissions.externalApis : higher.externalApis as boolean)
-      : base.externalApis,
+    webSearch: resolveBooleanValue(
+      lower?.webSearch,
+      higher?.webSearch,
+      DEFAULTS.toolPermissions.webSearch,
+      nullClearsValue,
+    ),
+    codeExecution: resolveBooleanValue(
+      lower?.codeExecution,
+      higher?.codeExecution,
+      DEFAULTS.toolPermissions.codeExecution,
+      nullClearsValue,
+    ),
+    fileSystem: resolveBooleanValue(
+      lower?.fileSystem,
+      higher?.fileSystem,
+      DEFAULTS.toolPermissions.fileSystem,
+      nullClearsValue,
+    ),
+    externalApis: resolveBooleanValue(
+      lower?.externalApis,
+      higher?.externalApis,
+      DEFAULTS.toolPermissions.externalApis,
+      nullClearsValue,
+    ),
   };
 }
 
@@ -214,22 +342,22 @@ function mergePartialProfiles(
   
   // Nested objects - merge deeply
   result.notifications = mergeNotifications(
-    lower.notifications as NotificationPreferences | undefined,
+    lower.notifications,
     higher.notifications,
     options.nullClearsValue
   );
   result.privacy = mergePrivacy(
-    lower.privacy as PrivacySettings | undefined,
+    lower.privacy,
     higher.privacy,
     options.nullClearsValue
   );
   result.modelPreferences = mergeModelPreferences(
-    lower.modelPreferences as ModelPreferences | undefined,
+    lower.modelPreferences,
     higher.modelPreferences,
     options.nullClearsValue
   );
   result.toolPermissions = mergeToolPermissions(
-    lower.toolPermissions as ToolPermissions | undefined,
+    lower.toolPermissions,
     higher.toolPermissions,
     options.nullClearsValue
   );
@@ -259,10 +387,10 @@ function applyDefaults(partial: PartialProfile): ProfileData {
     timezone: partial.timezone ?? DEFAULTS.timezone,
     locale: partial.locale ?? DEFAULTS.locale,
     theme: partial.theme ?? DEFAULTS.theme,
-    notifications: (partial.notifications as NotificationPreferences) ?? { ...DEFAULTS.notifications },
-    privacy: (partial.privacy as PrivacySettings) ?? { ...DEFAULTS.privacy },
-    modelPreferences: (partial.modelPreferences as ModelPreferences) ?? { ...DEFAULTS.modelPreferences },
-    toolPermissions: (partial.toolPermissions as ToolPermissions) ?? { ...DEFAULTS.toolPermissions },
+    notifications: mergeNotifications(undefined, partial.notifications, true),
+    privacy: mergePrivacy(undefined, partial.privacy, true),
+    modelPreferences: mergeModelPreferences(undefined, partial.modelPreferences, true),
+    toolPermissions: mergeToolPermissions(undefined, partial.toolPermissions, true),
     tags: partial.tags ?? [...DEFAULTS.tags],
     customInstructions: partial.customInstructions ?? DEFAULTS.customInstructions,
   };

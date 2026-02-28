@@ -446,6 +446,57 @@ export function validateProfile(profile: unknown): ValidationResult {
   errors.push(...validateModelPreferences(obj.modelPreferences, 'modelPreferences', 'merged'));
   errors.push(...validateToolPermissions(obj.toolPermissions, 'toolPermissions', 'merged'));
   errors.push(...validateStringArray(obj.tags, 'tags', 'merged'));
+
+  if (typeof obj.notifications !== 'object' || obj.notifications === null) {
+    errors.push({ source: 'merged', field: 'notifications', message: 'Required object', value: obj.notifications });
+  } else {
+    if (typeof obj.notifications.email !== 'boolean') {
+      errors.push({ source: 'merged', field: 'notifications.email', message: 'Required boolean', value: obj.notifications.email });
+    }
+    if (typeof obj.notifications.push !== 'boolean') {
+      errors.push({ source: 'merged', field: 'notifications.push', message: 'Required boolean', value: obj.notifications.push });
+    }
+    if (!['daily', 'weekly', 'never'].includes(obj.notifications.digest)) {
+      errors.push({ source: 'merged', field: 'notifications.digest', message: 'Required: daily, weekly, or never', value: obj.notifications.digest });
+    }
+  }
+
+  if (typeof obj.privacy !== 'object' || obj.privacy === null) {
+    errors.push({ source: 'merged', field: 'privacy', message: 'Required object', value: obj.privacy });
+  } else {
+    if (typeof obj.privacy.analytics !== 'boolean') {
+      errors.push({ source: 'merged', field: 'privacy.analytics', message: 'Required boolean', value: obj.privacy.analytics });
+    }
+    if (typeof obj.privacy.shareUsage !== 'boolean') {
+      errors.push({ source: 'merged', field: 'privacy.shareUsage', message: 'Required boolean', value: obj.privacy.shareUsage });
+    }
+  }
+
+  if (typeof obj.modelPreferences !== 'object' || obj.modelPreferences === null) {
+    errors.push({ source: 'merged', field: 'modelPreferences', message: 'Required object', value: obj.modelPreferences });
+  } else {
+    if (typeof obj.modelPreferences.default !== 'string' || obj.modelPreferences.default.length === 0) {
+      errors.push({ source: 'merged', field: 'modelPreferences.default', message: 'Required non-empty string', value: obj.modelPreferences.default });
+    }
+
+    for (const key of ['coding', 'analysis', 'creative'] as const) {
+      const value = obj.modelPreferences[key];
+      if (!(value === null || typeof value === 'string')) {
+        errors.push({ source: 'merged', field: `modelPreferences.${key}`, message: 'Required string or null', value });
+      }
+    }
+  }
+
+  if (typeof obj.toolPermissions !== 'object' || obj.toolPermissions === null) {
+    errors.push({ source: 'merged', field: 'toolPermissions', message: 'Required object', value: obj.toolPermissions });
+  } else {
+    for (const key of ['webSearch', 'codeExecution', 'fileSystem', 'externalApis'] as const) {
+      const value = obj.toolPermissions[key];
+      if (typeof value !== 'boolean') {
+        errors.push({ source: 'merged', field: `toolPermissions.${key}`, message: 'Required boolean', value });
+      }
+    }
+  }
   
   if (obj.customInstructions !== undefined && obj.customInstructions !== null) {
     if (typeof obj.customInstructions !== 'string' || obj.customInstructions.length > 4000) {

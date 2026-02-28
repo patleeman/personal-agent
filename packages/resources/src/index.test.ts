@@ -38,6 +38,13 @@ describe('resources profile loader', () => {
     expect(profiles).toEqual(['datadog', 'shared']);
   });
 
+  it('rejects invalid profile names', () => {
+    const repo = createTempRepo();
+    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+
+    expect(() => resolveResourceProfile('../escape', { repoRoot: repo })).toThrow('Invalid profile name');
+  });
+
   it('resolves layered profile with shared + overlay + local', () => {
     const repo = createTempRepo();
     const local = mkdtempSync(join(tmpdir(), 'personal-agent-local-'));
@@ -79,6 +86,34 @@ describe('resources profile loader', () => {
       nested: { a: true, b: true },
       array: [3],
     });
+  });
+
+  it('blocks prototype-polluting keys during merge', () => {
+    const repo = createTempRepo();
+    const fileA = join(repo, 'a.json');
+    const fileB = join(repo, 'b.json');
+
+    writeFile(fileA, JSON.stringify({ safe: true }));
+    writeFile(fileB, '{"__proto__":{"polluted":"yes"},"nested":{"constructor":{"bad":true},"ok":1}}');
+
+    const merged = mergeJsonFiles([fileA, fileB]);
+
+    expect((Object.prototype as Record<string, unknown>).polluted).toBeUndefined();
+    expect((merged as Record<string, unknown>).safe).toBe(true);
+
+    const nested = (merged as Record<string, unknown>).nested as Record<string, unknown>;
+    expect(nested.ok).toBe(1);
+    expect(Object.prototype.hasOwnProperty.call(nested, 'constructor')).toBe(false);
+
+    delete (Object.prototype as Record<string, unknown>).polluted;
+  });
+
+  it('includes file path in JSON parse errors', () => {
+    const repo = createTempRepo();
+    const file = join(repo, 'broken.json');
+    writeFile(file, '{"broken":');
+
+    expect(() => mergeJsonFiles([file])).toThrow(`Failed to read JSON file ${file}`);
   });
 
   it('materializes merged files into runtime agent dir', () => {

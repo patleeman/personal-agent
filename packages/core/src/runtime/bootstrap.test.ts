@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { existsSync } from 'fs';
 import { mkdtemp, rm, mkdir, chmod } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -178,6 +179,22 @@ describe('canBootstrap', () => {
     const result = await canBootstrap(paths);
 
     expect(result).toBe(true);
+  });
+
+  it('does not create directories during dry-run checks', async () => {
+    const paths: RuntimeStatePaths = {
+      root: join(tempDir, 'state'),
+      auth: join(tempDir, 'state', 'auth'),
+      session: join(tempDir, 'state', 'session'),
+      cache: join(tempDir, 'state', 'cache'),
+    };
+
+    const result = await canBootstrap(paths);
+
+    expect(result).toBe(true);
+    expect(existsSync(paths.auth)).toBe(false);
+    expect(existsSync(paths.session)).toBe(false);
+    expect(existsSync(paths.cache)).toBe(false);
   });
 
   it('should return false for invalid paths', async () => {

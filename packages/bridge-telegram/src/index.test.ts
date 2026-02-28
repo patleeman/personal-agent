@@ -107,4 +107,41 @@ describe('queued message handler', () => {
     const secondCall = runPrompt.mock.calls[2]?.[0] as { sessionFile: string };
     expect(secondCall.sessionFile).toBe('/tmp/sessions/1.jsonl');
   });
+
+  it('rejects messages when per-chat queue limit is exceeded', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const gate = deferred();
+
+    const runPrompt = vi.fn(async () => {
+      await gate.promise;
+      return 'reply';
+    });
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      maxPendingPerChat: 1,
+      sendMessage,
+      sendChatAction,
+      runPrompt,
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: 'first' });
+    handler.handleMessage({ chat: { id: 1 }, text: 'second' });
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(runPrompt).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenCalledWith(
+      1,
+      'Too many pending messages for this chat (limit: 1). Please wait and try again.',
+    );
+
+    gate.resolve();
+    await handler.waitForIdle();
+  });
 });

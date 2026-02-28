@@ -30,7 +30,11 @@ export function readConfig(): PersonalAgentConfig {
     return {
       defaultProfile: parsed.defaultProfile || DEFAULT_CONFIG.defaultProfile,
     };
-  } catch {
+  } catch (error) {
+    console.error(
+      `Failed to read personal-agent config at ${filePath}: ${(error as Error).message}. ` +
+      `Using defaults.`,
+    );
     return { ...DEFAULT_CONFIG };
   }
 }

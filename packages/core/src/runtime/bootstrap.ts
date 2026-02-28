@@ -177,11 +177,48 @@ function generateSuggestions(errors: BootstrapError[]): string {
   return suggestions.join('\n');
 }
 
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path, constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function canCreateOrWriteDirectory(path: string): Promise<boolean> {
+  if (await pathExists(path)) {
+    return isWritable(path);
+  }
+
+  let current = dirname(path);
+
+  while (!(await pathExists(current))) {
+    const parent = dirname(current);
+    if (parent === current) {
+      return false;
+    }
+    current = parent;
+  }
+
+  try {
+    await access(current, constants.W_OK | constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Quick check if bootstrap would succeed (dry run)
  * Does not create directories, only checks if they could be created.
  */
 export async function canBootstrap(paths: RuntimeStatePaths): Promise<boolean> {
-  const result = await bootstrapState(paths);
-  return result.success;
+  const checks = await Promise.all([
+    canCreateOrWriteDirectory(paths.auth),
+    canCreateOrWriteDirectory(paths.session),
+    canCreateOrWriteDirectory(paths.cache),
+  ]);
+
+  return checks.every(Boolean);
 }
