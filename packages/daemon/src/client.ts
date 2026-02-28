@@ -120,6 +120,30 @@ export async function emitDaemonEvent(input: DaemonEventInput, config?: DaemonCo
   return result.accepted;
 }
 
+function getErrorCode(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null) {
+    return undefined;
+  }
+
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' ? code : undefined;
+}
+
+function formatDaemonUnavailableWarning(error: unknown, config?: DaemonConfig): string {
+  const code = getErrorCode(error);
+
+  if (code === 'ENOENT') {
+    const socketPath = getSocketPath(config);
+    return (
+      'daemon is not running; background events are disabled. ' +
+      `Start it with: pa daemon start (socket: ${socketPath})`
+    );
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  return `daemon unavailable; continuing without background event (${message})`;
+}
+
 export async function emitDaemonEventNonFatal(input: DaemonEventInput, config?: DaemonConfig): Promise<void> {
   if (process.env.PERSONAL_AGENT_DISABLE_DAEMON_EVENTS === '1') {
     return;
@@ -131,6 +155,6 @@ export async function emitDaemonEventNonFatal(input: DaemonEventInput, config?: 
       console.warn(`daemon queue is full; dropped event type=${input.type}`);
     }
   } catch (error) {
-    console.warn(`daemon unavailable; continuing without background event (${(error as Error).message})`);
+    console.warn(formatDaemonUnavailableWarning(error, config));
   }
 }
