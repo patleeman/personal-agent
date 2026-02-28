@@ -21,6 +21,7 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
+    "@mariozechner/pi-coding-agent": "^0.55.3",
     "@personal-agent/core": "*"
   },
   "devDependencies": {}

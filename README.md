@@ -127,6 +127,6 @@ See docs:
 - `docs/cli.md`
 - `docs/architecture.md`
 - `docs/daemon-architecture.md`
-- `docs/memory-package.md`
+- `docs/memory.md`
 - `docs/profile-schema.md`
 - `docs/migration-strategy.md`

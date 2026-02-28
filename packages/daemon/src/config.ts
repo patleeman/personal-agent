@@ -11,11 +11,22 @@ export interface MemoryCollectionConfig {
   mask?: string;
 }
 
+export interface MemorySummarizationConfig {
+  provider?: 'pi-sdk';
+  maxTurns?: number;
+  maxCharsPerTurn?: number;
+  maxTranscriptChars?: number;
+}
+
 export interface MemoryModuleConfig {
   enabled: boolean;
   sessionSource: string;
   summaryDir: string;
+  scanIntervalMinutes?: number;
+  inactiveAfterMinutes?: number;
+  retentionDays?: number;
   collections: MemoryCollectionConfig[];
+  summarization?: MemorySummarizationConfig;
   qmd: {
     index: string;
     updateDebounceSeconds: number;
@@ -149,6 +160,9 @@ export function getDefaultDaemonConfig(): DaemonConfig {
         enabled: true,
         sessionSource: join(statePaths.root, 'pi-agent', 'sessions'),
         summaryDir,
+        scanIntervalMinutes: 5,
+        inactiveAfterMinutes: 30,
+        retentionDays: 90,
         collections: [
           {
             name: 'conversations',
@@ -156,6 +170,12 @@ export function getDefaultDaemonConfig(): DaemonConfig {
             mask: '**/*.md',
           },
         ],
+        summarization: {
+          provider: 'pi-sdk',
+          maxTurns: 250,
+          maxCharsPerTurn: 600,
+          maxTranscriptChars: 18_000,
+        },
         qmd: {
           index: 'default',
           updateDebounceSeconds: 45,
