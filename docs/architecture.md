@@ -6,7 +6,7 @@
 
 - repo-managed resources (profiles, skills, extensions, themes, prompts)
 - local-only runtime state (auth, sessions, cache)
-- wrapper CLI + Telegram gateway using the same profile/runtime plumbing
+- wrapper CLI + chat gateways (Telegram/Discord) using the same profile/runtime plumbing
 - one shared daemon for background orchestration
 
 No symlink chains and no manual "apply/syncback" workflow.
@@ -26,7 +26,7 @@ Out of scope:
 
 - profile filesystem discovery
 - CLI command parsing
-- Telegram transport
+- gateway transport implementations
 
 ## `@personal-agent/resources`
 
@@ -62,10 +62,11 @@ Built-in modules:
 
 Owns user-facing local commands:
 
-- `personal-agent run`
-- `personal-agent profile list/show/use`
-- `personal-agent doctor`
-- `personal-agent daemon start|stop|status|restart|logs`
+- `pa [pi args...]` / `pa run [pi args...]`
+- `pa profile list/show/use`
+- `pa doctor`
+- `pa gateway [telegram|discord] [start|help]` (registered by `@personal-agent/gateway`)
+- `pa daemon start|stop|status|restart|logs`
 
 Responsibilities:
 
@@ -77,10 +78,10 @@ Responsibilities:
 
 ## `@personal-agent/gateway`
 
-Owns Telegram transport:
+Owns chat gateway transports (Telegram + Discord):
 
 - allowlist-based access control
-- one Pi session file per chat
+- one Pi session file per chat/channel
 - reuse core/runtime/resources logic
 - invoke `pi -p --session <chat-session>` for replies
 - emit non-fatal daemon events (`session.updated` / `session.closed`)
@@ -100,7 +101,7 @@ Default root: `~/.local/state/personal-agent`
 - `pi-agent/auth.json`
 - `pi-agent/sessions/**`
 - `pi-agent/*` runtime artifacts
-- telegram session files under runtime session directory
+- telegram/discord session files under runtime session directory
 
 ## Data flow
 

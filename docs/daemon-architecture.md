@@ -6,8 +6,8 @@ Run one shared background process: `personal-agentd`.
 
 All Personal Agent entrypoints send background work to this daemon:
 
-- `personal-agent` CLI
-- `personal-agent-telegram`
+- `pa` CLI
+- `pa gateway ...` commands
 - future integrations
 
 ## Core model
@@ -200,11 +200,11 @@ Example:
 
 ## CLI surface
 
-- `personal-agent daemon start`
-- `personal-agent daemon stop`
-- `personal-agent daemon status`
-- `personal-agent daemon restart`
-- `personal-agent daemon logs`
+- `pa daemon start`
+- `pa daemon stop`
+- `pa daemon status`
+- `pa daemon restart`
+- `pa daemon logs`
 
 ---
 

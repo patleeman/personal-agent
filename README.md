@@ -10,8 +10,8 @@ A personal application layer over Pi that keeps:
 - `@personal-agent/core` — runtime path/bootstrap + profile data merge engine
 - `@personal-agent/resources` — profile discovery/materialization + Pi resource args
 - `@personal-agent/daemon` — shared background daemon (`personal-agentd`) with event bus + modules
-- `@personal-agent/cli` — `personal-agent` wrapper command
-- `@personal-agent/gateway` — Telegram gateway (`personal-agent-telegram`)
+- `@personal-agent/cli` — `pa` wrapper command
+- `@personal-agent/gateway` — Telegram + Discord gateways (registered as `pa gateway` command)
 
 ## Quickstart
 
@@ -22,37 +22,30 @@ npm run build
 npm run test
 ```
 
-Run Pi through personal-agent:
+Run Pi through `pa`:
 
 ```bash
-# default profile (shared)
-node packages/cli/dist/index.js run
+# start Pi TUI with configured/default profile
+pa
 
-# choose profile explicitly
-node packages/cli/dist/index.js run --profile datadog
+# configure profile (infrequent)
+pa profile use datadog
 ```
 
-If a profile contains extension packages with dependencies, install those dependencies explicitly (trusted profiles only), for example:
-
-```bash
-cd profiles/shared/agent/extensions && npm install
-```
-
-Or opt in to one-time auto-install at runtime:
-
-```bash
-PERSONAL_AGENT_INSTALL_EXTENSION_DEPS=1 personal-agent run
-```
+If a profile contains extension packages with dependencies, `pa` installs missing extension dependencies automatically at runtime.
 
 After packaging/installing CLI binary:
 
 ```bash
-personal-agent run
-personal-agent profile list
-personal-agent profile use datadog
-personal-agent doctor
-personal-agent daemon start
-personal-agent daemon status
+pa
+pa run -p "hello"
+pa profile list
+pa profile use datadog
+pa doctor
+pa gateway telegram start
+pa gateway discord start
+pa daemon start
+pa daemon status
 ```
 
 ## Daemon
@@ -61,15 +54,23 @@ personal-agent daemon status
 
 CLI surface:
 
-- `personal-agent daemon start`
-- `personal-agent daemon stop`
-- `personal-agent daemon status`
-- `personal-agent daemon restart`
-- `personal-agent daemon logs`
+- `pa daemon start`
+- `pa daemon stop`
+- `pa daemon status`
+- `pa daemon restart`
+- `pa daemon logs`
 
 When daemon is unavailable, clients warn and continue (non-fatal).
 
-## Telegram bridge
+## Messaging gateways
+
+Shared optional env vars:
+
+- `PERSONAL_AGENT_PROFILE` (default: `shared`)
+- `PERSONAL_AGENT_PI_TIMEOUT_MS` (default: `180000`)
+- `PERSONAL_AGENT_PI_MAX_OUTPUT_BYTES` (default: `200000`)
+
+### Telegram
 
 Required env vars:
 
@@ -78,20 +79,34 @@ Required env vars:
 
 Optional:
 
-- `PERSONAL_AGENT_PROFILE` (default: `shared`)
 - `PERSONAL_AGENT_TELEGRAM_CWD` (working directory for Pi calls)
 - `PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT` (default: `20`)
-- `PERSONAL_AGENT_PI_TIMEOUT_MS` (default: `180000`)
-- `PERSONAL_AGENT_PI_MAX_OUTPUT_BYTES` (default: `200000`)
-- `PERSONAL_AGENT_INSTALL_EXTENSION_DEPS=1` (opt-in auto-install for trusted extension deps)
 
 Run bridge:
 
 ```bash
-personal-agent-telegram
+pa gateway telegram start
 ```
 
-Telegram commands:
+### Discord
+
+Required env vars:
+
+- `DISCORD_BOT_TOKEN`
+- `PERSONAL_AGENT_DISCORD_ALLOWLIST` (comma-separated channel IDs)
+
+Optional:
+
+- `PERSONAL_AGENT_DISCORD_CWD` (working directory for Pi calls)
+- `PERSONAL_AGENT_DISCORD_MAX_PENDING_PER_CHANNEL` (default: `20`)
+
+Run bridge:
+
+```bash
+pa gateway discord start
+```
+
+Gateway commands:
 
 - `/status`
 - `/new`
@@ -109,6 +124,7 @@ Optional local overlay:
 
 See docs:
 
+- `docs/cli.md`
 - `docs/architecture.md`
 - `docs/daemon-architecture.md`
 - `docs/memory-package.md`
