@@ -410,8 +410,8 @@ async function printDaemonStatusHumanReadable(): Promise<void> {
   console.log(`${chalk.dim('socket')}: ${status.socketPath}`);
   console.log(`${chalk.dim('log')}: ${daemonPaths.logFile}`);
   console.log(
-    `${chalk.bold('queue')}: pending=${status.queue.currentDepth}/${status.queue.maxDepth}, ` +
-    `processed=${status.queue.processedEvents}, dropped=${status.queue.droppedEvents}`,
+    `${chalk.bold('queue')}: ${status.queue.currentDepth} pending, ` +
+    `${status.queue.processedEvents} processed, ${status.queue.droppedEvents} dropped`,
   );
 
   printDaemonModules(status.modules);
