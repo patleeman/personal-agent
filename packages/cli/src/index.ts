@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { hello } from '@personal-agent/core';
 
 function main(): void {

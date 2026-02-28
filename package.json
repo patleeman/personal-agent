@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsc --build",
     "lint": "eslint packages --ext .ts",
-    "test": "npm run test --workspaces --if-present",
+    "test": "vitest run",
     "clean": "npm run clean --workspaces --if-present && rm -f tsconfig.tsbuildinfo"
   },
   "devDependencies": {

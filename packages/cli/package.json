@@ -15,7 +15,7 @@
     "personal-agent": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc --build && echo '#!/usr/bin/env node' | cat - dist/index.js > temp && mv temp dist/index.js && chmod +x dist/index.js",
+    "build": "tsc --build",
     "lint": "eslint src --ext .ts",
     "test": "vitest run",
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
