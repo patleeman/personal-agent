@@ -128,16 +128,22 @@ Example: `memory-cards` extension queries qmd and injects relevant context into 
 
 ## Memory system
 
-Two-layer memory for cross-session context:
+Three-layer memory for cross-session context:
 
 1. **Summaries** - Human-readable markdown in `memory/conversations/`
 2. **Memory Cards** - Structured JSON in `memory/cards/` with fixed schema
+3. **Durable Profile Memory** - Repo-managed markdown in `profiles/<profile>/agent/MEMORY.md`
 
 Cards are:
 - Generated at session summarization time
 - Indexed in separate qmd collection (`memory_cards`)
 - Retrieved at runtime by `memory-cards` extension
 - Filtered by TTL (90 days) and relevance score
+
+Durable profile memory is:
+- Injected by the same extension as `DURABLE_MEMORY`
+- Updated via `memory_update` tool (`upsert` / `remove` / `replace`)
+- Committed and pushed on change
 
 See `docs/memory.md` for details.
 

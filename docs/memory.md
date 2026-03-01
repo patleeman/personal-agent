@@ -12,6 +12,8 @@
 
 The module scans Pi session files, summarizes concluded sessions into markdown, generates structured memory cards (JSON), and keeps qmd indexes fresh.
 
+Durable profile memory is handled separately in repo-managed `MEMORY.md` files (one per profile) and injected at runtime by the memory extension.
+
 ## Default paths
 
 - Daemon config: `~/.config/personal-agent/daemon.json`
@@ -20,6 +22,7 @@ The module scans Pi session files, summarizes concluded sessions into markdown, 
 - Card root: `~/.local/state/personal-agent/memory/cards`
 - Memory state file: `~/.local/state/personal-agent/memory/session-state.json`
 - qmd cache/index: `~/.cache/qmd/`
+- Durable memory (repo-managed): `<repo>/profiles/<profile>/agent/MEMORY.md`
 
 ## Event subscriptions and timers
 
@@ -179,13 +182,21 @@ Any deletion marks qmd as dirty/needs embedding.
 
 ## Runtime memory injection (Pi extension)
 
-A dedicated extension (`profiles/shared/agent/extensions/memory-cards`) injects compact memory candidates per prompt via `before_agent_start`:
+A dedicated extension (`profiles/shared/agent/extensions/memory-cards`) injects runtime memory context per prompt via `before_agent_start`:
 
+- loads durable profile memory from `profiles/<active-profile>/agent/MEMORY.md` (fallback: `shared`)
+- injects the durable memory as a capped `DURABLE_MEMORY` block
 - queries `memory_cards` collection globally with `qmd query --json --full`
-- filters by TTL (90 days) from card file mtime
-- gates by score threshold or recall/debug intent
-- injects a capped `MEMORY_CANDIDATES` block into system prompt
+- filters card hits by TTL (90 days) from card file mtime
+- gates card injection by score threshold or recall/debug intent
+- injects a capped `MEMORY_CANDIDATES` block with high-signal entries
 - keeps full summary access via `summary_path`
+
+The same extension also registers a `memory_update` tool that:
+
+- applies durable memory changes (`upsert` / `remove` / `replace`)
+- writes `profiles/<profile>/agent/MEMORY.md`
+- runs `git add`, `git commit`, and `git push` when content changes
 
 Optional tuning env vars for the extension:
 - `PERSONAL_AGENT_MEMORY_SCORE_THRESHOLD`
@@ -195,6 +206,31 @@ Optional tuning env vars for the extension:
 - `PERSONAL_AGENT_MEMORY_TTL_DAYS`
 - `PERSONAL_AGENT_MEMORY_CARDS_COLLECTION`
 - `PERSONAL_AGENT_MEMORY_CARDS_DIR`
+- `PERSONAL_AGENT_DURABLE_MEMORY_MAX_TOKENS`
+- `PERSONAL_AGENT_ACTIVE_PROFILE`
+- `PERSONAL_AGENT_REPO_ROOT`
+
+## Durable memory file template
+
+`profiles/<profile>/agent/MEMORY.md` is intentionally simple markdown:
+
+```md
+# Durable Memory
+
+## User
+
+## Preferences
+
+## Environment
+
+## Constraints
+
+## Do Not Store
+- Secrets, credentials, API keys, tokens
+- Session-only or temporary task notes
+```
+
+Updates are applied through `memory_update` to keep formatting and git workflow consistent.
 
 ## Current config shape
 

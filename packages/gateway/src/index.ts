@@ -253,6 +253,18 @@ interface PreparedGatewayRuntime {
   runtime: Awaited<ReturnType<typeof preparePiAgentDir>>;
 }
 
+function buildPiEnv(options: {
+  agentDir: string;
+  profile: ResolvedProfile;
+}): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    PI_CODING_AGENT_DIR: options.agentDir,
+    PERSONAL_AGENT_ACTIVE_PROFILE: options.profile.name,
+    PERSONAL_AGENT_REPO_ROOT: options.profile.repoRoot,
+  };
+}
+
 export function parseAllowlist(value: string | undefined): Set<string> {
   if (!value) return new Set<string>();
 
@@ -484,10 +496,10 @@ async function discoverPiHelpFromPi(options: {
   try {
     const result = spawnSync('pi', args, {
       cwd: options.cwd,
-      env: {
-        ...process.env,
-        PI_CODING_AGENT_DIR: options.agentDir,
-      },
+      env: buildPiEnv({
+        agentDir: options.agentDir,
+        profile: options.profile,
+      }),
       encoding: 'utf-8',
     });
 
@@ -892,6 +904,7 @@ function parsePiModelListOutput(output: string): string[] {
 }
 
 async function listPiModels(options: {
+  profile: ResolvedProfile;
   agentDir: string;
   cwd: string;
   search?: string;
@@ -904,10 +917,10 @@ async function listPiModels(options: {
 
   const result = spawnSync('pi', args, {
     cwd: options.cwd,
-    env: {
-      ...process.env,
-      PI_CODING_AGENT_DIR: options.agentDir,
-    },
+    env: buildPiEnv({
+      agentDir: options.agentDir,
+      profile: options.profile,
+    }),
     encoding: 'utf-8',
   });
 
@@ -987,10 +1000,10 @@ async function runPiPrintPrompt(options: RunPiPrintPromptOptions): Promise<strin
   return new Promise((resolve, reject) => {
     const child = spawn('pi', args, {
       cwd: options.cwd,
-      env: {
-        ...process.env,
-        PI_CODING_AGENT_DIR: options.agentDir,
-      },
+      env: buildPiEnv({
+        agentDir: options.agentDir,
+        profile: options.profile,
+      }),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
@@ -1658,6 +1671,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
   const modelCommands: ModelCommandSupport = {
     listModels: (search) => listPiModels({
+      profile: resolvedProfile,
       agentDir: runtime.agentDir,
       cwd: effectiveConfig.workingDirectory,
       search,
@@ -1697,7 +1711,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
   bot.on('message', handler.handleMessage);
 
-  bot.on('callback_query', (query) => {
+  bot.on('callback_query', (query: any) => {
     void (async () => {
       const callbackId = query.id;
       const callbackData = query.data;
@@ -2035,6 +2049,7 @@ export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<
 
   const modelCommands: ModelCommandSupport = {
     listModels: (search) => listPiModels({
+      profile: resolvedProfile,
       agentDir: runtime.agentDir,
       cwd: effectiveConfig.workingDirectory,
       search,

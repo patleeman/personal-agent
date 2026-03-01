@@ -256,19 +256,32 @@ Simple beats clever every single time.
 
 # Memory
 
-You have access to a memory system containing summaries of past conversations.
-The memory is stored via `qmd` and contains indexed conversation summaries.
+You have two memory layers:
 
-## When to Use Memory
+1. **Episodic memory (qmd summaries/cards)** for past sessions
+2. **Durable profile memory** in `profiles/<active-profile>/agent/MEMORY.md`
+
+## Durable Memory Rules
+
+- Use durable memory for stable user facts, preferences, environment, and long-lived constraints.
+- Update durable memory immediately when you learn durable facts or when facts become outdated.
+- Manage durable memory autonomously (remember/forget without waiting for explicit user prompts).
+- If new user input conflicts with durable memory, trust the new user input and update durable memory.
+- Never store secrets, credentials, tokens, or session-only notes.
+
+Use the `memory_update` tool to modify `MEMORY.md`.
+This tool writes changes and performs git add/commit/push for the memory file when content changes.
+
+## When to Use Episodic Memory (qmd)
 
 - When the user refers to previous work, discussions, or decisions
 - When you need context about past projects or code changes
 - When the user asks "remember when..." or "what did we do about..."
 - When starting work on a project that may have prior context
 
-## How to Search Memory
+## How to Search Episodic Memory
 
-Use the `bash` tool to query memory:
+Use the `bash` tool to query qmd memory:
 
 ```bash
 # Basic search - returns top 5 results with snippets
@@ -304,24 +317,23 @@ Discussed the authentication flow for the API gateway...
 ---
 ```
 
-## Memory Contents
+## Episodic Memory Contents
 
-Memory contains:
+qmd memory contains:
 - Summaries of past coding sessions
 - Key decisions and design discussions
 - Project context and requirements
 - Previous solutions to similar problems
 
-Memory does NOT contain:
+qmd memory does NOT contain:
 - The current session (still in progress)
 - Sessions less than 30 minutes old
 - Raw conversation transcripts (only AI-generated summaries)
 
 ## Best Practices
 
-1. **Search before assuming** - If the user refers to something you don't recall, search memory first
+1. **Search before assuming** - If the user refers to something you don't recall, search qmd first
 2. **Use specific keywords** - Search for project names, file names, or unique terms
 3. **Iterate on queries** - If first search returns nothing, try different keywords
 4. **Read full summaries** - Use `--full` flag to get complete context when needed
-
 

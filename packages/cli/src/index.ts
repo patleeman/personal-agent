@@ -244,6 +244,8 @@ async function runPiWithResolvedProfile(
     env: {
       ...process.env,
       PI_CODING_AGENT_DIR: runtime.agentDir,
+      PERSONAL_AGENT_ACTIVE_PROFILE: resolvedProfile.name,
+      PERSONAL_AGENT_REPO_ROOT: resolvedProfile.repoRoot,
     },
   });
 
