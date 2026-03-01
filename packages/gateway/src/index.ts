@@ -6,11 +6,7 @@ import { existsSync } from 'fs';
 import { join, resolve } from 'path';
 import { spawn, spawnSync } from 'child_process';
 import TelegramBot from 'node-telegram-bot-api';
-import {
-  Client,
-  GatewayIntentBits,
-  Partials,
-} from 'discord.js';
+import * as DiscordJs from 'discord.js';
 import {
   bootstrapStateOrThrow,
   preparePiAgentDir,
@@ -242,6 +238,35 @@ function gatewayKeyValue(key: string, value: string | number): string {
 }
 
 const GATEWAY_PROVIDERS = ['telegram', 'discord'] as const;
+
+function resolveDiscordIntentFlags(): number[] {
+  const bits = (DiscordJs as any).GatewayIntentBits;
+  if (bits && typeof bits === 'object') {
+    return [bits.Guilds, bits.GuildMessages, bits.DirectMessages, bits.MessageContent]
+      .filter((value): value is number => typeof value === 'number');
+  }
+
+  const legacyFlags = (DiscordJs as any).Intents?.FLAGS;
+  if (legacyFlags && typeof legacyFlags === 'object') {
+    return [
+      legacyFlags.GUILDS,
+      legacyFlags.GUILD_MESSAGES,
+      legacyFlags.DIRECT_MESSAGES,
+      legacyFlags.MESSAGE_CONTENT,
+    ].filter((value): value is number => typeof value === 'number');
+  }
+
+  return [];
+}
+
+function resolveDiscordChannelPartial(): unknown {
+  const partials = (DiscordJs as any).Partials;
+  if (!partials || typeof partials !== 'object') {
+    return undefined;
+  }
+
+  return partials.Channel ?? partials.CHANNEL;
+}
 
 export type GatewayProvider = (typeof GATEWAY_PROVIDERS)[number];
 
@@ -2079,17 +2104,20 @@ export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<
     }),
   });
 
-  const client = new Client({
-    intents: [
-      GatewayIntentBits.Guilds,
-      GatewayIntentBits.GuildMessages,
-      GatewayIntentBits.DirectMessages,
-      GatewayIntentBits.MessageContent,
-    ],
-    partials: [Partials.Channel],
+  const DiscordClient = (DiscordJs as any).Client;
+  if (typeof DiscordClient !== 'function') {
+    throw new Error('Discord client is unavailable from discord.js');
+  }
+
+  const intentFlags = resolveDiscordIntentFlags();
+  const channelPartial = resolveDiscordChannelPartial();
+
+  const client = new DiscordClient({
+    intents: intentFlags,
+    partials: channelPartial ? [channelPartial] : [],
   });
 
-  client.on('messageCreate', (message) => {
+  client.on('messageCreate', (message: any) => {
     if (!hasDiscordChannelMessaging(message.channel)) {
       return;
     }
@@ -2113,7 +2141,7 @@ export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<
     logSystem('discord', `Bridge started for profile=${effectiveConfig.profile}`);
   });
 
-  client.on('error', (error) => {
+  client.on('error', (error: unknown) => {
     console.error('Discord bridge error:', error);
   });
 

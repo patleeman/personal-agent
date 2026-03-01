@@ -29,7 +29,7 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "discord.js": "13.17.1",
+    "discord.js": "^14.25.1",
     "grammy": "^1.41.0"
   },
   "overrides": {

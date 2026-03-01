@@ -23,8 +23,6 @@
   "dependencies": {
     "@mariozechner/pi-coding-agent": "^0.44.0",
     "@personal-agent/core": "*",
-    "discord.js": "13.17.1",
-    "grammy": "^1.36.2",
     "vitest": "4.0.18"
   }
 }
