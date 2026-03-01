@@ -3,6 +3,7 @@
 ## User
 
 ## Preferences
+- For personal-agent internals, prefer using the Pi SDK over shelling out to the `pi` CLI when feasible.
 
 ## Environment
 
