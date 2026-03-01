@@ -58,10 +58,21 @@ Higher layers override lower layers.
 For each resolved layer:
 
 - `skills/` directories are collected and passed as `--skill <dir>`
-- extension entry files are discovered from `extensions/` (`*.ts`, `*.js`, or `<name>/index.ts|js`)
-- prompt templates are discovered as markdown files under `prompts/`
-- themes are discovered as json files under `themes/`
+- `extensions/` entries are discovered (`*.ts`, `*.js`, or `<name>/index.ts|js`)
+- `prompts/` markdown files are discovered as prompt templates
+- `themes/` json files are discovered as themes
 - deduplication is path-based, preserving first-seen order
+
+### Extensions
+
+Extensions are Pi plugins auto-discovered from `extensions/`:
+
+- Flat structure: one entrypoint per extension
+- Entrypoint formats: `extname.ts`, `extname/index.ts`
+- Dependencies in `package.json` are auto-installed
+- Loaded by Pi at startup via `--extension <path>`
+
+See `docs/extensions.md` for authoring guide.
 
 ## Validation rules
 

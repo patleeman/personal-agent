@@ -13,7 +13,7 @@ No symlink chains and no manual "apply/syncback" workflow.
 
 ## Package boundaries
 
-## `@personal-agent/core`
+### `@personal-agent/core`
 
 Owns **runtime state safety** and **profile data merge primitives**:
 
@@ -28,7 +28,7 @@ Out of scope:
 - CLI command parsing
 - gateway transport implementations
 
-## `@personal-agent/resources`
+### `@personal-agent/resources`
 
 Owns **repo profile discovery and materialization**:
 
@@ -43,7 +43,9 @@ Layer order:
 2. selected profile (for example `datadog`)
 3. optional local overlay (`~/.config/personal-agent/local`)
 
-## `@personal-agent/daemon`
+Extension discovery follows the same layer order.
+
+### `@personal-agent/daemon`
 
 Owns background orchestration via one local process (`personal-agentd`):
 
@@ -55,10 +57,10 @@ Owns background orchestration via one local process (`personal-agentd`):
 
 Built-in modules:
 
-- `memory` (session summary + `qmd` update/embed scheduling)
+- `memory` (session summary + card generation + `qmd` indexing)
 - `maintenance` (periodic cleanup)
 
-## `@personal-agent/cli`
+### `@personal-agent/cli`
 
 Owns user-facing local commands:
 
@@ -76,7 +78,7 @@ Responsibilities:
 - launch `pi` with deterministic resource flags
 - emit non-fatal daemon events for background processing
 
-## `@personal-agent/gateway`
+### `@personal-agent/gateway`
 
 Owns chat gateway transports (Telegram + Discord):
 
@@ -112,3 +114,46 @@ Default root: `~/.local/state/personal-agent`
 5. cli/gateway execute Pi with the same resolved profile resources
 6. cli/gateway emit events to `personal-agentd` (non-fatal if unavailable)
 7. daemon modules process queued and timer-emitted events
+
+## Extensions
+
+Extensions are Pi plugins discovered from profile layers:
+
+- Auto-discovered from `extensions/` in each profile layer
+- Dependencies auto-installed from `package.json`
+- Loaded by Pi at startup
+- Can hook into agent lifecycle events
+
+Example: `memory-cards` extension queries qmd and injects relevant context into prompts.
+
+## Memory system
+
+Two-layer memory for cross-session context:
+
+1. **Summaries** - Human-readable markdown in `memory/conversations/`
+2. **Memory Cards** - Structured JSON in `memory/cards/` with fixed schema
+
+Cards are:
+- Generated at session summarization time
+- Indexed in separate qmd collection (`memory_cards`)
+- Retrieved at runtime by `memory-cards` extension
+- Filtered by TTL (90 days) and relevance score
+
+See `docs/memory.md` for details.
+
+## Gateway mode
+
+Gateways reuse the same profile/runtime plumbing as CLI:
+
+- One Pi session file per chat/channel
+- Same profile layering and resource resolution
+- Same extension loading
+- Same daemon event emission
+
+Differences from CLI:
+- No TUI (print mode only)
+- Built-in slash commands (`/status`, `/new`, `/model`, etc.)
+- Allowlist-based access control
+- Per-chat model persistence
+
+See `docs/gateway.md` for details.

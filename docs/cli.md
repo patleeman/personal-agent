@@ -66,6 +66,45 @@ pa daemon status [--json]
 pa memory [list|query|search|head|cards|open|status]
 ```
 
+## Memory commands
+
+The memory system provides cross-session context through summaries and structured cards.
+
+### Browse recent sessions
+
+```bash
+pa memory head [count]          # Latest markdown summaries (default: 5)
+pa memory cards head [count]    # Latest memory cards (default: 5)
+```
+
+### Open specific session
+
+```bash
+pa memory open <sessionId>              # View summary markdown
+pa memory open <sessionId> --card       # View card JSON
+```
+
+### Search with qmd
+
+```bash
+pa memory query "authentication flow"   # Semantic search summaries
+pa memory search "pattern"              # Full-text search
+pa memory list                          # List all indexed files
+```
+
+### Check system status
+
+```bash
+pa memory status                        # Human-readable status
+pa memory status --json                 # Machine-readable JSON
+```
+
+Status includes:
+- Session coverage (summarized vs total)
+- Index state (dirty, needs embedding)
+- qmd collection stats
+- Directory paths
+
 ## Cross-package command registration
 
 `pa` keeps command parsing in `@personal-agent/cli`, while feature packages can register commands.
@@ -90,6 +129,19 @@ When `pa` runs Pi (via `pa`, `pa tui`, or `pa <pi args>`), it:
 7. injects default model/thinking from settings if missing
 8. auto-installs extension dependencies when missing
 9. launches `pi` with `PI_CODING_AGENT_DIR` pointing at runtime agent dir
+
+## Extension auto-installation
+
+Profiles can include Pi extensions with npm dependencies. When `pa tui` runs:
+
+1. Discovers extensions from all profile layers
+2. Checks for `package.json` in extension directories
+3. Runs `npm install` if `node_modules` is missing
+4. Continues with Pi launch
+
+Extensions are loaded by Pi at startup. Use `/reload` in Pi TUI to reload extensions without restarting.
+
+See `docs/extensions.md` for authoring guide.
 
 ## Auth behavior
 
