@@ -62,7 +62,7 @@ Built-in modules:
 
 Owns user-facing local commands:
 
-- `pa [pi args...]` / `pa run [pi args...]`
+- `pa [pi args...]` / `pa tui [pi args...]`
 - `pa profile list/show/use`
 - `pa doctor`
 - `pa gateway [telegram|discord] [start|help]` (registered by `@personal-agent/gateway`)

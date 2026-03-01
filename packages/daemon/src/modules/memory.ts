@@ -1,9 +1,10 @@
 import { existsSync, mkdirSync, rmSync, statSync } from 'fs';
-import { dirname, resolve } from 'path';
+import { dirname, relative, resolve } from 'path';
 import type { MemoryModuleConfig } from '../config.js';
 import { runCommand } from './command.js';
 import { resolveMemoryConfig } from './memory-config.js';
-import { summarizeWithPiSdk } from './memory-summarizer.js';
+import { formatMemoryCard, parseAndNormalizeMemoryCard } from './memory-card.js';
+import { summarizeMemoryCardWithPiSdk, summarizeWithPiSdk } from './memory-summarizer.js';
 import { parseSessionTranscript } from './memory-transcript.js';
 import {
   cleanupRetention,
@@ -11,9 +12,13 @@ import {
   createEmptyScanState,
   loadScanState,
   saveScanState,
+  toCardPath,
   toFingerprint,
+  toSkipMarkerPath,
   toSummaryPath,
   toWorkspaceKey,
+  writeCardFile,
+  writeSkipMarkerFile,
   writeSummaryFile,
 } from './memory-store.js';
 import type { DaemonModule, DaemonModuleContext } from './types.js';
@@ -21,6 +26,7 @@ import type {
   MemoryModuleDependencies,
   MemoryModuleState,
   ResolvedMemoryConfig,
+  SessionMemoryCardRequest,
   SessionScanResult,
   SessionScanState,
   SessionSummaryRequest,
@@ -35,24 +41,47 @@ function removeFileIfExists(path: string): boolean {
   return true;
 }
 
-async function ensureCollections(config: ResolvedMemoryConfig, context: DaemonModuleContext): Promise<void> {
-  for (const collection of config.collections) {
-    const args = ['collection', 'add', collection.path, '--name', collection.name];
+function countApproxTokens(value: string): number {
+  const normalized = value.trim();
+  if (normalized.length === 0) {
+    return 0;
+  }
 
-    if (collection.mask && collection.mask.trim().length > 0) {
-      args.push('--mask', collection.mask);
-    }
+  return normalized.split(/\s+/).length;
+}
 
-    const result = await runCommand('qmd', args);
+async function ensureCollection(
+  name: string,
+  path: string,
+  mask: string | undefined,
+  context: DaemonModuleContext,
+): Promise<void> {
+  const args = ['collection', 'add', path, '--name', name];
 
-    if (result.code !== 0) {
-      const stderr = result.stderr.toLowerCase();
-      const alreadyExists = stderr.includes('exists') || stderr.includes('already');
-      if (!alreadyExists) {
-        context.logger.warn(`qmd collection add failed for ${collection.name}: ${result.stderr || 'unknown error'}`);
-      }
+  if (mask && mask.trim().length > 0) {
+    args.push('--mask', mask);
+  }
+
+  const result = await runCommand('qmd', args);
+
+  if (result.code !== 0) {
+    const stderr = result.stderr.toLowerCase();
+    const alreadyExists = stderr.includes('exists') || stderr.includes('already');
+    if (!alreadyExists) {
+      context.logger.warn(`qmd collection add failed for ${name}: ${result.stderr || 'unknown error'}`);
     }
   }
+}
+
+async function ensureCollections(config: ResolvedMemoryConfig, context: DaemonModuleContext): Promise<void> {
+  for (const collection of config.collections) {
+    await ensureCollection(collection.name, collection.path, collection.mask, context);
+  }
+
+  // Ensure cards collection points at the configured cardsDir even if a stale
+  // collection with the same name exists from prior runs/tests.
+  await runCommand('qmd', ['collection', 'remove', config.cardsCollectionName]);
+  await ensureCollection(config.cardsCollectionName, config.cardsDir, '**/*.json', context);
 }
 
 async function runQmdUpdate(config: ResolvedMemoryConfig, context: DaemonModuleContext): Promise<void> {
@@ -85,6 +114,7 @@ async function scanConcludedSessions(
   nowMs: number,
   hintedFiles: string[],
   summarizeSession: (request: SessionSummaryRequest) => Promise<string>,
+  summarizeMemoryCard: (request: SessionMemoryCardRequest) => Promise<string>,
   context: DaemonModuleContext,
   state: MemoryModuleState,
 ): Promise<SessionScanResult> {
@@ -133,8 +163,13 @@ async function scanConcludedSessions(
     const existingRecord = scanState.sessions[sessionFile];
 
     if (existingRecord && existingRecord.fingerprint === fingerprint) {
-      skipped += 1;
-      continue;
+      const artifactExists = existsSync(existingRecord.summaryPath);
+      const cardExists = existingRecord.cardPath ? existsSync(existingRecord.cardPath) : true;
+
+      if (artifactExists && cardExists) {
+        skipped += 1;
+        continue;
+      }
     }
 
     const parsed = (() => {
@@ -155,6 +190,60 @@ async function scanConcludedSessions(
 
     const workspaceKey = toWorkspaceKey(parsed.cwd);
     const summaryPath = toSummaryPath(config.summaryDir, workspaceKey, parsed.sessionId);
+    const cardPath = toCardPath(config.cardsDir, workspaceKey, parsed.sessionId);
+    const summaryRelativePath = relative(config.summaryDir, summaryPath).replace(/\\/g, '/');
+    const transcriptTokens = countApproxTokens(parsed.transcript);
+
+    if (transcriptTokens < config.summarization.minTranscriptTokens) {
+      const skipMarkerPath = toSkipMarkerPath(config.summaryDir, workspaceKey, parsed.sessionId);
+
+      try {
+        if (removeFileIfExists(summaryPath)) {
+          removed += 1;
+          state.dirty = true;
+          state.needsEmbedding = true;
+        }
+
+        if (removeFileIfExists(cardPath)) {
+          state.dirty = true;
+          state.needsEmbedding = true;
+        }
+
+        if (existingRecord) {
+          if (existingRecord.summaryPath !== skipMarkerPath && removeFileIfExists(existingRecord.summaryPath)) {
+            if (existingRecord.summaryPath.endsWith('.md')) {
+              removed += 1;
+              state.dirty = true;
+              state.needsEmbedding = true;
+            }
+          }
+
+          if (existingRecord.cardPath && existingRecord.cardPath !== cardPath && removeFileIfExists(existingRecord.cardPath)) {
+            state.dirty = true;
+            state.needsEmbedding = true;
+          }
+        }
+
+        writeSkipMarkerFile(skipMarkerPath, transcriptTokens);
+        scanState.sessions[sessionFile] = {
+          fingerprint,
+          summaryPath: skipMarkerPath,
+          cardPath: undefined,
+          workspaceKey,
+          sessionId: parsed.sessionId,
+          summarizedAt: new Date(nowMs).toISOString(),
+        };
+
+        skipped += 1;
+      } catch (error) {
+        failed += 1;
+        const message = (error as Error).message;
+        state.lastError = message;
+        context.logger.warn(`memory failed to persist low-signal skip marker for ${sessionFile}: ${message}`);
+      }
+
+      continue;
+    }
 
     try {
       const markdown = await summarizeSession({
@@ -166,14 +255,41 @@ async function scanConcludedSessions(
         transcript: parsed.transcript,
       });
 
-      if (existingRecord && existingRecord.summaryPath !== summaryPath && removeFileIfExists(existingRecord.summaryPath)) {
-        removed += 1;
-        state.dirty = true;
-        state.needsEmbedding = true;
+      const rawMemoryCard = await summarizeMemoryCard({
+        sessionFile,
+        sessionId: parsed.sessionId,
+        cwd: parsed.cwd,
+        transcript: parsed.transcript,
+        summaryRelativePath,
+      });
+
+      const memoryCard = parseAndNormalizeMemoryCard(rawMemoryCard, {
+        sessionFile,
+        sessionId: parsed.sessionId,
+        cwd: parsed.cwd,
+        transcript: parsed.transcript,
+        summaryRelativePath,
+      });
+
+      if (existingRecord) {
+        if (existingRecord.summaryPath !== summaryPath && removeFileIfExists(existingRecord.summaryPath)) {
+          if (existingRecord.summaryPath.endsWith('.md')) {
+            removed += 1;
+          }
+          state.dirty = true;
+          state.needsEmbedding = true;
+        }
+
+        if (existingRecord.cardPath && existingRecord.cardPath !== cardPath && removeFileIfExists(existingRecord.cardPath)) {
+          state.dirty = true;
+          state.needsEmbedding = true;
+        }
       }
 
-      const changed = writeSummaryFile(summaryPath, markdown);
-      if (changed) {
+      const summaryChanged = writeSummaryFile(summaryPath, markdown);
+      const cardChanged = writeCardFile(cardPath, formatMemoryCard(memoryCard));
+
+      if (summaryChanged) {
         state.dirty = true;
         state.needsEmbedding = true;
         state.lastSummaryAt = new Date(nowMs).toISOString();
@@ -183,9 +299,19 @@ async function scanConcludedSessions(
         });
       }
 
+      if (cardChanged) {
+        state.dirty = true;
+        state.needsEmbedding = true;
+        context.publish('memory.card.updated', {
+          sessionFile,
+          cardPath,
+        });
+      }
+
       scanState.sessions[sessionFile] = {
         fingerprint,
         summaryPath,
+        cardPath,
         workspaceKey,
         sessionId: parsed.sessionId,
         summarizedAt: new Date(nowMs).toISOString(),
@@ -218,6 +344,8 @@ export function createMemoryModule(
   const now = dependencies.now ?? (() => new Date());
   const summarizeSession = dependencies.summarizeSession
     ?? ((request: SessionSummaryRequest) => summarizeWithPiSdk(request, resolvedConfig));
+  const summarizeMemoryCard = dependencies.summarizeMemoryCard
+    ?? ((request: SessionMemoryCardRequest) => summarizeMemoryCardWithPiSdk(request, resolvedConfig));
 
   const state: MemoryModuleState = {
     dirty: false,
@@ -247,6 +375,7 @@ export function createMemoryModule(
       nowMs,
       hintedFiles,
       summarizeSession,
+      summarizeMemoryCard,
       context,
       state,
     );
@@ -321,6 +450,7 @@ export function createMemoryModule(
 
     async start(context): Promise<void> {
       mkdirSync(resolvedConfig.summaryDir, { recursive: true, mode: 0o700 });
+      mkdirSync(resolvedConfig.cardsDir, { recursive: true, mode: 0o700 });
       mkdirSync(dirname(resolvedConfig.stateFile), { recursive: true, mode: 0o700 });
       scanState = loadScanState(resolvedConfig.stateFile, context.logger);
 
@@ -436,6 +566,9 @@ export function createMemoryModule(
         pendingHintedSessions: state.pendingHintedSessions,
         stateFile: resolvedConfig.stateFile,
         agentDir: resolvedConfig.agentDir,
+        summaryDir: resolvedConfig.summaryDir,
+        cardsDir: resolvedConfig.cardsDir,
+        cardsCollectionName: resolvedConfig.cardsCollectionName,
         lastError: state.lastError,
       };
     },

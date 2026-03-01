@@ -118,7 +118,18 @@ export interface TelegramMessageLike {
   };
 }
 
-type SendMessageFn = (chatId: number, text: string) => Promise<unknown>;
+interface TelegramInlineKeyboardButton {
+  text: string;
+  callback_data: string;
+}
+
+interface TelegramSendMessageOptions {
+  reply_markup?: {
+    inline_keyboard: TelegramInlineKeyboardButton[][];
+  };
+}
+
+type SendMessageFn = (chatId: number, text: string, options?: TelegramSendMessageOptions) => Promise<unknown>;
 
 type SendTextFn = (text: string) => Promise<unknown>;
 
@@ -208,6 +219,7 @@ const DEFAULT_PI_MAX_OUTPUT_BYTES = 200_000;
 const DEFAULT_MAX_PENDING_PER_CHAT = 20;
 const DEFAULT_MAX_PENDING_PER_CHANNEL = 20;
 const DEFAULT_MODEL_SELECTION_LIMIT = 25;
+const TELEGRAM_MODEL_SELECTION_CALLBACK_PREFIX = 'model_select:';
 
 function gatewaySection(title: string): string {
   return title;
@@ -1165,6 +1177,57 @@ function formatModelSelectionPrompt(options: {
   return lines.join('\n');
 }
 
+function truncateTelegramButtonLabel(text: string, maxLength = 56): string {
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  return `${text.slice(0, maxLength - 1)}…`;
+}
+
+function buildTelegramModelSelectionOptions(models: string[]): TelegramSendMessageOptions {
+  const inlineKeyboard: TelegramInlineKeyboardButton[][] = models.map((model, index) => [
+    {
+      text: truncateTelegramButtonLabel(`${index + 1}. ${model}`),
+      callback_data: `${TELEGRAM_MODEL_SELECTION_CALLBACK_PREFIX}${index + 1}`,
+    },
+  ]);
+
+  inlineKeyboard.push([
+    {
+      text: 'Cancel',
+      callback_data: `${TELEGRAM_MODEL_SELECTION_CALLBACK_PREFIX}cancel`,
+    },
+  ]);
+
+  return {
+    reply_markup: {
+      inline_keyboard: inlineKeyboard,
+    },
+  };
+}
+
+function parseTelegramModelSelectionCallback(data: string): string | undefined {
+  if (!data.startsWith(TELEGRAM_MODEL_SELECTION_CALLBACK_PREFIX)) {
+    return undefined;
+  }
+
+  const value = data.slice(TELEGRAM_MODEL_SELECTION_CALLBACK_PREFIX.length).trim();
+  if (value.length === 0) {
+    return undefined;
+  }
+
+  if (value === 'cancel') {
+    return '/cancel';
+  }
+
+  if (!/^\d+$/.test(value)) {
+    return undefined;
+  }
+
+  return value;
+}
+
 function clearPendingModelSelection(
   support: ModelCommandSupport | undefined,
   conversationId: string,
@@ -1180,6 +1243,7 @@ interface HandleModelCommandOptions {
   normalizedText: string;
   modelCommands?: ModelCommandSupport;
   sendMessage: SendTextFn;
+  sendModelSelectionPrompt?: (promptText: string, models: string[]) => Promise<void>;
 }
 
 async function handleModelCommand(options: HandleModelCommandOptions): Promise<boolean> {
@@ -1290,6 +1354,11 @@ async function handleModelCommand(options: HandleModelCommandOptions): Promise<b
       total: availableModels.length,
     });
 
+    if (options.sendModelSelectionPrompt) {
+      await options.sendModelSelectionPrompt(pickerText, modelsForSelection);
+      return true;
+    }
+
     await sendLongText(options.sendMessage, pickerText);
     return true;
   } catch (error) {
@@ -1335,6 +1404,13 @@ async function processTelegramMessage(
     normalizedText: normalized.normalizedText,
     modelCommands: options.modelCommands,
     sendMessage: (messageText) => options.sendMessage(message.chat.id, messageText),
+    sendModelSelectionPrompt: async (promptText, models) => {
+      await options.sendMessage(
+        message.chat.id,
+        promptText,
+        buildTelegramModelSelectionOptions(models),
+      );
+    },
   });
 
   if (modelCommandHandled) {
@@ -1607,7 +1683,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     commandHelpText,
     skillsHelpText,
     modelCommands,
-    sendMessage: (chatId, text) => bot.sendMessage(chatId, text),
+    sendMessage: (chatId, text, options) => bot.sendMessage(chatId, text, options),
     sendChatAction: (chatId, action) => bot.sendChatAction(chatId, action),
     runPrompt: ({ prompt, sessionFile, cwd, model }) => runPiPrintPrompt({
       prompt,
@@ -1620,6 +1696,42 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
   });
 
   bot.on('message', handler.handleMessage);
+
+  bot.on('callback_query', (query) => {
+    void (async () => {
+      const callbackId = query.id;
+      const callbackData = query.data;
+      const callbackMessage = query.message;
+
+      if (!callbackData || !callbackMessage) {
+        await bot.answerCallbackQuery(callbackId);
+        return;
+      }
+
+      const callbackText = parseTelegramModelSelectionCallback(callbackData);
+      if (!callbackText) {
+        await bot.answerCallbackQuery(callbackId);
+        return;
+      }
+
+      handler.handleMessage({
+        chat: { id: callbackMessage.chat.id },
+        text: callbackText,
+        from: query.from
+          ? {
+            id: query.from.id,
+            username: query.from.username,
+            first_name: query.from.first_name,
+            last_name: query.from.last_name,
+          }
+          : undefined,
+      });
+
+      await bot.answerCallbackQuery(callbackId);
+    })().catch((error) => {
+      console.error('Telegram callback handling failed:', error);
+    });
+  });
 
   console.log(gatewaySuccess(`Telegram bridge started (profile=${effectiveConfig.profile})`));
   console.log(gatewayKeyValue('Allowed chats', [...effectiveConfig.allowlist].join(', ')));

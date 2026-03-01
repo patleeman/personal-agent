@@ -10,13 +10,14 @@
 - `packages/daemon/src/modules/memory-transcript.ts`
 - `packages/daemon/src/modules/memory-summarizer.ts`
 
-The module scans Pi session files, summarizes concluded sessions into markdown, and keeps qmd indexes fresh.
+The module scans Pi session files, summarizes concluded sessions into markdown, generates structured memory cards (JSON), and keeps qmd indexes fresh.
 
 ## Default paths
 
 - Daemon config: `~/.config/personal-agent/daemon.json`
 - Session source: `~/.local/state/personal-agent/pi-agent/sessions`
 - Summary root: `~/.local/state/personal-agent/memory/conversations`
+- Card root: `~/.local/state/personal-agent/memory/cards`
 - Memory state file: `~/.local/state/personal-agent/memory/session-state.json`
 - qmd cache/index: `~/.cache/qmd/`
 
@@ -43,10 +44,11 @@ The module scans Pi session files, summarizes concluded sessions into markdown, 
 
 On startup, the memory module:
 
-1. creates summary and state directories (`0700`)
+1. creates summary, card, and state directories (`0700`)
 2. loads `session-state.json` (or initializes empty state)
-3. ensures configured qmd collections exist via:
-   - `qmd collection add <path> --name <name> [--mask <mask>]`
+3. ensures qmd collections exist via:
+   - configured collections (typically `conversations`)
+   - built-in card collection: `memory_cards` with `**/*.json` mask
 4. runs an immediate scan pass
 
 ## Session processing flow
@@ -65,13 +67,14 @@ Active/recent files are skipped.
 
 ### 3) Idempotency / change detection
 
-Each summarized session is tracked in `session-state.json` with:
+Each processed session is tracked in `session-state.json` with:
 
 - fingerprint: `"<size>:<mtimeMs>"`
-- summary path
+- artifact path (`.md` summary or `.skip` low-signal marker)
+- card path (`.json`) when generated
 - workspace key
 - session id
-- summarized timestamp
+- processed timestamp
 
 If fingerprint is unchanged, the session is skipped.
 
@@ -95,9 +98,19 @@ Compaction limits:
 - `maxCharsPerTurn`
 - `maxTranscriptChars`
 
-### 5) Pi SDK summarization
+Low-signal filter:
+- approximate transcript token count is computed via whitespace splitting
+- if transcript tokens are below `minTranscriptTokens`, summarization is skipped
+- skipped sessions get a `.skip` marker under `<summaryDir>/.skipped/...` for idempotency
 
-Summaries are generated with Pi SDK (`createAgentSession`) using:
+### 5) Pi SDK summarization + card generation
+
+For high-signal sessions, the module runs two Pi SDK prompts:
+
+1. human markdown summary
+2. strict JSON memory card (fixed schema)
+
+Both use:
 
 - `SessionManager.inMemory()`
 - `tools: []`
@@ -109,18 +122,27 @@ Guardrail:
 
 This prevents creating new persisted Pi conversations during summarization.
 
-### 6) Summary output
+### 6) Output artifacts
 
 Summary files are written to:
 
 - `<summaryDir>/<workspace-key>/<session-id>.md`
 
+Card files are written to:
+
+- `<cardsDir>/<workspace-key>/<session-id>.json`
+
 Where:
 - `workspace-key` is a slug derived from session `cwd`
 - `session-id` is sanitized for filesystem safety
 
-When summary content changes, module publishes:
+Low-signal sessions do not produce markdown summaries or cards. They write:
+
+- `<summaryDir>/.skipped/<workspace-key>/<session-id>.skip`
+
+When summary or card content changes, module publishes:
 - `memory.summary.updated`
+- `memory.card.updated`
 
 and marks:
 - `dirty = true`
@@ -131,8 +153,9 @@ and marks:
 Every scan pass also runs retention cleanup:
 
 - deletes summary markdown files older than `retentionDays`
+- deletes card JSON files older than `retentionDays`
 - removes stale entries from `session-state.json`
-- prunes empty summary directories
+- prunes empty summary/card directories
 
 Any deletion marks qmd as dirty/needs embedding.
 
@@ -154,6 +177,25 @@ Any deletion marks qmd as dirty/needs embedding.
   - sets `needsEmbedding = false`
   - publishes `memory.qmd.embed.completed`
 
+## Runtime memory injection (Pi extension)
+
+A dedicated extension (`profiles/shared/agent/extensions/memory-cards`) injects compact memory candidates per prompt via `before_agent_start`:
+
+- queries `memory_cards` collection globally with `qmd query --json --full`
+- filters by TTL (90 days) from card file mtime
+- gates by score threshold or recall/debug intent
+- injects a capped `MEMORY_CANDIDATES` block into system prompt
+- keeps full summary access via `summary_path`
+
+Optional tuning env vars for the extension:
+- `PERSONAL_AGENT_MEMORY_SCORE_THRESHOLD`
+- `PERSONAL_AGENT_MEMORY_TOP_K`
+- `PERSONAL_AGENT_MEMORY_MAX_CARDS`
+- `PERSONAL_AGENT_MEMORY_MAX_TOKENS`
+- `PERSONAL_AGENT_MEMORY_TTL_DAYS`
+- `PERSONAL_AGENT_MEMORY_CARDS_COLLECTION`
+- `PERSONAL_AGENT_MEMORY_CARDS_DIR`
+
 ## Current config shape
 
 ```json
@@ -163,6 +205,8 @@ Any deletion marks qmd as dirty/needs embedding.
       "enabled": true,
       "sessionSource": "~/.local/state/personal-agent/pi-agent/sessions",
       "summaryDir": "~/.local/state/personal-agent/memory/conversations",
+      "cardsDir": "~/.local/state/personal-agent/memory/cards",
+      "cardsCollectionName": "memory_cards",
       "scanIntervalMinutes": 5,
       "inactiveAfterMinutes": 30,
       "retentionDays": 90,
@@ -177,7 +221,8 @@ Any deletion marks qmd as dirty/needs embedding.
         "provider": "pi-sdk",
         "maxTurns": 250,
         "maxCharsPerTurn": 600,
-        "maxTranscriptChars": 18000
+        "maxTranscriptChars": 18000,
+        "minTranscriptTokens": 30
       },
       "qmd": {
         "index": "default",
@@ -210,4 +255,7 @@ Any deletion marks qmd as dirty/needs embedding.
 - `pendingHintedSessions`
 - `stateFile`
 - `agentDir`
+- `summaryDir`
+- `cardsDir`
+- `cardsCollectionName`
 - `lastError`

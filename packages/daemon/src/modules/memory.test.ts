@@ -32,6 +32,7 @@ function createMemoryConfig(sessionSource: string, summaryDir: string): MemoryMo
     enabled: true,
     sessionSource,
     summaryDir,
+    cardsDir: join(summaryDir, 'cards'),
     scanIntervalMinutes: 1,
     inactiveAfterMinutes: 30,
     retentionDays: 30,
@@ -41,6 +42,7 @@ function createMemoryConfig(sessionSource: string, summaryDir: string): MemoryMo
       maxTurns: 50,
       maxCharsPerTurn: 400,
       maxTranscriptChars: 4_000,
+      minTranscriptTokens: 0,
     },
     qmd: {
       index: 'test',
@@ -145,6 +147,41 @@ function writeSessionFile(path: string, cwd: string, id = 'session-1'): void {
   writeFileSync(path, `${lines.join('\n')}\n`);
 }
 
+function writeBriefSessionFile(path: string, cwd: string, id = 'session-brief'): void {
+  const lines = [
+    JSON.stringify({
+      type: 'session',
+      version: 3,
+      id,
+      timestamp: '2026-02-28T19:00:00.000Z',
+      cwd,
+    }),
+    JSON.stringify({
+      type: 'message',
+      id: 'msg-1',
+      parentId: null,
+      timestamp: '2026-02-28T19:01:00.000Z',
+      message: {
+        role: 'user',
+        content: [{ type: 'text', text: 'hi' }],
+      },
+    }),
+    JSON.stringify({
+      type: 'message',
+      id: 'msg-2',
+      parentId: 'msg-1',
+      timestamp: '2026-02-28T19:01:02.000Z',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'hello' }],
+      },
+    }),
+  ];
+
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${lines.join('\n')}\n`);
+}
+
 function createFakeQmdBinary(argsLogPath: string): string {
   const binDir = createTempDir('memory-qmd-bin-');
   const qmdPath = join(binDir, 'qmd');
@@ -178,6 +215,19 @@ describe('memory module scanner flow', () => {
     utimesSync(sessionFile, old, old);
 
     const summarizeSession = vi.fn(async () => '# Session session-1\n\n- summarized\n');
+    const summarizeMemoryCard = vi.fn(async () => JSON.stringify({
+      type: 'memory_card',
+      session_id: 'session-1',
+      cwd: '/Users/patrick/workingdir/personal-agent',
+      subsystems: ['memory'],
+      primary_topics: ['qmd'],
+      durable_decisions: ['Use memory cards for retrieval'],
+      invariants: [],
+      pitfalls: [],
+      open_loops: [],
+      supersedes: null,
+      summary_path: 'users-patrick-workingdir-personal-agent/session-1.md',
+    }));
 
     const config = createMemoryConfig(sessionSource, summaryDir);
     const { context, published } = createModuleContext(config);
@@ -185,17 +235,61 @@ describe('memory module scanner flow', () => {
     const module = createMemoryModule(config, {
       now: () => now,
       summarizeSession,
+      summarizeMemoryCard,
     });
 
     await module.start(context);
 
     const summaryPath = join(summaryDir, 'users-patrick-workingdir-personal-agent', 'session-1.md');
+    const cardPath = join(summaryDir, 'cards', 'users-patrick-workingdir-personal-agent', 'session-1.json');
 
     expect(summarizeSession).toHaveBeenCalledTimes(1);
+    expect(summarizeMemoryCard).toHaveBeenCalledTimes(1);
     expect(existsSync(summaryPath)).toBe(true);
+    expect(existsSync(cardPath)).toBe(true);
     expect(readFileSync(summaryPath, 'utf-8')).toContain('- summarized');
     expect(published.some((event) => event.type === 'memory.summary.updated')).toBe(true);
+    expect(published.some((event) => event.type === 'memory.card.updated')).toBe(true);
     expect(published.some((event) => event.type === 'memory.scan.completed')).toBe(true);
+  });
+
+  it('skips low-signal sessions under minTranscriptTokens and writes skip markers', async () => {
+    const sessionSource = createTempDir('memory-sessions-');
+    const summaryDir = createTempDir('memory-summaries-');
+    const sessionFile = join(sessionSource, 'workspace-a', 'session-brief.jsonl');
+
+    writeBriefSessionFile(sessionFile, '/Users/patrick/workingdir/personal-agent', 'session-brief');
+
+    const now = new Date('2026-03-01T12:00:00.000Z');
+    const old = new Date('2026-03-01T10:00:00.000Z');
+    utimesSync(sessionFile, old, old);
+
+    const summarizeSession = vi.fn(async () => '# Session session-brief\n\n- should-not-run\n');
+    const summarizeMemoryCard = vi.fn(async () => '{"type":"memory_card"}');
+
+    const config = createMemoryConfig(sessionSource, summaryDir);
+    config.summarization!.minTranscriptTokens = 30;
+
+    const { context, published } = createModuleContext(config);
+
+    const module = createMemoryModule(config, {
+      now: () => now,
+      summarizeSession,
+      summarizeMemoryCard,
+    });
+
+    await module.start(context);
+
+    const summaryPath = join(summaryDir, 'users-patrick-workingdir-personal-agent', 'session-brief.md');
+    const cardPath = join(summaryDir, 'cards', 'users-patrick-workingdir-personal-agent', 'session-brief.json');
+    const skipMarkerPath = join(summaryDir, '.skipped', 'users-patrick-workingdir-personal-agent', 'session-brief.skip');
+
+    expect(summarizeSession).toHaveBeenCalledTimes(0);
+    expect(summarizeMemoryCard).toHaveBeenCalledTimes(0);
+    expect(existsSync(summaryPath)).toBe(false);
+    expect(existsSync(cardPath)).toBe(false);
+    expect(existsSync(skipMarkerPath)).toBe(true);
+    expect(published.some((event) => event.type === 'memory.summary.updated')).toBe(false);
   });
 
   it('uses session hints but waits for inactivity before summarizing', async () => {
@@ -209,6 +303,19 @@ describe('memory module scanner flow', () => {
     utimesSync(sessionFile, now, now);
 
     const summarizeSession = vi.fn(async () => '# Session active-session\n\n- summarized\n');
+    const summarizeMemoryCard = vi.fn(async () => JSON.stringify({
+      type: 'memory_card',
+      session_id: 'active-session',
+      cwd: '/Users/patrick/workingdir/active-repo',
+      subsystems: ['gateway'],
+      primary_topics: ['session.closed'],
+      durable_decisions: ['wait for inactivity before summarization'],
+      invariants: [],
+      pitfalls: [],
+      open_loops: [],
+      supersedes: null,
+      summary_path: 'users-patrick-workingdir-active-repo/active-session.md',
+    }));
 
     const config = createMemoryConfig(sessionSource, summaryDir);
     config.inactiveAfterMinutes = 10;
@@ -218,6 +325,7 @@ describe('memory module scanner flow', () => {
     const module = createMemoryModule(config, {
       now: () => now,
       summarizeSession,
+      summarizeMemoryCard,
     });
 
     await module.start(context);
@@ -240,6 +348,7 @@ describe('memory module scanner flow', () => {
     await module.handleEvent(createTestEvent('timer.memory.session.scan', { timer: 'memory-session-scan' }), context);
 
     expect(summarizeSession).toHaveBeenCalledTimes(1);
+    expect(summarizeMemoryCard).toHaveBeenCalledTimes(1);
 
     const summaryPath = join(summaryDir, 'users-patrick-workingdir-active-repo', 'active-session.md');
     expect(existsSync(summaryPath)).toBe(true);
@@ -260,6 +369,7 @@ describe('memory module scanner flow', () => {
     try {
       const now = new Date('2026-03-01T12:00:00.000Z');
       const summarizeSession = vi.fn(async () => '# should-not-run');
+      const summarizeMemoryCard = vi.fn(async () => '{"type":"memory_card"}');
 
       const config = createMemoryConfig(sessionSource, summaryDir);
       const { context } = createModuleContext(config);
@@ -267,6 +377,7 @@ describe('memory module scanner flow', () => {
       const module = createMemoryModule(config, {
         now: () => now,
         summarizeSession,
+        summarizeMemoryCard,
       });
 
       await module.start(context);
@@ -314,6 +425,7 @@ describe('memory module scanner flow', () => {
     utimesSync(staleSummaryPath, old, old);
 
     const summarizeSession = vi.fn(async () => '# should-not-run');
+    const summarizeMemoryCard = vi.fn(async () => '{"type":"memory_card"}');
 
     const config = createMemoryConfig(sessionSource, summaryDir);
     config.retentionDays = 1;
@@ -323,6 +435,7 @@ describe('memory module scanner flow', () => {
     const module = createMemoryModule(config, {
       now: () => now,
       summarizeSession,
+      summarizeMemoryCard,
     });
 
     await module.start(context);

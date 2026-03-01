@@ -12,7 +12,7 @@ import { dirname, join } from 'path';
 import type { ModuleLogger } from './types.js';
 import type { ResolvedMemoryConfig, SessionScanRecord, SessionScanState } from './memory-types.js';
 
-const SESSION_SCAN_STATE_VERSION = 1;
+const SESSION_SCAN_STATE_VERSION = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -135,6 +135,7 @@ export function loadScanState(path: string, logger: ModuleLogger): SessionScanSt
 
       const fingerprint = typeof value.fingerprint === 'string' ? value.fingerprint : undefined;
       const summaryPath = typeof value.summaryPath === 'string' ? value.summaryPath : undefined;
+      const cardPath = typeof value.cardPath === 'string' ? value.cardPath : undefined;
       const workspaceKey = typeof value.workspaceKey === 'string' ? value.workspaceKey : undefined;
       const sessionId = typeof value.sessionId === 'string' ? value.sessionId : undefined;
       const summarizedAt = typeof value.summarizedAt === 'string' ? value.summarizedAt : undefined;
@@ -146,6 +147,7 @@ export function loadScanState(path: string, logger: ModuleLogger): SessionScanSt
       sessions[key] = {
         fingerprint,
         summaryPath,
+        cardPath,
         workspaceKey,
         sessionId,
         summarizedAt,
@@ -230,6 +232,14 @@ export function toSummaryPath(summaryDir: string, workspaceKey: string, sessionI
   return join(summaryDir, workspaceKey, `${sanitizeFileStem(sessionId)}.md`);
 }
 
+export function toCardPath(cardsDir: string, workspaceKey: string, sessionId: string): string {
+  return join(cardsDir, workspaceKey, `${sanitizeFileStem(sessionId)}.json`);
+}
+
+export function toSkipMarkerPath(summaryDir: string, workspaceKey: string, sessionId: string): string {
+  return join(summaryDir, '.skipped', workspaceKey, `${sanitizeFileStem(sessionId)}.skip`);
+}
+
 export function toFingerprint(size: number, mtimeMs: number): string {
   return `${size}:${Math.floor(mtimeMs)}`;
 }
@@ -250,6 +260,38 @@ export function writeSummaryFile(path: string, markdown: string): boolean {
   return true;
 }
 
+export function writeCardFile(path: string, json: string): boolean {
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+
+  const normalized = json.trimEnd();
+
+  if (existsSync(path)) {
+    const existing = readFileSync(path, 'utf-8').trimEnd();
+    if (existing === normalized) {
+      return false;
+    }
+  }
+
+  writeFileSync(path, `${normalized}\n`);
+  return true;
+}
+
+export function writeSkipMarkerFile(path: string, tokenCount: number): boolean {
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+
+  const content = `tokens=${tokenCount}\n`;
+
+  if (existsSync(path)) {
+    const existing = readFileSync(path, 'utf-8');
+    if (existing === content) {
+      return false;
+    }
+  }
+
+  writeFileSync(path, content);
+  return true;
+}
+
 export function cleanupRetention(
   config: ResolvedMemoryConfig,
   scanState: SessionScanState,
@@ -263,8 +305,9 @@ export function cleanupRetention(
   let removedFiles = 0;
 
   const markdownFiles = collectFilesRecursive(config.summaryDir, '.md');
+  const cardFiles = collectFilesRecursive(config.cardsDir, '.json');
 
-  for (const file of markdownFiles) {
+  for (const file of [...markdownFiles, ...cardFiles]) {
     let mtimeMs = 0;
 
     try {
@@ -283,33 +326,65 @@ export function cleanupRetention(
   }
 
   for (const [sessionFile, record] of Object.entries(scanState.sessions)) {
-    const summaryPath = record.summaryPath;
+    const artifactPath = record.summaryPath;
+    const cardPath = record.cardPath;
 
-    if (!existsSync(summaryPath)) {
+    if (!existsSync(artifactPath)) {
+      if (cardPath && removeIfExists(cardPath)) {
+        removedFiles += 1;
+      }
       delete scanState.sessions[sessionFile];
       continue;
     }
 
-    let mtimeMs = 0;
+    let artifactMtimeMs = 0;
 
     try {
-      mtimeMs = statSync(summaryPath).mtimeMs;
+      artifactMtimeMs = statSync(artifactPath).mtimeMs;
     } catch {
+      if (cardPath && removeIfExists(cardPath)) {
+        removedFiles += 1;
+      }
       delete scanState.sessions[sessionFile];
       continue;
     }
 
-    if (mtimeMs > cutoffMs) {
+    if (artifactMtimeMs <= cutoffMs) {
+      if (removeIfExists(artifactPath)) {
+        removedFiles += 1;
+      }
+
+      if (cardPath && removeIfExists(cardPath)) {
+        removedFiles += 1;
+      }
+
+      delete scanState.sessions[sessionFile];
       continue;
     }
 
-    if (removeIfExists(summaryPath)) {
-      removedFiles += 1;
+    if (!cardPath) {
+      continue;
     }
 
-    delete scanState.sessions[sessionFile];
+    if (!existsSync(cardPath)) {
+      delete scanState.sessions[sessionFile];
+      continue;
+    }
+
+    try {
+      const cardMtimeMs = statSync(cardPath).mtimeMs;
+      if (cardMtimeMs <= cutoffMs) {
+        if (removeIfExists(cardPath)) {
+          removedFiles += 1;
+        }
+        delete scanState.sessions[sessionFile];
+      }
+    } catch {
+      delete scanState.sessions[sessionFile];
+    }
   }
 
   pruneEmptyDirectories(config.summaryDir);
+  pruneEmptyDirectories(config.cardsDir);
   return removedFiles;
 }

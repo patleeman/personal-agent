@@ -1,6 +1,10 @@
 import { createAgentSession, SessionManager } from '@mariozechner/pi-coding-agent';
-import { buildSummaryPrompt } from './memory-transcript.js';
-import type { ResolvedMemoryConfig, SessionSummaryRequest } from './memory-types.js';
+import { buildMemoryCardPrompt, buildSummaryPrompt } from './memory-transcript.js';
+import type {
+  ResolvedMemoryConfig,
+  SessionMemoryCardRequest,
+  SessionSummaryRequest,
+} from './memory-types.js';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -52,12 +56,7 @@ function extractLatestAssistantText(messages: unknown): string {
   return '';
 }
 
-export async function summarizeWithPiSdk(
-  request: SessionSummaryRequest,
-  config: ResolvedMemoryConfig,
-): Promise<string> {
-  const prompt = buildSummaryPrompt(request);
-
+async function runPiSdkPrompt(prompt: string, config: ResolvedMemoryConfig): Promise<string> {
   // Use memory summary dir as cwd to avoid pulling large project-specific context
   // files and keep summarization token usage predictable.
   const sdkCwd = config.summaryDir;
@@ -74,7 +73,7 @@ export async function summarizeWithPiSdk(
     throw new Error('pi sdk summarizer must run with in-memory session manager');
   }
 
-  let markdown = '';
+  let output = '';
 
   const unsubscribe = session.subscribe((event) => {
     if (event.type !== 'message_update') {
@@ -85,23 +84,37 @@ export async function summarizeWithPiSdk(
       return;
     }
 
-    markdown += event.assistantMessageEvent.delta;
+    output += event.assistantMessageEvent.delta;
   });
 
   try {
     await session.prompt(prompt);
 
-    const streamed = markdown.trim();
+    const streamed = output.trim();
     const fallback = extractLatestAssistantText(session.messages as unknown);
-    const finalSummary = streamed.length > 0 ? streamed : fallback;
+    const finalOutput = streamed.length > 0 ? streamed : fallback;
 
-    if (finalSummary.trim().length === 0) {
+    if (finalOutput.trim().length === 0) {
       throw new Error('pi sdk summarizer returned empty output');
     }
 
-    return finalSummary.trim();
+    return finalOutput.trim();
   } finally {
     unsubscribe();
     session.dispose();
   }
+}
+
+export async function summarizeWithPiSdk(
+  request: SessionSummaryRequest,
+  config: ResolvedMemoryConfig,
+): Promise<string> {
+  return runPiSdkPrompt(buildSummaryPrompt(request), config);
+}
+
+export async function summarizeMemoryCardWithPiSdk(
+  request: SessionMemoryCardRequest,
+  config: ResolvedMemoryConfig,
+): Promise<string> {
+  return runPiSdkPrompt(buildMemoryCardPrompt(request), config);
 }

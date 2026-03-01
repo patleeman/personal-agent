@@ -22,6 +22,8 @@ export interface ResolvedMemoryConfig {
   enabled: boolean;
   sessionSource: string;
   summaryDir: string;
+  cardsDir: string;
+  cardsCollectionName: string;
   scanIntervalMinutes: number;
   inactiveAfterMinutes: number;
   retentionDays: number;
@@ -37,6 +39,7 @@ export interface ResolvedMemoryConfig {
     maxTurns: number;
     maxCharsPerTurn: number;
     maxTranscriptChars: number;
+    minTranscriptTokens: number;
   };
   agentDir: string;
   stateFile: string;
@@ -45,6 +48,7 @@ export interface ResolvedMemoryConfig {
 export interface SessionScanRecord {
   fingerprint: string;
   summaryPath: string;
+  cardPath?: string;
   workspaceKey: string;
   sessionId: string;
   summarizedAt: string;
@@ -72,6 +76,28 @@ export interface SessionSummaryRequest {
   transcript: string;
 }
 
+export interface SessionMemoryCardRequest {
+  sessionFile: string;
+  sessionId: string;
+  cwd: string;
+  transcript: string;
+  summaryRelativePath: string;
+}
+
+export interface MemoryCard {
+  type: 'memory_card';
+  session_id: string;
+  cwd: string;
+  subsystems: string[];
+  primary_topics: string[];
+  durable_decisions: string[];
+  invariants: string[];
+  pitfalls: string[];
+  open_loops: string[];
+  supersedes: string | null;
+  summary_path: string;
+}
+
 export interface SessionScanResult {
   scanned: number;
   summarized: number;
@@ -83,4 +109,5 @@ export interface SessionScanResult {
 export interface MemoryModuleDependencies {
   now?: () => Date;
   summarizeSession?: (request: SessionSummaryRequest) => Promise<string>;
+  summarizeMemoryCard?: (request: SessionMemoryCardRequest) => Promise<string>;
 }

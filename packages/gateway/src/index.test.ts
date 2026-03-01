@@ -333,6 +333,15 @@ describe('queued telegram message handler', () => {
     expect(pickerOutput).toContain('1. provider/model-a');
     expect(pickerOutput).toContain('2. provider/model-b');
 
+    const firstSendCall = sendMessage.mock.calls[0] as unknown[] | undefined;
+    const pickerOptions = firstSendCall?.[2] as {
+      reply_markup?: {
+        inline_keyboard?: Array<Array<{ text: string; callback_data: string }>>;
+      };
+    } | undefined;
+    expect(pickerOptions?.reply_markup?.inline_keyboard?.[0]?.[0]?.callback_data).toBe('model_select:1');
+    expect(pickerOptions?.reply_markup?.inline_keyboard?.[1]?.[0]?.callback_data).toBe('model_select:2');
+
     handler.handleMessage({ chat: { id: 1 }, text: '2' });
     await handler.waitForIdle('1');
 

@@ -111,7 +111,7 @@ exit 1
     });
 
     // The CLI should throw or return non-zero when npm install fails
-    const exitCode = await runCli(['run', '-p', 'test']);
+    const exitCode = await runCli(['tui', '-p', 'test']);
 
     // Should have failed due to npm install failure
     expect(exitCode).not.toBe(0);
@@ -155,10 +155,10 @@ exit 0
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_CONFIG_FILE = join(configDir, 'config.json');
 
-    // Before run, node_modules should not exist
+    // Before tui, node_modules should not exist
     expect(existsSync(join(extensionDir, 'node_modules'))).toBe(false);
 
-    const exitCode = await runCli(['run', '-p', 'test']);
+    const exitCode = await runCli(['tui', '-p', 'test']);
 
     // Should succeed
     expect(exitCode).toBe(0);
@@ -198,7 +198,7 @@ exit 0
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_CONFIG_FILE = join(configDir, 'config.json');
 
-    const exitCode = await runCli(['run', '-p', 'test']);
+    const exitCode = await runCli(['tui', '-p', 'test']);
 
     expect(exitCode).toBe(0);
   });
@@ -241,7 +241,7 @@ exit 0
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_CONFIG_FILE = join(configDir, 'config.json');
 
-    const exitCode = await runCli(['run', '-p', 'test']);
+    const exitCode = await runCli(['tui', '-p', 'test']);
 
     expect(exitCode).toBe(0);
     expect(existsSync(join(ext1Dir, 'node_modules'))).toBe(true);

@@ -94,7 +94,7 @@ describe('CLI command flows', () => {
     const config = JSON.parse(readFileSync(configPath, 'utf-8')) as { defaultProfile: string };
     expect(config.defaultProfile).toBe('datadog');
 
-    expect(await runCli(['run', '--', '-p', 'Say ok'])).toBe(0);
+    expect(await runCli(['tui', '--', '-p', 'Say ok'])).toBe(0);
 
     const runtimeAgentsPath = join(stateRoot, 'pi-agent', 'AGENTS.md');
     const runtimeAgents = readFileSync(runtimeAgentsPath, 'utf-8');

@@ -13,7 +13,7 @@ This document explains how `pa` works.
    - `pa gateway ...` (registered by `@personal-agent/gateway`)
 
 2. **Pi passthrough mode**:
-   - `pa run ...`
+   - `pa tui ...`
    - `pa <any pi args>`
 
 In passthrough mode, `pa` resolves profile resources, prepares runtime state, and then launches `pi`.
@@ -54,7 +54,7 @@ pa profile show datadog
 
 ```bash
 pa
-pa run [pi args...]
+pa tui [pi args...]
 pa profile [list|show|use]
 pa doctor
 pa gateway
@@ -63,6 +63,7 @@ pa gateway start [telegram|discord]
 pa gateway service [install|status|uninstall|help] [telegram|discord]
 pa daemon [status|start|stop|restart|logs]
 pa daemon status [--json]
+pa memory [list|query|search|head|cards|open|status]
 ```
 
 ## Cross-package command registration
@@ -76,9 +77,9 @@ Current example:
 
 This keeps package boundaries clean: gateway logic stays in the gateway package, while command dispatch stays in CLI.
 
-## How passthrough run works
+## How passthrough TUI works
 
-When `pa` runs Pi (via `pa`, `pa run`, or `pa <pi args>`), it:
+When `pa` runs Pi (via `pa`, `pa tui`, or `pa <pi args>`), it:
 
 1. resolves configured profile (`~/.config/personal-agent/config.json`)
 2. resolves layers: shared -> selected profile -> optional local overlay
@@ -117,7 +118,7 @@ pa profile use datadog
 pa profile show datadog
 pa doctor
 pa gateway help
-pa run
+pa tui
 ```
 
-If `pa run` launches TUI and `profile show` includes both skill dirs, layering is working.
+If `pa tui` launches TUI and `profile show` includes both skill dirs, layering is working.

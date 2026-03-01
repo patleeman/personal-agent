@@ -29,7 +29,7 @@ Run Pi through `pa`:
 pa
 
 # start Pi TUI with configured/default profile
-pa run
+pa tui
 
 # configure profile (infrequent)
 pa profile use datadog
@@ -41,7 +41,7 @@ After packaging/installing CLI binary:
 
 ```bash
 pa
-pa run -p "hello"
+pa tui -p "hello"
 pa profile list
 pa profile use datadog
 pa doctor
@@ -53,6 +53,8 @@ pa gateway discord start
 pa gateway service install discord
 pa daemon start
 pa daemon status
+pa memory head 5
+pa memory status --json
 ```
 
 ## Daemon
@@ -126,7 +128,7 @@ Gateway commands:
 - `/commands`
 - `/skills`
 - `/skill <name>`
-- `/model` (picker + per-chat/per-channel model override)
+- `/model` (picker + per-chat/per-channel model override; Telegram includes inline buttons)
 - `/compact` (guidance only in gateway mode; use Pi TUI for manual compaction)
 - `/resume` (gateway auto-resumes per chat/channel)
 

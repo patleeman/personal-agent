@@ -90,7 +90,7 @@ describe('CLI main flow integration', () => {
     expect(await runCli(['doctor'])).toBe(0);
 
     // Step 3: Run pi with the profile
-    expect(await runCli(['run', '-p', 'hello'])).toBe(0);
+    expect(await runCli(['tui', '-p', 'hello'])).toBe(0);
 
     // Verify pi was called with merged profile
     const loggedArgs = readFileSync(argsLogPath, 'utf-8');
@@ -116,9 +116,9 @@ describe('CLI main flow integration', () => {
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_CONFIG_FILE = join(configDir, 'config.json');
 
-    // Use shared and run
+    // Use shared and tui
     await runCli(['profile', 'use', 'shared']);
-    await runCli(['run', '-p', 'test']);
+    await runCli(['tui', '-p', 'test']);
 
     // Check runtime has shared content
     const runtimeAgentsPath = join(stateRoot, 'pi-agent', 'AGENTS.md');
@@ -126,9 +126,9 @@ describe('CLI main flow integration', () => {
     let agentsContent = readFileSync(runtimeAgentsPath, 'utf-8');
     expect(agentsContent).toContain('Shared Content');
 
-    // Switch to datadog and run
+    // Switch to datadog and tui
     await runCli(['profile', 'use', 'datadog']);
-    await runCli(['run', '-p', 'test2']);
+    await runCli(['tui', '-p', 'test2']);
 
     // Check runtime now has merged content
     agentsContent = readFileSync(runtimeAgentsPath, 'utf-8');
@@ -152,7 +152,7 @@ describe('CLI main flow integration', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
     // Should succeed even though daemon is not running
-    const exitCode = await runCli(['run', '-p', 'test']);
+    const exitCode = await runCli(['tui', '-p', 'test']);
 
     expect(exitCode).toBe(0);
     // Should have logged daemon unavailable warning
@@ -178,7 +178,7 @@ describe('CLI main flow integration', () => {
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
-    const exitCode = await runCli(['run', '-p', 'test']);
+    const exitCode = await runCli(['tui', '-p', 'test']);
 
     expect(exitCode).toBe(0);
 

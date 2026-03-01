@@ -16,12 +16,15 @@ export interface MemorySummarizationConfig {
   maxTurns?: number;
   maxCharsPerTurn?: number;
   maxTranscriptChars?: number;
+  minTranscriptTokens?: number;
 }
 
 export interface MemoryModuleConfig {
   enabled: boolean;
   sessionSource: string;
   summaryDir: string;
+  cardsDir?: string;
+  cardsCollectionName?: string;
   scanIntervalMinutes?: number;
   inactiveAfterMinutes?: number;
   retentionDays?: number;
@@ -81,6 +84,9 @@ function expandConfigPaths(config: DaemonConfig): DaemonConfig {
         ...config.modules.memory,
         sessionSource: resolve(expandHome(config.modules.memory.sessionSource)),
         summaryDir: resolve(expandHome(config.modules.memory.summaryDir)),
+        cardsDir: config.modules.memory.cardsDir
+          ? resolve(expandHome(config.modules.memory.cardsDir))
+          : undefined,
         collections: config.modules.memory.collections.map((collection) => ({
           ...collection,
           path: resolve(expandHome(collection.path)),
@@ -147,6 +153,7 @@ export function getDaemonConfigFilePath(): string {
 export function getDefaultDaemonConfig(): DaemonConfig {
   const statePaths = resolveStatePaths();
   const summaryDir = join(statePaths.root, 'memory', 'conversations');
+  const cardsDir = join(statePaths.root, 'memory', 'cards');
 
   return {
     logLevel: 'info',
@@ -161,6 +168,8 @@ export function getDefaultDaemonConfig(): DaemonConfig {
         enabled: true,
         sessionSource: join(statePaths.root, 'pi-agent', 'sessions'),
         summaryDir,
+        cardsDir,
+        cardsCollectionName: 'memory_cards',
         scanIntervalMinutes: 5,
         inactiveAfterMinutes: 30,
         retentionDays: 90,
@@ -176,6 +185,7 @@ export function getDefaultDaemonConfig(): DaemonConfig {
           maxTurns: 250,
           maxCharsPerTurn: 600,
           maxTranscriptChars: 18_000,
+          minTranscriptTokens: 30,
         },
         qmd: {
           index: 'default',

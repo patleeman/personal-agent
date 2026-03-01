@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'child_process';
-import { existsSync, readdirSync, realpathSync } from 'fs';
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from 'fs';
 import { homedir } from 'os';
-import { join, resolve } from 'path';
+import { join, relative, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { createInterface } from 'readline';
 import { Command, CommanderError } from 'commander';
@@ -521,7 +521,7 @@ async function doctor(options: DoctorOptions = {}): Promise<number> {
   doctorOk('runtime auth present', report.runtimeAuthPresent);
   doctorOk('legacy auth present', report.legacyAuthPresent);
   console.log('');
-  console.log(formatNextStep('pa run -p "hello"'));
+  console.log(formatNextStep('pa tui -p "hello"'));
 
   return 0;
 }
@@ -573,7 +573,7 @@ Commands:
 
     setDefaultProfile(value);
     console.log(success('Default profile set to', value));
-    console.log(`  ${formatNextStep('pa run -p "hello"')}`);
+    console.log(`  ${formatNextStep('pa tui -p "hello"')}`);
     return 0;
   }
 
@@ -597,17 +597,21 @@ async function printMemoryModuleStatus(module: DaemonStatus['modules'][0]): Prom
 
   const sessionDir = config.modules.memory.sessionSource;
   const summaryDir = config.modules.memory.summaryDir;
+  const cardsDir = resolveCardsDir(config.modules.memory);
 
   const sessionFiles = existsSync(sessionDir)
     ? spawnSync('find', [sessionDir, '-name', '*.jsonl', '-type', 'f'], { encoding: 'utf-8' }).stdout.split('\n').filter(Boolean)
     : [];
 
-  const summaryFiles = existsSync(summaryDir)
-    ? spawnSync('find', [summaryDir, '-mindepth', '2', '-name', '*.md', '-type', 'f'], { encoding: 'utf-8' }).stdout.split('\n').filter(Boolean)
-    : [];
+  const summaryFiles = listMemorySummaryFiles(summaryDir);
+  const skipMarkerFiles = listMemorySkipMarkerFiles(summaryDir);
+  const cardFiles = listMemoryCardFiles(cardsDir);
 
   const total = sessionFiles.length;
   const summarizedOnDisk = summaryFiles.length;
+  const filteredOnDisk = skipMarkerFiles.length;
+  const cardsOnDisk = cardFiles.length;
+  const processedOnDisk = Math.min(total, summarizedOnDisk + filteredOnDisk);
   const failed = detail?.failedSessions ?? 0;
   const hasError = Boolean(module.lastError || detail?.lastError);
   const hasPending = Boolean(detail?.needsEmbedding || detail?.dirty);
@@ -624,7 +628,7 @@ async function printMemoryModuleStatus(module: DaemonStatus['modules'][0]): Prom
       : statusChip('active');
 
   console.log(bullet(`Memory summaries: ${status}`));
-  console.log(keyValue('Coverage', `${progressBar(summarizedOnDisk, total)} (${summarizedOnDisk}/${total} conversations summarized)`, 4));
+  console.log(keyValue('Coverage', `${progressBar(processedOnDisk, total)} (${summarizedOnDisk} summarized, ${filteredOnDisk} filtered, ${cardsOnDisk} cards, ${total} total)`, 4));
 
   if (qmdCounts && primaryCollection) {
     console.log(keyValue(`qmd indexed summaries (${primaryCollection})`, qmdCounts.workspace, 4));
@@ -903,18 +907,96 @@ function runQmdCommand(
   return result;
 }
 
+function listMemorySummaryFiles(summaryDir: string): string[] {
+  if (!existsSync(summaryDir)) {
+    return [];
+  }
+
+  const result = spawnSync('find', [summaryDir, '-mindepth', '2', '-name', '*.md', '-type', 'f'], { encoding: 'utf-8' });
+
+  if (result.error || (result.status ?? 1) !== 0) {
+    return [];
+  }
+
+  return toProcessText(result.stdout).split('\n').filter((line) => line.trim().length > 0);
+}
+
+function listMemorySkipMarkerFiles(summaryDir: string): string[] {
+  if (!existsSync(summaryDir)) {
+    return [];
+  }
+
+  const result = spawnSync('find', [summaryDir, '-mindepth', '2', '-name', '*.skip', '-type', 'f'], { encoding: 'utf-8' });
+
+  if (result.error || (result.status ?? 1) !== 0) {
+    return [];
+  }
+
+  return toProcessText(result.stdout).split('\n').filter((line) => line.trim().length > 0);
+}
+
+function listMemoryCardFiles(cardsDir: string): string[] {
+  if (!existsSync(cardsDir)) {
+    return [];
+  }
+
+  const result = spawnSync('find', [cardsDir, '-mindepth', '2', '-name', '*.json', '-type', 'f'], { encoding: 'utf-8' });
+
+  if (result.error || (result.status ?? 1) !== 0) {
+    return [];
+  }
+
+  return toProcessText(result.stdout).split('\n').filter((line) => line.trim().length > 0);
+}
+
+function parseMemoryHeadCount(rawValue: string | undefined): number {
+  if (!rawValue) {
+    return 5;
+  }
+
+  if (!/^\d+$/.test(rawValue)) {
+    throw new Error('Usage: pa memory head [count] (count must be a positive integer)');
+  }
+
+  const parsed = Number.parseInt(rawValue, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error('Usage: pa memory head [count] (count must be a positive integer)');
+  }
+
+  return parsed;
+}
+
+function resolveCardsDir(memoryConfig: {
+  summaryDir: string;
+  cardsDir?: string;
+}): string {
+  if (typeof memoryConfig.cardsDir === 'string' && memoryConfig.cardsDir.trim().length > 0) {
+    return memoryConfig.cardsDir;
+  }
+
+  return join(resolve(memoryConfig.summaryDir), '..', 'cards');
+}
+
+function findMemoryFileBySessionId(files: string[], sessionId: string, extension: string): string | undefined {
+  const needle = `${sessionId}${extension}`;
+  return files.find((path) => path.endsWith(needle));
+}
+
 async function memoryCommand(args: string[]): Promise<number> {
   const [subcommand, ...rest] = args;
 
   if (!subcommand) {
     console.log(section('Memory commands'));
     console.log('');
-    console.log(`Usage: pa memory [list|query|search|status]
+    console.log(`Usage: pa memory [list|query|search|head|cards|open|status]
 
 Commands:
   list                   List memory collections and files
   query <text>           Semantic search with query expansion + reranking
   search <text>          Full-text keyword search (BM25)
+  head [count]           Show latest summarized memories (default: 5)
+  cards head [count]     Show latest memory cards (default: 5)
+  open <sessionId>       Open session summary markdown (use --card for card JSON)
   status [--json]        Show comprehensive memory status
 `);
     return 0;
@@ -935,6 +1017,152 @@ Commands:
     const result = runQmdCommand([subcommand, query], `Running qmd ${subcommand}`);
     console.log(toProcessText(result.stdout || result.stderr));
     return result.status ?? 0;
+  }
+
+  if (subcommand === 'head') {
+    if (rest.length > 1) {
+      throw new Error('Usage: pa memory head [count]');
+    }
+
+    const count = parseMemoryHeadCount(rest[0]);
+    const { loadDaemonConfig } = await import('@personal-agent/daemon');
+    const config = loadDaemonConfig();
+    const summaryDir = config.modules.memory.summaryDir;
+    const summaryFiles = listMemorySummaryFiles(summaryDir);
+
+    const recentSummaries = summaryFiles
+      .map((path) => {
+        try {
+          return {
+            path,
+            mtimeMs: statSync(path).mtimeMs,
+          };
+        } catch {
+          return {
+            path,
+            mtimeMs: 0,
+          };
+        }
+      })
+      .sort((a, b) => b.mtimeMs - a.mtimeMs)
+      .slice(0, count);
+
+    console.log(section(`Latest memories (${recentSummaries.length})`));
+    console.log(keyValue('Summary directory', summaryDir));
+
+    if (recentSummaries.length === 0) {
+      console.log(dim('No summarized memories found.'));
+      return 0;
+    }
+
+    for (const [index, entry] of recentSummaries.entries()) {
+      const relativePath = relative(summaryDir, entry.path);
+      const modifiedAt = entry.mtimeMs > 0 ? new Date(entry.mtimeMs).toLocaleString() : 'unknown';
+
+      let summaryText = '';
+      try {
+        summaryText = readFileSync(entry.path, 'utf-8').trim();
+      } catch {
+        summaryText = '(failed to read summary file)';
+      }
+
+      console.log('');
+      console.log(`${index + 1}. ${relativePath}`);
+      console.log(`   ${dim(`Updated: ${modifiedAt}`)}`);
+      console.log(summaryText.length > 0 ? summaryText : dim('(empty summary)'));
+    }
+
+    return 0;
+  }
+
+  if (subcommand === 'cards') {
+    const [cardsSubcommand, cardsCountRaw] = rest;
+
+    if (cardsSubcommand && cardsSubcommand !== 'head') {
+      throw new Error('Usage: pa memory cards head [count]');
+    }
+
+    if (rest.length > 2) {
+      throw new Error('Usage: pa memory cards head [count]');
+    }
+
+    const count = parseMemoryHeadCount(cardsCountRaw);
+    const { loadDaemonConfig } = await import('@personal-agent/daemon');
+    const config = loadDaemonConfig();
+    const cardsDir = resolveCardsDir(config.modules.memory);
+    const cardFiles = listMemoryCardFiles(cardsDir);
+
+    const recentCards = cardFiles
+      .map((path) => {
+        try {
+          return {
+            path,
+            mtimeMs: statSync(path).mtimeMs,
+          };
+        } catch {
+          return {
+            path,
+            mtimeMs: 0,
+          };
+        }
+      })
+      .sort((a, b) => b.mtimeMs - a.mtimeMs)
+      .slice(0, count);
+
+    console.log(section(`Latest memory cards (${recentCards.length})`));
+    console.log(keyValue('Cards directory', cardsDir));
+
+    if (recentCards.length === 0) {
+      console.log(dim('No memory cards found.'));
+      return 0;
+    }
+
+    for (const [index, entry] of recentCards.entries()) {
+      const relativePath = relative(cardsDir, entry.path);
+      const modifiedAt = entry.mtimeMs > 0 ? new Date(entry.mtimeMs).toLocaleString() : 'unknown';
+
+      let cardText = '';
+      try {
+        cardText = readFileSync(entry.path, 'utf-8').trim();
+      } catch {
+        cardText = '(failed to read card file)';
+      }
+
+      console.log('');
+      console.log(`${index + 1}. ${relativePath}`);
+      console.log(`   ${dim(`Updated: ${modifiedAt}`)}`);
+      console.log(cardText.length > 0 ? cardText : dim('(empty card)'));
+    }
+
+    return 0;
+  }
+
+  if (subcommand === 'open') {
+    const sessionId = rest.find((arg) => !arg.startsWith('-'));
+    if (!sessionId) {
+      throw new Error('Usage: pa memory open <sessionId> [--card]');
+    }
+
+    const preferCard = hasOption(rest, '--card');
+    const { loadDaemonConfig } = await import('@personal-agent/daemon');
+    const config = loadDaemonConfig();
+    const summaryDir = config.modules.memory.summaryDir;
+    const cardsDir = resolveCardsDir(config.modules.memory);
+
+    const summaryPath = findMemoryFileBySessionId(listMemorySummaryFiles(summaryDir), sessionId, '.md');
+    const cardPath = findMemoryFileBySessionId(listMemoryCardFiles(cardsDir), sessionId, '.json');
+
+    const target = preferCard
+      ? (cardPath ?? summaryPath)
+      : (summaryPath ?? cardPath);
+
+    if (!target) {
+      throw new Error(`No memory artifact found for session: ${sessionId}`);
+    }
+
+    const text = readFileSync(target, 'utf-8').trim();
+    console.log(text.length > 0 ? text : dim('(empty memory artifact)'));
+    return 0;
   }
 
   if (subcommand === 'status') {
@@ -964,13 +1192,17 @@ Commands:
       : [];
 
     const summaryDir = config.modules.memory.summaryDir;
-    const summaryFiles = existsSync(summaryDir)
-      ? spawnSync('find', [summaryDir, '-mindepth', '2', '-name', '*.md', '-type', 'f'], { encoding: 'utf-8' }).stdout.split('\n').filter(Boolean)
-      : [];
+    const cardsDir = resolveCardsDir(config.modules.memory);
+    const summaryFiles = listMemorySummaryFiles(summaryDir);
+    const skipMarkerFiles = listMemorySkipMarkerFiles(summaryDir);
+    const cardFiles = listMemoryCardFiles(cardsDir);
 
     const totalSessions = sessionFiles.length;
     const summarized = summaryFiles.length;
-    const unindexed = Math.max(0, totalSessions - summarized);
+    const filtered = skipMarkerFiles.length;
+    const cards = cardFiles.length;
+    const processed = Math.min(totalSessions, summarized + filtered);
+    const unindexed = Math.max(0, totalSessions - processed);
     const failed = detail?.failedSessions ?? 0;
     const needsEmbedding = Boolean(detail?.needsEmbedding);
     const dirty = Boolean(detail?.dirty);
@@ -989,6 +1221,9 @@ Commands:
       sessions: {
         total: totalSessions,
         summarizedOnDisk: summarized,
+        filteredLowSignalOnDisk: filtered,
+        cardsOnDisk: cards,
+        processedOnDisk: processed,
         unindexed,
         failed,
       },
@@ -1007,6 +1242,11 @@ Commands:
         indexedSummaries: qmdCollectionCounts?.workspace ?? null,
         summaryLag: qmdSummaryLag,
       },
+      paths: {
+        sessionDir,
+        summaryDir,
+        cardsDir,
+      },
       qmdStatus: qmdStatusText,
     };
 
@@ -1020,9 +1260,13 @@ Commands:
     console.log(section('Sessions'));
     console.log(keyValue('Total session files', totalSessions));
     console.log(keyValue('Summarized (on disk)', summarized));
-    console.log(keyValue('Coverage', progressBar(summarized, totalSessions)));
+    console.log(keyValue('Filtered low-signal (on disk)', filtered));
+    console.log(keyValue('Cards (on disk)', cards));
+    console.log(keyValue('Coverage', progressBar(processed, totalSessions)));
     console.log(keyValue('Unindexed sessions', unindexed > 0 ? statusChip('pending') + ` (${unindexed})` : statusChip('active') + ' (0)'));
     console.log(keyValue('Failed scans', failed > 0 ? statusChip('error') + ` (${failed})` : statusChip('active') + ' (0)'));
+    console.log(keyValue('Summary directory', summaryDir));
+    console.log(keyValue('Cards directory', cardsDir));
 
     if (qmdCollectionCounts && primaryCollection) {
       console.log(keyValue(`qmd indexed summaries (${primaryCollection})`, qmdCollectionCounts.workspace));
@@ -1085,9 +1329,9 @@ function normalizeCommandUsage(command: Pick<RegisteredCliCommand, 'name' | 'usa
 function buildCommandDefinitions(): CliCommandDefinition[] {
   const definitions: CliCommandDefinition[] = [
     {
-      name: 'run',
-      usage: 'run [args...]',
-      description: 'Run pi with configured profile resources',
+      name: 'tui',
+      usage: 'tui [args...]',
+      description: 'Run pi TUI with configured profile resources',
       run: runCommand,
     },
     {
@@ -1116,8 +1360,8 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     },
     {
       name: 'memory',
-      usage: 'memory [list|query|search|status] [args...]',
-      description: 'Query memory (conversation summaries)',
+      usage: 'memory [list|query|search|head|cards|open|status] [args...]',
+      description: 'Query memory (conversation summaries and cards)',
       run: memoryCommand,
     },
   ];
@@ -1194,7 +1438,7 @@ Global options:
 Examples:
   pa
   pa --plain -p "hello"
-  pa run -- --model kimi-coding/k2p5
+  pa tui -- --model kimi-coding/k2p5
   pa profile use datadog
   pa profile list
   pa doctor
@@ -1205,6 +1449,9 @@ Examples:
   pa daemon start
   pa daemon status
   pa memory list
+  pa memory head 5
+  pa memory cards head 5
+  pa memory open <sessionId>
   pa memory status --json
   pa memory query "authentication flow"
 `,

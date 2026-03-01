@@ -2,29 +2,30 @@ import { describe, expect, it } from 'vitest';
 import { parseCommand } from './args.js';
 
 describe('parseCommand', () => {
-  it('defaults to run when no command is provided', () => {
-    expect(parseCommand([])).toEqual({ command: 'run', args: [] });
+  it('defaults to tui when no command is provided', () => {
+    expect(parseCommand([])).toEqual({ command: 'tui', args: [] });
   });
 
   it('detects explicit commands', () => {
     expect(parseCommand(['profile', 'list'])).toEqual({ command: 'profile', args: ['list'] });
     expect(parseCommand(['doctor'])).toEqual({ command: 'doctor', args: [] });
     expect(parseCommand(['daemon', 'status'])).toEqual({ command: 'daemon', args: ['status'] });
-    expect(parseCommand(['run', '--profile', 'shared'])).toEqual({
-      command: 'run',
+    expect(parseCommand(['memory', 'status'])).toEqual({ command: 'memory', args: ['status'] });
+    expect(parseCommand(['tui', '--profile', 'shared'])).toEqual({
+      command: 'tui',
       args: ['--profile', 'shared'],
     });
   });
 
-  it('treats unknown first token as run args', () => {
+  it('treats unknown first token as tui args', () => {
     expect(parseCommand(['--profile', 'shared'])).toEqual({
-      command: 'run',
+      command: 'tui',
       args: ['--profile', 'shared'],
     });
   });
 
   it('supports caller-provided commands for plugin registration', () => {
-    expect(parseCommand(['gateway', 'start'], ['run', 'gateway'])).toEqual({
+    expect(parseCommand(['gateway', 'start'], ['tui', 'gateway'])).toEqual({
       command: 'gateway',
       args: ['start'],
     });
