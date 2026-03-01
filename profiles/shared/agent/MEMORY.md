@@ -6,6 +6,7 @@
 - For Todoist integration, use direct API calls (curl/HTTP) rather than assuming a Todoist CLI.
 - Place new personal skills under the assistant profile (`profiles/assistant/agent/skills`).
 - Prefer on-demand qmd memory queries over automatic prompt-time memory-card injection.
+- For the assistant profile, default to provider `openai-codex` with model `gpt-5.3-codex`.
 
 ## Environment
 
