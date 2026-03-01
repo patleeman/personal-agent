@@ -1,6 +1,6 @@
 {
-  "defaultProvider": "kimi-coding",
-  "defaultModel": "k2p5",
-  "defaultThinkingLevel": "off",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.3-codex",
+  "defaultThinkingLevel": "xhigh",
   "theme": "cobalt2"
 }
