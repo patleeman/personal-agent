@@ -78,6 +78,8 @@ pa gateway telegram setup
 pa gateway telegram start
 ```
 
+`start` runs in the foreground. Keep that terminal open and press `Ctrl+C` to stop.
+
 ## Discord
 
 Required configuration (via setup or env):
@@ -96,6 +98,8 @@ Run:
 pa gateway discord setup
 pa gateway discord start
 ```
+
+`start` runs in the foreground. Keep that terminal open and press `Ctrl+C` to stop.
 
 ## Message/session behavior
 

@@ -1008,6 +1008,12 @@ async function startGateway(provider: GatewayProvider): Promise<void> {
   await startDiscordBridge();
 }
 
+function waitIndefinitely(): Promise<void> {
+  return new Promise(() => {
+    // Keep process alive in foreground mode until interrupted (Ctrl+C).
+  });
+}
+
 async function resolveGatewayProviderForSetup(
   ask: (question: string) => Promise<string>,
   provider?: GatewayProvider,
@@ -1180,6 +1186,7 @@ async function runGatewayCommand(args: string[]): Promise<number> {
   }
 
   await startGateway(parsed.provider ?? 'telegram');
+  await waitIndefinitely();
   return 0;
 }
 
@@ -1206,6 +1213,7 @@ async function startGatewayFromEnv(): Promise<void> {
 
   if (!providerValue) {
     await startTelegramBridge();
+    await waitIndefinitely();
     return;
   }
 
@@ -1214,6 +1222,7 @@ async function startGatewayFromEnv(): Promise<void> {
   }
 
   await startGateway(providerValue);
+  await waitIndefinitely();
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
