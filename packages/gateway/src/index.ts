@@ -34,6 +34,49 @@ import {
   writeGatewayConfig,
 } from './config.js';
 
+// Logging types for chat flow
+export interface ChatLogEntry {
+  timestamp: string;
+  type: 'incoming' | 'tool_call' | 'tool_result' | 'assistant' | 'error' | 'system';
+  source: string;
+  userId: string;
+  userName?: string;
+  content: string;
+  details?: Record<string, unknown>;
+}
+
+export interface PiJsonEvent {
+  type: string;
+  assistantMessageEvent?: {
+    type: string;
+    contentIndex?: number;
+    delta?: string;
+    content?: string;
+    toolCall?: {
+      id?: string;
+      name?: string;
+      arguments?: Record<string, unknown>;
+    };
+  };
+  toolCallId?: string;
+  toolName?: string;
+  args?: Record<string, unknown>;
+  result?: {
+    content?: Array<{ type: string; text?: string }>;
+    isError?: boolean;
+  };
+  isError?: boolean;
+  message?: {
+    role?: string;
+    content?: Array<{
+      type: string;
+      text?: string;
+      name?: string;
+      arguments?: Record<string, unknown>;
+    }>;
+  };
+}
+
 export interface TelegramBridgeConfig {
   token: string;
   profile: string;
@@ -53,6 +96,12 @@ export interface DiscordBridgeConfig {
 export interface TelegramMessageLike {
   chat: { id: number };
   text?: string;
+  from?: {
+    id?: number;
+    username?: string;
+    first_name?: string;
+    last_name?: string;
+  };
 }
 
 type SendMessageFn = (chatId: number, text: string) => Promise<unknown>;
@@ -65,6 +114,11 @@ interface RunPromptFnInput {
   prompt: string;
   sessionFile: string;
   cwd: string;
+  logContext?: {
+    source: string;
+    userId: string;
+    userName?: string;
+  };
 }
 
 type RunPromptFn = (options: RunPromptFnInput) => Promise<string>;
@@ -78,6 +132,7 @@ export interface CreateTelegramMessageHandlerOptions {
   sendMessage: SendMessageFn;
   sendChatAction: SendChatActionFn;
   runPrompt: RunPromptFn;
+  commandHelpText?: string;
   sessionFileExists?: (path: string) => boolean;
   removeSessionFile?: (path: string) => Promise<void>;
   maxPendingPerChat?: number;
@@ -92,6 +147,8 @@ export interface DiscordMessageLike {
   channelId: string;
   content?: string;
   authorIsBot?: boolean;
+  authorUsername?: string;
+  authorId?: string;
   sendMessage: SendTextFn;
   sendTyping: () => Promise<unknown>;
 }
@@ -118,6 +175,26 @@ const DEFAULT_PI_MAX_OUTPUT_BYTES = 200_000;
 const DEFAULT_MAX_PENDING_PER_CHAT = 20;
 const DEFAULT_MAX_PENDING_PER_CHANNEL = 20;
 
+function gatewaySection(title: string): string {
+  return title;
+}
+
+function gatewaySuccess(message: string): string {
+  return `✓ ${message}`;
+}
+
+function gatewayWarning(message: string): string {
+  return `⚠ ${message}`;
+}
+
+function gatewayNext(command: string): string {
+  return `Next: ${command}`;
+}
+
+function gatewayKeyValue(key: string, value: string | number): string {
+  return `  ${key}: ${value}`;
+}
+
 const GATEWAY_PROVIDERS = ['telegram', 'discord'] as const;
 
 export type GatewayProvider = (typeof GATEWAY_PROVIDERS)[number];
@@ -139,6 +216,411 @@ export function parseAllowlist(value: string | undefined): Set<string> {
       .map((entry) => entry.trim())
       .filter((entry) => entry.length > 0),
   );
+}
+
+interface TelegramCommandDefinition {
+  command: string;
+  description: string;
+}
+
+const DEFAULT_TELEGRAM_COMMANDS: TelegramCommandDefinition[] = [
+  { command: 'new', description: 'Start a new session' },
+  { command: 'status', description: 'Show gateway status' },
+  { command: 'commands', description: 'List available commands' },
+  { command: 'help', description: 'Show command help' },
+  { command: 'skill', description: 'Load a skill (usage: /skill <name>)' },
+];
+
+function toTelegramCommandName(rawCommand: string): string | undefined {
+  let value = rawCommand.trim().toLowerCase();
+  if (value.startsWith('/')) {
+    value = value.slice(1);
+  }
+
+  value = value.split(/\s+/)[0] ?? value;
+
+  let command = '';
+  for (const char of value) {
+    if (/[a-z0-9_]/.test(char)) {
+      command += char;
+      continue;
+    }
+
+    break;
+  }
+
+  if (command.length === 0) {
+    return undefined;
+  }
+
+  return command.slice(0, 32);
+}
+
+function toTelegramCommandDescription(description: string): string {
+  const singleLine = description.replace(/\s+/g, ' ').trim();
+  if (singleLine.length === 0) {
+    return 'Command';
+  }
+
+  return singleLine.slice(0, 256);
+}
+
+function parsePiHelpCommands(helpText: string): TelegramCommandDefinition[] {
+  const parsed: TelegramCommandDefinition[] = [];
+  const lines = helpText.split('\n');
+
+  for (const line of lines) {
+    const match = line.match(/^\s*-\s*`\/([^`]+)`\s*-\s*(.+)$/);
+    if (!match) {
+      continue;
+    }
+
+    const rawCommand = match[1]?.trim() ?? '';
+    const rawDescription = match[2]?.trim() ?? '';
+    const command = toTelegramCommandName(rawCommand);
+
+    if (!command) {
+      continue;
+    }
+
+    const description = command === 'skill'
+      ? 'Load a skill (usage: /skill <name>)'
+      : toTelegramCommandDescription(rawDescription);
+
+    parsed.push({ command, description });
+  }
+
+  return parsed;
+}
+
+function mergeTelegramCommands(
+  preferred: TelegramCommandDefinition[],
+  discovered: TelegramCommandDefinition[],
+): TelegramCommandDefinition[] {
+  const merged = new Map<string, TelegramCommandDefinition>();
+
+  for (const command of preferred) {
+    merged.set(command.command, command);
+  }
+
+  for (const command of discovered) {
+    if (!merged.has(command.command)) {
+      merged.set(command.command, command);
+    }
+  }
+
+  return [...merged.values()].slice(0, 100);
+}
+
+function formatTelegramCommands(commands: TelegramCommandDefinition[]): string {
+  const lines = ['Available commands:'];
+
+  for (const command of commands) {
+    lines.push(`/${command.command} - ${command.description}`);
+  }
+
+  lines.push('');
+  lines.push('Tip: use /skill <name> for skill commands like /skill:tdd-feature.');
+
+  return lines.join('\n');
+}
+
+function normalizeTelegramCommandText(text: string): {
+  normalizedText: string;
+  command?: string;
+  args: string;
+} {
+  const trimmed = text.trim();
+
+  if (!trimmed.startsWith('/')) {
+    return {
+      normalizedText: trimmed,
+      args: '',
+    };
+  }
+
+  const parts = trimmed.split(/\s+/);
+  const first = parts[0] ?? '';
+  const normalizedCommand = first
+    .replace(/^\/([a-z0-9_]+)@[^\s]+$/i, '/$1')
+    .toLowerCase();
+  const args = parts.slice(1).join(' ').trim();
+
+  return {
+    normalizedText: args.length > 0 ? `${normalizedCommand} ${args}` : normalizedCommand,
+    command: normalizedCommand,
+    args,
+  };
+}
+
+async function discoverTelegramCommandsFromPi(options: {
+  profile: ResolvedProfile;
+  agentDir: string;
+  cwd: string;
+  sessionFile: string;
+}): Promise<TelegramCommandDefinition[]> {
+  const settings = options.profile.settingsFiles.length > 0
+    ? mergeJsonFiles(options.profile.settingsFiles)
+    : {};
+
+  const resourceArgs = buildPiResourceArgs(options.profile);
+  const args = applyModelDefaults(
+    [
+      ...resourceArgs,
+      '--session',
+      options.sessionFile,
+      '-p',
+      '/help',
+    ],
+    settings,
+  );
+
+  try {
+    const result = spawnSync('pi', args, {
+      cwd: options.cwd,
+      env: {
+        ...process.env,
+        PI_CODING_AGENT_DIR: options.agentDir,
+      },
+      encoding: 'utf-8',
+    });
+
+    if (result.error || result.status !== 0) {
+      return [];
+    }
+
+    return parsePiHelpCommands(result.stdout ?? '');
+  } finally {
+    await rm(options.sessionFile, { force: true });
+  }
+}
+
+// Chat flow logging functions
+function formatLogTimestamp(): string {
+  return new Date().toISOString();
+}
+
+function logChatEntry(entry: ChatLogEntry): void {
+  const timestamp = entry.timestamp;
+  const type = entry.type.toUpperCase().padEnd(12);
+  const source = entry.source.padEnd(10);
+  const user = entry.userName || entry.userId;
+  
+  // Color codes for terminal
+  const colors: Record<string, string> = {
+    incoming: '\x1b[36m',   // Cyan
+    tool_call: '\x1b[33m',  // Yellow
+    tool_result: '\x1b[32m', // Green
+    assistant: '\x1b[35m',  // Magenta
+    error: '\x1b[31m',      // Red
+    system: '\x1b[90m',     // Gray
+    reset: '\x1b[0m',
+  };
+  
+  const color = colors[entry.type] || colors.reset;
+  const reset = colors.reset;
+  
+  console.log(`${color}[${timestamp}] [${type}] [${source}] ${user}:${reset} ${entry.content}`);
+  
+  if (entry.details && Object.keys(entry.details).length > 0) {
+    const detailsStr = JSON.stringify(entry.details, null, 2);
+    console.log(`${color}  → Details:${reset} ${detailsStr}`);
+  }
+}
+
+function logIncomingMessage(source: string, userId: string, userName: string | undefined, message: string): void {
+  logChatEntry({
+    timestamp: formatLogTimestamp(),
+    type: 'incoming',
+    source,
+    userId,
+    userName,
+    content: message,
+  });
+}
+
+function logToolCall(
+  source: string,
+  userId: string,
+  toolName: string,
+  args: Record<string, unknown>,
+  userName?: string,
+): void {
+  logChatEntry({
+    timestamp: formatLogTimestamp(),
+    type: 'tool_call',
+    source,
+    userId,
+    userName,
+    content: `Tool call: ${toolName}`,
+    details: { args },
+  });
+}
+
+function logToolResult(
+  source: string,
+  userId: string,
+  toolName: string,
+  result: string,
+  isError: boolean,
+  userName?: string,
+): void {
+  logChatEntry({
+    timestamp: formatLogTimestamp(),
+    type: 'tool_result',
+    source,
+    userId,
+    userName,
+    content: `Tool result: ${toolName}${isError ? ' (ERROR)' : ''}`,
+    details: { result: result.slice(0, 500) + (result.length > 500 ? '...' : '') },
+  });
+}
+
+function logAssistantMessage(source: string, userId: string, message: string, userName?: string): void {
+  logChatEntry({
+    timestamp: formatLogTimestamp(),
+    type: 'assistant',
+    source,
+    userId,
+    userName,
+    content: message.slice(0, 200) + (message.length > 200 ? '...' : ''),
+  });
+}
+
+function logError(source: string, userId: string, error: string, userName?: string): void {
+  logChatEntry({
+    timestamp: formatLogTimestamp(),
+    type: 'error',
+    source,
+    userId,
+    userName,
+    content: error,
+  });
+}
+
+function logSystem(source: string, message: string): void {
+  logChatEntry({
+    timestamp: formatLogTimestamp(),
+    type: 'system',
+    source,
+    userId: '-',
+    content: message,
+  });
+}
+
+// Parse pi --mode json output and log events
+class PiJsonStreamParser {
+  private currentToolCalls = new Map<string, { name: string; args: string }>();
+  private assistantTextBuffer = '';
+  private source: string;
+  private userId: string;
+  private userName?: string;
+
+  constructor(source: string, userId: string, userName?: string) {
+    this.source = source;
+    this.userId = userId;
+    this.userName = userName;
+  }
+
+  parseLine(line: string): void {
+    if (!line.trim()) return;
+    
+    try {
+      const event = JSON.parse(line) as PiJsonEvent;
+      this.handleEvent(event);
+    } catch {
+      // Ignore parse errors for non-JSON lines
+    }
+  }
+
+  private handleEvent(event: PiJsonEvent): void {
+    switch (event.type) {
+      case 'message_update': {
+        const msgEvent = event.assistantMessageEvent;
+        if (!msgEvent) return;
+
+        switch (msgEvent.type) {
+          case 'text_delta': {
+            if (msgEvent.delta) {
+              this.assistantTextBuffer += msgEvent.delta;
+            }
+            break;
+          }
+          case 'toolcall_start': {
+            const toolCall = msgEvent.toolCall;
+            if (toolCall?.id) {
+              this.currentToolCalls.set(toolCall.id, {
+                name: toolCall.name || 'unknown',
+                args: '',
+              });
+            }
+            break;
+          }
+          case 'toolcall_delta': {
+            const toolCall = msgEvent.toolCall;
+            if (toolCall?.id && msgEvent.delta) {
+              const existing = this.currentToolCalls.get(toolCall.id);
+              if (existing) {
+                existing.args += msgEvent.delta;
+              }
+            }
+            break;
+          }
+          case 'toolcall_end': {
+            const toolCall = msgEvent.toolCall;
+            if (toolCall?.id) {
+              const existing = this.currentToolCalls.get(toolCall.id);
+              if (existing) {
+                try {
+                  const args = JSON.parse(existing.args) as Record<string, unknown>;
+                  logToolCall(this.source, this.userId, existing.name, args, this.userName);
+                } catch {
+                  logToolCall(this.source, this.userId, existing.name, { raw: existing.args }, this.userName);
+                }
+                this.currentToolCalls.delete(toolCall.id);
+              }
+            }
+            break;
+          }
+          case 'text_end': {
+            // Text is complete, will be logged at turn_end
+            break;
+          }
+        }
+        break;
+      }
+      case 'tool_execution_start': {
+        // Tool execution started - already logged at toolcall_end
+        break;
+      }
+      case 'tool_execution_end': {
+        const result = event.result;
+        const toolName = event.toolName || 'unknown';
+        const isError = event.isError || false;
+        
+        if (result?.content) {
+          const textContent = result.content
+            .filter((c) => c.type === 'text')
+            .map((c) => c.text)
+            .join('');
+          logToolResult(this.source, this.userId, toolName, textContent, isError, this.userName);
+        }
+        break;
+      }
+      case 'turn_end': {
+        // Log the complete assistant message
+        if (this.assistantTextBuffer.trim()) {
+          logAssistantMessage(this.source, this.userId, this.assistantTextBuffer.trim(), this.userName);
+          this.assistantTextBuffer = '';
+        }
+        break;
+      }
+      case 'agent_end': {
+        // Final message logged at turn_end
+        break;
+      }
+    }
+  }
 }
 
 function toPositiveInteger(value: string | undefined): number | undefined {
@@ -172,12 +654,13 @@ function createPromptInterface() {
 }
 
 async function promptRequired(ask: (question: string) => Promise<string>, question: string): Promise<string> {
-  while (true) {
-    const value = await ask(question);
-    if (value.length > 0) {
-      return value;
-    }
+  let value = await ask(question);
+
+  while (value.length === 0) {
+    value = await ask(question);
   }
+
+  return value;
 }
 
 async function promptWithDefault(
@@ -194,21 +677,20 @@ async function promptPositiveInteger(
   label: string,
   defaultValue?: number,
 ): Promise<number | undefined> {
-  while (true) {
-    const suffix = defaultValue ? ` [${defaultValue}]` : ' (optional)';
-    const value = await ask(`${label}${suffix}: `);
+  const suffix = defaultValue ? ` [${defaultValue}]` : ' (optional)';
+  let value = await ask(`${label}${suffix}: `);
 
-    if (value.length === 0) {
-      return defaultValue;
-    }
-
+  while (value.length > 0) {
     const parsed = toPositiveInteger(value);
     if (parsed !== undefined) {
       return parsed;
     }
 
     console.log('Please enter a positive integer or leave blank.');
+    value = await ask(`${label}${suffix}: `);
   }
+
+  return defaultValue;
 }
 
 function splitMessage(text: string, chunkSize = 3900): string[] {
@@ -266,13 +748,20 @@ function ensureExtensionDependencies(profile: ResolvedProfile): void {
   }
 }
 
-async function runPiPrintPrompt(options: {
+interface RunPiPrintPromptOptions {
   prompt: string;
   sessionFile: string;
   profile: ResolvedProfile;
   agentDir: string;
   cwd: string;
-}): Promise<string> {
+  logContext?: {
+    source: string;
+    userId: string;
+    userName?: string;
+  };
+}
+
+async function runPiPrintPrompt(options: RunPiPrintPromptOptions): Promise<string> {
   const settings = options.profile.settingsFiles.length > 0
     ? mergeJsonFiles(options.profile.settingsFiles)
     : {};
@@ -285,6 +774,8 @@ async function runPiPrintPrompt(options: {
       options.sessionFile,
       '-p',
       options.prompt,
+      '--mode',
+      'json',
     ],
     settings,
   );
@@ -317,6 +808,11 @@ async function runPiPrintPrompt(options: {
     let stderrBytes = 0;
     let settled = false;
 
+    // Initialize JSON stream parser for logging
+    const parser = options.logContext
+      ? new PiJsonStreamParser(options.logContext.source, options.logContext.userId, options.logContext.userName)
+      : null;
+
     const finalize = (resolver: () => void) => {
       if (settled) return;
       settled = true;
@@ -326,6 +822,9 @@ async function runPiPrintPrompt(options: {
 
     const fail = (message: string) => {
       child.kill('SIGTERM');
+      if (parser && options.logContext) {
+        logError(options.logContext.source, options.logContext.userId, message, options.logContext.userName);
+      }
       finalize(() => reject(new Error(message)));
     };
 
@@ -337,6 +836,14 @@ async function runPiPrintPrompt(options: {
       const text = chunk.toString();
       stdout += text;
       stdoutBytes += Buffer.byteLength(text);
+
+      // Parse JSON lines for logging
+      if (parser) {
+        const lines = text.split('\n');
+        for (const line of lines) {
+          parser.parseLine(line);
+        }
+      }
 
       if (stdoutBytes > maxOutputBytes) {
         fail(`pi stdout exceeded ${maxOutputBytes} bytes`);
@@ -414,11 +921,19 @@ async function processTelegramMessage(
     return;
   }
 
+  const fullName = [message.from?.first_name, message.from?.last_name].filter(Boolean).join(' ');
+  const userName = message.from?.username ?? (fullName || undefined);
+
+  logIncomingMessage('telegram', chatId, userName, text);
+
   const sessionFile = join(options.telegramSessionDir, `${chatId}.jsonl`);
   const sessionFileExists = options.sessionFileExists ?? existsSync;
   const removeSessionFile = options.removeSessionFile ?? ((path: string) => rm(path, { force: true }));
 
-  if (text === '/new') {
+  const normalized = normalizeTelegramCommandText(text);
+  const command = normalized.command;
+
+  if (command === '/new') {
     if (sessionFileExists(sessionFile)) {
       await removeSessionFile(sessionFile);
     }
@@ -438,7 +953,7 @@ async function processTelegramMessage(
     return;
   }
 
-  if (text === '/status') {
+  if (command === '/status') {
     await options.sendMessage(
       message.chat.id,
       `profile=${options.profileName}\nagentDir=${options.agentDir}\nsession=${sessionFile}`,
@@ -446,11 +961,28 @@ async function processTelegramMessage(
     return;
   }
 
+  if (command === '/commands') {
+    const commandHelp = options.commandHelpText
+      ?? formatTelegramCommands(DEFAULT_TELEGRAM_COMMANDS);
+    await sendLongText((chunk) => options.sendMessage(message.chat.id, chunk), commandHelp);
+    return;
+  }
+
+  let prompt = normalized.normalizedText;
+  if (command === '/skill') {
+    if (normalized.args.length === 0) {
+      await options.sendMessage(message.chat.id, 'Usage: /skill <name>\nExample: /skill tdd-feature');
+      return;
+    }
+
+    prompt = `/skill:${normalized.args}`;
+  }
+
   await options.sendChatAction(message.chat.id, 'typing');
 
   try {
     const output = await options.runPrompt({
-      prompt: text,
+      prompt,
       sessionFile,
       cwd: options.workingDirectory,
     });
@@ -598,6 +1130,21 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
   const maxPendingPerChat = effectiveConfig.maxPendingPerChat ?? DEFAULT_MAX_PENDING_PER_CHAT;
 
+  const discoveredCommands = await discoverTelegramCommandsFromPi({
+    profile: resolvedProfile,
+    agentDir: runtime.agentDir,
+    cwd: effectiveConfig.workingDirectory,
+    sessionFile: join(telegramSessionDir, '__commands__.jsonl'),
+  });
+  const telegramCommands = mergeTelegramCommands(DEFAULT_TELEGRAM_COMMANDS, discoveredCommands);
+  const commandHelpText = formatTelegramCommands(telegramCommands);
+
+  try {
+    await bot.setMyCommands(telegramCommands);
+  } catch (error) {
+    console.warn(gatewayWarning(`Failed to register Telegram commands: ${(error as Error).message}`));
+  }
+
   const handler = createQueuedTelegramMessageHandler({
     allowlist: effectiveConfig.allowlist,
     profileName: effectiveConfig.profile,
@@ -605,6 +1152,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     telegramSessionDir,
     workingDirectory: effectiveConfig.workingDirectory,
     maxPendingPerChat,
+    commandHelpText,
     sendMessage: (chatId, text) => bot.sendMessage(chatId, text),
     sendChatAction: (chatId, action) => bot.sendChatAction(chatId, action),
     runPrompt: ({ prompt, sessionFile, cwd }) => runPiPrintPrompt({
@@ -618,8 +1166,11 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
   bot.on('message', handler.handleMessage);
 
-  console.log(`Telegram bridge started (profile=${effectiveConfig.profile})`);
-  console.log(`Allowed chats: ${[...effectiveConfig.allowlist].join(', ')}`);
+  console.log(gatewaySuccess(`Telegram bridge started (profile=${effectiveConfig.profile})`));
+  console.log(gatewayKeyValue('Allowed chats', [...effectiveConfig.allowlist].join(', ')));
+  console.log(gatewayKeyValue('Working directory', effectiveConfig.workingDirectory));
+  console.log(gatewayKeyValue('Registered commands', telegramCommands.length));
+  logSystem('telegram', `Bridge started for profile=${effectiveConfig.profile}`);
 }
 
 async function processDiscordMessage(
@@ -642,6 +1193,8 @@ async function processDiscordMessage(
     await message.sendMessage('Please send text messages only.');
     return;
   }
+
+  logIncomingMessage('discord', channelId, undefined, text);
 
   const sessionFile = join(options.discordSessionDir, `${channelId}.jsonl`);
   const sessionFileExists = options.sessionFileExists ?? existsSync;
@@ -880,8 +1433,10 @@ export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<
   });
 
   client.once('ready', () => {
-    console.log(`Discord bridge started (profile=${effectiveConfig.profile})`);
-    console.log(`Allowed channels: ${[...effectiveConfig.allowlist].join(', ')}`);
+    console.log(gatewaySuccess(`Discord bridge started (profile=${effectiveConfig.profile})`));
+    console.log(gatewayKeyValue('Allowed channels', [...effectiveConfig.allowlist].join(', ')));
+    console.log(gatewayKeyValue('Working directory', effectiveConfig.workingDirectory));
+    logSystem('discord', `Bridge started for profile=${effectiveConfig.profile}`);
   });
 
   client.on('error', (error) => {
@@ -1022,18 +1577,22 @@ async function resolveGatewayProviderForSetup(
     return provider;
   }
 
-  while (true) {
-    const input = (await ask('Provider [telegram/discord] [telegram]: ')).trim().toLowerCase();
-    if (input.length === 0) {
-      return 'telegram';
-    }
+  let input = (await ask('Provider [telegram/discord] [telegram]: ')).trim().toLowerCase();
 
-    if (isGatewayProvider(input)) {
-      return input;
-    }
-
-    console.log('Please enter telegram or discord.');
+  while (input.length > 0 && !isGatewayProvider(input)) {
+    console.log(gatewayWarning('Please enter telegram or discord.'));
+    input = (await ask('Provider [telegram/discord] [telegram]: ')).trim().toLowerCase();
   }
+
+  if (input.length === 0) {
+    return 'telegram';
+  }
+
+  if (!isGatewayProvider(input)) {
+    return 'telegram';
+  }
+
+  return input;
 }
 
 async function runGatewaySetup(provider?: GatewayProvider): Promise<void> {
@@ -1109,8 +1668,9 @@ async function runGatewaySetup(provider?: GatewayProvider): Promise<void> {
     }
 
     writeGatewayConfig(updated);
-    console.log(`Saved ${selectedProvider} gateway config to ${getGatewayConfigFilePath()}`);
-    console.log(`Next: pa gateway ${selectedProvider} start`);
+    console.log(gatewaySuccess(`Saved ${selectedProvider} gateway config`));
+    console.log(gatewayKeyValue('Config file', getGatewayConfigFilePath()));
+    console.log(gatewayNext(`pa gateway ${selectedProvider} start`));
   } finally {
     prompt.close();
   }
@@ -1118,58 +1678,58 @@ async function runGatewaySetup(provider?: GatewayProvider): Promise<void> {
 
 function printGatewayHelp(provider?: GatewayProvider): void {
   if (provider === 'telegram') {
-    console.log(`pa gateway telegram
-
-Commands:
-  pa gateway telegram setup    Interactive setup for Telegram gateway
-  pa gateway telegram start    Start Telegram bridge in foreground
-  pa gateway telegram help     Show Telegram gateway help
-
-Configuration (setup command writes these):
-  TELEGRAM_BOT_TOKEN
-  PERSONAL_AGENT_TELEGRAM_ALLOWLIST
-  PERSONAL_AGENT_PROFILE (optional, default: shared)
-  PERSONAL_AGENT_TELEGRAM_CWD (optional, default: current working directory)
-  PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT (optional, default: 20)
-`);
+    console.log(gatewaySection('Gateway · Telegram'));
+    console.log('');
+    console.log('Commands:');
+    console.log('  pa gateway telegram setup    Interactive setup for Telegram gateway');
+    console.log('  pa gateway telegram start    Start Telegram bridge in foreground');
+    console.log('  pa gateway telegram help     Show Telegram gateway help');
+    console.log('');
+    console.log('Config keys (written by setup):');
+    console.log('  TELEGRAM_BOT_TOKEN');
+    console.log('  PERSONAL_AGENT_TELEGRAM_ALLOWLIST');
+    console.log('  PERSONAL_AGENT_PROFILE (optional, default: shared)');
+    console.log('  PERSONAL_AGENT_TELEGRAM_CWD (optional, default: current working directory)');
+    console.log('  PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT (optional, default: 20)');
+    console.log('');
+    console.log(gatewayNext('pa gateway telegram setup'));
     return;
   }
 
   if (provider === 'discord') {
-    console.log(`pa gateway discord
-
-Commands:
-  pa gateway discord setup     Interactive setup for Discord gateway
-  pa gateway discord start     Start Discord bridge in foreground
-  pa gateway discord help      Show Discord gateway help
-
-Configuration (setup command writes these):
-  DISCORD_BOT_TOKEN
-  PERSONAL_AGENT_DISCORD_ALLOWLIST
-  PERSONAL_AGENT_PROFILE (optional, default: shared)
-  PERSONAL_AGENT_DISCORD_CWD (optional, default: current working directory)
-  PERSONAL_AGENT_DISCORD_MAX_PENDING_PER_CHANNEL (optional, default: 20)
-`);
+    console.log(gatewaySection('Gateway · Discord'));
+    console.log('');
+    console.log('Commands:');
+    console.log('  pa gateway discord setup     Interactive setup for Discord gateway');
+    console.log('  pa gateway discord start     Start Discord bridge in foreground');
+    console.log('  pa gateway discord help      Show Discord gateway help');
+    console.log('');
+    console.log('Config keys (written by setup):');
+    console.log('  DISCORD_BOT_TOKEN');
+    console.log('  PERSONAL_AGENT_DISCORD_ALLOWLIST');
+    console.log('  PERSONAL_AGENT_PROFILE (optional, default: shared)');
+    console.log('  PERSONAL_AGENT_DISCORD_CWD (optional, default: current working directory)');
+    console.log('  PERSONAL_AGENT_DISCORD_MAX_PENDING_PER_CHANNEL (optional, default: 20)');
+    console.log('');
+    console.log(gatewayNext('pa gateway discord setup'));
     return;
   }
 
-  console.log(`pa gateway
-
-Commands:
-  pa gateway help                            Show gateway help
-  pa gateway setup [provider]                Interactive setup walkthrough
-  pa gateway start [provider]                Start provider (default: telegram)
-  pa gateway telegram [setup|start|help]     Telegram gateway commands
-  pa gateway discord [setup|start|help]      Discord gateway commands
-
-Config file:
-  ${getGatewayConfigFilePath()}
-
-Environment overrides (optional):
-  PERSONAL_AGENT_PROFILE
-  PERSONAL_AGENT_PI_TIMEOUT_MS
-  PERSONAL_AGENT_PI_MAX_OUTPUT_BYTES
-`);
+  console.log(gatewaySection('Gateway commands'));
+  console.log('');
+  console.log('Commands:');
+  console.log('  pa gateway help                            Show gateway help');
+  console.log('  pa gateway setup [provider]                Interactive setup walkthrough');
+  console.log('  pa gateway start [provider]                Start provider (default: telegram)');
+  console.log('  pa gateway telegram [setup|start|help]     Telegram gateway commands');
+  console.log('  pa gateway discord [setup|start|help]      Discord gateway commands');
+  console.log('');
+  console.log(`Config file: ${getGatewayConfigFilePath()}`);
+  console.log('');
+  console.log('Environment overrides (optional):');
+  console.log('  PERSONAL_AGENT_PROFILE');
+  console.log('  PERSONAL_AGENT_PI_TIMEOUT_MS');
+  console.log('  PERSONAL_AGENT_PI_MAX_OUTPUT_BYTES');
 }
 
 async function runGatewayCommand(args: string[]): Promise<number> {

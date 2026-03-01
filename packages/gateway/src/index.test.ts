@@ -135,6 +135,55 @@ describe('queued telegram message handler', () => {
     expect(sendMessage).toHaveBeenCalledWith(2, 'This chat is not allowed.');
   });
 
+  it('returns configured command list for /commands without invoking pi', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'ignored');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      commandHelpText: 'Available commands:\n/new\n/status',
+      sendMessage,
+      sendChatAction,
+      runPrompt,
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/commands' });
+    await handler.waitForIdle('1');
+
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendChatAction).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(1, 'Available commands:\n/new\n/status');
+  });
+
+  it('maps /skill <name> to /skill:<name> before invoking pi', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async ({ prompt }: { prompt: string; sessionFile: string }) => `reply:${prompt}`);
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      runPrompt,
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/skill tdd-feature' });
+    await handler.waitForIdle('1');
+
+    const firstCall = runPrompt.mock.calls[0]?.[0] as { prompt: string };
+    expect(firstCall.prompt).toBe('/skill:tdd-feature');
+    expect(sendChatAction).toHaveBeenCalledWith(1, 'typing');
+  });
+
   it('isolates session files per chat and queues messages per chat', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);

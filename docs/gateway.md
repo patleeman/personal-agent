@@ -109,8 +109,12 @@ Gateway commands inside chat:
 
 - `/status` -> profile, agentDir, session file info
 - `/new` -> delete chat/channel session file and start a fresh conversation
+- `/commands` -> list available slash commands
 
-All non-command messages are sent to Pi in print mode with that chat's session.
+Telegram also registers slash commands via Bot API on startup (`setMyCommands`).
+
+All non-gateway commands are passed through to Pi in print mode with that chat's session.
+For Telegram menu compatibility, `/skill <name>` is translated to `/skill:<name>` before sending to Pi.
 
 ## Daemon integration
 
