@@ -507,10 +507,9 @@ describe('validateProfile comprehensive (merged profile)', () => {
   });
 
   it('rejects profile with invalid email', () => {
-    const profile = mergeProfiles({ shared: { name: 'Test', email: 'invalid' } });
-    const result = validateProfile(profile);
-    expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'email')).toBe(true);
+    expect(() => mergeProfiles({ shared: { name: 'Test', email: 'invalid' } })).toThrow(
+      'Profile validation failed',
+    );
   });
 
   it('accepts profile with null email', () => {
@@ -579,10 +578,9 @@ describe('validateProfile comprehensive (merged profile)', () => {
   });
 
   it('validates customInstructions max length', () => {
-    const profile = mergeProfiles({ shared: { name: 'Test', customInstructions: 'a'.repeat(4001) } });
-    const result = validateProfile(profile);
-    expect(result.valid).toBe(false);
-    expect(result.errors.some(e => e.field === 'customInstructions')).toBe(true);
+    expect(() => mergeProfiles({ shared: { name: 'Test', customInstructions: 'a'.repeat(4001) } })).toThrow(
+      'Profile validation failed',
+    );
   });
 
   it('accepts valid complete profile', () => {

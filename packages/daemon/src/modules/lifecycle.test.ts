@@ -12,6 +12,7 @@ import { createConnection } from 'net';
 import { randomUUID } from 'crypto';
 import { PersonalAgentDaemon } from '../server.js';
 import type { DaemonConfig } from '../config.js';
+import { resolveDaemonPaths } from '../paths.js';
 
 const tempDirs: string[] = [];
 
@@ -162,19 +163,16 @@ describe('daemon module lifecycle', () => {
     const testSocketPath = join(tempDir, 'test.sock');
     const config = createTestConfig(testSocketPath);
 
+    const pidFile = resolveDaemonPaths(testSocketPath).pidFile;
+
     daemon = new PersonalAgentDaemon(config);
     await daemon.start();
-
-    // Pid file should exist at expected location
-    const daemonDir = join(tempDir, 'daemon');
-    const pidFile = join(daemonDir, 'personal-agentd.pid');
 
     expect(existsSync(pidFile)).toBe(true);
 
     await daemon.stop();
     daemon = null;
 
-    // Pid file should be removed
     expect(existsSync(pidFile)).toBe(false);
   });
 

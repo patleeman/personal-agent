@@ -309,7 +309,7 @@ export function validatePartialProfile(
     return { valid: true, errors: [] };
   }
   
-  if (typeof profile !== 'object') {
+  if (typeof profile !== 'object' || Array.isArray(profile)) {
     return {
       valid: false,
       errors: [{ source, field: '', message: 'Expected object', value: profile }],

@@ -12,6 +12,7 @@ import { createConnection } from 'net';
 import { randomUUID } from 'crypto';
 import { PersonalAgentDaemon } from './server.js';
 import type { DaemonConfig } from './config.js';
+import { resolveDaemonPaths } from './paths.js';
 
 const tempDirs: string[] = [];
 
@@ -145,6 +146,7 @@ describe('daemon IPC integration', () => {
       type: 'emit',
       event: {
         id: `evt_${randomUUID()}`,
+        version: 1,
         type: 'test.event',
         source: 'test',
         timestamp: new Date().toISOString(),
@@ -225,11 +227,13 @@ describe('daemon IPC integration', () => {
   });
 
   it('creates and removes pid file on startup/shutdown', async () => {
-    const pidPath = join(createTempDir('daemon-test-'), 'daemon', 'personal-agentd.pid');
     const configWithPidPath = {
       ...config,
       ipc: { socketPath: join(createTempDir('daemon-test-'), 'test.sock') },
     };
+
+    const daemonPaths = resolveDaemonPaths(configWithPidPath.ipc.socketPath);
+    const pidPath = daemonPaths.pidFile;
 
     daemon = new PersonalAgentDaemon(configWithPidPath);
     await daemon.start();

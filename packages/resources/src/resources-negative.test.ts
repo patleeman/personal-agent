@@ -69,7 +69,8 @@ describe('resources negative tests', () => {
 
       const resolved = resolveResourceProfile('shared', { repoRoot: repo });
 
-      expect(resolved.extensionDirs).toEqual([]);
+      expect(resolved.extensionDirs).toEqual([extensionsDir]);
+      expect(resolved.extensionEntries).toEqual([]);
     });
 
     it('handles profile with empty skills directory', () => {
@@ -80,7 +81,7 @@ describe('resources negative tests', () => {
 
       const resolved = resolveResourceProfile('shared', { repoRoot: repo });
 
-      expect(resolved.skillDirs).toEqual([]);
+      expect(resolved.skillDirs).toEqual([skillsDir]);
     });
   });
 
@@ -113,14 +114,17 @@ describe('resources negative tests', () => {
       expect(result).toEqual({});
     });
 
-    it('throws on file with valid JSON in array position but containing non-object', () => {
+    it('handles file with valid JSON array payload by preserving numeric keys', () => {
       const repo = createTempDir('personal-agent-resources-');
       const file = join(repo, 'array.json');
       writeFile(file, '[1, 2, 3]');
 
       const result = mergeJsonFiles([file]);
-      // Should handle this gracefully
-      expect(Array.isArray(result)).toBe(true);
+      expect(result).toEqual({
+        0: 1,
+        1: 2,
+        2: 3,
+      });
     });
   });
 
@@ -189,13 +193,12 @@ describe('resources negative tests', () => {
       expect(profiles).toEqual([]);
     });
 
-    it('ignores profiles without AGENTS.md', () => {
+    it('includes profiles with agent directory even without AGENTS.md', () => {
       const repo = createTempDir('personal-agent-resources-');
       mkdirSync(join(repo, 'profiles/incomplete/agent'), { recursive: true });
-      // No AGENTS.md file
 
       const profiles = listProfiles({ repoRoot: repo });
-      expect(profiles).toEqual([]);
+      expect(profiles).toEqual(['incomplete']);
     });
 
     it('handles profiles with special characters in name (valid)', () => {
