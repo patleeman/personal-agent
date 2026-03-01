@@ -4,6 +4,7 @@
 
 ## Preferences
 - For Todoist integration, use direct API calls (curl/HTTP) rather than assuming a Todoist CLI.
+- Place new personal skills under the assistant profile (`profiles/assistant/agent/skills`).
 
 ## Environment
 
