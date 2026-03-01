@@ -16,40 +16,14 @@ function createTempDir(prefix: string): string {
 afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   vi.restoreAllMocks();
-  delete process.env.PERSONAL_AGENT_STATE_ROOT;
   delete process.env.PERSONAL_AGENT_REPO_ROOT;
   delete process.env.PERSONAL_AGENT_ACTIVE_PROFILE;
 });
 
 describe('memory-cards extension integration', () => {
-  it('queries cards and injects MEMORY_CANDIDATES when score threshold is met', async () => {
-    const stateRoot = createTempDir('memory-cards-state-');
-    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
-    process.env.PERSONAL_AGENT_REPO_ROOT = createTempDir('memory-cards-repo-');
-
-    const cardsDir = join(stateRoot, 'memory', 'cards', 'workspace');
-    mkdirSync(cardsDir, { recursive: true });
-    writeFileSync(join(cardsDir, 's1.json'), '{"type":"memory_card"}\n');
-
-    const queryOutput = JSON.stringify([
-      {
-        score: 0.91,
-        file: 'qmd://memory_cards/workspace/s1.json',
-        body: JSON.stringify({
-          type: 'memory_card',
-          session_id: 's1',
-          cwd: '/tmp/project',
-          subsystems: ['memory'],
-          primary_topics: ['qmd', 'memory_cards'],
-          durable_decisions: ['Use cards for retrieval injection'],
-          invariants: ['Only factual transcript-derived memory'],
-          pitfalls: [],
-          open_loops: ['Add integration coverage for injection'],
-          supersedes: null,
-          summary_path: 'workspace/s1.md',
-        }),
-      },
-    ]);
+  it('does not run qmd lookup during before_agent_start', async () => {
+    const repoRoot = createTempDir('memory-cards-repo-');
+    process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
 
     let beforeAgentStartHandler: ((event: { prompt: string; systemPrompt: string }, ctx: unknown) => Promise<unknown>) | undefined;
 
@@ -60,52 +34,36 @@ describe('memory-cards extension integration', () => {
         }
       },
       registerTool: vi.fn(),
-      exec: vi.fn(async (command: string, args: string[]) => {
-        if (command === 'qmd' && args[0] === 'query') {
-          return {
-            stdout: queryOutput,
-            stderr: '',
-            code: 0,
-            killed: false,
-          };
-        }
-
-        return {
-          stdout: '',
-          stderr: '',
-          code: 1,
-          killed: false,
-        };
-      }),
+      exec: vi.fn(async () => ({
+        stdout: '[]',
+        stderr: '',
+        code: 0,
+        killed: false,
+      })),
     };
 
     memoryCardsExtension(pi as never);
-
     expect(beforeAgentStartHandler).toBeDefined();
 
     const result = await beforeAgentStartHandler!(
       {
-        prompt: 'How should we handle memory retrieval?',
+        prompt: 'hello there',
         systemPrompt: 'BASE_SYSTEM_PROMPT',
       },
       {
-        cwd: '/tmp/project',
+        cwd: repoRoot,
         sessionManager: {
           getBranch: () => [],
         },
       },
-    ) as { systemPrompt?: string } | undefined;
+    );
 
-    expect(pi.exec).toHaveBeenCalled();
-    expect(result?.systemPrompt).toContain('BASE_SYSTEM_PROMPT');
-    expect(result?.systemPrompt).toContain('MEMORY_CANDIDATES');
-    expect(result?.systemPrompt).toContain('session_id=s1');
+    expect(result).toBeUndefined();
+    expect(pi.exec).not.toHaveBeenCalled();
   });
 
   it('injects DURABLE_MEMORY block from profile MEMORY.md', async () => {
-    const stateRoot = createTempDir('memory-cards-state-');
     const repoRoot = createTempDir('memory-cards-repo-');
-    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'shared';
 
@@ -152,6 +110,7 @@ describe('memory-cards extension integration', () => {
     expect(result?.systemPrompt).toContain('DURABLE_MEMORY');
     expect(result?.systemPrompt).toContain('profile=shared');
     expect(result?.systemPrompt).toContain('Prefers concise responses');
+    expect(pi.exec).not.toHaveBeenCalled();
   });
 
   it('registers memory_update and commits durable memory changes', async () => {

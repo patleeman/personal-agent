@@ -4,14 +4,14 @@ A personal application layer over Pi that keeps:
 
 - **profiles/resources in git** (`profiles/*`)
 - **runtime state local** (`~/.local/state/personal-agent`)
-- **cross-session memory** (summaries + structured cards for retrieval)
+- **cross-session memory** (summaries + durable profile memory)
 - **chat gateways** (Telegram + Discord)
 
 ## Features
 
 - **Profile system** - Layered configs (shared → profile → local) with skills, extensions, themes
 - **pa tui** - Launch Pi with profile resources and memory injection
-- **Memory system** - Automatic session summarization + structured memory cards with runtime retrieval
+- **Memory system** - Automatic session summarization + durable profile memory injection
 - **Daemon** - Background processing for memory indexing and maintenance
 - **Gateways** - Telegram and Discord bot integration with per-chat sessions
 - **Extensions** - Pi extensions auto-discovered from profiles with dependency auto-install
@@ -101,9 +101,7 @@ pa profile show datadog     # Show specific profile
 pa memory status            # Show memory system status
 pa memory status --json     # Machine-readable status
 pa memory head 5            # Show 5 latest summaries
-pa memory cards head 5      # Show 5 latest memory cards
 pa memory open <sessionId>  # Open summary by ID
-pa memory open <id> --card  # Open card JSON by ID
 pa memory query "auth flow" # Search summaries with qmd
 pa memory search "pattern"  # Full-text search
 ```
@@ -142,7 +140,7 @@ pa gateway service uninstall telegram
 
 `personal-agentd` runs background modules behind a local event bus:
 
-- **memory** - Session summarization, card generation, qmd indexing
+- **memory** - Session summarization and qmd indexing
 - **maintenance** - Periodic cleanup and retention
 
 CLI surface:
@@ -156,13 +154,12 @@ When daemon is unavailable, clients warn and continue (non-fatal).
 Two-layer memory for cross-session context:
 
 1. **Summaries** (`~/.local/state/personal-agent/memory/conversations/`)  
-   Human-readable markdown summaries of concluded sessions
+   Human-readable markdown summaries of concluded sessions, indexed by qmd for recall
 
-2. **Memory Cards** (`~/.local/state/personal-agent/memory/cards/`)  
-   Structured JSON with topics, decisions, invariants, pitfalls  
-   Injected into Pi prompts via `memory-cards` extension
+2. **Durable Profile Memory** (`profiles/<profile>/agent/MEMORY.md`)  
+   Stable user/environment preferences injected as `DURABLE_MEMORY`
 
-Retention: 90 days. Cards are globally retrieved and score-ranked at query time.
+Retention: 90 days for summaries.
 
 ## Extensions
 
@@ -175,7 +172,7 @@ Pi extensions auto-discovered from profile layers:
 Extensions with `package.json` dependencies are auto-installed on first use.
 
 Built-in extensions:
-- `memory-cards` - Runtime memory injection
+- `memory-cards` - Durable memory injection + `memory_update` tool
 - `context-bar` - Session context display
 - `web-tools` - Web search/integration
 - `update` - Self-update commands
@@ -263,7 +260,7 @@ See docs:
 - `docs/cli.md` - CLI usage and command reference
 - `docs/architecture.md` - Package architecture and data flow
 - `docs/daemon-architecture.md` - Daemon design and event system
-- `docs/memory.md` - Memory module (summaries + cards)
+- `docs/memory.md` - Memory module (summaries + durable memory)
 - `docs/gateway.md` - Telegram/Discord gateway setup
 - `docs/profile-schema.md` - Profile layer semantics
 - `docs/extensions.md` - Extension authoring guide

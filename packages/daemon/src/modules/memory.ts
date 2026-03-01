@@ -1,10 +1,9 @@
 import { existsSync, mkdirSync, rmSync, statSync } from 'fs';
-import { dirname, relative, resolve } from 'path';
+import { dirname, resolve } from 'path';
 import type { MemoryModuleConfig } from '../config.js';
 import { runCommand } from './command.js';
 import { resolveMemoryConfig } from './memory-config.js';
-import { formatMemoryCard, parseAndNormalizeMemoryCard } from './memory-card.js';
-import { summarizeMemoryCardWithPiSdk, summarizeWithPiSdk } from './memory-summarizer.js';
+import { summarizeWithPiSdk } from './memory-summarizer.js';
 import { parseSessionTranscript } from './memory-transcript.js';
 import {
   cleanupRetention,
@@ -12,12 +11,10 @@ import {
   createEmptyScanState,
   loadScanState,
   saveScanState,
-  toCardPath,
   toFingerprint,
   toSkipMarkerPath,
   toSummaryPath,
   toWorkspaceKey,
-  writeCardFile,
   writeSkipMarkerFile,
   writeSummaryFile,
 } from './memory-store.js';
@@ -26,7 +23,6 @@ import type {
   MemoryModuleDependencies,
   MemoryModuleState,
   ResolvedMemoryConfig,
-  SessionMemoryCardRequest,
   SessionScanResult,
   SessionScanState,
   SessionSummaryRequest,
@@ -78,10 +74,9 @@ async function ensureCollections(config: ResolvedMemoryConfig, context: DaemonMo
     await ensureCollection(collection.name, collection.path, collection.mask, context);
   }
 
-  // Ensure cards collection points at the configured cardsDir even if a stale
-  // collection with the same name exists from prior runs/tests.
+  // Legacy cleanup: remove cards collection if it exists.
+  // Ignore failures here so startup remains resilient.
   await runCommand('qmd', ['collection', 'remove', config.cardsCollectionName]);
-  await ensureCollection(config.cardsCollectionName, config.cardsDir, '**/*.json', context);
 }
 
 async function runQmdUpdate(config: ResolvedMemoryConfig, context: DaemonModuleContext): Promise<void> {
@@ -114,7 +109,6 @@ async function scanConcludedSessions(
   nowMs: number,
   hintedFiles: string[],
   summarizeSession: (request: SessionSummaryRequest) => Promise<string>,
-  summarizeMemoryCard: (request: SessionMemoryCardRequest) => Promise<string>,
   context: DaemonModuleContext,
   state: MemoryModuleState,
 ): Promise<SessionScanResult> {
@@ -164,9 +158,7 @@ async function scanConcludedSessions(
 
     if (existingRecord && existingRecord.fingerprint === fingerprint) {
       const artifactExists = existsSync(existingRecord.summaryPath);
-      const cardExists = existingRecord.cardPath ? existsSync(existingRecord.cardPath) : true;
-
-      if (artifactExists && cardExists) {
+      if (artifactExists) {
         skipped += 1;
         continue;
       }
@@ -190,8 +182,6 @@ async function scanConcludedSessions(
 
     const workspaceKey = toWorkspaceKey(parsed.cwd);
     const summaryPath = toSummaryPath(config.summaryDir, workspaceKey, parsed.sessionId);
-    const cardPath = toCardPath(config.cardsDir, workspaceKey, parsed.sessionId);
-    const summaryRelativePath = relative(config.summaryDir, summaryPath).replace(/\\/g, '/');
     const transcriptTokens = countApproxTokens(parsed.transcript);
 
     if (transcriptTokens < config.summarization.minTranscriptTokens) {
@@ -204,21 +194,9 @@ async function scanConcludedSessions(
           state.needsEmbedding = true;
         }
 
-        if (removeFileIfExists(cardPath)) {
-          state.dirty = true;
-          state.needsEmbedding = true;
-        }
-
-        if (existingRecord) {
-          if (existingRecord.summaryPath !== skipMarkerPath && removeFileIfExists(existingRecord.summaryPath)) {
-            if (existingRecord.summaryPath.endsWith('.md')) {
-              removed += 1;
-              state.dirty = true;
-              state.needsEmbedding = true;
-            }
-          }
-
-          if (existingRecord.cardPath && existingRecord.cardPath !== cardPath && removeFileIfExists(existingRecord.cardPath)) {
+        if (existingRecord && existingRecord.summaryPath !== skipMarkerPath && removeFileIfExists(existingRecord.summaryPath)) {
+          if (existingRecord.summaryPath.endsWith('.md')) {
+            removed += 1;
             state.dirty = true;
             state.needsEmbedding = true;
           }
@@ -228,7 +206,6 @@ async function scanConcludedSessions(
         scanState.sessions[sessionFile] = {
           fingerprint,
           summaryPath: skipMarkerPath,
-          cardPath: undefined,
           workspaceKey,
           sessionId: parsed.sessionId,
           summarizedAt: new Date(nowMs).toISOString(),
@@ -255,39 +232,15 @@ async function scanConcludedSessions(
         transcript: parsed.transcript,
       });
 
-      const rawMemoryCard = await summarizeMemoryCard({
-        sessionFile,
-        sessionId: parsed.sessionId,
-        cwd: parsed.cwd,
-        transcript: parsed.transcript,
-        summaryRelativePath,
-      });
-
-      const memoryCard = parseAndNormalizeMemoryCard(rawMemoryCard, {
-        sessionFile,
-        sessionId: parsed.sessionId,
-        cwd: parsed.cwd,
-        transcript: parsed.transcript,
-        summaryRelativePath,
-      });
-
-      if (existingRecord) {
-        if (existingRecord.summaryPath !== summaryPath && removeFileIfExists(existingRecord.summaryPath)) {
-          if (existingRecord.summaryPath.endsWith('.md')) {
-            removed += 1;
-          }
-          state.dirty = true;
-          state.needsEmbedding = true;
+      if (existingRecord && existingRecord.summaryPath !== summaryPath && removeFileIfExists(existingRecord.summaryPath)) {
+        if (existingRecord.summaryPath.endsWith('.md')) {
+          removed += 1;
         }
-
-        if (existingRecord.cardPath && existingRecord.cardPath !== cardPath && removeFileIfExists(existingRecord.cardPath)) {
-          state.dirty = true;
-          state.needsEmbedding = true;
-        }
+        state.dirty = true;
+        state.needsEmbedding = true;
       }
 
       const summaryChanged = writeSummaryFile(summaryPath, markdown);
-      const cardChanged = writeCardFile(cardPath, formatMemoryCard(memoryCard));
 
       if (summaryChanged) {
         state.dirty = true;
@@ -299,19 +252,9 @@ async function scanConcludedSessions(
         });
       }
 
-      if (cardChanged) {
-        state.dirty = true;
-        state.needsEmbedding = true;
-        context.publish('memory.card.updated', {
-          sessionFile,
-          cardPath,
-        });
-      }
-
       scanState.sessions[sessionFile] = {
         fingerprint,
         summaryPath,
-        cardPath,
         workspaceKey,
         sessionId: parsed.sessionId,
         summarizedAt: new Date(nowMs).toISOString(),
@@ -344,8 +287,6 @@ export function createMemoryModule(
   const now = dependencies.now ?? (() => new Date());
   const summarizeSession = dependencies.summarizeSession
     ?? ((request: SessionSummaryRequest) => summarizeWithPiSdk(request, resolvedConfig));
-  const summarizeMemoryCard = dependencies.summarizeMemoryCard
-    ?? ((request: SessionMemoryCardRequest) => summarizeMemoryCardWithPiSdk(request, resolvedConfig));
 
   const state: MemoryModuleState = {
     dirty: false,
@@ -375,7 +316,6 @@ export function createMemoryModule(
       nowMs,
       hintedFiles,
       summarizeSession,
-      summarizeMemoryCard,
       context,
       state,
     );
@@ -450,7 +390,6 @@ export function createMemoryModule(
 
     async start(context): Promise<void> {
       mkdirSync(resolvedConfig.summaryDir, { recursive: true, mode: 0o700 });
-      mkdirSync(resolvedConfig.cardsDir, { recursive: true, mode: 0o700 });
       mkdirSync(dirname(resolvedConfig.stateFile), { recursive: true, mode: 0o700 });
       scanState = loadScanState(resolvedConfig.stateFile, context.logger);
 
@@ -567,8 +506,6 @@ export function createMemoryModule(
         stateFile: resolvedConfig.stateFile,
         agentDir: resolvedConfig.agentDir,
         summaryDir: resolvedConfig.summaryDir,
-        cardsDir: resolvedConfig.cardsDir,
-        cardsCollectionName: resolvedConfig.cardsCollectionName,
         lastError: state.lastError,
       };
     },

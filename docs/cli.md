@@ -63,25 +63,23 @@ pa gateway start [telegram|discord]
 pa gateway service [install|status|uninstall|help] [telegram|discord]
 pa daemon [status|start|stop|restart|logs]
 pa daemon status [--json]
-pa memory [list|query|search|head|cards|open|status]
+pa memory [list|query|search|head|open|status]
 ```
 
 ## Memory commands
 
-The memory system provides cross-session context through summaries and structured cards.
+The memory system provides cross-session context through summaries and durable profile memory.
 
 ### Browse recent sessions
 
 ```bash
 pa memory head [count]          # Latest markdown summaries (default: 5)
-pa memory cards head [count]    # Latest memory cards (default: 5)
 ```
 
 ### Open specific session
 
 ```bash
 pa memory open <sessionId>              # View summary markdown
-pa memory open <sessionId> --card       # View card JSON
 ```
 
 ### Search with qmd

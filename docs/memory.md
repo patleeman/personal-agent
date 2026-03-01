@@ -10,7 +10,7 @@
 - `packages/daemon/src/modules/memory-transcript.ts`
 - `packages/daemon/src/modules/memory-summarizer.ts`
 
-The module scans Pi session files, summarizes concluded sessions into markdown, generates structured memory cards (JSON), and keeps qmd indexes fresh.
+The module scans Pi session files, summarizes concluded sessions into markdown, and keeps qmd indexes fresh.
 
 Durable profile memory is handled separately in repo-managed `MEMORY.md` files (one per profile) and injected at runtime by the memory extension.
 
@@ -19,7 +19,6 @@ Durable profile memory is handled separately in repo-managed `MEMORY.md` files (
 - Daemon config: `~/.config/personal-agent/daemon.json`
 - Session source: `~/.local/state/personal-agent/pi-agent/sessions`
 - Summary root: `~/.local/state/personal-agent/memory/conversations`
-- Card root: `~/.local/state/personal-agent/memory/cards`
 - Memory state file: `~/.local/state/personal-agent/memory/session-state.json`
 - qmd cache/index: `~/.cache/qmd/`
 - Durable memory (repo-managed): `<repo>/profiles/<profile>/agent/MEMORY.md`
@@ -47,11 +46,9 @@ Durable profile memory is handled separately in repo-managed `MEMORY.md` files (
 
 On startup, the memory module:
 
-1. creates summary, card, and state directories (`0700`)
+1. creates summary and state directories (`0700`)
 2. loads `session-state.json` (or initializes empty state)
-3. ensures qmd collections exist via:
-   - configured collections (typically `conversations`)
-   - built-in card collection: `memory_cards` with `**/*.json` mask
+3. ensures configured qmd collections exist (typically `conversations`)
 4. runs an immediate scan pass
 
 ## Session processing flow
@@ -74,7 +71,6 @@ Each processed session is tracked in `session-state.json` with:
 
 - fingerprint: `"<size>:<mtimeMs>"`
 - artifact path (`.md` summary or `.skip` low-signal marker)
-- card path (`.json`) when generated
 - workspace key
 - session id
 - processed timestamp
@@ -106,14 +102,11 @@ Low-signal filter:
 - if transcript tokens are below `minTranscriptTokens`, summarization is skipped
 - skipped sessions get a `.skip` marker under `<summaryDir>/.skipped/...` for idempotency
 
-### 5) Pi SDK summarization + card generation
+### 5) Pi SDK summarization
 
-For high-signal sessions, the module runs two Pi SDK prompts:
+For high-signal sessions, the module runs one Pi SDK prompt to produce a human markdown summary.
 
-1. human markdown summary
-2. strict JSON memory card (fixed schema)
-
-Both use:
+It uses:
 
 - `SessionManager.inMemory()`
 - `tools: []`
@@ -131,21 +124,16 @@ Summary files are written to:
 
 - `<summaryDir>/<workspace-key>/<session-id>.md`
 
-Card files are written to:
-
-- `<cardsDir>/<workspace-key>/<session-id>.json`
-
 Where:
 - `workspace-key` is a slug derived from session `cwd`
 - `session-id` is sanitized for filesystem safety
 
-Low-signal sessions do not produce markdown summaries or cards. They write:
+Low-signal sessions do not produce markdown summaries. They write:
 
 - `<summaryDir>/.skipped/<workspace-key>/<session-id>.skip`
 
-When summary or card content changes, module publishes:
+When summary content changes, module publishes:
 - `memory.summary.updated`
-- `memory.card.updated`
 
 and marks:
 - `dirty = true`
@@ -156,9 +144,8 @@ and marks:
 Every scan pass also runs retention cleanup:
 
 - deletes summary markdown files older than `retentionDays`
-- deletes card JSON files older than `retentionDays`
 - removes stale entries from `session-state.json`
-- prunes empty summary/card directories
+- prunes empty summary directories
 
 Any deletion marks qmd as dirty/needs embedding.
 
@@ -182,15 +169,12 @@ Any deletion marks qmd as dirty/needs embedding.
 
 ## Runtime memory injection (Pi extension)
 
-A dedicated extension (`profiles/shared/agent/extensions/memory-cards`) injects runtime memory context per prompt via `before_agent_start`:
+A dedicated extension (`profiles/shared/agent/extensions/memory-cards`) injects durable profile memory per prompt via `before_agent_start`:
 
 - loads durable profile memory from `profiles/<active-profile>/agent/MEMORY.md` (fallback: `shared`)
 - injects the durable memory as a capped `DURABLE_MEMORY` block
-- queries `memory_cards` collection globally with `qmd query --json --full`
-- filters card hits by TTL (90 days) from card file mtime
-- gates card injection by score threshold or recall/debug intent
-- injects a capped `MEMORY_CANDIDATES` block with high-signal entries
-- keeps full summary access via `summary_path`
+- does **not** auto-query episodic memory at prompt time (to avoid added message latency)
+- relies on on-demand `qmd query` via `bash` when episodic recall is needed
 
 The same extension also registers a `memory_update` tool that:
 
@@ -199,13 +183,6 @@ The same extension also registers a `memory_update` tool that:
 - runs `git add`, `git commit`, and `git push` when content changes
 
 Optional tuning env vars for the extension:
-- `PERSONAL_AGENT_MEMORY_SCORE_THRESHOLD`
-- `PERSONAL_AGENT_MEMORY_TOP_K`
-- `PERSONAL_AGENT_MEMORY_MAX_CARDS`
-- `PERSONAL_AGENT_MEMORY_MAX_TOKENS`
-- `PERSONAL_AGENT_MEMORY_TTL_DAYS`
-- `PERSONAL_AGENT_MEMORY_CARDS_COLLECTION`
-- `PERSONAL_AGENT_MEMORY_CARDS_DIR`
 - `PERSONAL_AGENT_DURABLE_MEMORY_MAX_TOKENS`
 - `PERSONAL_AGENT_ACTIVE_PROFILE`
 - `PERSONAL_AGENT_REPO_ROOT`
@@ -241,8 +218,6 @@ Updates are applied through `memory_update` to keep formatting and git workflow 
       "enabled": true,
       "sessionSource": "~/.local/state/personal-agent/pi-agent/sessions",
       "summaryDir": "~/.local/state/personal-agent/memory/conversations",
-      "cardsDir": "~/.local/state/personal-agent/memory/cards",
-      "cardsCollectionName": "memory_cards",
       "scanIntervalMinutes": 5,
       "inactiveAfterMinutes": 30,
       "retentionDays": 90,
@@ -292,6 +267,4 @@ Updates are applied through `memory_update` to keep formatting and git workflow 
 - `stateFile`
 - `agentDir`
 - `summaryDir`
-- `cardsDir`
-- `cardsCollectionName`
 - `lastError`

@@ -161,17 +161,15 @@ describe('memory command', () => {
     errorSpy.mockRestore();
   });
 
-  it('includes summary and cards directory paths in memory status --json output', async () => {
+  it('includes summary and session directory paths in memory status --json output', async () => {
     const stateRoot = createTempDir('personal-agent-cli-state-');
     const daemonConfigPath = join(createTempDir('personal-agent-cli-config-'), 'daemon.json');
     const qmdBinDir = createFakeQmdBinary();
 
     const summaryDir = join(stateRoot, 'memory', 'conversations');
-    const cardsDir = join(stateRoot, 'memory', 'cards');
     const sessionDir = join(stateRoot, 'pi-agent', 'sessions');
 
     writeFile(join(summaryDir, 'workspace-a', 'session-1.md'), '# Session session-1\n\nMemory\n');
-    writeFile(join(cardsDir, 'workspace-a', 'session-1.json'), '{"type":"memory_card"}\n');
     writeFile(join(sessionDir, 'session-1.jsonl'), '{"type":"session","id":"session-1"}\n');
 
     process.env.PATH = `${qmdBinDir}:${process.env.PATH}`;
@@ -191,47 +189,31 @@ describe('memory command', () => {
       paths?: {
         sessionDir?: string;
         summaryDir?: string;
-        cardsDir?: string;
       };
     };
 
     expect(payload.paths?.summaryDir).toBe(summaryDir);
-    expect(payload.paths?.cardsDir).toBe(cardsDir);
     expect(payload.paths?.sessionDir).toBe(sessionDir);
 
     logSpy.mockRestore();
   });
 
-  it('shows latest memory cards with pa memory cards head [count]', async () => {
+  it('rejects legacy cards subcommand', async () => {
     const stateRoot = createTempDir('personal-agent-cli-state-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_DAEMON_CONFIG = join(createTempDir('personal-agent-cli-config-'), 'daemon.json');
 
-    const cardsDir = join(stateRoot, 'memory', 'cards');
-    const olderCard = join(cardsDir, 'workspace-a', 'session-1.json');
-    const newerCard = join(cardsDir, 'workspace-a', 'session-2.json');
-
-    writeFile(olderCard, '{"session_id":"session-1"}\n');
-    writeFile(newerCard, '{"session_id":"session-2"}\n');
-
-    const now = Date.now() / 1000;
-    utimesSync(olderCard, now - 120, now - 120);
-    utimesSync(newerCard, now - 60, now - 60);
-
-    const logs: string[] = [];
-    const logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
-      logs.push(String(message ?? ''));
+    const errors: string[] = [];
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation((message?: unknown) => {
+      errors.push(String(message ?? ''));
     });
 
     const exitCode = await runCli(['memory', 'cards', 'head', '1']);
 
-    expect(exitCode).toBe(0);
-    const output = logs.join('\n');
-    expect(output).toContain('Latest memory cards (1)');
-    expect(output).toContain('workspace-a/session-2.json');
-    expect(output).not.toContain('workspace-a/session-1.json');
+    expect(exitCode).toBe(1);
+    expect(errors.some((line) => line.includes('Unknown memory subcommand: cards'))).toBe(true);
 
-    logSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 
   it('opens memory summary by session id with pa memory open <sessionId>', async () => {

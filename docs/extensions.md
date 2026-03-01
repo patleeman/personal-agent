@@ -67,14 +67,12 @@ On first use, `pa` will:
 
 ### memory-cards
 
-Runtime memory injection for cross-session + durable profile context.
+Durable profile memory injection and update tooling.
 
 - Loads `profiles/<active-profile>/agent/MEMORY.md` (fallback to `shared`) and injects `DURABLE_MEMORY`
-- Queries `memory_cards` qmd collection
-- Filters by TTL (90 days) and relevance score
-- Injects `MEMORY_CANDIDATES` block into system prompt
 - Registers `memory_update` tool for durable memory writes + git add/commit/push
-- Configurable via env vars
+- Automatic episodic retrieval is disabled to avoid prompt-time qmd latency
+- For episodic lookup, the model can run `qmd query` on-demand via the `bash` tool
 
 Location: `profiles/shared/agent/extensions/memory-cards/`
 
@@ -100,13 +98,6 @@ Extension behavior can be tuned via env vars:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `PERSONAL_AGENT_MEMORY_SCORE_THRESHOLD` | Minimum relevance score for cards | `0.55` |
-| `PERSONAL_AGENT_MEMORY_TOP_K` | Max qmd hits to consider | `12` |
-| `PERSONAL_AGENT_MEMORY_MAX_CARDS` | Max memory cards injected | `3` |
-| `PERSONAL_AGENT_MEMORY_MAX_TOKENS` | Max tokens for MEMORY_CANDIDATES block | `400` |
-| `PERSONAL_AGENT_MEMORY_TTL_DAYS` | Card retention in days | `90` |
-| `PERSONAL_AGENT_MEMORY_CARDS_COLLECTION` | qmd collection name | `memory_cards` |
-| `PERSONAL_AGENT_MEMORY_CARDS_DIR` | Local memory cards directory | `~/.local/state/personal-agent/memory/cards` |
 | `PERSONAL_AGENT_DURABLE_MEMORY_MAX_TOKENS` | Max tokens for DURABLE_MEMORY block | `350` |
 | `PERSONAL_AGENT_ACTIVE_PROFILE` | Active profile used for MEMORY.md resolution | `shared` |
 | `PERSONAL_AGENT_REPO_ROOT` | Repo root for profile MEMORY.md + git operations | inferred from extension path |
