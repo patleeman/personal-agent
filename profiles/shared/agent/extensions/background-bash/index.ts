@@ -105,6 +105,33 @@ function parseState(content: string): BackgroundState | null {
 	}
 }
 
+function isAbortSignalLike(value: unknown): value is AbortSignal {
+	if (!value || typeof value !== "object") {
+		return false;
+	}
+
+	const candidate = value as { aborted?: unknown; addEventListener?: unknown };
+	return typeof candidate.aborted === "boolean" && typeof candidate.addEventListener === "function";
+}
+
+function isExtensionContextLike(value: unknown): value is ExtensionContext {
+	if (!value || typeof value !== "object") {
+		return false;
+	}
+
+	const candidate = value as {
+		cwd?: unknown;
+		abort?: unknown;
+		hasPendingMessages?: unknown;
+	};
+
+	return (
+		typeof candidate.cwd === "string"
+		&& typeof candidate.abort === "function"
+		&& typeof candidate.hasPendingMessages === "function"
+	);
+}
+
 function loadJobsFromSession(ctx: ExtensionContext): BackgroundJobRecord[] {
 	const jobs: BackgroundJobRecord[] = [];
 	const seenJobIds = new Set<string>();
@@ -473,7 +500,23 @@ export default function (pi: ExtensionAPI) {
 		description:
 			"Execute a bash command. Set background=true to run detached and return immediately with pid and log path.",
 		parameters: bashSchema,
-		async execute(toolCallId, params, signal, onUpdate, ctx) {
+		async execute(toolCallId, params, first, second, third) {
+			let signal: AbortSignal | undefined;
+			let onUpdate: ((result: any) => void) | undefined;
+			let ctx: ExtensionContext | undefined;
+
+			if (isExtensionContextLike(second)) {
+				onUpdate = typeof first === "function" ? first : undefined;
+				ctx = second;
+				signal = isAbortSignalLike(third) ? third : undefined;
+			} else if (isExtensionContextLike(third)) {
+				signal = isAbortSignalLike(first) ? first : undefined;
+				onUpdate = typeof second === "function" ? second : undefined;
+				ctx = third;
+			} else {
+				throw new Error("background-bash: extension context missing");
+			}
+
 			if (!params.background) {
 				return baseBash.execute(
 					toolCallId,
