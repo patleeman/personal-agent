@@ -154,23 +154,14 @@ function validateNotifications(
   const obj = value as Record<string, unknown>;
   const errors: ValidationError[] = [];
   
-  errors.push(
-    ...(
-      validateBoolean(obj.email, `${field}.email`, source)
-        ? [validateBoolean(obj.email, `${field}.email`, source)!]
-        : []
-    ),
-    ...(
-      validateBoolean(obj.push, `${field}.push`, source)
-        ? [validateBoolean(obj.push, `${field}.push`, source)!]
-        : []
-    ),
-    ...(
-      validateEnum(obj.digest, `${field}.digest`, source, ['daily', 'weekly', 'never'])
-        ? [validateEnum(obj.digest, `${field}.digest`, source, ['daily', 'weekly', 'never'])!]
-        : []
-    )
-  );
+  const emailError = validateBoolean(obj.email, `${field}.email`, source);
+  if (emailError) errors.push(emailError);
+
+  const pushError = validateBoolean(obj.push, `${field}.push`, source);
+  if (pushError) errors.push(pushError);
+
+  const digestError = validateEnum(obj.digest, `${field}.digest`, source, ['daily', 'weekly', 'never']);
+  if (digestError) errors.push(digestError);
   
   // Check for unknown keys
   const knownKeys = ['email', 'push', 'digest'];
@@ -199,13 +190,13 @@ function validatePrivacy(
   
   const obj = value as Record<string, unknown>;
   const errors: ValidationError[] = [];
-  
+
   const analyticsError = validateBoolean(obj.analytics, `${field}.analytics`, source);
   if (analyticsError) errors.push(analyticsError);
-  
+
   const shareUsageError = validateBoolean(obj.shareUsage, `${field}.shareUsage`, source);
   if (shareUsageError) errors.push(shareUsageError);
-  
+
   // Check for unknown keys
   const knownKeys = ['analytics', 'shareUsage'];
   for (const key of Object.keys(obj)) {

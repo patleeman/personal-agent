@@ -19,6 +19,8 @@ interface ResponseEnvelope {
   error?: string;
 }
 
+const DEFAULT_SOCKET_TIMEOUT_MS = 5000;
+
 function getSocketPath(config?: DaemonConfig): string {
   const effectiveConfig = config ?? loadDaemonConfig();
   const paths = resolveDaemonPaths(effectiveConfig.ipc.socketPath);
@@ -31,6 +33,15 @@ async function sendRequest<T>(request: RequestEnvelope, config?: DaemonConfig): 
   return new Promise<T>((resolve, reject) => {
     const socket = createConnection(socketPath);
     let buffer = '';
+    let settled = false;
+
+    const timeout = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        socket.destroy();
+        reject(new Error(`Daemon connection timed out after ${DEFAULT_SOCKET_TIMEOUT_MS}ms`));
+      }
+    }, DEFAULT_SOCKET_TIMEOUT_MS);
 
     socket.on('connect', () => {
       socket.write(`${JSON.stringify(request)}\n`);
@@ -47,7 +58,11 @@ async function sendRequest<T>(request: RequestEnvelope, config?: DaemonConfig): 
       buffer = '';
 
       if (!line) {
-        reject(new Error('Daemon returned empty response'));
+        if (!settled) {
+          settled = true;
+          clearTimeout(timeout);
+          reject(new Error('Daemon returned empty response'));
+        }
         socket.end();
         return;
       }
@@ -55,17 +70,37 @@ async function sendRequest<T>(request: RequestEnvelope, config?: DaemonConfig): 
       const parsed = JSON.parse(line) as ResponseEnvelope;
 
       if (!parsed.ok) {
-        reject(new Error(parsed.error ?? 'Daemon request failed'));
+        if (!settled) {
+          settled = true;
+          clearTimeout(timeout);
+          reject(new Error(parsed.error ?? 'Daemon request failed'));
+        }
         socket.end();
         return;
       }
 
-      resolve(parsed.result as T);
+      if (!settled) {
+        settled = true;
+        clearTimeout(timeout);
+        resolve(parsed.result as T);
+      }
       socket.end();
     });
 
     socket.on('error', (error) => {
-      reject(error);
+      if (!settled) {
+        settled = true;
+        clearTimeout(timeout);
+        reject(error);
+      }
+    });
+
+    socket.on('close', () => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timeout);
+        reject(new Error('Daemon connection closed without response'));
+      }
     });
   });
 }

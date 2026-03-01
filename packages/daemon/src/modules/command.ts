@@ -6,6 +6,8 @@ export interface CommandResult {
   stderr: string;
 }
 
+const GRACEFUL_SHUTDOWN_MS = 5000;
+
 export async function runCommand(
   command: string,
   args: string[],
@@ -19,16 +21,24 @@ export async function runCommand(
     let stdout = '';
     let stderr = '';
     let settled = false;
+    let killTimer: NodeJS.Timeout | undefined;
 
     const finalize = (fn: () => void) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeoutHandle);
+      if (killTimer) clearTimeout(killTimer);
       fn();
     };
 
     const timeoutHandle = setTimeout(() => {
       child.kill('SIGTERM');
+      // Force kill if process doesn't exit gracefully
+      killTimer = setTimeout(() => {
+        if (!settled) {
+          child.kill('SIGKILL');
+        }
+      }, GRACEFUL_SHUTDOWN_MS);
       finalize(() => reject(new Error(`${command} timed out after ${timeoutMs}ms`)));
     }, timeoutMs);
 
