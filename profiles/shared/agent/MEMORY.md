@@ -1,6 +1,7 @@
 # Durable Memory
 
 ## User
+- Stores shopping list in Todoist. All other reminders/tasks use Apple Reminders.
 
 ## Preferences
 - For Todoist integration, use direct API calls (curl/HTTP) rather than assuming a Todoist CLI.
