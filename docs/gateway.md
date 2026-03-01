@@ -149,7 +149,9 @@ Gateway commands inside chat:
 Common Pi slash commands exposed in gateway command lists:
 
 - `/skill <name>` (translated to `/skill:<name>` for Telegram menu compatibility)
-- `/model` -> opens a model picker in chat (Telegram includes inline buttons); reply with a number or `/model <provider/model>`
+- `/model` or `/models` -> opens a model picker in chat (Telegram includes inline buttons); reply with a number or `/model <provider/model>`
+- `/stop` -> stop active request
+- `/cancel` -> cancel active model selection
 - `/compact` -> currently returns guidance (manual compaction requires Pi TUI)
 - `/resume` -> gateway sessions already auto-resume per chat/channel; use `/new` for a fresh one
 

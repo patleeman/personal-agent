@@ -242,7 +242,9 @@ Gateway commands:
 - `/commands`
 - `/skills`
 - `/skill <name>`
-- `/model` (picker + per-chat/per-channel model override; Telegram includes inline buttons)
+- `/model` or `/models` (picker + per-chat/per-channel model override; Telegram includes inline buttons)
+- `/stop` (stop active request)
+- `/cancel` (cancel active model selection)
 - `/compact` (guidance only in gateway mode; use Pi TUI for manual compaction)
 - `/resume` (gateway auto-resumes per chat/channel)
 

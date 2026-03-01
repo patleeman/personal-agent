@@ -136,6 +136,7 @@ interface RunPromptFnInput {
   sessionFile: string;
   cwd: string;
   model?: string;
+  abortSignal?: AbortSignal;
   logContext?: {
     source: string;
     userId: string;
@@ -173,6 +174,7 @@ export interface CreateTelegramMessageHandlerOptions {
   removeSessionFile?: (path: string) => Promise<void>;
   maxPendingPerChat?: number;
   modelCommands?: ModelCommandSupport;
+  createAbortController?: () => AbortController;
 }
 
 export interface QueuedTelegramMessageHandler {
@@ -203,6 +205,7 @@ export interface CreateDiscordMessageHandlerOptions {
   removeSessionFile?: (path: string) => Promise<void>;
   maxPendingPerChannel?: number;
   modelCommands?: ModelCommandSupport;
+  createAbortController?: () => AbortController;
 }
 
 export interface QueuedDiscordMessageHandler {
@@ -216,6 +219,9 @@ const DEFAULT_MAX_PENDING_PER_CHAT = 20;
 const DEFAULT_MAX_PENDING_PER_CHANNEL = 20;
 const DEFAULT_MODEL_SELECTION_LIMIT = 25;
 const TELEGRAM_MODEL_SELECTION_CALLBACK_PREFIX = 'model_select:';
+const PROMPT_CANCELLED_ERROR_MESSAGE = 'Request cancelled by /stop.';
+const STOPPED_ACTIVE_REQUEST_MESSAGE = 'Stopped active request.';
+const NO_ACTIVE_REQUEST_MESSAGE = 'No active request to stop.';
 
 function gatewaySection(title: string): string {
   return title;
@@ -316,6 +322,23 @@ interface PiHelpDiscovery {
   skills: TelegramSkillDefinition[];
 }
 
+const MODEL_TELEGRAM_COMMANDS: TelegramCommandDefinition[] = [
+  { command: 'model', description: 'Select model (usage: /model [search|provider/model])' },
+  { command: 'models', description: 'Alias for /model' },
+];
+
+const MODEL_TELEGRAM_COMMAND_ALIASES = new Set(
+  MODEL_TELEGRAM_COMMANDS.map((command) => `/${command.command}`),
+);
+
+function isModelCommand(command: string | undefined): boolean {
+  if (!command) {
+    return false;
+  }
+
+  return MODEL_TELEGRAM_COMMAND_ALIASES.has(command);
+}
+
 const DEFAULT_TELEGRAM_COMMANDS: TelegramCommandDefinition[] = [
   { command: 'new', description: 'Start a new session' },
   { command: 'status', description: 'Show gateway status' },
@@ -323,7 +346,9 @@ const DEFAULT_TELEGRAM_COMMANDS: TelegramCommandDefinition[] = [
   { command: 'skills', description: 'List available skills' },
   { command: 'help', description: 'Show command help' },
   { command: 'skill', description: 'Load a skill (usage: /skill <name>)' },
-  { command: 'model', description: 'Select model (usage: /model [search|provider/model])' },
+  ...MODEL_TELEGRAM_COMMANDS,
+  { command: 'stop', description: 'Stop active request' },
+  { command: 'cancel', description: 'Cancel active model selection' },
   { command: 'compact', description: 'Compact context (TUI only in gateway mode)' },
   { command: 'resume', description: 'Resume help (gateway auto-resumes per chat)' },
 ];
@@ -982,6 +1007,7 @@ interface RunPiPrintPromptOptions {
   agentDir: string;
   cwd: string;
   model?: string;
+  abortSignal?: AbortSignal;
   logContext?: {
     source: string;
     userId: string;
@@ -1044,10 +1070,26 @@ async function runPiPrintPrompt(options: RunPiPrintPromptOptions): Promise<strin
       ? new PiJsonStreamParser(options.logContext.source, options.logContext.userId, options.logContext.userName)
       : null;
 
+    const abortSignal = options.abortSignal;
+    let timeoutHandle: NodeJS.Timeout | undefined;
+
+    const onAbort = () => {
+      fail(PROMPT_CANCELLED_ERROR_MESSAGE);
+    };
+
     const finalize = (resolver: () => void) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timeoutHandle);
+
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+        timeoutHandle = undefined;
+      }
+
+      if (abortSignal) {
+        abortSignal.removeEventListener('abort', onAbort);
+      }
+
       resolver();
     };
 
@@ -1059,9 +1101,16 @@ async function runPiPrintPrompt(options: RunPiPrintPromptOptions): Promise<strin
       finalize(() => reject(new Error(message)));
     };
 
-    const timeoutHandle = setTimeout(() => {
+    timeoutHandle = setTimeout(() => {
       fail(`pi timed out after ${timeoutMs}ms`);
     }, timeoutMs);
+
+    if (abortSignal?.aborted) {
+      fail(PROMPT_CANCELLED_ERROR_MESSAGE);
+      return;
+    }
+
+    abortSignal?.addEventListener('abort', onAbort, { once: true });
 
     child.stdout.on('data', (chunk: Buffer | string) => {
       const text = chunk.toString();
@@ -1292,9 +1341,14 @@ async function handleModelCommand(options: HandleModelCommandOptions): Promise<b
 
   const pending = support.pendingSelectionsByConversation.get(options.conversationId);
 
-  if (pending && options.command === '/cancel') {
-    support.pendingSelectionsByConversation.delete(options.conversationId);
-    await options.sendMessage('Cancelled model selection.');
+  if (options.command === '/cancel') {
+    if (pending) {
+      support.pendingSelectionsByConversation.delete(options.conversationId);
+      await options.sendMessage('Cancelled model selection.');
+      return true;
+    }
+
+    await options.sendMessage('No active model selection. Use /model to list models.');
     return true;
   }
 
@@ -1314,11 +1368,11 @@ async function handleModelCommand(options: HandleModelCommandOptions): Promise<b
     return true;
   }
 
-  if (pending && options.command && options.command !== '/model') {
+  if (pending && options.command && !isModelCommand(options.command)) {
     support.pendingSelectionsByConversation.delete(options.conversationId);
   }
 
-  if (options.command !== '/model') {
+  if (!isModelCommand(options.command)) {
     return false;
   }
 
@@ -1408,6 +1462,7 @@ async function handleModelCommand(options: HandleModelCommandOptions): Promise<b
 async function processTelegramMessage(
   options: CreateTelegramMessageHandlerOptions,
   message: TelegramMessageLike,
+  activePromptAbortControllers?: Map<string, AbortController>,
 ): Promise<void> {
   const chatId = String(message.chat.id);
 
@@ -1516,6 +1571,18 @@ async function processTelegramMessage(
     return;
   }
 
+  if (command === '/stop') {
+    const activeController = activePromptAbortControllers?.get(chatId);
+    if (activeController) {
+      activeController.abort();
+      await options.sendMessage(message.chat.id, STOPPED_ACTIVE_REQUEST_MESSAGE);
+      return;
+    }
+
+    await options.sendMessage(message.chat.id, NO_ACTIVE_REQUEST_MESSAGE);
+    return;
+  }
+
   let prompt = normalized.normalizedText;
   if (command === '/skill') {
     if (normalized.args.length === 0) {
@@ -1528,12 +1595,16 @@ async function processTelegramMessage(
 
   await options.sendChatAction(message.chat.id, 'typing');
 
+  const abortController = (options.createAbortController ?? (() => new AbortController()))();
+  activePromptAbortControllers?.set(chatId, abortController);
+
   try {
     const output = await options.runPrompt({
       prompt,
       sessionFile,
       cwd: options.workingDirectory,
       model: options.modelCommands?.activeModelsByConversation.get(chatId),
+      abortSignal: abortController.signal,
       logContext: {
         source: 'telegram',
         userId: chatId,
@@ -1554,6 +1625,12 @@ async function processTelegramMessage(
 
     await sendLongText((chunk) => options.sendMessage(message.chat.id, chunk), output || '(no output)');
   } catch (error) {
+    const errorMessage = (error as Error).message;
+
+    if (errorMessage === PROMPT_CANCELLED_ERROR_MESSAGE) {
+      return;
+    }
+
     await emitDaemonEventNonFatal({
       type: 'session.processing.failed',
       source: 'gateway',
@@ -1562,11 +1639,15 @@ async function processTelegramMessage(
         profile: options.profileName,
         cwd: options.workingDirectory,
         chatId,
-        message: (error as Error).message,
+        message: errorMessage,
       },
     });
 
-    await options.sendMessage(message.chat.id, `Error: ${(error as Error).message}`);
+    await options.sendMessage(message.chat.id, `Error: ${errorMessage}`);
+  } finally {
+    if (activePromptAbortControllers?.get(chatId) === abortController) {
+      activePromptAbortControllers.delete(chatId);
+    }
   }
 }
 
@@ -1575,6 +1656,7 @@ export function createQueuedTelegramMessageHandler(
 ): QueuedTelegramMessageHandler {
   const chatQueue = new Map<string, Promise<void>>();
   const pendingPerChat = new Map<string, number>();
+  const activePromptAbortControllers = new Map<string, AbortController>();
   const maxPendingPerChat = options.maxPendingPerChat ?? DEFAULT_MAX_PENDING_PER_CHAT;
 
   const enqueue = (chatId: string, task: () => Promise<void>) => {
@@ -1597,6 +1679,30 @@ export function createQueuedTelegramMessageHandler(
   return {
     handleMessage(message: TelegramMessageLike): void {
       const chatId = String(message.chat.id);
+      const text = message.text?.trim();
+      const command = text ? normalizeTelegramCommandText(text).command : undefined;
+
+      if (command === '/stop') {
+        if (!options.allowlist.has(chatId)) {
+          void options.sendMessage(message.chat.id, 'This chat is not allowed.');
+          return;
+        }
+
+        const fullName = [message.from?.first_name, message.from?.last_name].filter(Boolean).join(' ');
+        const userName = message.from?.username ?? (fullName || undefined);
+        logIncomingMessage('telegram', chatId, userName, text ?? '/stop');
+
+        const activeController = activePromptAbortControllers.get(chatId);
+        if (activeController) {
+          activeController.abort();
+          void options.sendMessage(message.chat.id, STOPPED_ACTIVE_REQUEST_MESSAGE);
+          return;
+        }
+
+        void options.sendMessage(message.chat.id, NO_ACTIVE_REQUEST_MESSAGE);
+        return;
+      }
+
       const pending = pendingPerChat.get(chatId) ?? 0;
 
       if (pending >= maxPendingPerChat) {
@@ -1611,7 +1717,7 @@ export function createQueuedTelegramMessageHandler(
 
       enqueue(chatId, async () => {
         try {
-          await processTelegramMessage(options, message);
+          await processTelegramMessage(options, message, activePromptAbortControllers);
         } finally {
           const nextPending = (pendingPerChat.get(chatId) ?? 1) - 1;
           if (nextPending <= 0) {
@@ -1782,6 +1888,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 async function processDiscordMessage(
   options: CreateDiscordMessageHandlerOptions,
   message: DiscordMessageLike,
+  activePromptAbortControllers?: Map<string, AbortController>,
 ): Promise<void> {
   if (message.authorIsBot) {
     return;
@@ -1881,6 +1988,18 @@ async function processDiscordMessage(
     return;
   }
 
+  if (command === '/stop') {
+    const activeController = activePromptAbortControllers?.get(channelId);
+    if (activeController) {
+      activeController.abort();
+      await message.sendMessage(STOPPED_ACTIVE_REQUEST_MESSAGE);
+      return;
+    }
+
+    await message.sendMessage(NO_ACTIVE_REQUEST_MESSAGE);
+    return;
+  }
+
   let prompt = normalized.normalizedText;
   if (command === '/skill') {
     if (normalized.args.length === 0) {
@@ -1893,12 +2012,16 @@ async function processDiscordMessage(
 
   await message.sendTyping();
 
+  const abortController = (options.createAbortController ?? (() => new AbortController()))();
+  activePromptAbortControllers?.set(channelId, abortController);
+
   try {
     const output = await options.runPrompt({
       prompt,
       sessionFile,
       cwd: options.workingDirectory,
       model: options.modelCommands?.activeModelsByConversation.get(channelId),
+      abortSignal: abortController.signal,
       logContext: {
         source: 'discord',
         userId: channelId,
@@ -1919,6 +2042,12 @@ async function processDiscordMessage(
 
     await sendLongText(message.sendMessage, output || '(no output)');
   } catch (error) {
+    const errorMessage = (error as Error).message;
+
+    if (errorMessage === PROMPT_CANCELLED_ERROR_MESSAGE) {
+      return;
+    }
+
     await emitDaemonEventNonFatal({
       type: 'session.processing.failed',
       source: 'gateway',
@@ -1927,11 +2056,15 @@ async function processDiscordMessage(
         profile: options.profileName,
         cwd: options.workingDirectory,
         channelId,
-        message: (error as Error).message,
+        message: errorMessage,
       },
     });
 
-    await message.sendMessage(`Error: ${(error as Error).message}`);
+    await message.sendMessage(`Error: ${errorMessage}`);
+  } finally {
+    if (activePromptAbortControllers?.get(channelId) === abortController) {
+      activePromptAbortControllers.delete(channelId);
+    }
   }
 }
 
@@ -1940,6 +2073,7 @@ export function createQueuedDiscordMessageHandler(
 ): QueuedDiscordMessageHandler {
   const channelQueue = new Map<string, Promise<void>>();
   const pendingPerChannel = new Map<string, number>();
+  const activePromptAbortControllers = new Map<string, AbortController>();
   const maxPendingPerChannel = options.maxPendingPerChannel ?? DEFAULT_MAX_PENDING_PER_CHANNEL;
 
   const enqueue = (channelId: string, task: () => Promise<void>) => {
@@ -1966,6 +2100,28 @@ export function createQueuedDiscordMessageHandler(
       }
 
       const channelId = message.channelId;
+      const text = message.content?.trim();
+      const command = text ? normalizeTelegramCommandText(text).command : undefined;
+
+      if (command === '/stop') {
+        if (!options.allowlist.has(channelId)) {
+          void message.sendMessage('This channel is not allowed.');
+          return;
+        }
+
+        logIncomingMessage('discord', channelId, message.authorUsername, text ?? '/stop');
+
+        const activeController = activePromptAbortControllers.get(channelId);
+        if (activeController) {
+          activeController.abort();
+          void message.sendMessage(STOPPED_ACTIVE_REQUEST_MESSAGE);
+          return;
+        }
+
+        void message.sendMessage(NO_ACTIVE_REQUEST_MESSAGE);
+        return;
+      }
+
       const pending = pendingPerChannel.get(channelId) ?? 0;
 
       if (pending >= maxPendingPerChannel) {
@@ -1979,7 +2135,7 @@ export function createQueuedDiscordMessageHandler(
 
       enqueue(channelId, async () => {
         try {
-          await processDiscordMessage(options, message);
+          await processDiscordMessage(options, message, activePromptAbortControllers);
         } finally {
           const nextPending = (pendingPerChannel.get(channelId) ?? 1) - 1;
           if (nextPending <= 0) {

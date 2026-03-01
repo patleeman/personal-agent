@@ -187,7 +187,7 @@ describe('queued telegram message handler', () => {
     expect(sendMessage).toHaveBeenCalledWith(1, 'Available commands:\n/new\n/status');
   });
 
-  it('includes /model, /compact, and /resume in default /commands output', async () => {
+  it('includes /model, /models, /stop, /cancel, /compact, and /resume in default /commands output', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
     const runPrompt = vi.fn(async () => 'ignored');
@@ -213,6 +213,9 @@ describe('queued telegram message handler', () => {
       .map((call) => String(call.at(1) ?? ''))
       .join('\n');
     expect(output).toContain('/model -');
+    expect(output).toContain('/models -');
+    expect(output).toContain('/stop -');
+    expect(output).toContain('/cancel -');
     expect(output).toContain('/compact -');
     expect(output).toContain('/resume -');
   });
@@ -354,6 +357,154 @@ describe('queued telegram message handler', () => {
     const promptCall = runPrompt.mock.calls[0]?.[0] as { prompt: string; model?: string };
     expect(promptCall.prompt).toBe('hello');
     expect(promptCall.model).toBe('provider/model-b');
+  });
+
+  it('supports /models as an alias for /model', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'ignored');
+    const listModels = vi.fn(async () => ['provider/model-a']);
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      runPrompt,
+      modelCommands: {
+        listModels,
+        activeModelsByConversation: new Map(),
+        pendingSelectionsByConversation: new Map(),
+      },
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/models' });
+    await handler.waitForIdle('1');
+
+    expect(listModels).toHaveBeenCalledWith(undefined);
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(1, 'Model set to provider/model-a for this chat.');
+  });
+
+  it('handles /cancel for active model selection without forwarding to pi', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'ignored');
+    const listModels = vi.fn(async () => ['provider/model-a', 'provider/model-b']);
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      runPrompt,
+      modelCommands: {
+        listModels,
+        activeModelsByConversation: new Map(),
+        pendingSelectionsByConversation: new Map(),
+      },
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/model' });
+    await handler.waitForIdle('1');
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/cancel' });
+    await handler.waitForIdle('1');
+
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(1, 'Cancelled model selection.');
+  });
+
+  it('handles /cancel with no active model selection without forwarding to pi', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'ignored');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      runPrompt,
+      modelCommands: {
+        listModels: vi.fn(async () => []),
+        activeModelsByConversation: new Map(),
+        pendingSelectionsByConversation: new Map(),
+      },
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/cancel' });
+    await handler.waitForIdle('1');
+
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(1, 'No active model selection. Use /model to list models.');
+  });
+
+  it('stops an active telegram request with /stop without forwarding to pi', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+
+    const runPrompt = vi.fn(async ({ abortSignal }: { abortSignal?: AbortSignal }) => new Promise<string>((_, reject) => {
+      abortSignal?.addEventListener('abort', () => {
+        reject(new Error('Request cancelled by /stop.'));
+      }, { once: true });
+    }));
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      runPrompt,
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: 'long-running prompt' });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/stop' });
+    await handler.waitForIdle('1');
+
+    expect(sendMessage).toHaveBeenCalledWith(1, 'Stopped active request.');
+
+    const output = sendMessage.mock.calls
+      .map((call) => String(call.at(1) ?? ''))
+      .join('\n');
+    expect(output).not.toContain('Error: Request cancelled by /stop.');
+  });
+
+  it('returns helpful /stop message when no telegram request is active', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'ignored');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      runPrompt,
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/stop' });
+    await handler.waitForIdle('1');
+
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(1, 'No active request to stop.');
   });
 
   it('isolates session files per chat and queues messages per chat', async () => {
@@ -499,7 +650,7 @@ describe('queued discord message handler', () => {
     expect(sendMessage).toHaveBeenCalledWith('Available commands:\n/new\n/status');
   });
 
-  it('includes /model, /compact, and /resume in default /commands output', async () => {
+  it('includes /model, /models, /stop, /cancel, /compact, and /resume in default /commands output', async () => {
     const runPrompt = vi.fn(async () => 'ignored');
     const sendMessage = vi.fn(async () => undefined);
     const sendTyping = vi.fn(async () => undefined);
@@ -529,6 +680,9 @@ describe('queued discord message handler', () => {
       .map((call) => String(call.at(0) ?? ''))
       .join('\n');
     expect(output).toContain('/model -');
+    expect(output).toContain('/models -');
+    expect(output).toContain('/stop -');
+    expect(output).toContain('/cancel -');
     expect(output).toContain('/compact -');
     expect(output).toContain('/resume -');
   });
@@ -673,6 +827,78 @@ describe('queued discord message handler', () => {
     const firstCall = runPrompt.mock.calls[0]?.[0] as { prompt: string; model?: string };
     expect(firstCall.prompt).toBe('hello');
     expect(firstCall.model).toBe('provider/model-a');
+  });
+
+  it('stops an active discord request with /stop without forwarding to pi', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendTyping = vi.fn(async () => undefined);
+
+    const runPrompt = vi.fn(async ({ abortSignal }: { abortSignal?: AbortSignal }) => new Promise<string>((_, reject) => {
+      abortSignal?.addEventListener('abort', () => {
+        reject(new Error('Request cancelled by /stop.'));
+      }, { once: true });
+    }));
+
+    const handler = createQueuedDiscordMessageHandler({
+      allowlist: new Set(['channel-1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      discordSessionDir: '/tmp/discord-sessions',
+      workingDirectory: '/tmp/work',
+      runPrompt,
+    });
+
+    handler.handleMessage({
+      channelId: 'channel-1',
+      content: 'long-running prompt',
+      sendMessage,
+      sendTyping,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    handler.handleMessage({
+      channelId: 'channel-1',
+      content: '/stop',
+      sendMessage,
+      sendTyping,
+    });
+
+    await handler.waitForIdle('channel-1');
+
+    expect(sendMessage).toHaveBeenCalledWith('Stopped active request.');
+
+    const output = sendMessage.mock.calls
+      .map((call) => String(call.at(0) ?? ''))
+      .join('\n');
+    expect(output).not.toContain('Error: Request cancelled by /stop.');
+  });
+
+  it('returns helpful /stop message when no discord request is active', async () => {
+    const runPrompt = vi.fn(async () => 'ignored');
+    const sendMessage = vi.fn(async () => undefined);
+    const sendTyping = vi.fn(async () => undefined);
+
+    const handler = createQueuedDiscordMessageHandler({
+      allowlist: new Set(['channel-1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      discordSessionDir: '/tmp/discord-sessions',
+      workingDirectory: '/tmp/work',
+      runPrompt,
+    });
+
+    handler.handleMessage({
+      channelId: 'channel-1',
+      content: '/stop',
+      sendMessage,
+      sendTyping,
+    });
+
+    await handler.waitForIdle('channel-1');
+
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith('No active request to stop.');
   });
 
   it('rejects messages when per-channel queue limit is exceeded', async () => {
