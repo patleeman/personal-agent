@@ -684,6 +684,15 @@ class PiJsonStreamParser {
     }
   }
 
+  private flushAssistantMessage(): void {
+    if (!this.assistantTextBuffer.trim()) {
+      return;
+    }
+
+    logAssistantMessage(this.source, this.userId, this.assistantTextBuffer.trim(), this.userName);
+    this.assistantTextBuffer = '';
+  }
+
   private handleEvent(event: PiJsonEvent): void {
     switch (event.type) {
       case 'message_update': {
@@ -759,15 +768,12 @@ class PiJsonStreamParser {
         break;
       }
       case 'turn_end': {
-        // Log the complete assistant message
-        if (this.assistantTextBuffer.trim()) {
-          logAssistantMessage(this.source, this.userId, this.assistantTextBuffer.trim(), this.userName);
-          this.assistantTextBuffer = '';
-        }
+        this.flushAssistantMessage();
         break;
       }
       case 'agent_end': {
-        // Final message logged at turn_end
+        // In case turn_end was missed or omitted.
+        this.flushAssistantMessage();
         break;
       }
     }
