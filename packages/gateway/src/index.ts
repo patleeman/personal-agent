@@ -75,6 +75,15 @@ export interface PiJsonEvent {
       arguments?: Record<string, unknown>;
     }>;
   };
+  messages?: Array<{
+    role?: string;
+    content?: Array<{
+      type: string;
+      text?: string;
+      name?: string;
+      arguments?: Record<string, unknown>;
+    }>;
+  }>;
 }
 
 export interface TelegramBridgeConfig {
@@ -133,6 +142,7 @@ export interface CreateTelegramMessageHandlerOptions {
   sendChatAction: SendChatActionFn;
   runPrompt: RunPromptFn;
   commandHelpText?: string;
+  skillsHelpText?: string;
   sessionFileExists?: (path: string) => boolean;
   removeSessionFile?: (path: string) => Promise<void>;
   maxPendingPerChat?: number;
@@ -160,6 +170,8 @@ export interface CreateDiscordMessageHandlerOptions {
   discordSessionDir: string;
   workingDirectory: string;
   runPrompt: RunPromptFn;
+  commandHelpText?: string;
+  skillsHelpText?: string;
   sessionFileExists?: (path: string) => boolean;
   removeSessionFile?: (path: string) => Promise<void>;
   maxPendingPerChannel?: number;
@@ -223,10 +235,21 @@ interface TelegramCommandDefinition {
   description: string;
 }
 
+interface TelegramSkillDefinition {
+  name: string;
+  description: string;
+}
+
+interface PiHelpDiscovery {
+  commands: TelegramCommandDefinition[];
+  skills: TelegramSkillDefinition[];
+}
+
 const DEFAULT_TELEGRAM_COMMANDS: TelegramCommandDefinition[] = [
   { command: 'new', description: 'Start a new session' },
   { command: 'status', description: 'Show gateway status' },
   { command: 'commands', description: 'List available commands' },
+  { command: 'skills', description: 'List available skills' },
   { command: 'help', description: 'Show command help' },
   { command: 'skill', description: 'Load a skill (usage: /skill <name>)' },
 ];
@@ -293,6 +316,52 @@ function parsePiHelpCommands(helpText: string): TelegramCommandDefinition[] {
   return parsed;
 }
 
+function parsePiHelpSkills(helpText: string): TelegramSkillDefinition[] {
+  const skills = new Map<string, TelegramSkillDefinition>();
+  const lines = helpText.split('\n');
+
+  for (const line of lines) {
+    const match = line.match(/^\|\s*`([^`]+)`\s*\|\s*(.+?)\s*\|\s*$/);
+    if (!match) {
+      continue;
+    }
+
+    const name = match[1]?.trim();
+    const description = toTelegramCommandDescription(match[2]?.trim() ?? '');
+    if (!name) {
+      continue;
+    }
+
+    if (!skills.has(name)) {
+      skills.set(name, { name, description });
+    }
+  }
+
+  return [...skills.values()];
+}
+
+function formatTelegramSkills(skills: TelegramSkillDefinition[]): string {
+  if (skills.length === 0) {
+    return [
+      'No skills found for this profile.',
+      '',
+      'Tip: use /commands to see gateway and slash commands.',
+    ].join('\n');
+  }
+
+  const lines = ['Available skills:'];
+
+  for (const skill of skills) {
+    lines.push(`- ${skill.name} - ${skill.description}`);
+  }
+
+  lines.push('');
+  lines.push('Usage: /skill <name>');
+  lines.push('Example: /skill tdd-feature');
+
+  return lines.join('\n');
+}
+
 function mergeTelegramCommands(
   preferred: TelegramCommandDefinition[],
   discovered: TelegramCommandDefinition[],
@@ -353,12 +422,12 @@ function normalizeTelegramCommandText(text: string): {
   };
 }
 
-async function discoverTelegramCommandsFromPi(options: {
+async function discoverPiHelpFromPi(options: {
   profile: ResolvedProfile;
   agentDir: string;
   cwd: string;
   sessionFile: string;
-}): Promise<TelegramCommandDefinition[]> {
+}): Promise<PiHelpDiscovery> {
   const settings = options.profile.settingsFiles.length > 0
     ? mergeJsonFiles(options.profile.settingsFiles)
     : {};
@@ -386,10 +455,14 @@ async function discoverTelegramCommandsFromPi(options: {
     });
 
     if (result.error || result.status !== 0) {
-      return [];
+      return { commands: [], skills: [] };
     }
 
-    return parsePiHelpCommands(result.stdout ?? '');
+    const helpText = result.stdout ?? '';
+    return {
+      commands: parsePiHelpCommands(helpText),
+      skills: parsePiHelpSkills(helpText),
+    };
   } finally {
     await rm(options.sessionFile, { force: true });
   }
@@ -807,6 +880,7 @@ async function runPiPrintPrompt(options: RunPiPrintPromptOptions): Promise<strin
     let stdoutBytes = 0;
     let stderrBytes = 0;
     let settled = false;
+    let finalTextOutput = '';
 
     // Initialize JSON stream parser for logging
     const parser = options.logContext
@@ -837,11 +911,37 @@ async function runPiPrintPrompt(options: RunPiPrintPromptOptions): Promise<strin
       stdout += text;
       stdoutBytes += Buffer.byteLength(text);
 
-      // Parse JSON lines for logging
-      if (parser) {
-        const lines = text.split('\n');
-        for (const line of lines) {
+      // Parse JSON lines for logging and extract text output
+      const lines = text.split('\n');
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        
+        // Parse for logging
+        if (parser) {
           parser.parseLine(line);
+        }
+        
+        // Extract final text output from agent_end event
+        try {
+          const event = JSON.parse(line) as PiJsonEvent;
+          if (event.type === 'agent_end' && event.messages) {
+            // Find the last assistant message with text content
+            for (let i = event.messages.length - 1; i >= 0; i--) {
+              const msg = event.messages[i];
+              if (msg.role === 'assistant' && msg.content) {
+                const textContent = msg.content
+                  .filter((c: {type: string; text?: string}) => c.type === 'text')
+                  .map((c: {type: string; text?: string}) => c.text)
+                  .join('');
+                if (textContent) {
+                  finalTextOutput = textContent;
+                  break;
+                }
+              }
+            }
+          }
+        } catch {
+          // Ignore parse errors
         }
       }
 
@@ -870,7 +970,7 @@ async function runPiPrintPrompt(options: RunPiPrintPromptOptions): Promise<strin
         return;
       }
 
-      finalize(() => resolve(stdout.trim()));
+      finalize(() => resolve(finalTextOutput || stdout.trim()));
     });
   });
 }
@@ -965,6 +1065,12 @@ async function processTelegramMessage(
     const commandHelp = options.commandHelpText
       ?? formatTelegramCommands(DEFAULT_TELEGRAM_COMMANDS);
     await sendLongText((chunk) => options.sendMessage(message.chat.id, chunk), commandHelp);
+    return;
+  }
+
+  if (command === '/skills') {
+    const skillsHelp = options.skillsHelpText ?? formatTelegramSkills([]);
+    await sendLongText((chunk) => options.sendMessage(message.chat.id, chunk), skillsHelp);
     return;
   }
 
@@ -1135,14 +1241,15 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
   const maxPendingPerChat = effectiveConfig.maxPendingPerChat ?? DEFAULT_MAX_PENDING_PER_CHAT;
 
-  const discoveredCommands = await discoverTelegramCommandsFromPi({
+  const discoveredHelp = await discoverPiHelpFromPi({
     profile: resolvedProfile,
     agentDir: runtime.agentDir,
     cwd: effectiveConfig.workingDirectory,
     sessionFile: join(telegramSessionDir, '__commands__.jsonl'),
   });
-  const telegramCommands = mergeTelegramCommands(DEFAULT_TELEGRAM_COMMANDS, discoveredCommands);
+  const telegramCommands = mergeTelegramCommands(DEFAULT_TELEGRAM_COMMANDS, discoveredHelp.commands);
   const commandHelpText = formatTelegramCommands(telegramCommands);
+  const skillsHelpText = formatTelegramSkills(discoveredHelp.skills);
 
   try {
     await bot.setMyCommands(telegramCommands);
@@ -1158,6 +1265,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     workingDirectory: effectiveConfig.workingDirectory,
     maxPendingPerChat,
     commandHelpText,
+    skillsHelpText,
     sendMessage: (chatId, text) => bot.sendMessage(chatId, text),
     sendChatAction: (chatId, action) => bot.sendChatAction(chatId, action),
     runPrompt: ({ prompt, sessionFile, cwd }) => runPiPrintPrompt({
@@ -1199,13 +1307,16 @@ async function processDiscordMessage(
     return;
   }
 
-  logIncomingMessage('discord', channelId, undefined, text);
+  logIncomingMessage('discord', channelId, message.authorUsername, text);
 
   const sessionFile = join(options.discordSessionDir, `${channelId}.jsonl`);
   const sessionFileExists = options.sessionFileExists ?? existsSync;
   const removeSessionFile = options.removeSessionFile ?? ((path: string) => rm(path, { force: true }));
 
-  if (text === '/new') {
+  const normalized = normalizeTelegramCommandText(text);
+  const command = normalized.command;
+
+  if (command === '/new') {
     if (sessionFileExists(sessionFile)) {
       await removeSessionFile(sessionFile);
     }
@@ -1225,20 +1336,48 @@ async function processDiscordMessage(
     return;
   }
 
-  if (text === '/status') {
+  if (command === '/status') {
     await message.sendMessage(
       `profile=${options.profileName}\nagentDir=${options.agentDir}\nsession=${sessionFile}`,
     );
     return;
   }
 
+  if (command === '/commands') {
+    const commandHelp = options.commandHelpText
+      ?? formatTelegramCommands(DEFAULT_TELEGRAM_COMMANDS);
+    await sendLongText(message.sendMessage, commandHelp);
+    return;
+  }
+
+  if (command === '/skills') {
+    const skillsHelp = options.skillsHelpText ?? formatTelegramSkills([]);
+    await sendLongText(message.sendMessage, skillsHelp);
+    return;
+  }
+
+  let prompt = normalized.normalizedText;
+  if (command === '/skill') {
+    if (normalized.args.length === 0) {
+      await message.sendMessage('Usage: /skill <name>\nExample: /skill tdd-feature');
+      return;
+    }
+
+    prompt = `/skill:${normalized.args}`;
+  }
+
   await message.sendTyping();
 
   try {
     const output = await options.runPrompt({
-      prompt: text,
+      prompt,
       sessionFile,
       cwd: options.workingDirectory,
+      logContext: {
+        source: 'discord',
+        userId: channelId,
+        userName: message.authorUsername,
+      },
     });
 
     await emitDaemonEventNonFatal({
@@ -1397,6 +1536,16 @@ export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<
 
   const maxPendingPerChannel = effectiveConfig.maxPendingPerChannel ?? DEFAULT_MAX_PENDING_PER_CHANNEL;
 
+  const discoveredHelp = await discoverPiHelpFromPi({
+    profile: resolvedProfile,
+    agentDir: runtime.agentDir,
+    cwd: effectiveConfig.workingDirectory,
+    sessionFile: join(discordSessionDir, '__commands__.jsonl'),
+  });
+  const discordCommands = mergeTelegramCommands(DEFAULT_TELEGRAM_COMMANDS, discoveredHelp.commands);
+  const commandHelpText = formatTelegramCommands(discordCommands);
+  const skillsHelpText = formatTelegramSkills(discoveredHelp.skills);
+
   const handler = createQueuedDiscordMessageHandler({
     allowlist: effectiveConfig.allowlist,
     profileName: effectiveConfig.profile,
@@ -1404,6 +1553,8 @@ export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<
     discordSessionDir,
     workingDirectory: effectiveConfig.workingDirectory,
     maxPendingPerChannel,
+    commandHelpText,
+    skillsHelpText,
     runPrompt: ({ prompt, sessionFile, cwd }) => runPiPrintPrompt({
       prompt,
       sessionFile,
@@ -1432,6 +1583,8 @@ export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<
       channelId: message.channelId,
       content: message.content,
       authorIsBot: message.author?.bot ?? false,
+      authorUsername: message.author?.username,
+      authorId: message.author?.id,
       sendMessage: (text) => message.channel.send(text),
       sendTyping: () => message.channel.sendTyping(),
     });
@@ -1441,6 +1594,7 @@ export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<
     console.log(gatewaySuccess(`Discord bridge started (profile=${effectiveConfig.profile})`));
     console.log(gatewayKeyValue('Allowed channels', [...effectiveConfig.allowlist].join(', ')));
     console.log(gatewayKeyValue('Working directory', effectiveConfig.workingDirectory));
+    console.log(gatewayKeyValue('Available commands', discordCommands.length));
     logSystem('discord', `Bridge started for profile=${effectiveConfig.profile}`);
   });
 

@@ -160,6 +160,31 @@ describe('queued telegram message handler', () => {
     expect(sendMessage).toHaveBeenCalledWith(1, 'Available commands:\n/new\n/status');
   });
 
+  it('returns configured skills list for /skills without invoking pi', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'ignored');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      skillsHelpText: 'Available skills:\n- tdd-feature',
+      sendMessage,
+      sendChatAction,
+      runPrompt,
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/skills' });
+    await handler.waitForIdle('1');
+
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendChatAction).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(1, 'Available skills:\n- tdd-feature');
+  });
+
   it('maps /skill <name> to /skill:<name> before invoking pi', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
@@ -296,6 +321,92 @@ describe('queued discord message handler', () => {
     expect(runPrompt).not.toHaveBeenCalled();
     expect(sendTyping).not.toHaveBeenCalled();
     expect(sendMessage).toHaveBeenCalledWith('This channel is not allowed.');
+  });
+
+  it('returns configured command list for /commands without invoking pi', async () => {
+    const runPrompt = vi.fn(async () => 'ignored');
+    const sendMessage = vi.fn(async () => undefined);
+    const sendTyping = vi.fn(async () => undefined);
+
+    const handler = createQueuedDiscordMessageHandler({
+      allowlist: new Set(['channel-1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      discordSessionDir: '/tmp/discord-sessions',
+      workingDirectory: '/tmp/work',
+      commandHelpText: 'Available commands:\n/new\n/status',
+      runPrompt,
+    });
+
+    handler.handleMessage({
+      channelId: 'channel-1',
+      content: '/commands',
+      sendMessage,
+      sendTyping,
+    });
+
+    await handler.waitForIdle('channel-1');
+
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendTyping).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith('Available commands:\n/new\n/status');
+  });
+
+  it('returns configured skills list for /skills without invoking pi', async () => {
+    const runPrompt = vi.fn(async () => 'ignored');
+    const sendMessage = vi.fn(async () => undefined);
+    const sendTyping = vi.fn(async () => undefined);
+
+    const handler = createQueuedDiscordMessageHandler({
+      allowlist: new Set(['channel-1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      discordSessionDir: '/tmp/discord-sessions',
+      workingDirectory: '/tmp/work',
+      skillsHelpText: 'Available skills:\n- tdd-feature',
+      runPrompt,
+    });
+
+    handler.handleMessage({
+      channelId: 'channel-1',
+      content: '/skills',
+      sendMessage,
+      sendTyping,
+    });
+
+    await handler.waitForIdle('channel-1');
+
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendTyping).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith('Available skills:\n- tdd-feature');
+  });
+
+  it('maps /skill <name> to /skill:<name> before invoking pi', async () => {
+    const runPrompt = vi.fn(async ({ prompt }: { prompt: string; sessionFile: string }) => `reply:${prompt}`);
+    const sendMessage = vi.fn(async () => undefined);
+    const sendTyping = vi.fn(async () => undefined);
+
+    const handler = createQueuedDiscordMessageHandler({
+      allowlist: new Set(['channel-1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      discordSessionDir: '/tmp/discord-sessions',
+      workingDirectory: '/tmp/work',
+      runPrompt,
+    });
+
+    handler.handleMessage({
+      channelId: 'channel-1',
+      content: '/skill tdd-feature',
+      sendMessage,
+      sendTyping,
+    });
+
+    await handler.waitForIdle('channel-1');
+
+    const firstCall = runPrompt.mock.calls[0]?.[0] as { prompt: string };
+    expect(firstCall.prompt).toBe('/skill:tdd-feature');
+    expect(sendTyping).toHaveBeenCalled();
   });
 
   it('rejects messages when per-channel queue limit is exceeded', async () => {

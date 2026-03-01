@@ -110,6 +110,7 @@ Gateway commands inside chat:
 - `/status` -> profile, agentDir, session file info
 - `/new` -> delete chat/channel session file and start a fresh conversation
 - `/commands` -> list available slash commands
+- `/skills` -> list available skills for the current profile
 
 Telegram also registers slash commands via Bot API on startup (`setMyCommands`).
 
