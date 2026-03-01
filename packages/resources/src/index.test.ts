@@ -5,6 +5,7 @@ import { tmpdir } from 'os';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildPiResourceArgs,
+  getExtensionDependencyDirs,
   listProfiles,
   materializeProfileToAgentDir,
   mergeJsonFiles,
@@ -69,6 +70,24 @@ describe('resources profile loader', () => {
     expect(resolved.extensionDirs.length).toBe(1);
     expect(resolved.settingsFiles.length).toBe(3);
     expect(resolved.agentsFiles.length).toBe(3);
+  });
+
+  it('discovers extension dependency directories for nested extension packages', () => {
+    const repo = createTempRepo();
+
+    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'profiles/shared/agent/extensions/basic/index.ts'), 'export default {}\n');
+    writeFile(join(repo, 'profiles/shared/agent/extensions/basic/package.json'), JSON.stringify({
+      name: 'basic',
+      version: '1.0.0',
+    }));
+
+    const resolved = resolveResourceProfile('shared', { repoRoot: repo });
+    const dependencyDirs = getExtensionDependencyDirs(resolved);
+
+    expect(dependencyDirs).toEqual([
+      join(repo, 'profiles/shared/agent/extensions/basic'),
+    ]);
   });
 
   it('layers shared and profile skills for datadog even without overlay AGENTS.md', () => {

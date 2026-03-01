@@ -293,6 +293,7 @@ export function createMemoryModule(
       'memory.reindex.requested',
       'timer.memory.session.scan',
       'timer.memory.qmd.update',
+      'timer.memory.qmd.reconcile',
       'timer.memory.qmd.embed',
     ],
     timers: [
@@ -305,6 +306,11 @@ export function createMemoryModule(
         name: 'memory-qmd-update',
         eventType: 'timer.memory.qmd.update',
         intervalMs: Math.max(5_000, resolvedConfig.qmd.updateDebounceSeconds * 1000),
+      },
+      {
+        name: 'memory-qmd-reconcile',
+        eventType: 'timer.memory.qmd.reconcile',
+        intervalMs: Math.max(60_000, resolvedConfig.qmd.reconcileIntervalMinutes * 60_000),
       },
       {
         name: 'memory-qmd-embed',
@@ -380,6 +386,21 @@ export function createMemoryModule(
         return;
       }
 
+      if (event.type === 'timer.memory.qmd.reconcile') {
+        try {
+          await runQmdUpdate(resolvedConfig, context);
+          state.dirty = false;
+          state.lastQmdUpdateAt = now().toISOString();
+          state.lastQmdReconcileAt = state.lastQmdUpdateAt;
+          state.lastError = undefined;
+        } catch (error) {
+          state.lastError = (error as Error).message;
+          context.logger.warn(`memory module qmd reconcile failed: ${state.lastError}`);
+        }
+
+        return;
+      }
+
       if (event.type === 'timer.memory.qmd.embed') {
         if (!state.needsEmbedding || state.dirty) {
           return;
@@ -405,6 +426,7 @@ export function createMemoryModule(
         lastCleanupAt: state.lastCleanupAt,
         lastSummaryAt: state.lastSummaryAt,
         lastQmdUpdateAt: state.lastQmdUpdateAt,
+        lastQmdReconcileAt: state.lastQmdReconcileAt,
         lastQmdEmbedAt: state.lastQmdEmbedAt,
         scannedSessions: state.scannedSessions,
         summarizedSessions: state.summarizedSessions,

@@ -156,6 +156,7 @@ Example policy (memory):
 
 - summarize on `session.updated` / `session.closed`
 - `qmd update` every 30–60s while dirty
+- hard `qmd update` reconcile every 60m (even when clean)
 - `qmd embed` every 5–15m while dirty
 
 ---
@@ -185,7 +186,8 @@ Example:
       "qmd": {
         "index": "default",
         "updateDebounceSeconds": 45,
-        "embedDebounceSeconds": 600
+        "embedDebounceSeconds": 600,
+        "reconcileIntervalMinutes": 60
       }
     },
     "maintenance": {

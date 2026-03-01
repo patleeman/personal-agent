@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, utimesSync, writeFileSync } from 'fs';
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, utimesSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
@@ -145,6 +145,22 @@ function writeSessionFile(path: string, cwd: string, id = 'session-1'): void {
   writeFileSync(path, `${lines.join('\n')}\n`);
 }
 
+function createFakeQmdBinary(argsLogPath: string): string {
+  const binDir = createTempDir('memory-qmd-bin-');
+  const qmdPath = join(binDir, 'qmd');
+
+  writeFileSync(
+    qmdPath,
+    `#!/usr/bin/env bash
+printf '%s\n' "$@" >> "${argsLogPath}"
+exit 0
+`,
+  );
+
+  chmodSync(qmdPath, 0o755);
+  return binDir;
+}
+
 describe('memory module scanner flow', () => {
   afterEach(async () => {
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
@@ -230,6 +246,58 @@ describe('memory module scanner flow', () => {
 
     const status = module.getStatus?.() as { pendingHintedSessions?: number };
     expect(status.pendingHintedSessions).toBe(0);
+  });
+
+  it('runs qmd reconcile update even when memory state is clean', async () => {
+    const sessionSource = createTempDir('memory-sessions-');
+    const summaryDir = createTempDir('memory-summaries-');
+    const argsLogPath = join(createTempDir('memory-qmd-log-'), 'qmd-args.log');
+    const qmdBinDir = createFakeQmdBinary(argsLogPath);
+
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${qmdBinDir}:${process.env.PATH}`;
+
+    try {
+      const now = new Date('2026-03-01T12:00:00.000Z');
+      const summarizeSession = vi.fn(async () => '# should-not-run');
+
+      const config = createMemoryConfig(sessionSource, summaryDir);
+      const { context } = createModuleContext(config);
+
+      const module = createMemoryModule(config, {
+        now: () => now,
+        summarizeSession,
+      });
+
+      await module.start(context);
+
+      const statusBefore = module.getStatus?.() as { dirty?: boolean };
+      expect(statusBefore.dirty).toBe(false);
+
+      await module.handleEvent(
+        createTestEvent('timer.memory.qmd.reconcile', {
+          timer: 'memory-qmd-reconcile',
+        }),
+        context,
+      );
+
+      const argsLog = readFileSync(argsLogPath, 'utf-8');
+      expect(argsLog).toContain('update');
+      expect(argsLog).toContain('--index');
+      expect(argsLog).toContain('test');
+
+      const status = module.getStatus?.() as {
+        dirty?: boolean;
+        lastQmdUpdateAt?: string;
+        lastQmdReconcileAt?: string;
+      };
+
+      expect(status.dirty).toBe(false);
+      expect(status.lastQmdUpdateAt).toBeDefined();
+      expect(status.lastQmdReconcileAt).toBeDefined();
+    } finally {
+      process.env.PATH = originalPath;
+    }
   });
 
   it('removes expired summaries during retention cleanup', async () => {

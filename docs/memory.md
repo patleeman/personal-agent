@@ -29,12 +29,14 @@ The module scans Pi session files, summarizes concluded sessions into markdown, 
 - `memory.reindex.requested`
 - `timer.memory.session.scan`
 - `timer.memory.qmd.update`
+- `timer.memory.qmd.reconcile`
 - `timer.memory.qmd.embed`
 
 ### Timers
 
 - `timer.memory.session.scan`: every `scanIntervalMinutes` (minimum 60s)
 - `timer.memory.qmd.update`: every `qmd.updateDebounceSeconds` (minimum 5s)
+- `timer.memory.qmd.reconcile`: every `qmd.reconcileIntervalMinutes` (minimum 1m)
 - `timer.memory.qmd.embed`: every `qmd.embedDebounceSeconds` (minimum 30s)
 
 ## Startup behavior
@@ -141,6 +143,12 @@ Any deletion marks qmd as dirty/needs embedding.
   - sets `dirty = false`
   - publishes `memory.qmd.update.completed`
 
+- On `timer.memory.qmd.reconcile` (hourly by default), regardless of `dirty`:
+  - runs `qmd update --index <index>`
+  - sets `dirty = false`
+  - updates `lastQmdReconcileAt`
+  - publishes `memory.qmd.update.completed`
+
 - On `timer.memory.qmd.embed`, when `needsEmbedding === true` and `dirty === false`:
   - runs `qmd embed --index <index>`
   - sets `needsEmbedding = false`
@@ -174,7 +182,8 @@ Any deletion marks qmd as dirty/needs embedding.
       "qmd": {
         "index": "default",
         "updateDebounceSeconds": 45,
-        "embedDebounceSeconds": 600
+        "embedDebounceSeconds": 600,
+        "reconcileIntervalMinutes": 60
       }
     }
   }
@@ -191,6 +200,7 @@ Any deletion marks qmd as dirty/needs embedding.
 - `lastCleanupAt`
 - `lastSummaryAt`
 - `lastQmdUpdateAt`
+- `lastQmdReconcileAt`
 - `lastQmdEmbedAt`
 - `scannedSessions`
 - `summarizedSessions`

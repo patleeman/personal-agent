@@ -7,6 +7,7 @@ export interface MemoryModuleState {
   lastCleanupAt?: string;
   lastSummaryAt?: string;
   lastQmdUpdateAt?: string;
+  lastQmdReconcileAt?: string;
   lastQmdEmbedAt?: string;
   scannedSessions: number;
   summarizedSessions: number;
@@ -25,7 +26,12 @@ export interface ResolvedMemoryConfig {
   inactiveAfterMinutes: number;
   retentionDays: number;
   collections: MemoryModuleConfig['collections'];
-  qmd: MemoryModuleConfig['qmd'];
+  qmd: {
+    index: string;
+    updateDebounceSeconds: number;
+    embedDebounceSeconds: number;
+    reconcileIntervalMinutes: number;
+  };
   summarization: {
     provider: 'pi-sdk';
     maxTurns: number;

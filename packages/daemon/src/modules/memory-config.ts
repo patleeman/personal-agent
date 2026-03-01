@@ -8,6 +8,7 @@ const DEFAULT_RETENTION_DAYS = 90;
 const DEFAULT_MAX_TURNS = 250;
 const DEFAULT_MAX_CHARS_PER_TURN = 600;
 const DEFAULT_MAX_TRANSCRIPT_CHARS = 18_000;
+const DEFAULT_QMD_RECONCILE_INTERVAL_MINUTES = 60;
 
 function toStateFile(summaryDir: string): string {
   return join(dirname(summaryDir), 'session-state.json');
@@ -34,6 +35,11 @@ export function resolveMemoryConfig(config: MemoryModuleConfig): ResolvedMemoryC
     Math.floor(config.summarization?.maxTranscriptChars ?? DEFAULT_MAX_TRANSCRIPT_CHARS),
   );
 
+  const qmdReconcileIntervalMinutes = Math.max(
+    1,
+    Math.floor(config.qmd.reconcileIntervalMinutes ?? DEFAULT_QMD_RECONCILE_INTERVAL_MINUTES),
+  );
+
   return {
     enabled: config.enabled,
     sessionSource: config.sessionSource,
@@ -42,7 +48,10 @@ export function resolveMemoryConfig(config: MemoryModuleConfig): ResolvedMemoryC
     inactiveAfterMinutes,
     retentionDays,
     collections: config.collections,
-    qmd: config.qmd,
+    qmd: {
+      ...config.qmd,
+      reconcileIntervalMinutes: qmdReconcileIntervalMinutes,
+    },
     summarization: {
       provider: 'pi-sdk',
       maxTurns,

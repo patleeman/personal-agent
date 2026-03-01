@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'child_process';
-import { existsSync, realpathSync } from 'fs';
+import { existsSync, readdirSync, realpathSync } from 'fs';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { createInterface } from 'readline';
 import { Command, CommanderError } from 'commander';
-import chalk from 'chalk';
 import {
   bootstrapStateOrThrow,
   preparePiAgentDir,
@@ -37,6 +36,55 @@ import {
 import { registerGatewayCliCommands, type RegisteredCliCommand } from '@personal-agent/gateway';
 import { hasOption } from './args.js';
 import { readConfig, setDefaultProfile } from './config.js';
+import {
+  accent,
+  bullet,
+  configureUi,
+  dim,
+  error as uiError,
+  formatHint,
+  formatNextStep,
+  isInteractiveOutput,
+  keyValue,
+  pending,
+  progressBar,
+  section,
+  spinner,
+  statusChip,
+  success,
+  warning,
+} from './ui.js';
+
+interface ParsedGlobalFlags {
+  argv: string[];
+  plain: boolean;
+}
+
+function parseGlobalFlags(argv: string[]): ParsedGlobalFlags {
+  let plain = process.env.PERSONAL_AGENT_PLAIN_OUTPUT === '1' || process.env.NO_COLOR === '1';
+  const normalized: string[] = [];
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+
+    if (arg === '--') {
+      normalized.push(...argv.slice(i));
+      break;
+    }
+
+    if (arg === '--plain' || arg === '--no-color') {
+      plain = true;
+      continue;
+    }
+
+    normalized.push(arg);
+  }
+
+  return {
+    argv: normalized,
+    plain,
+  };
+}
 
 function ensurePiInstalled(): void {
   const result = spawnSync('pi', ['--version'], { encoding: 'utf-8' });
@@ -67,9 +115,10 @@ async function maybeStartDaemon(): Promise<void> {
     return;
   }
 
-  console.log(chalk.yellow('⚠ Daemon is not running.'));
+  console.warn(warning('Daemon is not running.'));
+  console.warn(`  ${formatHint('Run pa daemon start')}`);
 
-  const interactive = process.stdin.isTTY && process.stdout.isTTY;
+  const interactive = isInteractiveOutput();
   if (!interactive || process.env.PERSONAL_AGENT_NO_DAEMON_PROMPT === '1') {
     return;
   }
@@ -77,8 +126,17 @@ async function maybeStartDaemon(): Promise<void> {
   const answer = await promptUser('Would you like to start it? [Y/n] ');
 
   if (answer === '' || answer === 'y' || answer === 'yes') {
-    await startDaemonDetached();
-    console.log(chalk.green('✓ Daemon started'));
+    const startSpinner = spinner('Starting daemon');
+    startSpinner.start();
+
+    try {
+      await startDaemonDetached();
+      startSpinner.succeed('Daemon started');
+    } catch (error) {
+      startSpinner.fail('Unable to start daemon');
+      throw error;
+    }
+
     // Give daemon a moment to initialize
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
@@ -89,15 +147,22 @@ function ensureExtensionDependencies(profile: ReturnType<typeof resolveResourceP
   const missingDirs = dependencyDirs.filter((dir) => !existsSync(join(dir, 'node_modules')));
 
   for (const dir of missingDirs) {
-    console.log(`Installing extension dependencies in ${dir} ...`);
+    const installSpinner = spinner(`Installing extension dependencies in ${dir}`);
+    installSpinner.start();
+
     const result = spawnSync('npm', ['install', '--silent', '--no-package-lock'], {
       cwd: dir,
-      stdio: 'inherit',
+      stdio: 'pipe',
+      encoding: 'utf-8',
     });
 
     if (result.error || result.status !== 0) {
-      throw new Error(`Failed to install extension dependencies in ${dir}`);
+      installSpinner.fail(`Extension dependency install failed in ${dir}`);
+      const detail = result.stderr?.trim() || result.error?.message || 'unknown error';
+      throw new Error(`Failed to install extension dependencies in ${dir}: ${detail}`);
     }
+
+    installSpinner.succeed(`Installed extension dependencies in ${dir}`);
   }
 }
 
@@ -221,16 +286,18 @@ function printProfileList(): void {
   const config = readConfig();
 
   if (profiles.length === 0) {
-    console.log(chalk.yellow('No profiles found under profiles/.'));
+    console.log(warning('No profiles found under profiles/.'));
+    console.log(`  ${formatHint('Create a profile under profiles/<name>/agent')}`);
     return;
   }
 
-  console.log(chalk.bold('Profiles:'));
+  console.log(section('Profiles:'));
+
   for (const profile of profiles) {
     const isDefault = profile === config.defaultProfile;
-    const marker = isDefault ? chalk.green('*') : chalk.dim(' ');
-    const name = isDefault ? chalk.green(profile) : profile;
-    console.log(` ${marker} ${name}`);
+    const marker = isDefault ? accent('*') : dim('·');
+    const suffix = isDefault ? ` ${dim('(default)')}` : '';
+    console.log(` ${marker} ${profile}${suffix}`);
   }
 }
 
@@ -255,32 +322,91 @@ function showProfile(name?: string): void {
   console.log(JSON.stringify(payload, null, 2));
 }
 
-function doctorError(label: string, message: string): void {
-  console.error(`${chalk.red('✗')} ${chalk.bold(label)}: ${message}`);
+function doctorError(label: string, message: string, hint?: string): void {
+  console.error(uiError(label, message));
+
+  if (hint) {
+    console.error(`  ${formatHint(hint)}`);
+  }
 }
 
 function doctorOk(label: string, value?: string | number | boolean): void {
-  if (value === undefined) {
-    console.log(`${chalk.green('✓')} ${chalk.bold(label)}`);
-    return;
-  }
-
-  console.log(`${chalk.green('✓')} ${chalk.bold(label)}: ${value}`);
+  console.log(success(label, value));
 }
 
-async function doctor(): Promise<number> {
+function countFilesNamed(directories: string[], fileName: string): number {
+  const stack = [...directories];
+  let count = 0;
+
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current || !existsSync(current)) {
+      continue;
+    }
+
+    const entries = readdirSync(current, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (entry.isFile() && entry.name === fileName) {
+        count += 1;
+        continue;
+      }
+
+      if (entry.isDirectory()) {
+        stack.push(join(current, entry.name));
+      }
+    }
+  }
+
+  return count;
+}
+
+interface DoctorOptions {
+  json?: boolean;
+}
+
+function printDoctorJson(payload: Record<string, unknown>): void {
+  console.log(JSON.stringify(payload, null, 2));
+}
+
+async function doctor(options: DoctorOptions = {}): Promise<number> {
   const profileName = resolveProfileName();
 
   try {
     ensurePiInstalled();
   } catch (error) {
-    doctorError('pi binary', (error as Error).message);
+    const message = (error as Error).message;
+    const hint = 'npm install -g @mariozechner/pi-coding-agent';
+
+    if (options.json) {
+      printDoctorJson({
+        ok: false,
+        check: 'pi binary',
+        error: message,
+        hint,
+      });
+    } else {
+      doctorError('pi binary', message, hint);
+    }
+
     return 1;
   }
 
   const profiles = listProfiles();
   if (profiles.length === 0) {
-    doctorError('profiles', 'none found');
+    const hint = 'Create profiles/<name>/agent and run pa profile list';
+
+    if (options.json) {
+      printDoctorJson({
+        ok: false,
+        check: 'profiles',
+        error: 'none found',
+        hint,
+      });
+    } else {
+      doctorError('profiles', 'none found', hint);
+    }
+
     return 1;
   }
 
@@ -288,7 +414,20 @@ async function doctor(): Promise<number> {
   try {
     resolvedProfile = resolveResourceProfile(profileName);
   } catch (error) {
-    doctorError('profile', (error as Error).message);
+    const message = (error as Error).message;
+    const hint = 'Run pa profile list and pa profile use <name>';
+
+    if (options.json) {
+      printDoctorJson({
+        ok: false,
+        check: 'profile',
+        error: message,
+        hint,
+      });
+    } else {
+      doctorError('profile', message, hint);
+    }
+
     return 1;
   }
 
@@ -297,14 +436,40 @@ async function doctor(): Promise<number> {
   try {
     validateStatePathsOutsideRepo(statePaths, resolvedProfile.repoRoot);
   } catch (error) {
-    doctorError('runtime paths', (error as Error).message);
+    const message = (error as Error).message;
+    const hint = 'Use PERSONAL_AGENT_STATE_ROOT outside your repository';
+
+    if (options.json) {
+      printDoctorJson({
+        ok: false,
+        check: 'runtime paths',
+        error: message,
+        hint,
+      });
+    } else {
+      doctorError('runtime paths', message, hint);
+    }
+
     return 1;
   }
 
   try {
     await bootstrapStateOrThrow(statePaths);
   } catch (error) {
-    doctorError('bootstrap', (error as Error).message);
+    const message = (error as Error).message;
+    const hint = 'Check filesystem permissions for state directories';
+
+    if (options.json) {
+      printDoctorJson({
+        ok: false,
+        check: 'bootstrap',
+        error: message,
+        hint,
+      });
+    } else {
+      doctorError('bootstrap', message, hint);
+    }
+
     return 1;
   }
 
@@ -314,17 +479,49 @@ async function doctor(): Promise<number> {
   const runtimeAuth = runtime.authFile;
   const legacyAuth = join(homedir(), '.pi', 'agent', 'auth.json');
 
+  const report = {
+    ok: true,
+    profile: resolvedProfile.name,
+    layers: resolvedProfile.layers.map((layer) => layer.name),
+    runtimeRoot: statePaths.root,
+    runtimeAgentDir: runtime.agentDir,
+    extensionDirs: resolvedProfile.extensionDirs.length,
+    extensionEntries: resolvedProfile.extensionEntries.length,
+    skillDirs: resolvedProfile.skillDirs.length,
+    skillDefinitions: countFilesNamed(resolvedProfile.skillDirs, 'SKILL.md'),
+    promptDirs: resolvedProfile.promptDirs.length,
+    promptTemplates: resolvedProfile.promptEntries.length,
+    themeDirs: resolvedProfile.themeDirs.length,
+    themes: resolvedProfile.themeEntries.length,
+    runtimeAuthPresent: existsSync(runtimeAuth),
+    legacyAuthPresent: existsSync(legacyAuth),
+  };
+
+  if (options.json) {
+    printDoctorJson(report);
+    return 0;
+  }
+
+  console.log(section('Doctor checks'));
+  console.log('');
+
   doctorOk('pi binary');
-  doctorOk('profile', resolvedProfile.name);
-  doctorOk('layers', resolvedProfile.layers.map((layer) => layer.name).join(' -> '));
-  doctorOk('runtime root', statePaths.root);
-  doctorOk('runtime agent dir', runtime.agentDir);
-  doctorOk('extensions', resolvedProfile.extensionDirs.length);
-  doctorOk('skills', resolvedProfile.skillDirs.length);
-  doctorOk('prompts', resolvedProfile.promptDirs.length);
-  doctorOk('themes', resolvedProfile.themeDirs.length);
-  doctorOk('runtime auth present', existsSync(runtimeAuth));
-  doctorOk('legacy auth present', existsSync(legacyAuth));
+  doctorOk('profile', report.profile);
+  doctorOk('layers', report.layers.join(' -> '));
+  doctorOk('runtime root', report.runtimeRoot);
+  doctorOk('runtime agent dir', report.runtimeAgentDir);
+  doctorOk('extension directories', report.extensionDirs);
+  doctorOk('extension entries', report.extensionEntries);
+  doctorOk('skill directories', report.skillDirs);
+  doctorOk('skills discovered', report.skillDefinitions);
+  doctorOk('prompt directories', report.promptDirs);
+  doctorOk('prompt templates', report.promptTemplates);
+  doctorOk('theme directories', report.themeDirs);
+  doctorOk('themes', report.themes);
+  doctorOk('runtime auth present', report.runtimeAuthPresent);
+  doctorOk('legacy auth present', report.legacyAuthPresent);
+  console.log('');
+  console.log(formatNextStep('pa run -p "hello"'));
 
   return 0;
 }
@@ -342,9 +539,9 @@ async function profileCommand(args: string[]): Promise<number> {
   const [subcommand, value] = args;
 
   if (!subcommand) {
+    console.log(section('Profile commands'));
+    console.log('');
     console.log(`Usage: pa profile [list|show|use]
-
-Manage profile settings
 
 Commands:
   list           List available profiles
@@ -375,7 +572,8 @@ Commands:
     }
 
     setDefaultProfile(value);
-    console.log(`${chalk.green('✓')} ${chalk.bold('Default profile set to')}: ${chalk.cyan(value)}`);
+    console.log(success('Default profile set to', value));
+    console.log(`  ${formatNextStep('pa run -p "hello"')}`);
     return 0;
   }
 
@@ -394,7 +592,6 @@ async function printMemoryModuleStatus(module: DaemonStatus['modules'][0]): Prom
     lastError?: string;
   } | undefined;
 
-  // Get actual counts from filesystem for accuracy
   const { loadDaemonConfig } = await import('@personal-agent/daemon');
   const config = loadDaemonConfig();
 
@@ -405,38 +602,52 @@ async function printMemoryModuleStatus(module: DaemonStatus['modules'][0]): Prom
     ? spawnSync('find', [sessionDir, '-name', '*.jsonl', '-type', 'f'], { encoding: 'utf-8' }).stdout.split('\n').filter(Boolean)
     : [];
 
-  // Only count summaries in workspace subdirectories (not root level files like 1.md)
   const summaryFiles = existsSync(summaryDir)
     ? spawnSync('find', [summaryDir, '-mindepth', '2', '-name', '*.md', '-type', 'f'], { encoding: 'utf-8' }).stdout.split('\n').filter(Boolean)
     : [];
 
   const total = sessionFiles.length;
-  const indexed = summaryFiles.length;
+  const summarizedOnDisk = summaryFiles.length;
   const failed = detail?.failedSessions ?? 0;
-  const percent = total > 0 ? Math.round((indexed / total) * 100) : 0;
+  const hasError = Boolean(module.lastError || detail?.lastError);
+  const hasPending = Boolean(detail?.needsEmbedding || detail?.dirty);
 
-  let statusText: string;
-  if (percent === 100 && !detail?.needsEmbedding && !detail?.dirty) {
-    statusText = chalk.green(`${percent}% indexed`);
-  } else if (percent > 0) {
-    statusText = chalk.yellow(`${percent}% indexed`);
-  } else {
-    statusText = chalk.gray('not indexed');
+  const primaryCollection = config.modules.memory.collections[0]?.name;
+  const qmdCounts = primaryCollection
+    ? getQmdCollectionCounts(primaryCollection)
+    : undefined;
+
+  const status = hasError
+    ? statusChip('error')
+    : hasPending
+      ? statusChip('pending')
+      : statusChip('active');
+
+  console.log(bullet(`Memory summaries: ${status}`));
+  console.log(keyValue('Coverage', `${progressBar(summarizedOnDisk, total)} (${summarizedOnDisk}/${total} conversations summarized)`, 4));
+
+  if (qmdCounts && primaryCollection) {
+    console.log(keyValue(`qmd indexed summaries (${primaryCollection})`, qmdCounts.workspace, 4));
+
+    if (qmdCounts.workspace < summarizedOnDisk) {
+      console.log(`    ${pending('qmd index is behind summaries on disk')}`);
+    }
   }
-
-  console.log(`  ${chalk.cyan('•')} Memory: ${statusText} (${indexed}/${total} conversations)`);
 
   if (failed > 0) {
-    console.log(`    ${chalk.red('⚠')} ${failed} failed to index`);
+    console.log(`    ${warning(`${failed} session scans failed`)}`);
   }
+
   if (detail?.needsEmbedding) {
-    console.log(`    ${chalk.yellow('⏳')} Waiting for embedding`);
+    console.log(`    ${pending('Waiting for embedding')}`);
   }
+
   if (detail?.dirty) {
-    console.log(`    ${chalk.yellow('⏳')} Updates pending`);
+    console.log(`    ${pending('Updates pending')}`);
   }
-  if (module.lastError || detail?.lastError) {
-    console.log(`    ${chalk.red('✗')} Error: ${module.lastError || detail?.lastError}`);
+
+  if (hasError) {
+    console.log(`    ${uiError('Memory module', module.lastError || detail?.lastError || 'Unknown error')}`);
   }
 }
 
@@ -447,44 +658,68 @@ function printMaintenanceModuleStatus(module: DaemonStatus['modules'][0]): void 
     lastError?: string;
   } | undefined;
 
-  console.log(`  ${chalk.cyan('•')} PA Housekeeping (internal): ${module.enabled ? chalk.green('active') : chalk.gray('disabled')}`);
-  console.log(`    Log cleanup: removes daemon logs older than 7 days`);
+  const status = module.lastError || detail?.lastError
+    ? statusChip('error')
+    : module.enabled
+      ? statusChip('active')
+      : statusChip('disabled');
+
+  console.log(bullet(`PA housekeeping: ${status}`));
+  console.log(keyValue('Policy', 'Removes daemon logs older than 7 days', 4));
 
   if (typeof detail?.cleanedFiles === 'number') {
-    console.log(`    Logs removed (total): ${detail.cleanedFiles}`);
+    console.log(keyValue('Logs removed (total)', detail.cleanedFiles, 4));
   }
 
   if (detail?.lastRunAt) {
-    console.log(`    Last run: ${new Date(detail.lastRunAt).toLocaleString()}`);
+    console.log(keyValue('Last run', new Date(detail.lastRunAt).toLocaleString(), 4));
   }
 
   if (module.lastError || detail?.lastError) {
-    console.log(`    ${chalk.red('✗')} Error: ${module.lastError || detail?.lastError}`);
+    console.log(`    ${uiError('Housekeeping module', module.lastError || detail?.lastError || 'Unknown error')}`);
   }
 }
 
 async function printDaemonModules(modules: DaemonStatus['modules']): Promise<void> {
   if (modules.length === 0) {
-    console.log(chalk.dim('No modules loaded'));
+    console.log(dim('No modules loaded'));
     return;
   }
 
   for (const module of modules) {
     if (module.name === 'memory') {
       await printMemoryModuleStatus(module);
-    } else if (module.name === 'maintenance') {
-      printMaintenanceModuleStatus(module);
+      continue;
     }
+
+    if (module.name === 'maintenance') {
+      printMaintenanceModuleStatus(module);
+      continue;
+    }
+
+    const moduleStatus = module.lastError
+      ? statusChip('error')
+      : module.enabled
+        ? statusChip('active')
+        : statusChip('disabled');
+
+    console.log(bullet(`${module.name}: ${moduleStatus}`));
   }
 }
 
 async function printDaemonStatusHumanReadable(): Promise<void> {
   const config = loadDaemonConfig();
+  const daemonPaths = resolveDaemonPaths(config.ipc.socketPath);
   const running = await pingDaemon(config);
 
   if (!running) {
-    console.log(`${chalk.red('✗')} Daemon is stopped`);
-    console.log(`  Run ${chalk.cyan('pa daemon start')} to start it`);
+    console.log('personal-agentd: stopped');
+    console.log(`socket: ${daemonPaths.socketPath}`);
+    console.log('hint: pa daemon start');
+
+    console.log('');
+    console.log(uiError('Daemon is stopped'));
+    console.log(`  ${formatHint('pa daemon start')}`);
     return;
   }
 
@@ -495,8 +730,14 @@ async function printDaemonStatusHumanReadable(): Promise<void> {
     ? `${uptimeMinutes}m`
     : `${Math.floor(uptimeMinutes / 60)}h ${uptimeMinutes % 60}m`;
 
-  console.log(`${chalk.green('✓')} Daemon running (pid ${status.pid}, up ${uptimeText})`);
+  console.log('personal-agentd: running');
+  console.log(`socket: ${daemonPaths.socketPath}`);
+
   console.log('');
+  console.log(section('Daemon status'));
+  console.log(success('Daemon running', `pid ${status.pid}, up ${uptimeText}`));
+  console.log('');
+  console.log(section('Modules'));
 
   await printDaemonModules(status.modules);
 }
@@ -505,17 +746,7 @@ async function daemonCommand(args: string[]): Promise<number> {
   const [subcommand] = args;
 
   if (!subcommand) {
-    console.log(`Usage: pa daemon [status|start|stop|restart|logs]
-
-Manage personal-agent daemon
-
-Commands:
-  status [--json]  Show daemon status (optionally as JSON)
-  start            Start the daemon
-  stop             Stop the daemon
-  restart          Restart the daemon
-  logs             Show log file location
-`);
+    await printDaemonStatusHumanReadable();
     return 0;
   }
 
@@ -530,21 +761,29 @@ Commands:
   }
 
   if (subcommand === 'start') {
+    const daemonSpinner = spinner('Starting personal-agentd');
+    daemonSpinner.start();
     await startDaemonDetached();
-    console.log(`${chalk.green('✓')} ${chalk.bold('personal-agentd')} start requested`);
+    daemonSpinner.succeed('personal-agentd start requested');
+    console.log(`  ${formatNextStep('pa daemon status')}`);
     return 0;
   }
 
   if (subcommand === 'stop') {
+    const daemonSpinner = spinner('Stopping personal-agentd');
+    daemonSpinner.start();
     await stopDaemonGracefully();
-    console.log(`${chalk.green('✓')} ${chalk.bold('personal-agentd')} stop requested`);
+    daemonSpinner.succeed('personal-agentd stop requested');
     return 0;
   }
 
   if (subcommand === 'restart') {
+    const daemonSpinner = spinner('Restarting personal-agentd');
+    daemonSpinner.start();
     await stopDaemonGracefully();
     await startDaemonDetached();
-    console.log(`${chalk.green('✓')} ${chalk.bold('personal-agentd')} restart requested`);
+    daemonSpinner.succeed('personal-agentd restart requested');
+    console.log(`  ${formatNextStep('pa daemon status')}`);
     return 0;
   }
 
@@ -552,37 +791,138 @@ Commands:
     const config = loadDaemonConfig();
     const daemonPaths = resolveDaemonPaths(config.ipc.socketPath);
     const pid = await readDaemonPid();
-    console.log(`${chalk.bold('log file')}: ${daemonPaths.logFile}`);
-    console.log(`${chalk.bold('pid')}: ${pid ?? chalk.dim('unknown')}`);
+
+    console.log(`logFile=${daemonPaths.logFile}`);
+    console.log(`pid=${pid ?? 'unknown'}`);
+
+    console.log('');
+    console.log(section('Daemon logs'));
+    console.log(keyValue('Log file', daemonPaths.logFile));
+    console.log(keyValue('PID', pid ?? dim('unknown')));
     return 0;
   }
 
   throw new Error(`Unknown daemon subcommand: ${subcommand}`);
 }
 
+function toProcessText(value: string | Buffer | null | undefined): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (value) {
+    return value.toString('utf-8');
+  }
+
+  return '';
+}
+
+function parseQmdIndexedFileCount(statusText: string): number | undefined {
+  const match = statusText.match(/Total:\s*(\d+)\s*files indexed/i);
+  if (!match) {
+    return undefined;
+  }
+
+  const parsed = Number.parseInt(match[1], 10);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+
+  return parsed;
+}
+
+interface QmdCollectionCounts {
+  total: number;
+  workspace: number;
+}
+
+function getQmdCollectionCounts(collectionName: string): QmdCollectionCounts | undefined {
+  const result = spawnSync('qmd', ['ls', collectionName], { encoding: 'utf-8' });
+
+  if (result.error || (result.status ?? 1) !== 0) {
+    return undefined;
+  }
+
+  const output = toProcessText(result.stdout || result.stderr);
+  const prefix = `qmd://${collectionName}/`;
+
+  let total = 0;
+  let workspace = 0;
+
+  for (const line of output.split('\n')) {
+    const index = line.indexOf(prefix);
+    if (index < 0) {
+      continue;
+    }
+
+    const relativePath = line.slice(index + prefix.length).trim();
+    if (relativePath.length === 0) {
+      continue;
+    }
+
+    total += 1;
+
+    if (relativePath.includes('/')) {
+      workspace += 1;
+    }
+  }
+
+  return {
+    total,
+    workspace,
+  };
+}
+
+interface RunQmdOptions {
+  quiet?: boolean;
+}
+
+function runQmdCommand(
+  args: string[],
+  description: string,
+  options: RunQmdOptions = {},
+): ReturnType<typeof spawnSync> {
+  const commandSpinner = options.quiet ? undefined : spinner(description);
+  commandSpinner?.start();
+
+  const result = spawnSync('qmd', args, { encoding: 'utf-8' });
+
+  if (result.error) {
+    commandSpinner?.fail('qmd command failed');
+    throw new Error(`Failed to run qmd. Is it installed?\n${formatHint('Install qmd and verify with: qmd --version')}`);
+  }
+
+  if (!options.quiet) {
+    if ((result.status ?? 1) !== 0) {
+      commandSpinner?.fail('qmd command failed');
+    } else {
+      commandSpinner?.succeed('qmd command completed');
+    }
+  }
+
+  return result;
+}
+
 async function memoryCommand(args: string[]): Promise<number> {
   const [subcommand, ...rest] = args;
 
   if (!subcommand) {
+    console.log(section('Memory commands'));
+    console.log('');
     console.log(`Usage: pa memory [list|query|search|status]
 
-Query memory (conversation summaries)
-
 Commands:
-  list              List memory collections and files
-  query <text>      Semantic search with query expansion + reranking
-  search <text>     Full-text keyword search (BM25)
-  status            Show comprehensive memory status
+  list                   List memory collections and files
+  query <text>           Semantic search with query expansion + reranking
+  search <text>          Full-text keyword search (BM25)
+  status [--json]        Show comprehensive memory status
 `);
     return 0;
   }
 
   if (subcommand === 'list') {
-    const result = spawnSync('qmd', ['ls'], { encoding: 'utf-8' });
-    if (result.error) {
-      throw new Error('Failed to run qmd. Is it installed?');
-    }
-    console.log(result.stdout || result.stderr);
+    const result = runQmdCommand(['ls'], 'Loading memory collections');
+    console.log(toProcessText(result.stdout || result.stderr));
     return result.status ?? 0;
   }
 
@@ -591,22 +931,16 @@ Commands:
     if (!query) {
       throw new Error(`Usage: pa memory ${subcommand} <query>`);
     }
-    const result = spawnSync('qmd', [subcommand, query], { encoding: 'utf-8' });
-    if (result.error) {
-      throw new Error('Failed to run qmd. Is it installed?');
-    }
-    console.log(result.stdout || result.stderr);
+
+    const result = runQmdCommand([subcommand, query], `Running qmd ${subcommand}`);
+    console.log(toProcessText(result.stdout || result.stderr));
     return result.status ?? 0;
   }
 
   if (subcommand === 'status') {
-    // Get qmd status
-    const qmdResult = spawnSync('qmd', ['status'], { encoding: 'utf-8' });
-    if (qmdResult.error) {
-      throw new Error('Failed to run qmd. Is it installed?');
-    }
+    const jsonMode = hasOption(rest, '--json');
+    const qmdResult = runQmdCommand(['status'], 'Reading memory index status', { quiet: jsonMode });
 
-    // Get daemon memory module status
     const { getDaemonStatus, loadDaemonConfig } = await import('@personal-agent/daemon');
     const config = loadDaemonConfig();
     const daemonStatus = await getDaemonStatus(config);
@@ -619,45 +953,106 @@ Commands:
       needsEmbedding?: boolean;
       dirty?: boolean;
       lastScanAt?: string;
+      lastQmdUpdateAt?: string;
+      lastQmdReconcileAt?: string;
       lastQmdEmbedAt?: string;
     } | undefined;
 
-    // Count actual session files
     const sessionDir = config.modules.memory.sessionSource;
-    const sessionFiles = existsSync(sessionDir) 
+    const sessionFiles = existsSync(sessionDir)
       ? spawnSync('find', [sessionDir, '-name', '*.jsonl', '-type', 'f'], { encoding: 'utf-8' }).stdout.split('\n').filter(Boolean)
       : [];
 
-    // Count summary files  
     const summaryDir = config.modules.memory.summaryDir;
     const summaryFiles = existsSync(summaryDir)
-      ? spawnSync('find', [summaryDir, '-name', '*.md', '-type', 'f'], { encoding: 'utf-8' }).stdout.split('\n').filter(Boolean)
+      ? spawnSync('find', [summaryDir, '-mindepth', '2', '-name', '*.md', '-type', 'f'], { encoding: 'utf-8' }).stdout.split('\n').filter(Boolean)
       : [];
 
-    // Calculate unindexed
     const totalSessions = sessionFiles.length;
-    const summarized = detail?.summarizedSessions ?? summaryFiles.length;
+    const summarized = summaryFiles.length;
     const unindexed = Math.max(0, totalSessions - summarized);
+    const failed = detail?.failedSessions ?? 0;
+    const needsEmbedding = Boolean(detail?.needsEmbedding);
+    const dirty = Boolean(detail?.dirty);
 
-    console.log(chalk.bold('Memory Status'));
+    const qmdStatusText = toProcessText(qmdResult.stdout || qmdResult.stderr).trim();
+    const qmdIndexedFiles = parseQmdIndexedFileCount(qmdStatusText);
+    const primaryCollection = config.modules.memory.collections[0]?.name;
+    const qmdCollectionCounts = primaryCollection
+      ? getQmdCollectionCounts(primaryCollection)
+      : undefined;
+    const qmdSummaryLag = qmdCollectionCounts
+      ? Math.max(0, summarized - qmdCollectionCounts.workspace)
+      : 0;
+
+    const statusPayload = {
+      sessions: {
+        total: totalSessions,
+        summarizedOnDisk: summarized,
+        unindexed,
+        failed,
+      },
+      index: {
+        needsEmbedding,
+        dirty,
+        lastScanAt: detail?.lastScanAt ?? null,
+        lastUpdateAt: detail?.lastQmdUpdateAt ?? null,
+        lastReconcileAt: detail?.lastQmdReconcileAt ?? null,
+        lastEmbedAt: detail?.lastQmdEmbedAt ?? null,
+      },
+      qmd: {
+        indexedFiles: qmdIndexedFiles ?? null,
+        primaryCollection: primaryCollection ?? null,
+        indexedCollectionFiles: qmdCollectionCounts?.total ?? null,
+        indexedSummaries: qmdCollectionCounts?.workspace ?? null,
+        summaryLag: qmdSummaryLag,
+      },
+      qmdStatus: qmdStatusText,
+    };
+
+    if (jsonMode) {
+      console.log(JSON.stringify(statusPayload, null, 2));
+      return qmdResult.status ?? 0;
+    }
+
+    console.log(section('Memory status'));
     console.log('');
+    console.log(section('Sessions'));
+    console.log(keyValue('Total session files', totalSessions));
+    console.log(keyValue('Summarized (on disk)', summarized));
+    console.log(keyValue('Coverage', progressBar(summarized, totalSessions)));
+    console.log(keyValue('Unindexed sessions', unindexed > 0 ? statusChip('pending') + ` (${unindexed})` : statusChip('active') + ' (0)'));
+    console.log(keyValue('Failed scans', failed > 0 ? statusChip('error') + ` (${failed})` : statusChip('active') + ' (0)'));
 
-    console.log(chalk.bold('Sessions:'));
-    console.log(`  Total session files: ${totalSessions}`);
-    console.log(`  Summarized: ${summarized}`);
-    console.log(`  Unindexed (not yet summarized): ${unindexed > 0 ? chalk.yellow(unindexed) : chalk.green(unindexed)}`);
-    console.log(`  Failed: ${detail?.failedSessions ?? 0}`);
+    if (qmdCollectionCounts && primaryCollection) {
+      console.log(keyValue(`qmd indexed summaries (${primaryCollection})`, qmdCollectionCounts.workspace));
+      console.log(keyValue(`qmd indexed files (${primaryCollection})`, qmdCollectionCounts.total));
+    } else if (typeof qmdIndexedFiles === 'number') {
+      console.log(keyValue('qmd indexed files (all collections)', qmdIndexedFiles));
+    }
+
+    if (qmdSummaryLag > 0) {
+      console.log(keyValue('qmd lag', `${qmdSummaryLag} summaries pending qmd indexing`));
+    }
+
     console.log('');
+    console.log(section('Index status'));
+    console.log(keyValue('Needs embedding', needsEmbedding ? statusChip('pending') : statusChip('active')));
+    console.log(keyValue('Dirty (pending update)', dirty ? statusChip('pending') : statusChip('active')));
+    console.log(keyValue('Last scan', detail?.lastScanAt ? new Date(detail.lastScanAt).toLocaleString() : dim('never')));
+    console.log(keyValue('Last qmd update', detail?.lastQmdUpdateAt ? new Date(detail.lastQmdUpdateAt).toLocaleString() : dim('never')));
+    console.log(keyValue('Last qmd reconcile', detail?.lastQmdReconcileAt ? new Date(detail.lastQmdReconcileAt).toLocaleString() : dim('never')));
+    console.log(keyValue('Last embed', detail?.lastQmdEmbedAt ? new Date(detail.lastQmdEmbedAt).toLocaleString() : dim('never')));
 
-    console.log(chalk.bold('Index Status:'));
-    console.log(`  Needs embedding: ${detail?.needsEmbedding ? chalk.yellow('yes') : chalk.green('no')}`);
-    console.log(`  Dirty (pending update): ${detail?.dirty ? chalk.yellow('yes') : chalk.green('no')}`);
-    console.log(`  Last scan: ${detail?.lastScanAt ? new Date(detail.lastScanAt).toLocaleString() : chalk.dim('never')}`);
-    console.log(`  Last embed: ${detail?.lastQmdEmbedAt ? new Date(detail.lastQmdEmbedAt).toLocaleString() : chalk.dim('never')}`);
     console.log('');
+    console.log(section('qmd status'));
+    console.log(qmdStatusText);
 
-    console.log(chalk.bold('qmd Status:'));
-    console.log(qmdResult.stdout || qmdResult.stderr);
+    if (qmdSummaryLag > 0) {
+      console.log(`  ${formatNextStep('Run qmd update (or wait for daemon qmd update timer)')}`);
+    } else if (unindexed > 0 || needsEmbedding || dirty) {
+      console.log(`  ${formatNextStep('Wait for daemon indexing or run pa daemon restart')}`);
+    }
 
     return qmdResult.status ?? 0;
   }
@@ -710,7 +1105,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
           throw new Error('doctor no longer accepts --profile. Set it once with: pa profile use <name>');
         }
 
-        return doctor();
+        return doctor({ json: hasOption(args, '--json') });
       },
     },
     {
@@ -793,24 +1188,29 @@ function createProgram(definitions: CliCommandDefinition[], setExitCode: (code: 
     .addHelpText(
       'after',
       `
+Global options:
+  --plain, --no-color   Disable rich ANSI styling
+
 Examples:
   pa
-  pa -p "hello"
+  pa --plain -p "hello"
   pa run -- --model kimi-coding/k2p5
   pa profile use datadog
   pa profile list
   pa doctor
+  pa doctor --json
   pa gateway telegram start
   pa gateway discord start
   pa daemon start
   pa daemon status
   pa memory list
+  pa memory status --json
   pa memory query "authentication flow"
 `,
     )
     .configureOutput({
       outputError: (message, write) => {
-        write(chalk.red(message));
+        write(`${uiError('CLI error', message.trim())}\n`);
       },
     })
     .exitOverride();
@@ -831,6 +1231,9 @@ Examples:
 }
 
 export async function runCli(argv: string[] = process.argv.slice(2)): Promise<number> {
+  const parsedFlags = parseGlobalFlags(argv);
+  configureUi({ plain: parsedFlags.plain });
+
   try {
     const definitions = buildCommandDefinitions();
     const knownCommands = new Set(definitions.map((definition) => definition.name));
@@ -840,19 +1243,19 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
       exitCode = code;
     });
 
-    if (argv.length === 0) {
+    if (parsedFlags.argv.length === 0) {
       await program.parseAsync(['--help'], { from: 'user' });
       return 0;
     }
 
-    const firstArg = argv[0];
+    const firstArg = parsedFlags.argv[0];
     const isHelpRequest = firstArg === '--help' || firstArg === '-h' || firstArg === 'help';
 
     if (!isHelpRequest && !knownCommands.has(firstArg)) {
-      return runCommand(argv);
+      return runCommand(parsedFlags.argv);
     }
 
-    await program.parseAsync(argv, { from: 'user' });
+    await program.parseAsync(parsedFlags.argv, { from: 'user' });
     return exitCode;
   } catch (error) {
     if (error instanceof CommanderError) {
@@ -860,11 +1263,17 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
         return 0;
       }
 
-      console.error(chalk.red(error.message));
+      console.error(uiError('CLI error', error.message));
       return error.exitCode ?? 1;
     }
 
-    console.error(chalk.red((error as Error).message));
+    const message = (error as Error).message;
+    console.error(uiError('CLI error', message));
+
+    if (message.includes('qmd')) {
+      console.error(`  ${formatHint('Install and configure qmd, then rerun the command')}`);
+    }
+
     return 1;
   }
 }

@@ -31,6 +31,7 @@ export interface MemoryModuleConfig {
     index: string;
     updateDebounceSeconds: number;
     embedDebounceSeconds: number;
+    reconcileIntervalMinutes?: number;
   };
 }
 
@@ -180,6 +181,7 @@ export function getDefaultDaemonConfig(): DaemonConfig {
           index: 'default',
           updateDebounceSeconds: 45,
           embedDebounceSeconds: 600,
+          reconcileIntervalMinutes: 60,
         },
       },
       maintenance: {

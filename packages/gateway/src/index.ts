@@ -985,6 +985,11 @@ async function processTelegramMessage(
       prompt,
       sessionFile,
       cwd: options.workingDirectory,
+      logContext: {
+        source: 'telegram',
+        userId: chatId,
+        userName,
+      },
     });
 
     await emitDaemonEventNonFatal({

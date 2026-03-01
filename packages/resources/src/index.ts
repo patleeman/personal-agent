@@ -372,7 +372,32 @@ export interface BuildPiArgsOptions {
 }
 
 export function getExtensionDependencyDirs(profile: ResolvedResourceProfile): string[] {
-  return profile.extensionDirs.filter((dir) => existsSync(join(dir, 'package.json')));
+  const dependencyDirs: string[] = [];
+
+  for (const extensionDir of profile.extensionDirs) {
+    if (!existsSync(extensionDir)) {
+      continue;
+    }
+
+    if (existsSync(join(extensionDir, 'package.json'))) {
+      dependencyDirs.push(extensionDir);
+    }
+
+    const entries = readdirSync(extensionDir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+
+      const candidate = join(extensionDir, entry.name);
+      if (existsSync(join(candidate, 'package.json'))) {
+        dependencyDirs.push(candidate);
+      }
+    }
+  }
+
+  return dedupe(dependencyDirs);
 }
 
 export function buildPiResourceArgs(

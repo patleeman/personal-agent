@@ -23,6 +23,9 @@ In passthrough mode, `pa` resolves profile resources, prepares runtime state, an
 - `pa` (no args) shows CLI help.
 - `pa` is a superset wrapper for Pi CLI usage: unknown top-level args are treated as Pi args.
   - Example: `pa -p "hello"`
+- Global output controls:
+  - `--plain` / `--no-color` disables rich styling
+  - `doctor --json`, `daemon status --json`, and `memory status --json` emit machine-readable JSON
 
 ## Profile selection
 
