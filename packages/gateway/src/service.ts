@@ -166,7 +166,6 @@ function buildServiceEnvironment(provider: GatewayProvider): Record<string, stri
     'PERSONAL_AGENT_GATEWAY_CONFIG_FILE',
     'PERSONAL_AGENT_PROFILE',
     'PERSONAL_AGENT_PI_TIMEOUT_MS',
-    'PERSONAL_AGENT_PI_MAX_OUTPUT_BYTES',
   ] as const;
 
   for (const key of passthroughKeys) {

@@ -2,11 +2,19 @@
 
 import { createInterface } from 'readline';
 import { mkdir, rm } from 'fs/promises';
-import { existsSync } from 'fs';
-import { join, resolve } from 'path';
-import { spawn, spawnSync } from 'child_process';
+import { existsSync, readFileSync } from 'fs';
+import { basename, join, resolve } from 'path';
+import { spawnSync } from 'child_process';
 import TelegramBot from 'node-telegram-bot-api';
 import * as DiscordJs from 'discord.js';
+import {
+  SessionManager,
+  SettingsManager,
+  createAgentSession,
+  createEventBus,
+  loadExtensions,
+  type PromptTemplate,
+} from '@mariozechner/pi-coding-agent';
 import {
   bootstrapStateOrThrow,
   preparePiAgentDir,
@@ -14,7 +22,6 @@ import {
   validateStatePathsOutsideRepo,
 } from '@personal-agent/core';
 import {
-  buildPiResourceArgs,
   getExtensionDependencyDirs,
   materializeProfileToAgentDir,
   mergeJsonFiles,
@@ -214,7 +221,6 @@ export interface QueuedDiscordMessageHandler {
 }
 
 const DEFAULT_PI_TIMEOUT_MS = 180_000;
-const DEFAULT_PI_MAX_OUTPUT_BYTES = 200_000;
 const DEFAULT_MAX_PENDING_PER_CHAT = 20;
 const DEFAULT_MAX_PENDING_PER_CHANNEL = 20;
 const DEFAULT_MODEL_SELECTION_LIMIT = 25;
@@ -277,23 +283,12 @@ function resolveDiscordChannelPartial(): unknown {
 export type GatewayProvider = (typeof GATEWAY_PROVIDERS)[number];
 
 type ResolvedProfile = ReturnType<typeof resolveResourceProfile>;
+type PiAgentSession = Awaited<ReturnType<typeof createAgentSession>>['session'];
 
 interface PreparedGatewayRuntime {
   resolvedProfile: ResolvedProfile;
   statePaths: ReturnType<typeof resolveStatePaths>;
   runtime: Awaited<ReturnType<typeof preparePiAgentDir>>;
-}
-
-function buildPiEnv(options: {
-  agentDir: string;
-  profile: ResolvedProfile;
-}): NodeJS.ProcessEnv {
-  return {
-    ...process.env,
-    PI_CODING_AGENT_DIR: options.agentDir,
-    PERSONAL_AGENT_ACTIVE_PROFILE: options.profile.name,
-    PERSONAL_AGENT_REPO_ROOT: options.profile.repoRoot,
-  };
 }
 
 export function parseAllowlist(value: string | undefined): Set<string> {
@@ -527,41 +522,21 @@ async function discoverPiHelpFromPi(options: {
   cwd: string;
   sessionFile: string;
 }): Promise<PiHelpDiscovery> {
-  const settings = options.profile.settingsFiles.length > 0
-    ? mergeJsonFiles(options.profile.settingsFiles)
-    : {};
-
-  const resourceArgs = buildPiResourceArgs(options.profile);
-  const args = applyModelDefaults(
-    [
-      ...resourceArgs,
-      '--session',
-      options.sessionFile,
-      '-p',
-      '/help',
-    ],
-    settings,
-  );
-
   try {
-    const result = spawnSync('pi', args, {
+    const helpText = await runPiPrintPrompt({
+      prompt: '/help',
+      sessionFile: options.sessionFile,
+      profile: options.profile,
+      agentDir: options.agentDir,
       cwd: options.cwd,
-      env: buildPiEnv({
-        agentDir: options.agentDir,
-        profile: options.profile,
-      }),
-      encoding: 'utf-8',
     });
 
-    if (result.error || result.status !== 0) {
-      return { commands: [], skills: [] };
-    }
-
-    const helpText = result.stdout ?? '';
     return {
       commands: parsePiHelpCommands(helpText),
       skills: parsePiHelpSkills(helpText),
     };
+  } catch {
+    return { commands: [], skills: [] };
   } finally {
     await rm(options.sessionFile, { force: true });
   }
@@ -680,7 +655,7 @@ function logSystem(source: string, message: string): void {
   });
 }
 
-// Parse pi --mode json output and log events
+// Parse SDK agent events and log chat flow details
 class PiJsonStreamParser {
   private currentToolCalls = new Map<string, { name: string; args: string }>();
   private assistantTextBuffer = '';
@@ -694,9 +669,13 @@ class PiJsonStreamParser {
     this.userName = userName;
   }
 
+  parseEvent(event: PiJsonEvent): void {
+    this.handleEvent(event);
+  }
+
   parseLine(line: string): void {
     if (!line.trim()) return;
-    
+
     try {
       const event = JSON.parse(line) as PiJsonEvent;
       this.handleEvent(event);
@@ -883,27 +862,6 @@ export function splitTelegramMessage(text: string, chunkSize = 3900): string[] {
   return splitMessage(text, chunkSize);
 }
 
-function applyModelDefaults(args: string[], settings: Record<string, unknown>): string[] {
-  const output = [...args];
-
-  if (!output.includes('--model')) {
-    const provider = settings.defaultProvider;
-    const model = settings.defaultModel;
-    if (typeof provider === 'string' && typeof model === 'string') {
-      output.push('--model', `${provider}/${model}`);
-    }
-  }
-
-  if (!output.includes('--thinking')) {
-    const thinking = settings.defaultThinkingLevel;
-    if (typeof thinking === 'string') {
-      output.push('--thinking', thinking);
-    }
-  }
-
-  return output;
-}
-
 function getProfileDefaultModel(profile: ResolvedProfile): string | undefined {
   const settings = profile.settingsFiles.length > 0
     ? mergeJsonFiles(profile.settingsFiles)
@@ -919,38 +877,199 @@ function getProfileDefaultModel(profile: ResolvedProfile): string | undefined {
   return undefined;
 }
 
-function parsePiModelListOutput(output: string): string[] {
-  const lines = output.split('\n');
-  const models: string[] = [];
-  const seen = new Set<string>();
+function parsePromptTemplateFrontmatter(content: string): {
+  description?: string;
+  content: string;
+} {
+  if (!content.startsWith('---')) {
+    return { content: content.trim() };
+  }
 
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('provider')) {
-      continue;
-    }
+  const endIndex = content.indexOf('\n---', 3);
+  if (endIndex === -1) {
+    return { content: content.trim() };
+  }
 
-    const match = trimmed.match(/^(\S+)\s+(\S+)(?:\s+|$)/);
+  const frontmatter = content.slice(4, endIndex);
+  const remainingContent = content.slice(endIndex + 4).trim();
+
+  let description: string | undefined;
+  for (const line of frontmatter.split('\n')) {
+    const match = line.match(/^(\w+):\s*(.*)$/);
     if (!match) {
       continue;
     }
 
-    const provider = match[1];
-    const model = match[2];
-    if (!provider || !model) {
-      continue;
+    const key = match[1]?.trim().toLowerCase();
+    const value = match[2]?.trim();
+    if (key === 'description' && value) {
+      description = value;
     }
-
-    const modelId = `${provider}/${model}`;
-    if (seen.has(modelId)) {
-      continue;
-    }
-
-    seen.add(modelId);
-    models.push(modelId);
   }
 
-  return models;
+  return {
+    description,
+    content: remainingContent,
+  };
+}
+
+function loadProfilePromptTemplates(profile: ResolvedProfile): PromptTemplate[] {
+  const templates: PromptTemplate[] = [];
+
+  for (const entry of profile.promptEntries) {
+    try {
+      const rawContent = readFileSync(entry, 'utf-8');
+      const parsed = parsePromptTemplateFrontmatter(rawContent);
+      const name = basename(entry, '.md');
+      const firstLine = parsed.content.split('\n').find((line) => line.trim().length > 0)?.trim();
+
+      let description = parsed.description;
+      if (!description && firstLine) {
+        description = firstLine.slice(0, 60) + (firstLine.length > 60 ? '...' : '');
+      }
+
+      templates.push({
+        name,
+        description: description ? `${description} (profile)` : '(profile)',
+        content: parsed.content,
+        source: '(profile)',
+      });
+    } catch {
+      // Ignore unreadable prompt templates
+    }
+  }
+
+  return templates;
+}
+
+function buildGatewaySettingsManager(profile: ResolvedProfile, cwd: string, agentDir: string): SettingsManager {
+  const settingsManager = SettingsManager.create(cwd, agentDir);
+
+  settingsManager.applyOverrides({
+    skills: {
+      enableCodexUser: false,
+      enableClaudeUser: false,
+      enableClaudeProject: false,
+      enablePiUser: false,
+      enablePiProject: false,
+      customDirectories: profile.skillDirs,
+    },
+  });
+
+  return settingsManager;
+}
+
+function createPersistentSessionManager(cwd: string, sessionFile: string): SessionManager {
+  const sessionDir = resolve(sessionFile, '..');
+
+  if (existsSync(sessionFile)) {
+    return SessionManager.open(sessionFile, sessionDir);
+  }
+
+  const manager = SessionManager.create(cwd, sessionDir);
+  manager.setSessionFile(sessionFile);
+  return manager;
+}
+
+async function createGatewayAgentSession(options: {
+  profile: ResolvedProfile;
+  agentDir: string;
+  cwd: string;
+  sessionFile: string;
+}): Promise<PiAgentSession> {
+  const settingsManager = buildGatewaySettingsManager(options.profile, options.cwd, options.agentDir);
+  const eventBus = createEventBus();
+  const preloadedExtensions = await loadExtensions(options.profile.extensionEntries, options.cwd, eventBus);
+
+  for (const { path, error } of preloadedExtensions.errors) {
+    console.error(`Failed to load extension "${path}": ${error}`);
+  }
+
+  const { session } = await createAgentSession({
+    cwd: options.cwd,
+    agentDir: options.agentDir,
+    sessionManager: createPersistentSessionManager(options.cwd, options.sessionFile),
+    settingsManager,
+    preloadedExtensions,
+    promptTemplates: loadProfilePromptTemplates(options.profile),
+  });
+
+  return session;
+}
+
+function parseModelReference(model: string): { provider: string; modelId: string } | undefined {
+  const trimmed = model.trim();
+  const separatorIndex = trimmed.indexOf('/');
+
+  if (separatorIndex <= 0 || separatorIndex >= trimmed.length - 1) {
+    return undefined;
+  }
+
+  return {
+    provider: trimmed.slice(0, separatorIndex),
+    modelId: trimmed.slice(separatorIndex + 1),
+  };
+}
+
+async function applyRequestedModel(session: PiAgentSession, model?: string): Promise<void> {
+  if (!model) {
+    return;
+  }
+
+  const parsed = parseModelReference(model);
+  if (!parsed) {
+    throw new Error(`Invalid model "${model}". Use format provider/model.`);
+  }
+
+  const resolvedModel = session.modelRegistry.find(parsed.provider, parsed.modelId);
+  if (!resolvedModel) {
+    throw new Error(`Model not found: ${parsed.provider}/${parsed.modelId}`);
+  }
+
+  const currentModel = session.model;
+  if (currentModel && currentModel.provider === resolvedModel.provider && currentModel.id === resolvedModel.id) {
+    return;
+  }
+
+  await session.setModel(resolvedModel);
+}
+
+function extractLatestAssistantText(messages: unknown): string {
+  if (!Array.isArray(messages)) {
+    return '';
+  }
+
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index] as Record<string, unknown> | undefined;
+    if (!message || message.role !== 'assistant') {
+      continue;
+    }
+
+    const content = message.content;
+    if (!Array.isArray(content)) {
+      continue;
+    }
+
+    const textParts: string[] = [];
+    for (const block of content) {
+      const candidate = block as Record<string, unknown>;
+      if (candidate?.type !== 'text') {
+        continue;
+      }
+
+      const text = candidate.text;
+      if (typeof text === 'string') {
+        textParts.push(text);
+      }
+    }
+
+    const joined = textParts.join('').trim();
+    if (joined.length > 0) {
+      return joined;
+    }
+  }
+
+  return '';
 }
 
 async function listPiModels(options: {
@@ -959,29 +1078,40 @@ async function listPiModels(options: {
   cwd: string;
   search?: string;
 }): Promise<string[]> {
-  const args = ['--list-models'];
-  const search = options.search?.trim();
-  if (search && search.length > 0) {
-    args.push(search);
-  }
-
-  const result = spawnSync('pi', args, {
+  const settingsManager = buildGatewaySettingsManager(options.profile, options.cwd, options.agentDir);
+  const { session } = await createAgentSession({
     cwd: options.cwd,
-    env: buildPiEnv({
-      agentDir: options.agentDir,
-      profile: options.profile,
-    }),
-    encoding: 'utf-8',
+    agentDir: options.agentDir,
+    sessionManager: SessionManager.inMemory(options.cwd),
+    settingsManager,
+    extensions: [],
+    skills: [],
+    promptTemplates: [],
+    tools: [],
   });
 
-  if (result.error || result.status !== 0) {
-    const errorMessage = result.error?.message
-      ?? result.stderr?.trim()
-      ?? `pi --list-models exited with code ${result.status}`;
-    throw new Error(errorMessage);
-  }
+  try {
+    const search = options.search?.trim().toLowerCase();
+    const seen = new Set<string>();
+    const models: string[] = [];
 
-  return parsePiModelListOutput(result.stdout ?? '');
+    const availableModels = await session.getAvailableModels();
+    for (const availableModel of availableModels) {
+      const modelName = `${availableModel.provider}/${availableModel.id}`;
+      if (seen.has(modelName)) {
+        continue;
+      }
+
+      seen.add(modelName);
+      if (!search || modelName.toLowerCase().includes(search)) {
+        models.push(modelName);
+      }
+    }
+
+    return models;
+  } finally {
+    session.dispose();
+  }
 }
 
 function ensureExtensionDependencies(profile: ResolvedProfile): void {
@@ -1016,71 +1146,49 @@ interface RunPiPrintPromptOptions {
 }
 
 async function runPiPrintPrompt(options: RunPiPrintPromptOptions): Promise<string> {
-  const settings = options.profile.settingsFiles.length > 0
-    ? mergeJsonFiles(options.profile.settingsFiles)
-    : {};
-
-  const resourceArgs = buildPiResourceArgs(options.profile);
-  const modelArgs = options.model ? ['--model', options.model] : [];
-  const args = applyModelDefaults(
-    [
-      ...resourceArgs,
-      '--session',
-      options.sessionFile,
-      ...modelArgs,
-      '-p',
-      options.prompt,
-      '--mode',
-      'json',
-    ],
-    settings,
-  );
-
   const configuredTimeoutMs = Number(process.env.PERSONAL_AGENT_PI_TIMEOUT_MS ?? DEFAULT_PI_TIMEOUT_MS);
   const timeoutMs = Number.isFinite(configuredTimeoutMs) && configuredTimeoutMs > 0
     ? Math.floor(configuredTimeoutMs)
     : DEFAULT_PI_TIMEOUT_MS;
 
-  const configuredMaxOutputBytes = Number(
-    process.env.PERSONAL_AGENT_PI_MAX_OUTPUT_BYTES ?? DEFAULT_PI_MAX_OUTPUT_BYTES,
-  );
-  const maxOutputBytes = Number.isFinite(configuredMaxOutputBytes) && configuredMaxOutputBytes > 0
-    ? Math.floor(configuredMaxOutputBytes)
-    : DEFAULT_PI_MAX_OUTPUT_BYTES;
+  if (options.abortSignal?.aborted) {
+    throw new Error(PROMPT_CANCELLED_ERROR_MESSAGE);
+  }
+
+  const session = await createGatewayAgentSession({
+    profile: options.profile,
+    agentDir: options.agentDir,
+    cwd: options.cwd,
+    sessionFile: options.sessionFile,
+  });
+
+  const parser = options.logContext
+    ? new PiJsonStreamParser(options.logContext.source, options.logContext.userId, options.logContext.userName)
+    : null;
 
   return new Promise((resolve, reject) => {
-    const child = spawn('pi', args, {
-      cwd: options.cwd,
-      env: buildPiEnv({
-        agentDir: options.agentDir,
-        profile: options.profile,
-      }),
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-
-    let stdout = '';
-    let stderr = '';
-    let stdoutBytes = 0;
-    let stderrBytes = 0;
     let settled = false;
-    let finalTextOutput = '';
-
-    // Initialize JSON stream parser for logging
-    const parser = options.logContext
-      ? new PiJsonStreamParser(options.logContext.source, options.logContext.userId, options.logContext.userName)
-      : null;
+    let timeoutHandle: NodeJS.Timeout | undefined;
+    let streamedOutput = '';
 
     const abortSignal = options.abortSignal;
-    let timeoutHandle: NodeJS.Timeout | undefined;
 
-    const onAbort = () => {
-      fail(PROMPT_CANCELLED_ERROR_MESSAGE);
-    };
+    const unsubscribe = session.subscribe((event) => {
+      const piEvent = event as unknown as PiJsonEvent;
 
-    const finalize = (resolver: () => void) => {
-      if (settled) return;
-      settled = true;
+      if (parser) {
+        parser.parseEvent(piEvent);
+      }
 
+      if (piEvent.type === 'message_update' && piEvent.assistantMessageEvent?.type === 'text_delta') {
+        const delta = piEvent.assistantMessageEvent.delta;
+        if (typeof delta === 'string') {
+          streamedOutput += delta;
+        }
+      }
+    });
+
+    const cleanup = () => {
       if (timeoutHandle) {
         clearTimeout(timeoutHandle);
         timeoutHandle = undefined;
@@ -1090,15 +1198,38 @@ async function runPiPrintPrompt(options: RunPiPrintPromptOptions): Promise<strin
         abortSignal.removeEventListener('abort', onAbort);
       }
 
+      unsubscribe();
+      session.dispose();
+    };
+
+    const finalize = (resolver: () => void) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      cleanup();
       resolver();
     };
 
     const fail = (message: string) => {
-      child.kill('SIGTERM');
-      if (parser && options.logContext) {
-        logError(options.logContext.source, options.logContext.userId, message, options.logContext.userName);
-      }
-      finalize(() => reject(new Error(message)));
+      void (async () => {
+        try {
+          await session.abort();
+        } catch {
+          // Ignore abort failures and surface original failure message
+        }
+
+        if (parser && options.logContext) {
+          logError(options.logContext.source, options.logContext.userId, message, options.logContext.userName);
+        }
+
+        finalize(() => reject(new Error(message)));
+      })();
+    };
+
+    const onAbort = () => {
+      fail(PROMPT_CANCELLED_ERROR_MESSAGE);
     };
 
     timeoutHandle = setTimeout(() => {
@@ -1112,72 +1243,21 @@ async function runPiPrintPrompt(options: RunPiPrintPromptOptions): Promise<strin
 
     abortSignal?.addEventListener('abort', onAbort, { once: true });
 
-    child.stdout.on('data', (chunk: Buffer | string) => {
-      const text = chunk.toString();
-      stdout += text;
-      stdoutBytes += Buffer.byteLength(text);
+    void (async () => {
+      try {
+        await applyRequestedModel(session, options.model);
+        await session.prompt(options.prompt);
 
-      // Parse JSON lines for logging and extract text output
-      const lines = text.split('\n');
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        
-        // Parse for logging
-        if (parser) {
-          parser.parseLine(line);
-        }
-        
-        // Extract final text output from agent_end event
-        try {
-          const event = JSON.parse(line) as PiJsonEvent;
-          if (event.type === 'agent_end' && event.messages) {
-            // Find the last assistant message with text content
-            for (let i = event.messages.length - 1; i >= 0; i--) {
-              const msg = event.messages[i];
-              if (msg.role === 'assistant' && msg.content) {
-                const textContent = msg.content
-                  .filter((c: {type: string; text?: string}) => c.type === 'text')
-                  .map((c: {type: string; text?: string}) => c.text)
-                  .join('');
-                if (textContent) {
-                  finalTextOutput = textContent;
-                  break;
-                }
-              }
-            }
-          }
-        } catch {
-          // Ignore parse errors
-        }
+        const streamed = streamedOutput.trim();
+        const fallback = extractLatestAssistantText(session.messages as unknown);
+        const finalOutput = streamed.length > 0 ? streamed : fallback;
+
+        finalize(() => resolve(finalOutput));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        finalize(() => reject(new Error(message)));
       }
-
-      if (stdoutBytes > maxOutputBytes) {
-        fail(`pi stdout exceeded ${maxOutputBytes} bytes`);
-      }
-    });
-
-    child.stderr.on('data', (chunk: Buffer | string) => {
-      const text = chunk.toString();
-      stderr += text;
-      stderrBytes += Buffer.byteLength(text);
-
-      if (stderrBytes > maxOutputBytes) {
-        fail(`pi stderr exceeded ${maxOutputBytes} bytes`);
-      }
-    });
-
-    child.on('error', (error) => {
-      finalize(() => reject(error));
-    });
-
-    child.on('close', (code) => {
-      if (code !== 0) {
-        finalize(() => reject(new Error(stderr.trim() || `pi exited with code ${code}`)));
-        return;
-      }
-
-      finalize(() => resolve(finalTextOutput || stdout.trim()));
-    });
+    })();
   });
 }
 
@@ -2799,7 +2879,6 @@ function printGatewayHelp(provider?: GatewayProvider): void {
   console.log('Environment overrides (optional):');
   console.log('  PERSONAL_AGENT_PROFILE');
   console.log('  PERSONAL_AGENT_PI_TIMEOUT_MS');
-  console.log('  PERSONAL_AGENT_PI_MAX_OUTPUT_BYTES');
 }
 
 async function runGatewayCommand(args: string[]): Promise<number> {

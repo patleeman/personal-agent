@@ -85,7 +85,7 @@ Owns chat gateway transports (Telegram + Discord):
 - allowlist-based access control
 - one Pi session file per chat/channel
 - reuse core/runtime/resources logic
-- invoke `pi -p --session <chat-session>` for replies
+- invoke Pi SDK sessions with one persisted session file per chat/channel for replies
 - emit non-fatal daemon events (`session.updated` / `session.closed`)
 
 ## Runtime ownership model
@@ -157,7 +157,7 @@ Gateways reuse the same profile/runtime plumbing as CLI:
 - Same daemon event emission
 
 Differences from CLI:
-- No TUI (print mode only)
+- No TUI (chat-only SDK execution)
 - Built-in slash commands (`/status`, `/new`, `/model`, etc.)
 - Allowlist-based access control
 - Per-chat model persistence

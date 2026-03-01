@@ -189,7 +189,6 @@ Shared optional env vars:
 
 - `PERSONAL_AGENT_PROFILE` (default: `shared`)
 - `PERSONAL_AGENT_PI_TIMEOUT_MS` (default: `180000`)
-- `PERSONAL_AGENT_PI_MAX_OUTPUT_BYTES` (default: `200000`)
 
 ### Telegram
 

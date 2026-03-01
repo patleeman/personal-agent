@@ -59,7 +59,6 @@ Used by both providers:
 
 - `PERSONAL_AGENT_PROFILE` (default: `shared`)
 - `PERSONAL_AGENT_PI_TIMEOUT_MS` (default: `180000`)
-- `PERSONAL_AGENT_PI_MAX_OUTPUT_BYTES` (default: `200000`)
 
 ## Telegram
 
@@ -157,7 +156,7 @@ Common Pi slash commands exposed in gateway command lists:
 
 Telegram also registers slash commands via Bot API on startup (`setMyCommands`).
 
-All non-gateway commands are passed through to Pi in print mode with that chat's session.
+All non-gateway commands are executed through the Pi SDK with that chat's session file.
 
 ## Daemon integration
 
