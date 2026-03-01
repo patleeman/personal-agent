@@ -24,12 +24,35 @@ A personal application layer over Pi that keeps:
 - `@personal-agent/cli` — `pa` wrapper command
 - `@personal-agent/gateway` — Telegram + Discord gateways (registered as `pa gateway` command)
 
-## Quickstart
+## Installation (from source)
+
+Prerequisites:
+
+- Node.js 20+
+- npm
+- Pi CLI (`pi` command)
 
 ```bash
+# Required once (pa wraps the pi CLI)
+npm install -g @mariozechner/pi-coding-agent
+
+# In this repo
 npm install
 npm run build
-npm run test
+npm link --workspace @personal-agent/cli
+```
+
+Verify install:
+
+```bash
+pa --help
+pa doctor
+```
+
+If you prefer not to link globally, run `pa` via npm exec:
+
+```bash
+npm exec pa -- --help
 ```
 
 ### First run
