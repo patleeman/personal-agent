@@ -9,6 +9,8 @@ import { readGatewayConfig } from './config.js';
 
 export type GatewayProvider = 'telegram' | 'discord';
 
+export const SUPPORTED_GATEWAY_PROVIDERS: readonly GatewayProvider[] = ['telegram', 'discord'];
+
 export type GatewayServicePlatform = 'launchd' | 'systemd';
 
 export interface ManagedDaemonServiceInfo {
@@ -606,6 +608,42 @@ function getSystemdGatewayServiceStatus(provider: GatewayProvider): GatewayServi
   };
 }
 
+function restartLaunchdService(label: string, manifestPath: string): void {
+  const domain = getLaunchdDomain();
+  const serviceTarget = `${domain}/${label}`;
+
+  runCommand('launchctl', ['bootout', domain, manifestPath], { allowNonZero: true });
+  runCommand('launchctl', ['bootstrap', domain, manifestPath]);
+  runCommand('launchctl', ['kickstart', '-k', serviceTarget], { allowNonZero: true });
+}
+
+function restartSystemdService(unitName: string): void {
+  runCommand('systemctl', ['--user', 'daemon-reload']);
+  runCommand('systemctl', ['--user', 'restart', unitName]);
+}
+
+function restartLaunchdGatewayService(provider: GatewayProvider): void {
+  const label = getLaunchdLabel(provider);
+  const manifestPath = getLaunchdPlistPath(label);
+  restartLaunchdService(label, manifestPath);
+}
+
+function restartSystemdGatewayService(provider: GatewayProvider): void {
+  const unitName = getSystemdUnitName(provider);
+  restartSystemdService(unitName);
+}
+
+function restartLaunchdDaemonService(): void {
+  const label = getLaunchdDaemonLabel();
+  const manifestPath = getLaunchdPlistPath(label);
+  restartLaunchdService(label, manifestPath);
+}
+
+function restartSystemdDaemonService(): void {
+  const unitName = getSystemdDaemonUnitName();
+  restartSystemdService(unitName);
+}
+
 export function installGatewayService(provider: GatewayProvider): GatewayServiceInfo {
   const platform = resolveServicePlatform();
 
@@ -634,4 +672,60 @@ export function getGatewayServiceStatus(provider: GatewayProvider): GatewayServi
   }
 
   return getSystemdGatewayServiceStatus(provider);
+}
+
+export function restartGatewayService(provider: GatewayProvider): GatewayServiceStatus {
+  const status = getGatewayServiceStatus(provider);
+
+  if (!status.installed) {
+    throw new Error(`Gateway service for ${provider} is not installed. Run \`pa gateway service install ${provider}\` first.`);
+  }
+
+  if (status.platform === 'launchd') {
+    restartLaunchdGatewayService(provider);
+  } else {
+    restartSystemdGatewayService(provider);
+  }
+
+  return getGatewayServiceStatus(provider);
+}
+
+export function restartGatewayServiceIfInstalled(provider: GatewayProvider): GatewayServiceStatus | undefined {
+  const status = getGatewayServiceStatus(provider);
+
+  if (!status.installed) {
+    return undefined;
+  }
+
+  if (status.platform === 'launchd') {
+    restartLaunchdGatewayService(provider);
+  } else {
+    restartSystemdGatewayService(provider);
+  }
+
+  return getGatewayServiceStatus(provider);
+}
+
+export function restartManagedDaemonServiceIfInstalled(): ManagedDaemonServiceStatus | undefined {
+  const platform = resolveServicePlatform();
+
+  if (platform === 'launchd') {
+    const status = getLaunchdDaemonServiceStatus();
+
+    if (!status.installed) {
+      return undefined;
+    }
+
+    restartLaunchdDaemonService();
+    return getLaunchdDaemonServiceStatus();
+  }
+
+  const status = getSystemdDaemonServiceStatus();
+
+  if (!status.installed) {
+    return undefined;
+  }
+
+  restartSystemdDaemonService();
+  return getSystemdDaemonServiceStatus();
 }

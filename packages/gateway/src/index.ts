@@ -42,6 +42,13 @@ import {
   uninstallGatewayService,
 } from './service.js';
 
+export {
+  SUPPORTED_GATEWAY_PROVIDERS,
+  restartGatewayService,
+  restartGatewayServiceIfInstalled,
+  restartManagedDaemonServiceIfInstalled,
+} from './service.js';
+
 // Logging types for chat flow
 export interface ChatLogEntry {
   timestamp: string;

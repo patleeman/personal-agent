@@ -84,6 +84,8 @@ pa tui -p "hello"           # Launch with initial prompt
 pa tui -- --model kimi-coding/k2p5    # Pass args to pi
 pa doctor                   # Validate setup
 pa doctor --json            # Machine-readable status
+pa restart                  # Restart daemon + managed gateways
+pa update                   # git pull --ff-only, then restart services
 ```
 
 ### Profile management
@@ -112,8 +114,10 @@ pa memory search "pattern"  # Full-text search
 pa daemon start             # Start background daemon
 pa daemon stop              # Stop daemon
 pa daemon status            # Check daemon status
-pa daemon restart           # Restart daemon
+pa daemon restart           # Restart daemon only
 pa daemon logs              # View daemon logs
+pa restart                  # Restart daemon + managed gateways
+pa update                   # Pull latest git changes and restart
 ```
 
 ### Gateway (Telegram/Discord)
@@ -146,6 +150,8 @@ pa gateway service uninstall telegram
 CLI surface:
 
 - `pa daemon start|stop|restart|status|logs`
+- `pa restart`
+- `pa update`
 
 When daemon is unavailable, clients warn and continue (non-fatal).
 

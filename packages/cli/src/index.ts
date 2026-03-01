@@ -16,6 +16,7 @@ import {
 import {
   buildPiResourceArgs,
   getExtensionDependencyDirs,
+  getRepoRoot,
   listProfiles,
   materializeProfileToAgentDir,
   mergeJsonFiles,
@@ -33,7 +34,13 @@ import {
   stopDaemonGracefully,
   type DaemonStatus,
 } from '@personal-agent/daemon';
-import { registerGatewayCliCommands, type RegisteredCliCommand } from '@personal-agent/gateway';
+import {
+  SUPPORTED_GATEWAY_PROVIDERS,
+  registerGatewayCliCommands,
+  restartGatewayServiceIfInstalled,
+  restartManagedDaemonServiceIfInstalled,
+  type RegisteredCliCommand,
+} from '@personal-agent/gateway';
 import { hasOption } from './args.js';
 import { readConfig, setDefaultProfile } from './config.js';
 import {
@@ -808,6 +815,180 @@ async function daemonCommand(args: string[]): Promise<number> {
   throw new Error(`Unknown daemon subcommand: ${subcommand}`);
 }
 
+function ensureNoExtraCommandArgs(args: string[], usage: string): void {
+  if (args.length > 0) {
+    throw new Error(`Usage: ${usage}`);
+  }
+}
+
+function pullLatestFromGit(repoRoot: string): string {
+  if (!existsSync(join(repoRoot, '.git'))) {
+    throw new Error(`Repository root is not a git checkout: ${repoRoot}`);
+  }
+
+  const result = spawnSync('git', ['-C', repoRoot, 'pull', '--ff-only'], {
+    encoding: 'utf-8',
+  });
+
+  if (result.error) {
+    throw new Error(`Failed to run git pull: ${result.error.message}`);
+  }
+
+  const statusCode = result.status ?? 1;
+  const stdout = result.stdout?.trim() ?? '';
+  const stderr = result.stderr?.trim() ?? '';
+
+  if (statusCode !== 0) {
+    const detail = stderr || stdout || `exit code ${statusCode}`;
+    throw new Error(`Git pull failed in ${repoRoot}: ${detail}`);
+  }
+
+  return [stdout, stderr].filter((line) => line.length > 0).join('\n');
+}
+
+function isMissingServiceManagerError(error: unknown): boolean {
+  const message = (error as Error).message;
+  return message.includes('spawnSync launchctl ENOENT') || message.includes('spawnSync systemctl ENOENT');
+}
+
+interface RestartSummary {
+  restartedGatewayServices: string[];
+  skippedGatewayServices: string[];
+  managedDaemonServiceRestarted: boolean;
+}
+
+async function restartBackgroundServices(): Promise<RestartSummary> {
+  const daemonSpinner = spinner('Restarting personal-agentd');
+  daemonSpinner.start();
+
+  try {
+    await stopDaemonGracefully();
+    await startDaemonDetached();
+    daemonSpinner.succeed('personal-agentd restart requested');
+  } catch (error) {
+    daemonSpinner.fail('Unable to restart personal-agentd');
+    throw error;
+  }
+
+  const managedDaemonSpinner = spinner('Restarting managed daemon service');
+  managedDaemonSpinner.start();
+
+  let managedDaemonServiceRestarted = false;
+  let serviceManagerAvailable = true;
+
+  try {
+    const managedDaemonService = restartManagedDaemonServiceIfInstalled();
+
+    if (managedDaemonService) {
+      managedDaemonServiceRestarted = true;
+      managedDaemonSpinner.succeed(`Managed daemon service restarted (${managedDaemonService.identifier})`);
+    } else {
+      managedDaemonSpinner.succeed('Managed daemon service not installed (skipped)');
+    }
+  } catch (error) {
+    if (isMissingServiceManagerError(error)) {
+      serviceManagerAvailable = false;
+      managedDaemonSpinner.succeed('Service manager not available (skipped)');
+    } else {
+      managedDaemonSpinner.fail('Unable to restart managed daemon service');
+      throw error;
+    }
+  }
+
+  const restartedGatewayServices: string[] = [];
+  const skippedGatewayServices: string[] = [];
+  const failedGatewayServices: string[] = [];
+
+  if (!serviceManagerAvailable) {
+    console.log(`  ${warning('Gateway service manager not found; skipping managed gateway restarts')}`);
+    skippedGatewayServices.push(...SUPPORTED_GATEWAY_PROVIDERS);
+  } else {
+    for (const provider of SUPPORTED_GATEWAY_PROVIDERS) {
+      const gatewaySpinner = spinner(`Restarting ${provider} gateway service`);
+      gatewaySpinner.start();
+
+      try {
+        const status = restartGatewayServiceIfInstalled(provider);
+
+        if (status) {
+          gatewaySpinner.succeed(`Restarted ${provider} gateway service`);
+          restartedGatewayServices.push(provider);
+        } else {
+          gatewaySpinner.succeed(`${provider} gateway service not installed (skipped)`);
+          skippedGatewayServices.push(provider);
+        }
+      } catch (error) {
+        if (isMissingServiceManagerError(error)) {
+          gatewaySpinner.succeed('Service manager not available (skipped)');
+          skippedGatewayServices.push(provider);
+          continue;
+        }
+
+        gatewaySpinner.fail(`Failed to restart ${provider} gateway service`);
+        failedGatewayServices.push(`${provider}: ${(error as Error).message}`);
+      }
+    }
+  }
+
+  if (failedGatewayServices.length > 0) {
+    throw new Error(`Failed to restart gateway services:\n${failedGatewayServices.map((detail) => `- ${detail}`).join('\n')}`);
+  }
+
+  return {
+    restartedGatewayServices,
+    skippedGatewayServices,
+    managedDaemonServiceRestarted,
+  };
+}
+
+async function restartCommand(args: string[]): Promise<number> {
+  ensureNoExtraCommandArgs(args, 'pa restart');
+
+  const summary = await restartBackgroundServices();
+
+  console.log('');
+  console.log(section('Restart summary'));
+  console.log(keyValue('personal-agentd', 'restarted'));
+  console.log(keyValue('managed daemon service', summary.managedDaemonServiceRestarted ? 'restarted' : 'not installed'));
+  console.log(keyValue('gateway services restarted', summary.restartedGatewayServices.length > 0 ? summary.restartedGatewayServices.join(', ') : 'none'));
+  console.log(keyValue('gateway services skipped', summary.skippedGatewayServices.length > 0 ? summary.skippedGatewayServices.join(', ') : 'none'));
+
+  return 0;
+}
+
+async function updateCommand(args: string[]): Promise<number> {
+  ensureNoExtraCommandArgs(args, 'pa update');
+
+  const repoRoot = getRepoRoot();
+  const pullSpinner = spinner('Pulling latest changes from git');
+  pullSpinner.start();
+
+  let gitOutput = '';
+
+  try {
+    gitOutput = pullLatestFromGit(repoRoot);
+    pullSpinner.succeed('Git repository updated');
+  } catch (error) {
+    pullSpinner.fail('Unable to update repository');
+    throw error;
+  }
+
+  if (gitOutput.length > 0) {
+    console.log(dim(gitOutput));
+  }
+
+  const summary = await restartBackgroundServices();
+
+  console.log('');
+  console.log(section('Update summary'));
+  console.log(keyValue('repository', repoRoot));
+  console.log(keyValue('managed daemon service', summary.managedDaemonServiceRestarted ? 'restarted' : 'not installed'));
+  console.log(keyValue('gateway services restarted', summary.restartedGatewayServices.length > 0 ? summary.restartedGatewayServices.join(', ') : 'none'));
+  console.log(keyValue('gateway services skipped', summary.skippedGatewayServices.length > 0 ? summary.skippedGatewayServices.join(', ') : 'none'));
+
+  return 0;
+}
+
 function toProcessText(value: string | Buffer | null | undefined): string {
   if (typeof value === 'string') {
     return value;
@@ -1250,6 +1431,18 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       },
     },
     {
+      name: 'restart',
+      usage: 'restart [args...]',
+      description: 'Restart daemon and managed gateway services',
+      run: restartCommand,
+    },
+    {
+      name: 'update',
+      usage: 'update [args...]',
+      description: 'Pull latest git changes and restart background services',
+      run: updateCommand,
+    },
+    {
       name: 'daemon',
       usage: 'daemon [args...]',
       description: 'Manage personal-agent daemon',
@@ -1340,6 +1533,8 @@ Examples:
   pa profile list
   pa doctor
   pa doctor --json
+  pa restart
+  pa update
   pa gateway telegram start
   pa gateway discord start
   pa gateway service install telegram
