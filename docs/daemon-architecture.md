@@ -202,11 +202,13 @@ Example:
 
 ## CLI surface
 
+- `pa daemon` (help)
 - `pa daemon start`
 - `pa daemon stop`
 - `pa daemon status`
 - `pa daemon restart`
 - `pa daemon logs`
+- `pa daemon service install|status|uninstall|help`
 
 ---
 

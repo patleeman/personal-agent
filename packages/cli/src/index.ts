@@ -36,9 +36,12 @@ import {
 } from '@personal-agent/daemon';
 import {
   SUPPORTED_GATEWAY_PROVIDERS,
+  getManagedDaemonServiceStatus,
+  installManagedDaemonService,
   registerGatewayCliCommands,
   restartGatewayServiceIfInstalled,
   restartManagedDaemonServiceIfInstalled,
+  uninstallManagedDaemonService,
   type RegisteredCliCommand,
 } from '@personal-agent/gateway';
 import { hasOption } from './args.js';
@@ -752,18 +755,151 @@ async function printDaemonStatusHumanReadable(): Promise<void> {
   await printDaemonModules(status.modules);
 }
 
+type DaemonServiceAction = 'help' | 'install' | 'status' | 'uninstall';
+
+const DAEMON_HELP_TEXT = `
+Daemon subcommands:
+  status [--json]                               Show daemon status
+  start                                         Start daemon
+  stop                                          Stop daemon
+  restart                                       Restart daemon
+  logs                                          Show daemon log file and PID
+  service [install|status|uninstall|help]      Manage daemon as an OS user service
+  help                                          Show this daemon help
+`;
+
+function printDaemonHelp(): void {
+  console.log(section('Daemon'));
+  console.log('');
+  console.log('Commands:');
+  console.log('  pa daemon help                                   Show daemon help');
+  console.log('  pa daemon status [--json]                        Show daemon status');
+  console.log('  pa daemon start                                  Start daemon');
+  console.log('  pa daemon stop                                   Stop daemon');
+  console.log('  pa daemon restart                                Restart daemon');
+  console.log('  pa daemon logs                                   Show daemon log file and PID');
+  console.log('  pa daemon service [install|status|uninstall|help] Manage daemon as OS user service');
+  console.log('');
+  console.log(`  ${formatNextStep('pa daemon status')}`);
+}
+
+function printDaemonServiceHelp(): void {
+  console.log(section('Daemon service'));
+  console.log('');
+  console.log('Commands:');
+  console.log('  pa daemon service help         Show daemon service help');
+  console.log('  pa daemon service install      Install and start managed daemon service');
+  console.log('  pa daemon service status       Show managed daemon service status');
+  console.log('  pa daemon service uninstall    Stop and remove managed daemon service');
+  console.log('');
+  console.log(keyValue('Supported platforms', 'macOS launchd, Linux systemd --user'));
+  console.log('');
+  console.log(`  ${formatNextStep('pa daemon service install')}`);
+}
+
+function printDaemonServiceStatus(): void {
+  const status = getManagedDaemonServiceStatus();
+
+  console.log(section('Daemon service'));
+  console.log('');
+  console.log(keyValue('Service', status.identifier));
+  console.log(keyValue('Manifest', status.manifestPath));
+  console.log(keyValue('Installed', status.installed ? 'yes' : 'no'));
+  console.log(keyValue('Running', status.running ? 'yes' : 'no'));
+
+  if (status.logFile) {
+    console.log(keyValue('Log file', status.logFile));
+  }
+
+  if (!status.installed) {
+    console.log('');
+    console.log(`  ${formatNextStep('pa daemon service install')}`);
+  }
+}
+
+function runDaemonServiceAction(action: DaemonServiceAction): void {
+  if (action === 'help') {
+    printDaemonServiceHelp();
+    return;
+  }
+
+  if (action === 'status') {
+    printDaemonServiceStatus();
+    return;
+  }
+
+  if (action === 'install') {
+    const service = installManagedDaemonService();
+
+    console.log(success('Installed managed daemon service'));
+    console.log(keyValue('Service', service.identifier));
+    console.log(keyValue('Manifest', service.manifestPath));
+
+    if (service.logFile) {
+      console.log(keyValue('Log file', service.logFile));
+    }
+
+    console.log(`  ${formatNextStep('pa daemon service status')}`);
+    return;
+  }
+
+  const removed = uninstallManagedDaemonService();
+
+  console.log(success('Removed managed daemon service'));
+  console.log(keyValue('Service', removed.identifier));
+  console.log(keyValue('Manifest', removed.manifestPath));
+
+  if (removed.logFile) {
+    console.log(keyValue('Log file', removed.logFile));
+  }
+
+  console.log(`  ${formatNextStep('pa daemon service install')}`);
+}
+
 async function daemonCommand(args: string[]): Promise<number> {
-  const [subcommand] = args;
+  const [subcommand, ...rest] = args;
 
   if (!subcommand) {
-    await printDaemonStatusHumanReadable();
+    printDaemonHelp();
     return 0;
   }
 
-  if (subcommand === 'status' || subcommand === '--json') {
-    if (hasOption(args, '--json')) {
+  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
+    ensureNoExtraCommandArgs(rest, 'pa daemon help');
+    printDaemonHelp();
+    return 0;
+  }
+
+  if (subcommand === 'service') {
+    const [rawAction, ...serviceArgs] = rest;
+
+    if (!rawAction || rawAction === 'help' || rawAction === '--help' || rawAction === '-h') {
+      ensureNoExtraCommandArgs(serviceArgs, 'pa daemon service help');
+      printDaemonServiceHelp();
+      return 0;
+    }
+
+    if (rawAction !== 'install' && rawAction !== 'status' && rawAction !== 'uninstall') {
+      throw new Error(`Unknown daemon service subcommand: ${rawAction}`);
+    }
+
+    ensureNoExtraCommandArgs(serviceArgs, `pa daemon service ${rawAction}`);
+    runDaemonServiceAction(rawAction);
+    return 0;
+  }
+
+  if (subcommand === '--json') {
+    ensureNoExtraCommandArgs(rest, 'pa daemon --json');
+    console.log(await daemonStatusJson());
+    return 0;
+  }
+
+  if (subcommand === 'status') {
+    if (hasOption(rest, '--json')) {
+      ensureNoExtraCommandArgs(rest.filter((arg) => arg !== '--json'), 'pa daemon status [--json]');
       console.log(await daemonStatusJson());
     } else {
+      ensureNoExtraCommandArgs(rest, 'pa daemon status [--json]');
       await printDaemonStatusHumanReadable();
     }
 
@@ -771,6 +907,7 @@ async function daemonCommand(args: string[]): Promise<number> {
   }
 
   if (subcommand === 'start') {
+    ensureNoExtraCommandArgs(rest, 'pa daemon start');
     const daemonSpinner = spinner('Starting personal-agentd');
     daemonSpinner.start();
     await startDaemonDetached();
@@ -780,6 +917,7 @@ async function daemonCommand(args: string[]): Promise<number> {
   }
 
   if (subcommand === 'stop') {
+    ensureNoExtraCommandArgs(rest, 'pa daemon stop');
     const daemonSpinner = spinner('Stopping personal-agentd');
     daemonSpinner.start();
     await stopDaemonGracefully();
@@ -788,6 +926,7 @@ async function daemonCommand(args: string[]): Promise<number> {
   }
 
   if (subcommand === 'restart') {
+    ensureNoExtraCommandArgs(rest, 'pa daemon restart');
     const daemonSpinner = spinner('Restarting personal-agentd');
     daemonSpinner.start();
     await stopDaemonGracefully();
@@ -798,6 +937,7 @@ async function daemonCommand(args: string[]): Promise<number> {
   }
 
   if (subcommand === 'logs') {
+    ensureNoExtraCommandArgs(rest, 'pa daemon logs');
     const config = loadDaemonConfig();
     const daemonPaths = resolveDaemonPaths(config.ipc.socketPath);
     const pid = await readDaemonPid();
@@ -1388,6 +1528,7 @@ interface CliCommandDefinition {
   name: string;
   description: string;
   usage?: string;
+  helpText?: string;
   run: CommandHandler;
 }
 
@@ -1444,8 +1585,9 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     },
     {
       name: 'daemon',
-      usage: 'daemon [args...]',
+      usage: 'daemon [status|start|stop|restart|logs|service|help] [args...]',
       description: 'Manage personal-agent daemon',
+      helpText: DAEMON_HELP_TEXT,
       run: daemonCommand,
     },
     {
@@ -1538,8 +1680,9 @@ Examples:
   pa gateway telegram start
   pa gateway discord start
   pa gateway service install telegram
-  pa daemon start
+  pa daemon
   pa daemon status
+  pa daemon service install
   pa memory list
   pa memory head 5
   pa memory open <sessionId>
@@ -1555,7 +1698,7 @@ Examples:
     .exitOverride();
 
   for (const definition of definitions) {
-    program
+    const command = program
       .command(definition.usage ?? `${definition.name} [args...]`)
       .description(definition.description)
       .allowUnknownOption(true)
@@ -1564,6 +1707,10 @@ Examples:
         const args = normalizeActionArgs(actionArgs);
         setExitCode(await definition.run(args));
       });
+
+    if (definition.helpText) {
+      command.addHelpText('after', definition.helpText);
+    }
   }
 
   return program;

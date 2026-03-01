@@ -44,9 +44,12 @@ import {
 
 export {
   SUPPORTED_GATEWAY_PROVIDERS,
+  getManagedDaemonServiceStatus,
+  installManagedDaemonService,
   restartGatewayService,
   restartGatewayServiceIfInstalled,
   restartManagedDaemonServiceIfInstalled,
+  uninstallManagedDaemonService,
 } from './service.js';
 
 // Logging types for chat flow

@@ -61,10 +61,15 @@ pa gateway
 pa gateway setup [telegram|discord]
 pa gateway start [telegram|discord]
 pa gateway service [install|status|uninstall|help] [telegram|discord]
+pa daemon
+pa daemon help
 pa daemon [status|start|stop|restart|logs]
 pa daemon status [--json]
+pa daemon service [install|status|uninstall|help]
 pa memory [list|query|search|head|open|status]
 ```
+
+`pa daemon` now prints daemon command help. Use `pa daemon status` for runtime status.
 
 ## Memory commands
 

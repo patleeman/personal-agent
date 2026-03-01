@@ -1,6 +1,6 @@
 /**
  * P0: CLI daemon command behavior matrix tests
- * Tests all daemon subcommands: status, status --json, start, stop, restart, logs
+ * Tests daemon command behavior: help, status, status --json, start, stop, restart, logs, service help
  * Plus unknown subcommand failure paths
  */
 
@@ -79,7 +79,7 @@ describe('daemon command matrix', () => {
     logSpy.mockRestore();
   });
 
-  it('handles daemon status as default when no subcommand provided', async () => {
+  it('shows daemon help when no subcommand is provided', async () => {
     const stateRoot = createTempDir('personal-agent-cli-state-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
@@ -88,11 +88,45 @@ describe('daemon command matrix', () => {
       logs.push(String(message ?? ''));
     });
 
-    // 'daemon' without subcommand should default to status
     const exitCode = await runCli(['daemon']);
 
     expect(exitCode).toBe(0);
-    expect(logs.some((line) => line.includes('personal-agentd:'))).toBe(true);
+    expect(logs.some((line) => line.includes('Commands:'))).toBe(true);
+    expect(logs.some((line) => line.includes('pa daemon status [--json]'))).toBe(true);
+
+    logSpy.mockRestore();
+  });
+
+  it('shows daemon help via daemon help subcommand', async () => {
+    const stateRoot = createTempDir('personal-agent-cli-state-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
+      logs.push(String(message ?? ''));
+    });
+
+    const exitCode = await runCli(['daemon', 'help']);
+
+    expect(exitCode).toBe(0);
+    expect(logs.some((line) => line.includes('pa daemon service [install|status|uninstall|help]'))).toBe(true);
+
+    logSpy.mockRestore();
+  });
+
+  it('shows daemon service help via daemon service', async () => {
+    const stateRoot = createTempDir('personal-agent-cli-state-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
+      logs.push(String(message ?? ''));
+    });
+
+    const exitCode = await runCli(['daemon', 'service']);
+
+    expect(exitCode).toBe(0);
+    expect(logs.some((line) => line.includes('pa daemon service install'))).toBe(true);
 
     logSpy.mockRestore();
   });

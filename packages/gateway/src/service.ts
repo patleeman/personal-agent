@@ -333,6 +333,24 @@ function getLaunchdDaemonServiceStatus(): ManagedDaemonServiceStatus {
   };
 }
 
+function uninstallLaunchdDaemonService(): ManagedDaemonServiceInfo {
+  const label = getLaunchdDaemonLabel();
+  const manifestPath = getLaunchdPlistPath(label);
+  const domain = getLaunchdDomain();
+
+  runCommand('launchctl', ['bootout', domain, manifestPath], { allowNonZero: true });
+
+  if (existsSync(manifestPath)) {
+    rmSync(manifestPath, { force: true });
+  }
+
+  return {
+    identifier: label,
+    manifestPath,
+    logFile: getDaemonLogFile(),
+  };
+}
+
 interface SystemdUnitInput {
   provider: GatewayProvider;
   nodePath: string;
@@ -453,6 +471,24 @@ function getSystemdDaemonServiceStatus(): ManagedDaemonServiceStatus {
     manifestPath,
     installed: existsSync(manifestPath),
     running: (status.status ?? 1) === 0 && activeState === 'active',
+  };
+}
+
+function uninstallSystemdDaemonService(): ManagedDaemonServiceInfo {
+  const unitName = getSystemdDaemonUnitName();
+  const manifestPath = getSystemdUnitPath(unitName);
+
+  runCommand('systemctl', ['--user', 'disable', '--now', unitName], { allowNonZero: true });
+
+  if (existsSync(manifestPath)) {
+    rmSync(manifestPath, { force: true });
+  }
+
+  runCommand('systemctl', ['--user', 'daemon-reload']);
+
+  return {
+    identifier: unitName,
+    manifestPath,
   };
 }
 
@@ -642,6 +678,36 @@ function restartLaunchdDaemonService(): void {
 function restartSystemdDaemonService(): void {
   const unitName = getSystemdDaemonUnitName();
   restartSystemdService(unitName);
+}
+
+export function installManagedDaemonService(): ManagedDaemonServiceInfo {
+  const platform = resolveServicePlatform();
+
+  if (platform === 'launchd') {
+    return installLaunchdDaemonService();
+  }
+
+  return installSystemdDaemonService();
+}
+
+export function uninstallManagedDaemonService(): ManagedDaemonServiceInfo {
+  const platform = resolveServicePlatform();
+
+  if (platform === 'launchd') {
+    return uninstallLaunchdDaemonService();
+  }
+
+  return uninstallSystemdDaemonService();
+}
+
+export function getManagedDaemonServiceStatus(): ManagedDaemonServiceStatus {
+  const platform = resolveServicePlatform();
+
+  if (platform === 'launchd') {
+    return getLaunchdDaemonServiceStatus();
+  }
+
+  return getSystemdDaemonServiceStatus();
 }
 
 export function installGatewayService(provider: GatewayProvider): GatewayServiceInfo {

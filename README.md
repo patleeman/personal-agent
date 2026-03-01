@@ -111,11 +111,13 @@ pa memory search "pattern"  # Full-text search
 ### Daemon management
 
 ```bash
+pa daemon                   # Show daemon command help
+pa daemon status            # Check daemon status
 pa daemon start             # Start background daemon
 pa daemon stop              # Stop daemon
-pa daemon status            # Check daemon status
 pa daemon restart           # Restart daemon only
 pa daemon logs              # View daemon logs
+pa daemon service install   # Install daemon as managed user service
 pa restart                  # Restart daemon + managed gateways
 pa update                   # Pull latest git changes and restart
 ```
@@ -149,7 +151,8 @@ pa gateway service uninstall telegram
 
 CLI surface:
 
-- `pa daemon start|stop|restart|status|logs`
+- `pa daemon` (help), `pa daemon status|start|stop|restart|logs`
+- `pa daemon service install|status|uninstall|help`
 - `pa restart`
 - `pa update`
 

@@ -68,7 +68,8 @@ Owns user-facing local commands:
 - `pa profile list/show/use`
 - `pa doctor`
 - `pa gateway [telegram|discord] [start|help]` (registered by `@personal-agent/gateway`)
-- `pa daemon start|stop|status|restart|logs`
+- `pa daemon` (help), `pa daemon status|start|stop|restart|logs`
+- `pa daemon service install|status|uninstall|help`
 
 Responsibilities:
 
