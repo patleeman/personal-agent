@@ -21,10 +21,11 @@
     "@personal-agent/core": "*",
     "@personal-agent/daemon": "*",
     "@personal-agent/resources": "*",
-    "discord.js": "^14.25.1",
-    "node-telegram-bot-api": "^0.66.0"
+    "discord.js": "^13.17.1",
+    "grammy": "^1.36.2",
+    "vitest": "4.0.18"
   },
   "devDependencies": {
-    "@types/node-telegram-bot-api": "^0.64.7"
+    "@types/node": "^20.0.0"
   }
 }
