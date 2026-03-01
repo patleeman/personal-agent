@@ -1201,6 +1201,7 @@ Examples:
   pa doctor --json
   pa gateway telegram start
   pa gateway discord start
+  pa gateway service install telegram
   pa daemon start
   pa daemon status
   pa memory list

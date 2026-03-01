@@ -73,6 +73,31 @@ describe('parseGatewayCliArgs', () => {
     expect(parseGatewayCliArgs(['setup'])).toEqual({ action: 'setup' });
   });
 
+  it('supports service subcommands', () => {
+    expect(parseGatewayCliArgs(['service'])).toEqual({ action: 'service', serviceAction: 'help' });
+    expect(parseGatewayCliArgs(['service', 'help'])).toEqual({ action: 'service', serviceAction: 'help' });
+    expect(parseGatewayCliArgs(['service', 'help', 'discord'])).toEqual({
+      action: 'service',
+      serviceAction: 'help',
+      provider: 'discord',
+    });
+    expect(parseGatewayCliArgs(['service', 'install'])).toEqual({
+      action: 'service',
+      serviceAction: 'install',
+      provider: 'telegram',
+    });
+    expect(parseGatewayCliArgs(['service', 'status', 'discord'])).toEqual({
+      action: 'service',
+      serviceAction: 'status',
+      provider: 'discord',
+    });
+    expect(parseGatewayCliArgs(['service', 'uninstall', 'telegram'])).toEqual({
+      action: 'service',
+      serviceAction: 'uninstall',
+      provider: 'telegram',
+    });
+  });
+
   it('supports global help', () => {
     expect(parseGatewayCliArgs(['help'])).toEqual({ action: 'help' });
     expect(parseGatewayCliArgs(['--help'])).toEqual({ action: 'help' });
@@ -82,6 +107,8 @@ describe('parseGatewayCliArgs', () => {
   it('fails for invalid syntax', () => {
     expect(() => parseGatewayCliArgs(['start', 'slack'])).toThrow('Unknown gateway provider: slack');
     expect(() => parseGatewayCliArgs(['setup', 'slack'])).toThrow('Unknown gateway provider: slack');
+    expect(() => parseGatewayCliArgs(['service', 'restart'])).toThrow('Unknown gateway service subcommand: restart');
+    expect(() => parseGatewayCliArgs(['service', 'install', 'slack'])).toThrow('Unknown gateway provider: slack');
     expect(() => parseGatewayCliArgs(['discord', 'stop'])).toThrow('Unknown discord subcommand: stop');
     expect(() => parseGatewayCliArgs(['unknown'])).toThrow('Unknown gateway subcommand: unknown');
     expect(() => parseGatewayCliArgs(['help', 'discord'])).toThrow('Too many arguments for `pa gateway help`');
@@ -103,7 +130,7 @@ describe('gateway CLI command registration', () => {
     expect(commands).toEqual([
       {
         name: 'gateway',
-        usage: 'pa gateway [telegram|discord] [setup|start|help]',
+        usage: 'pa gateway [telegram|discord|service] [subcommand]',
         description: 'Run messaging gateway commands',
       },
     ]);
@@ -160,6 +187,36 @@ describe('queued telegram message handler', () => {
     expect(sendMessage).toHaveBeenCalledWith(1, 'Available commands:\n/new\n/status');
   });
 
+  it('includes /model, /compact, and /resume in default /commands output', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'ignored');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      runPrompt,
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/commands' });
+    await handler.waitForIdle('1');
+
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendChatAction).not.toHaveBeenCalled();
+
+    const output = sendMessage.mock.calls
+      .map((call) => String(call.at(1) ?? ''))
+      .join('\n');
+    expect(output).toContain('/model -');
+    expect(output).toContain('/compact -');
+    expect(output).toContain('/resume -');
+  });
+
   it('returns configured skills list for /skills without invoking pi', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
@@ -185,6 +242,38 @@ describe('queued telegram message handler', () => {
     expect(sendMessage).toHaveBeenCalledWith(1, 'Available skills:\n- tdd-feature');
   });
 
+  it('handles /resume and /compact without forwarding to pi', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'ignored');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      runPrompt,
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/resume' });
+    handler.handleMessage({ chat: { id: 1 }, text: '/compact' });
+    await handler.waitForIdle('1');
+
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendChatAction).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(
+      1,
+      'Gateway sessions already resume automatically per chat. Use /new to start a fresh session.',
+    );
+    expect(sendMessage).toHaveBeenCalledWith(
+      1,
+      'Manual /compact is not supported in gateway print mode yet. Open this session in Pi TUI to compact.',
+    );
+  });
+
   it('maps /skill <name> to /skill:<name> before invoking pi', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
@@ -207,6 +296,55 @@ describe('queued telegram message handler', () => {
     const firstCall = runPrompt.mock.calls[0]?.[0] as { prompt: string };
     expect(firstCall.prompt).toBe('/skill:tdd-feature');
     expect(sendChatAction).toHaveBeenCalledWith(1, 'typing');
+  });
+
+  it('lists models for /model and applies selected model to future prompts', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async ({ prompt, model }: { prompt: string; model?: string }) => `reply:${prompt}:${model}`);
+
+    const listModels = vi.fn(async () => ['provider/model-a', 'provider/model-b']);
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      runPrompt,
+      modelCommands: {
+        listModels,
+        activeModelsByConversation: new Map(),
+        pendingSelectionsByConversation: new Map(),
+      },
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/model' });
+    await handler.waitForIdle('1');
+
+    expect(listModels).toHaveBeenCalledWith(undefined);
+    expect(runPrompt).not.toHaveBeenCalled();
+
+    const pickerOutput = sendMessage.mock.calls
+      .map((call) => String(call.at(1) ?? ''))
+      .join('\n');
+    expect(pickerOutput).toContain('1. provider/model-a');
+    expect(pickerOutput).toContain('2. provider/model-b');
+
+    handler.handleMessage({ chat: { id: 1 }, text: '2' });
+    await handler.waitForIdle('1');
+
+    expect(sendMessage).toHaveBeenCalledWith(1, 'Model set to provider/model-b for this chat.');
+    expect(runPrompt).not.toHaveBeenCalled();
+
+    handler.handleMessage({ chat: { id: 1 }, text: 'hello' });
+    await handler.waitForIdle('1');
+
+    const promptCall = runPrompt.mock.calls[0]?.[0] as { prompt: string; model?: string };
+    expect(promptCall.prompt).toBe('hello');
+    expect(promptCall.model).toBe('provider/model-b');
   });
 
   it('isolates session files per chat and queues messages per chat', async () => {
@@ -352,6 +490,40 @@ describe('queued discord message handler', () => {
     expect(sendMessage).toHaveBeenCalledWith('Available commands:\n/new\n/status');
   });
 
+  it('includes /model, /compact, and /resume in default /commands output', async () => {
+    const runPrompt = vi.fn(async () => 'ignored');
+    const sendMessage = vi.fn(async () => undefined);
+    const sendTyping = vi.fn(async () => undefined);
+
+    const handler = createQueuedDiscordMessageHandler({
+      allowlist: new Set(['channel-1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      discordSessionDir: '/tmp/discord-sessions',
+      workingDirectory: '/tmp/work',
+      runPrompt,
+    });
+
+    handler.handleMessage({
+      channelId: 'channel-1',
+      content: '/commands',
+      sendMessage,
+      sendTyping,
+    });
+
+    await handler.waitForIdle('channel-1');
+
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendTyping).not.toHaveBeenCalled();
+
+    const output = sendMessage.mock.calls
+      .map((call) => String(call.at(0) ?? ''))
+      .join('\n');
+    expect(output).toContain('/model -');
+    expect(output).toContain('/compact -');
+    expect(output).toContain('/resume -');
+  });
+
   it('returns configured skills list for /skills without invoking pi', async () => {
     const runPrompt = vi.fn(async () => 'ignored');
     const sendMessage = vi.fn(async () => undefined);
@@ -381,6 +553,46 @@ describe('queued discord message handler', () => {
     expect(sendMessage).toHaveBeenCalledWith('Available skills:\n- tdd-feature');
   });
 
+  it('handles /resume and /compact without forwarding to pi', async () => {
+    const runPrompt = vi.fn(async () => 'ignored');
+    const sendMessage = vi.fn(async () => undefined);
+    const sendTyping = vi.fn(async () => undefined);
+
+    const handler = createQueuedDiscordMessageHandler({
+      allowlist: new Set(['channel-1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      discordSessionDir: '/tmp/discord-sessions',
+      workingDirectory: '/tmp/work',
+      runPrompt,
+    });
+
+    handler.handleMessage({
+      channelId: 'channel-1',
+      content: '/resume',
+      sendMessage,
+      sendTyping,
+    });
+
+    handler.handleMessage({
+      channelId: 'channel-1',
+      content: '/compact',
+      sendMessage,
+      sendTyping,
+    });
+
+    await handler.waitForIdle('channel-1');
+
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendTyping).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(
+      'Gateway sessions already resume automatically per channel. Use /new to start a fresh session.',
+    );
+    expect(sendMessage).toHaveBeenCalledWith(
+      'Manual /compact is not supported in gateway print mode yet. Open this session in Pi TUI to compact.',
+    );
+  });
+
   it('maps /skill <name> to /skill:<name> before invoking pi', async () => {
     const runPrompt = vi.fn(async ({ prompt }: { prompt: string; sessionFile: string }) => `reply:${prompt}`);
     const sendMessage = vi.fn(async () => undefined);
@@ -407,6 +619,51 @@ describe('queued discord message handler', () => {
     const firstCall = runPrompt.mock.calls[0]?.[0] as { prompt: string };
     expect(firstCall.prompt).toBe('/skill:tdd-feature');
     expect(sendTyping).toHaveBeenCalled();
+  });
+
+  it('applies /model <provider/model> and forwards selection to future prompts', async () => {
+    const runPrompt = vi.fn(async ({ prompt, model }: { prompt: string; model?: string }) => `reply:${prompt}:${model}`);
+    const sendMessage = vi.fn(async () => undefined);
+    const sendTyping = vi.fn(async () => undefined);
+
+    const handler = createQueuedDiscordMessageHandler({
+      allowlist: new Set(['channel-1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      discordSessionDir: '/tmp/discord-sessions',
+      workingDirectory: '/tmp/work',
+      runPrompt,
+      modelCommands: {
+        listModels: vi.fn(async () => []),
+        activeModelsByConversation: new Map(),
+        pendingSelectionsByConversation: new Map(),
+      },
+    });
+
+    handler.handleMessage({
+      channelId: 'channel-1',
+      content: '/model provider/model-a',
+      sendMessage,
+      sendTyping,
+    });
+
+    await handler.waitForIdle('channel-1');
+
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith('Model set to provider/model-a for this channel.');
+
+    handler.handleMessage({
+      channelId: 'channel-1',
+      content: 'hello',
+      sendMessage,
+      sendTyping,
+    });
+
+    await handler.waitForIdle('channel-1');
+
+    const firstCall = runPrompt.mock.calls[0]?.[0] as { prompt: string; model?: string };
+    expect(firstCall.prompt).toBe('hello');
+    expect(firstCall.model).toBe('provider/model-a');
   });
 
   it('rejects messages when per-channel queue limit is exceeded', async () => {

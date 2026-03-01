@@ -22,6 +22,7 @@ pa gateway
 pa gateway help
 pa gateway setup [telegram|discord]
 pa gateway start [telegram|discord]
+pa gateway service [install|status|uninstall|help] [telegram|discord]
 pa gateway telegram [setup|start|help]
 pa gateway discord [setup|start|help]
 ```
@@ -30,7 +31,8 @@ Behavior defaults:
 
 - `pa gateway` -> show gateway help
 - `pa gateway setup` -> interactive setup (asks provider)
-- `pa gateway start` -> start Telegram
+- `pa gateway start` -> start Telegram in foreground
+- `pa gateway service install` -> install Telegram as background service
 - `pa gateway telegram` -> show Telegram-specific help
 - `pa gateway discord` -> show Discord-specific help
 
@@ -101,21 +103,56 @@ pa gateway discord start
 
 `start` runs in the foreground. Keep that terminal open and press `Ctrl+C` to stop.
 
+## Background service mode (recommended for 24/7)
+
+Use service mode if you want gateway to stay up after terminal close and auto-restart on failure.
+
+Supported platforms:
+
+- macOS (`launchd` user agent)
+- Linux (`systemd --user` unit)
+
+Commands:
+
+```bash
+# Install + start in background (default provider: telegram)
+pa gateway service install [telegram|discord]
+
+# Check state
+pa gateway service status [telegram|discord]
+
+# Stop + remove service
+pa gateway service uninstall [telegram|discord]
+```
+
+Notes:
+
+- Run provider setup first (`pa gateway <provider> setup`).
+- `service install` validates provider token + allowlist in gateway config.
+- macOS logs are written to `~/.local/state/personal-agent/gateway/logs/<provider>.log`.
+- Linux logs are available via `journalctl --user -u personal-agent-gateway-<provider>.service -f`.
+
 ## Message/session behavior
 
 Each chat/channel gets its own Pi session file.
 
 Gateway commands inside chat:
 
-- `/status` -> profile, agentDir, session file info
+- `/status` -> profile, agentDir, session file info, active model
 - `/new` -> delete chat/channel session file and start a fresh conversation
 - `/commands` -> list available slash commands
 - `/skills` -> list available skills for the current profile
 
+Common Pi slash commands exposed in gateway command lists:
+
+- `/skill <name>` (translated to `/skill:<name>` for Telegram menu compatibility)
+- `/model` -> opens a model picker in chat; reply with a number or `/model <provider/model>`
+- `/compact` -> currently returns guidance (manual compaction requires Pi TUI)
+- `/resume` -> gateway sessions already auto-resume per chat/channel; use `/new` for a fresh one
+
 Telegram also registers slash commands via Bot API on startup (`setMyCommands`).
 
 All non-gateway commands are passed through to Pi in print mode with that chat's session.
-For Telegram menu compatibility, `/skill <name>` is translated to `/skill:<name>` before sending to Pi.
 
 ## Daemon integration
 
@@ -140,6 +177,9 @@ Run setup (`pa gateway setup <provider>`) or set provider token env var.
 
 ### `...ALLOWLIST is required`
 Run setup (`pa gateway setup <provider>`) or set allowlist env var with comma-separated chat/channel IDs.
+
+### `Gateway <provider> token missing` / `allowlist missing` during `service install`
+Run `pa gateway <provider> setup` first so token/allowlist are saved in gateway config.
 
 ### Messages are queued slowly
 Increase:

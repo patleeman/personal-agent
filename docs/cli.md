@@ -60,6 +60,7 @@ pa doctor
 pa gateway
 pa gateway setup [telegram|discord]
 pa gateway start [telegram|discord]
+pa gateway service [install|status|uninstall|help] [telegram|discord]
 pa daemon [status|start|stop|restart|logs]
 pa daemon status [--json]
 ```

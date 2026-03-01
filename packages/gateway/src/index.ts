@@ -33,6 +33,11 @@ import {
   type TelegramStoredConfig,
   writeGatewayConfig,
 } from './config.js';
+import {
+  getGatewayServiceStatus,
+  installGatewayService,
+  uninstallGatewayService,
+} from './service.js';
 
 // Logging types for chat flow
 export interface ChatLogEntry {
@@ -123,6 +128,7 @@ interface RunPromptFnInput {
   prompt: string;
   sessionFile: string;
   cwd: string;
+  model?: string;
   logContext?: {
     source: string;
     userId: string;
@@ -131,6 +137,19 @@ interface RunPromptFnInput {
 }
 
 type RunPromptFn = (options: RunPromptFnInput) => Promise<string>;
+
+interface PendingModelSelection {
+  models: string[];
+  search?: string;
+}
+
+export interface ModelCommandSupport {
+  listModels: (search?: string) => Promise<string[]>;
+  activeModelsByConversation: Map<string, string>;
+  pendingSelectionsByConversation: Map<string, PendingModelSelection>;
+  defaultModel?: string;
+  selectionLimit?: number;
+}
 
 export interface CreateTelegramMessageHandlerOptions {
   allowlist: Set<string>;
@@ -146,6 +165,7 @@ export interface CreateTelegramMessageHandlerOptions {
   sessionFileExists?: (path: string) => boolean;
   removeSessionFile?: (path: string) => Promise<void>;
   maxPendingPerChat?: number;
+  modelCommands?: ModelCommandSupport;
 }
 
 export interface QueuedTelegramMessageHandler {
@@ -175,6 +195,7 @@ export interface CreateDiscordMessageHandlerOptions {
   sessionFileExists?: (path: string) => boolean;
   removeSessionFile?: (path: string) => Promise<void>;
   maxPendingPerChannel?: number;
+  modelCommands?: ModelCommandSupport;
 }
 
 export interface QueuedDiscordMessageHandler {
@@ -186,6 +207,7 @@ const DEFAULT_PI_TIMEOUT_MS = 180_000;
 const DEFAULT_PI_MAX_OUTPUT_BYTES = 200_000;
 const DEFAULT_MAX_PENDING_PER_CHAT = 20;
 const DEFAULT_MAX_PENDING_PER_CHANNEL = 20;
+const DEFAULT_MODEL_SELECTION_LIMIT = 25;
 
 function gatewaySection(title: string): string {
   return title;
@@ -252,6 +274,9 @@ const DEFAULT_TELEGRAM_COMMANDS: TelegramCommandDefinition[] = [
   { command: 'skills', description: 'List available skills' },
   { command: 'help', description: 'Show command help' },
   { command: 'skill', description: 'Load a skill (usage: /skill <name>)' },
+  { command: 'model', description: 'Select model (usage: /model [search|provider/model])' },
+  { command: 'compact', description: 'Compact context (TUI only in gateway mode)' },
+  { command: 'resume', description: 'Resume help (gateway auto-resumes per chat)' },
 ];
 
 function toTelegramCommandName(rawCommand: string): string | undefined {
@@ -805,6 +830,85 @@ function applyModelDefaults(args: string[], settings: Record<string, unknown>): 
   return output;
 }
 
+function getProfileDefaultModel(profile: ResolvedProfile): string | undefined {
+  const settings = profile.settingsFiles.length > 0
+    ? mergeJsonFiles(profile.settingsFiles)
+    : {};
+
+  const provider = settings.defaultProvider;
+  const model = settings.defaultModel;
+
+  if (typeof provider === 'string' && typeof model === 'string') {
+    return `${provider}/${model}`;
+  }
+
+  return undefined;
+}
+
+function parsePiModelListOutput(output: string): string[] {
+  const lines = output.split('\n');
+  const models: string[] = [];
+  const seen = new Set<string>();
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('provider')) {
+      continue;
+    }
+
+    const match = trimmed.match(/^(\S+)\s+(\S+)(?:\s+|$)/);
+    if (!match) {
+      continue;
+    }
+
+    const provider = match[1];
+    const model = match[2];
+    if (!provider || !model) {
+      continue;
+    }
+
+    const modelId = `${provider}/${model}`;
+    if (seen.has(modelId)) {
+      continue;
+    }
+
+    seen.add(modelId);
+    models.push(modelId);
+  }
+
+  return models;
+}
+
+async function listPiModels(options: {
+  agentDir: string;
+  cwd: string;
+  search?: string;
+}): Promise<string[]> {
+  const args = ['--list-models'];
+  const search = options.search?.trim();
+  if (search && search.length > 0) {
+    args.push(search);
+  }
+
+  const result = spawnSync('pi', args, {
+    cwd: options.cwd,
+    env: {
+      ...process.env,
+      PI_CODING_AGENT_DIR: options.agentDir,
+    },
+    encoding: 'utf-8',
+  });
+
+  if (result.error || result.status !== 0) {
+    const errorMessage = result.error?.message
+      ?? result.stderr?.trim()
+      ?? `pi --list-models exited with code ${result.status}`;
+    throw new Error(errorMessage);
+  }
+
+  return parsePiModelListOutput(result.stdout ?? '');
+}
+
 function ensureExtensionDependencies(profile: ResolvedProfile): void {
   const dependencyDirs = getExtensionDependencyDirs(profile);
   const missingDirs = dependencyDirs.filter((dir) => !existsSync(join(dir, 'node_modules')));
@@ -827,6 +931,7 @@ interface RunPiPrintPromptOptions {
   profile: ResolvedProfile;
   agentDir: string;
   cwd: string;
+  model?: string;
   logContext?: {
     source: string;
     userId: string;
@@ -840,11 +945,13 @@ async function runPiPrintPrompt(options: RunPiPrintPromptOptions): Promise<strin
     : {};
 
   const resourceArgs = buildPiResourceArgs(options.profile);
+  const modelArgs = options.model ? ['--model', options.model] : [];
   const args = applyModelDefaults(
     [
       ...resourceArgs,
       '--session',
       options.sessionFile,
+      ...modelArgs,
       '-p',
       options.prompt,
       '--mode',
@@ -1004,6 +1111,193 @@ async function sendLongText(sendMessage: SendTextFn, text: string): Promise<void
   }
 }
 
+function resolveModelFromInput(input: string, models: string[]): string | undefined {
+  const trimmed = input.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+
+  if (/^\d+$/.test(trimmed)) {
+    const index = Number(trimmed);
+    if (!Number.isFinite(index) || index <= 0) {
+      return undefined;
+    }
+
+    return models[index - 1];
+  }
+
+  const exactMatch = models.find((model) => model.toLowerCase() === trimmed.toLowerCase());
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  if (trimmed.includes('/')) {
+    return trimmed;
+  }
+
+  return undefined;
+}
+
+function formatModelSelectionPrompt(options: {
+  models: string[];
+  search?: string;
+  total: number;
+}): string {
+  const heading = options.search
+    ? `Available models matching "${options.search}":`
+    : 'Available models:';
+
+  const lines = [heading];
+
+  for (const [index, model] of options.models.entries()) {
+    lines.push(`${index + 1}. ${model}`);
+  }
+
+  if (options.total > options.models.length) {
+    lines.push(`...and ${options.total - options.models.length} more.`);
+    lines.push('Use /model <search> to narrow the results.');
+  }
+
+  lines.push('');
+  lines.push('Reply with a number (for example: 2) or /model <provider/model>.');
+  lines.push('Send /cancel to cancel model selection.');
+
+  return lines.join('\n');
+}
+
+function clearPendingModelSelection(
+  support: ModelCommandSupport | undefined,
+  conversationId: string,
+): void {
+  support?.pendingSelectionsByConversation.delete(conversationId);
+}
+
+interface HandleModelCommandOptions {
+  conversationId: string;
+  conversationLabel: 'chat' | 'channel';
+  command?: string;
+  args: string;
+  normalizedText: string;
+  modelCommands?: ModelCommandSupport;
+  sendMessage: SendTextFn;
+}
+
+async function handleModelCommand(options: HandleModelCommandOptions): Promise<boolean> {
+  const support = options.modelCommands;
+  if (!support) {
+    return false;
+  }
+
+  const pending = support.pendingSelectionsByConversation.get(options.conversationId);
+
+  if (pending && options.command === '/cancel') {
+    support.pendingSelectionsByConversation.delete(options.conversationId);
+    await options.sendMessage('Cancelled model selection.');
+    return true;
+  }
+
+  if (pending && !options.command) {
+    const selectedModel = resolveModelFromInput(options.normalizedText, pending.models);
+    if (!selectedModel) {
+      await options.sendMessage(
+        'Invalid model selection. Reply with a number from the list, '
+        + 'or send /model to refresh, or /cancel to cancel.',
+      );
+      return true;
+    }
+
+    support.pendingSelectionsByConversation.delete(options.conversationId);
+    support.activeModelsByConversation.set(options.conversationId, selectedModel);
+    await options.sendMessage(`Model set to ${selectedModel} for this ${options.conversationLabel}.`);
+    return true;
+  }
+
+  if (pending && options.command && options.command !== '/model') {
+    support.pendingSelectionsByConversation.delete(options.conversationId);
+  }
+
+  if (options.command !== '/model') {
+    return false;
+  }
+
+  const args = options.args.trim();
+
+  if (args.includes('/')) {
+    clearPendingModelSelection(support, options.conversationId);
+    support.activeModelsByConversation.set(options.conversationId, args);
+    await options.sendMessage(`Model set to ${args} for this ${options.conversationLabel}.`);
+    return true;
+  }
+
+  if (/^\d+$/.test(args)) {
+    let selectedModel = pending
+      ? resolveModelFromInput(args, pending.models)
+      : undefined;
+
+    if (!selectedModel) {
+      try {
+        const availableModels = await support.listModels();
+        selectedModel = resolveModelFromInput(args, availableModels);
+      } catch (error) {
+        await options.sendMessage(`Error listing models: ${(error as Error).message}`);
+        return true;
+      }
+    }
+
+    if (!selectedModel) {
+      await options.sendMessage(
+        'Selection number not found. Run /model to list models, '
+        + 'or use /model <provider/model> to set one directly.',
+      );
+      return true;
+    }
+
+    clearPendingModelSelection(support, options.conversationId);
+    support.activeModelsByConversation.set(options.conversationId, selectedModel);
+    await options.sendMessage(`Model set to ${selectedModel} for this ${options.conversationLabel}.`);
+    return true;
+  }
+
+  const search = args.length > 0 ? args : undefined;
+
+  try {
+    const availableModels = await support.listModels(search);
+    if (availableModels.length === 0) {
+      const suffix = search ? ` matching "${search}"` : '';
+      await options.sendMessage(`No models found${suffix}.`);
+      return true;
+    }
+
+    if (availableModels.length === 1) {
+      const selectedModel = availableModels[0] as string;
+      clearPendingModelSelection(support, options.conversationId);
+      support.activeModelsByConversation.set(options.conversationId, selectedModel);
+      await options.sendMessage(`Model set to ${selectedModel} for this ${options.conversationLabel}.`);
+      return true;
+    }
+
+    const selectionLimit = support.selectionLimit ?? DEFAULT_MODEL_SELECTION_LIMIT;
+    const modelsForSelection = availableModels.slice(0, selectionLimit);
+
+    support.pendingSelectionsByConversation.set(options.conversationId, {
+      models: modelsForSelection,
+      search,
+    });
+
+    const pickerText = formatModelSelectionPrompt({
+      models: modelsForSelection,
+      search,
+      total: availableModels.length,
+    });
+
+    await sendLongText(options.sendMessage, pickerText);
+    return true;
+  } catch (error) {
+    await options.sendMessage(`Error listing models: ${(error as Error).message}`);
+    return true;
+  }
+}
+
 async function processTelegramMessage(
   options: CreateTelegramMessageHandlerOptions,
   message: TelegramMessageLike,
@@ -1033,6 +1327,20 @@ async function processTelegramMessage(
   const normalized = normalizeTelegramCommandText(text);
   const command = normalized.command;
 
+  const modelCommandHandled = await handleModelCommand({
+    conversationId: chatId,
+    conversationLabel: 'chat',
+    command,
+    args: normalized.args,
+    normalizedText: normalized.normalizedText,
+    modelCommands: options.modelCommands,
+    sendMessage: (messageText) => options.sendMessage(message.chat.id, messageText),
+  });
+
+  if (modelCommandHandled) {
+    return;
+  }
+
   if (command === '/new') {
     if (sessionFileExists(sessionFile)) {
       await removeSessionFile(sessionFile);
@@ -1054,9 +1362,29 @@ async function processTelegramMessage(
   }
 
   if (command === '/status') {
+    const activeModel = options.modelCommands?.activeModelsByConversation.get(chatId);
+    const configuredModel = options.modelCommands?.defaultModel;
+    const model = activeModel ?? configuredModel ?? '(pi default)';
+
     await options.sendMessage(
       message.chat.id,
-      `profile=${options.profileName}\nagentDir=${options.agentDir}\nsession=${sessionFile}`,
+      `profile=${options.profileName}\nagentDir=${options.agentDir}\nsession=${sessionFile}\nmodel=${model}`,
+    );
+    return;
+  }
+
+  if (command === '/resume') {
+    await options.sendMessage(
+      message.chat.id,
+      'Gateway sessions already resume automatically per chat. Use /new to start a fresh session.',
+    );
+    return;
+  }
+
+  if (command === '/compact') {
+    await options.sendMessage(
+      message.chat.id,
+      'Manual /compact is not supported in gateway print mode yet. Open this session in Pi TUI to compact.',
     );
     return;
   }
@@ -1091,6 +1419,7 @@ async function processTelegramMessage(
       prompt,
       sessionFile,
       cwd: options.workingDirectory,
+      model: options.modelCommands?.activeModelsByConversation.get(chatId),
       logContext: {
         source: 'telegram',
         userId: chatId,
@@ -1251,6 +1580,17 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
   const commandHelpText = formatTelegramCommands(telegramCommands);
   const skillsHelpText = formatTelegramSkills(discoveredHelp.skills);
 
+  const modelCommands: ModelCommandSupport = {
+    listModels: (search) => listPiModels({
+      agentDir: runtime.agentDir,
+      cwd: effectiveConfig.workingDirectory,
+      search,
+    }),
+    activeModelsByConversation: new Map(),
+    pendingSelectionsByConversation: new Map(),
+    defaultModel: getProfileDefaultModel(resolvedProfile),
+  };
+
   try {
     await bot.setMyCommands(telegramCommands);
   } catch (error) {
@@ -1266,14 +1606,16 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     maxPendingPerChat,
     commandHelpText,
     skillsHelpText,
+    modelCommands,
     sendMessage: (chatId, text) => bot.sendMessage(chatId, text),
     sendChatAction: (chatId, action) => bot.sendChatAction(chatId, action),
-    runPrompt: ({ prompt, sessionFile, cwd }) => runPiPrintPrompt({
+    runPrompt: ({ prompt, sessionFile, cwd, model }) => runPiPrintPrompt({
       prompt,
       sessionFile,
       profile: resolvedProfile,
       agentDir: runtime.agentDir,
       cwd,
+      model,
     }),
   });
 
@@ -1316,6 +1658,20 @@ async function processDiscordMessage(
   const normalized = normalizeTelegramCommandText(text);
   const command = normalized.command;
 
+  const modelCommandHandled = await handleModelCommand({
+    conversationId: channelId,
+    conversationLabel: 'channel',
+    command,
+    args: normalized.args,
+    normalizedText: normalized.normalizedText,
+    modelCommands: options.modelCommands,
+    sendMessage: message.sendMessage,
+  });
+
+  if (modelCommandHandled) {
+    return;
+  }
+
   if (command === '/new') {
     if (sessionFileExists(sessionFile)) {
       await removeSessionFile(sessionFile);
@@ -1337,8 +1693,26 @@ async function processDiscordMessage(
   }
 
   if (command === '/status') {
+    const activeModel = options.modelCommands?.activeModelsByConversation.get(channelId);
+    const configuredModel = options.modelCommands?.defaultModel;
+    const model = activeModel ?? configuredModel ?? '(pi default)';
+
     await message.sendMessage(
-      `profile=${options.profileName}\nagentDir=${options.agentDir}\nsession=${sessionFile}`,
+      `profile=${options.profileName}\nagentDir=${options.agentDir}\nsession=${sessionFile}\nmodel=${model}`,
+    );
+    return;
+  }
+
+  if (command === '/resume') {
+    await message.sendMessage(
+      'Gateway sessions already resume automatically per channel. Use /new to start a fresh session.',
+    );
+    return;
+  }
+
+  if (command === '/compact') {
+    await message.sendMessage(
+      'Manual /compact is not supported in gateway print mode yet. Open this session in Pi TUI to compact.',
     );
     return;
   }
@@ -1373,6 +1747,7 @@ async function processDiscordMessage(
       prompt,
       sessionFile,
       cwd: options.workingDirectory,
+      model: options.modelCommands?.activeModelsByConversation.get(channelId),
       logContext: {
         source: 'discord',
         userId: channelId,
@@ -1546,6 +1921,17 @@ export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<
   const commandHelpText = formatTelegramCommands(discordCommands);
   const skillsHelpText = formatTelegramSkills(discoveredHelp.skills);
 
+  const modelCommands: ModelCommandSupport = {
+    listModels: (search) => listPiModels({
+      agentDir: runtime.agentDir,
+      cwd: effectiveConfig.workingDirectory,
+      search,
+    }),
+    activeModelsByConversation: new Map(),
+    pendingSelectionsByConversation: new Map(),
+    defaultModel: getProfileDefaultModel(resolvedProfile),
+  };
+
   const handler = createQueuedDiscordMessageHandler({
     allowlist: effectiveConfig.allowlist,
     profileName: effectiveConfig.profile,
@@ -1555,12 +1941,14 @@ export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<
     maxPendingPerChannel,
     commandHelpText,
     skillsHelpText,
-    runPrompt: ({ prompt, sessionFile, cwd }) => runPiPrintPrompt({
+    modelCommands,
+    runPrompt: ({ prompt, sessionFile, cwd, model }) => runPiPrintPrompt({
       prompt,
       sessionFile,
       profile: resolvedProfile,
       agentDir: runtime.agentDir,
       cwd,
+      model,
     }),
   });
 
@@ -1625,6 +2013,24 @@ function isSetupToken(value: string | undefined): boolean {
   return value === 'setup';
 }
 
+function isServiceToken(value: string | undefined): boolean {
+  return value === 'service';
+}
+
+const GATEWAY_SERVICE_ACTIONS = ['install', 'uninstall', 'status'] as const;
+
+type GatewayServiceRuntimeAction = (typeof GATEWAY_SERVICE_ACTIONS)[number];
+
+type GatewayServiceCliAction = GatewayServiceRuntimeAction | 'help';
+
+function isGatewayServiceRuntimeAction(value: string | undefined): value is GatewayServiceRuntimeAction {
+  if (!value) {
+    return false;
+  }
+
+  return (GATEWAY_SERVICE_ACTIONS as readonly string[]).includes(value);
+}
+
 function ensureNoExtraGatewayArgs(args: string[], expectedLength: number, command: string): void {
   if (args.length <= expectedLength) {
     return;
@@ -1634,8 +2040,66 @@ function ensureNoExtraGatewayArgs(args: string[], expectedLength: number, comman
 }
 
 export interface ParsedGatewayCliArgs {
-  action: 'start' | 'setup' | 'help';
+  action: 'start' | 'setup' | 'help' | 'service';
   provider?: GatewayProvider;
+  serviceAction?: GatewayServiceCliAction;
+}
+
+function parseGatewayServiceCliArgs(args: string[]): ParsedGatewayCliArgs {
+  const [, rawAction, rawProvider] = args;
+
+  if (!rawAction) {
+    return {
+      action: 'service',
+      serviceAction: 'help',
+    };
+  }
+
+  if (isHelpToken(rawAction)) {
+    if (!rawProvider) {
+      ensureNoExtraGatewayArgs(args, 2, 'pa gateway service help');
+      return {
+        action: 'service',
+        serviceAction: 'help',
+      };
+    }
+
+    if (!isGatewayProvider(rawProvider)) {
+      throw new Error(`Unknown gateway provider: ${rawProvider}`);
+    }
+
+    ensureNoExtraGatewayArgs(args, 3, `pa gateway service help ${rawProvider}`);
+    return {
+      action: 'service',
+      serviceAction: 'help',
+      provider: rawProvider,
+    };
+  }
+
+  if (!isGatewayServiceRuntimeAction(rawAction)) {
+    throw new Error(`Unknown gateway service subcommand: ${rawAction}`);
+  }
+
+  if (!rawProvider) {
+    ensureNoExtraGatewayArgs(args, 2, `pa gateway service ${rawAction}`);
+    return {
+      action: 'service',
+      serviceAction: rawAction,
+      provider: 'telegram',
+    };
+  }
+
+  if (!isGatewayProvider(rawProvider)) {
+    throw new Error(`Unknown gateway provider: ${rawProvider}`);
+  }
+
+  ensureNoExtraGatewayArgs(args, 3, `pa gateway service ${rawAction} ${rawProvider}`);
+
+  return {
+    action: 'service',
+    serviceAction: rawAction,
+    provider: rawProvider,
+  };
 }
 
 export function parseGatewayCliArgs(args: string[]): ParsedGatewayCliArgs {
@@ -1652,6 +2116,10 @@ export function parseGatewayCliArgs(args: string[]): ParsedGatewayCliArgs {
     return {
       action: 'help',
     };
+  }
+
+  if (isServiceToken(first)) {
+    return parseGatewayServiceCliArgs(args);
   }
 
   if (isStartToken(first) || isSetupToken(first)) {
@@ -1835,14 +2303,97 @@ async function runGatewaySetup(provider?: GatewayProvider): Promise<void> {
   }
 }
 
+function printGatewayServiceHelp(provider?: GatewayProvider): void {
+  const defaultProvider = provider ?? 'telegram';
+
+  console.log(gatewaySection('Gateway service'));
+  console.log('');
+  console.log('Commands:');
+  console.log('  pa gateway service help [provider]         Show gateway service help');
+  console.log('  pa gateway service install [provider]      Install and start background service');
+  console.log('  pa gateway service status [provider]       Show background service status');
+  console.log('  pa gateway service uninstall [provider]    Stop and remove background service');
+  console.log('');
+  console.log(gatewayKeyValue('Default provider', defaultProvider));
+  console.log(gatewayKeyValue('Supported platforms', 'macOS launchd, Linux systemd --user'));
+  console.log('');
+  console.log(gatewayNext(`pa gateway service install ${defaultProvider}`));
+}
+
+function printGatewayServiceStatus(provider: GatewayProvider): void {
+  const status = getGatewayServiceStatus(provider);
+
+  console.log(gatewaySection(`Gateway service · ${provider}`));
+  console.log('');
+  console.log(gatewayKeyValue('Platform', status.platform));
+  console.log(gatewayKeyValue('Service', status.identifier));
+  console.log(gatewayKeyValue('Manifest', status.manifestPath));
+  console.log(gatewayKeyValue('Installed', status.installed ? 'yes' : 'no'));
+  console.log(gatewayKeyValue('Running', status.running ? 'yes' : 'no'));
+
+  if (status.logFile) {
+    console.log(gatewayKeyValue('Log file', status.logFile));
+  }
+
+  if (status.platform === 'systemd') {
+    console.log(gatewayKeyValue('Logs', `journalctl --user -u ${status.identifier} -f`));
+  }
+
+  if (!status.installed) {
+    console.log(gatewayNext(`pa gateway service install ${provider}`));
+  }
+}
+
+function runGatewayServiceAction(action: GatewayServiceRuntimeAction, provider: GatewayProvider): void {
+  if (action === 'install') {
+    const service = installGatewayService(provider);
+
+    console.log(gatewaySuccess(`Installed ${provider} gateway service`));
+    console.log(gatewayKeyValue('Platform', service.platform));
+    console.log(gatewayKeyValue('Service', service.identifier));
+    console.log(gatewayKeyValue('Manifest', service.manifestPath));
+
+    if (service.logFile) {
+      console.log(gatewayKeyValue('Log file', service.logFile));
+    }
+
+    if (service.platform === 'systemd') {
+      console.log(gatewayKeyValue('Logs', `journalctl --user -u ${service.identifier} -f`));
+    }
+
+    console.log(gatewayNext(`pa gateway service status ${provider}`));
+    return;
+  }
+
+  if (action === 'status') {
+    printGatewayServiceStatus(provider);
+    return;
+  }
+
+  const removed = uninstallGatewayService(provider);
+  console.log(gatewaySuccess(`Removed ${provider} gateway service`));
+  console.log(gatewayKeyValue('Platform', removed.platform));
+  console.log(gatewayKeyValue('Service', removed.identifier));
+  console.log(gatewayKeyValue('Manifest', removed.manifestPath));
+
+  if (removed.logFile) {
+    console.log(gatewayKeyValue('Log file', removed.logFile));
+  }
+
+  console.log(gatewayNext(`pa gateway service install ${provider}`));
+}
+
 function printGatewayHelp(provider?: GatewayProvider): void {
   if (provider === 'telegram') {
     console.log(gatewaySection('Gateway · Telegram'));
     console.log('');
     console.log('Commands:');
-    console.log('  pa gateway telegram setup    Interactive setup for Telegram gateway');
-    console.log('  pa gateway telegram start    Start Telegram bridge in foreground');
-    console.log('  pa gateway telegram help     Show Telegram gateway help');
+    console.log('  pa gateway telegram setup                 Interactive setup for Telegram gateway');
+    console.log('  pa gateway telegram start                 Start Telegram bridge in foreground');
+    console.log('  pa gateway telegram help                  Show Telegram gateway help');
+    console.log('  pa gateway service install telegram       Install Telegram background service');
+    console.log('  pa gateway service status telegram        Show Telegram service status');
+    console.log('  pa gateway service uninstall telegram     Remove Telegram background service');
     console.log('');
     console.log('Config keys (written by setup):');
     console.log('  TELEGRAM_BOT_TOKEN');
@@ -1859,9 +2410,12 @@ function printGatewayHelp(provider?: GatewayProvider): void {
     console.log(gatewaySection('Gateway · Discord'));
     console.log('');
     console.log('Commands:');
-    console.log('  pa gateway discord setup     Interactive setup for Discord gateway');
-    console.log('  pa gateway discord start     Start Discord bridge in foreground');
-    console.log('  pa gateway discord help      Show Discord gateway help');
+    console.log('  pa gateway discord setup                  Interactive setup for Discord gateway');
+    console.log('  pa gateway discord start                  Start Discord bridge in foreground');
+    console.log('  pa gateway discord help                   Show Discord gateway help');
+    console.log('  pa gateway service install discord        Install Discord background service');
+    console.log('  pa gateway service status discord         Show Discord service status');
+    console.log('  pa gateway service uninstall discord      Remove Discord background service');
     console.log('');
     console.log('Config keys (written by setup):');
     console.log('  DISCORD_BOT_TOKEN');
@@ -1877,11 +2431,12 @@ function printGatewayHelp(provider?: GatewayProvider): void {
   console.log(gatewaySection('Gateway commands'));
   console.log('');
   console.log('Commands:');
-  console.log('  pa gateway help                            Show gateway help');
-  console.log('  pa gateway setup [provider]                Interactive setup walkthrough');
-  console.log('  pa gateway start [provider]                Start provider (default: telegram)');
-  console.log('  pa gateway telegram [setup|start|help]     Telegram gateway commands');
-  console.log('  pa gateway discord [setup|start|help]      Discord gateway commands');
+  console.log('  pa gateway help                                          Show gateway help');
+  console.log('  pa gateway setup [provider]                              Interactive setup walkthrough');
+  console.log('  pa gateway start [provider]                              Start provider (default: telegram)');
+  console.log('  pa gateway service [install|status|uninstall|help] [...] Manage background service');
+  console.log('  pa gateway telegram [setup|start|help]                   Telegram gateway commands');
+  console.log('  pa gateway discord [setup|start|help]                    Discord gateway commands');
   console.log('');
   console.log(`Config file: ${getGatewayConfigFilePath()}`);
   console.log('');
@@ -1904,6 +2459,19 @@ async function runGatewayCommand(args: string[]): Promise<number> {
     return 0;
   }
 
+  if (parsed.action === 'service') {
+    const provider = parsed.provider ?? 'telegram';
+    const serviceAction = parsed.serviceAction ?? 'help';
+
+    if (serviceAction === 'help') {
+      printGatewayServiceHelp(provider);
+      return 0;
+    }
+
+    runGatewayServiceAction(serviceAction, provider);
+    return 0;
+  }
+
   await startGateway(parsed.provider ?? 'telegram');
   await waitIndefinitely();
   return 0;
@@ -1921,7 +2489,7 @@ export type CliCommandRegistrar = (command: RegisteredCliCommand) => void;
 export function registerGatewayCliCommands(register: CliCommandRegistrar): void {
   register({
     name: 'gateway',
-    usage: 'pa gateway [telegram|discord] [setup|start|help]',
+    usage: 'pa gateway [telegram|discord|service] [subcommand]',
     description: 'Run messaging gateway commands',
     run: runGatewayCommand,
   });

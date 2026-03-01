@@ -47,8 +47,10 @@ pa profile use datadog
 pa doctor
 pa gateway setup telegram
 pa gateway telegram start
+pa gateway service install telegram
 pa gateway setup discord
 pa gateway discord start
+pa gateway service install discord
 pa daemon start
 pa daemon status
 ```
@@ -92,6 +94,8 @@ Run bridge:
 ```bash
 pa gateway telegram setup
 pa gateway telegram start
+# or run as background service (recommended for long-running use)
+pa gateway service install telegram
 ```
 
 ### Discord
@@ -111,12 +115,20 @@ Run bridge:
 ```bash
 pa gateway discord setup
 pa gateway discord start
+# or run as background service (recommended for long-running use)
+pa gateway service install discord
 ```
 
 Gateway commands:
 
 - `/status`
 - `/new`
+- `/commands`
+- `/skills`
+- `/skill <name>`
+- `/model` (picker + per-chat/per-channel model override)
+- `/compact` (guidance only in gateway mode; use Pi TUI for manual compaction)
+- `/resume` (gateway auto-resumes per chat/channel)
 
 ## Profiles
 
