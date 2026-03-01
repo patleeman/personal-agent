@@ -1,10 +1,4 @@
-# Global AGENTS.md for Pi
-
-This file contains shared rules and instructions that apply to all Pi sessions.
-
----
-
-# Development Philosophy
+# Grug Brained Dev Software Development Philosophy
 
 ## Prime Directive: Complexity Is The Enemy
 
@@ -320,7 +314,7 @@ Discussed the authentication flow for the API gateway...
 ## Episodic Memory Contents
 
 qmd memory contains:
-- Summaries of past coding sessions
+- Summaries of past conversations
 - Key decisions and design discussions
 - Project context and requirements
 - Previous solutions to similar problems

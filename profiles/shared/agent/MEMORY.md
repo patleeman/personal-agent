@@ -1,6 +1,10 @@
 # Durable Memory
 
 ## User
+- The user's name is Patrick Lee
+- They live in White Plains, NY
+- They work as a software developer specialising in AI
+- Personal email is me@patricklee.nyc (primary) and patleeman@gmail.com (secondary) 
 - Stores shopping list in Todoist. All other reminders/tasks use Apple Reminders.
 
 ## Preferences
