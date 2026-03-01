@@ -1,0 +1,141 @@
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { homedir } from 'os';
+import { dirname, join, resolve } from 'path';
+
+export interface TelegramStoredConfig {
+  token?: string;
+  allowlist?: string[];
+  workingDirectory?: string;
+  maxPendingPerChat?: number;
+}
+
+export interface DiscordStoredConfig {
+  token?: string;
+  allowlist?: string[];
+  workingDirectory?: string;
+  maxPendingPerChannel?: number;
+}
+
+export interface GatewayStoredConfig {
+  profile?: string;
+  telegram?: TelegramStoredConfig;
+  discord?: DiscordStoredConfig;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function toOptionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+}
+
+function toOptionalStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const values = value
+    .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+    .filter((entry) => entry.length > 0);
+
+  return values.length > 0 ? values : undefined;
+}
+
+function toOptionalPositiveInt(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined;
+  }
+
+  const parsed = Math.floor(value);
+  return parsed > 0 ? parsed : undefined;
+}
+
+function sanitizeTelegram(value: unknown): TelegramStoredConfig | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const token = toOptionalString(value.token);
+  const allowlist = toOptionalStringArray(value.allowlist);
+  const workingDirectory = toOptionalString(value.workingDirectory);
+  const maxPendingPerChat = toOptionalPositiveInt(value.maxPendingPerChat);
+
+  if (!token && !allowlist && !workingDirectory && !maxPendingPerChat) {
+    return undefined;
+  }
+
+  return {
+    token,
+    allowlist,
+    workingDirectory,
+    maxPendingPerChat,
+  };
+}
+
+function sanitizeDiscord(value: unknown): DiscordStoredConfig | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const token = toOptionalString(value.token);
+  const allowlist = toOptionalStringArray(value.allowlist);
+  const workingDirectory = toOptionalString(value.workingDirectory);
+  const maxPendingPerChannel = toOptionalPositiveInt(value.maxPendingPerChannel);
+
+  if (!token && !allowlist && !workingDirectory && !maxPendingPerChannel) {
+    return undefined;
+  }
+
+  return {
+    token,
+    allowlist,
+    workingDirectory,
+    maxPendingPerChannel,
+  };
+}
+
+export function getGatewayConfigFilePath(): string {
+  const explicit = process.env.PERSONAL_AGENT_GATEWAY_CONFIG_FILE;
+  if (explicit && explicit.trim().length > 0) {
+    return resolve(explicit);
+  }
+
+  return join(homedir(), '.config', 'personal-agent', 'gateway.json');
+}
+
+export function readGatewayConfig(): GatewayStoredConfig {
+  const filePath = getGatewayConfigFilePath();
+
+  if (!existsSync(filePath)) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(filePath, 'utf-8')) as unknown;
+
+    if (!isRecord(parsed)) {
+      return {};
+    }
+
+    return {
+      profile: toOptionalString(parsed.profile),
+      telegram: sanitizeTelegram(parsed.telegram),
+      discord: sanitizeDiscord(parsed.discord),
+    };
+  } catch {
+    return {};
+  }
+}
+
+export function writeGatewayConfig(config: GatewayStoredConfig): void {
+  const filePath = getGatewayConfigFilePath();
+  mkdirSync(dirname(filePath), { recursive: true });
+  writeFileSync(filePath, `${JSON.stringify(config, null, 2)}\n`);
+
+  try {
+    chmodSync(filePath, 0o600);
+  } catch {
+    // Ignore chmod failures on unsupported filesystems.
+  }
+}

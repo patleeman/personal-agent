@@ -53,21 +53,24 @@ describe('splitTelegramMessage', () => {
 });
 
 describe('parseGatewayCliArgs', () => {
-  it('defaults to telegram start', () => {
-    expect(parseGatewayCliArgs([])).toEqual({ action: 'start', provider: 'telegram' });
+  it('shows help by default and supports explicit start', () => {
+    expect(parseGatewayCliArgs([])).toEqual({ action: 'help' });
     expect(parseGatewayCliArgs(['start'])).toEqual({ action: 'start', provider: 'telegram' });
   });
 
   it('supports provider-first syntax', () => {
-    expect(parseGatewayCliArgs(['telegram'])).toEqual({ action: 'start', provider: 'telegram' });
-    expect(parseGatewayCliArgs(['discord'])).toEqual({ action: 'start', provider: 'discord' });
+    expect(parseGatewayCliArgs(['telegram'])).toEqual({ action: 'help', provider: 'telegram' });
+    expect(parseGatewayCliArgs(['discord'])).toEqual({ action: 'help', provider: 'discord' });
     expect(parseGatewayCliArgs(['telegram', 'help'])).toEqual({ action: 'help', provider: 'telegram' });
     expect(parseGatewayCliArgs(['discord', 'start'])).toEqual({ action: 'start', provider: 'discord' });
+    expect(parseGatewayCliArgs(['telegram', 'setup'])).toEqual({ action: 'setup', provider: 'telegram' });
   });
 
-  it('supports start <provider> syntax', () => {
+  it('supports start/setup <provider> syntax', () => {
     expect(parseGatewayCliArgs(['start', 'telegram'])).toEqual({ action: 'start', provider: 'telegram' });
     expect(parseGatewayCliArgs(['start', 'discord'])).toEqual({ action: 'start', provider: 'discord' });
+    expect(parseGatewayCliArgs(['setup', 'telegram'])).toEqual({ action: 'setup', provider: 'telegram' });
+    expect(parseGatewayCliArgs(['setup'])).toEqual({ action: 'setup' });
   });
 
   it('supports global help', () => {
@@ -78,6 +81,7 @@ describe('parseGatewayCliArgs', () => {
 
   it('fails for invalid syntax', () => {
     expect(() => parseGatewayCliArgs(['start', 'slack'])).toThrow('Unknown gateway provider: slack');
+    expect(() => parseGatewayCliArgs(['setup', 'slack'])).toThrow('Unknown gateway provider: slack');
     expect(() => parseGatewayCliArgs(['discord', 'stop'])).toThrow('Unknown discord subcommand: stop');
     expect(() => parseGatewayCliArgs(['unknown'])).toThrow('Unknown gateway subcommand: unknown');
     expect(() => parseGatewayCliArgs(['help', 'discord'])).toThrow('Too many arguments for `pa gateway help`');
@@ -99,7 +103,7 @@ describe('gateway CLI command registration', () => {
     expect(commands).toEqual([
       {
         name: 'gateway',
-        usage: 'pa gateway [telegram|discord] [start|help]',
+        usage: 'pa gateway [telegram|discord] [setup|start|help]',
         description: 'Run messaging gateway commands',
       },
     ]);

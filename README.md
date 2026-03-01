@@ -25,8 +25,11 @@ npm run test
 Run Pi through `pa`:
 
 ```bash
-# start Pi TUI with configured/default profile
+# show CLI help
 pa
+
+# start Pi TUI with configured/default profile
+pa run
 
 # configure profile (infrequent)
 pa profile use datadog
@@ -42,7 +45,9 @@ pa run -p "hello"
 pa profile list
 pa profile use datadog
 pa doctor
+pa gateway setup telegram
 pa gateway telegram start
+pa gateway setup discord
 pa gateway discord start
 pa daemon start
 pa daemon status
@@ -72,7 +77,7 @@ Shared optional env vars:
 
 ### Telegram
 
-Required env vars:
+Required configuration (via setup or env vars):
 
 - `TELEGRAM_BOT_TOKEN`
 - `PERSONAL_AGENT_TELEGRAM_ALLOWLIST` (comma-separated chat IDs)
@@ -85,12 +90,13 @@ Optional:
 Run bridge:
 
 ```bash
+pa gateway telegram setup
 pa gateway telegram start
 ```
 
 ### Discord
 
-Required env vars:
+Required configuration (via setup or env vars):
 
 - `DISCORD_BOT_TOKEN`
 - `PERSONAL_AGENT_DISCORD_ALLOWLIST` (comma-separated channel IDs)
@@ -103,6 +109,7 @@ Optional:
 Run bridge:
 
 ```bash
+pa gateway discord setup
 pa gateway discord start
 ```
 
@@ -125,6 +132,7 @@ Optional local overlay:
 See docs:
 
 - `docs/cli.md`
+- `docs/gateway.md`
 - `docs/architecture.md`
 - `docs/daemon-architecture.md`
 - `docs/memory.md`

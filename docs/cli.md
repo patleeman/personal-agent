@@ -13,7 +13,6 @@ This document explains how `pa` works.
    - `pa gateway ...` (registered by `@personal-agent/gateway`)
 
 2. **Pi passthrough mode**:
-   - `pa` with no args
    - `pa run ...`
    - `pa <any pi args>`
 
@@ -21,7 +20,7 @@ In passthrough mode, `pa` resolves profile resources, prepares runtime state, an
 
 ## Important behavior
 
-- `pa` (no args) starts Pi TUI.
+- `pa` (no args) shows CLI help.
 - `pa` is a superset wrapper for Pi CLI usage: unknown top-level args are treated as Pi args.
   - Example: `pa -p "hello"`
 
@@ -53,15 +52,13 @@ pa profile show datadog
 ```bash
 pa
 pa run [pi args...]
-pa profile list
-pa profile show [name]
-pa profile use <name>
+pa profile [list|show|use]
 pa doctor
-pa gateway [telegram|discord] [start|help]
-pa gateway start <telegram|discord>
-pa daemon
+pa gateway
+pa gateway setup [telegram|discord]
+pa gateway start [telegram|discord]
+pa daemon [status|start|stop|restart|logs]
 pa daemon status [--json]
-pa daemon start|stop|restart|logs
 ```
 
 ## Cross-package command registration
@@ -116,7 +113,7 @@ pa profile use datadog
 pa profile show datadog
 pa doctor
 pa gateway help
-pa
+pa run
 ```
 
-If `pa` launches TUI and `profile show` includes both skill dirs, layering is working.
+If `pa run` launches TUI and `profile show` includes both skill dirs, layering is working.

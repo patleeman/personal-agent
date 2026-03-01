@@ -68,6 +68,12 @@ async function maybeStartDaemon(): Promise<void> {
   }
 
   console.log(chalk.yellow('⚠ Daemon is not running.'));
+
+  const interactive = process.stdin.isTTY && process.stdout.isTTY;
+  if (!interactive || process.env.PERSONAL_AGENT_NO_DAEMON_PROMPT === '1') {
+    return;
+  }
+
   const answer = await promptUser('Would you like to start it? [Y/n] ');
 
   if (answer === '' || answer === 'y' || answer === 'yes') {
@@ -435,9 +441,25 @@ async function printMemoryModuleStatus(module: DaemonStatus['modules'][0]): Prom
 }
 
 function printMaintenanceModuleStatus(module: DaemonStatus['modules'][0]): void {
-  console.log(`  ${chalk.cyan('•')} Maintenance: ${module.enabled ? chalk.green('active') : chalk.gray('disabled')}`);
-  if (module.lastError) {
-    console.log(`    ${chalk.red('✗')} Error: ${module.lastError}`);
+  const detail = module.detail as {
+    cleanedFiles?: number;
+    lastRunAt?: string;
+    lastError?: string;
+  } | undefined;
+
+  console.log(`  ${chalk.cyan('•')} PA Housekeeping (internal): ${module.enabled ? chalk.green('active') : chalk.gray('disabled')}`);
+  console.log(`    Log cleanup: removes daemon logs older than 7 days`);
+
+  if (typeof detail?.cleanedFiles === 'number') {
+    console.log(`    Logs removed (total): ${detail.cleanedFiles}`);
+  }
+
+  if (detail?.lastRunAt) {
+    console.log(`    Last run: ${new Date(detail.lastRunAt).toLocaleString()}`);
+  }
+
+  if (module.lastError || detail?.lastError) {
+    console.log(`    ${chalk.red('✗')} Error: ${module.lastError || detail?.lastError}`);
   }
 }
 
@@ -721,20 +743,44 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
   return definitions;
 }
 
+function toPositionalArg(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+
+  return undefined;
+}
+
 function normalizeActionArgs(values: unknown[]): string[] {
   if (values.length === 0) {
     return [];
   }
 
   const positionalValues = values.slice(0, -1);
+  const normalized: string[] = [];
 
-  if (positionalValues.length === 1 && Array.isArray(positionalValues[0])) {
-    return positionalValues[0].map((entry) => String(entry));
+  for (const value of positionalValues) {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const arg = toPositionalArg(item);
+        if (arg !== undefined) {
+          normalized.push(arg);
+        }
+      }
+      continue;
+    }
+
+    const arg = toPositionalArg(value);
+    if (arg !== undefined) {
+      normalized.push(arg);
+    }
   }
 
-  return positionalValues
-    .filter((entry) => entry !== undefined)
-    .map((entry) => String(entry));
+  return normalized;
 }
 
 function createProgram(definitions: CliCommandDefinition[], setExitCode: (code: number) => void): Command {

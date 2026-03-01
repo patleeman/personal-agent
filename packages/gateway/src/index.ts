@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
+import { createInterface } from 'readline';
 import { mkdir, rm } from 'fs/promises';
 import { existsSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { spawn, spawnSync } from 'child_process';
 import TelegramBot from 'node-telegram-bot-api';
 import {
@@ -24,12 +25,21 @@ import {
   resolveResourceProfile,
 } from '@personal-agent/resources';
 import { emitDaemonEventNonFatal } from '@personal-agent/daemon';
+import {
+  getGatewayConfigFilePath,
+  readGatewayConfig,
+  type DiscordStoredConfig,
+  type GatewayStoredConfig,
+  type TelegramStoredConfig,
+  writeGatewayConfig,
+} from './config.js';
 
 export interface TelegramBridgeConfig {
   token: string;
   profile: string;
   allowlist: Set<string>;
   workingDirectory: string;
+  maxPendingPerChat?: number;
 }
 
 export interface DiscordBridgeConfig {
@@ -37,6 +47,7 @@ export interface DiscordBridgeConfig {
   profile: string;
   allowlist: Set<string>;
   workingDirectory: string;
+  maxPendingPerChannel?: number;
 }
 
 export interface TelegramMessageLike {
@@ -128,6 +139,76 @@ export function parseAllowlist(value: string | undefined): Set<string> {
       .map((entry) => entry.trim())
       .filter((entry) => entry.length > 0),
   );
+}
+
+function toPositiveInteger(value: string | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return undefined;
+  }
+
+  return Math.floor(parsed);
+}
+
+function createPromptInterface() {
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  const ask = async (question: string): Promise<string> => new Promise((resolve) => {
+    rl.question(question, (answer) => resolve(answer.trim()));
+  });
+
+  const close = (): void => {
+    rl.close();
+  };
+
+  return { ask, close };
+}
+
+async function promptRequired(ask: (question: string) => Promise<string>, question: string): Promise<string> {
+  while (true) {
+    const value = await ask(question);
+    if (value.length > 0) {
+      return value;
+    }
+  }
+}
+
+async function promptWithDefault(
+  ask: (question: string) => Promise<string>,
+  label: string,
+  defaultValue: string,
+): Promise<string> {
+  const value = await ask(`${label} [${defaultValue}]: `);
+  return value.length > 0 ? value : defaultValue;
+}
+
+async function promptPositiveInteger(
+  ask: (question: string) => Promise<string>,
+  label: string,
+  defaultValue?: number,
+): Promise<number | undefined> {
+  while (true) {
+    const suffix = defaultValue ? ` [${defaultValue}]` : ' (optional)';
+    const value = await ask(`${label}${suffix}: `);
+
+    if (value.length === 0) {
+      return defaultValue;
+    }
+
+    const parsed = toPositiveInteger(value);
+    if (parsed !== undefined) {
+      return parsed;
+    }
+
+    console.log('Please enter a positive integer or leave blank.');
+  }
 }
 
 function splitMessage(text: string, chunkSize = 3900): string[] {
@@ -468,25 +549,41 @@ export function createQueuedTelegramMessageHandler(
 }
 
 async function createTelegramConfigFromEnv(): Promise<TelegramBridgeConfig> {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const stored = readGatewayConfig();
+  const storedTelegram = stored.telegram;
+
+  const token = process.env.TELEGRAM_BOT_TOKEN ?? storedTelegram?.token;
   if (!token) {
-    throw new Error('TELEGRAM_BOT_TOKEN is required');
+    throw new Error('TELEGRAM_BOT_TOKEN is required. Run `pa gateway setup telegram` or set TELEGRAM_BOT_TOKEN.');
   }
 
-  const profile = process.env.PERSONAL_AGENT_PROFILE || 'shared';
-  const allowlist = parseAllowlist(process.env.PERSONAL_AGENT_TELEGRAM_ALLOWLIST);
+  const profile = process.env.PERSONAL_AGENT_PROFILE || stored.profile || 'shared';
+
+  const allowlistFromEnv = parseAllowlist(process.env.PERSONAL_AGENT_TELEGRAM_ALLOWLIST);
+  const allowlist = allowlistFromEnv.size > 0
+    ? allowlistFromEnv
+    : new Set(storedTelegram?.allowlist ?? []);
 
   if (allowlist.size === 0) {
-    throw new Error('PERSONAL_AGENT_TELEGRAM_ALLOWLIST is required (comma-separated chat IDs)');
+    throw new Error(
+      'PERSONAL_AGENT_TELEGRAM_ALLOWLIST is required (comma-separated chat IDs). ' +
+      'Run `pa gateway setup telegram` or set PERSONAL_AGENT_TELEGRAM_ALLOWLIST.',
+    );
   }
 
-  const workingDirectory = process.env.PERSONAL_AGENT_TELEGRAM_CWD || process.cwd();
+  const workingDirectory = process.env.PERSONAL_AGENT_TELEGRAM_CWD
+    || storedTelegram?.workingDirectory
+    || process.cwd();
+
+  const maxPendingPerChat = toPositiveInteger(process.env.PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT)
+    ?? storedTelegram?.maxPendingPerChat;
 
   return {
     token,
     profile,
     allowlist,
     workingDirectory,
+    maxPendingPerChat,
   };
 }
 
@@ -499,13 +596,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
   const bot = new TelegramBot(effectiveConfig.token, { polling: true });
 
-  const configuredMaxPendingPerChat = Number(
-    process.env.PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT ?? DEFAULT_MAX_PENDING_PER_CHAT,
-  );
-
-  const maxPendingPerChat = Number.isFinite(configuredMaxPendingPerChat) && configuredMaxPendingPerChat > 0
-    ? Math.floor(configuredMaxPendingPerChat)
-    : DEFAULT_MAX_PENDING_PER_CHAT;
+  const maxPendingPerChat = effectiveConfig.maxPendingPerChat ?? DEFAULT_MAX_PENDING_PER_CHAT;
 
   const handler = createQueuedTelegramMessageHandler({
     allowlist: effectiveConfig.allowlist,
@@ -689,25 +780,41 @@ export function createQueuedDiscordMessageHandler(
 }
 
 async function createDiscordConfigFromEnv(): Promise<DiscordBridgeConfig> {
-  const token = process.env.DISCORD_BOT_TOKEN;
+  const stored = readGatewayConfig();
+  const storedDiscord = stored.discord;
+
+  const token = process.env.DISCORD_BOT_TOKEN ?? storedDiscord?.token;
   if (!token) {
-    throw new Error('DISCORD_BOT_TOKEN is required');
+    throw new Error('DISCORD_BOT_TOKEN is required. Run `pa gateway setup discord` or set DISCORD_BOT_TOKEN.');
   }
 
-  const profile = process.env.PERSONAL_AGENT_PROFILE || 'shared';
-  const allowlist = parseAllowlist(process.env.PERSONAL_AGENT_DISCORD_ALLOWLIST);
+  const profile = process.env.PERSONAL_AGENT_PROFILE || stored.profile || 'shared';
+
+  const allowlistFromEnv = parseAllowlist(process.env.PERSONAL_AGENT_DISCORD_ALLOWLIST);
+  const allowlist = allowlistFromEnv.size > 0
+    ? allowlistFromEnv
+    : new Set(storedDiscord?.allowlist ?? []);
 
   if (allowlist.size === 0) {
-    throw new Error('PERSONAL_AGENT_DISCORD_ALLOWLIST is required (comma-separated channel IDs)');
+    throw new Error(
+      'PERSONAL_AGENT_DISCORD_ALLOWLIST is required (comma-separated channel IDs). ' +
+      'Run `pa gateway setup discord` or set PERSONAL_AGENT_DISCORD_ALLOWLIST.',
+    );
   }
 
-  const workingDirectory = process.env.PERSONAL_AGENT_DISCORD_CWD || process.cwd();
+  const workingDirectory = process.env.PERSONAL_AGENT_DISCORD_CWD
+    || storedDiscord?.workingDirectory
+    || process.cwd();
+
+  const maxPendingPerChannel = toPositiveInteger(process.env.PERSONAL_AGENT_DISCORD_MAX_PENDING_PER_CHANNEL)
+    ?? storedDiscord?.maxPendingPerChannel;
 
   return {
     token,
     profile,
     allowlist,
     workingDirectory,
+    maxPendingPerChannel,
   };
 }
 
@@ -730,13 +837,7 @@ export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<
   const discordSessionDir = join(statePaths.session, 'discord');
   await mkdir(discordSessionDir, { recursive: true });
 
-  const configuredMaxPendingPerChannel = Number(
-    process.env.PERSONAL_AGENT_DISCORD_MAX_PENDING_PER_CHANNEL ?? DEFAULT_MAX_PENDING_PER_CHANNEL,
-  );
-
-  const maxPendingPerChannel = Number.isFinite(configuredMaxPendingPerChannel) && configuredMaxPendingPerChannel > 0
-    ? Math.floor(configuredMaxPendingPerChannel)
-    : DEFAULT_MAX_PENDING_PER_CHANNEL;
+  const maxPendingPerChannel = effectiveConfig.maxPendingPerChannel ?? DEFAULT_MAX_PENDING_PER_CHANNEL;
 
   const handler = createQueuedDiscordMessageHandler({
     allowlist: effectiveConfig.allowlist,
@@ -806,6 +907,10 @@ function isStartToken(value: string | undefined): boolean {
   return value === 'start';
 }
 
+function isSetupToken(value: string | undefined): boolean {
+  return value === 'setup';
+}
+
 function ensureNoExtraGatewayArgs(args: string[], expectedLength: number, command: string): void {
   if (args.length <= expectedLength) {
     return;
@@ -815,7 +920,7 @@ function ensureNoExtraGatewayArgs(args: string[], expectedLength: number, comman
 }
 
 export interface ParsedGatewayCliArgs {
-  action: 'start' | 'help';
+  action: 'start' | 'setup' | 'help';
   provider?: GatewayProvider;
 }
 
@@ -824,8 +929,7 @@ export function parseGatewayCliArgs(args: string[]): ParsedGatewayCliArgs {
 
   if (!first) {
     return {
-      action: 'start',
-      provider: 'telegram',
+      action: 'help',
     };
   }
 
@@ -836,22 +940,23 @@ export function parseGatewayCliArgs(args: string[]): ParsedGatewayCliArgs {
     };
   }
 
-  if (isStartToken(first)) {
+  if (isStartToken(first) || isSetupToken(first)) {
+    const action: ParsedGatewayCliArgs['action'] = isStartToken(first) ? 'start' : 'setup';
+
     if (!second) {
-      return {
-        action: 'start',
-        provider: 'telegram',
-      };
+      return action === 'start'
+        ? { action, provider: 'telegram' }
+        : { action };
     }
 
     if (!isGatewayProvider(second)) {
       throw new Error(`Unknown gateway provider: ${second}`);
     }
 
-    ensureNoExtraGatewayArgs(args, 2, `pa gateway start ${second}`);
+    ensureNoExtraGatewayArgs(args, 2, `pa gateway ${first} ${second}`);
 
     return {
-      action: 'start',
+      action,
       provider: second,
     };
   }
@@ -859,7 +964,7 @@ export function parseGatewayCliArgs(args: string[]): ParsedGatewayCliArgs {
   if (isGatewayProvider(first)) {
     if (!second) {
       return {
-        action: 'start',
+        action: 'help',
         provider: first,
       };
     }
@@ -868,6 +973,14 @@ export function parseGatewayCliArgs(args: string[]): ParsedGatewayCliArgs {
       ensureNoExtraGatewayArgs(args, 2, `pa gateway ${first} start`);
       return {
         action: 'start',
+        provider: first,
+      };
+    }
+
+    if (isSetupToken(second)) {
+      ensureNoExtraGatewayArgs(args, 2, `pa gateway ${first} setup`);
+      return {
+        action: 'setup',
         provider: first,
       };
     }
@@ -895,15 +1008,118 @@ async function startGateway(provider: GatewayProvider): Promise<void> {
   await startDiscordBridge();
 }
 
+async function resolveGatewayProviderForSetup(
+  ask: (question: string) => Promise<string>,
+  provider?: GatewayProvider,
+): Promise<GatewayProvider> {
+  if (provider) {
+    return provider;
+  }
+
+  while (true) {
+    const input = (await ask('Provider [telegram/discord] [telegram]: ')).trim().toLowerCase();
+    if (input.length === 0) {
+      return 'telegram';
+    }
+
+    if (isGatewayProvider(input)) {
+      return input;
+    }
+
+    console.log('Please enter telegram or discord.');
+  }
+}
+
+async function runGatewaySetup(provider?: GatewayProvider): Promise<void> {
+  const prompt = createPromptInterface();
+
+  try {
+    const selectedProvider = await resolveGatewayProviderForSetup(prompt.ask, provider);
+    const current = readGatewayConfig();
+
+    const profileDefault = current.profile ?? 'shared';
+    const profile = await promptWithDefault(prompt.ask, 'Profile', profileDefault);
+
+    const existingProviderConfig: TelegramStoredConfig | DiscordStoredConfig | undefined =
+      selectedProvider === 'telegram' ? current.telegram : current.discord;
+
+    let resolvedToken = existingProviderConfig?.token;
+
+    if (resolvedToken) {
+      const tokenInput = await prompt.ask('Bot token [press Enter to keep existing]: ');
+      if (tokenInput.length > 0) {
+        resolvedToken = tokenInput;
+      }
+    } else {
+      resolvedToken = await promptRequired(prompt.ask, 'Bot token: ');
+    }
+
+    if (!resolvedToken) {
+      throw new Error('Bot token is required.');
+    }
+
+    const allowlistDefault = existingProviderConfig?.allowlist?.join(',') ?? '';
+    const allowlistInput = allowlistDefault.length > 0
+      ? await promptWithDefault(prompt.ask, 'Allowlist (comma-separated IDs)', allowlistDefault)
+      : await promptRequired(prompt.ask, 'Allowlist (comma-separated IDs): ');
+
+    const allowlist = [...parseAllowlist(allowlistInput)];
+    if (allowlist.length === 0) {
+      throw new Error('At least one allowlist entry is required.');
+    }
+
+    const cwdDefault = existingProviderConfig?.workingDirectory ?? process.cwd();
+    const workingDirectory = resolve(await promptWithDefault(prompt.ask, 'Working directory', cwdDefault));
+
+    const maxPending = await promptPositiveInteger(
+      prompt.ask,
+      selectedProvider === 'telegram' ? 'Max pending messages per chat' : 'Max pending messages per channel',
+      selectedProvider === 'telegram'
+        ? current.telegram?.maxPendingPerChat
+        : current.discord?.maxPendingPerChannel,
+    );
+
+    const updated: GatewayStoredConfig = {
+      ...current,
+      profile,
+    };
+
+    if (selectedProvider === 'telegram') {
+      updated.telegram = {
+        ...current.telegram,
+        token: resolvedToken,
+        allowlist,
+        workingDirectory,
+        maxPendingPerChat: maxPending,
+      };
+    } else {
+      updated.discord = {
+        ...current.discord,
+        token: resolvedToken,
+        allowlist,
+        workingDirectory,
+        maxPendingPerChannel: maxPending,
+      };
+    }
+
+    writeGatewayConfig(updated);
+    console.log(`Saved ${selectedProvider} gateway config to ${getGatewayConfigFilePath()}`);
+    console.log(`Next: pa gateway ${selectedProvider} start`);
+  } finally {
+    prompt.close();
+  }
+}
+
 function printGatewayHelp(provider?: GatewayProvider): void {
   if (provider === 'telegram') {
     console.log(`pa gateway telegram
 
 Commands:
+  pa gateway telegram setup    Interactive setup for Telegram gateway
   pa gateway telegram start    Start Telegram bridge in foreground
   pa gateway telegram help     Show Telegram gateway help
 
-Environment:
+Configuration (setup command writes these):
   TELEGRAM_BOT_TOKEN
   PERSONAL_AGENT_TELEGRAM_ALLOWLIST
   PERSONAL_AGENT_PROFILE (optional, default: shared)
@@ -917,10 +1133,11 @@ Environment:
     console.log(`pa gateway discord
 
 Commands:
+  pa gateway discord setup     Interactive setup for Discord gateway
   pa gateway discord start     Start Discord bridge in foreground
   pa gateway discord help      Show Discord gateway help
 
-Environment:
+Configuration (setup command writes these):
   DISCORD_BOT_TOKEN
   PERSONAL_AGENT_DISCORD_ALLOWLIST
   PERSONAL_AGENT_PROFILE (optional, default: shared)
@@ -933,16 +1150,19 @@ Environment:
   console.log(`pa gateway
 
 Commands:
-  pa gateway [start]                 Start Telegram bridge in foreground
-  pa gateway telegram [start|help]   Telegram gateway commands
-  pa gateway discord [start|help]    Discord gateway commands
-  pa gateway start <provider>        Start specific provider (telegram|discord)
-  pa gateway help                    Show gateway help
+  pa gateway help                            Show gateway help
+  pa gateway setup [provider]                Interactive setup walkthrough
+  pa gateway start [provider]                Start provider (default: telegram)
+  pa gateway telegram [setup|start|help]     Telegram gateway commands
+  pa gateway discord [setup|start|help]      Discord gateway commands
 
-Shared Environment:
-  PERSONAL_AGENT_PROFILE (optional, default: shared)
-  PERSONAL_AGENT_PI_TIMEOUT_MS (optional, default: 180000)
-  PERSONAL_AGENT_PI_MAX_OUTPUT_BYTES (optional, default: 200000)
+Config file:
+  ${getGatewayConfigFilePath()}
+
+Environment overrides (optional):
+  PERSONAL_AGENT_PROFILE
+  PERSONAL_AGENT_PI_TIMEOUT_MS
+  PERSONAL_AGENT_PI_MAX_OUTPUT_BYTES
 `);
 }
 
@@ -951,6 +1171,11 @@ async function runGatewayCommand(args: string[]): Promise<number> {
 
   if (parsed.action === 'help') {
     printGatewayHelp(parsed.provider);
+    return 0;
+  }
+
+  if (parsed.action === 'setup') {
+    await runGatewaySetup(parsed.provider);
     return 0;
   }
 
@@ -970,7 +1195,7 @@ export type CliCommandRegistrar = (command: RegisteredCliCommand) => void;
 export function registerGatewayCliCommands(register: CliCommandRegistrar): void {
   register({
     name: 'gateway',
-    usage: 'pa gateway [telegram|discord] [start|help]',
+    usage: 'pa gateway [telegram|discord] [setup|start|help]',
     description: 'Run messaging gateway commands',
     run: runGatewayCommand,
   });

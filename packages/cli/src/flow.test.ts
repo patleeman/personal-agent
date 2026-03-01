@@ -63,6 +63,7 @@ beforeEach(() => {
   process.env = {
     ...originalEnv,
     PERSONAL_AGENT_DISABLE_DAEMON_EVENTS: '1',
+    PERSONAL_AGENT_NO_DAEMON_PROMPT: '1',
     PI_SESSION_DIR: createTempDir('pi-session-')
   };
 });
@@ -109,7 +110,7 @@ describe('CLI command flows', () => {
     expect(loggedArgs).toContain('Say ok');
   });
 
-  it('defaults to run when invoked with no args and passes unknown args through to pi', async () => {
+  it('shows help with no args and passes unknown args through to pi', async () => {
     const repo = createTestRepo();
     const stateRoot = createTempDir('personal-agent-cli-state-');
     const runLogDir = createTempDir('personal-agent-cli-log-');
@@ -161,7 +162,7 @@ describe('CLI command flows', () => {
     expect(await runCli(['doctor'])).toBe(1);
   });
 
-  it('prints human-friendly daemon status by default', async () => {
+  it('prints daemon status for explicit status command', async () => {
     const stateRoot = createTempDir('personal-agent-cli-state-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
@@ -170,10 +171,9 @@ describe('CLI command flows', () => {
       logs.push(String(message ?? ''));
     });
 
-    expect(await runCli(['daemon'])).toBe(0);
+    expect(await runCli(['daemon', 'status'])).toBe(0);
 
-    expect(logs.some((line) => line.includes('personal-agentd: stopped'))).toBe(true);
-    expect(logs.some((line) => line.includes('hint: pa daemon start'))).toBe(true);
+    expect(logs.some((line) => line.includes('Daemon is stopped'))).toBe(true);
 
     logSpy.mockRestore();
   });
