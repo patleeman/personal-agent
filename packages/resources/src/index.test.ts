@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { dirname, join } from 'path';
 import { tmpdir } from 'os';
@@ -183,6 +183,50 @@ describe('resources profile loader', () => {
     expect(result.writtenFiles.some((path) => path.endsWith('/AGENTS.md'))).toBe(true);
     expect(result.writtenFiles.some((path) => path.endsWith('/settings.json'))).toBe(true);
     expect(result.writtenFiles.some((path) => path.endsWith('/models.json'))).toBe(true);
+  });
+
+  it('preserves runtime lastChangelogVersion over profile value', () => {
+    const repo = createTempRepo();
+    const runtime = mkdtempSync(join(tmpdir(), 'personal-agent-runtime-'));
+    tempDirs.push(runtime);
+
+    writeFile(
+      join(runtime, 'settings.json'),
+      JSON.stringify({ lastChangelogVersion: '0.55.3', runtimeOnly: true }),
+    );
+
+    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(
+      join(repo, 'profiles/shared/agent/settings.json'),
+      JSON.stringify({ theme: 'cobalt2', lastChangelogVersion: '0.52.9' }),
+    );
+
+    const resolved = resolveResourceProfile('shared', { repoRoot: repo });
+    materializeProfileToAgentDir(resolved, runtime);
+
+    const settings = JSON.parse(readFileSync(join(runtime, 'settings.json'), 'utf-8')) as Record<string, unknown>;
+    expect(settings.lastChangelogVersion).toBe('0.55.3');
+    expect(settings.theme).toBe('cobalt2');
+    expect(settings.runtimeOnly).toBeUndefined();
+  });
+
+  it('drops profile-provided lastChangelogVersion when runtime value is missing', () => {
+    const repo = createTempRepo();
+    const runtime = mkdtempSync(join(tmpdir(), 'personal-agent-runtime-'));
+    tempDirs.push(runtime);
+
+    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(
+      join(repo, 'profiles/shared/agent/settings.json'),
+      JSON.stringify({ theme: 'cobalt2', lastChangelogVersion: '0.52.9' }),
+    );
+
+    const resolved = resolveResourceProfile('shared', { repoRoot: repo });
+    materializeProfileToAgentDir(resolved, runtime);
+
+    const settings = JSON.parse(readFileSync(join(runtime, 'settings.json'), 'utf-8')) as Record<string, unknown>;
+    expect(Object.prototype.hasOwnProperty.call(settings, 'lastChangelogVersion')).toBe(false);
+    expect(settings.theme).toBe('cobalt2');
   });
 
   it('removes stale runtime files when profile no longer provides them', () => {

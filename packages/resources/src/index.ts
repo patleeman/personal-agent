@@ -301,6 +301,42 @@ function combineMarkdownFiles(paths: string[]): string {
   return chunks.join('\n\n---\n\n');
 }
 
+function readRuntimeLastChangelogVersion(settingsPath: string): string | undefined {
+  if (!existsSync(settingsPath)) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(settingsPath, 'utf-8')) as unknown;
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return undefined;
+    }
+
+    const value = (parsed as Record<string, unknown>).lastChangelogVersion;
+    if (typeof value !== 'string' || value.length === 0) {
+      return undefined;
+    }
+
+    return value;
+  } catch {
+    return undefined;
+  }
+}
+
+function mergeMaterializedSettings(profileSettingsFiles: string[], targetSettingsPath: string): Record<string, unknown> {
+  const merged = mergeJsonFiles(profileSettingsFiles);
+  const runtimeLastChangelogVersion = readRuntimeLastChangelogVersion(targetSettingsPath);
+
+  if (runtimeLastChangelogVersion) {
+    merged.lastChangelogVersion = runtimeLastChangelogVersion;
+  } else {
+    delete merged.lastChangelogVersion;
+  }
+
+  return merged;
+}
+
 export interface MaterializeProfileResult {
   agentDir: string;
   writtenFiles: string[];
@@ -330,7 +366,8 @@ export function materializeProfileToAgentDir(
   };
 
   if (profile.settingsFiles.length > 0) {
-    const settings = mergeJsonFiles(profile.settingsFiles);
+    const targetSettingsPath = join(targetDir, 'settings.json');
+    const settings = mergeMaterializedSettings(profile.settingsFiles, targetSettingsPath);
     writeOrRemove('settings.json', JSON.stringify(settings, null, 2));
   } else {
     writeOrRemove('settings.json', undefined);
