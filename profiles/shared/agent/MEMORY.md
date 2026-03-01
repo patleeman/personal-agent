@@ -8,6 +8,7 @@
 - Prefer on-demand qmd memory queries over automatic prompt-time memory-card injection.
 - For the assistant profile, default to provider `openai-codex` with model `gpt-5.3-codex`.
 - Disable automatic memory-card generation/indexing; use on-demand qmd queries instead.
+- Use `xhigh` as the default thinking level for assistant and shared profiles.
 
 ## Environment
 
