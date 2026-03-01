@@ -136,6 +136,8 @@ pa gateway service status telegram
 pa gateway service uninstall telegram
 ```
 
+`pa gateway service install ...` also provisions `personal-agentd` as a managed user service so gateway background events stay enabled.
+
 ## Daemon
 
 `personal-agentd` runs background modules behind a local event bus:
@@ -209,6 +211,8 @@ pa gateway telegram start
 # or run as background service (recommended for long-running use)
 pa gateway service install telegram
 ```
+
+Foreground gateway starts (`pa gateway ... start`) auto-start `personal-agentd` if needed.
 
 ### Discord
 

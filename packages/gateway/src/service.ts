@@ -4,11 +4,23 @@ import { homedir } from 'os';
 import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { getStateRoot } from '@personal-agent/core';
+import { loadDaemonConfig, resolveDaemonPaths } from '@personal-agent/daemon';
 import { readGatewayConfig } from './config.js';
 
 export type GatewayProvider = 'telegram' | 'discord';
 
 export type GatewayServicePlatform = 'launchd' | 'systemd';
+
+export interface ManagedDaemonServiceInfo {
+  identifier: string;
+  manifestPath: string;
+  logFile?: string;
+}
+
+export interface ManagedDaemonServiceStatus extends ManagedDaemonServiceInfo {
+  installed: boolean;
+  running: boolean;
+}
 
 export interface GatewayServiceInfo {
   platform: GatewayServicePlatform;
@@ -16,11 +28,13 @@ export interface GatewayServiceInfo {
   identifier: string;
   manifestPath: string;
   logFile?: string;
+  daemonService?: ManagedDaemonServiceInfo;
 }
 
 export interface GatewayServiceStatus extends GatewayServiceInfo {
   installed: boolean;
   running: boolean;
+  daemonService?: ManagedDaemonServiceStatus;
 }
 
 function resolveServicePlatform(): GatewayServicePlatform {
@@ -50,6 +64,23 @@ function resolveGatewayEntryFile(): string {
   }
 
   throw new Error('Could not locate gateway entrypoint (build packages/gateway first)');
+}
+
+function resolveDaemonEntryFile(): string {
+  const currentFile = fileURLToPath(import.meta.url);
+  const currentDir = dirname(currentFile);
+
+  const siblingCandidate = resolve(currentDir, '..', '..', 'daemon', 'dist', 'index.js');
+  if (existsSync(siblingCandidate)) {
+    return siblingCandidate;
+  }
+
+  const workspaceCandidate = resolve(process.cwd(), 'packages', 'daemon', 'dist', 'index.js');
+  if (existsSync(workspaceCandidate)) {
+    return workspaceCandidate;
+  }
+
+  throw new Error('Could not locate daemon entrypoint (build packages/daemon first)');
 }
 
 function formatCommand(command: string, args: string[]): string {
@@ -119,6 +150,11 @@ function getGatewayLogFile(provider: GatewayProvider): string {
   return join(getStateRoot(), 'gateway', 'logs', `${provider}.log`);
 }
 
+function getDaemonLogFile(): string {
+  const config = loadDaemonConfig();
+  return resolveDaemonPaths(config.ipc.socketPath).logFile;
+}
+
 function buildServiceEnvironment(provider: GatewayProvider): Record<string, string> {
   const environment: Record<string, string> = {
     PERSONAL_AGENT_GATEWAY_PROVIDER: provider,
@@ -131,6 +167,25 @@ function buildServiceEnvironment(provider: GatewayProvider): Record<string, stri
     'PERSONAL_AGENT_PROFILE',
     'PERSONAL_AGENT_PI_TIMEOUT_MS',
     'PERSONAL_AGENT_PI_MAX_OUTPUT_BYTES',
+  ] as const;
+
+  for (const key of passthroughKeys) {
+    const value = process.env[key];
+    if (typeof value === 'string' && value.trim().length > 0) {
+      environment[key] = value;
+    }
+  }
+
+  return environment;
+}
+
+function buildDaemonServiceEnvironment(): Record<string, string> {
+  const environment: Record<string, string> = {};
+
+  const passthroughKeys = [
+    'PATH',
+    'PERSONAL_AGENT_STATE_ROOT',
+    'PERSONAL_AGENT_DAEMON_CONFIG',
   ] as const;
 
   for (const key of passthroughKeys) {
@@ -217,8 +272,64 @@ function getLaunchdLabel(provider: GatewayProvider): string {
   return `io.personal-agent.gateway.${provider}`;
 }
 
+function getLaunchdDaemonLabel(): string {
+  return 'io.personal-agent.daemon';
+}
+
 function getLaunchdPlistPath(label: string): string {
   return join(homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
+}
+
+function installLaunchdDaemonService(): ManagedDaemonServiceInfo {
+  const label = getLaunchdDaemonLabel();
+  const manifestPath = getLaunchdPlistPath(label);
+  const logFile = getDaemonLogFile();
+  const domain = getLaunchdDomain();
+  const serviceTarget = `${domain}/${label}`;
+
+  const entryFile = resolveDaemonEntryFile();
+  const nodePath = process.execPath;
+  const environment = buildDaemonServiceEnvironment();
+
+  mkdirSync(dirname(manifestPath), { recursive: true });
+  mkdirSync(dirname(logFile), { recursive: true });
+
+  const content = buildLaunchdPlistContent({
+    label,
+    nodePath,
+    entryFile,
+    workingDirectory: homedir(),
+    logFile,
+    environment,
+  });
+
+  writeFileSync(manifestPath, `${content}\n`);
+
+  runCommand('launchctl', ['bootout', domain, manifestPath], { allowNonZero: true });
+  runCommand('launchctl', ['bootstrap', domain, manifestPath]);
+  runCommand('launchctl', ['kickstart', '-k', serviceTarget], { allowNonZero: true });
+
+  return {
+    identifier: label,
+    manifestPath,
+    logFile,
+  };
+}
+
+function getLaunchdDaemonServiceStatus(): ManagedDaemonServiceStatus {
+  const label = getLaunchdDaemonLabel();
+  const manifestPath = getLaunchdPlistPath(label);
+  const domain = getLaunchdDomain();
+  const serviceTarget = `${domain}/${label}`;
+  const status = runCommand('launchctl', ['print', serviceTarget], { allowNonZero: true });
+
+  return {
+    identifier: label,
+    manifestPath,
+    logFile: getDaemonLogFile(),
+    installed: existsSync(manifestPath),
+    running: (status.status ?? 1) === 0,
+  };
 }
 
 interface SystemdUnitInput {
@@ -229,21 +340,60 @@ interface SystemdUnitInput {
   environment: Record<string, string>;
 }
 
+interface SystemdDaemonUnitInput {
+  nodePath: string;
+  entryFile: string;
+  environment: Record<string, string>;
+}
+
+function getSystemdDaemonUnitName(): string {
+  return 'personal-agent-daemon.service';
+}
+
 function buildSystemdUnitContent(input: SystemdUnitInput): string {
+  const environmentLines = Object.entries(input.environment)
+    .map(([key, value]) => `Environment=${key}=${quoteSystemdValue(value)}`)
+    .join('\n');
+
+  const daemonUnitName = getSystemdDaemonUnitName();
+  const lines = [
+    '[Unit]',
+    `Description=Personal Agent gateway (${input.provider})`,
+    `After=network-online.target ${daemonUnitName}`,
+    `Wants=network-online.target ${daemonUnitName}`,
+    '',
+    '[Service]',
+    'Type=simple',
+    `ExecStart=${quoteSystemdValue(input.nodePath)} ${quoteSystemdValue(input.entryFile)}`,
+    `WorkingDirectory=${quoteSystemdValue(input.workingDirectory)}`,
+    environmentLines,
+    'Restart=always',
+    'RestartSec=5',
+    '',
+    '[Install]',
+    'WantedBy=default.target',
+  ];
+
+  return lines
+    .filter((line) => line.length > 0)
+    .join('\n');
+}
+
+function buildSystemdDaemonUnitContent(input: SystemdDaemonUnitInput): string {
   const environmentLines = Object.entries(input.environment)
     .map(([key, value]) => `Environment=${key}=${quoteSystemdValue(value)}`)
     .join('\n');
 
   const lines = [
     '[Unit]',
-    `Description=Personal Agent gateway (${input.provider})`,
+    'Description=Personal Agent daemon',
     'After=network-online.target',
     'Wants=network-online.target',
     '',
     '[Service]',
     'Type=simple',
     `ExecStart=${quoteSystemdValue(input.nodePath)} ${quoteSystemdValue(input.entryFile)}`,
-    `WorkingDirectory=${quoteSystemdValue(input.workingDirectory)}`,
+    `WorkingDirectory=${quoteSystemdValue(homedir())}`,
     environmentLines,
     'Restart=always',
     'RestartSec=5',
@@ -265,7 +415,48 @@ function getSystemdUnitPath(unitName: string): string {
   return join(homedir(), '.config', 'systemd', 'user', unitName);
 }
 
+function installSystemdDaemonService(): ManagedDaemonServiceInfo {
+  const unitName = getSystemdDaemonUnitName();
+  const manifestPath = getSystemdUnitPath(unitName);
+  const entryFile = resolveDaemonEntryFile();
+  const nodePath = process.execPath;
+  const environment = buildDaemonServiceEnvironment();
+
+  mkdirSync(dirname(manifestPath), { recursive: true });
+
+  const content = buildSystemdDaemonUnitContent({
+    nodePath,
+    entryFile,
+    environment,
+  });
+
+  writeFileSync(manifestPath, `${content}\n`);
+
+  runCommand('systemctl', ['--user', 'daemon-reload']);
+  runCommand('systemctl', ['--user', 'enable', '--now', unitName]);
+
+  return {
+    identifier: unitName,
+    manifestPath,
+  };
+}
+
+function getSystemdDaemonServiceStatus(): ManagedDaemonServiceStatus {
+  const unitName = getSystemdDaemonUnitName();
+  const manifestPath = getSystemdUnitPath(unitName);
+  const status = runCommand('systemctl', ['--user', 'is-active', unitName], { allowNonZero: true });
+  const activeState = status.stdout.trim().toLowerCase();
+
+  return {
+    identifier: unitName,
+    manifestPath,
+    installed: existsSync(manifestPath),
+    running: (status.status ?? 1) === 0 && activeState === 'active',
+  };
+}
+
 function installLaunchdGatewayService(provider: GatewayProvider): GatewayServiceInfo {
+  const daemonService = installLaunchdDaemonService();
   const label = getLaunchdLabel(provider);
   const manifestPath = getLaunchdPlistPath(label);
   const logFile = getGatewayLogFile(provider);
@@ -301,6 +492,7 @@ function installLaunchdGatewayService(provider: GatewayProvider): GatewayService
     identifier: label,
     manifestPath,
     logFile,
+    daemonService,
   };
 }
 
@@ -339,10 +531,12 @@ function getLaunchdGatewayServiceStatus(provider: GatewayProvider): GatewayServi
     logFile: getGatewayLogFile(provider),
     installed: existsSync(manifestPath),
     running: (status.status ?? 1) === 0,
+    daemonService: getLaunchdDaemonServiceStatus(),
   };
 }
 
 function installSystemdGatewayService(provider: GatewayProvider): GatewayServiceInfo {
+  const daemonService = installSystemdDaemonService();
   const unitName = getSystemdUnitName(provider);
   const manifestPath = getSystemdUnitPath(unitName);
 
@@ -371,6 +565,7 @@ function installSystemdGatewayService(provider: GatewayProvider): GatewayService
     provider,
     identifier: unitName,
     manifestPath,
+    daemonService,
   };
 }
 
@@ -408,6 +603,7 @@ function getSystemdGatewayServiceStatus(provider: GatewayProvider): GatewayServi
     manifestPath,
     installed: existsSync(manifestPath),
     running: (status.status ?? 1) === 0 && activeState === 'active',
+    daemonService: getSystemdDaemonServiceStatus(),
   };
 }
 

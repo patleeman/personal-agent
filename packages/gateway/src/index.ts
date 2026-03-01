@@ -20,7 +20,7 @@ import {
   mergeJsonFiles,
   resolveResourceProfile,
 } from '@personal-agent/resources';
-import { emitDaemonEventNonFatal } from '@personal-agent/daemon';
+import { emitDaemonEventNonFatal, startDaemonDetached } from '@personal-agent/daemon';
 import {
   getGatewayConfigFilePath,
   readGatewayConfig,
@@ -2336,6 +2336,18 @@ export function parseGatewayCliArgs(args: string[]): ParsedGatewayCliArgs {
   throw new Error(`Unknown gateway subcommand: ${first}`);
 }
 
+async function ensureDaemonRunningForGatewayStartup(): Promise<void> {
+  if (process.env.PERSONAL_AGENT_DISABLE_DAEMON_EVENTS === '1') {
+    return;
+  }
+
+  try {
+    await startDaemonDetached();
+  } catch (error) {
+    console.warn(gatewayWarning(`Unable to auto-start personal-agentd: ${(error as Error).message}`));
+  }
+}
+
 async function startGateway(provider: GatewayProvider): Promise<void> {
   if (provider === 'telegram') {
     await startTelegramBridge();
@@ -2471,6 +2483,7 @@ function printGatewayServiceHelp(provider?: GatewayProvider): void {
   console.log('');
   console.log(gatewayKeyValue('Default provider', defaultProvider));
   console.log(gatewayKeyValue('Supported platforms', 'macOS launchd, Linux systemd --user'));
+  console.log(gatewayKeyValue('Daemon', 'Install also provisions personal-agentd as a managed user service'));
   console.log('');
   console.log(gatewayNext(`pa gateway service install ${defaultProvider}`));
 }
@@ -2494,6 +2507,23 @@ function printGatewayServiceStatus(provider: GatewayProvider): void {
     console.log(gatewayKeyValue('Logs', `journalctl --user -u ${status.identifier} -f`));
   }
 
+  if (status.daemonService) {
+    console.log('');
+    console.log(gatewaySection('Daemon service'));
+    console.log(gatewayKeyValue('Service', status.daemonService.identifier));
+    console.log(gatewayKeyValue('Manifest', status.daemonService.manifestPath));
+    console.log(gatewayKeyValue('Installed', status.daemonService.installed ? 'yes' : 'no'));
+    console.log(gatewayKeyValue('Running', status.daemonService.running ? 'yes' : 'no'));
+
+    if (status.daemonService.logFile) {
+      console.log(gatewayKeyValue('Log file', status.daemonService.logFile));
+    }
+
+    if (status.platform === 'systemd') {
+      console.log(gatewayKeyValue('Logs', `journalctl --user -u ${status.daemonService.identifier} -f`));
+    }
+  }
+
   if (!status.installed) {
     console.log(gatewayNext(`pa gateway service install ${provider}`));
   }
@@ -2514,6 +2544,21 @@ function runGatewayServiceAction(action: GatewayServiceRuntimeAction, provider: 
 
     if (service.platform === 'systemd') {
       console.log(gatewayKeyValue('Logs', `journalctl --user -u ${service.identifier} -f`));
+    }
+
+    if (service.daemonService) {
+      console.log('');
+      console.log(gatewaySection('Daemon service'));
+      console.log(gatewayKeyValue('Service', service.daemonService.identifier));
+      console.log(gatewayKeyValue('Manifest', service.daemonService.manifestPath));
+
+      if (service.daemonService.logFile) {
+        console.log(gatewayKeyValue('Log file', service.daemonService.logFile));
+      }
+
+      if (service.platform === 'systemd') {
+        console.log(gatewayKeyValue('Logs', `journalctl --user -u ${service.daemonService.identifier} -f`));
+      }
     }
 
     console.log(gatewayNext(`pa gateway service status ${provider}`));
@@ -2627,6 +2672,7 @@ async function runGatewayCommand(args: string[]): Promise<number> {
     return 0;
   }
 
+  await ensureDaemonRunningForGatewayStartup();
   await startGateway(parsed.provider ?? 'telegram');
   await waitIndefinitely();
   return 0;

@@ -81,6 +81,7 @@ pa gateway telegram start
 ```
 
 `start` runs in the foreground. Keep that terminal open and press `Ctrl+C` to stop.
+It also auto-starts `personal-agentd` if needed (unless daemon events are explicitly disabled).
 
 ## Discord
 
@@ -102,6 +103,7 @@ pa gateway discord start
 ```
 
 `start` runs in the foreground. Keep that terminal open and press `Ctrl+C` to stop.
+It also auto-starts `personal-agentd` if needed (unless daemon events are explicitly disabled).
 
 ## Background service mode (recommended for 24/7)
 
@@ -129,6 +131,7 @@ Notes:
 
 - Run provider setup first (`pa gateway <provider> setup`).
 - `service install` validates provider token + allowlist in gateway config.
+- `service install` also installs/starts `personal-agentd` as a managed user service.
 - macOS logs are written to `~/.local/state/personal-agent/gateway/logs/<provider>.log`.
 - Linux logs are available via `journalctl --user -u personal-agent-gateway-<provider>.service -f`.
 
