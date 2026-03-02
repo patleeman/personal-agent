@@ -367,6 +367,50 @@ describe('queued telegram message handler', () => {
     expect(sendChatAction).toHaveBeenCalledWith(1, 'typing');
   });
 
+  it('continues sending typing actions while a telegram run is active', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const sendMessage = vi.fn(async () => undefined);
+      const sendChatAction = vi.fn(async () => undefined);
+
+      let resolveRun: ((value: string) => void) | undefined;
+      const runPromise = new Promise<string>((resolve) => {
+        resolveRun = resolve;
+      });
+
+      const runPrompt = vi.fn(async () => runPromise);
+
+      const handler = createQueuedTelegramMessageHandler({
+        allowlist: new Set(['1']),
+        profileName: 'shared',
+        agentDir: '/tmp/agent',
+        telegramSessionDir: '/tmp/sessions',
+        workingDirectory: '/tmp/work',
+        sendMessage,
+        sendChatAction,
+        createConversationController: createTestConversationControllerFactory(runPrompt),
+      });
+
+      handler.handleMessage({ chat: { id: 1 }, text: 'hello' });
+
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(12_500);
+
+      expect(sendChatAction.mock.calls.length).toBeGreaterThanOrEqual(3);
+      expect(sendChatAction).toHaveBeenCalledWith(1, 'typing');
+
+      resolveRun?.('done');
+      await handler.waitForIdle('1');
+
+      const callsAfterCompletion = sendChatAction.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(8_000);
+      expect(sendChatAction.mock.calls.length).toBe(callsAfterCompletion);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('steers active telegram runs instead of starting a second run with controller mode', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
@@ -904,6 +948,52 @@ describe('queued discord message handler', () => {
     const firstCall = runPrompt.mock.calls[0]?.[0] as { prompt: string };
     expect(firstCall.prompt).toBe('/skill:tdd-feature');
     expect(sendTyping).toHaveBeenCalled();
+  });
+
+  it('continues sending typing indicators while a discord run is active', async () => {
+    vi.useFakeTimers();
+
+    try {
+      const sendMessage = vi.fn(async () => undefined);
+      const sendTyping = vi.fn(async () => undefined);
+
+      let resolveRun: ((value: string) => void) | undefined;
+      const runPromise = new Promise<string>((resolve) => {
+        resolveRun = resolve;
+      });
+
+      const runPrompt = vi.fn(async () => runPromise);
+
+      const handler = createQueuedDiscordMessageHandler({
+        allowlist: new Set(['channel-1']),
+        profileName: 'shared',
+        agentDir: '/tmp/agent',
+        discordSessionDir: '/tmp/discord-sessions',
+        workingDirectory: '/tmp/work',
+        createConversationController: createTestConversationControllerFactory(runPrompt),
+      });
+
+      handler.handleMessage({
+        channelId: 'channel-1',
+        content: 'hello',
+        sendMessage,
+        sendTyping,
+      });
+
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(12_500);
+
+      expect(sendTyping.mock.calls.length).toBeGreaterThanOrEqual(3);
+
+      resolveRun?.('done');
+      await handler.waitForIdle('channel-1');
+
+      const callsAfterCompletion = sendTyping.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(8_000);
+      expect(sendTyping.mock.calls.length).toBe(callsAfterCompletion);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('steers active discord runs instead of starting a second run with controller mode', async () => {

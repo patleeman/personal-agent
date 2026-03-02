@@ -254,6 +254,7 @@ const DEFAULT_PI_TIMEOUT_MS = 180_000;
 const DEFAULT_MAX_PENDING_PER_CHAT = 20;
 const DEFAULT_MAX_PENDING_PER_CHANNEL = 20;
 const DEFAULT_MODEL_SELECTION_LIMIT = 25;
+const TYPING_HEARTBEAT_INTERVAL_MS = 4_000;
 const TELEGRAM_MODEL_SELECTION_CALLBACK_PREFIX = 'model_select:';
 const PROMPT_CANCELLED_ERROR_MESSAGE = 'Request cancelled by /stop.';
 const STOPPED_ACTIVE_REQUEST_MESSAGE = 'Stopped active request.';
@@ -1665,6 +1666,37 @@ async function sendLongText(sendMessage: SendTextFn, text: string): Promise<void
   }
 }
 
+function startTypingHeartbeat(sendTyping: () => Promise<unknown>): () => void {
+  let stopped = false;
+  let sending = false;
+
+  const dispatchTyping = async (): Promise<void> => {
+    if (stopped || sending) {
+      return;
+    }
+
+    sending = true;
+    try {
+      await sendTyping();
+    } catch {
+      // Ignore typing indicator failures.
+    } finally {
+      sending = false;
+    }
+  };
+
+  void dispatchTyping();
+
+  const interval = setInterval(() => {
+    void dispatchTyping();
+  }, TYPING_HEARTBEAT_INTERVAL_MS);
+
+  return () => {
+    stopped = true;
+    clearInterval(interval);
+  };
+}
+
 function resolveModelFromInput(input: string, models: string[]): string | undefined {
   const trimmed = input.trim();
   if (trimmed.length === 0) {
@@ -2136,7 +2168,7 @@ model=${model}`,
     : await controller.submitPrompt(submissionInput);
 
   if (submission.mode === 'started') {
-    await options.sendChatAction(message.chat.id, 'typing');
+    const stopTypingHeartbeat = startTypingHeartbeat(() => options.sendChatAction(message.chat.id, 'typing'));
 
     const runTask = submission.run
       .then(async (output) => {
@@ -2173,6 +2205,9 @@ model=${model}`,
         });
 
         await options.sendMessage(message.chat.id, `Error: ${errorMessage}`);
+      })
+      .finally(() => {
+        stopTypingHeartbeat();
       });
 
     registerRunTask(runTask);
@@ -2618,7 +2653,7 @@ model=${model}`,
     : await controller.submitPrompt(submissionInput);
 
   if (submission.mode === 'started') {
-    await message.sendTyping();
+    const stopTypingHeartbeat = startTypingHeartbeat(message.sendTyping);
 
     const runTask = submission.run
       .then(async (output) => {
@@ -2655,6 +2690,9 @@ model=${model}`,
         });
 
         await message.sendMessage(`Error: ${errorMessage}`);
+      })
+      .finally(() => {
+        stopTypingHeartbeat();
       });
 
     registerRunTask(runTask);
