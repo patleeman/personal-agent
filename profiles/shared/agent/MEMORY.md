@@ -16,6 +16,7 @@
 - When asked to take notes, use Apple Notes.
 - Prefer profile-based settings over environment variables for pa TUI theme mapping.
 - Checkpoint workflow should always push after committing.
+- - Stores shopping list in Todoist. For time-based reminders or follow-up check-ins, prefer using personal-agent scheduled tasks (daemon) rather than Apple Reminders.
 
 ## Environment
 
