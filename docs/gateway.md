@@ -133,10 +133,13 @@ Notes:
 - `service install` also installs/starts `personal-agentd` as a managed user service.
 - macOS logs are written to `~/.local/state/personal-agent/gateway/logs/<provider>.log`.
 - Linux logs are available via `journalctl --user -u personal-agent-gateway-<provider>.service -f`.
+- Telegram durable pending inbox is stored at `~/.local/state/personal-agent/gateway/pending/telegram`.
 
 ## Message/session behavior
 
 Each chat/channel gets its own Pi session file.
+
+Telegram inbound messages are durably spooled to disk before processing and replayed on startup after crashes/restarts.
 
 Gateway commands inside chat:
 

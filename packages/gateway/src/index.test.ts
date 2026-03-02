@@ -1,3 +1,6 @@
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createQueuedDiscordMessageHandler,
@@ -27,6 +30,10 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
     resolve = res;
   });
   return { promise, resolve };
+}
+
+function createTempDir(prefix: string): string {
+  return mkdtempSync(join(tmpdir(), prefix));
 }
 
 interface TestRunPromptInput {
@@ -365,6 +372,89 @@ describe('queued telegram message handler', () => {
     const firstCall = runPrompt.mock.calls[0]?.[0] as { prompt: string };
     expect(firstCall.prompt).toBe('/skill:tdd-feature');
     expect(sendChatAction).toHaveBeenCalledWith(1, 'typing');
+  });
+
+  it('keeps telegram messages in durable inbox until run completion', async () => {
+    const durableInboxDir = createTempDir('gateway-telegram-inbox-');
+
+    try {
+      const sendMessage = vi.fn(async () => undefined);
+      const sendChatAction = vi.fn(async () => undefined);
+
+      let resolveRun: ((value: string) => void) | undefined;
+      const runPromise = new Promise<string>((resolve) => {
+        resolveRun = resolve;
+      });
+
+      const runPrompt = vi.fn(async () => runPromise);
+
+      const handler = createQueuedTelegramMessageHandler({
+        allowlist: new Set(['1']),
+        profileName: 'shared',
+        agentDir: '/tmp/agent',
+        telegramSessionDir: '/tmp/sessions',
+        workingDirectory: '/tmp/work',
+        sendMessage,
+        sendChatAction,
+        durableInboxDir,
+        createConversationController: createTestConversationControllerFactory(runPrompt),
+      });
+
+      handler.handleMessage({ chat: { id: 1 }, message_id: 101, text: 'hello' });
+      expect(readdirSync(durableInboxDir).length).toBe(1);
+
+      resolveRun?.('done');
+      await handler.waitForIdle('1');
+
+      expect(readdirSync(durableInboxDir).length).toBe(0);
+    } finally {
+      rmSync(durableInboxDir, { recursive: true, force: true });
+    }
+  });
+
+  it('replays pending durable telegram messages on startup', async () => {
+    const durableInboxDir = createTempDir('gateway-telegram-replay-');
+
+    try {
+      const storedMessage = {
+        version: 1,
+        storedAt: new Date().toISOString(),
+        message: {
+          chat: { id: 1 },
+          message_id: 202,
+          text: 'replayed message',
+        },
+      };
+
+      writeFileSync(join(durableInboxDir, 'pending.json'), `${JSON.stringify(storedMessage)}\n`, 'utf-8');
+
+      const sendMessage = vi.fn(async () => undefined);
+      const sendChatAction = vi.fn(async () => undefined);
+      const runPrompt = vi.fn(async ({ prompt }: { prompt: string }) => `reply:${prompt}`);
+
+      const handler = createQueuedTelegramMessageHandler({
+        allowlist: new Set(['1']),
+        profileName: 'shared',
+        agentDir: '/tmp/agent',
+        telegramSessionDir: '/tmp/sessions',
+        workingDirectory: '/tmp/work',
+        sendMessage,
+        sendChatAction,
+        durableInboxDir,
+        createConversationController: createTestConversationControllerFactory(runPrompt),
+      });
+
+      const recovered = handler.replayPendingMessages();
+      expect(recovered).toBe(1);
+
+      await handler.waitForIdle('1');
+
+      const firstCall = runPrompt.mock.calls[0]?.[0] as { prompt: string };
+      expect(firstCall.prompt).toBe('replayed message');
+      expect(readdirSync(durableInboxDir).length).toBe(0);
+    } finally {
+      rmSync(durableInboxDir, { recursive: true, force: true });
+    }
   });
 
   it('continues sending typing actions while a telegram run is active', async () => {

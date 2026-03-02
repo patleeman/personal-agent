@@ -2,7 +2,14 @@
 
 import { createInterface } from 'readline';
 import { mkdir, rm } from 'fs/promises';
-import { existsSync, readFileSync } from 'fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  unlinkSync,
+  writeFileSync,
+} from 'fs';
 import { basename, join, resolve } from 'path';
 import { spawnSync } from 'child_process';
 import TelegramBot from 'node-telegram-bot-api';
@@ -122,6 +129,7 @@ export interface DiscordBridgeConfig {
 
 export interface TelegramMessageLike {
   chat: { id: number };
+  message_id?: number;
   text?: string;
   from?: {
     id?: number;
@@ -172,6 +180,14 @@ interface ConversationSubmitQueued {
 
 type ConversationSubmitResult = ConversationSubmitStarted | ConversationSubmitQueued;
 
+interface MessageProcessingResult {
+  completion: Promise<void>;
+}
+
+function completedMessageProcessingResult(): MessageProcessingResult {
+  return { completion: Promise.resolve() };
+}
+
 export interface GatewayConversationController {
   submitPrompt: (input: RunPromptFnInput) => Promise<ConversationSubmitResult>;
   submitFollowUp: (input: RunPromptFnInput) => Promise<ConversationSubmitResult>;
@@ -213,10 +229,12 @@ export interface CreateTelegramMessageHandlerOptions {
   removeSessionFile?: (path: string) => Promise<void>;
   maxPendingPerChat?: number;
   modelCommands?: ModelCommandSupport;
+  durableInboxDir?: string;
 }
 
 export interface QueuedTelegramMessageHandler {
   handleMessage: (message: TelegramMessageLike) => void;
+  replayPendingMessages: () => number;
   waitForIdle: (chatId?: string) => Promise<void>;
 }
 
@@ -1666,6 +1684,115 @@ async function sendLongText(sendMessage: SendTextFn, text: string): Promise<void
   }
 }
 
+interface StoredTelegramPendingMessage {
+  version: 1;
+  storedAt: string;
+  message: TelegramMessageLike;
+}
+
+interface LoadedTelegramPendingMessage {
+  id: string;
+  message: TelegramMessageLike;
+}
+
+function sanitizeTelegramPendingToken(token: string): string {
+  return token.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function createTelegramPendingMessageId(message: TelegramMessageLike): string {
+  const timestampToken = new Date().toISOString().replace(/[:.]/g, '-');
+  const chatToken = sanitizeTelegramPendingToken(String(message.chat.id));
+  const messageToken = typeof message.message_id === 'number'
+    ? String(message.message_id)
+    : `nomsg-${Math.floor(Math.random() * 1_000_000_000)}`;
+  const nonce = Math.floor(Math.random() * 1_000_000_000).toString(36);
+
+  return `${timestampToken}_${chatToken}_${messageToken}_${nonce}`;
+}
+
+function isTelegramMessageLike(value: unknown): value is TelegramMessageLike {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const chat = candidate.chat as Record<string, unknown> | undefined;
+  if (!chat || typeof chat.id !== 'number') {
+    return false;
+  }
+
+  if (candidate.message_id !== undefined && typeof candidate.message_id !== 'number') {
+    return false;
+  }
+
+  if (candidate.text !== undefined && typeof candidate.text !== 'string') {
+    return false;
+  }
+
+  return true;
+}
+
+function storeTelegramPendingMessage(inboxDir: string, message: TelegramMessageLike): string {
+  mkdirSync(inboxDir, { recursive: true });
+
+  const id = createTelegramPendingMessageId(message);
+  const payload: StoredTelegramPendingMessage = {
+    version: 1,
+    storedAt: new Date().toISOString(),
+    message,
+  };
+
+  writeFileSync(join(inboxDir, `${id}.json`), `${JSON.stringify(payload)}\n`, 'utf-8');
+  return id;
+}
+
+function loadTelegramPendingMessages(inboxDir: string): LoadedTelegramPendingMessage[] {
+  if (!existsSync(inboxDir)) {
+    return [];
+  }
+
+  const fileNames = readdirSync(inboxDir)
+    .filter((entry) => entry.endsWith('.json'))
+    .sort((a, b) => a.localeCompare(b));
+
+  const recovered: LoadedTelegramPendingMessage[] = [];
+
+  for (const fileName of fileNames) {
+    const filePath = join(inboxDir, fileName);
+
+    try {
+      const raw = readFileSync(filePath, 'utf-8');
+      const parsed = JSON.parse(raw) as Partial<StoredTelegramPendingMessage>;
+      if (parsed.version !== 1 || !isTelegramMessageLike(parsed.message)) {
+        throw new Error('invalid message payload');
+      }
+
+      recovered.push({
+        id: fileName.slice(0, -'.json'.length),
+        message: parsed.message,
+      });
+    } catch (error) {
+      console.warn(gatewayWarning(`Dropping unreadable telegram pending message ${fileName}: ${(error as Error).message}`));
+      try {
+        unlinkSync(filePath);
+      } catch {
+        // Best-effort cleanup for bad files.
+      }
+    }
+  }
+
+  return recovered;
+}
+
+function acknowledgeTelegramPendingMessage(inboxDir: string, id: string): void {
+  const filePath = join(inboxDir, `${id}.json`);
+  if (!existsSync(filePath)) {
+    return;
+  }
+
+  unlinkSync(filePath);
+}
+
 function startTypingHeartbeat(sendTyping: () => Promise<unknown>): () => void {
   let stopped = false;
   let sending = false;
@@ -1996,18 +2123,18 @@ async function processTelegramMessage(
   message: TelegramMessageLike,
   controllers: Map<string, Promise<GatewayConversationController>>,
   registerRunTask: (task: Promise<void>) => void,
-): Promise<void> {
+): Promise<MessageProcessingResult> {
   const chatId = String(message.chat.id);
 
   if (!options.allowlist.has(chatId)) {
     await options.sendMessage(message.chat.id, 'This chat is not allowed.');
-    return;
+    return completedMessageProcessingResult();
   }
 
   const text = message.text?.trim();
   if (!text) {
     await options.sendMessage(message.chat.id, 'Please send text messages only.');
-    return;
+    return completedMessageProcessingResult();
   }
 
   const fullName = [message.from?.first_name, message.from?.last_name].filter(Boolean).join(' ');
@@ -2040,7 +2167,7 @@ async function processTelegramMessage(
   });
 
   if (modelCommandHandled) {
-    return;
+    return completedMessageProcessingResult();
   }
 
   if (command === '/new') {
@@ -2062,7 +2189,7 @@ async function processTelegramMessage(
     });
 
     await options.sendMessage(message.chat.id, 'Started a new session.');
-    return;
+    return completedMessageProcessingResult();
   }
 
   if (command === '/status') {
@@ -2077,7 +2204,7 @@ agentDir=${options.agentDir}
 session=${sessionFile}
 model=${model}`,
     );
-    return;
+    return completedMessageProcessingResult();
   }
 
   if (command === '/resume') {
@@ -2085,7 +2212,7 @@ model=${model}`,
       message.chat.id,
       'Gateway sessions already resume automatically per chat. Use /new to start a fresh session.',
     );
-    return;
+    return completedMessageProcessingResult();
   }
 
   if (command === '/compact') {
@@ -2093,52 +2220,52 @@ model=${model}`,
       message.chat.id,
       'Manual /compact is not supported in gateway print mode yet. Open this session in Pi TUI to compact.',
     );
-    return;
+    return completedMessageProcessingResult();
   }
 
   if (command === '/commands') {
     const commandHelp = options.commandHelpText
       ?? formatTelegramCommands(DEFAULT_TELEGRAM_COMMANDS);
     await sendLongText((chunk) => options.sendMessage(message.chat.id, chunk), commandHelp);
-    return;
+    return completedMessageProcessingResult();
   }
 
   if (command === '/skills') {
     const skillsHelp = options.skillsHelpText ?? formatTelegramSkills([]);
     await sendLongText((chunk) => options.sendMessage(message.chat.id, chunk), skillsHelp);
-    return;
+    return completedMessageProcessingResult();
   }
 
   if (command === '/stop') {
     const controllerPromise = controllers.get(chatId);
     if (!controllerPromise) {
       await options.sendMessage(message.chat.id, NO_ACTIVE_REQUEST_MESSAGE);
-      return;
+      return completedMessageProcessingResult();
     }
 
     const controller = await controllerPromise;
     const aborted = await controller.abortCurrent();
     if (aborted) {
       await options.sendMessage(message.chat.id, STOPPED_ACTIVE_REQUEST_MESSAGE);
-      return;
+      return completedMessageProcessingResult();
     }
 
     await options.sendMessage(message.chat.id, NO_ACTIVE_REQUEST_MESSAGE);
-    return;
+    return completedMessageProcessingResult();
   }
 
   let prompt = normalized.normalizedText;
   if (command === '/skill') {
     if (normalized.args.length === 0) {
       await options.sendMessage(message.chat.id, 'Usage: /skill <name>\nExample: /skill tdd-feature');
-      return;
+      return completedMessageProcessingResult();
     }
 
     prompt = `/skill:${normalized.args}`;
   } else if (command === '/followup') {
     if (normalized.args.length === 0) {
       await options.sendMessage(message.chat.id, 'Usage: /followup <message>');
-      return;
+      return completedMessageProcessingResult();
     }
 
     prompt = normalized.args;
@@ -2211,15 +2338,16 @@ model=${model}`,
       });
 
     registerRunTask(runTask);
-    return;
+    return { completion: runTask };
   }
 
   if (submission.mode === 'steered') {
     await options.sendMessage(message.chat.id, STEERING_ACTIVE_REQUEST_MESSAGE);
-    return;
+    return completedMessageProcessingResult();
   }
 
   await options.sendMessage(message.chat.id, FOLLOWUP_QUEUED_MESSAGE);
+  return completedMessageProcessingResult();
 }
 
 export function createQueuedTelegramMessageHandler(
@@ -2229,7 +2357,25 @@ export function createQueuedTelegramMessageHandler(
   const pendingPerChat = new Map<string, number>();
   const controllers = new Map<string, Promise<GatewayConversationController>>();
   const runTasks = new Map<string, Set<Promise<void>>>();
+  const latestMessageIdByChat = new Map<string, number>();
   const maxPendingPerChat = options.maxPendingPerChat ?? DEFAULT_MAX_PENDING_PER_CHAT;
+  const durableInboxDir = options.durableInboxDir;
+
+  if (durableInboxDir) {
+    mkdirSync(durableInboxDir, { recursive: true });
+  }
+
+  const acknowledgePendingMessage = (pendingMessageId: string | undefined): void => {
+    if (!pendingMessageId || !durableInboxDir) {
+      return;
+    }
+
+    try {
+      acknowledgeTelegramPendingMessage(durableInboxDir, pendingMessageId);
+    } catch (error) {
+      console.error(`[telegram] failed to acknowledge durable message ${pendingMessageId}:`, error);
+    }
+  };
 
   const trackRunTask = (chatId: string, task: Promise<void>): void => {
     const existing = runTasks.get(chatId) ?? new Set<Promise<void>>();
@@ -2286,38 +2432,100 @@ export function createQueuedTelegramMessageHandler(
     chatQueue.set(chatId, next);
   };
 
+  const queueMessage = (
+    message: TelegramMessageLike,
+    pendingMessageId?: string,
+    bypassPendingLimit = false,
+  ): boolean => {
+    const chatId = String(message.chat.id);
+
+    if (typeof message.message_id === 'number') {
+      const latestMessageId = latestMessageIdByChat.get(chatId);
+      if (latestMessageId !== undefined && message.message_id <= latestMessageId) {
+        acknowledgePendingMessage(pendingMessageId);
+        return false;
+      }
+
+      latestMessageIdByChat.set(chatId, message.message_id);
+    }
+
+    const pending = pendingPerChat.get(chatId) ?? 0;
+
+    if (!bypassPendingLimit && pending >= maxPendingPerChat) {
+      void options.sendMessage(
+        message.chat.id,
+        `Too many pending messages for this chat (limit: ${maxPendingPerChat}). Please wait and try again.`,
+      );
+      acknowledgePendingMessage(pendingMessageId);
+      return false;
+    }
+
+    pendingPerChat.set(chatId, pending + 1);
+
+    enqueue(chatId, async () => {
+      try {
+        const processing = await processTelegramMessage(
+          options,
+          message,
+          controllers,
+          (task) => trackRunTask(chatId, task),
+        );
+
+        if (pendingMessageId && durableInboxDir) {
+          void processing.completion
+            .then(() => {
+              acknowledgePendingMessage(pendingMessageId);
+            })
+            .catch((error) => {
+              console.error(
+                `[telegram:${chatId}] durable message ${pendingMessageId} not acknowledged; will retry after restart:`,
+                error,
+              );
+            });
+        }
+      } finally {
+        const nextPending = (pendingPerChat.get(chatId) ?? 1) - 1;
+        if (nextPending <= 0) {
+          pendingPerChat.delete(chatId);
+        } else {
+          pendingPerChat.set(chatId, nextPending);
+        }
+      }
+    });
+
+    return true;
+  };
+
   return {
     handleMessage(message: TelegramMessageLike): void {
       const chatId = String(message.chat.id);
-      const pending = pendingPerChat.get(chatId) ?? 0;
+      let pendingMessageId: string | undefined;
 
-      if (pending >= maxPendingPerChat) {
-        void options.sendMessage(
-          message.chat.id,
-          `Too many pending messages for this chat (limit: ${maxPendingPerChat}). Please wait and try again.`,
-        );
-        return;
+      if (durableInboxDir) {
+        try {
+          pendingMessageId = storeTelegramPendingMessage(durableInboxDir, message);
+        } catch (error) {
+          console.error(`[telegram:${chatId}] failed to store durable inbox message:`, error);
+        }
       }
 
-      pendingPerChat.set(chatId, pending + 1);
+      const accepted = queueMessage(message, pendingMessageId);
+      if (!accepted) {
+        acknowledgePendingMessage(pendingMessageId);
+      }
+    },
 
-      enqueue(chatId, async () => {
-        try {
-          await processTelegramMessage(
-            options,
-            message,
-            controllers,
-            (task) => trackRunTask(chatId, task),
-          );
-        } finally {
-          const nextPending = (pendingPerChat.get(chatId) ?? 1) - 1;
-          if (nextPending <= 0) {
-            pendingPerChat.delete(chatId);
-          } else {
-            pendingPerChat.set(chatId, nextPending);
-          }
-        }
-      });
+    replayPendingMessages(): number {
+      if (!durableInboxDir) {
+        return 0;
+      }
+
+      const pendingMessages = loadTelegramPendingMessages(durableInboxDir);
+      for (const pendingMessage of pendingMessages) {
+        queueMessage(pendingMessage.message, pendingMessage.id, true);
+      }
+
+      return pendingMessages.length;
     },
 
     async waitForIdle(chatId?: string): Promise<void> {
@@ -2388,6 +2596,9 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
   const telegramSessionDir = join(statePaths.session, 'telegram');
   await mkdir(telegramSessionDir, { recursive: true });
 
+  const telegramDurableInboxDir = join(statePaths.root, 'gateway', 'pending', 'telegram');
+  await mkdir(telegramDurableInboxDir, { recursive: true });
+
   const bot = new TelegramBot(effectiveConfig.token, { polling: true });
 
   const maxPendingPerChat = effectiveConfig.maxPendingPerChat ?? DEFAULT_MAX_PENDING_PER_CHAT;
@@ -2427,6 +2638,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     telegramSessionDir,
     workingDirectory: effectiveConfig.workingDirectory,
     maxPendingPerChat,
+    durableInboxDir: telegramDurableInboxDir,
     commandHelpText,
     skillsHelpText,
     modelCommands,
@@ -2461,6 +2673,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
       handler.handleMessage({
         chat: { id: callbackMessage.chat.id },
+        message_id: callbackMessage.message_id,
         text: callbackText,
         from: query.from
           ? {
@@ -2477,6 +2690,12 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
       console.error('Telegram callback handling failed:', error);
     });
   });
+
+  const recoveredPendingMessages = handler.replayPendingMessages();
+  if (recoveredPendingMessages > 0) {
+    console.log(gatewayWarning(`Recovered ${recoveredPendingMessages} pending telegram message(s) from durable inbox.`));
+    logSystem('telegram', `Recovered ${recoveredPendingMessages} pending message(s) from durable inbox`);
+  }
 
   console.log(gatewaySuccess(`Telegram bridge started (profile=${effectiveConfig.profile})`));
   console.log(gatewayKeyValue('Allowed chats', [...effectiveConfig.allowlist].join(', ')));
