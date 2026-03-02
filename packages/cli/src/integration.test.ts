@@ -186,6 +186,39 @@ describe('CLI main flow integration', () => {
     await rm(legacyAuthDir, { recursive: true, force: true }).catch(() => {});
   });
 
+  it('maps runtime theme from system theme when env mapping is configured', async () => {
+    const repo = createTempDir('personal-agent-cli-repo-');
+    const stateRoot = createTempDir('personal-agent-cli-state-');
+    const argsLogPath = join(createTempDir('personal-agent-cli-log-'), 'pi-args.log');
+    const fakePiBinDir = createFakePiBinary(argsLogPath);
+
+    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(
+      join(repo, 'profiles/shared/agent/settings.json'),
+      JSON.stringify({
+        defaultProvider: 'test',
+        defaultModel: 'model',
+        theme: 'cobalt2',
+      }),
+    );
+
+    process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
+    process.env.PERSONAL_AGENT_REPO_ROOT = repo;
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_THEME_DARK = 'cobalt2';
+    process.env.PERSONAL_AGENT_THEME_LIGHT = 'cobalt2-light';
+    process.env.PERSONAL_AGENT_SYSTEM_THEME = 'light';
+
+    expect(await runCli(['tui', '-p', 'theme test'])).toBe(0);
+
+    const runtimeSettingsPath = join(stateRoot, 'pi-agent', 'settings.json');
+    const runtimeSettings = JSON.parse(readFileSync(runtimeSettingsPath, 'utf-8')) as Record<string, unknown>;
+
+    expect(runtimeSettings.theme).toBe('cobalt2-light');
+    expect(runtimeSettings.defaultProvider).toBe('test');
+    expect(runtimeSettings.defaultModel).toBe('model');
+  });
+
   it('doctor validates complete setup chain', async () => {
     const repo = createTempDir('personal-agent-cli-repo-');
     const stateRoot = createTempDir('personal-agent-cli-state-');

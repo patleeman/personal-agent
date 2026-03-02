@@ -74,6 +74,19 @@ pa memory [list|query|search|head|open|status]
 
 `pa update` updates Pi (`@mariozechner/pi-coding-agent`), pulls latest git changes for personal-agent, then restarts background services. Use `--repo-only` to skip the Pi package update.
 
+### System theme mapping (optional)
+
+If you set both env vars below, `pa` switches Pi theme at launch:
+
+- `PERSONAL_AGENT_THEME_DARK`
+- `PERSONAL_AGENT_THEME_LIGHT`
+
+`pa` detects the system theme and writes the selected value to runtime `settings.json` before launching Pi.
+
+Optional override for testing or non-standard desktops:
+
+- `PERSONAL_AGENT_SYSTEM_THEME=dark|light`
+
 ## Memory commands
 
 The memory system provides cross-session context through summaries and durable profile memory.
@@ -132,9 +145,10 @@ When `pa` runs Pi (via `pa`, `pa tui`, or `pa <pi args>`), it:
 4. bootstraps runtime directories
 5. materializes merged runtime agent files
 6. builds explicit Pi resource args (`--skill`, `-e`, `--prompt-template`, `--theme`)
-7. injects default model/thinking from settings if missing
-8. auto-installs extension dependencies when missing
-9. launches `pi` with `PI_CODING_AGENT_DIR` pointing at runtime agent dir
+7. optionally remaps `settings.theme` from system dark/light mode (when theme env mapping is configured)
+8. injects default model/thinking from settings if missing
+9. auto-installs extension dependencies when missing
+10. launches `pi` with `PI_CODING_AGENT_DIR` pointing at runtime agent dir
 
 ## Extension auto-installation
 

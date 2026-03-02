@@ -197,6 +197,11 @@ Shared optional env vars:
 
 - `PERSONAL_AGENT_PROFILE` (default: `shared`)
 - `PERSONAL_AGENT_PI_TIMEOUT_MS` (default: `180000`)
+- `PERSONAL_AGENT_THEME_DARK` (theme name to use when system theme is dark)
+- `PERSONAL_AGENT_THEME_LIGHT` (theme name to use when system theme is light)
+- `PERSONAL_AGENT_SYSTEM_THEME` (optional override: `dark` or `light`, useful for testing)
+
+When both `PERSONAL_AGENT_THEME_DARK` and `PERSONAL_AGENT_THEME_LIGHT` are set, `pa` picks one on launch based on system theme and writes it to runtime `settings.json` before starting Pi.
 
 ### Telegram
 

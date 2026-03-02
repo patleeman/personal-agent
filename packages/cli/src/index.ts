@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'child_process';
-import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from 'fs';
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { join, relative, resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -205,6 +205,165 @@ function applyDefaultModelArgs(args: string[], settings: Record<string, unknown>
   return output;
 }
 
+type SystemThemeMode = 'light' | 'dark';
+
+interface SystemThemeMappingStatus {
+  configured: boolean;
+  mode?: SystemThemeMode;
+  selectedTheme?: string;
+}
+
+function parseSystemThemeMode(value: string | undefined): SystemThemeMode | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  if (normalized === 'light' || normalized === 'dark') {
+    return normalized;
+  }
+
+  return undefined;
+}
+
+function detectSystemThemeMode(): SystemThemeMode | undefined {
+  const override = parseSystemThemeMode(process.env.PERSONAL_AGENT_SYSTEM_THEME);
+  if (override) {
+    return override;
+  }
+
+  if (process.platform === 'darwin') {
+    const result = spawnSync('defaults', ['read', '-g', 'AppleInterfaceStyle'], {
+      encoding: 'utf-8',
+    });
+
+    if (result.error) {
+      return undefined;
+    }
+
+    if ((result.status ?? 1) === 0) {
+      const value = result.stdout.toLowerCase();
+      return value.includes('dark') ? 'dark' : 'light';
+    }
+
+    return 'light';
+  }
+
+  if (process.platform === 'win32') {
+    const result = spawnSync(
+      'reg',
+      ['query', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize', '/v', 'AppsUseLightTheme'],
+      { encoding: 'utf-8' },
+    );
+
+    if (result.error || (result.status ?? 1) !== 0) {
+      return undefined;
+    }
+
+    const value = result.stdout.toLowerCase();
+
+    if (value.includes('0x0')) {
+      return 'dark';
+    }
+
+    if (value.includes('0x1')) {
+      return 'light';
+    }
+
+    return undefined;
+  }
+
+  if (process.platform === 'linux') {
+    const result = spawnSync('gsettings', ['get', 'org.gnome.desktop.interface', 'color-scheme'], {
+      encoding: 'utf-8',
+    });
+
+    if (result.error || (result.status ?? 1) !== 0) {
+      return undefined;
+    }
+
+    const value = result.stdout.toLowerCase();
+
+    if (value.includes('dark')) {
+      return 'dark';
+    }
+
+    if (value.includes('light') || value.includes('default')) {
+      return 'light';
+    }
+  }
+
+  return undefined;
+}
+
+function getSystemThemeMappingStatus(): SystemThemeMappingStatus {
+  const darkTheme = process.env.PERSONAL_AGENT_THEME_DARK?.trim();
+  const lightTheme = process.env.PERSONAL_AGENT_THEME_LIGHT?.trim();
+
+  if (!darkTheme || !lightTheme) {
+    return { configured: false };
+  }
+
+  const mode = detectSystemThemeMode();
+
+  if (!mode) {
+    return { configured: true };
+  }
+
+  return {
+    configured: true,
+    mode,
+    selectedTheme: mode === 'dark' ? darkTheme : lightTheme,
+  };
+}
+
+function readRuntimeSettings(settingsPath: string, fallbackSettings: Record<string, unknown>): Record<string, unknown> {
+  if (!existsSync(settingsPath)) {
+    return fallbackSettings;
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(settingsPath, 'utf-8')) as unknown;
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return fallbackSettings;
+    }
+
+    return parsed as Record<string, unknown>;
+  } catch {
+    return fallbackSettings;
+  }
+}
+
+function applySystemThemeOverride(settingsPath: string, settings: Record<string, unknown>): Record<string, unknown> {
+  const mappingStatus = getSystemThemeMappingStatus();
+  const targetTheme = mappingStatus.selectedTheme;
+
+  if (!targetTheme) {
+    return settings;
+  }
+
+  const currentTheme = typeof settings.theme === 'string' ? settings.theme : undefined;
+
+  if (currentTheme === targetTheme) {
+    return settings;
+  }
+
+  const nextSettings: Record<string, unknown> = {
+    ...settings,
+    theme: targetTheme,
+  };
+
+  try {
+    writeFileSync(settingsPath, JSON.stringify(nextSettings, null, 2));
+    return nextSettings;
+  } catch (error) {
+    console.warn(warning(`Unable to write theme override to ${settingsPath}: ${(error as Error).message}`));
+    return settings;
+  }
+}
+
 function extractSessionFile(args: string[]): string | undefined {
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--session') {
@@ -243,9 +402,12 @@ async function runPiWithResolvedProfile(
   materializeProfileToAgentDir(resolvedProfile, runtime.agentDir);
   ensureExtensionDependencies(resolvedProfile);
 
-  const settings = resolvedProfile.settingsFiles.length > 0
+  const fallbackSettings = resolvedProfile.settingsFiles.length > 0
     ? mergeJsonFiles(resolvedProfile.settingsFiles)
     : {};
+  const settingsPath = join(runtime.agentDir, 'settings.json');
+  const runtimeSettings = readRuntimeSettings(settingsPath, fallbackSettings);
+  const settings = applySystemThemeOverride(settingsPath, runtimeSettings);
 
   const resourceArgs = buildPiResourceArgs(resolvedProfile);
   const withDefaults = applyDefaultModelArgs(piArgs, settings);
@@ -493,6 +655,7 @@ async function doctor(options: DoctorOptions = {}): Promise<number> {
 
   const runtimeAuth = runtime.authFile;
   const legacyAuth = join(homedir(), '.pi', 'agent', 'auth.json');
+  const themeMappingStatus = getSystemThemeMappingStatus();
 
   const report = {
     ok: true,
@@ -508,6 +671,9 @@ async function doctor(options: DoctorOptions = {}): Promise<number> {
     promptTemplates: resolvedProfile.promptEntries.length,
     themeDirs: resolvedProfile.themeDirs.length,
     themes: resolvedProfile.themeEntries.length,
+    systemThemeMappingConfigured: themeMappingStatus.configured,
+    systemThemeMappingMode: themeMappingStatus.mode ?? null,
+    systemThemeMappingTheme: themeMappingStatus.selectedTheme ?? null,
     runtimeAuthPresent: existsSync(runtimeAuth),
     legacyAuthPresent: existsSync(legacyAuth),
   };
@@ -533,6 +699,12 @@ async function doctor(options: DoctorOptions = {}): Promise<number> {
   doctorOk('prompt templates', report.promptTemplates);
   doctorOk('theme directories', report.themeDirs);
   doctorOk('themes', report.themes);
+  const systemThemeMappingLabel = !report.systemThemeMappingConfigured
+    ? 'disabled'
+    : report.systemThemeMappingMode && report.systemThemeMappingTheme
+      ? `${report.systemThemeMappingMode} -> ${report.systemThemeMappingTheme}`
+      : 'configured (detection unavailable)';
+  doctorOk('system theme mapping', systemThemeMappingLabel);
   doctorOk('runtime auth present', report.runtimeAuthPresent);
   doctorOk('legacy auth present', report.legacyAuthPresent);
   console.log('');
