@@ -29,6 +29,72 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve };
 }
 
+interface TestRunPromptInput {
+  prompt: string;
+  sessionFile: string;
+  cwd: string;
+  model?: string;
+  abortSignal?: AbortSignal;
+  logContext?: {
+    source: string;
+    userId: string;
+    userName?: string;
+  };
+}
+
+type TestRunPrompt = (input: TestRunPromptInput) => Promise<string>;
+
+function createTestConversationControllerFactory(runPrompt: TestRunPrompt) {
+  return async ({ sessionFile }: { sessionFile: string }) => {
+    let runChain: Promise<void> = Promise.resolve();
+    let activeAbortController: AbortController | undefined;
+
+    const enqueueRun = (input: TestRunPromptInput): Promise<string> => {
+      const abortController = new AbortController();
+      const run = runChain
+        .then(async () => {
+          activeAbortController = abortController;
+          return runPrompt({
+            ...input,
+            sessionFile,
+            abortSignal: abortController.signal,
+          });
+        })
+        .finally(() => {
+          if (activeAbortController === abortController) {
+            activeAbortController = undefined;
+          }
+        });
+
+      runChain = run.then(() => undefined).catch(() => undefined);
+      return run;
+    };
+
+    return {
+      submitPrompt: async (input: TestRunPromptInput) => ({ mode: 'started' as const, run: enqueueRun(input) }),
+      submitFollowUp: async (input: TestRunPromptInput) => ({ mode: 'started' as const, run: enqueueRun(input) }),
+      abortCurrent: async () => {
+        if (!activeAbortController) {
+          return false;
+        }
+
+        activeAbortController.abort();
+        return true;
+      },
+      waitForIdle: async () => {
+        await runChain;
+      },
+      dispose: async () => {
+        if (activeAbortController) {
+          activeAbortController.abort();
+        }
+
+        await runChain;
+      },
+    };
+  };
+}
+
 describe('parseAllowlist', () => {
   it('parses comma-separated ids', () => {
     const allowlist = parseAllowlist('123,456, 789 ');
@@ -151,7 +217,7 @@ describe('queued telegram message handler', () => {
       workingDirectory: '/tmp/work',
       sendMessage,
       sendChatAction,
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({ chat: { id: 2 }, text: 'hello' });
@@ -176,7 +242,7 @@ describe('queued telegram message handler', () => {
       commandHelpText: 'Available commands:\n/new\n/status',
       sendMessage,
       sendChatAction,
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({ chat: { id: 1 }, text: '/commands' });
@@ -200,7 +266,7 @@ describe('queued telegram message handler', () => {
       workingDirectory: '/tmp/work',
       sendMessage,
       sendChatAction,
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({ chat: { id: 1 }, text: '/commands' });
@@ -234,7 +300,7 @@ describe('queued telegram message handler', () => {
       skillsHelpText: 'Available skills:\n- tdd-feature',
       sendMessage,
       sendChatAction,
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({ chat: { id: 1 }, text: '/skills' });
@@ -258,7 +324,7 @@ describe('queued telegram message handler', () => {
       workingDirectory: '/tmp/work',
       sendMessage,
       sendChatAction,
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({ chat: { id: 1 }, text: '/resume' });
@@ -290,7 +356,7 @@ describe('queued telegram message handler', () => {
       workingDirectory: '/tmp/work',
       sendMessage,
       sendChatAction,
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({ chat: { id: 1 }, text: '/skill tdd-feature' });
@@ -372,7 +438,7 @@ describe('queued telegram message handler', () => {
       workingDirectory: '/tmp/work',
       sendMessage,
       sendChatAction,
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
       modelCommands: {
         listModels,
         activeModelsByConversation: new Map(),
@@ -429,7 +495,7 @@ describe('queued telegram message handler', () => {
       workingDirectory: '/tmp/work',
       sendMessage,
       sendChatAction,
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
       modelCommands: {
         listModels,
         activeModelsByConversation: new Map(),
@@ -459,7 +525,7 @@ describe('queued telegram message handler', () => {
       workingDirectory: '/tmp/work',
       sendMessage,
       sendChatAction,
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
       modelCommands: {
         listModels,
         activeModelsByConversation: new Map(),
@@ -490,7 +556,7 @@ describe('queued telegram message handler', () => {
       workingDirectory: '/tmp/work',
       sendMessage,
       sendChatAction,
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
       modelCommands: {
         listModels: vi.fn(async () => []),
         activeModelsByConversation: new Map(),
@@ -523,7 +589,7 @@ describe('queued telegram message handler', () => {
       workingDirectory: '/tmp/work',
       sendMessage,
       sendChatAction,
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({ chat: { id: 1 }, text: 'long-running prompt' });
@@ -553,7 +619,7 @@ describe('queued telegram message handler', () => {
       workingDirectory: '/tmp/work',
       sendMessage,
       sendChatAction,
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({ chat: { id: 1 }, text: '/stop' });
@@ -584,7 +650,7 @@ describe('queued telegram message handler', () => {
       workingDirectory: '/tmp/work',
       sendMessage,
       sendChatAction,
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({ chat: { id: 1 }, text: 'first' });
@@ -629,7 +695,7 @@ describe('queued telegram message handler', () => {
       maxPendingPerChat: 1,
       sendMessage,
       sendChatAction,
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({ chat: { id: 1 }, text: 'first' });
@@ -660,7 +726,7 @@ describe('queued discord message handler', () => {
       agentDir: '/tmp/agent',
       discordSessionDir: '/tmp/discord-sessions',
       workingDirectory: '/tmp/work',
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({
@@ -689,7 +755,7 @@ describe('queued discord message handler', () => {
       discordSessionDir: '/tmp/discord-sessions',
       workingDirectory: '/tmp/work',
       commandHelpText: 'Available commands:\n/new\n/status',
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({
@@ -717,7 +783,7 @@ describe('queued discord message handler', () => {
       agentDir: '/tmp/agent',
       discordSessionDir: '/tmp/discord-sessions',
       workingDirectory: '/tmp/work',
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({
@@ -755,7 +821,7 @@ describe('queued discord message handler', () => {
       discordSessionDir: '/tmp/discord-sessions',
       workingDirectory: '/tmp/work',
       skillsHelpText: 'Available skills:\n- tdd-feature',
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({
@@ -783,7 +849,7 @@ describe('queued discord message handler', () => {
       agentDir: '/tmp/agent',
       discordSessionDir: '/tmp/discord-sessions',
       workingDirectory: '/tmp/work',
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({
@@ -823,7 +889,7 @@ describe('queued discord message handler', () => {
       agentDir: '/tmp/agent',
       discordSessionDir: '/tmp/discord-sessions',
       workingDirectory: '/tmp/work',
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({
@@ -916,7 +982,7 @@ describe('queued discord message handler', () => {
       agentDir: '/tmp/agent',
       discordSessionDir: '/tmp/discord-sessions',
       workingDirectory: '/tmp/work',
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
       modelCommands: {
         listModels: vi.fn(async () => []),
         activeModelsByConversation: new Map(),
@@ -966,7 +1032,7 @@ describe('queued discord message handler', () => {
       agentDir: '/tmp/agent',
       discordSessionDir: '/tmp/discord-sessions',
       workingDirectory: '/tmp/work',
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({
@@ -1006,7 +1072,7 @@ describe('queued discord message handler', () => {
       agentDir: '/tmp/agent',
       discordSessionDir: '/tmp/discord-sessions',
       workingDirectory: '/tmp/work',
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({
@@ -1040,7 +1106,7 @@ describe('queued discord message handler', () => {
       discordSessionDir: '/tmp/discord-sessions',
       workingDirectory: '/tmp/work',
       maxPendingPerChannel: 1,
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({

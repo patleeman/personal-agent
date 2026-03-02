@@ -161,8 +161,6 @@ interface RunPromptFnInput {
   };
 }
 
-type RunPromptFn = (options: RunPromptFnInput) => Promise<string>;
-
 interface ConversationSubmitStarted {
   mode: 'started';
   run: Promise<string>;
@@ -208,9 +206,7 @@ export interface CreateTelegramMessageHandlerOptions {
   workingDirectory: string;
   sendMessage: SendMessageFn;
   sendChatAction: SendChatActionFn;
-  createConversationController?: CreateConversationControllerFn;
-  runPrompt?: RunPromptFn;
-  createAbortController?: () => AbortController;
+  createConversationController: CreateConversationControllerFn;
   commandHelpText?: string;
   skillsHelpText?: string;
   sessionFileExists?: (path: string) => boolean;
@@ -240,9 +236,7 @@ export interface CreateDiscordMessageHandlerOptions {
   agentDir: string;
   discordSessionDir: string;
   workingDirectory: string;
-  createConversationController?: CreateConversationControllerFn;
-  runPrompt?: RunPromptFn;
-  createAbortController?: () => AbortController;
+  createConversationController: CreateConversationControllerFn;
   commandHelpText?: string;
   skillsHelpText?: string;
   sessionFileExists?: (path: string) => boolean;
@@ -1924,118 +1918,8 @@ async function disposeConversationController(
   }
 }
 
-function createLegacyConversationControllerFactory(options: {
-  runPrompt: RunPromptFn;
-  createAbortController?: () => AbortController;
-}): CreateConversationControllerFn {
-  return ({ sessionFile }) => {
-    let runChain: Promise<void> = Promise.resolve();
-    let activeAbortController: AbortController | undefined;
-    let disposed = false;
-
-    const enqueueRun = (input: RunPromptFnInput): Promise<string> => {
-      const abortController = (options.createAbortController ?? (() => new AbortController()))();
-      const runPromise = runChain
-        .then(async () => {
-          if (disposed) {
-            throw new Error('Conversation is closed.');
-          }
-
-          activeAbortController = abortController;
-          return options.runPrompt({
-            ...input,
-            sessionFile,
-            abortSignal: abortController.signal,
-          });
-        })
-        .finally(() => {
-          if (activeAbortController === abortController) {
-            activeAbortController = undefined;
-          }
-        });
-
-      runChain = runPromise
-        .then(() => undefined)
-        .catch(() => undefined);
-
-      return runPromise;
-    };
-
-    const controller: GatewayConversationController = {
-      async submitPrompt(input: RunPromptFnInput): Promise<ConversationSubmitResult> {
-        return {
-          mode: 'started',
-          run: enqueueRun(input),
-        };
-      },
-
-      async submitFollowUp(input: RunPromptFnInput): Promise<ConversationSubmitResult> {
-        return {
-          mode: 'started',
-          run: enqueueRun(input),
-        };
-      },
-
-      async abortCurrent(): Promise<boolean> {
-        if (!activeAbortController) {
-          return false;
-        }
-
-        activeAbortController.abort();
-        return true;
-      },
-
-      async waitForIdle(): Promise<void> {
-        await runChain;
-      },
-
-      async dispose(): Promise<void> {
-        if (disposed) {
-          return;
-        }
-
-        disposed = true;
-        if (activeAbortController) {
-          activeAbortController.abort();
-        }
-
-        await runChain;
-      },
-    };
-
-    return controller;
-  };
-}
-
-interface ResolvedTelegramMessageHandlerOptions extends CreateTelegramMessageHandlerOptions {
-  createConversationController: CreateConversationControllerFn;
-}
-
-interface ResolvedDiscordMessageHandlerOptions extends CreateDiscordMessageHandlerOptions {
-  createConversationController: CreateConversationControllerFn;
-}
-
-function resolveConversationControllerFactory(options: {
-  createConversationController?: CreateConversationControllerFn;
-  runPrompt?: RunPromptFn;
-  createAbortController?: () => AbortController;
-}): CreateConversationControllerFn {
-  if (options.createConversationController) {
-    return options.createConversationController;
-  }
-
-  if (options.runPrompt) {
-    return createLegacyConversationControllerFactory({
-      runPrompt: options.runPrompt,
-      createAbortController: options.createAbortController,
-    });
-  }
-
-  throw new Error('Gateway handler requires createConversationController or runPrompt.');
-}
-
 async function processTelegramMessage(
-  options: ResolvedTelegramMessageHandlerOptions,
+  options: CreateTelegramMessageHandlerOptions,
   message: TelegramMessageLike,
   controllers: Map<string, Promise<GatewayConversationController>>,
   registerRunTask: (task: Promise<void>) => void,
@@ -2265,17 +2149,11 @@ model=${model}`,
 export function createQueuedTelegramMessageHandler(
   options: CreateTelegramMessageHandlerOptions,
 ): QueuedTelegramMessageHandler {
-  const createConversationController = resolveConversationControllerFactory(options);
-  const resolvedOptions: ResolvedTelegramMessageHandlerOptions = {
-    ...options,
-    createConversationController,
-  };
-
   const chatQueue = new Map<string, Promise<void>>();
   const pendingPerChat = new Map<string, number>();
   const controllers = new Map<string, Promise<GatewayConversationController>>();
   const runTasks = new Map<string, Set<Promise<void>>>();
-  const maxPendingPerChat = resolvedOptions.maxPendingPerChat ?? DEFAULT_MAX_PENDING_PER_CHAT;
+  const maxPendingPerChat = options.maxPendingPerChat ?? DEFAULT_MAX_PENDING_PER_CHAT;
 
   const trackRunTask = (chatId: string, task: Promise<void>): void => {
     const existing = runTasks.get(chatId) ?? new Set<Promise<void>>();
@@ -2338,7 +2216,7 @@ export function createQueuedTelegramMessageHandler(
       const pending = pendingPerChat.get(chatId) ?? 0;
 
       if (pending >= maxPendingPerChat) {
-        void resolvedOptions.sendMessage(
+        void options.sendMessage(
           message.chat.id,
           `Too many pending messages for this chat (limit: ${maxPendingPerChat}). Please wait and try again.`,
         );
@@ -2350,7 +2228,7 @@ export function createQueuedTelegramMessageHandler(
       enqueue(chatId, async () => {
         try {
           await processTelegramMessage(
-            resolvedOptions,
+            options,
             message,
             controllers,
             (task) => trackRunTask(chatId, task),
@@ -2532,7 +2410,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 }
 
 async function processDiscordMessage(
-  options: ResolvedDiscordMessageHandlerOptions,
+  options: CreateDiscordMessageHandlerOptions,
   message: DiscordMessageLike,
   controllers: Map<string, Promise<GatewayConversationController>>,
   registerRunTask: (task: Promise<void>) => void,
@@ -2753,17 +2631,11 @@ model=${model}`,
 export function createQueuedDiscordMessageHandler(
   options: CreateDiscordMessageHandlerOptions,
 ): QueuedDiscordMessageHandler {
-  const createConversationController = resolveConversationControllerFactory(options);
-  const resolvedOptions: ResolvedDiscordMessageHandlerOptions = {
-    ...options,
-    createConversationController,
-  };
-
   const channelQueue = new Map<string, Promise<void>>();
   const pendingPerChannel = new Map<string, number>();
   const controllers = new Map<string, Promise<GatewayConversationController>>();
   const runTasks = new Map<string, Set<Promise<void>>>();
-  const maxPendingPerChannel = resolvedOptions.maxPendingPerChannel ?? DEFAULT_MAX_PENDING_PER_CHANNEL;
+  const maxPendingPerChannel = options.maxPendingPerChannel ?? DEFAULT_MAX_PENDING_PER_CHANNEL;
 
   const trackRunTask = (channelId: string, task: Promise<void>): void => {
     const existing = runTasks.get(channelId) ?? new Set<Promise<void>>();
@@ -2837,7 +2709,7 @@ export function createQueuedDiscordMessageHandler(
       enqueue(channelId, async () => {
         try {
           await processDiscordMessage(
-            resolvedOptions,
+            options,
             message,
             controllers,
             (task) => trackRunTask(channelId, task),

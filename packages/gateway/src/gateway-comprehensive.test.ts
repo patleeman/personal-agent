@@ -11,6 +11,72 @@ import {
   splitTelegramMessage,
 } from './index.js';
 
+interface TestRunPromptInput {
+  prompt: string;
+  sessionFile: string;
+  cwd: string;
+  model?: string;
+  abortSignal?: AbortSignal;
+  logContext?: {
+    source: string;
+    userId: string;
+    userName?: string;
+  };
+}
+
+type TestRunPrompt = (input: TestRunPromptInput) => Promise<string>;
+
+function createTestConversationControllerFactory(runPrompt: TestRunPrompt) {
+  return async ({ sessionFile }: { sessionFile: string }) => {
+    let runChain: Promise<void> = Promise.resolve();
+    let activeAbortController: AbortController | undefined;
+
+    const enqueueRun = (input: TestRunPromptInput): Promise<string> => {
+      const abortController = new AbortController();
+      const run = runChain
+        .then(async () => {
+          activeAbortController = abortController;
+          return runPrompt({
+            ...input,
+            sessionFile,
+            abortSignal: abortController.signal,
+          });
+        })
+        .finally(() => {
+          if (activeAbortController === abortController) {
+            activeAbortController = undefined;
+          }
+        });
+
+      runChain = run.then(() => undefined).catch(() => undefined);
+      return run;
+    };
+
+    return {
+      submitPrompt: async (input: TestRunPromptInput) => ({ mode: 'started' as const, run: enqueueRun(input) }),
+      submitFollowUp: async (input: TestRunPromptInput) => ({ mode: 'started' as const, run: enqueueRun(input) }),
+      abortCurrent: async () => {
+        if (!activeAbortController) {
+          return false;
+        }
+
+        activeAbortController.abort();
+        return true;
+      },
+      waitForIdle: async () => {
+        await runChain;
+      },
+      dispose: async () => {
+        if (activeAbortController) {
+          activeAbortController.abort();
+        }
+
+        await runChain;
+      },
+    };
+  };
+}
+
 describe('parseAllowlist breadth', () => {
   it('parses comma-separated ids with whitespace', () => {
     const allowlist = parseAllowlist('123, 456 , 789 ');
@@ -97,7 +163,7 @@ describe('queued telegram handler breadth', () => {
       workingDirectory: '/tmp/work',
       sendMessage,
       sendChatAction,
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({ chat: { id: 1 }, text: 'hello' });
@@ -119,7 +185,7 @@ describe('queued telegram handler breadth', () => {
       workingDirectory: '/tmp/work',
       sendMessage,
       sendChatAction,
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({ chat: { id: 1 }, text: '' });
@@ -143,7 +209,7 @@ describe('queued telegram handler breadth', () => {
       workingDirectory: '/tmp/work',
       sendMessage,
       sendChatAction,
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({ chat: { id: 1 }, text: 'hello' });
@@ -167,7 +233,7 @@ describe('queued telegram handler breadth', () => {
       workingDirectory: '/tmp/work',
       sendMessage,
       sendChatAction,
-      runPrompt,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({ chat: { id: 1 }, text: 'hello' });
