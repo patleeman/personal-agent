@@ -1460,7 +1460,7 @@ class PersistentConversationController implements GatewayConversationController 
       promise: Promise.resolve(''),
     };
 
-    const runPromise = this.executeRun(input, activeRun)
+    const runPromise = this.executeRunWithTimeout(input, activeRun)
       .catch((error) => {
         if (activeRun.aborted) {
           throw new Error(PROMPT_CANCELLED_ERROR_MESSAGE);
@@ -1488,6 +1488,41 @@ class PersistentConversationController implements GatewayConversationController 
     const streamed = activeRun.streamedOutput.trim();
     const fallback = extractLatestAssistantText(session.messages as unknown);
     return streamed.length > 0 ? streamed : fallback;
+  }
+
+  private async executeRunWithTimeout(
+    input: RunPromptFnInput,
+    activeRun: ActiveConversationRun,
+  ): Promise<string> {
+    const configuredTimeoutMs = Number(process.env.PERSONAL_AGENT_PI_TIMEOUT_MS ?? DEFAULT_PI_TIMEOUT_MS);
+    const timeoutMs = Number.isFinite(configuredTimeoutMs) && configuredTimeoutMs > 0
+      ? Math.floor(configuredTimeoutMs)
+      : DEFAULT_PI_TIMEOUT_MS;
+
+    let timeoutHandle: NodeJS.Timeout | undefined;
+
+    try {
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+          void this.getSession()
+            .then(async (session) => session.abort())
+            .catch(() => {
+              // Ignore abort failures and surface timeout error.
+            });
+
+          reject(new Error(`pi timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      });
+
+      return await Promise.race([
+        this.executeRun(input, activeRun),
+        timeoutPromise,
+      ]);
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+    }
   }
 
   private async dispatchToActiveRun(
