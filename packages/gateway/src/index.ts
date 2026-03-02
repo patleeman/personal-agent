@@ -273,6 +273,8 @@ const DEFAULT_MAX_PENDING_PER_CHAT = 20;
 const DEFAULT_MAX_PENDING_PER_CHANNEL = 20;
 const DEFAULT_MODEL_SELECTION_LIMIT = 25;
 const TYPING_HEARTBEAT_INTERVAL_MS = 4_000;
+const DEFAULT_TELEGRAM_RETRY_ATTEMPTS = 3;
+const DEFAULT_TELEGRAM_RETRY_BASE_DELAY_MS = 300;
 const TELEGRAM_MODEL_SELECTION_CALLBACK_PREFIX = 'model_select:';
 const PROMPT_CANCELLED_ERROR_MESSAGE = 'Request cancelled by /stop.';
 const STOPPED_ACTIVE_REQUEST_MESSAGE = 'Stopped active request.';
@@ -1793,6 +1795,109 @@ function acknowledgeTelegramPendingMessage(inboxDir: string, id: string): void {
   unlinkSync(filePath);
 }
 
+interface RetryAsyncOptions {
+  operationName: string;
+  attempts: number;
+  baseDelayMs: number;
+  shouldRetry: (error: unknown) => boolean;
+}
+
+function getTelegramErrorStatusCode(error: unknown): number | undefined {
+  if (!error || typeof error !== 'object') {
+    return undefined;
+  }
+
+  const candidate = error as {
+    response?: {
+      statusCode?: number;
+    };
+  };
+
+  return candidate.response?.statusCode;
+}
+
+function getTelegramRetryAfterMs(error: unknown): number | undefined {
+  if (!error || typeof error !== 'object') {
+    return undefined;
+  }
+
+  const candidate = error as {
+    response?: {
+      body?: {
+        parameters?: {
+          retry_after?: number;
+        };
+      };
+    };
+  };
+
+  const retryAfterSeconds = candidate.response?.body?.parameters?.retry_after;
+  if (typeof retryAfterSeconds !== 'number' || !Number.isFinite(retryAfterSeconds) || retryAfterSeconds < 0) {
+    return undefined;
+  }
+
+  return Math.floor(retryAfterSeconds * 1000);
+}
+
+function isRetriableTelegramApiError(error: unknown): boolean {
+  const statusCode = getTelegramErrorStatusCode(error);
+  if (typeof statusCode === 'number') {
+    if (statusCode === 408 || statusCode === 429 || statusCode >= 500) {
+      return true;
+    }
+
+    if (statusCode >= 400 && statusCode < 500) {
+      return false;
+    }
+  }
+
+  const candidate = error as { code?: unknown; message?: unknown } | undefined;
+  const code = typeof candidate?.code === 'string' ? candidate.code.toUpperCase() : '';
+  const retriableCodes = new Set(['ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN', 'ENOTFOUND', 'ECONNREFUSED', 'EPIPE']);
+  if (retriableCodes.has(code)) {
+    return true;
+  }
+
+  const message = typeof candidate?.message === 'string'
+    ? candidate.message.toLowerCase()
+    : String(error).toLowerCase();
+
+  return message.includes('socket hang up')
+    || message.includes('network')
+    || message.includes('timeout')
+    || message.includes('temporarily unavailable')
+    || message.includes('too many requests');
+}
+
+async function retryAsync<T>(operation: () => Promise<T>, options: RetryAsyncOptions): Promise<T> {
+  const attempts = Math.max(1, options.attempts);
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (attempt >= attempts || !options.shouldRetry(error)) {
+        throw error;
+      }
+
+      const retryAfterMs = getTelegramRetryAfterMs(error) ?? 0;
+      const exponentialBackoffMs = options.baseDelayMs * (2 ** (attempt - 1));
+      const delayMs = Math.max(exponentialBackoffMs, retryAfterMs);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      console.warn(
+        gatewayWarning(
+          `${options.operationName} failed (attempt ${attempt}/${attempts}): ${errorMessage}. Retrying in ${delayMs}ms.`,
+        ),
+      );
+
+      await delay(delayMs);
+    }
+  }
+
+  throw new Error(`${options.operationName} failed after ${attempts} attempts`);
+}
+
 function startTypingHeartbeat(sendTyping: () => Promise<unknown>): () => void {
   let stopped = false;
   let sending = false;
@@ -2602,6 +2707,20 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
   const bot = new TelegramBot(effectiveConfig.token, { polling: true });
 
   const maxPendingPerChat = effectiveConfig.maxPendingPerChat ?? DEFAULT_MAX_PENDING_PER_CHAT;
+  const telegramRetryAttempts = toPositiveInteger(process.env.PERSONAL_AGENT_TELEGRAM_RETRY_ATTEMPTS)
+    ?? DEFAULT_TELEGRAM_RETRY_ATTEMPTS;
+  const telegramRetryBaseDelayMs = toPositiveInteger(process.env.PERSONAL_AGENT_TELEGRAM_RETRY_BASE_DELAY_MS)
+    ?? DEFAULT_TELEGRAM_RETRY_BASE_DELAY_MS;
+
+  const withTelegramRetry = async <T>(
+    operationName: string,
+    operation: () => Promise<T>,
+  ): Promise<T> => retryAsync(operation, {
+    operationName,
+    attempts: telegramRetryAttempts,
+    baseDelayMs: telegramRetryBaseDelayMs,
+    shouldRetry: isRetriableTelegramApiError,
+  });
 
   const discoveredHelp = await discoverPiHelpFromPi({
     profile: resolvedProfile,
@@ -2626,7 +2745,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
   };
 
   try {
-    await bot.setMyCommands(telegramCommands);
+    await withTelegramRetry('telegram.setMyCommands', () => bot.setMyCommands(telegramCommands));
   } catch (error) {
     console.warn(gatewayWarning(`Failed to register Telegram commands: ${(error as Error).message}`));
   }
@@ -2642,8 +2761,14 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     commandHelpText,
     skillsHelpText,
     modelCommands,
-    sendMessage: (chatId, text, options) => bot.sendMessage(chatId, text, options),
-    sendChatAction: (chatId, action) => bot.sendChatAction(chatId, action),
+    sendMessage: (chatId, text, options) => withTelegramRetry(
+      `telegram.sendMessage chat=${chatId}`,
+      () => bot.sendMessage(chatId, text, options),
+    ),
+    sendChatAction: (chatId, action) => withTelegramRetry(
+      `telegram.sendChatAction chat=${chatId} action=${action}`,
+      () => bot.sendChatAction(chatId, action),
+    ),
     createConversationController: ({ sessionFile }) => createPersistentConversationController({
       profile: resolvedProfile,
       agentDir: runtime.agentDir,
@@ -2654,6 +2779,10 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
   bot.on('message', handler.handleMessage);
 
+  bot.on('polling_error', (error: unknown) => {
+    console.error(gatewayWarning(`Telegram polling error: ${error instanceof Error ? error.message : String(error)}`));
+  });
+
   bot.on('callback_query', (query: any) => {
     void (async () => {
       const callbackId = query.id;
@@ -2661,13 +2790,13 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
       const callbackMessage = query.message;
 
       if (!callbackData || !callbackMessage) {
-        await bot.answerCallbackQuery(callbackId);
+        await withTelegramRetry('telegram.answerCallbackQuery', () => bot.answerCallbackQuery(callbackId));
         return;
       }
 
       const callbackText = parseTelegramModelSelectionCallback(callbackData);
       if (!callbackText) {
-        await bot.answerCallbackQuery(callbackId);
+        await withTelegramRetry('telegram.answerCallbackQuery', () => bot.answerCallbackQuery(callbackId));
         return;
       }
 
@@ -2685,7 +2814,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
           : undefined,
       });
 
-      await bot.answerCallbackQuery(callbackId);
+      await withTelegramRetry('telegram.answerCallbackQuery', () => bot.answerCallbackQuery(callbackId));
     })().catch((error) => {
       console.error('Telegram callback handling failed:', error);
     });

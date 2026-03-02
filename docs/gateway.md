@@ -71,6 +71,8 @@ Optional:
 
 - `PERSONAL_AGENT_TELEGRAM_CWD` (working directory for Pi calls)
 - `PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT` (default: `20`)
+- `PERSONAL_AGENT_TELEGRAM_RETRY_ATTEMPTS` (Telegram API retry attempts for send operations, default: `3`)
+- `PERSONAL_AGENT_TELEGRAM_RETRY_BASE_DELAY_MS` (base backoff delay for retries, default: `300`)
 
 Run:
 
@@ -134,12 +136,15 @@ Notes:
 - macOS logs are written to `~/.local/state/personal-agent/gateway/logs/<provider>.log`.
 - Linux logs are available via `journalctl --user -u personal-agent-gateway-<provider>.service -f`.
 - Telegram durable pending inbox is stored at `~/.local/state/personal-agent/gateway/pending/telegram`.
+- In service mode, gateway processes auto-restart after crashes (`launchd` KeepAlive / `systemd` Restart=always).
 
 ## Message/session behavior
 
 Each chat/channel gets its own Pi session file.
 
 Telegram inbound messages are durably spooled to disk before processing and replayed on startup after crashes/restarts.
+
+If a crash happens mid-request, the in-flight message is replayed after restart and processing resumes from that message boundary.
 
 Gateway commands inside chat:
 
