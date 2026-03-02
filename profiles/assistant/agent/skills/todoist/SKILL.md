@@ -10,8 +10,8 @@ Use direct HTTP requests to the Todoist REST API.
 ## Setup
 
 ```bash
-export TODOIST_TOKEN="<todoist-api-token>"
-export TODOIST_API_BASE="https://api.todoist.com/rest/v2"
+export TODOIST_API_TOKEN="<todoist-api-token>"
+export TODOIST_API_BASE="https://api.todoist.com/api/v1"
 ```
 
 Get token from: `https://todoist.com/app/settings/integrations`
@@ -20,7 +20,7 @@ Sanity check auth:
 
 ```bash
 curl -sS \
-  -H "Authorization: Bearer $TODOIST_TOKEN" \
+  -H "Authorization: Bearer $TODOIST_API_TOKEN" \
   "$TODOIST_API_BASE/projects" | jq '.[0:]'
 ```
 
@@ -36,13 +36,13 @@ todoist_api() {
 
   if [ -n "$data" ]; then
     curl -sS -X "$method" \
-      -H "Authorization: Bearer $TODOIST_TOKEN" \
+      -H "Authorization: Bearer $TODOIST_API_TOKEN" \
       -H "Content-Type: application/json" \
       "$TODOIST_API_BASE$path" \
       -d "$data"
   else
     curl -sS -X "$method" \
-      -H "Authorization: Bearer $TODOIST_TOKEN" \
+      -H "Authorization: Bearer $TODOIST_API_TOKEN" \
       "$TODOIST_API_BASE$path"
   fi
 }
@@ -53,7 +53,7 @@ todoist_api() {
 ### 1) List projects (Todoist "lists")
 
 ```bash
-todoist_api GET "/projects" | jq '.[] | {id, name, color, is_favorite}'
+todoist_api GET "/projects" | jq '.results[] | {id, name, color, is_favorite}'
 ```
 
 ### 2) Create / update / delete a project
@@ -71,7 +71,7 @@ todoist_api POST "/projects/$project_id" "$payload"
 # Delete (returns 204)
 curl -sS -o /dev/null -w "%{http_code}\n" \
   -X DELETE \
-  -H "Authorization: Bearer $TODOIST_TOKEN" \
+  -H "Authorization: Bearer $TODOIST_API_TOKEN" \
   "$TODOIST_API_BASE/projects/$project_id"
 ```
 
@@ -79,22 +79,22 @@ curl -sS -o /dev/null -w "%{http_code}\n" \
 
 ```bash
 # All active tasks
-todoist_api GET "/tasks" | jq '.[] | {id, content, project_id, priority, due}'
+todoist_api GET "/tasks" | jq '.results[] | {id, content, project_id, priority, due}'
 
 # By natural-language filter (today, overdue, etc.)
 curl -sS --get \
-  -H "Authorization: Bearer $TODOIST_TOKEN" \
+  -H "Authorization: Bearer $TODOIST_API_TOKEN" \
   "$TODOIST_API_BASE/tasks" \
   --data-urlencode "filter=today | overdue" \
-  | jq '.[] | {id, content, due}'
+  | jq '.results[] | {id, content, due}'
 
 # By project_id
 project_id="<project-id>"
 curl -sS --get \
-  -H "Authorization: Bearer $TODOIST_TOKEN" \
+  -H "Authorization: Bearer $TODOIST_API_TOKEN" \
   "$TODOIST_API_BASE/tasks" \
   --data-urlencode "project_id=$project_id" \
-  | jq '.[] | {id, content, priority, due}'
+  | jq '.results[] | {id, content, priority, due}'
 ```
 
 ### 4) Add a task
@@ -132,19 +132,19 @@ todoist_api POST "/tasks/$task_id" "$payload"
 # Complete task (close)
 curl -sS -o /dev/null -w "%{http_code}\n" \
   -X POST \
-  -H "Authorization: Bearer $TODOIST_TOKEN" \
+  -H "Authorization: Bearer $TODOIST_API_TOKEN" \
   "$TODOIST_API_BASE/tasks/$task_id/close"
 
 # Reopen task
 curl -sS -o /dev/null -w "%{http_code}\n" \
   -X POST \
-  -H "Authorization: Bearer $TODOIST_TOKEN" \
+  -H "Authorization: Bearer $TODOIST_API_TOKEN" \
   "$TODOIST_API_BASE/tasks/$task_id/reopen"
 
 # Delete task
 curl -sS -o /dev/null -w "%{http_code}\n" \
   -X DELETE \
-  -H "Authorization: Bearer $TODOIST_TOKEN" \
+  -H "Authorization: Bearer $TODOIST_API_TOKEN" \
   "$TODOIST_API_BASE/tasks/$task_id"
 ```
 
@@ -153,10 +153,10 @@ curl -sS -o /dev/null -w "%{http_code}\n" \
 ```bash
 # List sections in a project
 curl -sS --get \
-  -H "Authorization: Bearer $TODOIST_TOKEN" \
+  -H "Authorization: Bearer $TODOIST_API_TOKEN" \
   "$TODOIST_API_BASE/sections" \
   --data-urlencode "project_id=$project_id" \
-  | jq '.[] | {id, name, project_id, order}'
+  | jq '.results[] | {id, name, project_id, order}'
 
 # Create section
 payload=$(jq -n --arg name "This Week" --arg project_id "$project_id" '{name: $name, project_id: $project_id}')
