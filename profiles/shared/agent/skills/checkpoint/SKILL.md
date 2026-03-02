@@ -1,6 +1,6 @@
 ---
 name: checkpoint
-description: Commit the agent's current work. Stages only files modified by the agent.
+description: Commit and push the agent's current work. Stages only files modified by the agent.
 ---
 
 # Checkpoint
@@ -51,7 +51,15 @@ Confirm only intended files are staged.
 git commit -m "<commit message>"
 ```
 
-### 6. Report
+### 6. Push
+
+```bash
+git push
+```
+
+If push fails (for example non-fast-forward), stop and report the error.
+
+### 7. Report
 
 Provide the commit SHA to the user:
 
@@ -64,7 +72,7 @@ git rev-parse HEAD
 - **Only commit agent's changes** — don't stage unrelated files
 - **Keep commits focused** — one logical change per checkpoint
 - **Don't use --no-verify** — let hooks run
-- **Do not push unless the user asks**
+- **Always push after committing**
 
 ## What Not to Checkpoint
 
