@@ -1645,6 +1645,12 @@ async function prepareGatewayRuntime(profileName: string): Promise<PreparedGatew
   materializeProfileToAgentDir(resolvedProfile, runtime.agentDir);
   ensureExtensionDependencies(resolvedProfile);
 
+  const runtimeBinDir = join(runtime.agentDir, 'bin');
+  const pathEntries = (process.env.PATH ?? '').split(':').filter((entry) => entry.length > 0);
+  if (!pathEntries.includes(runtimeBinDir)) {
+    process.env.PATH = [runtimeBinDir, ...pathEntries].join(':');
+  }
+
   return {
     resolvedProfile,
     statePaths,
