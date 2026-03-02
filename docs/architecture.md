@@ -57,7 +57,6 @@ Owns background orchestration via one local process (`personal-agentd`):
 
 Built-in modules:
 
-- `memory` (session summary + `qmd` indexing)
 - `maintenance` (periodic cleanup)
 
 ### `@personal-agent/cli`
@@ -127,25 +126,9 @@ Extensions are Pi plugins discovered from profile layers:
 
 Example: `memory-cards` extension injects durable profile context and registers durable-memory update tooling.
 
-## Memory system
+## Durable memory
 
-Two-layer memory for cross-session context:
-
-1. **Summaries** - Human-readable markdown in `memory/conversations/`, indexed by qmd
-2. **Durable Profile Memory** - Repo-managed markdown in `profiles/<profile>/agent/MEMORY.md`
-
-Summaries are:
-- Generated at session summarization time
-- Indexed in qmd via the configured `conversations` collection
-- Available for on-demand recall via `qmd query`
-- Retained for 90 days by cleanup policy
-
-Durable profile memory is:
-- Injected by the same extension as `DURABLE_MEMORY`
-- Updated via `memory_update` tool (`upsert` / `remove` / `replace`)
-- Committed and pushed on change
-
-See `docs/memory.md` for details.
+`profiles/<profile>/agent/MEMORY.md` stores stable user/environment facts, injected at runtime as `DURABLE_MEMORY` by the `memory-cards` extension. Updated via the `memory_update` tool, which writes the file and git add/commit/pushes the change.
 
 ## Gateway mode
 

@@ -4,15 +4,13 @@ A personal application layer over Pi that keeps:
 
 - **profiles/resources in git** (`profiles/*`)
 - **runtime state local** (`~/.local/state/personal-agent`)
-- **cross-session memory** (summaries + durable profile memory)
 - **chat gateways** (Telegram + Discord)
 
 ## Features
 
 - **Profile system** - Layered configs (shared → profile → local) with skills, extensions, themes
-- **pa tui** - Launch Pi with profile resources and memory injection
-- **Memory system** - Automatic session summarization + durable profile memory injection
-- **Daemon** - Background processing for memory indexing and maintenance
+- **pa tui** - Launch Pi with profile resources and durable memory injection
+- **Daemon** - Background processing for scheduled tasks and maintenance
 - **Gateways** - Telegram and Discord bot integration with per-chat sessions
 - **Extensions** - Pi extensions auto-discovered from profiles with dependency auto-install
 
@@ -99,17 +97,6 @@ pa profile show             # Show current profile details
 pa profile show datadog     # Show specific profile
 ```
 
-### Memory commands
-
-```bash
-pa memory status            # Show memory system status
-pa memory status --json     # Machine-readable status
-pa memory head 5            # Show 5 latest summaries
-pa memory open <sessionId>  # Open summary by ID
-pa memory query "auth flow" # Search summaries with qmd
-pa memory search "pattern"  # Full-text search
-```
-
 ### Daemon management
 
 ```bash
@@ -149,7 +136,6 @@ pa gateway service uninstall telegram
 
 `personal-agentd` runs background modules behind a local event bus:
 
-- **memory** - Session summarization and qmd indexing
 - **maintenance** - Periodic cleanup and retention
 
 CLI surface:
@@ -160,18 +146,6 @@ CLI surface:
 - `pa update`
 
 When daemon is unavailable, clients warn and continue (non-fatal).
-
-## Memory System
-
-Two-layer memory for cross-session context:
-
-1. **Summaries** (`~/.local/state/personal-agent/memory/conversations/`)  
-   Human-readable markdown summaries of concluded sessions, indexed by qmd for recall
-
-2. **Durable Profile Memory** (`profiles/<profile>/agent/MEMORY.md`)  
-   Stable user/environment preferences injected as `DURABLE_MEMORY`
-
-Retention: 90 days for summaries.
 
 ## Extensions
 
@@ -280,7 +254,6 @@ See docs:
 - `docs/cli.md` - CLI usage and command reference
 - `docs/architecture.md` - Package architecture and data flow
 - `docs/daemon-architecture.md` - Daemon design and event system
-- `docs/memory.md` - Memory module (summaries + durable memory)
 - `docs/gateway.md` - Telegram/Discord gateway setup
 - `docs/profile-schema.md` - Profile layer semantics
 - `docs/extensions.md` - Extension authoring guide

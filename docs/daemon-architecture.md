@@ -27,7 +27,7 @@ MVP scope:
 
 - local-only daemon (per user, per machine)
 - Unix socket IPC + JSON lines protocol
-- built-in modules: `memory`, `maintenance`, `tasks`
+- built-in modules: `maintenance`, `tasks`
 - queue and module diagnostics
 
 Non-goals:
@@ -72,9 +72,6 @@ Common event types:
 
 - `session.updated`
 - `session.closed`
-- `memory.reindex.requested`
-- `timer.memory.qmd.update`
-- `timer.memory.qmd.embed`
 - `timer.maintenance.cleanup`
 - `timer.tasks.tick`
 
@@ -153,13 +150,6 @@ No separate scheduler abstraction is required.
 - each timer emits a normal event into the same queue
 - modules handle timer events like any other event
 
-Example policy (memory):
-
-- summarize on `session.updated` / `session.closed`
-- `qmd update` every 30–60s while dirty
-- hard `qmd update` reconcile every 60m (even when clean)
-- `qmd embed` every 5–15m while dirty
-
 ---
 
 ## Configuration
@@ -180,17 +170,6 @@ Example:
     "socketPath": "~/.local/state/personal-agent/daemon/personal-agentd.sock"
   },
   "modules": {
-    "memory": {
-      "enabled": true,
-      "sessionSource": "~/.local/state/personal-agent/pi-agent/sessions",
-      "summaryDir": "~/.local/state/personal-agent/memory/conversations",
-      "qmd": {
-        "index": "default",
-        "updateDebounceSeconds": 45,
-        "embedDebounceSeconds": 600,
-        "reconcileIntervalMinutes": 60
-      }
-    },
     "maintenance": {
       "enabled": true,
       "cleanupIntervalMinutes": 60
@@ -244,6 +223,5 @@ Starter file: `docs/examples/scheduled-task.task.md`
 
 1. `@personal-agent/daemon` package: scaffolded
 2. CLI + gateway non-fatal event emission: wired
-3. memory module: scaffolded (`qmd` lifecycle events + summary stubs)
-4. tasks module: implemented (task discovery, cron/at scheduling, retries, overlap skipping)
-5. diagnostics: queue and module status exposed via `daemon status`
+3. tasks module: implemented (task discovery, cron/at scheduling, retries, overlap skipping)
+4. diagnostics: queue and module status exposed via `daemon status`

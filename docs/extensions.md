@@ -71,8 +71,6 @@ Durable profile memory injection and update tooling.
 
 - Loads `profiles/<active-profile>/agent/MEMORY.md` (fallback to `shared`) and injects `DURABLE_MEMORY`
 - Registers `memory_update` tool for durable memory writes + git add/commit/push
-- Automatic episodic retrieval is disabled to avoid prompt-time qmd latency
-- For episodic lookup, the model can run `qmd query` on-demand via the `bash` tool
 
 Location: `profiles/shared/agent/extensions/memory-cards/`
 

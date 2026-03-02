@@ -26,7 +26,7 @@ In passthrough mode, `pa` resolves profile resources, prepares runtime state, an
   - Example: `pa -p "hello"`
 - Global output controls:
   - `--plain` / `--no-color` disables rich styling
-  - `doctor --json`, `daemon status --json`, and `memory status --json` emit machine-readable JSON
+  - `doctor --json` and `daemon status --json` emit machine-readable JSON
 
 ## Profile selection
 
@@ -75,7 +75,6 @@ pa daemon status [--json]
 pa daemon service [install|status|uninstall|help]
 pa tasks [list|show|validate|logs]
 pa update [--repo-only]
-pa memory [list|query|search|head|open|status]
 ```
 
 `pa daemon` now prints daemon command help. Use `pa daemon status` for runtime status.
@@ -103,43 +102,6 @@ Configure these keys in profile `settings.json` (for example `profiles/shared/ag
 - `themeMode` (`system` | `dark` | `light`, defaults to `system`)
 
 When both `themeDark` and `themeLight` are set, `pa` chooses one at launch (from system mode or explicit `themeMode`) and writes it to runtime `settings.json` before launching Pi.
-
-## Memory commands
-
-The memory system provides cross-session context through summaries and durable profile memory.
-
-### Browse recent sessions
-
-```bash
-pa memory head [count]          # Latest markdown summaries (default: 5)
-```
-
-### Open specific session
-
-```bash
-pa memory open <sessionId>              # View summary markdown
-```
-
-### Search with qmd
-
-```bash
-pa memory query "authentication flow"   # Semantic search summaries
-pa memory search "pattern"              # Full-text search
-pa memory list                          # List all indexed files
-```
-
-### Check system status
-
-```bash
-pa memory status                        # Human-readable status
-pa memory status --json                 # Machine-readable JSON
-```
-
-Status includes:
-- Session coverage (summarized vs total)
-- Index state (dirty, needs embedding)
-- qmd collection stats
-- Directory paths
 
 ## Cross-package command registration
 
