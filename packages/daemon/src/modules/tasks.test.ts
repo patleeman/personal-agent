@@ -44,17 +44,6 @@ function createContext(taskDir: string, stateRoot: string): {
     queue: { maxDepth: 100 },
     ipc: {},
     modules: {
-      memory: {
-        enabled: false,
-        sessionSource: join(stateRoot, 'sessions'),
-        summaryDir: join(stateRoot, 'summaries'),
-        collections: [],
-        qmd: {
-          index: 'test',
-          updateDebounceSeconds: 60,
-          embedDebounceSeconds: 300,
-        },
-      },
       maintenance: {
         enabled: false,
         cleanupIntervalMinutes: 60,

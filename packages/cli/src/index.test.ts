@@ -12,7 +12,6 @@ describe('parseCommand', () => {
     expect(parseCommand(['restart'])).toEqual({ command: 'restart', args: [] });
     expect(parseCommand(['update'])).toEqual({ command: 'update', args: [] });
     expect(parseCommand(['daemon', 'status'])).toEqual({ command: 'daemon', args: ['status'] });
-    expect(parseCommand(['memory', 'status'])).toEqual({ command: 'memory', args: ['status'] });
     expect(parseCommand(['tui', '--profile', 'shared'])).toEqual({
       command: 'tui',
       args: ['--profile', 'shared'],

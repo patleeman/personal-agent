@@ -29,17 +29,6 @@ function createTestConfig(socketPath: string, maxDepth: number): DaemonConfig {
     queue: { maxDepth },
     ipc: { socketPath },
     modules: {
-      memory: {
-        enabled: false,
-        sessionSource: join(createTempDir('memory-'), 'sessions'),
-        summaryDir: join(createTempDir('memory-'), 'summaries'),
-        collections: [],
-        qmd: {
-          index: 'test',
-          updateDebounceSeconds: 60,
-          embedDebounceSeconds: 300,
-        },
-      },
       maintenance: {
         enabled: false,
         cleanupIntervalMinutes: 60,
