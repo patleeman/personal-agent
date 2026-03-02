@@ -186,7 +186,7 @@ describe('CLI main flow integration', () => {
     await rm(legacyAuthDir, { recursive: true, force: true }).catch(() => {});
   });
 
-  it('maps runtime theme from system theme when env mapping is configured', async () => {
+  it('maps runtime theme from profile settings when themeMode is explicit', async () => {
     const repo = createTempDir('personal-agent-cli-repo-');
     const stateRoot = createTempDir('personal-agent-cli-state-');
     const argsLogPath = join(createTempDir('personal-agent-cli-log-'), 'pi-args.log');
@@ -199,15 +199,15 @@ describe('CLI main flow integration', () => {
         defaultProvider: 'test',
         defaultModel: 'model',
         theme: 'cobalt2',
+        themeDark: 'cobalt2',
+        themeLight: 'cobalt2-light',
+        themeMode: 'light',
       }),
     );
 
     process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
-    process.env.PERSONAL_AGENT_THEME_DARK = 'cobalt2';
-    process.env.PERSONAL_AGENT_THEME_LIGHT = 'cobalt2-light';
-    process.env.PERSONAL_AGENT_SYSTEM_THEME = 'light';
 
     expect(await runCli(['tui', '-p', 'theme test'])).toBe(0);
 

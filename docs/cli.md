@@ -90,16 +90,13 @@ pa tasks logs <id> --tail 120
 
 ### System theme mapping (optional)
 
-If you set both env vars below, `pa` switches Pi theme at launch:
+Configure these keys in profile `settings.json` (for example `profiles/shared/agent/settings.json`):
 
-- `PERSONAL_AGENT_THEME_DARK`
-- `PERSONAL_AGENT_THEME_LIGHT`
+- `themeDark` (theme name to use in dark mode)
+- `themeLight` (theme name to use in light mode)
+- `themeMode` (`system` | `dark` | `light`, defaults to `system`)
 
-`pa` detects the system theme and writes the selected value to runtime `settings.json` before launching Pi.
-
-Optional override for testing or non-standard desktops:
-
-- `PERSONAL_AGENT_SYSTEM_THEME=dark|light`
+When both `themeDark` and `themeLight` are set, `pa` chooses one at launch (from system mode or explicit `themeMode`) and writes it to runtime `settings.json` before launching Pi.
 
 ## Memory commands
 
@@ -159,7 +156,7 @@ When `pa` runs Pi (via `pa`, `pa tui`, or `pa <pi args>`), it:
 4. bootstraps runtime directories
 5. materializes merged runtime agent files
 6. builds explicit Pi resource args (`--skill`, `-e`, `--prompt-template`, `--theme`)
-7. optionally remaps `settings.theme` from system dark/light mode (when theme env mapping is configured)
+7. optionally remaps `settings.theme` from dark/light mode (when `themeDark` + `themeLight` are configured)
 8. injects default model/thinking from settings if missing
 9. auto-installs extension dependencies when missing
 10. launches `pi` with `PI_CODING_AGENT_DIR` pointing at runtime agent dir

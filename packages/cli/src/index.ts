@@ -206,6 +206,7 @@ function applyDefaultModelArgs(args: string[], settings: Record<string, unknown>
 }
 
 type SystemThemeMode = 'light' | 'dark';
+type ThemeMode = SystemThemeMode | 'system';
 
 interface SystemThemeMappingStatus {
   configured: boolean;
@@ -213,8 +214,8 @@ interface SystemThemeMappingStatus {
   selectedTheme?: string;
 }
 
-function parseSystemThemeMode(value: string | undefined): SystemThemeMode | undefined {
-  if (!value) {
+function parseSystemThemeMode(value: unknown): SystemThemeMode | undefined {
+  if (typeof value !== 'string') {
     return undefined;
   }
 
@@ -227,12 +228,35 @@ function parseSystemThemeMode(value: string | undefined): SystemThemeMode | unde
   return undefined;
 }
 
-function detectSystemThemeMode(): SystemThemeMode | undefined {
-  const override = parseSystemThemeMode(process.env.PERSONAL_AGENT_SYSTEM_THEME);
-  if (override) {
-    return override;
+function parseThemeMode(value: unknown): ThemeMode {
+  if (typeof value !== 'string') {
+    return 'system';
   }
 
+  const normalized = value.trim().toLowerCase();
+
+  if (normalized === 'light' || normalized === 'dark' || normalized === 'system') {
+    return normalized;
+  }
+
+  return 'system';
+}
+
+function readMappedTheme(
+  settings: Record<string, unknown>,
+  key: 'themeDark' | 'themeLight',
+): string | undefined {
+  const value = settings[key];
+
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function detectSystemThemeMode(): SystemThemeMode | undefined {
   if (process.platform === 'darwin') {
     const result = spawnSync('defaults', ['read', '-g', 'AppleInterfaceStyle'], {
       encoding: 'utf-8',
@@ -243,8 +267,7 @@ function detectSystemThemeMode(): SystemThemeMode | undefined {
     }
 
     if ((result.status ?? 1) === 0) {
-      const value = result.stdout.toLowerCase();
-      return value.includes('dark') ? 'dark' : 'light';
+      return parseSystemThemeMode(result.stdout);
     }
 
     return 'light';
@@ -297,15 +320,18 @@ function detectSystemThemeMode(): SystemThemeMode | undefined {
   return undefined;
 }
 
-function getSystemThemeMappingStatus(): SystemThemeMappingStatus {
-  const darkTheme = process.env.PERSONAL_AGENT_THEME_DARK?.trim();
-  const lightTheme = process.env.PERSONAL_AGENT_THEME_LIGHT?.trim();
+function getSystemThemeMappingStatus(settings: Record<string, unknown>): SystemThemeMappingStatus {
+  const darkTheme = readMappedTheme(settings, 'themeDark');
+  const lightTheme = readMappedTheme(settings, 'themeLight');
 
   if (!darkTheme || !lightTheme) {
     return { configured: false };
   }
 
-  const mode = detectSystemThemeMode();
+  const modeSetting = parseThemeMode(settings.themeMode);
+  const mode = modeSetting === 'system'
+    ? detectSystemThemeMode()
+    : modeSetting;
 
   if (!mode) {
     return { configured: true };
@@ -337,7 +363,7 @@ function readRuntimeSettings(settingsPath: string, fallbackSettings: Record<stri
 }
 
 function applySystemThemeOverride(settingsPath: string, settings: Record<string, unknown>): Record<string, unknown> {
-  const mappingStatus = getSystemThemeMappingStatus();
+  const mappingStatus = getSystemThemeMappingStatus(settings);
   const targetTheme = mappingStatus.selectedTheme;
 
   if (!targetTheme) {
@@ -655,7 +681,10 @@ async function doctor(options: DoctorOptions = {}): Promise<number> {
 
   const runtimeAuth = runtime.authFile;
   const legacyAuth = join(homedir(), '.pi', 'agent', 'auth.json');
-  const themeMappingStatus = getSystemThemeMappingStatus();
+  const profileSettings = resolvedProfile.settingsFiles.length > 0
+    ? mergeJsonFiles(resolvedProfile.settingsFiles)
+    : {};
+  const themeMappingStatus = getSystemThemeMappingStatus(profileSettings);
 
   const report = {
     ok: true,

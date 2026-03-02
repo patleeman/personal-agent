@@ -2,5 +2,8 @@
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.3-codex",
   "defaultThinkingLevel": "xhigh",
-  "theme": "cobalt2"
+  "theme": "cobalt2",
+  "themeDark": "cobalt2",
+  "themeLight": "cobalt2-light",
+  "themeMode": "system"
 }
