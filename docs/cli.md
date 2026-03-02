@@ -10,6 +10,7 @@ This document explains how `pa` works.
    - `pa profile ...`
    - `pa doctor`
    - `pa daemon ...`
+   - `pa tasks ...`
    - `pa gateway ...` (registered by `@personal-agent/gateway`)
 
 2. **Pi passthrough mode**:
@@ -66,6 +67,7 @@ pa daemon help
 pa daemon [status|start|stop|restart|logs]
 pa daemon status [--json]
 pa daemon service [install|status|uninstall|help]
+pa tasks [list|show|validate|logs]
 pa update [--repo-only]
 pa memory [list|query|search|head|open|status]
 ```
@@ -73,6 +75,18 @@ pa memory [list|query|search|head|open|status]
 `pa daemon` now prints daemon command help. Use `pa daemon status` for runtime status.
 
 `pa update` updates Pi (`@mariozechner/pi-coding-agent`), pulls latest git changes for personal-agent, then restarts background services. Use `--repo-only` to skip the Pi package update.
+
+## Scheduled task commands
+
+```bash
+pa tasks list
+pa tasks show <id>
+pa tasks validate --all
+pa tasks validate ~/.config/personal-agent/tasks/example.task.md
+pa tasks logs <id> --tail 120
+```
+
+`pa daemon status` also prints the configured scheduled task directory to make it easy to find.
 
 ### System theme mapping (optional)
 

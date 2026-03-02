@@ -174,6 +174,7 @@ describe('CLI command flows', () => {
     expect(await runCli(['daemon', 'status'])).toBe(0);
 
     expect(logs.some((line) => line.includes('Daemon is stopped'))).toBe(true);
+    expect(logs.some((line) => line.includes('taskDir:'))).toBe(true);
 
     logSpy.mockRestore();
   });
@@ -190,6 +191,44 @@ describe('CLI command flows', () => {
     expect(await runCli(['daemon', '--json'])).toBe(0);
 
     expect(logs.some((line) => line.includes('"running": false'))).toBe(true);
+
+    logSpy.mockRestore();
+  });
+
+  it('lists scheduled tasks and shows configured task directory', async () => {
+    const stateRoot = createTempDir('personal-agent-cli-state-');
+    const daemonConfigPath = join(createTempDir('personal-agent-cli-config-'), 'daemon.json');
+    const taskDir = join(createTempDir('personal-agent-cli-tasks-'), 'definitions');
+
+    mkdirSync(taskDir, { recursive: true });
+    writeFileSync(
+      join(taskDir, 'demo.task.md'),
+      `---\nid: demo\nat: "2026-03-02T10:00:00Z"\n---\nRun demo task\n`,
+    );
+
+    writeFileSync(
+      daemonConfigPath,
+      JSON.stringify({
+        modules: {
+          tasks: {
+            taskDir,
+          },
+        },
+      }),
+    );
+
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_DAEMON_CONFIG = daemonConfigPath;
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
+      logs.push(String(message ?? ''));
+    });
+
+    expect(await runCli(['tasks', 'list'])).toBe(0);
+
+    expect(logs.some((line) => line.includes(taskDir))).toBe(true);
+    expect(logs.some((line) => line.includes('demo'))).toBe(true);
 
     logSpy.mockRestore();
   });

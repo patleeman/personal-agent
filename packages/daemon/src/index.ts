@@ -9,6 +9,8 @@ export { loadDaemonConfig, getDefaultDaemonConfig, getDaemonConfigFilePath, type
 export { resolveDaemonPaths } from './paths.js';
 export { getDaemonStatus, pingDaemon, stopDaemon, emitDaemonEvent, emitDaemonEventNonFatal } from './client.js';
 export { startDaemonDetached, stopDaemonGracefully, daemonStatusJson, readDaemonPid } from './manage.js';
+export { parseTaskDefinition } from './modules/tasks-parser.js';
+export type { ParsedTaskDefinition } from './modules/tasks-parser.js';
 export type { DaemonEvent, DaemonEventInput, DaemonStatus, DaemonModuleStatus } from './types.js';
 
 export async function runDaemonCli(argv: string[] = process.argv.slice(2)): Promise<number> {

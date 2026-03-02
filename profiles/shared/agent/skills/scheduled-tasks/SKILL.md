@@ -77,12 +77,15 @@ Prepare a tax filing checklist.
 1. Clarify schedule (`cron` vs `at`), profile, model, cwd.
 2. Write or update `~/.config/personal-agent/tasks/<name>.task.md`.
 3. Validate frontmatter keys match the supported contract above.
-4. Check daemon health:
-   - `pa daemon status`
+4. Check daemon/task health:
+   - `pa daemon status` (shows configured task directory)
+   - `pa tasks list`
    - confirm `tasks` module is enabled/active.
-5. Verify execution:
-   - inspect `task-state.json` for last status
-   - inspect latest run log in `task-runs/<task-id>/`.
+5. Validate definitions before waiting for schedule:
+   - `pa tasks validate --all`
+6. Verify execution:
+   - `pa tasks show <id>`
+   - `pa tasks logs <id> --tail 120`
 
 ## Debug checklist
 

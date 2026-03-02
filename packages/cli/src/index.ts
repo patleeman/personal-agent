@@ -32,7 +32,9 @@ import {
   resolveDaemonPaths,
   startDaemonDetached,
   stopDaemonGracefully,
+  parseTaskDefinition,
   type DaemonStatus,
+  type ParsedTaskDefinition,
 } from '@personal-agent/daemon';
 import {
   SUPPORTED_GATEWAY_PROVIDERS,
@@ -868,7 +870,86 @@ function printMaintenanceModuleStatus(module: DaemonStatus['modules'][0]): void 
   }
 }
 
-async function printDaemonModules(modules: DaemonStatus['modules']): Promise<void> {
+function printTasksModuleStatus(module: DaemonStatus['modules'][0], configuredTaskDir: string): void {
+  const detail = module.detail as {
+    taskDir?: string;
+    stateFile?: string;
+    runsRoot?: string;
+    knownTasks?: number;
+    parseErrors?: number;
+    runningTasks?: number;
+    totalRuns?: number;
+    successfulRuns?: number;
+    failedRuns?: number;
+    skippedRuns?: number;
+    lastTickAt?: string;
+    lastRunAt?: string;
+    lastError?: string;
+  } | undefined;
+
+  const status = module.lastError || detail?.lastError
+    ? statusChip('error')
+    : module.enabled
+      ? statusChip('active')
+      : statusChip('disabled');
+
+  console.log(bullet(`Scheduled tasks: ${status}`));
+  console.log(keyValue('Task directory', detail?.taskDir ?? configuredTaskDir, 4));
+
+  if (detail?.stateFile) {
+    console.log(keyValue('Task state file', detail.stateFile, 4));
+  }
+
+  if (detail?.runsRoot) {
+    console.log(keyValue('Task runs directory', detail.runsRoot, 4));
+  }
+
+  if (typeof detail?.knownTasks === 'number') {
+    console.log(keyValue('Discovered tasks', detail.knownTasks, 4));
+  }
+
+  if (typeof detail?.parseErrors === 'number') {
+    const label = detail.parseErrors > 0
+      ? `${statusChip('error')} (${detail.parseErrors})`
+      : `${statusChip('active')} (0)`;
+    console.log(keyValue('Parse errors', label, 4));
+  }
+
+  if (typeof detail?.runningTasks === 'number') {
+    console.log(keyValue('Running tasks', detail.runningTasks, 4));
+  }
+
+  if (
+    typeof detail?.successfulRuns === 'number'
+    || typeof detail?.failedRuns === 'number'
+    || typeof detail?.skippedRuns === 'number'
+  ) {
+    console.log(
+      keyValue(
+        'Run totals',
+        `ok ${detail?.successfulRuns ?? 0} | failed ${detail?.failedRuns ?? 0} | skipped ${detail?.skippedRuns ?? 0}`,
+        4,
+      ),
+    );
+  }
+
+  if (detail?.lastTickAt) {
+    console.log(keyValue('Last scheduler tick', new Date(detail.lastTickAt).toLocaleString(), 4));
+  }
+
+  if (detail?.lastRunAt) {
+    console.log(keyValue('Last completed run', new Date(detail.lastRunAt).toLocaleString(), 4));
+  }
+
+  if (module.lastError || detail?.lastError) {
+    console.log(`    ${uiError('Tasks module', module.lastError || detail?.lastError || 'Unknown error')}`);
+  }
+}
+
+async function printDaemonModules(
+  modules: DaemonStatus['modules'],
+  options: { configuredTaskDir: string },
+): Promise<void> {
   if (modules.length === 0) {
     console.log(dim('No modules loaded'));
     return;
@@ -882,6 +963,11 @@ async function printDaemonModules(modules: DaemonStatus['modules']): Promise<voi
 
     if (module.name === 'maintenance') {
       printMaintenanceModuleStatus(module);
+      continue;
+    }
+
+    if (module.name === 'tasks') {
+      printTasksModuleStatus(module, options.configuredTaskDir);
       continue;
     }
 
@@ -903,6 +989,7 @@ async function printDaemonStatusHumanReadable(): Promise<void> {
   if (!running) {
     console.log('personal-agentd: stopped');
     console.log(`socket: ${daemonPaths.socketPath}`);
+    console.log(`taskDir: ${config.modules.tasks.taskDir}`);
     console.log('hint: pa daemon start');
 
     console.log('');
@@ -924,10 +1011,13 @@ async function printDaemonStatusHumanReadable(): Promise<void> {
   console.log('');
   console.log(section('Daemon status'));
   console.log(success('Daemon running', `pid ${status.pid}, up ${uptimeText}`));
+  console.log(keyValue('Task directory', config.modules.tasks.taskDir));
   console.log('');
   console.log(section('Modules'));
 
-  await printDaemonModules(status.modules);
+  await printDaemonModules(status.modules, {
+    configuredTaskDir: config.modules.tasks.taskDir,
+  });
 }
 
 type DaemonServiceAction = 'help' | 'install' | 'status' | 'uninstall';
@@ -1512,6 +1602,581 @@ function findMemoryFileBySessionId(files: string[], sessionId: string, extension
   return files.find((path) => path.endsWith(needle));
 }
 
+interface TaskParseError {
+  filePath: string;
+  error: string;
+}
+
+interface TaskRuntimeRecord {
+  id?: string;
+  filePath?: string;
+  running?: boolean;
+  runningStartedAt?: string;
+  lastStatus?: string;
+  lastRunAt?: string;
+  lastSuccessAt?: string;
+  lastFailureAt?: string;
+  lastError?: string;
+  lastLogPath?: string;
+  lastAttemptCount?: number;
+  oneTimeResolvedAt?: string;
+  oneTimeResolvedStatus?: string;
+  oneTimeCompletedAt?: string;
+}
+
+function isTaskStateRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function listTaskDefinitionFiles(taskDir: string): string[] {
+  if (!existsSync(taskDir)) {
+    return [];
+  }
+
+  const output: string[] = [];
+  const stack = [resolve(taskDir)];
+
+  while (stack.length > 0) {
+    const current = stack.pop() as string;
+    const entries = readdirSync(current, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = join(current, entry.name);
+
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+        continue;
+      }
+
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      if (!entry.name.endsWith('.task.md')) {
+        continue;
+      }
+
+      output.push(fullPath);
+    }
+  }
+
+  output.sort();
+  return output;
+}
+
+function loadTaskDefinitions(taskDir: string, defaultTimeoutSeconds: number): {
+  tasks: ParsedTaskDefinition[];
+  parseErrors: TaskParseError[];
+} {
+  const files = listTaskDefinitionFiles(taskDir);
+  const tasks: ParsedTaskDefinition[] = [];
+  const parseErrors: TaskParseError[] = [];
+
+  for (const filePath of files) {
+    try {
+      const task = parseTaskDefinition({
+        filePath,
+        rawContent: readFileSync(filePath, 'utf-8'),
+        defaultTimeoutSeconds,
+      });
+      tasks.push(task);
+    } catch (error) {
+      parseErrors.push({
+        filePath,
+        error: (error as Error).message,
+      });
+    }
+  }
+
+  tasks.sort((left, right) => left.id.localeCompare(right.id) || left.filePath.localeCompare(right.filePath));
+
+  return {
+    tasks,
+    parseErrors,
+  };
+}
+
+function resolveTaskRuntimePaths(config: ReturnType<typeof loadDaemonConfig>): {
+  taskDir: string;
+  stateFile: string;
+  runsRoot: string;
+} {
+  const daemonPaths = resolveDaemonPaths(config.ipc.socketPath);
+  return {
+    taskDir: config.modules.tasks.taskDir,
+    stateFile: join(daemonPaths.root, 'task-state.json'),
+    runsRoot: join(daemonPaths.root, 'task-runs'),
+  };
+}
+
+function loadTaskRuntimeState(stateFile: string): Record<string, TaskRuntimeRecord> {
+  if (!existsSync(stateFile)) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(stateFile, 'utf-8')) as unknown;
+    if (!isTaskStateRecord(parsed)) {
+      return {};
+    }
+
+    const tasks = parsed.tasks;
+    if (!isTaskStateRecord(tasks)) {
+      return {};
+    }
+
+    const output: Record<string, TaskRuntimeRecord> = {};
+
+    for (const [key, value] of Object.entries(tasks)) {
+      if (!isTaskStateRecord(value)) {
+        continue;
+      }
+
+      output[key] = {
+        id: typeof value.id === 'string' ? value.id : undefined,
+        filePath: typeof value.filePath === 'string' ? value.filePath : undefined,
+        running: typeof value.running === 'boolean' ? value.running : undefined,
+        runningStartedAt: typeof value.runningStartedAt === 'string' ? value.runningStartedAt : undefined,
+        lastStatus: typeof value.lastStatus === 'string' ? value.lastStatus : undefined,
+        lastRunAt: typeof value.lastRunAt === 'string' ? value.lastRunAt : undefined,
+        lastSuccessAt: typeof value.lastSuccessAt === 'string' ? value.lastSuccessAt : undefined,
+        lastFailureAt: typeof value.lastFailureAt === 'string' ? value.lastFailureAt : undefined,
+        lastError: typeof value.lastError === 'string' ? value.lastError : undefined,
+        lastLogPath: typeof value.lastLogPath === 'string' ? value.lastLogPath : undefined,
+        lastAttemptCount: typeof value.lastAttemptCount === 'number' ? value.lastAttemptCount : undefined,
+        oneTimeResolvedAt: typeof value.oneTimeResolvedAt === 'string' ? value.oneTimeResolvedAt : undefined,
+        oneTimeResolvedStatus: typeof value.oneTimeResolvedStatus === 'string' ? value.oneTimeResolvedStatus : undefined,
+        oneTimeCompletedAt: typeof value.oneTimeCompletedAt === 'string' ? value.oneTimeCompletedAt : undefined,
+      };
+    }
+
+    return output;
+  } catch {
+    return {};
+  }
+}
+
+function formatTaskSchedule(task: ParsedTaskDefinition): string {
+  if (task.schedule.type === 'cron') {
+    return `cron ${task.schedule.expression}`;
+  }
+
+  return `at ${task.schedule.at}`;
+}
+
+function parseTaskTailCount(raw: string): number {
+  if (!/^\d+$/.test(raw)) {
+    throw new Error('Usage: pa tasks logs <id> [--tail <count>]');
+  }
+
+  const count = Number.parseInt(raw, 10);
+
+  if (!Number.isFinite(count) || count <= 0) {
+    throw new Error('Usage: pa tasks logs <id> [--tail <count>]');
+  }
+
+  return count;
+}
+
+function sanitizeTaskRunDirectoryName(value: string): string {
+  const sanitized = value
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+
+  return sanitized.length > 0 ? sanitized : 'task';
+}
+
+function findLatestTaskLogFile(taskRunDir: string): string | undefined {
+  if (!existsSync(taskRunDir)) {
+    return undefined;
+  }
+
+  const entries = readdirSync(taskRunDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.log'))
+    .map((entry) => join(taskRunDir, entry.name));
+
+  if (entries.length === 0) {
+    return undefined;
+  }
+
+  const withMtime = entries.map((path) => ({
+    path,
+    mtimeMs: statSync(path).mtimeMs,
+  }));
+
+  withMtime.sort((left, right) => right.mtimeMs - left.mtimeMs);
+
+  return withMtime[0]?.path;
+}
+
+function readTailLines(path: string, lineCount: number): string {
+  const text = readFileSync(path, 'utf-8').replace(/\r\n/g, '\n');
+  const lines = text.split('\n');
+
+  if (lines.length === 0) {
+    return '';
+  }
+
+  return lines.slice(-lineCount).join('\n').trimEnd();
+}
+
+function resolveTaskById(tasks: ParsedTaskDefinition[], id: string): ParsedTaskDefinition {
+  const matches = tasks.filter((task) => task.id === id);
+
+  if (matches.length === 0) {
+    throw new Error(`No task found with id: ${id}`);
+  }
+
+  if (matches.length > 1) {
+    const files = matches.map((task) => task.filePath).join(', ');
+    throw new Error(`Task id is ambiguous (${id}). Matches: ${files}`);
+  }
+
+  return matches[0] as ParsedTaskDefinition;
+}
+
+function isTaskOption(arg: string): boolean {
+  return arg.startsWith('-');
+}
+
+async function tasksCommand(args: string[]): Promise<number> {
+  const [subcommand, ...rest] = args;
+
+  if (!subcommand) {
+    console.log(section('Tasks commands'));
+    console.log('');
+    console.log(`Usage: pa tasks [list|show|validate|logs]
+
+Commands:
+  list [--json]            List parsed scheduled tasks with runtime status
+  show <id> [--json]       Show one task definition and runtime state
+  validate [--all|file]    Validate task file frontmatter and prompt body
+  logs <id> [--tail <n>]   Show latest task run log (default: 80 lines)
+`);
+
+    const config = loadDaemonConfig();
+    console.log(keyValue('Task directory', config.modules.tasks.taskDir));
+    return 0;
+  }
+
+  if (subcommand === 'list') {
+    const jsonMode = hasOption(rest, '--json');
+    const unexpected = rest.filter((arg) => arg !== '--json');
+
+    if (unexpected.length > 0) {
+      throw new Error('Usage: pa tasks list [--json]');
+    }
+
+    const config = loadDaemonConfig();
+    const paths = resolveTaskRuntimePaths(config);
+    const { tasks, parseErrors } = loadTaskDefinitions(paths.taskDir, config.modules.tasks.defaultTimeoutSeconds);
+    const runtimeState = loadTaskRuntimeState(paths.stateFile);
+
+    const payload = {
+      paths,
+      tasks: tasks.map((task) => {
+        const runtime = runtimeState[task.key];
+        return {
+          id: task.id,
+          enabled: task.enabled,
+          schedule: formatTaskSchedule(task),
+          profile: task.profile,
+          model: task.modelRef ?? null,
+          cwd: task.cwd ?? null,
+          timeoutSeconds: task.timeoutSeconds,
+          filePath: task.filePath,
+          runtime: runtime ?? null,
+        };
+      }),
+      parseErrors,
+    };
+
+    if (jsonMode) {
+      console.log(JSON.stringify(payload, null, 2));
+      return parseErrors.length > 0 ? 1 : 0;
+    }
+
+    console.log(section('Scheduled tasks'));
+    console.log(keyValue('Task directory', paths.taskDir));
+    console.log(keyValue('Task state file', paths.stateFile));
+
+    if (tasks.length === 0) {
+      console.log(dim('No valid task files found.'));
+    }
+
+    for (const task of tasks) {
+      const runtime = runtimeState[task.key];
+      const running = runtime?.running === true;
+      const status = running
+        ? statusChip('running')
+        : runtime?.lastStatus === 'failed'
+          ? statusChip('error')
+          : runtime?.lastStatus === 'skipped'
+            ? statusChip('pending')
+            : task.enabled
+              ? statusChip('active')
+              : statusChip('disabled');
+
+      console.log('');
+      console.log(bullet(`${task.id}: ${status}`));
+      console.log(keyValue('Schedule', formatTaskSchedule(task), 4));
+      console.log(keyValue('Profile', task.profile, 4));
+      console.log(keyValue('File', task.filePath, 4));
+
+      if (runtime?.lastRunAt) {
+        console.log(keyValue('Last run', new Date(runtime.lastRunAt).toLocaleString(), 4));
+      }
+
+      if (runtime?.lastStatus) {
+        console.log(keyValue('Last status', runtime.lastStatus, 4));
+      }
+    }
+
+    if (parseErrors.length > 0) {
+      console.log('');
+      console.log(warning(`${parseErrors.length} task file(s) failed to parse`));
+      for (const issue of parseErrors) {
+        console.log(keyValue('Parse error', `${issue.filePath}: ${issue.error}`, 4));
+      }
+    }
+
+    return parseErrors.length > 0 ? 1 : 0;
+  }
+
+  if (subcommand === 'show') {
+    const jsonMode = hasOption(rest, '--json');
+    const nonJsonArgs = rest.filter((arg) => arg !== '--json');
+    const unknownOptions = rest.filter((arg) => isTaskOption(arg) && arg !== '--json');
+
+    if (unknownOptions.length > 0 || nonJsonArgs.length !== 1) {
+      throw new Error('Usage: pa tasks show <id> [--json]');
+    }
+
+    const taskId = nonJsonArgs[0] as string;
+    const config = loadDaemonConfig();
+    const paths = resolveTaskRuntimePaths(config);
+    const { tasks } = loadTaskDefinitions(paths.taskDir, config.modules.tasks.defaultTimeoutSeconds);
+    const runtimeState = loadTaskRuntimeState(paths.stateFile);
+    const task = resolveTaskById(tasks, taskId);
+    const runtime = runtimeState[task.key];
+
+    const payload = {
+      paths,
+      task,
+      runtime: runtime ?? null,
+    };
+
+    if (jsonMode) {
+      console.log(JSON.stringify(payload, null, 2));
+      return 0;
+    }
+
+    console.log(section(`Task: ${task.id}`));
+    console.log(keyValue('Schedule', formatTaskSchedule(task)));
+    console.log(keyValue('Enabled', task.enabled ? 'yes' : 'no'));
+    console.log(keyValue('Profile', task.profile));
+    console.log(keyValue('File', task.filePath));
+    console.log(keyValue('Task directory', paths.taskDir));
+
+    if (task.modelRef) {
+      console.log(keyValue('Model', task.modelRef));
+    }
+
+    if (task.cwd) {
+      console.log(keyValue('CWD', task.cwd));
+    }
+
+    console.log(keyValue('Timeout', `${task.timeoutSeconds}s`));
+
+    if (runtime) {
+      console.log('');
+      console.log(section('Runtime'));
+      if (runtime.lastStatus) {
+        console.log(keyValue('Last status', runtime.lastStatus));
+      }
+
+      if (runtime.lastRunAt) {
+        console.log(keyValue('Last run', new Date(runtime.lastRunAt).toLocaleString()));
+      }
+
+      if (runtime.runningStartedAt) {
+        console.log(keyValue('Running since', new Date(runtime.runningStartedAt).toLocaleString()));
+      }
+
+      if (runtime.lastLogPath) {
+        console.log(keyValue('Last log', runtime.lastLogPath));
+      }
+
+      if (runtime.lastError) {
+        console.log(uiError('Task runtime', runtime.lastError));
+      }
+    }
+
+    console.log('');
+    console.log(section('Prompt'));
+    console.log(task.prompt);
+    return 0;
+  }
+
+  if (subcommand === 'validate') {
+    let jsonMode = false;
+    let allMode = false;
+    const positional: string[] = [];
+
+    for (const arg of rest) {
+      if (arg === '--json') {
+        jsonMode = true;
+        continue;
+      }
+
+      if (arg === '--all') {
+        allMode = true;
+        continue;
+      }
+
+      if (arg.startsWith('--')) {
+        throw new Error('Usage: pa tasks validate [--all|file] [--json]');
+      }
+
+      positional.push(arg);
+    }
+
+    if (positional.length > 1) {
+      throw new Error('Usage: pa tasks validate [--all|file] [--json]');
+    }
+
+    if (allMode && positional.length > 0) {
+      throw new Error('Usage: pa tasks validate [--all|file] [--json]');
+    }
+
+    const config = loadDaemonConfig();
+    const paths = resolveTaskRuntimePaths(config);
+
+    const files = allMode || positional.length === 0
+      ? listTaskDefinitionFiles(paths.taskDir)
+      : [resolve(positional[0] as string)];
+
+    const results = files.map((filePath) => {
+      try {
+        parseTaskDefinition({
+          filePath,
+          rawContent: readFileSync(filePath, 'utf-8'),
+          defaultTimeoutSeconds: config.modules.tasks.defaultTimeoutSeconds,
+        });
+
+        return {
+          filePath,
+          valid: true,
+          error: null,
+        };
+      } catch (error) {
+        return {
+          filePath,
+          valid: false,
+          error: (error as Error).message,
+        };
+      }
+    });
+
+    const invalidCount = results.filter((result) => !result.valid).length;
+
+    if (jsonMode) {
+      console.log(JSON.stringify({
+        taskDir: paths.taskDir,
+        checked: results.length,
+        invalid: invalidCount,
+        results,
+      }, null, 2));
+      return invalidCount > 0 ? 1 : 0;
+    }
+
+    console.log(section('Task validation'));
+    console.log(keyValue('Task directory', paths.taskDir));
+    console.log(keyValue('Files checked', results.length));
+
+    if (results.length === 0) {
+      console.log(dim('No task files found.'));
+      return 0;
+    }
+
+    for (const result of results) {
+      const label = result.valid ? success('valid') : uiError('invalid', result.error || 'unknown error');
+      console.log(bullet(`${result.filePath}`));
+      console.log(`    ${label}`);
+    }
+
+    if (invalidCount > 0) {
+      console.log('');
+      console.log(uiError('Validation failed', `${invalidCount} file(s) are invalid`));
+      return 1;
+    }
+
+    console.log('');
+    console.log(success('All task files are valid'));
+    return 0;
+  }
+
+  if (subcommand === 'logs') {
+    let tail = 80;
+    const positional: string[] = [];
+
+    for (let index = 0; index < rest.length; index += 1) {
+      const arg = rest[index] as string;
+
+      if (arg === '--tail') {
+        const value = rest[index + 1];
+        if (!value) {
+          throw new Error('Usage: pa tasks logs <id> [--tail <count>]');
+        }
+
+        tail = parseTaskTailCount(value);
+        index += 1;
+        continue;
+      }
+
+      if (arg.startsWith('--')) {
+        throw new Error('Usage: pa tasks logs <id> [--tail <count>]');
+      }
+
+      positional.push(arg);
+    }
+
+    if (positional.length !== 1) {
+      throw new Error('Usage: pa tasks logs <id> [--tail <count>]');
+    }
+
+    const taskId = positional[0] as string;
+    const config = loadDaemonConfig();
+    const paths = resolveTaskRuntimePaths(config);
+    const { tasks } = loadTaskDefinitions(paths.taskDir, config.modules.tasks.defaultTimeoutSeconds);
+    const runtimeState = loadTaskRuntimeState(paths.stateFile);
+    const task = resolveTaskById(tasks, taskId);
+
+    let logPath = runtimeState[task.key]?.lastLogPath;
+
+    if (!logPath || !existsSync(logPath)) {
+      const taskRunDir = join(paths.runsRoot, sanitizeTaskRunDirectoryName(task.id));
+      logPath = findLatestTaskLogFile(taskRunDir);
+    }
+
+    if (!logPath || !existsSync(logPath)) {
+      throw new Error(`No logs found for task: ${taskId}`);
+    }
+
+    const tailOutput = readTailLines(logPath, tail);
+
+    console.log(section(`Task logs: ${task.id}`));
+    console.log(keyValue('Log file', logPath));
+    console.log('');
+    console.log(tailOutput.length > 0 ? tailOutput : dim('(empty log)'));
+
+    return 0;
+  }
+
+  throw new Error(`Unknown tasks subcommand: ${subcommand}`);
+}
+
 async function memoryCommand(args: string[]): Promise<number> {
   const [subcommand, ...rest] = args;
 
@@ -1826,6 +2491,12 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       run: daemonCommand,
     },
     {
+      name: 'tasks',
+      usage: 'tasks [list|show|validate|logs] [args...]',
+      description: 'Inspect and validate scheduled daemon tasks',
+      run: tasksCommand,
+    },
+    {
       name: 'memory',
       usage: 'memory [list|query|search|head|open|status] [args...]',
       description: 'Query memory conversation summaries',
@@ -1919,6 +2590,9 @@ Examples:
   pa daemon
   pa daemon status
   pa daemon service install
+  pa tasks list
+  pa tasks validate --all
+  pa tasks logs <id> --tail 120
   pa memory list
   pa memory head 5
   pa memory open <sessionId>
