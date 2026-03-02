@@ -66,10 +66,13 @@ pa daemon help
 pa daemon [status|start|stop|restart|logs]
 pa daemon status [--json]
 pa daemon service [install|status|uninstall|help]
+pa update [--repo-only]
 pa memory [list|query|search|head|open|status]
 ```
 
 `pa daemon` now prints daemon command help. Use `pa daemon status` for runtime status.
+
+`pa update` updates Pi (`@mariozechner/pi-coding-agent`), pulls latest git changes for personal-agent, then restarts background services. Use `--repo-only` to skip the Pi package update.
 
 ## Memory commands
 

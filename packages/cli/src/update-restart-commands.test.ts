@@ -77,6 +77,24 @@ describe('update and restart commands', () => {
     errorSpy.mockRestore();
   });
 
+  it('supports pa update --repo-only', async () => {
+    const nonGitRepo = createTempDir('personal-agent-non-git-');
+    process.env.PERSONAL_AGENT_REPO_ROOT = nonGitRepo;
+
+    const errors: string[] = [];
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation((message?: unknown) => {
+      errors.push(String(message ?? ''));
+    });
+
+    const exitCode = await runCli(['update', '--repo-only']);
+
+    expect(exitCode).toBe(1);
+    expect(errors.some((line) => line.includes('Repository root is not a git checkout'))).toBe(true);
+    expect(errors.some((line) => line.includes('Usage: pa update'))).toBe(false);
+
+    errorSpy.mockRestore();
+  });
+
   it('validates pa update arguments', async () => {
     const errors: string[] = [];
     const errorSpy = vi.spyOn(console, 'error').mockImplementation((message?: unknown) => {

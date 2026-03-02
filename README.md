@@ -85,7 +85,8 @@ pa tui -- --model kimi-coding/k2p5    # Pass args to pi
 pa doctor                   # Validate setup
 pa doctor --json            # Machine-readable status
 pa restart                  # Restart daemon + managed gateways
-pa update                   # git pull --ff-only, then restart services
+pa update                   # Update pi package + pull git changes, then restart services
+pa update --repo-only       # Pull git changes only, then restart services
 ```
 
 ### Profile management
@@ -119,7 +120,8 @@ pa daemon restart           # Restart daemon only
 pa daemon logs              # View daemon logs
 pa daemon service install   # Install daemon as managed user service
 pa restart                  # Restart daemon + managed gateways
-pa update                   # Pull latest git changes and restart
+pa update                   # Update pi package + pull latest git changes and restart
+pa update --repo-only       # Pull latest git changes only and restart
 ```
 
 ### Gateway (Telegram/Discord)

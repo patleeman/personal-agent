@@ -96,10 +96,13 @@ function parseGlobalFlags(argv: string[]): ParsedGlobalFlags {
   };
 }
 
+const PI_PACKAGE_NAME = '@mariozechner/pi-coding-agent';
+const PI_PACKAGE_LATEST = `${PI_PACKAGE_NAME}@latest`;
+
 function ensurePiInstalled(): void {
   const result = spawnSync('pi', ['--version'], { encoding: 'utf-8' });
   if (result.error || result.status !== 0) {
-    throw new Error('`pi` command not found. Install with: npm install -g @mariozechner/pi-coding-agent');
+    throw new Error(`\`pi\` command not found. Install with: npm install -g ${PI_PACKAGE_NAME}`);
   }
 }
 
@@ -388,7 +391,7 @@ async function doctor(options: DoctorOptions = {}): Promise<number> {
     ensurePiInstalled();
   } catch (error) {
     const message = (error as Error).message;
-    const hint = 'npm install -g @mariozechner/pi-coding-agent';
+    const hint = `npm install -g ${PI_PACKAGE_NAME}`;
 
     if (options.json) {
       printDoctorJson({
@@ -961,6 +964,23 @@ function ensureNoExtraCommandArgs(args: string[], usage: string): void {
   }
 }
 
+interface UpdateOptions {
+  repoOnly: boolean;
+}
+
+function parseUpdateOptions(args: string[]): UpdateOptions {
+  const allowed = new Set(['--repo-only']);
+  const invalidArgs = args.filter((arg) => !allowed.has(arg));
+
+  if (invalidArgs.length > 0) {
+    throw new Error('Usage: pa update [--repo-only]');
+  }
+
+  return {
+    repoOnly: hasOption(args, '--repo-only'),
+  };
+}
+
 function pullLatestFromGit(repoRoot: string): string {
   if (!existsSync(join(repoRoot, '.git'))) {
     throw new Error(`Repository root is not a git checkout: ${repoRoot}`);
@@ -981,6 +1001,27 @@ function pullLatestFromGit(repoRoot: string): string {
   if (statusCode !== 0) {
     const detail = stderr || stdout || `exit code ${statusCode}`;
     throw new Error(`Git pull failed in ${repoRoot}: ${detail}`);
+  }
+
+  return [stdout, stderr].filter((line) => line.length > 0).join('\n');
+}
+
+function updatePiPackage(): string {
+  const result = spawnSync('npm', ['install', '-g', PI_PACKAGE_LATEST], {
+    encoding: 'utf-8',
+  });
+
+  if (result.error) {
+    throw new Error(`Failed to run npm install -g ${PI_PACKAGE_LATEST}: ${result.error.message}`);
+  }
+
+  const statusCode = result.status ?? 1;
+  const stdout = result.stdout?.trim() ?? '';
+  const stderr = result.stderr?.trim() ?? '';
+
+  if (statusCode !== 0) {
+    const detail = stderr || stdout || `exit code ${statusCode}`;
+    throw new Error(`Pi update failed (${PI_PACKAGE_LATEST}): ${detail}`);
   }
 
   return [stdout, stderr].filter((line) => line.length > 0).join('\n');
@@ -1097,7 +1138,7 @@ async function restartCommand(args: string[]): Promise<number> {
 }
 
 async function updateCommand(args: string[]): Promise<number> {
-  ensureNoExtraCommandArgs(args, 'pa update');
+  const options = parseUpdateOptions(args);
 
   const repoRoot = getRepoRoot();
   const pullSpinner = spinner('Pulling latest changes from git');
@@ -1117,11 +1158,33 @@ async function updateCommand(args: string[]): Promise<number> {
     console.log(dim(gitOutput));
   }
 
+  let piOutput = '';
+  let piUpdated = false;
+
+  if (!options.repoOnly) {
+    const piSpinner = spinner(`Updating pi (${PI_PACKAGE_NAME})`);
+    piSpinner.start();
+
+    try {
+      piOutput = updatePiPackage();
+      piUpdated = true;
+      piSpinner.succeed(`Updated pi package (${PI_PACKAGE_LATEST})`);
+    } catch (error) {
+      piSpinner.fail('Unable to update pi package');
+      throw error;
+    }
+
+    if (piOutput.length > 0) {
+      console.log(dim(piOutput));
+    }
+  }
+
   const summary = await restartBackgroundServices();
 
   console.log('');
   console.log(section('Update summary'));
   console.log(keyValue('repository', repoRoot));
+  console.log(keyValue('pi package', options.repoOnly ? 'skipped (--repo-only)' : (piUpdated ? 'updated' : 'unknown')));
   console.log(keyValue('managed daemon service', summary.managedDaemonServiceRestarted ? 'restarted' : 'not installed'));
   console.log(keyValue('gateway services restarted', summary.restartedGatewayServices.length > 0 ? summary.restartedGatewayServices.join(', ') : 'none'));
   console.log(keyValue('gateway services skipped', summary.skippedGatewayServices.length > 0 ? summary.skippedGatewayServices.join(', ') : 'none'));
@@ -1579,8 +1642,8 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     },
     {
       name: 'update',
-      usage: 'update [args...]',
-      description: 'Pull latest git changes and restart background services',
+      usage: 'update [--repo-only]',
+      description: 'Update pi package + pull latest git changes, then restart background services',
       run: updateCommand,
     },
     {
@@ -1677,6 +1740,7 @@ Examples:
   pa doctor --json
   pa restart
   pa update
+  pa update --repo-only
   pa gateway telegram start
   pa gateway discord start
   pa gateway service install telegram
