@@ -6,6 +6,7 @@
 - Work email is patrickc.lee@datadoghq.com
 
 ## Preferences
+- Prefers ergonomic CLI shortcuts and avoiding repetitive command typing (e.g., dislikes typing long commands repeatedly).
 
 ## Environment
 
