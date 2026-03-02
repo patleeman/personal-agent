@@ -15,6 +15,7 @@
 - Use `xhigh` as the default thinking level for assistant and shared profiles.
 - When asked to take notes, use Apple Notes.
 - Prefer profile-based settings over environment variables for pa TUI theme mapping.
+- Checkpoint workflow should always push after committing.
 
 ## Environment
 
