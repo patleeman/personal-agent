@@ -72,6 +72,14 @@ function createModuleContext(memoryConfig: MemoryModuleConfig): {
         enabled: false,
         cleanupIntervalMinutes: 60,
       },
+      tasks: {
+        enabled: false,
+        taskDir: join(createTempDir('tasks-'), 'definitions'),
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
     },
   };
 

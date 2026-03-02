@@ -5,12 +5,14 @@
     "rootDir": "./src",
     "composite": true,
     "paths": {
-      "@personal-agent/core": ["../core/src"]
+      "@personal-agent/core": ["../core/src"],
+      "@personal-agent/resources": ["../resources/src"]
     }
   },
   "include": ["src/**/*"],
   "exclude": ["dist", "node_modules"],
   "references": [
-    { "path": "../core" }
+    { "path": "../core" },
+    { "path": "../resources" }
   ]
 }

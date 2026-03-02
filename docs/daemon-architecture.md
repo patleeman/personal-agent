@@ -27,7 +27,7 @@ MVP scope:
 
 - local-only daemon (per user, per machine)
 - Unix socket IPC + JSON lines protocol
-- built-in modules: `memory`, `maintenance`
+- built-in modules: `memory`, `maintenance`, `tasks`
 - queue and module diagnostics
 
 Non-goals:
@@ -76,6 +76,7 @@ Common event types:
 - `timer.memory.qmd.update`
 - `timer.memory.qmd.embed`
 - `timer.maintenance.cleanup`
+- `timer.tasks.tick`
 
 Delivery model (MVP):
 
@@ -193,10 +194,37 @@ Example:
     "maintenance": {
       "enabled": true,
       "cleanupIntervalMinutes": 60
+    },
+    "tasks": {
+      "enabled": true,
+      "taskDir": "~/.config/personal-agent/tasks",
+      "tickIntervalSeconds": 30,
+      "maxRetries": 3,
+      "reapAfterDays": 7,
+      "defaultTimeoutSeconds": 1800
     }
   }
 }
 ```
+
+Task files are markdown prompts with YAML frontmatter in `taskDir`.
+One-time (`at`) tasks are marked complete in state on success and reaped after `reapAfterDays`.
+
+Example:
+
+```md
+---
+id: daily-status
+enabled: true
+cron: "0 9 * * 1-5"
+profile: "shared"
+provider: "openai-codex"
+model: "gpt-5.3-codex"
+---
+Summarize yesterday's work and open follow-up tasks.
+```
+
+Starter file: `docs/examples/scheduled-task.task.md`
 
 ---
 
@@ -217,4 +245,5 @@ Example:
 1. `@personal-agent/daemon` package: scaffolded
 2. CLI + gateway non-fatal event emission: wired
 3. memory module: scaffolded (`qmd` lifecycle events + summary stubs)
-4. diagnostics: queue and module status exposed via `daemon status`
+4. tasks module: implemented (task discovery, cron/at scheduling, retries, overlap skipping)
+5. diagnostics: queue and module status exposed via `daemon status`

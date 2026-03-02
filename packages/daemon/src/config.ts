@@ -43,6 +43,15 @@ export interface MaintenanceModuleConfig {
   cleanupIntervalMinutes: number;
 }
 
+export interface TasksModuleConfig {
+  enabled: boolean;
+  taskDir: string;
+  tickIntervalSeconds: number;
+  maxRetries: number;
+  reapAfterDays: number;
+  defaultTimeoutSeconds: number;
+}
+
 export interface DaemonConfig {
   logLevel: LogLevel;
   queue: {
@@ -54,6 +63,7 @@ export interface DaemonConfig {
   modules: {
     memory: MemoryModuleConfig;
     maintenance: MaintenanceModuleConfig;
+    tasks: TasksModuleConfig;
   };
 }
 
@@ -91,6 +101,10 @@ function expandConfigPaths(config: DaemonConfig): DaemonConfig {
           ...collection,
           path: resolve(expandHome(collection.path)),
         })),
+      },
+      tasks: {
+        ...config.modules.tasks,
+        taskDir: resolve(expandHome(config.modules.tasks.taskDir)),
       },
     },
   };
@@ -194,6 +208,14 @@ export function getDefaultDaemonConfig(): DaemonConfig {
       maintenance: {
         enabled: true,
         cleanupIntervalMinutes: 60,
+      },
+      tasks: {
+        enabled: true,
+        taskDir: join(homedir(), '.config', 'personal-agent', 'tasks'),
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
       },
     },
   };

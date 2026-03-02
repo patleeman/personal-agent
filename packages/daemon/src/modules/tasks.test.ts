@@ -1,0 +1,314 @@
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { rm } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { DaemonConfig } from '../config.js';
+import type { DaemonEvent, DaemonPaths, EventPayload } from '../types.js';
+import type { DaemonModuleContext } from './types.js';
+import { createTasksModule } from './tasks.js';
+import type { TaskRunRequest, TaskRunResult } from './tasks-runner.js';
+
+const tempDirs: string[] = [];
+
+function createTempDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  tempDirs.push(dir);
+  return dir;
+}
+
+function createTimerEvent(): DaemonEvent {
+  return {
+    id: `evt_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    version: 1,
+    type: 'timer.tasks.tick',
+    source: 'test',
+    timestamp: new Date().toISOString(),
+    payload: {
+      timer: 'tasks-tick',
+    },
+  };
+}
+
+interface PublishedEvent {
+  type: string;
+  payload?: EventPayload;
+}
+
+function createContext(taskDir: string, stateRoot: string): {
+  context: DaemonModuleContext;
+  published: PublishedEvent[];
+} {
+  const daemonConfig: DaemonConfig = {
+    logLevel: 'error',
+    queue: { maxDepth: 100 },
+    ipc: {},
+    modules: {
+      memory: {
+        enabled: false,
+        sessionSource: join(stateRoot, 'sessions'),
+        summaryDir: join(stateRoot, 'summaries'),
+        collections: [],
+        qmd: {
+          index: 'test',
+          updateDebounceSeconds: 60,
+          embedDebounceSeconds: 300,
+        },
+      },
+      maintenance: {
+        enabled: false,
+        cleanupIntervalMinutes: 60,
+      },
+      tasks: {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
+    },
+  };
+
+  const paths: DaemonPaths = {
+    root: stateRoot,
+    socketPath: join(stateRoot, 'daemon.sock'),
+    pidFile: join(stateRoot, 'daemon.pid'),
+    logDir: join(stateRoot, 'logs'),
+    logFile: join(stateRoot, 'logs', 'daemon.log'),
+  };
+
+  mkdirSync(paths.logDir, { recursive: true });
+
+  const published: PublishedEvent[] = [];
+
+  return {
+    context: {
+      config: daemonConfig,
+      paths,
+      publish: (type, payload) => {
+        published.push({ type, payload });
+        return true;
+      },
+      logger: {
+        debug: () => undefined,
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+      },
+    },
+    published,
+  };
+}
+
+async function waitForCondition(check: () => boolean, timeoutMs = 2000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (!check()) {
+    if (Date.now() > deadline) {
+      throw new Error('Timed out waiting for condition');
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
+function createRunResult(request: TaskRunRequest, success: boolean, nowIso: string, error?: string): TaskRunResult {
+  return {
+    success,
+    startedAt: nowIso,
+    endedAt: nowIso,
+    exitCode: success ? 0 : 1,
+    signal: null,
+    timedOut: false,
+    cancelled: false,
+    logPath: join(request.runsRoot, `${request.task.id}-attempt-${request.attempt}.log`),
+    error,
+  };
+}
+
+describe('tasks module scheduling', () => {
+  afterEach(async () => {
+    await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  });
+
+  it('retries one-time tasks up to 3 attempts and resolves on success', async () => {
+    const taskDir = createTempDir('tasks-module-definitions-');
+    const stateRoot = createTempDir('tasks-module-state-');
+    const taskPath = join(taskDir, 'nightly.task.md');
+
+    writeFileSync(taskPath, `---\nid: nightly\nat: "2026-03-02T10:00:05.000Z"\n---\nRun nightly update\n`);
+
+    let currentTime = new Date('2026-03-02T10:00:00.000Z');
+
+    const runTask = vi.fn(async (request: TaskRunRequest) => {
+      const nowIso = currentTime.toISOString();
+      if (request.attempt < 3) {
+        return createRunResult(request, false, nowIso, `failed attempt ${request.attempt}`);
+      }
+
+      return createRunResult(request, true, nowIso);
+    });
+
+    const module = createTasksModule(
+      {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
+      {
+        now: () => currentTime,
+        runTask,
+      },
+    );
+
+    const { context, published } = createContext(taskDir, stateRoot);
+
+    await module.start(context);
+
+    currentTime = new Date('2026-03-02T10:00:10.000Z');
+    await module.handleEvent(createTimerEvent(), context);
+
+    await waitForCondition(() => {
+      const status = module.getStatus?.() as { totalRuns?: number };
+      return (status.totalRuns ?? 0) === 1;
+    });
+
+    expect(runTask).toHaveBeenCalledTimes(3);
+
+    const status = module.getStatus?.() as {
+      successfulRuns?: number;
+      failedRuns?: number;
+      runningTasks?: number;
+    };
+
+    expect(status.successfulRuns).toBe(1);
+    expect(status.failedRuns).toBe(0);
+    expect(status.runningTasks).toBe(0);
+
+    currentTime = new Date('2026-03-02T10:01:00.000Z');
+    await module.handleEvent(createTimerEvent(), context);
+
+    expect(runTask).toHaveBeenCalledTimes(3);
+    expect(published.some((event) => event.type === 'tasks.run.completed')).toBe(true);
+
+    await module.stop?.(context);
+  });
+
+  it('skips overlapping cron runs when prior run is still active', async () => {
+    const taskDir = createTempDir('tasks-module-definitions-');
+    const stateRoot = createTempDir('tasks-module-state-');
+    const taskPath = join(taskDir, 'heartbeat.task.md');
+
+    writeFileSync(taskPath, `---\nid: heartbeat\ncron: "* * * * *"\n---\nHeartbeat task\n`);
+
+    let currentTime = new Date('2026-03-02T10:00:00.000Z');
+
+    let releaseRun: (() => void) | undefined;
+    const runTask = vi.fn(async (request: TaskRunRequest) => {
+      await new Promise<void>((resolve) => {
+        releaseRun = resolve;
+      });
+
+      return createRunResult(request, true, currentTime.toISOString());
+    });
+
+    const module = createTasksModule(
+      {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
+      {
+        now: () => currentTime,
+        runTask,
+      },
+    );
+
+    const { context } = createContext(taskDir, stateRoot);
+
+    await module.start(context);
+
+    await waitForCondition(() => runTask.mock.calls.length === 1);
+
+    currentTime = new Date('2026-03-02T10:01:00.000Z');
+    await module.handleEvent(createTimerEvent(), context);
+
+    const midStatus = module.getStatus?.() as { skippedRuns?: number; runningTasks?: number };
+    expect(runTask).toHaveBeenCalledTimes(1);
+    expect(midStatus.skippedRuns).toBe(1);
+    expect(midStatus.runningTasks).toBe(1);
+
+    releaseRun?.();
+
+    await waitForCondition(() => {
+      const status = module.getStatus?.() as { runningTasks?: number; totalRuns?: number };
+      return (status.runningTasks ?? 0) === 0 && (status.totalRuns ?? 0) === 1;
+    });
+
+    await module.stop?.(context);
+  });
+
+  it('reaps completed one-time tasks after 7 days', async () => {
+    const taskDir = createTempDir('tasks-module-definitions-');
+    const stateRoot = createTempDir('tasks-module-state-');
+    const taskPath = join(taskDir, 'cleanup.task.md');
+
+    writeFileSync(taskPath, `---\nid: cleanup\nat: "2026-03-02T10:00:00.000Z"\n---\nCleanup task\n`);
+
+    let currentTime = new Date('2026-03-02T09:59:00.000Z');
+
+    const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(request, true, currentTime.toISOString()));
+
+    const module = createTasksModule(
+      {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
+      {
+        now: () => currentTime,
+        runTask,
+      },
+    );
+
+    const { context } = createContext(taskDir, stateRoot);
+
+    await module.start(context);
+
+    currentTime = new Date('2026-03-02T10:00:10.000Z');
+    await module.handleEvent(createTimerEvent(), context);
+
+    await waitForCondition(() => {
+      const status = module.getStatus?.() as { totalRuns?: number };
+      return (status.totalRuns ?? 0) === 1;
+    });
+
+    expect(existsSync(taskPath)).toBe(true);
+
+    currentTime = new Date('2026-03-10T10:00:10.000Z');
+    await module.handleEvent(createTimerEvent(), context);
+
+    expect(existsSync(taskPath)).toBe(false);
+
+    const persistedStatePath = join(stateRoot, 'task-state.json');
+    expect(existsSync(persistedStatePath)).toBe(true);
+
+    const persistedState = JSON.parse(readFileSync(persistedStatePath, 'utf-8')) as {
+      tasks: Record<string, unknown>;
+    };
+
+    expect(Object.keys(persistedState.tasks).length).toBe(0);
+
+    await module.stop?.(context);
+  });
+});
