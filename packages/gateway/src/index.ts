@@ -163,6 +163,30 @@ interface RunPromptFnInput {
 
 type RunPromptFn = (options: RunPromptFnInput) => Promise<string>;
 
+interface ConversationSubmitStarted {
+  mode: 'started';
+  run: Promise<string>;
+}
+
+interface ConversationSubmitQueued {
+  mode: 'steered' | 'followup';
+}
+
+type ConversationSubmitResult = ConversationSubmitStarted | ConversationSubmitQueued;
+
+export interface GatewayConversationController {
+  submitPrompt: (input: RunPromptFnInput) => Promise<ConversationSubmitResult>;
+  submitFollowUp: (input: RunPromptFnInput) => Promise<ConversationSubmitResult>;
+  abortCurrent: () => Promise<boolean>;
+  waitForIdle: () => Promise<void>;
+  dispose: () => Promise<void>;
+}
+
+type CreateConversationControllerFn = (input: {
+  conversationId: string;
+  sessionFile: string;
+}) => Promise<GatewayConversationController> | GatewayConversationController;
+
 interface PendingModelSelection {
   models: string[];
   search?: string;
@@ -184,14 +208,15 @@ export interface CreateTelegramMessageHandlerOptions {
   workingDirectory: string;
   sendMessage: SendMessageFn;
   sendChatAction: SendChatActionFn;
-  runPrompt: RunPromptFn;
+  createConversationController?: CreateConversationControllerFn;
+  runPrompt?: RunPromptFn;
+  createAbortController?: () => AbortController;
   commandHelpText?: string;
   skillsHelpText?: string;
   sessionFileExists?: (path: string) => boolean;
   removeSessionFile?: (path: string) => Promise<void>;
   maxPendingPerChat?: number;
   modelCommands?: ModelCommandSupport;
-  createAbortController?: () => AbortController;
 }
 
 export interface QueuedTelegramMessageHandler {
@@ -215,14 +240,15 @@ export interface CreateDiscordMessageHandlerOptions {
   agentDir: string;
   discordSessionDir: string;
   workingDirectory: string;
-  runPrompt: RunPromptFn;
+  createConversationController?: CreateConversationControllerFn;
+  runPrompt?: RunPromptFn;
+  createAbortController?: () => AbortController;
   commandHelpText?: string;
   skillsHelpText?: string;
   sessionFileExists?: (path: string) => boolean;
   removeSessionFile?: (path: string) => Promise<void>;
   maxPendingPerChannel?: number;
   modelCommands?: ModelCommandSupport;
-  createAbortController?: () => AbortController;
 }
 
 export interface QueuedDiscordMessageHandler {
@@ -238,6 +264,8 @@ const TELEGRAM_MODEL_SELECTION_CALLBACK_PREFIX = 'model_select:';
 const PROMPT_CANCELLED_ERROR_MESSAGE = 'Request cancelled by /stop.';
 const STOPPED_ACTIVE_REQUEST_MESSAGE = 'Stopped active request.';
 const NO_ACTIVE_REQUEST_MESSAGE = 'No active request to stop.';
+const STEERING_ACTIVE_REQUEST_MESSAGE = 'Steering current response...';
+const FOLLOWUP_QUEUED_MESSAGE = 'Queued as follow-up.';
 
 function gatewaySection(title: string): string {
   return title;
@@ -353,6 +381,7 @@ const DEFAULT_TELEGRAM_COMMANDS: TelegramCommandDefinition[] = [
   { command: 'skill', description: 'Load a skill (usage: /skill <name>)' },
   ...MODEL_TELEGRAM_COMMANDS,
   { command: 'stop', description: 'Stop active request' },
+  { command: 'followup', description: 'Queue follow-up while current response runs' },
   { command: 'cancel', description: 'Cancel active model selection' },
   { command: 'compact', description: 'Compact context (TUI only in gateway mode)' },
   { command: 'resume', description: 'Resume help (gateway auto-resumes per chat)' },
@@ -1277,6 +1306,301 @@ async function runPiPrintPrompt(options: RunPiPrintPromptOptions): Promise<strin
   });
 }
 
+interface PersistentConversationControllerOptions {
+  profile: ResolvedProfile;
+  agentDir: string;
+  cwd: string;
+  sessionFile: string;
+}
+
+interface ActiveConversationRun {
+  streamedOutput: string;
+  parser?: PiJsonStreamParser;
+  aborted: boolean;
+  promise: Promise<string>;
+}
+
+function isLikelyStreamingTransitionError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+  return normalized.includes('stream')
+    || normalized.includes('processing')
+    || normalized.includes('already')
+    || normalized.includes('idle')
+    || normalized.includes('pending');
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+class PersistentConversationController implements GatewayConversationController {
+  private readonly profile: ResolvedProfile;
+  private readonly agentDir: string;
+  private readonly cwd: string;
+  private readonly sessionFile: string;
+
+  private session?: PiAgentSession;
+  private sessionPromise?: Promise<PiAgentSession>;
+  private unsubscribe?: () => void;
+
+  private activeRun?: ActiveConversationRun;
+  private dispatchChain: Promise<void> = Promise.resolve();
+  private disposed = false;
+
+  constructor(options: PersistentConversationControllerOptions) {
+    this.profile = options.profile;
+    this.agentDir = options.agentDir;
+    this.cwd = options.cwd;
+    this.sessionFile = options.sessionFile;
+  }
+
+  async submitPrompt(input: RunPromptFnInput): Promise<ConversationSubmitResult> {
+    this.ensureActive();
+
+    if (!this.activeRun) {
+      return {
+        mode: 'started',
+        run: this.startRun(input),
+      };
+    }
+
+    const steered = await this.dispatchToActiveRun(input, 'steer');
+    if (steered) {
+      return { mode: 'steered' };
+    }
+
+    return {
+      mode: 'started',
+      run: this.startRun(input),
+    };
+  }
+
+  async submitFollowUp(input: RunPromptFnInput): Promise<ConversationSubmitResult> {
+    this.ensureActive();
+
+    if (!this.activeRun) {
+      return {
+        mode: 'started',
+        run: this.startRun(input),
+      };
+    }
+
+    const queued = await this.dispatchToActiveRun(input, 'followup');
+    if (queued) {
+      return { mode: 'followup' };
+    }
+
+    return {
+      mode: 'started',
+      run: this.startRun(input),
+    };
+  }
+
+  async abortCurrent(): Promise<boolean> {
+    const activeRun = this.activeRun;
+    if (!activeRun) {
+      return false;
+    }
+
+    activeRun.aborted = true;
+
+    try {
+      const session = await this.getSession();
+      await session.abort();
+    } catch {
+      // Ignore abort failures and rely on run state cleanup.
+    }
+
+    return true;
+  }
+
+  async waitForIdle(): Promise<void> {
+    await this.dispatchChain;
+    const run = this.activeRun?.promise;
+    if (!run) {
+      return;
+    }
+
+    await run.catch(() => {
+      // waitForIdle is best-effort and should not throw.
+    });
+  }
+
+  async dispose(): Promise<void> {
+    if (this.disposed) {
+      return;
+    }
+
+    this.disposed = true;
+
+    await this.abortCurrent();
+    await this.waitForIdle();
+
+    if (this.unsubscribe) {
+      this.unsubscribe();
+      this.unsubscribe = undefined;
+    }
+
+    if (this.session) {
+      this.session.dispose();
+      this.session = undefined;
+    }
+
+    this.sessionPromise = undefined;
+  }
+
+  private ensureActive(): void {
+    if (this.disposed) {
+      throw new Error('Conversation is closed.');
+    }
+  }
+
+  private startRun(input: RunPromptFnInput): Promise<string> {
+    const activeRun: ActiveConversationRun = {
+      streamedOutput: '',
+      parser: input.logContext
+        ? new PiJsonStreamParser(input.logContext.source, input.logContext.userId, input.logContext.userName)
+        : undefined,
+      aborted: false,
+      promise: Promise.resolve(''),
+    };
+
+    const runPromise = this.executeRun(input, activeRun)
+      .catch((error) => {
+        if (activeRun.aborted) {
+          throw new Error(PROMPT_CANCELLED_ERROR_MESSAGE);
+        }
+
+        throw error;
+      })
+      .finally(() => {
+        if (this.activeRun === activeRun) {
+          this.activeRun = undefined;
+        }
+      });
+
+    activeRun.promise = runPromise;
+    this.activeRun = activeRun;
+
+    return runPromise;
+  }
+
+  private async executeRun(input: RunPromptFnInput, activeRun: ActiveConversationRun): Promise<string> {
+    const session = await this.getSession();
+    await applyRequestedModel(session, input.model);
+    await session.prompt(input.prompt);
+
+    const streamed = activeRun.streamedOutput.trim();
+    const fallback = extractLatestAssistantText(session.messages as unknown);
+    return streamed.length > 0 ? streamed : fallback;
+  }
+
+  private async dispatchToActiveRun(
+    input: RunPromptFnInput,
+    mode: 'steer' | 'followup',
+  ): Promise<boolean> {
+    let dispatched = false;
+
+    const dispatchPromise = this.dispatchChain
+      .then(async () => {
+        dispatched = await this.dispatchToActiveRunInternal(input, mode);
+      });
+
+    this.dispatchChain = dispatchPromise.catch(() => {
+      // Keep dispatch chain alive after failures.
+    });
+
+    await dispatchPromise;
+    return dispatched;
+  }
+
+  private async dispatchToActiveRunInternal(
+    input: RunPromptFnInput,
+    mode: 'steer' | 'followup',
+  ): Promise<boolean> {
+    if (!this.activeRun) {
+      return false;
+    }
+
+    const session = await this.getSession();
+    const deadline = Date.now() + 2_000;
+
+    while (this.activeRun) {
+      try {
+        if (mode === 'steer') {
+          await session.steer(input.prompt);
+        } else {
+          await session.followUp(input.prompt);
+        }
+
+        return true;
+      } catch (error) {
+        if (!this.activeRun) {
+          return false;
+        }
+
+        if (!isLikelyStreamingTransitionError(error) || Date.now() >= deadline) {
+          throw error;
+        }
+
+        await delay(25);
+      }
+    }
+
+    return false;
+  }
+
+  private async getSession(): Promise<PiAgentSession> {
+    if (this.session) {
+      return this.session;
+    }
+
+    if (this.sessionPromise) {
+      return this.sessionPromise;
+    }
+
+    this.sessionPromise = createGatewayAgentSession({
+      profile: this.profile,
+      agentDir: this.agentDir,
+      cwd: this.cwd,
+      sessionFile: this.sessionFile,
+    }).then((session) => {
+      this.session = session;
+      this.unsubscribe = session.subscribe((event) => {
+        this.handleSessionEvent(event as unknown as PiJsonEvent);
+      });
+      return session;
+    });
+
+    return this.sessionPromise;
+  }
+
+  private handleSessionEvent(event: PiJsonEvent): void {
+    const activeRun = this.activeRun;
+    if (!activeRun) {
+      return;
+    }
+
+    if (activeRun.parser) {
+      activeRun.parser.parseEvent(event);
+    }
+
+    if (event.type === 'message_update' && event.assistantMessageEvent?.type === 'text_delta') {
+      const delta = event.assistantMessageEvent.delta;
+      if (typeof delta === 'string') {
+        activeRun.streamedOutput += delta;
+      }
+    }
+  }
+}
+
+function createPersistentConversationController(
+  options: PersistentConversationControllerOptions,
+): GatewayConversationController {
+  return new PersistentConversationController(options);
+}
+
 async function prepareGatewayRuntime(profileName: string): Promise<PreparedGatewayRuntime> {
   const resolvedProfile = resolveResourceProfile(profileName);
   const statePaths = resolveStatePaths();
@@ -1555,10 +1879,166 @@ async function handleModelCommand(options: HandleModelCommandOptions): Promise<b
   }
 }
 
+async function getOrCreateConversationController(
+  controllers: Map<string, Promise<GatewayConversationController>>,
+  conversationId: string,
+  sessionFile: string,
+  createConversationController: CreateConversationControllerFn,
+): Promise<GatewayConversationController> {
+  const existing = controllers.get(conversationId);
+  if (existing) {
+    return existing;
+  }
+
+  const controllerPromise = Promise.resolve(createConversationController({
+    conversationId,
+    sessionFile,
+  }));
+
+  controllers.set(conversationId, controllerPromise);
+
+  try {
+    return await controllerPromise;
+  } catch (error) {
+    controllers.delete(conversationId);
+    throw error;
+  }
+}
+
+async function disposeConversationController(
+  controllers: Map<string, Promise<GatewayConversationController>>,
+  conversationId: string,
+): Promise<void> {
+  const controllerPromise = controllers.get(conversationId);
+  if (!controllerPromise) {
+    return;
+  }
+
+  controllers.delete(conversationId);
+
+  try {
+    const controller = await controllerPromise;
+    await controller.dispose();
+  } catch {
+    // best-effort cleanup
+  }
+}
+
+function createLegacyConversationControllerFactory(options: {
+  runPrompt: RunPromptFn;
+  createAbortController?: () => AbortController;
+}): CreateConversationControllerFn {
+  return ({ sessionFile }) => {
+    let runChain: Promise<void> = Promise.resolve();
+    let activeAbortController: AbortController | undefined;
+    let disposed = false;
+
+    const enqueueRun = (input: RunPromptFnInput): Promise<string> => {
+      const abortController = (options.createAbortController ?? (() => new AbortController()))();
+      const runPromise = runChain
+        .then(async () => {
+          if (disposed) {
+            throw new Error('Conversation is closed.');
+          }
+
+          activeAbortController = abortController;
+          return options.runPrompt({
+            ...input,
+            sessionFile,
+            abortSignal: abortController.signal,
+          });
+        })
+        .finally(() => {
+          if (activeAbortController === abortController) {
+            activeAbortController = undefined;
+          }
+        });
+
+      runChain = runPromise
+        .then(() => undefined)
+        .catch(() => undefined);
+
+      return runPromise;
+    };
+
+    const controller: GatewayConversationController = {
+      async submitPrompt(input: RunPromptFnInput): Promise<ConversationSubmitResult> {
+        return {
+          mode: 'started',
+          run: enqueueRun(input),
+        };
+      },
+
+      async submitFollowUp(input: RunPromptFnInput): Promise<ConversationSubmitResult> {
+        return {
+          mode: 'started',
+          run: enqueueRun(input),
+        };
+      },
+
+      async abortCurrent(): Promise<boolean> {
+        if (!activeAbortController) {
+          return false;
+        }
+
+        activeAbortController.abort();
+        return true;
+      },
+
+      async waitForIdle(): Promise<void> {
+        await runChain;
+      },
+
+      async dispose(): Promise<void> {
+        if (disposed) {
+          return;
+        }
+
+        disposed = true;
+        if (activeAbortController) {
+          activeAbortController.abort();
+        }
+
+        await runChain;
+      },
+    };
+
+    return controller;
+  };
+}
+
+interface ResolvedTelegramMessageHandlerOptions extends CreateTelegramMessageHandlerOptions {
+  createConversationController: CreateConversationControllerFn;
+}
+
+interface ResolvedDiscordMessageHandlerOptions extends CreateDiscordMessageHandlerOptions {
+  createConversationController: CreateConversationControllerFn;
+}
+
+function resolveConversationControllerFactory(options: {
+  createConversationController?: CreateConversationControllerFn;
+  runPrompt?: RunPromptFn;
+  createAbortController?: () => AbortController;
+}): CreateConversationControllerFn {
+  if (options.createConversationController) {
+    return options.createConversationController;
+  }
+
+  if (options.runPrompt) {
+    return createLegacyConversationControllerFactory({
+      runPrompt: options.runPrompt,
+      createAbortController: options.createAbortController,
+    });
+  }
+
+  throw new Error('Gateway handler requires createConversationController or runPrompt.');
+}
+
 async function processTelegramMessage(
-  options: CreateTelegramMessageHandlerOptions,
+  options: ResolvedTelegramMessageHandlerOptions,
   message: TelegramMessageLike,
-  activePromptAbortControllers?: Map<string, AbortController>,
+  controllers: Map<string, Promise<GatewayConversationController>>,
+  registerRunTask: (task: Promise<void>) => void,
 ): Promise<void> {
   const chatId = String(message.chat.id);
 
@@ -1607,6 +2087,8 @@ async function processTelegramMessage(
   }
 
   if (command === '/new') {
+    await disposeConversationController(controllers, chatId);
+
     if (sessionFileExists(sessionFile)) {
       await removeSessionFile(sessionFile);
     }
@@ -1633,7 +2115,10 @@ async function processTelegramMessage(
 
     await options.sendMessage(
       message.chat.id,
-      `profile=${options.profileName}\nagentDir=${options.agentDir}\nsession=${sessionFile}\nmodel=${model}`,
+      `profile=${options.profileName}
+agentDir=${options.agentDir}
+session=${sessionFile}
+model=${model}`,
     );
     return;
   }
@@ -1668,9 +2153,15 @@ async function processTelegramMessage(
   }
 
   if (command === '/stop') {
-    const activeController = activePromptAbortControllers?.get(chatId);
-    if (activeController) {
-      activeController.abort();
+    const controllerPromise = controllers.get(chatId);
+    if (!controllerPromise) {
+      await options.sendMessage(message.chat.id, NO_ACTIVE_REQUEST_MESSAGE);
+      return;
+    }
+
+    const controller = await controllerPromise;
+    const aborted = await controller.abortCurrent();
+    if (aborted) {
       await options.sendMessage(message.chat.id, STOPPED_ACTIVE_REQUEST_MESSAGE);
       return;
     }
@@ -1687,73 +2178,142 @@ async function processTelegramMessage(
     }
 
     prompt = `/skill:${normalized.args}`;
-  }
-
-  await options.sendChatAction(message.chat.id, 'typing');
-
-  const abortController = (options.createAbortController ?? (() => new AbortController()))();
-  activePromptAbortControllers?.set(chatId, abortController);
-
-  try {
-    const output = await options.runPrompt({
-      prompt,
-      sessionFile,
-      cwd: options.workingDirectory,
-      model: options.modelCommands?.activeModelsByConversation.get(chatId),
-      abortSignal: abortController.signal,
-      logContext: {
-        source: 'telegram',
-        userId: chatId,
-        userName,
-      },
-    });
-
-    await emitDaemonEventNonFatal({
-      type: 'session.updated',
-      source: 'gateway',
-      payload: {
-        sessionFile,
-        profile: options.profileName,
-        cwd: options.workingDirectory,
-        chatId,
-      },
-    });
-
-    await sendLongText((chunk) => options.sendMessage(message.chat.id, chunk), output || '(no output)');
-  } catch (error) {
-    const errorMessage = (error as Error).message;
-
-    if (errorMessage === PROMPT_CANCELLED_ERROR_MESSAGE) {
+  } else if (command === '/followup') {
+    if (normalized.args.length === 0) {
+      await options.sendMessage(message.chat.id, 'Usage: /followup <message>');
       return;
     }
 
-    await emitDaemonEventNonFatal({
-      type: 'session.processing.failed',
-      source: 'gateway',
-      payload: {
-        sessionFile,
-        profile: options.profileName,
-        cwd: options.workingDirectory,
-        chatId,
-        message: errorMessage,
-      },
-    });
-
-    await options.sendMessage(message.chat.id, `Error: ${errorMessage}`);
-  } finally {
-    if (activePromptAbortControllers?.get(chatId) === abortController) {
-      activePromptAbortControllers.delete(chatId);
-    }
+    prompt = normalized.args;
   }
+
+  const controller = await getOrCreateConversationController(
+    controllers,
+    chatId,
+    sessionFile,
+    options.createConversationController,
+  );
+
+  const submissionInput: RunPromptFnInput = {
+    prompt,
+    sessionFile,
+    cwd: options.workingDirectory,
+    model: options.modelCommands?.activeModelsByConversation.get(chatId),
+    logContext: {
+      source: 'telegram',
+      userId: chatId,
+      userName,
+    },
+  };
+
+  const submission = command === '/followup'
+    ? await controller.submitFollowUp(submissionInput)
+    : await controller.submitPrompt(submissionInput);
+
+  if (submission.mode === 'started') {
+    await options.sendChatAction(message.chat.id, 'typing');
+
+    const runTask = submission.run
+      .then(async (output) => {
+        await emitDaemonEventNonFatal({
+          type: 'session.updated',
+          source: 'gateway',
+          payload: {
+            sessionFile,
+            profile: options.profileName,
+            cwd: options.workingDirectory,
+            chatId,
+          },
+        });
+
+        await sendLongText((chunk) => options.sendMessage(message.chat.id, chunk), output || '(no output)');
+      })
+      .catch(async (error) => {
+        const errorMessage = (error as Error).message;
+
+        if (errorMessage === PROMPT_CANCELLED_ERROR_MESSAGE) {
+          return;
+        }
+
+        await emitDaemonEventNonFatal({
+          type: 'session.processing.failed',
+          source: 'gateway',
+          payload: {
+            sessionFile,
+            profile: options.profileName,
+            cwd: options.workingDirectory,
+            chatId,
+            message: errorMessage,
+          },
+        });
+
+        await options.sendMessage(message.chat.id, `Error: ${errorMessage}`);
+      });
+
+    registerRunTask(runTask);
+    return;
+  }
+
+  if (submission.mode === 'steered') {
+    await options.sendMessage(message.chat.id, STEERING_ACTIVE_REQUEST_MESSAGE);
+    return;
+  }
+
+  await options.sendMessage(message.chat.id, FOLLOWUP_QUEUED_MESSAGE);
 }
 
 export function createQueuedTelegramMessageHandler(
   options: CreateTelegramMessageHandlerOptions,
 ): QueuedTelegramMessageHandler {
+  const createConversationController = resolveConversationControllerFactory(options);
+  const resolvedOptions: ResolvedTelegramMessageHandlerOptions = {
+    ...options,
+    createConversationController,
+  };
+
   const chatQueue = new Map<string, Promise<void>>();
   const pendingPerChat = new Map<string, number>();
-  const activePromptAbortControllers = new Map<string, AbortController>();
-  const maxPendingPerChat = options.maxPendingPerChat ?? DEFAULT_MAX_PENDING_PER_CHAT;
+  const controllers = new Map<string, Promise<GatewayConversationController>>();
+  const runTasks = new Map<string, Set<Promise<void>>>();
+  const maxPendingPerChat = resolvedOptions.maxPendingPerChat ?? DEFAULT_MAX_PENDING_PER_CHAT;
+
+  const trackRunTask = (chatId: string, task: Promise<void>): void => {
+    const existing = runTasks.get(chatId) ?? new Set<Promise<void>>();
+    existing.add(task);
+    runTasks.set(chatId, existing);
+
+    void task.finally(() => {
+      const tasksForChat = runTasks.get(chatId);
+      if (!tasksForChat) {
+        return;
+      }
+
+      tasksForChat.delete(task);
+      if (tasksForChat.size === 0) {
+        runTasks.delete(chatId);
+      }
+    });
+  };
+
+  const waitForRunTasks = async (chatId?: string): Promise<void> => {
+    if (chatId) {
+      let tasksForChat = runTasks.get(chatId);
+      while (tasksForChat && tasksForChat.size > 0) {
+        await Promise.allSettled([...tasksForChat]);
+        tasksForChat = runTasks.get(chatId);
+      }
+      return;
+    }
+
+    while (runTasks.size > 0) {
+      const allTasks = [...runTasks.values()].flatMap((tasksForChat) => [...tasksForChat]);
+      if (allTasks.length === 0) {
+        return;
+      }
+
+      await Promise.allSettled(allTasks);
+    }
+  };
 
   const enqueue = (chatId: string, task: () => Promise<void>) => {
     const previous = chatQueue.get(chatId) ?? Promise.resolve();
@@ -1775,34 +2335,10 @@ export function createQueuedTelegramMessageHandler(
   return {
     handleMessage(message: TelegramMessageLike): void {
       const chatId = String(message.chat.id);
-      const text = message.text?.trim();
-      const command = text ? normalizeTelegramCommandText(text).command : undefined;
-
-      if (command === '/stop') {
-        if (!options.allowlist.has(chatId)) {
-          void options.sendMessage(message.chat.id, 'This chat is not allowed.');
-          return;
-        }
-
-        const fullName = [message.from?.first_name, message.from?.last_name].filter(Boolean).join(' ');
-        const userName = message.from?.username ?? (fullName || undefined);
-        logIncomingMessage('telegram', chatId, userName, text ?? '/stop');
-
-        const activeController = activePromptAbortControllers.get(chatId);
-        if (activeController) {
-          activeController.abort();
-          void options.sendMessage(message.chat.id, STOPPED_ACTIVE_REQUEST_MESSAGE);
-          return;
-        }
-
-        void options.sendMessage(message.chat.id, NO_ACTIVE_REQUEST_MESSAGE);
-        return;
-      }
-
       const pending = pendingPerChat.get(chatId) ?? 0;
 
       if (pending >= maxPendingPerChat) {
-        void options.sendMessage(
+        void resolvedOptions.sendMessage(
           message.chat.id,
           `Too many pending messages for this chat (limit: ${maxPendingPerChat}). Please wait and try again.`,
         );
@@ -1813,7 +2349,12 @@ export function createQueuedTelegramMessageHandler(
 
       enqueue(chatId, async () => {
         try {
-          await processTelegramMessage(options, message, activePromptAbortControllers);
+          await processTelegramMessage(
+            resolvedOptions,
+            message,
+            controllers,
+            (task) => trackRunTask(chatId, task),
+          );
         } finally {
           const nextPending = (pendingPerChat.get(chatId) ?? 1) - 1;
           if (nextPending <= 0) {
@@ -1828,10 +2369,21 @@ export function createQueuedTelegramMessageHandler(
     async waitForIdle(chatId?: string): Promise<void> {
       if (chatId) {
         await (chatQueue.get(chatId) ?? Promise.resolve());
+        const controllerPromise = controllers.get(chatId);
+        if (controllerPromise) {
+          const controller = await controllerPromise;
+          await controller.waitForIdle();
+        }
+
+        await waitForRunTasks(chatId);
         return;
       }
 
       await Promise.all([...chatQueue.values()]);
+
+      const allControllers = await Promise.all([...controllers.values()]);
+      await Promise.all(allControllers.map(async (controller) => controller.waitForIdle()));
+      await waitForRunTasks();
     },
   };
 }
@@ -1926,13 +2478,11 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     modelCommands,
     sendMessage: (chatId, text, options) => bot.sendMessage(chatId, text, options),
     sendChatAction: (chatId, action) => bot.sendChatAction(chatId, action),
-    runPrompt: ({ prompt, sessionFile, cwd, model }) => runPiPrintPrompt({
-      prompt,
-      sessionFile,
+    createConversationController: ({ sessionFile }) => createPersistentConversationController({
       profile: resolvedProfile,
       agentDir: runtime.agentDir,
-      cwd,
-      model,
+      cwd: effectiveConfig.workingDirectory,
+      sessionFile,
     }),
   });
 
@@ -1982,9 +2532,10 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 }
 
 async function processDiscordMessage(
-  options: CreateDiscordMessageHandlerOptions,
+  options: ResolvedDiscordMessageHandlerOptions,
   message: DiscordMessageLike,
-  activePromptAbortControllers?: Map<string, AbortController>,
+  controllers: Map<string, Promise<GatewayConversationController>>,
+  registerRunTask: (task: Promise<void>) => void,
 ): Promise<void> {
   if (message.authorIsBot) {
     return;
@@ -2027,6 +2578,8 @@ async function processDiscordMessage(
   }
 
   if (command === '/new') {
+    await disposeConversationController(controllers, channelId);
+
     if (sessionFileExists(sessionFile)) {
       await removeSessionFile(sessionFile);
     }
@@ -2052,7 +2605,10 @@ async function processDiscordMessage(
     const model = activeModel ?? configuredModel ?? '(pi default)';
 
     await message.sendMessage(
-      `profile=${options.profileName}\nagentDir=${options.agentDir}\nsession=${sessionFile}\nmodel=${model}`,
+      `profile=${options.profileName}
+agentDir=${options.agentDir}
+session=${sessionFile}
+model=${model}`,
     );
     return;
   }
@@ -2085,9 +2641,15 @@ async function processDiscordMessage(
   }
 
   if (command === '/stop') {
-    const activeController = activePromptAbortControllers?.get(channelId);
-    if (activeController) {
-      activeController.abort();
+    const controllerPromise = controllers.get(channelId);
+    if (!controllerPromise) {
+      await message.sendMessage(NO_ACTIVE_REQUEST_MESSAGE);
+      return;
+    }
+
+    const controller = await controllerPromise;
+    const aborted = await controller.abortCurrent();
+    if (aborted) {
       await message.sendMessage(STOPPED_ACTIVE_REQUEST_MESSAGE);
       return;
     }
@@ -2104,73 +2666,142 @@ async function processDiscordMessage(
     }
 
     prompt = `/skill:${normalized.args}`;
-  }
-
-  await message.sendTyping();
-
-  const abortController = (options.createAbortController ?? (() => new AbortController()))();
-  activePromptAbortControllers?.set(channelId, abortController);
-
-  try {
-    const output = await options.runPrompt({
-      prompt,
-      sessionFile,
-      cwd: options.workingDirectory,
-      model: options.modelCommands?.activeModelsByConversation.get(channelId),
-      abortSignal: abortController.signal,
-      logContext: {
-        source: 'discord',
-        userId: channelId,
-        userName: message.authorUsername,
-      },
-    });
-
-    await emitDaemonEventNonFatal({
-      type: 'session.updated',
-      source: 'gateway',
-      payload: {
-        sessionFile,
-        profile: options.profileName,
-        cwd: options.workingDirectory,
-        channelId,
-      },
-    });
-
-    await sendLongText(message.sendMessage, output || '(no output)');
-  } catch (error) {
-    const errorMessage = (error as Error).message;
-
-    if (errorMessage === PROMPT_CANCELLED_ERROR_MESSAGE) {
+  } else if (command === '/followup') {
+    if (normalized.args.length === 0) {
+      await message.sendMessage('Usage: /followup <message>');
       return;
     }
 
-    await emitDaemonEventNonFatal({
-      type: 'session.processing.failed',
-      source: 'gateway',
-      payload: {
-        sessionFile,
-        profile: options.profileName,
-        cwd: options.workingDirectory,
-        channelId,
-        message: errorMessage,
-      },
-    });
-
-    await message.sendMessage(`Error: ${errorMessage}`);
-  } finally {
-    if (activePromptAbortControllers?.get(channelId) === abortController) {
-      activePromptAbortControllers.delete(channelId);
-    }
+    prompt = normalized.args;
   }
+
+  const controller = await getOrCreateConversationController(
+    controllers,
+    channelId,
+    sessionFile,
+    options.createConversationController,
+  );
+
+  const submissionInput: RunPromptFnInput = {
+    prompt,
+    sessionFile,
+    cwd: options.workingDirectory,
+    model: options.modelCommands?.activeModelsByConversation.get(channelId),
+    logContext: {
+      source: 'discord',
+      userId: channelId,
+      userName: message.authorUsername,
+    },
+  };
+
+  const submission = command === '/followup'
+    ? await controller.submitFollowUp(submissionInput)
+    : await controller.submitPrompt(submissionInput);
+
+  if (submission.mode === 'started') {
+    await message.sendTyping();
+
+    const runTask = submission.run
+      .then(async (output) => {
+        await emitDaemonEventNonFatal({
+          type: 'session.updated',
+          source: 'gateway',
+          payload: {
+            sessionFile,
+            profile: options.profileName,
+            cwd: options.workingDirectory,
+            channelId,
+          },
+        });
+
+        await sendLongText(message.sendMessage, output || '(no output)');
+      })
+      .catch(async (error) => {
+        const errorMessage = (error as Error).message;
+
+        if (errorMessage === PROMPT_CANCELLED_ERROR_MESSAGE) {
+          return;
+        }
+
+        await emitDaemonEventNonFatal({
+          type: 'session.processing.failed',
+          source: 'gateway',
+          payload: {
+            sessionFile,
+            profile: options.profileName,
+            cwd: options.workingDirectory,
+            channelId,
+            message: errorMessage,
+          },
+        });
+
+        await message.sendMessage(`Error: ${errorMessage}`);
+      });
+
+    registerRunTask(runTask);
+    return;
+  }
+
+  if (submission.mode === 'steered') {
+    await message.sendMessage(STEERING_ACTIVE_REQUEST_MESSAGE);
+    return;
+  }
+
+  await message.sendMessage(FOLLOWUP_QUEUED_MESSAGE);
 }
 
 export function createQueuedDiscordMessageHandler(
   options: CreateDiscordMessageHandlerOptions,
 ): QueuedDiscordMessageHandler {
+  const createConversationController = resolveConversationControllerFactory(options);
+  const resolvedOptions: ResolvedDiscordMessageHandlerOptions = {
+    ...options,
+    createConversationController,
+  };
+
   const channelQueue = new Map<string, Promise<void>>();
   const pendingPerChannel = new Map<string, number>();
-  const activePromptAbortControllers = new Map<string, AbortController>();
-  const maxPendingPerChannel = options.maxPendingPerChannel ?? DEFAULT_MAX_PENDING_PER_CHANNEL;
+  const controllers = new Map<string, Promise<GatewayConversationController>>();
+  const runTasks = new Map<string, Set<Promise<void>>>();
+  const maxPendingPerChannel = resolvedOptions.maxPendingPerChannel ?? DEFAULT_MAX_PENDING_PER_CHANNEL;
+
+  const trackRunTask = (channelId: string, task: Promise<void>): void => {
+    const existing = runTasks.get(channelId) ?? new Set<Promise<void>>();
+    existing.add(task);
+    runTasks.set(channelId, existing);
+
+    void task.finally(() => {
+      const tasksForChannel = runTasks.get(channelId);
+      if (!tasksForChannel) {
+        return;
+      }
+
+      tasksForChannel.delete(task);
+      if (tasksForChannel.size === 0) {
+        runTasks.delete(channelId);
+      }
+    });
+  };
+
+  const waitForRunTasks = async (channelId?: string): Promise<void> => {
+    if (channelId) {
+      let tasksForChannel = runTasks.get(channelId);
+      while (tasksForChannel && tasksForChannel.size > 0) {
+        await Promise.allSettled([...tasksForChannel]);
+        tasksForChannel = runTasks.get(channelId);
+      }
+      return;
+    }
+
+    while (runTasks.size > 0) {
+      const allTasks = [...runTasks.values()].flatMap((tasksForChannel) => [...tasksForChannel]);
+      if (allTasks.length === 0) {
+        return;
+      }
+
+      await Promise.allSettled(allTasks);
+    }
+  };
 
   const enqueue = (channelId: string, task: () => Promise<void>) => {
     const previous = channelQueue.get(channelId) ?? Promise.resolve();
@@ -2191,33 +2822,7 @@ export function createQueuedDiscordMessageHandler(
 
   return {
     handleMessage(message: DiscordMessageLike): void {
-      if (message.authorIsBot) {
-        return;
-      }
-
       const channelId = message.channelId;
-      const text = message.content?.trim();
-      const command = text ? normalizeTelegramCommandText(text).command : undefined;
-
-      if (command === '/stop') {
-        if (!options.allowlist.has(channelId)) {
-          void message.sendMessage('This channel is not allowed.');
-          return;
-        }
-
-        logIncomingMessage('discord', channelId, message.authorUsername, text ?? '/stop');
-
-        const activeController = activePromptAbortControllers.get(channelId);
-        if (activeController) {
-          activeController.abort();
-          void message.sendMessage(STOPPED_ACTIVE_REQUEST_MESSAGE);
-          return;
-        }
-
-        void message.sendMessage(NO_ACTIVE_REQUEST_MESSAGE);
-        return;
-      }
-
       const pending = pendingPerChannel.get(channelId) ?? 0;
 
       if (pending >= maxPendingPerChannel) {
@@ -2231,7 +2836,12 @@ export function createQueuedDiscordMessageHandler(
 
       enqueue(channelId, async () => {
         try {
-          await processDiscordMessage(options, message, activePromptAbortControllers);
+          await processDiscordMessage(
+            resolvedOptions,
+            message,
+            controllers,
+            (task) => trackRunTask(channelId, task),
+          );
         } finally {
           const nextPending = (pendingPerChannel.get(channelId) ?? 1) - 1;
           if (nextPending <= 0) {
@@ -2246,10 +2856,21 @@ export function createQueuedDiscordMessageHandler(
     async waitForIdle(channelId?: string): Promise<void> {
       if (channelId) {
         await (channelQueue.get(channelId) ?? Promise.resolve());
+        const controllerPromise = controllers.get(channelId);
+        if (controllerPromise) {
+          const controller = await controllerPromise;
+          await controller.waitForIdle();
+        }
+
+        await waitForRunTasks(channelId);
         return;
       }
 
       await Promise.all([...channelQueue.values()]);
+
+      const allControllers = await Promise.all([...controllers.values()]);
+      await Promise.all(allControllers.map(async (controller) => controller.waitForIdle()));
+      await waitForRunTasks();
     },
   };
 }
@@ -2346,13 +2967,11 @@ export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<
     commandHelpText,
     skillsHelpText,
     modelCommands,
-    runPrompt: ({ prompt, sessionFile, cwd, model }) => runPiPrintPrompt({
-      prompt,
-      sessionFile,
+    createConversationController: ({ sessionFile }) => createPersistentConversationController({
       profile: resolvedProfile,
       agentDir: runtime.agentDir,
-      cwd,
-      model,
+      cwd: effectiveConfig.workingDirectory,
+      sessionFile,
     }),
   });
 

@@ -150,6 +150,7 @@ Common Pi slash commands exposed in gateway command lists:
 - `/skill <name>` (translated to `/skill:<name>` for Telegram menu compatibility)
 - `/model` or `/models` -> opens a model picker in chat (Telegram includes inline buttons); reply with a number or `/model <provider/model>`
 - `/stop` -> stop active request
+- `/followup <text>` -> queue a follow-up while current response is running
 - `/cancel` -> cancel active model selection
 - `/compact` -> currently returns guidance (manual compaction requires Pi TUI)
 - `/resume` -> gateway sessions already auto-resume per chat/channel; use `/new` for a fresh one
@@ -157,6 +158,8 @@ Common Pi slash commands exposed in gateway command lists:
 Telegram also registers slash commands via Bot API on startup (`setMyCommands`).
 
 All non-gateway commands are executed through the Pi SDK with that chat's session file.
+
+When a new message arrives while the agent is already streaming in that conversation, gateway sends it as a **steer** (interrupt-style) instruction instead of starting an independent second run. This avoids double-reply behavior for rapid follow-ups.
 
 ## Daemon integration
 

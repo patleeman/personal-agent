@@ -301,6 +301,62 @@ describe('queued telegram message handler', () => {
     expect(sendChatAction).toHaveBeenCalledWith(1, 'typing');
   });
 
+  it('steers active telegram runs instead of starting a second run with controller mode', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+
+    let resolveRun: ((value: string) => void) | undefined;
+    const firstRun = new Promise<string>((resolve) => {
+      resolveRun = resolve;
+    });
+
+    const submitPrompt = vi.fn()
+      .mockResolvedValueOnce({ mode: 'started', run: firstRun })
+      .mockResolvedValueOnce({ mode: 'steered' });
+
+    const controller = {
+      submitPrompt,
+      submitFollowUp: vi.fn(async () => ({ mode: 'followup' as const })),
+      abortCurrent: vi.fn(async () => false),
+      waitForIdle: vi.fn(async () => {
+        await firstRun;
+      }),
+      dispose: vi.fn(async () => undefined),
+    };
+
+    const createConversationController = vi.fn(async () => controller);
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createConversationController,
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: 'first' });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    handler.handleMessage({ chat: { id: 1 }, text: 'second' });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(sendMessage).toHaveBeenCalledWith(1, 'Steering current response...');
+    expect(submitPrompt).toHaveBeenCalledTimes(2);
+
+    resolveRun?.('reply:first');
+    await handler.waitForIdle('1');
+
+    expect(sendMessage).toHaveBeenCalledWith(1, 'reply:first');
+    expect(createConversationController).toHaveBeenCalledTimes(1);
+    expect(createConversationController).toHaveBeenCalledWith({
+      conversationId: '1',
+      sessionFile: '/tmp/sessions/1.jsonl',
+    });
+  });
+
   it('lists models for /model and applies selected model to future prompts', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
@@ -782,6 +838,71 @@ describe('queued discord message handler', () => {
     const firstCall = runPrompt.mock.calls[0]?.[0] as { prompt: string };
     expect(firstCall.prompt).toBe('/skill:tdd-feature');
     expect(sendTyping).toHaveBeenCalled();
+  });
+
+  it('steers active discord runs instead of starting a second run with controller mode', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendTyping = vi.fn(async () => undefined);
+
+    let resolveRun: ((value: string) => void) | undefined;
+    const firstRun = new Promise<string>((resolve) => {
+      resolveRun = resolve;
+    });
+
+    const submitPrompt = vi.fn()
+      .mockResolvedValueOnce({ mode: 'started', run: firstRun })
+      .mockResolvedValueOnce({ mode: 'steered' });
+
+    const controller = {
+      submitPrompt,
+      submitFollowUp: vi.fn(async () => ({ mode: 'followup' as const })),
+      abortCurrent: vi.fn(async () => false),
+      waitForIdle: vi.fn(async () => {
+        await firstRun;
+      }),
+      dispose: vi.fn(async () => undefined),
+    };
+
+    const createConversationController = vi.fn(async () => controller);
+
+    const handler = createQueuedDiscordMessageHandler({
+      allowlist: new Set(['channel-1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      discordSessionDir: '/tmp/discord-sessions',
+      workingDirectory: '/tmp/work',
+      createConversationController,
+    });
+
+    handler.handleMessage({
+      channelId: 'channel-1',
+      content: 'first',
+      sendMessage,
+      sendTyping,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    handler.handleMessage({
+      channelId: 'channel-1',
+      content: 'second',
+      sendMessage,
+      sendTyping,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(sendMessage).toHaveBeenCalledWith('Steering current response...');
+    expect(submitPrompt).toHaveBeenCalledTimes(2);
+
+    resolveRun?.('reply:first');
+    await handler.waitForIdle('channel-1');
+
+    expect(sendMessage).toHaveBeenCalledWith('reply:first');
+    expect(createConversationController).toHaveBeenCalledWith({
+      conversationId: 'channel-1',
+      sessionFile: '/tmp/discord-sessions/channel-1.jsonl',
+    });
   });
 
   it('applies /model <provider/model> and forwards selection to future prompts', async () => {
