@@ -268,7 +268,7 @@ export interface QueuedDiscordMessageHandler {
   waitForIdle: (channelId?: string) => Promise<void>;
 }
 
-const DEFAULT_PI_TIMEOUT_MS = 180_000;
+const DEFAULT_PI_TIMEOUT_MS = 1_800_000;
 const DEFAULT_MAX_PENDING_PER_CHAT = 20;
 const DEFAULT_MAX_PENDING_PER_CHANNEL = 20;
 const DEFAULT_MODEL_SELECTION_LIMIT = 25;
@@ -847,6 +847,24 @@ function toPositiveInteger(value: string | undefined): number | undefined {
   return Math.floor(parsed);
 }
 
+function resolvePiTimeoutMs(): number | undefined {
+  const raw = process.env.PERSONAL_AGENT_PI_TIMEOUT_MS;
+  if (typeof raw !== 'string' || raw.trim().length === 0) {
+    return DEFAULT_PI_TIMEOUT_MS;
+  }
+
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_PI_TIMEOUT_MS;
+  }
+
+  if (parsed <= 0) {
+    return undefined;
+  }
+
+  return Math.floor(parsed);
+}
+
 function createPromptInterface() {
   const rl = createInterface({
     input: process.stdin,
@@ -1206,10 +1224,7 @@ interface RunPiPrintPromptOptions {
 }
 
 async function runPiPrintPrompt(options: RunPiPrintPromptOptions): Promise<string> {
-  const configuredTimeoutMs = Number(process.env.PERSONAL_AGENT_PI_TIMEOUT_MS ?? DEFAULT_PI_TIMEOUT_MS);
-  const timeoutMs = Number.isFinite(configuredTimeoutMs) && configuredTimeoutMs > 0
-    ? Math.floor(configuredTimeoutMs)
-    : DEFAULT_PI_TIMEOUT_MS;
+  const timeoutMs = resolvePiTimeoutMs();
 
   if (options.abortSignal?.aborted) {
     throw new Error(PROMPT_CANCELLED_ERROR_MESSAGE);
@@ -1292,9 +1307,11 @@ async function runPiPrintPrompt(options: RunPiPrintPromptOptions): Promise<strin
       fail(PROMPT_CANCELLED_ERROR_MESSAGE);
     };
 
-    timeoutHandle = setTimeout(() => {
-      fail(`pi timed out after ${timeoutMs}ms`);
-    }, timeoutMs);
+    if (timeoutMs !== undefined) {
+      timeoutHandle = setTimeout(() => {
+        fail(`pi timed out after ${timeoutMs}ms`);
+      }, timeoutMs);
+    }
 
     if (abortSignal?.aborted) {
       fail(PROMPT_CANCELLED_ERROR_MESSAGE);
@@ -1515,10 +1532,10 @@ class PersistentConversationController implements GatewayConversationController 
     input: RunPromptFnInput,
     activeRun: ActiveConversationRun,
   ): Promise<string> {
-    const configuredTimeoutMs = Number(process.env.PERSONAL_AGENT_PI_TIMEOUT_MS ?? DEFAULT_PI_TIMEOUT_MS);
-    const timeoutMs = Number.isFinite(configuredTimeoutMs) && configuredTimeoutMs > 0
-      ? Math.floor(configuredTimeoutMs)
-      : DEFAULT_PI_TIMEOUT_MS;
+    const timeoutMs = resolvePiTimeoutMs();
+    if (timeoutMs === undefined) {
+      return this.executeRun(input, activeRun);
+    }
 
     let timeoutHandle: NodeJS.Timeout | undefined;
 

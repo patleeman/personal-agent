@@ -58,7 +58,7 @@ You can override config file location with:
 Used by both providers:
 
 - `PERSONAL_AGENT_PROFILE` (default: `shared`)
-- `PERSONAL_AGENT_PI_TIMEOUT_MS` (default: `180000`)
+- `PERSONAL_AGENT_PI_TIMEOUT_MS` (default: `1800000` / 30 minutes; set `0` to disable timeout)
 
 ## Telegram
 
