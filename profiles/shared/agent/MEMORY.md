@@ -14,6 +14,7 @@
 - Disable automatic memory-card generation/indexing; use on-demand qmd queries instead.
 - Use `xhigh` as the default thinking level for assistant and shared profiles.
 - When asked to take notes, use Apple Notes.
+- Prefer profile-based settings over environment variables for pa TUI theme mapping.
 
 ## Environment
 
