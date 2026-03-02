@@ -3,7 +3,7 @@
 import { spawnSync } from 'child_process';
 import { existsSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
-import { join, relative, resolve } from 'path';
+import { join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { createInterface } from 'readline';
 import { Command, CommanderError } from 'commander';
@@ -58,8 +58,6 @@ import {
   formatNextStep,
   isInteractiveOutput,
   keyValue,
-  pending,
-  progressBar,
   section,
   spinner,
   statusChip,
@@ -769,77 +767,6 @@ Commands:
   throw new Error(`Unknown profile subcommand: ${subcommand}`);
 }
 
-async function printMemoryModuleStatus(module: DaemonStatus['modules'][0]): Promise<void> {
-  const detail = module.detail as {
-    scannedSessions?: number;
-    summarizedSessions?: number;
-    skippedSessions?: number;
-    failedSessions?: number;
-    needsEmbedding?: boolean;
-    dirty?: boolean;
-    lastScanAt?: string;
-    lastError?: string;
-  } | undefined;
-
-  const { loadDaemonConfig } = await import('@personal-agent/daemon');
-  const config = loadDaemonConfig();
-
-  const sessionDir = config.modules.memory.sessionSource;
-  const summaryDir = config.modules.memory.summaryDir;
-
-  const sessionFiles = existsSync(sessionDir)
-    ? spawnSync('find', [sessionDir, '-name', '*.jsonl', '-type', 'f'], { encoding: 'utf-8' }).stdout.split('\n').filter(Boolean)
-    : [];
-
-  const summaryFiles = listMemorySummaryFiles(summaryDir);
-  const skipMarkerFiles = listMemorySkipMarkerFiles(summaryDir);
-
-  const total = sessionFiles.length;
-  const summarizedOnDisk = summaryFiles.length;
-  const filteredOnDisk = skipMarkerFiles.length;
-  const processedOnDisk = Math.min(total, summarizedOnDisk + filteredOnDisk);
-  const failed = detail?.failedSessions ?? 0;
-  const hasError = Boolean(module.lastError || detail?.lastError);
-  const hasPending = Boolean(detail?.needsEmbedding || detail?.dirty);
-
-  const primaryCollection = config.modules.memory.collections[0]?.name;
-  const qmdCounts = primaryCollection
-    ? getQmdCollectionCounts(primaryCollection)
-    : undefined;
-
-  const status = hasError
-    ? statusChip('error')
-    : hasPending
-      ? statusChip('pending')
-      : statusChip('active');
-
-  console.log(bullet(`Memory summaries: ${status}`));
-  console.log(keyValue('Coverage', `${progressBar(processedOnDisk, total)} (${summarizedOnDisk} summarized, ${filteredOnDisk} filtered, ${total} total)`, 4));
-
-  if (qmdCounts && primaryCollection) {
-    console.log(keyValue(`qmd indexed summaries (${primaryCollection})`, qmdCounts.workspace, 4));
-
-    if (qmdCounts.workspace < summarizedOnDisk) {
-      console.log(`    ${pending('qmd index is behind summaries on disk')}`);
-    }
-  }
-
-  if (failed > 0) {
-    console.log(`    ${warning(`${failed} session scans failed`)}`);
-  }
-
-  if (detail?.needsEmbedding) {
-    console.log(`    ${pending('Waiting for embedding')}`);
-  }
-
-  if (detail?.dirty) {
-    console.log(`    ${pending('Updates pending')}`);
-  }
-
-  if (hasError) {
-    console.log(`    ${uiError('Memory module', module.lastError || detail?.lastError || 'Unknown error')}`);
-  }
-}
 
 function printMaintenanceModuleStatus(module: DaemonStatus['modules'][0]): void {
   const detail = module.detail as {
@@ -956,11 +883,6 @@ async function printDaemonModules(
   }
 
   for (const module of modules) {
-    if (module.name === 'memory') {
-      await printMemoryModuleStatus(module);
-      continue;
-    }
-
     if (module.name === 'maintenance') {
       printMaintenanceModuleStatus(module);
       continue;
@@ -987,14 +909,13 @@ async function printDaemonStatusHumanReadable(): Promise<void> {
   const running = await pingDaemon(config);
 
   if (!running) {
-    console.log('personal-agentd: stopped');
-    console.log(`socket: ${daemonPaths.socketPath}`);
-    console.log(`taskDir: ${config.modules.tasks.taskDir}`);
-    console.log('hint: pa daemon start');
-
     console.log('');
-    console.log(uiError('Daemon is stopped'));
-    console.log(`  ${formatHint('pa daemon start')}`);
+    console.log(section('Daemon'));
+    console.log(keyValue('Status', statusChip('stopped')));
+    console.log(keyValue('Socket', daemonPaths.socketPath));
+    console.log(keyValue('Task directory', config.modules.tasks.taskDir));
+    console.log('');
+    console.log(`  ${formatNextStep('pa daemon start')}`);
     return;
   }
 
@@ -1005,12 +926,12 @@ async function printDaemonStatusHumanReadable(): Promise<void> {
     ? `${uptimeMinutes}m`
     : `${Math.floor(uptimeMinutes / 60)}h ${uptimeMinutes % 60}m`;
 
-  console.log('personal-agentd: running');
-  console.log(`socket: ${daemonPaths.socketPath}`);
-
   console.log('');
-  console.log(section('Daemon status'));
-  console.log(success('Daemon running', `pid ${status.pid}, up ${uptimeText}`));
+  console.log(section('Daemon'));
+  console.log(keyValue('Status', statusChip('running')));
+  console.log(keyValue('PID', status.pid));
+  console.log(keyValue('Uptime', uptimeText));
+  console.log(keyValue('Socket', daemonPaths.socketPath));
   console.log(keyValue('Task directory', config.modules.tasks.taskDir));
   console.log('');
   console.log(section('Modules'));
@@ -1206,9 +1127,6 @@ async function daemonCommand(args: string[]): Promise<number> {
     const config = loadDaemonConfig();
     const daemonPaths = resolveDaemonPaths(config.ipc.socketPath);
     const pid = await readDaemonPid();
-
-    console.log(`logFile=${daemonPaths.logFile}`);
-    console.log(`pid=${pid ?? 'unknown'}`);
 
     console.log('');
     console.log(section('Daemon logs'));
@@ -1452,154 +1370,6 @@ async function updateCommand(args: string[]): Promise<number> {
   console.log(keyValue('gateway services skipped', summary.skippedGatewayServices.length > 0 ? summary.skippedGatewayServices.join(', ') : 'none'));
 
   return 0;
-}
-
-function toProcessText(value: string | Buffer | null | undefined): string {
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  if (value) {
-    return value.toString('utf-8');
-  }
-
-  return '';
-}
-
-function parseQmdIndexedFileCount(statusText: string): number | undefined {
-  const match = statusText.match(/Total:\s*(\d+)\s*files indexed/i);
-  if (!match) {
-    return undefined;
-  }
-
-  const parsed = Number.parseInt(match[1], 10);
-  if (!Number.isFinite(parsed)) {
-    return undefined;
-  }
-
-  return parsed;
-}
-
-interface QmdCollectionCounts {
-  total: number;
-  workspace: number;
-}
-
-function getQmdCollectionCounts(collectionName: string): QmdCollectionCounts | undefined {
-  const result = spawnSync('qmd', ['ls', collectionName], { encoding: 'utf-8' });
-
-  if (result.error || (result.status ?? 1) !== 0) {
-    return undefined;
-  }
-
-  const output = toProcessText(result.stdout || result.stderr);
-  const prefix = `qmd://${collectionName}/`;
-
-  let total = 0;
-  let workspace = 0;
-
-  for (const line of output.split('\n')) {
-    const index = line.indexOf(prefix);
-    if (index < 0) {
-      continue;
-    }
-
-    const relativePath = line.slice(index + prefix.length).trim();
-    if (relativePath.length === 0) {
-      continue;
-    }
-
-    total += 1;
-
-    if (relativePath.includes('/')) {
-      workspace += 1;
-    }
-  }
-
-  return {
-    total,
-    workspace,
-  };
-}
-
-interface RunQmdOptions {
-  quiet?: boolean;
-}
-
-function runQmdCommand(
-  args: string[],
-  description: string,
-  options: RunQmdOptions = {},
-): ReturnType<typeof spawnSync> {
-  const commandSpinner = options.quiet ? undefined : spinner(description);
-  commandSpinner?.start();
-
-  const result = spawnSync('qmd', args, { encoding: 'utf-8' });
-
-  if (result.error) {
-    commandSpinner?.fail('qmd command failed');
-    throw new Error(`Failed to run qmd. Is it installed?\n${formatHint('Install qmd and verify with: qmd --version')}`);
-  }
-
-  if (!options.quiet) {
-    if ((result.status ?? 1) !== 0) {
-      commandSpinner?.fail('qmd command failed');
-    } else {
-      commandSpinner?.succeed('qmd command completed');
-    }
-  }
-
-  return result;
-}
-
-function listMemorySummaryFiles(summaryDir: string): string[] {
-  if (!existsSync(summaryDir)) {
-    return [];
-  }
-
-  const result = spawnSync('find', [summaryDir, '-mindepth', '2', '-name', '*.md', '-type', 'f'], { encoding: 'utf-8' });
-
-  if (result.error || (result.status ?? 1) !== 0) {
-    return [];
-  }
-
-  return toProcessText(result.stdout).split('\n').filter((line) => line.trim().length > 0);
-}
-
-function listMemorySkipMarkerFiles(summaryDir: string): string[] {
-  if (!existsSync(summaryDir)) {
-    return [];
-  }
-
-  const result = spawnSync('find', [summaryDir, '-mindepth', '2', '-name', '*.skip', '-type', 'f'], { encoding: 'utf-8' });
-
-  if (result.error || (result.status ?? 1) !== 0) {
-    return [];
-  }
-
-  return toProcessText(result.stdout).split('\n').filter((line) => line.trim().length > 0);
-}
-
-function parseMemoryHeadCount(rawValue: string | undefined): number {
-  if (!rawValue) {
-    return 5;
-  }
-
-  if (!/^\d+$/.test(rawValue)) {
-    throw new Error('Usage: pa memory head [count] (count must be a positive integer)');
-  }
-
-  const parsed = Number.parseInt(rawValue, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error('Usage: pa memory head [count] (count must be a positive integer)');
-  }
-
-  return parsed;
-}
-
-function findMemoryFileBySessionId(files: string[], sessionId: string, extension: string): string | undefined {
-  const needle = `${sessionId}${extension}`;
-  return files.find((path) => path.endsWith(needle));
 }
 
 interface TaskParseError {
@@ -2177,251 +1947,6 @@ Commands:
   throw new Error(`Unknown tasks subcommand: ${subcommand}`);
 }
 
-async function memoryCommand(args: string[]): Promise<number> {
-  const [subcommand, ...rest] = args;
-
-  if (!subcommand) {
-    console.log(section('Memory commands'));
-    console.log('');
-    console.log(`Usage: pa memory [list|query|search|head|open|status]
-
-Commands:
-  list                   List memory collections and files
-  query <text>           Semantic search with query expansion + reranking
-  search <text>          Full-text keyword search (BM25)
-  head [count]           Show latest summarized memories (default: 5)
-  open <sessionId>       Open session summary markdown
-  status [--json]        Show comprehensive memory status
-`);
-    return 0;
-  }
-
-  if (subcommand === 'list') {
-    const result = runQmdCommand(['ls'], 'Loading memory collections');
-    console.log(toProcessText(result.stdout || result.stderr));
-    return result.status ?? 0;
-  }
-
-  if (subcommand === 'query' || subcommand === 'search') {
-    const query = rest.join(' ');
-    if (!query) {
-      throw new Error(`Usage: pa memory ${subcommand} <query>`);
-    }
-
-    const result = runQmdCommand([subcommand, query], `Running qmd ${subcommand}`);
-    console.log(toProcessText(result.stdout || result.stderr));
-    return result.status ?? 0;
-  }
-
-  if (subcommand === 'head') {
-    if (rest.length > 1) {
-      throw new Error('Usage: pa memory head [count]');
-    }
-
-    const count = parseMemoryHeadCount(rest[0]);
-    const { loadDaemonConfig } = await import('@personal-agent/daemon');
-    const config = loadDaemonConfig();
-    const summaryDir = config.modules.memory.summaryDir;
-    const summaryFiles = listMemorySummaryFiles(summaryDir);
-
-    const recentSummaries = summaryFiles
-      .map((path) => {
-        try {
-          return {
-            path,
-            mtimeMs: statSync(path).mtimeMs,
-          };
-        } catch {
-          return {
-            path,
-            mtimeMs: 0,
-          };
-        }
-      })
-      .sort((a, b) => b.mtimeMs - a.mtimeMs)
-      .slice(0, count);
-
-    console.log(section(`Latest memories (${recentSummaries.length})`));
-    console.log(keyValue('Summary directory', summaryDir));
-
-    if (recentSummaries.length === 0) {
-      console.log(dim('No summarized memories found.'));
-      return 0;
-    }
-
-    for (const [index, entry] of recentSummaries.entries()) {
-      const relativePath = relative(summaryDir, entry.path);
-      const modifiedAt = entry.mtimeMs > 0 ? new Date(entry.mtimeMs).toLocaleString() : 'unknown';
-
-      let summaryText = '';
-      try {
-        summaryText = readFileSync(entry.path, 'utf-8').trim();
-      } catch {
-        summaryText = '(failed to read summary file)';
-      }
-
-      console.log('');
-      console.log(`${index + 1}. ${relativePath}`);
-      console.log(`   ${dim(`Updated: ${modifiedAt}`)}`);
-      console.log(summaryText.length > 0 ? summaryText : dim('(empty summary)'));
-    }
-
-    return 0;
-  }
-
-  if (subcommand === 'open') {
-    const sessionId = rest.find((arg) => !arg.startsWith('-'));
-    if (!sessionId) {
-      throw new Error('Usage: pa memory open <sessionId>');
-    }
-
-    const { loadDaemonConfig } = await import('@personal-agent/daemon');
-    const config = loadDaemonConfig();
-    const summaryDir = config.modules.memory.summaryDir;
-
-    const summaryPath = findMemoryFileBySessionId(listMemorySummaryFiles(summaryDir), sessionId, '.md');
-
-    if (!summaryPath) {
-      throw new Error(`No memory summary found for session: ${sessionId}`);
-    }
-
-    const text = readFileSync(summaryPath, 'utf-8').trim();
-    console.log(text.length > 0 ? text : dim('(empty memory summary)'));
-    return 0;
-  }
-
-  if (subcommand === 'status') {
-    const jsonMode = hasOption(rest, '--json');
-    const qmdResult = runQmdCommand(['status'], 'Reading memory index status', { quiet: jsonMode });
-
-    const { getDaemonStatus, loadDaemonConfig } = await import('@personal-agent/daemon');
-    const config = loadDaemonConfig();
-    const daemonStatus = await getDaemonStatus(config);
-    const memoryModule = daemonStatus.modules.find((m) => m.name === 'memory');
-    const detail = memoryModule?.detail as {
-      scannedSessions?: number;
-      summarizedSessions?: number;
-      skippedSessions?: number;
-      failedSessions?: number;
-      needsEmbedding?: boolean;
-      dirty?: boolean;
-      lastScanAt?: string;
-      lastQmdUpdateAt?: string;
-      lastQmdReconcileAt?: string;
-      lastQmdEmbedAt?: string;
-    } | undefined;
-
-    const sessionDir = config.modules.memory.sessionSource;
-    const sessionFiles = existsSync(sessionDir)
-      ? spawnSync('find', [sessionDir, '-name', '*.jsonl', '-type', 'f'], { encoding: 'utf-8' }).stdout.split('\n').filter(Boolean)
-      : [];
-
-    const summaryDir = config.modules.memory.summaryDir;
-    const summaryFiles = listMemorySummaryFiles(summaryDir);
-    const skipMarkerFiles = listMemorySkipMarkerFiles(summaryDir);
-
-    const totalSessions = sessionFiles.length;
-    const summarized = summaryFiles.length;
-    const filtered = skipMarkerFiles.length;
-    const processed = Math.min(totalSessions, summarized + filtered);
-    const unindexed = Math.max(0, totalSessions - processed);
-    const failed = detail?.failedSessions ?? 0;
-    const needsEmbedding = Boolean(detail?.needsEmbedding);
-    const dirty = Boolean(detail?.dirty);
-
-    const qmdStatusText = toProcessText(qmdResult.stdout || qmdResult.stderr).trim();
-    const qmdIndexedFiles = parseQmdIndexedFileCount(qmdStatusText);
-    const primaryCollection = config.modules.memory.collections[0]?.name;
-    const qmdCollectionCounts = primaryCollection
-      ? getQmdCollectionCounts(primaryCollection)
-      : undefined;
-    const qmdSummaryLag = qmdCollectionCounts
-      ? Math.max(0, summarized - qmdCollectionCounts.workspace)
-      : 0;
-
-    const statusPayload = {
-      sessions: {
-        total: totalSessions,
-        summarizedOnDisk: summarized,
-        filteredLowSignalOnDisk: filtered,
-        processedOnDisk: processed,
-        unindexed,
-        failed,
-      },
-      index: {
-        needsEmbedding,
-        dirty,
-        lastScanAt: detail?.lastScanAt ?? null,
-        lastUpdateAt: detail?.lastQmdUpdateAt ?? null,
-        lastReconcileAt: detail?.lastQmdReconcileAt ?? null,
-        lastEmbedAt: detail?.lastQmdEmbedAt ?? null,
-      },
-      qmd: {
-        indexedFiles: qmdIndexedFiles ?? null,
-        primaryCollection: primaryCollection ?? null,
-        indexedCollectionFiles: qmdCollectionCounts?.total ?? null,
-        indexedSummaries: qmdCollectionCounts?.workspace ?? null,
-        summaryLag: qmdSummaryLag,
-      },
-      paths: {
-        sessionDir,
-        summaryDir,
-      },
-      qmdStatus: qmdStatusText,
-    };
-
-    if (jsonMode) {
-      console.log(JSON.stringify(statusPayload, null, 2));
-      return qmdResult.status ?? 0;
-    }
-
-    console.log(section('Memory status'));
-    console.log('');
-    console.log(section('Sessions'));
-    console.log(keyValue('Total session files', totalSessions));
-    console.log(keyValue('Summarized (on disk)', summarized));
-    console.log(keyValue('Filtered low-signal (on disk)', filtered));
-    console.log(keyValue('Coverage', progressBar(processed, totalSessions)));
-    console.log(keyValue('Unindexed sessions', unindexed > 0 ? statusChip('pending') + ` (${unindexed})` : statusChip('active') + ' (0)'));
-    console.log(keyValue('Failed scans', failed > 0 ? statusChip('error') + ` (${failed})` : statusChip('active') + ' (0)'));
-    console.log(keyValue('Summary directory', summaryDir));
-
-    if (qmdCollectionCounts && primaryCollection) {
-      console.log(keyValue(`qmd indexed summaries (${primaryCollection})`, qmdCollectionCounts.workspace));
-      console.log(keyValue(`qmd indexed files (${primaryCollection})`, qmdCollectionCounts.total));
-    } else if (typeof qmdIndexedFiles === 'number') {
-      console.log(keyValue('qmd indexed files (all collections)', qmdIndexedFiles));
-    }
-
-    if (qmdSummaryLag > 0) {
-      console.log(keyValue('qmd lag', `${qmdSummaryLag} summaries pending qmd indexing`));
-    }
-
-    console.log('');
-    console.log(section('Index status'));
-    console.log(keyValue('Needs embedding', needsEmbedding ? statusChip('pending') : statusChip('active')));
-    console.log(keyValue('Dirty (pending update)', dirty ? statusChip('pending') : statusChip('active')));
-    console.log(keyValue('Last scan', detail?.lastScanAt ? new Date(detail.lastScanAt).toLocaleString() : dim('never')));
-    console.log(keyValue('Last qmd update', detail?.lastQmdUpdateAt ? new Date(detail.lastQmdUpdateAt).toLocaleString() : dim('never')));
-    console.log(keyValue('Last qmd reconcile', detail?.lastQmdReconcileAt ? new Date(detail.lastQmdReconcileAt).toLocaleString() : dim('never')));
-    console.log(keyValue('Last embed', detail?.lastQmdEmbedAt ? new Date(detail.lastQmdEmbedAt).toLocaleString() : dim('never')));
-
-    console.log('');
-    console.log(section('qmd status'));
-    console.log(qmdStatusText);
-
-    if (qmdSummaryLag > 0) {
-      console.log(`  ${formatNextStep('Run qmd update (or wait for daemon qmd update timer)')}`);
-    } else if (unindexed > 0 || needsEmbedding || dirty) {
-      console.log(`  ${formatNextStep('Wait for daemon indexing or run pa daemon restart')}`);
-    }
-
-    return qmdResult.status ?? 0;
-  }
-
-  throw new Error(`Unknown memory subcommand: ${subcommand}`);
-}
-
 type CommandHandler = (args: string[]) => Promise<number>;
 
 interface CliCommandDefinition {
@@ -2496,12 +2021,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       description: 'Inspect and validate scheduled daemon tasks',
       run: tasksCommand,
     },
-    {
-      name: 'memory',
-      usage: 'memory [list|query|search|head|open|status] [args...]',
-      description: 'Query memory conversation summaries',
-      run: memoryCommand,
-    },
+
   ];
 
   registerGatewayCliCommands((command) => {
@@ -2593,11 +2113,7 @@ Examples:
   pa tasks list
   pa tasks validate --all
   pa tasks logs <id> --tail 120
-  pa memory list
-  pa memory head 5
-  pa memory open <sessionId>
-  pa memory status --json
-  pa memory query "authentication flow"
+
 `,
     )
     .configureOutput({
@@ -2665,10 +2181,6 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
 
     const message = (error as Error).message;
     console.error(uiError('CLI error', message));
-
-    if (message.includes('qmd')) {
-      console.error(`  ${formatHint('Install and configure qmd, then rerun the command')}`);
-    }
 
     return 1;
   }

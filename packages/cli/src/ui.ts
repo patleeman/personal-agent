@@ -15,6 +15,9 @@ let uiConfig: UiConfig = { ...DEFAULT_CONFIG };
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 const PLAIN_SPINNER_FRAMES = ['-', '\\', '|', '/'];
 
+const SECTION_RULE_WIDTH = 44;
+const KEY_ALIGN_WIDTH = 28;
+
 function applyTone(text: string, tone: Tone): string {
   if (uiConfig.plain) {
     return text;
@@ -81,8 +84,28 @@ export function command(text: string): string {
   return chalk.cyan(text);
 }
 
+export function section(title: string): string {
+  if (uiConfig.plain) {
+    return `--- ${title} ---`;
+  }
+
+  const marker = chalk.blueBright('◆');
+  const ruleLen = Math.max(2, SECTION_RULE_WIDTH - title.length - 2);
+  const rule = chalk.gray('─'.repeat(ruleLen));
+
+  return `${marker} ${chalk.bold(title)} ${rule}`;
+}
+
+export function divider(width = SECTION_RULE_WIDTH): string {
+  if (uiConfig.plain) {
+    return '-'.repeat(width);
+  }
+
+  return chalk.gray('─'.repeat(width));
+}
+
 export function success(label: string, value?: string | number | boolean): string {
-  const icon = applyTone('✓', 'success');
+  const icon = applyTone('✔', 'success');
   const title = bold(label);
 
   if (value === undefined) {
@@ -98,7 +121,7 @@ export function warning(message: string): string {
 }
 
 export function error(label: string, message?: string): string {
-  const icon = applyTone('✗', 'error');
+  const icon = applyTone('✕', 'error');
   const title = bold(label);
 
   if (!message) {
@@ -109,68 +132,90 @@ export function error(label: string, message?: string): string {
 }
 
 export function info(message: string): string {
-  const icon = applyTone('•', 'info');
+  const icon = applyTone('▸', 'info');
   return `${icon} ${message}`;
 }
 
 export function pending(message: string): string {
-  const icon = applyTone('⏳', 'warning');
+  const icon = applyTone('◌', 'warning');
   return `${icon} ${message}`;
-}
-
-export function section(title: string): string {
-  return bold(title);
 }
 
 export function keyValue(key: string, value: string | number | boolean, indent = 2): string {
   const prefix = ' '.repeat(Math.max(0, indent));
+
+  if (uiConfig.plain) {
+    return `${prefix}${key}: ${value}`;
+  }
+
   const renderedKey = bold(key);
-  return `${prefix}${renderedKey}: ${value}`;
+  const dotsNeeded = Math.max(2, KEY_ALIGN_WIDTH - key.length);
+  const leader = chalk.gray(' ' + '·'.repeat(dotsNeeded) + ' ');
+
+  return `${prefix}${renderedKey}${leader}${value}`;
 }
 
 export function bullet(message: string, indent = 2): string {
   const prefix = ' '.repeat(Math.max(0, indent));
-  const dot = applyTone('•', 'info');
-  return `${prefix}${dot} ${message}`;
+
+  if (uiConfig.plain) {
+    return `${prefix}- ${message}`;
+  }
+
+  const marker = applyTone('▸', 'accent');
+  return `${prefix}${marker} ${message}`;
 }
 
 export function statusChip(status: 'running' | 'stopped' | 'active' | 'disabled' | 'pending' | 'error'): string {
+  if (uiConfig.plain) {
+    return `[${status}]`;
+  }
+
   if (status === 'running' || status === 'active') {
-    return applyTone(status, 'success');
+    return `${chalk.green('●')} ${chalk.green(status)}`;
   }
 
   if (status === 'pending') {
-    return applyTone(status, 'warning');
+    return `${chalk.yellow('◌')} ${chalk.yellow(status)}`;
   }
 
   if (status === 'error' || status === 'stopped') {
-    return applyTone(status, 'error');
+    return `${chalk.red('●')} ${chalk.red(status)}`;
   }
 
-  return dim(status);
+  return `${chalk.gray('○')} ${chalk.gray(status)}`;
 }
 
-export function progressBar(completed: number, total: number, width = 22): string {
+export function progressBar(completed: number, total: number, width = 20): string {
   const safeTotal = Math.max(0, total);
   const safeCompleted = Math.max(0, Math.min(completed, safeTotal));
 
   if (safeTotal === 0) {
-    const empty = uiConfig.plain
-      ? '-'.repeat(width)
-      : '░'.repeat(width);
-    return `[${empty}] 0%`;
+    if (uiConfig.plain) {
+      return `[${'─'.repeat(width)}] 0%`;
+    }
+
+    return `${chalk.gray('━'.repeat(width))} 0%`;
   }
 
   const percent = Math.round((safeCompleted / safeTotal) * 100);
   const filledCount = Math.round((percent / 100) * width);
-  const fill = uiConfig.plain
-    ? '#'.repeat(filledCount)
-    : '█'.repeat(filledCount);
-  const empty = uiConfig.plain
-    ? '-'.repeat(width - filledCount)
-    : '░'.repeat(width - filledCount);
+  const emptyCount = width - filledCount;
 
-  return `[${fill}${empty}] ${percent}%`;
+  if (uiConfig.plain) {
+    return `[${'#'.repeat(filledCount)}${'-'.repeat(emptyCount)}] ${percent}%`;
+  }
+
+  const fill = '━'.repeat(filledCount);
+  const empty = '━'.repeat(emptyCount);
+
+  const coloredFill = percent > 66
+    ? chalk.green(fill)
+    : percent > 33
+      ? chalk.yellow(fill)
+      : chalk.red(fill);
+
+  return `${coloredFill}${chalk.gray(empty)} ${percent}%`;
 }
 
 function clearCurrentLine(): void {
@@ -268,11 +313,11 @@ class TerminalSpinner implements Spinner {
   }
 
   succeed(message?: string): void {
-    this.finish('✓', 'success', message);
+    this.finish('✔', 'success', message);
   }
 
   fail(message?: string): void {
-    this.finish('✗', 'error', message);
+    this.finish('✕', 'error', message);
   }
 
   stop(): void {
@@ -294,9 +339,9 @@ export function spinner(message: string): Spinner {
 }
 
 export function formatHint(text: string): string {
-  return `${dim('Hint:')} ${command(text)}`;
+  return `${dim('hint:')} ${command(text)}`;
 }
 
 export function formatNextStep(text: string): string {
-  return `${accent('Next:')} ${command(text)}`;
+  return `${accent('→')} ${command(text)}`;
 }

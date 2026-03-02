@@ -173,8 +173,8 @@ describe('CLI command flows', () => {
 
     expect(await runCli(['daemon', 'status'])).toBe(0);
 
-    expect(logs.some((line) => line.includes('Daemon is stopped'))).toBe(true);
-    expect(logs.some((line) => line.includes('taskDir:'))).toBe(true);
+    expect(logs.some((line) => line.includes('stopped'))).toBe(true);
+    expect(logs.some((line) => line.includes('Task directory'))).toBe(true);
 
     logSpy.mockRestore();
   });

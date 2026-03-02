@@ -49,9 +49,9 @@ describe('daemon command matrix', () => {
     const exitCode = await runCli(['daemon', 'status']);
 
     expect(exitCode).toBe(0);
-    expect(logs.some((line) => line.includes('personal-agentd: stopped'))).toBe(true);
-    expect(logs.some((line) => line.includes('socket:'))).toBe(true);
-    expect(logs.some((line) => line.includes('hint: pa daemon start'))).toBe(true);
+    expect(logs.some((line) => line.includes('stopped'))).toBe(true);
+    expect(logs.some((line) => line.includes('Socket'))).toBe(true);
+    expect(logs.some((line) => line.includes('pa daemon start'))).toBe(true);
 
     logSpy.mockRestore();
   });
@@ -196,8 +196,8 @@ describe('daemon command matrix', () => {
     const exitCode = await runCli(['daemon', 'logs']);
 
     expect(exitCode).toBe(0);
-    expect(logs.some((line) => line.includes('logFile='))).toBe(true);
-    expect(logs.some((line) => line.includes('pid='))).toBe(true);
+    expect(logs.some((line) => line.includes('Log file'))).toBe(true);
+    expect(logs.some((line) => line.includes('PID'))).toBe(true);
 
     logSpy.mockRestore();
   });
@@ -234,7 +234,7 @@ describe('daemon command matrix', () => {
 
     await runCli(['daemon', 'logs']);
 
-    expect(logs.some((line) => line.includes('pid=12345'))).toBe(true);
+    expect(logs.some((line) => line.includes('12345'))).toBe(true);
 
     logSpy.mockRestore();
   });
