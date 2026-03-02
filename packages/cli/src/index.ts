@@ -742,13 +742,62 @@ async function doctor(options: DoctorOptions = {}): Promise<number> {
   return 0;
 }
 
-async function runCommand(args: string[]): Promise<number> {
-  const profileName = resolveProfileName();
-  const passthroughArgs = args[0] === '--'
-    ? args.slice(1)
-    : args;
+interface ParsedRunCommandArgs {
+  profileName: string;
+  piArgs: string[];
+}
 
-  return runPi(profileName, passthroughArgs);
+function parseRunCommandArgs(args: string[]): ParsedRunCommandArgs {
+  const filteredArgs: string[] = [];
+  let profileName = resolveProfileName();
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+
+    if (arg === '--') {
+      filteredArgs.push(...args.slice(i));
+      break;
+    }
+
+    if (arg === '--profile') {
+      const value = args[i + 1];
+
+      if (!value || value.startsWith('-')) {
+        throw new Error('tui --profile requires a profile name');
+      }
+
+      profileName = value;
+      i += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--profile=')) {
+      const value = arg.slice('--profile='.length).trim();
+
+      if (value.length === 0) {
+        throw new Error('tui --profile requires a profile name');
+      }
+
+      profileName = value;
+      continue;
+    }
+
+    filteredArgs.push(arg);
+  }
+
+  const piArgs = filteredArgs[0] === '--'
+    ? filteredArgs.slice(1)
+    : filteredArgs;
+
+  return {
+    profileName,
+    piArgs,
+  };
+}
+
+async function runCommand(args: string[]): Promise<number> {
+  const parsed = parseRunCommandArgs(args);
+  return runPi(parsed.profileName, parsed.piArgs);
 }
 
 async function profileCommand(args: string[]): Promise<number> {
@@ -2004,7 +2053,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     {
       name: 'tui',
       usage: 'tui [args...]',
-      description: 'Run pi TUI with configured profile resources',
+      description: 'Run pi TUI with profile resources (supports --profile override)',
       run: runCommand,
     },
     {
@@ -2125,6 +2174,7 @@ Global options:
 Examples:
   pa
   pa --plain -p "hello"
+  pa tui --profile datadog -p "hello"
   pa tui -- --model kimi-coding/k2p5
   pa profile use datadog
   pa profile list

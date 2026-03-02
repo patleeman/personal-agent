@@ -32,10 +32,16 @@ In passthrough mode, `pa` resolves profile resources, prepares runtime state, an
 
 Profile is configured once and reused.
 
-Set it with:
+Set default with:
 
 ```bash
 pa profile use datadog
+```
+
+For a one-off TUI launch without changing default profile:
+
+```bash
+pa tui --profile datadog
 ```
 
 Inspect current default and available profiles:
@@ -55,7 +61,7 @@ pa profile show datadog
 
 ```bash
 pa
-pa tui [pi args...]
+pa tui [--profile <name>] [pi args...]
 pa profile [list|show|use]
 pa doctor
 pa gateway
@@ -150,7 +156,7 @@ This keeps package boundaries clean: gateway logic stays in the gateway package,
 
 When `pa` runs Pi (via `pa`, `pa tui`, or `pa <pi args>`), it:
 
-1. resolves configured profile (`~/.config/personal-agent/config.json`)
+1. resolves profile from `--profile <name>` (if provided), otherwise from configured default (`~/.config/personal-agent/config.json`)
 2. resolves layers: shared -> selected profile -> optional local overlay
 3. validates runtime state paths
 4. bootstraps runtime directories

@@ -79,7 +79,8 @@ Extensions with npm dependencies are auto-installed on first use.
 
 ```bash
 pa                          # Show help
-pa tui                      # Launch Pi TUI with profile
+pa tui                      # Launch Pi TUI with default profile
+pa tui --profile datadog    # One-off profile override for this launch
 pa tui -p "hello"           # Launch with initial prompt
 pa tui -- --model kimi-coding/k2p5    # Pass args to pi
 pa doctor                   # Validate setup

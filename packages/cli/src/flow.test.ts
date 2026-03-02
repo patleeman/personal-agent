@@ -110,6 +110,38 @@ describe('CLI command flows', () => {
     expect(loggedArgs).toContain('Say ok');
   });
 
+  it('allows one-off profile override for tui with --profile', async () => {
+    const repo = createTestRepo();
+    const stateRoot = createTempDir('personal-agent-cli-state-');
+    const configDir = createTempDir('personal-agent-cli-config-');
+    const runLogDir = createTempDir('personal-agent-cli-log-');
+
+    const configPath = join(configDir, 'config.json');
+    const argsLogPath = join(runLogDir, 'pi-args.log');
+    const fakePiBinDir = createFakePiBinary(argsLogPath);
+
+    process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
+    process.env.PERSONAL_AGENT_REPO_ROOT = repo;
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
+
+    expect(await runCli(['profile', 'use', 'shared'])).toBe(0);
+    expect(await runCli(['tui', '--profile', 'datadog', '--', '-p', 'override test'])).toBe(0);
+
+    const runtimeAgentsPath = join(stateRoot, 'pi-agent', 'AGENTS.md');
+    const runtimeAgents = readFileSync(runtimeAgentsPath, 'utf-8');
+    expect(runtimeAgents).toContain('Shared');
+    expect(runtimeAgents).toContain('Datadog');
+
+    const config = JSON.parse(readFileSync(configPath, 'utf-8')) as { defaultProfile: string };
+    expect(config.defaultProfile).toBe('shared');
+
+    const loggedArgs = readFileSync(argsLogPath, 'utf-8');
+    expect(loggedArgs).toContain('-p');
+    expect(loggedArgs).toContain('override test');
+    expect(loggedArgs).not.toContain('--profile');
+  });
+
   it('shows help with no args and passes unknown args through to pi', async () => {
     const repo = createTestRepo();
     const stateRoot = createTempDir('personal-agent-cli-state-');
@@ -142,6 +174,8 @@ describe('CLI command flows', () => {
 
     expect(await runCli(['profile', 'use'])).toBe(1);
     expect(await runCli(['doctor', '--profile', 'datadog'])).toBe(1);
+    expect(await runCli(['tui', '--profile'])).toBe(1);
+    expect(await runCli(['tui', '--profile='])).toBe(1);
   });
 
   it('runs doctor success and failure paths based on configured profile', async () => {
