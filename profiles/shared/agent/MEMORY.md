@@ -9,14 +9,11 @@
 
 ## Preferences
 - For Todoist integration, use direct API calls (curl/HTTP) rather than assuming a Todoist CLI.
-- Place new personal skills under the assistant profile (`profiles/assistant/agent/skills`).
-- For the assistant profile, default to provider `openai-codex` with model `gpt-5.3-codex`.
-- Disable automatic memory-card generation/indexing; use on-demand qmd queries instead.
-- Use `xhigh` as the default thinking level for assistant and shared profiles.
 - When asked to take notes, use Apple Notes.
-- Prefer profile-based settings over environment variables for pa TUI theme mapping.
 - Checkpoint workflow should always push after committing.
-- - Stores shopping list in Todoist. For time-based reminders or follow-up check-ins, prefer using personal-agent scheduled tasks (daemon) rather than Apple Reminders.
+- Stores shopping list in Todoist.
+- For time-based reminders or follow-up check-ins, prefer using personal-agent scheduled tasks (daemon) rather than Apple Reminders.
+- They want a recurring daily weather task at 7am (White Plains, NY) for today's weather plus the next 3 days, using personal-agent scheduled tasks.
 
 ## Environment
 
