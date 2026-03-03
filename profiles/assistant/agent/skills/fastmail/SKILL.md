@@ -1,38 +1,36 @@
 ---
 name: fastmail
-description: Interact with Fastmail using direct API calls via CalDAV and JMAP, with explicit IMAP/CalDAV vs JMAP auth separation. Use when the user wants to list/create/delete calendar events, list mailboxes, or query recent email.
+description: Interact with Fastmail using CalDAV for calendar operations and IMAP for mailbox/email queries. Use when the user wants to list/create/delete calendar events, list mailboxes, or query recent email.
 ---
 
-# Fastmail via CalDAV + JMAP (API-first)
+# Fastmail via CalDAV + IMAP
 
-Use direct HTTP calls only (`curl` + `jq`).
+Use the bundled scripts in `scripts/` for repeatable operations.
 
-Prefer the bundled scripts in `scripts/` for repeatable operations.
+- **Calendar**: CalDAV (`curl`)
+- **Mail**: IMAP (`python3` + `imaplib`)
 
 ## Credentials and endpoints
 
-Fastmail uses different auth per protocol:
-
-- **IMAP / SMTP / CalDAV**: Fastmail username + **app password**
-- **JMAP**: Fastmail **API token** (`Authorization: Bearer ...`)
+Fastmail uses app-password auth for IMAP/SMTP/CalDAV.
 
 ```bash
 export FASTMAIL_USERNAME="you@example.com"
+# Set to concrete value, or an op:// reference for IMAP scripts.
 export FASTMAIL_APP_PASSWORD="<fastmail-app-password>"
-# Recommended with 1Password:
-# export FASTMAIL_APP_PASSWORD="op://Assistant/FASTMAIL_APP_PASSWORD/password"
-
-# JMAP uses a separate token (do not reuse app password)
-export FASTMAIL_JMAP_API_TOKEN="<fastmail-jmap-api-token>"
-# Recommended with 1Password:
-# export FASTMAIL_JMAP_API_TOKEN="op://Assistant/FASTMAIL_JMAP_API_TOKEN/credential"
-# Optional fallback reference when FASTMAIL_JMAP_API_TOKEN is unset:
-# export FASTMAIL_JMAP_API_TOKEN_OP_REF="op://Assistant/FASTMAIL_JMAP_API_TOKEN/credential"
+# 1Password examples:
+# export FASTMAIL_APP_PASSWORD="$(op --cache=false read op://Assistant/FASTMAIL_APP_PASSWORD/password)"
+# export FASTMAIL_APP_PASSWORD_OP_REF="op://Assistant/FASTMAIL_APP_PASSWORD/password"
 
 export FASTMAIL_CALENDAR_URL="<calendar-url-from-fastmail-export>"
-export FASTMAIL_JMAP_SESSION_URL="https://api.fastmail.com/jmap/session"
 
-# Optional fail-fast controls for 1Password + network calls
+# IMAP defaults (usually no override needed)
+export FASTMAIL_IMAP_HOST="imap.fastmail.com"
+export FASTMAIL_IMAP_PORT=993
+export FASTMAIL_IMAP_TIMEOUT_SECONDS=30
+export FASTMAIL_IMAP_MAILBOX="INBOX"
+
+# Optional fail-fast controls
 export FASTMAIL_OP_READ_TIMEOUT_SECONDS=15
 export FASTMAIL_CURL_CONNECT_TIMEOUT_SECONDS=10
 export FASTMAIL_CURL_MAX_TIME_SECONDS=30
@@ -40,7 +38,6 @@ export FASTMAIL_CURL_MAX_TIME_SECONDS=30
 
 Get credentials from Fastmail settings:
 - App password: `Settings -> Privacy & Security -> Manage app passwords and access`
-- API token: `Settings -> Privacy & Security -> Manage API tokens`
 - Calendar URL: `Settings -> Calendars -> <calendar> -> Export -> CalDAV URL`
 
 ## Bundled scripts (preferred)
@@ -59,22 +56,22 @@ Get credentials from Fastmail settings:
 ./scripts/caldav-delete-event.sh abc123.ics
 ```
 
-### JMAP
+### IMAP
 
 ```bash
 # List mailboxes
-./scripts/jmap-mailboxes.sh
+./scripts/imap-mailboxes.sh
 
-# Latest messages (default 10)
-./scripts/jmap-latest-email.sh
+# Latest messages from INBOX (default 10)
+./scripts/imap-latest-email.sh
 
-# Latest 25
-./scripts/jmap-latest-email.sh 25
+# Latest 25 from Archive
+./scripts/imap-latest-email.sh 25 Archive
 ```
 
-## Raw API fallback examples
+## Raw protocol fallback examples
 
-Use when you need custom behavior not covered by scripts.
+Use these when you need behavior not covered by scripts.
 
 ### CalDAV REPORT (list events)
 
@@ -103,37 +100,35 @@ curl -sS -u "$FASTMAIL_USERNAME:$FASTMAIL_APP_PASSWORD" \
   --data "$CALDAV_REPORT_BODY"
 ```
 
-### JMAP session + mailbox list
+### IMAP mailbox list (python)
 
 ```bash
-fastmail_jmap_api_token="$FASTMAIL_JMAP_API_TOKEN"
-if [[ "$fastmail_jmap_api_token" == op://* ]]; then
-  fastmail_jmap_api_token="$(op --cache=false read "$fastmail_jmap_api_token")"
-fi
+python3 - <<'PY'
+import imaplib
+import json
+import os
 
-session_json="$(curl -sS -H "Authorization: Bearer $fastmail_jmap_api_token" "$FASTMAIL_JMAP_SESSION_URL")"
-api_url="$(echo "$session_json" | jq -r '.apiUrl')"
-mail_account_id="$(echo "$session_json" | jq -r '.primaryAccounts["urn:ietf:params:jmap:mail"]')"
+username = os.environ["FASTMAIL_USERNAME"]
+password = os.environ["FASTMAIL_APP_PASSWORD"]
+host = os.environ.get("FASTMAIL_IMAP_HOST", "imap.fastmail.com")
+port = int(os.environ.get("FASTMAIL_IMAP_PORT", "993"))
 
-payload="$(jq -n \
-  --arg accountId "$mail_account_id" \
-  '{
-    using: ["urn:ietf:params:jmap:core", "urn:ietf:params:jmap:mail"],
-    methodCalls: [["Mailbox/get", {accountId: $accountId}, "m1"]]
-  }'
-)"
+with imaplib.IMAP4_SSL(host, port) as client:
+    client.login(username, password)
+    status, rows = client.list()
+    if status != "OK":
+        raise RuntimeError("IMAP LIST failed")
 
-curl -sS \
-  -H "Authorization: Bearer $fastmail_jmap_api_token" \
-  -H "Content-Type: application/json" \
-  "$api_url" \
-  --data "$payload"
+    mailboxes = [row.decode("utf-8", errors="replace") for row in rows or []]
+    print(json.dumps(mailboxes, indent=2))
+PY
 ```
 
 ## Notes
 
-- Fastmail calendar access is currently via **CalDAV** (not general JMAP calendar APIs).
-- Bundled scripts now fail fast on stalled 1Password or network calls (configurable via `FASTMAIL_OP_READ_TIMEOUT_SECONDS`, `FASTMAIL_CURL_CONNECT_TIMEOUT_SECONDS`, and `FASTMAIL_CURL_MAX_TIME_SECONDS`).
-- If JMAP returns `Invalid Authorization bearer parameters`, the configured value is likely an app password (CalDAV) rather than a Fastmail API token.
-- Keep tokens/passwords in env vars or a secret manager.
+- Calendar access is via **CalDAV**.
+- Mailbox/email queries now use **IMAP** (no JMAP token required).
+- IMAP scripts fail fast on stalled 1Password reads (`FASTMAIL_OP_READ_TIMEOUT_SECONDS`) and socket timeouts (`FASTMAIL_IMAP_TIMEOUT_SECONDS`).
+- CalDAV scripts honor `FASTMAIL_CURL_CONNECT_TIMEOUT_SECONDS` and `FASTMAIL_CURL_MAX_TIME_SECONDS`.
+- Keep credentials in env vars or a secret manager.
 - Do not write secrets to repo files or durable memory.
