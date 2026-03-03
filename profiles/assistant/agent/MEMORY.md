@@ -14,6 +14,7 @@
 - 1Password CLI (`op`) is installed, and authentication is intended via `OP_SERVICE_ACCOUNT_TOKEN` environment variable.
 - Assistant runtime secrets are stored in 1Password vault `Assistant`; `TELEGRAM_BOT` item contains `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` fields.
 - 1Password vault `Assistant` also stores `EXA_API_KEY`, `HEVY_API_KEY`, `TODOIST_API_TOKEN`, `KIMI_API_KEY`, and `ZAI_API_KEY` items using `credential` fields.
+- User has already removed plaintext secret exports from shell config and prefers 1Password `op://` references for runtime secrets.
 
 ## Constraints
 
