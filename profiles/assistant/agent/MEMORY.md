@@ -12,6 +12,7 @@
 
 ## Environment
 - 1Password CLI (`op`) is installed, and authentication is intended via `OP_SERVICE_ACCOUNT_TOKEN` environment variable.
+- Assistant runtime secrets are stored in 1Password vault `Assistant`; `TELEGRAM_BOT` item contains `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` fields.
 
 ## Constraints
 
