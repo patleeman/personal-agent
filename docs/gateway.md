@@ -108,6 +108,15 @@ pa gateway telegram start
 
 Foreground mode stays attached to terminal (`Ctrl+C` to stop).
 
+Telegram behavior highlights:
+
+- Inbound support: text, documents, photos, and voice notes
+- Image attachments are passed to Pi as native image inputs
+- Rich HTML formatting for code blocks/headings/links in bot replies
+- Streaming uses message edits (live-updating response)
+- Very long outputs are sent as `.txt` document attachments
+- Inline action buttons on replies: Stop, New, Regenerate, Follow up
+
 ---
 
 ## Discord
@@ -162,12 +171,21 @@ Notes:
 
 Each chat/channel has its own persisted Pi session file.
 
+Gateway runs append a gateway-specific system-prompt block before each turn so the model knows:
+
+- it is operating in chat-gateway mode (not TUI)
+- which gateway/provider is active (Telegram or Discord)
+- what gateway features and commands are available
+- how media/file delivery behaves
+- chat-style response rules (concise by default; no code snippets/file paths unless asked)
+
 Telegram additionally durably spools inbound messages before processing; pending messages are replayed after restart/crash.
 
 When a new message arrives while a run is active in the same conversation:
 
 - normal message → steer (interrupt-style)
 - `/followup <text>` → queued follow-up delivered after current response
+- `/followup` (no args) → puts chat into one-shot follow-up capture mode (next message is treated as follow-up)
 
 ---
 
@@ -181,9 +199,10 @@ When a new message arrives while a run is active in the same conversation:
 - `/tasks [status]` (`all|running|active|completed|disabled|pending|error`)
 - `/model` / `/models`
 - `/stop`
-- `/followup <text>`
+- `/followup <text>` (or `/followup` for one-shot follow-up capture mode)
+- `/regenerate`
 - `/cancel`
-- `/compact` (guidance only; manual compaction is in Pi TUI)
+- `/compact [instructions]` (runs native Pi compaction)
 - `/resume` (gateway auto-resumes per chat/channel)
 
 Telegram registers slash commands via Bot API on startup.

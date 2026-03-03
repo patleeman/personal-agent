@@ -42,6 +42,11 @@ interface TestRunPromptInput {
   sessionFile: string;
   cwd: string;
   model?: string;
+  images?: Array<{
+    type: 'image';
+    data: string;
+    mimeType: string;
+  }>;
   abortSignal?: AbortSignal;
   onTextDelta?: (delta: string) => void;
   logContext?: {
@@ -82,6 +87,13 @@ function createTestConversationControllerFactory(runPrompt: TestRunPrompt) {
     return {
       submitPrompt: async (input: TestRunPromptInput) => ({ mode: 'started' as const, run: enqueueRun(input) }),
       submitFollowUp: async (input: TestRunPromptInput) => ({ mode: 'started' as const, run: enqueueRun(input) }),
+      compact: async (customInstructions?: string) => {
+        if (customInstructions && customInstructions.length > 0) {
+          return `Context compacted.\n${customInstructions}`;
+        }
+
+        return 'Context compacted.';
+      },
       abortCurrent: async () => {
         if (!activeAbortController) {
           return false;
@@ -124,6 +136,24 @@ describe('splitTelegramMessage', () => {
   it('splits into multiple chunks when above limit', () => {
     const chunks = splitTelegramMessage('abcdefghij', 4);
     expect(chunks).toEqual(['abcd', 'efgh', 'ij']);
+  });
+
+  it('preserves fenced code blocks across chunk boundaries', () => {
+    const text = [
+      '```ts',
+      'const value = 1;',
+      'console.log(value);',
+      '```',
+      'done',
+    ].join('\n');
+
+    const chunks = splitTelegramMessage(text, 20);
+
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks) {
+      const fenceCount = (chunk.match(/```/g) ?? []).length;
+      expect(fenceCount % 2).toBe(0);
+    }
   });
 });
 
@@ -469,8 +499,158 @@ describe('queued telegram message handler', () => {
     );
     expect(sendMessage).toHaveBeenCalledWith(
       1,
-      'Manual /compact is not supported in gateway print mode yet. Open this session in Pi TUI to compact.',
+      'Context compacted.',
     );
+  });
+
+  it('enters follow-up capture mode when /followup is sent without arguments', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async ({ prompt }: { prompt: string }) => `reply:${prompt}`);
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/followup' });
+    await handler.waitForIdle('1');
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      1,
+      'Send your follow-up message now. Your next message in this chat will be queued as a follow-up.',
+      {
+        reply_markup: {
+          force_reply: true,
+        },
+      },
+    );
+
+    handler.handleMessage({ chat: { id: 1 }, text: 'also check edge cases' });
+    await handler.waitForIdle('1');
+
+    const promptCall = runPrompt.mock.calls[0]?.[0] as { prompt: string };
+    expect(promptCall.prompt).toBe('also check edge cases');
+  });
+
+  it('reuses the last prompt with /regenerate', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async ({ prompt }: { prompt: string }) => `reply:${prompt}`);
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: 'hello there' });
+    await handler.waitForIdle('1');
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/regenerate' });
+    await handler.waitForIdle('1');
+
+    expect(runPrompt).toHaveBeenCalledTimes(2);
+    const firstPrompt = runPrompt.mock.calls[0]?.[0] as { prompt: string };
+    const secondPrompt = runPrompt.mock.calls[1]?.[0] as { prompt: string };
+    expect(firstPrompt.prompt).toBe('hello there');
+    expect(secondPrompt.prompt).toBe('hello there');
+  });
+
+  it('passes prepared inbound media into prompt text and image attachments', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async ({ prompt }: { prompt: string }) => `reply:${prompt}`);
+    const prepareInboundMedia = vi.fn(async () => [
+      {
+        kind: 'photo' as const,
+        localPath: '/tmp/media/image.png',
+        fileName: 'image.png',
+        mimeType: 'image/png',
+        imageContent: {
+          type: 'image' as const,
+          data: 'aGVsbG8=',
+          mimeType: 'image/png',
+        },
+      },
+    ]);
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      prepareInboundMedia,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({
+      chat: { id: 1 },
+      caption: 'analyze this image',
+      photo: [{ file_id: 'photo-1', width: 10, height: 10 }],
+    });
+
+    await handler.waitForIdle('1');
+
+    expect(prepareInboundMedia).toHaveBeenCalledTimes(1);
+
+    const promptCall = runPrompt.mock.calls[0]?.[0] as { prompt: string; images?: unknown[] };
+    expect(promptCall.prompt).toContain('analyze this image');
+    expect(promptCall.prompt).toContain('/tmp/media/image.png');
+    expect(promptCall.images).toEqual([
+      {
+        type: 'image',
+        data: 'aGVsbG8=',
+        mimeType: 'image/png',
+      },
+    ]);
+  });
+
+  it('uses message edits for streaming and sends long responses as text files', async () => {
+    const sendMessage = vi.fn(async () => ({ message_id: 321 }));
+    const editMessageText = vi.fn(async () => undefined);
+    const sendDocument = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const exportDir = createTempDir('gateway-telegram-exports-');
+
+    const runPrompt = vi.fn(async ({ onTextDelta }: { onTextDelta?: (delta: string) => void }) => {
+      onTextDelta?.('preview');
+      return 'x'.repeat(13_000);
+    });
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      telegramExportDir: exportDir,
+      sendMessage,
+      editMessageText,
+      sendDocument,
+      sendChatAction,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: 'stream please' });
+    await handler.waitForIdle('1');
+
+    expect(editMessageText).toHaveBeenCalled();
+    expect(sendDocument).toHaveBeenCalledTimes(1);
   });
 
   it('maps /skill <name> to /skill:<name> before invoking pi', async () => {
@@ -723,6 +903,7 @@ describe('queued telegram message handler', () => {
     const controller = {
       submitPrompt,
       submitFollowUp: vi.fn(async () => ({ mode: 'followup' as const })),
+      compact: vi.fn(async () => 'Context compacted.'),
       abortCurrent: vi.fn(async () => false),
       waitForIdle: vi.fn(async () => {
         await firstRun;
@@ -1375,6 +1556,7 @@ describe('queued discord message handler', () => {
     const controller = {
       submitPrompt,
       submitFollowUp: vi.fn(async () => ({ mode: 'followup' as const })),
+      compact: vi.fn(async () => 'Context compacted.'),
       abortCurrent: vi.fn(async () => false),
       waitForIdle: vi.fn(async () => {
         await firstRun;

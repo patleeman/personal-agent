@@ -16,6 +16,11 @@ interface TestRunPromptInput {
   sessionFile: string;
   cwd: string;
   model?: string;
+  images?: Array<{
+    type: 'image';
+    data: string;
+    mimeType: string;
+  }>;
   abortSignal?: AbortSignal;
   onTextDelta?: (delta: string) => void;
   logContext?: {
@@ -56,6 +61,13 @@ function createTestConversationControllerFactory(runPrompt: TestRunPrompt) {
     return {
       submitPrompt: async (input: TestRunPromptInput) => ({ mode: 'started' as const, run: enqueueRun(input) }),
       submitFollowUp: async (input: TestRunPromptInput) => ({ mode: 'started' as const, run: enqueueRun(input) }),
+      compact: async (customInstructions?: string) => {
+        if (customInstructions && customInstructions.length > 0) {
+          return `Context compacted.\n${customInstructions}`;
+        }
+
+        return 'Context compacted.';
+      },
       abortCurrent: async () => {
         if (!activeAbortController) {
           return false;
@@ -193,7 +205,7 @@ describe('queued telegram handler breadth', () => {
     await handler.waitForIdle();
 
     expect(runPrompt).not.toHaveBeenCalled();
-    expect(sendMessage).toHaveBeenCalledWith(1, 'Please send text messages only.');
+    expect(sendMessage).toHaveBeenCalledWith(1, 'Please send text, documents, images, or voice notes.');
   });
 
   it('splits long responses into multiple messages', async () => {

@@ -7,10 +7,12 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
+  statSync,
   unlinkSync,
   writeFileSync,
 } from 'fs';
-import { join, resolve } from 'path';
+import { basename, dirname, extname, join, resolve } from 'path';
+import { fileURLToPath } from 'url';
 import { spawnSync } from 'child_process';
 import TelegramBot from 'node-telegram-bot-api';
 import * as DiscordJs from 'discord.js';
@@ -139,10 +141,43 @@ export interface DiscordBridgeConfig {
   maxPendingPerChannel?: number;
 }
 
+type TelegramParseMode = 'HTML';
+
+interface PromptImageAttachment {
+  type: 'image';
+  data: string;
+  mimeType: string;
+}
+
+interface TelegramDocumentLike {
+  file_id: string;
+  file_name?: string;
+  mime_type?: string;
+  file_size?: number;
+}
+
+interface TelegramPhotoSizeLike {
+  file_id: string;
+  width?: number;
+  height?: number;
+  file_size?: number;
+}
+
+interface TelegramVoiceLike {
+  file_id: string;
+  mime_type?: string;
+  duration?: number;
+  file_size?: number;
+}
+
 export interface TelegramMessageLike {
   chat: { id: number };
   message_id?: number;
   text?: string;
+  caption?: string;
+  document?: TelegramDocumentLike;
+  photo?: TelegramPhotoSizeLike[];
+  voice?: TelegramVoiceLike;
   reply_to_message?: {
     message_id?: number;
   };
@@ -154,18 +189,68 @@ export interface TelegramMessageLike {
   };
 }
 
+type TelegramInboundMediaKind = 'photo' | 'document' | 'voice';
+
+interface TelegramInboundMediaReference {
+  kind: TelegramInboundMediaKind;
+  fileId: string;
+  fileName?: string;
+  mimeType?: string;
+  fileSizeBytes?: number;
+  durationSeconds?: number;
+  width?: number;
+  height?: number;
+}
+
+interface TelegramPreparedInboundMedia {
+  kind: TelegramInboundMediaKind;
+  localPath: string;
+  fileName?: string;
+  mimeType?: string;
+  fileSizeBytes?: number;
+  durationSeconds?: number;
+  imageContent?: PromptImageAttachment;
+}
+
+type PrepareTelegramInboundMediaFn = (input: {
+  chatId: string;
+  messageId?: number;
+  media: TelegramInboundMediaReference[];
+}) => Promise<TelegramPreparedInboundMedia[]>;
+
 interface TelegramInlineKeyboardButton {
   text: string;
   callback_data: string;
 }
 
+interface TelegramReplyMarkup {
+  inline_keyboard?: TelegramInlineKeyboardButton[][];
+  force_reply?: boolean;
+}
+
 interface TelegramSendMessageOptions {
-  reply_markup?: {
-    inline_keyboard: TelegramInlineKeyboardButton[][];
-  };
+  parse_mode?: TelegramParseMode;
+  disable_web_page_preview?: boolean;
+  reply_markup?: TelegramReplyMarkup;
+}
+
+interface TelegramSendFileOptions {
+  caption?: string;
+  parse_mode?: TelegramParseMode;
 }
 
 type SendMessageFn = (chatId: number, text: string, options?: TelegramSendMessageOptions) => Promise<unknown>;
+
+type EditMessageTextFn = (
+  chatId: number,
+  messageId: number,
+  text: string,
+  options?: TelegramSendMessageOptions,
+) => Promise<unknown>;
+
+type SendDocumentFn = (chatId: number, filePath: string, options?: TelegramSendFileOptions) => Promise<unknown>;
+
+type SendPhotoFn = (chatId: number, filePath: string, options?: TelegramSendFileOptions) => Promise<unknown>;
 
 type SendTextFn = (text: string) => Promise<unknown>;
 
@@ -176,6 +261,7 @@ interface RunPromptFnInput {
   sessionFile: string;
   cwd: string;
   model?: string;
+  images?: PromptImageAttachment[];
   abortSignal?: AbortSignal;
   onTextDelta?: (delta: string) => void;
   logContext?: {
@@ -207,6 +293,7 @@ function completedMessageProcessingResult(): MessageProcessingResult {
 export interface GatewayConversationController {
   submitPrompt: (input: RunPromptFnInput) => Promise<ConversationSubmitResult>;
   submitFollowUp: (input: RunPromptFnInput) => Promise<ConversationSubmitResult>;
+  compact: (customInstructions?: string) => Promise<string>;
   abortCurrent: () => Promise<boolean>;
   waitForIdle: () => Promise<void>;
   dispose: () => Promise<void>;
@@ -270,7 +357,12 @@ export interface CreateTelegramMessageHandlerOptions {
   telegramSessionDir: string;
   workingDirectory: string;
   sendMessage: SendMessageFn;
+  editMessageText?: EditMessageTextFn;
+  sendDocument?: SendDocumentFn;
+  sendPhoto?: SendPhotoFn;
   sendChatAction: SendChatActionFn;
+  prepareInboundMedia?: PrepareTelegramInboundMediaFn;
+  telegramExportDir?: string;
   createConversationController: CreateConversationControllerFn;
   commandHelpText?: string;
   skillsHelpText?: string;
@@ -333,6 +425,13 @@ const DAEMON_NOTIFICATION_POLL_INTERVAL_MS = 5000;
 const MAX_TRACKED_SCHEDULED_REPLY_CONTEXTS = 500;
 const SCHEDULED_REPLY_CONTEXT_TTL_MS = 24 * 60 * 60 * 1000;
 const TELEGRAM_MODEL_SELECTION_CALLBACK_PREFIX = 'model_select:';
+const TELEGRAM_ACTION_CALLBACK_PREFIX = 'action:';
+const TELEGRAM_MAX_MESSAGE_CHARS = 3900;
+const TELEGRAM_STREAMING_EDIT_PREVIEW_MAX_CHARS = 3200;
+const TELEGRAM_STREAMING_EDIT_INTERVAL_MS = 800;
+const TELEGRAM_LONG_OUTPUT_FILE_THRESHOLD_CHARS = 12_000;
+const TELEGRAM_MAX_AUTO_ATTACHMENTS = 3;
+const TELEGRAM_MAX_ATTACHMENT_BYTES = 45 * 1024 * 1024;
 const PROMPT_CANCELLED_ERROR_MESSAGE = 'Request cancelled by /stop.';
 const STOPPED_ACTIVE_REQUEST_MESSAGE = 'Stopped active request.';
 const NO_ACTIVE_REQUEST_MESSAGE = 'No active request to stop.';
@@ -456,9 +555,10 @@ const DEFAULT_TELEGRAM_COMMANDS: TelegramCommandDefinition[] = [
   { command: 'skill', description: 'Load a skill (usage: /skill <name>)' },
   ...MODEL_TELEGRAM_COMMANDS,
   { command: 'stop', description: 'Stop active request' },
-  { command: 'followup', description: 'Queue follow-up while current response runs' },
+  { command: 'followup', description: 'Queue follow-up (or /followup to enter follow-up mode)' },
+  { command: 'regenerate', description: 'Run the last prompt again' },
   { command: 'cancel', description: 'Cancel active model selection' },
-  { command: 'compact', description: 'Compact context (TUI only in gateway mode)' },
+  { command: 'compact', description: 'Compact context (usage: /compact [instructions])' },
   { command: 'resume', description: 'Resume help (gateway auto-resumes per chat)' },
 ];
 
@@ -1235,8 +1335,10 @@ async function promptPositiveInteger(
   return defaultValue;
 }
 
-function splitMessage(text: string, chunkSize = 3900): string[] {
-  if (text.length <= chunkSize) return [text];
+function splitMessage(text: string, chunkSize = TELEGRAM_MAX_MESSAGE_CHARS): string[] {
+  if (text.length <= chunkSize) {
+    return [text];
+  }
 
   const chunks: string[] = [];
   let start = 0;
@@ -1249,8 +1351,255 @@ function splitMessage(text: string, chunkSize = 3900): string[] {
   return chunks;
 }
 
-export function splitTelegramMessage(text: string, chunkSize = 3900): string[] {
-  return splitMessage(text, chunkSize);
+function splitLongLineForTelegram(line: string, maxLength: number): string[] {
+  if (line.length <= maxLength) {
+    return [line];
+  }
+
+  const segments: string[] = [];
+  let remaining = line;
+
+  while (remaining.length > maxLength) {
+    const candidate = remaining.slice(0, maxLength);
+    const splitAt = Math.max(
+      candidate.lastIndexOf(' '),
+      candidate.lastIndexOf('\t'),
+      candidate.lastIndexOf(','),
+      candidate.lastIndexOf(';'),
+    );
+
+    if (splitAt <= 0 || splitAt < Math.floor(maxLength * 0.4)) {
+      segments.push(candidate);
+      remaining = remaining.slice(maxLength);
+      continue;
+    }
+
+    segments.push(remaining.slice(0, splitAt + 1));
+    remaining = remaining.slice(splitAt + 1);
+  }
+
+  if (remaining.length > 0) {
+    segments.push(remaining);
+  }
+
+  return segments;
+}
+
+export function splitTelegramMessage(text: string, chunkSize = TELEGRAM_MAX_MESSAGE_CHARS): string[] {
+  if (text.length <= chunkSize) {
+    return [text];
+  }
+
+  const chunks: string[] = [];
+  const lines = text.split('\n');
+  let currentChunk = '';
+  let activeFenceLanguage: string | null = null;
+
+  const pushChunk = (): void => {
+    if (currentChunk.length === 0) {
+      return;
+    }
+
+    let finalizedChunk = currentChunk;
+
+    if (activeFenceLanguage !== null && !finalizedChunk.trimEnd().endsWith('```')) {
+      finalizedChunk = `${finalizedChunk}${finalizedChunk.endsWith('\n') ? '' : '\n'}\`\`\``;
+    }
+
+    chunks.push(finalizedChunk);
+    currentChunk = activeFenceLanguage !== null ? `\`\`\`${activeFenceLanguage}\n` : '';
+  };
+
+  const appendText = (segment: string): void => {
+    let remaining = segment;
+
+    while (remaining.length > 0) {
+      const closingFenceReserve = activeFenceLanguage !== null ? 4 : 0;
+      const available = chunkSize - currentChunk.length - closingFenceReserve;
+
+      if (available <= 0) {
+        pushChunk();
+        continue;
+      }
+
+      if (remaining.length <= available) {
+        currentChunk += remaining;
+        remaining = '';
+        continue;
+      }
+
+      const splitSegments = splitLongLineForTelegram(remaining, available);
+      const nextSegment = splitSegments[0] ?? '';
+      currentChunk += nextSegment;
+      remaining = remaining.slice(nextSegment.length);
+      pushChunk();
+    }
+  };
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? '';
+    const lineWithNewLine = index < lines.length - 1 ? `${line}\n` : line;
+
+    appendText(lineWithNewLine);
+
+    const fenceMatch = line.trim().match(/^```\s*([^`]*)$/);
+    if (!fenceMatch) {
+      continue;
+    }
+
+    if (activeFenceLanguage === null) {
+      activeFenceLanguage = (fenceMatch[1] ?? '').trim();
+    } else {
+      activeFenceLanguage = null;
+    }
+  }
+
+  if (currentChunk.length > 0) {
+    if (activeFenceLanguage !== null && !currentChunk.trimEnd().endsWith('```')) {
+      currentChunk = `${currentChunk}${currentChunk.endsWith('\n') ? '' : '\n'}\`\`\``;
+    }
+
+    chunks.push(currentChunk);
+  }
+
+  return chunks;
+}
+
+function inferMimeTypeFromPath(filePath: string): string | undefined {
+  switch (extname(filePath).toLowerCase()) {
+    case '.png':
+      return 'image/png';
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.gif':
+      return 'image/gif';
+    case '.webp':
+      return 'image/webp';
+    case '.txt':
+      return 'text/plain';
+    case '.md':
+      return 'text/markdown';
+    case '.json':
+      return 'application/json';
+    case '.csv':
+      return 'text/csv';
+    case '.pdf':
+      return 'application/pdf';
+    case '.ogg':
+      return 'audio/ogg';
+    case '.wav':
+      return 'audio/wav';
+    case '.mp3':
+      return 'audio/mpeg';
+    default:
+      return undefined;
+  }
+}
+
+function selectBestTelegramPhoto(photoSizes: TelegramPhotoSizeLike[]): TelegramPhotoSizeLike | undefined {
+  if (photoSizes.length === 0) {
+    return undefined;
+  }
+
+  const sorted = [...photoSizes].sort((left, right) => {
+    const leftSize = (left.file_size ?? 0) || ((left.width ?? 0) * (left.height ?? 0));
+    const rightSize = (right.file_size ?? 0) || ((right.width ?? 0) * (right.height ?? 0));
+    return leftSize - rightSize;
+  });
+
+  return sorted[sorted.length - 1];
+}
+
+function extractTelegramInboundMedia(message: TelegramMessageLike): TelegramInboundMediaReference[] {
+  const media: TelegramInboundMediaReference[] = [];
+
+  if (message.document?.file_id) {
+    media.push({
+      kind: 'document',
+      fileId: message.document.file_id,
+      fileName: message.document.file_name,
+      mimeType: message.document.mime_type,
+      fileSizeBytes: message.document.file_size,
+    });
+  }
+
+  if (Array.isArray(message.photo) && message.photo.length > 0) {
+    const bestPhoto = selectBestTelegramPhoto(message.photo);
+    if (bestPhoto?.file_id) {
+      media.push({
+        kind: 'photo',
+        fileId: bestPhoto.file_id,
+        mimeType: 'image/jpeg',
+        fileSizeBytes: bestPhoto.file_size,
+        width: bestPhoto.width,
+        height: bestPhoto.height,
+      });
+    }
+  }
+
+  if (message.voice?.file_id) {
+    media.push({
+      kind: 'voice',
+      fileId: message.voice.file_id,
+      mimeType: message.voice.mime_type,
+      durationSeconds: message.voice.duration,
+      fileSizeBytes: message.voice.file_size,
+    });
+  }
+
+  return media;
+}
+
+function describeTelegramInboundMedia(media: TelegramPreparedInboundMedia): string {
+  const details: string[] = [];
+
+  if (media.fileName) {
+    details.push(`name=${media.fileName}`);
+  }
+
+  if (media.mimeType) {
+    details.push(`mime=${media.mimeType}`);
+  }
+
+  if (typeof media.fileSizeBytes === 'number') {
+    details.push(`size=${media.fileSizeBytes}B`);
+  }
+
+  if (typeof media.durationSeconds === 'number') {
+    details.push(`duration=${media.durationSeconds}s`);
+  }
+
+  const detailSuffix = details.length > 0 ? ` (${details.join(', ')})` : '';
+  return `- [${media.kind}] \`${media.localPath}\`${detailSuffix}`;
+}
+
+function buildPromptFromTelegramMedia(
+  baseText: string,
+  preparedMedia: TelegramPreparedInboundMedia[],
+): { prompt: string; images: PromptImageAttachment[] } {
+  const images = preparedMedia
+    .map((media) => media.imageContent)
+    .filter((image): image is PromptImageAttachment => Boolean(image));
+
+  const promptLines: string[] = [];
+  if (baseText.trim().length > 0) {
+    promptLines.push(baseText.trim());
+  } else {
+    promptLines.push('Please inspect the attached media and help the user.');
+  }
+
+  promptLines.push('', 'User attached the following media files:');
+  for (const media of preparedMedia) {
+    promptLines.push(describeTelegramInboundMedia(media));
+  }
+
+  promptLines.push('', 'Use the file paths above with tools when needed.');
+
+  return {
+    prompt: promptLines.join('\n'),
+    images,
+  };
 }
 
 function getProfileDefaultModel(profile: ResolvedProfile): string | undefined {
@@ -1266,6 +1615,33 @@ function getProfileDefaultModel(profile: ResolvedProfile): string | undefined {
   }
 
   return undefined;
+}
+
+function resolveGatewayPromptExtensionPath(): string | undefined {
+  const moduleDir = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    join(moduleDir, 'extensions', 'gateway-context.js'),
+    join(moduleDir, 'extensions', 'gateway-context.ts'),
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+}
+
+function buildGatewayExtensionEntries(profile: ResolvedProfile): string[] {
+  const merged = [...profile.extensionEntries];
+  const gatewayPromptExtension = resolveGatewayPromptExtensionPath();
+
+  if (gatewayPromptExtension && !merged.includes(gatewayPromptExtension)) {
+    merged.push(gatewayPromptExtension);
+  }
+
+  return merged;
 }
 
 function buildGatewaySettingsManager(profile: ResolvedProfile, cwd: string, agentDir: string): SettingsManager {
@@ -1306,7 +1682,7 @@ async function createGatewayAgentSession(options: {
     agentDir: options.agentDir,
     settingsManager,
     eventBus,
-    additionalExtensionPaths: options.profile.extensionEntries,
+    additionalExtensionPaths: buildGatewayExtensionEntries(options.profile),
     additionalPromptTemplatePaths: options.profile.promptEntries,
   });
 
@@ -1464,6 +1840,7 @@ interface RunPiPrintPromptOptions {
   agentDir: string;
   cwd: string;
   model?: string;
+  images?: PromptImageAttachment[];
   abortSignal?: AbortSignal;
   logContext?: {
     source: string;
@@ -1572,7 +1949,9 @@ async function runPiPrintPrompt(options: RunPiPrintPromptOptions): Promise<strin
     void (async () => {
       try {
         await applyRequestedModel(session, options.model);
-        await session.prompt(options.prompt);
+        await session.prompt(options.prompt, {
+          images: options.images,
+        });
 
         const streamed = streamedOutput.trim();
         const fallback = extractLatestAssistantText(session.messages as unknown);
@@ -1679,6 +2058,27 @@ class PersistentConversationController implements GatewayConversationController 
     };
   }
 
+  async compact(customInstructions?: string): Promise<string> {
+    this.ensureActive();
+
+    if (this.activeRun) {
+      await this.abortCurrent();
+    }
+
+    const session = await this.getSession();
+    const result = await session.compact(customInstructions?.trim() || undefined);
+
+    const lines = ['Context compacted.'];
+    lines.push(`Tokens before: ${result.tokensBefore}`);
+
+    const summary = result.summary.trim();
+    if (summary.length > 0) {
+      lines.push('', summary);
+    }
+
+    return lines.join('\n');
+  }
+
   async abortCurrent(): Promise<boolean> {
     const activeRun = this.activeRun;
     if (!activeRun) {
@@ -1772,7 +2172,9 @@ class PersistentConversationController implements GatewayConversationController 
   private async executeRun(input: RunPromptFnInput, activeRun: ActiveConversationRun): Promise<string> {
     const session = await this.getSession();
     await applyRequestedModel(session, input.model);
-    await session.prompt(input.prompt);
+    await session.prompt(input.prompt, {
+      images: input.images,
+    });
 
     const streamed = activeRun.streamedOutput.trim();
     const fallback = extractLatestAssistantText(session.messages as unknown);
@@ -1847,9 +2249,9 @@ class PersistentConversationController implements GatewayConversationController 
     while (this.activeRun) {
       try {
         if (mode === 'steer') {
-          await session.steer(input.prompt);
+          await session.steer(input.prompt, input.images);
         } else {
-          await session.followUp(input.prompt);
+          await session.followUp(input.prompt, input.images);
         }
 
         return true;
@@ -1971,12 +2373,407 @@ function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
+function escapeTelegramHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+function escapeTelegramHtmlAttribute(value: string): string {
+  return escapeTelegramHtml(value).replaceAll('"', '&quot;');
+}
+
+function renderTelegramRichText(text: string): { text: string; parseMode?: TelegramParseMode } {
+  const normalizedText = text.length > 0 ? text : '(empty response)';
+
+  const codeBlocks: string[] = [];
+  const codeBlockTokenPrefix = '@@TG_CODE_BLOCK_';
+  let withCodeBlockTokens = normalizedText.replace(/```([a-zA-Z0-9_-]*)\n?([\s\S]*?)```/g, (_match, language, code) => {
+    const index = codeBlocks.length;
+    const normalizedLanguage = typeof language === 'string' ? language.trim() : '';
+    const normalizedCode = typeof code === 'string' ? code : '';
+    const prefix = normalizedLanguage.length > 0 ? `${normalizedLanguage}\n` : '';
+    codeBlocks.push(`${prefix}${normalizedCode}`);
+    return `${codeBlockTokenPrefix}${index}@@`;
+  });
+
+  withCodeBlockTokens = escapeTelegramHtml(withCodeBlockTokens);
+
+  let rendered = withCodeBlockTokens
+    .replace(/^(#{1,6})\s+(.+)$/gm, (_match, _hashes, title: string) => `<b>${title.trim()}</b>`)
+    .replace(/\*\*([^*\n][\s\S]*?)\*\*/g, (_match, boldText: string) => `<b>${boldText}</b>`)
+    .replace(/`([^`\n]+)`/g, (_match, codeText: string) => `<code>${codeText}</code>`)
+    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, (_match, label: string, url: string) =>
+      `<a href="${escapeTelegramHtmlAttribute(url)}">${label}</a>`);
+
+  rendered = rendered.replace(/@@TG_CODE_BLOCK_(\d+)@@/g, (_match, rawIndex: string) => {
+    const index = Number.parseInt(rawIndex, 10);
+    const code = codeBlocks[index] ?? '';
+    return `<pre><code>${escapeTelegramHtml(code)}</code></pre>`;
+  });
+
+  return {
+    text: rendered,
+    parseMode: 'HTML',
+  };
+}
+
+function invokeTelegramSendMessage(
+  sendMessage: SendMessageFn,
+  chatId: number,
+  text: string,
+  options?: TelegramSendMessageOptions,
+): Promise<unknown> {
+  if (!options || Object.keys(options).length === 0) {
+    return sendMessage(chatId, text);
+  }
+
+  return sendMessage(chatId, text, options);
+}
+
+function invokeTelegramEditMessageText(
+  editMessageText: EditMessageTextFn,
+  chatId: number,
+  messageId: number,
+  text: string,
+  options?: TelegramSendMessageOptions,
+): Promise<unknown> {
+  if (!options || Object.keys(options).length === 0) {
+    return editMessageText(chatId, messageId, text);
+  }
+
+  return editMessageText(chatId, messageId, text, options);
+}
+
+function stripTelegramParseMode(options?: TelegramSendMessageOptions): TelegramSendMessageOptions | undefined {
+  if (!options) {
+    return undefined;
+  }
+
+  const rest: TelegramSendMessageOptions = { ...options };
+  delete rest.parse_mode;
+
+  if (Object.keys(rest).length === 0) {
+    return undefined;
+  }
+
+  return rest;
+}
+
+function isTelegramEntityParseError(error: unknown): boolean {
+  const statusCode = getTelegramErrorStatusCode(error);
+  if (statusCode !== 400) {
+    return false;
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  return /parse entities|can't parse|entity is malformed/i.test(message);
+}
+
+async function sendTelegramFormattedMessage(
+  sendMessage: SendMessageFn,
+  chatId: number,
+  text: string,
+  options?: TelegramSendMessageOptions,
+): Promise<unknown> {
+  const rendered = renderTelegramRichText(text);
+  const renderedOptions: TelegramSendMessageOptions = {
+    ...(options ?? {}),
+    ...(rendered.parseMode ? { parse_mode: rendered.parseMode } : {}),
+  };
+
+  try {
+    return await invokeTelegramSendMessage(sendMessage, chatId, rendered.text, renderedOptions);
+  } catch (error) {
+    if (!isTelegramEntityParseError(error)) {
+      throw error;
+    }
+
+    const plainOptions = stripTelegramParseMode(options);
+    return invokeTelegramSendMessage(sendMessage, chatId, text, plainOptions);
+  }
+}
+
+async function editTelegramFormattedMessage(
+  editMessageText: EditMessageTextFn,
+  chatId: number,
+  messageId: number,
+  text: string,
+  options?: TelegramSendMessageOptions,
+): Promise<unknown> {
+  const rendered = renderTelegramRichText(text);
+  const renderedOptions: TelegramSendMessageOptions = {
+    ...(options ?? {}),
+    ...(rendered.parseMode ? { parse_mode: rendered.parseMode } : {}),
+  };
+
+  try {
+    return await invokeTelegramEditMessageText(editMessageText, chatId, messageId, rendered.text, renderedOptions);
+  } catch (error) {
+    if (!isTelegramEntityParseError(error)) {
+      throw error;
+    }
+
+    const plainOptions = stripTelegramParseMode(options);
+    return invokeTelegramEditMessageText(editMessageText, chatId, messageId, text, plainOptions);
+  }
+}
+
+function buildTelegramResponseActionOptions(): TelegramSendMessageOptions {
+  return {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: '⏹ Stop', callback_data: `${TELEGRAM_ACTION_CALLBACK_PREFIX}stop` },
+          { text: '🆕 New', callback_data: `${TELEGRAM_ACTION_CALLBACK_PREFIX}new` },
+          { text: '🔁 Regenerate', callback_data: `${TELEGRAM_ACTION_CALLBACK_PREFIX}regenerate` },
+        ],
+        [
+          { text: '➕ Follow up', callback_data: `${TELEGRAM_ACTION_CALLBACK_PREFIX}followup` },
+        ],
+      ],
+    },
+  };
+}
+
+interface TelegramOutputAttachment {
+  path: string;
+  kind: 'photo' | 'document';
+}
+
+function isTelegramImagePath(path: string): boolean {
+  const extension = extname(path).toLowerCase();
+  return extension === '.png'
+    || extension === '.jpg'
+    || extension === '.jpeg'
+    || extension === '.gif'
+    || extension === '.webp';
+}
+
+function normalizeTelegramAttachmentCandidate(rawCandidate: string): string {
+  return rawCandidate
+    .trim()
+    .replace(/^file:\/\//i, '')
+    .replace(/^['"(<\[]+/, '')
+    .replace(/['")>\],.;:!?]+$/, '');
+}
+
+function extractTelegramAttachmentCandidates(text: string): string[] {
+  const candidates: string[] = [];
+
+  const markdownImageRegex = /!\[[^\]]*\]\(([^)\n]+)\)/g;
+  const markdownLinkRegex = /\[[^\]]+\]\(([^)\n]+)\)/g;
+  const inlineCodeRegex = /`([^`\n]+\.[a-zA-Z0-9]{1,8})`/g;
+
+  for (const regex of [markdownImageRegex, markdownLinkRegex, inlineCodeRegex]) {
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(text)) !== null) {
+      const candidate = match[1];
+      if (candidate) {
+        candidates.push(candidate);
+      }
+    }
+  }
+
+  return candidates;
+}
+
+function resolveTelegramAttachmentPath(candidate: string, cwd: string): string | undefined {
+  const normalized = normalizeTelegramAttachmentCandidate(candidate);
+  if (normalized.length === 0) {
+    return undefined;
+  }
+
+  if (/^[a-z]+:\/\//i.test(normalized)) {
+    return undefined;
+  }
+
+  const absolutePath = normalized.startsWith('/')
+    ? normalized
+    : resolve(cwd, normalized);
+
+  if (!existsSync(absolutePath)) {
+    return undefined;
+  }
+
+  let stats;
+  try {
+    stats = statSync(absolutePath);
+  } catch {
+    return undefined;
+  }
+
+  if (!stats.isFile() || stats.size > TELEGRAM_MAX_ATTACHMENT_BYTES) {
+    return undefined;
+  }
+
+  return absolutePath;
+}
+
+function extractTelegramOutputAttachments(text: string, cwd: string): TelegramOutputAttachment[] {
+  const resolved = new Set<string>();
+  const attachments: TelegramOutputAttachment[] = [];
+
+  for (const candidate of extractTelegramAttachmentCandidates(text)) {
+    const absolutePath = resolveTelegramAttachmentPath(candidate, cwd);
+    if (!absolutePath || resolved.has(absolutePath)) {
+      continue;
+    }
+
+    const extension = extname(absolutePath);
+    if (extension.length === 0) {
+      continue;
+    }
+
+    resolved.add(absolutePath);
+    attachments.push({
+      path: absolutePath,
+      kind: isTelegramImagePath(absolutePath) ? 'photo' : 'document',
+    });
+
+    if (attachments.length >= TELEGRAM_MAX_AUTO_ATTACHMENTS) {
+      break;
+    }
+  }
+
+  return attachments;
+}
+
+function createTelegramTextExportPath(chatId: number, outputDir: string): string {
+  const timestampToken = new Date().toISOString().replace(/[:.]/g, '-');
+  const chatToken = sanitizeTelegramPendingToken(String(chatId));
+  const fileName = `response_${chatToken}_${timestampToken}.txt`;
+  return join(outputDir, fileName);
+}
+
+interface DeliverTelegramFinalResponseOptions {
+  chatId: number;
+  finalOutput: string;
+  workingDirectory: string;
+  sendMessage: SendMessageFn;
+  editMessageText?: EditMessageTextFn;
+  sendDocument?: SendDocumentFn;
+  sendPhoto?: SendPhotoFn;
+  previewMessageId?: number;
+  outputDir?: string;
+}
+
+async function sendTelegramOutputAttachments(
+  chatId: number,
+  text: string,
+  workingDirectory: string,
+  sendDocument: SendDocumentFn | undefined,
+  sendPhoto: SendPhotoFn | undefined,
+): Promise<void> {
+  if (!sendDocument && !sendPhoto) {
+    return;
+  }
+
+  const attachments = extractTelegramOutputAttachments(text, workingDirectory);
+  if (attachments.length === 0) {
+    return;
+  }
+
+  for (const attachment of attachments) {
+    const caption = `Attachment: ${basename(attachment.path)}`;
+
+    if (attachment.kind === 'photo' && sendPhoto) {
+      await sendPhoto(chatId, attachment.path, { caption });
+      continue;
+    }
+
+    if (sendDocument) {
+      await sendDocument(chatId, attachment.path, { caption });
+    }
+  }
+}
+
+async function deliverTelegramFinalResponse(options: DeliverTelegramFinalResponseOptions): Promise<void> {
+  const text = options.finalOutput.length > 0 ? options.finalOutput : '(no output)';
+  const actionOptions = buildTelegramResponseActionOptions();
+
+  if (text.length > TELEGRAM_LONG_OUTPUT_FILE_THRESHOLD_CHARS && options.sendDocument) {
+    const exportRoot = options.outputDir ?? join(options.workingDirectory, '.pa-telegram-exports');
+    mkdirSync(exportRoot, { recursive: true });
+
+    const exportFilePath = createTelegramTextExportPath(options.chatId, exportRoot);
+    writeFileSync(exportFilePath, `${text}\n`, 'utf-8');
+
+    const summary = 'Response is long. Sending the full output as a text file attachment.';
+
+    if (options.previewMessageId !== undefined && options.editMessageText) {
+      await editTelegramFormattedMessage(
+        options.editMessageText,
+        options.chatId,
+        options.previewMessageId,
+        summary,
+        actionOptions,
+      );
+    } else {
+      await sendTelegramFormattedMessage(options.sendMessage, options.chatId, summary, actionOptions);
+    }
+
+    await options.sendDocument(options.chatId, exportFilePath, {
+      caption: `Full response (${basename(exportFilePath)})`,
+    });
+
+    await sendTelegramOutputAttachments(
+      options.chatId,
+      text,
+      options.workingDirectory,
+      options.sendDocument,
+      options.sendPhoto,
+    );
+
+    return;
+  }
+
+  const chunks = splitTelegramMessage(text, TELEGRAM_MAX_MESSAGE_CHARS);
+  const [firstChunk, ...restChunks] = chunks;
+
+  if (typeof firstChunk === 'string') {
+    if (options.previewMessageId !== undefined && options.editMessageText) {
+      await editTelegramFormattedMessage(
+        options.editMessageText,
+        options.chatId,
+        options.previewMessageId,
+        firstChunk,
+        actionOptions,
+      );
+    } else {
+      await sendTelegramFormattedMessage(options.sendMessage, options.chatId, firstChunk, actionOptions);
+    }
+  }
+
+  for (const chunk of restChunks) {
+    await sendTelegramFormattedMessage(options.sendMessage, options.chatId, chunk);
+  }
+
+  await sendTelegramOutputAttachments(
+    options.chatId,
+    text,
+    options.workingDirectory,
+    options.sendDocument,
+    options.sendPhoto,
+  );
+}
+
+function buildTelegramStreamingPreviewText(text: string): string {
+  if (text.length <= TELEGRAM_STREAMING_EDIT_PREVIEW_MAX_CHARS) {
+    return text;
+  }
+
+  const truncated = text.slice(0, TELEGRAM_STREAMING_EDIT_PREVIEW_MAX_CHARS);
+  return `${truncated}\n\n…`;
+}
+
 function findStreamingFlushLength(text: string): number {
   if (text.length < STREAMING_FLUSH_TARGET_CHARS) {
     return 0;
   }
 
-  const limit = Math.min(text.length, 3900);
+  const limit = Math.min(text.length, TELEGRAM_MAX_MESSAGE_CHARS);
   const candidate = text.slice(0, limit);
 
   const boundaryCandidates = [
@@ -2025,7 +2822,7 @@ function createResponseChunkStreamer(sendMessage: SendTextFn): ResponseChunkStre
   const flushBuffered = (force: boolean): void => {
     while (buffered.length > 0) {
       const flushLength = force
-        ? Math.min(buffered.length, 3900)
+        ? Math.min(buffered.length, TELEGRAM_MAX_MESSAGE_CHARS)
         : findStreamingFlushLength(buffered);
 
       if (flushLength <= 0) {
@@ -2081,6 +2878,130 @@ function createResponseChunkStreamer(sendMessage: SendTextFn): ResponseChunkStre
       if (sendError) {
         throw sendError;
       }
+    },
+  };
+}
+
+interface TelegramResponseChunkStreamerOptions {
+  chatId: number;
+  workingDirectory: string;
+  sendMessage: SendMessageFn;
+  editMessageText?: EditMessageTextFn;
+  sendDocument?: SendDocumentFn;
+  sendPhoto?: SendPhotoFn;
+  outputDir?: string;
+}
+
+function createTelegramResponseChunkStreamer(options: TelegramResponseChunkStreamerOptions): ResponseChunkStreamer {
+  let streamedOutput = '';
+  let sawDelta = false;
+  let previewMessageId: number | undefined;
+  let sendError: Error | undefined;
+  let sendChain: Promise<void> = Promise.resolve();
+  let lastPreviewText = '';
+  let lastPreviewEditAt = 0;
+
+  const queue = (task: () => Promise<void>): void => {
+    sendChain = sendChain
+      .then(async () => {
+        if (sendError) {
+          return;
+        }
+
+        await task();
+      })
+      .catch((error) => {
+        sendError = toError(error);
+      });
+  };
+
+  const ensurePreviewMessage = (): void => {
+    if (!options.editMessageText || previewMessageId !== undefined) {
+      return;
+    }
+
+    queue(async () => {
+      if (previewMessageId !== undefined) {
+        return;
+      }
+
+      const sent = await sendTelegramFormattedMessage(options.sendMessage, options.chatId, '…');
+      const sentMessageId = toTelegramSentMessageId(sent);
+      if (typeof sentMessageId === 'number') {
+        previewMessageId = sentMessageId;
+      }
+    });
+  };
+
+  const flushPreview = (force: boolean): void => {
+    if (!options.editMessageText) {
+      return;
+    }
+
+    if (!force && Date.now() - lastPreviewEditAt < TELEGRAM_STREAMING_EDIT_INTERVAL_MS) {
+      return;
+    }
+
+    const previewText = buildTelegramStreamingPreviewText(streamedOutput);
+    if (previewText.length === 0 || previewText === lastPreviewText) {
+      return;
+    }
+
+    ensurePreviewMessage();
+
+    queue(async () => {
+      if (!options.editMessageText || previewMessageId === undefined) {
+        return;
+      }
+
+      await editTelegramFormattedMessage(
+        options.editMessageText,
+        options.chatId,
+        previewMessageId,
+        previewText,
+      );
+
+      lastPreviewText = previewText;
+      lastPreviewEditAt = Date.now();
+    });
+  };
+
+  return {
+    pushDelta: (delta: string): void => {
+      if (delta.length === 0) {
+        return;
+      }
+
+      sawDelta = true;
+      streamedOutput += delta;
+      flushPreview(false);
+    },
+
+    finalize: async (finalOutput: string): Promise<void> => {
+      if (!sawDelta) {
+        streamedOutput = finalOutput.length > 0 ? finalOutput : '(no output)';
+      } else if (finalOutput.length > 0) {
+        streamedOutput = finalOutput;
+      }
+
+      flushPreview(true);
+      await sendChain;
+
+      if (sendError) {
+        throw sendError;
+      }
+
+      await deliverTelegramFinalResponse({
+        chatId: options.chatId,
+        finalOutput: streamedOutput,
+        workingDirectory: options.workingDirectory,
+        sendMessage: options.sendMessage,
+        editMessageText: options.editMessageText,
+        sendDocument: options.sendDocument,
+        sendPhoto: options.sendPhoto,
+        previewMessageId,
+        outputDir: options.outputDir,
+      });
     },
   };
 }
@@ -2212,6 +3133,49 @@ function isTelegramMessageLike(value: unknown): value is TelegramMessageLike {
 
   if (candidate.text !== undefined && typeof candidate.text !== 'string') {
     return false;
+  }
+
+  if (candidate.caption !== undefined && typeof candidate.caption !== 'string') {
+    return false;
+  }
+
+  if (candidate.document !== undefined) {
+    if (!candidate.document || typeof candidate.document !== 'object') {
+      return false;
+    }
+
+    const document = candidate.document as Record<string, unknown>;
+    if (typeof document.file_id !== 'string') {
+      return false;
+    }
+  }
+
+  if (candidate.photo !== undefined) {
+    if (!Array.isArray(candidate.photo)) {
+      return false;
+    }
+
+    for (const size of candidate.photo) {
+      if (!size || typeof size !== 'object') {
+        return false;
+      }
+
+      const photoSize = size as Record<string, unknown>;
+      if (typeof photoSize.file_id !== 'string') {
+        return false;
+      }
+    }
+  }
+
+  if (candidate.voice !== undefined) {
+    if (!candidate.voice || typeof candidate.voice !== 'object') {
+      return false;
+    }
+
+    const voice = candidate.voice as Record<string, unknown>;
+    if (typeof voice.file_id !== 'string') {
+      return false;
+    }
   }
 
   if (candidate.reply_to_message !== undefined) {
@@ -2528,6 +3492,27 @@ function parseTelegramModelSelectionCallback(data: string): string | undefined {
   return value;
 }
 
+function parseTelegramActionCallback(data: string): '/stop' | '/new' | '/regenerate' | '/followup' | undefined {
+  if (!data.startsWith(TELEGRAM_ACTION_CALLBACK_PREFIX)) {
+    return undefined;
+  }
+
+  const action = data.slice(TELEGRAM_ACTION_CALLBACK_PREFIX.length).trim().toLowerCase();
+
+  switch (action) {
+    case 'stop':
+      return '/stop';
+    case 'new':
+      return '/new';
+    case 'regenerate':
+      return '/regenerate';
+    case 'followup':
+      return '/followup';
+    default:
+      return undefined;
+  }
+}
+
 function clearPendingModelSelection(
   support: ModelCommandSupport | undefined,
   conversationId: string,
@@ -2745,10 +3730,21 @@ function buildPromptWithScheduledReplyContext(input: {
   return lines.join('\n');
 }
 
+interface TelegramPromptMemoryEntry {
+  prompt: string;
+  images?: PromptImageAttachment[];
+}
+
+interface TelegramMessageHandlerState {
+  lastPromptByChat: Map<string, TelegramPromptMemoryEntry>;
+  awaitingFollowUpByChat: Set<string>;
+}
+
 async function processTelegramMessage(
   options: CreateTelegramMessageHandlerOptions,
   message: TelegramMessageLike,
   controllers: Map<string, Promise<GatewayConversationController>>,
+  state: TelegramMessageHandlerState,
   registerRunTask: (task: Promise<void>) => void,
 ): Promise<MessageProcessingResult> {
   const chatId = String(message.chat.id);
@@ -2758,30 +3754,76 @@ async function processTelegramMessage(
     return completedMessageProcessingResult();
   }
 
-  const text = message.text?.trim();
-  if (!text) {
-    await options.sendMessage(message.chat.id, 'Please send text messages only.');
+  const rawText = (message.text ?? message.caption ?? '').trim();
+  const inboundMediaReferences = extractTelegramInboundMedia(message);
+
+  if (rawText.length === 0 && inboundMediaReferences.length === 0) {
+    await options.sendMessage(message.chat.id, 'Please send text, documents, images, or voice notes.');
     return completedMessageProcessingResult();
+  }
+
+  let preparedMedia: TelegramPreparedInboundMedia[] = [];
+  if (inboundMediaReferences.length > 0) {
+    if (!options.prepareInboundMedia) {
+      await options.sendMessage(message.chat.id, 'Media processing is not configured for this gateway instance.');
+      return completedMessageProcessingResult();
+    }
+
+    try {
+      preparedMedia = await options.prepareInboundMedia({
+        chatId,
+        messageId: message.message_id,
+        media: inboundMediaReferences,
+      });
+    } catch (error) {
+      await options.sendMessage(
+        message.chat.id,
+        `Unable to process media attachment: ${(error as Error).message}`,
+      );
+      return completedMessageProcessingResult();
+    }
+
+    if (preparedMedia.length === 0) {
+      await options.sendMessage(
+        message.chat.id,
+        'Unable to download the attached media. Please try sending it again.',
+      );
+      return completedMessageProcessingResult();
+    }
   }
 
   const fullName = [message.from?.first_name, message.from?.last_name].filter(Boolean).join(' ');
   const userName = message.from?.username ?? (fullName || undefined);
 
-  logIncomingMessage('telegram', chatId, userName, text);
+  const incomingSummary = rawText.length > 0
+    ? rawText
+    : `[${preparedMedia.map((media) => media.kind).join(', ')} attachment]`;
+  logIncomingMessage('telegram', chatId, userName, incomingSummary);
 
   const sessionFile = join(options.telegramSessionDir, `${chatId}.jsonl`);
   const sessionFileExists = options.sessionFileExists ?? existsSync;
   const removeSessionFile = options.removeSessionFile ?? ((path: string) => rm(path, { force: true }));
 
-  const normalized = normalizeTelegramCommandText(text);
-  const command = normalized.command;
+  const normalized = normalizeTelegramCommandText(rawText);
+  let command = normalized.command;
+  let commandArgs = normalized.args;
+
+  const shouldConsumeFollowUpCapture = state.awaitingFollowUpByChat.has(chatId)
+    && command === undefined
+    && (rawText.length > 0 || preparedMedia.length > 0);
+
+  if (shouldConsumeFollowUpCapture) {
+    state.awaitingFollowUpByChat.delete(chatId);
+    command = '/followup';
+    commandArgs = rawText;
+  }
 
   const modelCommandHandled = await handleModelCommand({
     conversationId: chatId,
     conversationLabel: 'chat',
     command,
-    args: normalized.args,
-    normalizedText: normalized.normalizedText,
+    args: commandArgs,
+    normalizedText: rawText,
     modelCommands: options.modelCommands,
     sendMessage: (messageText) => options.sendMessage(message.chat.id, messageText),
     sendModelSelectionPrompt: async (promptText, models) => {
@@ -2803,6 +3845,9 @@ async function processTelegramMessage(
     if (sessionFileExists(sessionFile)) {
       await removeSessionFile(sessionFile);
     }
+
+    state.lastPromptByChat.delete(chatId);
+    state.awaitingFollowUpByChat.delete(chatId);
 
     await emitDaemonEventNonFatal({
       type: 'session.closed',
@@ -2843,10 +3888,20 @@ model=${model}`,
   }
 
   if (command === '/compact') {
-    await options.sendMessage(
-      message.chat.id,
-      'Manual /compact is not supported in gateway print mode yet. Open this session in Pi TUI to compact.',
+    const controller = await getOrCreateConversationController(
+      controllers,
+      chatId,
+      sessionFile,
+      options.createConversationController,
     );
+
+    try {
+      const compactResult = await controller.compact(commandArgs.length > 0 ? commandArgs : undefined);
+      await sendLongText((chunk) => options.sendMessage(message.chat.id, chunk), compactResult);
+    } catch (error) {
+      await options.sendMessage(message.chat.id, `Unable to compact context: ${(error as Error).message}`);
+    }
+
     return completedMessageProcessingResult();
   }
 
@@ -2864,7 +3919,7 @@ model=${model}`,
   }
 
   if (command === '/tasks') {
-    const statusFilter = parseGatewayTaskStatusFilter(normalized.args);
+    const statusFilter = parseGatewayTaskStatusFilter(commandArgs);
     if (!statusFilter) {
       await options.sendMessage(
         message.chat.id,
@@ -2901,37 +3956,68 @@ model=${model}`,
     return completedMessageProcessingResult();
   }
 
-  let prompt = normalized.normalizedText;
+  let prompt = rawText;
+  let promptImages: PromptImageAttachment[] | undefined;
+  let useFollowUpSubmission = false;
+
   if (command === '/skill') {
-    if (normalized.args.length === 0) {
+    if (commandArgs.length === 0) {
       await options.sendMessage(message.chat.id, 'Usage: /skill <name>\nExample: /skill tdd-feature');
       return completedMessageProcessingResult();
     }
 
-    prompt = `/skill:${normalized.args}`;
+    prompt = `/skill:${commandArgs}`;
   } else if (command === '/followup') {
-    if (normalized.args.length === 0) {
-      await options.sendMessage(message.chat.id, 'Usage: /followup <message>');
+    useFollowUpSubmission = true;
+
+    if (commandArgs.length === 0 && preparedMedia.length === 0) {
+      state.awaitingFollowUpByChat.add(chatId);
+      await options.sendMessage(
+        message.chat.id,
+        'Send your follow-up message now. Your next message in this chat will be queued as a follow-up.',
+        {
+          reply_markup: {
+            force_reply: true,
+          },
+        },
+      );
       return completedMessageProcessingResult();
     }
 
-    prompt = normalized.args;
+    prompt = commandArgs;
+  } else if (command === '/regenerate') {
+    const lastPrompt = state.lastPromptByChat.get(chatId);
+    if (!lastPrompt) {
+      await options.sendMessage(message.chat.id, 'No previous prompt to regenerate yet.');
+      return completedMessageProcessingResult();
+    }
+
+    prompt = lastPrompt.prompt;
+    promptImages = lastPrompt.images ? [...lastPrompt.images] : undefined;
   }
 
-  const replyMessageId = message.reply_to_message?.message_id;
-  if ((command === undefined || command === '/followup')
-    && typeof replyMessageId === 'number'
-    && options.resolveScheduledReplyContext) {
-    const scheduledReplyContext = options.resolveScheduledReplyContext({
-      chatId,
-      replyMessageId,
-    });
+  if (preparedMedia.length > 0 && command !== '/skill' && command !== '/regenerate') {
+    const mediaPrompt = buildPromptFromTelegramMedia(prompt, preparedMedia);
+    prompt = mediaPrompt.prompt;
+    if (mediaPrompt.images.length > 0) {
+      promptImages = mediaPrompt.images;
+    }
+  }
 
-    if (scheduledReplyContext) {
-      prompt = buildPromptWithScheduledReplyContext({
-        userPrompt: prompt,
-        context: scheduledReplyContext,
+  if (!command || command === '/followup') {
+    const replyMessageId = message.reply_to_message?.message_id;
+    if (typeof replyMessageId === 'number' && options.resolveScheduledReplyContext) {
+      const scheduledReplyContext = options.resolveScheduledReplyContext({
+        chatId,
+        replyMessageId,
       });
+
+      if (scheduledReplyContext) {
+        prompt = buildPromptWithScheduledReplyContext({
+          userPrompt: prompt,
+          context: scheduledReplyContext,
+        });
+      }
     }
   }
 
@@ -2942,13 +4028,24 @@ model=${model}`,
     options.createConversationController,
   );
 
-  const responseStreamer = createResponseChunkStreamer((chunk) => options.sendMessage(message.chat.id, chunk));
+  const responseStreamer = options.editMessageText
+    ? createTelegramResponseChunkStreamer({
+      chatId: message.chat.id,
+      workingDirectory: options.workingDirectory,
+      sendMessage: options.sendMessage,
+      editMessageText: options.editMessageText,
+      sendDocument: options.sendDocument,
+      sendPhoto: options.sendPhoto,
+      outputDir: options.telegramExportDir,
+    })
+    : createResponseChunkStreamer((chunk) => options.sendMessage(message.chat.id, chunk));
 
   const submissionInput: RunPromptFnInput = {
     prompt,
     sessionFile,
     cwd: options.workingDirectory,
     model: options.modelCommands?.activeModelsByConversation.get(chatId),
+    images: promptImages,
     onTextDelta: (delta) => {
       responseStreamer.pushDelta(delta);
     },
@@ -2959,7 +4056,14 @@ model=${model}`,
     },
   };
 
-  const submission = command === '/followup'
+  if (!useFollowUpSubmission && command !== '/regenerate') {
+    state.lastPromptByChat.set(chatId, {
+      prompt,
+      images: promptImages ? [...promptImages] : undefined,
+    });
+  }
+
+  const submission = useFollowUpSubmission
     ? await controller.submitFollowUp(submissionInput)
     : await controller.submitPrompt(submissionInput);
 
@@ -3027,6 +4131,8 @@ export function createQueuedTelegramMessageHandler(
   const controllers = new Map<string, Promise<GatewayConversationController>>();
   const runTasks = new Map<string, Set<Promise<void>>>();
   const latestMessageIdByChat = new Map<string, number>();
+  const lastPromptByChat = new Map<string, TelegramPromptMemoryEntry>();
+  const awaitingFollowUpByChat = new Set<string>();
   const maxPendingPerChat = options.maxPendingPerChat ?? DEFAULT_MAX_PENDING_PER_CHAT;
   const durableInboxDir = options.durableInboxDir;
 
@@ -3137,6 +4243,10 @@ export function createQueuedTelegramMessageHandler(
           options,
           message,
           controllers,
+          {
+            lastPromptByChat,
+            awaitingFollowUpByChat,
+          },
           (task) => trackRunTask(chatId, task),
         );
 
@@ -3271,6 +4381,9 @@ async function createTelegramConfigFromEnv(): Promise<TelegramBridgeConfig> {
 
 export async function startTelegramBridge(config?: TelegramBridgeConfig): Promise<void> {
   const effectiveConfig = config ?? await createTelegramConfigFromEnv();
+  process.env.PERSONAL_AGENT_GATEWAY_MODE = '1';
+  process.env.PERSONAL_AGENT_GATEWAY_PROVIDER = 'telegram';
+
   const { resolvedProfile, statePaths, runtime } = await prepareGatewayRuntime(effectiveConfig.profile);
 
   const telegramSessionDir = join(statePaths.session, 'telegram');
@@ -3278,6 +4391,12 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
   const telegramDurableInboxDir = join(statePaths.root, 'gateway', 'pending', 'telegram');
   await mkdir(telegramDurableInboxDir, { recursive: true });
+
+  const telegramMediaDir = join(statePaths.root, 'gateway', 'media', 'telegram');
+  await mkdir(telegramMediaDir, { recursive: true });
+
+  const telegramExportDir = join(statePaths.root, 'gateway', 'exports', 'telegram');
+  await mkdir(telegramExportDir, { recursive: true });
 
   const bot = new TelegramBot(effectiveConfig.token, { polling: true });
 
@@ -3303,7 +4422,45 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     options?: TelegramSendMessageOptions,
   ): Promise<unknown> => withTelegramRetry(
     `telegram.sendMessage chat=${chatId}`,
-    () => bot.sendMessage(chatId, text, options),
+    () => {
+      if (!options) {
+        return bot.sendMessage(chatId, text);
+      }
+
+      return bot.sendMessage(chatId, text, options as any);
+    },
+  );
+
+  const editTelegramMessageTextWithRetry = (
+    chatId: number,
+    messageId: number,
+    text: string,
+    options?: TelegramSendMessageOptions,
+  ): Promise<unknown> => withTelegramRetry(
+    `telegram.editMessageText chat=${chatId} message=${messageId}`,
+    () => bot.editMessageText(text, {
+      chat_id: chatId,
+      message_id: messageId,
+      ...(options ?? {}),
+    } as any),
+  );
+
+  const sendTelegramDocumentWithRetry = (
+    chatId: number,
+    filePath: string,
+    options?: TelegramSendFileOptions,
+  ): Promise<unknown> => withTelegramRetry(
+    `telegram.sendDocument chat=${chatId}`,
+    () => bot.sendDocument(chatId, filePath, options ?? {}),
+  );
+
+  const sendTelegramPhotoWithRetry = (
+    chatId: number,
+    filePath: string,
+    options?: TelegramSendFileOptions,
+  ): Promise<unknown> => withTelegramRetry(
+    `telegram.sendPhoto chat=${chatId}`,
+    () => bot.sendPhoto(chatId, filePath, options ?? {}),
   );
 
   const trackedScheduledReplyContexts = new Map<string, ScheduledReplyContext & { trackedAtMs: number }>();
@@ -3401,16 +4558,67 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     workingDirectory: effectiveConfig.workingDirectory,
     maxPendingPerChat,
     durableInboxDir: telegramDurableInboxDir,
+    telegramExportDir,
     commandHelpText,
     skillsHelpText,
     modelCommands,
     resolveScheduledReplyContext: ({ chatId, replyMessageId }) =>
       resolveScheduledReplyContext(chatId, replyMessageId),
     sendMessage: (chatId, text, options) => sendTelegramMessageWithRetry(chatId, text, options),
+    editMessageText: (chatId, messageId, text, options) =>
+      editTelegramMessageTextWithRetry(chatId, messageId, text, options),
+    sendDocument: (chatId, filePath, options) => sendTelegramDocumentWithRetry(chatId, filePath, options),
+    sendPhoto: (chatId, filePath, options) => sendTelegramPhotoWithRetry(chatId, filePath, options),
     sendChatAction: (chatId, action) => withTelegramRetry(
       `telegram.sendChatAction chat=${chatId} action=${action}`,
       () => bot.sendChatAction(chatId, action),
     ),
+    prepareInboundMedia: async ({ chatId, messageId, media }) => {
+      const chatDir = join(telegramMediaDir, sanitizeTelegramPendingToken(chatId));
+      const messageToken = messageId !== undefined ? String(messageId) : Date.now().toString();
+      const messageDir = join(chatDir, sanitizeTelegramPendingToken(messageToken));
+      await mkdir(messageDir, { recursive: true });
+
+      const prepared: TelegramPreparedInboundMedia[] = [];
+
+      for (const mediaRef of media) {
+        try {
+          const downloadedPath = await withTelegramRetry(
+            `telegram.downloadFile chat=${chatId} kind=${mediaRef.kind}`,
+            () => bot.downloadFile(mediaRef.fileId, messageDir),
+          );
+
+          const resolvedPath = resolve(downloadedPath);
+          const mimeType = mediaRef.mimeType ?? inferMimeTypeFromPath(resolvedPath);
+
+          const preparedEntry: TelegramPreparedInboundMedia = {
+            kind: mediaRef.kind,
+            localPath: resolvedPath,
+            fileName: mediaRef.fileName ?? basename(resolvedPath),
+            mimeType,
+            fileSizeBytes: mediaRef.fileSizeBytes,
+            durationSeconds: mediaRef.durationSeconds,
+          };
+
+          if (mediaRef.kind === 'photo') {
+            const imageMimeType = mimeType ?? 'image/jpeg';
+            preparedEntry.imageContent = {
+              type: 'image',
+              data: readFileSync(resolvedPath).toString('base64'),
+              mimeType: imageMimeType,
+            };
+          }
+
+          prepared.push(preparedEntry);
+        } catch (error) {
+          console.warn(gatewayWarning(
+            `Failed to download telegram ${mediaRef.kind} attachment for chat ${chatId}: ${(error as Error).message}`,
+          ));
+        }
+      }
+
+      return prepared;
+    },
     createConversationController: ({ sessionFile }) => createPersistentConversationController({
       profile: resolvedProfile,
       agentDir: runtime.agentDir,
@@ -3436,7 +4644,8 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
         return;
       }
 
-      const callbackText = parseTelegramModelSelectionCallback(callbackData);
+      const callbackText = parseTelegramModelSelectionCallback(callbackData)
+        ?? parseTelegramActionCallback(callbackData);
       if (!callbackText) {
         await withTelegramRetry('telegram.answerCallbackQuery', () => bot.answerCallbackQuery(callbackId));
         return;
@@ -3965,6 +5174,9 @@ function hasDiscordChannelSender(channel: unknown): channel is {
 
 export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<void> {
   const effectiveConfig = config ?? await createDiscordConfigFromEnv();
+  process.env.PERSONAL_AGENT_GATEWAY_MODE = '1';
+  process.env.PERSONAL_AGENT_GATEWAY_PROVIDER = 'discord';
+
   const { resolvedProfile, statePaths, runtime } = await prepareGatewayRuntime(effectiveConfig.profile);
 
   const discordSessionDir = join(statePaths.session, 'discord');

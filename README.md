@@ -194,6 +194,8 @@ See `docs/extensions.md` for authoring guide.
 
 ## Messaging gateways
 
+Gateway sessions automatically append a gateway-specific runtime block to the system prompt so the agent is aware of chat-gateway constraints, commands, provider capabilities, and concise chat-style response rules.
+
 Shared optional env vars:
 
 - `PERSONAL_AGENT_PROFILE` (default: `shared`)
@@ -224,6 +226,14 @@ Optional:
 - `PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT` (default: `20`)
 - `PERSONAL_AGENT_TELEGRAM_RETRY_ATTEMPTS` (default: `3`)
 - `PERSONAL_AGENT_TELEGRAM_RETRY_BASE_DELAY_MS` (default: `300`)
+
+Telegram gateway supports:
+
+- inbound text + document + photo + voice-note messages
+- rich formatted output (HTML rendering for code blocks/headings/links)
+- live streaming via message edits
+- long-output `.txt` file fallback
+- inline action buttons (Stop, New, Regenerate, Follow up)
 
 Run bridge:
 
