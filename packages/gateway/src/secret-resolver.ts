@@ -1,6 +1,7 @@
 import { spawnSync } from 'child_process';
 
 const ONE_PASSWORD_REFERENCE_PREFIX = 'op://';
+const DEFAULT_OP_READ_TIMEOUT_MS = 15_000;
 
 interface ResolveOnePasswordReferenceOptions {
   fieldName: string;
@@ -11,11 +12,27 @@ export function isOnePasswordReference(value: string): boolean {
   return value.trim().startsWith(ONE_PASSWORD_REFERENCE_PREFIX);
 }
 
+function resolveOpReadTimeoutMs(): number {
+  const raw = process.env.PERSONAL_AGENT_OP_READ_TIMEOUT_MS;
+  if (!raw) {
+    return DEFAULT_OP_READ_TIMEOUT_MS;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_OP_READ_TIMEOUT_MS;
+  }
+
+  return parsed;
+}
+
 function defaultReadOnePasswordReference(reference: string): string {
   const opCommand = process.env.PERSONAL_AGENT_OP_BIN?.trim() || 'op';
-  const result = spawnSync(opCommand, ['read', reference], {
+  const timeoutMs = resolveOpReadTimeoutMs();
+  const result = spawnSync(opCommand, ['--cache=false', 'read', reference], {
     encoding: 'utf-8',
     env: process.env,
+    timeout: timeoutMs,
   });
 
   if (result.error) {
@@ -26,12 +43,17 @@ function defaultReadOnePasswordReference(reference: string): string {
       );
     }
 
+    if (errorWithCode.code === 'ETIMEDOUT') {
+      throw new Error(`timed out after ${timeoutMs}ms while reading 1Password reference`);
+    }
+
     throw new Error(`Failed to execute 1Password CLI: ${result.error.message}`);
   }
 
   const status = result.status ?? 1;
   if (status !== 0) {
-    const detail = result.stderr?.trim() || result.stdout?.trim() || `exit code ${status}`;
+    const signalSuffix = result.signal ? ` (signal: ${result.signal})` : '';
+    const detail = result.stderr?.trim() || result.stdout?.trim() || `exit code ${status}${signalSuffix}`;
     const authHint = process.env.OP_SERVICE_ACCOUNT_TOKEN
       ? ''
       : ' OP_SERVICE_ACCOUNT_TOKEN may be missing for service-account auth.';

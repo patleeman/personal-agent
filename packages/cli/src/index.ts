@@ -1368,7 +1368,7 @@ function isMissingServiceManagerError(error: unknown): boolean {
 interface RestartSummary {
   restartedGatewayServices: string[];
   skippedGatewayServices: string[];
-  managedDaemonServiceRestarted: boolean;
+  daemonStatus: string;
 }
 
 async function restartBackgroundServices(): Promise<RestartSummary> {
@@ -1384,28 +1384,21 @@ async function restartBackgroundServices(): Promise<RestartSummary> {
     throw error;
   }
 
-  const managedDaemonSpinner = spinner('Restarting managed daemon service');
-  managedDaemonSpinner.start();
-
-  let managedDaemonServiceRestarted = false;
   let serviceManagerAvailable = true;
+  let daemonStatus = 'restarted (mode: detached; managed service not installed)';
 
   try {
     const managedDaemonService = restartManagedDaemonServiceIfInstalled();
 
     if (managedDaemonService) {
-      managedDaemonServiceRestarted = true;
-      managedDaemonSpinner.succeed(`Managed daemon service restarted (${managedDaemonService.identifier})`);
-    } else {
-      managedDaemonSpinner.succeed('Managed daemon service not installed (skipped)');
+      daemonStatus = `restarted (mode: managed service ${managedDaemonService.identifier})`;
     }
   } catch (error) {
     if (isMissingServiceManagerError(error)) {
       serviceManagerAvailable = false;
-      managedDaemonSpinner.succeed('Service manager not available (skipped)');
+      daemonStatus = 'restarted (mode: detached; service manager unavailable)';
     } else {
-      managedDaemonSpinner.fail('Unable to restart managed daemon service');
-      throw error;
+      throw new Error(`Unable to reconcile managed daemon service: ${(error as Error).message}`);
     }
   }
 
@@ -1451,7 +1444,7 @@ async function restartBackgroundServices(): Promise<RestartSummary> {
   return {
     restartedGatewayServices,
     skippedGatewayServices,
-    managedDaemonServiceRestarted,
+    daemonStatus,
   };
 }
 
@@ -1462,8 +1455,7 @@ async function restartCommand(args: string[]): Promise<number> {
 
   console.log('');
   console.log(section('Restart summary'));
-  console.log(keyValue('personal-agentd', 'restarted'));
-  console.log(keyValue('managed daemon service', summary.managedDaemonServiceRestarted ? 'restarted' : 'not installed'));
+  console.log(keyValue('daemon', summary.daemonStatus));
   console.log(keyValue('gateway services restarted', summary.restartedGatewayServices.length > 0 ? summary.restartedGatewayServices.join(', ') : 'none'));
   console.log(keyValue('gateway services skipped', summary.skippedGatewayServices.length > 0 ? summary.skippedGatewayServices.join(', ') : 'none'));
 
@@ -1518,7 +1510,7 @@ async function updateCommand(args: string[]): Promise<number> {
   console.log(section('Update summary'));
   console.log(keyValue('repository', repoRoot));
   console.log(keyValue('pi package', options.repoOnly ? 'skipped (--repo-only)' : (piUpdated ? 'updated' : 'unknown')));
-  console.log(keyValue('managed daemon service', summary.managedDaemonServiceRestarted ? 'restarted' : 'not installed'));
+  console.log(keyValue('daemon', summary.daemonStatus));
   console.log(keyValue('gateway services restarted', summary.restartedGatewayServices.length > 0 ? summary.restartedGatewayServices.join(', ') : 'none'));
   console.log(keyValue('gateway services skipped', summary.skippedGatewayServices.length > 0 ? summary.skippedGatewayServices.join(', ') : 'none'));
 
