@@ -357,4 +357,4 @@ This returns an object with `exercise_history: ExerciseHistoryEntry[]`.
 - All examples assume macOS/Linux shell with `curl` and `jq` installed.
 - Use `jq -n` to build payloads; avoid hand-written JSON with unescaped quotes.
 - Pagination is consistently `page` + `pageSize` (with max values per endpoint).
-- Keep `HEVY_API_KEY` and any sensitive info out of source control and durable memory.
+- Keep `HEVY_API_KEY` and any sensitive info out of source control, AGENTS.md, and skills.

@@ -131,4 +131,4 @@ PY
 - IMAP scripts fail fast on stalled 1Password reads (`FASTMAIL_OP_READ_TIMEOUT_SECONDS`) and socket timeouts (`FASTMAIL_IMAP_TIMEOUT_SECONDS`).
 - CalDAV scripts honor `FASTMAIL_CURL_CONNECT_TIMEOUT_SECONDS` and `FASTMAIL_CURL_MAX_TIME_SECONDS`.
 - Keep credentials in env vars or a secret manager.
-- Do not write secrets to repo files or durable memory.
+- Do not write secrets to repo files, AGENTS.md, or skills.
