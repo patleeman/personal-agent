@@ -11,6 +11,15 @@ const STATUS_KEY = "background-bash";
 const STATUS_REFRESH_MS = 3000;
 const OWNER_PID = process.pid;
 const JOB_ENTRY_TYPE = "background-bash-job";
+const BACKGROUND_BASH_GUIDANCE = [
+	"BACKGROUND_BASH_GUIDANCE",
+	"- Use foreground bash only for short, bounded commands where immediate output is required (usually <=10s).",
+	"- For foreground commands that might run longer, set a tight timeout (typically 30-120s) instead of long timeouts.",
+	"- Use background=true for potentially long or unbounded commands (dev servers, watch jobs, tail -f/log follow, loops, large scripts).",
+	"- If a long command must stay foreground, start with a conservative timeout and increase only when needed.",
+	"- Avoid foreground commands that may wait for input; prefer non-interactive flags or background=true.",
+	"- After launching background work, inspect logs and run follow-up commands instead of blocking on one long call.",
+].join("\n");
 
 interface BackgroundJobRecord {
 	jobId: string;
@@ -301,6 +310,17 @@ export default function (pi: ExtensionAPI) {
 	let state = createFreshState();
 	let stateInitialized = false;
 
+	pi.on("before_agent_start", (event) => {
+		const prompt = event.prompt?.trim() ?? "";
+		if (prompt.length === 0 || prompt.startsWith("/")) {
+			return;
+		}
+
+		return {
+			systemPrompt: `${event.systemPrompt}\n\n${BACKGROUND_BASH_GUIDANCE}`,
+		};
+	});
+
 	const initializeState = async (_forceFresh: boolean, ctx: ExtensionContext) => {
 		await ensureStateDir();
 		await cleanupStaleOwnerStateFiles();
@@ -498,7 +518,7 @@ export default function (pi: ExtensionAPI) {
 		name: "bash",
 		label: "bash",
 		description:
-			"Execute a bash command. Set background=true to run detached and return immediately with pid and log path.",
+			"Execute a bash command. For long-running or unbounded work, set background=true to run detached and return immediately with pid and log path.",
 		parameters: bashSchema,
 		async execute(toolCallId, params, first, second, third) {
 			let signal: AbortSignal | undefined;
