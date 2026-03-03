@@ -1,6 +1,6 @@
 ---
 name: fastmail
-description: Interact with Fastmail using direct API calls via CalDAV ("cadav") and JMAP. Use when the user wants to list/create/delete calendar events, list mailboxes, or query recent email.
+description: Interact with Fastmail using direct API calls via CalDAV and JMAP, with explicit IMAP/CalDAV vs JMAP auth separation. Use when the user wants to list/create/delete calendar events, list mailboxes, or query recent email.
 ---
 
 # Fastmail via CalDAV + JMAP (API-first)
@@ -13,16 +13,29 @@ Prefer the bundled scripts in `scripts/` for repeatable operations.
 
 Fastmail uses different auth per protocol:
 
-- **CalDAV**: Fastmail username + **app password**
+- **IMAP / SMTP / CalDAV**: Fastmail username + **app password**
 - **JMAP**: Fastmail **API token** (`Authorization: Bearer ...`)
 
 ```bash
 export FASTMAIL_USERNAME="you@example.com"
 export FASTMAIL_APP_PASSWORD="<fastmail-app-password>"
-export FASTMAIL_API_TOKEN="<fastmail-api-token>"
+# Recommended with 1Password:
+# export FASTMAIL_APP_PASSWORD="op://Assistant/FASTMAIL_APP_PASSWORD/password"
+
+# JMAP uses a separate token (do not reuse app password)
+export FASTMAIL_JMAP_API_TOKEN="<fastmail-jmap-api-token>"
+# Recommended with 1Password:
+# export FASTMAIL_JMAP_API_TOKEN="op://Assistant/FASTMAIL_JMAP_API_TOKEN/credential"
+# Optional fallback reference when FASTMAIL_JMAP_API_TOKEN is unset:
+# export FASTMAIL_JMAP_API_TOKEN_OP_REF="op://Assistant/FASTMAIL_JMAP_API_TOKEN/credential"
 
 export FASTMAIL_CALENDAR_URL="<calendar-url-from-fastmail-export>"
 export FASTMAIL_JMAP_SESSION_URL="https://api.fastmail.com/jmap/session"
+
+# Optional fail-fast controls for 1Password + network calls
+export FASTMAIL_OP_READ_TIMEOUT_SECONDS=15
+export FASTMAIL_CURL_CONNECT_TIMEOUT_SECONDS=10
+export FASTMAIL_CURL_MAX_TIME_SECONDS=30
 ```
 
 Get credentials from Fastmail settings:
@@ -93,7 +106,12 @@ curl -sS -u "$FASTMAIL_USERNAME:$FASTMAIL_APP_PASSWORD" \
 ### JMAP session + mailbox list
 
 ```bash
-session_json="$(curl -sS -H "Authorization: Bearer $FASTMAIL_API_TOKEN" "$FASTMAIL_JMAP_SESSION_URL")"
+fastmail_jmap_api_token="$FASTMAIL_JMAP_API_TOKEN"
+if [[ "$fastmail_jmap_api_token" == op://* ]]; then
+  fastmail_jmap_api_token="$(op --cache=false read "$fastmail_jmap_api_token")"
+fi
+
+session_json="$(curl -sS -H "Authorization: Bearer $fastmail_jmap_api_token" "$FASTMAIL_JMAP_SESSION_URL")"
 api_url="$(echo "$session_json" | jq -r '.apiUrl')"
 mail_account_id="$(echo "$session_json" | jq -r '.primaryAccounts["urn:ietf:params:jmap:mail"]')"
 
@@ -106,7 +124,7 @@ payload="$(jq -n \
 )"
 
 curl -sS \
-  -H "Authorization: Bearer $FASTMAIL_API_TOKEN" \
+  -H "Authorization: Bearer $fastmail_jmap_api_token" \
   -H "Content-Type: application/json" \
   "$api_url" \
   --data "$payload"
@@ -115,5 +133,7 @@ curl -sS \
 ## Notes
 
 - Fastmail calendar access is currently via **CalDAV** (not general JMAP calendar APIs).
+- Bundled scripts now fail fast on stalled 1Password or network calls (configurable via `FASTMAIL_OP_READ_TIMEOUT_SECONDS`, `FASTMAIL_CURL_CONNECT_TIMEOUT_SECONDS`, and `FASTMAIL_CURL_MAX_TIME_SECONDS`).
+- If JMAP returns `Invalid Authorization bearer parameters`, the configured value is likely an app password (CalDAV) rather than a Fastmail API token.
 - Keep tokens/passwords in env vars or a secret manager.
 - Do not write secrets to repo files or durable memory.

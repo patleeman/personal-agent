@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+DEFAULT_CURL_CONNECT_TIMEOUT_SECONDS=10
+DEFAULT_CURL_MAX_TIME_SECONDS=30
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -14,6 +17,10 @@ Arguments:
 Required environment:
   FASTMAIL_USERNAME
   FASTMAIL_APP_PASSWORD
+
+Optional environment:
+  FASTMAIL_CURL_CONNECT_TIMEOUT_SECONDS (default: 10)
+  FASTMAIL_CURL_MAX_TIME_SECONDS (default: 30)
 
 Examples:
   caldav-delete-event.sh https://caldav.fastmail.com/.../abcd.ics
@@ -30,6 +37,21 @@ if [[ $# -lt 1 || $# -gt 2 ]]; then
   usage >&2
   exit 1
 fi
+
+resolve_positive_int() {
+  local raw="${1:-}"
+  local fallback="$2"
+
+  if [[ "$raw" =~ ^[0-9]+$ ]] && (( raw > 0 )); then
+    printf '%s' "$raw"
+    return
+  fi
+
+  printf '%s' "$fallback"
+}
+
+curl_connect_timeout_seconds="$(resolve_positive_int "${FASTMAIL_CURL_CONNECT_TIMEOUT_SECONDS:-$DEFAULT_CURL_CONNECT_TIMEOUT_SECONDS}" "$DEFAULT_CURL_CONNECT_TIMEOUT_SECONDS")"
+curl_max_time_seconds="$(resolve_positive_int "${FASTMAIL_CURL_MAX_TIME_SECONDS:-$DEFAULT_CURL_MAX_TIME_SECONDS}" "$DEFAULT_CURL_MAX_TIME_SECONDS")"
 
 if [[ -z "${FASTMAIL_USERNAME:-}" ]]; then
   echo "Error: FASTMAIL_USERNAME is required" >&2
@@ -63,7 +85,10 @@ tmp_response="$(mktemp)"
 trap 'rm -f "$tmp_response"' EXIT
 
 http_status="$({
-  curl -sS -u "$FASTMAIL_USERNAME:$FASTMAIL_APP_PASSWORD" \
+  curl -sS \
+    --connect-timeout "$curl_connect_timeout_seconds" \
+    --max-time "$curl_max_time_seconds" \
+    -u "$FASTMAIL_USERNAME:$FASTMAIL_APP_PASSWORD" \
     -X DELETE "$event_url" \
     -o "$tmp_response" \
     -w "%{http_code}"
