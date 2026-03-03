@@ -199,6 +199,13 @@ cron: "0 9 * * 1-5"
 profile: "shared"
 provider: "openai-codex"
 model: "gpt-5.3-codex"
+output:
+  when: success
+  targets:
+    - gateway: telegram
+      chatId: "123456789"
+    - gateway: discord
+      channelId: "987654321"
 ---
 Summarize yesterday's work and open follow-up tasks.
 ```

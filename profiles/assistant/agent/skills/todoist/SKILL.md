@@ -10,42 +10,68 @@ Use direct HTTP requests to the Todoist REST API.
 ## Setup
 
 ```bash
+# Either set a plain token...
 export TODOIST_API_TOKEN="<todoist-api-token>"
+
+# ...or (recommended) set an op:// reference
+export TODOIST_API_TOKEN="op://Assistant/TODOIST_API_TOKEN/credential"
+# Optional override for reference path when TODOIST_API_TOKEN is unset
+export TODOIST_API_TOKEN_OP_REF="op://Assistant/TODOIST_API_TOKEN/credential"
+
 export TODOIST_API_BASE="https://api.todoist.com/api/v1"
 ```
 
 Get token from: `https://todoist.com/app/settings/integrations`
 
-Sanity check auth:
-
-```bash
-curl -sS \
-  -H "Authorization: Bearer $TODOIST_API_TOKEN" \
-  "$TODOIST_API_BASE/projects" | jq '.[0:]'
-```
-
 ## Reusable helper
 
-Use this shell helper in commands:
+Use this shell helper in commands (with 1Password support):
 
 ```bash
+resolve_todoist_api_token() {
+  if [ -n "${TODOIST_API_TOKEN:-}" ]; then
+    if [[ "$TODOIST_API_TOKEN" == op://* ]]; then
+      op read "$TODOIST_API_TOKEN"
+    else
+      printf '%s' "$TODOIST_API_TOKEN"
+    fi
+    return
+  fi
+
+  op read "${TODOIST_API_TOKEN_OP_REF:-op://Assistant/TODOIST_API_TOKEN/credential}"
+}
+
 todoist_api() {
   local method="$1"
   local path="$2"
   local data="${3:-}"
 
+  local token
+  if ! token="$(resolve_todoist_api_token)"; then
+    echo "Unable to resolve Todoist API token (check op CLI auth / TODOIST_API_TOKEN)" >&2
+    return 1
+  fi
+
+  local base="${TODOIST_API_BASE:-https://api.todoist.com/api/v1}"
+
   if [ -n "$data" ]; then
     curl -sS -X "$method" \
-      -H "Authorization: Bearer $TODOIST_API_TOKEN" \
+      -H "Authorization: Bearer $token" \
       -H "Content-Type: application/json" \
-      "$TODOIST_API_BASE$path" \
+      "$base$path" \
       -d "$data"
   else
     curl -sS -X "$method" \
-      -H "Authorization: Bearer $TODOIST_API_TOKEN" \
-      "$TODOIST_API_BASE$path"
+      -H "Authorization: Bearer $token" \
+      "$base$path"
   fi
 }
+```
+
+Sanity check auth:
+
+```bash
+todoist_api GET "/projects" | jq '.results[0:]'
 ```
 
 ## Common workflows
@@ -69,10 +95,12 @@ payload=$(jq -n --arg name "Personal" '{name: $name}')
 todoist_api POST "/projects/$project_id" "$payload"
 
 # Delete (returns 204)
+token="$(resolve_todoist_api_token)"
+base="${TODOIST_API_BASE:-https://api.todoist.com/api/v1}"
 curl -sS -o /dev/null -w "%{http_code}\n" \
   -X DELETE \
-  -H "Authorization: Bearer $TODOIST_API_TOKEN" \
-  "$TODOIST_API_BASE/projects/$project_id"
+  -H "Authorization: Bearer $token" \
+  "$base/projects/$project_id"
 ```
 
 ### 3) List tasks
@@ -82,17 +110,19 @@ curl -sS -o /dev/null -w "%{http_code}\n" \
 todoist_api GET "/tasks" | jq '.results[] | {id, content, project_id, priority, due}'
 
 # By natural-language filter (today, overdue, etc.)
+token="$(resolve_todoist_api_token)"
+base="${TODOIST_API_BASE:-https://api.todoist.com/api/v1}"
 curl -sS --get \
-  -H "Authorization: Bearer $TODOIST_API_TOKEN" \
-  "$TODOIST_API_BASE/tasks" \
+  -H "Authorization: Bearer $token" \
+  "$base/tasks" \
   --data-urlencode "filter=today | overdue" \
   | jq '.results[] | {id, content, due}'
 
 # By project_id
 project_id="<project-id>"
 curl -sS --get \
-  -H "Authorization: Bearer $TODOIST_API_TOKEN" \
-  "$TODOIST_API_BASE/tasks" \
+  -H "Authorization: Bearer $token" \
+  "$base/tasks" \
   --data-urlencode "project_id=$project_id" \
   | jq '.results[] | {id, content, priority, due}'
 ```
@@ -129,23 +159,26 @@ task_id="<task-id>"
 payload=$(jq -n --arg content "Buy oat milk" --argjson priority 2 '{content: $content, priority: $priority}')
 todoist_api POST "/tasks/$task_id" "$payload"
 
+token="$(resolve_todoist_api_token)"
+base="${TODOIST_API_BASE:-https://api.todoist.com/api/v1}"
+
 # Complete task (close)
 curl -sS -o /dev/null -w "%{http_code}\n" \
   -X POST \
-  -H "Authorization: Bearer $TODOIST_API_TOKEN" \
-  "$TODOIST_API_BASE/tasks/$task_id/close"
+  -H "Authorization: Bearer $token" \
+  "$base/tasks/$task_id/close"
 
 # Reopen task
 curl -sS -o /dev/null -w "%{http_code}\n" \
   -X POST \
-  -H "Authorization: Bearer $TODOIST_API_TOKEN" \
-  "$TODOIST_API_BASE/tasks/$task_id/reopen"
+  -H "Authorization: Bearer $token" \
+  "$base/tasks/$task_id/reopen"
 
 # Delete task
 curl -sS -o /dev/null -w "%{http_code}\n" \
   -X DELETE \
-  -H "Authorization: Bearer $TODOIST_API_TOKEN" \
-  "$TODOIST_API_BASE/tasks/$task_id"
+  -H "Authorization: Bearer $token" \
+  "$base/tasks/$task_id"
 ```
 
 ### 6) Manage sections inside a project

@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import { createWriteStream, mkdirSync, type WriteStream } from 'fs';
+import { createWriteStream, existsSync, mkdirSync, statSync, type WriteStream } from 'fs';
 import { join } from 'path';
 import {
   bootstrapStateOrThrow,
@@ -16,6 +16,7 @@ import {
 import type { ParsedTaskDefinition } from './tasks-parser.js';
 
 const GRACEFUL_SHUTDOWN_MS = 5000;
+const MAX_CAPTURED_OUTPUT_CHARS = 16_000;
 
 export interface TaskRunRequest {
   task: ParsedTaskDefinition;
@@ -34,6 +35,7 @@ export interface TaskRunResult {
   cancelled: boolean;
   logPath: string;
   error?: string;
+  outputText?: string;
 }
 
 function sanitizePathSegment(value: string): string {
@@ -70,6 +72,62 @@ function toTaskRunArgs(task: ParsedTaskDefinition, resolvedProfile: ResolvedReso
   return args;
 }
 
+function resolvePiCommand(repoRoot: string): { command: string; argsPrefix: string[] } {
+  const localPiCli = join(
+    repoRoot,
+    'node_modules',
+    '@mariozechner',
+    'pi-coding-agent',
+    'dist',
+    'cli.js',
+  );
+
+  if (existsSync(localPiCli) && statSync(localPiCli).isFile()) {
+    return {
+      command: process.execPath,
+      argsPrefix: [localPiCli],
+    };
+  }
+
+  return {
+    command: 'pi',
+    argsPrefix: [],
+  };
+}
+
+function appendCapturedOutput(current: string, chunk: string): { next: string; truncated: boolean } {
+  if (chunk.length === 0) {
+    return { next: current, truncated: false };
+  }
+
+  const remaining = MAX_CAPTURED_OUTPUT_CHARS - current.length;
+  if (remaining <= 0) {
+    return { next: current, truncated: true };
+  }
+
+  if (chunk.length <= remaining) {
+    return { next: current + chunk, truncated: false };
+  }
+
+  return {
+    next: current + chunk.slice(0, remaining),
+    truncated: true,
+  };
+}
+
+function formatCapturedOutput(raw: string, truncated: boolean): string | undefined {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+
+  if (!truncated) {
+    return trimmed;
+  }
+
+  return `${trimmed}\n\n[output truncated]`;
+}
+
 export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<TaskRunResult> {
   const startedAt = new Date().toISOString();
   const logDir = join(request.runsRoot, sanitizePathSegment(request.task.id));
@@ -84,6 +142,19 @@ export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<Task
   writeLine(stream, `# profile=${request.task.profile}`);
   writeLine(stream, `# attempt=${request.attempt}`);
   writeLine(stream, `# startedAt=${startedAt}`);
+
+  let capturedOutput = '';
+  let outputTruncated = false;
+
+  const captureOutput = (chunk: string): void => {
+    const append = appendCapturedOutput(capturedOutput, chunk);
+    capturedOutput = append.next;
+    if (append.truncated) {
+      outputTruncated = true;
+    }
+  };
+
+  const getCapturedOutput = (): string | undefined => formatCapturedOutput(capturedOutput, outputTruncated);
 
   let result: TaskRunResult | undefined;
 
@@ -101,6 +172,7 @@ export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<Task
         cancelled: true,
         logPath,
         error: 'Task run cancelled before spawn',
+        outputText: getCapturedOutput(),
       };
       return result;
     }
@@ -119,12 +191,13 @@ export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<Task
     materializeProfileToAgentDir(resolvedProfile, runtime.agentDir);
 
     const args = toTaskRunArgs(request.task, resolvedProfile);
+    const piCommand = resolvePiCommand(resolvedProfile.repoRoot);
 
     writeLine(stream, `# command=pi (profile resources)${request.task.modelRef ? ` --model ${request.task.modelRef}` : ''} -p <task prompt>`);
     writeLine(stream, '');
 
     result = await new Promise<TaskRunResult>((resolve) => {
-      const child = spawn('pi', args, {
+      const child = spawn(piCommand.command, [...piCommand.argsPrefix, ...args], {
         cwd: request.task.cwd ?? process.cwd(),
         env: {
           ...process.env,
@@ -178,11 +251,15 @@ export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<Task
       };
 
       child.stdout.on('data', (chunk: Buffer | string) => {
-        stream.write(chunk.toString());
+        const text = chunk.toString();
+        stream.write(text);
+        captureOutput(text);
       });
 
       child.stderr.on('data', (chunk: Buffer | string) => {
-        stream.write(chunk.toString());
+        const text = chunk.toString();
+        stream.write(text);
+        captureOutput(text);
       });
 
       child.on('error', (error) => {
@@ -197,6 +274,7 @@ export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<Task
           cancelled,
           logPath,
           error: error.message,
+          outputText: getCapturedOutput(),
         });
       });
 
@@ -226,6 +304,7 @@ export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<Task
           cancelled,
           logPath,
           error,
+          outputText: getCapturedOutput(),
         });
       });
     });
@@ -255,6 +334,7 @@ export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<Task
       cancelled: false,
       logPath,
       error: message,
+      outputText: getCapturedOutput(),
     };
 
     return result;

@@ -14,10 +14,17 @@ Hevy notes from the docs:
 
 ## Environment
 
-Configure your API credentials in the shell environment (you already set this in your `~/.zprofile`):
+Configure your API credentials in shell env:
 
 ```bash
+# Either set a plain API key...
 export HEVY_API_KEY="<hevy-api-key>"      # from https://hevy.com/settings?developer
+
+# ...or (recommended) set an op:// reference
+export HEVY_API_KEY="op://Assistant/HEVY_API_KEY/credential"
+# Optional override for reference path when HEVY_API_KEY is unset
+export HEVY_API_KEY_OP_REF="op://Assistant/HEVY_API_KEY/credential"
+
 export HEVY_API_BASE="https://api.hevyapp.com"  # default base URL
 ```
 
@@ -31,16 +38,30 @@ Security rules:
 
 ## Helper function
 
-Use this shell helper for repeatable calls:
+Use this shell helper for repeatable calls (with 1Password support):
 
 ```bash
+resolve_hevy_api_key() {
+  if [ -n "${HEVY_API_KEY:-}" ]; then
+    if [[ "$HEVY_API_KEY" == op://* ]]; then
+      op read "$HEVY_API_KEY"
+    else
+      printf '%s' "$HEVY_API_KEY"
+    fi
+    return
+  fi
+
+  op read "${HEVY_API_KEY_OP_REF:-op://Assistant/HEVY_API_KEY/credential}"
+}
+
 hevy_api() {
   local method="$1"   # GET, POST, PUT, etc.
   local path="$2"     # e.g. "/v1/workouts"
   local data="${3:-}" # optional JSON payload
 
-  if [ -z "${HEVY_API_KEY:-}" ]; then
-    echo "HEVY_API_KEY is not set. Get it from https://hevy.com/settings?developer" >&2
+  local api_key
+  if ! api_key="$(resolve_hevy_api_key)"; then
+    echo "Unable to resolve Hevy API key (check op CLI auth / HEVY_API_KEY)" >&2
     return 1
   fi
 
@@ -48,13 +69,13 @@ hevy_api() {
 
   if [ -n "$data" ]; then
     curl -sS -X "$method" \
-      -H "api-key: $HEVY_API_KEY" \
+      -H "api-key: $api_key" \
       -H "Content-Type: application/json" \
       "$base$path" \
       -d "$data"
   else
     curl -sS -X "$method" \
-      -H "api-key: $HEVY_API_KEY" \
+      -H "api-key: $api_key" \
       "$base$path"
   fi
 }

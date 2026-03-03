@@ -30,12 +30,21 @@ Summarize yesterday's progress.
     expect(task.prompt).toContain('Summarize yesterday');
   });
 
-  it('parses one-time at tasks and applies defaults', () => {
+  it('parses one-time at tasks with nested output targets', () => {
     const task = parseTaskDefinition({
       filePath: '/tmp/tasks/taxes-reminder.task.md',
       rawContent: `---
 at: "2026-04-15T09:00:00-04:00"
 model: openai-codex/gpt-5.3-codex
+output:
+  when: always
+  targets:
+    - gateway: telegram
+      chatId: "123"
+    - gateway: discord
+      channelIds:
+        - "abc"
+        - "def"
 ---
 Prepare tax checklist.
 `,
@@ -47,6 +56,14 @@ Prepare tax checklist.
     expect(task.profile).toBe('shared');
     expect(task.modelRef).toBe('openai-codex/gpt-5.3-codex');
     expect(task.timeoutSeconds).toBe(1800);
+    expect(task.output).toEqual({
+      when: 'always',
+      targets: [
+        { gateway: 'telegram', chatId: '123' },
+        { gateway: 'discord', channelId: 'abc' },
+        { gateway: 'discord', channelId: 'def' },
+      ],
+    });
   });
 
   it('rejects tasks without cron or at schedule', () => {
@@ -59,6 +76,22 @@ hello
 `,
       defaultTimeoutSeconds: 1800,
     })).toThrow('must define one schedule key');
+  });
+
+  it('rejects unknown output gateway targets', () => {
+    expect(() => parseTaskDefinition({
+      filePath: '/tmp/tasks/bad-output.task.md',
+      rawContent: `---
+cron: "0 9 * * 1-5"
+output:
+  targets:
+    - gateway: sms
+      chatId: "123"
+---
+hello
+`,
+      defaultTimeoutSeconds: 1800,
+    })).toThrow('Unsupported output target gateway');
   });
 
   it('matches cron expressions using cron day-of-month/day-of-week semantics', () => {

@@ -175,6 +175,68 @@ describe('daemon IPC integration', () => {
     expect(response.error).toContain('Invalid event envelope');
   });
 
+  it('pulls queued gateway notifications', async () => {
+    daemon = new PersonalAgentDaemon(config);
+    await daemon.start();
+
+    const emitResponse = await sendRequest(socketPath, {
+      id: `req_${randomUUID()}`,
+      type: 'emit',
+      event: {
+        id: `evt_${randomUUID()}`,
+        version: 1,
+        type: 'gateway.notification',
+        source: 'module:tasks',
+        timestamp: new Date().toISOString(),
+        payload: {
+          gateway: 'telegram',
+          destinationId: '123',
+          message: 'Hello from task',
+          taskId: 'daily-status',
+          status: 'success',
+        },
+      },
+    });
+
+    expect(emitResponse.ok).toBe(true);
+
+    let pullResponse: ResponseEnvelope | undefined;
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      pullResponse = await sendRequest(socketPath, {
+        id: `req_${randomUUID()}`,
+        type: 'notifications.pull',
+        gateway: 'telegram',
+      });
+
+      const notifications = (pullResponse.result as { notifications?: unknown[] } | undefined)?.notifications ?? [];
+      if (notifications.length > 0) {
+        break;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+
+    expect(pullResponse?.ok).toBe(true);
+    const pulled = (pullResponse?.result as { notifications: Array<Record<string, unknown>> }).notifications;
+    expect(pulled.length).toBe(1);
+    expect(pulled[0]).toMatchObject({
+      gateway: 'telegram',
+      destinationId: '123',
+      message: 'Hello from task',
+      taskId: 'daily-status',
+      status: 'success',
+    });
+
+    const secondPull = await sendRequest(socketPath, {
+      id: `req_${randomUUID()}`,
+      type: 'notifications.pull',
+      gateway: 'telegram',
+    });
+
+    expect(secondPull.ok).toBe(true);
+    expect((secondPull.result as { notifications: unknown[] }).notifications).toEqual([]);
+  });
+
   it('handles malformed JSON gracefully', async () => {
     daemon = new PersonalAgentDaemon(config);
     await daemon.start();

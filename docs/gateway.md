@@ -152,6 +152,7 @@ Gateway commands inside chat:
 - `/new` -> delete chat/channel session file and start a fresh conversation
 - `/commands` -> list available slash commands
 - `/skills` -> list available skills for the current profile
+- `/tasks [status]` -> list scheduled daemon tasks (`status`: `all|running|active|completed|disabled|pending|error`)
 
 Common Pi slash commands exposed in gateway command lists:
 
@@ -176,6 +177,13 @@ Gateway emits non-fatal events to `personal-agentd`:
 - `session.updated`
 - `session.closed`
 - `session.processing.failed`
+
+Gateway also polls daemon notification queue entries (`notifications.pull`) for:
+
+- `telegram` notifications
+- `discord` notifications
+
+These are used by scheduled tasks with `output.targets` routing.
 
 If daemon is unavailable, gateway still continues handling chat requests.
 

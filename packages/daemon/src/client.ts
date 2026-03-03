@@ -4,7 +4,12 @@ import { createDaemonEvent } from './events.js';
 import type { DaemonConfig } from './config.js';
 import { loadDaemonConfig } from './config.js';
 import { resolveDaemonPaths } from './paths.js';
-import type { DaemonEventInput, DaemonStatus } from './types.js';
+import type {
+  DaemonEventInput,
+  DaemonStatus,
+  GatewayNotification,
+  GatewayNotificationProvider,
+} from './types.js';
 
 interface RequestEnvelope {
   id: string;
@@ -139,6 +144,26 @@ export async function stopDaemon(config?: DaemonConfig): Promise<void> {
     },
     config,
   );
+}
+
+export async function pullGatewayNotifications(
+  input: {
+    gateway: GatewayNotificationProvider;
+    limit?: number;
+  },
+  config?: DaemonConfig,
+): Promise<GatewayNotification[]> {
+  const result = await sendRequest<{ notifications: GatewayNotification[] }>(
+    {
+      id: `req_${randomUUID()}`,
+      type: 'notifications.pull',
+      gateway: input.gateway,
+      limit: input.limit,
+    },
+    config,
+  );
+
+  return result.notifications;
 }
 
 export async function emitDaemonEvent(input: DaemonEventInput, config?: DaemonConfig): Promise<boolean> {

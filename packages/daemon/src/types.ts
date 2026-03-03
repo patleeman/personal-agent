@@ -63,3 +63,21 @@ export interface EmitResult {
   accepted: boolean;
   reason?: string;
 }
+
+export type GatewayNotificationProvider = 'telegram' | 'discord';
+
+export interface GatewayNotification {
+  id: string;
+  createdAt: string;
+  source: string;
+  gateway: GatewayNotificationProvider;
+  destinationId: string;
+  message: string;
+  taskId?: string;
+  status?: 'success' | 'failed';
+  logPath?: string;
+}
+
+export interface PullGatewayNotificationsResult {
+  notifications: GatewayNotification[];
+}

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createQueuedDiscordMessageHandler,
   createQueuedTelegramMessageHandler,
+  flushGatewayNotifications,
   parseAllowlist,
   parseGatewayCliArgs,
   registerGatewayCliCommands,
@@ -123,6 +124,67 @@ describe('splitTelegramMessage', () => {
   it('splits into multiple chunks when above limit', () => {
     const chunks = splitTelegramMessage('abcdefghij', 4);
     expect(chunks).toEqual(['abcd', 'efgh', 'ij']);
+  });
+});
+
+describe('flushGatewayNotifications', () => {
+  it('delivers pulled daemon notifications', async () => {
+    const pullNotifications = vi.fn(async () => [
+      {
+        id: 'notification-1',
+        createdAt: new Date().toISOString(),
+        source: 'module:tasks',
+        gateway: 'telegram' as const,
+        destinationId: '123',
+        message: 'Take a quick stretch break.',
+        taskId: 'stretch-break',
+        status: 'success' as const,
+      },
+    ]);
+
+    const deliverNotification = vi.fn(async () => undefined);
+
+    const deliveredCount = await flushGatewayNotifications({
+      gateway: 'telegram',
+      pullNotifications,
+      deliverNotification,
+    });
+
+    expect(deliveredCount).toBe(1);
+    expect(pullNotifications).toHaveBeenCalledTimes(1);
+    expect(deliverNotification).toHaveBeenCalledTimes(1);
+    expect(deliverNotification).toHaveBeenCalledWith(expect.objectContaining({ id: 'notification-1' }));
+  });
+
+  it('requeues failed deliveries', async () => {
+    const notification = {
+      id: 'notification-1',
+      createdAt: new Date().toISOString(),
+      source: 'module:tasks',
+      gateway: 'telegram' as const,
+      destinationId: '123',
+      message: 'Take a quick stretch break.',
+      taskId: 'stretch-break',
+      status: 'success' as const,
+    };
+
+    const pullNotifications = vi.fn(async () => [notification]);
+    const deliverNotification = vi.fn(async () => {
+      throw new Error('network down');
+    });
+    const requeueNotification = vi.fn(async () => undefined);
+
+    const deliveredCount = await flushGatewayNotifications({
+      gateway: 'telegram',
+      pullNotifications,
+      deliverNotification,
+      requeueNotification,
+    });
+
+    expect(deliveredCount).toBe(0);
+    expect(deliverNotification).toHaveBeenCalledTimes(1);
+    expect(requeueNotification).toHaveBeenCalledTimes(1);
+    expect(requeueNotification).toHaveBeenCalledWith(notification);
   });
 });
 
@@ -261,7 +323,66 @@ describe('queued telegram message handler', () => {
     expect(sendMessage).toHaveBeenCalledWith(1, 'Available commands:\n/new\n/status');
   });
 
-  it('includes /model, /models, /stop, /cancel, /compact, and /resume in default /commands output', async () => {
+  it('returns scheduled task list for /tasks without invoking pi', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'ignored');
+    const listScheduledTasks = vi.fn(async ({ statusFilter }: { statusFilter: string }) =>
+      `Scheduled tasks\nFilter: ${statusFilter}`
+    );
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      listScheduledTasks,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/tasks completed' });
+    await handler.waitForIdle('1');
+
+    expect(listScheduledTasks).toHaveBeenCalledWith({ statusFilter: 'completed' });
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendChatAction).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(1, 'Scheduled tasks\nFilter: completed');
+  });
+
+  it('shows /tasks usage when the status filter is invalid', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'ignored');
+    const listScheduledTasks = vi.fn(async () => 'should-not-be-called');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      listScheduledTasks,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/tasks nope invalid' });
+    await handler.waitForIdle('1');
+
+    expect(listScheduledTasks).not.toHaveBeenCalled();
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendChatAction).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(
+      1,
+      'Usage: /tasks [all|running|active|completed|disabled|pending|error]\nExample: /tasks completed',
+    );
+  });
+
+  it('includes /tasks, /model, /models, /stop, /cancel, /compact, and /resume in default /commands output', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
     const runPrompt = vi.fn(async () => 'ignored');
@@ -286,6 +407,7 @@ describe('queued telegram message handler', () => {
     const output = sendMessage.mock.calls
       .map((call) => String(call.at(1) ?? ''))
       .join('\n');
+    expect(output).toContain('/tasks -');
     expect(output).toContain('/model -');
     expect(output).toContain('/models -');
     expect(output).toContain('/stop -');
@@ -373,6 +495,50 @@ describe('queued telegram message handler', () => {
     const firstCall = runPrompt.mock.calls[0]?.[0] as { prompt: string };
     expect(firstCall.prompt).toBe('/skill:tdd-feature');
     expect(sendChatAction).toHaveBeenCalledWith(1, 'typing');
+  });
+
+  it('injects scheduled task context when replying to tracked notification messages', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async ({ prompt }: { prompt: string }) => `reply:${prompt}`);
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      resolveScheduledReplyContext: ({ chatId, replyMessageId }) => {
+        if (chatId !== '1' || replyMessageId !== 77) {
+          return undefined;
+        }
+
+        return {
+          source: 'scheduled-task',
+          taskId: 'daily-status',
+          status: 'success',
+          message: 'Yesterday summary from scheduled task.',
+          logPath: '/tmp/task.log',
+          createdAt: '2026-03-03T01:00:00.000Z',
+        };
+      },
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({
+      chat: { id: 1 },
+      text: 'what should I focus on now?',
+      reply_to_message: { message_id: 77 },
+    });
+    await handler.waitForIdle('1');
+
+    const promptCall = runPrompt.mock.calls[0]?.[0] as { prompt: string };
+    expect(promptCall.prompt).toContain('You are responding to a user reply to a scheduled task notification.');
+    expect(promptCall.prompt).toContain('Task ID: daily-status');
+    expect(promptCall.prompt).toContain('Yesterday summary from scheduled task.');
+    expect(promptCall.prompt).toContain('User reply:\nwhat should I focus on now?');
   });
 
   it('keeps telegram messages in durable inbox until run completion', async () => {
@@ -946,7 +1112,73 @@ describe('queued discord message handler', () => {
     expect(sendMessage).toHaveBeenCalledWith('Available commands:\n/new\n/status');
   });
 
-  it('includes /model, /models, /stop, /cancel, /compact, and /resume in default /commands output', async () => {
+  it('returns scheduled task list for /tasks without invoking pi', async () => {
+    const runPrompt = vi.fn(async () => 'ignored');
+    const sendMessage = vi.fn(async () => undefined);
+    const sendTyping = vi.fn(async () => undefined);
+    const listScheduledTasks = vi.fn(async ({ statusFilter }: { statusFilter: string }) =>
+      `Scheduled tasks\nFilter: ${statusFilter}`
+    );
+
+    const handler = createQueuedDiscordMessageHandler({
+      allowlist: new Set(['channel-1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      discordSessionDir: '/tmp/discord-sessions',
+      workingDirectory: '/tmp/work',
+      listScheduledTasks,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({
+      channelId: 'channel-1',
+      content: '/tasks pending',
+      sendMessage,
+      sendTyping,
+    });
+
+    await handler.waitForIdle('channel-1');
+
+    expect(listScheduledTasks).toHaveBeenCalledWith({ statusFilter: 'pending' });
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendTyping).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith('Scheduled tasks\nFilter: pending');
+  });
+
+  it('shows /tasks usage when the status filter is invalid', async () => {
+    const runPrompt = vi.fn(async () => 'ignored');
+    const sendMessage = vi.fn(async () => undefined);
+    const sendTyping = vi.fn(async () => undefined);
+    const listScheduledTasks = vi.fn(async () => 'should-not-be-called');
+
+    const handler = createQueuedDiscordMessageHandler({
+      allowlist: new Set(['channel-1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      discordSessionDir: '/tmp/discord-sessions',
+      workingDirectory: '/tmp/work',
+      listScheduledTasks,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({
+      channelId: 'channel-1',
+      content: '/tasks invalid invalid',
+      sendMessage,
+      sendTyping,
+    });
+
+    await handler.waitForIdle('channel-1');
+
+    expect(listScheduledTasks).not.toHaveBeenCalled();
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendTyping).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(
+      'Usage: /tasks [all|running|active|completed|disabled|pending|error]\nExample: /tasks completed',
+    );
+  });
+
+  it('includes /tasks, /model, /models, /stop, /cancel, /compact, and /resume in default /commands output', async () => {
     const runPrompt = vi.fn(async () => 'ignored');
     const sendMessage = vi.fn(async () => undefined);
     const sendTyping = vi.fn(async () => undefined);
@@ -975,6 +1207,7 @@ describe('queued discord message handler', () => {
     const output = sendMessage.mock.calls
       .map((call) => String(call.at(0) ?? ''))
       .join('\n');
+    expect(output).toContain('/tasks -');
     expect(output).toContain('/model -');
     expect(output).toContain('/models -');
     expect(output).toContain('/stop -');

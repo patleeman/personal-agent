@@ -20,7 +20,7 @@ A task is markdown with YAML frontmatter.
 
 - Must include exactly one schedule field: `cron` **or** `at`
 - Markdown body is the prompt passed to `pi -p`
-- Frontmatter is **flat key:value** only (no nested YAML objects/lists)
+- Frontmatter supports full YAML objects/lists (nested output routing is supported)
 
 ### Supported frontmatter keys
 
@@ -33,6 +33,11 @@ A task is markdown with YAML frontmatter.
 - `model` alone (optional; treated as full model ref)
 - `cwd` (optional; supports `~` expansion)
 - `timeoutSeconds` (optional; default from daemon config)
+- `output` (optional; structured delivery targets for post-run routing)
+  - `when`: `success` | `failure` | `always` (default: `success`)
+  - `targets`: list of gateway targets
+    - Telegram: `{ gateway: "telegram", chatId: "..." }` or `chatIds: ["...", ...]`
+    - Discord: `{ gateway: "discord", channelId: "..." }` or `channelIds: ["...", ...]`
 
 ## Examples
 
@@ -59,6 +64,13 @@ id: tax-checklist
 at: "2026-04-15T09:00:00-04:00"
 profile: "shared"
 model: "openai-codex/gpt-5.3-codex"
+output:
+  when: always
+  targets:
+    - gateway: telegram
+      chatId: "123456789"
+    - gateway: discord
+      channelId: "987654321"
 ---
 Prepare a tax filing checklist.
 ```

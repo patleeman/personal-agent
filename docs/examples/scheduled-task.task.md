@@ -6,6 +6,11 @@ profile: "shared"
 model: "openai-codex/gpt-5.3-codex"
 cwd: "~/agent-workspace"
 timeoutSeconds: 1800
+output:
+  when: success
+  targets:
+    - gateway: telegram
+      chatId: "123456789"
 ---
 Summarize yesterday's work from git history and open TODOs.
 Return:

@@ -1,5 +1,6 @@
 import { homedir } from 'os';
 import { basename, join, resolve } from 'path';
+import { parseDocument } from 'yaml';
 
 const FRONTMATTER_DELIMITER = '---';
 const DEFAULT_PROFILE = 'shared';
@@ -32,6 +33,25 @@ export interface AtTaskSchedule {
 
 export type ParsedTaskSchedule = CronTaskSchedule | AtTaskSchedule;
 
+export type TaskOutputWhen = 'success' | 'failure' | 'always';
+
+export interface ParsedTaskOutputTargetTelegram {
+  gateway: 'telegram';
+  chatId: string;
+}
+
+export interface ParsedTaskOutputTargetDiscord {
+  gateway: 'discord';
+  channelId: string;
+}
+
+export type ParsedTaskOutputTarget = ParsedTaskOutputTargetTelegram | ParsedTaskOutputTargetDiscord;
+
+export interface ParsedTaskOutput {
+  when: TaskOutputWhen;
+  targets: ParsedTaskOutputTarget[];
+}
+
 export interface ParsedTaskDefinition {
   key: string;
   filePath: string;
@@ -44,6 +64,7 @@ export interface ParsedTaskDefinition {
   modelRef?: string;
   cwd?: string;
   timeoutSeconds: number;
+  output?: ParsedTaskOutput;
 }
 
 interface ParseTaskDefinitionOptions {
@@ -89,92 +110,28 @@ function toTaskIdFromFile(filePath: string): string {
   return 'task';
 }
 
-function parseQuotedValue(raw: string): string {
-  if (raw.startsWith('"') && raw.endsWith('"') && raw.length >= 2) {
-    const unquoted = raw.slice(1, -1);
-    return unquoted
-      .replace(/\\"/g, '"')
-      .replace(/\\n/g, '\n')
-      .replace(/\\r/g, '\r')
-      .replace(/\\t/g, '\t')
-      .replace(/\\\\/g, '\\');
-  }
-
-  if (raw.startsWith('\'') && raw.endsWith('\'') && raw.length >= 2) {
-    const unquoted = raw.slice(1, -1);
-    return unquoted.replace(/''/g, '\'');
-  }
-
-  return raw;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
-function parseYamlScalar(raw: string): unknown {
-  const value = raw.trim();
+function parseFrontmatterYaml(rawFrontmatter: string): Record<string, unknown> {
+  const document = parseDocument(rawFrontmatter, {
+    prettyErrors: true,
+    uniqueKeys: true,
+  });
 
-  if (value.length === 0) {
-    return '';
+  if (document.errors.length > 0) {
+    const firstError = document.errors[0];
+    throw new Error(`Invalid YAML frontmatter: ${firstError?.message ?? 'unknown parse error'}`);
   }
 
-  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith('\'') && value.endsWith('\''))) {
-    return parseQuotedValue(value);
+  const parsed = document.toJS({ mapAsMap: false }) as unknown;
+
+  if (!isRecord(parsed)) {
+    throw new Error('YAML frontmatter must evaluate to an object');
   }
 
-  const normalized = value.toLowerCase();
-
-  if (normalized === 'true') {
-    return true;
-  }
-
-  if (normalized === 'false') {
-    return false;
-  }
-
-  if (normalized === 'null') {
-    return null;
-  }
-
-  if (/^-?\d+$/.test(value)) {
-    return Number.parseInt(value, 10);
-  }
-
-  if (/^-?\d+\.\d+$/.test(value)) {
-    return Number.parseFloat(value);
-  }
-
-  return value;
-}
-
-function parseSimpleFrontmatter(rawFrontmatter: string): Record<string, unknown> {
-  const attributes: Record<string, unknown> = {};
-  const lines = rawFrontmatter.split('\n');
-
-  for (const rawLine of lines) {
-    const trimmed = rawLine.trim();
-
-    if (trimmed.length === 0 || trimmed.startsWith('#')) {
-      continue;
-    }
-
-    if (rawLine.startsWith(' ') || rawLine.startsWith('\t')) {
-      throw new Error(`Unsupported nested YAML line: ${rawLine}`);
-    }
-
-    const separatorIndex = trimmed.indexOf(':');
-    if (separatorIndex <= 0) {
-      throw new Error(`Invalid frontmatter line: ${rawLine}`);
-    }
-
-    const key = trimmed.slice(0, separatorIndex).trim().toLowerCase();
-    const rawValue = trimmed.slice(separatorIndex + 1);
-
-    if (!/^[a-z0-9_-]+$/.test(key)) {
-      throw new Error(`Invalid frontmatter key: ${key}`);
-    }
-
-    attributes[key] = parseYamlScalar(rawValue);
-  }
-
-  return attributes;
+  return parsed;
 }
 
 function splitFrontmatter(content: string): FrontmatterSection {
@@ -201,16 +158,34 @@ function splitFrontmatter(content: string): FrontmatterSection {
   const body = lines.slice(endIndex + 1).join('\n').trim();
 
   return {
-    attributes: parseSimpleFrontmatter(rawFrontmatter),
+    attributes: parseFrontmatterYaml(rawFrontmatter),
     body,
   };
 }
 
+function getAttribute(attributes: Record<string, unknown>, key: string): unknown {
+  if (Object.prototype.hasOwnProperty.call(attributes, key)) {
+    return attributes[key];
+  }
+
+  const lowerKey = key.toLowerCase();
+  if (Object.prototype.hasOwnProperty.call(attributes, lowerKey)) {
+    return attributes[lowerKey];
+  }
+
+  return undefined;
+}
+
 function readOptionalString(attributes: Record<string, unknown>, key: string): string | undefined {
-  const raw = attributes[key];
+  const raw = getAttribute(attributes, key);
 
   if (raw === undefined || raw === null) {
     return undefined;
+  }
+
+  if (typeof raw === 'number' || typeof raw === 'bigint') {
+    const asString = String(raw).trim();
+    return asString.length > 0 ? asString : undefined;
   }
 
   if (typeof raw !== 'string') {
@@ -222,7 +197,7 @@ function readOptionalString(attributes: Record<string, unknown>, key: string): s
 }
 
 function readEnabled(attributes: Record<string, unknown>): boolean {
-  const raw = attributes.enabled;
+  const raw = getAttribute(attributes, 'enabled');
 
   if (raw === undefined) {
     return true;
@@ -247,7 +222,7 @@ function readEnabled(attributes: Record<string, unknown>): boolean {
 }
 
 function readTimeoutSeconds(attributes: Record<string, unknown>, defaultTimeoutSeconds: number): number {
-  const raw = attributes.timeoutseconds;
+  const raw = getAttribute(attributes, 'timeoutSeconds');
 
   if (raw === undefined || raw === null || raw === '') {
     return defaultTimeoutSeconds;
@@ -271,6 +246,123 @@ function readTimeoutSeconds(attributes: Record<string, unknown>, defaultTimeoutS
   }
 
   throw new Error('Frontmatter key timeoutSeconds must be a positive integer');
+}
+
+function parseOutputWhen(value: unknown): TaskOutputWhen {
+  if (value === undefined || value === null) {
+    return 'success';
+  }
+
+  if (typeof value !== 'string') {
+    throw new Error('Frontmatter key output.when must be success, failure, or always');
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'success' || normalized === 'failure' || normalized === 'always') {
+    return normalized;
+  }
+
+  throw new Error('Frontmatter key output.when must be success, failure, or always');
+}
+
+function parseOutputDestinationId(
+  target: Record<string, unknown>,
+  singularKey: string,
+  pluralKey: string,
+  label: string,
+): string[] {
+  const singularRaw = target[singularKey];
+  const pluralRaw = target[pluralKey];
+
+  if (singularRaw !== undefined && pluralRaw !== undefined) {
+    throw new Error(`Frontmatter key output.targets[].${singularKey} cannot be combined with ${pluralKey}`);
+  }
+
+  if (singularRaw !== undefined) {
+    const id = readOptionalString(target, singularKey);
+    if (!id) {
+      throw new Error(`Frontmatter key output.targets[].${singularKey} must be a non-empty string`);
+    }
+
+    return [id];
+  }
+
+  if (!Array.isArray(pluralRaw)) {
+    throw new Error(`Frontmatter key output.targets[].${label} destination is required`);
+  }
+
+  const ids = pluralRaw
+    .map((entry) => (typeof entry === 'string' || typeof entry === 'number' || typeof entry === 'bigint'
+      ? String(entry).trim()
+      : ''))
+    .filter((entry) => entry.length > 0);
+
+  if (ids.length === 0) {
+    throw new Error(`Frontmatter key output.targets[].${pluralKey} must include at least one destination`);
+  }
+
+  return ids;
+}
+
+function parseOutputTarget(rawTarget: unknown): ParsedTaskOutputTarget[] {
+  if (!isRecord(rawTarget)) {
+    throw new Error('Frontmatter key output.targets[] entries must be objects');
+  }
+
+  const gatewayRaw = readOptionalString(rawTarget, 'gateway');
+  if (!gatewayRaw) {
+    throw new Error('Frontmatter key output.targets[].gateway is required');
+  }
+
+  const gateway = gatewayRaw.toLowerCase();
+
+  if (gateway === 'telegram') {
+    const chatIds = parseOutputDestinationId(rawTarget, 'chatId', 'chatIds', 'telegram');
+    return chatIds.map((chatId) => ({
+      gateway: 'telegram' as const,
+      chatId,
+    }));
+  }
+
+  if (gateway === 'discord') {
+    const channelIds = parseOutputDestinationId(rawTarget, 'channelId', 'channelIds', 'discord');
+    return channelIds.map((channelId) => ({
+      gateway: 'discord' as const,
+      channelId,
+    }));
+  }
+
+  throw new Error(`Unsupported output target gateway: ${gatewayRaw}`);
+}
+
+function readOutput(attributes: Record<string, unknown>): ParsedTaskOutput | undefined {
+  const raw = getAttribute(attributes, 'output');
+
+  if (raw === undefined || raw === null) {
+    return undefined;
+  }
+
+  if (!isRecord(raw)) {
+    throw new Error('Frontmatter key output must be an object');
+  }
+
+  const when = parseOutputWhen(raw.when);
+  const targetsRaw = raw.targets;
+
+  if (!Array.isArray(targetsRaw)) {
+    throw new Error('Frontmatter key output.targets must be an array');
+  }
+
+  const targets = targetsRaw.flatMap((target) => parseOutputTarget(target));
+
+  if (targets.length === 0) {
+    throw new Error('Frontmatter key output.targets must include at least one target');
+  }
+
+  return {
+    when,
+    targets,
+  };
 }
 
 function parseCronNumber(raw: string, min: number, max: number, label: string, allowSunday7 = false): number {
@@ -493,5 +585,6 @@ export function parseTaskDefinition(options: ParseTaskDefinitionOptions): Parsed
     modelRef,
     cwd,
     timeoutSeconds: readTimeoutSeconds(section.attributes, options.defaultTimeoutSeconds),
+    output: readOutput(section.attributes),
   };
 }

@@ -99,11 +99,85 @@ function parseGlobalFlags(argv: string[]): ParsedGlobalFlags {
 const PI_PACKAGE_NAME = '@mariozechner/pi-coding-agent';
 const PI_PACKAGE_LATEST = `${PI_PACKAGE_NAME}@latest`;
 
-function ensurePiInstalled(): void {
-  const result = spawnSync('pi', ['--version'], { encoding: 'utf-8' });
-  if (result.error || result.status !== 0) {
-    throw new Error(`\`pi\` command not found. Install with: npm install -g ${PI_PACKAGE_NAME}`);
+interface PiCommandInvocation {
+  command: string;
+  argsPrefix: string[];
+  source: 'repo' | 'global';
+}
+
+function toUniqueItems(values: Array<string | undefined>): string[] {
+  const deduped = new Set<string>();
+
+  for (const value of values) {
+    if (!value) {
+      continue;
+    }
+
+    deduped.add(resolve(value));
   }
+
+  return [...deduped];
+}
+
+function resolveRepoPiCommand(repoRoot?: string): PiCommandInvocation | undefined {
+  const resolvedRepoRoot = getRepoRoot(repoRoot);
+  const localPiCli = join(
+    resolvedRepoRoot,
+    'node_modules',
+    '@mariozechner',
+    'pi-coding-agent',
+    'dist',
+    'cli.js',
+  );
+
+  if (!existsSync(localPiCli) || !statSync(localPiCli).isFile()) {
+    return undefined;
+  }
+
+  return {
+    command: process.execPath,
+    argsPrefix: [localPiCli],
+    source: 'repo',
+  };
+}
+
+function runPiVersion(invocation: PiCommandInvocation): boolean {
+  const result = spawnSync(invocation.command, [...invocation.argsPrefix, '--version'], { encoding: 'utf-8' });
+  return !result.error && result.status === 0;
+}
+
+function ensurePiInstalled(repoRoot?: string): PiCommandInvocation {
+  const repoCandidates = toUniqueItems([
+    repoRoot,
+    process.env.PERSONAL_AGENT_REPO_ROOT,
+    getRepoRoot(),
+  ]);
+
+  for (const candidate of repoCandidates) {
+    const repoInvocation = resolveRepoPiCommand(candidate);
+    if (!repoInvocation) {
+      continue;
+    }
+
+    if (runPiVersion(repoInvocation)) {
+      return repoInvocation;
+    }
+  }
+
+  const globalInvocation: PiCommandInvocation = {
+    command: 'pi',
+    argsPrefix: [],
+    source: 'global',
+  };
+
+  if (runPiVersion(globalInvocation)) {
+    return globalInvocation;
+  }
+
+  throw new Error(
+    `Unable to find a runnable pi binary. Tried repo-local SDK and global pi. `
+      + `Run npm install in ${getRepoRoot()} or install globally: npm install -g ${PI_PACKAGE_NAME}`,
+  );
 }
 
 function promptUser(question: string): Promise<string> {
@@ -406,15 +480,16 @@ async function runPi(profileName: string, piArgs: string[]): Promise<number> {
 
   validateStatePathsOutsideRepo(statePaths, resolvedProfile.repoRoot);
 
-  ensurePiInstalled();
+  const piInvocation = ensurePiInstalled(resolvedProfile.repoRoot);
   await maybeStartDaemon();
 
-  return runPiWithResolvedProfile(resolvedProfile, piArgs);
+  return runPiWithResolvedProfile(resolvedProfile, piArgs, piInvocation);
 }
 
 async function runPiWithResolvedProfile(
   resolvedProfile: ReturnType<typeof resolveResourceProfile>,
   piArgs: string[],
+  piInvocation: PiCommandInvocation,
 ): Promise<number> {
   const statePaths = resolveStatePaths();
 
@@ -440,7 +515,7 @@ async function runPiWithResolvedProfile(
 
   const args = [...resourceArgs, ...withDefaults];
 
-  const result = spawnSync('pi', args, {
+  const result = spawnSync(piInvocation.command, [...piInvocation.argsPrefix, ...args], {
     stdio: 'inherit',
     env: {
       ...process.env,
@@ -579,7 +654,7 @@ async function doctor(options: DoctorOptions = {}): Promise<number> {
     ensurePiInstalled();
   } catch (error) {
     const message = (error as Error).message;
-    const hint = `npm install -g ${PI_PACKAGE_NAME}`;
+    const hint = `npm install (in ${getRepoRoot()}) or npm install -g ${PI_PACKAGE_NAME}`;
 
     if (options.json) {
       printDoctorJson({
@@ -1472,6 +1547,17 @@ interface TaskRuntimeRecord {
   oneTimeCompletedAt?: string;
 }
 
+const TASK_LIST_STATUS_FILTERS = ['running', 'active', 'completed', 'disabled', 'pending', 'error'] as const;
+
+type TaskListStatus = (typeof TASK_LIST_STATUS_FILTERS)[number];
+type TaskListStatusFilter = TaskListStatus | 'all';
+
+interface TaskListEntry {
+  task: ParsedTaskDefinition;
+  runtime: TaskRuntimeRecord | undefined;
+  status: TaskListStatus;
+}
+
 function isTaskStateRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -1612,6 +1698,88 @@ function formatTaskSchedule(task: ParsedTaskDefinition): string {
   return `at ${task.schedule.at}`;
 }
 
+function formatTaskOutputTargets(task: ParsedTaskDefinition): string {
+  if (!task.output || task.output.targets.length === 0) {
+    return 'none';
+  }
+
+  const parts = task.output.targets.map((target) => {
+    if (target.gateway === 'telegram') {
+      return `telegram:${target.chatId}`;
+    }
+
+    return `discord:${target.channelId}`;
+  });
+
+  return `${task.output.when} -> ${parts.join(', ')}`;
+}
+
+function resolveTaskListStatus(
+  task: ParsedTaskDefinition,
+  runtime: TaskRuntimeRecord | undefined,
+): TaskListStatus {
+  if (runtime?.running === true) {
+    return 'running';
+  }
+
+  if (
+    task.schedule.type === 'at'
+    && (runtime?.oneTimeCompletedAt || runtime?.oneTimeResolvedStatus === 'success')
+  ) {
+    return 'completed';
+  }
+
+  if (runtime?.lastStatus === 'failed') {
+    return 'error';
+  }
+
+  if (runtime?.lastStatus === 'skipped') {
+    return 'pending';
+  }
+
+  return task.enabled ? 'active' : 'disabled';
+}
+
+function toTaskListEntry(task: ParsedTaskDefinition, runtimeState: Record<string, TaskRuntimeRecord>): TaskListEntry {
+  const runtime = runtimeState[task.key];
+
+  return {
+    task,
+    runtime,
+    status: resolveTaskListStatus(task, runtime),
+  };
+}
+
+function toTaskListPayload(entry: TaskListEntry): {
+  id: string;
+  enabled: boolean;
+  status: TaskListStatus;
+  schedule: string;
+  profile: string;
+  model: string | null;
+  cwd: string | null;
+  timeoutSeconds: number;
+  output: ParsedTaskDefinition['output'] | null;
+  filePath: string;
+  runtime: TaskRuntimeRecord | null;
+} {
+  const { task, runtime, status } = entry;
+
+  return {
+    id: task.id,
+    enabled: task.enabled,
+    status,
+    schedule: formatTaskSchedule(task),
+    profile: task.profile,
+    model: task.modelRef ?? null,
+    cwd: task.cwd ?? null,
+    timeoutSeconds: task.timeoutSeconds,
+    output: task.output ?? null,
+    filePath: task.filePath,
+    runtime: runtime ?? null,
+  };
+}
+
 function parseTaskTailCount(raw: string): number {
   if (!/^\d+$/.test(raw)) {
     throw new Error('Usage: pa tasks logs <id> [--tail <count>]');
@@ -1688,6 +1856,71 @@ function isTaskOption(arg: string): boolean {
   return arg.startsWith('-');
 }
 
+function taskListUsageText(): string {
+  return `Usage: pa tasks list [--json] [--status <all|${TASK_LIST_STATUS_FILTERS.join('|')}>]`;
+}
+
+function isTaskListStatus(value: string): value is TaskListStatus {
+  return (TASK_LIST_STATUS_FILTERS as readonly string[]).includes(value);
+}
+
+function parseTaskListStatusFilter(value: string): TaskListStatusFilter {
+  if (value === 'all') {
+    return value;
+  }
+
+  if (isTaskListStatus(value)) {
+    return value;
+  }
+
+  throw new Error(taskListUsageText());
+}
+
+function parseTaskListOptions(args: string[]): {
+  jsonMode: boolean;
+  statusFilter: TaskListStatusFilter;
+} {
+  let jsonMode = false;
+  let statusFilter: TaskListStatusFilter = 'all';
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] as string;
+
+    if (arg === '--json') {
+      jsonMode = true;
+      continue;
+    }
+
+    if (arg === '--status') {
+      const nextValue = args[index + 1];
+      if (!nextValue || isTaskOption(nextValue)) {
+        throw new Error(taskListUsageText());
+      }
+
+      statusFilter = parseTaskListStatusFilter(nextValue);
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--status=')) {
+      const value = arg.slice('--status='.length);
+      if (!value) {
+        throw new Error(taskListUsageText());
+      }
+
+      statusFilter = parseTaskListStatusFilter(value);
+      continue;
+    }
+
+    throw new Error(taskListUsageText());
+  }
+
+  return {
+    jsonMode,
+    statusFilter,
+  };
+}
+
 async function tasksCommand(args: string[]): Promise<number> {
   const [subcommand, ...rest] = args;
 
@@ -1697,7 +1930,8 @@ async function tasksCommand(args: string[]): Promise<number> {
     console.log(`Usage: pa tasks [list|show|validate|logs]
 
 Commands:
-  list [--json]            List parsed scheduled tasks with runtime status
+  list [--json] [--status <all|running|active|completed|disabled|pending|error>]
+                           List parsed scheduled tasks with runtime status
   show <id> [--json]       Show one task definition and runtime state
   validate [--all|file]    Validate task file frontmatter and prompt body
   logs <id> [--tail <n>]   Show latest task run log (default: 80 lines)
@@ -1709,34 +1943,29 @@ Commands:
   }
 
   if (subcommand === 'list') {
-    const jsonMode = hasOption(rest, '--json');
-    const unexpected = rest.filter((arg) => arg !== '--json');
-
-    if (unexpected.length > 0) {
-      throw new Error('Usage: pa tasks list [--json]');
-    }
+    const { jsonMode, statusFilter } = parseTaskListOptions(rest);
 
     const config = loadDaemonConfig();
     const paths = resolveTaskRuntimePaths(config);
     const { tasks, parseErrors } = loadTaskDefinitions(paths.taskDir, config.modules.tasks.defaultTimeoutSeconds);
     const runtimeState = loadTaskRuntimeState(paths.stateFile);
 
+    const taskEntries = tasks.map((task) => toTaskListEntry(task, runtimeState));
+    const filteredTaskEntries = statusFilter === 'all'
+      ? taskEntries
+      : taskEntries.filter((entry) => entry.status === statusFilter);
+    const completedTaskEntries = taskEntries.filter((entry) => entry.status === 'completed');
+
     const payload = {
       paths,
-      tasks: tasks.map((task) => {
-        const runtime = runtimeState[task.key];
-        return {
-          id: task.id,
-          enabled: task.enabled,
-          schedule: formatTaskSchedule(task),
-          profile: task.profile,
-          model: task.modelRef ?? null,
-          cwd: task.cwd ?? null,
-          timeoutSeconds: task.timeoutSeconds,
-          filePath: task.filePath,
-          runtime: runtime ?? null,
-        };
-      }),
+      filters: {
+        status: statusFilter,
+        supportedStatus: ['all', ...TASK_LIST_STATUS_FILTERS],
+      },
+      tasks: filteredTaskEntries.map((entry) => toTaskListPayload(entry)),
+      sections: {
+        completed: completedTaskEntries.map((entry) => toTaskListPayload(entry)),
+      },
       parseErrors,
     };
 
@@ -1748,28 +1977,23 @@ Commands:
     console.log(section('Scheduled tasks'));
     console.log(keyValue('Task directory', paths.taskDir));
     console.log(keyValue('Task state file', paths.stateFile));
+    console.log(keyValue('Status filter', statusFilter));
 
     if (tasks.length === 0) {
       console.log(dim('No valid task files found.'));
+    } else if (filteredTaskEntries.length === 0) {
+      console.log(dim(`No tasks matched status filter: ${statusFilter}`));
     }
 
-    for (const task of tasks) {
-      const runtime = runtimeState[task.key];
-      const running = runtime?.running === true;
-      const status = running
-        ? statusChip('running')
-        : runtime?.lastStatus === 'failed'
-          ? statusChip('error')
-          : runtime?.lastStatus === 'skipped'
-            ? statusChip('pending')
-            : task.enabled
-              ? statusChip('active')
-              : statusChip('disabled');
+    for (const entry of filteredTaskEntries) {
+      const { task, runtime } = entry;
+      const status = statusChip(entry.status);
 
       console.log('');
       console.log(bullet(`${task.id}: ${status}`));
       console.log(keyValue('Schedule', formatTaskSchedule(task), 4));
       console.log(keyValue('Profile', task.profile, 4));
+      console.log(keyValue('Output', formatTaskOutputTargets(task), 4));
       console.log(keyValue('File', task.filePath, 4));
 
       if (runtime?.lastRunAt) {
@@ -1836,6 +2060,7 @@ Commands:
     }
 
     console.log(keyValue('Timeout', `${task.timeoutSeconds}s`));
+    console.log(keyValue('Output', formatTaskOutputTargets(task)));
 
     if (runtime) {
       console.log('');
@@ -2190,6 +2415,7 @@ Examples:
   pa daemon status
   pa daemon service install
   pa tasks list
+  pa tasks list --json --status completed
   pa tasks validate --all
   pa tasks logs <id> --tail 120
 

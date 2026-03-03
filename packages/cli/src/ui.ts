@@ -166,13 +166,17 @@ export function bullet(message: string, indent = 2): string {
   return `${prefix}${marker} ${message}`;
 }
 
-export function statusChip(status: 'running' | 'stopped' | 'active' | 'disabled' | 'pending' | 'error'): string {
+export function statusChip(status: 'running' | 'stopped' | 'active' | 'completed' | 'disabled' | 'pending' | 'error'): string {
   if (uiConfig.plain) {
     return `[${status}]`;
   }
 
   if (status === 'running' || status === 'active') {
     return `${chalk.green('●')} ${chalk.green(status)}`;
+  }
+
+  if (status === 'completed') {
+    return `${chalk.green('✓')} ${chalk.green(status)}`;
   }
 
   if (status === 'pending') {

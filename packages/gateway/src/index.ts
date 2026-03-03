@@ -10,17 +10,16 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'fs';
-import { basename, join, resolve } from 'path';
+import { join, resolve } from 'path';
 import { spawnSync } from 'child_process';
 import TelegramBot from 'node-telegram-bot-api';
 import * as DiscordJs from 'discord.js';
 import {
+  DefaultResourceLoader,
   SessionManager,
   SettingsManager,
   createAgentSession,
   createEventBus,
-  loadExtensions,
-  type PromptTemplate,
 } from '@mariozechner/pi-coding-agent';
 import {
   bootstrapStateOrThrow,
@@ -34,7 +33,16 @@ import {
   mergeJsonFiles,
   resolveResourceProfile,
 } from '@personal-agent/resources';
-import { emitDaemonEventNonFatal, startDaemonDetached } from '@personal-agent/daemon';
+import {
+  emitDaemonEventNonFatal,
+  loadDaemonConfig,
+  parseTaskDefinition,
+  pullGatewayNotifications,
+  resolveDaemonPaths,
+  startDaemonDetached,
+  type GatewayNotification,
+  type ParsedTaskDefinition,
+} from '@personal-agent/daemon';
 import {
   getGatewayConfigFilePath,
   readGatewayConfig,
@@ -48,6 +56,10 @@ import {
   installGatewayService,
   uninstallGatewayService,
 } from './service.js';
+import {
+  resolveConfiguredAllowlistEntries,
+  resolveConfiguredValue,
+} from './secret-resolver.js';
 
 export {
   SUPPORTED_GATEWAY_PROVIDERS,
@@ -131,6 +143,9 @@ export interface TelegramMessageLike {
   chat: { id: number };
   message_id?: number;
   text?: string;
+  reply_to_message?: {
+    message_id?: number;
+  };
   from?: {
     id?: number;
     username?: string;
@@ -212,8 +227,41 @@ export interface ModelCommandSupport {
   activeModelsByConversation: Map<string, string>;
   pendingSelectionsByConversation: Map<string, PendingModelSelection>;
   defaultModel?: string;
-  selectionLimit?: number;
 }
+
+export interface ScheduledReplyContext {
+  source: 'scheduled-task';
+  taskId?: string;
+  status?: 'success' | 'failed';
+  message: string;
+  logPath?: string;
+  createdAt?: string;
+}
+
+const GATEWAY_TASK_STATUS_FILTERS = ['running', 'active', 'completed', 'disabled', 'pending', 'error'] as const;
+
+type GatewayTaskStatus = (typeof GATEWAY_TASK_STATUS_FILTERS)[number];
+type GatewayTaskStatusFilter = GatewayTaskStatus | 'all';
+
+interface GatewayTaskRuntimeRecord {
+  id?: string;
+  filePath?: string;
+  running?: boolean;
+  lastStatus?: string;
+  lastRunAt?: string;
+  oneTimeResolvedStatus?: string;
+  oneTimeCompletedAt?: string;
+}
+
+interface GatewayTaskSummaryEntry {
+  task: ParsedTaskDefinition;
+  status: GatewayTaskStatus;
+  runtime: GatewayTaskRuntimeRecord | undefined;
+}
+
+type ListScheduledTasksFn = (input: {
+  statusFilter: GatewayTaskStatusFilter;
+}) => Promise<string>;
 
 export interface CreateTelegramMessageHandlerOptions {
   allowlist: Set<string>;
@@ -231,6 +279,11 @@ export interface CreateTelegramMessageHandlerOptions {
   maxPendingPerChat?: number;
   modelCommands?: ModelCommandSupport;
   durableInboxDir?: string;
+  listScheduledTasks?: ListScheduledTasksFn;
+  resolveScheduledReplyContext?: (input: {
+    chatId: string;
+    replyMessageId: number;
+  }) => ScheduledReplyContext | undefined;
 }
 
 export interface QueuedTelegramMessageHandler {
@@ -262,6 +315,7 @@ export interface CreateDiscordMessageHandlerOptions {
   removeSessionFile?: (path: string) => Promise<void>;
   maxPendingPerChannel?: number;
   modelCommands?: ModelCommandSupport;
+  listScheduledTasks?: ListScheduledTasksFn;
 }
 
 export interface QueuedDiscordMessageHandler {
@@ -272,10 +326,12 @@ export interface QueuedDiscordMessageHandler {
 const DEFAULT_PI_TIMEOUT_MS = 1_800_000;
 const DEFAULT_MAX_PENDING_PER_CHAT = 20;
 const DEFAULT_MAX_PENDING_PER_CHANNEL = 20;
-const DEFAULT_MODEL_SELECTION_LIMIT = 25;
 const TYPING_HEARTBEAT_INTERVAL_MS = 4_000;
 const DEFAULT_TELEGRAM_RETRY_ATTEMPTS = 3;
 const DEFAULT_TELEGRAM_RETRY_BASE_DELAY_MS = 300;
+const DAEMON_NOTIFICATION_POLL_INTERVAL_MS = 5000;
+const MAX_TRACKED_SCHEDULED_REPLY_CONTEXTS = 500;
+const SCHEDULED_REPLY_CONTEXT_TTL_MS = 24 * 60 * 60 * 1000;
 const TELEGRAM_MODEL_SELECTION_CALLBACK_PREFIX = 'model_select:';
 const PROMPT_CANCELLED_ERROR_MESSAGE = 'Request cancelled by /stop.';
 const STOPPED_ACTIVE_REQUEST_MESSAGE = 'Stopped active request.';
@@ -393,6 +449,7 @@ function isModelCommand(command: string | undefined): boolean {
 const DEFAULT_TELEGRAM_COMMANDS: TelegramCommandDefinition[] = [
   { command: 'new', description: 'Start a new session' },
   { command: 'status', description: 'Show gateway status' },
+  { command: 'tasks', description: 'List scheduled tasks (usage: /tasks [status])' },
   { command: 'commands', description: 'List available commands' },
   { command: 'skills', description: 'List available skills' },
   { command: 'help', description: 'Show command help' },
@@ -572,6 +629,259 @@ function normalizeTelegramCommandText(text: string): {
     args,
   };
 }
+
+function gatewayTaskListUsageText(): string {
+  return `Usage: /tasks [all|${GATEWAY_TASK_STATUS_FILTERS.join('|')}]`;
+}
+
+function parseGatewayTaskStatusFilter(rawArgs: string): GatewayTaskStatusFilter | undefined {
+  const trimmed = rawArgs.trim();
+  if (trimmed.length === 0) {
+    return 'all';
+  }
+
+  const tokens = trimmed.split(/\s+/).filter((token) => token.length > 0);
+  if (tokens.length !== 1) {
+    return undefined;
+  }
+
+  const token = (tokens[0] as string).toLowerCase();
+  const candidate = token.startsWith('status=')
+    ? token.slice('status='.length)
+    : token;
+
+  if (candidate.length === 0) {
+    return undefined;
+  }
+
+  if (candidate === 'all') {
+    return 'all';
+  }
+
+  if ((GATEWAY_TASK_STATUS_FILTERS as readonly string[]).includes(candidate)) {
+    return candidate as GatewayTaskStatus;
+  }
+
+  return undefined;
+}
+
+function isGatewayTaskStateRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function listGatewayTaskDefinitionFiles(taskDir: string): string[] {
+  if (!existsSync(taskDir)) {
+    return [];
+  }
+
+  const output: string[] = [];
+  const stack = [resolve(taskDir)];
+
+  while (stack.length > 0) {
+    const current = stack.pop() as string;
+    const entries = readdirSync(current, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = join(current, entry.name);
+
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+        continue;
+      }
+
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      if (!entry.name.endsWith('.task.md')) {
+        continue;
+      }
+
+      output.push(fullPath);
+    }
+  }
+
+  output.sort();
+  return output;
+}
+
+function loadGatewayTaskRuntimeState(stateFile: string): Record<string, GatewayTaskRuntimeRecord> {
+  if (!existsSync(stateFile)) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(stateFile, 'utf-8')) as unknown;
+    if (!isGatewayTaskStateRecord(parsed)) {
+      return {};
+    }
+
+    const tasks = parsed.tasks;
+    if (!isGatewayTaskStateRecord(tasks)) {
+      return {};
+    }
+
+    const output: Record<string, GatewayTaskRuntimeRecord> = {};
+
+    for (const [key, value] of Object.entries(tasks)) {
+      if (!isGatewayTaskStateRecord(value)) {
+        continue;
+      }
+
+      output[key] = {
+        id: typeof value.id === 'string' ? value.id : undefined,
+        filePath: typeof value.filePath === 'string' ? value.filePath : undefined,
+        running: typeof value.running === 'boolean' ? value.running : undefined,
+        lastStatus: typeof value.lastStatus === 'string' ? value.lastStatus : undefined,
+        lastRunAt: typeof value.lastRunAt === 'string' ? value.lastRunAt : undefined,
+        oneTimeResolvedStatus:
+          typeof value.oneTimeResolvedStatus === 'string' ? value.oneTimeResolvedStatus : undefined,
+        oneTimeCompletedAt:
+          typeof value.oneTimeCompletedAt === 'string' ? value.oneTimeCompletedAt : undefined,
+      };
+    }
+
+    return output;
+  } catch {
+    return {};
+  }
+}
+
+function formatGatewayTaskSchedule(task: ParsedTaskDefinition): string {
+  if (task.schedule.type === 'cron') {
+    return `cron ${task.schedule.expression}`;
+  }
+
+  return `at ${task.schedule.at}`;
+}
+
+function resolveGatewayTaskStatus(
+  task: ParsedTaskDefinition,
+  runtime: GatewayTaskRuntimeRecord | undefined,
+): GatewayTaskStatus {
+  if (runtime?.running === true) {
+    return 'running';
+  }
+
+  if (
+    task.schedule.type === 'at'
+    && (runtime?.oneTimeCompletedAt || runtime?.oneTimeResolvedStatus === 'success')
+  ) {
+    return 'completed';
+  }
+
+  if (runtime?.lastStatus === 'failed') {
+    return 'error';
+  }
+
+  if (runtime?.lastStatus === 'skipped') {
+    return 'pending';
+  }
+
+  return task.enabled ? 'active' : 'disabled';
+}
+
+function countGatewayTaskStatuses(entries: GatewayTaskSummaryEntry[]): Record<GatewayTaskStatus, number> {
+  const counts: Record<GatewayTaskStatus, number> = {
+    running: 0,
+    active: 0,
+    completed: 0,
+    disabled: 0,
+    pending: 0,
+    error: 0,
+  };
+
+  for (const entry of entries) {
+    counts[entry.status] += 1;
+  }
+
+  return counts;
+}
+
+const listScheduledTasks: ListScheduledTasksFn = async ({ statusFilter }) => {
+  const config = loadDaemonConfig();
+  const daemonPaths = resolveDaemonPaths(config.ipc.socketPath);
+  const taskDir = config.modules.tasks.taskDir;
+  const stateFile = join(daemonPaths.root, 'task-state.json');
+  const taskFiles = listGatewayTaskDefinitionFiles(taskDir);
+  const runtimeState = loadGatewayTaskRuntimeState(stateFile);
+
+  const parsedTasks: ParsedTaskDefinition[] = [];
+  const parseErrors: Array<{ filePath: string; error: string }> = [];
+
+  for (const filePath of taskFiles) {
+    try {
+      parsedTasks.push(parseTaskDefinition({
+        filePath,
+        rawContent: readFileSync(filePath, 'utf-8'),
+        defaultTimeoutSeconds: config.modules.tasks.defaultTimeoutSeconds,
+      }));
+    } catch (error) {
+      parseErrors.push({
+        filePath,
+        error: (error as Error).message,
+      });
+    }
+  }
+
+  parsedTasks.sort((left, right) => left.id.localeCompare(right.id) || left.filePath.localeCompare(right.filePath));
+
+  const entries = parsedTasks.map((task) => {
+    const runtime = runtimeState[task.key];
+
+    return {
+      task,
+      runtime,
+      status: resolveGatewayTaskStatus(task, runtime),
+    };
+  });
+
+  const filteredEntries = statusFilter === 'all'
+    ? entries
+    : entries.filter((entry) => entry.status === statusFilter);
+
+  const counts = countGatewayTaskStatuses(entries);
+
+  const lines = [
+    'Scheduled tasks',
+    `Filter: ${statusFilter}`,
+    `Task directory: ${taskDir}`,
+    `State file: ${stateFile}`,
+    `Summary: running=${counts.running}, active=${counts.active}, completed=${counts.completed}, disabled=${counts.disabled}, pending=${counts.pending}, error=${counts.error}`,
+  ];
+
+  if (entries.length === 0) {
+    lines.push('', 'No valid task files found.');
+  } else if (filteredEntries.length === 0) {
+    lines.push('', `No tasks matched filter: ${statusFilter}`);
+  } else {
+    lines.push('');
+
+    for (const entry of filteredEntries) {
+      const { task, runtime, status } = entry;
+      lines.push(`- ${task.id} [${status}]`);
+      lines.push(`  schedule: ${formatGatewayTaskSchedule(task)}`);
+      lines.push(`  profile: ${task.profile}`);
+
+      if (runtime?.lastRunAt) {
+        lines.push(`  last run: ${new Date(runtime.lastRunAt).toLocaleString()}`);
+      }
+
+      if (runtime?.lastStatus) {
+        lines.push(`  last status: ${runtime.lastStatus}`);
+      }
+    }
+  }
+
+  if (parseErrors.length > 0) {
+    lines.push('', `Parse errors (${parseErrors.length}):`);
+    for (const error of parseErrors) {
+      lines.push(`- ${error.filePath}: ${error.error}`);
+    }
+  }
+
+  return lines.join('\n');
+};
 
 async function discoverPiHelpFromPi(options: {
   profile: ResolvedProfile;
@@ -958,84 +1268,14 @@ function getProfileDefaultModel(profile: ResolvedProfile): string | undefined {
   return undefined;
 }
 
-function parsePromptTemplateFrontmatter(content: string): {
-  description?: string;
-  content: string;
-} {
-  if (!content.startsWith('---')) {
-    return { content: content.trim() };
-  }
-
-  const endIndex = content.indexOf('\n---', 3);
-  if (endIndex === -1) {
-    return { content: content.trim() };
-  }
-
-  const frontmatter = content.slice(4, endIndex);
-  const remainingContent = content.slice(endIndex + 4).trim();
-
-  let description: string | undefined;
-  for (const line of frontmatter.split('\n')) {
-    const match = line.match(/^(\w+):\s*(.*)$/);
-    if (!match) {
-      continue;
-    }
-
-    const key = match[1]?.trim().toLowerCase();
-    const value = match[2]?.trim();
-    if (key === 'description' && value) {
-      description = value;
-    }
-  }
-
-  return {
-    description,
-    content: remainingContent,
-  };
-}
-
-function loadProfilePromptTemplates(profile: ResolvedProfile): PromptTemplate[] {
-  const templates: PromptTemplate[] = [];
-
-  for (const entry of profile.promptEntries) {
-    try {
-      const rawContent = readFileSync(entry, 'utf-8');
-      const parsed = parsePromptTemplateFrontmatter(rawContent);
-      const name = basename(entry, '.md');
-      const firstLine = parsed.content.split('\n').find((line) => line.trim().length > 0)?.trim();
-
-      let description = parsed.description;
-      if (!description && firstLine) {
-        description = firstLine.slice(0, 60) + (firstLine.length > 60 ? '...' : '');
-      }
-
-      templates.push({
-        name,
-        description: description ? `${description} (profile)` : '(profile)',
-        content: parsed.content,
-        source: '(profile)',
-      });
-    } catch {
-      // Ignore unreadable prompt templates
-    }
-  }
-
-  return templates;
-}
-
 function buildGatewaySettingsManager(profile: ResolvedProfile, cwd: string, agentDir: string): SettingsManager {
   const settingsManager = SettingsManager.create(cwd, agentDir);
 
-  settingsManager.applyOverrides({
-    skills: {
-      enableCodexUser: false,
-      enableClaudeUser: false,
-      enableClaudeProject: false,
-      enablePiUser: false,
-      enablePiProject: false,
-      customDirectories: profile.skillDirs,
-    },
-  });
+  if (profile.skillDirs.length > 0) {
+    settingsManager.applyOverrides({
+      skills: profile.skillDirs,
+    });
+  }
 
   return settingsManager;
 }
@@ -1060,20 +1300,29 @@ async function createGatewayAgentSession(options: {
 }): Promise<PiAgentSession> {
   const settingsManager = buildGatewaySettingsManager(options.profile, options.cwd, options.agentDir);
   const eventBus = createEventBus();
-  const preloadedExtensions = await loadExtensions(options.profile.extensionEntries, options.cwd, eventBus);
 
-  for (const { path, error } of preloadedExtensions.errors) {
-    console.error(`Failed to load extension "${path}": ${error}`);
-  }
+  const resourceLoader = new DefaultResourceLoader({
+    cwd: options.cwd,
+    agentDir: options.agentDir,
+    settingsManager,
+    eventBus,
+    additionalExtensionPaths: options.profile.extensionEntries,
+    additionalPromptTemplatePaths: options.profile.promptEntries,
+  });
 
-  const { session } = await createAgentSession({
+  await resourceLoader.reload();
+
+  const { session, extensionsResult } = await createAgentSession({
     cwd: options.cwd,
     agentDir: options.agentDir,
     sessionManager: createPersistentSessionManager(options.cwd, options.sessionFile),
     settingsManager,
-    preloadedExtensions,
-    promptTemplates: loadProfilePromptTemplates(options.profile),
+    resourceLoader,
   });
+
+  for (const { path, error } of extensionsResult.errors) {
+    console.error(`Failed to load extension "${path}": ${error}`);
+  }
 
   return session;
 }
@@ -1165,9 +1414,6 @@ async function listPiModels(options: {
     agentDir: options.agentDir,
     sessionManager: SessionManager.inMemory(options.cwd),
     settingsManager,
-    extensions: [],
-    skills: [],
-    promptTemplates: [],
     tools: [],
   });
 
@@ -1176,7 +1422,7 @@ async function listPiModels(options: {
     const seen = new Set<string>();
     const models: string[] = [];
 
-    const availableModels = await session.getAvailableModels();
+    const availableModels = session.modelRegistry.getAvailable();
     for (const availableModel of availableModels) {
       const modelName = `${availableModel.provider}/${availableModel.id}`;
       if (seen.has(modelName)) {
@@ -1839,6 +2085,90 @@ function createResponseChunkStreamer(sendMessage: SendTextFn): ResponseChunkStre
   };
 }
 
+export interface FlushGatewayNotificationsOptions {
+  gateway: 'telegram' | 'discord';
+  limit?: number;
+  deliverNotification: (notification: GatewayNotification) => Promise<void>;
+  pullNotifications?: (input: {
+    gateway: 'telegram' | 'discord';
+    limit?: number;
+  }) => Promise<GatewayNotification[]>;
+  requeueNotification?: (notification: GatewayNotification) => Promise<void>;
+}
+
+function toGatewayNotificationEventPayload(notification: GatewayNotification): Record<string, unknown> {
+  return {
+    gateway: notification.gateway,
+    destinationId: notification.destinationId,
+    message: notification.message,
+    taskId: notification.taskId,
+    status: notification.status,
+    logPath: notification.logPath,
+    createdAt: notification.createdAt,
+  };
+}
+
+export async function flushGatewayNotifications(
+  options: FlushGatewayNotificationsOptions,
+): Promise<number> {
+  const pullNotifications = options.pullNotifications ?? pullGatewayNotifications;
+  const requeueNotification = options.requeueNotification ?? ((notification: GatewayNotification) =>
+    emitDaemonEventNonFatal({
+      type: 'gateway.notification',
+      source: 'gateway',
+      payload: toGatewayNotificationEventPayload(notification),
+    }));
+
+  const notifications = await pullNotifications({
+    gateway: options.gateway,
+    limit: options.limit ?? 20,
+  });
+
+  if (notifications.length === 0) {
+    return 0;
+  }
+
+  let deliveredCount = 0;
+
+  for (const notification of notifications) {
+    try {
+      await options.deliverNotification(notification);
+      deliveredCount += 1;
+    } catch (error) {
+      console.warn(gatewayWarning(
+        `Failed to deliver daemon ${options.gateway} notification ${notification.id}: ${(error as Error).message}`,
+      ));
+
+      await requeueNotification(notification);
+      break;
+    }
+  }
+
+  return deliveredCount;
+}
+
+function toNumericDestinationId(value: string): number | undefined {
+  if (!/^-?\d+$/.test(value.trim())) {
+    return undefined;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isSafeInteger(parsed) ? parsed : undefined;
+}
+
+function toTelegramSentMessageId(value: unknown): number | undefined {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const candidate = value as { message_id?: unknown };
+  return typeof candidate.message_id === 'number' ? candidate.message_id : undefined;
+}
+
+function toTrackedScheduledReplyContextKey(chatId: string, messageId: number): string {
+  return `${chatId}:${messageId}`;
+}
+
 interface StoredTelegramPendingMessage {
   version: 1;
   storedAt: string;
@@ -1882,6 +2212,17 @@ function isTelegramMessageLike(value: unknown): value is TelegramMessageLike {
 
   if (candidate.text !== undefined && typeof candidate.text !== 'string') {
     return false;
+  }
+
+  if (candidate.reply_to_message !== undefined) {
+    if (!candidate.reply_to_message || typeof candidate.reply_to_message !== 'object') {
+      return false;
+    }
+
+    const replyTo = candidate.reply_to_message as Record<string, unknown>;
+    if (replyTo.message_id !== undefined && typeof replyTo.message_id !== 'number') {
+      return false;
+    }
   }
 
   return true;
@@ -2304,8 +2645,7 @@ async function handleModelCommand(options: HandleModelCommandOptions): Promise<b
       return true;
     }
 
-    const selectionLimit = support.selectionLimit ?? DEFAULT_MODEL_SELECTION_LIMIT;
-    const modelsForSelection = availableModels.slice(0, selectionLimit);
+    const modelsForSelection = availableModels;
 
     support.pendingSelectionsByConversation.set(options.conversationId, {
       models: modelsForSelection,
@@ -2374,6 +2714,35 @@ async function disposeConversationController(
   } catch {
     // best-effort cleanup
   }
+}
+
+function buildPromptWithScheduledReplyContext(input: {
+  userPrompt: string;
+  context: ScheduledReplyContext;
+}): string {
+  const lines: string[] = [
+    'You are responding to a user reply to a scheduled task notification.',
+  ];
+
+  if (input.context.taskId) {
+    lines.push(`Task ID: ${input.context.taskId}`);
+  }
+
+  if (input.context.status) {
+    lines.push(`Task status: ${input.context.status}`);
+  }
+
+  if (input.context.createdAt) {
+    lines.push(`Task message created at: ${input.context.createdAt}`);
+  }
+
+  if (input.context.logPath) {
+    lines.push(`Task log path: ${input.context.logPath}`);
+  }
+
+  lines.push('', 'Scheduled task notification message:', input.context.message, '', 'User reply:', input.userPrompt);
+
+  return lines.join('\n');
 }
 
 async function processTelegramMessage(
@@ -2494,6 +2863,26 @@ model=${model}`,
     return completedMessageProcessingResult();
   }
 
+  if (command === '/tasks') {
+    const statusFilter = parseGatewayTaskStatusFilter(normalized.args);
+    if (!statusFilter) {
+      await options.sendMessage(
+        message.chat.id,
+        `${gatewayTaskListUsageText()}\nExample: /tasks completed`,
+      );
+      return completedMessageProcessingResult();
+    }
+
+    try {
+      const taskText = await (options.listScheduledTasks ?? listScheduledTasks)({ statusFilter });
+      await sendLongText((chunk) => options.sendMessage(message.chat.id, chunk), taskText);
+    } catch (error) {
+      await options.sendMessage(message.chat.id, `Unable to list scheduled tasks: ${(error as Error).message}`);
+    }
+
+    return completedMessageProcessingResult();
+  }
+
   if (command === '/stop') {
     const controllerPromise = controllers.get(chatId);
     if (!controllerPromise) {
@@ -2527,6 +2916,23 @@ model=${model}`,
     }
 
     prompt = normalized.args;
+  }
+
+  const replyMessageId = message.reply_to_message?.message_id;
+  if ((command === undefined || command === '/followup')
+    && typeof replyMessageId === 'number'
+    && options.resolveScheduledReplyContext) {
+    const scheduledReplyContext = options.resolveScheduledReplyContext({
+      chatId,
+      replyMessageId,
+    });
+
+    if (scheduledReplyContext) {
+      prompt = buildPromptWithScheduledReplyContext({
+        userPrompt: prompt,
+        context: scheduledReplyContext,
+      });
+    }
   }
 
   const controller = await getOrCreateConversationController(
@@ -2817,17 +3223,28 @@ async function createTelegramConfigFromEnv(): Promise<TelegramBridgeConfig> {
   const stored = readGatewayConfig();
   const storedTelegram = stored.telegram;
 
-  const token = process.env.TELEGRAM_BOT_TOKEN ?? storedTelegram?.token;
+  const token = resolveConfiguredValue(
+    process.env.TELEGRAM_BOT_TOKEN ?? storedTelegram?.token,
+    { fieldName: 'TELEGRAM_BOT_TOKEN (or gateway.telegram.token)' },
+  );
+
   if (!token) {
     throw new Error('TELEGRAM_BOT_TOKEN is required. Run `pa gateway setup telegram` or set TELEGRAM_BOT_TOKEN.');
   }
 
   const profile = process.env.PERSONAL_AGENT_PROFILE || stored.profile || 'shared';
 
-  const allowlistFromEnv = parseAllowlist(process.env.PERSONAL_AGENT_TELEGRAM_ALLOWLIST);
+  const allowlistFromEnv = parseAllowlist(resolveConfiguredValue(
+    process.env.PERSONAL_AGENT_TELEGRAM_ALLOWLIST,
+    { fieldName: 'PERSONAL_AGENT_TELEGRAM_ALLOWLIST' },
+  ));
+  const storedAllowlist = resolveConfiguredAllowlistEntries(
+    storedTelegram?.allowlist,
+    { fieldName: 'gateway.telegram.allowlist' },
+  );
   const allowlist = allowlistFromEnv.size > 0
     ? allowlistFromEnv
-    : new Set(storedTelegram?.allowlist ?? []);
+    : storedAllowlist;
 
   if (allowlist.size === 0) {
     throw new Error(
@@ -2880,6 +3297,74 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     shouldRetry: isRetriableTelegramApiError,
   });
 
+  const sendTelegramMessageWithRetry = (
+    chatId: number,
+    text: string,
+    options?: TelegramSendMessageOptions,
+  ): Promise<unknown> => withTelegramRetry(
+    `telegram.sendMessage chat=${chatId}`,
+    () => bot.sendMessage(chatId, text, options),
+  );
+
+  const trackedScheduledReplyContexts = new Map<string, ScheduledReplyContext & { trackedAtMs: number }>();
+
+  const pruneTrackedScheduledReplyContexts = (): void => {
+    const nowMs = Date.now();
+
+    for (const [key, context] of trackedScheduledReplyContexts) {
+      if (nowMs - context.trackedAtMs > SCHEDULED_REPLY_CONTEXT_TTL_MS) {
+        trackedScheduledReplyContexts.delete(key);
+      }
+    }
+
+    while (trackedScheduledReplyContexts.size > MAX_TRACKED_SCHEDULED_REPLY_CONTEXTS) {
+      const oldestKey = trackedScheduledReplyContexts.keys().next().value;
+      if (typeof oldestKey !== 'string') {
+        break;
+      }
+
+      trackedScheduledReplyContexts.delete(oldestKey);
+    }
+  };
+
+  const trackScheduledReplyContext = (chatId: number, messageId: number, notification: GatewayNotification): void => {
+    trackedScheduledReplyContexts.set(
+      toTrackedScheduledReplyContextKey(String(chatId), messageId),
+      {
+        source: 'scheduled-task',
+        taskId: notification.taskId,
+        status: notification.status,
+        message: notification.message,
+        logPath: notification.logPath,
+        createdAt: notification.createdAt,
+        trackedAtMs: Date.now(),
+      },
+    );
+
+    pruneTrackedScheduledReplyContexts();
+  };
+
+  const resolveScheduledReplyContext = (
+    chatId: string,
+    replyMessageId: number,
+  ): ScheduledReplyContext | undefined => {
+    pruneTrackedScheduledReplyContexts();
+
+    const tracked = trackedScheduledReplyContexts.get(toTrackedScheduledReplyContextKey(chatId, replyMessageId));
+    if (!tracked) {
+      return undefined;
+    }
+
+    return {
+      source: tracked.source,
+      taskId: tracked.taskId,
+      status: tracked.status,
+      message: tracked.message,
+      logPath: tracked.logPath,
+      createdAt: tracked.createdAt,
+    };
+  };
+
   const discoveredHelp = await discoverPiHelpFromPi({
     profile: resolvedProfile,
     agentDir: runtime.agentDir,
@@ -2919,10 +3404,9 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     commandHelpText,
     skillsHelpText,
     modelCommands,
-    sendMessage: (chatId, text, options) => withTelegramRetry(
-      `telegram.sendMessage chat=${chatId}`,
-      () => bot.sendMessage(chatId, text, options),
-    ),
+    resolveScheduledReplyContext: ({ chatId, replyMessageId }) =>
+      resolveScheduledReplyContext(chatId, replyMessageId),
+    sendMessage: (chatId, text, options) => sendTelegramMessageWithRetry(chatId, text, options),
     sendChatAction: (chatId, action) => withTelegramRetry(
       `telegram.sendChatAction chat=${chatId} action=${action}`,
       () => bot.sendChatAction(chatId, action),
@@ -2983,6 +3467,63 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     console.log(gatewayWarning(`Recovered ${recoveredPendingMessages} pending telegram message(s) from durable inbox.`));
     logSystem('telegram', `Recovered ${recoveredPendingMessages} pending message(s) from durable inbox`);
   }
+
+  let daemonNotificationFlushInFlight = false;
+
+  const triggerDaemonNotificationFlush = (): void => {
+    if (daemonNotificationFlushInFlight) {
+      return;
+    }
+
+    daemonNotificationFlushInFlight = true;
+    void flushGatewayNotifications({
+      gateway: 'telegram',
+      limit: 10,
+      deliverNotification: async (notification) => {
+        if (!effectiveConfig.allowlist.has(notification.destinationId)) {
+          console.warn(gatewayWarning(
+            `Dropping daemon telegram notification for non-allowlisted chat ${notification.destinationId}`,
+          ));
+          return;
+        }
+
+        const chatId = toNumericDestinationId(notification.destinationId);
+        if (typeof chatId !== 'number') {
+          console.warn(gatewayWarning(
+            `Dropping daemon telegram notification with invalid chat id ${notification.destinationId}`,
+          ));
+          return;
+        }
+
+        const chunks = splitTelegramMessage(notification.message || '(empty response)');
+        for (const chunk of chunks) {
+          const sent = await sendTelegramMessageWithRetry(chatId, chunk);
+          const sentMessageId = toTelegramSentMessageId(sent);
+          if (typeof sentMessageId === 'number') {
+            trackScheduledReplyContext(chatId, sentMessageId, notification);
+          }
+        }
+      },
+    })
+      .then((deliveredCount) => {
+        if (deliveredCount > 0) {
+          logSystem('telegram', `Delivered ${deliveredCount} daemon notification(s)`);
+        }
+      })
+      .catch((error) => {
+        console.warn(gatewayWarning(`Failed to flush daemon notifications: ${(error as Error).message}`));
+      })
+      .finally(() => {
+        daemonNotificationFlushInFlight = false;
+      });
+  };
+
+  triggerDaemonNotificationFlush();
+  const daemonNotificationInterval = setInterval(
+    triggerDaemonNotificationFlush,
+    DAEMON_NOTIFICATION_POLL_INTERVAL_MS,
+  );
+  daemonNotificationInterval.unref();
 
   console.log(gatewaySuccess(`Telegram bridge started (profile=${effectiveConfig.profile})`));
   console.log(gatewayKeyValue('Allowed chats', [...effectiveConfig.allowlist].join(', ')));
@@ -3097,6 +3638,23 @@ model=${model}`,
   if (command === '/skills') {
     const skillsHelp = options.skillsHelpText ?? formatTelegramSkills([]);
     await sendLongText(message.sendMessage, skillsHelp);
+    return;
+  }
+
+  if (command === '/tasks') {
+    const statusFilter = parseGatewayTaskStatusFilter(normalized.args);
+    if (!statusFilter) {
+      await message.sendMessage(`${gatewayTaskListUsageText()}\nExample: /tasks completed`);
+      return;
+    }
+
+    try {
+      const taskText = await (options.listScheduledTasks ?? listScheduledTasks)({ statusFilter });
+      await sendLongText(message.sendMessage, taskText);
+    } catch (error) {
+      await message.sendMessage(`Unable to list scheduled tasks: ${(error as Error).message}`);
+    }
+
     return;
   }
 
@@ -3336,17 +3894,28 @@ async function createDiscordConfigFromEnv(): Promise<DiscordBridgeConfig> {
   const stored = readGatewayConfig();
   const storedDiscord = stored.discord;
 
-  const token = process.env.DISCORD_BOT_TOKEN ?? storedDiscord?.token;
+  const token = resolveConfiguredValue(
+    process.env.DISCORD_BOT_TOKEN ?? storedDiscord?.token,
+    { fieldName: 'DISCORD_BOT_TOKEN (or gateway.discord.token)' },
+  );
+
   if (!token) {
     throw new Error('DISCORD_BOT_TOKEN is required. Run `pa gateway setup discord` or set DISCORD_BOT_TOKEN.');
   }
 
   const profile = process.env.PERSONAL_AGENT_PROFILE || stored.profile || 'shared';
 
-  const allowlistFromEnv = parseAllowlist(process.env.PERSONAL_AGENT_DISCORD_ALLOWLIST);
+  const allowlistFromEnv = parseAllowlist(resolveConfiguredValue(
+    process.env.PERSONAL_AGENT_DISCORD_ALLOWLIST,
+    { fieldName: 'PERSONAL_AGENT_DISCORD_ALLOWLIST' },
+  ));
+  const storedAllowlist = resolveConfiguredAllowlistEntries(
+    storedDiscord?.allowlist,
+    { fieldName: 'gateway.discord.allowlist' },
+  );
   const allowlist = allowlistFromEnv.size > 0
     ? allowlistFromEnv
-    : new Set(storedDiscord?.allowlist ?? []);
+    : storedAllowlist;
 
   if (allowlist.size === 0) {
     throw new Error(
@@ -3381,6 +3950,17 @@ function hasDiscordChannelMessaging(channel: unknown): channel is {
 
   const candidate = channel as Record<string, unknown>;
   return typeof candidate.send === 'function' && typeof candidate.sendTyping === 'function';
+}
+
+function hasDiscordChannelSender(channel: unknown): channel is {
+  send: (text: string) => Promise<unknown>;
+} {
+  if (!channel || typeof channel !== 'object') {
+    return false;
+  }
+
+  const candidate = channel as Record<string, unknown>;
+  return typeof candidate.send === 'function';
 }
 
 export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<void> {
@@ -3461,12 +4041,63 @@ export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<
     });
   });
 
+  let daemonNotificationFlushInFlight = false;
+
+  const triggerDaemonNotificationFlush = (): void => {
+    if (daemonNotificationFlushInFlight) {
+      return;
+    }
+
+    daemonNotificationFlushInFlight = true;
+    void flushGatewayNotifications({
+      gateway: 'discord',
+      limit: 10,
+      deliverNotification: async (notification) => {
+        if (!effectiveConfig.allowlist.has(notification.destinationId)) {
+          console.warn(gatewayWarning(
+            `Dropping daemon discord notification for non-allowlisted channel ${notification.destinationId}`,
+          ));
+          return;
+        }
+
+        const cachedChannel = client.channels.cache.get(notification.destinationId);
+        const channel = cachedChannel ?? await client.channels.fetch(notification.destinationId);
+        if (!hasDiscordChannelSender(channel)) {
+          console.warn(gatewayWarning(
+            `Dropping daemon discord notification for non-sendable channel ${notification.destinationId}`,
+          ));
+          return;
+        }
+
+        await sendLongText((text) => channel.send(text), notification.message);
+      },
+    })
+      .then((deliveredCount) => {
+        if (deliveredCount > 0) {
+          logSystem('discord', `Delivered ${deliveredCount} daemon notification(s)`);
+        }
+      })
+      .catch((error) => {
+        console.warn(gatewayWarning(`Failed to flush daemon notifications: ${(error as Error).message}`));
+      })
+      .finally(() => {
+        daemonNotificationFlushInFlight = false;
+      });
+  };
+
   client.once('ready', () => {
     console.log(gatewaySuccess(`Discord bridge started (profile=${effectiveConfig.profile})`));
     console.log(gatewayKeyValue('Allowed channels', [...effectiveConfig.allowlist].join(', ')));
     console.log(gatewayKeyValue('Working directory', effectiveConfig.workingDirectory));
     console.log(gatewayKeyValue('Available commands', discordCommands.length));
     logSystem('discord', `Bridge started for profile=${effectiveConfig.profile}`);
+
+    triggerDaemonNotificationFlush();
+    const daemonNotificationInterval = setInterval(
+      triggerDaemonNotificationFlush,
+      DAEMON_NOTIFICATION_POLL_INTERVAL_MS,
+    );
+    daemonNotificationInterval.unref();
   });
 
   client.on('error', (error: unknown) => {

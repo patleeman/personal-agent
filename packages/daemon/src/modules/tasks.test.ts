@@ -102,7 +102,13 @@ async function waitForCondition(check: () => boolean, timeoutMs = 2000): Promise
   }
 }
 
-function createRunResult(request: TaskRunRequest, success: boolean, nowIso: string, error?: string): TaskRunResult {
+function createRunResult(
+  request: TaskRunRequest,
+  success: boolean,
+  nowIso: string,
+  error?: string,
+  outputText?: string,
+): TaskRunResult {
   return {
     success,
     startedAt: nowIso,
@@ -113,6 +119,7 @@ function createRunResult(request: TaskRunRequest, success: boolean, nowIso: stri
     cancelled: false,
     logPath: join(request.runsRoot, `${request.task.id}-attempt-${request.attempt}.log`),
     error,
+    outputText,
   };
 }
 
@@ -183,6 +190,142 @@ describe('tasks module scheduling', () => {
 
     expect(runTask).toHaveBeenCalledTimes(3);
     expect(published.some((event) => event.type === 'tasks.run.completed')).toBe(true);
+
+    await module.stop?.(context);
+  });
+
+  it('publishes gateway notifications for configured task outputs', async () => {
+    const taskDir = createTempDir('tasks-module-definitions-');
+    const stateRoot = createTempDir('tasks-module-state-');
+    const taskPath = join(taskDir, 'reminder.task.md');
+
+    writeFileSync(taskPath, `---
+id: reminder
+at: "2026-03-02T10:00:00.000Z"
+output:
+  when: always
+  targets:
+    - gateway: telegram
+      chatId: "123"
+---
+Send reminder
+`);
+
+    let currentTime = new Date('2026-03-02T09:59:00.000Z');
+
+    const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(
+      request,
+      true,
+      currentTime.toISOString(),
+      undefined,
+      'Reminder: stand up and stretch.',
+    ));
+
+    const module = createTasksModule(
+      {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
+      {
+        now: () => currentTime,
+        runTask,
+      },
+    );
+
+    const { context, published } = createContext(taskDir, stateRoot);
+
+    await module.start(context);
+
+    currentTime = new Date('2026-03-02T10:00:10.000Z');
+    await module.handleEvent(createTimerEvent(), context);
+
+    await waitForCondition(() => {
+      const status = module.getStatus?.() as { totalRuns?: number };
+      return (status.totalRuns ?? 0) === 1;
+    });
+
+    const notifications = published.filter((event) => event.type === 'gateway.notification');
+    expect(notifications.length).toBe(1);
+    expect(notifications[0]?.payload).toMatchObject({
+      gateway: 'telegram',
+      destinationId: '123',
+      taskId: 'reminder',
+      status: 'success',
+    });
+
+    const message = notifications[0]?.payload?.message;
+    expect(typeof message).toBe('string');
+    expect(String(message)).toContain('Reminder: stand up and stretch.');
+
+    await module.stop?.(context);
+  });
+
+  it('publishes failure outputs when task output.when is failure', async () => {
+    const taskDir = createTempDir('tasks-module-definitions-');
+    const stateRoot = createTempDir('tasks-module-state-');
+    const taskPath = join(taskDir, 'failing.task.md');
+
+    writeFileSync(taskPath, `---
+id: failing
+at: "2026-03-02T10:00:00.000Z"
+output:
+  when: failure
+  targets:
+    - gateway: discord
+      channelId: "channel-1"
+---
+This run should fail
+`);
+
+    let currentTime = new Date('2026-03-02T09:59:00.000Z');
+
+    const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(
+      request,
+      false,
+      currentTime.toISOString(),
+      'pi exited with code 1',
+      'failure output',
+    ));
+
+    const module = createTasksModule(
+      {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 30,
+        maxRetries: 1,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
+      {
+        now: () => currentTime,
+        runTask,
+      },
+    );
+
+    const { context, published } = createContext(taskDir, stateRoot);
+
+    await module.start(context);
+
+    currentTime = new Date('2026-03-02T10:00:10.000Z');
+    await module.handleEvent(createTimerEvent(), context);
+
+    await waitForCondition(() => {
+      const status = module.getStatus?.() as { totalRuns?: number };
+      return (status.totalRuns ?? 0) === 1;
+    });
+
+    const notifications = published.filter((event) => event.type === 'gateway.notification');
+    expect(notifications.length).toBe(1);
+    expect(notifications[0]?.payload).toMatchObject({
+      gateway: 'discord',
+      destinationId: 'channel-1',
+      taskId: 'failing',
+      status: 'failed',
+    });
 
     await module.stop?.(context);
   });

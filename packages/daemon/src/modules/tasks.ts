@@ -2,7 +2,13 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'fs';
 import { join, resolve } from 'path';
 import type { TasksModuleConfig } from '../config.js';
 import type { DaemonModule } from './types.js';
-import { cronMatches, parseTaskDefinition, type ParsedTaskDefinition } from './tasks-parser.js';
+import {
+  cronMatches,
+  parseTaskDefinition,
+  type ParsedTaskDefinition,
+  type ParsedTaskOutput,
+  type ParsedTaskOutputTarget,
+} from './tasks-parser.js';
 import {
   createEmptyTaskState,
   loadTaskState,
@@ -13,6 +19,9 @@ import {
 import { runTaskInIsolatedPi, type TaskRunRequest, type TaskRunResult } from './tasks-runner.js';
 
 const TASK_FILE_SUFFIX = '.task.md';
+const GATEWAY_NOTIFICATION_MAX_MESSAGE_CHARS = 12_000;
+
+type TaskRunOutcomeStatus = 'success' | 'failed';
 
 interface RunningTaskHandle {
   controller: AbortController;
@@ -30,6 +39,81 @@ interface TasksModuleState {
   lastTickAt?: string;
   lastRunAt?: string;
   lastError?: string;
+}
+
+function truncateGatewayNotificationMessage(message: string): string {
+  if (message.length <= GATEWAY_NOTIFICATION_MAX_MESSAGE_CHARS) {
+    return message;
+  }
+
+  const marker = '\n\n[message truncated]';
+  const budget = Math.max(0, GATEWAY_NOTIFICATION_MAX_MESSAGE_CHARS - marker.length);
+  return `${message.slice(0, budget)}${marker}`;
+}
+
+function normalizeTaskOutput(outputText?: string): string | undefined {
+  if (!outputText) {
+    return undefined;
+  }
+
+  const normalized = outputText.split('\0').join('').trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function toTaskOutputMessage(input: {
+  taskId: string;
+  status: TaskRunOutcomeStatus;
+  outputText?: string;
+  error?: string;
+}): string {
+  const outputText = normalizeTaskOutput(input.outputText);
+
+  if (input.status === 'success') {
+    if (!outputText) {
+      return `🗓️ Scheduled task ${input.taskId} completed.`;
+    }
+
+    return truncateGatewayNotificationMessage(`🗓️ Scheduled task ${input.taskId} completed.\n\n${outputText}`);
+  }
+
+  const errorLine = input.error ? `Reason: ${input.error}` : 'Reason: task run failed.';
+
+  if (!outputText) {
+    return truncateGatewayNotificationMessage(`⚠️ Scheduled task ${input.taskId} failed.\n${errorLine}`);
+  }
+
+  return truncateGatewayNotificationMessage(
+    `⚠️ Scheduled task ${input.taskId} failed.\n${errorLine}\n\nOutput:\n${outputText}`,
+  );
+}
+
+function shouldPublishTaskOutput(output: ParsedTaskOutput, status: TaskRunOutcomeStatus): boolean {
+  if (output.when === 'always') {
+    return true;
+  }
+
+  if (output.when === 'success') {
+    return status === 'success';
+  }
+
+  return status === 'failed';
+}
+
+function toGatewayNotificationPayload(target: ParsedTaskOutputTarget): {
+  gateway: 'telegram' | 'discord';
+  destinationId: string;
+} {
+  if (target.gateway === 'telegram') {
+    return {
+      gateway: 'telegram',
+      destinationId: target.chatId,
+    };
+  }
+
+  return {
+    gateway: 'discord',
+    destinationId: target.channelId,
+  };
 }
 
 export interface TasksModuleDependencies {
@@ -152,6 +236,52 @@ export function createTasksModule(
     }
   };
 
+  const publishTaskOutputNotifications = (
+    task: ParsedTaskDefinition,
+    status: TaskRunOutcomeStatus,
+    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean },
+    details: {
+      finishedAt: string;
+      outputText?: string;
+      error?: string;
+      logPath?: string;
+    },
+  ): void => {
+    if (!task.output) {
+      return;
+    }
+
+    if (!shouldPublishTaskOutput(task.output, status)) {
+      return;
+    }
+
+    const message = toTaskOutputMessage({
+      taskId: task.id,
+      status,
+      outputText: details.outputText,
+      error: details.error,
+    });
+
+    for (const target of task.output.targets) {
+      const routedTarget = toGatewayNotificationPayload(target);
+      const accepted = context.publish('gateway.notification', {
+        gateway: routedTarget.gateway,
+        destinationId: routedTarget.destinationId,
+        message,
+        taskId: task.id,
+        status,
+        createdAt: details.finishedAt,
+        logPath: details.logPath,
+      });
+
+      if (!accepted) {
+        context.logger.warn(
+          `failed to enqueue gateway notification task=${task.id} gateway=${routedTarget.gateway} destination=${routedTarget.destinationId}`,
+        );
+      }
+    }
+  };
+
   const executeTaskRun = async (
     task: ParsedTaskDefinition,
     record: TaskRuntimeState,
@@ -215,6 +345,12 @@ export function createTasksModule(
         logPath: finalResult.logPath,
       });
       context.logger.info(`task completed id=${task.id} log=${finalResult.logPath}`);
+
+      publishTaskOutputNotifications(task, 'success', context, {
+        finishedAt,
+        outputText: finalResult.outputText,
+        logPath: finalResult.logPath,
+      });
     } else if (finalResult?.cancelled) {
       record.lastStatus = 'skipped';
       record.lastError = finalResult.error ?? 'Task run cancelled';
@@ -243,6 +379,13 @@ export function createTasksModule(
         logPath: finalResult?.logPath,
       });
       context.logger.warn(`task failed id=${task.id} error=${record.lastError}`);
+
+      publishTaskOutputNotifications(task, 'failed', context, {
+        finishedAt,
+        outputText: finalResult?.outputText,
+        error: record.lastError,
+        logPath: finalResult?.logPath,
+      });
     }
 
   };

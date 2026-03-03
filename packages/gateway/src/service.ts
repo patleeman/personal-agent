@@ -168,6 +168,8 @@ function buildServiceEnvironment(provider: GatewayProvider): Record<string, stri
     'PERSONAL_AGENT_GATEWAY_CONFIG_FILE',
     'PERSONAL_AGENT_PROFILE',
     'PERSONAL_AGENT_PI_TIMEOUT_MS',
+    'PERSONAL_AGENT_OP_BIN',
+    'OP_SERVICE_ACCOUNT_TOKEN',
   ] as const;
 
   for (const key of passthroughKeys) {
@@ -187,6 +189,8 @@ function buildDaemonServiceEnvironment(): Record<string, string> {
     'PATH',
     'PERSONAL_AGENT_STATE_ROOT',
     'PERSONAL_AGENT_DAEMON_CONFIG',
+    'PERSONAL_AGENT_OP_BIN',
+    'OP_SERVICE_ACCOUNT_TOKEN',
   ] as const;
 
   for (const key of passthroughKeys) {

@@ -1,4 +1,10 @@
-import type { DaemonEvent, DaemonStatus, EmitResult } from './types.js';
+import type {
+  DaemonEvent,
+  DaemonStatus,
+  EmitResult,
+  GatewayNotificationProvider,
+  PullGatewayNotificationsResult,
+} from './types.js';
 
 export interface EmitRequest {
   id: string;
@@ -21,12 +27,19 @@ export interface PingRequest {
   type: 'ping';
 }
 
-export type DaemonRequest = EmitRequest | StatusRequest | StopRequest | PingRequest;
+export interface PullGatewayNotificationsRequest {
+  id: string;
+  type: 'notifications.pull';
+  gateway: GatewayNotificationProvider;
+  limit?: number;
+}
+
+export type DaemonRequest = EmitRequest | StatusRequest | StopRequest | PingRequest | PullGatewayNotificationsRequest;
 
 export interface DaemonSuccessResponse {
   id: string;
   ok: true;
-  result: EmitResult | DaemonStatus | { stopping: boolean } | { pong: true };
+  result: EmitResult | DaemonStatus | { stopping: boolean } | { pong: true } | PullGatewayNotificationsResult;
 }
 
 export interface DaemonErrorResponse {
@@ -45,6 +58,22 @@ function hasId(value: Record<string, unknown>): value is Record<string, unknown>
   return typeof value.id === 'string' && value.id.length > 0;
 }
 
+function isGatewayNotificationProvider(value: unknown): value is GatewayNotificationProvider {
+  return value === 'telegram' || value === 'discord';
+}
+
+function readOptionalLimit(value: unknown): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isInteger(value) || value <= 0) {
+    throw new Error('notifications.pull limit must be a positive integer');
+  }
+
+  return value;
+}
+
 export function parseRequest(raw: string): DaemonRequest {
   const parsed = JSON.parse(raw) as unknown;
 
@@ -61,6 +90,19 @@ export function parseRequest(raw: string): DaemonRequest {
       id: parsed.id,
       type: 'emit',
       event: parsed.event as DaemonEvent,
+    };
+  }
+
+  if (parsed.type === 'notifications.pull') {
+    if (!isGatewayNotificationProvider(parsed.gateway)) {
+      throw new Error('notifications.pull gateway must be telegram or discord');
+    }
+
+    return {
+      id: parsed.id,
+      type: 'notifications.pull',
+      gateway: parsed.gateway,
+      limit: readOptionalLimit(parsed.limit),
     };
   }
 
