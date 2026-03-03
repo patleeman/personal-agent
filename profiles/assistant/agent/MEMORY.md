@@ -11,6 +11,7 @@
 - Use 1Password CLI (`op`) to access secrets whenever possible; user has migrated many secrets to 1Password.
 - Daily morning report should include weather, calendar, and upcoming Apple Reminders items.
 - For weather reports, prefer free sources like wttr.in (or another free weather provider) over paid APIs.
+- Morning report calendar data should come from Fastmail (not Apple Calendar).
 
 ## Environment
 - 1Password CLI (`op`) is installed, and authentication is intended via `OP_SERVICE_ACCOUNT_TOKEN` environment variable.
