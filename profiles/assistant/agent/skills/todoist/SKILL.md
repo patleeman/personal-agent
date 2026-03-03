@@ -185,9 +185,11 @@ curl -sS -o /dev/null -w "%{http_code}\n" \
 
 ```bash
 # List sections in a project
+token="$(resolve_todoist_api_token)"
+base="${TODOIST_API_BASE:-https://api.todoist.com/api/v1}"
 curl -sS --get \
-  -H "Authorization: Bearer $TODOIST_API_TOKEN" \
-  "$TODOIST_API_BASE/sections" \
+  -H "Authorization: Bearer $token" \
+  "$base/sections" \
   --data-urlencode "project_id=$project_id" \
   | jq '.results[] | {id, name, project_id, order}'
 

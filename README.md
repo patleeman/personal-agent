@@ -173,6 +173,8 @@ Shared optional env vars:
 - `PERSONAL_AGENT_PROFILE` (default: `shared`)
 - `PERSONAL_AGENT_PI_TIMEOUT_MS` (default: `180000`)
 
+If you use `op://...` references for secrets, ensure 1Password CLI (`op`) is installed and authenticated (service-account flow: `OP_SERVICE_ACCOUNT_TOKEN`).
+
 TUI theme mapping is configured in profile `settings.json`:
 
 - `themeDark` (theme name for dark mode)
@@ -187,6 +189,8 @@ Required configuration (via setup or env vars):
 
 - `TELEGRAM_BOT_TOKEN`
 - `PERSONAL_AGENT_TELEGRAM_ALLOWLIST` (comma-separated chat IDs)
+
+`TELEGRAM_BOT_TOKEN` and allowlist values may be plain strings or `op://...` 1Password references.
 
 Optional:
 
@@ -210,6 +214,8 @@ Required configuration (via setup or env vars):
 
 - `DISCORD_BOT_TOKEN`
 - `PERSONAL_AGENT_DISCORD_ALLOWLIST` (comma-separated channel IDs)
+
+`DISCORD_BOT_TOKEN` and allowlist values may be plain strings or `op://...` 1Password references.
 
 Optional:
 

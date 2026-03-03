@@ -60,12 +60,16 @@ Used by both providers:
 - `PERSONAL_AGENT_PROFILE` (default: `shared`)
 - `PERSONAL_AGENT_PI_TIMEOUT_MS` (default: `1800000` / 30 minutes; set `0` to disable timeout)
 
+If you use `op://...` references, make sure 1Password CLI (`op`) is installed and authenticated (for service-account flow, set `OP_SERVICE_ACCOUNT_TOKEN`).
+
 ## Telegram
 
 Required configuration (via setup or env):
 
 - `TELEGRAM_BOT_TOKEN`
 - `PERSONAL_AGENT_TELEGRAM_ALLOWLIST` (comma-separated chat IDs)
+
+`TELEGRAM_BOT_TOKEN` and allowlist entries may be plain strings or `op://...` 1Password references.
 
 Optional:
 
@@ -90,6 +94,8 @@ Required configuration (via setup or env):
 
 - `DISCORD_BOT_TOKEN`
 - `PERSONAL_AGENT_DISCORD_ALLOWLIST` (comma-separated channel IDs)
+
+`DISCORD_BOT_TOKEN` and allowlist entries may be plain strings or `op://...` 1Password references.
 
 Optional:
 
