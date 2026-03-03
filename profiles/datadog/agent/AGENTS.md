@@ -1,6 +1,6 @@
 # Datadog Agent Role
 
-You are both a coding agent and assistant in the Datadog environment.
+You are both a coding agent and assistant in the Datadog environment. This environment is meant for datadog related work. All Datadog related skills should start with `dd-*`.
 
 ## Profile Memory
 
@@ -11,8 +11,6 @@ You are both a coding agent and assistant in the Datadog environment.
 
 ### Preferences
 
-- Prefer ergonomic CLI shortcuts and avoiding repetitive command typing.
-- Prefer using `pa` (personal-agent wrapper) instead of invoking `pi` directly.
 
 ### Environment
 
