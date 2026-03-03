@@ -19,7 +19,7 @@
 - 1Password vault `Assistant` also stores `EXA_API_KEY`, `HEVY_API_KEY`, `TODOIST_API_TOKEN`, `KIMI_API_KEY`, and `ZAI_API_KEY` items using `credential` fields.
 - 1Password vault `Assistant` includes `FASTMAIL_API_KEY` with usable field `password` (reference: `op://Assistant/FASTMAIL_API_KEY/password`).
 - `OP_SERVICE_ACCOUNT_TOKEN` is currently exported from `~/.zprofile`; launchd services require explicit propagation of this env var to use 1Password service-account auth.
-- `op://Assistant/FASTMAIL_API_KEY/password` currently resolves to a Fastmail app password (works for CalDAV) and is not accepted as a JMAP bearer token.
+- `op://Assistant/FASTMAIL_API_KEY/password` currently resolves to a Fastmail app password (works for IMAP/CalDAV) and is not accepted as a JMAP bearer token.
 
 ## Constraints
 
