@@ -12,11 +12,12 @@ So each extension here uses `index.ts` as the entrypoint.
 
 ```text
 extensions/
-├── package.json
-├── README.md
 ├── context-bar.ts
-└── web-tools/
-    └── index.ts
+├── memory/
+│   └── index.ts
+├── web-tools/
+│   └── index.ts
+└── ...
 ```
 
 ## Notes

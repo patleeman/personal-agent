@@ -124,11 +124,16 @@ Extensions are Pi plugins discovered from profile layers:
 - Loaded by Pi at startup
 - Can hook into agent lifecycle events
 
-Example: `memory-cards` extension injects durable profile context and registers durable-memory update tooling.
+Example: `memory` extension injects active-profile memory policy instructions.
 
-## Durable memory
+## Memory model
 
-`profiles/<profile>/agent/MEMORY.md` stores stable user/environment facts, injected at runtime as `DURABLE_MEMORY` by the `memory-cards` extension. Updated via the `memory_update` tool, which writes the file and git add/commit/pushes the change.
+Memory is profile-driven:
+
+- `AGENTS.md` stores durable behavior constraints and stable facts
+- `skills/` stores reusable workflows and domain knowledge
+
+The `memory` extension injects active profile metadata plus these memory-management rules into the system prompt on each turn.
 
 ## Gateway mode
 

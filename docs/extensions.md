@@ -18,10 +18,8 @@ Valid entrypoints:
 
 ```
 extensions/
-├── memory-cards/
-│   ├── index.ts          # Main entrypoint
-│   ├── helpers.ts        # Supporting modules
-│   └── package.json      # Dependencies (optional)
+├── memory/
+│   └── index.ts          # Active-profile memory policy
 ├── web-tools/
 │   └── index.ts
 └── package.json          # Shared dependencies (optional)
@@ -65,14 +63,15 @@ On first use, `pa` will:
 
 ## Built-in Extensions
 
-### memory-cards
+### memory
 
-Durable profile memory injection and update tooling.
+Active-profile memory policy injection.
 
-- Loads `profiles/<active-profile>/agent/MEMORY.md` (fallback to `shared`) and injects `DURABLE_MEMORY`
-- Registers `memory_update` tool for durable memory writes + git add/commit/push
+- Injects the active profile name and profile directory into the system prompt
+- Instructs the agent to treat `AGENTS.md` and `skills/` as the memory system
+- Grants the agent autonomy to manage AGENTS/skills for the active role
 
-Location: `profiles/shared/agent/extensions/memory-cards/`
+Location: `profiles/shared/agent/extensions/memory/`
 
 ### context-bar
 
@@ -96,9 +95,8 @@ Extension behavior can be tuned via env vars:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `PERSONAL_AGENT_DURABLE_MEMORY_MAX_TOKENS` | Max tokens for DURABLE_MEMORY block | `350` |
-| `PERSONAL_AGENT_ACTIVE_PROFILE` | Active profile used for MEMORY.md resolution | `shared` |
-| `PERSONAL_AGENT_REPO_ROOT` | Repo root for profile MEMORY.md + git operations | inferred from extension path |
+| `PERSONAL_AGENT_ACTIVE_PROFILE` | Active profile exposed to the memory extension | `shared` |
+| `PERSONAL_AGENT_REPO_ROOT` | Repo root used to resolve profile paths | inferred from extension path |
 
 ## Authoring Extensions
 

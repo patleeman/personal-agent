@@ -9,7 +9,7 @@ A personal application layer over Pi that keeps:
 ## Features
 
 - **Profile system** - Layered configs (shared → profile → local) with skills, extensions, themes
-- **pa tui** - Launch Pi with profile resources and durable memory injection
+- **pa tui** - Launch Pi with layered profile resources and memory policy injection
 - **Daemon** - Background processing for scheduled tasks and maintenance
 - **Gateways** - Telegram and Discord bot integration with per-chat sessions
 - **Extensions** - Pi extensions auto-discovered from profiles with dependency auto-install
@@ -158,7 +158,7 @@ Pi extensions auto-discovered from profile layers:
 Extensions with `package.json` dependencies are auto-installed on first use.
 
 Built-in extensions:
-- `memory-cards` - Durable memory injection + `memory_update` tool
+- `memory` - Active-profile memory policy (AGENTS.md + skills)
 - `context-bar` - Session context display
 - `web-tools` - Web search/integration
 - `update` - Self-update commands
