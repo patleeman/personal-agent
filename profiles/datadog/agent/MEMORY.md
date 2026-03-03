@@ -7,6 +7,7 @@
 
 ## Preferences
 - Prefers ergonomic CLI shortcuts and avoiding repetitive command typing (e.g., dislikes typing long commands repeatedly).
+- For Fastmail automation, prefers IMAP (app-password auth) over JMAP token flows.
 
 ## Environment
 
