@@ -11,7 +11,7 @@
 - Prefers using `pa` (personal-agent wrapper) instead of invoking `pi` directly.
 
 ## Environment
-- Global `pi` CLI (`@mariozechner/pi-coding-agent`) is currently uninstalled; `pa doctor` reports missing `pi` binary.
+- Global `pi` CLI (`@mariozechner/pi-coding-agent`) is currently uninstalled; `pa` now resolves and runs the repo-local Pi SDK successfully.
 
 ## Constraints
 
