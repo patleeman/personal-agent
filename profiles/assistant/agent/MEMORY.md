@@ -8,9 +8,7 @@
 - Phone number: +1 347-581-0470
 
 ## Preferences
-- For personal-agent internals, prefer using the Pi SDK over shelling out to the `pi` CLI when feasible.
-- When I checkpoint/commit changes, push to remote by default unless I explicitly ask not to.
-- Prefers episodic qmd memory to remain disabled/removed unless explicitly requested to re-enable it.
+- Use 1Password CLI (`op`) to access secrets whenever possible; user has migrated many secrets to 1Password.
 
 ## Environment
 
