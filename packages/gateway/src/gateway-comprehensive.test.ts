@@ -17,6 +17,7 @@ interface TestRunPromptInput {
   cwd: string;
   model?: string;
   abortSignal?: AbortSignal;
+  onTextDelta?: (delta: string) => void;
   logContext?: {
     source: string;
     userId: string;

@@ -42,6 +42,7 @@ interface TestRunPromptInput {
   cwd: string;
   model?: string;
   abortSignal?: AbortSignal;
+  onTextDelta?: (delta: string) => void;
   logContext?: {
     source: string;
     userId: string;
@@ -499,6 +500,45 @@ describe('queued telegram message handler', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('streams telegram responses in chunks before completion', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+
+    let resolveRun: ((value: string) => void) | undefined;
+    const runPromise = new Promise<string>((resolve) => {
+      resolveRun = resolve;
+    });
+
+    const streamedChunk = 'chunk '.repeat(150);
+    const finalTail = 'tail';
+
+    const runPrompt = vi.fn(async ({ onTextDelta }: TestRunPromptInput) => {
+      onTextDelta?.(streamedChunk);
+      return runPromise;
+    });
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: 'stream this' });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(sendMessage).toHaveBeenCalledWith(1, streamedChunk);
+
+    resolveRun?.(`${streamedChunk}${finalTail}`);
+    await handler.waitForIdle('1');
+
+    expect(sendMessage).toHaveBeenCalledWith(1, finalTail);
   });
 
   it('steers active telegram runs instead of starting a second run with controller mode', async () => {

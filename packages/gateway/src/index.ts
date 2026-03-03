@@ -162,6 +162,7 @@ interface RunPromptFnInput {
   cwd: string;
   model?: string;
   abortSignal?: AbortSignal;
+  onTextDelta?: (delta: string) => void;
   logContext?: {
     source: string;
     userId: string;
@@ -281,6 +282,8 @@ const STOPPED_ACTIVE_REQUEST_MESSAGE = 'Stopped active request.';
 const NO_ACTIVE_REQUEST_MESSAGE = 'No active request to stop.';
 const STEERING_ACTIVE_REQUEST_MESSAGE = 'Steering current response...';
 const FOLLOWUP_QUEUED_MESSAGE = 'Queued as follow-up.';
+const STREAMING_FLUSH_TARGET_CHARS = 700;
+const STREAMING_FLUSH_MIN_CHARS = 250;
 
 function gatewaySection(title: string): string {
   return title;
@@ -1348,6 +1351,7 @@ interface PersistentConversationControllerOptions {
 interface ActiveConversationRun {
   streamedOutput: string;
   parser?: PiJsonStreamParser;
+  onTextDelta?: (delta: string) => void;
   aborted: boolean;
   promise: Promise<string>;
 }
@@ -1494,6 +1498,7 @@ class PersistentConversationController implements GatewayConversationController 
       parser: input.logContext
         ? new PiJsonStreamParser(input.logContext.source, input.logContext.userId, input.logContext.userName)
         : undefined,
+      onTextDelta: input.onTextDelta,
       aborted: false,
       promise: Promise.resolve(''),
     };
@@ -1657,6 +1662,14 @@ class PersistentConversationController implements GatewayConversationController 
       const delta = event.assistantMessageEvent.delta;
       if (typeof delta === 'string') {
         activeRun.streamedOutput += delta;
+
+        if (activeRun.onTextDelta) {
+          try {
+            activeRun.onTextDelta(delta);
+          } catch {
+            // Ignore downstream streaming callback failures and keep the run alive.
+          }
+        }
       }
     }
   }
@@ -1701,6 +1714,129 @@ async function sendLongText(sendMessage: SendTextFn, text: string): Promise<void
   for (const chunk of chunks) {
     await sendMessage(chunk);
   }
+}
+
+interface ResponseChunkStreamer {
+  pushDelta: (delta: string) => void;
+  finalize: (finalOutput: string) => Promise<void>;
+}
+
+function toError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
+}
+
+function findStreamingFlushLength(text: string): number {
+  if (text.length < STREAMING_FLUSH_TARGET_CHARS) {
+    return 0;
+  }
+
+  const limit = Math.min(text.length, 3900);
+  const candidate = text.slice(0, limit);
+
+  const boundaryCandidates = [
+    candidate.lastIndexOf('\n\n') + 2,
+    candidate.lastIndexOf('\n') + 1,
+    candidate.lastIndexOf('. ') + 2,
+    candidate.lastIndexOf('! ') + 2,
+    candidate.lastIndexOf('? ') + 2,
+    candidate.lastIndexOf(' ') + 1,
+  ];
+
+  for (const boundary of boundaryCandidates) {
+    if (boundary >= STREAMING_FLUSH_MIN_CHARS) {
+      return boundary;
+    }
+  }
+
+  return limit;
+}
+
+function createResponseChunkStreamer(sendMessage: SendTextFn): ResponseChunkStreamer {
+  let buffered = '';
+  let streamedOutput = '';
+  let sawDelta = false;
+  let sendError: Error | undefined;
+  let sendChain: Promise<void> = Promise.resolve();
+
+  const queueSend = (text: string): void => {
+    if (text.length === 0) {
+      return;
+    }
+
+    sendChain = sendChain
+      .then(async () => {
+        if (sendError) {
+          return;
+        }
+
+        await sendLongText(sendMessage, text);
+      })
+      .catch((error) => {
+        sendError = toError(error);
+      });
+  };
+
+  const flushBuffered = (force: boolean): void => {
+    while (buffered.length > 0) {
+      const flushLength = force
+        ? Math.min(buffered.length, 3900)
+        : findStreamingFlushLength(buffered);
+
+      if (flushLength <= 0) {
+        return;
+      }
+
+      const chunk = buffered.slice(0, flushLength);
+      buffered = buffered.slice(flushLength);
+      queueSend(chunk);
+    }
+  };
+
+  return {
+    pushDelta: (delta: string): void => {
+      if (delta.length === 0) {
+        return;
+      }
+
+      sawDelta = true;
+      streamedOutput += delta;
+      buffered += delta;
+      flushBuffered(false);
+    },
+
+    finalize: async (finalOutput: string): Promise<void> => {
+      if (!sawDelta) {
+        const fallback = finalOutput.length > 0 ? finalOutput : '(no output)';
+        queueSend(fallback);
+      } else {
+        flushBuffered(true);
+
+        if (finalOutput.length > 0) {
+          let suffix = '';
+
+          if (finalOutput.startsWith(streamedOutput)) {
+            suffix = finalOutput.slice(streamedOutput.length);
+          } else if (
+            streamedOutput.startsWith(finalOutput)
+            || streamedOutput.trim() === finalOutput.trim()
+          ) {
+            suffix = '';
+          } else if (streamedOutput.length === 0) {
+            suffix = finalOutput;
+          }
+
+          if (suffix.length > 0) {
+            queueSend(suffix);
+          }
+        }
+      }
+
+      await sendChain;
+      if (sendError) {
+        throw sendError;
+      }
+    },
+  };
 }
 
 interface StoredTelegramPendingMessage {
@@ -2400,11 +2536,16 @@ model=${model}`,
     options.createConversationController,
   );
 
+  const responseStreamer = createResponseChunkStreamer((chunk) => options.sendMessage(message.chat.id, chunk));
+
   const submissionInput: RunPromptFnInput = {
     prompt,
     sessionFile,
     cwd: options.workingDirectory,
     model: options.modelCommands?.activeModelsByConversation.get(chatId),
+    onTextDelta: (delta) => {
+      responseStreamer.pushDelta(delta);
+    },
     logContext: {
       source: 'telegram',
       userId: chatId,
@@ -2432,7 +2573,7 @@ model=${model}`,
           },
         });
 
-        await sendLongText((chunk) => options.sendMessage(message.chat.id, chunk), output || '(no output)');
+        await responseStreamer.finalize(output);
       })
       .catch(async (error) => {
         const errorMessage = (error as Error).message;
