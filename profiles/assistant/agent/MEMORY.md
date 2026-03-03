@@ -12,6 +12,7 @@
 - Daily morning report should include weather, calendar, and upcoming Apple Reminders items.
 - For weather reports, prefer free sources like wttr.in (or another free weather provider) over paid APIs.
 - Morning report calendar data should come from Fastmail (not Apple Calendar).
+- Keep Fastmail credentials separated by protocol: app password for IMAP/CalDAV; dedicated JMAP API token for JMAP scripts.
 
 ## Environment
 - 1Password CLI (`op`) is installed, and authentication is intended via `OP_SERVICE_ACCOUNT_TOKEN` environment variable.
