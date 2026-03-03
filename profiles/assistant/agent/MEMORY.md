@@ -9,6 +9,7 @@
 
 ## Preferences
 - Use 1Password CLI (`op`) to access secrets whenever possible; user has migrated many secrets to 1Password.
+- Daily morning report should include weather, calendar, and upcoming Apple Reminders items.
 
 ## Environment
 - 1Password CLI (`op`) is installed, and authentication is intended via `OP_SERVICE_ACCOUNT_TOKEN` environment variable.
