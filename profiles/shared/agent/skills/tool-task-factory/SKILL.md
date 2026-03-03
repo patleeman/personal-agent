@@ -1,396 +1,320 @@
 ---
 name: tool-task-factory
-description: Task Factory CLI commands for managing tasks, workspaces, planning sessions, and automation. Use when the user asks about task-factory CLI, creating tasks, managing workspaces, or running agent tasks.
+description: Use Task Factory to decompose ambiguous projects into sequenced tasks, run planning/execution queues, and configure/validate pre-planning, pre-execution, and post-execution hooks.
 ---
 
-# Task Factory CLI (v0.5.0)
+# Task Factory Operator Playbook
 
-> 📁 **Local Skill**: This repo also contains `skills/task-factory/SKILL.md` for project-specific workflow guidance.
+Use this skill when a user asks to create/manage Task Factory workspaces or tasks, run queued execution, or set up hook skills.
 
-Task Factory is a lean manufacturing-inspired task queue system for AI agents.
+## Core operating principle
 
-## Quick Reference
+Task Factory is for **queue-first autonomous execution**:
+- You provide high-level goals and constraints.
+- Task agents do their own investigation and planning.
+- You sequence work by ordering tasks and controlling ready/executing flow.
+- You verify outcomes later.
 
-### Common Commands
+For large or ambiguous projects, default to Task Factory orchestration instead of handling everything inline.
+
+## Outcomes
+
+1. Task is created with clear criteria and can move through phases.
+2. Hooks are configured (task-level or global defaults).
+3. Hook execution is verified via task activity logs.
+4. Common failures are diagnosed and fixed quickly.
+
+---
+
+## Default strategy for large, ambiguous requests
+
+Use Task Factory as an orchestrator when scope is broad or under-specified:
+
+1. Break work into a dependency-ordered set of tasks.
+2. Add all tasks to Task Factory backlog quickly (high-level instructions are fine).
+3. Let planning run for each task.
+4. Stage tasks to `ready` in execution order.
+5. Let queue/execution run.
+6. Verify later (block and poll, or schedule a one-time check-in via `pa` daemon task).
+
+Prefer this over trying to execute a big ambiguous project in one direct session.
+
+---
+
+## 0) Preflight (always)
+
+Run these first:
 
 ```bash
-# Start the daemon
+task-factory --version
+task-factory daemon status
+task-factory --help
+task-factory task --help
+task-factory task update --help
+```
+
+If daemon is down:
+
+```bash
 task-factory daemon start
-
-# List workspaces
-task-factory workspaces list
-
-# List tasks
-task-factory task list --workspace <id>
-
-# Create a task
-task-factory task create --workspace <id> --title "Task name"
-
-# View task conversation
-task-factory task conversation <task-id>
-
-# Send message to task
-task-factory task message <task-id> "Message content"
 ```
 
-## Task Commands
+Then identify workspace:
 
-### List Tasks
 ```bash
-task-factory task list --workspace <id> [--scope active|archived|all] [--all]
+task-factory workspace list
 ```
 
-### Show Task Details
+Use the **full workspace ID** from `workspace list` whenever possible.
+
+---
+
+## 1) Workspace bootstrap workflow
+
+Create or reuse a workspace, then verify queue state.
+
+Path selection rules:
+- A Task Factory workspace should map to a **code repository path**.
+- If user gave a repo/path, use that exact path.
+- Otherwise, use the current repo root.
+
+```bash
+# Create from the target repo path
+mkdir -p <repo-path>
+task-factory workspace create <repo-path>
+
+# Inspect
+task-factory workspace show <workspace-id>
+task-factory queue status --workspace <workspace-id>
+```
+
+Queue control:
+
+```bash
+task-factory queue start --workspace <workspace-id>
+task-factory queue stop --workspace <workspace-id>
+```
+
+---
+
+## 2) Create an executable task workflow
+
+Create task:
+
+```bash
+task-factory task create \
+  --workspace <workspace-id> \
+  --title "<title>" \
+  --content "<what to do>"
+```
+
+Add acceptance criteria (**required to move to ready**):
+
+```bash
+task-factory task update <task-id> \
+  --acceptance-criteria "criterion 1,criterion 2"
+```
+
+Optional: assign task-level hooks:
+
+```bash
+task-factory task update <task-id> \
+  --pre-planning-skills "<skill-a>,<skill-b>" \
+  --pre-execution-skills "<skill-c>" \
+  --post-execution-skills "<skill-d>"
+```
+
+Promote and execute:
+
+```bash
+task-factory task move <task-id> --to ready --reason "ready to run"
+task-factory task execute <task-id>
+```
+
+Monitor:
+
 ```bash
 task-factory task show <task-id>
+task-factory task activity <task-id> --limit 200
+task-factory task conversation <task-id>
 ```
 
-### Update Task
+---
+
+## 2b) Large-project decomposition + sequencing workflow (preferred)
+
+Use this when the user asks for a large project with many moving parts.
+
+Task authoring guideline (keep task prompts high-level but testable):
+- State desired outcome and acceptance criteria.
+- Include constraints (tech stack, repo area, non-goals, deadlines).
+- Avoid prescribing implementation details unless required.
+
+1. Define a dependency-ordered task list (T1, T2, T3...).
+2. Create all tasks with high-level instructions.
+3. Add acceptance criteria and backlog order.
+4. Let planning run for each task.
+5. Move tasks to `ready` in dependency order.
+6. For strict sequencing, keep execution concurrency at 1.
+7. Check back later to verify outcomes.
+
+Command skeleton:
+
 ```bash
-task-factory task update <task-id> [options]
-  --title <title>                    # Update title (max 200 chars)
-  --content <content>                # Update content (max 50000 chars)
-  --file <path>                      # Read content from file
-  --acceptance-criteria <criteria>   # Comma-separated (max 50)
-  --pre-execution-skills <skills>    # Comma-separated skill IDs
-  --post-execution-skills <skills>   # Comma-separated skill IDs
-  --model-provider <provider>        # Set execution model provider
-  --model-id <id>                    # Set execution model ID
-  --model-thinking <level>           # Set thinking level (off/minimal/low/medium/high/xhigh)
-  --planning-provider <provider>     # Set planning model provider
-  --planning-model-id <id>           # Set planning model ID
-  --planning-thinking <level>        # Set thinking level (off/minimal/low/medium/high/xhigh)
-  --order <n>                        # Set task order for prioritization
-  --plan-goal <goal>                 # Set plan goal
-  --plan-steps <steps>               # Set plan steps (comma-separated)
-  --pre-planning-skills <skills>     # Comma-separated pre-planning skill IDs
-  --pre-execution-skills <skills>    # Comma-separated pre-execution skill IDs
-  --post-execution-skills <skills>   # Comma-separated post-execution skill IDs
+# Create a batch of tasks
+task-factory task create --workspace <workspace-id> --title "T1" --content "<high-level objective>"
+task-factory task create --workspace <workspace-id> --title "T2" --content "<high-level objective>"
+
+# Set criteria + ordering
+task-factory task update TASK-1 --acceptance-criteria "criterion a,criterion b" --order 10
+task-factory task update TASK-2 --acceptance-criteria "criterion a,criterion b" --order 20
+
+# Keep strict sequencing (single active execution)
+task-factory settings set workflowDefaults.executingLimit 1
+
+# Stage in execution order
+task-factory task move TASK-1 --to ready --reason "dependency order"
+task-factory task move TASK-2 --to ready --reason "dependency order"
 ```
 
-### Task Conversation
+Verification options:
+
+- **Block and poll now**
+
 ```bash
-# View conversation (alias: chat)
-task-factory task conversation <task-id> [options]
-  --limit <n>           # Number of messages (default: 100)
-  --since <duration>    # e.g., "2h", "1d"
-  --follow              # Real-time updates
-  --export <file>       # Export to markdown
-  --json                # JSON output
-  --compact             # Compact format
-  --only <user|agent>   # Filter by role
-  --search <keyword>    # Search messages
+task-factory task list --workspace <workspace-id> --phase active
+task-factory task activity <task-id> --limit 200
 ```
 
-### Send Message
+- **Schedule one-time check-in later** (recommended for long runs)
+  - Create `~/.config/personal-agent/tasks/task-factory-checkin.task.md` with an `at:` schedule.
+  - In prompt body, ask the agent to inspect the target workspace tasks and summarize status/failures.
+  - Validate and monitor:
+
 ```bash
-task-factory task message <task-id> <content> [options]
-  --file <path>         # Read from file (max 10000 chars)
-  --attachment <paths>  # Attach files (max 10, 10MB each)
+pa tasks validate --all
+pa tasks list
+pa tasks show task-factory-checkin
 ```
 
-### Steering & Follow-up
-```bash
-# Send steering instruction to running task
-task-factory task steer <task-id> <instruction>
+For scheduling specifics, follow `pa-scheduled-tasks` skill.
 
-# Queue follow-up message
-task-factory task follow-up <task-id> <message>
-```
+---
 
-### Task Activity
-```bash
-task-factory task activity <task-id> [--limit <n>] [--json]
-```
+## 3) Hook configuration workflow (global defaults)
 
-### Plan Management
-```bash
-# Regenerate plan
-task-factory task plan regenerate <task-id>
-```
-
-### Acceptance Criteria
-```bash
-# Regenerate criteria
-task-factory task criteria regenerate <task-id>
-
-# Update criterion status
-task-factory task criteria check <task-id> <index> <pass|fail|pending>
-```
-
-## Planning Commands
+Prefer settings file values over ad-hoc env vars.
 
 ```bash
-# Get planning status
-task-factory planning status <workspace-id>
-
-# View planning messages
-task-factory planning messages <workspace-id> [--limit <n>]
-
-# Send planning message
-task-factory planning message <workspace-id> <content>
-
-# Stop planning
-task-factory planning stop <workspace-id>
-
-# Reset planning session
-task-factory planning reset <workspace-id> [--force]
-```
-
-## Q&A Commands
-
-```bash
-# Check pending questions
-task-factory qa pending <workspace-id>
-
-# Submit answers
-task-factory qa respond <workspace-id> --answers "answer1,answer2"
-
-# Abort Q&A
-task-factory qa abort <workspace-id>
-```
-
-## Shelf Commands (Draft Tasks)
-
-```bash
-# Show shelf contents
-task-factory shelf show <workspace-id>
-
-# Promote draft to task
-task-factory shelf push <workspace-id> <draft-id>
-
-# Promote all drafts
-task-factory shelf push-all <workspace-id>
-
-# Update draft
-task-factory shelf update <workspace-id> <draft-id> --content <content>
-
-# Remove item
-task-factory shelf remove <workspace-id> <item-id> [--force]
-
-# Clear all items
-task-factory shelf clear <workspace-id> [--force]
-```
-
-## Idea Backlog Commands
-
-```bash
-# List ideas
-task-factory idea list <workspace-id>
-
-# Add idea
-task-factory idea add <workspace-id> <description>
-
-# Update idea
-task-factory idea update <workspace-id> <idea-id> <description>
-
-# Delete idea
-task-factory idea delete <workspace-id> <idea-id> [--force]
-
-# Reorder ideas
-task-factory idea reorder <workspace-id> --order "idea-1,idea-2,idea-3"
-```
-
-## Attachment Commands
-
-```bash
-# List attachments
-task-factory attachment list <task-id>
-
-# Upload attachment (max 10MB)
-task-factory attachment upload <task-id> <file-path> [--files <paths>]
-
-# Download attachment
-task-factory attachment download <task-id> <attachment-id> [-o <path>]
-
-# Delete attachment
-task-factory attachment delete <task-id> <attachment-id> [--force]
-```
-
-## Automation Commands
-
-```bash
-# Get automation settings
-task-factory automation get <workspace-id>
-
-# Set automation settings
-task-factory automation set <workspace-id> [options]
-  --ready-limit <n>        # Ready queue limit (1-100)
-  --executing-limit <n>    # Executing limit (1-20)
-  --backlog-to-ready <bool>
-  --ready-to-executing <bool>
-
-# Enable all automation
-task-factory automation enable <workspace-id>
-
-# Disable all automation
-task-factory automation disable <workspace-id>
-```
-
-## Settings Commands
-
-```bash
-# Get global settings
+task-factory settings set taskDefaults.prePlanningSkills '["<pre-planning-skill>"]'
+task-factory settings set taskDefaults.preExecutionSkills '["<pre-execution-skill>"]'
+task-factory settings set taskDefaults.postExecutionSkills '["<post-execution-skill>"]'
 task-factory settings get
-
-# Set a global setting (supports dot notation for nested keys)
-task-factory settings set <key> <value>
-
-# Get Pi settings
-task-factory settings pi
-
-# Show available settings fields and types
-task-factory settings schema
 ```
 
-**Examples:**
+These defaults apply to newly created tasks.
+
+---
+
+## 4) Hook skill authoring workflow
+
+Create hook skill under:
+
+`~/.taskfactory/skills/<skill-id>/SKILL.md`
+
+Minimal template:
+
+````markdown
+---
+name: <skill-id>
+description: <what this hook does>
+metadata:
+  author: <name>
+  version: "1.0"
+  type: follow-up
+  hooks: <pre-planning|pre|post>
+---
+
+# <Title>
+
 ```bash
-# Set simple value
-task-factory settings set theme "dark"
-
-# Set nested value
-task-factory settings set taskDefaults.modelConfig.provider "openai-codex"
-task-factory settings set taskDefaults.modelConfig.modelId "gpt-5.3-codex"
-task-factory settings set workflowDefaults.readyLimit 10
-
-# View all available settings
-task-factory settings schema
+echo "hook ran"
 ```
+````
 
-## Defaults Commands
-
-```bash
-# Get global defaults
-task-factory defaults get
-
-# Set global defaults
-task-factory defaults set [options]
-  --model <model>
-  --pre-execution-skills <skills>
-  --post-execution-skills <skills>
-
-# Get workspace defaults
-task-factory defaults workspace-get <workspace-id>
-
-# Set workspace defaults
-task-factory defaults workspace-set <workspace-id> [options]
-```
-
-## Auth Commands
+Reload and verify:
 
 ```bash
-# Check auth status
-task-factory auth status
-
-# Set API key for a provider
-task-factory auth set-key <provider> <api-key>
-
-# Clear credentials for a provider
-task-factory auth clear <provider>
-```
-
-## Stat Command
-
-```bash
-# Show task statistics across all workspaces
-task-factory stats
-```
-
-## Model Commands
-
-```bash
-# List available models
-task-factory models list
-```
-
-## Skill Commands
-
-```bash
-# List factory skills (execution hooks)
-task-factory skills list
-
-# Get skill details
-task-factory skills get <skill-id>
-
-# Reload skills after adding new ones
 task-factory skills reload
-
-# List Pi skills
-task-factory pi-skills list
-
-task-factory pi-skills get <skill-id>
+task-factory skills list
+task-factory skills get <skill-id>
 ```
 
-## Update Command
+### Important hook-name compatibility note (v0.5.x)
 
-```bash
-# Check for and install updates
-task-factory update
-```
+In current builds, hook metadata accepts:
+- `pre-planning`
+- `pre`
+- `post`
 
-When a new version is available, the CLI will display a notice:
-```
-┌─────────────────────────────────────────────────────────────┐
-│ Update Available                                             │
-├─────────────────────────────────────────────────────────────┤
-│  Current version: 0.5.0                                      │
-│  Latest version:  0.6.0                                      │
-├─────────────────────────────────────────────────────────────┤
-│  Run task-factory update to update to the latest version.   │
-└─────────────────────────────────────────────────────────────┘
-```
+Task flags still use:
+- `--pre-execution-skills`
+- `--post-execution-skills`
 
-## Daemon Commands
+So: **metadata uses `pre`/`post`**, while task update flags use `pre-execution`/`post-execution` wording.
 
-```bash
-# Start daemon
-task-factory daemon start [--port <port>] [--host <host>]
+---
 
-# Stop daemon
-task-factory daemon stop
+## 5) End-to-end hook smoke test
 
-# Restart daemon
-task-factory daemon restart [--port <port>] [--host <host>]
+1. Create 3 tiny hook skills (pre-planning, pre, post) that each print a unique message.
+2. `task-factory skills reload`
+3. Create a test task.
+4. Set acceptance criteria.
+5. Attach all three hooks via `task update`.
+6. Move to `ready` and execute.
+7. Check `task activity` for events like:
+   - `Running N pre-planning skill(s)`
+   - `Running N pre-execution skill(s)`
+   - `Running N post-execution skill(s)`
 
-# Check status
-task-factory daemon status
+If post hooks don’t run, the execution may still be active/awaiting input; verify with `task show` and `task activity`.
 
-# Start in foreground (legacy)
-task-factory start [--port <port>] [--host <host>] [--no-open]
-```
+---
 
-## Environment Variables
+## 6) Fast troubleshooting
 
-| Variable                   | Default     | Description                  |
-| -------------------------- | ----------- | ---------------------------- |
-| `PORT`                     | `3000`      | HTTP/WebSocket port          |
-| `HOST`                     | `127.0.0.1` | Bind host                    |
-| `DEBUG`                    | unset       | Enable debug logging         |
-| `WS_HEARTBEAT_INTERVAL_MS` | `30000`     | WebSocket heartbeat interval |
+- **"Server Not Running"**
+  - Run `task-factory daemon start`.
 
-## Constraints & Limits
+- **"Task must have acceptance criteria before moving to Ready"**
+  - Add criteria via `task update --acceptance-criteria ...`.
 
-- Title: 200 characters max
-- Content: 50000 characters max
-- Messages: 10000 characters max
-- Acceptance criteria: 50 max
-- Attachments: 10 max per message
-- Attachment size: 10MB max per file
-- Ready limit: 1-100
-- Executing limit: 1-20
-- Task ID partial match: minimum 8 characters
+- **"Task planning is still running" when executing**
+  - Stop current run: `task-factory task stop <task-id>`
+  - Re-run execute.
 
-## Error Handling
+- **Unknown hook skill IDs**
+  - Verify with `task-factory skills list` and exact ID spelling.
 
-If the daemon is not running:
-```
-✗ Server Not Running
+- **Hook metadata rejected**
+  - Use `hooks: pre-planning|pre|post` in skill frontmatter.
 
-The Task Factory daemon is not running.
+- **Need deferred verification for long-running queue**
+  - Either poll with `task list/task activity`, or schedule a one-time `pa` daemon check-in task (`at:` schedule).
 
-To start the daemon, run:
-  task-factory daemon start
+- **CLI command from docs fails**
+  - Re-check live capabilities with `task-factory --help` and subcommand `--help`.
+  - Do not assume older/newer docs match installed version.
 
-Or start in foreground mode:
-  task-factory start
-```
+---
+
+## Agent behavior when using this skill
+
+When completing a user request:
+1. Do preflight and confirm capabilities from live CLI help.
+2. For large ambiguous requests, use queue-first orchestration: decompose into sequenced tasks and enqueue them instead of doing everything inline.
+3. Keep task prompts high-level + constraint-aware so agents can investigate/plan autonomously.
+4. Stage tasks in dependency order and let planning/execution run.
+5. Verify now (`task show`/`task activity`) or schedule a one-time `pa` check-in task for later.
+6. Report concrete IDs, paths, ordering decisions, and observed hook events.

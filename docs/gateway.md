@@ -2,20 +2,22 @@
 
 ## Overview
 
-`@personal-agent/gateway` lets `personal-agent` run Pi through chat platforms.
+`@personal-agent/gateway` runs Pi through chat platforms.
 
 Current providers:
 
 - Telegram
 - Discord
 
-The gateway command is registered into `pa` at startup, so you use it as:
+The command is registered into `pa` at startup:
 
 ```bash
 pa gateway ...
 ```
 
-## Command behavior
+---
+
+## Command surface
 
 ```bash
 pa gateway
@@ -27,56 +29,75 @@ pa gateway telegram [setup|start|help]
 pa gateway discord [setup|start|help]
 ```
 
-Behavior defaults:
+Defaults:
 
-- `pa gateway` -> show gateway help
-- `pa gateway setup` -> interactive setup (asks provider)
-- `pa gateway start` -> start Telegram in foreground
-- `pa gateway service install` -> install Telegram as background service
-- `pa gateway telegram` -> show Telegram-specific help
-- `pa gateway discord` -> show Discord-specific help
+- `pa gateway` → help
+- `pa gateway setup` → interactive provider prompt
+- `pa gateway start` → starts Telegram in foreground
+- `pa gateway service install` → installs Telegram managed service
+
+---
+
+## Configuration model
+
+Gateway config file:
+
+- `~/.config/personal-agent/gateway.json`
+- override path: `PERSONAL_AGENT_GATEWAY_CONFIG_FILE`
+
+Precedence per provider setting:
+
+1. environment variable
+2. gateway config file value
+3. built-in default
+
+Examples:
+
+- profile: `PERSONAL_AGENT_PROFILE` > `gateway.json.profile` > `shared`
+- Telegram token: `TELEGRAM_BOT_TOKEN` > `gateway.json.telegram.token`
+
+---
 
 ## Setup walkthrough
 
-Use interactive setup instead of manually exporting env vars:
+Use setup instead of manual env export when possible:
 
 ```bash
 pa gateway setup telegram
 pa gateway setup discord
 ```
 
-This writes local config to:
+Setup writes provider token/allowlist/cwd/max-pending values to `gateway.json`.
 
-- `~/.config/personal-agent/gateway.json`
-
-You can override config file location with:
-
-- `PERSONAL_AGENT_GATEWAY_CONFIG_FILE`
+---
 
 ## Shared environment variables
 
-Used by both providers:
+- `PERSONAL_AGENT_PROFILE` (default `shared`)
+- `PERSONAL_AGENT_PI_TIMEOUT_MS` (default `1800000` / 30 minutes; set `0` to disable timeout)
 
-- `PERSONAL_AGENT_PROFILE` (default: `shared`)
-- `PERSONAL_AGENT_PI_TIMEOUT_MS` (default: `1800000` / 30 minutes; set `0` to disable timeout)
+If using `op://...` references, ensure 1Password CLI (`op`) is installed/authenticated.
 
-If you use `op://...` references, make sure 1Password CLI (`op`) is installed and authenticated (for service-account flow, set `OP_SERVICE_ACCOUNT_TOKEN`).
+Optional 1Password overrides:
+
+- `PERSONAL_AGENT_OP_BIN` (default `op`)
+- `PERSONAL_AGENT_OP_READ_TIMEOUT_MS` (default `15000`)
+
+---
 
 ## Telegram
 
-Required configuration (via setup or env):
+Required (setup or env):
 
 - `TELEGRAM_BOT_TOKEN`
 - `PERSONAL_AGENT_TELEGRAM_ALLOWLIST` (comma-separated chat IDs)
 
-`TELEGRAM_BOT_TOKEN` and allowlist entries may be plain strings or `op://...` 1Password references.
-
 Optional:
 
-- `PERSONAL_AGENT_TELEGRAM_CWD` (working directory for Pi calls)
-- `PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT` (default: `20`)
-- `PERSONAL_AGENT_TELEGRAM_RETRY_ATTEMPTS` (Telegram API retry attempts for send operations, default: `3`)
-- `PERSONAL_AGENT_TELEGRAM_RETRY_BASE_DELAY_MS` (base backoff delay for retries, default: `300`)
+- `PERSONAL_AGENT_TELEGRAM_CWD`
+- `PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT` (default `20`)
+- `PERSONAL_AGENT_TELEGRAM_RETRY_ATTEMPTS` (default `3`)
+- `PERSONAL_AGENT_TELEGRAM_RETRY_BASE_DELAY_MS` (default `300`)
 
 Run:
 
@@ -85,22 +106,21 @@ pa gateway telegram setup
 pa gateway telegram start
 ```
 
-`start` runs in the foreground. Keep that terminal open and press `Ctrl+C` to stop.
-It also auto-starts `personal-agentd` if needed (unless daemon events are explicitly disabled).
+Foreground mode stays attached to terminal (`Ctrl+C` to stop).
+
+---
 
 ## Discord
 
-Required configuration (via setup or env):
+Required (setup or env):
 
 - `DISCORD_BOT_TOKEN`
 - `PERSONAL_AGENT_DISCORD_ALLOWLIST` (comma-separated channel IDs)
 
-`DISCORD_BOT_TOKEN` and allowlist entries may be plain strings or `op://...` 1Password references.
-
 Optional:
 
-- `PERSONAL_AGENT_DISCORD_CWD` (working directory for Pi calls)
-- `PERSONAL_AGENT_DISCORD_MAX_PENDING_PER_CHANNEL` (default: `20`)
+- `PERSONAL_AGENT_DISCORD_CWD`
+- `PERSONAL_AGENT_DISCORD_MAX_PENDING_PER_CHANNEL` (default `20`)
 
 Run:
 
@@ -109,111 +129,118 @@ pa gateway discord setup
 pa gateway discord start
 ```
 
-`start` runs in the foreground. Keep that terminal open and press `Ctrl+C` to stop.
-It also auto-starts `personal-agentd` if needed (unless daemon events are explicitly disabled).
+Foreground mode stays attached to terminal (`Ctrl+C` to stop).
+
+---
 
 ## Background service mode (recommended for 24/7)
 
-Use service mode if you want gateway to stay up after terminal close and auto-restart on failure.
-
 Supported platforms:
 
-- macOS (`launchd` user agent)
-- Linux (`systemd --user` unit)
+- macOS (`launchd` user agents)
+- Linux (`systemd --user` units)
 
 Commands:
 
 ```bash
-# Install + start in background (default provider: telegram)
 pa gateway service install [telegram|discord]
-
-# Check state
 pa gateway service status [telegram|discord]
-
-# Stop + remove service
 pa gateway service uninstall [telegram|discord]
 ```
 
 Notes:
 
-- Run provider setup first (`pa gateway <provider> setup`).
-- `service install` validates provider token + allowlist in gateway config.
-- `service install` also installs/starts `personal-agentd` as a managed user service.
-- macOS logs are written to `~/.local/state/personal-agent/gateway/logs/<provider>.log`.
-- Linux logs are available via `journalctl --user -u personal-agent-gateway-<provider>.service -f`.
-- Telegram durable pending inbox is stored at `~/.local/state/personal-agent/gateway/pending/telegram`.
-- In service mode, gateway processes auto-restart after crashes (`launchd` KeepAlive / `systemd` Restart=always).
+- Install validates provider token + allowlist first
+- Installing gateway service also provisions managed `personal-agentd`
+- macOS logs: `~/.local/state/personal-agent/gateway/logs/<provider>.log`
+- Linux logs: `journalctl --user -u personal-agent-gateway-<provider>.service -f`
+- Telegram durable inbox path: `~/.local/state/personal-agent/gateway/pending/telegram`
 
-## Message/session behavior
+---
 
-Each chat/channel gets its own Pi session file.
+## Chat/session behavior
 
-Telegram inbound messages are durably spooled to disk before processing and replayed on startup after crashes/restarts.
+Each chat/channel has its own persisted Pi session file.
 
-If a crash happens mid-request, the in-flight message is replayed after restart and processing resumes from that message boundary.
+Telegram additionally durably spools inbound messages before processing; pending messages are replayed after restart/crash.
 
-Gateway commands inside chat:
+When a new message arrives while a run is active in the same conversation:
 
-- `/status` -> profile, agentDir, session file info, active model
-- `/new` -> delete chat/channel session file and start a fresh conversation
-- `/commands` -> list available slash commands
-- `/skills` -> list available skills for the current profile
-- `/tasks [status]` -> list scheduled daemon tasks (`status`: `all|running|active|completed|disabled|pending|error`)
+- normal message → steer (interrupt-style)
+- `/followup <text>` → queued follow-up delivered after current response
 
-Common Pi slash commands exposed in gateway command lists:
+---
 
-- `/skill <name>` (translated to `/skill:<name>` for Telegram menu compatibility)
-- `/model` or `/models` -> opens a model picker in chat (Telegram includes inline buttons); reply with a number or `/model <provider/model>`
-- `/stop` -> stop active request
-- `/followup <text>` -> queue a follow-up while current response is running
-- `/cancel` -> cancel active model selection
-- `/compact` -> currently returns guidance (manual compaction requires Pi TUI)
-- `/resume` -> gateway sessions already auto-resume per chat/channel; use `/new` for a fresh one
+## Gateway slash commands
 
-Telegram also registers slash commands via Bot API on startup (`setMyCommands`).
+- `/status`
+- `/new`
+- `/commands`
+- `/skills`
+- `/skill <name>`
+- `/tasks [status]` (`all|running|active|completed|disabled|pending|error`)
+- `/model` / `/models`
+- `/stop`
+- `/followup <text>`
+- `/cancel`
+- `/compact` (guidance only; manual compaction is in Pi TUI)
+- `/resume` (gateway auto-resumes per chat/channel)
 
-All non-gateway commands are executed through the Pi SDK with that chat's session file.
+Telegram registers slash commands via Bot API on startup.
 
-When a new message arrives while the agent is already streaming in that conversation, gateway sends it as a **steer** (interrupt-style) instruction instead of starting an independent second run. This avoids double-reply behavior for rapid follow-ups.
+---
 
 ## Daemon integration
 
-Gateway emits non-fatal events to `personal-agentd`:
+Gateway emits non-fatal daemon events:
 
 - `session.updated`
 - `session.closed`
 - `session.processing.failed`
 
-Gateway also polls daemon notification queue entries (`notifications.pull`) for:
+Gateway also pulls daemon notifications (`notifications.pull`) and delivers:
 
-- `telegram` notifications
-- `discord` notifications
+- Telegram notifications
+- Discord notifications
 
-These are used by scheduled tasks with `output.targets` routing.
+This powers scheduled task output routing (`output.targets`).
 
-If daemon is unavailable, gateway still continues handling chat requests.
+If daemon is unavailable, gateway continues processing requests.
+
+Disable daemon integration explicitly with:
+
+- `PERSONAL_AGENT_DISABLE_DAEMON_EVENTS=1`
+
+---
 
 ## Access control
 
-Access is allowlist-only.
+Provider allowlist is mandatory.
 
-If a chat/channel ID is not in the provider allowlist env var, requests are rejected.
+Messages from non-allowlisted chat/channel IDs are rejected.
+
+---
 
 ## Troubleshooting
 
-### `TELEGRAM_BOT_TOKEN is required` / `DISCORD_BOT_TOKEN is required`
-Run setup (`pa gateway setup <provider>`) or set provider token env var.
+### Missing token/allowlist
 
-### `...ALLOWLIST is required`
-Run setup (`pa gateway setup <provider>`) or set allowlist env var with comma-separated chat/channel IDs.
+Run setup:
 
-### `Gateway <provider> token missing` / `allowlist missing` during `service install`
-Run `pa gateway <provider> setup` first so token/allowlist are saved in gateway config.
+```bash
+pa gateway setup telegram
+pa gateway setup discord
+```
 
-### Messages are queued slowly
-Increase:
+### Service install says token/allowlist missing
+
+Provider setup must be completed first.
+
+### Gateway feels backlogged
+
+Increase pending limits only if needed:
 
 - `PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT`
 - `PERSONAL_AGENT_DISCORD_MAX_PENDING_PER_CHANNEL`
 
-only if you actually need higher throughput.
+For broader incident playbooks, see [Troubleshooting](./troubleshooting.md).

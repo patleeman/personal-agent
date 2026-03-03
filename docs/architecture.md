@@ -2,99 +2,97 @@
 
 ## Goal
 
-`personal-agent` is a thin application layer on top of Pi:
+`personal-agent` is a thin application layer on top of Pi that provides:
 
 - repo-managed resources (profiles, skills, extensions, themes, prompts)
-- local-only runtime state (auth, sessions, cache)
-- wrapper CLI + chat gateways (Telegram/Discord) using the same profile/runtime plumbing
-- one shared daemon for background orchestration
+- local runtime state (auth, sessions, daemon state, gateway spools)
+- a wrapper CLI (`pa`) for deterministic profile launches
+- chat gateways (Telegram/Discord) that reuse the same profile/runtime plumbing
+- one shared local daemon (`personal-agentd`) for background orchestration
 
-No symlink chains and no manual "apply/syncback" workflow.
+No symlink sync workflows are required.
+
+---
 
 ## Package boundaries
 
 ### `@personal-agent/core`
 
-Owns **runtime state safety** and **profile data merge primitives**:
+Owns runtime safety primitives:
 
-- profile data schema + validation + merge engine (`packages/core/src/profile/*`)
-- runtime path resolution (`packages/core/src/runtime/paths.ts`)
-- runtime bootstrap checks (`packages/core/src/runtime/bootstrap.ts`)
-- Pi runtime dir preparation (`packages/core/src/runtime/agent-dir.ts`)
-
-Out of scope:
-
-- profile filesystem discovery
-- CLI command parsing
-- gateway transport implementations
+- runtime path resolution (`resolveStatePaths`)
+- path safety checks (state paths must be outside repo)
+- runtime directory bootstrap/writability checks
+- Pi runtime agent dir preparation (`pi-agent`, auth/session initialization)
 
 ### `@personal-agent/resources`
 
-Owns **repo profile discovery and materialization**:
+Owns profile discovery + materialization:
 
-- list/resolve profiles from `profiles/*/agent`
-- merge layered `settings.json` and `models.json`
-- combine AGENTS/SYSTEM/APPEND_SYSTEM into runtime agent dir
-- produce Pi CLI resource args (`--skill`, `-e`, `--theme`, ...)
-
-Layer order:
-
-1. `shared`
-2. selected profile (for example `datadog`)
-3. optional local overlay (`~/.config/personal-agent/local`)
-
-Extension discovery follows the same layer order.
+- profile layer resolution (`shared` → selected profile → optional local overlay)
+- merge of `settings.json` and `models.json`
+- AGENTS/SYSTEM/APPEND_SYSTEM resolution rules
+- extension/skill/prompt/theme discovery
+- deterministic Pi resource args (`--skill`, `-e`, `--prompt-template`, `--theme`)
 
 ### `@personal-agent/daemon`
 
-Owns background orchestration via one local process (`personal-agentd`):
+Owns background orchestration:
 
-- in-process event bus
-- JSONL IPC server over Unix socket
-- module lifecycle and subscriptions
-- timer-driven event emission for scheduled work
-- queue/module diagnostics
-
-Built-in modules:
-
-- `maintenance` (periodic cleanup)
+- local JSONL IPC server over Unix socket
+- bounded event queue + in-process event bus
+- built-in modules:
+  - `maintenance`
+  - `tasks`
+- module status/diagnostics + queue status
+- gateway notification queue (for task output routing)
 
 ### `@personal-agent/cli`
 
-Owns user-facing local commands:
+Owns user-facing CLI command surface:
 
-- `pa [pi args...]` / `pa tui [pi args...]`
-- `pa profile list/show/use`
-- `pa doctor`
-- `pa gateway [telegram|discord] [start|help]` (registered by `@personal-agent/gateway`)
-- `pa daemon` (help), `pa daemon status|start|stop|restart|logs`
-- `pa daemon service install|status|uninstall|help`
-
-Responsibilities:
-
-- select profile
-- ensure runtime state is writable and outside repo
-- materialize profile into runtime Pi agent dir
-- launch `pi` with deterministic resource flags
-- emit non-fatal daemon events for background processing
+- Pi passthrough: `pa tui ...`, `pa <pi args>`
+- management commands: `profile`, `doctor`, `daemon`, `tasks`, `restart`, `update`
+- profile resolution + runtime materialization + Pi launch
+- non-fatal daemon event emission from CLI runs
 
 ### `@personal-agent/gateway`
 
-Owns chat gateway transports (Telegram + Discord):
+Owns Telegram/Discord transports:
 
-- allowlist-based access control
-- one Pi session file per chat/channel
-- reuse core/runtime/resources logic
-- invoke Pi SDK sessions with one persisted session file per chat/channel for replies
-- emit non-fatal daemon events (`session.updated` / `session.closed`)
+- allowlist access control
+- per-chat/per-channel persisted Pi sessions
+- durable Telegram inbox replay for crash recovery
+- slash command handling (`/status`, `/new`, `/model`, `/tasks`, `/followup`, ...)
+- daemon event emission + notification pull for scheduled task outputs
+
+---
+
+## Resource layering
+
+For active profile `<p>`:
+
+1. `profiles/shared/agent`
+2. `profiles/<p>/agent`
+3. optional local overlay (`~/.config/personal-agent/local` by default)
+
+Examples:
+
+- Skills are layered by directory (`--skill` for each discovered skill dir)
+- `SYSTEM.md` is highest-precedence file wins
+- `AGENTS.md` and `APPEND_SYSTEM.md` are concatenated in layer order
+
+See [Profile Schema](./profile-schema.md).
+
+---
 
 ## Runtime ownership model
 
 ### Repo-managed (versioned)
 
-- `profiles/shared/agent/**`
-- `profiles/datadog/agent/**`
-- package source and tests
+- `profiles/**`
+- package source + tests
+- docs
 
 ### Local mutable (not versioned)
 
@@ -102,29 +100,49 @@ Default root: `~/.local/state/personal-agent`
 
 - `pi-agent/auth.json`
 - `pi-agent/sessions/**`
-- `pi-agent/*` runtime artifacts
-- telegram/discord session files under runtime session directory
+- `daemon/**` (socket, pid, logs, task state, task run logs)
+- `gateway/**` (provider logs, durable pending inbox)
 
-## Data flow
+---
 
-1. User selects profile (`shared`/`datadog`)
-2. resources resolves profile layers from repo + optional local overlay
-3. core validates/bootstrap runtime paths
-4. resources materializes merged runtime config into runtime Pi agent dir
-5. cli/gateway execute Pi with the same resolved profile resources
-6. cli/gateway emit events to `personal-agentd` (non-fatal if unavailable)
-7. daemon modules process queued and timer-emitted events
+## End-to-end flows
 
-## Extensions
+## CLI flow (`pa tui` / passthrough)
 
-Extensions are Pi plugins discovered from profile layers:
+1. resolve selected profile
+2. resolve and validate runtime state paths
+3. bootstrap runtime dirs and prepare runtime Pi agent dir
+4. materialize merged profile artifacts into runtime agent dir
+5. auto-install extension dependencies when missing
+6. launch Pi with explicit resource args and `PI_CODING_AGENT_DIR`
+7. emit daemon events (non-fatal if daemon unavailable)
 
-- Auto-discovered from `extensions/` in each profile layer
-- Dependencies auto-installed from `package.json`
-- Loaded by Pi at startup
-- Can hook into agent lifecycle events
+## Gateway flow (`pa gateway ... start`)
 
-Example: `memory` extension injects active-profile memory policy instructions.
+1. load gateway config + env overrides
+2. resolve token/allowlist (including optional `op://` references)
+3. ensure daemon is running (unless daemon events disabled)
+4. process inbound messages with per-chat/per-channel persisted sessions
+5. emit session events to daemon
+6. poll daemon notification queue and deliver routed task outputs
+
+---
+
+## Event model (high-level)
+
+Examples of emitted events:
+
+- `session.updated`
+- `session.closed`
+- `session.processing.failed`
+- `pi.run.completed`
+- `pi.run.failed`
+- timer events (`timer.maintenance.cleanup`, `timer.tasks.tick`)
+- `gateway.notification` (queued for gateway delivery)
+
+Delivery behavior is at-most-once with bounded queue semantics.
+
+---
 
 ## Memory model
 
@@ -133,21 +151,15 @@ Memory is profile-driven:
 - `AGENTS.md` stores durable behavior constraints and stable facts
 - `skills/` stores reusable workflows and domain knowledge
 
-The `memory` extension injects active profile metadata plus these memory-management rules into the system prompt on each turn.
+The `memory` extension injects active-profile memory policy guidance into the system prompt on each turn.
 
-## Gateway mode
+---
 
-Gateways reuse the same profile/runtime plumbing as CLI:
+## Related docs
 
-- One Pi session file per chat/channel
-- Same profile layering and resource resolution
-- Same extension loading
-- Same daemon event emission
-
-Differences from CLI:
-- No TUI (chat-only SDK execution)
-- Built-in slash commands (`/status`, `/new`, `/model`, etc.)
-- Allowlist-based access control
-- Per-chat model persistence
-
-See `docs/gateway.md` for details.
+- [CLI Guide](./cli.md)
+- [Configuration](./configuration.md)
+- [Daemon Architecture](./daemon-architecture.md)
+- [Scheduled Tasks](./tasks.md)
+- [Gateway Guide](./gateway.md)
+- [Extensions Guide](./extensions.md)

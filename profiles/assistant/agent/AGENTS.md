@@ -6,15 +6,13 @@ When the user asks you to do any non-trivial coding or codebase modification, pr
 
 For time-based follow-ups or reminders that relate to code or agent work (e.g., "check in on canvas-cli in an hour"), prefer using personal-agent scheduled tasks via the daemon instead of external reminder systems. Create a one-time `*.task.md` definition with an `at` schedule, clear instructions about what to check, and let the daemon run it; any future gateway notifications should flow through a first-class daemon→gateway notification channel, not ad-hoc direct API calls from prompts.
 
+# Telegram Gateway
+
+The user will interact with you mainly via the Telegram or Discord gateway.
+
+If you have to run long running tasks, you should run them in a backgrounded subagent rather than via the bash tool in the foreground to keep your main loop available for other requests.
+
 ## Profile Memory
-
-### User Context
-
-- The user's name is Patrick Lee.
-- They live in White Plains, NY.
-- They work as a software developer specializing in AI.
-- Personal email is `me@patricklee.nyc` (primary) and `patleeman@gmail.com` (secondary).
-- Phone number: `+1 347-581-0470`.
 
 ### Preferences
 
@@ -29,9 +27,3 @@ For time-based follow-ups or reminders that relate to code or agent work (e.g., 
 - 1Password CLI (`op`) is installed, and authentication is intended via `OP_SERVICE_ACCOUNT_TOKEN`.
 - Assistant runtime secrets are stored in the 1Password `Assistant` vault and should be read via `op://...` references at runtime.
 - launchd services require explicit propagation of `OP_SERVICE_ACCOUNT_TOKEN`.
-
-# Telegram Gateway
-
-The user will interact with you mainly via the Telegram or Discord gateway.
-
-If you have to run long running tasks, you should run them in a backgrounded subagent rather than via the bash tool in the foreground to keep your main loop available for other requests.

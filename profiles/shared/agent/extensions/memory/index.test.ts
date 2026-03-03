@@ -64,6 +64,10 @@ describe('memory extension', () => {
     expect(result?.systemPrompt).toContain('Conflict rule: higher layer overrides lower layer (local > active profile > shared).');
     expect(result?.systemPrompt).toContain('3. Local overlay:');
     expect(result?.systemPrompt).toContain('- Local AGENTS.md:');
+    expect(result?.systemPrompt).toContain('PA documentation (read when the user asks about pa/personal-agent');
+    expect(result?.systemPrompt).toContain('- Main README: README.md');
+    expect(result?.systemPrompt).toContain('- Docs index: docs/README.md');
+    expect(result?.systemPrompt).toContain('- Tasks: docs/tasks.md');
     expect(result?.systemPrompt).toContain('Use AGENTS.md and skills as the only durable memory system.');
     expect(result?.systemPrompt).toContain('carte blanche');
     expect(result?.systemPrompt).toContain('Do not use MEMORY.md files as durable memory.');

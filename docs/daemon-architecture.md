@@ -2,56 +2,82 @@
 
 ## Goal
 
-Run one shared background process: `personal-agentd`.
+`personal-agentd` is the shared local background process used by:
 
-All Personal Agent entrypoints send background work to this daemon:
+- `pa` CLI launches
+- `pa gateway` processes
+- scheduled task execution
 
-- `pa` CLI
-- `pa gateway ...` commands
-- future integrations
-
-## Core model
-
-The daemon is an **in-process event bus**.
-
-- Clients publish events over local IPC.
-- Modules subscribe to events and handle work.
-- Modules can publish follow-up events.
-- Scheduled tasks are implemented as timer-emitted events.
-
-This keeps one-writer ownership for mutable daemon state and gives one consistent orchestration path.
-
-## Scope
-
-MVP scope:
-
-- local-only daemon (per user, per machine)
-- Unix socket IPC + JSON lines protocol
-- built-in modules: `maintenance`, `tasks`
-- queue and module diagnostics
-
-Non-goals:
-
-- distributed multi-machine orchestration
-- remote network control
-- dynamic plugin marketplace
+It centralizes background orchestration so clients can stay thin.
 
 ---
 
-## Runtime model
+## Core model
 
-Default paths:
+The daemon is an **in-process event bus** behind a local IPC interface.
 
-- socket: `~/.local/state/personal-agent/daemon/personal-agentd.sock`
-- pid: `~/.local/state/personal-agent/daemon/personal-agentd.pid`
-- logs: `~/.local/state/personal-agent/daemon/logs/daemon.log`
-- daemon root: `~/.local/state/personal-agent/daemon/`
+- Clients publish events over Unix socket JSONL IPC
+- Modules subscribe to event types and handle work
+- Timers emit normal events into the same queue
+- Modules expose status for diagnostics
 
-Clients emit events. Daemon modules process events asynchronously through one queue.
+Queue behavior:
+
+- bounded depth (`queue.maxDepth`)
+- at-most-once delivery
+- events can be dropped when queue is saturated
+
+---
+
+## Runtime paths
+
+Default root:
+
+- `~/.local/state/personal-agent/daemon`
+
+Default files:
+
+- socket: `personal-agentd.sock`
+- pid: `personal-agentd.pid`
+- log: `logs/daemon.log`
+- task runtime state: `task-state.json`
+- task run logs: `task-runs/**`
+
+---
+
+## Built-in modules
+
+## `maintenance`
+
+- periodic cleanup tasks (for example daemon log retention)
+
+## `tasks`
+
+- discovers `*.task.md` files from configured task directory
+- parses frontmatter + prompt body
+- schedules cron/at tasks
+- executes tasks with retries and timeout
+- writes per-run logs and updates task state
+- publishes `gateway.notification` events when `output` routing is configured
+
+See [Scheduled Tasks](./tasks.md) for schema details.
 
 ---
 
 ## Event contract
+
+Common event types in current flows:
+
+- `session.updated`
+- `session.closed`
+- `session.processing.failed`
+- `pi.run.completed`
+- `pi.run.failed`
+- `timer.maintenance.cleanup`
+- `timer.tasks.tick`
+- `gateway.notification`
+
+Event envelope:
 
 ```json
 {
@@ -60,49 +86,38 @@ Clients emit events. Daemon modules process events asynchronously through one qu
   "type": "session.closed",
   "source": "cli",
   "timestamp": "2026-02-28T14:30:00Z",
-  "payload": {
-    "sessionFile": "~/.local/state/personal-agent/pi-agent/sessions/abc.jsonl",
-    "profile": "shared",
-    "cwd": "/Users/patrick/workingdir/personal-agent"
-  }
+  "payload": { "...": "..." }
 }
 ```
 
-Common event types:
-
-- `session.updated`
-- `session.closed`
-- `timer.maintenance.cleanup`
-- `timer.tasks.tick`
-
-Delivery model (MVP):
-
-- at-most-once delivery
-- bounded queue
-- drop when queue is full
-
 ---
 
-## IPC contract (JSON lines)
+## IPC protocol (JSON lines)
 
-Requests are one JSON object per line over Unix socket.
+Requests are one JSON object per line over the Unix socket.
 
-### emit
+### Emit event
 
 ```json
 {"id":"req_1","type":"emit","event":{...}}
 ```
 
-### status
+### Read daemon status
 
 ```json
 {"id":"req_2","type":"status"}
 ```
 
-### stop
+### Stop daemon
 
 ```json
 {"id":"req_3","type":"stop"}
+```
+
+### Pull gateway notifications
+
+```json
+{"id":"req_4","type":"notifications.pull","gateway":"telegram","limit":50}
 ```
 
 Responses:
@@ -117,55 +132,24 @@ or
 {"id":"req_2","ok":false,"error":"..."}
 ```
 
-Client behavior when daemon is unavailable:
-
-- warn and continue (non-fatal)
-
----
-
-## Module contract
-
-A daemon module can:
-
-- declare subscriptions (`event types`)
-- declare timers (`interval -> event type`)
-- handle events
-- publish events
-- expose status for diagnostics
-
-High-level shape:
-
-- `start(context)`
-- `handleEvent(event, context)`
-- `stop(context)` (optional)
-- `getStatus()` (optional)
-
----
-
-## Scheduling model
-
-No separate scheduler abstraction is required.
-
-- timers are owned by daemon runtime
-- each timer emits a normal event into the same queue
-- modules handle timer events like any other event
-
 ---
 
 ## Configuration
 
-Config file:
+Primary file:
 
 - `~/.config/personal-agent/daemon.json`
+
+Override path via:
+
+- `PERSONAL_AGENT_DAEMON_CONFIG`
 
 Example:
 
 ```json
 {
   "logLevel": "info",
-  "queue": {
-    "maxDepth": 1000
-  },
+  "queue": { "maxDepth": 1000 },
   "ipc": {
     "socketPath": "~/.local/state/personal-agent/daemon/personal-agentd.sock"
   },
@@ -186,49 +170,34 @@ Example:
 }
 ```
 
-Task files are markdown prompts with YAML frontmatter in `taskDir`.
-One-time (`at`) tasks are marked complete in state on success and reaped after `reapAfterDays`.
-
-Example:
-
-```md
----
-id: daily-status
-enabled: true
-cron: "0 9 * * 1-5"
-profile: "shared"
-provider: "openai-codex"
-model: "gpt-5.3-codex"
-output:
-  when: success
-  targets:
-    - gateway: telegram
-      chatId: "123456789"
-    - gateway: discord
-      channelId: "987654321"
----
-Summarize yesterday's work and open follow-up tasks.
-```
-
-Starter file: `docs/examples/scheduled-task.task.md`
+`PERSONAL_AGENT_DAEMON_SOCKET_PATH` can set the default socket path if `ipc.socketPath` is not set in file config.
 
 ---
 
 ## CLI surface
 
-- `pa daemon` (help)
-- `pa daemon start`
-- `pa daemon stop`
-- `pa daemon status`
-- `pa daemon restart`
-- `pa daemon logs`
-- `pa daemon service install|status|uninstall|help`
+```bash
+pa daemon
+pa daemon status [--json]
+pa daemon start
+pa daemon stop
+pa daemon restart
+pa daemon logs
+pa daemon service [install|status|uninstall|help]
+```
+
+Task companion commands:
+
+```bash
+pa tasks list|show|validate|logs
+```
 
 ---
 
-## Integration status
+## Failure behavior
 
-1. `@personal-agent/daemon` package: scaffolded
-2. CLI + gateway non-fatal event emission: wired
-3. tasks module: implemented (task discovery, cron/at scheduling, retries, overlap skipping)
-4. diagnostics: queue and module status exposed via `daemon status`
+If daemon is unavailable, clients (CLI/gateway) continue in degraded mode and warn instead of hard-failing.
+
+You can intentionally disable daemon integration with:
+
+- `PERSONAL_AGENT_DISABLE_DAEMON_EVENTS=1`

@@ -1,61 +1,83 @@
 # CLI Guide (`pa`)
 
-This document explains how `pa` works.
+This document explains how `pa` works and what each command is responsible for.
 
 ## Command model
 
 `pa` has two modes:
 
-1. **Management commands** (handled by `pa`):
+1. **Management commands** handled by personal-agent:
    - `pa profile ...`
    - `pa doctor`
    - `pa daemon ...`
    - `pa tasks ...`
-   - `pa gateway ...` (registered by `@personal-agent/gateway`)
+   - `pa gateway ...`
+   - `pa restart`
+   - `pa update`
 
 2. **Pi passthrough mode**:
    - `pa tui ...`
    - `pa <any pi args>`
 
-In passthrough mode, `pa` resolves profile resources, prepares runtime state, and then launches `pi`.
+In passthrough mode, `pa` resolves profile resources, prepares runtime state, and launches Pi with explicit resource flags.
+
+---
 
 ## Important behavior
 
 - `pa` (no args) shows CLI help.
-- `pa` is a superset wrapper for Pi CLI usage: unknown top-level args are treated as Pi args.
+- Unknown top-level args are treated as Pi args.
   - Example: `pa -p "hello"`
 - Global output controls:
-  - `--plain` / `--no-color` disables rich styling
-  - `doctor --json` and `daemon status --json` emit machine-readable JSON
+  - `--plain` / `--no-color`
+  - env: `PERSONAL_AGENT_PLAIN_OUTPUT=1` or `NO_COLOR=1`
+
+Machine-readable output:
+
+- `pa doctor --json`
+- `pa daemon status --json`
+- `pa tasks list --json`
+- `pa tasks show <id> --json`
+- `pa tasks validate --json`
+
+---
+
+## Pi binary resolution
+
+When launching Pi, `pa` checks in this order:
+
+1. repo-local Pi SDK CLI (`node_modules/@mariozechner/pi-coding-agent/dist/cli.js`)
+2. global `pi` on PATH
+
+If neither is runnable, `pa` exits with a setup error.
+
+---
 
 ## Profile selection
 
-Profile is configured once and reused.
-
-Set default with:
+Set default once:
 
 ```bash
 pa profile use datadog
 ```
 
-For a one-off TUI launch without changing default profile:
+One-off override for a run:
 
 ```bash
 pa tui --profile datadog
+# or passthrough mode
+pa --profile datadog -p "hello"
 ```
 
-Inspect current default and available profiles:
+Inspect:
 
 ```bash
 pa profile list
-```
-
-Show resolved profile details:
-
-```bash
 pa profile show
 pa profile show datadog
 ```
+
+---
 
 ## Core commands
 
@@ -63,104 +85,94 @@ pa profile show datadog
 pa
 pa tui [--profile <name>] [pi args...]
 pa profile [list|show|use]
-pa doctor
-pa gateway
-pa gateway setup [telegram|discord]
-pa gateway start [telegram|discord]
-pa gateway service [install|status|uninstall|help] [telegram|discord]
-pa daemon
-pa daemon help
-pa daemon [status|start|stop|restart|logs]
+pa doctor [--json]
+pa daemon [status|start|stop|restart|logs|service|help]
 pa daemon status [--json]
 pa daemon service [install|status|uninstall|help]
 pa tasks [list|show|validate|logs]
+pa restart
 pa update [--repo-only]
+pa gateway ...
 ```
 
-`pa daemon` now prints daemon command help. Use `pa daemon status` for runtime status.
+Notes:
 
-`pa update` updates Pi (`@mariozechner/pi-coding-agent`), pulls latest git changes for personal-agent, then restarts background services. Use `--repo-only` to skip the Pi package update.
+- `pa daemon` prints daemon command help.
+- `pa tasks` prints detailed tasks command help.
+- `pa update` runs `git pull --ff-only`, updates global Pi package, then restarts background services.
+- `pa update --repo-only` skips global Pi update.
+
+---
 
 ## Scheduled task commands
 
 ```bash
-pa tasks list
-pa tasks show <id>
-pa tasks validate --all
-pa tasks validate ~/.config/personal-agent/tasks/example.task.md
-pa tasks logs <id> --tail 120
+pa tasks list [--json] [--status <all|running|active|completed|disabled|pending|error>]
+pa tasks show <id> [--json]
+pa tasks validate [--all|file] [--json]
+pa tasks logs <id> [--tail <n>]
 ```
 
-`pa daemon status` also prints the configured scheduled task directory to make it easy to find.
+See [Scheduled Tasks](./tasks.md) for schema and runtime semantics.
 
-### System theme mapping (optional)
+---
 
-Configure these keys in profile `settings.json` (for example `profiles/shared/agent/settings.json`):
+## Restart vs update
 
-- `themeDark` (theme name to use in dark mode)
-- `themeLight` (theme name to use in light mode)
-- `themeMode` (`system` | `dark` | `light`, defaults to `system`)
+## `pa restart`
 
-When both `themeDark` and `themeLight` are set, `pa` chooses one at launch (from system mode or explicit `themeMode`) and writes it to runtime `settings.json` before launching Pi.
+- restarts daemon process
+- restarts managed gateway services if installed
+- prints summary of restarted/skipped services
 
-## Cross-package command registration
+## `pa update`
 
-`pa` keeps command parsing in `@personal-agent/cli`, while feature packages can register commands.
+- pulls latest repo changes (`git pull --ff-only`)
+- runs `npm install -g @mariozechner/pi-coding-agent@latest`
+- restarts daemon and managed gateways
 
-Current example:
+Use `--repo-only` when you do not want to mutate global npm installs.
 
-- `@personal-agent/gateway` registers the `gateway` command
-- CLI discovers it at startup and routes `pa gateway ...` to provider handlers (`telegram` / `discord`)
+---
 
-This keeps package boundaries clean: gateway logic stays in the gateway package, while command dispatch stays in CLI.
+## How passthrough launch works
 
-## How passthrough TUI works
+When `pa` runs Pi (`pa`, `pa tui`, or `pa <pi args>`), it:
 
-When `pa` runs Pi (via `pa`, `pa tui`, or `pa <pi args>`), it:
-
-1. resolves profile from `--profile <name>` (if provided), otherwise from configured default (`~/.config/personal-agent/config.json`)
-2. resolves layers: shared -> selected profile -> optional local overlay
-3. validates runtime state paths
-4. bootstraps runtime directories
+1. resolves profile from `--profile` or default profile config
+2. resolves layers (`shared` → selected profile → optional local overlay)
+3. validates runtime state paths are outside repo
+4. bootstraps runtime state directories
 5. materializes merged runtime agent files
-6. builds explicit Pi resource args (`--skill`, `-e`, `--prompt-template`, `--theme`)
-7. optionally remaps `settings.theme` from dark/light mode (when `themeDark` + `themeLight` are configured)
-8. injects default model/thinking from settings if missing
-9. auto-installs extension dependencies when missing
-10. launches `pi` with `PI_CODING_AGENT_DIR` pointing at runtime agent dir
+6. auto-installs extension dependencies when missing
+7. builds explicit Pi resource args (`--skill`, `-e`, `--prompt-template`, `--theme`)
+8. applies optional system dark/light theme mapping (`themeDark`/`themeLight`)
+9. injects default model/thinking from settings if omitted
+10. launches Pi with `PI_CODING_AGENT_DIR` pointed at runtime agent dir
 
-## Extension auto-installation
-
-Profiles can include Pi extensions with npm dependencies. When `pa tui` runs:
-
-1. Discovers extensions from all profile layers
-2. Checks for `package.json` in extension directories
-3. Runs `npm install` if `node_modules` is missing
-4. Continues with Pi launch
-
-Extensions are loaded by Pi at startup. Use `/reload` in Pi TUI to reload extensions without restarting.
-
-See `docs/extensions.md` for authoring guide.
+---
 
 ## Auth behavior
 
-When running via `pa`, Pi auth is stored in the personal-agent runtime dir, not legacy Pi config:
+When running via `pa`, auth is stored in personal-agent runtime state:
 
-- runtime auth: `~/.local/state/personal-agent/pi-agent/auth.json` (default)
+- runtime auth: `~/.local/state/personal-agent/pi-agent/auth.json`
 - legacy auth: `~/.pi/agent/auth.json`
 
-On first run, `pa` may seed runtime auth from legacy auth **only if runtime auth is missing**.
+If runtime auth is missing and legacy auth exists, `pa` seeds runtime auth once.
 There is no sync-back to legacy auth.
 
-## Datadog layering
+---
 
-For `datadog`, skills are layered in order:
+## Datadog layering reminder
+
+For `datadog` profile:
 
 1. `profiles/shared/agent/skills`
 2. `profiles/datadog/agent/skills`
-3. optional local overlay skills
+3. optional local overlay skill dirs
 
-So Datadog skills are appended on top of shared skills.
+---
 
 ## Quick verification
 
@@ -168,8 +180,16 @@ So Datadog skills are appended on top of shared skills.
 pa profile use datadog
 pa profile show datadog
 pa doctor
-pa gateway help
+pa daemon status
+pa tasks list
 pa tui
 ```
 
-If `pa tui` launches TUI and `profile show` includes both skill dirs, layering is working.
+---
+
+## Related docs
+
+- [Configuration](./configuration.md)
+- [Profile Schema](./profile-schema.md)
+- [Gateway Guide](./gateway.md)
+- [Troubleshooting](./troubleshooting.md)

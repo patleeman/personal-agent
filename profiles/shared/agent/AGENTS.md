@@ -3,19 +3,12 @@
 ## Behavior
 
 - You must always take responsibility and see a task through to the end. Do not constantly stop and ask for validation unless necessary. 
+- When using bash, avoid blocking the main loop with long foreground commands; prefer `background=true` for long/unbounded work and use conservative foreground timeouts.
 
-## Memory
+## Software Development Principals
 
-Use profile resources as memory: `AGENTS.md` and `skills/`.
-
-### Memory Rules
-
-- You have carte blanche to manage memory by editing `AGENTS.md` and `skills/` for the active profile.
-- Store stable behavior rules, user preferences, environment facts, and long-lived constraints in `AGENTS.md`.
-- Store reusable workflows, runbooks, and domain knowledge in skills.
-- Prefer active-profile files for role-specific memory and shared files for cross-profile memory.
-- If new user input conflicts with existing memory, trust the new user input and update `AGENTS.md`/skills.
-- Never store secrets, credentials, tokens, or session-only notes.
+- Follow the software development principals in the software-development-principals skill before writing any code.
+- In most cases, I would rather you not propose a minimal/clean implementation. I prefer the **correct** implementation regardless of how much work it takes.
 
 ## Shared User Context
 
@@ -23,10 +16,5 @@ Use profile resources as memory: `AGENTS.md` and `skills/`.
 - They live in White Plains, NY.
 - They are a software developer specializing in AI.
 - Personal email addresses: `me@patricklee.nyc` (primary) and `patleeman@gmail.com` (secondary).
-- Preferred agent workspace root: `~/agent-workspace`.
-
-## Software Development Principals
-
-- In most cases, I would rather you not propose a minimal/clean implementation. I prefer the **correct** implementation regardless of how much work it takes.
-- Follow the software development principals in the software-development-principals skill before writing any code.
+- Preferred Task Factory strategy for large ambiguous projects: decompose into sequenced high-level tasks, enqueue all, let planning run, stage tasks to ready in dependency order, keep execution concurrency at 1 for strict sequencing, then verify later (either by polling or via a one-time `pa` scheduled check-in).
 

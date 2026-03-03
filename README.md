@@ -9,8 +9,8 @@ A personal application layer over Pi that keeps:
 ## Features
 
 - **Profile system** - Layered configs (shared → profile → local) with skills, extensions, themes
-- **pa tui** - Launch Pi with layered profile resources and memory policy injection
-- **Daemon** - Background processing for scheduled tasks and maintenance
+- **`pa tui`** - Launch Pi with layered profile resources and memory policy injection
+- **Daemon** - Background processing for maintenance + scheduled tasks
 - **Gateways** - Telegram and Discord bot integration with per-chat sessions
 - **Extensions** - Pi extensions auto-discovered from profiles with dependency auto-install
 
@@ -22,18 +22,29 @@ A personal application layer over Pi that keeps:
 - `@personal-agent/cli` — `pa` wrapper command
 - `@personal-agent/gateway` — Telegram + Discord gateways (registered as `pa gateway` command)
 
+## Documentation
+
+Start here:
+
+- `docs/README.md` - full docs map
+- `docs/cli.md` - CLI usage and command reference
+- `docs/configuration.md` - config files, env vars, and precedence
+- `docs/tasks.md` - scheduled task schema + behavior
+- `docs/troubleshooting.md` - common failures and fixes
+
 ## Installation (from source)
 
 Prerequisites:
 
 - Node.js 20+
 - npm
-- Pi CLI (`pi` command)
+
+Pi availability options:
+
+1. **Repo-local Pi (recommended in this repo):** `npm install` in this repo installs `@mariozechner/pi-coding-agent` under `node_modules`, and `pa` will use it automatically.
+2. **Global Pi fallback:** `npm install -g @mariozechner/pi-coding-agent` (optional).
 
 ```bash
-# Required once (pa wraps the pi CLI)
-npm install -g @mariozechner/pi-coding-agent
-
 # In this repo
 npm install
 npm run build
@@ -84,9 +95,11 @@ pa tui -- --model kimi-coding/k2p5    # Pass args to pi
 pa doctor                   # Validate setup
 pa doctor --json            # Machine-readable status
 pa restart                  # Restart daemon + managed gateways
-pa update                   # Update pi package + pull git changes, then restart services
-pa update --repo-only       # Pull git changes only, then restart services
+pa update                   # Pull git changes + update global pi package + restart services
+pa update --repo-only       # Pull git changes only + restart services
 ```
+
+> `pa update` runs `npm install -g @mariozechner/pi-coding-agent@latest`. If you do not use global Pi installs, prefer `pa update --repo-only`.
 
 ### Profile management
 
@@ -102,14 +115,25 @@ pa profile show datadog     # Show specific profile
 ```bash
 pa daemon                   # Show daemon command help
 pa daemon status            # Check daemon status
+pa daemon status --json     # Machine-readable daemon status
 pa daemon start             # Start background daemon
 pa daemon stop              # Stop daemon
 pa daemon restart           # Restart daemon only
-pa daemon logs              # View daemon logs
+pa daemon logs              # View daemon log path + PID
 pa daemon service install   # Install daemon as managed user service
 pa restart                  # Restart daemon + managed gateways
-pa update                   # Update pi package + pull latest git changes and restart
-pa update --repo-only       # Pull latest git changes only and restart
+```
+
+### Scheduled tasks
+
+```bash
+pa tasks list
+pa tasks list --status active
+pa tasks list --json --status completed
+pa tasks show <id>
+pa tasks validate --all
+pa tasks validate ~/.config/personal-agent/tasks/example.task.md
+pa tasks logs <id> --tail 120
 ```
 
 ### Gateway (Telegram/Discord)
@@ -137,11 +161,13 @@ pa gateway service uninstall telegram
 `personal-agentd` runs background modules behind a local event bus:
 
 - **maintenance** - Periodic cleanup and retention
+- **tasks** - Scheduled `*.task.md` execution with retries, logs, and gateway output routing
 
 CLI surface:
 
 - `pa daemon` (help), `pa daemon status|start|stop|restart|logs`
 - `pa daemon service install|status|uninstall|help`
+- `pa tasks list|show|validate|logs`
 - `pa restart`
 - `pa update`
 
@@ -149,19 +175,19 @@ When daemon is unavailable, clients warn and continue (non-fatal).
 
 ## Extensions
 
-Pi extensions auto-discovered from profile layers:
+Pi extensions are auto-discovered from profile layers:
 
-- `profiles/shared/agent/extensions/*`  
+- `profiles/shared/agent/extensions/*`
 - `profiles/<profile>/agent/extensions/*`
 - `~/.config/personal-agent/local/extensions/*`
 
 Extensions with `package.json` dependencies are auto-installed on first use.
 
-Built-in extensions:
+Built-in extensions in this repo:
+
 - `memory` - Active-profile memory policy (AGENTS.md + skills)
 - `context-bar` - Session context display
 - `web-tools` - Web search/integration
-- `update` - Self-update commands
 - `background-bash` - Background task execution
 
 See `docs/extensions.md` for authoring guide.
@@ -171,7 +197,7 @@ See `docs/extensions.md` for authoring guide.
 Shared optional env vars:
 
 - `PERSONAL_AGENT_PROFILE` (default: `shared`)
-- `PERSONAL_AGENT_PI_TIMEOUT_MS` (default: `180000`)
+- `PERSONAL_AGENT_PI_TIMEOUT_MS` (default: `1800000` / 30 minutes, set `0` to disable timeout)
 
 If you use `op://...` references for secrets, ensure 1Password CLI (`op`) is installed and authenticated (service-account flow: `OP_SERVICE_ACCOUNT_TOKEN`).
 
@@ -196,6 +222,8 @@ Optional:
 
 - `PERSONAL_AGENT_TELEGRAM_CWD` (working directory for Pi calls)
 - `PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT` (default: `20`)
+- `PERSONAL_AGENT_TELEGRAM_RETRY_ATTEMPTS` (default: `3`)
+- `PERSONAL_AGENT_TELEGRAM_RETRY_BASE_DELAY_MS` (default: `300`)
 
 Run bridge:
 
@@ -231,18 +259,15 @@ pa gateway discord start
 pa gateway service install discord
 ```
 
-Gateway commands:
+Gateway slash commands include:
 
-- `/status`
-- `/new`
-- `/commands`
-- `/skills`
-- `/skill <name>`
-- `/model` or `/models` (picker + per-chat/per-channel model override; Telegram includes inline buttons)
-- `/stop` (stop active request)
-- `/cancel` (cancel active model selection)
-- `/compact` (guidance only in gateway mode; use Pi TUI for manual compaction)
-- `/resume` (gateway auto-resumes per chat/channel)
+- `/status`, `/new`, `/commands`
+- `/skills`, `/skill <name>`
+- `/tasks [status]`
+- `/model` / `/models`
+- `/stop`, `/followup <text>`, `/cancel`
+- `/compact` (guidance only in gateway mode)
+- `/resume` (auto-resume behavior info)
 
 ## Profiles
 
@@ -257,9 +282,12 @@ Optional local overlay:
 
 See docs:
 
+- `docs/README.md` - docs map
 - `docs/cli.md` - CLI usage and command reference
-- `docs/architecture.md` - Package architecture and data flow
-- `docs/daemon-architecture.md` - Daemon design and event system
+- `docs/configuration.md` - config files, env vars, precedence
+- `docs/profile-schema.md` - profile layer semantics
+- `docs/extensions.md` - extension authoring guide
+- `docs/daemon-architecture.md` - daemon design and event system
+- `docs/tasks.md` - scheduled task schema + runtime behavior
 - `docs/gateway.md` - Telegram/Discord gateway setup
-- `docs/profile-schema.md` - Profile layer semantics
-- `docs/extensions.md` - Extension authoring guide
+- `docs/troubleshooting.md` - debugging and incident playbooks
