@@ -12,7 +12,7 @@ import { join } from "path";
 import { homedir } from "os";
 
 const ONE_PASSWORD_REFERENCE_PREFIX = "op://";
-const DEFAULT_EXA_API_KEY_REFERENCE = "op://Assistant/EXA_API_KEY/credential";
+const DEFAULT_OP_READ_TIMEOUT_MS = 5000;
 
 let resolvedExaApiKey: string | undefined;
 let attemptedExaResolution = false;
@@ -23,12 +23,20 @@ function isOnePasswordReference(value: string): boolean {
 
 function resolveOnePasswordReference(reference: string): string | undefined {
 	const opCommand = process.env.PERSONAL_AGENT_OP_BIN?.trim() || "op";
+	const configuredTimeout = Number.parseInt(process.env.PERSONAL_AGENT_OP_READ_TIMEOUT_MS || "", 10);
+	const timeoutMs = Number.isFinite(configuredTimeout) && configuredTimeout > 0
+		? configuredTimeout
+		: DEFAULT_OP_READ_TIMEOUT_MS;
 
 	try {
-		const output = execFileSync(opCommand, ["read", reference], {
+		const output = execFileSync(opCommand, ["--cache=false", "read", reference], {
 			encoding: "utf-8",
 			stdio: ["ignore", "pipe", "pipe"],
-			env: process.env,
+			env: {
+				...process.env,
+				OP_CACHE: "false",
+			},
+			timeout: timeoutMs,
 		}).trim();
 
 		return output.length > 0 ? output : undefined;
@@ -101,9 +109,16 @@ function getExaApiKey(): string | undefined {
 		}
 	}
 
-	const defaultReference = process.env.PERSONAL_AGENT_EXA_API_KEY_DEFAULT_REF
-		|| DEFAULT_EXA_API_KEY_REFERENCE;
-	resolvedExaApiKey = resolveConfiguredSecret(defaultReference);
+	const configuredDefaultReference = process.env.PERSONAL_AGENT_EXA_API_KEY_DEFAULT_REF;
+	if (configuredDefaultReference) {
+		const resolvedDefaultReference = resolveConfiguredSecret(configuredDefaultReference);
+		if (resolvedDefaultReference) {
+			resolvedExaApiKey = resolvedDefaultReference;
+			return resolvedExaApiKey;
+		}
+	}
+
+	resolvedExaApiKey = undefined;
 	return resolvedExaApiKey;
 }
 
