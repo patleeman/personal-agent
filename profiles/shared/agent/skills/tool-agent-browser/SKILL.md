@@ -6,14 +6,41 @@ allowed-tools: Bash(agent-browser:*), Bash(npx agent-browser:*)
 
 # Browser Automation with agent-browser
 
+## Native Mode (Default)
+
+Start each workflow in the experimental native daemon mode.
+
+```bash
+agent-browser --native <command> ...
+```
+
+For multi-step sequences, define a helper once per shell (boots native daemon on first call, avoids repeated `--native` warnings):
+
+```bash
+AB_NATIVE_STARTED=0
+ab() {
+  if [[ "$AB_NATIVE_STARTED" -eq 0 ]]; then
+    AB_NATIVE_STARTED=1
+    agent-browser --native "$@"
+    return
+  fi
+
+  agent-browser "$@"
+}
+```
+
+Then run `ab open ...`, `ab snapshot -i`, etc.
+
 ## Core Workflow
 
 Every browser automation follows this pattern:
 
-1. **Navigate**: `agent-browser open <url>`
-2. **Snapshot**: `agent-browser snapshot -i` (get element refs like `@e1`, `@e2`)
+1. **Navigate**: `agent-browser --native open <url>` (or `ab open <url>`)
+2. **Snapshot**: `agent-browser snapshot -i` (or `ab snapshot -i`) to get refs like `@e1`, `@e2`
 3. **Interact**: Use refs to click, fill, select
 4. **Re-snapshot**: After navigation or DOM changes, get fresh refs
+
+All commands below assume you've started the workflow in native mode (or are using the `ab` helper).
 
 ```bash
 agent-browser open https://example.com/form

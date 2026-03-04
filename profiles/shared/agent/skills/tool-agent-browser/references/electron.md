@@ -2,6 +2,8 @@
 
 Automate Electron desktop apps by launching them with a Chrome DevTools Protocol (CDP) port, then connecting with `agent-browser`.
 
+**Native default:** start each workflow with `agent-browser --native <first-command>`, then run regular `agent-browser ...` commands for the rest of that session (or use the `ab` helper from [SKILL.md](../SKILL.md)).
+
 ## Core Workflow
 
 1. Quit app if already running

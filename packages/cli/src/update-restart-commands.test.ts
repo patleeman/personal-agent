@@ -3,6 +3,22 @@ import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@personal-agent/gateway', async () => {
+  const actual = await vi.importActual<typeof import('@personal-agent/gateway')>('@personal-agent/gateway');
+  return {
+    ...actual,
+    restartManagedDaemonServiceIfInstalled: vi.fn(() => undefined),
+    restartGatewayServiceIfInstalled: vi.fn(() => undefined),
+    getManagedDaemonServiceStatus: vi.fn(() => ({
+      identifier: 'mock-daemon',
+      manifestPath: '/tmp/mock-daemon',
+      installed: false,
+      running: false,
+    })),
+  };
+});
+
 import { runCli } from './index.js';
 
 const originalEnv = process.env;

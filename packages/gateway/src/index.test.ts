@@ -620,6 +620,51 @@ describe('queued telegram message handler', () => {
     ]);
   });
 
+  it('accepts sticker messages as media input', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async ({ prompt }: { prompt: string }) => `reply:${prompt}`);
+    const prepareInboundMedia = vi.fn(async (_input: {
+      media: Array<{ kind: string; fileId: string }>;
+    }) => [
+      {
+        kind: 'sticker' as const,
+        localPath: '/tmp/media/sticker.webp',
+        fileName: 'sticker.webp',
+        mimeType: 'image/webp',
+      },
+    ]);
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      prepareInboundMedia,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({
+      chat: { id: 1 },
+      sticker: { file_id: 'sticker-1', width: 512, height: 512 },
+    });
+
+    await handler.waitForIdle('1');
+
+    expect(prepareInboundMedia).toHaveBeenCalledTimes(1);
+    const prepareCall = prepareInboundMedia.mock.calls[0]?.[0];
+    expect(prepareCall).toBeDefined();
+
+    const media = (prepareCall as { media: Array<{ kind: string; fileId: string }> }).media;
+    expect(media[0]).toMatchObject({ kind: 'sticker', fileId: 'sticker-1' });
+
+    const promptCall = runPrompt.mock.calls[0]?.[0] as { prompt: string };
+    expect(promptCall.prompt).toContain('/tmp/media/sticker.webp');
+  });
+
   it('uses message edits for streaming and sends long responses as text files', async () => {
     const sendMessage = vi.fn(async () => ({ message_id: 321 }));
     const editMessageText = vi.fn(async () => undefined);
@@ -651,6 +696,44 @@ describe('queued telegram message handler', () => {
 
     expect(editMessageText).toHaveBeenCalled();
     expect(sendDocument).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores telegram "message is not modified" edit errors', async () => {
+    const sendMessage = vi.fn(async () => ({ message_id: 333 }));
+    const editMessageText = vi.fn(async () => {
+      const error = new Error(
+        'ETELEGRAM: 400 Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message',
+      ) as Error & { response?: { statusCode?: number } };
+      error.response = { statusCode: 400 };
+      throw error;
+    });
+    const sendChatAction = vi.fn(async () => undefined);
+
+    const runPrompt = vi.fn(async ({ onTextDelta }: { onTextDelta?: (delta: string) => void }) => {
+      onTextDelta?.('preview');
+      return 'preview';
+    });
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      editMessageText,
+      sendChatAction,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: 'stream unchanged' });
+    await handler.waitForIdle('1');
+
+    const sentTexts = sendMessage.mock.calls.map((call) => {
+      const args = call as unknown[];
+      return String(args[1] ?? '');
+    });
+    expect(sentTexts.some((value) => value.includes('message is not modified'))).toBe(false);
   });
 
   it('maps /skill <name> to /skill:<name> before invoking pi', async () => {
@@ -885,6 +968,32 @@ describe('queued telegram message handler', () => {
     await handler.waitForIdle('1');
 
     expect(sendMessage).toHaveBeenCalledWith(1, finalTail);
+  });
+
+  it('formats markdown in regular telegram responses using parse mode', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => '# Heading\n\n**Bold** and `code`');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: 'format this' });
+    await handler.waitForIdle('1');
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      1,
+      '<b>Heading</b>\n\n<b>Bold</b> and <code>code</code>',
+      { parse_mode: 'HTML' },
+    );
   });
 
   it('steers active telegram runs instead of starting a second run with controller mode', async () => {

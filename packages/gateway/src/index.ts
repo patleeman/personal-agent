@@ -170,6 +170,36 @@ interface TelegramVoiceLike {
   file_size?: number;
 }
 
+interface TelegramAnimationLike {
+  file_id: string;
+  file_name?: string;
+  mime_type?: string;
+  file_size?: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+}
+
+interface TelegramVideoLike {
+  file_id: string;
+  file_name?: string;
+  mime_type?: string;
+  file_size?: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+}
+
+interface TelegramStickerLike {
+  file_id: string;
+  file_size?: number;
+  width?: number;
+  height?: number;
+  is_animated?: boolean;
+  is_video?: boolean;
+  emoji?: string;
+}
+
 export interface TelegramMessageLike {
   chat: { id: number };
   message_id?: number;
@@ -178,6 +208,9 @@ export interface TelegramMessageLike {
   document?: TelegramDocumentLike;
   photo?: TelegramPhotoSizeLike[];
   voice?: TelegramVoiceLike;
+  animation?: TelegramAnimationLike;
+  video?: TelegramVideoLike;
+  sticker?: TelegramStickerLike;
   reply_to_message?: {
     message_id?: number;
   };
@@ -189,7 +222,7 @@ export interface TelegramMessageLike {
   };
 }
 
-type TelegramInboundMediaKind = 'photo' | 'document' | 'voice';
+type TelegramInboundMediaKind = 'photo' | 'document' | 'voice' | 'animation' | 'video' | 'sticker';
 
 interface TelegramInboundMediaReference {
   kind: TelegramInboundMediaKind;
@@ -1511,6 +1544,18 @@ function selectBestTelegramPhoto(photoSizes: TelegramPhotoSizeLike[]): TelegramP
   return sorted[sorted.length - 1];
 }
 
+function inferStickerMimeType(sticker: TelegramStickerLike): string {
+  if (sticker.is_video) {
+    return 'video/webm';
+  }
+
+  if (sticker.is_animated) {
+    return 'application/x-tgsticker';
+  }
+
+  return 'image/webp';
+}
+
 function extractTelegramInboundMedia(message: TelegramMessageLike): TelegramInboundMediaReference[] {
   const media: TelegramInboundMediaReference[] = [];
 
@@ -1545,6 +1590,43 @@ function extractTelegramInboundMedia(message: TelegramMessageLike): TelegramInbo
       mimeType: message.voice.mime_type,
       durationSeconds: message.voice.duration,
       fileSizeBytes: message.voice.file_size,
+    });
+  }
+
+  if (message.animation?.file_id) {
+    media.push({
+      kind: 'animation',
+      fileId: message.animation.file_id,
+      fileName: message.animation.file_name,
+      mimeType: message.animation.mime_type,
+      fileSizeBytes: message.animation.file_size,
+      durationSeconds: message.animation.duration,
+      width: message.animation.width,
+      height: message.animation.height,
+    });
+  }
+
+  if (message.video?.file_id) {
+    media.push({
+      kind: 'video',
+      fileId: message.video.file_id,
+      fileName: message.video.file_name,
+      mimeType: message.video.mime_type,
+      fileSizeBytes: message.video.file_size,
+      durationSeconds: message.video.duration,
+      width: message.video.width,
+      height: message.video.height,
+    });
+  }
+
+  if (message.sticker?.file_id) {
+    media.push({
+      kind: 'sticker',
+      fileId: message.sticker.file_id,
+      mimeType: inferStickerMimeType(message.sticker),
+      fileSizeBytes: message.sticker.file_size,
+      width: message.sticker.width,
+      height: message.sticker.height,
     });
   }
 
@@ -1991,6 +2073,25 @@ function isLikelyStreamingTransitionError(error: unknown): boolean {
     || normalized.includes('pending');
 }
 
+function isLikelyUnsupportedImageInputError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+
+  const mentionsImageInput = normalized.includes('image')
+    || normalized.includes('vision')
+    || normalized.includes('multimodal');
+
+  const indicatesUnsupported = normalized.includes('not support')
+    || normalized.includes('unsupported')
+    || normalized.includes('not enabled')
+    || normalized.includes('text-only')
+    || normalized.includes('text only')
+    || normalized.includes('invalid image')
+    || normalized.includes('image input');
+
+  return mentionsImageInput && indicatesUnsupported;
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -2172,9 +2273,20 @@ class PersistentConversationController implements GatewayConversationController 
   private async executeRun(input: RunPromptFnInput, activeRun: ActiveConversationRun): Promise<string> {
     const session = await this.getSession();
     await applyRequestedModel(session, input.model);
-    await session.prompt(input.prompt, {
-      images: input.images,
-    });
+
+    const hasImages = Boolean(input.images && input.images.length > 0);
+
+    try {
+      await session.prompt(input.prompt, {
+        images: input.images,
+      });
+    } catch (error) {
+      if (!hasImages || !isLikelyUnsupportedImageInputError(error)) {
+        throw error;
+      }
+
+      await session.prompt(input.prompt);
+    }
 
     const streamed = activeRun.streamedOutput.trim();
     const fallback = extractLatestAssistantText(session.messages as unknown);
@@ -2248,10 +2360,24 @@ class PersistentConversationController implements GatewayConversationController 
 
     while (this.activeRun) {
       try {
-        if (mode === 'steer') {
-          await session.steer(input.prompt, input.images);
-        } else {
-          await session.followUp(input.prompt, input.images);
+        const hasImages = Boolean(input.images && input.images.length > 0);
+
+        try {
+          if (mode === 'steer') {
+            await session.steer(input.prompt, input.images);
+          } else {
+            await session.followUp(input.prompt, input.images);
+          }
+        } catch (error) {
+          if (!hasImages || !isLikelyUnsupportedImageInputError(error)) {
+            throw error;
+          }
+
+          if (mode === 'steer') {
+            await session.steer(input.prompt);
+          } else {
+            await session.followUp(input.prompt);
+          }
         }
 
         return true;
@@ -2387,6 +2513,18 @@ function escapeTelegramHtmlAttribute(value: string): string {
 function renderTelegramRichText(text: string): { text: string; parseMode?: TelegramParseMode } {
   const normalizedText = text.length > 0 ? text : '(empty response)';
 
+  const hasMarkdownFormatting = /```/.test(normalizedText)
+    || /^(#{1,6})\s+.+$/m.test(normalizedText)
+    || /\*\*[^*\n][\s\S]*?\*\*/.test(normalizedText)
+    || /`[^`\n]+`/.test(normalizedText)
+    || /\[[^\]\n]+\]\((https?:\/\/[^\s)]+)\)/.test(normalizedText);
+
+  if (!hasMarkdownFormatting) {
+    return {
+      text: normalizedText,
+    };
+  }
+
   const codeBlocks: string[] = [];
   const codeBlockTokenPrefix = '@@TG_CODE_BLOCK_';
   let withCodeBlockTokens = normalizedText.replace(/```([a-zA-Z0-9_-]*)\n?([\s\S]*?)```/g, (_match, language, code) => {
@@ -2471,6 +2609,16 @@ function isTelegramEntityParseError(error: unknown): boolean {
   return /parse entities|can't parse|entity is malformed/i.test(message);
 }
 
+function isTelegramMessageNotModifiedError(error: unknown): boolean {
+  const statusCode = getTelegramErrorStatusCode(error);
+  if (statusCode !== 400) {
+    return false;
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  return /message is not modified|specified new message content.*exactly the same/i.test(message);
+}
+
 async function sendTelegramFormattedMessage(
   sendMessage: SendMessageFn,
   chatId: number,
@@ -2511,12 +2659,25 @@ async function editTelegramFormattedMessage(
   try {
     return await invokeTelegramEditMessageText(editMessageText, chatId, messageId, rendered.text, renderedOptions);
   } catch (error) {
+    if (isTelegramMessageNotModifiedError(error)) {
+      return undefined;
+    }
+
     if (!isTelegramEntityParseError(error)) {
       throw error;
     }
 
     const plainOptions = stripTelegramParseMode(options);
-    return invokeTelegramEditMessageText(editMessageText, chatId, messageId, text, plainOptions);
+
+    try {
+      return await invokeTelegramEditMessageText(editMessageText, chatId, messageId, text, plainOptions);
+    } catch (fallbackError) {
+      if (isTelegramMessageNotModifiedError(fallbackError)) {
+        return undefined;
+      }
+
+      throw fallbackError;
+    }
   }
 }
 
@@ -3825,7 +3986,7 @@ async function processTelegramMessage(
     args: commandArgs,
     normalizedText: rawText,
     modelCommands: options.modelCommands,
-    sendMessage: (messageText) => options.sendMessage(message.chat.id, messageText),
+    sendMessage: (messageText) => sendTelegramFormattedMessage(options.sendMessage, message.chat.id, messageText),
     sendModelSelectionPrompt: async (promptText, models) => {
       await options.sendMessage(
         message.chat.id,
@@ -3897,7 +4058,10 @@ model=${model}`,
 
     try {
       const compactResult = await controller.compact(commandArgs.length > 0 ? commandArgs : undefined);
-      await sendLongText((chunk) => options.sendMessage(message.chat.id, chunk), compactResult);
+      await sendLongText(
+        (chunk) => sendTelegramFormattedMessage(options.sendMessage, message.chat.id, chunk),
+        compactResult,
+      );
     } catch (error) {
       await options.sendMessage(message.chat.id, `Unable to compact context: ${(error as Error).message}`);
     }
@@ -3908,13 +4072,19 @@ model=${model}`,
   if (command === '/commands') {
     const commandHelp = options.commandHelpText
       ?? formatTelegramCommands(DEFAULT_TELEGRAM_COMMANDS);
-    await sendLongText((chunk) => options.sendMessage(message.chat.id, chunk), commandHelp);
+    await sendLongText(
+      (chunk) => sendTelegramFormattedMessage(options.sendMessage, message.chat.id, chunk),
+      commandHelp,
+    );
     return completedMessageProcessingResult();
   }
 
   if (command === '/skills') {
     const skillsHelp = options.skillsHelpText ?? formatTelegramSkills([]);
-    await sendLongText((chunk) => options.sendMessage(message.chat.id, chunk), skillsHelp);
+    await sendLongText(
+      (chunk) => sendTelegramFormattedMessage(options.sendMessage, message.chat.id, chunk),
+      skillsHelp,
+    );
     return completedMessageProcessingResult();
   }
 
@@ -3930,7 +4100,10 @@ model=${model}`,
 
     try {
       const taskText = await (options.listScheduledTasks ?? listScheduledTasks)({ statusFilter });
-      await sendLongText((chunk) => options.sendMessage(message.chat.id, chunk), taskText);
+      await sendLongText(
+        (chunk) => sendTelegramFormattedMessage(options.sendMessage, message.chat.id, chunk),
+        taskText,
+      );
     } catch (error) {
       await options.sendMessage(message.chat.id, `Unable to list scheduled tasks: ${(error as Error).message}`);
     }
@@ -4038,7 +4211,8 @@ model=${model}`,
       sendPhoto: options.sendPhoto,
       outputDir: options.telegramExportDir,
     })
-    : createResponseChunkStreamer((chunk) => options.sendMessage(message.chat.id, chunk));
+    : createResponseChunkStreamer((chunk) =>
+      sendTelegramFormattedMessage(options.sendMessage, message.chat.id, chunk));
 
   const submissionInput: RunPromptFnInput = {
     prompt,
@@ -4600,7 +4774,10 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
             durationSeconds: mediaRef.durationSeconds,
           };
 
-          if (mediaRef.kind === 'photo') {
+          const isImageAttachment = mediaRef.kind === 'photo'
+            || Boolean(mimeType && mimeType.startsWith('image/'));
+
+          if (isImageAttachment) {
             const imageMimeType = mimeType ?? 'image/jpeg';
             preparedEntry.imageContent = {
               type: 'image',
@@ -4706,7 +4883,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
         const chunks = splitTelegramMessage(notification.message || '(empty response)');
         for (const chunk of chunks) {
-          const sent = await sendTelegramMessageWithRetry(chatId, chunk);
+          const sent = await sendTelegramFormattedMessage(sendTelegramMessageWithRetry, chatId, chunk);
           const sentMessageId = toTelegramSentMessageId(sent);
           if (typeof sentMessageId === 'number') {
             trackScheduledReplyContext(chatId, sentMessageId, notification);

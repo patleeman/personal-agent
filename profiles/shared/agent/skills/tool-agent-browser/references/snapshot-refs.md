@@ -4,6 +4,8 @@ Compact element references that reduce context usage dramatically for AI agents.
 
 **Related**: [commands.md](commands.md) for full command reference, [SKILL.md](../SKILL.md) for quick start.
 
+**Native default:** start each workflow with `agent-browser --native <first-command>`, then run regular `agent-browser ...` commands for the rest of that session (or use the `ab` helper from [SKILL.md](../SKILL.md)).
+
 ## Contents
 
 - [How Refs Work](#how-refs-work)

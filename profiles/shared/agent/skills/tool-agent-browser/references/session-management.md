@@ -4,6 +4,8 @@ Multiple isolated browser sessions with state persistence and concurrent browsin
 
 **Related**: [authentication.md](authentication.md) for login patterns, [SKILL.md](../SKILL.md) for quick start.
 
+**Native default:** start each workflow with `agent-browser --native <first-command>`, then run regular `agent-browser ...` commands for the rest of that session (or use the `ab` helper from [SKILL.md](../SKILL.md)).
+
 ## Contents
 
 - [Named Sessions](#named-sessions)

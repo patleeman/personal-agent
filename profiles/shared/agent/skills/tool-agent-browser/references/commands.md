@@ -2,6 +2,8 @@
 
 Complete reference for all agent-browser commands. For quick start and common patterns, see SKILL.md.
 
+**Native default:** start each workflow with `agent-browser --native <first-command>`, then run regular `agent-browser ...` commands for the rest of that session (or use the `ab` helper from [SKILL.md](../SKILL.md)).
+
 ## Navigation
 
 ```bash
@@ -227,6 +229,7 @@ agent-browser --headers <json> ...    # HTTP headers scoped to URL's origin
 agent-browser --executable-path <p>   # Custom browser executable
 agent-browser --extension <path> ...  # Load browser extension (repeatable)
 agent-browser --ignore-https-errors   # Ignore SSL certificate errors
+agent-browser --native ...            # Use native Rust daemon (experimental)
 agent-browser --help                  # Show help (-h)
 agent-browser --version               # Show version (-V)
 agent-browser <command> --help        # Show detailed help for a command
@@ -255,5 +258,6 @@ AGENT_BROWSER_EXECUTABLE_PATH="/path/chrome" # Custom browser path
 AGENT_BROWSER_EXTENSIONS="/ext1,/ext2"       # Comma-separated extension paths
 AGENT_BROWSER_PROVIDER="browserbase"         # Cloud browser provider
 AGENT_BROWSER_STREAM_PORT="9223"             # WebSocket streaming port
+AGENT_BROWSER_NATIVE="1"                     # Use native Rust daemon by default
 AGENT_BROWSER_HOME="/path/to/agent-browser"  # Custom install location
 ```

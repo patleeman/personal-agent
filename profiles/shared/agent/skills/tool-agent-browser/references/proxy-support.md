@@ -4,6 +4,8 @@ Proxy configuration for geo-testing, rate limiting avoidance, and corporate envi
 
 **Related**: [commands.md](commands.md) for global options, [SKILL.md](../SKILL.md) for quick start.
 
+**Native default:** start each workflow with `agent-browser --native <first-command>`, then run regular `agent-browser ...` commands for the rest of that session (or use the `ab` helper from [SKILL.md](../SKILL.md)).
+
 ## Contents
 
 - [Basic Proxy Configuration](#basic-proxy-configuration)

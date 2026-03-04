@@ -49,9 +49,14 @@ echo "ok"
 
 beforeEach(() => {
   const sessionDir = createTempDir('pi-session-');
+  const configDir = createTempDir('personal-agent-cli-config-');
+  const configPath = join(configDir, 'config.json');
+  writeFileSync(configPath, JSON.stringify({ defaultProfile: 'shared' }));
+
   process.env = {
     ...originalEnv,
     PERSONAL_AGENT_DISABLE_DAEMON_EVENTS: '1',
+    PERSONAL_AGENT_CONFIG_FILE: configPath,
     PI_SESSION_DIR: sessionDir,
   };
 });

@@ -12,6 +12,26 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    environment: 'node'
+    environment: 'node',
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.taskfactory/**',
+    ],
+    coverage: {
+      include: [
+        'packages/*/src/**/*.ts',
+      ],
+      exclude: [
+        '**/*.test.ts',
+        '**/*.spec.ts',
+        '**/node_modules/**',
+        '**/dist/**',
+        'packages/**/src/**/types.ts',
+        'packages/cli/src/index.ts',
+        'packages/gateway/src/index.ts',
+      ],
+      reporter: ['text', 'text-summary', 'json-summary'],
+    },
   }
 });
