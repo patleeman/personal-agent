@@ -107,6 +107,19 @@ function getExaApiKey(): string | undefined {
 	return resolvedExaApiKey;
 }
 
+function createRequestSignal(signal: unknown, timeoutMs: number): AbortSignal {
+	const timeoutSignal = AbortSignal.timeout(timeoutMs);
+	if (!(signal instanceof AbortSignal)) {
+		return timeoutSignal;
+	}
+
+	try {
+		return AbortSignal.any([signal, timeoutSignal]);
+	} catch {
+		return timeoutSignal;
+	}
+}
+
 export default function (pi: ExtensionAPI) {
 	// ── web_fetch: Fetch a URL and extract readable content as markdown ──
 	pi.registerTool({
@@ -123,7 +136,7 @@ export default function (pi: ExtensionAPI) {
 			),
 		}),
 
-		async execute(_toolCallId, params, _onUpdate, _ctx, signal) {
+		async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
 			const { url, raw } = params;
 			try {
 				const response = await fetch(url, {
@@ -132,7 +145,7 @@ export default function (pi: ExtensionAPI) {
 							"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
 						Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 					},
-					signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
+					signal: createRequestSignal(signal, 15000),
 				});
 
 				if (!response.ok) {
@@ -259,7 +272,7 @@ export default function (pi: ExtensionAPI) {
 			),
 		}),
 
-		async execute(_toolCallId, params, _onUpdate, _ctx, signal) {
+		async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
 			const { query, count = 5, page = 1 } = params;
 			const maxResults = Math.min(count, 20);
 			const offset = (Math.max(page, 1) - 1) * 20;
@@ -282,7 +295,7 @@ export default function (pi: ExtensionAPI) {
 								highlights: true,
 							},
 						}),
-						signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10000)]) : AbortSignal.timeout(10000),
+						signal: createRequestSignal(signal, 10000),
 					});
 
 					if (!response.ok) {
@@ -347,7 +360,7 @@ export default function (pi: ExtensionAPI) {
 							"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
 						Accept: "text/html,application/xhtml+xml",
 					},
-					signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10000)]) : AbortSignal.timeout(10000),
+					signal: createRequestSignal(signal, 10000),
 				});
 
 				if (!response.ok) {
