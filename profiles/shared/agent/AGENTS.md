@@ -26,6 +26,7 @@
 - Personal email addresses: `me@patricklee.nyc` (primary) and `patleeman@gmail.com` (secondary).
 - Patrick uses Zotero to save research papers and other research-related topics.
 - For reminders and follow-ups, prefer creating Apple Reminders items by default; use personal-agent scheduled tasks only when explicitly requested.
+- When scheduled task files (`*.task.md`) are added/updated in-repo, checkpoint those changes with a commit + push before finishing unless the user explicitly opts out.
 - Distinguish workspace types: `~/agent-workspace` is for assistant scratch work, while Task Factory workspaces should point to actual code repository paths unless the user explicitly asks for a scratch/test repo.
 - Keep shared profile memory project-agnostic; store project-specific operational context in the active non-shared profile workspace.
 - There should never be a shared-profile workspace.

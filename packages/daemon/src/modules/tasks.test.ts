@@ -443,4 +443,54 @@ This run should fail
 
     await module.stop?.(context);
   });
+
+  it('reaps skipped one-time tasks after 7 days', async () => {
+    const taskDir = createTempDir('tasks-module-definitions-');
+    const stateRoot = createTempDir('tasks-module-state-');
+    const taskPath = join(taskDir, 'missed.task.md');
+
+    writeFileSync(taskPath, `---\nid: missed\nat: "2026-03-02T09:00:00.000Z"\n---\nMissed task\n`);
+
+    let currentTime = new Date('2026-03-02T10:00:00.000Z');
+
+    const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(request, true, currentTime.toISOString()));
+
+    const module = createTasksModule(
+      {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
+      {
+        now: () => currentTime,
+        runTask,
+      },
+    );
+
+    const { context } = createContext(taskDir, stateRoot);
+
+    await module.start(context);
+
+    expect(runTask).toHaveBeenCalledTimes(0);
+    expect(existsSync(taskPath)).toBe(true);
+
+    currentTime = new Date('2026-03-10T10:00:10.000Z');
+    await module.handleEvent(createTimerEvent(), context);
+
+    expect(existsSync(taskPath)).toBe(false);
+
+    const persistedStatePath = join(stateRoot, 'task-state.json');
+    expect(existsSync(persistedStatePath)).toBe(true);
+
+    const persistedState = JSON.parse(readFileSync(persistedStatePath, 'utf-8')) as {
+      tasks: Record<string, unknown>;
+    };
+
+    expect(Object.keys(persistedState.tasks).length).toBe(0);
+
+    await module.stop?.(context);
+  });
 });

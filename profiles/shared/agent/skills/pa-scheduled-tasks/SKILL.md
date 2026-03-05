@@ -9,7 +9,9 @@ Use this skill when the user wants the daemon to run prompts automatically.
 
 ## Canonical paths
 
-- Task definitions (machine-local): `~/.config/personal-agent/tasks/*.task.md`
+- Task definitions (preferred, in-repo): `<repo>/profiles/<non-shared-profile>/agent/workspace/tasks/*.task.md`
+- Do not use a shared-profile workspace path.
+- Daemon discovery root (recommended): `<repo>/profiles` (recursive `*.task.md` discovery)
 - Runtime state: `~/.local/state/personal-agent/daemon/task-state.json`
 - Run logs: `~/.local/state/personal-agent/daemon/task-runs/<task-id>/...`
 - Starter template in repo: `docs/examples/scheduled-task.task.md`
@@ -81,13 +83,13 @@ Prepare a tax filing checklist.
 - Retries: up to 3 attempts per scheduled run
 - Missed runs while daemon is down: **skipped**
 - Overlap policy: if still running at next due time, next run is **skipped**
-- One-time tasks: marked complete on success, then reaped after 7 days
+- One-time tasks: resolved once (`success`/`failed`/`skipped`), then reaped after 7 days
 - No daemon-level post-run commit/PR automation; any git action must be explicit in prompt
 
 ## Agent workflow
 
 1. Clarify schedule (`cron` vs `at`), profile, model, cwd.
-2. Write or update `~/.config/personal-agent/tasks/<name>.task.md`.
+2. Write or update `<repo>/profiles/<non-shared-profile>/agent/workspace/tasks/<name>.task.md`.
 3. Validate frontmatter keys match the supported contract above.
 4. Check daemon/task health:
    - `pa daemon status` (shows configured task directory)
@@ -98,6 +100,10 @@ Prepare a tax filing checklist.
 6. Verify execution:
    - `pa tasks show <id>`
    - `pa tasks logs <id> --tail 120`
+7. Keep repo in sync:
+   - checkpoint task-file changes with commit + push using `/skill:checkpoint`
+   - stage only intended task/docs changes (no unrelated files)
+   - skip only when the user explicitly asks not to commit/push
 
 ## Debug checklist
 

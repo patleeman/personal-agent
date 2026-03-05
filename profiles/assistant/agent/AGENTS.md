@@ -21,6 +21,7 @@ ALWAYS PROIORITIZE UNBLOCKING THE MAIN THREAD. Use tmux + subagents aggressively
 - For weather reports, prefer free sources like `wttr.in` over paid APIs.
 - Morning report calendar data should come from local Apple Calendar (`osascript`), focusing on `Patrick Lee`, `patrickc.lee@datadoghq.com`, and `Sanitation` (iCloud) calendars.
 - Scheduled daemon tasks should live in-repo under `profiles/<profile>/agent/workspace/tasks/*.task.md` (task discovery root: `<repo>/profiles`).
+- After creating/updating `*.task.md` files, run the checkpoint workflow to commit and push task changes before finishing (unless the user explicitly says not to).
 - Workspace policy: exactly one workspace per non-shared profile; never create/use a shared-profile workspace.
 - For Fastmail automation (outside morning report), prefer IMAP + CalDAV with app-password auth; avoid JMAP-token workflows.
 - Primary personal notes vault is `~/Library/CloudStorage/Dropbox/Notes`; search active note folders first, then `!Archive` if needed.

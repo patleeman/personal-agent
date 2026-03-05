@@ -14,6 +14,11 @@ You can change the directory in daemon config:
 
 - `~/.config/personal-agent/daemon.json` → `modules.tasks.taskDir`
 
+Repository workflow recommendation:
+
+- keep task files inside the repo (for example under profile workspace task folders)
+- commit and push task-file changes right after updates so daemon config/task definitions stay in sync across machines
+
 ---
 
 ## Task file format
@@ -120,7 +125,8 @@ One-time task lifecycle:
 
 - `success` → status can appear as `completed` in CLI
 - `failed` or `skipped` → visible via runtime status/error fields
-- Completed one-time task files + run logs are reaped after `reapAfterDays` (default `7`)
+- Resolved one-time task files + run logs are reaped after `reapAfterDays` (default `7`)
+  - Resolved means `success`, `failed`, or `skipped`
 
 ---
 

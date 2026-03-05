@@ -28,7 +28,7 @@ extensions/
 │   └── index.ts
 ├── web-tools/
 │   └── index.ts
-├── background-bash/
+├── tmux-orchestration-prompt/
 │   └── index.ts
 └── package.json   # optional shared deps for this extension root
 ```
@@ -66,7 +66,7 @@ This allows extension-specific dependencies to be self-contained.
 - `memory` — active-profile memory policy injection (`AGENTS.md` + `skills/` memory model)
 - `context-bar` — session context display in Pi TUI
 - `web-tools` — web search/fetch tool integration
-- `background-bash` — background bash job utilities
+- `tmux-orchestration-prompt` — system-prompt tmux orchestration/status policy injection
 
 ---
 

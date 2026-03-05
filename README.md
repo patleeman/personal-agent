@@ -188,7 +188,7 @@ Built-in extensions in this repo:
 - `memory` - Active-profile memory policy (AGENTS.md + skills)
 - `context-bar` - Session context display
 - `web-tools` - Web search/integration
-- `background-bash` - Background task execution
+- `tmux-orchestration-prompt` - System-prompt policy for tmux-based background orchestration and status reporting
 
 See `docs/extensions.md` for authoring guide.
 

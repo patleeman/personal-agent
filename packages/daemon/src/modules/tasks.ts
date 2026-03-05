@@ -442,7 +442,7 @@ export function createTasksModule(
     }
   };
 
-  const reapCompletedTasks = (
+  const reapResolvedOneTimeTasks = (
     currentTimeMs: number,
     context: { logger: { info: (message: string) => void; warn: (message: string) => void } },
   ): void => {
@@ -457,16 +457,17 @@ export function createTasksModule(
         continue;
       }
 
-      if (!record.oneTimeCompletedAt) {
+      const resolvedAt = record.oneTimeCompletedAt ?? record.oneTimeResolvedAt;
+      if (!resolvedAt) {
         continue;
       }
 
-      const completedAtMs = Date.parse(record.oneTimeCompletedAt);
-      if (!Number.isFinite(completedAtMs)) {
+      const resolvedAtMs = Date.parse(resolvedAt);
+      if (!Number.isFinite(resolvedAtMs)) {
         continue;
       }
 
-      if (currentTimeMs - completedAtMs < reapAfterMs) {
+      if (currentTimeMs - resolvedAtMs < reapAfterMs) {
         continue;
       }
 
@@ -481,9 +482,9 @@ export function createTasksModule(
         }
 
         delete taskState.tasks[key];
-        context.logger.info(`reaped completed one-time task id=${record.id}`);
+        context.logger.info(`reaped resolved one-time task id=${record.id} status=${record.oneTimeResolvedStatus ?? 'unknown'}`);
       } catch (error) {
-        context.logger.warn(`failed to reap completed one-time task id=${record.id}: ${(error as Error).message}`);
+        context.logger.warn(`failed to reap resolved one-time task id=${record.id}: ${(error as Error).message}`);
       }
     }
   };
@@ -597,7 +598,7 @@ export function createTasksModule(
         startTaskRun(task, record, context);
       }
 
-      reapCompletedTasks(nowMs, context);
+      reapResolvedOneTimeTasks(nowMs, context);
 
       state.runningTasks = activeRuns.size;
       persistState(context.logger);
