@@ -513,8 +513,8 @@ const TELEGRAM_STREAMING_EDIT_INTERVAL_MS = 800;
 const TELEGRAM_TOOL_ACTIVITY_EDIT_INTERVAL_MS = 700;
 const TELEGRAM_TOOL_ACTIVITY_MAX_LINES = 8;
 const TELEGRAM_TOOL_ACTIVITY_MAX_CHARS = 1500;
-const TELEGRAM_TOOL_ACTIVITY_TOOL_COL_WIDTH = 12;
-const TELEGRAM_TOOL_ACTIVITY_DETAIL_COL_WIDTH = 64;
+const TELEGRAM_TOOL_ACTIVITY_TOOL_MAX_CHARS = 28;
+const TELEGRAM_TOOL_ACTIVITY_DETAIL_MAX_CHARS = 96;
 const TELEGRAM_LONG_OUTPUT_FILE_THRESHOLD_CHARS = 12_000;
 const TELEGRAM_MAX_AUTO_ATTACHMENTS = 3;
 const TELEGRAM_MAX_ATTACHMENT_BYTES = 45 * 1024 * 1024;
@@ -2785,7 +2785,9 @@ function renderTelegramRichText(text: string): { text: string; parseMode?: Teleg
   const hasMarkdownFormatting = /```/.test(normalizedText)
     || /^(#{1,6})\s+.+$/m.test(normalizedText)
     || /\*\*[^*\n][\s\S]*?\*\*/.test(normalizedText)
+    || /(?<!\*)\*[^\s*][^*\n]*?[^\s*]\*(?!\*)/.test(normalizedText)
     || /`[^`\n]+`/.test(normalizedText)
+    || /\|\|[\s\S]+?\|\|/.test(normalizedText)
     || /\[[^\]\n]+\]\((https?:\/\/[^\s)]+)\)/.test(normalizedText);
 
   if (!hasMarkdownFormatting) {
@@ -2810,7 +2812,9 @@ function renderTelegramRichText(text: string): { text: string; parseMode?: Teleg
   let rendered = withCodeBlockTokens
     .replace(/^(#{1,6})\s+(.+)$/gm, (_match, _hashes, title: string) => `<b>${title.trim()}</b>`)
     .replace(/\*\*([^*\n][\s\S]*?)\*\*/g, (_match, boldText: string) => `<b>${boldText}</b>`)
+    .replace(/(?<!\*)\*([^\s*][^*\n]*?[^\s*])\*(?!\*)/g, (_match, italicText: string) => `<i>${italicText}</i>`)
     .replace(/`([^`\n]+)`/g, (_match, codeText: string) => `<code>${codeText}</code>`)
+    .replace(/\|\|([\s\S]+?)\|\|/g, (_match, spoilerText: string) => `<tg-spoiler>${spoilerText}</tg-spoiler>`)
     .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, (_match, label: string, url: string) =>
       `<a href="${escapeTelegramHtmlAttribute(url)}">${label}</a>`);
 
@@ -3461,14 +3465,6 @@ function truncateToolActivityCell(value: string, width: number): string {
   return value.length > width ? `${value.slice(0, width - 1)}…` : value;
 }
 
-function padRight(value: string, width: number): string {
-  if (value.length >= width) {
-    return value;
-  }
-
-  return `${value}${' '.repeat(width - value.length)}`;
-}
-
 function summarizeToolActivityValue(value: unknown): string {
   if (value === null || value === undefined) {
     return 'null';
@@ -3553,23 +3549,45 @@ function buildToolActivityRow(event: ToolActivityEvent, step: number): ToolActiv
   };
 }
 
+function toToolActivityPhaseLabel(phase: ToolActivityRow['phase']): string {
+  if (phase === 'call') {
+    return 'Call';
+  }
+
+  if (phase === 'error') {
+    return 'Error';
+  }
+
+  return 'Result';
+}
+
+function toToolActivityPhaseEmoji(phase: ToolActivityRow['phase']): string {
+  if (phase === 'call') {
+    return '🔧';
+  }
+
+  if (phase === 'error') {
+    return '❌';
+  }
+
+  return '✅';
+}
+
 function renderToolActivityText(rows: ToolActivityRow[], completed: boolean): string {
-  const header = completed ? '✅ Tool calls' : '⚙️ Running tools…';
+  const header = completed ? '✅ **Tool calls**' : '⚙️ **Running tools…**';
   const recent = [...rows];
 
   while (recent.length > 0) {
-    const tableLines = [
-      '#   phase   tool         details',
-      '--  ------  -----------  ------------------------------------------------',
-      ...recent.map((row) => {
-        const phase = padRight(row.phase, 6);
-        const tool = padRight(truncateToolActivityCell(row.tool, TELEGRAM_TOOL_ACTIVITY_TOOL_COL_WIDTH), TELEGRAM_TOOL_ACTIVITY_TOOL_COL_WIDTH);
-        const details = truncateToolActivityCell(row.details, TELEGRAM_TOOL_ACTIVITY_DETAIL_COL_WIDTH);
-        return `${String(row.step).padStart(2, ' ')}  ${phase}  ${tool}  ${details}`;
-      }),
-    ];
+    const lines = recent.map((row) => {
+      const tool = truncateToolActivityCell(row.tool, TELEGRAM_TOOL_ACTIVITY_TOOL_MAX_CHARS);
+      const details = truncateToolActivityCell(row.details, TELEGRAM_TOOL_ACTIVITY_DETAIL_MAX_CHARS);
+      const detailSuffix = details.length > 0 && details !== '-'
+        ? ` — *${row.phase === 'call' ? 'args' : 'details'}:* ${row.phase === 'error' ? `||${details}||` : details}`
+        : '';
+      return `${toToolActivityPhaseEmoji(row.phase)} **${row.step}) ${toToolActivityPhaseLabel(row.phase)}** \`${tool}\`${detailSuffix}`;
+    });
 
-    const body = `${header}\n\`\`\`\n${tableLines.join('\n')}\n\`\`\``;
+    const body = `${header}\n${lines.join('\n')}`;
     if (body.length <= TELEGRAM_TOOL_ACTIVITY_MAX_CHARS) {
       return body;
     }
@@ -3577,7 +3595,7 @@ function renderToolActivityText(rows: ToolActivityRow[], completed: boolean): st
     recent.shift();
   }
 
-  return `${header}\n\`\`\`\n#   phase   tool         details\n\`\`\``;
+  return header;
 }
 
 function createTelegramToolActivityStreamer(options: TelegramToolActivityStreamerOptions): ToolActivityStreamer {
@@ -3623,7 +3641,7 @@ function createTelegramToolActivityStreamer(options: TelegramToolActivityStreame
         return;
       }
 
-      const sent = await sendTelegramFormattedMessage(options.sendMessage, options.chatId, '⚙️ Running tools…');
+      const sent = await sendTelegramFormattedMessage(options.sendMessage, options.chatId, '⚙️ **Running tools…**');
       const messageId = toTelegramSentMessageId(sent);
       if (typeof messageId === 'number') {
         statusMessageId = messageId;

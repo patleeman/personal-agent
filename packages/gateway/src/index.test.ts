@@ -858,12 +858,11 @@ describe('queued telegram message handler', () => {
       };
     });
 
-    const toolStatusEdit = editedCalls.find((call) => call.text.includes('⚙️ Running tools…'));
+    const toolStatusEdit = editedCalls.find((call) => call.text.includes('⚙️ <b>Running tools…</b>'));
     expect(toolStatusEdit).toBeDefined();
-    expect(editedCalls.some((call) => call.text.includes('#   phase   tool'))).toBe(true);
-    expect(editedCalls.some((call) => /\b1\s+call\s+read\s+path=\/tmp\/notes\.md/.test(call.text))).toBe(true);
-    expect(editedCalls.some((call) => /\b2\s+result\s+read\s+loaded 120 lines/.test(call.text))).toBe(true);
-    expect(editedCalls.some((call) => call.text.includes('✅ Tool calls'))).toBe(true);
+    expect(editedCalls.some((call) => call.text.includes('🔧 <b>1) Call</b> <code>read</code> — <i>args:</i> path=/tmp/notes.md'))).toBe(true);
+    expect(editedCalls.some((call) => call.text.includes('✅ <b>2) Result</b> <code>read</code> — <i>details:</i> loaded 120 lines'))).toBe(true);
+    expect(editedCalls.some((call) => call.text.includes('✅ <b>Tool calls</b>'))).toBe(true);
 
     expect(deleteMessage).not.toHaveBeenCalled();
   });
@@ -1143,7 +1142,7 @@ describe('queued telegram message handler', () => {
   it('formats markdown in regular telegram responses using parse mode', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
-    const runPrompt = vi.fn(async () => '# Heading\n\n**Bold** and `code`');
+    const runPrompt = vi.fn(async () => '# Heading\n\n**Bold** and *italic* with `code` and ||secret||');
 
     const handler = createQueuedTelegramMessageHandler({
       allowlist: new Set(['1']),
@@ -1161,7 +1160,7 @@ describe('queued telegram message handler', () => {
 
     expect(sendMessage).toHaveBeenCalledWith(
       1,
-      '<b>Heading</b>\n\n<b>Bold</b> and <code>code</code>',
+      '<b>Heading</b>\n\n<b>Bold</b> and <i>italic</i> with <code>code</code> and <tg-spoiler>secret</tg-spoiler>',
       { parse_mode: 'HTML' },
     );
   });
