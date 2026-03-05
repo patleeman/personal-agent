@@ -17,6 +17,14 @@ describe('parseCommand', () => {
       command: 'profile',
       args: ['use', 'shared'],
     });
+    expect(parseCommand(['tasks', 'list'])).toEqual({
+      command: 'tasks',
+      args: ['list'],
+    });
+    expect(parseCommand(['tmux', 'list'])).toEqual({
+      command: 'tmux',
+      args: ['list'],
+    });
   });
 
   it('treats unknown first token as tui args passthrough', () => {

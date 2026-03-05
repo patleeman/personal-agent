@@ -28,6 +28,8 @@ extensions/
 │   └── index.ts
 ├── web-tools/
 │   └── index.ts
+├── tmux-manager/
+│   └── index.ts
 ├── tmux-orchestration-prompt/
 │   └── index.ts
 └── package.json   # optional shared deps for this extension root
@@ -68,6 +70,7 @@ This allows extension-specific dependencies to be self-contained.
 - `pa-header` — appends personal-agent profile/AGENTS provenance to the startup header
 - `at-autocomplete-performance` — replaces heavy `@` fuzzy file search with fast path-style completion in large repos
 - `web-tools` — web search/fetch tool integration
+- `tmux-manager` — `/tmux` command + footer status for agent-managed tmux sessions only
 - `tmux-orchestration-prompt` — system-prompt tmux orchestration/status policy injection
 
 ---

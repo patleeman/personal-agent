@@ -11,6 +11,7 @@ This document explains how `pa` works and what each command is responsible for.
    - `pa doctor`
    - `pa daemon ...`
    - `pa tasks ...`
+   - `pa tmux ...`
    - `pa gateway ...`
    - `pa restart`
    - `pa update`
@@ -39,6 +40,9 @@ Machine-readable output:
 - `pa tasks list --json`
 - `pa tasks show <id> --json`
 - `pa tasks validate --json`
+- `pa tmux list --json`
+- `pa tmux inspect <session> --json`
+- `pa tmux clean --json`
 
 ---
 
@@ -90,6 +94,7 @@ pa daemon [status|start|stop|restart|logs|service|help]
 pa daemon status [--json]
 pa daemon service [install|status|uninstall|help]
 pa tasks [list|show|validate|logs]
+pa tmux [list|inspect|logs|stop|send|run|clean|help]
 pa restart
 pa update [--repo-only]
 pa gateway ...
@@ -99,6 +104,7 @@ Notes:
 
 - `pa daemon` prints daemon command help.
 - `pa tasks` prints detailed tasks command help.
+- `pa tmux` manages only agent-tagged tmux sessions (`@pa_agent_session=1`).
 - `pa update` runs `git pull --ff-only`, installs repo dependencies (`npm install`), verifies repo-local Pi, then restarts background services.
 - `pa update --repo-only` skips dependency refresh.
 
@@ -114,6 +120,23 @@ pa tasks logs <id> [--tail <n>]
 ```
 
 See [Scheduled Tasks](./tasks.md) for schema and runtime semantics.
+
+---
+
+## Managed tmux commands
+
+```bash
+pa tmux list [--json]
+pa tmux inspect <session> [--json]
+pa tmux logs <session> [--tail <n>]
+pa tmux stop <session>
+pa tmux send <session> <command>
+pa tmux run <task-slug> [--cwd <path>] [--] <command...>
+pa tmux clean [--dry-run] [--json]
+```
+
+`pa tmux` intentionally ignores non-agent sessions and only operates on sessions tagged with `@pa_agent_session=1`.
+`pa tmux clean` removes stale managed-session log files after sessions have completed.
 
 ---
 
@@ -183,6 +206,7 @@ pa profile show datadog
 pa doctor
 pa daemon status
 pa tasks list
+pa tmux list
 pa tui
 ```
 

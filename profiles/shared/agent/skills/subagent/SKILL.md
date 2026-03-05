@@ -1,7 +1,7 @@
 ---
 name: subagent
-description: Run a generic subagent via `pa -p` to delegate focused work, isolate noisy tasks, or parallelize independent investigations.
-allowed-tools: Bash(pa:*), Bash(mktemp:*)
+description: Run a generic subagent in detached tmux sessions via `pa tmux run` + `pa -p` to delegate focused work, isolate noisy tasks, or parallelize independent investigations.
+allowed-tools: Bash(pa:*), Bash(mktemp:*), Bash(cat:*)
 ---
 
 # Subagent
@@ -23,10 +23,13 @@ Delegate focused work to a separate agent process (invoked via `pa`) and return 
 
 1. Define a precise sub-task and acceptance criteria.
 2. Write a constrained subagent prompt (task, context, constraints, expected output).
-3. Run `pa -p` (and `--provider` / `--model` when user specifies a model).
-4. For independent tasks, run multiple subagents in parallel.
-5. Validate important claims before reporting back.
-6. Return only a concise synthesis, not raw noisy logs.
+3. Launch each subagent with `pa tmux run <task-slug> -- pa -p ...`.
+4. Confirm startup with `pa tmux list`.
+5. Send kickoff/progress/completion updates with session name, state, latest output, and next action.
+6. Validate important claims before reporting back.
+7. Return only a concise synthesis, not raw noisy logs.
+8. Stop completed sessions with `pa tmux stop <session>` unless the user asks to keep them.
+9. Clean stale logs with `pa tmux clean` when appropriate.
 
 ## Subagent prompt template
 
@@ -58,35 +61,44 @@ Output contract:
 ### Single subagent
 
 ```bash
-pa -p "$(cat <<'EOF'
+task_slug="<task-slug>" # kebab-case
+prompt_file="$(mktemp /tmp/${task_slug}.prompt.XXXX.md)"
+
+cat >"$prompt_file" <<'EOF'
 <subagent prompt>
 EOF
-)"
+
+pa tmux run "$task_slug" -- pa -p "$(cat "$prompt_file")"
+pa tmux list
 ```
 
 ### With model override
 
 ```bash
-pa --provider <provider> --model <model> -p "$(cat <<'EOF'
-<subagent prompt>
-EOF
-)"
+pa tmux run "$task_slug" -- pa --provider <provider> --model <model> -p "$(cat "$prompt_file")"
+pa tmux list
 ```
 
-### Parallel subagents
+### Parallel subagents (independent tasks)
 
 ```bash
-log_a="$(mktemp /tmp/subagent-a.XXXX.log)"
-log_b="$(mktemp /tmp/subagent-b.XXXX.log)"
+# Write prompts first: $prompt_a, $prompt_b
+pa tmux run "<task-a-slug>" -- pa -p "$(cat "$prompt_a")"
+pa tmux run "<task-b-slug>" -- pa -p "$(cat "$prompt_b")"
 
-pa -p "<prompt A>" >"$log_a" 2>&1 &
-pid_a=$!
+pa tmux list
+```
 
-pa -p "<prompt B>" >"$log_b" 2>&1 &
-pid_b=$!
+### Monitoring and cleanup
 
-wait "$pid_a"; rc_a=$?
-wait "$pid_b"; rc_b=$?
+```bash
+pa tmux list
+pa tmux logs <session> --tail 80
+
+# after completion
+pa tmux stop <session>
+pa tmux clean --dry-run
+pa tmux clean
 ```
 
 ## Safety rules

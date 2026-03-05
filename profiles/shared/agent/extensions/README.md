@@ -21,6 +21,8 @@ extensions/
 │   └── index.ts
 ├── web-tools/
 │   └── index.ts
+├── tmux-manager/
+│   └── index.ts
 └── ...
 ```
 

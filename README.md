@@ -136,6 +136,17 @@ pa tasks validate ~/.config/personal-agent/tasks/example.task.md
 pa tasks logs <id> --tail 120
 ```
 
+### Agent-managed tmux sessions
+
+```bash
+pa tmux list
+pa tmux inspect <session>
+pa tmux logs <session> --tail 120
+pa tmux stop <session>
+pa tmux clean --dry-run
+pa tmux run code-review -- pa -p "review this diff"
+```
+
 ### Gateway (Telegram/Discord)
 
 ```bash
@@ -188,6 +199,7 @@ Built-in extensions in this repo:
 - `memory` - Active-profile memory policy (AGENTS.md + skills)
 - `context-bar` - Session context display
 - `web-tools` - Web search/integration
+- `tmux-manager` - `/tmux` command + footer status for agent-managed tmux sessions only
 - `tmux-orchestration-prompt` - System-prompt policy for tmux-based background orchestration and status reporting
 
 See `docs/extensions.md` for authoring guide.

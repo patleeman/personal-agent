@@ -187,10 +187,12 @@ export default function (pi: ExtensionAPI) {
 
 					const extensionStatuses = Array.from(footerData.getExtensionStatuses().values())
 						.filter((status) => status.trim().length > 0);
+					const tmuxStatusIndex = extensionStatuses.findIndex((status) => status.includes("tmux:"));
 					const bgStatusIndex = extensionStatuses.findIndex((status) => status.includes("bg:"));
-					const bgStatus = bgStatusIndex >= 0 ? extensionStatuses[bgStatusIndex] : undefined;
-					if (bgStatus) leftParts.push(bgStatus);
-					const rightExtensionStatuses = extensionStatuses.filter((_, index) => index !== bgStatusIndex);
+					const pinnedStatusIndex = tmuxStatusIndex >= 0 ? tmuxStatusIndex : bgStatusIndex;
+					const pinnedStatus = pinnedStatusIndex >= 0 ? extensionStatuses[pinnedStatusIndex] : undefined;
+					if (pinnedStatus) leftParts.push(pinnedStatus);
+					const rightExtensionStatuses = extensionStatuses.filter((_, index) => index !== pinnedStatusIndex);
 
 					const rightParts: string[] = [
 						`${segBar} ${theme.fg("dim", `${pct}%`)}`,
