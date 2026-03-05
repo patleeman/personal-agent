@@ -65,6 +65,8 @@ This allows extension-specific dependencies to be self-contained.
 
 - `memory` — active-profile memory policy injection (`AGENTS.md` + `skills/` memory model)
 - `context-bar` — session context display in Pi TUI
+- `pa-header` — appends personal-agent profile/AGENTS provenance to the startup header
+- `at-autocomplete-performance` — replaces heavy `@` fuzzy file search with fast path-style completion in large repos
 - `web-tools` — web search/fetch tool integration
 - `tmux-orchestration-prompt` — system-prompt tmux orchestration/status policy injection
 

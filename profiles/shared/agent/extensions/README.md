@@ -12,8 +12,12 @@ So each extension here uses `index.ts` as the entrypoint.
 
 ```text
 extensions/
+├── at-autocomplete-performance/
+│   └── index.ts
 ├── context-bar.ts
 ├── memory/
+│   └── index.ts
+├── pa-header/
 │   └── index.ts
 ├── web-tools/
 │   └── index.ts
