@@ -22,6 +22,7 @@ If you have to run long running tasks, you should run them in a backgrounded sub
 - Morning report calendar data should come from local Apple Calendar (`osascript`), focusing on `Patrick Lee` and `patrickc.lee@datadoghq.com` calendars.
 - For Fastmail automation (outside morning report), prefer IMAP + CalDAV with app-password auth; avoid JMAP-token workflows.
 - Primary personal notes vault is `~/Library/CloudStorage/Dropbox/Notes`; search active note folders first, then `!Archive` if needed.
+- Zotero is used to store research papers and other research-related topics.
 
 ### Environment
 

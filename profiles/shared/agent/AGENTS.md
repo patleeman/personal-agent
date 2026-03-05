@@ -16,6 +16,7 @@
 - They live in White Plains, NY.
 - They are a software developer specializing in AI.
 - Personal email addresses: `me@patricklee.nyc` (primary) and `patleeman@gmail.com` (secondary).
+- Patrick uses Zotero to save research papers and other research-related topics.
 - For reminders and follow-ups, prefer creating Apple Reminders items by default; use personal-agent scheduled tasks only when explicitly requested.
 - Distinguish workspace types: `~/agent-workspace` is for assistant scratch work, while Task Factory workspaces should point to actual code repository paths unless the user explicitly asks for a scratch/test repo.
 - Preferred Task Factory strategy for large ambiguous projects: decompose into sequenced high-level tasks, enqueue all, let planning run, stage tasks to ready in dependency order, keep execution concurrency at 1 for strict sequencing, then verify later (either by polling or via a one-time `pa` scheduled check-in).
