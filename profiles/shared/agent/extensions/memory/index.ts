@@ -1,11 +1,9 @@
-import { existsSync, statSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { existsSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
-const DEFAULT_LOCAL_PROFILE_DIR = join(homedir(), '.config', 'personal-agent', 'local');
 
 function sanitizeProfileName(raw: string | undefined): string | undefined {
   if (!raw) {
@@ -30,7 +28,7 @@ function resolveRepoRoot(): string {
   return resolve(extensionDir, '../../../../..');
 }
 
-function resolveActiveProfile(): string {
+function resolveRequestedProfile(): string {
   const envCandidates = [
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE,
     process.env.PERSONAL_AGENT_PROFILE,
@@ -50,27 +48,6 @@ function resolveProfileDir(repoRoot: string, profile: string): string {
   return join(repoRoot, 'profiles', profile, 'agent');
 }
 
-function existingDir(path: string): string | undefined {
-  if (!existsSync(path)) {
-    return undefined;
-  }
-
-  try {
-    return statSync(path).isDirectory() ? resolve(path) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function resolveLocalOverlayDir(): string | undefined {
-  const explicit = process.env.PERSONAL_AGENT_LOCAL_PROFILE_DIR?.trim();
-  const localBase = explicit && explicit.length > 0
-    ? resolve(explicit)
-    : DEFAULT_LOCAL_PROFILE_DIR;
-
-  return existingDir(join(localBase, 'agent')) ?? existingDir(localBase);
-}
-
 function toDisplayPath(cwd: string, path: string): string {
   const displayed = relative(cwd, path);
   if (!displayed || displayed.startsWith('..')) {
@@ -86,9 +63,9 @@ function buildMemoryPolicyBlock(options: {
   requestedProfile: string;
   activeProfile: string;
   activeProfileDir: string;
+  activeAgentsFile?: string;
+  activeSkillsDir: string;
   activeWorkspaceDir?: string;
-  sharedProfileDir: string;
-  localOverlayDir?: string;
 }): string {
   const lines = [
     'MEMORY_POLICY',
@@ -104,19 +81,23 @@ function buildMemoryPolicyBlock(options: {
 
   lines.push(
     '',
-    'Resource layering (low -> high priority):',
-    `1. Shared profile: ${toDisplayPath(options.cwd, options.sharedProfileDir)}`,
-    `2. Active profile (${options.activeProfile}): ${toDisplayPath(options.cwd, options.activeProfileDir)}`,
+    'Profile memory write targets (edit these locations directly):',
+    options.activeAgentsFile
+      ? `- AGENTS.md edit target: ${toDisplayPath(options.cwd, options.activeAgentsFile)}`
+      : '- AGENTS.md edit target: none (shared profile does not use AGENTS.md)',
+    `- Skills dir: ${toDisplayPath(options.cwd, options.activeSkillsDir)}`,
   );
 
-  if (options.localOverlayDir) {
-    lines.push(`3. Local overlay: ${toDisplayPath(options.cwd, options.localOverlayDir)}`);
+  if (options.activeWorkspaceDir) {
+    lines.push(
+      `- Workspace dir: ${toDisplayPath(options.cwd, options.activeWorkspaceDir)}`,
+      `- Project context file template: ${toDisplayPath(options.cwd, join(options.activeWorkspaceDir, 'projects', '<project-slug>', 'PROJECT.md'))}`,
+    );
   } else {
-    lines.push('3. Local overlay: not present');
+    lines.push('- Workspace dir: none (shared profile has no workspace)');
   }
 
   lines.push(
-    'Conflict rule: higher layer overrides lower layer (local > active profile > shared).',
     '',
     'PA documentation (read when the user asks about pa/personal-agent, CLI, daemon, gateway, tasks, profiles, or extensions):',
     `- Docs folder: ${toDisplayPath(options.cwd, join(options.repoRoot, 'docs'))}`,
@@ -124,38 +105,18 @@ function buildMemoryPolicyBlock(options: {
     '- Then follow markdown cross-references to relevant pages.',
     '- When working on personal-agent features, read relevant docs first before implementing.',
     '',
-    'Use AGENTS.md, skills, and non-shared profile workspace docs as the durable memory system.',
-    '',
-    'Memory locations:',
-    `- Shared AGENTS.md: ${toDisplayPath(options.cwd, join(options.sharedProfileDir, 'AGENTS.md'))}`,
-    `- Active AGENTS.md: ${toDisplayPath(options.cwd, join(options.activeProfileDir, 'AGENTS.md'))}`,
-    `- Shared skills: ${toDisplayPath(options.cwd, join(options.sharedProfileDir, 'skills'))}`,
-    `- Active skills: ${toDisplayPath(options.cwd, join(options.activeProfileDir, 'skills'))}`,
-    options.activeWorkspaceDir
-      ? `- Active workspace: ${toDisplayPath(options.cwd, options.activeWorkspaceDir)}`
-      : '- Active workspace: none (shared profile has no workspace)',
-  );
-
-  if (options.localOverlayDir) {
-    lines.push(
-      `- Local AGENTS.md: ${toDisplayPath(options.cwd, join(options.localOverlayDir, 'AGENTS.md'))}`,
-      `- Local skills: ${toDisplayPath(options.cwd, join(options.localOverlayDir, 'skills'))}`,
-    );
-  }
-
-  lines.push(
+    'Use profile-local AGENTS.md, skills, and workspace docs as the durable memory system.',
     '',
     'Memory handling rules:',
-    '- You have carte blanche to create, update, reorganize, or remove AGENTS.md, skills, and active profile workspace docs for the active role.',
+    '- When asked to update durable behavior/memory, edit the AGENTS.md edit target above.',
     '- Store stable behavior rules, durable facts, and role constraints in AGENTS.md.',
     '- Store reusable cross-project workflows and domain knowledge in skills.',
-    '- Store project-specific briefs, runbooks, specs, and notes under active profile workspace/projects/<project-slug>/.',
-    '- For project work, read active profile workspace/projects/<project-slug>/PROJECT.md first when present.',
-    '- Prefer active profile files for role-specific memory; promote broadly reusable memory to shared files.',
-    '- Use local overlay files only for machine-specific non-secret overrides when needed.',
+    '- Store project-specific briefs, runbooks, specs, and notes under workspace/projects/<project-slug>/.',
+    '- For project work, read workspace/projects/<project-slug>/PROJECT.md first when present.',
+    '- Do not write durable memory into profiles/shared/agent/AGENTS.md.',
     '- Do not use MEMORY.md files as durable memory.',
     '- Never store secrets, credentials, API keys, tokens, or temporary/session-only notes.',
-    '- Read the workflow-learn-skill and workflow-skill-creator skills when creating new skills.'
+    '- Read the workflow-learn-skill and workflow-skill-creator skills when creating new skills.',
   );
 
   return lines.join('\n');
@@ -173,18 +134,24 @@ export default function memoryExtension(pi: ExtensionAPI): void {
     }
 
     const repoRoot = resolveRepoRoot();
-    const requestedProfile = resolveActiveProfile();
+    const requestedProfile = resolveRequestedProfile();
+    const requestedProfileDir = resolveProfileDir(repoRoot, requestedProfile);
     const sharedProfileDir = resolveProfileDir(repoRoot, 'shared');
 
-    const requestedProfileDir = resolveProfileDir(repoRoot, requestedProfile);
     const activeProfile = existsSync(requestedProfileDir) ? requestedProfile : 'shared';
     const activeProfileDir = activeProfile === requestedProfile
       ? requestedProfileDir
       : sharedProfileDir;
+
+    const activeAgentsFile = activeProfile === 'shared'
+      ? undefined
+      : join(activeProfileDir, 'AGENTS.md');
+
+    const activeSkillsDir = join(activeProfileDir, 'skills');
+
     const activeWorkspaceDir = activeProfile === 'shared'
       ? undefined
       : join(activeProfileDir, 'workspace');
-    const localOverlayDir = resolveLocalOverlayDir();
 
     const memoryPolicy = buildMemoryPolicyBlock({
       cwd: ctx.cwd,
@@ -192,9 +159,9 @@ export default function memoryExtension(pi: ExtensionAPI): void {
       requestedProfile,
       activeProfile,
       activeProfileDir,
+      activeAgentsFile,
+      activeSkillsDir,
       activeWorkspaceDir,
-      sharedProfileDir,
-      localOverlayDir,
     });
 
     return {

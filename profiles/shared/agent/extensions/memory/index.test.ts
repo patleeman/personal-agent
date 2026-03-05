@@ -23,17 +23,14 @@ afterEach(async () => {
 });
 
 describe('memory extension', () => {
-  it('injects active profile context, layering, and memory policy instructions', async () => {
+  it('injects active profile path targets and memory policy instructions', async () => {
     const repoRoot = createTempDir('memory-repo-');
-    const localOverlayRoot = createTempDir('memory-local-');
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
-    process.env.PERSONAL_AGENT_LOCAL_PROFILE_DIR = localOverlayRoot;
 
     mkdirSync(join(repoRoot, 'profiles', 'shared', 'agent'), { recursive: true });
     mkdirSync(join(repoRoot, 'profiles', 'datadog', 'agent'), { recursive: true });
-    mkdirSync(join(localOverlayRoot, 'agent'), { recursive: true });
 
     let beforeAgentStartHandler: ((event: { prompt: string; systemPrompt: string }, ctx: { cwd: string }) => Promise<unknown>) | undefined;
 
@@ -59,20 +56,19 @@ describe('memory extension', () => {
 
     expect(result?.systemPrompt).toContain('MEMORY_POLICY');
     expect(result?.systemPrompt).toContain('- active_profile: datadog');
-    expect(result?.systemPrompt).toContain('profiles/datadog/agent');
-    expect(result?.systemPrompt).toContain('Resource layering (low -> high priority):');
-    expect(result?.systemPrompt).toContain('Conflict rule: higher layer overrides lower layer (local > active profile > shared).');
-    expect(result?.systemPrompt).toContain('3. Local overlay:');
-    expect(result?.systemPrompt).toContain('- Local AGENTS.md:');
+    expect(result?.systemPrompt).toContain('Profile memory write targets (edit these locations directly):');
+    expect(result?.systemPrompt).toContain('- AGENTS.md edit target: profiles/datadog/agent/AGENTS.md');
+    expect(result?.systemPrompt).toContain('- Skills dir: profiles/datadog/agent/skills');
+    expect(result?.systemPrompt).toContain('- Workspace dir: profiles/datadog/agent/workspace');
+    expect(result?.systemPrompt).toContain('workspace/projects/<project-slug>/PROJECT.md');
     expect(result?.systemPrompt).toContain('PA documentation (read when the user asks about pa/personal-agent');
     expect(result?.systemPrompt).toContain('- Docs folder: docs');
     expect(result?.systemPrompt).toContain('- Start with docs index: docs/README.md');
-    expect(result?.systemPrompt).toContain('Use AGENTS.md, skills, and non-shared profile workspace docs as the durable memory system.');
-    expect(result?.systemPrompt).toContain('- Active workspace: profiles/datadog/agent/workspace');
-    expect(result?.systemPrompt).not.toContain('- Shared workspace:');
-    expect(result?.systemPrompt).toContain('active profile workspace/projects/<project-slug>/PROJECT.md');
-    expect(result?.systemPrompt).toContain('carte blanche');
+    expect(result?.systemPrompt).toContain('Use profile-local AGENTS.md, skills, and workspace docs as the durable memory system.');
+    expect(result?.systemPrompt).toContain('Do not write durable memory into profiles/shared/agent/AGENTS.md.');
     expect(result?.systemPrompt).toContain('Do not use MEMORY.md files as durable memory.');
+    expect(result?.systemPrompt).not.toContain('- Shared AGENTS.md:');
+    expect(result?.systemPrompt).not.toContain('- Local AGENTS.md:');
     expect(pi.registerTool).not.toHaveBeenCalled();
   });
 
@@ -107,8 +103,8 @@ describe('memory extension', () => {
     expect(result?.systemPrompt).toContain('- active_profile: shared');
     expect(result?.systemPrompt).toContain('- requested_profile: missing-profile');
     expect(result?.systemPrompt).toContain('requested profile was missing');
-    expect(result?.systemPrompt).toContain('3. Local overlay: not present');
-    expect(result?.systemPrompt).toContain('- Active workspace: none (shared profile has no workspace)');
+    expect(result?.systemPrompt).toContain('- AGENTS.md edit target: none (shared profile does not use AGENTS.md)');
+    expect(result?.systemPrompt).toContain('- Workspace dir: none (shared profile has no workspace)');
   });
 
   it('does not inject memory policy for slash commands or empty prompts', async () => {

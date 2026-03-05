@@ -3,6 +3,13 @@
 - Prefer settings in a settings file and not in environment variables.
 - Do not worry about backwards compatibility; this is personal software. Prefer correct implementations over small patches that incur tech debt.
 
+## AGENTS ownership model
+
+- Do not use `profiles/shared/agent/AGENTS.md`.
+- Keep one `AGENTS.md` per non-shared profile at `profiles/<profile>/agent/AGENTS.md`.
+- Duplicate shared guidance across profile AGENTS files when needed; do not centralize behavior rules in shared AGENTS.
+- Memory and behavior updates should target the active profile's AGENTS path.
+
 ## Profile workspace convention
 
 - Each non-shared profile keeps project-specific context under `profiles/<profile>/agent/workspace/`.

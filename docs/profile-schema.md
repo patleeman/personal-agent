@@ -22,7 +22,7 @@ If local overlay contains `agent/`, that subdir is used; otherwise the overlay d
 
 - `settings.json` (optional)
 - `models.json` (optional)
-- `AGENTS.md` (optional)
+- `AGENTS.md` (optional; project policy uses profile-local AGENTS only, not `profiles/shared/agent/AGENTS.md`)
 - `SYSTEM.md` (optional)
 - `APPEND_SYSTEM.md` (optional)
 - `extensions/` (optional)
@@ -35,9 +35,10 @@ If local overlay contains `agent/`, that subdir is used; otherwise the overlay d
 For **non-shared profiles only**, you may keep profile-local project docs under `agent/workspace/` (for example `agent/workspace/projects/<slug>/PROJECT.md`).
 
 - There is no shared workspace (`profiles/shared/agent/workspace` is intentionally unused).
+- There is also no shared AGENTS ownership; durable behavior memory should be edited in the active non-shared profile's `agent/AGENTS.md`.
 - This is a **repo convention** for operational context (briefs, runbooks, specs).
 - It is **not** discovered/materialized as a Pi resource automatically.
-- Keep reusable cross-project instructions in `skills/` and durable behavior constraints in `AGENTS.md`.
+- Keep reusable cross-project instructions in `skills/` and durable behavior constraints in the active profile `AGENTS.md`.
 
 ---
 
@@ -63,7 +64,7 @@ Higher layer wins where override semantics apply.
 
 ### Markdown context files
 
-- `AGENTS.md`: concatenated in layer order
+- `AGENTS.md`: concatenated in layer order by loader semantics, but repo policy is to keep AGENTS only in non-shared profile paths for clear ownership
 - `APPEND_SYSTEM.md`: concatenated in layer order
 - `SYSTEM.md`: highest-precedence file wins
 

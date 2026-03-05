@@ -148,7 +148,7 @@ Delivery behavior is at-most-once with bounded queue semantics.
 
 Memory is profile-driven:
 
-- `AGENTS.md` stores durable behavior constraints and stable facts
+- `AGENTS.md` stores durable behavior constraints and stable facts (one per non-shared profile; no shared AGENTS ownership)
 - `skills/` stores reusable workflows and domain knowledge
 - `agent/workspace/projects/**` can store non-shared profile project context (briefs/runbooks/specs); these files are repo-managed but not auto-loaded as Pi resources
 - There is no shared-profile workspace (`profiles/shared/agent/workspace`)
