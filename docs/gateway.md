@@ -98,6 +98,7 @@ Optional:
 - `PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT` (default `20`)
 - `PERSONAL_AGENT_TELEGRAM_RETRY_ATTEMPTS` (default `3`)
 - `PERSONAL_AGENT_TELEGRAM_RETRY_BASE_DELAY_MS` (default `300`)
+- `PERSONAL_AGENT_TELEGRAM_TOOL_ACTIVITY_STREAM` (default `false`) — stream temporary tool-call/result status while a run is active
 
 Run:
 
@@ -114,6 +115,7 @@ Telegram behavior highlights:
 - Image attachments are passed to Pi as native image inputs
 - Rich HTML formatting for code blocks/headings/links in bot replies
 - Streaming uses message edits (live-updating response)
+- Optional tool activity stream can show temporary tool-call/result updates, then remove/collapse when the assistant reply completes
 - Very long outputs are sent as `.txt` document attachments
 - Inline action buttons on replies: Stop, New, Regenerate, Follow up
 

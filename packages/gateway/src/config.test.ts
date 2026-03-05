@@ -49,6 +49,7 @@ describe('gateway config', () => {
         token: '  token  ',
         allowlist: [' 1 ', '', 2],
         maxPendingPerChat: 4.9,
+        toolActivityStream: true,
       },
       discord: {
         allowlist: [],
@@ -62,6 +63,7 @@ describe('gateway config', () => {
         allowlist: ['1'],
         workingDirectory: undefined,
         maxPendingPerChat: 4,
+        toolActivityStream: true,
       },
       discord: undefined,
     });

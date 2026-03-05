@@ -49,6 +49,13 @@ interface TestRunPromptInput {
   }>;
   abortSignal?: AbortSignal;
   onTextDelta?: (delta: string) => void;
+  onToolActivity?: (event: {
+    phase: 'call' | 'result';
+    toolName: string;
+    args?: Record<string, unknown>;
+    resultText?: string;
+    isError?: boolean;
+  }) => void;
   logContext?: {
     source: string;
     userId: string;
@@ -696,6 +703,61 @@ describe('queued telegram message handler', () => {
 
     expect(editMessageText).toHaveBeenCalled();
     expect(sendDocument).toHaveBeenCalledTimes(1);
+  });
+
+  it('streams tool activity in a temporary telegram status message when enabled', async () => {
+    let nextMessageId = 500;
+    const sendMessage = vi.fn(async () => ({ message_id: nextMessageId++ }));
+    const editMessageText = vi.fn(async () => undefined);
+    const deleteMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+
+    const runPrompt = vi.fn(async ({ onToolActivity }: TestRunPromptInput) => {
+      onToolActivity?.({
+        phase: 'call',
+        toolName: 'read',
+        args: { path: '/tmp/notes.md' },
+      });
+      onToolActivity?.({
+        phase: 'result',
+        toolName: 'read',
+        resultText: 'loaded 120 lines',
+      });
+
+      return 'done';
+    });
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      streamToolActivity: true,
+      sendMessage,
+      editMessageText,
+      deleteMessage,
+      sendChatAction,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: 'run with tool status' });
+    await handler.waitForIdle('1');
+
+    const editedCalls = editMessageText.mock.calls.map((call) => {
+      const args = call as unknown[];
+      return {
+        messageId: Number(args[1]),
+        text: String(args[2] ?? ''),
+      };
+    });
+
+    const toolStatusEdit = editedCalls.find((call) => call.text.includes('⚙️ Running tools…'));
+    expect(toolStatusEdit).toBeDefined();
+    expect(editedCalls.some((call) => call.text.includes('call read(path=/tmp/notes.md)'))).toBe(true);
+    expect(editedCalls.some((call) => call.text.includes('result read: loaded 120 lines'))).toBe(true);
+
+    expect(deleteMessage).toHaveBeenCalledWith(1, toolStatusEdit?.messageId);
   });
 
   it('ignores telegram "message is not modified" edit errors', async () => {

@@ -23,6 +23,13 @@ interface TestRunPromptInput {
   }>;
   abortSignal?: AbortSignal;
   onTextDelta?: (delta: string) => void;
+  onToolActivity?: (event: {
+    phase: 'call' | 'result';
+    toolName: string;
+    args?: Record<string, unknown>;
+    resultText?: string;
+    isError?: boolean;
+  }) => void;
   logContext?: {
     source: string;
     userId: string;

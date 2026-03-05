@@ -7,6 +7,7 @@ export interface TelegramStoredConfig {
   allowlist?: string[];
   workingDirectory?: string;
   maxPendingPerChat?: number;
+  toolActivityStream?: boolean;
 }
 
 export interface DiscordStoredConfig {
@@ -51,6 +52,14 @@ function toOptionalPositiveInt(value: unknown): number | undefined {
   return parsed > 0 ? parsed : undefined;
 }
 
+function toOptionalBoolean(value: unknown): boolean | undefined {
+  if (typeof value !== 'boolean') {
+    return undefined;
+  }
+
+  return value;
+}
+
 function sanitizeTelegram(value: unknown): TelegramStoredConfig | undefined {
   if (!isRecord(value)) {
     return undefined;
@@ -60,8 +69,9 @@ function sanitizeTelegram(value: unknown): TelegramStoredConfig | undefined {
   const allowlist = toOptionalStringArray(value.allowlist);
   const workingDirectory = toOptionalString(value.workingDirectory);
   const maxPendingPerChat = toOptionalPositiveInt(value.maxPendingPerChat);
+  const toolActivityStream = toOptionalBoolean(value.toolActivityStream);
 
-  if (!token && !allowlist && !workingDirectory && !maxPendingPerChat) {
+  if (!token && !allowlist && !workingDirectory && !maxPendingPerChat && toolActivityStream === undefined) {
     return undefined;
   }
 
@@ -70,6 +80,7 @@ function sanitizeTelegram(value: unknown): TelegramStoredConfig | undefined {
     allowlist,
     workingDirectory,
     maxPendingPerChat,
+    toolActivityStream,
   };
 }
 

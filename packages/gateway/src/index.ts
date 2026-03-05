@@ -131,6 +131,7 @@ export interface TelegramBridgeConfig {
   allowlist: Set<string>;
   workingDirectory: string;
   maxPendingPerChat?: number;
+  toolActivityStream?: boolean;
 }
 
 export interface DiscordBridgeConfig {
@@ -281,6 +282,8 @@ type EditMessageTextFn = (
   options?: TelegramSendMessageOptions,
 ) => Promise<unknown>;
 
+type DeleteMessageFn = (chatId: number, messageId: number) => Promise<unknown>;
+
 type SendDocumentFn = (chatId: number, filePath: string, options?: TelegramSendFileOptions) => Promise<unknown>;
 
 type SendPhotoFn = (chatId: number, filePath: string, options?: TelegramSendFileOptions) => Promise<unknown>;
@@ -288,6 +291,14 @@ type SendPhotoFn = (chatId: number, filePath: string, options?: TelegramSendFile
 type SendTextFn = (text: string) => Promise<unknown>;
 
 type SendChatActionFn = (chatId: number, action: 'typing') => Promise<unknown>;
+
+interface ToolActivityEvent {
+  phase: 'call' | 'result';
+  toolName: string;
+  args?: Record<string, unknown>;
+  resultText?: string;
+  isError?: boolean;
+}
 
 interface RunPromptFnInput {
   prompt: string;
@@ -297,6 +308,7 @@ interface RunPromptFnInput {
   images?: PromptImageAttachment[];
   abortSignal?: AbortSignal;
   onTextDelta?: (delta: string) => void;
+  onToolActivity?: (event: ToolActivityEvent) => void;
   logContext?: {
     source: string;
     userId: string;
@@ -391,6 +403,7 @@ export interface CreateTelegramMessageHandlerOptions {
   workingDirectory: string;
   sendMessage: SendMessageFn;
   editMessageText?: EditMessageTextFn;
+  deleteMessage?: DeleteMessageFn;
   sendDocument?: SendDocumentFn;
   sendPhoto?: SendPhotoFn;
   sendChatAction: SendChatActionFn;
@@ -402,6 +415,7 @@ export interface CreateTelegramMessageHandlerOptions {
   sessionFileExists?: (path: string) => boolean;
   removeSessionFile?: (path: string) => Promise<void>;
   maxPendingPerChat?: number;
+  streamToolActivity?: boolean;
   modelCommands?: ModelCommandSupport;
   durableInboxDir?: string;
   listScheduledTasks?: ListScheduledTasksFn;
@@ -462,6 +476,9 @@ const TELEGRAM_ACTION_CALLBACK_PREFIX = 'action:';
 const TELEGRAM_MAX_MESSAGE_CHARS = 3900;
 const TELEGRAM_STREAMING_EDIT_PREVIEW_MAX_CHARS = 3200;
 const TELEGRAM_STREAMING_EDIT_INTERVAL_MS = 800;
+const TELEGRAM_TOOL_ACTIVITY_EDIT_INTERVAL_MS = 700;
+const TELEGRAM_TOOL_ACTIVITY_MAX_LINES = 8;
+const TELEGRAM_TOOL_ACTIVITY_MAX_CHARS = 1500;
 const TELEGRAM_LONG_OUTPUT_FILE_THRESHOLD_CHARS = 12_000;
 const TELEGRAM_MAX_AUTO_ATTACHMENTS = 3;
 const TELEGRAM_MAX_ATTACHMENT_BYTES = 45 * 1024 * 1024;
@@ -1293,6 +1310,27 @@ function toPositiveInteger(value: string | undefined): number | undefined {
   return Math.floor(parsed);
 }
 
+function toOptionalBoolean(value: string | undefined): boolean | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized.length === 0) {
+    return undefined;
+  }
+
+  if (['1', 'true', 'yes', 'y', 'on'].includes(normalized)) {
+    return true;
+  }
+
+  if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) {
+    return false;
+  }
+
+  return undefined;
+}
+
 function resolvePiTimeoutMs(): number | undefined {
   const raw = process.env.PERSONAL_AGENT_PI_TIMEOUT_MS;
   if (typeof raw !== 'string' || raw.trim().length === 0) {
@@ -1363,6 +1401,30 @@ async function promptPositiveInteger(
 
     console.log('Please enter a positive integer or leave blank.');
     value = await ask(`${label}${suffix}: `);
+  }
+
+  return defaultValue;
+}
+
+async function promptBoolean(
+  ask: (question: string) => Promise<string>,
+  label: string,
+  defaultValue: boolean,
+): Promise<boolean> {
+  const suffix = defaultValue ? ' [Y/n]' : ' [y/N]';
+  let value = (await ask(`${label}${suffix}: `)).trim().toLowerCase();
+
+  while (value.length > 0) {
+    if (['y', 'yes', 'true', '1', 'on'].includes(value)) {
+      return true;
+    }
+
+    if (['n', 'no', 'false', '0', 'off'].includes(value)) {
+      return false;
+    }
+
+    console.log('Please answer yes or no.');
+    value = (await ask(`${label}${suffix}: `)).trim().toLowerCase();
   }
 
   return defaultValue;
@@ -2059,6 +2121,8 @@ interface ActiveConversationRun {
   streamedOutput: string;
   parser?: PiJsonStreamParser;
   onTextDelta?: (delta: string) => void;
+  onToolActivity?: (event: ToolActivityEvent) => void;
+  toolCallsById: Map<string, { name: string; args: string }>;
   aborted: boolean;
   promise: Promise<string>;
 }
@@ -2246,6 +2310,8 @@ class PersistentConversationController implements GatewayConversationController 
         ? new PiJsonStreamParser(input.logContext.source, input.logContext.userId, input.logContext.userName)
         : undefined,
       onTextDelta: input.onTextDelta,
+      onToolActivity: input.onToolActivity,
+      toolCallsById: new Map<string, { name: string; args: string }>(),
       aborted: false,
       promise: Promise.resolve(''),
     };
@@ -2422,6 +2488,103 @@ class PersistentConversationController implements GatewayConversationController 
     return this.sessionPromise;
   }
 
+  private emitToolActivity(activeRun: ActiveConversationRun, event: ToolActivityEvent): void {
+    if (!activeRun.onToolActivity) {
+      return;
+    }
+
+    try {
+      activeRun.onToolActivity(event);
+    } catch {
+      // Ignore downstream tool activity callback failures and keep the run alive.
+    }
+  }
+
+  private handleToolActivityEvent(event: PiJsonEvent, activeRun: ActiveConversationRun): void {
+    if (!activeRun.onToolActivity) {
+      return;
+    }
+
+    if (event.type === 'message_update') {
+      const msgEvent = event.assistantMessageEvent;
+      if (!msgEvent || !msgEvent.toolCall?.id) {
+        return;
+      }
+
+      const toolId = msgEvent.toolCall.id;
+      if (!toolId) {
+        return;
+      }
+
+      if (msgEvent.type === 'toolcall_start') {
+        activeRun.toolCallsById.set(toolId, {
+          name: msgEvent.toolCall.name || 'unknown',
+          args: '',
+        });
+        return;
+      }
+
+      if (msgEvent.type === 'toolcall_delta') {
+        const existing = activeRun.toolCallsById.get(toolId);
+        if (!existing || typeof msgEvent.delta !== 'string') {
+          return;
+        }
+
+        existing.args += msgEvent.delta;
+        return;
+      }
+
+      if (msgEvent.type === 'toolcall_end') {
+        const existing = activeRun.toolCallsById.get(toolId);
+        const toolName = existing?.name || msgEvent.toolCall.name || 'unknown';
+        let args: Record<string, unknown> = {};
+
+        if (existing?.args && existing.args.trim().length > 0) {
+          try {
+            const parsed = JSON.parse(existing.args) as unknown;
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+              args = parsed as Record<string, unknown>;
+            } else {
+              args = { raw: existing.args };
+            }
+          } catch {
+            args = { raw: existing.args };
+          }
+        } else if (msgEvent.toolCall.arguments && typeof msgEvent.toolCall.arguments === 'object') {
+          args = msgEvent.toolCall.arguments;
+        }
+
+        this.emitToolActivity(activeRun, {
+          phase: 'call',
+          toolName,
+          args,
+        });
+
+        activeRun.toolCallsById.delete(toolId);
+        return;
+      }
+
+      return;
+    }
+
+    if (event.type !== 'tool_execution_end') {
+      return;
+    }
+
+    const toolName = event.toolName || 'unknown';
+    const resultText = event.result?.content
+      ?.filter((item) => item.type === 'text')
+      .map((item) => item.text || '')
+      .join('') || '';
+
+    this.emitToolActivity(activeRun, {
+      phase: 'result',
+      toolName,
+      resultText,
+      isError: Boolean(event.isError || event.result?.isError),
+    });
+  }
+
   private handleSessionEvent(event: PiJsonEvent): void {
     const activeRun = this.activeRun;
     if (!activeRun) {
@@ -2431,6 +2594,8 @@ class PersistentConversationController implements GatewayConversationController 
     if (activeRun.parser) {
       activeRun.parser.parseEvent(event);
     }
+
+    this.handleToolActivityEvent(event, activeRun);
 
     if (event.type === 'message_update' && event.assistantMessageEvent?.type === 'text_delta') {
       const delta = event.assistantMessageEvent.delta;
@@ -2681,21 +2846,8 @@ async function editTelegramFormattedMessage(
   }
 }
 
-function buildTelegramResponseActionOptions(): TelegramSendMessageOptions {
-  return {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          { text: '⏹ Stop', callback_data: `${TELEGRAM_ACTION_CALLBACK_PREFIX}stop` },
-          { text: '🆕 New', callback_data: `${TELEGRAM_ACTION_CALLBACK_PREFIX}new` },
-          { text: '🔁 Regenerate', callback_data: `${TELEGRAM_ACTION_CALLBACK_PREFIX}regenerate` },
-        ],
-        [
-          { text: '➕ Follow up', callback_data: `${TELEGRAM_ACTION_CALLBACK_PREFIX}followup` },
-        ],
-      ],
-    },
-  };
+function buildTelegramResponseActionOptions(): TelegramSendMessageOptions | undefined {
+  return undefined;
 }
 
 interface TelegramOutputAttachment {
@@ -3163,6 +3315,243 @@ function createTelegramResponseChunkStreamer(options: TelegramResponseChunkStrea
         previewMessageId,
         outputDir: options.outputDir,
       });
+    },
+  };
+}
+
+interface ToolActivityStreamer {
+  push: (event: ToolActivityEvent) => void;
+  finalize: () => Promise<void>;
+}
+
+interface TelegramToolActivityStreamerOptions {
+  chatId: number;
+  enabled: boolean;
+  sendMessage: SendMessageFn;
+  editMessageText?: EditMessageTextFn;
+  deleteMessage?: DeleteMessageFn;
+}
+
+function sanitizeToolActivityText(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function summarizeToolActivityValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return 'null';
+  }
+
+  if (typeof value === 'string') {
+    const normalized = sanitizeToolActivityText(value);
+    return normalized.length > 80 ? `${normalized.slice(0, 77)}…` : normalized;
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+
+  try {
+    const serialized = sanitizeToolActivityText(JSON.stringify(value));
+    return serialized.length > 80 ? `${serialized.slice(0, 77)}…` : serialized;
+  } catch {
+    return String(value);
+  }
+}
+
+function summarizeToolActivityArgs(args: Record<string, unknown> | undefined): string {
+  if (!args) {
+    return '';
+  }
+
+  const entries = Object.entries(args);
+  if (entries.length === 0) {
+    return '';
+  }
+
+  const preview = entries
+    .slice(0, 4)
+    .map(([key, value]) => `${key}=${summarizeToolActivityValue(value)}`)
+    .join(', ');
+
+  if (entries.length > 4) {
+    return `${preview}, …`;
+  }
+
+  return preview;
+}
+
+function summarizeToolActivityResult(value: string | undefined): string {
+  const normalized = sanitizeToolActivityText(value ?? '');
+  if (normalized.length === 0) {
+    return 'ok';
+  }
+
+  return normalized.length > 220 ? `${normalized.slice(0, 217)}…` : normalized;
+}
+
+function buildToolActivityLine(event: ToolActivityEvent): string {
+  const toolName = event.toolName || 'unknown';
+
+  if (event.phase === 'call') {
+    const argsSummary = summarizeToolActivityArgs(event.args);
+    return argsSummary.length > 0
+      ? `call ${toolName}(${argsSummary})`
+      : `call ${toolName}`;
+  }
+
+  const resultSummary = summarizeToolActivityResult(event.resultText);
+  if (event.isError) {
+    return `error ${toolName}: ${resultSummary}`;
+  }
+
+  return `result ${toolName}: ${resultSummary}`;
+}
+
+function renderToolActivityText(lines: string[]): string {
+  const header = '⚙️ Running tools…';
+  const recent = [...lines];
+
+  while (recent.length > 0) {
+    const body = `${header}\n${recent.map((line) => `• ${line}`).join('\n')}`;
+    if (body.length <= TELEGRAM_TOOL_ACTIVITY_MAX_CHARS) {
+      return body;
+    }
+
+    recent.shift();
+  }
+
+  return header;
+}
+
+function createTelegramToolActivityStreamer(options: TelegramToolActivityStreamerOptions): ToolActivityStreamer {
+  if (!options.enabled || !options.editMessageText) {
+    return {
+      push: () => {
+        // no-op
+      },
+      finalize: async () => undefined,
+    };
+  }
+
+  let statusMessageId: number | undefined;
+  let lastRenderedText = '';
+  let lastEditAt = 0;
+  let sendError: Error | undefined;
+  let sendChain: Promise<void> = Promise.resolve();
+  let closed = false;
+  const lines: string[] = [];
+
+  const queue = (task: () => Promise<void>): void => {
+    sendChain = sendChain
+      .then(async () => {
+        if (sendError) {
+          return;
+        }
+
+        await task();
+      })
+      .catch((error) => {
+        sendError = toError(error);
+      });
+  };
+
+  const ensureStatusMessage = (): void => {
+    if (statusMessageId !== undefined) {
+      return;
+    }
+
+    queue(async () => {
+      if (statusMessageId !== undefined) {
+        return;
+      }
+
+      const sent = await sendTelegramFormattedMessage(options.sendMessage, options.chatId, '⚙️ Running tools…');
+      const messageId = toTelegramSentMessageId(sent);
+      if (typeof messageId === 'number') {
+        statusMessageId = messageId;
+      }
+    });
+  };
+
+  const flush = (force: boolean): void => {
+    if (lines.length === 0) {
+      return;
+    }
+
+    if (!force && Date.now() - lastEditAt < TELEGRAM_TOOL_ACTIVITY_EDIT_INTERVAL_MS) {
+      return;
+    }
+
+    const nextText = renderToolActivityText(lines);
+    if (!force && nextText === lastRenderedText) {
+      return;
+    }
+
+    ensureStatusMessage();
+
+    queue(async () => {
+      if (!options.editMessageText || statusMessageId === undefined) {
+        return;
+      }
+
+      await editTelegramFormattedMessage(
+        options.editMessageText,
+        options.chatId,
+        statusMessageId,
+        nextText,
+      );
+
+      lastRenderedText = nextText;
+      lastEditAt = Date.now();
+    });
+  };
+
+  return {
+    push: (event: ToolActivityEvent): void => {
+      if (closed) {
+        return;
+      }
+
+      lines.push(buildToolActivityLine(event));
+      while (lines.length > TELEGRAM_TOOL_ACTIVITY_MAX_LINES) {
+        lines.shift();
+      }
+
+      flush(false);
+    },
+    finalize: async (): Promise<void> => {
+      if (closed) {
+        return;
+      }
+
+      closed = true;
+      flush(true);
+      await sendChain;
+
+      if (statusMessageId === undefined) {
+        return;
+      }
+
+      if (options.editMessageText) {
+        try {
+          await editTelegramFormattedMessage(
+            options.editMessageText,
+            options.chatId,
+            statusMessageId,
+            '⚙️ Tool activity hidden.',
+          );
+        } catch {
+          // Continue to best-effort delete.
+        }
+      }
+
+      if (options.deleteMessage) {
+        try {
+          await options.deleteMessage(options.chatId, statusMessageId);
+        } catch {
+          // Ignore delete failures; collapsed text remains as fallback.
+        }
+      }
     },
   };
 }
@@ -4214,6 +4603,14 @@ model=${model}`,
     : createResponseChunkStreamer((chunk) =>
       sendTelegramFormattedMessage(options.sendMessage, message.chat.id, chunk));
 
+  const toolActivityStreamer = createTelegramToolActivityStreamer({
+    chatId: message.chat.id,
+    enabled: options.streamToolActivity === true,
+    sendMessage: options.sendMessage,
+    editMessageText: options.editMessageText,
+    deleteMessage: options.deleteMessage,
+  });
+
   const submissionInput: RunPromptFnInput = {
     prompt,
     sessionFile,
@@ -4222,6 +4619,9 @@ model=${model}`,
     images: promptImages,
     onTextDelta: (delta) => {
       responseStreamer.pushDelta(delta);
+    },
+    onToolActivity: (event) => {
+      toolActivityStreamer.push(event);
     },
     logContext: {
       source: 'telegram',
@@ -4282,6 +4682,9 @@ model=${model}`,
       })
       .finally(() => {
         stopTypingHeartbeat();
+        return toolActivityStreamer.finalize().catch(() => {
+          // Ignore non-critical tool activity cleanup failures.
+        });
       });
 
     registerRunTask(runTask);
@@ -4544,12 +4947,17 @@ async function createTelegramConfigFromEnv(): Promise<TelegramBridgeConfig> {
   const maxPendingPerChat = toPositiveInteger(process.env.PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT)
     ?? storedTelegram?.maxPendingPerChat;
 
+  const toolActivityStream = toOptionalBoolean(process.env.PERSONAL_AGENT_TELEGRAM_TOOL_ACTIVITY_STREAM)
+    ?? storedTelegram?.toolActivityStream
+    ?? false;
+
   return {
     token,
     profile,
     allowlist,
     workingDirectory,
     maxPendingPerChat,
+    toolActivityStream,
   };
 }
 
@@ -4575,6 +4983,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
   const bot = new TelegramBot(effectiveConfig.token, { polling: true });
 
   const maxPendingPerChat = effectiveConfig.maxPendingPerChat ?? DEFAULT_MAX_PENDING_PER_CHAT;
+  const toolActivityStream = effectiveConfig.toolActivityStream ?? false;
   const telegramRetryAttempts = toPositiveInteger(process.env.PERSONAL_AGENT_TELEGRAM_RETRY_ATTEMPTS)
     ?? DEFAULT_TELEGRAM_RETRY_ATTEMPTS;
   const telegramRetryBaseDelayMs = toPositiveInteger(process.env.PERSONAL_AGENT_TELEGRAM_RETRY_BASE_DELAY_MS)
@@ -4617,6 +5026,14 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
       message_id: messageId,
       ...(options ?? {}),
     } as any),
+  );
+
+  const deleteTelegramMessageWithRetry = (
+    chatId: number,
+    messageId: number,
+  ): Promise<unknown> => withTelegramRetry(
+    `telegram.deleteMessage chat=${chatId} message=${messageId}`,
+    () => bot.deleteMessage(chatId, messageId),
   );
 
   const sendTelegramDocumentWithRetry = (
@@ -4738,9 +5155,11 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     modelCommands,
     resolveScheduledReplyContext: ({ chatId, replyMessageId }) =>
       resolveScheduledReplyContext(chatId, replyMessageId),
+    streamToolActivity: toolActivityStream,
     sendMessage: (chatId, text, options) => sendTelegramMessageWithRetry(chatId, text, options),
     editMessageText: (chatId, messageId, text, options) =>
       editTelegramMessageTextWithRetry(chatId, messageId, text, options),
+    deleteMessage: (chatId, messageId) => deleteTelegramMessageWithRetry(chatId, messageId),
     sendDocument: (chatId, filePath, options) => sendTelegramDocumentWithRetry(chatId, filePath, options),
     sendPhoto: (chatId, filePath, options) => sendTelegramPhotoWithRetry(chatId, filePath, options),
     sendChatAction: (chatId, action) => withTelegramRetry(
@@ -4914,6 +5333,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
   console.log(gatewaySuccess(`Telegram bridge started (profile=${effectiveConfig.profile})`));
   console.log(gatewayKeyValue('Allowed chats', [...effectiveConfig.allowlist].join(', ')));
   console.log(gatewayKeyValue('Working directory', effectiveConfig.workingDirectory));
+  console.log(gatewayKeyValue('Tool activity stream', toolActivityStream ? 'enabled' : 'disabled'));
   console.log(gatewayKeyValue('Registered commands', telegramCommands.length));
   logSystem('telegram', `Bridge started for profile=${effectiveConfig.profile}`);
 }
@@ -5786,6 +6206,14 @@ async function runGatewaySetup(provider?: GatewayProvider): Promise<void> {
         : current.discord?.maxPendingPerChannel,
     );
 
+    const toolActivityStream = selectedProvider === 'telegram'
+      ? await promptBoolean(
+        prompt.ask,
+        'Stream tool activity while responses are running',
+        current.telegram?.toolActivityStream ?? false,
+      )
+      : undefined;
+
     const updated: GatewayStoredConfig = {
       ...current,
       profile,
@@ -5798,6 +6226,7 @@ async function runGatewaySetup(provider?: GatewayProvider): Promise<void> {
         allowlist,
         workingDirectory,
         maxPendingPerChat: maxPending,
+        toolActivityStream,
       };
     } else {
       updated.discord = {
@@ -5949,6 +6378,7 @@ function printGatewayHelp(provider?: GatewayProvider): void {
     console.log('  PERSONAL_AGENT_PROFILE (optional, default: shared)');
     console.log('  PERSONAL_AGENT_TELEGRAM_CWD (optional, default: current working directory)');
     console.log('  PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT (optional, default: 20)');
+    console.log('  PERSONAL_AGENT_TELEGRAM_TOOL_ACTIVITY_STREAM (optional, default: false)');
     console.log('');
     console.log(gatewayNext('pa gateway telegram setup'));
     return;
