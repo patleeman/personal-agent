@@ -59,12 +59,16 @@ describe('memory extension', () => {
     expect(result?.systemPrompt).toContain('Profile memory write targets (edit these locations directly):');
     expect(result?.systemPrompt).toContain('- AGENTS.md edit target: profiles/datadog/agent/AGENTS.md');
     expect(result?.systemPrompt).toContain('- Skills dir: profiles/datadog/agent/skills');
+    expect(result?.systemPrompt).toContain('- Scheduled tasks dir: profiles/datadog/agent/tasks');
+    expect(result?.systemPrompt).toContain('Scheduled tasks should live adjacent to workspace (not inside workspace).');
     expect(result?.systemPrompt).toContain('- Workspace dir: profiles/datadog/agent/workspace');
     expect(result?.systemPrompt).toContain('workspace/projects/<project-slug>/PROJECT.md');
     expect(result?.systemPrompt).toContain('PA documentation (read when the user asks about pa/personal-agent');
     expect(result?.systemPrompt).toContain('- Docs folder: docs');
     expect(result?.systemPrompt).toContain('- Start with docs index: docs/README.md');
     expect(result?.systemPrompt).toContain('Use profile-local AGENTS.md, skills, and workspace docs as the durable memory system.');
+    expect(result?.systemPrompt).toContain('AGENTS.md should stay high-level: user facts, durable role constraints, and broad operating policies.');
+    expect(result?.systemPrompt).toContain('Skills are for workflows and tactics you expect to repeat.');
     expect(result?.systemPrompt).toContain('Do not write durable memory into profiles/shared/agent/AGENTS.md.');
     expect(result?.systemPrompt).toContain('Do not use MEMORY.md files as durable memory.');
     expect(result?.systemPrompt).not.toContain('- Shared AGENTS.md:');
@@ -104,6 +108,7 @@ describe('memory extension', () => {
     expect(result?.systemPrompt).toContain('- requested_profile: missing-profile');
     expect(result?.systemPrompt).toContain('requested profile was missing');
     expect(result?.systemPrompt).toContain('- AGENTS.md edit target: none (shared profile does not use AGENTS.md)');
+    expect(result?.systemPrompt).toContain('- Scheduled tasks dir: none (shared profile does not use profile task dir)');
     expect(result?.systemPrompt).toContain('- Workspace dir: none (shared profile has no workspace)');
   });
 

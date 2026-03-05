@@ -17,6 +17,7 @@
 - Workspace docs are available to the agent via normal file tools (`read`, `edit`, `write`).
 - Use workspace docs for project-local briefs, runbooks, specs, and notes.
 - Recommended layout:
+  - `tasks/<name>.task.md` (scheduled task definitions; kept outside workspace)
   - `workspace/projects/<project-slug>/PROJECT.md`
   - `workspace/projects/<project-slug>/runbooks/`
   - `workspace/projects/<project-slug>/specs/`

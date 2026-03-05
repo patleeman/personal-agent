@@ -24,5 +24,6 @@ workspace/
 
 1. Keep reusable, cross-project workflows in `skills/`.
 2. Keep project-specific state and runbooks here.
-3. Never store secrets or credentials.
-4. Prefer one canonical `PROJECT.md` per project.
+3. Scheduled daemon task files belong in sibling `../tasks/` (not inside `workspace/`).
+4. Never store secrets or credentials.
+5. Prefer one canonical `PROJECT.md` per project.

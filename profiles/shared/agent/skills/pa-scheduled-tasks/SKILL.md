@@ -9,7 +9,8 @@ Use this skill when the user wants the daemon to run prompts automatically.
 
 ## Canonical paths
 
-- Task definitions (preferred, in-repo): `<repo>/profiles/<non-shared-profile>/agent/workspace/tasks/*.task.md`
+- Task definitions (preferred, in-repo): `<repo>/profiles/<non-shared-profile>/agent/tasks/*.task.md`
+- Keep task files adjacent to `agent/workspace/` (not inside workspace).
 - Do not use a shared-profile workspace path.
 - Daemon discovery root (recommended): `<repo>/profiles` (recursive `*.task.md` discovery)
 - Runtime state: `~/.local/state/personal-agent/daemon/task-state.json`
@@ -89,7 +90,7 @@ Prepare a tax filing checklist.
 ## Agent workflow
 
 1. Clarify schedule (`cron` vs `at`), profile, model, cwd.
-2. Write or update `<repo>/profiles/<non-shared-profile>/agent/workspace/tasks/<name>.task.md`.
+2. Write or update `<repo>/profiles/<non-shared-profile>/agent/tasks/<name>.task.md`.
 3. Validate frontmatter keys match the supported contract above.
 4. Check daemon/task health:
    - `pa daemon status` (shows configured task directory)

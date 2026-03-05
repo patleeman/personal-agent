@@ -39,6 +39,15 @@ Use Task Factory as an orchestrator when scope is broad or under-specified:
 
 Prefer this over trying to execute a big ambiguous project in one direct session.
 
+## Current known quirks (Task Factory v0.5.2)
+
+Treat these as operational guardrails when troubleshooting:
+
+- planning can end with `planningStatus=error` and no saved plan
+- queue execution timing can depend on whether planning has fully settled
+- `Current Task` in queue status can be stale
+- some tasks may need manual phase moves when lifecycle completion signaling is unavailable
+
 ---
 
 ## 0) Preflight (always)
@@ -187,7 +196,8 @@ task-factory task activity <task-id> --limit 200
 ```
 
 - **Schedule one-time check-in later** (recommended for long runs)
-  - Create `~/.config/personal-agent/tasks/task-factory-checkin.task.md` with an `at:` schedule.
+  - Create `<repo>/profiles/<active-non-shared-profile>/agent/tasks/task-factory-checkin.task.md` with an `at:` schedule.
+  - Keep task files adjacent to profile workspace (not inside `workspace/`).
   - In prompt body, ask the agent to inspect the target workspace tasks and summarize status/failures.
   - Validate and monitor:
 
