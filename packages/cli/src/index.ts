@@ -97,7 +97,6 @@ function parseGlobalFlags(argv: string[]): ParsedGlobalFlags {
 }
 
 const PI_PACKAGE_NAME = '@mariozechner/pi-coding-agent';
-const PI_PACKAGE_LATEST = `${PI_PACKAGE_NAME}@latest`;
 
 interface PiCommandInvocation {
   command: string;
@@ -141,9 +140,26 @@ function resolveRepoPiCommand(repoRoot?: string): PiCommandInvocation | undefine
   };
 }
 
-function runPiVersion(invocation: PiCommandInvocation): boolean {
+function readPiVersion(invocation: PiCommandInvocation): string | undefined {
   const result = spawnSync(invocation.command, [...invocation.argsPrefix, '--version'], { encoding: 'utf-8' });
-  return !result.error && result.status === 0;
+
+  if (result.error || result.status !== 0) {
+    return undefined;
+  }
+
+  const stdout = result.stdout?.trim();
+  const stderr = result.stderr?.trim();
+  const version = stdout && stdout.length > 0 ? stdout : stderr;
+
+  if (!version || version.length === 0) {
+    return undefined;
+  }
+
+  return version;
+}
+
+function runPiVersion(invocation: PiCommandInvocation): boolean {
+  return readPiVersion(invocation) !== undefined;
 }
 
 function ensurePiInstalled(repoRoot?: string): PiCommandInvocation {
@@ -1339,13 +1355,19 @@ function pullLatestFromGit(repoRoot: string): string {
   return [stdout, stderr].filter((line) => line.length > 0).join('\n');
 }
 
-function updatePiPackage(): string {
-  const result = spawnSync('npm', ['install', '-g', PI_PACKAGE_LATEST], {
+interface RepoPiUpdateResult {
+  output: string;
+  version: string;
+}
+
+function updateRepoPiPackage(repoRoot: string): RepoPiUpdateResult {
+  const result = spawnSync('npm', ['install', '--no-audit', '--no-fund'], {
+    cwd: repoRoot,
     encoding: 'utf-8',
   });
 
   if (result.error) {
-    throw new Error(`Failed to run npm install -g ${PI_PACKAGE_LATEST}: ${result.error.message}`);
+    throw new Error(`Failed to run npm install in ${repoRoot}: ${result.error.message}`);
   }
 
   const statusCode = result.status ?? 1;
@@ -1354,10 +1376,23 @@ function updatePiPackage(): string {
 
   if (statusCode !== 0) {
     const detail = stderr || stdout || `exit code ${statusCode}`;
-    throw new Error(`Pi update failed (${PI_PACKAGE_LATEST}): ${detail}`);
+    throw new Error(`Repository dependency install failed in ${repoRoot}: ${detail}`);
   }
 
-  return [stdout, stderr].filter((line) => line.length > 0).join('\n');
+  const repoInvocation = resolveRepoPiCommand(repoRoot);
+  if (!repoInvocation) {
+    throw new Error(`Repo-local pi binary missing after npm install in ${repoRoot}`);
+  }
+
+  const version = readPiVersion(repoInvocation);
+  if (!version) {
+    throw new Error(`Repo-local pi binary is not runnable after npm install in ${repoRoot}`);
+  }
+
+  return {
+    output: [stdout, stderr].filter((line) => line.length > 0).join('\n'),
+    version,
+  };
 }
 
 function isMissingServiceManagerError(error: unknown): boolean {
@@ -1484,18 +1519,21 @@ async function updateCommand(args: string[]): Promise<number> {
   }
 
   let piOutput = '';
+  let piVersion = '';
   let piUpdated = false;
 
   if (!options.repoOnly) {
-    const piSpinner = spinner(`Updating pi (${PI_PACKAGE_NAME})`);
+    const piSpinner = spinner(`Updating repo-local pi (${PI_PACKAGE_NAME})`);
     piSpinner.start();
 
     try {
-      piOutput = updatePiPackage();
+      const piUpdateResult = updateRepoPiPackage(repoRoot);
+      piOutput = piUpdateResult.output;
+      piVersion = piUpdateResult.version;
       piUpdated = true;
-      piSpinner.succeed(`Updated pi package (${PI_PACKAGE_LATEST})`);
+      piSpinner.succeed(`Updated repo-local pi (${piVersion})`);
     } catch (error) {
-      piSpinner.fail('Unable to update pi package');
+      piSpinner.fail('Unable to update repo-local pi');
       throw error;
     }
 
@@ -1509,7 +1547,7 @@ async function updateCommand(args: string[]): Promise<number> {
   console.log('');
   console.log(section('Update summary'));
   console.log(keyValue('repository', repoRoot));
-  console.log(keyValue('pi package', options.repoOnly ? 'skipped (--repo-only)' : (piUpdated ? 'updated' : 'unknown')));
+  console.log(keyValue('pi package', options.repoOnly ? 'skipped (--repo-only)' : (piUpdated ? `repo-local (${piVersion})` : 'unknown')));
   console.log(keyValue('daemon', summary.daemonStatus));
   console.log(keyValue('gateway services restarted', summary.restartedGatewayServices.length > 0 ? summary.restartedGatewayServices.join(', ') : 'none'));
   console.log(keyValue('gateway services skipped', summary.skippedGatewayServices.length > 0 ? summary.skippedGatewayServices.join(', ') : 'none'));
@@ -2300,7 +2338,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     {
       name: 'update',
       usage: 'update [--repo-only]',
-      description: 'Update pi package + pull latest git changes, then restart background services',
+      description: 'Pull latest git changes, update repo-local dependencies (including pi), then restart background services',
       run: updateCommand,
     },
     {

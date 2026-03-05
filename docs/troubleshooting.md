@@ -213,15 +213,15 @@ pa tasks list --status running
 
 ## Update/restart issues
 
-## `pa update` fails on global npm install
+## `pa update` fails during repo dependency install
 
 `pa update` executes:
 
 - `git pull --ff-only`
-- `npm install -g @mariozechner/pi-coding-agent@latest`
+- `npm install` in the personal-agent repo (including repo-local Pi)
 - background service restart
 
-If you do not use global Pi installs, use:
+If you need to skip dependency refresh temporarily, use:
 
 ```bash
 pa update --repo-only

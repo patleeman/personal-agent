@@ -99,8 +99,8 @@ Notes:
 
 - `pa daemon` prints daemon command help.
 - `pa tasks` prints detailed tasks command help.
-- `pa update` runs `git pull --ff-only`, updates global Pi package, then restarts background services.
-- `pa update --repo-only` skips global Pi update.
+- `pa update` runs `git pull --ff-only`, installs repo dependencies (`npm install`), verifies repo-local Pi, then restarts background services.
+- `pa update --repo-only` skips dependency refresh.
 
 ---
 
@@ -128,10 +128,11 @@ See [Scheduled Tasks](./tasks.md) for schema and runtime semantics.
 ## `pa update`
 
 - pulls latest repo changes (`git pull --ff-only`)
-- runs `npm install -g @mariozechner/pi-coding-agent@latest`
+- runs `npm install` in the personal-agent repo (refreshes repo-local dependencies, including Pi)
+- verifies repo-local Pi is runnable
 - restarts daemon and managed gateways
 
-Use `--repo-only` when you do not want to mutate global npm installs.
+Use `--repo-only` when you want to skip dependency refresh.
 
 ---
 
