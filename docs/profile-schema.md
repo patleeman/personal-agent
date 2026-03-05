@@ -30,6 +30,15 @@ If local overlay contains `agent/`, that subdir is used; otherwise the overlay d
 - `prompts/` (optional)
 - `themes/` (optional)
 
+### Optional profile workspace convention (not auto-loaded)
+
+For **non-shared profiles only**, you may keep profile-local project docs under `agent/workspace/` (for example `agent/workspace/projects/<slug>/PROJECT.md`).
+
+- There is no shared workspace (`profiles/shared/agent/workspace` is intentionally unused).
+- This is a **repo convention** for operational context (briefs, runbooks, specs).
+- It is **not** discovered/materialized as a Pi resource automatically.
+- Keep reusable cross-project instructions in `skills/` and durable behavior constraints in `AGENTS.md`.
+
 ---
 
 ## Layer precedence

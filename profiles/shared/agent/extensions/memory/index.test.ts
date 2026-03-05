@@ -67,7 +67,10 @@ describe('memory extension', () => {
     expect(result?.systemPrompt).toContain('PA documentation (read when the user asks about pa/personal-agent');
     expect(result?.systemPrompt).toContain('- Docs folder: docs');
     expect(result?.systemPrompt).toContain('- Start with docs index: docs/README.md');
-    expect(result?.systemPrompt).toContain('Use AGENTS.md and skills as the only durable memory system.');
+    expect(result?.systemPrompt).toContain('Use AGENTS.md, skills, and non-shared profile workspace docs as the durable memory system.');
+    expect(result?.systemPrompt).toContain('- Active workspace: profiles/datadog/agent/workspace');
+    expect(result?.systemPrompt).not.toContain('- Shared workspace:');
+    expect(result?.systemPrompt).toContain('active profile workspace/projects/<project-slug>/PROJECT.md');
     expect(result?.systemPrompt).toContain('carte blanche');
     expect(result?.systemPrompt).toContain('Do not use MEMORY.md files as durable memory.');
     expect(pi.registerTool).not.toHaveBeenCalled();
@@ -105,6 +108,7 @@ describe('memory extension', () => {
     expect(result?.systemPrompt).toContain('- requested_profile: missing-profile');
     expect(result?.systemPrompt).toContain('requested profile was missing');
     expect(result?.systemPrompt).toContain('3. Local overlay: not present');
+    expect(result?.systemPrompt).toContain('- Active workspace: none (shared profile has no workspace)');
   });
 
   it('does not inject memory policy for slash commands or empty prompts', async () => {

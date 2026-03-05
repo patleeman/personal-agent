@@ -86,6 +86,7 @@ function buildMemoryPolicyBlock(options: {
   requestedProfile: string;
   activeProfile: string;
   activeProfileDir: string;
+  activeWorkspaceDir?: string;
   sharedProfileDir: string;
   localOverlayDir?: string;
 }): string {
@@ -123,13 +124,16 @@ function buildMemoryPolicyBlock(options: {
     '- Then follow markdown cross-references to relevant pages.',
     '- When working on personal-agent features, read relevant docs first before implementing.',
     '',
-    'Use AGENTS.md and skills as the only durable memory system.',
+    'Use AGENTS.md, skills, and non-shared profile workspace docs as the durable memory system.',
     '',
     'Memory locations:',
     `- Shared AGENTS.md: ${toDisplayPath(options.cwd, join(options.sharedProfileDir, 'AGENTS.md'))}`,
     `- Active AGENTS.md: ${toDisplayPath(options.cwd, join(options.activeProfileDir, 'AGENTS.md'))}`,
     `- Shared skills: ${toDisplayPath(options.cwd, join(options.sharedProfileDir, 'skills'))}`,
     `- Active skills: ${toDisplayPath(options.cwd, join(options.activeProfileDir, 'skills'))}`,
+    options.activeWorkspaceDir
+      ? `- Active workspace: ${toDisplayPath(options.cwd, options.activeWorkspaceDir)}`
+      : '- Active workspace: none (shared profile has no workspace)',
   );
 
   if (options.localOverlayDir) {
@@ -142,9 +146,11 @@ function buildMemoryPolicyBlock(options: {
   lines.push(
     '',
     'Memory handling rules:',
-    '- You have carte blanche to create, update, reorganize, or remove AGENTS.md and skills for the active role.',
+    '- You have carte blanche to create, update, reorganize, or remove AGENTS.md, skills, and active profile workspace docs for the active role.',
     '- Store stable behavior rules, durable facts, and role constraints in AGENTS.md.',
-    '- Store reusable workflows, runbooks, and domain knowledge in skills or modify existing skills.',
+    '- Store reusable cross-project workflows and domain knowledge in skills.',
+    '- Store project-specific briefs, runbooks, specs, and notes under active profile workspace/projects/<project-slug>/.',
+    '- For project work, read active profile workspace/projects/<project-slug>/PROJECT.md first when present.',
     '- Prefer active profile files for role-specific memory; promote broadly reusable memory to shared files.',
     '- Use local overlay files only for machine-specific non-secret overrides when needed.',
     '- Do not use MEMORY.md files as durable memory.',
@@ -175,6 +181,9 @@ export default function memoryExtension(pi: ExtensionAPI): void {
     const activeProfileDir = activeProfile === requestedProfile
       ? requestedProfileDir
       : sharedProfileDir;
+    const activeWorkspaceDir = activeProfile === 'shared'
+      ? undefined
+      : join(activeProfileDir, 'workspace');
     const localOverlayDir = resolveLocalOverlayDir();
 
     const memoryPolicy = buildMemoryPolicyBlock({
@@ -183,6 +192,7 @@ export default function memoryExtension(pi: ExtensionAPI): void {
       requestedProfile,
       activeProfile,
       activeProfileDir,
+      activeWorkspaceDir,
       sharedProfileDir,
       localOverlayDir,
     });

@@ -150,6 +150,8 @@ Memory is profile-driven:
 
 - `AGENTS.md` stores durable behavior constraints and stable facts
 - `skills/` stores reusable workflows and domain knowledge
+- `agent/workspace/projects/**` can store non-shared profile project context (briefs/runbooks/specs); these files are repo-managed but not auto-loaded as Pi resources
+- There is no shared-profile workspace (`profiles/shared/agent/workspace`)
 
 The `memory` extension injects active-profile memory policy guidance into the system prompt on each turn.
 

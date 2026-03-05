@@ -10,7 +10,7 @@ For reminders and follow-ups, default to Apple Reminders unless the user explici
 
 The user will interact with you mainly via the Telegram or Discord gateway.
 
-If you have to run long running tasks, you should run them in a backgrounded subagent rather than via the bash tool in the foreground to keep your main loop available for other requests.
+ALWAYS PROIORITIZE UNBLOCKING THE MAIN THREAD. Use tmux + subagents aggressively for tasks that could potentially take a long time. You must not run any bash commands that could take longer than one minute. If you find yourself reaching for a timeout, use a tmux session instead.
 
 ## Profile Memory
 
@@ -19,10 +19,13 @@ If you have to run long running tasks, you should run them in a backgrounded sub
 - Use 1Password CLI (`op`) to access secrets whenever possible.
 - Daily morning report should include weather, calendar, and upcoming Apple Reminders items.
 - For weather reports, prefer free sources like `wttr.in` over paid APIs.
-- Morning report calendar data should come from local Apple Calendar (`osascript`), focusing on `Patrick Lee` and `patrickc.lee@datadoghq.com` calendars.
+- Morning report calendar data should come from local Apple Calendar (`osascript`), focusing on `Patrick Lee`, `patrickc.lee@datadoghq.com`, and `Sanitation` (iCloud) calendars.
+- Scheduled daemon tasks should live in-repo under `profiles/<profile>/agent/workspace/tasks/*.task.md` (task discovery root: `<repo>/profiles`).
+- Workspace policy: exactly one workspace per non-shared profile; never create/use a shared-profile workspace.
 - For Fastmail automation (outside morning report), prefer IMAP + CalDAV with app-password auth; avoid JMAP-token workflows.
 - Primary personal notes vault is `~/Library/CloudStorage/Dropbox/Notes`; search active note folders first, then `!Archive` if needed.
 - Zotero is used to store research papers and other research-related topics.
+- For Unraid-related software projects, Patrick prefers local-first development/validation before any server deployment.
 
 ### Environment
 
