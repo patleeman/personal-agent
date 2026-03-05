@@ -22,7 +22,7 @@ Required environment:
   FASTMAIL_APP_PASSWORD (or FASTMAIL_APP_PASSWORD_OP_REF)
 
 Optional environment:
-  FASTMAIL_APP_PASSWORD_OP_REF (default fallback: op://Assistant/FASTMAIL_APP_PASSWORD/password)
+  FASTMAIL_APP_PASSWORD_OP_REF (default fallback: op://Assistant/FASTMAIL_API_KEY/password)
   FASTMAIL_IMAP_HOST (default: imap.fastmail.com)
   FASTMAIL_IMAP_PORT (default: 993)
   FASTMAIL_IMAP_TIMEOUT_SECONDS (default: 30)
@@ -173,7 +173,7 @@ resolve_fastmail_app_password() {
     return
   fi
 
-  local fallback_ref="${FASTMAIL_APP_PASSWORD_OP_REF:-op://Assistant/FASTMAIL_APP_PASSWORD/password}"
+  local fallback_ref="${FASTMAIL_APP_PASSWORD_OP_REF:-op://Assistant/FASTMAIL_API_KEY/password}"
   if ! command -v op >/dev/null 2>&1; then
     echo "Error: FASTMAIL_APP_PASSWORD is required, or install op to use FASTMAIL_APP_PASSWORD_OP_REF" >&2
     return 1

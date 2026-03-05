@@ -73,7 +73,7 @@ function toTaskOutputMessage(input: {
       return `🗓️ Scheduled task ${input.taskId} completed.`;
     }
 
-    return truncateGatewayNotificationMessage(`🗓️ Scheduled task ${input.taskId} completed.\n\n${outputText}`);
+    return truncateGatewayNotificationMessage(outputText);
   }
 
   const errorLine = input.error ? `Reason: ${input.error}` : 'Reason: task run failed.';
