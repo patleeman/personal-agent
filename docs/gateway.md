@@ -67,7 +67,7 @@ pa gateway setup telegram
 pa gateway setup discord
 ```
 
-Setup writes provider token/allowlist/cwd/max-pending values to `gateway.json`.
+Setup writes provider token/allowlist/allowed-user-ids/blocked-user-ids/cwd/max-pending values to `gateway.json`.
 
 ---
 
@@ -90,10 +90,15 @@ Optional 1Password overrides:
 Required (setup or env):
 
 - `TELEGRAM_BOT_TOKEN`
-- `PERSONAL_AGENT_TELEGRAM_ALLOWLIST` (comma-separated chat IDs)
+
+Strongly recommended:
+
+- `PERSONAL_AGENT_TELEGRAM_ALLOWED_USER_IDS` (comma-separated Telegram user IDs allowed to control the bot)
 
 Optional:
 
+- `PERSONAL_AGENT_TELEGRAM_ALLOWLIST` (comma-separated chat IDs)
+- `PERSONAL_AGENT_TELEGRAM_BLOCKED_USER_IDS` (comma-separated Telegram user IDs)
 - `PERSONAL_AGENT_TELEGRAM_CWD`
 - `PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT` (default `20`)
 - `PERSONAL_AGENT_TELEGRAM_RETRY_ATTEMPTS` (default `3`)
@@ -161,7 +166,7 @@ pa gateway service uninstall [telegram|discord]
 
 Notes:
 
-- Install validates provider token + allowlist first
+- Install validates provider token + access settings first
 - Installing gateway service also provisions managed `personal-agentd`
 - macOS logs: `~/.local/state/personal-agent/gateway/logs/<provider>.log`
 - Linux logs: `journalctl --user -u personal-agent-gateway-<provider>.service -f`
@@ -171,7 +176,7 @@ Notes:
 
 ## Chat/session behavior
 
-Each chat/channel has its own persisted Pi session file.
+Each chat/channel has its own persisted Pi session file. Telegram forum topics/threads are isolated per `chat_id + message_thread_id`.
 
 Gateway runs append a gateway-specific system-prompt block before each turn so the model knows:
 
@@ -199,6 +204,7 @@ When a new message arrives while a run is active in the same conversation:
 - `/skills`
 - `/skill <name>`
 - `/tasks [status]` (`all|running|active|completed|disabled|pending|error`)
+- `/room [help|pending|approve <chatId>|deny <chatId>|blocked]` (Telegram room authorization admin)
 - `/model` / `/models`
 - `/stop`
 - `/followup <text>` (or `/followup` for one-shot follow-up capture mode)
@@ -236,15 +242,22 @@ Disable daemon integration explicitly with:
 
 ## Access control
 
-Provider allowlist is mandatory.
+- Discord: channel allowlist is mandatory.
+- Telegram: chat allowlist is optional (you can start empty and approve rooms as the bot is added).
+- Telegram `allowedUserIds` can restrict bot control to specific Telegram user IDs.
+- Telegram `blockedUserIds` are silently ignored.
 
-Messages from non-allowlisted chat/channel IDs are rejected.
+Telegram room authorization flow:
+
+- When the bot is added to a non-private chat, it can DM allowed users with approve/deny buttons.
+- Approve adds the room to the Telegram allowlist.
+- Deny removes the room, leaves the chat, and adds the inviter to blocked user IDs (with best-effort in-chat ban when permissions allow).
 
 ---
 
 ## Troubleshooting
 
-### Missing token/allowlist
+### Missing token/allowlist/allowed users
 
 Run setup:
 
@@ -253,9 +266,9 @@ pa gateway setup telegram
 pa gateway setup discord
 ```
 
-### Service install says token/allowlist missing
+### Service install says token/access settings missing
 
-Provider setup must be completed first.
+Provider setup must be completed first. Telegram service install requires either a chat allowlist or allowed user IDs.
 
 ### Gateway feels backlogged
 

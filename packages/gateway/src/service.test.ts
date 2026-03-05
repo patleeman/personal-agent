@@ -172,6 +172,37 @@ describe('gateway service management', () => {
     );
   });
 
+  it('accepts telegram setup when allowlist is empty but allowed user IDs are configured', () => {
+    setPlatform('darwin');
+    mocks.readGatewayConfig.mockReturnValue({
+      telegram: {
+        token: 'telegram-token',
+        allowlist: [],
+        allowedUserIds: ['42'],
+        workingDirectory: '/work/telegram',
+      },
+    });
+
+    const info = installGatewayService('telegram');
+    expect(info.provider).toBe('telegram');
+  });
+
+  it('requires telegram allowlist or allowed user IDs', () => {
+    setPlatform('darwin');
+    mocks.readGatewayConfig.mockReturnValue({
+      telegram: {
+        token: 'telegram-token',
+        allowlist: [],
+        allowedUserIds: [],
+        workingDirectory: '/work/telegram',
+      },
+    });
+
+    expect(() => installGatewayService('telegram')).toThrow(
+      'Gateway telegram allowlist or allowed user IDs missing. Run `pa gateway telegram setup` first.',
+    );
+  });
+
   it('reports launchd service status from manifest presence and launchctl response', () => {
     setPlatform('darwin');
 

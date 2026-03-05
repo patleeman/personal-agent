@@ -41,7 +41,7 @@ function buildGatewayContextBlock(provider: GatewayProvider): string {
       '- Very long outputs may be delivered as .txt document attachments.',
       '- If an attachment is sent, mention it briefly; do not include local file paths unless asked.',
       '- Inline action buttons are available: Stop, New, Regenerate, Follow up.',
-      '- Available gateway commands include: /commands, /skills, /skill, /tasks, /model, /stop, /followup, /regenerate, /compact, /new, /status, /resume.',
+      '- Available gateway commands include: /commands, /skills, /skill, /tasks, /room, /model, /stop, /followup, /regenerate, /compact, /new, /status, /resume.',
     );
   } else if (provider === 'discord') {
     lines.push(

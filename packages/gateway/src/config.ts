@@ -5,6 +5,8 @@ import { dirname, join, resolve } from 'path';
 export interface TelegramStoredConfig {
   token?: string;
   allowlist?: string[];
+  allowedUserIds?: string[];
+  blockedUserIds?: string[];
   workingDirectory?: string;
   maxPendingPerChat?: number;
   toolActivityStream?: boolean;
@@ -67,17 +69,29 @@ function sanitizeTelegram(value: unknown): TelegramStoredConfig | undefined {
 
   const token = toOptionalString(value.token);
   const allowlist = toOptionalStringArray(value.allowlist);
+  const allowedUserIds = toOptionalStringArray(value.allowedUserIds);
+  const blockedUserIds = toOptionalStringArray(value.blockedUserIds);
   const workingDirectory = toOptionalString(value.workingDirectory);
   const maxPendingPerChat = toOptionalPositiveInt(value.maxPendingPerChat);
   const toolActivityStream = toOptionalBoolean(value.toolActivityStream);
 
-  if (!token && !allowlist && !workingDirectory && !maxPendingPerChat && toolActivityStream === undefined) {
+  if (
+    !token
+    && !allowlist
+    && !allowedUserIds
+    && !blockedUserIds
+    && !workingDirectory
+    && !maxPendingPerChat
+    && toolActivityStream === undefined
+  ) {
     return undefined;
   }
 
   return {
     token,
     allowlist,
+    allowedUserIds,
+    blockedUserIds,
     workingDirectory,
     maxPendingPerChat,
     toolActivityStream,

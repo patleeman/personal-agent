@@ -335,6 +335,77 @@ describe('queued telegram message handler', () => {
     expect(sendMessage).toHaveBeenCalledWith(2, 'This chat is not allowed.');
   });
 
+  it('silently ignores non-authorized users when allowed user IDs are configured', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'ignored');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      allowedUserIds: new Set(['42']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({
+      chat: { id: 1 },
+      text: 'hello',
+      from: { id: 7 },
+    });
+    await handler.waitForIdle('1');
+
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendChatAction).not.toHaveBeenCalled();
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('routes topic messages to thread-specific sessions and replies in the same thread', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'thread response');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      allowedUserIds: new Set(['42']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({
+      chat: { id: 1 },
+      message_thread_id: 99,
+      text: 'hello thread',
+      from: { id: 42 },
+    });
+    await handler.waitForIdle('1');
+
+    expect(runPrompt).toHaveBeenCalledWith(expect.objectContaining({
+      sessionFile: '/tmp/sessions/1__thread_99.jsonl',
+    }));
+    expect(sendChatAction).toHaveBeenCalledWith(1, 'typing', { message_thread_id: 99 });
+
+    const sentCalls = sendMessage.mock.calls as unknown as Array<[
+      number,
+      string,
+      ({ message_thread_id?: number } | undefined)?,
+    ]>;
+    expect(sentCalls.some((call) =>
+      call[0] === 1
+      && call[1] === 'thread response'
+      && call[2]?.message_thread_id === 99,
+    )).toBe(true);
+  });
+
   it('returns configured command list for /commands without invoking pi', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
@@ -419,7 +490,41 @@ describe('queued telegram message handler', () => {
     );
   });
 
-  it('includes /tasks, /model, /models, /stop, /cancel, /compact, and /resume in default /commands output', async () => {
+  it('routes /room commands to the room admin handler', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'ignored');
+    const handleRoomAdminCommand = vi.fn(async () => 'Pending room authorization requests:\n- room-a');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      handleRoomAdminCommand,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({
+      chat: { id: 1 },
+      text: '/room pending',
+      from: { id: 42, username: 'patrick' },
+    });
+    await handler.waitForIdle('1');
+
+    expect(handleRoomAdminCommand).toHaveBeenCalledWith({
+      actorUserId: '42',
+      actorLabel: 'patrick (42)',
+      args: 'pending',
+    });
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(1, 'Pending room authorization requests:\n- room-a');
+  });
+
+  it('includes /tasks, /room, /model, /models, /stop, /cancel, /compact, and /resume in default /commands output', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
     const runPrompt = vi.fn(async () => 'ignored');
@@ -445,6 +550,7 @@ describe('queued telegram message handler', () => {
       .map((call) => String(call.at(1) ?? ''))
       .join('\n');
     expect(output).toContain('/tasks -');
+    expect(output).toContain('/room -');
     expect(output).toContain('/model -');
     expect(output).toContain('/models -');
     expect(output).toContain('/stop -');
@@ -502,7 +608,7 @@ describe('queued telegram message handler', () => {
     expect(sendChatAction).not.toHaveBeenCalled();
     expect(sendMessage).toHaveBeenCalledWith(
       1,
-      'Gateway sessions already resume automatically per chat. Use /new to start a fresh session.',
+      'Gateway sessions already resume automatically per chat/topic. Use /new to start a fresh session.',
     );
     expect(sendMessage).toHaveBeenCalledWith(
       1,
@@ -754,10 +860,12 @@ describe('queued telegram message handler', () => {
 
     const toolStatusEdit = editedCalls.find((call) => call.text.includes('⚙️ Running tools…'));
     expect(toolStatusEdit).toBeDefined();
-    expect(editedCalls.some((call) => call.text.includes('call read(path=/tmp/notes.md)'))).toBe(true);
-    expect(editedCalls.some((call) => call.text.includes('result read: loaded 120 lines'))).toBe(true);
+    expect(editedCalls.some((call) => call.text.includes('#   phase   tool'))).toBe(true);
+    expect(editedCalls.some((call) => /\b1\s+call\s+read\s+path=\/tmp\/notes\.md/.test(call.text))).toBe(true);
+    expect(editedCalls.some((call) => /\b2\s+result\s+read\s+loaded 120 lines/.test(call.text))).toBe(true);
+    expect(editedCalls.some((call) => call.text.includes('✅ Tool calls'))).toBe(true);
 
-    expect(deleteMessage).toHaveBeenCalledWith(1, toolStatusEdit?.messageId);
+    expect(deleteMessage).not.toHaveBeenCalled();
   });
 
   it('ignores telegram "message is not modified" edit errors', async () => {
@@ -1398,7 +1506,7 @@ describe('queued telegram message handler', () => {
     expect(runPrompt).toHaveBeenCalledTimes(1);
     expect(sendMessage).toHaveBeenCalledWith(
       1,
-      'Too many pending messages for this chat (limit: 1). Please wait and try again.',
+      'Too many pending messages for this conversation (limit: 1). Please wait and try again.',
     );
 
     gate.resolve();

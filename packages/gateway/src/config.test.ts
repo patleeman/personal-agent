@@ -48,6 +48,8 @@ describe('gateway config', () => {
       telegram: {
         token: '  token  ',
         allowlist: [' 1 ', '', 2],
+        allowedUserIds: [' 42 ', '', 99],
+        blockedUserIds: [' 7 ', '', 11],
         maxPendingPerChat: 4.9,
         toolActivityStream: true,
       },
@@ -61,6 +63,8 @@ describe('gateway config', () => {
       telegram: {
         token: '  token  ',
         allowlist: ['1'],
+        allowedUserIds: ['42'],
+        blockedUserIds: ['7'],
         workingDirectory: undefined,
         maxPendingPerChat: 4,
         toolActivityStream: true,

@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { getStateRoot } from '@personal-agent/core';
 import { loadDaemonConfig, resolveDaemonPaths } from '@personal-agent/daemon';
-import { readGatewayConfig } from './config.js';
+import { readGatewayConfig, type TelegramStoredConfig } from './config.js';
 
 export type GatewayProvider = 'telegram' | 'discord';
 
@@ -139,6 +139,21 @@ function validateProviderSetup(provider: GatewayProvider): string {
 
   if (!providerConfig?.token) {
     throw new Error(`Gateway ${provider} token missing. Run \`pa gateway ${provider} setup\` first.`);
+  }
+
+  if (provider === 'telegram') {
+    const telegramConfig = providerConfig as TelegramStoredConfig;
+    const hasAllowlist = Array.isArray(telegramConfig.allowlist) && telegramConfig.allowlist.length > 0;
+    const hasAllowedUsers = Array.isArray(telegramConfig.allowedUserIds) && telegramConfig.allowedUserIds.length > 0;
+
+    if (!hasAllowlist && !hasAllowedUsers) {
+      throw new Error(
+        'Gateway telegram allowlist or allowed user IDs missing. ' +
+        'Run `pa gateway telegram setup` first.',
+      );
+    }
+
+    return telegramConfig.workingDirectory ?? homedir();
   }
 
   if (!providerConfig.allowlist || providerConfig.allowlist.length === 0) {
