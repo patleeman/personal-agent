@@ -41,7 +41,8 @@ function buildGatewayContextBlock(provider: GatewayProvider): string {
       '- Very long outputs may be delivered as .txt document attachments.',
       '- If an attachment is sent, mention it briefly; do not include local file paths unless asked.',
       '- Inline action buttons are available: Stop, New, Regenerate, Follow up.',
-      '- Available gateway commands include: /commands, /skills, /skill, /tasks, /room, /tmux, /model, /stop, /followup, /regenerate, /compact, /new, /status, /resume.',
+      '- Available gateway commands include: /commands, /skill, /tasks, /room, /tmux, /model, /stop, /followup, /regenerate, /compact, /new, /status, /resume.',
+      '- Telegram slash menu may include auto-generated /skill_* shortcuts mapped to profile skills.',
     );
   } else if (provider === 'discord') {
     lines.push(

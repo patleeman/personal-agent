@@ -539,6 +539,7 @@ export interface CreateTelegramMessageHandlerOptions {
   handleTmuxCommand?: HandleTelegramTmuxCommandFn;
   handleTmuxRunRequest?: HandleTelegramTmuxRunRequestFn;
   createForumTopic?: CreateTelegramForumTopicFn;
+  skillSlashCommandMap?: Map<string, string>;
   setWorkTopicBinding?: (input: SetTelegramWorkTopicBindingInput) => void;
   resolveConversationSessionFile?: (input: {
     conversationId: string;
@@ -857,7 +858,7 @@ const DEFAULT_TELEGRAM_COMMANDS: TelegramCommandDefinition[] = [
   { command: 'commands', description: 'List available commands' },
   { command: 'skills', description: 'List available skills' },
   { command: 'help', description: 'Show command help' },
-  { command: 'skill', description: 'Load a skill (usage: /skill <name>)' },
+  { command: 'skill', description: 'Load a skill (usage: /skill <name> or /skill:<name>)' },
   ...MODEL_TELEGRAM_COMMANDS,
   { command: 'stop', description: 'Stop active request' },
   { command: 'followup', description: 'Queue follow-up (or /followup to enter follow-up mode)' },
@@ -924,7 +925,7 @@ function parsePiHelpCommands(helpText: string): TelegramCommandDefinition[] {
     }
 
     const description = command === 'skill'
-      ? 'Load a skill (usage: /skill <name>)'
+      ? 'Load a skill (usage: /skill <name> or /skill:<name>)'
       : toTelegramCommandDescription(rawDescription);
 
     parsed.push({ command, description });
@@ -957,6 +958,133 @@ function parsePiHelpSkills(helpText: string): TelegramSkillDefinition[] {
   return [...skills.values()];
 }
 
+function stripMatchingQuotes(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length < 2) {
+    return trimmed;
+  }
+
+  const startsWithSingle = trimmed.startsWith('\'');
+  const startsWithDouble = trimmed.startsWith('"');
+
+  if ((startsWithSingle && trimmed.endsWith('\'')) || (startsWithDouble && trimmed.endsWith('"'))) {
+    return trimmed.slice(1, -1).trim();
+  }
+
+  return trimmed;
+}
+
+function parseMarkdownFrontmatter(content: string): Record<string, string> {
+  const match = content.match(/^---\s*\r?\n([\s\S]*?)\r?\n---\s*(?:\r?\n|$)/);
+  if (!match) {
+    return {};
+  }
+
+  const output: Record<string, string> = {};
+  const body = match[1] ?? '';
+
+  for (const line of body.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0 || trimmed.startsWith('#')) {
+      continue;
+    }
+
+    const separatorIndex = trimmed.indexOf(':');
+    if (separatorIndex <= 0) {
+      continue;
+    }
+
+    const key = trimmed.slice(0, separatorIndex).trim().toLowerCase();
+    const value = stripMatchingQuotes(trimmed.slice(separatorIndex + 1));
+
+    if (key.length === 0 || value.length === 0) {
+      continue;
+    }
+
+    output[key] = value;
+  }
+
+  return output;
+}
+
+function listSkillDefinitionFiles(skillDir: string): string[] {
+  if (!existsSync(skillDir)) {
+    return [];
+  }
+
+  const output: string[] = [];
+  const stack = [resolve(skillDir)];
+
+  while (stack.length > 0) {
+    const current = stack.pop() as string;
+    const entries = readdirSync(current, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = join(current, entry.name);
+
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+        continue;
+      }
+
+      if (entry.isFile() && entry.name === 'SKILL.md') {
+        output.push(fullPath);
+      }
+    }
+  }
+
+  output.sort();
+  return output;
+}
+
+function parseSkillDefinitionFile(skillFile: string): TelegramSkillDefinition | undefined {
+  try {
+    const content = readFileSync(skillFile, 'utf-8');
+    const frontmatter = parseMarkdownFrontmatter(content);
+
+    const fallbackName = basename(dirname(skillFile));
+    const name = (frontmatter.name ?? fallbackName).trim();
+    if (name.length === 0) {
+      return undefined;
+    }
+
+    const description = toTelegramCommandDescription(
+      frontmatter.description?.trim() || 'No description available.',
+    );
+
+    return {
+      name,
+      description,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function discoverProfileSkillsFromFilesystem(profile: ResolvedProfile): TelegramSkillDefinition[] {
+  const discovered = new Map<string, TelegramSkillDefinition>();
+
+  for (const skillDir of profile.skillDirs) {
+    const skillFiles = listSkillDefinitionFiles(skillDir);
+
+    for (const skillFile of skillFiles) {
+      const parsedSkill = parseSkillDefinitionFile(skillFile);
+      if (!parsedSkill) {
+        continue;
+      }
+
+      discovered.set(parsedSkill.name, parsedSkill);
+    }
+  }
+
+  return [...discovered.values()].sort((left, right) => left.name.localeCompare(right.name));
+}
+
+interface TelegramSkillSlashCommand {
+  command: TelegramCommandDefinition;
+  skillName: string;
+}
+
 function formatTelegramSkills(skills: TelegramSkillDefinition[]): string {
   if (skills.length === 0) {
     return [
@@ -973,10 +1101,53 @@ function formatTelegramSkills(skills: TelegramSkillDefinition[]): string {
   }
 
   lines.push('');
-  lines.push('Usage: /skill <name>');
-  lines.push('Example: /skill tdd-feature');
+  lines.push('Usage: /skill <name> or /skill:<name>');
+  lines.push('Examples: /skill tdd-feature, /skill:tdd-feature');
 
   return lines.join('\n');
+}
+
+function toTelegramSkillSlashCommandBase(skillName: string): string {
+  const normalized = skillName
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+/, '')
+    .replace(/_+$/, '');
+
+  return `skill_${normalized.length > 0 ? normalized : 'skill'}`;
+}
+
+function buildTelegramSkillSlashCommands(
+  skills: TelegramSkillDefinition[],
+  reservedCommands: Set<string>,
+): TelegramSkillSlashCommand[] {
+  const usedCommands = new Set<string>(reservedCommands);
+  const commands: TelegramSkillSlashCommand[] = [];
+
+  for (const skill of skills) {
+    const baseCommand = toTelegramSkillSlashCommandBase(skill.name).slice(0, 32);
+    let candidate = baseCommand;
+    let suffix = 2;
+
+    while (usedCommands.has(candidate)) {
+      const suffixToken = `_${suffix}`;
+      const head = baseCommand.slice(0, Math.max(1, 32 - suffixToken.length));
+      candidate = `${head}${suffixToken}`;
+      suffix += 1;
+    }
+
+    usedCommands.add(candidate);
+    commands.push({
+      command: {
+        command: candidate,
+        description: toTelegramCommandDescription(`Run /skill:${skill.name}`),
+      },
+      skillName: skill.name,
+    });
+  }
+
+  return commands;
 }
 
 function mergeTelegramCommands(
@@ -998,6 +1169,10 @@ function mergeTelegramCommands(
   return [...merged.values()].slice(0, 100);
 }
 
+function filterTelegramSlashMenuCommands(commands: TelegramCommandDefinition[]): TelegramCommandDefinition[] {
+  return commands.filter((command) => command.command !== 'skills');
+}
+
 function formatTelegramCommands(commands: TelegramCommandDefinition[]): string {
   const lines = ['Available commands:'];
 
@@ -1006,7 +1181,7 @@ function formatTelegramCommands(commands: TelegramCommandDefinition[]): string {
   }
 
   lines.push('');
-  lines.push('Tip: use /skill <name> for skill commands like /skill:tdd-feature.');
+  lines.push('Tip: use /skill <name> (or /skill:tdd-feature). Telegram slash menu also includes auto-generated /skill_* shortcuts.');
 
   return lines.join('\n');
 }
@@ -1128,6 +1303,20 @@ function normalizeTelegramCommandText(text: string): {
 
   const parts = trimmed.split(/\s+/);
   const first = parts[0] ?? '';
+
+  const skillShortcutMatch = first.match(/^\/skill:([^\s@]+)(?:@[^\s]+)?$/i);
+  if (skillShortcutMatch) {
+    const skillName = skillShortcutMatch[1]?.trim() ?? '';
+    const trailingArgs = parts.slice(1).join(' ').trim();
+    const args = [skillName, trailingArgs].filter((part) => part.length > 0).join(' ').trim();
+
+    return {
+      normalizedText: args.length > 0 ? `/skill ${args}` : '/skill',
+      command: '/skill',
+      args,
+    };
+  }
+
   const normalizedCommand = first
     .replace(/^\/([a-z0-9_]+)@[^\s]+$/i, '/$1')
     .toLowerCase();
@@ -5803,6 +5992,16 @@ async function processTelegramMessage(
     commandArgs = rawText;
   }
 
+  if (command) {
+    const commandName = command.startsWith('/') ? command.slice(1) : command;
+    const skillName = options.skillSlashCommandMap?.get(commandName);
+
+    if (skillName) {
+      command = '/skill';
+      commandArgs = skillName;
+    }
+  }
+
   const modelCommandHandled = await handleModelCommand({
     conversationId,
     conversationLabel: 'chat',
@@ -6144,7 +6343,7 @@ model=${model}`,
 
   if (command === '/commands') {
     const commandHelp = options.commandHelpText
-      ?? formatTelegramCommands(DEFAULT_TELEGRAM_COMMANDS);
+      ?? formatTelegramCommands(filterTelegramSlashMenuCommands(DEFAULT_TELEGRAM_COMMANDS));
     await sendLongText(
       (chunk) => sendFormattedMessageToConversation(chunk),
       commandHelp,
@@ -6321,7 +6520,7 @@ model=${model}`,
 
   if (command === '/skill') {
     if (commandArgs.length === 0) {
-      await sendMessageToConversation('Usage: /skill <name>\nExample: /skill tdd-feature');
+      await sendMessageToConversation('Usage: /skill <name>\nExample: /skill tdd-feature\nAlso works: /skill:tdd-feature');
       return completedMessageProcessingResult();
     }
 
@@ -7941,9 +8140,34 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     cwd: effectiveConfig.workingDirectory,
     sessionFile: join(telegramSessionDir, '__commands__.jsonl'),
   });
-  const telegramCommands = mergeTelegramCommands(DEFAULT_TELEGRAM_COMMANDS, discoveredHelp.commands);
+  const discoveredProfileSkills = discoverProfileSkillsFromFilesystem(resolvedProfile);
+  const discoveredSkills = discoveredProfileSkills.length > 0
+    ? discoveredProfileSkills
+    : discoveredHelp.skills;
+
+  const baseTelegramCommands = filterTelegramSlashMenuCommands(
+    mergeTelegramCommands(DEFAULT_TELEGRAM_COMMANDS, discoveredHelp.commands),
+  );
+
+  const skillSlashCommands = buildTelegramSkillSlashCommands(
+    discoveredSkills,
+    new Set(baseTelegramCommands.map((command) => command.command)),
+  );
+
+  const telegramCommands = [...baseTelegramCommands];
+  const skillSlashCommandMap = new Map<string, string>();
+
+  for (const skillCommand of skillSlashCommands) {
+    if (telegramCommands.length >= 100) {
+      break;
+    }
+
+    telegramCommands.push(skillCommand.command);
+    skillSlashCommandMap.set(skillCommand.command.command, skillCommand.skillName);
+  }
+
   const commandHelpText = formatTelegramCommands(telegramCommands);
-  const skillsHelpText = formatTelegramSkills(discoveredHelp.skills);
+  const skillsHelpText = formatTelegramSkills(discoveredSkills);
 
   const modelCommands: ModelCommandSupport = {
     listModels: (search) => listPiModels({
@@ -7976,6 +8200,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     telegramExportDir,
     commandHelpText,
     skillsHelpText,
+    skillSlashCommandMap,
     modelCommands,
     resolveScheduledReplyContext: ({ chatId, replyMessageId }) =>
       resolveScheduledReplyContext(chatId, replyMessageId),
@@ -8565,7 +8790,7 @@ model=${model}`,
   let prompt = normalized.normalizedText;
   if (command === '/skill') {
     if (normalized.args.length === 0) {
-      await message.sendMessage('Usage: /skill <name>\nExample: /skill tdd-feature');
+      await message.sendMessage('Usage: /skill <name>\nExample: /skill tdd-feature\nAlso works: /skill:tdd-feature');
       return;
     }
 
@@ -8867,9 +9092,13 @@ export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<
     cwd: effectiveConfig.workingDirectory,
     sessionFile: join(discordSessionDir, '__commands__.jsonl'),
   });
+  const discoveredProfileSkills = discoverProfileSkillsFromFilesystem(resolvedProfile);
+  const discoveredSkills = discoveredProfileSkills.length > 0
+    ? discoveredProfileSkills
+    : discoveredHelp.skills;
   const discordCommands = mergeTelegramCommands(DEFAULT_DISCORD_COMMANDS, discoveredHelp.commands);
   const commandHelpText = formatTelegramCommands(discordCommands);
-  const skillsHelpText = formatTelegramSkills(discoveredHelp.skills);
+  const skillsHelpText = formatTelegramSkills(discoveredSkills);
 
   const modelCommands: ModelCommandSupport = {
     listModels: (search) => listPiModels({

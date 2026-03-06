@@ -285,7 +285,8 @@ pa gateway service install discord
 Gateway slash commands include:
 
 - `/status`, `/new` (resets session; on Telegram, optionally best-effort clears recent tracked messages), `/commands`
-- `/skills`, `/skill <name>`
+- `/skills` (compatibility alias; Telegram menu hides it), `/skill <name>` (and `/skill:<name>`)
+- Telegram slash menu auto-registers `/skill_*` shortcuts for discovered profile skills (mapped to `/skill:<skill-name>`)
 - `/tasks [status]`
 - `/model` / `/models`
 - `/stop`, `/followup <text>`, `/cancel`

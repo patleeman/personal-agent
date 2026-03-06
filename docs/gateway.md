@@ -124,6 +124,7 @@ Telegram behavior highlights:
 - Optional tool activity stream can show temporary tool-call/result updates, then remove/collapse when the assistant reply completes
 - Very long outputs are sent as `.txt` document attachments
 - Inline action buttons on replies: Stop, New, Regenerate, Follow up
+- Telegram slash menu auto-registers `/skill_*` shortcuts for discovered profile skills (mapped to `/skill:<skill-name>`)
 
 ---
 
@@ -207,8 +208,8 @@ When a new message arrives while a run is active in the same conversation:
 - `/chatid` (show current room/chat ID; includes topic thread ID in Telegram forums)
 - `/new` (start a fresh session and, when enabled, best-effort clear recent tracked messages in the current chat/topic)
 - `/commands`
-- `/skills`
-- `/skill <name>`
+- `/skills` (compatibility alias; Telegram slash menu hides this)
+- `/skill <name>` (and `/skill:<name>`)
 - `/tasks [status]` (`all|running|active|completed|disabled|pending|error`)
 - `/room [help|pending|approve <chatId>|deny <chatId>|blocked]` (Telegram room authorization admin)
 - `/tmux [help|list|inspect|logs|stop|send|run|clean]` (Telegram managed tmux command helper)

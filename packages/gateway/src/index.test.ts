@@ -1217,6 +1217,7 @@ describe('queued telegram message handler', () => {
     expect(output).toContain('/compact -');
     expect(output).toContain('/fork -');
     expect(output).toContain('/resume -');
+    expect(output).not.toContain('/skills -');
   });
 
   it('returns configured skills list for /skills without invoking pi', async () => {
@@ -1586,6 +1587,55 @@ describe('queued telegram message handler', () => {
 
     const firstCall = runPrompt.mock.calls[0]?.[0] as { prompt: string };
     expect(firstCall.prompt).toBe('/skill:tdd-feature');
+    expect(sendChatAction).toHaveBeenCalledWith(1, 'typing');
+  });
+
+  it('maps /skill:<name> to /skill:<name> before invoking pi', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async ({ prompt }: { prompt: string; sessionFile: string }) => `reply:${prompt}`);
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/skill:tdd-feature' });
+    await handler.waitForIdle('1');
+
+    const firstCall = runPrompt.mock.calls[0]?.[0] as { prompt: string };
+    expect(firstCall.prompt).toBe('/skill:tdd-feature');
+    expect(sendChatAction).toHaveBeenCalledWith(1, 'typing');
+  });
+
+  it('maps auto-generated telegram skill slash commands to /skill:<name>', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async ({ prompt }: { prompt: string; sessionFile: string }) => `reply:${prompt}`);
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      skillSlashCommandMap: new Map([['skill_best_practices_react', 'best-practices-react']]),
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/skill_best_practices_react' });
+    await handler.waitForIdle('1');
+
+    const firstCall = runPrompt.mock.calls[0]?.[0] as { prompt: string };
+    expect(firstCall.prompt).toBe('/skill:best-practices-react');
     expect(sendChatAction).toHaveBeenCalledWith(1, 'typing');
   });
 
@@ -2458,6 +2508,34 @@ describe('queued discord message handler', () => {
     handler.handleMessage({
       channelId: 'channel-1',
       content: '/skill tdd-feature',
+      sendMessage,
+      sendTyping,
+    });
+
+    await handler.waitForIdle('channel-1');
+
+    const firstCall = runPrompt.mock.calls[0]?.[0] as { prompt: string };
+    expect(firstCall.prompt).toBe('/skill:tdd-feature');
+    expect(sendTyping).toHaveBeenCalled();
+  });
+
+  it('maps /skill:<name> to /skill:<name> before invoking pi', async () => {
+    const runPrompt = vi.fn(async ({ prompt }: { prompt: string; sessionFile: string }) => `reply:${prompt}`);
+    const sendMessage = vi.fn(async () => undefined);
+    const sendTyping = vi.fn(async () => undefined);
+
+    const handler = createQueuedDiscordMessageHandler({
+      allowlist: new Set(['channel-1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      discordSessionDir: '/tmp/discord-sessions',
+      workingDirectory: '/tmp/work',
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({
+      channelId: 'channel-1',
+      content: '/skill:tdd-feature',
       sendMessage,
       sendTyping,
     });
