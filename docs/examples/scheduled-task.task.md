@@ -6,6 +6,7 @@ profile: "shared"
 model: "openai-codex/gpt-5.3-codex"
 cwd: "~/agent-workspace"
 timeoutSeconds: 1800
+runInTmux: true
 output:
   when: success
   targets:

@@ -35,6 +35,7 @@ profile: "shared"
 model: "openai-codex/gpt-5.3-codex"
 cwd: "~/agent-workspace"
 timeoutSeconds: 1800
+runInTmux: true
 output:
   when: success
   targets:
@@ -61,6 +62,7 @@ Body text is the prompt sent to Pi (`-p <prompt>`).
 | `model` | no | — | If `provider` is set, this is model id; otherwise treated as full model ref |
 | `cwd` | no | current process cwd | `~` is expanded |
 | `timeoutSeconds` | no | daemon `defaultTimeoutSeconds` (default `1800`) | Positive integer |
+| `runInTmux` | no | daemon `runTasksInTmux` (default `true`) | Boolean override for per-task execution mode |
 | `output` | no | — | Optional gateway notification routing |
 
 \* Exactly one of `cron` or `at` is required.
@@ -70,6 +72,12 @@ Body text is the prompt sent to Pi (`-p <prompt>`).
 - `provider` + `model` → combined into `provider/model`
 - `model` only → used as-is (for example `openai-codex/gpt-5.3-codex`)
 - `provider` without `model` → validation error
+
+### Tmux execution mode
+
+- Daemon tasks run inside tmux by default (`modules.tasks.runTasksInTmux: true`)
+- Set `runInTmux: false` in a task file to run that task as a direct subprocess
+- Set daemon config `modules.tasks.runTasksInTmux: false` to disable tmux by default globally
 
 ---
 
@@ -117,6 +125,7 @@ Also supported:
 
 - Tick interval defaults to 30s (`tickIntervalSeconds`)
 - Cron tasks run at most once per matching minute
+- Tasks execute in tmux by default (`runTasksInTmux`), with per-task override via `runInTmux`
 - Overlap is prevented: if previous run is active, the next run is skipped
 - Retries happen up to `maxRetries` (default `3`)
 - Each attempt writes a run log under daemon `task-runs`

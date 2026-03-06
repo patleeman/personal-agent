@@ -14,6 +14,7 @@ provider: openai-codex
 model: gpt-5.3-codex
 cwd: ~/agent-workspace
 timeoutSeconds: 900
+runInTmux: false
 ---
 Summarize yesterday's progress.
 `,
@@ -27,6 +28,7 @@ Summarize yesterday's progress.
     expect(task.modelRef).toBe('openai-codex/gpt-5.3-codex');
     expect(task.cwd).toContain('agent-workspace');
     expect(task.timeoutSeconds).toBe(900);
+    expect(task.runInTmux).toBe(false);
     expect(task.prompt).toContain('Summarize yesterday');
   });
 
@@ -92,6 +94,19 @@ hello
 `,
       defaultTimeoutSeconds: 1800,
     })).toThrow('Unsupported output target gateway');
+  });
+
+  it('rejects invalid runInTmux values', () => {
+    expect(() => parseTaskDefinition({
+      filePath: '/tmp/tasks/invalid-run-mode.task.md',
+      rawContent: `---
+cron: "0 9 * * 1-5"
+runInTmux: maybe
+---
+hello
+`,
+      defaultTimeoutSeconds: 1800,
+    })).toThrow('Frontmatter key runInTmux must be a boolean');
   });
 
   it('matches cron expressions using cron day-of-month/day-of-week semantics', () => {

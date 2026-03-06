@@ -194,6 +194,63 @@ describe('tasks module scheduling', () => {
     await module.stop?.(context);
   });
 
+  it('passes tmux execution mode from module defaults with per-task overrides', async () => {
+    const taskDir = createTempDir('tasks-module-definitions-');
+    const stateRoot = createTempDir('tasks-module-state-');
+
+    writeFileSync(
+      join(taskDir, 'default-mode.task.md'),
+      `---\nid: default-mode\nat: "2026-03-02T10:00:00.000Z"\n---\nRun using module default\n`,
+    );
+
+    writeFileSync(
+      join(taskDir, 'override-mode.task.md'),
+      `---\nid: override-mode\nat: "2026-03-02T10:00:00.000Z"\nrunInTmux: false\n---\nRun without tmux\n`,
+    );
+
+    let currentTime = new Date('2026-03-02T09:59:00.000Z');
+    const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(request, true, currentTime.toISOString()));
+
+    const module = createTasksModule(
+      {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+        runTasksInTmux: true,
+      },
+      {
+        now: () => currentTime,
+        runTask,
+      },
+    );
+
+    const { context } = createContext(taskDir, stateRoot);
+
+    await module.start(context);
+
+    currentTime = new Date('2026-03-02T10:00:10.000Z');
+    await module.handleEvent(createTimerEvent(), context);
+
+    await waitForCondition(() => {
+      const status = module.getStatus?.() as { totalRuns?: number };
+      return (status.totalRuns ?? 0) === 2;
+    });
+
+    const runModes = runTask.mock.calls
+      .map(([request]: [TaskRunRequest]) => ({ id: request.task.id, runInTmux: request.runInTmux }))
+      .sort((left, right) => left.id.localeCompare(right.id));
+
+    expect(runModes).toEqual([
+      { id: 'default-mode', runInTmux: true },
+      { id: 'override-mode', runInTmux: false },
+    ]);
+
+    await module.stop?.(context);
+  });
+
   it('publishes gateway notifications for configured task outputs', async () => {
     const taskDir = createTempDir('tasks-module-definitions-');
     const stateRoot = createTempDir('tasks-module-state-');

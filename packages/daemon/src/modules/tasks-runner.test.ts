@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -58,6 +58,12 @@ function createMockChildProcess(): MockChildProcess {
   return child;
 }
 
+function closeMockChildSoon(child: MockChildProcess, code = 0, signal: NodeJS.Signals | null = null): void {
+  queueMicrotask(() => {
+    child.emit('close', code, signal);
+  });
+}
+
 function createTask(overrides: Partial<ParsedTaskDefinition> = {}): ParsedTaskDefinition {
   return {
     key: 'task.md',
@@ -94,6 +100,18 @@ async function waitForCondition(check: () => boolean, maxTicks = 2_000): Promise
   }
 
   throw new Error('Timed out waiting for condition');
+}
+
+async function waitForFileCondition(check: () => boolean, timeoutMs = 2_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (!check()) {
+    if (Date.now() > deadline) {
+      throw new Error('Timed out waiting for file condition');
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
 }
 
 beforeEach(() => {
@@ -222,6 +240,107 @@ describe('runTaskInIsolatedPi', () => {
     const log = readFileSync(result.logPath, 'utf-8');
     expect(log).toContain('# task=nightly-run');
     expect(log).toContain('# success=true');
+  });
+
+  it('runs task inside tmux when runInTmux is enabled', async () => {
+    const repoRoot = createTempDir('tasks-runner-repo-');
+    const runsRoot = createTempDir('tasks-runner-runs-');
+
+    const localPiCli = join(repoRoot, 'node_modules', '@mariozechner', 'pi-coding-agent', 'dist', 'cli.js');
+    mkdirSync(join(repoRoot, 'node_modules', '@mariozechner', 'pi-coding-agent', 'dist'), { recursive: true });
+    writeFileSync(localPiCli, 'console.log("pi")');
+
+    mocks.resolveResourceProfile.mockReturnValue({
+      name: 'shared',
+      repoRoot,
+    });
+
+    mocks.spawn.mockImplementation((command: string) => {
+      const child = createMockChildProcess();
+
+      if (command === 'tmux') {
+        closeMockChildSoon(child, 0, null);
+      }
+
+      return child;
+    });
+
+    const promise = runTaskInIsolatedPi({
+      task: createTask({ cwd: repoRoot }),
+      attempt: 1,
+      runsRoot,
+      runInTmux: true,
+    });
+
+    await waitForCondition(() => mocks.spawn.mock.calls.some(([command, args]) => command === 'tmux' && args[0] === 'new-session'));
+
+    const logDir = join(runsRoot, 'nightly-run');
+    await waitForFileCondition(() => existsSync(logDir) && readdirSync(logDir).some((entry) => entry.endsWith('.log')));
+
+    const logFile = readdirSync(logDir).find((entry) => entry.endsWith('.log')) as string;
+    const logPath = join(logDir, logFile);
+
+    writeFileSync(`${logPath}.output`, 'tmux stdout\n');
+    writeFileSync(`${logPath}.exit-code`, '0');
+
+    const result = await promise;
+
+    expect(result).toMatchObject({
+      success: true,
+      exitCode: 0,
+      timedOut: false,
+      cancelled: false,
+      error: undefined,
+    });
+
+    expect(result.outputText).toContain('tmux stdout');
+
+    const tmuxCalls = mocks.spawn.mock.calls.filter(([command]) => command === 'tmux');
+    expect(tmuxCalls.some(([, args]) => args[0] === 'new-session')).toBe(true);
+    expect(tmuxCalls.some(([, args]) => args[0] === 'set-option')).toBe(true);
+
+    const nonTmuxCalls = mocks.spawn.mock.calls.filter(([command]) => command !== 'tmux');
+    expect(nonTmuxCalls.length).toBe(0);
+
+    const log = readFileSync(result.logPath, 'utf-8');
+    expect(log).toContain('# mode=tmux');
+    expect(log).toContain('tmux stdout');
+  });
+
+  it('returns a clear error when tmux is unavailable in tmux mode', async () => {
+    const repoRoot = createTempDir('tasks-runner-repo-');
+    const runsRoot = createTempDir('tasks-runner-runs-');
+
+    mocks.resolveResourceProfile.mockReturnValue({
+      name: 'shared',
+      repoRoot,
+    });
+
+    mocks.spawn.mockImplementation((command: string) => {
+      const child = createMockChildProcess();
+
+      if (command === 'tmux') {
+        queueMicrotask(() => {
+          const error = Object.assign(new Error('spawn tmux ENOENT'), { code: 'ENOENT' });
+          child.emit('error', error);
+        });
+      }
+
+      return child;
+    });
+
+    const result = await runTaskInIsolatedPi({
+      task: createTask({ cwd: repoRoot }),
+      attempt: 1,
+      runsRoot,
+      runInTmux: true,
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      exitCode: 1,
+      error: 'tmux is not installed or not available on PATH.',
+    });
   });
 
   it('returns process error when spawn emits error', async () => {

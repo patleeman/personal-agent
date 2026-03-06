@@ -203,6 +203,7 @@ export function createTasksModule(
   const maxRetries = Math.max(1, Math.floor(config.maxRetries));
   const reapAfterDays = Math.max(0, Math.floor(config.reapAfterDays));
   const defaultTimeoutSeconds = Math.max(30, Math.floor(config.defaultTimeoutSeconds));
+  const runTasksInTmuxByDefault = config.runTasksInTmux ?? true;
 
   const state: TasksModuleState = {
     knownTasks: 0,
@@ -303,6 +304,7 @@ export function createTasksModule(
         attempt,
         runsRoot,
         signal: controller.signal,
+        runInTmux: task.runInTmux ?? runTasksInTmuxByDefault,
       });
 
       finalResult = result;
@@ -674,6 +676,7 @@ export function createTasksModule(
         knownTasks: state.knownTasks,
         parseErrors: state.parseErrors,
         runningTasks: state.runningTasks,
+        runTasksInTmuxByDefault,
         totalRuns: state.totalRuns,
         successfulRuns: state.successfulRuns,
         failedRuns: state.failedRuns,
