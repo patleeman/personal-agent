@@ -10,7 +10,8 @@ output:
   when: always
   targets:
     - gateway: telegram
-      chatId: "-5175615289"
+      chatId: "-1003854487728"
+      messageThreadId: 22
 ---
 Run a daily AGENTS.md hygiene pass across profile memory files.
 
