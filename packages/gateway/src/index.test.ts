@@ -524,7 +524,36 @@ describe('queued telegram message handler', () => {
     expect(sendMessage).toHaveBeenCalledWith(1, 'Pending room authorization requests:\n- room-a');
   });
 
-  it('includes /tasks, /room, /model, /models, /stop, /cancel, /compact, and /resume in default /commands output', async () => {
+  it('routes /tmux commands to the tmux handler', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'ignored');
+    const handleTmuxCommand = vi.fn(async () => 'Managed tmux sessions:\n- session-a');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      handleTmuxCommand,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/tmux list' });
+    await handler.waitForIdle('1');
+
+    expect(handleTmuxCommand).toHaveBeenCalledWith({
+      args: 'list',
+    });
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendChatAction).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(1, 'Managed tmux sessions:\n- session-a');
+  });
+
+  it('includes /tasks, /room, /tmux, /model, /models, /stop, /cancel, /compact, and /resume in default /commands output', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
     const runPrompt = vi.fn(async () => 'ignored');
@@ -551,6 +580,7 @@ describe('queued telegram message handler', () => {
       .join('\n');
     expect(output).toContain('/tasks -');
     expect(output).toContain('/room -');
+    expect(output).toContain('/tmux -');
     expect(output).toContain('/model -');
     expect(output).toContain('/models -');
     expect(output).toContain('/stop -');
@@ -1637,7 +1667,7 @@ describe('queued discord message handler', () => {
     );
   });
 
-  it('includes /tasks, /model, /models, /stop, /cancel, /compact, and /resume in default /commands output', async () => {
+  it('includes /tasks, /tmux, /model, /models, /stop, /cancel, /compact, and /resume in default /commands output', async () => {
     const runPrompt = vi.fn(async () => 'ignored');
     const sendMessage = vi.fn(async () => undefined);
     const sendTyping = vi.fn(async () => undefined);
@@ -1667,6 +1697,7 @@ describe('queued discord message handler', () => {
       .map((call) => String(call.at(0) ?? ''))
       .join('\n');
     expect(output).toContain('/tasks -');
+    expect(output).toContain('/tmux -');
     expect(output).toContain('/model -');
     expect(output).toContain('/models -');
     expect(output).toContain('/stop -');

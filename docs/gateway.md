@@ -205,6 +205,7 @@ When a new message arrives while a run is active in the same conversation:
 - `/skill <name>`
 - `/tasks [status]` (`all|running|active|completed|disabled|pending|error`)
 - `/room [help|pending|approve <chatId>|deny <chatId>|blocked]` (Telegram room authorization admin)
+- `/tmux [help|list|inspect|logs|stop|send|run|clean]` (Telegram managed tmux command helper)
 - `/model` / `/models`
 - `/stop`
 - `/followup <text>` (or `/followup` for one-shot follow-up capture mode)

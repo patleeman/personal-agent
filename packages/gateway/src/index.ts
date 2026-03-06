@@ -423,6 +423,10 @@ type HandleTelegramRoomAdminCommandFn = (input: {
   args: string;
 }) => Promise<string>;
 
+type HandleTelegramTmuxCommandFn = (input: {
+  args: string;
+}) => Promise<string>;
+
 export interface CreateTelegramMessageHandlerOptions {
   allowlist: Set<string>;
   allowedUserIds?: Set<string>;
@@ -450,6 +454,7 @@ export interface CreateTelegramMessageHandlerOptions {
   durableInboxDir?: string;
   listScheduledTasks?: ListScheduledTasksFn;
   handleRoomAdminCommand?: HandleTelegramRoomAdminCommandFn;
+  handleTmuxCommand?: HandleTelegramTmuxCommandFn;
   resolveScheduledReplyContext?: (input: {
     chatId: string;
     replyMessageId: number;
@@ -703,6 +708,7 @@ const DEFAULT_TELEGRAM_COMMANDS: TelegramCommandDefinition[] = [
   { command: 'status', description: 'Show gateway status' },
   { command: 'tasks', description: 'List scheduled tasks (usage: /tasks [status])' },
   { command: 'room', description: 'Manage room approvals (usage: /room help)' },
+  { command: 'tmux', description: 'Manage agent tmux sessions (usage: /tmux help)' },
   { command: 'commands', description: 'List available commands' },
   { command: 'skills', description: 'List available skills' },
   { command: 'help', description: 'Show command help' },
@@ -887,6 +893,208 @@ function normalizeTelegramCommandText(text: string): {
 function gatewayTaskListUsageText(): string {
   return `Usage: /tasks [all|${GATEWAY_TASK_STATUS_FILTERS.join('|')}]`;
 }
+
+function gatewayTmuxUsageText(): string {
+  return [
+    'Usage: /tmux <subcommand>',
+    '',
+    'Subcommands:',
+    '- /tmux list',
+    '- /tmux inspect <session>',
+    '- /tmux logs <session> [tail=<n>]',
+    '- /tmux stop <session>',
+    '- /tmux send <session> -- <command>',
+    '- /tmux run <task-slug> [cwd=<path>] -- <command>',
+    '- /tmux clean [dry-run]',
+  ].join('\n');
+}
+
+function parseGatewayTmuxCommand(rawArgs: string): { cliArgs?: string[]; message?: string } {
+  const trimmed = rawArgs.trim();
+  if (trimmed.length === 0 || trimmed.toLowerCase() === 'help') {
+    return { message: gatewayTmuxUsageText() };
+  }
+
+  const delimiterMatch = trimmed.match(/^(.*?)(?:\s+--\s+)([\s\S]+)$/);
+  const headText = delimiterMatch?.[1]?.trim() ?? trimmed;
+  const commandText = delimiterMatch?.[2]?.trim();
+  const tokens = headText.split(/\s+/).filter((token) => token.length > 0);
+  const subcommand = (tokens[0] ?? '').toLowerCase();
+
+  const invalidArgs = (detail: string): { message: string } => ({
+    message: `${detail}\n\n${gatewayTmuxUsageText()}`,
+  });
+
+  if (subcommand === 'list') {
+    if (tokens.length !== 1) {
+      return invalidArgs('Usage: /tmux list');
+    }
+
+    return { cliArgs: ['list'] };
+  }
+
+  if (subcommand === 'inspect') {
+    if (tokens.length !== 2) {
+      return invalidArgs('Usage: /tmux inspect <session>');
+    }
+
+    return { cliArgs: ['inspect', tokens[1] as string] };
+  }
+
+  if (subcommand === 'logs') {
+    if (tokens.length < 2 || tokens.length > 3) {
+      return invalidArgs('Usage: /tmux logs <session> [tail=<n>]');
+    }
+
+    const sessionName = tokens[1] as string;
+    const cliArgs = ['logs', sessionName];
+
+    if (tokens.length === 3) {
+      const tailToken = tokens[2] as string;
+      const rawTail = tailToken.startsWith('tail=')
+        ? tailToken.slice('tail='.length)
+        : tailToken;
+      const tail = Number.parseInt(rawTail, 10);
+
+      if (!Number.isFinite(tail) || tail <= 0) {
+        return invalidArgs('Tail must be a positive integer.');
+      }
+
+      cliArgs.push('--tail', String(tail));
+    }
+
+    return { cliArgs };
+  }
+
+  if (subcommand === 'stop') {
+    if (tokens.length !== 2) {
+      return invalidArgs('Usage: /tmux stop <session>');
+    }
+
+    return { cliArgs: ['stop', tokens[1] as string] };
+  }
+
+  if (subcommand === 'send') {
+    if (tokens.length !== 2 || !commandText) {
+      return invalidArgs('Usage: /tmux send <session> -- <command>');
+    }
+
+    return {
+      cliArgs: ['send', tokens[1] as string, commandText],
+    };
+  }
+
+  if (subcommand === 'run') {
+    if (tokens.length < 2 || !commandText) {
+      return invalidArgs('Usage: /tmux run <task-slug> [cwd=<path>] -- <command>');
+    }
+
+    const taskSlug = tokens[1] as string;
+    const cliArgs = ['run', taskSlug];
+
+    if (tokens.length > 2) {
+      let cwdArg: string | undefined;
+
+      if (tokens.length === 3 && (tokens[2] as string).startsWith('cwd=')) {
+        cwdArg = (tokens[2] as string).slice('cwd='.length);
+      } else if (tokens.length === 4 && tokens[2] === '--cwd') {
+        cwdArg = tokens[3] as string;
+      } else {
+        return invalidArgs('Usage: /tmux run <task-slug> [cwd=<path>] -- <command>');
+      }
+
+      if (!cwdArg || cwdArg.length === 0) {
+        return invalidArgs('CWD cannot be empty.');
+      }
+
+      cliArgs.push('--cwd', cwdArg);
+    }
+
+    cliArgs.push('--', 'sh', '-lc', commandText);
+    return { cliArgs };
+  }
+
+  if (subcommand === 'clean') {
+    if (tokens.length === 1) {
+      return { cliArgs: ['clean'] };
+    }
+
+    if (tokens.length === 2 && (tokens[1] === 'dry-run' || tokens[1] === '--dry-run')) {
+      return { cliArgs: ['clean', '--dry-run'] };
+    }
+
+    return invalidArgs('Usage: /tmux clean [dry-run]');
+  }
+
+  return invalidArgs(`Unknown /tmux subcommand: ${subcommand}`);
+}
+
+function normalizeGatewayTerminalOutput(value: string): string {
+  return value
+    .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .trim();
+}
+
+function resolveGatewayCliEntryPath(): string | undefined {
+  const gatewayModulePath = fileURLToPath(import.meta.url);
+  const candidate = resolve(dirname(gatewayModulePath), '../../cli/dist/index.js');
+  return existsSync(candidate) ? candidate : undefined;
+}
+
+function runGatewayTmuxCli(tmuxArgs: string[], workingDirectory: string): { ok: boolean; output: string } {
+  const cliEntryPath = resolveGatewayCliEntryPath();
+  const command = cliEntryPath ? process.execPath : 'pa';
+  const args = cliEntryPath
+    ? [cliEntryPath, 'tmux', ...tmuxArgs]
+    : ['tmux', ...tmuxArgs];
+
+  const result = spawnSync(command, args, {
+    cwd: workingDirectory,
+    encoding: 'utf-8',
+  });
+
+  if (result.error) {
+    return {
+      ok: false,
+      output: result.error.message,
+    };
+  }
+
+  const stdout = normalizeGatewayTerminalOutput(result.stdout ?? '');
+  const stderr = normalizeGatewayTerminalOutput(result.stderr ?? '');
+  const output = [stdout, stderr].filter((value) => value.length > 0).join('\n');
+
+  if ((result.status ?? 1) !== 0) {
+    return {
+      ok: false,
+      output: output.length > 0 ? output : `tmux command failed with exit code ${String(result.status ?? 1)}.`,
+    };
+  }
+
+  return {
+    ok: true,
+    output: output.length > 0 ? output : 'Done.',
+  };
+}
+
+const runTelegramTmuxCommand = async (input: {
+  args: string;
+  workingDirectory: string;
+}): Promise<string> => {
+  const parsed = parseGatewayTmuxCommand(input.args);
+  if (!parsed.cliArgs) {
+    return parsed.message ?? gatewayTmuxUsageText();
+  }
+
+  const result = runGatewayTmuxCli(parsed.cliArgs, input.workingDirectory);
+  if (!result.ok) {
+    return `Unable to run /tmux command: ${result.output}`;
+  }
+
+  return result.output;
+};
 
 function parseGatewayTaskStatusFilter(rawArgs: string): GatewayTaskStatusFilter | undefined {
   const trimmed = rawArgs.trim();
@@ -4861,6 +5069,28 @@ model=${model}`,
     return completedMessageProcessingResult();
   }
 
+  if (command === '/tmux') {
+    if (!options.handleTmuxCommand) {
+      await sendMessageToConversation('tmux commands are not available in this gateway instance.');
+      return completedMessageProcessingResult();
+    }
+
+    try {
+      const tmuxOutput = await options.handleTmuxCommand({
+        args: commandArgs,
+      });
+
+      await sendLongText(
+        (chunk) => sendFormattedMessageToConversation(chunk),
+        tmuxOutput,
+      );
+    } catch (error) {
+      await sendMessageToConversation(`Unable to process /tmux command: ${(error as Error).message}`);
+    }
+
+    return completedMessageProcessingResult();
+  }
+
   if (command === '/tasks') {
     const statusFilter = parseGatewayTaskStatusFilter(commandArgs);
     if (!statusFilter) {
@@ -5806,6 +6036,12 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     return `Unknown /room subcommand: ${subcommand}. Use /room help.`;
   };
 
+  const handleTmuxCommand: HandleTelegramTmuxCommandFn = async ({ args }) =>
+    runTelegramTmuxCommand({
+      args,
+      workingDirectory: effectiveConfig.workingDirectory,
+    });
+
   const discoveredHelp = await discoverPiHelpFromPi({
     profile: resolvedProfile,
     agentDir: runtime.agentDir,
@@ -5851,6 +6087,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     resolveScheduledReplyContext: ({ chatId, replyMessageId }) =>
       resolveScheduledReplyContext(chatId, replyMessageId),
     handleRoomAdminCommand,
+    handleTmuxCommand,
     streamToolActivity: toolActivityStream,
     sendMessage: (chatId, text, options) => sendTelegramMessageWithRetry(chatId, text, options),
     editMessageText: (chatId, messageId, text, options) =>
