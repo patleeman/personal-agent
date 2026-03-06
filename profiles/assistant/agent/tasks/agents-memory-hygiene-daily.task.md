@@ -3,14 +3,14 @@ id: agents-memory-hygiene-daily
 enabled: true
 cron: "15 3 * * *"
 profile: "assistant"
-model: "openai-codex/gpt-5.3-codex"
+model: "openai-codex/gpt-5.4"
 cwd: "/Users/patrick/workingdir/personal-agent"
 timeoutSeconds: 1800
 output:
   when: always
   targets:
     - gateway: telegram
-      chatId: "1191448898"
+      chatId: "-5175615289"
 ---
 Run a daily AGENTS.md hygiene pass across profile memory files.
 

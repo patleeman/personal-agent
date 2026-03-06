@@ -3,14 +3,14 @@ id: recruiter-outreach-daily
 enabled: true
 cron: "0 2 * * *"
 profile: "assistant"
-model: "openai-codex/gpt-5.3-codex"
+model: "openai-codex/gpt-5.4"
 cwd: "/Users/patrick/agent-workspace"
 timeoutSeconds: 1200
 output:
   when: always
   targets:
     - gateway: telegram
-      chatId: "1191448898"
+      chatId: "-5175615289"
 ---
 Scan the previous calendar day for new recruiter-outreach emails and update the workspace list.
 

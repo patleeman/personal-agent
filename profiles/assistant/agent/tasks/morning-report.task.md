@@ -3,14 +3,14 @@ id: morning-report
 enabled: true
 cron: "30 6 * * *"
 profile: "assistant"
-model: "openai-codex/gpt-5.3-codex"
+model: "openai-codex/gpt-5.4"
 cwd: "~/workingdir"
 timeoutSeconds: 1200
 output:
-  when: success
+  when: always
   targets:
     - gateway: telegram
-      chatId: "1191448898"
+      chatId: "-5175615289"
 ---
 Create my **Morning Report** for White Plains, NY.
 
