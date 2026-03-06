@@ -134,6 +134,7 @@ export interface TelegramBridgeConfig {
   workingDirectory: string;
   maxPendingPerChat?: number;
   toolActivityStream?: boolean;
+  clearRecentMessagesOnNew?: boolean;
 }
 
 export interface DiscordBridgeConfig {
@@ -229,6 +230,17 @@ export interface TelegramMessageLike {
   animation?: TelegramAnimationLike;
   video?: TelegramVideoLike;
   sticker?: TelegramStickerLike;
+  group_chat_created?: boolean;
+  supergroup_chat_created?: boolean;
+  channel_chat_created?: boolean;
+  new_chat_participant?: TelegramUserLike;
+  new_chat_member?: TelegramUserLike;
+  new_chat_members?: TelegramUserLike[];
+  left_chat_member?: TelegramUserLike;
+  delete_chat_photo?: boolean;
+  migrate_to_chat_id?: number;
+  migrate_from_chat_id?: number;
+  pinned_message?: unknown;
   reply_to_message?: {
     message_id?: number;
   };
@@ -306,6 +318,27 @@ type SendDocumentFn = (chatId: number, filePath: string, options?: TelegramSendF
 
 type SendPhotoFn = (chatId: number, filePath: string, options?: TelegramSendFileOptions) => Promise<unknown>;
 
+interface CreatedTelegramForumTopic {
+  messageThreadId: number;
+  name: string;
+}
+
+type CreateTelegramForumTopicFn = (input: {
+  chatId: number;
+  name: string;
+}) => Promise<CreatedTelegramForumTopic>;
+
+interface SetTelegramWorkTopicBindingInput {
+  sourceConversationId: string;
+  sourceChatId: string;
+  sourceMessageThreadId?: number;
+  workConversationId: string;
+  workChatId: number;
+  workMessageThreadId: number;
+  topicName: string;
+  sessionFile: string;
+}
+
 type SendTextFn = (text: string) => Promise<unknown>;
 
 type SendChatActionFn = (
@@ -357,10 +390,24 @@ function completedMessageProcessingResult(): MessageProcessingResult {
   return { completion: Promise.resolve() };
 }
 
+export interface ForkableConversationMessage {
+  entryId: string;
+  text: string;
+}
+
+export interface ForkConversationResult {
+  selectedText: string;
+  cancelled: boolean;
+  sessionFile: string;
+}
+
 export interface GatewayConversationController {
   submitPrompt: (input: RunPromptFnInput) => Promise<ConversationSubmitResult>;
   submitFollowUp: (input: RunPromptFnInput) => Promise<ConversationSubmitResult>;
   compact: (customInstructions?: string) => Promise<string>;
+  getUserMessagesForForking: () => Promise<ForkableConversationMessage[]>;
+  fork: (entryId: string) => Promise<ForkConversationResult>;
+  getSessionFile: () => Promise<string>;
   abortCurrent: () => Promise<boolean>;
   waitForIdle: () => Promise<void>;
   dispose: () => Promise<void>;
@@ -423,8 +470,42 @@ type HandleTelegramRoomAdminCommandFn = (input: {
   args: string;
 }) => Promise<string>;
 
+export type TelegramTmuxForkMode = 'none' | 'auto' | 'new-topic' | 'reuse-topic';
+export type TelegramTmuxNotifyMode = 'none' | 'message' | 'resume';
+
+export interface TelegramTmuxRunRequest {
+  taskSlug: string;
+  commandText: string;
+  cwd?: string;
+  forkMode: TelegramTmuxForkMode;
+  notifyMode: TelegramTmuxNotifyMode;
+  group: string;
+  topic: string;
+}
+
 type HandleTelegramTmuxCommandFn = (input: {
   args: string;
+}) => Promise<string>;
+
+type HandleTelegramTmuxRunRequestFn = (input: {
+  run: TelegramTmuxRunRequest;
+  sourceConversationId: string;
+  sourceChatId: number;
+  sourceMessageThreadId: number | undefined;
+  sourceChatType: string | undefined;
+  sourceChatTitle: string | undefined;
+  sourceChatUsername: string | undefined;
+  defaultSourceSessionFile: string;
+  getForkableMessages: () => Promise<ForkableConversationMessage[]>;
+  forkConversation: (entryId: string) => Promise<ForkConversationResult>;
+  setConversationSessionFile: (input: {
+    conversationId: string;
+    sessionFile: string;
+  }) => void;
+  resolveConversationSessionFile: (input: {
+    conversationId: string;
+    defaultSessionFile: string;
+  }) => string;
 }) => Promise<string>;
 
 export interface CreateTelegramMessageHandlerOptions {
@@ -450,11 +531,27 @@ export interface CreateTelegramMessageHandlerOptions {
   removeSessionFile?: (path: string) => Promise<void>;
   maxPendingPerChat?: number;
   streamToolActivity?: boolean;
+  clearRecentMessagesOnNew?: boolean;
   modelCommands?: ModelCommandSupport;
   durableInboxDir?: string;
   listScheduledTasks?: ListScheduledTasksFn;
   handleRoomAdminCommand?: HandleTelegramRoomAdminCommandFn;
   handleTmuxCommand?: HandleTelegramTmuxCommandFn;
+  handleTmuxRunRequest?: HandleTelegramTmuxRunRequestFn;
+  createForumTopic?: CreateTelegramForumTopicFn;
+  setWorkTopicBinding?: (input: SetTelegramWorkTopicBindingInput) => void;
+  resolveConversationSessionFile?: (input: {
+    conversationId: string;
+    defaultSessionFile: string;
+  }) => string;
+  setConversationSessionFile?: (input: {
+    conversationId: string;
+    sessionFile: string;
+  }) => void;
+  clearConversationSessionFile?: (input: {
+    conversationId: string;
+  }) => void;
+  persistAccessLists?: () => void;
   resolveScheduledReplyContext?: (input: {
     chatId: string;
     replyMessageId: number;
@@ -510,12 +607,14 @@ const SCHEDULED_REPLY_CONTEXT_TTL_MS = 24 * 60 * 60 * 1000;
 const TELEGRAM_MODEL_SELECTION_CALLBACK_PREFIX = 'model_select:';
 const TELEGRAM_ACTION_CALLBACK_PREFIX = 'action:';
 const TELEGRAM_ROOM_AUTH_CALLBACK_PREFIX = 'room_auth:';
+const TELEGRAM_FORK_SELECTION_CALLBACK_PREFIX = 'fork_select:';
 const TELEGRAM_ROOM_AUTH_REQUEST_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const TELEGRAM_MAX_PENDING_ROOM_AUTH_REQUESTS = 500;
+const TELEGRAM_MAX_TRACKED_CONVERSATION_MESSAGES = 200;
 const TELEGRAM_MAX_MESSAGE_CHARS = 3900;
 const TELEGRAM_STREAMING_EDIT_PREVIEW_MAX_CHARS = 3200;
-const TELEGRAM_STREAMING_EDIT_INTERVAL_MS = 800;
-const TELEGRAM_TOOL_ACTIVITY_EDIT_INTERVAL_MS = 700;
+const TELEGRAM_STREAMING_EDIT_INTERVAL_MS = 2500;
+const TELEGRAM_TOOL_ACTIVITY_EDIT_INTERVAL_MS = 2500;
 const TELEGRAM_TOOL_ACTIVITY_MAX_LINES = 8;
 const TELEGRAM_TOOL_ACTIVITY_MAX_CHARS = 1500;
 const TELEGRAM_TOOL_ACTIVITY_TOOL_MAX_CHARS = 28;
@@ -630,6 +729,35 @@ function buildTelegramConversationId(chatId: string, messageThreadId: number | u
   return `${chatId}::thread:${messageThreadId}`;
 }
 
+function parseTelegramConversationId(conversationId: string): {
+  chatId: string;
+  messageThreadId: number | undefined;
+} | undefined {
+  const trimmed = conversationId.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+
+  const threadMatch = trimmed.match(/^(.*)::thread:(\d+)$/);
+  if (!threadMatch) {
+    return {
+      chatId: trimmed,
+      messageThreadId: undefined,
+    };
+  }
+
+  const chatId = threadMatch[1]?.trim();
+  const messageThreadId = normalizeTelegramMessageThreadId(Number.parseInt(threadMatch[2] ?? '', 10));
+  if (!chatId || messageThreadId === undefined) {
+    return undefined;
+  }
+
+  return {
+    chatId,
+    messageThreadId,
+  };
+}
+
 function buildTelegramSessionFileName(chatId: string, messageThreadId: number | undefined): string {
   const chatToken = sanitizeTelegramPendingToken(chatId);
   if (messageThreadId === undefined) {
@@ -637,6 +765,22 @@ function buildTelegramSessionFileName(chatId: string, messageThreadId: number | 
   }
 
   return `${chatToken}__thread_${messageThreadId}.jsonl`;
+}
+
+function isTelegramServiceOnlyMessage(message: TelegramMessageLike): boolean {
+  return Boolean(
+    message.group_chat_created
+    || message.supergroup_chat_created
+    || message.channel_chat_created
+    || message.new_chat_participant
+    || message.new_chat_member
+    || (Array.isArray(message.new_chat_members) && message.new_chat_members.length > 0)
+    || message.left_chat_member
+    || message.delete_chat_photo
+    || message.migrate_to_chat_id !== undefined
+    || message.migrate_from_chat_id !== undefined
+    || message.pinned_message,
+  );
 }
 
 function isTelegramConversationInChat(conversationId: string, chatId: string): boolean {
@@ -706,6 +850,7 @@ function isModelCommand(command: string | undefined): boolean {
 const DEFAULT_TELEGRAM_COMMANDS: TelegramCommandDefinition[] = [
   { command: 'new', description: 'Start a new session' },
   { command: 'status', description: 'Show gateway status' },
+  { command: 'chatid', description: 'Show current chat ID (and topic ID)' },
   { command: 'tasks', description: 'List scheduled tasks (usage: /tasks [status])' },
   { command: 'room', description: 'Manage room approvals (usage: /room help)' },
   { command: 'tmux', description: 'Manage agent tmux sessions (usage: /tmux help)' },
@@ -719,8 +864,12 @@ const DEFAULT_TELEGRAM_COMMANDS: TelegramCommandDefinition[] = [
   { command: 'regenerate', description: 'Run the last prompt again' },
   { command: 'cancel', description: 'Cancel active model selection' },
   { command: 'compact', description: 'Compact context (usage: /compact [instructions])' },
+  { command: 'fork', description: 'Fork to new topic (usage: /fork [topic name])' },
   { command: 'resume', description: 'Resume help (gateway auto-resumes per chat)' },
 ];
+
+const DEFAULT_DISCORD_COMMANDS: TelegramCommandDefinition[] = DEFAULT_TELEGRAM_COMMANDS
+  .filter((command) => command.command !== 'fork');
 
 function toTelegramCommandName(rawCommand: string): string | undefined {
   let value = rawCommand.trim().toLowerCase();
@@ -862,6 +1011,107 @@ function formatTelegramCommands(commands: TelegramCommandDefinition[]): string {
   return lines.join('\n');
 }
 
+function trimForkMessagePreview(text: string, maxLength = 120): string {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+function defaultTelegramForkTopicName(messageText: string): string {
+  const preview = trimForkMessagePreview(messageText, 48).replace(/\s+/g, ' ').trim();
+  if (preview.length === 0) {
+    const timestamp = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    return `fork ${timestamp}`;
+  }
+
+  return trimForkMessagePreview(`fork ${preview}`, 96);
+}
+
+function normalizeTelegramForkTopicName(requestedName: string, fallbackName: string): string {
+  const normalized = requestedName.replace(/\s+/g, ' ').trim();
+  if (normalized.length === 0) {
+    return fallbackName;
+  }
+
+  return trimForkMessagePreview(normalized, 96);
+}
+
+function normalizeForkableMessages(messages: ForkableConversationMessage[]): ForkableConversationMessage[] {
+  return [...messages]
+    .map((entry) => ({
+      entryId: entry.entryId,
+      text: entry.text,
+    }))
+    .reverse();
+}
+
+function formatForkableMessages(messages: ForkableConversationMessage[]): string {
+  if (messages.length === 0) {
+    return [
+      'No previous user messages available to fork from in this conversation yet.',
+      '',
+      'Send at least one prompt first, then run /fork again.',
+    ].join('\n');
+  }
+
+  const maxRows = 15;
+  const displayed = messages.slice(0, maxRows);
+  const lines = ['Forkable messages (most recent first):'];
+
+  for (let index = 0; index < displayed.length; index += 1) {
+    const entry = displayed[index] as ForkableConversationMessage;
+    lines.push(`${index + 1}. [${entry.entryId}] ${trimForkMessagePreview(entry.text)}`);
+  }
+
+  if (messages.length > displayed.length) {
+    lines.push(`…and ${messages.length - displayed.length} older message(s).`);
+  }
+
+  lines.push('');
+  lines.push('Usage: /fork <index|entryId>');
+  lines.push('Example: /fork 1');
+
+  return lines.join('\n');
+}
+
+function resolveForkEntryId(
+  arg: string,
+  messages: ForkableConversationMessage[],
+): { entryId?: string; error?: string } {
+  const trimmed = arg.trim();
+
+  if (trimmed.length === 0) {
+    return { error: 'Usage: /fork <index|entryId>' };
+  }
+
+  if (/^\d+$/.test(trimmed)) {
+    const index = Number.parseInt(trimmed, 10);
+    if (!Number.isFinite(index) || index <= 0 || index > messages.length) {
+      return {
+        error: `Fork index out of range. Choose 1-${messages.length}.`,
+      };
+    }
+
+    return {
+      entryId: (messages[index - 1] as ForkableConversationMessage).entryId,
+    };
+  }
+
+  const matchedEntry = messages.find((entry) => entry.entryId === trimmed);
+  if (!matchedEntry) {
+    return {
+      error: `Unknown fork entry ID: ${trimmed}`,
+    };
+  }
+
+  return {
+    entryId: matchedEntry.entryId,
+  };
+}
+
 function normalizeTelegramCommandText(text: string): {
   normalizedText: string;
   command?: string;
@@ -904,9 +1154,176 @@ function gatewayTmuxUsageText(): string {
     '- /tmux logs <session> [tail=<n>]',
     '- /tmux stop <session>',
     '- /tmux send <session> -- <command>',
-    '- /tmux run <task-slug> [cwd=<path>] -- <command>',
+    '- /tmux run <task-slug> [cwd=<path>] [fork=<none|auto|new-topic|reuse-topic>] [notify=<none|message|resume>] [group=<id|auto>] [topic=<name|auto>] -- <command>',
     '- /tmux clean [dry-run]',
   ].join('\n');
+}
+
+function parseTelegramTmuxRunRequest(rawArgs: string):
+  | { kind: 'pass' }
+  | { kind: 'invalid'; message: string }
+  | { kind: 'run'; value: TelegramTmuxRunRequest } {
+  const trimmed = rawArgs.trim();
+  if (trimmed.length === 0) {
+    return { kind: 'pass' };
+  }
+
+  const delimiterMatch = trimmed.match(/^(.*?)(?:\s+--\s+)([\s\S]+)$/);
+  const headText = delimiterMatch?.[1]?.trim() ?? trimmed;
+  const commandText = delimiterMatch?.[2]?.trim();
+  const tokens = headText.split(/\s+/).filter((token) => token.length > 0);
+  const subcommand = (tokens[0] ?? '').toLowerCase();
+
+  if (subcommand !== 'run') {
+    return { kind: 'pass' };
+  }
+
+  if (!commandText) {
+    return {
+      kind: 'invalid',
+      message: `Usage: /tmux run <task-slug> [cwd=<path>] [fork=<none|auto|new-topic|reuse-topic>] [notify=<none|message|resume>] [group=<id|auto>] [topic=<name|auto>] -- <command>\n\n${gatewayTmuxUsageText()}`,
+    };
+  }
+
+  const taskSlug = tokens[1];
+  if (!taskSlug) {
+    return {
+      kind: 'invalid',
+      message: `Usage: /tmux run <task-slug> [cwd=<path>] [fork=<none|auto|new-topic|reuse-topic>] [notify=<none|message|resume>] [group=<id|auto>] [topic=<name|auto>] -- <command>\n\n${gatewayTmuxUsageText()}`,
+    };
+  }
+
+  let cwd: string | undefined;
+  let forkMode: TelegramTmuxForkMode = 'none';
+  let notifyMode: TelegramTmuxNotifyMode = 'message';
+  let group = 'auto';
+  let topic = 'auto';
+
+  for (let index = 2; index < tokens.length; index += 1) {
+    const token = tokens[index] as string;
+
+    if (token === '--cwd') {
+      const next = tokens[index + 1];
+      if (!next) {
+        return {
+          kind: 'invalid',
+          message: `Usage: /tmux run <task-slug> [cwd=<path>] [fork=<none|auto|new-topic|reuse-topic>] [notify=<none|message|resume>] [group=<id|auto>] [topic=<name|auto>] -- <command>\n\n${gatewayTmuxUsageText()}`,
+        };
+      }
+
+      cwd = next;
+      index += 1;
+      continue;
+    }
+
+    if (token.startsWith('cwd=')) {
+      const value = token.slice('cwd='.length).trim();
+      if (value.length === 0) {
+        return {
+          kind: 'invalid',
+          message: `CWD cannot be empty.\n\n${gatewayTmuxUsageText()}`,
+        };
+      }
+
+      cwd = value;
+      continue;
+    }
+
+    if (token.startsWith('fork=')) {
+      const value = token.slice('fork='.length).trim().toLowerCase();
+      if (value === 'none' || value === 'auto' || value === 'new-topic' || value === 'reuse-topic') {
+        forkMode = value;
+        continue;
+      }
+
+      return {
+        kind: 'invalid',
+        message: `Invalid fork mode: ${value}. Use one of none, auto, new-topic, reuse-topic.\n\n${gatewayTmuxUsageText()}`,
+      };
+    }
+
+    if (token.startsWith('notify=')) {
+      const value = token.slice('notify='.length).trim().toLowerCase();
+      if (value === 'none' || value === 'message' || value === 'resume') {
+        notifyMode = value;
+        continue;
+      }
+
+      return {
+        kind: 'invalid',
+        message: `Invalid notify mode: ${value}. Use one of none, message, resume.\n\n${gatewayTmuxUsageText()}`,
+      };
+    }
+
+    if (token.startsWith('group=')) {
+      const value = token.slice('group='.length).trim();
+      if (value.length === 0) {
+        return {
+          kind: 'invalid',
+          message: `Group cannot be empty.\n\n${gatewayTmuxUsageText()}`,
+        };
+      }
+
+      group = value;
+      continue;
+    }
+
+    if (token.startsWith('topic=')) {
+      const value = token.slice('topic='.length).trim();
+      if (value.length === 0) {
+        return {
+          kind: 'invalid',
+          message: `Topic cannot be empty.\n\n${gatewayTmuxUsageText()}`,
+        };
+      }
+
+      topic = value;
+      continue;
+    }
+
+    return {
+      kind: 'invalid',
+      message: `Unknown /tmux run option: ${token}.\n\n${gatewayTmuxUsageText()}`,
+    };
+  }
+
+  return {
+    kind: 'run',
+    value: {
+      taskSlug,
+      commandText,
+      cwd,
+      forkMode,
+      notifyMode,
+      group,
+      topic,
+    },
+  };
+}
+
+function buildTelegramTmuxRunCliArgs(run: TelegramTmuxRunRequest): string[] {
+  const cliArgs = ['run', run.taskSlug];
+
+  if (run.cwd && run.cwd.length > 0) {
+    cliArgs.push('--cwd', run.cwd);
+  }
+
+  if (run.notifyMode !== 'none') {
+    cliArgs.push('--notify-on-complete');
+  }
+
+  cliArgs.push('--', 'sh', '-lc', run.commandText);
+  return cliArgs;
+}
+
+function parseTmuxRunCliOutput(output: string): { sessionName?: string; logPath?: string } {
+  const sessionMatch = output.match(/^\s*Session:\s*(.+)$/m);
+  const logMatch = output.match(/^\s*Log:\s*(.+)$/m);
+
+  return {
+    sessionName: sessionMatch?.[1]?.trim(),
+    logPath: logMatch?.[1]?.trim(),
+  };
 }
 
 function parseGatewayTmuxCommand(rawArgs: string): { cliArgs?: string[]; message?: string } {
@@ -1043,6 +1460,8 @@ function resolveGatewayCliEntryPath(): string | undefined {
   return existsSync(candidate) ? candidate : undefined;
 }
 
+const GATEWAY_TMUX_CLI_MAX_BUFFER_BYTES = 20 * 1024 * 1024;
+
 function runGatewayTmuxCli(tmuxArgs: string[], workingDirectory: string): { ok: boolean; output: string } {
   const cliEntryPath = resolveGatewayCliEntryPath();
   const command = cliEntryPath ? process.execPath : 'pa';
@@ -1053,18 +1472,31 @@ function runGatewayTmuxCli(tmuxArgs: string[], workingDirectory: string): { ok: 
   const result = spawnSync(command, args, {
     cwd: workingDirectory,
     encoding: 'utf-8',
+    maxBuffer: GATEWAY_TMUX_CLI_MAX_BUFFER_BYTES,
   });
-
-  if (result.error) {
-    return {
-      ok: false,
-      output: result.error.message,
-    };
-  }
 
   const stdout = normalizeGatewayTerminalOutput(result.stdout ?? '');
   const stderr = normalizeGatewayTerminalOutput(result.stderr ?? '');
   const output = [stdout, stderr].filter((value) => value.length > 0).join('\n');
+
+  if (result.error) {
+    const error = result.error as NodeJS.ErrnoException;
+
+    if (error.code === 'ENOBUFS') {
+      const maxBufferMb = Math.floor(GATEWAY_TMUX_CLI_MAX_BUFFER_BYTES / (1024 * 1024));
+      const bufferMessage = `Gateway /tmux output exceeded ${maxBufferMb}MB. Try narrowing the command output.`;
+
+      return {
+        ok: false,
+        output: output.length > 0 ? `${output}\n\n${bufferMessage}` : bufferMessage,
+      };
+    }
+
+    return {
+      ok: false,
+      output: output.length > 0 ? output : error.message,
+    };
+  }
 
   if ((result.status ?? 1) !== 0) {
     return {
@@ -1078,6 +1510,7 @@ function runGatewayTmuxCli(tmuxArgs: string[], workingDirectory: string): { ok: 
     output: output.length > 0 ? output : 'Done.',
   };
 }
+
 
 const runTelegramTmuxCommand = async (input: {
   args: string;
@@ -2476,7 +2909,7 @@ class PersistentConversationController implements GatewayConversationController 
   private readonly profile: ResolvedProfile;
   private readonly agentDir: string;
   private readonly cwd: string;
-  private readonly sessionFile: string;
+  private readonly initialSessionFile: string;
 
   private session?: PiAgentSession;
   private sessionPromise?: Promise<PiAgentSession>;
@@ -2490,7 +2923,7 @@ class PersistentConversationController implements GatewayConversationController 
     this.profile = options.profile;
     this.agentDir = options.agentDir;
     this.cwd = options.cwd;
-    this.sessionFile = options.sessionFile;
+    this.initialSessionFile = options.sessionFile;
   }
 
   async submitPrompt(input: RunPromptFnInput): Promise<ConversationSubmitResult> {
@@ -2554,6 +2987,51 @@ class PersistentConversationController implements GatewayConversationController 
     }
 
     return lines.join('\n');
+  }
+
+  async getUserMessagesForForking(): Promise<ForkableConversationMessage[]> {
+    this.ensureActive();
+
+    if (this.activeRun) {
+      throw new Error('Cannot fork while a response is running. Use /stop first.');
+    }
+
+    const session = await this.getSession();
+    const messages = session.getUserMessagesForForking();
+
+    return messages.map((message) => ({
+      entryId: message.entryId,
+      text: message.text,
+    }));
+  }
+
+  async fork(entryId: string): Promise<ForkConversationResult> {
+    this.ensureActive();
+
+    if (this.activeRun) {
+      throw new Error('Cannot fork while a response is running. Use /stop first.');
+    }
+
+    const trimmedEntryId = entryId.trim();
+    if (trimmedEntryId.length === 0) {
+      throw new Error('Fork entry ID cannot be empty.');
+    }
+
+    const session = await this.getSession();
+    const result = await session.fork(trimmedEntryId);
+
+    return {
+      selectedText: result.selectedText,
+      cancelled: result.cancelled,
+      sessionFile: session.sessionFile ?? this.initialSessionFile,
+    };
+  }
+
+  async getSessionFile(): Promise<string> {
+    this.ensureActive();
+
+    const session = await this.getSession();
+    return session.sessionFile ?? this.initialSessionFile;
   }
 
   async abortCurrent(): Promise<boolean> {
@@ -2788,7 +3266,7 @@ class PersistentConversationController implements GatewayConversationController 
       profile: this.profile,
       agentDir: this.agentDir,
       cwd: this.cwd,
-      sessionFile: this.sessionFile,
+      sessionFile: this.initialSessionFile,
     }).then((session) => {
       this.session = session;
       this.unsubscribe = session.subscribe((event) => {
@@ -3940,6 +4418,7 @@ function toGatewayNotificationEventPayload(notification: GatewayNotification): R
   return {
     gateway: notification.gateway,
     destinationId: notification.destinationId,
+    ...(typeof notification.messageThreadId === 'number' ? { messageThreadId: notification.messageThreadId } : {}),
     message: notification.message,
     taskId: notification.taskId,
     status: notification.status,
@@ -4018,6 +4497,224 @@ interface StoredTelegramPendingMessage {
 interface LoadedTelegramPendingMessage {
   id: string;
   message: TelegramMessageLike;
+}
+
+interface TelegramConversationBindingRecord {
+  sessionFile: string;
+  updatedAt: string;
+}
+
+interface StoredTelegramConversationBindings {
+  version: 1;
+  conversations: Record<string, TelegramConversationBindingRecord>;
+}
+
+interface TelegramWorkTopicBinding {
+  sourceConversationId: string;
+  sourceChatId: string;
+  sourceMessageThreadId?: number;
+  workConversationId: string;
+  workChatId: number;
+  workMessageThreadId: number;
+  topicName: string;
+  sessionFile: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface StoredTelegramWorkTopicBindings {
+  version: 1;
+  bindings: TelegramWorkTopicBinding[];
+}
+
+function loadTelegramWorkTopicBindings(filePath: string): Map<string, TelegramWorkTopicBinding> {
+  if (!existsSync(filePath)) {
+    return new Map<string, TelegramWorkTopicBinding>();
+  }
+
+  try {
+    const raw = readFileSync(filePath, 'utf-8').trim();
+    if (raw.length === 0) {
+      return new Map<string, TelegramWorkTopicBinding>();
+    }
+
+    const parsed = JSON.parse(raw) as Partial<StoredTelegramWorkTopicBindings>;
+    if (parsed.version !== 1 || !Array.isArray(parsed.bindings)) {
+      return new Map<string, TelegramWorkTopicBinding>();
+    }
+
+    const bindings = new Map<string, TelegramWorkTopicBinding>();
+
+    for (const item of parsed.bindings) {
+      if (!item || typeof item !== 'object') {
+        continue;
+      }
+
+      const sourceConversationId = typeof item.sourceConversationId === 'string'
+        ? item.sourceConversationId.trim()
+        : '';
+      const workConversationId = typeof item.workConversationId === 'string'
+        ? item.workConversationId.trim()
+        : '';
+      const sourceChatId = typeof item.sourceChatId === 'string'
+        ? item.sourceChatId.trim()
+        : '';
+      const topicName = typeof item.topicName === 'string'
+        ? item.topicName.trim()
+        : '';
+      const sessionFile = typeof item.sessionFile === 'string'
+        ? item.sessionFile.trim()
+        : '';
+      const workChatId = typeof item.workChatId === 'number' && Number.isFinite(item.workChatId)
+        ? Math.floor(item.workChatId)
+        : undefined;
+      const workMessageThreadId = normalizeTelegramMessageThreadId(item.workMessageThreadId);
+
+      if (!sourceConversationId || !workConversationId || !sourceChatId || !topicName || !sessionFile) {
+        continue;
+      }
+
+      if (workChatId === undefined || workMessageThreadId === undefined) {
+        continue;
+      }
+
+      bindings.set(sourceConversationId, {
+        sourceConversationId,
+        sourceChatId,
+        sourceMessageThreadId: normalizeTelegramMessageThreadId(item.sourceMessageThreadId),
+        workConversationId,
+        workChatId,
+        workMessageThreadId,
+        topicName,
+        sessionFile,
+        createdAt: typeof item.createdAt === 'string' ? item.createdAt : new Date().toISOString(),
+        updatedAt: typeof item.updatedAt === 'string' ? item.updatedAt : new Date().toISOString(),
+      });
+    }
+
+    return bindings;
+  } catch {
+    return new Map<string, TelegramWorkTopicBinding>();
+  }
+}
+
+function writeTelegramWorkTopicBindings(filePath: string, bindings: Map<string, TelegramWorkTopicBinding>): void {
+  mkdirSync(dirname(filePath), { recursive: true });
+
+  const payload: StoredTelegramWorkTopicBindings = {
+    version: 1,
+    bindings: [...bindings.values()],
+  };
+
+  writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf-8');
+}
+
+function readTmuxExitCodeFromLog(logPath: string | undefined): number | undefined {
+  if (!logPath) {
+    return undefined;
+  }
+
+  try {
+    const text = readFileSync(logPath, 'utf-8');
+    const matches = [...text.matchAll(/__PA_TMUX_EXIT_CODE=(\d+)/g)];
+    const last = matches[matches.length - 1];
+    if (!last || !last[1]) {
+      return undefined;
+    }
+
+    const parsed = Number.parseInt(last[1], 10);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function readTmuxLogTail(logPath: string | undefined, lineCount = 40): string {
+  if (!logPath) {
+    return '';
+  }
+
+  try {
+    const text = readFileSync(logPath, 'utf-8');
+    const lines = text
+      .split(/\r?\n/)
+      .filter((line) => line.trim().length > 0)
+      .slice(-lineCount);
+
+    return lines.join('\n').trim();
+  } catch {
+    return '';
+  }
+}
+
+function loadTelegramConversationBindings(filePath: string): Map<string, string> {
+  if (!existsSync(filePath)) {
+    return new Map<string, string>();
+  }
+
+  try {
+    const raw = readFileSync(filePath, 'utf-8').trim();
+    if (raw.length === 0) {
+      return new Map<string, string>();
+    }
+
+    const parsed = JSON.parse(raw) as Partial<StoredTelegramConversationBindings>;
+    if (parsed.version !== 1 || !parsed.conversations || typeof parsed.conversations !== 'object') {
+      return new Map<string, string>();
+    }
+
+    const bindings = new Map<string, string>();
+    for (const [conversationId, record] of Object.entries(parsed.conversations)) {
+      if (!record || typeof record !== 'object') {
+        continue;
+      }
+
+      const sessionFile = (record as { sessionFile?: unknown }).sessionFile;
+      if (typeof sessionFile !== 'string') {
+        continue;
+      }
+
+      const trimmedConversationId = conversationId.trim();
+      const trimmedSessionFile = sessionFile.trim();
+      if (trimmedConversationId.length === 0 || trimmedSessionFile.length === 0) {
+        continue;
+      }
+
+      bindings.set(trimmedConversationId, trimmedSessionFile);
+    }
+
+    return bindings;
+  } catch {
+    return new Map<string, string>();
+  }
+}
+
+function writeTelegramConversationBindings(filePath: string, bindings: Map<string, string>): void {
+  mkdirSync(dirname(filePath), { recursive: true });
+
+  const conversations: Record<string, TelegramConversationBindingRecord> = {};
+  const updatedAt = new Date().toISOString();
+
+  for (const [conversationId, sessionFile] of bindings.entries()) {
+    const trimmedConversationId = conversationId.trim();
+    const trimmedSessionFile = sessionFile.trim();
+
+    if (trimmedConversationId.length === 0 || trimmedSessionFile.length === 0) {
+      continue;
+    }
+
+    conversations[trimmedConversationId] = {
+      sessionFile: trimmedSessionFile,
+      updatedAt,
+    };
+  }
+
+  const payload: StoredTelegramConversationBindings = {
+    version: 1,
+    conversations,
+  };
+
+  writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf-8');
 }
 
 function sanitizeTelegramPendingToken(token: string): string {
@@ -4216,6 +4913,26 @@ function getTelegramRetryAfterMs(error: unknown): number | undefined {
   return Math.floor(retryAfterSeconds * 1000);
 }
 
+function isTelegramTopicCreationPermissionError(error: unknown): boolean {
+  const statusCode = getTelegramErrorStatusCode(error);
+  if (statusCode !== 400 && statusCode !== 403) {
+    return false;
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  return /not enough rights to create a topic|not enough rights|forbidden/i.test(message);
+}
+
+function isTelegramTopicsNotEnabledError(error: unknown): boolean {
+  const statusCode = getTelegramErrorStatusCode(error);
+  if (statusCode !== 400) {
+    return false;
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  return /topics? (are|is) not enabled|forum topic/i.test(message);
+}
+
 function isRetriableTelegramApiError(error: unknown): boolean {
   const statusCode = getTelegramErrorStatusCode(error);
   if (typeof statusCode === 'number') {
@@ -4390,6 +5107,36 @@ function buildTelegramModelSelectionOptions(models: string[]): TelegramSendMessa
   };
 }
 
+function buildTelegramForkSelectionOptions(messages: ForkableConversationMessage[]): TelegramSendMessageOptions | undefined {
+  const inlineKeyboard: TelegramInlineKeyboardButton[][] = [];
+
+  for (let index = 0; index < Math.min(messages.length, 5); index += 1) {
+    const entry = messages[index] as ForkableConversationMessage;
+    const callbackData = `${TELEGRAM_FORK_SELECTION_CALLBACK_PREFIX}${entry.entryId}`;
+
+    if (callbackData.length > 64) {
+      continue;
+    }
+
+    inlineKeyboard.push([
+      {
+        text: truncateTelegramButtonLabel(`${index + 1}. ${trimForkMessagePreview(entry.text, 44)}`),
+        callback_data: callbackData,
+      },
+    ]);
+  }
+
+  if (inlineKeyboard.length === 0) {
+    return undefined;
+  }
+
+  return {
+    reply_markup: {
+      inline_keyboard: inlineKeyboard,
+    },
+  };
+}
+
 function parseTelegramModelSelectionCallback(data: string): string | undefined {
   if (!data.startsWith(TELEGRAM_MODEL_SELECTION_CALLBACK_PREFIX)) {
     return undefined;
@@ -4409,6 +5156,19 @@ function parseTelegramModelSelectionCallback(data: string): string | undefined {
   }
 
   return value;
+}
+
+function parseTelegramForkSelectionCallback(data: string): string | undefined {
+  if (!data.startsWith(TELEGRAM_FORK_SELECTION_CALLBACK_PREFIX)) {
+    return undefined;
+  }
+
+  const entryId = data.slice(TELEGRAM_FORK_SELECTION_CALLBACK_PREFIX.length).trim();
+  if (entryId.length === 0) {
+    return undefined;
+  }
+
+  return `/fork ${entryId}`;
 }
 
 function parseTelegramActionCallback(data: string): '/stop' | '/new' | '/regenerate' | '/followup' | undefined {
@@ -4783,9 +5543,76 @@ interface TelegramPromptMemoryEntry {
   images?: PromptImageAttachment[];
 }
 
+interface ClearTrackedTelegramConversationMessagesInput {
+  chatId: number;
+  messageIds: number[];
+  deleteMessage?: DeleteMessageFn;
+}
+
+interface ClearTrackedTelegramConversationMessagesResult {
+  attempted: number;
+  deleted: number;
+}
+
+function trackTelegramConversationMessageId(
+  messageIdsByConversation: Map<string, number[]>,
+  conversationId: string,
+  messageId: number | undefined,
+): void {
+  if (typeof messageId !== 'number' || !Number.isSafeInteger(messageId) || messageId <= 0) {
+    return;
+  }
+
+  const tracked = messageIdsByConversation.get(conversationId) ?? [];
+
+  if (tracked.includes(messageId)) {
+    return;
+  }
+
+  tracked.push(messageId);
+
+  if (tracked.length > TELEGRAM_MAX_TRACKED_CONVERSATION_MESSAGES) {
+    tracked.splice(0, tracked.length - TELEGRAM_MAX_TRACKED_CONVERSATION_MESSAGES);
+  }
+
+  messageIdsByConversation.set(conversationId, tracked);
+}
+
+async function clearTrackedTelegramConversationMessages(
+  input: ClearTrackedTelegramConversationMessagesInput,
+): Promise<ClearTrackedTelegramConversationMessagesResult> {
+  if (!input.deleteMessage || input.messageIds.length === 0) {
+    return {
+      attempted: 0,
+      deleted: 0,
+    };
+  }
+
+  const messageIds = [...new Set(
+    input.messageIds.filter((value): value is number => Number.isSafeInteger(value) && value > 0),
+  )].sort((a, b) => b - a);
+
+  let deleted = 0;
+
+  for (const messageId of messageIds) {
+    try {
+      await input.deleteMessage(input.chatId, messageId);
+      deleted += 1;
+    } catch {
+      // Best-effort cleanup. Ignore individual delete failures.
+    }
+  }
+
+  return {
+    attempted: messageIds.length,
+    deleted,
+  };
+}
+
 interface TelegramMessageHandlerState {
   lastPromptByConversation: Map<string, TelegramPromptMemoryEntry>;
   awaitingFollowUpByConversation: Set<string>;
+  recentMessageIdsByConversation: Map<string, number[]>;
 }
 
 async function processTelegramMessage(
@@ -4810,36 +5637,46 @@ async function processTelegramMessage(
     return completedMessageProcessingResult();
   }
 
-  const sendMessageWithConversationThread: SendMessageFn = (targetChatId, text, sendOptions) => {
-    const threadedOptions = applyTelegramThreadToMessageOptions(sendOptions, messageThreadId);
-    if (!threadedOptions || Object.keys(threadedOptions).length === 0) {
-      return options.sendMessage(targetChatId, text);
-    }
+  const trackConversationMessageId = (messageId: number | undefined): void => {
+    trackTelegramConversationMessageId(state.recentMessageIdsByConversation, conversationId, messageId);
+  };
 
-    return options.sendMessage(targetChatId, text, threadedOptions);
+  const sendMessageWithConversationThread: SendMessageFn = async (targetChatId, text, sendOptions) => {
+    const threadedOptions = applyTelegramThreadToMessageOptions(sendOptions, messageThreadId);
+
+    const sent = !threadedOptions || Object.keys(threadedOptions).length === 0
+      ? await options.sendMessage(targetChatId, text)
+      : await options.sendMessage(targetChatId, text, threadedOptions);
+
+    trackConversationMessageId(toTelegramSentMessageId(sent));
+    return sent;
   };
 
   const baseSendDocument = options.sendDocument;
   const sendDocumentWithConversationThread: SendDocumentFn | undefined = baseSendDocument
-    ? (targetChatId, filePath, sendOptions) => {
+    ? async (targetChatId, filePath, sendOptions) => {
       const threadedOptions = applyTelegramThreadToFileOptions(sendOptions, messageThreadId);
-      if (!threadedOptions || Object.keys(threadedOptions).length === 0) {
-        return baseSendDocument(targetChatId, filePath);
-      }
 
-      return baseSendDocument(targetChatId, filePath, threadedOptions);
+      const sent = !threadedOptions || Object.keys(threadedOptions).length === 0
+        ? await baseSendDocument(targetChatId, filePath)
+        : await baseSendDocument(targetChatId, filePath, threadedOptions);
+
+      trackConversationMessageId(toTelegramSentMessageId(sent));
+      return sent;
     }
     : undefined;
 
   const baseSendPhoto = options.sendPhoto;
   const sendPhotoWithConversationThread: SendPhotoFn | undefined = baseSendPhoto
-    ? (targetChatId, filePath, sendOptions) => {
+    ? async (targetChatId, filePath, sendOptions) => {
       const threadedOptions = applyTelegramThreadToFileOptions(sendOptions, messageThreadId);
-      if (!threadedOptions || Object.keys(threadedOptions).length === 0) {
-        return baseSendPhoto(targetChatId, filePath);
-      }
 
-      return baseSendPhoto(targetChatId, filePath, threadedOptions);
+      const sent = !threadedOptions || Object.keys(threadedOptions).length === 0
+        ? await baseSendPhoto(targetChatId, filePath)
+        : await baseSendPhoto(targetChatId, filePath, threadedOptions);
+
+      trackConversationMessageId(toTelegramSentMessageId(sent));
+      return sent;
     }
     : undefined;
 
@@ -4873,13 +5710,37 @@ async function processTelegramMessage(
     });
   };
 
-  if (!options.allowlist.has(chatId)) {
-    await sendMessageToConversation('This chat is not allowed.');
+  const rawText = (message.text ?? message.caption ?? '').trim();
+  const inboundMediaReferences = extractTelegramInboundMedia(message);
+  const isServiceOnlyMessage = rawText.length === 0
+    && inboundMediaReferences.length === 0
+    && isTelegramServiceOnlyMessage(message);
+  const senderIsAllowedUser = senderUserId ? allowedUserIds.has(senderUserId) : false;
+  const bypassAllowlistForDirectChat = senderIsAllowedUser && message.chat.type === 'private';
+  const canAutoAuthorizeRoom = senderIsAllowedUser && message.chat.type !== 'private';
+
+  if (!options.allowlist.has(chatId) && !bypassAllowlistForDirectChat) {
+    if (canAutoAuthorizeRoom && !isServiceOnlyMessage) {
+      options.allowlist.add(chatId);
+      options.persistAccessLists?.();
+
+      const chatTitle = message.chat.title?.trim()
+        || (message.chat.username ? `@${message.chat.username}` : chatId);
+      const senderLabel = formatTelegramUserLabel(message.from);
+      logSystem('telegram', `Auto-authorized room ${chatTitle} (${chatId}) from allowed user ${senderLabel}`);
+    } else {
+      if (!isServiceOnlyMessage) {
+        await sendMessageToConversation('This chat is not allowed.');
+      }
+      return completedMessageProcessingResult();
+    }
+  }
+
+  if (isServiceOnlyMessage) {
     return completedMessageProcessingResult();
   }
 
-  const rawText = (message.text ?? message.caption ?? '').trim();
-  const inboundMediaReferences = extractTelegramInboundMedia(message);
+  trackConversationMessageId(message.message_id);
 
   if (rawText.length === 0 && inboundMediaReferences.length === 0) {
     await sendMessageToConversation('Please send text, documents, images, or voice notes.');
@@ -4918,7 +5779,13 @@ async function processTelegramMessage(
     : `[${preparedMedia.map((media) => media.kind).join(', ')} attachment]`;
   logIncomingMessage('telegram', conversationId, userName, incomingSummary);
 
-  const sessionFile = join(options.telegramSessionDir, buildTelegramSessionFileName(chatId, messageThreadId));
+  const defaultSessionFile = join(options.telegramSessionDir, buildTelegramSessionFileName(chatId, messageThreadId));
+  const sessionFile = options.resolveConversationSessionFile
+    ? options.resolveConversationSessionFile({
+      conversationId,
+      defaultSessionFile,
+    })
+    : defaultSessionFile;
   const sessionFileExists = options.sessionFileExists ?? existsSync;
   const removeSessionFile = options.removeSessionFile ?? ((path: string) => rm(path, { force: true }));
 
@@ -4960,8 +5827,26 @@ async function processTelegramMessage(
       await removeSessionFile(sessionFile);
     }
 
+    options.clearConversationSessionFile?.({
+      conversationId,
+    });
+
+    const trackedMessageIds = [...(state.recentMessageIdsByConversation.get(conversationId) ?? [])];
+    state.recentMessageIdsByConversation.delete(conversationId);
     state.lastPromptByConversation.delete(conversationId);
     state.awaitingFollowUpByConversation.delete(conversationId);
+
+    const shouldClearRecentMessagesOnNew = options.clearRecentMessagesOnNew ?? true;
+    const clearResult = shouldClearRecentMessagesOnNew
+      ? await clearTrackedTelegramConversationMessages({
+        chatId: message.chat.id,
+        messageIds: trackedMessageIds,
+        deleteMessage: options.deleteMessage,
+      })
+      : {
+        attempted: 0,
+        deleted: 0,
+      };
 
     await emitDaemonEventNonFatal({
       type: 'session.closed',
@@ -4974,7 +5859,19 @@ async function processTelegramMessage(
       },
     });
 
-    await sendMessageToConversation('Started a new session.');
+    let response = 'Started a new session.';
+    if (shouldClearRecentMessagesOnNew) {
+      if (clearResult.attempted > 0 && clearResult.deleted > 0) {
+        response = `Started a new session. Cleared ${clearResult.deleted} recent message${clearResult.deleted === 1 ? '' : 's'}.`;
+        if (clearResult.deleted < clearResult.attempted) {
+          response += ' Some messages could not be removed.';
+        }
+      } else if (clearResult.attempted > 0) {
+        response = 'Started a new session. Unable to clear recent messages.';
+      }
+    }
+
+    await sendMessageToConversation(response);
     return completedMessageProcessingResult();
   }
 
@@ -4989,6 +5886,17 @@ agentDir=${options.agentDir}
 session=${sessionFile}
 model=${model}`,
     );
+    return completedMessageProcessingResult();
+  }
+
+  if (command === '/chatid') {
+    const lines = [`chatId=${chatId}`];
+
+    if (messageThreadId !== undefined) {
+      lines.push(`messageThreadId=${messageThreadId}`);
+    }
+
+    await sendMessageToConversation(lines.join('\n'));
     return completedMessageProcessingResult();
   }
 
@@ -5015,6 +5923,220 @@ model=${model}`,
       );
     } catch (error) {
       await sendMessageToConversation(`Unable to compact context: ${(error as Error).message}`);
+    }
+
+    return completedMessageProcessingResult();
+  }
+
+  if (command === '/fork') {
+    const controller = await getOrCreateConversationController(
+      controllers,
+      conversationId,
+      sessionFile,
+      options.createConversationController,
+    );
+
+    try {
+      const forkableMessages = normalizeForkableMessages(await controller.getUserMessagesForForking());
+
+      if (forkableMessages.length === 0) {
+        await sendLongText(
+          (chunk) => sendFormattedMessageToConversation(chunk),
+          formatForkableMessages(forkableMessages),
+        );
+        return completedMessageProcessingResult();
+      }
+
+      const canForkToTopic = Boolean(options.createForumTopic)
+        && (message.chat.type === 'group' || message.chat.type === 'supergroup');
+
+      if (canForkToTopic) {
+        const selectedEntry = forkableMessages[0] as ForkableConversationMessage;
+        const requestedTopicName = commandArgs.trim();
+        const topicName = normalizeTelegramForkTopicName(
+          requestedTopicName,
+          defaultTelegramForkTopicName(selectedEntry.text),
+        );
+
+        try {
+          const createdTopic = await options.createForumTopic!({
+            chatId: message.chat.id,
+            name: topicName,
+          });
+
+          const forkResult = await controller.fork(selectedEntry.entryId);
+          if (forkResult.cancelled) {
+            await sendMessageToConversation('Fork was cancelled by an extension.');
+            return completedMessageProcessingResult();
+          }
+
+          const nextSessionFile = forkResult.sessionFile || await controller.getSessionFile();
+          const targetConversationId = buildTelegramConversationId(chatId, createdTopic.messageThreadId);
+
+          options.setConversationSessionFile?.({
+            conversationId: targetConversationId,
+            sessionFile: nextSessionFile,
+          });
+
+          options.setWorkTopicBinding?.({
+            sourceConversationId: conversationId,
+            sourceChatId: chatId,
+            sourceMessageThreadId: messageThreadId,
+            workConversationId: targetConversationId,
+            workChatId: message.chat.id,
+            workMessageThreadId: createdTopic.messageThreadId,
+            topicName: createdTopic.name,
+            sessionFile: nextSessionFile,
+          });
+
+          const selectedText = (forkResult.selectedText || selectedEntry.text).trim();
+          const seedLines = [
+            `🧵 Forked from ${conversationId}`,
+            `entryId=${selectedEntry.entryId}`,
+            `session=${nextSessionFile}`,
+            '',
+            'This topic is now a forked branch from the source conversation.',
+          ];
+
+          if (selectedText.length > 0) {
+            seedLines.push('', 'Selected message:', trimForkMessagePreview(selectedText, 400));
+          }
+
+          await sendTelegramFormattedMessage(
+            options.sendMessage,
+            message.chat.id,
+            seedLines.join('\n'),
+            {
+              message_thread_id: createdTopic.messageThreadId,
+            },
+          );
+
+          const responseLines = [
+            'Forked conversation to a new topic.',
+            `topic=${createdTopic.name}`,
+            `workConversation=${targetConversationId}`,
+            `entryId=${selectedEntry.entryId}`,
+            `session=${nextSessionFile}`,
+          ];
+
+          await sendLongText(
+            (chunk) => sendFormattedMessageToConversation(chunk),
+            responseLines.join('\n'),
+          );
+          return completedMessageProcessingResult();
+        } catch (topicCreationError) {
+          if (!isTelegramTopicCreationPermissionError(topicCreationError)
+            && !isTelegramTopicsNotEnabledError(topicCreationError)) {
+            throw topicCreationError;
+          }
+
+          const topicCreationMessage = topicCreationError instanceof Error
+            ? topicCreationError.message
+            : String(topicCreationError);
+
+          await sendMessageToConversation(
+            `Unable to create a new topic for /fork (${topicCreationMessage}). Falling back to this chat/topic.`,
+          );
+
+          const forkResult = await controller.fork(selectedEntry.entryId);
+          if (forkResult.cancelled) {
+            await sendMessageToConversation('Fork was cancelled by an extension.');
+            return completedMessageProcessingResult();
+          }
+
+          const nextSessionFile = forkResult.sessionFile || await controller.getSessionFile();
+          options.setConversationSessionFile?.({
+            conversationId,
+            sessionFile: nextSessionFile,
+          });
+
+          state.lastPromptByConversation.set(conversationId, {
+            prompt: forkResult.selectedText,
+          });
+          state.awaitingFollowUpByConversation.delete(conversationId);
+
+          const selectedText = (forkResult.selectedText || selectedEntry.text).trim();
+          const lines = [
+            'Forked conversation to a new session in the current chat/topic.',
+            `entryId=${selectedEntry.entryId}`,
+            `session=${nextSessionFile}`,
+          ];
+
+          if (selectedText.length > 0) {
+            lines.push('', 'Selected message:', trimForkMessagePreview(selectedText, 400));
+          }
+
+          await sendLongText(
+            (chunk) => sendFormattedMessageToConversation(chunk),
+            lines.join('\n'),
+          );
+          return completedMessageProcessingResult();
+        }
+      }
+
+      if (commandArgs.length === 0) {
+        const forkMessageList = formatForkableMessages(forkableMessages);
+        const forkSelectionOptions = buildTelegramForkSelectionOptions(forkableMessages);
+
+        if (!forkSelectionOptions) {
+          await sendLongText(
+            (chunk) => sendFormattedMessageToConversation(chunk),
+            forkMessageList,
+          );
+          return completedMessageProcessingResult();
+        }
+
+        await sendFormattedMessageToConversation(forkMessageList, forkSelectionOptions);
+        return completedMessageProcessingResult();
+      }
+
+      const resolvedFork = resolveForkEntryId(commandArgs, forkableMessages);
+      if (!resolvedFork.entryId) {
+        const errorMessage = resolvedFork.error ?? 'Unable to resolve fork target.';
+        await sendLongText(
+          (chunk) => sendFormattedMessageToConversation(chunk),
+          `${errorMessage}\n\n${formatForkableMessages(forkableMessages)}`,
+        );
+        return completedMessageProcessingResult();
+      }
+
+      const selectedEntry = forkableMessages.find((entry) => entry.entryId === resolvedFork.entryId);
+      const forkResult = await controller.fork(resolvedFork.entryId);
+
+      if (forkResult.cancelled) {
+        await sendMessageToConversation('Fork was cancelled by an extension.');
+        return completedMessageProcessingResult();
+      }
+
+      const nextSessionFile = forkResult.sessionFile || await controller.getSessionFile();
+      options.setConversationSessionFile?.({
+        conversationId,
+        sessionFile: nextSessionFile,
+      });
+
+      state.lastPromptByConversation.set(conversationId, {
+        prompt: forkResult.selectedText,
+      });
+      state.awaitingFollowUpByConversation.delete(conversationId);
+
+      const lines = [
+        'Forked conversation to a new session.',
+        `entryId=${resolvedFork.entryId}`,
+        `session=${nextSessionFile}`,
+      ];
+
+      const selectedText = selectedEntry?.text ?? forkResult.selectedText;
+      const trimmedSelectedText = selectedText.trim();
+      if (trimmedSelectedText.length > 0) {
+        lines.push('', 'Selected message:', trimForkMessagePreview(trimmedSelectedText, 400));
+      }
+
+      await sendLongText(
+        (chunk) => sendFormattedMessageToConversation(chunk),
+        lines.join('\n'),
+      );
+    } catch (error) {
+      await sendMessageToConversation(`Unable to fork conversation: ${(error as Error).message}`);
     }
 
     return completedMessageProcessingResult();
@@ -5070,6 +6192,70 @@ model=${model}`,
   }
 
   if (command === '/tmux') {
+    const parsedTmuxRun = parseTelegramTmuxRunRequest(commandArgs);
+    if (parsedTmuxRun.kind === 'invalid') {
+      await sendLongText(
+        (chunk) => sendFormattedMessageToConversation(chunk),
+        parsedTmuxRun.message,
+      );
+      return completedMessageProcessingResult();
+    }
+
+    if (parsedTmuxRun.kind === 'run' && options.handleTmuxRunRequest) {
+      try {
+        const getController = async (): Promise<GatewayConversationController> => getOrCreateConversationController(
+          controllers,
+          conversationId,
+          sessionFile,
+          options.createConversationController,
+        );
+
+        const tmuxOutput = await options.handleTmuxRunRequest({
+          run: parsedTmuxRun.value,
+          sourceConversationId: conversationId,
+          sourceChatId: message.chat.id,
+          sourceMessageThreadId: messageThreadId,
+          sourceChatType: message.chat.type,
+          sourceChatTitle: message.chat.title,
+          sourceChatUsername: message.chat.username,
+          defaultSourceSessionFile: sessionFile,
+          getForkableMessages: async () => {
+            const controller = await getController();
+            return controller.getUserMessagesForForking();
+          },
+          forkConversation: async (entryId) => {
+            const controller = await getController();
+            return controller.fork(entryId);
+          },
+          setConversationSessionFile: ({ conversationId: targetConversationId, sessionFile: targetSessionFile }) => {
+            options.setConversationSessionFile?.({
+              conversationId: targetConversationId,
+              sessionFile: targetSessionFile,
+            });
+          },
+          resolveConversationSessionFile: ({ conversationId: targetConversationId, defaultSessionFile: targetDefaultSessionFile }) => {
+            if (options.resolveConversationSessionFile) {
+              return options.resolveConversationSessionFile({
+                conversationId: targetConversationId,
+                defaultSessionFile: targetDefaultSessionFile,
+              });
+            }
+
+            return targetDefaultSessionFile;
+          },
+        });
+
+        await sendLongText(
+          (chunk) => sendFormattedMessageToConversation(chunk),
+          tmuxOutput,
+        );
+      } catch (error) {
+        await sendMessageToConversation(`Unable to process /tmux command: ${(error as Error).message}`);
+      }
+
+      return completedMessageProcessingResult();
+    }
+
     if (!options.handleTmuxCommand) {
       await sendMessageToConversation('tmux commands are not available in this gateway instance.');
       return completedMessageProcessingResult();
@@ -5324,6 +6510,7 @@ export function createQueuedTelegramMessageHandler(
   const latestMessageIdByChat = new Map<string, number>();
   const lastPromptByConversation = new Map<string, TelegramPromptMemoryEntry>();
   const awaitingFollowUpByConversation = new Set<string>();
+  const recentMessageIdsByConversation = new Map<string, number[]>();
   const maxPendingPerChat = options.maxPendingPerChat ?? DEFAULT_MAX_PENDING_PER_CHAT;
   const durableInboxDir = options.durableInboxDir;
 
@@ -5448,6 +6635,7 @@ export function createQueuedTelegramMessageHandler(
           {
             lastPromptByConversation,
             awaitingFollowUpByConversation,
+            recentMessageIdsByConversation,
           },
           (task) => trackRunTask(conversationId, task),
         );
@@ -5604,6 +6792,10 @@ async function createTelegramConfigFromEnv(): Promise<TelegramBridgeConfig> {
     ?? storedTelegram?.toolActivityStream
     ?? false;
 
+  const clearRecentMessagesOnNew = toOptionalBoolean(process.env.PERSONAL_AGENT_TELEGRAM_CLEAR_RECENT_MESSAGES_ON_NEW)
+    ?? storedTelegram?.clearRecentMessagesOnNew
+    ?? true;
+
   return {
     token,
     profile,
@@ -5613,6 +6805,7 @@ async function createTelegramConfigFromEnv(): Promise<TelegramBridgeConfig> {
     workingDirectory,
     maxPendingPerChat,
     toolActivityStream,
+    clearRecentMessagesOnNew,
   };
 }
 
@@ -5634,6 +6827,111 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
   const telegramExportDir = join(statePaths.root, 'gateway', 'exports', 'telegram');
   await mkdir(telegramExportDir, { recursive: true });
+
+  const telegramConversationBindingPath = join(statePaths.root, 'gateway', 'state', 'telegram-conversation-bindings.json');
+  const telegramConversationSessionBindings = loadTelegramConversationBindings(telegramConversationBindingPath);
+
+  const telegramWorkTopicBindingPath = join(statePaths.root, 'gateway', 'state', 'telegram-work-topics.json');
+  const telegramWorkTopicBindings = loadTelegramWorkTopicBindings(telegramWorkTopicBindingPath);
+
+  const persistTelegramConversationSessionBindings = (): void => {
+    writeTelegramConversationBindings(telegramConversationBindingPath, telegramConversationSessionBindings);
+  };
+
+  const persistTelegramWorkTopicBindings = (): void => {
+    writeTelegramWorkTopicBindings(telegramWorkTopicBindingPath, telegramWorkTopicBindings);
+  };
+
+  const resolveTelegramConversationSessionFile = (input: {
+    conversationId: string;
+    defaultSessionFile: string;
+  }): string => telegramConversationSessionBindings.get(input.conversationId) ?? input.defaultSessionFile;
+
+  const defaultTelegramSessionFileForConversation = (conversationId: string): string | undefined => {
+    const parsed = parseTelegramConversationId(conversationId);
+    if (!parsed) {
+      return undefined;
+    }
+
+    return join(telegramSessionDir, buildTelegramSessionFileName(parsed.chatId, parsed.messageThreadId));
+  };
+
+  const setTelegramConversationSessionFile = (input: {
+    conversationId: string;
+    sessionFile: string;
+  }): void => {
+    const normalizedConversationId = input.conversationId.trim();
+    const normalizedSessionFile = input.sessionFile.trim();
+
+    if (normalizedConversationId.length === 0 || normalizedSessionFile.length === 0) {
+      return;
+    }
+
+    const previous = telegramConversationSessionBindings.get(normalizedConversationId);
+    if (previous !== normalizedSessionFile) {
+      telegramConversationSessionBindings.set(normalizedConversationId, normalizedSessionFile);
+      persistTelegramConversationSessionBindings();
+    }
+
+    let workTopicUpdated = false;
+    for (const [sourceConversationId, binding] of telegramWorkTopicBindings.entries()) {
+      if (binding.workConversationId !== normalizedConversationId) {
+        continue;
+      }
+
+      if (binding.sessionFile === normalizedSessionFile) {
+        continue;
+      }
+
+      telegramWorkTopicBindings.set(sourceConversationId, {
+        ...binding,
+        sessionFile: normalizedSessionFile,
+        updatedAt: new Date().toISOString(),
+      });
+      workTopicUpdated = true;
+    }
+
+    if (workTopicUpdated) {
+      persistTelegramWorkTopicBindings();
+    }
+  };
+
+  const clearTelegramConversationSessionFile = (input: {
+    conversationId: string;
+  }): void => {
+    const normalizedConversationId = input.conversationId.trim();
+    if (normalizedConversationId.length === 0) {
+      return;
+    }
+
+    const removed = telegramConversationSessionBindings.delete(normalizedConversationId);
+    if (removed) {
+      persistTelegramConversationSessionBindings();
+    }
+
+    const nextDefaultSessionFile = defaultTelegramSessionFileForConversation(normalizedConversationId);
+    if (!nextDefaultSessionFile) {
+      return;
+    }
+
+    let workTopicUpdated = false;
+    for (const [sourceConversationId, binding] of telegramWorkTopicBindings.entries()) {
+      if (binding.workConversationId !== normalizedConversationId) {
+        continue;
+      }
+
+      telegramWorkTopicBindings.set(sourceConversationId, {
+        ...binding,
+        sessionFile: nextDefaultSessionFile,
+        updatedAt: new Date().toISOString(),
+      });
+      workTopicUpdated = true;
+    }
+
+    if (workTopicUpdated) {
+      persistTelegramWorkTopicBindings();
+    }
+  };
 
   const bot = new TelegramBot(effectiveConfig.token, { polling: true });
 
@@ -6036,11 +7334,606 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     return `Unknown /room subcommand: ${subcommand}. Use /room help.`;
   };
 
+  interface TelegramTmuxRunGroupSession {
+    sessionName: string;
+    taskSlug: string;
+    commandText: string;
+    logPath?: string;
+    status: 'running' | 'success' | 'failed' | 'unknown';
+    startedAt: string;
+    completedAt?: string;
+    exitCode?: number;
+  }
+
+  interface TelegramTmuxRunGroup {
+    id: string;
+    sourceConversationId: string;
+    sourceChatId: number;
+    sourceMessageThreadId?: number;
+    targetConversationId: string;
+    targetChatId: number;
+    targetMessageThreadId?: number;
+    targetTopicName?: string;
+    notifyMode: TelegramTmuxNotifyMode;
+    status: 'running' | 'completed';
+    sessions: TelegramTmuxRunGroupSession[];
+    dashboardMessageId?: number;
+    createdAt: string;
+    updatedAt: string;
+    resumeTriggered?: boolean;
+  }
+
+  interface TelegramTmuxSessionWatch {
+    sessionName: string;
+    groupId: string;
+    logPath?: string;
+  }
+
+  const tmuxRunGroups = new Map<string, TelegramTmuxRunGroup>();
+  const tmuxSessionWatches = new Map<string, TelegramTmuxSessionWatch>();
+  let tmuxWatchPollInFlight = false;
+  let syntheticInternalMessageId = Date.now();
+  let telegramHandlerRef: QueuedTelegramMessageHandler | undefined;
+
+  const pickMoreVerboseNotifyMode = (
+    left: TelegramTmuxNotifyMode,
+    right: TelegramTmuxNotifyMode,
+  ): TelegramTmuxNotifyMode => {
+    const rank = (mode: TelegramTmuxNotifyMode): number => {
+      if (mode === 'resume') {
+        return 3;
+      }
+
+      if (mode === 'message') {
+        return 2;
+      }
+
+      return 1;
+    };
+
+    return rank(right) > rank(left) ? right : left;
+  };
+
+  const toThreadedMessageOptions = (messageThreadId: number | undefined): TelegramSendMessageOptions | undefined =>
+    applyTelegramThreadToMessageOptions(undefined, messageThreadId);
+
+  const sendTelegramMessageToConversation = async (
+    chatId: number,
+    messageThreadId: number | undefined,
+    text: string,
+  ): Promise<unknown> => sendTelegramFormattedMessage(
+    sendTelegramMessageWithRetry,
+    chatId,
+    text,
+    toThreadedMessageOptions(messageThreadId),
+  );
+
+  const updateTelegramMessageInConversation = async (
+    chatId: number,
+    messageId: number,
+    text: string,
+  ): Promise<void> => {
+    await editTelegramFormattedMessage(
+      editTelegramMessageTextWithRetry,
+      chatId,
+      messageId,
+      text,
+      undefined,
+    );
+  };
+
+  const sanitizeRunGroupToken = (value: string): string => {
+    const normalized = value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, '-')
+      .replace(/^-+/, '')
+      .replace(/-+$/, '');
+
+    return normalized.length > 0 ? normalized.slice(0, 64) : 'auto';
+  };
+
+  const createTelegramRunGroupId = (taskSlug: string): string => {
+    const task = sanitizeRunGroupToken(taskSlug).slice(0, 24) || 'task';
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    return `${task}-${timestamp}`;
+  };
+
+  const defaultWorkTopicName = (taskSlug: string): string => {
+    const task = sanitizeRunGroupToken(taskSlug).replaceAll('_', '-').slice(0, 32) || 'task';
+    const timestamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 12);
+    return `work-${task}-${timestamp}`;
+  };
+
+  const formatTmuxRunGroupDashboard = (group: TelegramTmuxRunGroup): string => {
+    const lines = [`🧵 tmux run group: ${group.id}`, `status=${group.status}`, `notify=${group.notifyMode}`];
+
+    if (group.targetMessageThreadId !== undefined) {
+      lines.push(`threadId=${group.targetMessageThreadId}`);
+    }
+
+    lines.push('', 'Sessions:');
+
+    for (const session of group.sessions) {
+      const icon = session.status === 'running'
+        ? '⏳'
+        : session.status === 'success'
+          ? '✅'
+          : session.status === 'failed'
+            ? '❌'
+            : '⚠️';
+
+      const metadata: string[] = [session.sessionName, `task=${session.taskSlug}`, `status=${session.status}`];
+      if (typeof session.exitCode === 'number') {
+        metadata.push(`exit=${session.exitCode}`);
+      }
+
+      lines.push(`- ${icon} ${metadata.join(' · ')}`);
+    }
+
+    return lines.join('\n');
+  };
+
+  const formatTmuxRunGroupCompletion = (group: TelegramTmuxRunGroup): string => {
+    const succeeded = group.sessions.filter((session) => session.status === 'success').length;
+    const failed = group.sessions.filter((session) => session.status === 'failed').length;
+    const unknown = group.sessions.filter((session) => session.status === 'unknown').length;
+
+    const lines = [
+      `tmux run group completed: ${group.id}`,
+      `success=${succeeded} failed=${failed} unknown=${unknown}`,
+    ];
+
+    const failedSessions = group.sessions.filter((session) => session.status === 'failed');
+    if (failedSessions.length > 0) {
+      lines.push('', 'Failed sessions:');
+      for (const session of failedSessions) {
+        lines.push(`- ${session.sessionName}${typeof session.exitCode === 'number' ? ` (exit=${session.exitCode})` : ''}`);
+      }
+    }
+
+    return lines.join('\n');
+  };
+
+  const updateTmuxRunGroupDashboard = async (group: TelegramTmuxRunGroup): Promise<void> => {
+    const text = formatTmuxRunGroupDashboard(group);
+
+    if (group.dashboardMessageId !== undefined) {
+      await updateTelegramMessageInConversation(group.targetChatId, group.dashboardMessageId, text);
+      return;
+    }
+
+    const sent = await sendTelegramMessageToConversation(
+      group.targetChatId,
+      group.targetMessageThreadId,
+      text,
+    );
+
+    const messageId = toTelegramSentMessageId(sent);
+    if (typeof messageId === 'number') {
+      group.dashboardMessageId = messageId;
+      group.updatedAt = new Date().toISOString();
+    }
+  };
+
+  const summarizeRunGroupForFollowUp = (group: TelegramTmuxRunGroup): string => {
+    const lines = [
+      `tmux run group ${group.id} completed. Continue from this point.`,
+      '',
+      'Session results:',
+    ];
+
+    for (const session of group.sessions) {
+      const summary = [`- ${session.sessionName}`, `status=${session.status}`];
+      if (typeof session.exitCode === 'number') {
+        summary.push(`exit=${session.exitCode}`);
+      }
+
+      const tail = readTmuxLogTail(session.logPath, 12);
+      if (tail.length > 0) {
+        summary.push(`tail=${tail}`);
+      }
+
+      lines.push(summary.join(' · '));
+    }
+
+    lines.push('', 'Please summarize outcomes and continue with next concrete steps.');
+    return lines.join('\n');
+  };
+
+  const dispatchInternalFollowUp = (group: TelegramTmuxRunGroup): boolean => {
+    if (!telegramHandlerRef) {
+      return false;
+    }
+
+    const syntheticSenderId = [...allowedUserIds]
+      .map((userId) => toNumericDestinationId(userId))
+      .find((value): value is number => typeof value === 'number');
+
+    if (allowedUserIds.size > 0 && typeof syntheticSenderId !== 'number') {
+      return false;
+    }
+
+    syntheticInternalMessageId += 1;
+
+    telegramHandlerRef.handleMessage({
+      chat: {
+        id: group.targetChatId,
+        type: 'supergroup',
+      },
+      message_id: syntheticInternalMessageId,
+      message_thread_id: group.targetMessageThreadId,
+      text: `/followup ${summarizeRunGroupForFollowUp(group)}`,
+      from: typeof syntheticSenderId === 'number'
+        ? {
+          id: syntheticSenderId,
+          username: 'pa-system',
+          first_name: 'PA',
+          last_name: 'System',
+        }
+        : undefined,
+    });
+
+    return true;
+  };
+
+  const finalizeTmuxSessionWatch = async (watch: TelegramTmuxSessionWatch): Promise<void> => {
+    const group = tmuxRunGroups.get(watch.groupId);
+    if (!group) {
+      return;
+    }
+
+    const session = group.sessions.find((entry) => entry.sessionName === watch.sessionName);
+    if (!session) {
+      return;
+    }
+
+    const exitCode = readTmuxExitCodeFromLog(watch.logPath ?? session.logPath);
+    session.exitCode = exitCode;
+    session.completedAt = new Date().toISOString();
+    session.status = exitCode === undefined
+      ? 'unknown'
+      : exitCode === 0
+        ? 'success'
+        : 'failed';
+
+    group.updatedAt = new Date().toISOString();
+
+    await updateTmuxRunGroupDashboard(group);
+
+    const hasRunningSessions = group.sessions.some((entry) => entry.status === 'running');
+    if (hasRunningSessions) {
+      return;
+    }
+
+    group.status = 'completed';
+    group.updatedAt = new Date().toISOString();
+
+    const completionSummary = formatTmuxRunGroupCompletion(group);
+
+    if (group.notifyMode !== 'none') {
+      await sendTelegramMessageToConversation(
+        group.targetChatId,
+        group.targetMessageThreadId,
+        completionSummary,
+      );
+
+      const sourceDiffers = group.sourceChatId !== group.targetChatId
+        || group.sourceMessageThreadId !== group.targetMessageThreadId;
+
+      if (sourceDiffers) {
+        await sendTelegramMessageToConversation(
+          group.sourceChatId,
+          group.sourceMessageThreadId,
+          `tmux run group ${group.id} finished in thread ${String(group.targetMessageThreadId ?? 'n/a')}.`,
+        );
+      }
+    }
+
+    if (group.notifyMode === 'resume' && !group.resumeTriggered) {
+      group.resumeTriggered = true;
+      const resumed = dispatchInternalFollowUp(group);
+
+      if (!resumed) {
+        await sendTelegramMessageToConversation(
+          group.targetChatId,
+          group.targetMessageThreadId,
+          'Unable to auto-resume: no authorized synthetic sender is configured. Reply in this thread to continue.',
+        );
+      }
+    }
+
+    tmuxRunGroups.delete(group.id);
+  };
+
+  const pollTmuxSessionWatches = async (): Promise<void> => {
+    if (tmuxWatchPollInFlight || tmuxSessionWatches.size === 0) {
+      return;
+    }
+
+    tmuxWatchPollInFlight = true;
+
+    try {
+      for (const [sessionName, watch] of [...tmuxSessionWatches.entries()]) {
+        const inspect = runGatewayTmuxCli(
+          ['inspect', sessionName, '--json'],
+          effectiveConfig.workingDirectory,
+        );
+
+        if (inspect.ok) {
+          continue;
+        }
+
+        const normalizedOutput = inspect.output.toLowerCase();
+        if (!normalizedOutput.includes('no managed tmux session found')) {
+          continue;
+        }
+
+        tmuxSessionWatches.delete(sessionName);
+        await finalizeTmuxSessionWatch(watch);
+      }
+    } finally {
+      tmuxWatchPollInFlight = false;
+    }
+  };
+
+  const tmuxWatchPollHandle = setInterval(() => {
+    void pollTmuxSessionWatches().catch((error) => {
+      console.warn(gatewayWarning(`Failed to poll tmux watch sessions: ${(error as Error).message}`));
+    });
+  }, 5000);
+  tmuxWatchPollHandle.unref();
+
   const handleTmuxCommand: HandleTelegramTmuxCommandFn = async ({ args }) =>
     runTelegramTmuxCommand({
       args,
       workingDirectory: effectiveConfig.workingDirectory,
     });
+
+  const handleTmuxRunRequest: HandleTelegramTmuxRunRequestFn = async (input) => {
+    const sourceConversationId = input.sourceConversationId;
+    const sourceChatIdToken = String(input.sourceChatId);
+    const sourceSessionFile = input.resolveConversationSessionFile({
+      conversationId: sourceConversationId,
+      defaultSessionFile: input.defaultSourceSessionFile,
+    });
+
+    let targetConversationId = sourceConversationId;
+    let targetChatId = input.sourceChatId;
+    let targetMessageThreadId = input.sourceMessageThreadId;
+    let targetTopicName: string | undefined;
+
+    const sourceBinding = telegramWorkTopicBindings.get(sourceConversationId);
+    const sourceWorkBinding = sourceBinding
+      ?? [...telegramWorkTopicBindings.values()].find((binding) => binding.workConversationId === sourceConversationId);
+    const sourceIsExistingWorkTopic = Boolean(sourceWorkBinding)
+      && sourceWorkBinding?.workConversationId === sourceConversationId;
+
+    const canCreateWorkTopic = input.sourceChatType === 'group' || input.sourceChatType === 'supergroup';
+
+    const shouldCreateNewTopic = input.run.forkMode === 'new-topic'
+      || (input.run.forkMode === 'auto' && !sourceBinding && !sourceIsExistingWorkTopic);
+
+    const shouldReuseTopic = input.run.forkMode === 'reuse-topic'
+      || (input.run.forkMode === 'auto' && Boolean(sourceBinding));
+
+    if (input.run.forkMode !== 'none') {
+      if (sourceIsExistingWorkTopic && (input.run.forkMode === 'auto' || input.run.forkMode === 'reuse-topic')) {
+        const binding = sourceWorkBinding as TelegramWorkTopicBinding;
+        targetConversationId = sourceConversationId;
+        targetChatId = input.sourceChatId;
+        targetMessageThreadId = input.sourceMessageThreadId;
+        targetTopicName = binding.topicName;
+
+        input.setConversationSessionFile({
+          conversationId: targetConversationId,
+          sessionFile: binding.sessionFile,
+        });
+      }
+
+      if (shouldReuseTopic && !sourceBinding && !sourceIsExistingWorkTopic) {
+        throw new Error('No existing work topic is bound to this conversation. Use fork=new-topic or fork=auto first.');
+      }
+
+      if (shouldReuseTopic && sourceBinding) {
+        targetConversationId = sourceBinding.workConversationId;
+        targetChatId = sourceBinding.workChatId;
+        targetMessageThreadId = sourceBinding.workMessageThreadId;
+        targetTopicName = sourceBinding.topicName;
+
+        input.setConversationSessionFile({
+          conversationId: targetConversationId,
+          sessionFile: sourceBinding.sessionFile,
+        });
+      }
+
+      if (shouldCreateNewTopic) {
+        if (!canCreateWorkTopic) {
+          throw new Error('Auto topic forking requires a Telegram group/supergroup conversation.');
+        }
+
+        if (typeof (bot as { createForumTopic?: unknown }).createForumTopic !== 'function') {
+          throw new Error('Forum topic creation is not supported by this Telegram runtime.');
+        }
+
+        const topicName = input.run.topic !== 'auto'
+          ? input.run.topic
+          : defaultWorkTopicName(input.run.taskSlug);
+
+        const topicResult = await withTelegramRetry(
+          `telegram.createForumTopic chat=${input.sourceChatId}`,
+          () => (bot as { createForumTopic: (chatId: number, name: string) => Promise<unknown> })
+            .createForumTopic(input.sourceChatId, topicName),
+        );
+
+        const createdThreadId = normalizeTelegramMessageThreadId(
+          (topicResult as { message_thread_id?: number }).message_thread_id,
+        );
+
+        if (createdThreadId === undefined) {
+          throw new Error('Telegram createForumTopic did not return a valid message_thread_id.');
+        }
+
+        const forkableMessages = input.getForkableMessages();
+        const sortedForkableMessages = normalizeForkableMessages(await forkableMessages);
+        const selectedForkEntry = sortedForkableMessages[0];
+
+        if (!selectedForkEntry) {
+          throw new Error('No user message is available to fork from yet. Send a prompt first, then retry /tmux run.');
+        }
+
+        const forkResult = await input.forkConversation(selectedForkEntry.entryId);
+        if (forkResult.cancelled) {
+          throw new Error('Fork was cancelled by an extension.');
+        }
+
+        const nextSessionFile = forkResult.sessionFile || sourceSessionFile;
+
+        targetChatId = input.sourceChatId;
+        targetMessageThreadId = createdThreadId;
+        targetConversationId = buildTelegramConversationId(sourceChatIdToken, createdThreadId);
+        targetTopicName = typeof (topicResult as { name?: string }).name === 'string'
+          ? ((topicResult as { name?: string }).name as string)
+          : topicName;
+
+        input.setConversationSessionFile({
+          conversationId: targetConversationId,
+          sessionFile: nextSessionFile,
+        });
+
+        telegramWorkTopicBindings.set(sourceConversationId, {
+          sourceConversationId,
+          sourceChatId: sourceChatIdToken,
+          sourceMessageThreadId: input.sourceMessageThreadId,
+          workConversationId: targetConversationId,
+          workChatId: targetChatId,
+          workMessageThreadId: createdThreadId,
+          topicName: targetTopicName,
+          sessionFile: nextSessionFile,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+        persistTelegramWorkTopicBindings();
+
+        const seedLines = [
+          `🧵 Forked from ${sourceConversationId}`,
+          `Source session: ${sourceSessionFile}`,
+          `Fork entry: ${selectedForkEntry.entryId}`,
+          `Forked session: ${nextSessionFile}`,
+          '',
+          'Selected message:',
+          trimForkMessagePreview(selectedForkEntry.text, 400),
+          '',
+          'This topic is now the work thread for tmux jobs started with fork=auto.',
+        ];
+
+        await sendTelegramMessageToConversation(
+          targetChatId,
+          targetMessageThreadId,
+          seedLines.join('\n'),
+        );
+      }
+    }
+
+    const resolvedGroupToken = sanitizeRunGroupToken(input.run.group);
+    const existingGroup = resolvedGroupToken !== 'auto'
+      ? tmuxRunGroups.get(resolvedGroupToken)
+      : [...tmuxRunGroups.values()].find((group) =>
+        group.status === 'running'
+        && group.sourceConversationId === sourceConversationId
+        && group.targetConversationId === targetConversationId
+      );
+
+    const groupId = existingGroup?.id
+      ?? (resolvedGroupToken !== 'auto' ? resolvedGroupToken : createTelegramRunGroupId(input.run.taskSlug));
+
+    const group = existingGroup ?? {
+      id: groupId,
+      sourceConversationId,
+      sourceChatId: input.sourceChatId,
+      sourceMessageThreadId: input.sourceMessageThreadId,
+      targetConversationId,
+      targetChatId,
+      targetMessageThreadId,
+      targetTopicName,
+      notifyMode: input.run.notifyMode,
+      status: 'running' as const,
+      sessions: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    group.notifyMode = pickMoreVerboseNotifyMode(group.notifyMode, input.run.notifyMode);
+    group.updatedAt = new Date().toISOString();
+    tmuxRunGroups.set(group.id, group);
+
+    const tmuxRunArgs = buildTelegramTmuxRunCliArgs(input.run);
+    const tmuxResult = runGatewayTmuxCli(tmuxRunArgs, effectiveConfig.workingDirectory);
+    if (!tmuxResult.ok) {
+      throw new Error(tmuxResult.output);
+    }
+
+    const parsedRunOutput = parseTmuxRunCliOutput(tmuxResult.output);
+    if (!parsedRunOutput.sessionName) {
+      throw new Error(`Unable to parse tmux session name from output:\n${tmuxResult.output}`);
+    }
+
+    const sessionName = parsedRunOutput.sessionName;
+    const sessionLogPath = parsedRunOutput.logPath;
+
+    group.sessions.push({
+      sessionName,
+      taskSlug: input.run.taskSlug,
+      commandText: input.run.commandText,
+      logPath: sessionLogPath,
+      status: 'running',
+      startedAt: new Date().toISOString(),
+    });
+
+    group.updatedAt = new Date().toISOString();
+
+    tmuxSessionWatches.set(sessionName, {
+      sessionName,
+      groupId: group.id,
+      logPath: sessionLogPath,
+    });
+
+    await updateTmuxRunGroupDashboard(group);
+    void pollTmuxSessionWatches();
+
+    if (group.targetConversationId !== sourceConversationId) {
+      await sendTelegramMessageToConversation(
+        group.targetChatId,
+        group.targetMessageThreadId,
+        [
+          `Started tmux session ${sessionName}.`,
+          `group=${group.id}`,
+          `task=${input.run.taskSlug}`,
+          `notify=${input.run.notifyMode}`,
+          ...(sessionLogPath ? [`log=${sessionLogPath}`] : []),
+        ].join('\n'),
+      );
+    }
+
+    const sourceReplyLines = [
+      `Started tmux session ${sessionName}.`,
+      `group=${group.id}`,
+      `notify=${input.run.notifyMode}`,
+    ];
+
+    if (group.targetConversationId !== sourceConversationId) {
+      sourceReplyLines.push(
+        `workConversation=${group.targetConversationId}`,
+        `workThreadId=${String(group.targetMessageThreadId ?? 'n/a')}`,
+      );
+    }
+
+    if (sessionLogPath) {
+      sourceReplyLines.push(`log=${sessionLogPath}`);
+    }
+
+    return sourceReplyLines.join('\n');
+  };
 
   const discoveredHelp = await discoverPiHelpFromPi({
     profile: resolvedProfile,
@@ -6088,7 +7981,58 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
       resolveScheduledReplyContext(chatId, replyMessageId),
     handleRoomAdminCommand,
     handleTmuxCommand,
+    handleTmuxRunRequest,
+    createForumTopic: typeof (bot as { createForumTopic?: unknown }).createForumTopic === 'function'
+      ? async ({ chatId, name }) => {
+        const topicResult = await withTelegramRetry(
+          `telegram.createForumTopic chat=${chatId}`,
+          () => (bot as { createForumTopic: (targetChatId: number, topicName: string) => Promise<unknown> })
+            .createForumTopic(chatId, name),
+        );
+
+        const messageThreadId = normalizeTelegramMessageThreadId(
+          (topicResult as { message_thread_id?: number }).message_thread_id,
+        );
+
+        if (messageThreadId === undefined) {
+          throw new Error('Telegram createForumTopic did not return a valid message_thread_id.');
+        }
+
+        const topicName = typeof (topicResult as { name?: string }).name === 'string'
+          ? ((topicResult as { name?: string }).name as string)
+          : name;
+
+        return {
+          messageThreadId,
+          name: topicName,
+        };
+      }
+      : undefined,
+    setWorkTopicBinding: (binding) => {
+      const existing = telegramWorkTopicBindings.get(binding.sourceConversationId);
+      const now = new Date().toISOString();
+
+      telegramWorkTopicBindings.set(binding.sourceConversationId, {
+        sourceConversationId: binding.sourceConversationId,
+        sourceChatId: binding.sourceChatId,
+        sourceMessageThreadId: binding.sourceMessageThreadId,
+        workConversationId: binding.workConversationId,
+        workChatId: binding.workChatId,
+        workMessageThreadId: binding.workMessageThreadId,
+        topicName: binding.topicName,
+        sessionFile: binding.sessionFile,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      });
+
+      persistTelegramWorkTopicBindings();
+    },
+    resolveConversationSessionFile: resolveTelegramConversationSessionFile,
+    setConversationSessionFile: setTelegramConversationSessionFile,
+    clearConversationSessionFile: clearTelegramConversationSessionFile,
+    persistAccessLists: persistTelegramAccessLists,
     streamToolActivity: toolActivityStream,
+    clearRecentMessagesOnNew: effectiveConfig.clearRecentMessagesOnNew,
     sendMessage: (chatId, text, options) => sendTelegramMessageWithRetry(chatId, text, options),
     editMessageText: (chatId, messageId, text, options) =>
       editTelegramMessageTextWithRetry(chatId, messageId, text, options),
@@ -6155,6 +8099,8 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
       sessionFile,
     }),
   });
+
+  telegramHandlerRef = handler;
 
   bot.on('message', handler.handleMessage);
 
@@ -6270,6 +8216,13 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
         return;
       }
 
+      if (inviterUserId && allowedUserIds.has(inviterUserId)) {
+        allowlist.add(chatId);
+        persistTelegramAccessLists();
+        logSystem('telegram', `Auto-authorized room ${chatTitle} (${chatId}) added by allowed user ${inviterLabel}`);
+        return;
+      }
+
       if (allowedUserIds.size === 0) {
         console.warn(gatewayWarning(
           `Bot was added to ${chatTitle} (${chatId}) but no allowed Telegram user IDs are configured for approval prompts.`,
@@ -6344,6 +8297,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
       }
 
       const callbackText = parseTelegramModelSelectionCallback(callbackData)
+        ?? parseTelegramForkSelectionCallback(callbackData)
         ?? parseTelegramActionCallback(callbackData);
       if (!callbackText) {
         await answerTelegramCallbackQuery(callbackId);
@@ -6410,8 +8364,13 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
         }
 
         const chunks = splitTelegramMessage(notification.message || '(empty response)');
+        const threadedOptions = applyTelegramThreadToMessageOptions(
+          undefined,
+          normalizeTelegramMessageThreadId(notification.messageThreadId),
+        );
+
         for (const chunk of chunks) {
-          const sent = await sendTelegramFormattedMessage(sendTelegramMessageWithRetry, chatId, chunk);
+          const sent = await sendTelegramFormattedMessage(sendTelegramMessageWithRetry, chatId, chunk, threadedOptions);
           const sentMessageId = toTelegramSentMessageId(sent);
           if (typeof sentMessageId === 'number') {
             trackScheduledReplyContext(chatId, sentMessageId, notification);
@@ -6449,6 +8408,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
   console.log(gatewayKeyValue('Blocked users', blockedUsersSummary.length > 0 ? blockedUsersSummary : '(none)'));
   console.log(gatewayKeyValue('Working directory', effectiveConfig.workingDirectory));
   console.log(gatewayKeyValue('Tool activity stream', toolActivityStream ? 'enabled' : 'disabled'));
+  console.log(gatewayKeyValue('Clear recent messages on /new', effectiveConfig.clearRecentMessagesOnNew ? 'enabled' : 'disabled'));
   console.log(gatewayKeyValue('Registered commands', telegramCommands.length));
   logSystem('telegram', `Bridge started for profile=${effectiveConfig.profile}`);
 }
@@ -6535,6 +8495,11 @@ model=${model}`,
     return;
   }
 
+  if (command === '/chatid') {
+    await message.sendMessage(`channelId=${channelId}`);
+    return;
+  }
+
   if (command === '/resume') {
     await message.sendMessage(
       'Gateway sessions already resume automatically per channel. Use /new to start a fresh session.',
@@ -6551,7 +8516,7 @@ model=${model}`,
 
   if (command === '/commands') {
     const commandHelp = options.commandHelpText
-      ?? formatTelegramCommands(DEFAULT_TELEGRAM_COMMANDS);
+      ?? formatTelegramCommands(DEFAULT_DISCORD_COMMANDS);
     await sendLongText(message.sendMessage, commandHelp);
     return;
   }
@@ -6902,7 +8867,7 @@ export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<
     cwd: effectiveConfig.workingDirectory,
     sessionFile: join(discordSessionDir, '__commands__.jsonl'),
   });
-  const discordCommands = mergeTelegramCommands(DEFAULT_TELEGRAM_COMMANDS, discoveredHelp.commands);
+  const discordCommands = mergeTelegramCommands(DEFAULT_DISCORD_COMMANDS, discoveredHelp.commands);
   const commandHelpText = formatTelegramCommands(discordCommands);
   const skillsHelpText = formatTelegramSkills(discoveredHelp.skills);
 
@@ -7354,6 +9319,14 @@ async function runGatewaySetup(provider?: GatewayProvider): Promise<void> {
       )
       : undefined;
 
+    const clearRecentMessagesOnNew = selectedProvider === 'telegram'
+      ? await promptBoolean(
+        prompt.ask,
+        'Best-effort clear recent tracked messages when /new is used',
+        current.telegram?.clearRecentMessagesOnNew ?? true,
+      )
+      : undefined;
+
     const updated: GatewayStoredConfig = {
       ...current,
       profile,
@@ -7369,6 +9342,7 @@ async function runGatewaySetup(provider?: GatewayProvider): Promise<void> {
         workingDirectory,
         maxPendingPerChat: maxPending,
         toolActivityStream,
+        clearRecentMessagesOnNew,
       };
     } else {
       updated.discord = {
@@ -7523,6 +9497,7 @@ function printGatewayHelp(provider?: GatewayProvider): void {
     console.log('  PERSONAL_AGENT_TELEGRAM_CWD (optional, default: current working directory)');
     console.log('  PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT (optional, default: 20)');
     console.log('  PERSONAL_AGENT_TELEGRAM_TOOL_ACTIVITY_STREAM (optional, default: false)');
+    console.log('  PERSONAL_AGENT_TELEGRAM_CLEAR_RECENT_MESSAGES_ON_NEW (optional, default: true)');
     console.log('');
     console.log(gatewayNext('pa gateway telegram setup'));
     return;

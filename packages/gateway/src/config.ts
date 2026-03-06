@@ -10,6 +10,7 @@ export interface TelegramStoredConfig {
   workingDirectory?: string;
   maxPendingPerChat?: number;
   toolActivityStream?: boolean;
+  clearRecentMessagesOnNew?: boolean;
 }
 
 export interface DiscordStoredConfig {
@@ -74,6 +75,7 @@ function sanitizeTelegram(value: unknown): TelegramStoredConfig | undefined {
   const workingDirectory = toOptionalString(value.workingDirectory);
   const maxPendingPerChat = toOptionalPositiveInt(value.maxPendingPerChat);
   const toolActivityStream = toOptionalBoolean(value.toolActivityStream);
+  const clearRecentMessagesOnNew = toOptionalBoolean(value.clearRecentMessagesOnNew);
 
   if (
     !token
@@ -83,6 +85,7 @@ function sanitizeTelegram(value: unknown): TelegramStoredConfig | undefined {
     && !workingDirectory
     && !maxPendingPerChat
     && toolActivityStream === undefined
+    && clearRecentMessagesOnNew === undefined
   ) {
     return undefined;
   }
@@ -95,6 +98,7 @@ function sanitizeTelegram(value: unknown): TelegramStoredConfig | undefined {
     workingDirectory,
     maxPendingPerChat,
     toolActivityStream,
+    clearRecentMessagesOnNew,
   };
 }
 

@@ -52,6 +52,7 @@ describe('gateway config', () => {
         blockedUserIds: [' 7 ', '', 11],
         maxPendingPerChat: 4.9,
         toolActivityStream: true,
+        clearRecentMessagesOnNew: false,
       },
       discord: {
         allowlist: [],
@@ -68,6 +69,7 @@ describe('gateway config', () => {
         workingDirectory: undefined,
         maxPendingPerChat: 4,
         toolActivityStream: true,
+        clearRecentMessagesOnNew: false,
       },
       discord: undefined,
     });

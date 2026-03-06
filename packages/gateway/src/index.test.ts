@@ -69,6 +69,9 @@ function createTestConversationControllerFactory(runPrompt: TestRunPrompt) {
   return async ({ sessionFile }: { sessionFile: string }) => {
     let runChain: Promise<void> = Promise.resolve();
     let activeAbortController: AbortController | undefined;
+    let currentSessionFile = sessionFile;
+    let forkCounter = 0;
+    const forkableMessages: Array<{ entryId: string; text: string }> = [];
 
     const enqueueRun = (input: TestRunPromptInput): Promise<string> => {
       const abortController = new AbortController();
@@ -77,7 +80,7 @@ function createTestConversationControllerFactory(runPrompt: TestRunPrompt) {
           activeAbortController = abortController;
           return runPrompt({
             ...input,
-            sessionFile,
+            sessionFile: currentSessionFile,
             abortSignal: abortController.signal,
           });
         })
@@ -88,6 +91,16 @@ function createTestConversationControllerFactory(runPrompt: TestRunPrompt) {
         });
 
       runChain = run.then(() => undefined).catch(() => undefined);
+
+      const promptText = input.prompt.trim();
+      if (promptText.length > 0) {
+        forkCounter += 1;
+        forkableMessages.push({
+          entryId: `entry-${forkCounter}`,
+          text: promptText,
+        });
+      }
+
       return run;
     };
 
@@ -101,6 +114,22 @@ function createTestConversationControllerFactory(runPrompt: TestRunPrompt) {
 
         return 'Context compacted.';
       },
+      getUserMessagesForForking: async () => [...forkableMessages],
+      fork: async (entryId: string) => {
+        const target = forkableMessages.find((entry) => entry.entryId === entryId);
+        if (!target) {
+          throw new Error(`Invalid entry ID for forking: ${entryId}`);
+        }
+
+        currentSessionFile = `${sessionFile}.fork-${entryId}`;
+
+        return {
+          selectedText: target.text,
+          cancelled: false,
+          sessionFile: currentSessionFile,
+        };
+      },
+      getSessionFile: async () => currentSessionFile,
       abortCurrent: async () => {
         if (!activeAbortController) {
           return false;
@@ -335,6 +364,101 @@ describe('queued telegram message handler', () => {
     expect(sendMessage).toHaveBeenCalledWith(2, 'This chat is not allowed.');
   });
 
+  it('allows direct chats from allowed users without pre-allowlisting the DM chat', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'hello back');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(),
+      allowedUserIds: new Set(['42']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({
+      chat: { id: 42, type: 'private' },
+      text: 'hello',
+      from: { id: 42 },
+    });
+    await handler.waitForIdle('42');
+
+    expect(runPrompt).toHaveBeenCalledWith(expect.objectContaining({
+      sessionFile: '/tmp/sessions/42.jsonl',
+    }));
+    expect(sendChatAction).toHaveBeenCalledWith(42, 'typing');
+    expect(sendMessage).toHaveBeenCalledWith(42, 'hello back');
+  });
+
+  it('auto-authorizes non-private chats when an allowed user speaks first', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const persistAccessLists = vi.fn(() => undefined);
+    const allowlist = new Set<string>();
+    const runPrompt = vi.fn(async () => 'room response');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist,
+      allowedUserIds: new Set(['42']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      persistAccessLists,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({
+      chat: { id: 99, type: 'group', title: 'Alpha' },
+      text: 'hello room',
+      from: { id: 42, username: 'owner' },
+    });
+    await handler.waitForIdle('99');
+
+    expect(allowlist.has('99')).toBe(true);
+    expect(persistAccessLists).toHaveBeenCalledTimes(1);
+    expect(runPrompt).toHaveBeenCalledWith(expect.objectContaining({
+      sessionFile: '/tmp/sessions/99.jsonl',
+    }));
+    expect(sendMessage).toHaveBeenCalledWith(99, 'room response');
+  });
+
+  it('ignores service-only telegram messages without replying', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'ignored');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(),
+      allowedUserIds: new Set(['42']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({
+      chat: { id: 99, type: 'group', title: 'Alpha' },
+      from: { id: 42 },
+      group_chat_created: true,
+    });
+    await handler.waitForIdle('99');
+
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendChatAction).not.toHaveBeenCalled();
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
   it('silently ignores non-authorized users when allowed user IDs are configured', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
@@ -429,6 +553,432 @@ describe('queued telegram message handler', () => {
     expect(runPrompt).not.toHaveBeenCalled();
     expect(sendChatAction).not.toHaveBeenCalled();
     expect(sendMessage).toHaveBeenCalledWith(1, 'Available commands:\n/new\n/status');
+  });
+
+  it('returns current chat id for /chatid', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'ignored');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/chatid' });
+    await handler.waitForIdle('1');
+
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendChatAction).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(1, 'chatId=1');
+  });
+
+  it('includes topic id in /chatid for forum threads', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'ignored');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, message_thread_id: 99, text: '/chatid' });
+    await handler.waitForIdle('1');
+
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendChatAction).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(1, 'chatId=1\nmessageThreadId=99', { message_thread_id: 99 });
+  });
+
+  it('best-effort clears recent tracked telegram messages when /new is used', async () => {
+    let nextMessageId = 500;
+    const sendMessage = vi.fn(async () => ({ message_id: nextMessageId++ }));
+    const deleteMessage = vi.fn(async () => undefined);
+    const sessionFileExists = vi.fn(() => true);
+    const removeSessionFile = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'assistant reply');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      deleteMessage,
+      sessionFileExists,
+      removeSessionFile,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, message_id: 101, text: 'hello there' });
+    await handler.waitForIdle('1');
+
+    handler.handleMessage({ chat: { id: 1 }, message_id: 102, text: '/new' });
+    await handler.waitForIdle('1');
+
+    expect(runPrompt).toHaveBeenCalledTimes(1);
+    expect(removeSessionFile).toHaveBeenCalledWith('/tmp/sessions/1.jsonl');
+
+    const deletedMessageIds = deleteMessage.mock.calls
+      .map((call) => Number((call as unknown[])[1]))
+      .sort((a, b) => a - b);
+    expect(deletedMessageIds).toEqual([101, 102, 500]);
+
+    expect(sendMessage).toHaveBeenCalledWith(1, 'Started a new session. Cleared 3 recent messages.');
+  });
+
+  it('still starts a new session when tracked message deletions fail', async () => {
+    let nextMessageId = 700;
+    const sendMessage = vi.fn(async () => ({ message_id: nextMessageId++ }));
+    const deleteMessage = vi.fn(async () => {
+      throw new Error('forbidden');
+    });
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'assistant reply');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      deleteMessage,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, message_id: 201, text: 'hello there' });
+    await handler.waitForIdle('1');
+
+    handler.handleMessage({ chat: { id: 1 }, message_id: 202, text: '/new' });
+    await handler.waitForIdle('1');
+
+    expect(deleteMessage).toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(1, 'Started a new session. Unable to clear recent messages.');
+  });
+
+  it('can disable /new message clearing via handler option', async () => {
+    let nextMessageId = 800;
+    const sendMessage = vi.fn(async () => ({ message_id: nextMessageId++ }));
+    const deleteMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'assistant reply');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      deleteMessage,
+      clearRecentMessagesOnNew: false,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, message_id: 301, text: 'hello there' });
+    await handler.waitForIdle('1');
+
+    handler.handleMessage({ chat: { id: 1 }, message_id: 302, text: '/new' });
+    await handler.waitForIdle('1');
+
+    expect(deleteMessage).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(1, 'Started a new session.');
+  });
+
+  it('lists forkable messages for /fork without arguments', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'ok');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: 'first prompt' });
+    await handler.waitForIdle('1');
+
+    sendMessage.mockClear();
+    sendChatAction.mockClear();
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/fork' });
+    await handler.waitForIdle('1');
+
+    expect(runPrompt).toHaveBeenCalledTimes(1);
+    expect(sendChatAction).not.toHaveBeenCalled();
+
+    const output = sendMessage.mock.calls
+      .map((call) => String(call.at(1) ?? ''))
+      .join('\n');
+
+    expect(output).toContain('Forkable messages (most recent first):');
+    expect(output).toContain('[entry-1]');
+    expect(output).toContain('Usage: /fork <index|entryId>');
+
+    const firstSendCall = sendMessage.mock.calls[0] as unknown[] | undefined;
+    const pickerOptions = firstSendCall?.[2] as {
+      reply_markup?: {
+        inline_keyboard?: Array<Array<{ text: string; callback_data: string }>>;
+      };
+    } | undefined;
+
+    expect(pickerOptions?.reply_markup?.inline_keyboard?.[0]?.[0]?.callback_data).toBe('fork_select:entry-1');
+  });
+
+  it('forks telegram conversations and persists the bound session file mapping', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async ({ sessionFile, prompt }: { sessionFile: string; prompt: string }) =>
+      `session=${sessionFile}\nprompt=${prompt}`
+    );
+
+    const sessionBindings = new Map<string, string>();
+    const resolveConversationSessionFile = vi.fn((input: {
+      conversationId: string;
+      defaultSessionFile: string;
+    }) => sessionBindings.get(input.conversationId) ?? input.defaultSessionFile);
+    const setConversationSessionFile = vi.fn((input: {
+      conversationId: string;
+      sessionFile: string;
+    }) => {
+      sessionBindings.set(input.conversationId, input.sessionFile);
+    });
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      resolveConversationSessionFile,
+      setConversationSessionFile,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: 'first prompt' });
+    await handler.waitForIdle('1');
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/fork 1' });
+    await handler.waitForIdle('1');
+
+    expect(setConversationSessionFile).toHaveBeenCalledWith({
+      conversationId: '1',
+      sessionFile: '/tmp/sessions/1.jsonl.fork-entry-1',
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/status' });
+    await handler.waitForIdle('1');
+
+    const statusCall = (sendMessage.mock.calls as unknown as Array<[number, string]>).find((call) =>
+      String(call[1] ?? '').startsWith('profile=')
+    );
+
+    expect(statusCall?.[1]).toContain('session=/tmp/sessions/1.jsonl.fork-entry-1');
+
+    handler.handleMessage({ chat: { id: 1 }, text: 'after fork' });
+    await handler.waitForIdle('1');
+
+    expect(runPrompt).toHaveBeenLastCalledWith(expect.objectContaining({
+      prompt: 'after fork',
+      sessionFile: '/tmp/sessions/1.jsonl.fork-entry-1',
+    }));
+    expect(resolveConversationSessionFile).toHaveBeenCalled();
+  });
+
+  it('forks to a new telegram topic by default when forum-topic creation is available', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'ok');
+    const createForumTopic = vi.fn(async ({ name }: { chatId: number; name: string }) => ({
+      messageThreadId: 777,
+      name,
+    }));
+    const setConversationSessionFile = vi.fn();
+    const setWorkTopicBinding = vi.fn();
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createForumTopic,
+      setConversationSessionFile,
+      setWorkTopicBinding,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({
+      chat: { id: 1, type: 'supergroup', title: 'Workspace' },
+      text: 'first prompt',
+    });
+    await handler.waitForIdle('1');
+
+    sendMessage.mockClear();
+
+    handler.handleMessage({
+      chat: { id: 1, type: 'supergroup', title: 'Workspace' },
+      text: '/fork',
+    });
+    await handler.waitForIdle('1');
+
+    expect(createForumTopic).toHaveBeenCalledTimes(1);
+    expect(createForumTopic.mock.calls[0]?.[0]).toMatchObject({
+      chatId: 1,
+    });
+
+    expect(setConversationSessionFile).toHaveBeenCalledWith({
+      conversationId: '1::thread:777',
+      sessionFile: '/tmp/sessions/1.jsonl.fork-entry-1',
+    });
+
+    expect(setWorkTopicBinding).toHaveBeenCalledWith(expect.objectContaining({
+      sourceConversationId: '1',
+      workConversationId: '1::thread:777',
+      workMessageThreadId: 777,
+      sessionFile: '/tmp/sessions/1.jsonl.fork-entry-1',
+    }));
+
+    const seedCall = (sendMessage.mock.calls as unknown[]).find((call) =>
+      typeof (call as unknown[])[2] === 'object'
+      && (call as [number, string, { message_thread_id?: number }])[2]?.message_thread_id === 777
+    ) as [number, string, { message_thread_id?: number }] | undefined;
+
+    expect(seedCall).toBeDefined();
+    expect(String(seedCall?.[1] ?? '')).toContain('Forked from 1');
+
+    const sourceOutput = (sendMessage.mock.calls as unknown as Array<[number, string, unknown?]>)
+      .map((call) => String(call[1] ?? ''))
+      .join('\n');
+    expect(sourceOutput).toContain('Forked conversation to a new topic.');
+    expect(sourceOutput).toContain('workConversation=1::thread:777');
+  });
+
+  it('uses /fork <name> as the created telegram topic name', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'ok');
+    const createForumTopic = vi.fn(async ({ name }: { chatId: number; name: string }) => ({
+      messageThreadId: 778,
+      name,
+    }));
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createForumTopic,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({
+      chat: { id: 1, type: 'supergroup', title: 'Workspace' },
+      text: 'first prompt',
+    });
+    await handler.waitForIdle('1');
+
+    handler.handleMessage({
+      chat: { id: 1, type: 'supergroup', title: 'Workspace' },
+      text: '/fork release plan',
+    });
+    await handler.waitForIdle('1');
+
+    expect(createForumTopic).toHaveBeenCalledWith({
+      chatId: 1,
+      name: 'release plan',
+    });
+  });
+
+  it('falls back to in-chat fork when telegram topic creation is not allowed', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'ok');
+
+    const topicCreationError = Object.assign(
+      new Error('ETELEGRAM: 400 Bad Request: not enough rights to create a topic'),
+      {
+        response: {
+          statusCode: 400,
+        },
+      },
+    );
+
+    const createForumTopic = vi.fn(async () => {
+      throw topicCreationError;
+    });
+    const setConversationSessionFile = vi.fn();
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createForumTopic,
+      setConversationSessionFile,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({
+      chat: { id: 1, type: 'supergroup', title: 'Workspace' },
+      text: 'first prompt',
+    });
+    await handler.waitForIdle('1');
+
+    handler.handleMessage({
+      chat: { id: 1, type: 'supergroup', title: 'Workspace' },
+      text: '/fork',
+    });
+    await handler.waitForIdle('1');
+
+    expect(createForumTopic).toHaveBeenCalledTimes(1);
+
+    const output = sendMessage.mock.calls
+      .map((call) => String(call.at(1) ?? ''))
+      .join('\n');
+
+    expect(output).toContain('Unable to create a new topic for /fork');
+    expect(output).toContain('Falling back to this chat/topic');
+
+    expect(setConversationSessionFile).toHaveBeenCalledWith({
+      conversationId: '1',
+      sessionFile: '/tmp/sessions/1.jsonl.fork-entry-1',
+    });
   });
 
   it('returns scheduled task list for /tasks without invoking pi', async () => {
@@ -553,7 +1103,85 @@ describe('queued telegram message handler', () => {
     expect(sendMessage).toHaveBeenCalledWith(1, 'Managed tmux sessions:\n- session-a');
   });
 
-  it('includes /tasks, /room, /tmux, /model, /models, /stop, /cancel, /compact, and /resume in default /commands output', async () => {
+  it('routes /tmux run commands through the run-orchestration handler', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'ignored');
+    const handleTmuxRunRequest = vi.fn(async () => 'Started tmux session session-a');
+    const handleTmuxCommand = vi.fn(async () => 'fallback');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      handleTmuxCommand,
+      handleTmuxRunRequest,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({
+      chat: { id: 1, type: 'supergroup', title: 'Workroom' },
+      message_thread_id: 99,
+      text: '/tmux run lint fork=auto notify=resume group=auto topic=auto -- npm test',
+    });
+    await handler.waitForIdle('1');
+
+    expect(handleTmuxRunRequest).toHaveBeenCalledTimes(1);
+    expect(handleTmuxCommand).not.toHaveBeenCalled();
+
+    expect(handleTmuxRunRequest).toHaveBeenCalledWith(expect.objectContaining({
+      sourceConversationId: '1::thread:99',
+      sourceChatId: 1,
+      sourceMessageThreadId: 99,
+      run: {
+        taskSlug: 'lint',
+        commandText: 'npm test',
+        forkMode: 'auto',
+        notifyMode: 'resume',
+        group: 'auto',
+        topic: 'auto',
+      },
+    }));
+
+    expect(sendMessage).toHaveBeenCalledWith(1, 'Started tmux session session-a', { message_thread_id: 99 });
+  });
+
+  it('returns /tmux run usage errors for invalid enhanced run options', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'ignored');
+    const handleTmuxRunRequest = vi.fn(async () => 'should not run');
+    const handleTmuxCommand = vi.fn(async () => 'fallback');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      handleTmuxCommand,
+      handleTmuxRunRequest,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({
+      chat: { id: 1 },
+      text: '/tmux run lint notify=unknown -- npm test',
+    });
+    await handler.waitForIdle('1');
+
+    expect(handleTmuxRunRequest).not.toHaveBeenCalled();
+    expect(handleTmuxCommand).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(1, expect.stringContaining('Invalid notify mode: unknown'));
+  });
+
+  it('includes /chatid, /tasks, /room, /tmux, /model, /models, /stop, /cancel, /compact, /fork, and /resume in default /commands output', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
     const runPrompt = vi.fn(async () => 'ignored');
@@ -578,6 +1206,7 @@ describe('queued telegram message handler', () => {
     const output = sendMessage.mock.calls
       .map((call) => String(call.at(1) ?? ''))
       .join('\n');
+    expect(output).toContain('/chatid -');
     expect(output).toContain('/tasks -');
     expect(output).toContain('/room -');
     expect(output).toContain('/tmux -');
@@ -586,6 +1215,7 @@ describe('queued telegram message handler', () => {
     expect(output).toContain('/stop -');
     expect(output).toContain('/cancel -');
     expect(output).toContain('/compact -');
+    expect(output).toContain('/fork -');
     expect(output).toContain('/resume -');
   });
 
@@ -1212,6 +1842,13 @@ describe('queued telegram message handler', () => {
       submitPrompt,
       submitFollowUp: vi.fn(async () => ({ mode: 'followup' as const })),
       compact: vi.fn(async () => 'Context compacted.'),
+      getUserMessagesForForking: vi.fn(async () => []),
+      fork: vi.fn(async () => ({
+        selectedText: 'first',
+        cancelled: false,
+        sessionFile: '/tmp/sessions/1.jsonl.fork-entry-1',
+      })),
+      getSessionFile: vi.fn(async () => '/tmp/sessions/1.jsonl'),
       abortCurrent: vi.fn(async () => false),
       waitForIdle: vi.fn(async () => {
         await firstRun;
@@ -1601,6 +2238,34 @@ describe('queued discord message handler', () => {
     expect(sendMessage).toHaveBeenCalledWith('Available commands:\n/new\n/status');
   });
 
+  it('returns current channel id for /chatid', async () => {
+    const runPrompt = vi.fn(async () => 'ignored');
+    const sendMessage = vi.fn(async () => undefined);
+    const sendTyping = vi.fn(async () => undefined);
+
+    const handler = createQueuedDiscordMessageHandler({
+      allowlist: new Set(['channel-1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      discordSessionDir: '/tmp/discord-sessions',
+      workingDirectory: '/tmp/work',
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({
+      channelId: 'channel-1',
+      content: '/chatid',
+      sendMessage,
+      sendTyping,
+    });
+
+    await handler.waitForIdle('channel-1');
+
+    expect(runPrompt).not.toHaveBeenCalled();
+    expect(sendTyping).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith('channelId=channel-1');
+  });
+
   it('returns scheduled task list for /tasks without invoking pi', async () => {
     const runPrompt = vi.fn(async () => 'ignored');
     const sendMessage = vi.fn(async () => undefined);
@@ -1667,7 +2332,7 @@ describe('queued discord message handler', () => {
     );
   });
 
-  it('includes /tasks, /tmux, /model, /models, /stop, /cancel, /compact, and /resume in default /commands output', async () => {
+  it('includes /chatid, /tasks, /tmux, /model, /models, /stop, /cancel, /compact, and /resume in default /commands output', async () => {
     const runPrompt = vi.fn(async () => 'ignored');
     const sendMessage = vi.fn(async () => undefined);
     const sendTyping = vi.fn(async () => undefined);
@@ -1696,6 +2361,7 @@ describe('queued discord message handler', () => {
     const output = sendMessage.mock.calls
       .map((call) => String(call.at(0) ?? ''))
       .join('\n');
+    expect(output).toContain('/chatid -');
     expect(output).toContain('/tasks -');
     expect(output).toContain('/tmux -');
     expect(output).toContain('/model -');
@@ -1866,6 +2532,13 @@ describe('queued discord message handler', () => {
       submitPrompt,
       submitFollowUp: vi.fn(async () => ({ mode: 'followup' as const })),
       compact: vi.fn(async () => 'Context compacted.'),
+      getUserMessagesForForking: vi.fn(async () => []),
+      fork: vi.fn(async () => ({
+        selectedText: 'first',
+        cancelled: false,
+        sessionFile: '/tmp/discord-sessions/channel-1.jsonl.fork-entry-1',
+      })),
+      getSessionFile: vi.fn(async () => '/tmp/discord-sessions/channel-1.jsonl'),
       abortCurrent: vi.fn(async () => false),
       waitForIdle: vi.fn(async () => {
         await firstRun;

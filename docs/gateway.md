@@ -67,7 +67,7 @@ pa gateway setup telegram
 pa gateway setup discord
 ```
 
-Setup writes provider token/allowlist/allowed-user-ids/blocked-user-ids/cwd/max-pending values to `gateway.json`.
+Setup writes provider token/allowlist/allowed-user-ids/blocked-user-ids/cwd/max-pending/tool-activity/clear-on-new values to `gateway.json`.
 
 ---
 
@@ -104,6 +104,7 @@ Optional:
 - `PERSONAL_AGENT_TELEGRAM_RETRY_ATTEMPTS` (default `3`)
 - `PERSONAL_AGENT_TELEGRAM_RETRY_BASE_DELAY_MS` (default `300`)
 - `PERSONAL_AGENT_TELEGRAM_TOOL_ACTIVITY_STREAM` (default `false`) — stream temporary tool-call/result status while a run is active
+- `PERSONAL_AGENT_TELEGRAM_CLEAR_RECENT_MESSAGES_ON_NEW` (default `true`) — best-effort clear recent tracked Telegram messages when `/new` is used
 
 Run:
 
@@ -178,6 +179,10 @@ Notes:
 
 Each chat/channel has its own persisted Pi session file. Telegram forum topics/threads are isolated per `chat_id + message_thread_id`.
 
+Telegram persists conversation→session bindings (used by `/fork`) and source-conversation→work-topic bindings (used by `/tmux run ... fork=auto`) under the gateway state directory so branch routing survives restarts.
+
+`/new` resets the Pi session file and (when enabled) attempts to delete recent tracked Telegram messages in that same chat/topic (best-effort, permission/age limits apply). Configure via `PERSONAL_AGENT_TELEGRAM_CLEAR_RECENT_MESSAGES_ON_NEW` or `gateway.telegram.clearRecentMessagesOnNew`.
+
 Gateway runs append a gateway-specific system-prompt block before each turn so the model knows:
 
 - it is operating in chat-gateway mode (not TUI)
@@ -199,22 +204,30 @@ When a new message arrives while a run is active in the same conversation:
 ## Gateway slash commands
 
 - `/status`
-- `/new`
+- `/chatid` (show current room/chat ID; includes topic thread ID in Telegram forums)
+- `/new` (start a fresh session and, when enabled, best-effort clear recent tracked messages in the current chat/topic)
 - `/commands`
 - `/skills`
 - `/skill <name>`
 - `/tasks [status]` (`all|running|active|completed|disabled|pending|error`)
 - `/room [help|pending|approve <chatId>|deny <chatId>|blocked]` (Telegram room authorization admin)
 - `/tmux [help|list|inspect|logs|stop|send|run|clean]` (Telegram managed tmux command helper)
+  - `/tmux run <task> [fork=none|auto|new-topic|reuse-topic] [notify=none|message|resume] [group=<id>|auto] [topic=<name>|auto] -- <command>`
 - `/model` / `/models`
 - `/stop`
 - `/followup <text>` (or `/followup` for one-shot follow-up capture mode)
 - `/regenerate`
 - `/cancel`
 - `/compact [instructions]` (runs native Pi compaction)
+- `/fork [topic name]` (Telegram only; by default creates a new forum topic and forks Pi into that topic branch. `/fork` auto-generates a topic name, `/fork <topic name>` uses your name.)
 - `/resume` (gateway auto-resumes per chat/channel)
 
 Telegram registers slash commands via Bot API on startup.
+
+`/tmux run` orchestration notes:
+- `fork=auto` creates one work topic per source conversation (first run) and then reuses it.
+- `group=auto` groups parallel runs targeting the same source+work conversation while active.
+- `notify=resume` posts completion summary and injects a single follow-up continuation prompt in the work topic when the whole run group finishes.
 
 ---
 
@@ -246,11 +259,13 @@ Disable daemon integration explicitly with:
 - Discord: channel allowlist is mandatory.
 - Telegram: chat allowlist is optional (you can start empty and approve rooms as the bot is added).
 - Telegram `allowedUserIds` can restrict bot control to specific Telegram user IDs.
+- Direct messages from `allowedUserIds` work even if their DM chat ID is not pre-allowlisted.
+- Non-private chats added by an `allowedUserIds` user are auto-authorized and persisted.
 - Telegram `blockedUserIds` are silently ignored.
 
 Telegram room authorization flow:
 
-- When the bot is added to a non-private chat, it can DM allowed users with approve/deny buttons.
+- When the bot is added to a non-private chat by someone outside `allowedUserIds`, it can DM allowed users with approve/deny buttons.
 - Approve adds the room to the Telegram allowlist.
 - Deny removes the room, leaves the chat, and adds the inviter to blocked user IDs (with best-effort in-chat ban when permissions allow).
 

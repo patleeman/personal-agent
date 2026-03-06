@@ -238,6 +238,7 @@ Optional:
 - `PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT` (default: `20`)
 - `PERSONAL_AGENT_TELEGRAM_RETRY_ATTEMPTS` (default: `3`)
 - `PERSONAL_AGENT_TELEGRAM_RETRY_BASE_DELAY_MS` (default: `300`)
+- `PERSONAL_AGENT_TELEGRAM_CLEAR_RECENT_MESSAGES_ON_NEW` (default: `true`)
 
 Telegram gateway supports:
 
@@ -283,7 +284,7 @@ pa gateway service install discord
 
 Gateway slash commands include:
 
-- `/status`, `/new`, `/commands`
+- `/status`, `/new` (resets session; on Telegram, optionally best-effort clears recent tracked messages), `/commands`
 - `/skills`, `/skill <name>`
 - `/tasks [status]`
 - `/model` / `/models`
