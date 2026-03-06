@@ -3582,7 +3582,7 @@ function renderToolActivityText(rows: ToolActivityRow[], completed: boolean): st
       const tool = truncateToolActivityCell(row.tool, TELEGRAM_TOOL_ACTIVITY_TOOL_MAX_CHARS);
       const details = truncateToolActivityCell(row.details, TELEGRAM_TOOL_ACTIVITY_DETAIL_MAX_CHARS);
       const detailSuffix = details.length > 0 && details !== '-'
-        ? ` — *${row.phase === 'call' ? 'args' : 'details'}:* ${row.phase === 'error' ? `||${details}||` : details}`
+        ? ` — *${row.phase === 'call' ? 'args' : 'details'}:* ${details}`
         : '';
       return `${toToolActivityPhaseEmoji(row.phase)} **${row.step}) ${toToolActivityPhaseLabel(row.phase)}** \`${tool}\`${detailSuffix}`;
     });
