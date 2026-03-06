@@ -264,6 +264,7 @@ output:
   targets:
     - gateway: telegram
       chatId: "123"
+      messageThreadId: 22
 ---
 Send reminder
 `);
@@ -310,6 +311,7 @@ Send reminder
     expect(notifications[0]?.payload).toMatchObject({
       gateway: 'telegram',
       destinationId: '123',
+      messageThreadId: 22,
       taskId: 'reminder',
       status: 'success',
     });

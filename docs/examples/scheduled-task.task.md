@@ -12,6 +12,7 @@ output:
   targets:
     - gateway: telegram
       chatId: "123456789"
+      messageThreadId: 22
 ---
 Summarize yesterday's work from git history and open TODOs.
 Return:

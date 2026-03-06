@@ -131,7 +131,7 @@ pa tmux inspect <session> [--json]
 pa tmux logs <session> [--tail <n>]
 pa tmux stop <session>
 pa tmux send <session> <command>
-pa tmux run <task-slug> [--cwd <path>] [--] <command...>
+pa tmux run <task-slug> [--cwd <path>] [--notify-on-complete] [--notify-context <value>] [--] <command...>
 pa tmux clean [--dry-run] [--json]
 ```
 

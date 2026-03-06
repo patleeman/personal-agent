@@ -102,11 +102,13 @@ function shouldPublishTaskOutput(output: ParsedTaskOutput, status: TaskRunOutcom
 function toGatewayNotificationPayload(target: ParsedTaskOutputTarget): {
   gateway: 'telegram' | 'discord';
   destinationId: string;
+  messageThreadId?: number;
 } {
   if (target.gateway === 'telegram') {
     return {
       gateway: 'telegram',
       destinationId: target.chatId,
+      messageThreadId: target.messageThreadId,
     };
   }
 
@@ -268,6 +270,7 @@ export function createTasksModule(
       const accepted = context.publish('gateway.notification', {
         gateway: routedTarget.gateway,
         destinationId: routedTarget.destinationId,
+        ...(typeof routedTarget.messageThreadId === 'number' ? { messageThreadId: routedTarget.messageThreadId } : {}),
         message,
         taskId: task.id,
         status,

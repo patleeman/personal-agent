@@ -72,6 +72,7 @@ export interface GatewayNotification {
   source: string;
   gateway: GatewayNotificationProvider;
   destinationId: string;
+  messageThreadId?: number;
   message: string;
   taskId?: string;
   status?: 'success' | 'failed';

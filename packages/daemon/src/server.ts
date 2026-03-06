@@ -47,6 +47,23 @@ function toOptionalString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function toOptionalPositiveInteger(value: unknown): number | undefined {
+  if (typeof value === 'number') {
+    if (!Number.isInteger(value) || value <= 0) {
+      return undefined;
+    }
+
+    return value;
+  }
+
+  if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
+    const parsed = Number.parseInt(value.trim(), 10);
+    return parsed > 0 ? parsed : undefined;
+  }
+
+  return undefined;
+}
+
 function normalizeNotificationPullLimit(limit?: number): number {
   if (!limit || !Number.isFinite(limit)) {
     return DEFAULT_NOTIFICATION_PULL_LIMIT;
@@ -81,6 +98,9 @@ function parseGatewayNotification(event: { id: string; source: string; timestamp
   const statusRaw = toOptionalString(event.payload.status);
   const status = statusRaw === 'success' || statusRaw === 'failed' ? statusRaw : undefined;
   const createdAt = toOptionalString(event.payload.createdAt) ?? event.timestamp;
+  const messageThreadId = gateway === 'telegram'
+    ? toOptionalPositiveInteger(event.payload.messageThreadId)
+    : undefined;
 
   return {
     id: event.id,
@@ -88,6 +108,7 @@ function parseGatewayNotification(event: { id: string; source: string; timestamp
     source: event.source,
     gateway,
     destinationId,
+    ...(messageThreadId !== undefined ? { messageThreadId } : {}),
     message,
     taskId,
     status,

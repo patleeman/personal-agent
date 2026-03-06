@@ -43,6 +43,7 @@ output:
   targets:
     - gateway: telegram
       chatId: "123"
+      messageThreadId: 22
     - gateway: discord
       channelIds:
         - "abc"
@@ -61,7 +62,7 @@ Prepare tax checklist.
     expect(task.output).toEqual({
       when: 'always',
       targets: [
-        { gateway: 'telegram', chatId: '123' },
+        { gateway: 'telegram', chatId: '123', messageThreadId: 22 },
         { gateway: 'discord', channelId: 'abc' },
         { gateway: 'discord', channelId: 'def' },
       ],
@@ -94,6 +95,23 @@ hello
 `,
       defaultTimeoutSeconds: 1800,
     })).toThrow('Unsupported output target gateway');
+  });
+
+  it('rejects invalid telegram output messageThreadId values', () => {
+    expect(() => parseTaskDefinition({
+      filePath: '/tmp/tasks/bad-thread.task.md',
+      rawContent: `---
+cron: "0 9 * * 1-5"
+output:
+  targets:
+    - gateway: telegram
+      chatId: "123"
+      messageThreadId: nope
+---
+hello
+`,
+      defaultTimeoutSeconds: 1800,
+    })).toThrow('Frontmatter key output.targets[].messageThreadId must be a positive integer');
   });
 
   it('rejects invalid runInTmux values', () => {

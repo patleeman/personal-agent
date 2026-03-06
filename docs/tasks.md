@@ -108,6 +108,7 @@ output:
   targets:
     - gateway: telegram
       chatId: "123456789"
+      messageThreadId: 22   # optional (Telegram forum topic/thread)
     - gateway: discord
       channelId: "987654321"
 ```
@@ -118,6 +119,8 @@ Also supported:
 - `channelIds: ["..."]` for Discord
 
 `chatId` and `chatIds` (or `channelId` and `channelIds`) are mutually exclusive per target.
+
+`messageThreadId` is Telegram-only and must be a positive integer.
 
 ---
 

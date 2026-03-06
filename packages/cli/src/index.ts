@@ -1744,7 +1744,10 @@ function formatTaskOutputTargets(task: ParsedTaskDefinition): string {
 
   const parts = task.output.targets.map((target) => {
     if (target.gateway === 'telegram') {
-      return `telegram:${target.chatId}`;
+      const threadSuffix = target.messageThreadId !== undefined
+        ? `#thread:${target.messageThreadId}`
+        : '';
+      return `telegram:${target.chatId}${threadSuffix}`;
     }
 
     return `discord:${target.channelId}`;
@@ -2293,6 +2296,8 @@ interface TmuxRunOptions {
   taskSlug: string;
   commandArgs: string[];
   cwd: string;
+  notifyOnComplete: boolean;
+  notifyContext?: string;
 }
 
 function tmuxUsageText(): string {
@@ -2320,7 +2325,7 @@ function tmuxSendUsageText(): string {
 }
 
 function tmuxRunUsageText(): string {
-  return 'Usage: pa tmux run <task-slug> [--cwd <path>] [--] <command...>';
+  return 'Usage: pa tmux run <task-slug> [--cwd <path>] [--notify-on-complete] [--notify-context <value>] [--] <command...>';
 }
 
 function tmuxCleanUsageText(): string {
@@ -2477,6 +2482,8 @@ function parseTmuxRunOptions(args: string[]): TmuxRunOptions {
   let taskSlug: string | undefined;
   const commandTokens: string[] = [];
   let readingCommand = false;
+  let notifyOnComplete = false;
+  let notifyContext: string | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] as string;
@@ -2507,6 +2514,32 @@ function parseTmuxRunOptions(args: string[]): TmuxRunOptions {
       continue;
     }
 
+    if (!readingCommand && arg === '--notify-on-complete') {
+      notifyOnComplete = true;
+      continue;
+    }
+
+    if (!readingCommand && arg === '--notify-context') {
+      const value = args[index + 1];
+      if (!value || value.startsWith('--')) {
+        throw new Error(tmuxRunUsageText());
+      }
+
+      notifyContext = value;
+      index += 1;
+      continue;
+    }
+
+    if (!readingCommand && arg.startsWith('--notify-context=')) {
+      const value = arg.slice('--notify-context='.length);
+      if (!value) {
+        throw new Error(tmuxRunUsageText());
+      }
+
+      notifyContext = value;
+      continue;
+    }
+
     if (!readingCommand && arg.startsWith('--')) {
       throw new Error(tmuxRunUsageText());
     }
@@ -2528,6 +2561,8 @@ function parseTmuxRunOptions(args: string[]): TmuxRunOptions {
     taskSlug,
     commandArgs: commandTokens,
     cwd,
+    notifyOnComplete,
+    notifyContext,
   };
 }
 
@@ -2539,7 +2574,7 @@ async function tmuxCommand(args: string[]): Promise<number> {
   if (subcommand === 'help') {
     console.log(section('Tmux commands'));
     console.log('');
-    console.log(`Usage: pa tmux [list|inspect|logs|stop|send|run|clean|help] [args...]\n\nCommands:\n  list [--json]                    List agent-managed tmux sessions\n  inspect <session> [--json]       Show details for one managed tmux session\n  logs <session> [--tail <count>]  Show session logs (or pane output fallback)\n  stop <session>                   Stop one managed tmux session\n  send <session> <command>         Send command to session (tmux send-keys + Enter)\n  run <task-slug> [--cwd <path>] [--] <command...>\n                                   Start a managed tmux session for a command\n  clean [--dry-run] [--json]       Remove stale managed tmux logs for completed sessions\n`);
+    console.log(`Usage: pa tmux [list|inspect|logs|stop|send|run|clean|help] [args...]\n\nCommands:\n  list [--json]                    List agent-managed tmux sessions\n  inspect <session> [--json]       Show details for one managed tmux session\n  logs <session> [--tail <count>]  Show session logs (or pane output fallback)\n  stop <session>                   Stop one managed tmux session\n  send <session> <command>         Send command to session (tmux send-keys + Enter)\n  run <task-slug> [--cwd <path>] [--notify-on-complete] [--notify-context <value>] [--] <command...>\n                                   Start a managed tmux session for a command\n  clean [--dry-run] [--json]       Remove stale managed tmux logs for completed sessions\n`);
     return 0;
   }
 
@@ -2577,6 +2612,7 @@ async function tmuxCommand(args: string[]): Promise<number> {
       console.log(keyValue('Age', formatTmuxSessionAge(session.createdEpochSeconds), 4));
       console.log(keyValue('Started', session.createdAt ? new Date(session.createdAt).toLocaleString() : dim('unknown'), 4));
       console.log(keyValue('Log', session.logPath ?? dim('none'), 4));
+      console.log(keyValue('Notify', session.notifyOnComplete ? 'on-complete' : dim('none'), 4));
     }
 
     return 0;
@@ -2611,6 +2647,10 @@ async function tmuxCommand(args: string[]): Promise<number> {
     console.log(keyValue('Age', formatTmuxSessionAge(session.createdEpochSeconds)));
     console.log(keyValue('Log path', session.logPath ?? dim('none')));
     console.log(keyValue('Command', session.command ?? dim('unknown')));
+    console.log(keyValue('Notify on complete', session.notifyOnComplete ? 'yes' : 'no'));
+    if (session.notifyContext) {
+      console.log(keyValue('Notify context', session.notifyContext));
+    }
     return 0;
   }
 
@@ -2705,7 +2745,8 @@ async function tmuxCommand(args: string[]): Promise<number> {
 
     const displayCommand = runOptions.commandArgs.join(' ');
     const shellCommand = formatShellCommand(runOptions.commandArgs);
-    const wrappedCommand = `${shellCommand} > ${shellQuote(logPath)} 2>&1`;
+    const quotedLogPath = shellQuote(logPath);
+    const wrappedCommand = `${shellCommand} > ${quotedLogPath} 2>&1; __pa_exit_code=$?; printf '\n__PA_TMUX_EXIT_CODE=%s\n' "$__pa_exit_code" >> ${quotedLogPath}; exit $__pa_exit_code`;
 
     startManagedTmuxSession({
       sessionName,
@@ -2714,6 +2755,8 @@ async function tmuxCommand(args: string[]): Promise<number> {
       task: runOptions.taskSlug,
       logPath,
       sourceCommand: displayCommand,
+      notifyOnComplete: runOptions.notifyOnComplete,
+      notifyContext: runOptions.notifyContext,
     }, runner);
 
     const session = findManagedTmuxSessionByName(sessionName, runner);
@@ -2724,6 +2767,10 @@ async function tmuxCommand(args: string[]): Promise<number> {
     console.log(keyValue('CWD', runOptions.cwd));
     console.log(keyValue('Log', logPath));
     console.log(keyValue('Command', displayCommand));
+    console.log(keyValue('Notify on complete', runOptions.notifyOnComplete ? 'yes' : 'no'));
+    if (runOptions.notifyContext) {
+      console.log(keyValue('Notify context', runOptions.notifyContext));
+    }
 
     if (!session) {
       console.log(warning('Session exited before status check (command may have completed quickly).'));

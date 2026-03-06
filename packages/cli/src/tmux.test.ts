@@ -5,6 +5,8 @@ import {
   PA_TMUX_COMMAND_OPTION,
   PA_TMUX_LOG_OPTION,
   PA_TMUX_MANAGED_OPTION,
+  PA_TMUX_NOTIFY_CONTEXT_OPTION,
+  PA_TMUX_NOTIFY_ON_COMPLETE_OPTION,
   PA_TMUX_TASK_OPTION,
   sendManagedTmuxCommand,
   startManagedTmuxSession,
@@ -190,6 +192,8 @@ describe('tmux helpers', () => {
       task: 'code-review',
       logPath: '/tmp/log',
       sourceCommand: 'pa -p "review"',
+      notifyOnComplete: true,
+      notifyContext: 'group=alpha',
     }, runner);
 
     expect(calls[0]).toEqual([
@@ -206,6 +210,40 @@ describe('tmux helpers', () => {
     expect(calls).toContainEqual(['set-option', '-t', 'repo-code-review-20260305-130000', PA_TMUX_TASK_OPTION, 'code-review']);
     expect(calls).toContainEqual(['set-option', '-t', 'repo-code-review-20260305-130000', PA_TMUX_LOG_OPTION, '/tmp/log']);
     expect(calls).toContainEqual(['set-option', '-t', 'repo-code-review-20260305-130000', PA_TMUX_COMMAND_OPTION, 'pa -p "review"']);
+    expect(calls).toContainEqual(['set-option', '-t', 'repo-code-review-20260305-130000', PA_TMUX_NOTIFY_ON_COMPLETE_OPTION, '1']);
+    expect(calls).toContainEqual(['set-option', '-t', 'repo-code-review-20260305-130000', PA_TMUX_NOTIFY_CONTEXT_OPTION, 'group=alpha']);
+  });
+
+  it('does not fail tagging when a short-lived session exits before metadata is set', () => {
+    const calls: string[][] = [];
+
+    const runner = createRunner((args) => {
+      calls.push(args);
+
+      if (args[0] === 'new-session') {
+        return {
+          status: 0,
+          stdout: '',
+          stderr: '',
+        };
+      }
+
+      return {
+        status: 1,
+        stdout: '',
+        stderr: 'no such session: quick-session',
+      };
+    });
+
+    expect(() => startManagedTmuxSession({
+      sessionName: 'quick-session',
+      cwd: '/tmp',
+      command: 'echo done',
+      task: 'quick',
+    }, runner)).not.toThrow();
+
+    expect(calls[0]?.[0]).toBe('new-session');
+    expect(calls[1]?.[0]).toBe('set-option');
   });
 
   it('throws for unknown managed sessions', () => {

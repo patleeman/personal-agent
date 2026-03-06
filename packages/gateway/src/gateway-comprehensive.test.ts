@@ -65,6 +65,8 @@ function createTestConversationControllerFactory(runPrompt: TestRunPrompt) {
       return run;
     };
 
+    let activeSessionFile = sessionFile;
+
     return {
       submitPrompt: async (input: TestRunPromptInput) => ({ mode: 'started' as const, run: enqueueRun(input) }),
       submitFollowUp: async (input: TestRunPromptInput) => ({ mode: 'started' as const, run: enqueueRun(input) }),
@@ -75,6 +77,18 @@ function createTestConversationControllerFactory(runPrompt: TestRunPrompt) {
 
         return 'Context compacted.';
       },
+      getUserMessagesForForking: async () => [],
+      fork: async () => {
+        activeSessionFile = `${activeSessionFile}.fork`;
+        return {
+          sessionFile: activeSessionFile,
+          entryId: 'entry-1',
+          prompt: 'Fork point',
+          selectedText: '',
+          cancelled: false,
+        };
+      },
+      getSessionFile: async () => activeSessionFile,
       abortCurrent: async () => {
         if (!activeAbortController) {
           return false;

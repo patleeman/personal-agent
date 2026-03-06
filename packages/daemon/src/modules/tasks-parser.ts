@@ -38,6 +38,7 @@ export type TaskOutputWhen = 'success' | 'failure' | 'always';
 export interface ParsedTaskOutputTargetTelegram {
   gateway: 'telegram';
   chatId: string;
+  messageThreadId?: number;
 }
 
 export interface ParsedTaskOutputTargetDiscord {
@@ -330,6 +331,39 @@ function parseOutputDestinationId(
   return ids;
 }
 
+function parseOutputMessageThreadId(target: Record<string, unknown>): number | undefined {
+  const raw = getAttribute(target, 'messageThreadId');
+
+  if (raw === undefined || raw === null || raw === '') {
+    return undefined;
+  }
+
+  if (typeof raw === 'number') {
+    if (!Number.isInteger(raw) || raw <= 0) {
+      throw new Error('Frontmatter key output.targets[].messageThreadId must be a positive integer');
+    }
+
+    return raw;
+  }
+
+  if (typeof raw === 'bigint') {
+    if (raw <= 0n || raw > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new Error('Frontmatter key output.targets[].messageThreadId must be a positive integer');
+    }
+
+    return Number(raw);
+  }
+
+  if (typeof raw === 'string' && /^\d+$/.test(raw.trim())) {
+    const parsed = Number.parseInt(raw.trim(), 10);
+    if (parsed > 0) {
+      return parsed;
+    }
+  }
+
+  throw new Error('Frontmatter key output.targets[].messageThreadId must be a positive integer');
+}
+
 function parseOutputTarget(rawTarget: unknown): ParsedTaskOutputTarget[] {
   if (!isRecord(rawTarget)) {
     throw new Error('Frontmatter key output.targets[] entries must be objects');
@@ -344,9 +378,12 @@ function parseOutputTarget(rawTarget: unknown): ParsedTaskOutputTarget[] {
 
   if (gateway === 'telegram') {
     const chatIds = parseOutputDestinationId(rawTarget, 'chatId', 'chatIds', 'telegram');
+    const messageThreadId = parseOutputMessageThreadId(rawTarget);
+
     return chatIds.map((chatId) => ({
       gateway: 'telegram' as const,
       chatId,
+      ...(messageThreadId !== undefined ? { messageThreadId } : {}),
     }));
   }
 

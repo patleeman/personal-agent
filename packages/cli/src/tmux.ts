@@ -4,6 +4,8 @@ export const PA_TMUX_MANAGED_OPTION = '@pa_agent_session';
 export const PA_TMUX_TASK_OPTION = '@pa_agent_task';
 export const PA_TMUX_LOG_OPTION = '@pa_agent_log';
 export const PA_TMUX_COMMAND_OPTION = '@pa_agent_cmd';
+export const PA_TMUX_NOTIFY_ON_COMPLETE_OPTION = '@pa_agent_notify_on_complete';
+export const PA_TMUX_NOTIFY_CONTEXT_OPTION = '@pa_agent_notify_context';
 
 const LIST_SESSIONS_FORMAT = [
   '#{session_name}',
@@ -15,6 +17,8 @@ const LIST_SESSIONS_FORMAT = [
   `#{${PA_TMUX_TASK_OPTION}}`,
   `#{${PA_TMUX_LOG_OPTION}}`,
   `#{${PA_TMUX_COMMAND_OPTION}}`,
+  `#{${PA_TMUX_NOTIFY_ON_COMPLETE_OPTION}}`,
+  `#{${PA_TMUX_NOTIFY_CONTEXT_OPTION}}`,
 ].join('\t');
 
 interface TmuxCommandResult {
@@ -36,6 +40,8 @@ export interface ManagedTmuxSession {
   task: string | null;
   logPath: string | null;
   command: string | null;
+  notifyOnComplete?: boolean;
+  notifyContext?: string | null;
 }
 
 export interface StartManagedTmuxSessionOptions {
@@ -45,6 +51,8 @@ export interface StartManagedTmuxSessionOptions {
   task?: string;
   logPath?: string;
   sourceCommand?: string;
+  notifyOnComplete?: boolean;
+  notifyContext?: string;
 }
 
 export function createSpawnSyncTmuxRunner(): TmuxRunner {
@@ -118,6 +126,8 @@ function parseManagedSessionLine(line: string): ManagedTmuxSession | null {
   const taskRaw = parts[6] ?? '';
   const logPathRaw = parts[7] ?? '';
   const commandRaw = parts[8] ?? '';
+  const notifyOnCompleteRaw = parts[9]?.trim() ?? '';
+  const notifyContextRaw = parts[10] ?? '';
 
   if (managedRaw !== '1' || name.length === 0) {
     return null;
@@ -136,6 +146,8 @@ function parseManagedSessionLine(line: string): ManagedTmuxSession | null {
     task: toNullableString(taskRaw),
     logPath: toNullableString(logPathRaw),
     command: toNullableString(commandRaw),
+    notifyOnComplete: notifyOnCompleteRaw === '1' || notifyOnCompleteRaw.toLowerCase() === 'true',
+    notifyContext: toNullableString(notifyContextRaw),
   };
 }
 
@@ -272,6 +284,8 @@ export function tagManagedTmuxSession(
     task?: string;
     logPath?: string;
     command?: string;
+    notifyOnComplete?: boolean;
+    notifyContext?: string;
   },
   runner: TmuxRunner = createSpawnSyncTmuxRunner(),
 ): void {
@@ -288,6 +302,22 @@ export function tagManagedTmuxSession(
   if (metadata.command) {
     setManagedSessionOption(sessionName, PA_TMUX_COMMAND_OPTION, metadata.command, runner);
   }
+
+  if (metadata.notifyOnComplete) {
+    setManagedSessionOption(sessionName, PA_TMUX_NOTIFY_ON_COMPLETE_OPTION, '1', runner);
+  }
+
+  if (metadata.notifyContext) {
+    setManagedSessionOption(sessionName, PA_TMUX_NOTIFY_CONTEXT_OPTION, metadata.notifyContext, runner);
+  }
+}
+
+function isNoSuchTmuxSessionError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return error.message.toLowerCase().includes('no such session');
 }
 
 export function startManagedTmuxSession(
@@ -301,13 +331,23 @@ export function startManagedTmuxSession(
     throwTmuxFailure(args, result);
   }
 
-  tagManagedTmuxSession(
-    options.sessionName,
-    {
-      task: options.task,
-      logPath: options.logPath,
-      command: options.sourceCommand,
-    },
-    runner,
-  );
+  try {
+    tagManagedTmuxSession(
+      options.sessionName,
+      {
+        task: options.task,
+        logPath: options.logPath,
+        command: options.sourceCommand,
+        notifyOnComplete: options.notifyOnComplete,
+        notifyContext: options.notifyContext,
+      },
+      runner,
+    );
+  } catch (error) {
+    if (isNoSuchTmuxSessionError(error)) {
+      return;
+    }
+
+    throw error;
+  }
 }

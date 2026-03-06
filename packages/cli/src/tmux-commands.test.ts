@@ -141,6 +141,38 @@ describe('tmux CLI command', () => {
 
     expect(callArgs.sourceCommand).toBe('pa -p hello world');
     expect(callArgs.command).toContain("'pa' '-p' 'hello world'");
+    expect(callArgs.command).toContain('__PA_TMUX_EXIT_CODE');
+  });
+
+  it('passes notify metadata for pa tmux run --notify-on-complete', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-05T13:45:09-05:00'));
+
+    findManagedTmuxSessionByNameMock.mockReturnValue({
+      name: 'personal-agent-long-task-20260305-134509',
+    });
+
+    const exitCode = await runCli([
+      'tmux',
+      'run',
+      'long-task',
+      '--notify-on-complete',
+      '--notify-context',
+      'group=alpha',
+      '--',
+      'echo',
+      'hello',
+    ]);
+
+    expect(exitCode).toBe(0);
+
+    const callArgs = startManagedTmuxSessionMock.mock.calls[0]?.[0] as {
+      notifyOnComplete?: boolean;
+      notifyContext?: string;
+    };
+
+    expect(callArgs.notifyOnComplete).toBe(true);
+    expect(callArgs.notifyContext).toBe('group=alpha');
   });
 
   it('removes stale managed tmux logs via pa tmux clean', async () => {

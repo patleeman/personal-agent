@@ -191,6 +191,7 @@ describe('daemon IPC integration', () => {
         payload: {
           gateway: 'telegram',
           destinationId: '123',
+          messageThreadId: 22,
           message: 'Hello from task',
           taskId: 'daily-status',
           status: 'success',
@@ -222,6 +223,7 @@ describe('daemon IPC integration', () => {
     expect(pulled[0]).toMatchObject({
       gateway: 'telegram',
       destinationId: '123',
+      messageThreadId: 22,
       message: 'Hello from task',
       taskId: 'daily-status',
       status: 'success',
