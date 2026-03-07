@@ -95,11 +95,11 @@ pa tui -- --model kimi-coding/k2p5    # Pass args to pi
 pa doctor                   # Validate setup
 pa doctor --json            # Machine-readable status
 pa restart                  # Restart daemon + managed gateways
-pa update                   # Pull git changes + refresh repo dependencies (including pi) + restart services
+pa update                   # Pull git changes + refresh repo dependencies + sync pi to latest + restart services
 pa update --repo-only       # Pull git changes + skip dependency refresh + restart services
 ```
 
-> `pa update` runs `npm install` in this repo (not `npm install -g`) and verifies repo-local Pi.
+> `pa update` runs `npm install`, then syncs `@mariozechner/pi-coding-agent@latest` in repo root + gateway workspace, and verifies repo-local Pi.
 
 ### Profile management
 

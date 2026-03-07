@@ -1344,7 +1344,7 @@ function pullLatestFromGit(repoRoot: string): string {
     throw new Error(`Repository root is not a git checkout: ${repoRoot}`);
   }
 
-  const result = spawnSync('git', ['-C', repoRoot, 'pull', '--ff-only'], {
+  const result = spawnSync('git', ['-C', repoRoot, 'pull', '--rebase', '--autostash'], {
     encoding: 'utf-8',
   });
 
@@ -1357,7 +1357,7 @@ function pullLatestFromGit(repoRoot: string): string {
   const stderr = result.stderr?.trim() ?? '';
 
   if (statusCode !== 0) {
-    const detail = stderr || stdout || `exit code ${statusCode}`;
+    const detail = [stderr, stdout].filter((line) => line.length > 0).join('\n') || `exit code ${statusCode}`;
     throw new Error(`Git pull failed in ${repoRoot}: ${detail}`);
   }
 
@@ -1369,14 +1369,14 @@ interface RepoPiUpdateResult {
   version: string;
 }
 
-function updateRepoPiPackage(repoRoot: string): RepoPiUpdateResult {
-  const result = spawnSync('npm', ['install', '--no-audit', '--no-fund'], {
+function runNpmInstallCommand(repoRoot: string, args: string[], failurePrefix: string): string {
+  const result = spawnSync('npm', args, {
     cwd: repoRoot,
     encoding: 'utf-8',
   });
 
   if (result.error) {
-    throw new Error(`Failed to run npm install in ${repoRoot}: ${result.error.message}`);
+    throw new Error(`${failurePrefix} in ${repoRoot}: ${result.error.message}`);
   }
 
   const statusCode = result.status ?? 1;
@@ -1385,8 +1385,45 @@ function updateRepoPiPackage(repoRoot: string): RepoPiUpdateResult {
 
   if (statusCode !== 0) {
     const detail = stderr || stdout || `exit code ${statusCode}`;
-    throw new Error(`Repository dependency install failed in ${repoRoot}: ${detail}`);
+    throw new Error(`${failurePrefix} in ${repoRoot}: ${detail}`);
   }
+
+  return [stdout, stderr].filter((line) => line.length > 0).join('\n');
+}
+
+function updateRepoPiPackage(repoRoot: string): RepoPiUpdateResult {
+  const outputs: string[] = [];
+
+  outputs.push(
+    runNpmInstallCommand(
+      repoRoot,
+      ['install', '--no-audit', '--no-fund'],
+      'Repository dependency install failed',
+    ),
+  );
+
+  outputs.push(
+    runNpmInstallCommand(
+      repoRoot,
+      ['install', '--no-audit', '--no-fund', `${PI_PACKAGE_NAME}@latest`],
+      `Unable to install latest ${PI_PACKAGE_NAME} at repo root`,
+    ),
+  );
+
+  outputs.push(
+    runNpmInstallCommand(
+      repoRoot,
+      [
+        'install',
+        '--no-audit',
+        '--no-fund',
+        '--workspace',
+        '@personal-agent/gateway',
+        `${PI_PACKAGE_NAME}@latest`,
+      ],
+      `Unable to install latest ${PI_PACKAGE_NAME} in @personal-agent/gateway`,
+    ),
+  );
 
   const repoInvocation = resolveRepoPiCommand(repoRoot);
   if (!repoInvocation) {
@@ -1399,7 +1436,7 @@ function updateRepoPiPackage(repoRoot: string): RepoPiUpdateResult {
   }
 
   return {
-    output: [stdout, stderr].filter((line) => line.length > 0).join('\n'),
+    output: outputs.filter((line) => line.length > 0).join('\n'),
     version,
   };
 }
@@ -1532,7 +1569,7 @@ async function updateCommand(args: string[]): Promise<number> {
   let piUpdated = false;
 
   if (!options.repoOnly) {
-    const piSpinner = spinner(`Updating repo-local pi (${PI_PACKAGE_NAME})`);
+    const piSpinner = spinner(`Syncing repo-local pi to latest (${PI_PACKAGE_NAME})`);
     piSpinner.start();
 
     try {
@@ -1540,9 +1577,9 @@ async function updateCommand(args: string[]): Promise<number> {
       piOutput = piUpdateResult.output;
       piVersion = piUpdateResult.version;
       piUpdated = true;
-      piSpinner.succeed(`Updated repo-local pi (${piVersion})`);
+      piSpinner.succeed(`Synced repo-local pi to latest (${piVersion})`);
     } catch (error) {
-      piSpinner.fail('Unable to update repo-local pi');
+      piSpinner.fail('Unable to sync repo-local pi to latest');
       throw error;
     }
 
@@ -2921,7 +2958,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     {
       name: 'update',
       usage: 'update [--repo-only]',
-      description: 'Pull latest git changes, update repo-local dependencies (including pi), then restart background services',
+      description: 'Pull latest git changes, refresh repo dependencies, sync pi to latest, then restart background services',
       run: updateCommand,
     },
     {

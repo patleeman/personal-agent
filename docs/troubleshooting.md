@@ -217,8 +217,9 @@ pa tasks list --status running
 
 `pa update` executes:
 
-- `git pull --ff-only`
-- `npm install` in the personal-agent repo (including repo-local Pi)
+- `git pull --rebase --autostash`
+- `npm install` in the personal-agent repo
+- `npm install @mariozechner/pi-coding-agent@latest` in repo root + `@personal-agent/gateway` workspace
 - background service restart
 
 If you need to skip dependency refresh temporarily, use:

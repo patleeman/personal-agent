@@ -105,7 +105,7 @@ Notes:
 - `pa daemon` prints daemon command help.
 - `pa tasks` prints detailed tasks command help.
 - `pa tmux` manages only agent-tagged tmux sessions (`@pa_agent_session=1`).
-- `pa update` runs `git pull --ff-only`, installs repo dependencies (`npm install`), verifies repo-local Pi, then restarts background services.
+- `pa update` runs `git pull --rebase --autostash`, installs repo dependencies (`npm install`), syncs `@mariozechner/pi-coding-agent` to `@latest` in the repo + gateway workspace, verifies repo-local Pi, then restarts background services.
 - `pa update --repo-only` skips dependency refresh.
 
 ---
@@ -150,8 +150,9 @@ pa tmux clean [--dry-run] [--json]
 
 ## `pa update`
 
-- pulls latest repo changes (`git pull --ff-only`)
-- runs `npm install` in the personal-agent repo (refreshes repo-local dependencies, including Pi)
+- pulls latest repo changes (`git pull --rebase --autostash`)
+- runs `npm install` in the personal-agent repo (refreshes repo-local dependencies)
+- runs `npm install @mariozechner/pi-coding-agent@latest` in both repo root and `@personal-agent/gateway` workspace
 - verifies repo-local Pi is runnable
 - restarts daemon and managed gateways
 
