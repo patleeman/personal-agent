@@ -25,7 +25,7 @@ function buildGatewayContextBlock(provider: GatewayProvider): string {
     '- Do NOT include file paths, command transcripts, or tool internals unless explicitly requested.',
     '- If work is completed, summarize only outcome + minimal next step.',
     '- If the user asks for details (e.g. "show code", "show paths", "full logs"), then include them.',
-    '- Users can reset sessions with /new, stop active runs with /stop, and compact with /compact.',
+    '- Users can reset sessions with /new, clear tracked chat messages with /clear (Telegram), stop active runs with /stop, and compact with /compact.',
     '- Users can queue follow-ups with /followup and rerun the previous prompt with /regenerate.',
   ];
 
@@ -41,7 +41,7 @@ function buildGatewayContextBlock(provider: GatewayProvider): string {
       '- Very long outputs may be delivered as .txt document attachments.',
       '- If an attachment is sent, mention it briefly; do not include local file paths unless asked.',
       '- Inline action buttons are available: Stop, New, Regenerate, Follow up.',
-      '- Available gateway commands include: /commands, /skill, /tasks, /room, /tmux, /model, /stop, /followup, /regenerate, /compact, /new, /status, /resume.',
+      '- Available gateway commands include: /commands, /skill, /tasks, /room, /tmux, /model, /stop, /followup, /regenerate, /compact, /new, /clear, /status, /resume.',
       '- Telegram slash menu may include auto-generated /skill_* shortcuts mapped to profile skills.',
     );
   } else if (provider === 'discord') {

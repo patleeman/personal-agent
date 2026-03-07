@@ -488,6 +488,37 @@ describe('queued telegram message handler', () => {
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
+  it('accepts sender-less messages in allowlisted chats when allowed user IDs are configured', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'channel-style response');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      allowedUserIds: new Set(['42']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({
+      chat: { id: 1, type: 'supergroup', title: 'General' },
+      text: 'hello from send-as channel mode',
+    });
+    await handler.waitForIdle('1');
+
+    expect(runPrompt).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: 'hello from send-as channel mode',
+      sessionFile: '/tmp/sessions/1.jsonl',
+    }));
+    expect(sendChatAction).toHaveBeenCalledWith(1, 'typing');
+    expect(sendMessage).toHaveBeenCalledWith(1, 'channel-style response');
+  });
+
   it('routes topic messages to thread-specific sessions and replies in the same thread', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
@@ -702,6 +733,94 @@ describe('queued telegram message handler', () => {
 
     expect(deleteMessage).not.toHaveBeenCalled();
     expect(sendMessage).toHaveBeenCalledWith(1, 'Started a new session.');
+  });
+
+  it('best-effort clears tracked telegram messages with /clear in topic mode without resetting the session', async () => {
+    let nextMessageId = 900;
+    const sendMessage = vi.fn(async () => ({ message_id: nextMessageId++ }));
+    const deleteMessage = vi.fn(async () => undefined);
+    const sessionFileExists = vi.fn(() => true);
+    const removeSessionFile = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'assistant reply');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      deleteMessage,
+      sessionFileExists,
+      removeSessionFile,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, message_thread_id: 7, message_id: 401, text: 'hello there' });
+    await handler.waitForIdle('1');
+
+    handler.handleMessage({ chat: { id: 1 }, message_thread_id: 7, message_id: 402, text: '/clear' });
+    await handler.waitForIdle('1');
+
+    expect(runPrompt).toHaveBeenCalledTimes(1);
+    expect(removeSessionFile).not.toHaveBeenCalled();
+
+    const deletedMessageIds = deleteMessage.mock.calls
+      .map((call) => Number((call as unknown[])[1]))
+      .sort((a, b) => a - b);
+    expect(deletedMessageIds).toEqual([401, 402, 900]);
+
+    expect(sendMessage).toHaveBeenCalledWith(
+      1,
+      'Cleared 3 recent messages. Topic mode only clears tracked messages for this topic.',
+      { message_thread_id: 7 },
+    );
+  });
+
+  it('best-effort sweeps recent telegram chat messages with /clear in non-topic chats', async () => {
+    let nextMessageId = 900;
+    const sendMessage = vi.fn(async () => ({ message_id: nextMessageId++ }));
+    const deleteMessage = vi.fn(async () => undefined);
+    const deleteMessages = vi.fn(async () => true);
+    const removeSessionFile = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async () => 'assistant reply');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      deleteMessage,
+      deleteMessages,
+      removeSessionFile,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1, type: 'private' }, message_id: 10, text: 'hello there' });
+    await handler.waitForIdle('1');
+
+    handler.handleMessage({ chat: { id: 1, type: 'private' }, message_id: 12, text: '/clear' });
+    await handler.waitForIdle('1');
+
+    expect(runPrompt).toHaveBeenCalledTimes(1);
+    expect(removeSessionFile).not.toHaveBeenCalled();
+    expect(deleteMessages).not.toHaveBeenCalled();
+
+    const deletedMessageIds = deleteMessage.mock.calls
+      .map((call) => Number((call as unknown[])[1]))
+      .sort((a, b) => a - b);
+    expect(deletedMessageIds).toContain(1);
+    expect(deletedMessageIds).toContain(10);
+    expect(deletedMessageIds).toContain(12);
+    expect(deletedMessageIds).toContain(900);
+
+    expect(sendMessage).toHaveBeenCalledWith(1, 'Cleared 13 recent messages.');
   });
 
   it('lists forkable messages for /fork without arguments', async () => {
@@ -1181,7 +1300,7 @@ describe('queued telegram message handler', () => {
     expect(sendMessage).toHaveBeenCalledWith(1, expect.stringContaining('Invalid notify mode: unknown'));
   });
 
-  it('includes /chatid, /tasks, /room, /tmux, /model, /models, /stop, /cancel, /compact, /fork, and /resume in default /commands output', async () => {
+  it('includes /chatid, /tasks, /room, /tmux, /model, /models, /stop, /cancel, /compact, /fork, /clear, and /resume in default /commands output', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
     const runPrompt = vi.fn(async () => 'ignored');
@@ -1216,6 +1335,7 @@ describe('queued telegram message handler', () => {
     expect(output).toContain('/cancel -');
     expect(output).toContain('/compact -');
     expect(output).toContain('/fork -');
+    expect(output).toContain('/clear -');
     expect(output).toContain('/resume -');
     expect(output).not.toContain('/skills -');
   });
@@ -1472,7 +1592,43 @@ describe('queued telegram message handler', () => {
     expect(sendDocument).toHaveBeenCalledTimes(1);
   });
 
-  it('streams tool activity in a temporary telegram status message when enabled', async () => {
+  it('uses chunked streaming (not message edits) for group chats', async () => {
+    const sendMessage = vi.fn(async () => ({ message_id: 410 }));
+    const editMessageText = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+
+    const runPrompt = vi.fn(async ({ onTextDelta }: { onTextDelta?: (delta: string) => void }) => {
+      onTextDelta?.('partial output ');
+      return 'partial output final';
+    });
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      editMessageText,
+      sendChatAction,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1, type: 'supergroup' }, text: 'stream in group' });
+    await handler.waitForIdle('1');
+
+    expect(editMessageText).not.toHaveBeenCalled();
+
+    const sentTexts = sendMessage.mock.calls.map((call) => {
+      const args = call as unknown[];
+      return String(args[1] ?? '');
+    });
+
+    expect(sentTexts).toContain('partial output ');
+    expect(sentTexts).toContain('final');
+  });
+
+  it('shows a temporary tool acknowledgement and deletes it after completion when enabled', async () => {
     let nextMessageId = 500;
     const sendMessage = vi.fn(async () => ({ message_id: nextMessageId++ }));
     const editMessageText = vi.fn(async () => undefined);
@@ -1502,7 +1658,6 @@ describe('queued telegram message handler', () => {
       workingDirectory: '/tmp/work',
       streamToolActivity: true,
       sendMessage,
-      editMessageText,
       deleteMessage,
       sendChatAction,
       createConversationController: createTestConversationControllerFactory(runPrompt),
@@ -1511,21 +1666,17 @@ describe('queued telegram message handler', () => {
     handler.handleMessage({ chat: { id: 1 }, text: 'run with tool status' });
     await handler.waitForIdle('1');
 
-    const editedCalls = editMessageText.mock.calls.map((call) => {
+    const sentTexts = sendMessage.mock.calls.map((call) => {
       const args = call as unknown[];
-      return {
-        messageId: Number(args[1]),
-        text: String(args[2] ?? ''),
-      };
+      return String(args[1] ?? '');
     });
 
-    const toolStatusEdit = editedCalls.find((call) => call.text.includes('⚙️ <b>Running tools…</b>'));
-    expect(toolStatusEdit).toBeDefined();
-    expect(editedCalls.some((call) => call.text.includes('🔧 <b>1) Call</b> <code>read</code> — <i>args:</i> path=/tmp/notes.md'))).toBe(true);
-    expect(editedCalls.some((call) => call.text.includes('✅ <b>2) Result</b> <code>read</code> — <i>details:</i> loaded 120 lines'))).toBe(true);
-    expect(editedCalls.some((call) => call.text.includes('✅ <b>Tool calls</b>'))).toBe(true);
+    expect(sentTexts).toContain('⚙️ Working…');
+    expect(sentTexts.some((text) => text.includes('Call'))).toBe(false);
+    expect(sentTexts.some((text) => text.includes('Result'))).toBe(false);
+    expect(editMessageText).not.toHaveBeenCalled();
 
-    expect(deleteMessage).not.toHaveBeenCalled();
+    expect(deleteMessage).toHaveBeenCalledWith(1, 500);
   });
 
   it('ignores telegram "message is not modified" edit errors', async () => {

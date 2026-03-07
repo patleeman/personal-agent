@@ -6,6 +6,7 @@ profile: "assistant"
 model: "openai-codex/gpt-5.4"
 cwd: "~/workingdir"
 timeoutSeconds: 1200
+runInTmux: false
 output:
   when: always
   targets:
@@ -42,6 +43,7 @@ Data sources:
   - query A: now → end of today
   - query B: end of today → tomorrow 12:00 PM
 - Keep AppleScript timeout bounded (about 20–25s per calendar). If a specific calendar/account times out, skip it and continue; include a short note like `Unavailable: <calendar> timed out`.
+- If a calendar query times out, run a quick warm-up (`osascript -e 'tell application "Calendar" to launch'`) and retry that calendar once before marking it unavailable.
 - Pull events from now through end of today, plus first event tomorrow before noon.
 - For event rows include time, title, and calendar name.
 
@@ -51,6 +53,8 @@ Data sources:
   - overdue reminders
   - reminders due today
   - only truly important upcoming reminders (next 7 days)
+- Keep Reminders AppleScript timeout around 25–30s per attempt (the query can be slower than Calendar).
+- If the first Reminders query times out, run a warm-up (`osascript -e 'tell application "Reminders" to launch'`) and retry once before reporting unavailable.
 
 Output format (follow exactly):
 
@@ -61,8 +65,9 @@ Output format (follow exactly):
 <ONE sentence only: now + today high/low + practical note>
 
 ## ━━ 📅 CALENDAR ━━
-- **Today:** <"No events" or up to 3 upcoming events>
-- **Tomorrow AM:** <first event before noon or "None">
+- **Today:** <All events for the day or  "None">
+- **Tomorrow:** <All events tomorrow or "None">
+- **Upcoming** <All *notable* events for the upcoming week or omit line>
 
 ## ━━ ✅ REMINDERS ━━
 - **Today:** <overdue + due today, max 5 bullets>

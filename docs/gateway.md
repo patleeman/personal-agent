@@ -103,7 +103,7 @@ Optional:
 - `PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT` (default `20`)
 - `PERSONAL_AGENT_TELEGRAM_RETRY_ATTEMPTS` (default `3`)
 - `PERSONAL_AGENT_TELEGRAM_RETRY_BASE_DELAY_MS` (default `300`)
-- `PERSONAL_AGENT_TELEGRAM_TOOL_ACTIVITY_STREAM` (default `false`) — stream temporary tool-call/result status while a run is active
+- `PERSONAL_AGENT_TELEGRAM_TOOL_ACTIVITY_STREAM` (default `false`) — show a temporary tool-running acknowledgement while a run is active (deleted when reply completes)
 - `PERSONAL_AGENT_TELEGRAM_CLEAR_RECENT_MESSAGES_ON_NEW` (default `true`) — best-effort clear recent tracked Telegram messages when `/new` is used
 
 Run:
@@ -120,8 +120,8 @@ Telegram behavior highlights:
 - Inbound support: text, documents, photos, and voice notes
 - Image attachments are passed to Pi as native image inputs
 - Rich HTML formatting for code blocks/headings/links in bot replies
-- Streaming uses message edits (live-updating response)
-- Optional tool activity stream can show temporary tool-call/result updates, then remove/collapse when the assistant reply completes
+- Streaming uses message edits in private chats; group/supergroup chats use chunked message streaming to reduce edit-rate limits
+- Optional tool activity indicator can show a temporary “running tools” acknowledgement, then delete it when the assistant reply completes
 - Very long outputs are sent as `.txt` document attachments
 - Inline action buttons on replies: Stop, New, Regenerate, Follow up
 - Telegram slash menu auto-registers `/skill_*` shortcuts for discovered profile skills (mapped to `/skill:<skill-name>`)
@@ -184,6 +184,8 @@ Telegram persists conversation→session bindings (used by `/fork`) and source-c
 
 `/new` resets the Pi session file and (when enabled) attempts to delete recent tracked Telegram messages in that same chat/topic (best-effort, permission/age limits apply). Configure via `PERSONAL_AGENT_TELEGRAM_CLEAR_RECENT_MESSAGES_ON_NEW` or `gateway.telegram.clearRecentMessagesOnNew`.
 
+`/clear` (Telegram) keeps the current session and best-effort clears recent messages in the current chat/topic. In forum topics, it clears tracked messages for that topic to avoid deleting other topics. Use `/clear all` for a deeper non-topic sweep.
+
 Gateway runs append a gateway-specific system-prompt block before each turn so the model knows:
 
 - it is operating in chat-gateway mode (not TUI)
@@ -207,6 +209,7 @@ When a new message arrives while a run is active in the same conversation:
 - `/status`
 - `/chatid` (show current room/chat ID; includes topic thread ID in Telegram forums)
 - `/new` (start a fresh session and, when enabled, best-effort clear recent tracked messages in the current chat/topic)
+- `/clear` (Telegram only; best-effort clear recent messages in the current chat/topic without resetting the session; supports `/clear all` for deeper non-topic sweeps)
 - `/commands`
 - `/skills` (compatibility alias; Telegram slash menu hides this)
 - `/skill <name>` (and `/skill:<name>`)

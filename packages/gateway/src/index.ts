@@ -314,6 +314,8 @@ type EditMessageTextFn = (
 
 type DeleteMessageFn = (chatId: number, messageId: number) => Promise<unknown>;
 
+type DeleteMessagesFn = (chatId: number, messageIds: number[]) => Promise<unknown>;
+
 type SendDocumentFn = (chatId: number, filePath: string, options?: TelegramSendFileOptions) => Promise<unknown>;
 
 type SendPhotoFn = (chatId: number, filePath: string, options?: TelegramSendFileOptions) => Promise<unknown>;
@@ -519,6 +521,7 @@ export interface CreateTelegramMessageHandlerOptions {
   sendMessage: SendMessageFn;
   editMessageText?: EditMessageTextFn;
   deleteMessage?: DeleteMessageFn;
+  deleteMessages?: DeleteMessagesFn;
   sendDocument?: SendDocumentFn;
   sendPhoto?: SendPhotoFn;
   sendChatAction: SendChatActionFn;
@@ -612,14 +615,12 @@ const TELEGRAM_FORK_SELECTION_CALLBACK_PREFIX = 'fork_select:';
 const TELEGRAM_ROOM_AUTH_REQUEST_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const TELEGRAM_MAX_PENDING_ROOM_AUTH_REQUESTS = 500;
 const TELEGRAM_MAX_TRACKED_CONVERSATION_MESSAGES = 200;
+const TELEGRAM_CLEAR_SWEEP_MESSAGE_LIMIT = 400;
+const TELEGRAM_CLEAR_SWEEP_MESSAGE_LIMIT_ALL = 5000;
+const TELEGRAM_DELETE_MESSAGES_CHUNK_SIZE = 100;
 const TELEGRAM_MAX_MESSAGE_CHARS = 3900;
 const TELEGRAM_STREAMING_EDIT_PREVIEW_MAX_CHARS = 3200;
 const TELEGRAM_STREAMING_EDIT_INTERVAL_MS = 2500;
-const TELEGRAM_TOOL_ACTIVITY_EDIT_INTERVAL_MS = 2500;
-const TELEGRAM_TOOL_ACTIVITY_MAX_LINES = 8;
-const TELEGRAM_TOOL_ACTIVITY_MAX_CHARS = 1500;
-const TELEGRAM_TOOL_ACTIVITY_TOOL_MAX_CHARS = 28;
-const TELEGRAM_TOOL_ACTIVITY_DETAIL_MAX_CHARS = 96;
 const TELEGRAM_LONG_OUTPUT_FILE_THRESHOLD_CHARS = 12_000;
 const TELEGRAM_MAX_AUTO_ATTACHMENTS = 3;
 const TELEGRAM_MAX_ATTACHMENT_BYTES = 45 * 1024 * 1024;
@@ -850,6 +851,7 @@ function isModelCommand(command: string | undefined): boolean {
 
 const DEFAULT_TELEGRAM_COMMANDS: TelegramCommandDefinition[] = [
   { command: 'new', description: 'Start a new session' },
+  { command: 'clear', description: 'Clear messages in the current chat/topic' },
   { command: 'status', description: 'Show gateway status' },
   { command: 'chatid', description: 'Show current chat ID (and topic ID)' },
   { command: 'tasks', description: 'List scheduled tasks (usage: /tasks [status])' },
@@ -870,7 +872,7 @@ const DEFAULT_TELEGRAM_COMMANDS: TelegramCommandDefinition[] = [
 ];
 
 const DEFAULT_DISCORD_COMMANDS: TelegramCommandDefinition[] = DEFAULT_TELEGRAM_COMMANDS
-  .filter((command) => command.command !== 'fork');
+  .filter((command) => command.command !== 'fork' && command.command !== 'clear');
 
 function toTelegramCommandName(rawCommand: string): string | undefined {
   let value = rawCommand.trim().toLowerCase();
@@ -4315,166 +4317,8 @@ interface TelegramToolActivityStreamerOptions {
   deleteMessage?: DeleteMessageFn;
 }
 
-interface ToolActivityRow {
-  step: number;
-  phase: 'call' | 'result' | 'error';
-  tool: string;
-  details: string;
-}
-
-function sanitizeToolActivityText(value: string): string {
-  return value
-    .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '')
-    .replace(/[\u0000-\u001f\u007f]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .replace(/\|/g, '¦')
-    .replace(/`/g, "'")
-    .trim();
-}
-
-function truncateToolActivityCell(value: string, width: number): string {
-  if (width <= 1) {
-    return value.slice(0, Math.max(width, 0));
-  }
-
-  return value.length > width ? `${value.slice(0, width - 1)}…` : value;
-}
-
-function summarizeToolActivityValue(value: unknown): string {
-  if (value === null || value === undefined) {
-    return 'null';
-  }
-
-  if (typeof value === 'string') {
-    const normalized = sanitizeToolActivityText(value);
-    return truncateToolActivityCell(normalized, 96);
-  }
-
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-
-  try {
-    const serialized = sanitizeToolActivityText(JSON.stringify(value));
-    return truncateToolActivityCell(serialized, 96);
-  } catch {
-    return String(value);
-  }
-}
-
-function summarizeToolActivityArgs(args: Record<string, unknown> | undefined): string {
-  if (!args) {
-    return '';
-  }
-
-  const entries = Object.entries(args);
-  if (entries.length === 0) {
-    return '';
-  }
-
-  const preview = entries
-    .slice(0, 4)
-    .map(([key, value]) => `${key}=${summarizeToolActivityValue(value)}`)
-    .join(', ');
-
-  if (entries.length > 4) {
-    return `${preview}, …`;
-  }
-
-  return preview;
-}
-
-function summarizeToolActivityResult(value: string | undefined): string {
-  const normalized = sanitizeToolActivityText(value ?? '');
-  if (normalized.length === 0) {
-    return 'ok';
-  }
-
-  const editMatch = normalized.match(/Successfully replaced text in\s+([^\s]+\.[a-zA-Z0-9]+)/i);
-  if (editMatch?.[1]) {
-    return `edited ${basename(editMatch[1])}`;
-  }
-
-  const exitCodeMatch = normalized.match(/Command exited with code\s+(\d+)/i);
-  if (exitCodeMatch?.[1]) {
-    return `exit code ${exitCodeMatch[1]}`;
-  }
-
-  return truncateToolActivityCell(normalized, 140);
-}
-
-function buildToolActivityRow(event: ToolActivityEvent, step: number): ToolActivityRow {
-  const tool = sanitizeToolActivityText(event.toolName || 'unknown') || 'unknown';
-
-  if (event.phase === 'call') {
-    const details = summarizeToolActivityArgs(event.args);
-    return {
-      step,
-      phase: 'call',
-      tool,
-      details: details.length > 0 ? details : '-',
-    };
-  }
-
-  return {
-    step,
-    phase: event.isError ? 'error' : 'result',
-    tool,
-    details: summarizeToolActivityResult(event.resultText),
-  };
-}
-
-function toToolActivityPhaseLabel(phase: ToolActivityRow['phase']): string {
-  if (phase === 'call') {
-    return 'Call';
-  }
-
-  if (phase === 'error') {
-    return 'Error';
-  }
-
-  return 'Result';
-}
-
-function toToolActivityPhaseEmoji(phase: ToolActivityRow['phase']): string {
-  if (phase === 'call') {
-    return '🔧';
-  }
-
-  if (phase === 'error') {
-    return '❌';
-  }
-
-  return '✅';
-}
-
-function renderToolActivityText(rows: ToolActivityRow[], completed: boolean): string {
-  const header = completed ? '✅ **Tool calls**' : '⚙️ **Running tools…**';
-  const recent = [...rows];
-
-  while (recent.length > 0) {
-    const lines = recent.map((row) => {
-      const tool = truncateToolActivityCell(row.tool, TELEGRAM_TOOL_ACTIVITY_TOOL_MAX_CHARS);
-      const details = truncateToolActivityCell(row.details, TELEGRAM_TOOL_ACTIVITY_DETAIL_MAX_CHARS);
-      const detailSuffix = details.length > 0 && details !== '-'
-        ? ` — *${row.phase === 'call' ? 'args' : 'details'}:* ${details}`
-        : '';
-      return `${toToolActivityPhaseEmoji(row.phase)} **${row.step}) ${toToolActivityPhaseLabel(row.phase)}** \`${tool}\`${detailSuffix}`;
-    });
-
-    const body = `${header}\n${lines.join('\n')}`;
-    if (body.length <= TELEGRAM_TOOL_ACTIVITY_MAX_CHARS) {
-      return body;
-    }
-
-    recent.shift();
-  }
-
-  return header;
-}
-
 function createTelegramToolActivityStreamer(options: TelegramToolActivityStreamerOptions): ToolActivityStreamer {
-  if (!options.enabled || !options.editMessageText) {
+  if (!options.enabled) {
     return {
       push: () => {
         // no-op
@@ -4484,13 +4328,10 @@ function createTelegramToolActivityStreamer(options: TelegramToolActivityStreame
   }
 
   let statusMessageId: number | undefined;
-  let lastRenderedText = '';
-  let lastEditAt = 0;
   let sendError: Error | undefined;
   let sendChain: Promise<void> = Promise.resolve();
   let closed = false;
-  let nextStep = 1;
-  const rows: ToolActivityRow[] = [];
+  let acknowledgementQueued = false;
 
   const queue = (task: () => Promise<void>): void => {
     sendChain = sendChain
@@ -4506,17 +4347,19 @@ function createTelegramToolActivityStreamer(options: TelegramToolActivityStreame
       });
   };
 
-  const ensureStatusMessage = (): void => {
-    if (statusMessageId !== undefined) {
+  const ensureAcknowledgement = (): void => {
+    if (statusMessageId !== undefined || acknowledgementQueued) {
       return;
     }
+
+    acknowledgementQueued = true;
 
     queue(async () => {
       if (statusMessageId !== undefined) {
         return;
       }
 
-      const sent = await sendTelegramFormattedMessage(options.sendMessage, options.chatId, '⚙️ **Running tools…**');
+      const sent = await sendTelegramFormattedMessage(options.sendMessage, options.chatId, '⚙️ Working…');
       const messageId = toTelegramSentMessageId(sent);
       if (typeof messageId === 'number') {
         statusMessageId = messageId;
@@ -4524,53 +4367,13 @@ function createTelegramToolActivityStreamer(options: TelegramToolActivityStreame
     });
   };
 
-  const flush = (force: boolean, completed = false): void => {
-    if (rows.length === 0) {
-      return;
-    }
-
-    if (!force && Date.now() - lastEditAt < TELEGRAM_TOOL_ACTIVITY_EDIT_INTERVAL_MS) {
-      return;
-    }
-
-    const nextText = renderToolActivityText(rows, completed);
-    if (!force && nextText === lastRenderedText) {
-      return;
-    }
-
-    ensureStatusMessage();
-
-    queue(async () => {
-      if (!options.editMessageText || statusMessageId === undefined) {
-        return;
-      }
-
-      await editTelegramFormattedMessage(
-        options.editMessageText,
-        options.chatId,
-        statusMessageId,
-        nextText,
-      );
-
-      lastRenderedText = nextText;
-      lastEditAt = Date.now();
-    });
-  };
-
   return {
-    push: (event: ToolActivityEvent): void => {
+    push: (_event: ToolActivityEvent): void => {
       if (closed) {
         return;
       }
 
-      rows.push(buildToolActivityRow(event, nextStep));
-      nextStep += 1;
-
-      while (rows.length > TELEGRAM_TOOL_ACTIVITY_MAX_LINES) {
-        rows.shift();
-      }
-
-      flush(false, false);
+      ensureAcknowledgement();
     },
     finalize: async (): Promise<void> => {
       if (closed) {
@@ -4578,12 +4381,19 @@ function createTelegramToolActivityStreamer(options: TelegramToolActivityStreame
       }
 
       closed = true;
-      flush(true, true);
-      await sendChain;
 
-      if (statusMessageId === undefined) {
-        return;
+      if (statusMessageId !== undefined && options.deleteMessage) {
+        const messageId = statusMessageId;
+
+        queue(async () => {
+          await options.deleteMessage!(options.chatId, messageId);
+          if (statusMessageId === messageId) {
+            statusMessageId = undefined;
+          }
+        });
       }
+
+      await sendChain;
 
       if (sendError) {
         throw sendError;
@@ -5736,11 +5546,13 @@ interface ClearTrackedTelegramConversationMessagesInput {
   chatId: number;
   messageIds: number[];
   deleteMessage?: DeleteMessageFn;
+  deleteMessages?: DeleteMessagesFn;
 }
 
 interface ClearTrackedTelegramConversationMessagesResult {
   attempted: number;
   deleted: number;
+  usedBulkDelete: boolean;
 }
 
 function trackTelegramConversationMessageId(
@@ -5767,13 +5579,49 @@ function trackTelegramConversationMessageId(
   messageIdsByConversation.set(conversationId, tracked);
 }
 
+function buildTelegramClearSweepMessageIds(
+  latestMessageId: number | undefined,
+  maxCount: number,
+): number[] {
+  if (typeof latestMessageId !== 'number' || !Number.isSafeInteger(latestMessageId) || latestMessageId <= 0) {
+    return [];
+  }
+
+  const limit = Number.isFinite(maxCount) && maxCount > 0
+    ? Math.floor(maxCount)
+    : TELEGRAM_CLEAR_SWEEP_MESSAGE_LIMIT;
+  const floor = Math.max(1, latestMessageId - limit + 1);
+  const messageIds: number[] = [];
+
+  for (let messageId = latestMessageId; messageId >= floor; messageId -= 1) {
+    messageIds.push(messageId);
+  }
+
+  return messageIds;
+}
+
+function chunkTelegramMessageIds(messageIds: number[], chunkSize: number): number[][] {
+  if (chunkSize <= 0) {
+    return [messageIds];
+  }
+
+  const chunks: number[][] = [];
+
+  for (let index = 0; index < messageIds.length; index += chunkSize) {
+    chunks.push(messageIds.slice(index, index + chunkSize));
+  }
+
+  return chunks;
+}
+
 async function clearTrackedTelegramConversationMessages(
   input: ClearTrackedTelegramConversationMessagesInput,
 ): Promise<ClearTrackedTelegramConversationMessagesResult> {
-  if (!input.deleteMessage || input.messageIds.length === 0) {
+  if ((!input.deleteMessage && !input.deleteMessages) || input.messageIds.length === 0) {
     return {
       attempted: 0,
       deleted: 0,
+      usedBulkDelete: false,
     };
   }
 
@@ -5782,10 +5630,49 @@ async function clearTrackedTelegramConversationMessages(
   )].sort((a, b) => b - a);
 
   let deleted = 0;
+  let usedBulkDelete = false;
+
+  if (input.deleteMessages) {
+    const chunks = chunkTelegramMessageIds(messageIds, TELEGRAM_DELETE_MESSAGES_CHUNK_SIZE);
+
+    for (const chunk of chunks) {
+      if (chunk.length === 0) {
+        continue;
+      }
+
+      try {
+        await input.deleteMessages(input.chatId, chunk);
+        deleted += chunk.length;
+        usedBulkDelete = true;
+        continue;
+      } catch {
+        // Fall through to per-message delete when available.
+      }
+
+      if (!input.deleteMessage) {
+        continue;
+      }
+
+      for (const messageId of chunk) {
+        try {
+          await input.deleteMessage(input.chatId, messageId);
+          deleted += 1;
+        } catch {
+          // Best-effort cleanup. Ignore individual delete failures.
+        }
+      }
+    }
+
+    return {
+      attempted: messageIds.length,
+      deleted,
+      usedBulkDelete,
+    };
+  }
 
   for (const messageId of messageIds) {
     try {
-      await input.deleteMessage(input.chatId, messageId);
+      await input.deleteMessage!(input.chatId, messageId);
       deleted += 1;
     } catch {
       // Best-effort cleanup. Ignore individual delete failures.
@@ -5795,6 +5682,7 @@ async function clearTrackedTelegramConversationMessages(
   return {
     attempted: messageIds.length,
     deleted,
+    usedBulkDelete,
   };
 }
 
@@ -5817,12 +5705,14 @@ async function processTelegramMessage(
   const senderUserId = toTelegramUserIdString(message.from?.id);
   const allowedUserIds = options.allowedUserIds ?? new Set<string>();
   const blockedUserIds = options.blockedUserIds ?? new Set<string>();
+  const senderIsAllowedUser = senderUserId ? allowedUserIds.has(senderUserId) : false;
 
   if (senderUserId && blockedUserIds.has(senderUserId)) {
     return completedMessageProcessingResult();
   }
 
-  if (allowedUserIds.size > 0 && (!senderUserId || !allowedUserIds.has(senderUserId))) {
+  const allowSenderlessMessageInAllowlistedChat = !senderUserId && options.allowlist.has(chatId);
+  if (allowedUserIds.size > 0 && !senderIsAllowedUser && !allowSenderlessMessageInAllowlistedChat) {
     return completedMessageProcessingResult();
   }
 
@@ -5904,7 +5794,6 @@ async function processTelegramMessage(
   const isServiceOnlyMessage = rawText.length === 0
     && inboundMediaReferences.length === 0
     && isTelegramServiceOnlyMessage(message);
-  const senderIsAllowedUser = senderUserId ? allowedUserIds.has(senderUserId) : false;
   const bypassAllowlistForDirectChat = senderIsAllowedUser && message.chat.type === 'private';
   const canAutoAuthorizeRoom = senderIsAllowedUser && message.chat.type !== 'private';
 
@@ -6041,10 +5930,12 @@ async function processTelegramMessage(
         chatId: message.chat.id,
         messageIds: trackedMessageIds,
         deleteMessage: options.deleteMessage,
+        deleteMessages: options.deleteMessages,
       })
       : {
         attempted: 0,
         deleted: 0,
+        usedBulkDelete: false,
       };
 
     await emitDaemonEventNonFatal({
@@ -6068,6 +5959,56 @@ async function processTelegramMessage(
       } else if (clearResult.attempted > 0) {
         response = 'Started a new session. Unable to clear recent messages.';
       }
+    }
+
+    await sendMessageToConversation(response);
+    return completedMessageProcessingResult();
+  }
+
+  if (command === '/clear') {
+    if (!options.deleteMessage && !options.deleteMessages) {
+      await sendMessageToConversation('Message clearing is not configured for this gateway instance.');
+      return completedMessageProcessingResult();
+    }
+
+    const trackedMessageIds = [...(state.recentMessageIdsByConversation.get(conversationId) ?? [])];
+    state.recentMessageIdsByConversation.delete(conversationId);
+
+    const clearAllRequested = commandArgs.trim().toLowerCase() === 'all';
+    const shouldSweepCurrentChat = messageThreadId === undefined;
+    const sweepMessageIds = shouldSweepCurrentChat
+      ? buildTelegramClearSweepMessageIds(
+        message.message_id,
+        clearAllRequested ? TELEGRAM_CLEAR_SWEEP_MESSAGE_LIMIT_ALL : TELEGRAM_CLEAR_SWEEP_MESSAGE_LIMIT,
+      )
+      : [];
+
+    const clearResult = await clearTrackedTelegramConversationMessages({
+      chatId: message.chat.id,
+      messageIds: [...trackedMessageIds, ...sweepMessageIds],
+      deleteMessage: options.deleteMessage,
+      deleteMessages: shouldSweepCurrentChat ? undefined : options.deleteMessages,
+    });
+
+    let response = shouldSweepCurrentChat
+      ? 'No recent messages to clear yet.'
+      : 'No tracked messages to clear yet.';
+
+    if (clearResult.attempted > 0 && clearResult.deleted > 0) {
+      if (clearResult.usedBulkDelete && shouldSweepCurrentChat) {
+        response = `Attempted to clear up to ${clearResult.attempted} recent messages.`;
+      } else {
+        response = `Cleared ${clearResult.deleted} recent message${clearResult.deleted === 1 ? '' : 's'}.`;
+        if (clearResult.deleted < clearResult.attempted) {
+          response += ' Some messages could not be removed.';
+        }
+      }
+    } else if (clearResult.attempted > 0) {
+      response = 'Unable to clear recent messages.';
+    }
+
+    if (!shouldSweepCurrentChat) {
+      response += ' Topic mode only clears tracked messages for this topic.';
     }
 
     await sendMessageToConversation(response);
@@ -6585,7 +6526,11 @@ model=${model}`,
     options.createConversationController,
   );
 
-  const responseStreamer = options.editMessageText
+  const shouldStreamWithMessageEdits = options.editMessageText
+    && message.chat.type !== 'group'
+    && message.chat.type !== 'supergroup';
+
+  const responseStreamer = shouldStreamWithMessageEdits
     ? createTelegramResponseChunkStreamer({
       chatId: message.chat.id,
       workingDirectory: options.workingDirectory,
@@ -7191,6 +7136,18 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     `telegram.deleteMessage chat=${chatId} message=${messageId}`,
     () => bot.deleteMessage(chatId, messageId),
   );
+
+  const botWithDeleteMessages = bot as unknown as {
+    deleteMessages?: (targetChatId: number, targetMessageIds: number[]) => Promise<unknown>;
+  };
+
+  const deleteTelegramMessagesWithRetry: DeleteMessagesFn | undefined =
+    typeof botWithDeleteMessages.deleteMessages === 'function'
+      ? (chatId, messageIds) => withTelegramRetry(
+        `telegram.deleteMessages chat=${chatId} count=${messageIds.length}`,
+        () => botWithDeleteMessages.deleteMessages!(chatId, messageIds),
+      )
+      : undefined;
 
   const sendTelegramDocumentWithRetry = (
     chatId: number,
@@ -8262,6 +8219,9 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     editMessageText: (chatId, messageId, text, options) =>
       editTelegramMessageTextWithRetry(chatId, messageId, text, options),
     deleteMessage: (chatId, messageId) => deleteTelegramMessageWithRetry(chatId, messageId),
+    deleteMessages: deleteTelegramMessagesWithRetry
+      ? (chatId, messageIds) => deleteTelegramMessagesWithRetry(chatId, messageIds)
+      : undefined,
     sendDocument: (chatId, filePath, options) => sendTelegramDocumentWithRetry(chatId, filePath, options),
     sendPhoto: (chatId, filePath, options) => sendTelegramPhotoWithRetry(chatId, filePath, options),
     sendChatAction: (chatId, action, actionOptions) => withTelegramRetry(
@@ -9543,7 +9503,7 @@ async function runGatewaySetup(provider?: GatewayProvider): Promise<void> {
     const toolActivityStream = selectedProvider === 'telegram'
       ? await promptBoolean(
         prompt.ask,
-        'Stream tool activity while responses are running',
+        'Show temporary tool activity acknowledgement while responses are running',
         current.telegram?.toolActivityStream ?? false,
       )
       : undefined;
