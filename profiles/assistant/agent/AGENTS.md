@@ -34,3 +34,4 @@
 - Prefer free weather sources (`wttr.in`).
 - For local calendar agenda and morning-report calendar reads, use the `apple-calendar-local` skill defaults.
 - For Fastmail automation (outside morning report), prefer IMAP + CalDAV with app-password auth (avoid JMAP-token workflows).
+- During active development, do not add backward-compatibility shims, aliases, or migration layers unless Patrick explicitly asks for them.
