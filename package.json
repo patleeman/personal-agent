@@ -30,7 +30,7 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "@mariozechner/pi-coding-agent": "^0.56.3",
+    "@mariozechner/pi-coding-agent": "^0.57.0",
     "discord.js": "^14.25.1",
     "grammy": "^1.41.0"
   },

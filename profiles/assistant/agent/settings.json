@@ -5,5 +5,8 @@
   "theme": "cobalt2",
   "themeDark": "cobalt2",
   "themeLight": "cobalt2-light",
-  "themeMode": "system"
+  "themeMode": "system",
+  "packages": [
+    "/Users/patrick/workingdir/pi-boy"
+  ]
 }

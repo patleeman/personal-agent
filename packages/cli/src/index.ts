@@ -1369,7 +1369,7 @@ interface RepoPiUpdateResult {
   version: string;
 }
 
-function runNpmInstallCommand(repoRoot: string, args: string[], failurePrefix: string): string {
+function runNpmCommand(repoRoot: string, args: string[], failurePrefix: string): string {
   const result = spawnSync('npm', args, {
     cwd: repoRoot,
     encoding: 'utf-8',
@@ -1395,7 +1395,7 @@ function updateRepoPiPackage(repoRoot: string): RepoPiUpdateResult {
   const outputs: string[] = [];
 
   outputs.push(
-    runNpmInstallCommand(
+    runNpmCommand(
       repoRoot,
       ['install', '--no-audit', '--no-fund'],
       'Repository dependency install failed',
@@ -1403,7 +1403,7 @@ function updateRepoPiPackage(repoRoot: string): RepoPiUpdateResult {
   );
 
   outputs.push(
-    runNpmInstallCommand(
+    runNpmCommand(
       repoRoot,
       ['install', '--no-audit', '--no-fund', `${PI_PACKAGE_NAME}@latest`],
       `Unable to install latest ${PI_PACKAGE_NAME} at repo root`,
@@ -1411,7 +1411,7 @@ function updateRepoPiPackage(repoRoot: string): RepoPiUpdateResult {
   );
 
   outputs.push(
-    runNpmInstallCommand(
+    runNpmCommand(
       repoRoot,
       [
         'install',
@@ -1439,6 +1439,14 @@ function updateRepoPiPackage(repoRoot: string): RepoPiUpdateResult {
     output: outputs.filter((line) => line.length > 0).join('\n'),
     version,
   };
+}
+
+function rebuildRepoPackages(repoRoot: string): string {
+  return runNpmCommand(
+    repoRoot,
+    ['run', 'build'],
+    'Repository build failed',
+  );
 }
 
 function isMissingServiceManagerError(error: unknown): boolean {
@@ -1588,12 +1596,30 @@ async function updateCommand(args: string[]): Promise<number> {
     }
   }
 
+  const buildSpinner = spinner('Rebuilding personal-agent packages');
+  buildSpinner.start();
+
+  let buildOutput = '';
+
+  try {
+    buildOutput = rebuildRepoPackages(repoRoot);
+    buildSpinner.succeed('Rebuilt personal-agent packages');
+  } catch (error) {
+    buildSpinner.fail('Unable to rebuild personal-agent packages');
+    throw error;
+  }
+
+  if (buildOutput.length > 0) {
+    console.log(dim(buildOutput));
+  }
+
   const summary = await restartBackgroundServices();
 
   console.log('');
   console.log(section('Update summary'));
   console.log(keyValue('repository', repoRoot));
   console.log(keyValue('pi package', options.repoOnly ? 'skipped (--repo-only)' : (piUpdated ? `repo-local (${piVersion})` : 'unknown')));
+  console.log(keyValue('build', 'repo packages rebuilt'));
   console.log(keyValue('daemon', summary.daemonStatus));
   console.log(keyValue('gateway services restarted', summary.restartedGatewayServices.length > 0 ? summary.restartedGatewayServices.join(', ') : 'none'));
   console.log(keyValue('gateway services skipped', summary.skippedGatewayServices.length > 0 ? summary.skippedGatewayServices.join(', ') : 'none'));
@@ -2958,7 +2984,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     {
       name: 'update',
       usage: 'update [--repo-only]',
-      description: 'Pull latest git changes, refresh repo dependencies, sync pi to latest, then restart background services',
+      description: 'Pull latest git changes, refresh repo dependencies, sync pi to latest, rebuild packages, then restart background services',
       run: updateCommand,
     },
     {

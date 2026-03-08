@@ -220,9 +220,10 @@ pa tasks list --status running
 - `git pull --rebase --autostash`
 - `npm install` in the personal-agent repo
 - `npm install @mariozechner/pi-coding-agent@latest` in repo root + `@personal-agent/gateway` workspace
+- `npm run build` in the personal-agent repo
 - background service restart
 
-If you need to skip dependency refresh temporarily, use:
+If you need to skip dependency refresh temporarily, use (`npm run build` + restart still run):
 
 ```bash
 pa update --repo-only
