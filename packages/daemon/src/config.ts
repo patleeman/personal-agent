@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
-import { join, resolve } from 'path';
+import { dirname, join, resolve } from 'path';
+import { fileURLToPath } from 'url';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -40,7 +41,17 @@ export interface DaemonConfig {
   };
 }
 
+const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const DEFAULT_DAEMON_CONFIG_FILE = join(homedir(), '.config', 'personal-agent', 'daemon.json');
+const DEFAULT_TASKS_DIR = join(
+  process.env.PERSONAL_AGENT_REPO_ROOT
+    ? resolve(expandHome(process.env.PERSONAL_AGENT_REPO_ROOT))
+    : PACKAGE_ROOT,
+  'profiles',
+  'assistant',
+  'agent',
+  'tasks',
+);
 
 function expandHome(path: string): string {
   if (path === '~') {
@@ -141,7 +152,7 @@ export function getDefaultDaemonConfig(): DaemonConfig {
       },
       tasks: {
         enabled: true,
-        taskDir: join(homedir(), '.config', 'personal-agent', 'tasks'),
+        taskDir: DEFAULT_TASKS_DIR,
         tickIntervalSeconds: 30,
         maxRetries: 3,
         reapAfterDays: 7,

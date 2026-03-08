@@ -172,7 +172,7 @@ Example:
     },
     "tasks": {
       "enabled": true,
-      "taskDir": "~/.config/personal-agent/tasks",
+      "taskDir": "/path/to/personal-agent/profiles/assistant/agent/tasks",
       "tickIntervalSeconds": 30,
       "maxRetries": 3,
       "reapAfterDays": 7,

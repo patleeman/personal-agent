@@ -6,7 +6,7 @@
 
 Default directory:
 
-- `~/.config/personal-agent/tasks`
+- `<repo>/profiles/assistant/agent/tasks`
 
 Only files ending in **`.task.md`** are auto-discovered.
 
