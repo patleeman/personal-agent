@@ -201,11 +201,10 @@ When a new message arrives while a run is active in the same conversation:
 - normal message → steer (interrupt-style)
 - `/followup <text>` → queued follow-up delivered after current response
 - `/followup` (no args) → puts chat into one-shot follow-up capture mode (next message is treated as follow-up)
-- `/sleep <delay> [follow-up]` → schedules a future follow-up on the same durable conversation/session
-  - when due and the conversation is still active, it queues as a normal follow-up
-  - when due and the conversation is idle, it starts a new run on the same session file
-  - first version supports delays like `45s`, `10m`, `2h`, `1d`
-  - `/sleep cancel` removes the pending deferred resume for that conversation
+- the agent may also call the `deferred_resume` tool to schedule this same durable conversation/session to wake back up later
+  - deferred resumes are daemon-backed background wake-ups
+  - when due and the conversation is still active, the prompt queues as a normal follow-up
+  - when due and the conversation is idle, gateway starts a new run on the same session file
 
 ---
 
@@ -225,7 +224,7 @@ When a new message arrives while a run is active in the same conversation:
 - `/model` / `/models`
 - `/stop`
 - `/followup <text>` (or `/followup` for one-shot follow-up capture mode)
-- `/sleep <delay> [follow-up message]` (schedule a deferred follow-up on the same conversation; supports `/sleep cancel`)
+- `/deferred` (show queued deferred resumes)
 - `/regenerate`
 - `/cancel`
 - `/compact [instructions]` (runs native Pi compaction)
@@ -239,28 +238,28 @@ Telegram registers slash commands via Bot API on startup.
 - `group=auto` groups parallel runs targeting the same source+work conversation while active.
 - `notify=resume` posts completion summary and injects a single follow-up continuation prompt in the work topic when the whole run group finishes.
 
-## Which command should I use?
+## Which mechanism should I use?
 
-### `/sleep`
+### `deferred_resume` tool
 
-Use `/sleep` when you want the **same Telegram/Discord conversation** to wake back up later.
-
-Examples:
-
-```text
-/sleep 10m check the training logs and continue
-/sleep 2h
-/sleep cancel
-```
+Use the `deferred_resume` tool when the **agent itself** should wake this same Telegram/Discord conversation later.
 
 Behavior:
 
-- schedules a delayed follow-up on the **current durable conversation/session**
-- if you omit the follow-up text, the default is: `Continue from where you left off and keep going.`
-- when due:
-  - if a run is still active, the message is queued as a follow-up
-  - if idle, gateway starts a new run on the same session file
-- current implementation keeps one pending deferred follow-up per conversation; scheduling another replaces the previous one
+- schedules a daemon-backed delayed resume for the **current durable conversation/session**
+- meant for agent-controlled “pause now, continue later” behavior
+- best for waiting on time to pass or for background work to make progress
+- not a user slash command; the assistant should call it directly when appropriate
+
+### `/deferred`
+
+Use `/deferred` when you want to **inspect whether deferred resumes are queued**.
+
+Behavior:
+
+- read-only visibility into queued deferred resumes
+- does not schedule anything
+- useful for checking whether the agent already queued a wake-up
 
 ### `/resume`
 
@@ -296,7 +295,7 @@ Behavior:
 - the work happens in tmux, not inside the chat request itself
 - logs are attached to the tmux session
 - `notify=resume` is only a **completion hook**: when the tmux run group finishes, gateway posts a summary and injects one continuation follow-up into the target conversation
-- `notify=resume` is not a general timer/scheduler; `/sleep` is the delayed same-conversation wake-up tool
+- `notify=resume` is not a general timer/scheduler; `deferred_resume` is the delayed same-conversation wake-up mechanism
 
 ### Scheduled tasks (`*.task.md`)
 
@@ -310,10 +309,13 @@ Behavior:
 
 Quick rule of thumb:
 
-- **Resume this same conversation later** → `/sleep`
+- **Agent should resume this same conversation later** → `deferred_resume` tool
+- **Check whether deferred resumes are queued** → `/deferred`
 - **Switch this chat to another saved conversation now** → `/resume`
 - **Run a long background shell command** → `/tmux run`
 - **Run something on a calendar/schedule** → scheduled task
+
+In Pi TUI sessions, the footer/status bar also shows a `resume:` indicator for queued deferred resumes. A trailing `*` means the current session has at least one queued deferred resume.
 
 ---
 

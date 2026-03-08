@@ -45,6 +45,8 @@ describe('gateway context extension', () => {
     expect(result?.systemPrompt).toContain('do not include local file paths unless asked');
     expect(result?.systemPrompt).toContain('/regenerate');
     expect(result?.systemPrompt).toContain('/clear');
+    expect(result?.systemPrompt).toContain('/deferred');
+    expect(result?.systemPrompt).not.toContain('/sleep');
   });
 
   it('does not modify system prompt when gateway mode is disabled', () => {

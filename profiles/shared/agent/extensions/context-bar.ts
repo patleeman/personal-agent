@@ -189,7 +189,12 @@ export default function (pi: ExtensionAPI) {
 						.filter((status) => status.trim().length > 0);
 					const tmuxStatusIndex = extensionStatuses.findIndex((status) => status.includes("tmux:"));
 					const bgStatusIndex = extensionStatuses.findIndex((status) => status.includes("bg:"));
-					const pinnedStatusIndex = tmuxStatusIndex >= 0 ? tmuxStatusIndex : bgStatusIndex;
+					const resumeStatusIndex = extensionStatuses.findIndex((status) => status.includes("resume:"));
+					const pinnedStatusIndex = tmuxStatusIndex >= 0
+						? tmuxStatusIndex
+						: bgStatusIndex >= 0
+							? bgStatusIndex
+							: resumeStatusIndex;
 					const pinnedStatus = pinnedStatusIndex >= 0 ? extensionStatuses[pinnedStatusIndex] : undefined;
 					if (pinnedStatus) leftParts.push(pinnedStatus);
 					const rightExtensionStatuses = extensionStatuses.filter((_, index) => index !== pinnedStatusIndex);

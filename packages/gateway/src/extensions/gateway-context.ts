@@ -26,7 +26,8 @@ function buildGatewayContextBlock(provider: GatewayProvider): string {
     '- If work is completed, summarize only outcome + minimal next step.',
     '- If the user asks for details (e.g. "show code", "show paths", "full logs"), then include them.',
     '- Users can reset sessions with /new, clear tracked chat messages with /clear (Telegram), stop active runs with /stop, and compact with /compact.',
-    '- Users can queue follow-ups with /followup, schedule delayed same-conversation resumes with /sleep, and rerun the previous prompt with /regenerate.',
+    '- Users can queue follow-ups with /followup and rerun the previous prompt with /regenerate.',
+    '- If you need this same conversation to wake back up later, use the deferred_resume tool yourself instead of telling the user to run a sleep slash command.',
   ];
 
   if (provider === 'telegram') {
@@ -41,7 +42,7 @@ function buildGatewayContextBlock(provider: GatewayProvider): string {
       '- Very long outputs may be delivered as .txt document attachments.',
       '- If an attachment is sent, mention it briefly; do not include local file paths unless asked.',
       '- Inline action buttons are available: Stop, New, Regenerate, Follow up.',
-      '- Available gateway commands include: /commands, /skill, /tasks, /room, /tmux, /model, /stop, /followup, /sleep, /regenerate, /compact, /new, /clear, /status, /resume.',
+      '- Available gateway commands include: /commands, /skill, /tasks, /room, /tmux, /model, /stop, /followup, /deferred, /regenerate, /compact, /new, /clear, /status, /resume.',
       '- Telegram slash menu may include auto-generated /skill_* shortcuts mapped to profile skills.',
     );
   } else if (provider === 'discord') {
@@ -49,7 +50,7 @@ function buildGatewayContextBlock(provider: GatewayProvider): string {
       '',
       'Discord-specific capabilities:',
       '- Gateway supports per-channel persisted sessions and queued message handling.',
-      '- Available gateway commands include: /commands, /skills, /skill, /tasks, /model, /stop, /followup, /sleep, /regenerate, /compact, /new, /status, /resume.',
+      '- Available gateway commands include: /commands, /skills, /skill, /tasks, /model, /stop, /followup, /deferred, /regenerate, /compact, /new, /status, /resume.',
     );
   }
 

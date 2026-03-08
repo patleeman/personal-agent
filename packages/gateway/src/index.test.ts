@@ -5,15 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createQueuedDiscordMessageHandler,
   createQueuedTelegramMessageHandler,
-  dispatchDueDeferredFollowUps,
+  flushGatewayDeferredFollowUps,
   flushGatewayNotifications,
-  loadDeferredFollowUps,
   parseAllowlist,
-  parseDeferredFollowUpDelayMs,
   parseGatewayCliArgs,
   registerGatewayCliCommands,
   splitTelegramMessage,
-  writeDeferredFollowUps,
 } from './index.js';
 
 const originalEnv = process.env;
@@ -41,64 +38,64 @@ function createTempDir(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
-it('parses deferred follow-up delays', () => {
-  expect(parseDeferredFollowUpDelayMs('10m')).toBe(600000);
-  expect(parseDeferredFollowUpDelayMs('2h')).toBe(7200000);
-  expect(parseDeferredFollowUpDelayMs('1d')).toBe(86400000);
-  expect(parseDeferredFollowUpDelayMs('45s')).toBe(45000);
-  expect(parseDeferredFollowUpDelayMs('')).toBeUndefined();
-  expect(parseDeferredFollowUpDelayMs('10')).toBeUndefined();
-  expect(parseDeferredFollowUpDelayMs('abc')).toBeUndefined();
-});
+describe('flushGatewayDeferredFollowUps', () => {
+  it('delivers pulled daemon deferred follow-ups and acknowledges them', async () => {
+    const followUp = {
+      id: 'resume-1',
+      gateway: 'telegram' as const,
+      conversationId: '123',
+      sessionFile: '/tmp/sessions/123.jsonl',
+      prompt: 'continue from here',
+      dueAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      source: 'module:deferred-followups',
+    };
 
-it('round-trips deferred follow-ups through disk state', () => {
-  const dir = createTempDir('gateway-deferred-followups-');
-  const filePath = join(dir, 'state.json');
-  const entries = new Map([
-    ['chat-1', {
-      conversationId: 'chat-1',
-      prompt: 'continue later',
-      dueAt: '2026-03-08T12:00:00.000Z',
-      createdAt: '2026-03-08T11:50:00.000Z',
-      updatedAt: '2026-03-08T11:50:00.000Z',
-    }],
-  ]);
+    const pullDeferredFollowUps = vi.fn(async () => [followUp]);
+    const deliverFollowUp = vi.fn(async () => true);
+    const acknowledgeFollowUp = vi.fn(async () => undefined);
 
-  writeDeferredFollowUps(filePath, entries as any);
-  const loaded = loadDeferredFollowUps(filePath);
-  expect(loaded.get('chat-1')).toEqual(entries.get('chat-1'));
+    const deliveredCount = await flushGatewayDeferredFollowUps({
+      gateway: 'telegram',
+      pullDeferredFollowUps,
+      deliverFollowUp,
+      acknowledgeFollowUp,
+    });
 
-  rmSync(dir, { recursive: true, force: true });
-});
+    expect(deliveredCount).toBe(1);
+    expect(deliverFollowUp).toHaveBeenCalledWith(followUp);
+    expect(acknowledgeFollowUp).toHaveBeenCalledWith(followUp);
+  });
 
-it('dispatches only due deferred follow-ups', async () => {
-  const entries = new Map([
-    ['due', {
-      conversationId: 'due',
-      prompt: 'resume now',
-      dueAt: '2026-03-08T12:00:00.000Z',
-      createdAt: '2026-03-08T11:50:00.000Z',
-      updatedAt: '2026-03-08T11:50:00.000Z',
-    }],
-    ['later', {
-      conversationId: 'later',
-      prompt: 'resume later',
-      dueAt: '2026-03-08T12:30:00.000Z',
-      createdAt: '2026-03-08T11:50:00.000Z',
-      updatedAt: '2026-03-08T11:50:00.000Z',
-    }],
-  ]);
-  const dispatched: string[] = [];
+  it('requeues failed deferred follow-up deliveries', async () => {
+    const followUp = {
+      id: 'resume-1',
+      gateway: 'telegram' as const,
+      conversationId: '123',
+      sessionFile: '/tmp/sessions/123.jsonl',
+      prompt: 'continue from here',
+      dueAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      source: 'module:deferred-followups',
+    };
 
-  const count = await dispatchDueDeferredFollowUps(entries as any, async (record) => {
-    dispatched.push(record.conversationId);
-    return true;
-  }, Date.parse('2026-03-08T12:05:00.000Z'));
+    const pullDeferredFollowUps = vi.fn(async () => [followUp]);
+    const deliverFollowUp = vi.fn(async () => false);
+    const acknowledgeFollowUp = vi.fn(async () => undefined);
+    const requeueFollowUp = vi.fn(async () => undefined);
 
-  expect(count).toBe(1);
-  expect(dispatched).toEqual(['due']);
-  expect(entries.has('due')).toBe(false);
-  expect(entries.has('later')).toBe(true);
+    const deliveredCount = await flushGatewayDeferredFollowUps({
+      gateway: 'telegram',
+      pullDeferredFollowUps,
+      deliverFollowUp,
+      acknowledgeFollowUp,
+      requeueFollowUp,
+    });
+
+    expect(deliveredCount).toBe(0);
+    expect(acknowledgeFollowUp).not.toHaveBeenCalled();
+    expect(requeueFollowUp).toHaveBeenCalledWith(followUp);
+  });
 });
 
 interface TestRunPromptInput {
@@ -1364,7 +1361,7 @@ describe('queued telegram message handler', () => {
     expect(sendMessage).toHaveBeenCalledWith(1, expect.stringContaining('Invalid notify mode: unknown'));
   });
 
-  it('includes /chatid, /tasks, /room, /tmux, /model, /models, /stop, /cancel, /compact, /fork, /clear, /sleep, and /resume in default /commands output', async () => {
+  it('includes /chatid, /tasks, /room, /tmux, /model, /models, /stop, /cancel, /compact, /fork, /clear, /deferred, and /resume in default /commands output', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
     const runPrompt = vi.fn(async () => 'ignored');
@@ -1400,7 +1397,7 @@ describe('queued telegram message handler', () => {
     expect(output).toContain('/compact -');
     expect(output).toContain('/fork -');
     expect(output).toContain('/clear -');
-    expect(output).toContain('/sleep -');
+    expect(output).toContain('/deferred -');
     expect(output).toContain('/resume -');
     expect(output).not.toContain('/skills -');
   });
@@ -1505,12 +1502,11 @@ describe('queued telegram message handler', () => {
     rmSync(sessionDir, { recursive: true, force: true });
   });
 
-  it('schedules and cancels deferred telegram resumes with /sleep without invoking pi', async () => {
+  it('shows deferred telegram resume summary with /deferred without invoking pi', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
     const runPrompt = vi.fn(async () => 'ignored');
-    const scheduleDeferredFollowUp = vi.fn();
-    const cancelDeferredFollowUp = vi.fn(() => true);
+    const getDeferredFollowUpSummary = vi.fn(async () => 'Deferred resumes: 1 total (1 scheduled, 0 queued).');
 
     const handler = createQueuedTelegramMessageHandler({
       allowlist: new Set(['1']),
@@ -1520,24 +1516,19 @@ describe('queued telegram message handler', () => {
       workingDirectory: '/tmp/work',
       sendMessage,
       sendChatAction,
-      scheduleDeferredFollowUp,
-      cancelDeferredFollowUp,
+      getDeferredFollowUpSummary,
       createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
-    handler.handleMessage({ chat: { id: 1 }, text: '/sleep 10m check the logs' });
-    handler.handleMessage({ chat: { id: 1 }, text: '/sleep cancel' });
+    handler.handleMessage({ chat: { id: 1 }, text: '/deferred' });
     await handler.waitForIdle('1');
 
     expect(runPrompt).not.toHaveBeenCalled();
-    expect(scheduleDeferredFollowUp).toHaveBeenCalledWith({
+    expect(getDeferredFollowUpSummary).toHaveBeenCalledWith({
       conversationId: '1',
-      delayMs: 600000,
-      prompt: 'check the logs',
+      sessionFile: '/tmp/sessions/1.jsonl',
     });
-    expect(cancelDeferredFollowUp).toHaveBeenCalledWith('1');
-    expect(sendMessage).toHaveBeenCalledWith(1, 'Will resume this conversation in 10m.');
-    expect(sendMessage).toHaveBeenCalledWith(1, 'Cancelled the pending deferred resume for this conversation.');
+    expect(sendMessage).toHaveBeenCalledWith(1, 'Deferred resumes: 1 total (1 scheduled, 0 queued).');
   });
 
   it('enters follow-up capture mode when /followup is sent without arguments', async () => {
@@ -2676,7 +2667,7 @@ describe('queued discord message handler', () => {
     );
   });
 
-  it('includes /chatid, /tasks, /tmux, /model, /models, /stop, /cancel, /compact, /sleep, and /resume in default /commands output', async () => {
+  it('includes /chatid, /tasks, /tmux, /model, /models, /stop, /cancel, /compact, /deferred, and /resume in default /commands output', async () => {
     const runPrompt = vi.fn(async () => 'ignored');
     const sendMessage = vi.fn(async () => undefined);
     const sendTyping = vi.fn(async () => undefined);
@@ -2713,7 +2704,7 @@ describe('queued discord message handler', () => {
     expect(output).toContain('/stop -');
     expect(output).toContain('/cancel -');
     expect(output).toContain('/compact -');
-    expect(output).toContain('/sleep -');
+    expect(output).toContain('/deferred -');
     expect(output).toContain('/resume -');
   });
 
@@ -2838,12 +2829,11 @@ describe('queued discord message handler', () => {
     rmSync(sessionDir, { recursive: true, force: true });
   });
 
-  it('schedules and cancels deferred discord resumes with /sleep without invoking pi', async () => {
+  it('shows deferred discord resume summary with /deferred without invoking pi', async () => {
     const runPrompt = vi.fn(async () => 'ignored');
     const sendMessage = vi.fn(async () => undefined);
     const sendTyping = vi.fn(async () => undefined);
-    const scheduleDeferredFollowUp = vi.fn();
-    const cancelDeferredFollowUp = vi.fn(() => true);
+    const getDeferredFollowUpSummary = vi.fn(async () => 'Deferred resumes: 2 total (2 scheduled, 0 queued).');
 
     const handler = createQueuedDiscordMessageHandler({
       allowlist: new Set(['channel-1']),
@@ -2851,20 +2841,13 @@ describe('queued discord message handler', () => {
       agentDir: '/tmp/agent',
       discordSessionDir: '/tmp/discord-sessions',
       workingDirectory: '/tmp/work',
-      scheduleDeferredFollowUp,
-      cancelDeferredFollowUp,
+      getDeferredFollowUpSummary,
       createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({
       channelId: 'channel-1',
-      content: '/sleep 2h continue after the build',
-      sendMessage,
-      sendTyping,
-    });
-    handler.handleMessage({
-      channelId: 'channel-1',
-      content: '/sleep cancel',
+      content: '/deferred',
       sendMessage,
       sendTyping,
     });
@@ -2872,14 +2855,11 @@ describe('queued discord message handler', () => {
     await handler.waitForIdle('channel-1');
 
     expect(runPrompt).not.toHaveBeenCalled();
-    expect(scheduleDeferredFollowUp).toHaveBeenCalledWith({
+    expect(getDeferredFollowUpSummary).toHaveBeenCalledWith({
       conversationId: 'channel-1',
-      delayMs: 7200000,
-      prompt: 'continue after the build',
+      sessionFile: '/tmp/discord-sessions/channel-1.jsonl',
     });
-    expect(cancelDeferredFollowUp).toHaveBeenCalledWith('channel-1');
-    expect(sendMessage).toHaveBeenCalledWith('Will resume this channel in 2h.');
-    expect(sendMessage).toHaveBeenCalledWith('Cancelled the pending deferred resume for this channel.');
+    expect(sendMessage).toHaveBeenCalledWith('Deferred resumes: 2 total (2 scheduled, 0 queued).');
   });
 
   it('maps /skill <name> to /skill:<name> before invoking pi', async () => {

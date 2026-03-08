@@ -37,11 +37,14 @@ import {
 } from '@personal-agent/resources';
 import {
   emitDaemonEventNonFatal,
+  getDaemonStatus,
   loadDaemonConfig,
   parseTaskDefinition,
+  pullGatewayDeferredFollowUps,
   pullGatewayNotifications,
   resolveDaemonPaths,
   startDaemonDetached,
+  type GatewayDeferredFollowUp,
   type GatewayNotification,
   type ParsedTaskDefinition,
 } from '@personal-agent/daemon';
@@ -62,6 +65,7 @@ import {
   resolveConfiguredAllowlistEntries,
   resolveConfiguredValue,
 } from './secret-resolver.js';
+import { setGatewayExtensionRuntimeContext } from './extensions/runtime-context.js';
 
 export {
   SUPPORTED_GATEWAY_PROVIDERS,
@@ -441,19 +445,6 @@ export interface ScheduledReplyContext {
   createdAt?: string;
 }
 
-export interface DeferredFollowUpRecord {
-  conversationId: string;
-  prompt: string;
-  dueAt: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface StoredDeferredFollowUps {
-  version: 1;
-  entries: Record<string, DeferredFollowUpRecord>;
-}
-
 const GATEWAY_TASK_STATUS_FILTERS = ['running', 'active', 'completed', 'disabled', 'pending', 'error'] as const;
 
 type GatewayTaskStatus = (typeof GATEWAY_TASK_STATUS_FILTERS)[number];
@@ -573,13 +564,10 @@ export interface CreateTelegramMessageHandlerOptions {
     chatId: string;
     replyMessageId: number;
   }) => ScheduledReplyContext | undefined;
-  scheduleDeferredFollowUp?: (input: {
+  getDeferredFollowUpSummary?: (input: {
     conversationId: string;
-    delayMs: number;
-    prompt: string;
-  }) => void;
-  cancelDeferredFollowUp?: (conversationId: string) => boolean;
-  getDeferredFollowUp?: (conversationId: string) => DeferredFollowUpRecord | undefined;
+    sessionFile: string;
+  }) => Promise<string>;
 }
 
 export interface QueuedTelegramMessageHandler {
@@ -623,13 +611,10 @@ export interface CreateDiscordMessageHandlerOptions {
   clearConversationSessionFile?: (input: {
     conversationId: string;
   }) => void;
-  scheduleDeferredFollowUp?: (input: {
+  getDeferredFollowUpSummary?: (input: {
     conversationId: string;
-    delayMs: number;
-    prompt: string;
-  }) => void;
-  cancelDeferredFollowUp?: (conversationId: string) => boolean;
-  getDeferredFollowUp?: (conversationId: string) => DeferredFollowUpRecord | undefined;
+    sessionFile: string;
+  }) => Promise<string>;
 }
 
 export interface QueuedDiscordMessageHandler {
@@ -668,7 +653,6 @@ const STOPPED_ACTIVE_REQUEST_MESSAGE = 'Stopped active request.';
 const NO_ACTIVE_REQUEST_MESSAGE = 'No active request to stop.';
 const STEERING_ACTIVE_REQUEST_MESSAGE = 'Steering current response...';
 const FOLLOWUP_QUEUED_MESSAGE = 'Queued as follow-up.';
-const DEFAULT_DEFERRED_FOLLOWUP_PROMPT = 'Continue from where you left off and keep going.';
 const DEFERRED_FOLLOWUP_POLL_INTERVAL_MS = 5_000;
 const STREAMING_FLUSH_TARGET_CHARS = 700;
 const STREAMING_FLUSH_MIN_CHARS = 250;
@@ -905,7 +889,7 @@ const DEFAULT_TELEGRAM_COMMANDS: TelegramCommandDefinition[] = [
   ...MODEL_TELEGRAM_COMMANDS,
   { command: 'stop', description: 'Stop active request' },
   { command: 'followup', description: 'Queue follow-up (or /followup to enter follow-up mode)' },
-  { command: 'sleep', description: 'Resume this same conversation later (usage: /sleep <10m|2h|1d> [follow-up])' },
+  { command: 'deferred', description: 'Show queued deferred resumes' },
   { command: 'regenerate', description: 'Run the last prompt again' },
   { command: 'cancel', description: 'Cancel active model selection' },
   { command: 'compact', description: 'Compact context (usage: /compact [instructions])' },
@@ -3009,28 +2993,35 @@ function getProfileDefaultModel(profile: ResolvedProfile): string | undefined {
   return undefined;
 }
 
-function resolveGatewayPromptExtensionPath(): string | undefined {
+function resolveGatewayExtensionPaths(): string[] {
   const moduleDir = dirname(fileURLToPath(import.meta.url));
-  const candidates = [
-    join(moduleDir, 'extensions', 'gateway-context.js'),
-    join(moduleDir, 'extensions', 'gateway-context.ts'),
-  ];
+  const extensionNames = ['gateway-context', 'deferred-resume'];
+  const resolved: string[] = [];
 
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) {
-      return candidate;
+  for (const extensionName of extensionNames) {
+    const candidates = [
+      join(moduleDir, 'extensions', `${extensionName}.js`),
+      join(moduleDir, 'extensions', `${extensionName}.ts`),
+    ];
+
+    for (const candidate of candidates) {
+      if (existsSync(candidate)) {
+        resolved.push(candidate);
+        break;
+      }
     }
   }
 
-  return undefined;
+  return resolved;
 }
 
 function buildGatewayExtensionEntries(profile: ResolvedProfile): string[] {
   const merged = [...profile.extensionEntries];
-  const gatewayPromptExtension = resolveGatewayPromptExtensionPath();
 
-  if (gatewayPromptExtension && !merged.includes(gatewayPromptExtension)) {
-    merged.push(gatewayPromptExtension);
+  for (const extensionPath of resolveGatewayExtensionPaths()) {
+    if (!merged.includes(extensionPath)) {
+      merged.push(extensionPath);
+    }
   }
 
   return merged;
@@ -3065,6 +3056,8 @@ async function createGatewayAgentSession(options: {
   agentDir: string;
   cwd: string;
   sessionFile: string;
+  provider?: 'telegram' | 'discord';
+  conversationId?: string;
 }): Promise<PiAgentSession> {
   const settingsManager = buildGatewaySettingsManager(options.profile, options.cwd, options.agentDir);
   const eventBus = createEventBus();
@@ -3080,10 +3073,18 @@ async function createGatewayAgentSession(options: {
 
   await resourceLoader.reload();
 
+  const sessionManager = createPersistentSessionManager(options.cwd, options.sessionFile);
+  if (options.provider && options.conversationId) {
+    setGatewayExtensionRuntimeContext(sessionManager, {
+      provider: options.provider,
+      conversationId: options.conversationId,
+    });
+  }
+
   const { session, extensionsResult } = await createAgentSession({
     cwd: options.cwd,
     agentDir: options.agentDir,
-    sessionManager: createPersistentSessionManager(options.cwd, options.sessionFile),
+    sessionManager,
     settingsManager,
     resourceLoader,
   });
@@ -3359,6 +3360,8 @@ async function runPiPrintPrompt(options: RunPiPrintPromptOptions): Promise<strin
 }
 
 interface PersistentConversationControllerOptions {
+  provider: 'telegram' | 'discord';
+  conversationId: string;
   profile: ResolvedProfile;
   agentDir: string;
   cwd: string;
@@ -3409,6 +3412,8 @@ function delay(ms: number): Promise<void> {
 }
 
 class PersistentConversationController implements GatewayConversationController {
+  private readonly provider: 'telegram' | 'discord';
+  private readonly conversationId: string;
   private readonly profile: ResolvedProfile;
   private readonly agentDir: string;
   private readonly cwd: string;
@@ -3423,6 +3428,8 @@ class PersistentConversationController implements GatewayConversationController 
   private disposed = false;
 
   constructor(options: PersistentConversationControllerOptions) {
+    this.provider = options.provider;
+    this.conversationId = options.conversationId;
     this.profile = options.profile;
     this.agentDir = options.agentDir;
     this.cwd = options.cwd;
@@ -3770,6 +3777,8 @@ class PersistentConversationController implements GatewayConversationController 
       agentDir: this.agentDir,
       cwd: this.cwd,
       sessionFile: this.initialSessionFile,
+      provider: this.provider,
+      conversationId: this.conversationId,
     }).then((session) => {
       this.session = session;
       this.unsubscribe = session.subscribe((event) => {
@@ -4777,6 +4786,228 @@ export async function flushGatewayNotifications(
   return deliveredCount;
 }
 
+export interface FlushGatewayDeferredFollowUpsOptions {
+  gateway: 'telegram' | 'discord';
+  limit?: number;
+  deliverFollowUp: (followUp: GatewayDeferredFollowUp) => Promise<boolean | void>;
+  pullDeferredFollowUps?: (input: {
+    gateway: 'telegram' | 'discord';
+    limit?: number;
+  }) => Promise<GatewayDeferredFollowUp[]>;
+  acknowledgeFollowUp?: (followUp: GatewayDeferredFollowUp) => Promise<void>;
+  requeueFollowUp?: (followUp: GatewayDeferredFollowUp) => Promise<void>;
+}
+
+function toGatewayDeferredFollowUpDeliveredPayload(followUp: GatewayDeferredFollowUp): Record<string, unknown> {
+  return {
+    id: followUp.id,
+  };
+}
+
+function toGatewayDeferredFollowUpRequeuePayload(followUp: GatewayDeferredFollowUp): Record<string, unknown> {
+  return {
+    id: followUp.id,
+  };
+}
+
+export async function flushGatewayDeferredFollowUps(
+  options: FlushGatewayDeferredFollowUpsOptions,
+): Promise<number> {
+  const pullDeferred = options.pullDeferredFollowUps ?? pullGatewayDeferredFollowUps;
+  const acknowledgeFollowUp = options.acknowledgeFollowUp ?? ((followUp: GatewayDeferredFollowUp) =>
+    emitDaemonEventNonFatal({
+      type: 'gateway.deferred-followup.delivered',
+      source: 'gateway',
+      payload: toGatewayDeferredFollowUpDeliveredPayload(followUp),
+    }));
+  const requeueFollowUp = options.requeueFollowUp ?? ((followUp: GatewayDeferredFollowUp) =>
+    emitDaemonEventNonFatal({
+      type: 'gateway.deferred-followup.requeue',
+      source: 'gateway',
+      payload: toGatewayDeferredFollowUpRequeuePayload(followUp),
+    }));
+
+  const followUps = await pullDeferred({
+    gateway: options.gateway,
+    limit: options.limit ?? 20,
+  });
+
+  if (followUps.length === 0) {
+    return 0;
+  }
+
+  let deliveredCount = 0;
+
+  for (const followUp of followUps) {
+    try {
+      const delivered = await options.deliverFollowUp(followUp);
+      if (delivered === false) {
+        await requeueFollowUp(followUp);
+        break;
+      }
+
+      await acknowledgeFollowUp(followUp);
+      deliveredCount += 1;
+    } catch (error) {
+      console.warn(gatewayWarning(
+        `Failed to deliver daemon ${options.gateway} deferred follow-up ${followUp.id}: ${(error as Error).message}`,
+      ));
+
+      await requeueFollowUp(followUp);
+      break;
+    }
+  }
+
+  return deliveredCount;
+}
+
+interface DaemonDeferredFollowUpStateRecord {
+  id: string;
+  gateway: 'telegram' | 'discord';
+  conversationId: string;
+  sessionFile: string;
+  prompt: string;
+  dueAt: string;
+  status: 'scheduled' | 'queued';
+  attempts: number;
+}
+
+function readDaemonDeferredFollowUpState(filePath: string): DaemonDeferredFollowUpStateRecord[] {
+  if (!existsSync(filePath)) {
+    return [];
+  }
+
+  try {
+    const raw = readFileSync(filePath, 'utf-8').trim();
+    if (raw.length === 0) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw) as { followUps?: Record<string, Record<string, unknown>> };
+    if (!parsed.followUps || typeof parsed.followUps !== 'object') {
+      return [];
+    }
+
+    const entries: DaemonDeferredFollowUpStateRecord[] = [];
+    for (const value of Object.values(parsed.followUps)) {
+      const id = typeof value.id === 'string' ? value.id.trim() : '';
+      const gateway = value.gateway === 'telegram' || value.gateway === 'discord' ? value.gateway : undefined;
+      const conversationId = typeof value.conversationId === 'string' ? value.conversationId.trim() : '';
+      const sessionFile = typeof value.sessionFile === 'string' ? value.sessionFile.trim() : '';
+      const prompt = typeof value.prompt === 'string' ? value.prompt.trim() : '';
+      const dueAt = typeof value.dueAt === 'string' ? value.dueAt.trim() : '';
+      const status = value.status === 'queued' ? 'queued' : value.status === 'scheduled' ? 'scheduled' : undefined;
+      const attempts = typeof value.attempts === 'number' && Number.isFinite(value.attempts)
+        ? Math.max(0, Math.floor(value.attempts))
+        : 0;
+
+      if (!id || !gateway || !conversationId || !sessionFile || !prompt || !dueAt || !status) {
+        continue;
+      }
+
+      if (Number.isNaN(Date.parse(dueAt))) {
+        continue;
+      }
+
+      entries.push({
+        id,
+        gateway,
+        conversationId,
+        sessionFile,
+        prompt,
+        dueAt,
+        status,
+        attempts,
+      });
+    }
+
+    return entries.sort((left, right) => Date.parse(left.dueAt) - Date.parse(right.dueAt));
+  } catch {
+    return [];
+  }
+}
+
+function formatDeferredFollowUpDueIn(dueAt: string): string {
+  const deltaMs = Date.parse(dueAt) - Date.now();
+  if (!Number.isFinite(deltaMs) || deltaMs <= 0) {
+    return 'now';
+  }
+
+  const totalSeconds = Math.floor(deltaMs / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (days > 0) {
+    return `${days}d${hours}h`;
+  }
+  if (hours > 0) {
+    return `${hours}h${minutes}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m${seconds}s`;
+  }
+
+  return `${seconds}s`;
+}
+
+async function buildDeferredFollowUpSummary(input: {
+  gateway: 'telegram' | 'discord';
+  conversationId: string;
+  sessionFile: string;
+}): Promise<string> {
+  try {
+    const status = await getDaemonStatus();
+    const moduleStatus = status.modules.find((entry) => entry.name === 'deferred-followups');
+    const stateFile = moduleStatus?.detail && typeof moduleStatus.detail.stateFile === 'string'
+      ? moduleStatus.detail.stateFile.trim()
+      : '';
+
+    if (!stateFile) {
+      return 'Deferred resumes are unavailable because the daemon deferred-followups module is not reporting state.';
+    }
+
+    const entries = readDaemonDeferredFollowUpState(stateFile)
+      .filter((entry) => entry.gateway === input.gateway);
+
+    if (entries.length === 0) {
+      return 'Deferred resumes: none queued.';
+    }
+
+    const scheduledCount = entries.filter((entry) => entry.status === 'scheduled').length;
+    const queuedCount = entries.length - scheduledCount;
+    const currentEntries = entries.filter((entry) =>
+      entry.conversationId === input.conversationId || entry.sessionFile === input.sessionFile,
+    );
+
+    const lines = [
+      `Deferred resumes: ${entries.length} total (${scheduledCount} scheduled, ${queuedCount} queued).`,
+    ];
+
+    if (currentEntries.length === 0) {
+      lines.push('Current conversation: none.');
+    } else {
+      lines.push('Current conversation:');
+      for (const entry of currentEntries.slice(0, 3)) {
+        lines.push(`- ${entry.status} · due in ${formatDeferredFollowUpDueIn(entry.dueAt)} · ${entry.prompt}`);
+      }
+      if (currentEntries.length > 3) {
+        lines.push(`- … ${currentEntries.length - 3} more`);
+      }
+    }
+
+    const otherCount = Math.max(0, entries.length - currentEntries.length);
+    if (otherCount > 0) {
+      lines.push(`Other conversations: ${otherCount}.`);
+    }
+
+    return lines.join('\n');
+  } catch (error) {
+    return `Deferred resumes are unavailable: ${(error as Error).message}`;
+  }
+}
+
 function toNumericDestinationId(value: string): number | undefined {
   if (!/^-?\d+$/.test(value.trim())) {
     return undefined;
@@ -5026,128 +5257,6 @@ function writeTelegramConversationBindings(filePath: string, bindings: Map<strin
   };
 
   writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf-8');
-}
-
-export function loadDeferredFollowUps(filePath: string): Map<string, DeferredFollowUpRecord> {
-  if (!existsSync(filePath)) {
-    return new Map<string, DeferredFollowUpRecord>();
-  }
-
-  try {
-    const raw = readFileSync(filePath, 'utf-8').trim();
-    if (raw.length === 0) {
-      return new Map<string, DeferredFollowUpRecord>();
-    }
-
-    const parsed = JSON.parse(raw) as Partial<StoredDeferredFollowUps>;
-    if (parsed.version !== 1 || !parsed.entries || typeof parsed.entries !== 'object') {
-      return new Map<string, DeferredFollowUpRecord>();
-    }
-
-    const entries = new Map<string, DeferredFollowUpRecord>();
-    for (const [conversationId, record] of Object.entries(parsed.entries)) {
-      if (!record || typeof record !== 'object') {
-        continue;
-      }
-      const candidate = record as Partial<DeferredFollowUpRecord>;
-      const trimmedConversationId = typeof candidate.conversationId === 'string'
-        ? candidate.conversationId.trim()
-        : conversationId.trim();
-      const prompt = typeof candidate.prompt === 'string' ? candidate.prompt.trim() : '';
-      const dueAt = typeof candidate.dueAt === 'string' ? candidate.dueAt.trim() : '';
-      const createdAt = typeof candidate.createdAt === 'string' ? candidate.createdAt.trim() : '';
-      const updatedAt = typeof candidate.updatedAt === 'string' ? candidate.updatedAt.trim() : createdAt;
-      if (!trimmedConversationId || !prompt || !dueAt || !createdAt) {
-        continue;
-      }
-      if (Number.isNaN(Date.parse(dueAt))) {
-        continue;
-      }
-      entries.set(trimmedConversationId, {
-        conversationId: trimmedConversationId,
-        prompt,
-        dueAt,
-        createdAt,
-        updatedAt: updatedAt || createdAt,
-      });
-    }
-
-    return entries;
-  } catch {
-    return new Map<string, DeferredFollowUpRecord>();
-  }
-}
-
-export function writeDeferredFollowUps(filePath: string, entries: Map<string, DeferredFollowUpRecord>): void {
-  mkdirSync(dirname(filePath), { recursive: true });
-
-  const serialized: Record<string, DeferredFollowUpRecord> = {};
-  for (const [conversationId, record] of entries.entries()) {
-    const trimmedConversationId = conversationId.trim();
-    if (!trimmedConversationId || !record.prompt.trim() || Number.isNaN(Date.parse(record.dueAt))) {
-      continue;
-    }
-    serialized[trimmedConversationId] = {
-      conversationId: trimmedConversationId,
-      prompt: record.prompt.trim(),
-      dueAt: record.dueAt,
-      createdAt: record.createdAt,
-      updatedAt: record.updatedAt,
-    };
-  }
-
-  const payload: StoredDeferredFollowUps = {
-    version: 1,
-    entries: serialized,
-  };
-
-  writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf-8');
-}
-
-export function parseDeferredFollowUpDelayMs(raw: string): number | undefined {
-  const match = raw.trim().match(/^(\d+)(s|m|h|d)$/i);
-  if (!match) {
-    return undefined;
-  }
-
-  const value = Number(match[1]);
-  const unit = (match[2] ?? '').toLowerCase();
-  if (!Number.isFinite(value) || value <= 0) {
-    return undefined;
-  }
-
-  switch (unit) {
-    case 's':
-      return value * 1_000;
-    case 'm':
-      return value * 60_000;
-    case 'h':
-      return value * 60 * 60_000;
-    case 'd':
-      return value * 24 * 60 * 60_000;
-    default:
-      return undefined;
-  }
-}
-
-export async function dispatchDueDeferredFollowUps(
-  entries: Map<string, DeferredFollowUpRecord>,
-  dispatch: (record: DeferredFollowUpRecord) => Promise<boolean> | boolean,
-  nowMs = Date.now(),
-): Promise<number> {
-  let dispatched = 0;
-  for (const [conversationId, record] of [...entries.entries()]) {
-    if (Date.parse(record.dueAt) > nowMs) {
-      continue;
-    }
-    const ok = await dispatch(record);
-    if (!ok) {
-      continue;
-    }
-    entries.delete(conversationId);
-    dispatched += 1;
-  }
-  return dispatched;
 }
 
 function sanitizeTelegramPendingToken(token: string): string {
@@ -6571,32 +6680,15 @@ model=${model}`,
     return completedMessageProcessingResult();
   }
 
-  if (command === '/sleep') {
-    const trimmedArgs = commandArgs.trim();
-    if (trimmedArgs.toLowerCase() === 'cancel') {
-      const cancelled = options.cancelDeferredFollowUp?.(conversationId) ?? false;
-      await sendMessageToConversation(cancelled
-        ? 'Cancelled the pending deferred resume for this conversation.'
-        : 'No deferred resume is scheduled for this conversation.');
-      return completedMessageProcessingResult();
-    }
-
-    const [rawDelay = '', ...promptParts] = trimmedArgs.split(/\s+/);
-    const delayMs = parseDeferredFollowUpDelayMs(rawDelay);
-    if (!delayMs) {
-      await sendMessageToConversation(
-        'Usage: /sleep <10m|2h|1d> [follow-up message]\nExample: /sleep 10m check the training logs and continue.',
-      );
-      return completedMessageProcessingResult();
-    }
-
-    const prompt = promptParts.join(' ').trim() || DEFAULT_DEFERRED_FOLLOWUP_PROMPT;
-    options.scheduleDeferredFollowUp?.({
+  if (command === '/deferred') {
+    const summary = await options.getDeferredFollowUpSummary?.({
       conversationId,
-      delayMs,
-      prompt,
-    });
-    await sendMessageToConversation(`Will resume this conversation in ${rawDelay}.`);
+      sessionFile,
+    }) ?? 'Deferred resumes are unavailable in this gateway instance.';
+    await sendLongText(
+      (chunk) => sendFormattedMessageToConversation(chunk),
+      summary,
+    );
     return completedMessageProcessingResult();
   }
 
@@ -7573,9 +7665,6 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
   const telegramWorkTopicBindingPath = join(statePaths.root, 'gateway', 'state', 'telegram-work-topics.json');
   const telegramWorkTopicBindings = loadTelegramWorkTopicBindings(telegramWorkTopicBindingPath);
 
-  const telegramDeferredFollowUpPath = join(statePaths.root, 'gateway', 'state', 'telegram-deferred-followups.json');
-  const telegramDeferredFollowUps = loadDeferredFollowUps(telegramDeferredFollowUpPath);
-
   const persistTelegramConversationSessionBindings = (): void => {
     writeTelegramConversationBindings(telegramConversationBindingPath, telegramConversationSessionBindings);
   };
@@ -7583,37 +7672,6 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
   const persistTelegramWorkTopicBindings = (): void => {
     writeTelegramWorkTopicBindings(telegramWorkTopicBindingPath, telegramWorkTopicBindings);
   };
-
-  const persistTelegramDeferredFollowUps = (): void => {
-    writeDeferredFollowUps(telegramDeferredFollowUpPath, telegramDeferredFollowUps);
-  };
-
-  const scheduleTelegramDeferredFollowUp = (input: {
-    conversationId: string;
-    delayMs: number;
-    prompt: string;
-  }): void => {
-    const now = new Date().toISOString();
-    telegramDeferredFollowUps.set(input.conversationId, {
-      conversationId: input.conversationId,
-      prompt: input.prompt,
-      dueAt: new Date(Date.now() + input.delayMs).toISOString(),
-      createdAt: now,
-      updatedAt: now,
-    });
-    persistTelegramDeferredFollowUps();
-  };
-
-  const cancelTelegramDeferredFollowUp = (conversationId: string): boolean => {
-    const removed = telegramDeferredFollowUps.delete(conversationId);
-    if (removed) {
-      persistTelegramDeferredFollowUps();
-    }
-    return removed;
-  };
-
-  const getTelegramDeferredFollowUp = (conversationId: string): DeferredFollowUpRecord | undefined =>
-    telegramDeferredFollowUps.get(conversationId);
 
   const resolveTelegramConversationSessionFile = (input: {
     conversationId: string;
@@ -8488,18 +8546,16 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
   let deferredFollowUpPollInFlight = false;
   const pollTelegramDeferredFollowUps = async (): Promise<void> => {
-    if (deferredFollowUpPollInFlight || telegramDeferredFollowUps.size === 0) {
+    if (deferredFollowUpPollInFlight) {
       return;
     }
+
     deferredFollowUpPollInFlight = true;
     try {
-      const dispatched = await dispatchDueDeferredFollowUps(
-        telegramDeferredFollowUps,
-        async (record) => dispatchSyntheticTelegramFollowUp(record.conversationId, record.prompt),
-      );
-      if (dispatched > 0) {
-        persistTelegramDeferredFollowUps();
-      }
+      await flushGatewayDeferredFollowUps({
+        gateway: 'telegram',
+        deliverFollowUp: async (followUp) => dispatchSyntheticTelegramFollowUp(followUp.conversationId, followUp.prompt),
+      });
     } finally {
       deferredFollowUpPollInFlight = false;
     }
@@ -8833,9 +8889,11 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     modelCommands,
     resolveScheduledReplyContext: ({ chatId, replyMessageId }) =>
       resolveScheduledReplyContext(chatId, replyMessageId),
-    scheduleDeferredFollowUp: scheduleTelegramDeferredFollowUp,
-    cancelDeferredFollowUp: cancelTelegramDeferredFollowUp,
-    getDeferredFollowUp: getTelegramDeferredFollowUp,
+    getDeferredFollowUpSummary: ({ conversationId, sessionFile }) => buildDeferredFollowUpSummary({
+      gateway: 'telegram',
+      conversationId,
+      sessionFile,
+    }),
     handleRoomAdminCommand,
     handleTmuxCommand,
     handleTmuxRunRequest,
@@ -8952,7 +9010,9 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
       return prepared;
     },
-    createConversationController: ({ sessionFile }) => createPersistentConversationController({
+    createConversationController: ({ conversationId, sessionFile }) => createPersistentConversationController({
+      provider: 'telegram',
+      conversationId,
       profile: resolvedProfile,
       agentDir: runtime.agentDir,
       cwd: effectiveConfig.workingDirectory,
@@ -9419,32 +9479,12 @@ model=${model}`,
     return;
   }
 
-  if (command === '/sleep') {
-    const trimmedArgs = normalized.args.trim();
-    if (trimmedArgs.toLowerCase() === 'cancel') {
-      const cancelled = options.cancelDeferredFollowUp?.(channelId) ?? false;
-      await message.sendMessage(cancelled
-        ? 'Cancelled the pending deferred resume for this channel.'
-        : 'No deferred resume is scheduled for this channel.');
-      return;
-    }
-
-    const [rawDelay = '', ...promptParts] = trimmedArgs.split(/\s+/);
-    const delayMs = parseDeferredFollowUpDelayMs(rawDelay);
-    if (!delayMs) {
-      await message.sendMessage(
-        'Usage: /sleep <10m|2h|1d> [follow-up message]\nExample: /sleep 10m check the training logs and continue.',
-      );
-      return;
-    }
-
-    const prompt = promptParts.join(' ').trim() || DEFAULT_DEFERRED_FOLLOWUP_PROMPT;
-    options.scheduleDeferredFollowUp?.({
+  if (command === '/deferred') {
+    const summary = await options.getDeferredFollowUpSummary?.({
       conversationId: channelId,
-      delayMs,
-      prompt,
-    });
-    await message.sendMessage(`Will resume this channel in ${rawDelay}.`);
+      sessionFile,
+    }) ?? 'Deferred resumes are unavailable in this gateway instance.';
+    await sendLongText(message.sendMessage, summary);
     return;
   }
 
@@ -9887,36 +9927,6 @@ export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<
     }
   };
 
-  const discordDeferredFollowUpPath = join(statePaths.root, 'gateway', 'state', 'discord-deferred-followups.json');
-  const discordDeferredFollowUps = loadDeferredFollowUps(discordDeferredFollowUpPath);
-  const persistDiscordDeferredFollowUps = (): void => {
-    writeDeferredFollowUps(discordDeferredFollowUpPath, discordDeferredFollowUps);
-  };
-  const scheduleDiscordDeferredFollowUp = (input: {
-    conversationId: string;
-    delayMs: number;
-    prompt: string;
-  }): void => {
-    const now = new Date().toISOString();
-    discordDeferredFollowUps.set(input.conversationId, {
-      conversationId: input.conversationId,
-      prompt: input.prompt,
-      dueAt: new Date(Date.now() + input.delayMs).toISOString(),
-      createdAt: now,
-      updatedAt: now,
-    });
-    persistDiscordDeferredFollowUps();
-  };
-  const cancelDiscordDeferredFollowUp = (conversationId: string): boolean => {
-    const removed = discordDeferredFollowUps.delete(conversationId);
-    if (removed) {
-      persistDiscordDeferredFollowUps();
-    }
-    return removed;
-  };
-  const getDiscordDeferredFollowUp = (conversationId: string): DeferredFollowUpRecord | undefined =>
-    discordDeferredFollowUps.get(conversationId);
-
   const maxPendingPerChannel = effectiveConfig.maxPendingPerChannel ?? DEFAULT_MAX_PENDING_PER_CHANNEL;
 
   const discoveredHelp = await discoverPiHelpFromPi({
@@ -9958,10 +9968,14 @@ export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<
     resolveConversationSessionFile: resolveDiscordConversationSessionFile,
     setConversationSessionFile: setDiscordConversationSessionFile,
     clearConversationSessionFile: clearDiscordConversationSessionFile,
-    scheduleDeferredFollowUp: scheduleDiscordDeferredFollowUp,
-    cancelDeferredFollowUp: cancelDiscordDeferredFollowUp,
-    getDeferredFollowUp: getDiscordDeferredFollowUp,
-    createConversationController: ({ sessionFile }) => createPersistentConversationController({
+    getDeferredFollowUpSummary: ({ conversationId, sessionFile }) => buildDeferredFollowUpSummary({
+      gateway: 'discord',
+      conversationId,
+      sessionFile,
+    }),
+    createConversationController: ({ conversationId, sessionFile }) => createPersistentConversationController({
+      provider: 'discord',
+      conversationId,
       profile: resolvedProfile,
       agentDir: runtime.agentDir,
       cwd: effectiveConfig.workingDirectory,
@@ -10004,18 +10018,16 @@ export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<
   };
 
   const pollDiscordDeferredFollowUps = async (): Promise<void> => {
-    if (deferredDiscordFollowUpPollInFlight || discordDeferredFollowUps.size === 0) {
+    if (deferredDiscordFollowUpPollInFlight) {
       return;
     }
+
     deferredDiscordFollowUpPollInFlight = true;
     try {
-      const dispatched = await dispatchDueDeferredFollowUps(
-        discordDeferredFollowUps,
-        async (record) => dispatchSyntheticDiscordFollowUp(record.conversationId, record.prompt),
-      );
-      if (dispatched > 0) {
-        persistDiscordDeferredFollowUps();
-      }
+      await flushGatewayDeferredFollowUps({
+        gateway: 'discord',
+        deliverFollowUp: async (followUp) => dispatchSyntheticDiscordFollowUp(followUp.conversationId, followUp.prompt),
+      });
     } finally {
       deferredDiscordFollowUpPollInFlight = false;
     }
