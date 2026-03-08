@@ -69,7 +69,7 @@ Example:
     "maintenance": { "enabled": true, "cleanupIntervalMinutes": 60 },
     "tasks": {
       "enabled": true,
-      "taskDir": "/path/to/personal-agent/profiles/assistant/agent/tasks",
+      "taskDir": "/path/to/personal-agent/profiles/<active-profile>/agent/tasks",
       "tickIntervalSeconds": 30,
       "maxRetries": 3,
       "reapAfterDays": 7,
@@ -79,6 +79,8 @@ Example:
   }
 }
 ```
+
+If `modules.tasks.taskDir` is omitted, daemon defaults to `<repo>/profiles/<active-profile>/agent/tasks`, where `<active-profile>` resolves from `PERSONAL_AGENT_PROFILE` or `defaultProfile` in `~/.config/personal-agent/config.json` (fallback: `shared`).
 
 Override file location with:
 

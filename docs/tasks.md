@@ -6,7 +6,9 @@
 
 Default directory:
 
-- `<repo>/profiles/assistant/agent/tasks`
+- `<repo>/profiles/<active-profile>/agent/tasks`
+
+`<active-profile>` resolves from `PERSONAL_AGENT_PROFILE` when set, otherwise `defaultProfile` in `~/.config/personal-agent/config.json` (fallback: `shared`).
 
 Only files ending in **`.task.md`** are auto-discovered.
 

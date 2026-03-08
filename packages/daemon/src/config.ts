@@ -43,15 +43,8 @@ export interface DaemonConfig {
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const DEFAULT_DAEMON_CONFIG_FILE = join(homedir(), '.config', 'personal-agent', 'daemon.json');
-const DEFAULT_TASKS_DIR = join(
-  process.env.PERSONAL_AGENT_REPO_ROOT
-    ? resolve(expandHome(process.env.PERSONAL_AGENT_REPO_ROOT))
-    : PACKAGE_ROOT,
-  'profiles',
-  'assistant',
-  'agent',
-  'tasks',
-);
+const DEFAULT_PERSONAL_AGENT_CONFIG_FILE = join(homedir(), '.config', 'personal-agent', 'config.json');
+const DEFAULT_PROFILE_NAME = 'shared';
 
 function expandHome(path: string): string {
   if (path === '~') {
@@ -63,6 +56,59 @@ function expandHome(path: string): string {
   }
 
   return path;
+}
+
+function normalizeProfileName(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+
+  return /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/.test(trimmed) ? trimmed : undefined;
+}
+
+function getPersonalAgentConfigFilePath(): string {
+  const explicit = process.env.PERSONAL_AGENT_CONFIG_FILE;
+  if (explicit && explicit.trim().length > 0) {
+    return resolve(expandHome(explicit));
+  }
+
+  return DEFAULT_PERSONAL_AGENT_CONFIG_FILE;
+}
+
+function getActiveProfileName(): string {
+  const envProfile = normalizeProfileName(process.env.PERSONAL_AGENT_PROFILE);
+  if (envProfile) {
+    return envProfile;
+  }
+
+  const configPath = getPersonalAgentConfigFilePath();
+  if (!existsSync(configPath)) {
+    return DEFAULT_PROFILE_NAME;
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(configPath, 'utf-8')) as unknown;
+    if (!isRecord(parsed)) {
+      return DEFAULT_PROFILE_NAME;
+    }
+
+    return normalizeProfileName(parsed.defaultProfile) ?? DEFAULT_PROFILE_NAME;
+  } catch {
+    return DEFAULT_PROFILE_NAME;
+  }
+}
+
+function getDefaultTasksDir(): string {
+  const repoRoot = process.env.PERSONAL_AGENT_REPO_ROOT
+    ? resolve(expandHome(process.env.PERSONAL_AGENT_REPO_ROOT))
+    : PACKAGE_ROOT;
+
+  return join(repoRoot, 'profiles', getActiveProfileName(), 'agent', 'tasks');
 }
 
 function expandConfigPaths(config: DaemonConfig): DaemonConfig {
@@ -152,7 +198,7 @@ export function getDefaultDaemonConfig(): DaemonConfig {
       },
       tasks: {
         enabled: true,
-        taskDir: DEFAULT_TASKS_DIR,
+        taskDir: getDefaultTasksDir(),
         tickIntervalSeconds: 30,
         maxRetries: 3,
         reapAfterDays: 7,
