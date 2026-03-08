@@ -19,6 +19,12 @@ export interface TasksModuleConfig {
   runTasksInTmux?: boolean;
 }
 
+export interface DeferredFollowUpsModuleConfig {
+  enabled: boolean;
+  tickIntervalSeconds: number;
+  requeueDelaySeconds: number;
+}
+
 export interface DaemonConfig {
   logLevel: LogLevel;
   queue: {
@@ -30,6 +36,7 @@ export interface DaemonConfig {
   modules: {
     maintenance: MaintenanceModuleConfig;
     tasks: TasksModuleConfig;
+    deferredFollowUps?: DeferredFollowUpsModuleConfig;
   };
 }
 
@@ -140,6 +147,11 @@ export function getDefaultDaemonConfig(): DaemonConfig {
         reapAfterDays: 7,
         defaultTimeoutSeconds: 1800,
         runTasksInTmux: true,
+      },
+      deferredFollowUps: {
+        enabled: true,
+        tickIntervalSeconds: 5,
+        requeueDelaySeconds: 30,
       },
     },
   };

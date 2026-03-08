@@ -11,6 +11,7 @@ import type {
   DaemonPaths,
   DaemonStatus,
   EventPayload,
+  GatewayDeferredFollowUp,
   GatewayNotification,
   GatewayNotificationProvider,
 } from './types.js';
@@ -116,6 +117,48 @@ function parseGatewayNotification(event: { id: string; source: string; timestamp
   };
 }
 
+function parseGatewayDeferredFollowUp(
+  event: { id: string; source: string; timestamp: string; payload: EventPayload },
+): GatewayDeferredFollowUp | undefined {
+  if (!isRecord(event.payload)) {
+    return undefined;
+  }
+
+  const id = toOptionalString(event.payload.id);
+  const gateway = event.payload.gateway;
+  const conversationId = toOptionalString(event.payload.conversationId);
+  const sessionFile = toOptionalString(event.payload.sessionFile);
+  const prompt = toOptionalString(event.payload.prompt);
+  const dueAt = toOptionalString(event.payload.dueAt);
+
+  if (!id || !isGatewayProvider(gateway) || !conversationId || !sessionFile || !prompt || !dueAt) {
+    return undefined;
+  }
+
+  const createdAt = toOptionalString(event.payload.createdAt) ?? event.timestamp;
+  const initiatedByUserId = toOptionalString(event.payload.initiatedByUserId);
+  const telegramChatTypeRaw = toOptionalString(event.payload.telegramChatType);
+  const telegramChatType = telegramChatTypeRaw === 'private'
+    || telegramChatTypeRaw === 'group'
+    || telegramChatTypeRaw === 'supergroup'
+    || telegramChatTypeRaw === 'channel'
+    ? telegramChatTypeRaw
+    : undefined;
+
+  return {
+    id,
+    gateway,
+    conversationId,
+    sessionFile,
+    prompt,
+    dueAt,
+    createdAt,
+    source: event.source,
+    initiatedByUserId,
+    telegramChatType,
+  };
+}
+
 export class PersonalAgentDaemon {
   private readonly config: DaemonConfig;
   private readonly paths: DaemonPaths;
@@ -124,6 +167,7 @@ export class PersonalAgentDaemon {
   private readonly pid: number;
   private readonly modules: ModuleRuntime[];
   private readonly pendingGatewayNotifications: GatewayNotification[] = [];
+  private readonly pendingGatewayDeferredFollowUps: GatewayDeferredFollowUp[] = [];
 
   private server?: Server;
   private timerHandles: NodeJS.Timeout[] = [];
@@ -154,6 +198,20 @@ export class PersonalAgentDaemon {
       }
 
       this.pendingGatewayNotifications.push(notification);
+    });
+
+    this.bus.subscribe('gateway.deferred-followup.ready', (event) => {
+      const followUp = parseGatewayDeferredFollowUp(event);
+      if (!followUp) {
+        this.log('warn', `invalid gateway.deferred-followup.ready payload id=${event.id}`);
+        return;
+      }
+
+      if (this.pendingGatewayDeferredFollowUps.length >= this.config.queue.maxDepth) {
+        this.pendingGatewayDeferredFollowUps.shift();
+      }
+
+      this.pendingGatewayDeferredFollowUps.push(followUp);
     });
 
     this.modules = createBuiltinModules(config)
@@ -372,6 +430,17 @@ export class PersonalAgentDaemon {
       return;
     }
 
+    if (request.type === 'deferred-followups.pull') {
+      socket.write(serializeResponse({
+        id: request.id,
+        ok: true,
+        result: {
+          followUps: this.pullGatewayDeferredFollowUps(request.gateway, request.limit),
+        },
+      }));
+      return;
+    }
+
     if (request.type === 'stop') {
       socket.write(serializeResponse({ id: request.id, ok: true, result: { stopping: true } }));
       setTimeout(() => {
@@ -418,6 +487,29 @@ export class PersonalAgentDaemon {
 
       output.push(notification);
       this.pendingGatewayNotifications.splice(index, 1);
+    }
+
+    return output;
+  }
+
+  private pullGatewayDeferredFollowUps(gateway: GatewayNotificationProvider, limit?: number): GatewayDeferredFollowUp[] {
+    const maxItems = normalizeNotificationPullLimit(limit);
+    const output: GatewayDeferredFollowUp[] = [];
+
+    for (let index = 0; index < this.pendingGatewayDeferredFollowUps.length && output.length < maxItems;) {
+      const followUp = this.pendingGatewayDeferredFollowUps[index];
+      if (!followUp) {
+        index += 1;
+        continue;
+      }
+
+      if (followUp.gateway !== gateway) {
+        index += 1;
+        continue;
+      }
+
+      output.push(followUp);
+      this.pendingGatewayDeferredFollowUps.splice(index, 1);
     }
 
     return output;

@@ -34,6 +34,22 @@ describe('parseRequest', () => {
     });
   });
 
+  it('parses deferred-followups.pull request', () => {
+    const parsed = parseRequest(JSON.stringify({
+      id: 'req_3',
+      type: 'deferred-followups.pull',
+      gateway: 'discord',
+      limit: 5,
+    }));
+
+    expect(parsed).toEqual({
+      id: 'req_3',
+      type: 'deferred-followups.pull',
+      gateway: 'discord',
+      limit: 5,
+    });
+  });
+
   it('rejects invalid envelope', () => {
     expect(() => parseRequest(JSON.stringify({ nope: true }))).toThrow('Invalid request envelope');
   });

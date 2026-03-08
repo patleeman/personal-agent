@@ -201,6 +201,11 @@ When a new message arrives while a run is active in the same conversation:
 - normal message → steer (interrupt-style)
 - `/followup <text>` → queued follow-up delivered after current response
 - `/followup` (no args) → puts chat into one-shot follow-up capture mode (next message is treated as follow-up)
+- `/sleep <delay> [follow-up]` → schedules a future follow-up on the same durable conversation/session
+  - when due and the conversation is still active, it queues as a normal follow-up
+  - when due and the conversation is idle, it starts a new run on the same session file
+  - first version supports delays like `45s`, `10m`, `2h`, `1d`
+  - `/sleep cancel` removes the pending deferred resume for that conversation
 
 ---
 
@@ -220,6 +225,7 @@ When a new message arrives while a run is active in the same conversation:
 - `/model` / `/models`
 - `/stop`
 - `/followup <text>` (or `/followup` for one-shot follow-up capture mode)
+- `/sleep <delay> [follow-up message]` (schedule a deferred follow-up on the same conversation; supports `/sleep cancel`)
 - `/regenerate`
 - `/cancel`
 - `/compact [instructions]` (runs native Pi compaction)

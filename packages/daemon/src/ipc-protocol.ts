@@ -3,6 +3,7 @@ import type {
   DaemonStatus,
   EmitResult,
   GatewayNotificationProvider,
+  PullGatewayDeferredFollowUpsResult,
   PullGatewayNotificationsResult,
 } from './types.js';
 
@@ -34,12 +35,31 @@ export interface PullGatewayNotificationsRequest {
   limit?: number;
 }
 
-export type DaemonRequest = EmitRequest | StatusRequest | StopRequest | PingRequest | PullGatewayNotificationsRequest;
+export interface PullGatewayDeferredFollowUpsRequest {
+  id: string;
+  type: 'deferred-followups.pull';
+  gateway: GatewayNotificationProvider;
+  limit?: number;
+}
+
+export type DaemonRequest =
+  | EmitRequest
+  | StatusRequest
+  | StopRequest
+  | PingRequest
+  | PullGatewayNotificationsRequest
+  | PullGatewayDeferredFollowUpsRequest;
 
 export interface DaemonSuccessResponse {
   id: string;
   ok: true;
-  result: EmitResult | DaemonStatus | { stopping: boolean } | { pong: true } | PullGatewayNotificationsResult;
+  result:
+    | EmitResult
+    | DaemonStatus
+    | { stopping: boolean }
+    | { pong: true }
+    | PullGatewayNotificationsResult
+    | PullGatewayDeferredFollowUpsResult;
 }
 
 export interface DaemonErrorResponse {
@@ -101,6 +121,19 @@ export function parseRequest(raw: string): DaemonRequest {
     return {
       id: parsed.id,
       type: 'notifications.pull',
+      gateway: parsed.gateway,
+      limit: readOptionalLimit(parsed.limit),
+    };
+  }
+
+  if (parsed.type === 'deferred-followups.pull') {
+    if (!isGatewayNotificationProvider(parsed.gateway)) {
+      throw new Error('deferred-followups.pull gateway must be telegram or discord');
+    }
+
+    return {
+      id: parsed.id,
+      type: 'deferred-followups.pull',
       gateway: parsed.gateway,
       limit: readOptionalLimit(parsed.limit),
     };

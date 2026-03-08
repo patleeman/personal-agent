@@ -12,6 +12,7 @@ export {
   pingDaemon,
   stopDaemon,
   pullGatewayNotifications,
+  pullGatewayDeferredFollowUps,
   emitDaemonEvent,
   emitDaemonEventNonFatal,
 } from './client.js';
@@ -25,6 +26,7 @@ export type {
   DaemonModuleStatus,
   GatewayNotification,
   GatewayNotificationProvider,
+  GatewayDeferredFollowUp,
 } from './types.js';
 
 export async function runDaemonCli(argv: string[] = process.argv.slice(2)): Promise<number> {
