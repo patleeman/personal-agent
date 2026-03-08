@@ -242,11 +242,20 @@ Telegram registers slash commands via Bot API on startup.
 
 ### `deferred_resume` tool
 
-Use the `deferred_resume` tool when the **agent itself** should wake this same Telegram/Discord conversation later.
+Use the `deferred_resume` tool when the **agent itself** should wake this same conversation/session later.
 
-Behavior:
+Gateway behavior:
 
-- schedules a daemon-backed delayed resume for the **current durable conversation/session**
+- in Telegram/Discord, it schedules a daemon-backed delayed resume for the **current durable gateway conversation/session**
+- when due, gateway injects the follow-up back into the same chat/thread
+
+Non-gateway note:
+
+- the same tool also works in persisted non-gateway sessions
+- outside gateway, it resumes the same session file in the background rather than posting into a chat thread
+
+General behavior:
+
 - meant for agent-controlled “pause now, continue later” behavior
 - best for waiting on time to pass or for background work to make progress
 - not a user slash command; the assistant should call it directly when appropriate

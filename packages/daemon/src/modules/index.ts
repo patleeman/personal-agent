@@ -2,6 +2,7 @@ import type { DaemonConfig } from '../config.js';
 import type { DaemonModule } from './types.js';
 import { createDeferredFollowUpsModule } from './deferred-followups.js';
 import { createMaintenanceModule } from './maintenance.js';
+import { createSessionDeferredResumesModule } from './session-deferred-resumes.js';
 import { createTasksModule } from './tasks.js';
 
 export function createBuiltinModules(config: DaemonConfig): DaemonModule[] {
@@ -9,6 +10,7 @@ export function createBuiltinModules(config: DaemonConfig): DaemonModule[] {
     createMaintenanceModule(config.modules.maintenance),
     createTasksModule(config.modules.tasks),
     createDeferredFollowUpsModule(config.modules.deferredFollowUps),
+    createSessionDeferredResumesModule(config.modules.sessionDeferredResumes),
   ];
 }
 

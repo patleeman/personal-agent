@@ -2995,7 +2995,7 @@ function getProfileDefaultModel(profile: ResolvedProfile): string | undefined {
 
 function resolveGatewayExtensionPaths(): string[] {
   const moduleDir = dirname(fileURLToPath(import.meta.url));
-  const extensionNames = ['gateway-context', 'deferred-resume'];
+  const extensionNames = ['gateway-context'];
   const resolved: string[] = [];
 
   for (const extensionName of extensionNames) {

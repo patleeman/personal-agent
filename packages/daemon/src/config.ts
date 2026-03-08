@@ -26,6 +26,12 @@ export interface DeferredFollowUpsModuleConfig {
   requeueDelaySeconds: number;
 }
 
+export interface SessionDeferredResumesModuleConfig {
+  enabled: boolean;
+  tickIntervalSeconds: number;
+  retryDelaySeconds: number;
+}
+
 export interface DaemonConfig {
   logLevel: LogLevel;
   queue: {
@@ -38,6 +44,7 @@ export interface DaemonConfig {
     maintenance: MaintenanceModuleConfig;
     tasks: TasksModuleConfig;
     deferredFollowUps?: DeferredFollowUpsModuleConfig;
+    sessionDeferredResumes?: SessionDeferredResumesModuleConfig;
   };
 }
 
@@ -209,6 +216,11 @@ export function getDefaultDaemonConfig(): DaemonConfig {
         enabled: true,
         tickIntervalSeconds: 5,
         requeueDelaySeconds: 30,
+      },
+      sessionDeferredResumes: {
+        enabled: true,
+        tickIntervalSeconds: 5,
+        retryDelaySeconds: 30,
       },
     },
   };
