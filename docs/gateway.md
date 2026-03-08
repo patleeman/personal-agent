@@ -239,6 +239,82 @@ Telegram registers slash commands via Bot API on startup.
 - `group=auto` groups parallel runs targeting the same source+work conversation while active.
 - `notify=resume` posts completion summary and injects a single follow-up continuation prompt in the work topic when the whole run group finishes.
 
+## Which command should I use?
+
+### `/sleep`
+
+Use `/sleep` when you want the **same Telegram/Discord conversation** to wake back up later.
+
+Examples:
+
+```text
+/sleep 10m check the training logs and continue
+/sleep 2h
+/sleep cancel
+```
+
+Behavior:
+
+- schedules a delayed follow-up on the **current durable conversation/session**
+- if you omit the follow-up text, the default is: `Continue from where you left off and keep going.`
+- when due:
+  - if a run is still active, the message is queued as a follow-up
+  - if idle, gateway starts a new run on the same session file
+- current implementation keeps one pending deferred follow-up per conversation; scheduling another replaces the previous one
+
+### `/resume`
+
+Use `/resume` when you want to **switch this chat/channel to an existing saved conversation immediately**.
+
+Examples:
+
+```text
+/resume
+/resume 2
+/resume some-session.jsonl
+```
+
+Behavior:
+
+- does **not** wait for a timer
+- changes which persisted session file this chat/channel is bound to
+- is for session selection/switching, not delayed wake-up
+
+### `/tmux run ...`
+
+Use `/tmux run` when you want to launch a **detached shell job** (training run, scraper, test suite, long script).
+
+Example:
+
+```text
+/tmux run train notify=resume -- python scripts/train.py
+```
+
+Behavior:
+
+- starts a managed tmux session in the background
+- the work happens in tmux, not inside the chat request itself
+- logs are attached to the tmux session
+- `notify=resume` is only a **completion hook**: when the tmux run group finishes, gateway posts a summary and injects one continuation follow-up into the target conversation
+- `notify=resume` is not a general timer/scheduler; `/sleep` is the delayed same-conversation wake-up tool
+
+### Scheduled tasks (`*.task.md`)
+
+Use scheduled tasks when you want **daemon-managed automation on cron/at schedules**, even if no one is currently chatting.
+
+Behavior:
+
+- independent of the current live conversation flow
+- best for recurring reminders, reports, or unattended automation
+- can send output to gateway chats/channels, but they are daemon jobs, not “pause this exact conversation and resume it later” semantics
+
+Quick rule of thumb:
+
+- **Resume this same conversation later** → `/sleep`
+- **Switch this chat to another saved conversation now** → `/resume`
+- **Run a long background shell command** → `/tmux run`
+- **Run something on a calendar/schedule** → scheduled task
+
 ---
 
 ## Daemon integration
