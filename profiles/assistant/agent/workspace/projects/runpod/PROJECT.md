@@ -114,6 +114,17 @@ In `gb-tetris-gym` repo, the following helper files were added for Runpod automa
 
 These are the starting point for future assistant-driven Runpod provisioning.
 
+## Latest completed lifecycle
+
+- pod id: `lafpdz6ugpkert`
+- GPU: `RTX 3090`
+- purpose: `gb-tetris-gym` bootstrap SFT
+- artifacts were synced back before teardown
+- pod was deleted after completion
+- verified cleanup state after delete:
+  - `runpodctl pod list` -> `[]`
+  - `runpodctl network-volume list` -> `[]`
+
 ## Operational guidance
 
 - Prefer **community cloud** for cheap bootstrap experiments
