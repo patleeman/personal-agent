@@ -1369,12 +1369,16 @@ describe('queued telegram message handler', () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
     const runPrompt = vi.fn(async () => 'ignored');
+    const sessionDir = createTempDir('gateway-telegram-resume-');
+
+    writeFileSync(join(sessionDir, '1.jsonl'), '[]\n');
+    writeFileSync(join(sessionDir, '2.jsonl'), '[]\n');
 
     const handler = createQueuedTelegramMessageHandler({
       allowlist: new Set(['1']),
       profileName: 'shared',
       agentDir: '/tmp/agent',
-      telegramSessionDir: '/tmp/sessions',
+      telegramSessionDir: sessionDir,
       workingDirectory: '/tmp/work',
       sendMessage,
       sendChatAction,
@@ -1387,14 +1391,53 @@ describe('queued telegram message handler', () => {
 
     expect(runPrompt).not.toHaveBeenCalled();
     expect(sendChatAction).not.toHaveBeenCalled();
-    expect(sendMessage).toHaveBeenCalledWith(
-      1,
-      'Gateway sessions already resume automatically per chat/topic. Use /new to start a fresh session.',
-    );
+
+    const output = sendMessage.mock.calls
+      .map((call) => String(call.at(1) ?? ''))
+      .join('\n');
+
+    expect(output).toContain('Saved conversations (most recent first):');
+    expect(output).toContain('Usage: /resume <index|conversation-id|file>');
     expect(sendMessage).toHaveBeenCalledWith(
       1,
       'Context compacted.',
     );
+
+    rmSync(sessionDir, { recursive: true, force: true });
+  });
+
+  it('switches telegram conversation session when /resume selects another conversation', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async ({ sessionFile }: { prompt: string; sessionFile: string }) => `session=${sessionFile}`);
+    const sessionDir = createTempDir('gateway-telegram-resume-select-');
+
+    writeFileSync(join(sessionDir, '1.jsonl'), '[]\n');
+    writeFileSync(join(sessionDir, '2.jsonl'), '[]\n');
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: sessionDir,
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: '/resume 2.jsonl' });
+    await handler.waitForIdle('1');
+
+    handler.handleMessage({ chat: { id: 1 }, text: 'continue this thread' });
+    await handler.waitForIdle('1');
+
+    expect(runPrompt).toHaveBeenCalledTimes(1);
+    const promptCall = runPrompt.mock.calls[0]?.[0] as { sessionFile: string };
+    expect(promptCall.sessionFile).toBe(join(sessionDir, '2.jsonl'));
+    expect(sendMessage).toHaveBeenCalledWith(1, 'Resumed 2. Continue chatting in this chat/topic.');
+
+    rmSync(sessionDir, { recursive: true, force: true });
   });
 
   it('enters follow-up capture mode when /followup is sent without arguments', async () => {
@@ -2606,12 +2649,16 @@ describe('queued discord message handler', () => {
     const runPrompt = vi.fn(async () => 'ignored');
     const sendMessage = vi.fn(async () => undefined);
     const sendTyping = vi.fn(async () => undefined);
+    const sessionDir = createTempDir('gateway-discord-resume-');
+
+    writeFileSync(join(sessionDir, 'channel-1.jsonl'), '[]\n');
+    writeFileSync(join(sessionDir, 'channel-2.jsonl'), '[]\n');
 
     const handler = createQueuedDiscordMessageHandler({
       allowlist: new Set(['channel-1']),
       profileName: 'shared',
       agentDir: '/tmp/agent',
-      discordSessionDir: '/tmp/discord-sessions',
+      discordSessionDir: sessionDir,
       workingDirectory: '/tmp/work',
       createConversationController: createTestConversationControllerFactory(runPrompt),
     });
@@ -2634,12 +2681,60 @@ describe('queued discord message handler', () => {
 
     expect(runPrompt).not.toHaveBeenCalled();
     expect(sendTyping).not.toHaveBeenCalled();
-    expect(sendMessage).toHaveBeenCalledWith(
-      'Gateway sessions already resume automatically per channel. Use /new to start a fresh session.',
-    );
+
+    const output = sendMessage.mock.calls
+      .map((call) => String(call.at(0) ?? ''))
+      .join('\n');
+
+    expect(output).toContain('Saved conversations (most recent first):');
+    expect(output).toContain('Usage: /resume <index|conversation-id|file>');
     expect(sendMessage).toHaveBeenCalledWith(
       'Manual /compact is not supported in gateway print mode yet. Open this session in Pi TUI to compact.',
     );
+
+    rmSync(sessionDir, { recursive: true, force: true });
+  });
+
+  it('switches discord channel session when /resume selects another conversation', async () => {
+    const runPrompt = vi.fn(async ({ sessionFile }: { prompt: string; sessionFile: string }) => `session=${sessionFile}`);
+    const sendMessage = vi.fn(async () => undefined);
+    const sendTyping = vi.fn(async () => undefined);
+    const sessionDir = createTempDir('gateway-discord-resume-select-');
+
+    writeFileSync(join(sessionDir, 'channel-1.jsonl'), '[]\n');
+    writeFileSync(join(sessionDir, 'channel-2.jsonl'), '[]\n');
+
+    const handler = createQueuedDiscordMessageHandler({
+      allowlist: new Set(['channel-1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      discordSessionDir: sessionDir,
+      workingDirectory: '/tmp/work',
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({
+      channelId: 'channel-1',
+      content: '/resume channel-2.jsonl',
+      sendMessage,
+      sendTyping,
+    });
+    await handler.waitForIdle('channel-1');
+
+    handler.handleMessage({
+      channelId: 'channel-1',
+      content: 'continue here',
+      sendMessage,
+      sendTyping,
+    });
+    await handler.waitForIdle('channel-1');
+
+    expect(runPrompt).toHaveBeenCalledTimes(1);
+    const promptCall = runPrompt.mock.calls[0]?.[0] as { sessionFile: string };
+    expect(promptCall.sessionFile).toBe(join(sessionDir, 'channel-2.jsonl'));
+    expect(sendMessage).toHaveBeenCalledWith('Resumed channel-2. Continue chatting in this channel.');
+
+    rmSync(sessionDir, { recursive: true, force: true });
   });
 
   it('maps /skill <name> to /skill:<name> before invoking pi', async () => {

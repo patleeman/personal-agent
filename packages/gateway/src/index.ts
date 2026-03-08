@@ -592,6 +592,17 @@ export interface CreateDiscordMessageHandlerOptions {
   maxPendingPerChannel?: number;
   modelCommands?: ModelCommandSupport;
   listScheduledTasks?: ListScheduledTasksFn;
+  resolveConversationSessionFile?: (input: {
+    conversationId: string;
+    defaultSessionFile: string;
+  }) => string;
+  setConversationSessionFile?: (input: {
+    conversationId: string;
+    sessionFile: string;
+  }) => void;
+  clearConversationSessionFile?: (input: {
+    conversationId: string;
+  }) => void;
 }
 
 export interface QueuedDiscordMessageHandler {
@@ -612,6 +623,7 @@ const TELEGRAM_MODEL_SELECTION_CALLBACK_PREFIX = 'model_select:';
 const TELEGRAM_ACTION_CALLBACK_PREFIX = 'action:';
 const TELEGRAM_ROOM_AUTH_CALLBACK_PREFIX = 'room_auth:';
 const TELEGRAM_FORK_SELECTION_CALLBACK_PREFIX = 'fork_select:';
+const TELEGRAM_RESUME_SELECTION_CALLBACK_PREFIX = 'resume_select:';
 const TELEGRAM_ROOM_AUTH_REQUEST_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const TELEGRAM_MAX_PENDING_ROOM_AUTH_REQUESTS = 500;
 const TELEGRAM_MAX_TRACKED_CONVERSATION_MESSAGES = 200;
@@ -868,7 +880,7 @@ const DEFAULT_TELEGRAM_COMMANDS: TelegramCommandDefinition[] = [
   { command: 'cancel', description: 'Cancel active model selection' },
   { command: 'compact', description: 'Compact context (usage: /compact [instructions])' },
   { command: 'fork', description: 'Fork to new topic (usage: /fork [topic name])' },
-  { command: 'resume', description: 'Resume help (gateway auto-resumes per chat)' },
+  { command: 'resume', description: 'Resume a saved conversation (usage: /resume [index|id|file])' },
 ];
 
 const DEFAULT_DISCORD_COMMANDS: TelegramCommandDefinition[] = DEFAULT_TELEGRAM_COMMANDS
@@ -1286,6 +1298,276 @@ function resolveForkEntryId(
 
   return {
     entryId: matchedEntry.entryId,
+  };
+}
+
+interface GatewayResumeConversationOption {
+  sessionFile: string;
+  sessionFileName: string;
+  label: string;
+  conversationId?: string;
+  updatedAtMs: number;
+}
+
+interface GatewaySessionFileListing {
+  sessionFile: string;
+  sessionFileName: string;
+  updatedAtMs: number;
+}
+
+function resolveSessionFileUpdatedAtMs(sessionFile: string): number {
+  try {
+    const stats = statSync(sessionFile);
+    if (!stats.isFile()) {
+      return 0;
+    }
+
+    const timestamp = Number.isFinite(stats.mtimeMs)
+      ? stats.mtimeMs
+      : stats.mtime.getTime();
+
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function listGatewaySessionFiles(sessionDir: string): GatewaySessionFileListing[] {
+  if (!existsSync(sessionDir)) {
+    return [];
+  }
+
+  let fileNames: string[] = [];
+
+  try {
+    fileNames = readdirSync(sessionDir);
+  } catch {
+    return [];
+  }
+
+  const listed: GatewaySessionFileListing[] = [];
+
+  for (const fileName of fileNames) {
+    if (fileName === '__commands__.jsonl' || !fileName.includes('.jsonl')) {
+      continue;
+    }
+
+    const sessionFile = join(sessionDir, fileName);
+    const updatedAtMs = resolveSessionFileUpdatedAtMs(sessionFile);
+    if (updatedAtMs <= 0 && !existsSync(sessionFile)) {
+      continue;
+    }
+
+    listed.push({
+      sessionFile,
+      sessionFileName: fileName,
+      updatedAtMs,
+    });
+  }
+
+  return listed;
+}
+
+function parseTelegramConversationFromSessionFileName(
+  sessionFileName: string,
+): { conversationId: string; label: string } | undefined {
+  const threadMatch = sessionFileName.match(/^(.+)__thread_(\d+)\.jsonl$/);
+  if (threadMatch) {
+    const chatId = threadMatch[1]?.trim() ?? '';
+    const messageThreadId = normalizeTelegramMessageThreadId(Number.parseInt(threadMatch[2] ?? '', 10));
+
+    if (chatId.length > 0 && messageThreadId !== undefined) {
+      return {
+        conversationId: buildTelegramConversationId(chatId, messageThreadId),
+        label: `chat ${chatId} • topic ${messageThreadId}`,
+      };
+    }
+  }
+
+  const chatMatch = sessionFileName.match(/^(.+)\.jsonl$/);
+  if (!chatMatch) {
+    return undefined;
+  }
+
+  const chatId = chatMatch[1]?.trim() ?? '';
+  if (chatId.length === 0) {
+    return undefined;
+  }
+
+  return {
+    conversationId: chatId,
+    label: `chat ${chatId}`,
+  };
+}
+
+function parseDiscordConversationFromSessionFileName(
+  sessionFileName: string,
+): { conversationId: string; label: string } | undefined {
+  if (!sessionFileName.endsWith('.jsonl')) {
+    return undefined;
+  }
+
+  const conversationId = sessionFileName.slice(0, -'.jsonl'.length).trim();
+  if (conversationId.length === 0) {
+    return undefined;
+  }
+
+  return {
+    conversationId,
+    label: `channel ${conversationId}`,
+  };
+}
+
+function buildResumeConversationOptions(input: {
+  sessionDir: string;
+  currentSessionFile: string;
+  parseConversation: (sessionFileName: string) => { conversationId: string; label: string } | undefined;
+}): GatewayResumeConversationOption[] {
+  const listings = listGatewaySessionFiles(input.sessionDir);
+  const optionsBySessionFile = new Map<string, GatewayResumeConversationOption>();
+
+  for (const listing of listings) {
+    const parsedConversation = input.parseConversation(listing.sessionFileName);
+
+    optionsBySessionFile.set(listing.sessionFile, {
+      sessionFile: listing.sessionFile,
+      sessionFileName: listing.sessionFileName,
+      label: parsedConversation?.label ?? listing.sessionFileName,
+      conversationId: parsedConversation?.conversationId,
+      updatedAtMs: listing.updatedAtMs,
+    });
+  }
+
+  if (!optionsBySessionFile.has(input.currentSessionFile)) {
+    const currentSessionFileName = basename(input.currentSessionFile);
+    const parsedConversation = input.parseConversation(currentSessionFileName);
+
+    optionsBySessionFile.set(input.currentSessionFile, {
+      sessionFile: input.currentSessionFile,
+      sessionFileName: currentSessionFileName,
+      label: parsedConversation?.label ?? currentSessionFileName,
+      conversationId: parsedConversation?.conversationId,
+      updatedAtMs: resolveSessionFileUpdatedAtMs(input.currentSessionFile),
+    });
+  }
+
+  return [...optionsBySessionFile.values()].sort((left, right) => {
+    const updatedDelta = right.updatedAtMs - left.updatedAtMs;
+    if (updatedDelta !== 0) {
+      return updatedDelta;
+    }
+
+    return left.label.localeCompare(right.label);
+  });
+}
+
+function formatSessionAgeFromNow(updatedAtMs: number): string {
+  if (!Number.isFinite(updatedAtMs) || updatedAtMs <= 0) {
+    return 'age unknown';
+  }
+
+  const elapsedMs = Math.max(0, Date.now() - updatedAtMs);
+  if (elapsedMs < 60_000) {
+    return 'just now';
+  }
+
+  const minutes = Math.floor(elapsedMs / 60_000);
+  if (minutes < 60) {
+    return `${minutes}m ago`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `${hours}h ago`;
+  }
+
+  const days = Math.floor(hours / 24);
+  if (days < 30) {
+    return `${days}d ago`;
+  }
+
+  const months = Math.floor(days / 30);
+  return `${months}mo ago`;
+}
+
+function formatResumeConversationSelectionPrompt(input: {
+  entries: GatewayResumeConversationOption[];
+  currentSessionFile: string;
+}): string {
+  const maxRows = 15;
+  const displayedEntries = input.entries.slice(0, maxRows);
+  const lines = ['Saved conversations (most recent first):'];
+
+  for (let index = 0; index < displayedEntries.length; index += 1) {
+    const entry = displayedEntries[index] as GatewayResumeConversationOption;
+    const tags: string[] = [formatSessionAgeFromNow(entry.updatedAtMs)];
+
+    if (entry.sessionFile === input.currentSessionFile) {
+      tags.unshift('current');
+    }
+
+    lines.push(`${index + 1}. ${entry.label} (${tags.join(', ')})`);
+
+    if (entry.conversationId) {
+      lines.push(`   id=${entry.conversationId}`);
+    }
+
+    lines.push(`   file=${entry.sessionFileName}`);
+  }
+
+  if (input.entries.length > displayedEntries.length) {
+    lines.push(`…and ${input.entries.length - displayedEntries.length} more conversation(s).`);
+  }
+
+  lines.push('');
+  lines.push('Usage: /resume <index|conversation-id|file>');
+  lines.push('Example: /resume 2');
+
+  return lines.join('\n');
+}
+
+function resolveResumeConversationSelection(
+  arg: string,
+  entries: GatewayResumeConversationOption[],
+): { entry?: GatewayResumeConversationOption; error?: string } {
+  const trimmed = arg.trim();
+
+  if (trimmed.length === 0) {
+    return {
+      error: 'Usage: /resume <index|conversation-id|file>',
+    };
+  }
+
+  if (/^\d+$/.test(trimmed)) {
+    const index = Number.parseInt(trimmed, 10);
+    if (!Number.isFinite(index) || index <= 0 || index > entries.length) {
+      return {
+        error: `Resume index out of range. Choose 1-${entries.length}.`,
+      };
+    }
+
+    return {
+      entry: entries[index - 1],
+    };
+  }
+
+  const byConversationId = entries.find((entry) => entry.conversationId === trimmed);
+  if (byConversationId) {
+    return { entry: byConversationId };
+  }
+
+  const byFileName = entries.find((entry) => entry.sessionFileName === trimmed);
+  if (byFileName) {
+    return { entry: byFileName };
+  }
+
+  const bySessionFilePath = entries.find((entry) => entry.sessionFile === trimmed);
+  if (bySessionFilePath) {
+    return { entry: bySessionFilePath };
+  }
+
+  return {
+    error: `Unknown resume target: ${trimmed}`,
   };
 }
 
@@ -5136,6 +5418,33 @@ function buildTelegramForkSelectionOptions(messages: ForkableConversationMessage
   };
 }
 
+function buildTelegramResumeSelectionOptions(
+  entries: GatewayResumeConversationOption[],
+): TelegramSendMessageOptions | undefined {
+  const inlineKeyboard: TelegramInlineKeyboardButton[][] = [];
+
+  for (let index = 0; index < Math.min(entries.length, 8); index += 1) {
+    const entry = entries[index] as GatewayResumeConversationOption;
+
+    inlineKeyboard.push([
+      {
+        text: truncateTelegramButtonLabel(`${index + 1}. ${entry.label}`, 52),
+        callback_data: `${TELEGRAM_RESUME_SELECTION_CALLBACK_PREFIX}${index + 1}`,
+      },
+    ]);
+  }
+
+  if (inlineKeyboard.length === 0) {
+    return undefined;
+  }
+
+  return {
+    reply_markup: {
+      inline_keyboard: inlineKeyboard,
+    },
+  };
+}
+
 function parseTelegramModelSelectionCallback(data: string): string | undefined {
   if (!data.startsWith(TELEGRAM_MODEL_SELECTION_CALLBACK_PREFIX)) {
     return undefined;
@@ -5168,6 +5477,19 @@ function parseTelegramForkSelectionCallback(data: string): string | undefined {
   }
 
   return `/fork ${entryId}`;
+}
+
+function parseTelegramResumeSelectionCallback(data: string): string | undefined {
+  if (!data.startsWith(TELEGRAM_RESUME_SELECTION_CALLBACK_PREFIX)) {
+    return undefined;
+  }
+
+  const indexText = data.slice(TELEGRAM_RESUME_SELECTION_CALLBACK_PREFIX.length).trim();
+  if (!/^\d+$/.test(indexText)) {
+    return undefined;
+  }
+
+  return `/resume ${indexText}`;
 }
 
 function parseTelegramActionCallback(data: string): '/stop' | '/new' | '/regenerate' | '/followup' | undefined {
@@ -5911,13 +6233,13 @@ async function processTelegramMessage(
   if (command === '/new') {
     await disposeConversationController(controllers, conversationId);
 
-    if (sessionFileExists(sessionFile)) {
-      await removeSessionFile(sessionFile);
-    }
-
     options.clearConversationSessionFile?.({
       conversationId,
     });
+
+    if (sessionFileExists(defaultSessionFile)) {
+      await removeSessionFile(defaultSessionFile);
+    }
 
     const trackedMessageIds = [...(state.recentMessageIdsByConversation.get(conversationId) ?? [])];
     state.recentMessageIdsByConversation.delete(conversationId);
@@ -6041,9 +6363,59 @@ model=${model}`,
   }
 
   if (command === '/resume') {
-    await sendMessageToConversation(
-      'Gateway sessions already resume automatically per chat/topic. Use /new to start a fresh session.',
-    );
+    const resumeOptions = buildResumeConversationOptions({
+      sessionDir: options.telegramSessionDir,
+      currentSessionFile: sessionFile,
+      parseConversation: parseTelegramConversationFromSessionFileName,
+    });
+
+    const resumeSelectionPrompt = formatResumeConversationSelectionPrompt({
+      entries: resumeOptions,
+      currentSessionFile: sessionFile,
+    });
+
+    const selectionArg = commandArgs.trim();
+    if (selectionArg.length === 0) {
+      const resumeSelectionOptions = buildTelegramResumeSelectionOptions(resumeOptions);
+
+      if (resumeSelectionOptions) {
+        await sendFormattedMessageToConversation(resumeSelectionPrompt, resumeSelectionOptions);
+      } else {
+        await sendLongText(
+          (chunk) => sendFormattedMessageToConversation(chunk),
+          resumeSelectionPrompt,
+        );
+      }
+
+      return completedMessageProcessingResult();
+    }
+
+    const resolvedResume = resolveResumeConversationSelection(selectionArg, resumeOptions);
+    if (!resolvedResume.entry) {
+      await sendLongText(
+        (chunk) => sendFormattedMessageToConversation(chunk),
+        `${resolvedResume.error ?? 'Unable to resolve resume target.'}\n\n${resumeSelectionPrompt}`,
+      );
+      return completedMessageProcessingResult();
+    }
+
+    const selectedResume = resolvedResume.entry;
+    if (selectedResume.sessionFile === sessionFile) {
+      await sendMessageToConversation('Already using that conversation in this chat/topic.');
+      return completedMessageProcessingResult();
+    }
+
+    await disposeConversationController(controllers, conversationId);
+
+    options.setConversationSessionFile?.({
+      conversationId,
+      sessionFile: selectedResume.sessionFile,
+    });
+    state.lastPromptByConversation.delete(conversationId);
+    state.awaitingFollowUpByConversation.delete(conversationId);
+
+    const resumedTarget = selectedResume.conversationId ?? selectedResume.sessionFileName;
+    await sendMessageToConversation(`Resumed ${resumedTarget}. Continue chatting in this chat/topic.`);
     return completedMessageProcessingResult();
   }
 
@@ -6657,6 +7029,48 @@ export function createQueuedTelegramMessageHandler(
   const recentMessageIdsByConversation = new Map<string, number[]>();
   const maxPendingPerChat = options.maxPendingPerChat ?? DEFAULT_MAX_PENDING_PER_CHAT;
   const durableInboxDir = options.durableInboxDir;
+  const conversationSessionOverrides = new Map<string, string>();
+
+  const resolveConversationSessionFile = (input: {
+    conversationId: string;
+    defaultSessionFile: string;
+  }): string => {
+    if (options.resolveConversationSessionFile) {
+      return options.resolveConversationSessionFile(input);
+    }
+
+    return conversationSessionOverrides.get(input.conversationId) ?? input.defaultSessionFile;
+  };
+
+  const setConversationSessionFile = (input: {
+    conversationId: string;
+    sessionFile: string;
+  }): void => {
+    if (options.setConversationSessionFile) {
+      options.setConversationSessionFile(input);
+      return;
+    }
+
+    conversationSessionOverrides.set(input.conversationId, input.sessionFile);
+  };
+
+  const clearConversationSessionFile = (input: {
+    conversationId: string;
+  }): void => {
+    if (options.clearConversationSessionFile) {
+      options.clearConversationSessionFile(input);
+      return;
+    }
+
+    conversationSessionOverrides.delete(input.conversationId);
+  };
+
+  const runtimeOptions: CreateTelegramMessageHandlerOptions = {
+    ...options,
+    resolveConversationSessionFile,
+    setConversationSessionFile,
+    clearConversationSessionFile,
+  };
 
   if (durableInboxDir) {
     mkdirSync(durableInboxDir, { recursive: true });
@@ -6773,7 +7187,7 @@ export function createQueuedTelegramMessageHandler(
     enqueue(conversationId, async () => {
       try {
         const processing = await processTelegramMessage(
-          options,
+          runtimeOptions,
           message,
           controllers,
           {
@@ -8483,6 +8897,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
       const callbackText = parseTelegramModelSelectionCallback(callbackData)
         ?? parseTelegramForkSelectionCallback(callbackData)
+        ?? parseTelegramResumeSelectionCallback(callbackData)
         ?? parseTelegramActionCallback(callbackData);
       if (!callbackText) {
         await answerTelegramCallbackQuery(callbackId);
@@ -8623,7 +9038,13 @@ async function processDiscordMessage(
 
   logIncomingMessage('discord', channelId, message.authorUsername, text);
 
-  const sessionFile = join(options.discordSessionDir, `${channelId}.jsonl`);
+  const defaultSessionFile = join(options.discordSessionDir, `${channelId}.jsonl`);
+  const sessionFile = options.resolveConversationSessionFile
+    ? options.resolveConversationSessionFile({
+      conversationId: channelId,
+      defaultSessionFile,
+    })
+    : defaultSessionFile;
   const sessionFileExists = options.sessionFileExists ?? existsSync;
   const removeSessionFile = options.removeSessionFile ?? ((path: string) => rm(path, { force: true }));
 
@@ -8647,8 +9068,12 @@ async function processDiscordMessage(
   if (command === '/new') {
     await disposeConversationController(controllers, channelId);
 
-    if (sessionFileExists(sessionFile)) {
-      await removeSessionFile(sessionFile);
+    options.clearConversationSessionFile?.({
+      conversationId: channelId,
+    });
+
+    if (sessionFileExists(defaultSessionFile)) {
+      await removeSessionFile(defaultSessionFile);
     }
 
     await emitDaemonEventNonFatal({
@@ -8686,9 +9111,47 @@ model=${model}`,
   }
 
   if (command === '/resume') {
-    await message.sendMessage(
-      'Gateway sessions already resume automatically per channel. Use /new to start a fresh session.',
-    );
+    const resumeOptions = buildResumeConversationOptions({
+      sessionDir: options.discordSessionDir,
+      currentSessionFile: sessionFile,
+      parseConversation: parseDiscordConversationFromSessionFileName,
+    });
+
+    const resumeSelectionPrompt = formatResumeConversationSelectionPrompt({
+      entries: resumeOptions,
+      currentSessionFile: sessionFile,
+    });
+
+    const selectionArg = normalized.args.trim();
+    if (selectionArg.length === 0) {
+      await sendLongText(message.sendMessage, resumeSelectionPrompt);
+      return;
+    }
+
+    const resolvedResume = resolveResumeConversationSelection(selectionArg, resumeOptions);
+    if (!resolvedResume.entry) {
+      await sendLongText(
+        message.sendMessage,
+        `${resolvedResume.error ?? 'Unable to resolve resume target.'}\n\n${resumeSelectionPrompt}`,
+      );
+      return;
+    }
+
+    const selectedResume = resolvedResume.entry;
+    if (selectedResume.sessionFile === sessionFile) {
+      await message.sendMessage('Already using that conversation in this channel.');
+      return;
+    }
+
+    await disposeConversationController(controllers, channelId);
+
+    options.setConversationSessionFile?.({
+      conversationId: channelId,
+      sessionFile: selectedResume.sessionFile,
+    });
+
+    const resumedTarget = selectedResume.conversationId ?? selectedResume.sessionFileName;
+    await message.sendMessage(`Resumed ${resumedTarget}. Continue chatting in this channel.`);
     return;
   }
 
@@ -8850,6 +9313,48 @@ export function createQueuedDiscordMessageHandler(
   const controllers = new Map<string, Promise<GatewayConversationController>>();
   const runTasks = new Map<string, Set<Promise<void>>>();
   const maxPendingPerChannel = options.maxPendingPerChannel ?? DEFAULT_MAX_PENDING_PER_CHANNEL;
+  const conversationSessionOverrides = new Map<string, string>();
+
+  const resolveConversationSessionFile = (input: {
+    conversationId: string;
+    defaultSessionFile: string;
+  }): string => {
+    if (options.resolveConversationSessionFile) {
+      return options.resolveConversationSessionFile(input);
+    }
+
+    return conversationSessionOverrides.get(input.conversationId) ?? input.defaultSessionFile;
+  };
+
+  const setConversationSessionFile = (input: {
+    conversationId: string;
+    sessionFile: string;
+  }): void => {
+    if (options.setConversationSessionFile) {
+      options.setConversationSessionFile(input);
+      return;
+    }
+
+    conversationSessionOverrides.set(input.conversationId, input.sessionFile);
+  };
+
+  const clearConversationSessionFile = (input: {
+    conversationId: string;
+  }): void => {
+    if (options.clearConversationSessionFile) {
+      options.clearConversationSessionFile(input);
+      return;
+    }
+
+    conversationSessionOverrides.delete(input.conversationId);
+  };
+
+  const runtimeOptions: CreateDiscordMessageHandlerOptions = {
+    ...options,
+    resolveConversationSessionFile,
+    setConversationSessionFile,
+    clearConversationSessionFile,
+  };
 
   const trackRunTask = (channelId: string, task: Promise<void>): void => {
     const existing = runTasks.get(channelId) ?? new Set<Promise<void>>();
@@ -8923,7 +9428,7 @@ export function createQueuedDiscordMessageHandler(
       enqueue(channelId, async () => {
         try {
           await processDiscordMessage(
-            options,
+            runtimeOptions,
             message,
             controllers,
             (task) => trackRunTask(channelId, task),
@@ -9044,6 +9549,51 @@ export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<
   const discordSessionDir = join(statePaths.session, 'discord');
   await mkdir(discordSessionDir, { recursive: true });
 
+  const discordConversationBindingPath = join(statePaths.root, 'gateway', 'state', 'discord-conversation-bindings.json');
+  const discordConversationSessionBindings = loadTelegramConversationBindings(discordConversationBindingPath);
+
+  const persistDiscordConversationSessionBindings = (): void => {
+    writeTelegramConversationBindings(discordConversationBindingPath, discordConversationSessionBindings);
+  };
+
+  const resolveDiscordConversationSessionFile = (input: {
+    conversationId: string;
+    defaultSessionFile: string;
+  }): string => discordConversationSessionBindings.get(input.conversationId) ?? input.defaultSessionFile;
+
+  const setDiscordConversationSessionFile = (input: {
+    conversationId: string;
+    sessionFile: string;
+  }): void => {
+    const normalizedConversationId = input.conversationId.trim();
+    const normalizedSessionFile = input.sessionFile.trim();
+
+    if (normalizedConversationId.length === 0 || normalizedSessionFile.length === 0) {
+      return;
+    }
+
+    const previous = discordConversationSessionBindings.get(normalizedConversationId);
+    if (previous === normalizedSessionFile) {
+      return;
+    }
+
+    discordConversationSessionBindings.set(normalizedConversationId, normalizedSessionFile);
+    persistDiscordConversationSessionBindings();
+  };
+
+  const clearDiscordConversationSessionFile = (input: {
+    conversationId: string;
+  }): void => {
+    const normalizedConversationId = input.conversationId.trim();
+    if (normalizedConversationId.length === 0) {
+      return;
+    }
+
+    if (discordConversationSessionBindings.delete(normalizedConversationId)) {
+      persistDiscordConversationSessionBindings();
+    }
+  };
+
   const maxPendingPerChannel = effectiveConfig.maxPendingPerChannel ?? DEFAULT_MAX_PENDING_PER_CHANNEL;
 
   const discoveredHelp = await discoverPiHelpFromPi({
@@ -9082,6 +9632,9 @@ export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<
     commandHelpText,
     skillsHelpText,
     modelCommands,
+    resolveConversationSessionFile: resolveDiscordConversationSessionFile,
+    setConversationSessionFile: setDiscordConversationSessionFile,
+    clearConversationSessionFile: clearDiscordConversationSessionFile,
     createConversationController: ({ sessionFile }) => createPersistentConversationController({
       profile: resolvedProfile,
       agentDir: runtime.agentDir,
