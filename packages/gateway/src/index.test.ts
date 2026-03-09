@@ -1535,8 +1535,16 @@ describe('queued telegram message handler', () => {
     const runPrompt = vi.fn(async () => 'ignored');
     const sessionDir = createTempDir('gateway-telegram-resume-');
 
-    writeFileSync(join(sessionDir, '1.jsonl'), '[]\n');
-    writeFileSync(join(sessionDir, '2.jsonl'), '[]\n');
+    writeFileSync(
+      join(sessionDir, '1.jsonl'),
+      '{"type":"session","id":"session-1","timestamp":"2026-03-09T00:00:00.000Z"}\n'
+        + '{"type":"message","id":"m1","timestamp":"2026-03-09T00:00:01.000Z","message":{"role":"user","content":[{"type":"text","text":"Current status update"}]}}\n',
+    );
+    writeFileSync(
+      join(sessionDir, '2.jsonl'),
+      '{"type":"session","id":"session-2","timestamp":"2026-03-09T00:00:00.000Z"}\n'
+        + '{"type":"session_info","id":"info-1","timestamp":"2026-03-09T00:00:02.000Z","name":"Finephrase follow-up"}\n',
+    );
 
     const handler = createQueuedTelegramMessageHandler({
       allowlist: new Set(['1']),
@@ -1561,6 +1569,8 @@ describe('queued telegram message handler', () => {
       .join('\n');
 
     expect(output).toContain('Saved conversations (most recent first):');
+    expect(output).toContain('Finephrase follow-up');
+    expect(output).toContain('Current status update');
     expect(output).toContain('Usage: /resume <index|conversation-id|file>');
     expect(sendMessage).toHaveBeenCalledWith(
       1,
@@ -2823,8 +2833,16 @@ describe('queued discord message handler', () => {
     const sendTyping = vi.fn(async () => undefined);
     const sessionDir = createTempDir('gateway-discord-resume-');
 
-    writeFileSync(join(sessionDir, 'channel-1.jsonl'), '[]\n');
-    writeFileSync(join(sessionDir, 'channel-2.jsonl'), '[]\n');
+    writeFileSync(
+      join(sessionDir, 'channel-1.jsonl'),
+      '{"type":"session","id":"session-1","timestamp":"2026-03-09T00:00:00.000Z"}\n'
+        + '{"type":"message","id":"m1","timestamp":"2026-03-09T00:00:01.000Z","message":{"role":"user","content":[{"type":"text","text":"Weekly planning thread"}]}}\n',
+    );
+    writeFileSync(
+      join(sessionDir, 'channel-2.jsonl'),
+      '{"type":"session","id":"session-2","timestamp":"2026-03-09T00:00:00.000Z"}\n'
+        + '{"type":"session_info","id":"info-1","timestamp":"2026-03-09T00:00:02.000Z","name":"Finephrase review"}\n',
+    );
 
     const handler = createQueuedDiscordMessageHandler({
       allowlist: new Set(['channel-1']),
@@ -2859,6 +2877,8 @@ describe('queued discord message handler', () => {
       .join('\n');
 
     expect(output).toContain('Saved conversations (most recent first):');
+    expect(output).toContain('Finephrase review');
+    expect(output).toContain('Weekly planning thread');
     expect(output).toContain('Usage: /resume <index|conversation-id|file>');
     expect(sendMessage).toHaveBeenCalledWith(
       'Manual /compact is not supported in gateway print mode yet. Open this session in Pi TUI to compact.',

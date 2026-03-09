@@ -46,6 +46,7 @@ Data sources:
 - If a calendar query times out, run a quick warm-up (`osascript -e 'tell application "Calendar" to launch'`) and retry that calendar once before marking it unavailable.
 - Pull events from now through end of today, plus first event tomorrow before noon.
 - For event rows include time, title, and calendar name.
+- In the final report, render each calendar event on its own line (one bullet per event). Do not combine multiple events into a single semicolon-separated line.
 
 3) **Apple Reminders**
 - Use `osascript`.
@@ -65,9 +66,13 @@ Output format (follow exactly):
 <ONE sentence only: now + today high/low + practical note>
 
 ## ━━ 📅 CALENDAR ━━
-- **Today:** <All events for the day or  "None">
-- **Tomorrow:** <All events tomorrow or "None">
-- **Upcoming** <All *notable* events for the upcoming week or omit line>
+- **Today:**
+  - <one event per line: time, title, calendar>
+  - <or "None">
+- **Tomorrow:**
+  - <one event per line: time, title, calendar>
+  - <or "None">
+- **Upcoming:** <All *notable* events for the upcoming week or omit line>
 
 ## ━━ ✅ REMINDERS ━━
 - **Today:** <overdue + due today, max 5 bullets>

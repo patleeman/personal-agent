@@ -225,7 +225,7 @@ When a new message arrives while a run is active in the same conversation:
 - `/cancel`
 - `/compact [instructions]` (runs native Pi compaction)
 - `/fork [topic name]` (Telegram only; by default creates a new forum topic and forks Pi into that topic branch. `/fork` auto-generates a topic name, `/fork <topic name>` uses your name.)
-- `/resume [index|conversation-id|file]` (list saved conversations and switch this chat/channel to one)
+- `/resume [index|conversation-id|file]` (list saved conversations using session names/first prompts and switch this chat/channel to one)
 
 Telegram registers slash commands via Bot API on startup.
 

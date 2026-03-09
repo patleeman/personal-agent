@@ -1329,14 +1329,22 @@ interface GatewayResumeConversationOption {
   sessionFile: string;
   sessionFileName: string;
   label: string;
+  conversationLabel?: string;
   conversationId?: string;
   updatedAtMs: number;
+  sessionName?: string;
+  firstUserMessage?: string;
 }
 
 interface GatewaySessionFileListing {
   sessionFile: string;
   sessionFileName: string;
   updatedAtMs: number;
+}
+
+interface GatewaySessionPreview {
+  sessionName?: string;
+  firstUserMessage?: string;
 }
 
 function resolveSessionFileUpdatedAtMs(sessionFile: string): number {
@@ -1390,6 +1398,118 @@ function listGatewaySessionFiles(sessionDir: string): GatewaySessionFileListing[
   }
 
   return listed;
+}
+
+function normalizeGatewaySessionPreviewText(text: string, maxLength = 96): string | undefined {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (normalized.length === 0) {
+    return undefined;
+  }
+
+  return trimForkMessagePreview(normalized, maxLength);
+}
+
+function extractGatewayUserMessagePreviewFromContent(content: unknown): string | undefined {
+  if (typeof content === 'string') {
+    return normalizeGatewaySessionPreviewText(content);
+  }
+
+  if (!Array.isArray(content)) {
+    return undefined;
+  }
+
+  const textParts: string[] = [];
+
+  for (const part of content) {
+    if (!part || typeof part !== 'object') {
+      continue;
+    }
+
+    const candidate = part as Record<string, unknown>;
+    if (candidate.type === 'text' && typeof candidate.text === 'string') {
+      textParts.push(candidate.text);
+    }
+  }
+
+  if (textParts.length === 0) {
+    return undefined;
+  }
+
+  return normalizeGatewaySessionPreviewText(textParts.join(' '));
+}
+
+function readGatewaySessionPreview(sessionFile: string): GatewaySessionPreview {
+  let raw = '';
+
+  try {
+    raw = readFileSync(sessionFile, 'utf-8');
+  } catch {
+    return {};
+  }
+
+  if (raw.trim().length === 0) {
+    return {};
+  }
+
+  let sessionName: string | undefined;
+  let firstUserMessage: string | undefined;
+
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmedLine = line.trim();
+    if (trimmedLine.length === 0) {
+      continue;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(trimmedLine);
+    } catch {
+      continue;
+    }
+
+    if (!parsed || typeof parsed !== 'object') {
+      continue;
+    }
+
+    const entry = parsed as Record<string, unknown>;
+
+    if (entry.type === 'session_info') {
+      const name = normalizeGatewaySessionPreviewText(
+        typeof entry.name === 'string' ? entry.name : '',
+        88,
+      );
+
+      if (name) {
+        sessionName = name;
+      }
+
+      continue;
+    }
+
+    if (firstUserMessage || entry.type !== 'message') {
+      continue;
+    }
+
+    const message = entry.message;
+    if (!message || typeof message !== 'object') {
+      continue;
+    }
+
+    const messageRecord = message as Record<string, unknown>;
+    if (messageRecord.role !== 'user') {
+      continue;
+    }
+
+    const preview = extractGatewayUserMessagePreviewFromContent(messageRecord.content);
+    if (preview) {
+      firstUserMessage = preview;
+    }
+  }
+
+  return {
+    sessionName,
+    firstUserMessage,
+  };
 }
 
 function parseTelegramConversationFromSessionFileName(
@@ -1452,26 +1572,42 @@ function buildResumeConversationOptions(input: {
 
   for (const listing of listings) {
     const parsedConversation = input.parseConversation(listing.sessionFileName);
+    const sessionPreview = readGatewaySessionPreview(listing.sessionFile);
+    const label = sessionPreview.sessionName
+      ?? sessionPreview.firstUserMessage
+      ?? parsedConversation?.label
+      ?? listing.sessionFileName;
 
     optionsBySessionFile.set(listing.sessionFile, {
       sessionFile: listing.sessionFile,
       sessionFileName: listing.sessionFileName,
-      label: parsedConversation?.label ?? listing.sessionFileName,
+      label,
+      conversationLabel: parsedConversation?.label,
       conversationId: parsedConversation?.conversationId,
       updatedAtMs: listing.updatedAtMs,
+      sessionName: sessionPreview.sessionName,
+      firstUserMessage: sessionPreview.firstUserMessage,
     });
   }
 
   if (!optionsBySessionFile.has(input.currentSessionFile)) {
     const currentSessionFileName = basename(input.currentSessionFile);
     const parsedConversation = input.parseConversation(currentSessionFileName);
+    const sessionPreview = readGatewaySessionPreview(input.currentSessionFile);
+    const label = sessionPreview.sessionName
+      ?? sessionPreview.firstUserMessage
+      ?? parsedConversation?.label
+      ?? currentSessionFileName;
 
     optionsBySessionFile.set(input.currentSessionFile, {
       sessionFile: input.currentSessionFile,
       sessionFileName: currentSessionFileName,
-      label: parsedConversation?.label ?? currentSessionFileName,
+      label,
+      conversationLabel: parsedConversation?.label,
       conversationId: parsedConversation?.conversationId,
       updatedAtMs: resolveSessionFileUpdatedAtMs(input.currentSessionFile),
+      sessionName: sessionPreview.sessionName,
+      firstUserMessage: sessionPreview.firstUserMessage,
     });
   }
 
@@ -1530,7 +1666,15 @@ function formatResumeConversationSelectionPrompt(input: {
       tags.unshift('current');
     }
 
+    if (entry.sessionName) {
+      tags.push('named');
+    }
+
     lines.push(`${index + 1}. ${entry.label} (${tags.join(', ')})`);
+
+    if (entry.conversationLabel && entry.conversationLabel !== entry.label) {
+      lines.push(`   context=${entry.conversationLabel}`);
+    }
 
     if (entry.conversationId) {
       lines.push(`   id=${entry.conversationId}`);
@@ -6556,7 +6700,9 @@ model=${model}`,
     state.lastPromptByConversation.delete(conversationId);
     state.awaitingFollowUpByConversation.delete(conversationId);
 
-    const resumedTarget = selectedResume.conversationId ?? selectedResume.sessionFileName;
+    const resumedTarget = selectedResume.sessionName
+      ?? selectedResume.conversationId
+      ?? selectedResume.sessionFileName;
     await sendMessageToConversation(`Resumed ${resumedTarget}. Continue chatting in this chat/topic.`);
     return completedMessageProcessingResult();
   }
@@ -9371,7 +9517,9 @@ model=${model}`,
       sessionFile: selectedResume.sessionFile,
     });
 
-    const resumedTarget = selectedResume.conversationId ?? selectedResume.sessionFileName;
+    const resumedTarget = selectedResume.sessionName
+      ?? selectedResume.conversationId
+      ?? selectedResume.sessionFileName;
     await message.sendMessage(`Resumed ${resumedTarget}. Continue chatting in this channel.`);
     return;
   }
