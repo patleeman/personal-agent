@@ -2,6 +2,8 @@
 set -euo pipefail
 
 DEFAULT_OP_READ_TIMEOUT_SECONDS=15
+DEFAULT_PRIMARY_FASTMAIL_APP_PASSWORD_OP_REF="op://Assistant/FASTMAIL_APP_PASSWORD/password"
+DEFAULT_LEGACY_FASTMAIL_APP_PASSWORD_OP_REF="op://Assistant/FASTMAIL_API_KEY/password"
 DEFAULT_IMAP_HOST="imap.fastmail.com"
 DEFAULT_IMAP_PORT=993
 DEFAULT_IMAP_TIMEOUT_SECONDS=30
@@ -16,7 +18,7 @@ Required environment:
   FASTMAIL_APP_PASSWORD (or FASTMAIL_APP_PASSWORD_OP_REF)
 
 Optional environment:
-  FASTMAIL_APP_PASSWORD_OP_REF (default fallback: op://Assistant/FASTMAIL_API_KEY/password)
+  FASTMAIL_APP_PASSWORD_OP_REF (default preferred ref: op://Assistant/FASTMAIL_APP_PASSWORD/password; legacy fallback: op://Assistant/FASTMAIL_API_KEY/password)
   FASTMAIL_IMAP_HOST (default: imap.fastmail.com)
   FASTMAIL_IMAP_PORT (default: 993)
   FASTMAIL_IMAP_TIMEOUT_SECONDS (default: 30)
@@ -135,6 +137,24 @@ NODE
   op --cache=false read "$reference"
 }
 
+resolve_default_fastmail_app_password_reference() {
+  local primary_ref="$DEFAULT_PRIMARY_FASTMAIL_APP_PASSWORD_OP_REF"
+  local legacy_ref="$DEFAULT_LEGACY_FASTMAIL_APP_PASSWORD_OP_REF"
+  local resolved_value=""
+
+  if resolved_value="$(op_read_reference "$primary_ref" 2>/dev/null)"; then
+    printf '%s' "$resolved_value"
+    return
+  fi
+
+  if [[ "$legacy_ref" != "$primary_ref" ]] && resolved_value="$(op_read_reference "$legacy_ref" 2>/dev/null)"; then
+    printf '%s' "$resolved_value"
+    return
+  fi
+
+  op_read_reference "$primary_ref"
+}
+
 resolve_fastmail_app_password() {
   local configured_value="${FASTMAIL_APP_PASSWORD:-}"
 
@@ -153,13 +173,17 @@ resolve_fastmail_app_password() {
     return
   fi
 
-  local fallback_ref="${FASTMAIL_APP_PASSWORD_OP_REF:-op://Assistant/FASTMAIL_API_KEY/password}"
   if ! command -v op >/dev/null 2>&1; then
     echo "Error: FASTMAIL_APP_PASSWORD is required, or install op to use FASTMAIL_APP_PASSWORD_OP_REF" >&2
     return 1
   fi
 
-  op_read_reference "$fallback_ref"
+  if [[ -n "${FASTMAIL_APP_PASSWORD_OP_REF:-}" ]]; then
+    op_read_reference "$FASTMAIL_APP_PASSWORD_OP_REF"
+    return
+  fi
+
+  resolve_default_fastmail_app_password_reference
 }
 
 if ! fastmail_app_password="$(resolve_fastmail_app_password)"; then
