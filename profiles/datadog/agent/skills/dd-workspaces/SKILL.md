@@ -14,7 +14,7 @@ Cloud development environments on AWS EC2, managed by the DevX Workspaces team.
 ddtool auth github login
 workspaces create <name> --region <us-east-1|eu-west-3> --repo <repo>
 ```
-Requires Appgate. Takes ~10 min. Name must be unique (`firstname-lastname` recommended).
+Requires Appgate. Name must be unique (`firstname-lastname` recommended).
 
 ### Connect
 ```bash
@@ -63,49 +63,21 @@ All flags from `workspaces create --help` can be saved here.
 
 ## Installing Software
 
-Three approaches:
+Prefer the least-fragile path:
 
-1. **`install.sh` in dotfiles** (automatic on creation) — best for tools you always want
-2. **Manual after SSH** — `sudo apt-get install`, curl scripts, etc.
-3. **Devcontainer features** — pre-installed by repo's `.devcontainer/` definition
+1. **Dotfiles `install.sh`** — for tools you want on every new workspace.
+2. **Repo devcontainer features** — for repo-scoped toolchains that should stay aligned with the project.
+3. **Manual package installs after SSH** — for one-off experimentation or temporary setup.
 
-Common installs on Ubuntu workspace:
+Keep this skill focused on workspace-specific behavior, not volatile package-manager recipes. For detailed install flows, prefer the official **Auto-Install Tools** / workspace docs below or the repo's own `.devcontainer/` guidance.
+
+For quick manual bootstrap, start with a small apt set such as:
 ```bash
-# apt
+sudo apt-get update
 sudo apt-get install -y stow fzf ripgrep fd-find jq tmux htop wget
-
-# GitHub CLI
-curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list
-sudo apt-get update && sudo apt-get install -y gh
-
-# Neovim (from GitHub releases)
-curl -fsSL https://github.com/neovim/neovim/releases/download/v0.10.3/nvim-linux64.tar.gz | sudo tar xz -C /opt/
-sudo ln -sf /opt/nvim-linux64/bin/nvim /usr/local/bin/nvim
-
-# eza (modern ls)
-sudo mkdir -p /etc/apt/keyrings
-wget -qO- https://raw.githubusercontent.com/eza-community/eza/main/deb.asc | sudo gpg --dearmor -o /etc/apt/keyrings/gierens.gpg
-echo "deb [signed-by=/etc/apt/keyrings/gierens.gpg] http://deb.gierens.de stable main" | sudo tee /etc/apt/sources.list.d/gierens.list
-sudo apt-get update && sudo apt-get install -y eza
-
-# lazygit
-LAZYGIT_VERSION=$(curl -fsSL https://api.github.com/repos/jesseduffield/lazygit/releases/latest | jq -r '.tag_name' | sed 's/^v//')
-curl -fsSL "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz" | tar xz -C /tmp lazygit
-sudo install /tmp/lazygit /usr/local/bin/lazygit
-
-# Linuxbrew (optional, heavy)
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-
-# Volta (Node.js manager)
-curl https://get.volta.sh | bash
-
-# Oh My Zsh
-sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 ```
 
-Tools like `go`, `node`, `kubectl`, `helm` are often pre-installed by devcontainer features.
+Tools like `go`, `node`, `kubectl`, and `helm` are often provided by repo devcontainer features.
 
 ## Secrets
 

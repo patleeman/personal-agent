@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- Workspaces CLI v0.22.0+: `brew update && brew upgrade datadog-workspaces`
+- Workspaces CLI installed and up to date: `brew update && brew upgrade datadog-workspaces`
 - **VSCode/Cursor**: Install Remote Development / Remote-SSH extension, ensure `code`/`cursor` command in PATH
 - **JetBrains**: Request Professional license at https://datadog.freshservice.com/support/catalog/items/160, install JetBrains Gateway
 
@@ -39,7 +39,7 @@ Better latency, survives laptop sleep. Ports 6001+ are open on workspaces.
 # Laptop
 brew install mosh
 
-# Workspace: must build from source for latest version
+# Workspace: if needed, build from source inside the workspace
 git clone https://github.com/keithw/mosh.git && cd mosh
 sudo apt install -y build-essential protobuf-compiler libprotobuf-dev pkg-config libutempter-dev zlib1g-dev libncurses5-dev libssl-dev
 ./autogen.sh && ./configure && make && sudo make install

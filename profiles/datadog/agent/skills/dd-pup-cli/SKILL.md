@@ -142,7 +142,6 @@ pup audit-logs search --query="@evt.outcome:error"
 
 ```bash
 pup on-call teams list
-pup on-call teams create --name="SRE Team" --handle="sre-team"
 ```
 
 ### Additional Commands
@@ -181,3 +180,4 @@ Always include direct links when referencing entities:
 5. **Try naming variations** — `ai-gateway`, `aigateway`, `ai_gateway` in parallel
 6. **Scope to user's team** — When user says "my services", use their team context
 7. **Use `--output table`** — For human-readable summaries shown to user
+8. **Prefer read-only commands** — Only use mutating `pup` actions when the user explicitly asks for changes
