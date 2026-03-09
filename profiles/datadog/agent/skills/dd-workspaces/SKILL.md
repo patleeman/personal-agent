@@ -71,12 +71,6 @@ Prefer the least-fragile path:
 
 Keep this skill focused on workspace-specific behavior, not volatile package-manager recipes. For detailed install flows, prefer the official **Auto-Install Tools** / workspace docs below or the repo's own `.devcontainer/` guidance.
 
-For quick manual bootstrap, start with a small apt set such as:
-```bash
-sudo apt-get update
-sudo apt-get install -y stow fzf ripgrep fd-find jq tmux htop wget
-```
-
 Tools like `go`, `node`, `kubectl`, and `helm` are often provided by repo devcontainer features.
 
 ## Secrets
