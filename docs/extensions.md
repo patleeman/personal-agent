@@ -69,6 +69,7 @@ This allows extension-specific dependencies to be self-contained.
 - `context-bar` — session context display in Pi TUI
 - `pa-header` — appends personal-agent profile/AGENTS provenance to the startup header
 - `at-autocomplete-performance` — replaces heavy `@` fuzzy file search with fast path-style completion in large repos
+- `deferred-resume` — schedules this same TUI session to resume later after a delay
 - `web-tools` — web search/fetch tool integration
 - `tmux-manager` — `/tmux` command + footer status for agent-managed tmux sessions only
 - `tmux-orchestration-prompt` — system-prompt tmux orchestration/status policy injection

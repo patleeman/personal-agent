@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import gatewayContextExtension from './gateway-context.js';
 
 const originalEnv = process.env;
@@ -20,7 +21,7 @@ function setupBeforeAgentStartHandler(): (event: { systemPrompt?: string }) => {
     }),
   };
 
-  gatewayContextExtension(api as any);
+  gatewayContextExtension(api as unknown as ExtensionAPI);
 
   const handler = handlers.get('before_agent_start');
   if (!handler) {

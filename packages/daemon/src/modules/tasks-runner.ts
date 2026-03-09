@@ -372,7 +372,7 @@ function appendOutputFileToLogAndCapture(
   const buffer = Buffer.allocUnsafe(64 * 1024);
 
   try {
-    while (true) {
+    for (;;) {
       const bytesRead = readSync(descriptor, buffer, 0, buffer.length, null);
       if (bytesRead <= 0) {
         break;

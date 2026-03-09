@@ -198,6 +198,9 @@ Built-in extensions in this repo:
 
 - `memory` - Active-profile memory policy (AGENTS.md + skills)
 - `context-bar` - Session context display
+- `pa-header` - Startup header/profile provenance
+- `at-autocomplete-performance` - Faster `@` path completion in large repos
+- `deferred-resume` - Resume this same TUI session later after a delay
 - `web-tools` - Web search/integration
 - `tmux-manager` - `/tmux` command + footer status for agent-managed tmux sessions only
 - `tmux-orchestration-prompt` - System-prompt policy for tmux-based background orchestration and status reporting

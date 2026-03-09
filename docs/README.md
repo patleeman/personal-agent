@@ -27,5 +27,5 @@ This folder is the primary documentation for `pa`.
 ## Notes
 
 - `pa` is a wrapper around Pi. For Pi-specific features (TUI API, SDK internals, keybindings, prompt templates, package system), use Pi docs under:
-  - `/Users/patrickc.lee/personal/personal-agent/node_modules/@mariozechner/pi-coding-agent/README.md`
-  - `/Users/patrickc.lee/personal/personal-agent/node_modules/@mariozechner/pi-coding-agent/docs`
+  - `../node_modules/@mariozechner/pi-coding-agent/README.md`
+  - `../node_modules/@mariozechner/pi-coding-agent/docs`
