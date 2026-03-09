@@ -20,7 +20,6 @@ Use this directory for:
 - runbooks
 - implementation notes
 - checklists
-- logs (when markdown is sufficient)
 
 ## Flat layout
 
@@ -35,6 +34,7 @@ Use this directory for:
 
 1. Keep reusable, cross-project workflows in `skills/`.
 2. Keep profile-local context in memory docs with clear frontmatter.
-3. Keep non-markdown automation state outside `memory/` (for example `agent/state/...`).
-4. Scheduled daemon task files belong in sibling `../tasks/` (not inside `memory/`).
-5. Never store secrets or credentials.
+3. Prefer durable, high-signal notes over transient run logs or session chatter.
+4. Keep non-markdown automation state outside `memory/` (for example `agent/state/...`).
+5. Scheduled daemon task files belong in sibling `../tasks/` (not inside `memory/`).
+6. Never store secrets or credentials.
