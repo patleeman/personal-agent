@@ -21,7 +21,6 @@ Read first:
 Authoritative files:
 - Processed index (JSON): `profiles/assistant/agent/workspace/projects/conversation-maintenance/notes/processed-conversations.json`
 - Run log (markdown): `profiles/assistant/agent/workspace/projects/conversation-maintenance/notes/processed-days.md`
-- Daily notes dir: `profiles/assistant/agent/workspace/projects/conversation-maintenance/notes/daily`
 - Sessions root: `~/.local/state/personal-agent/pi-agent/sessions`
 
 Execution requirements:
@@ -36,20 +35,31 @@ Execution requirements:
    - Repeated task patterns → update/add profile skills if genuinely reusable.
    - Durable profile behavior/facts → update `profiles/assistant/agent/AGENTS.md` (high-level only).
    - Project-specific insights → update relevant workspace project docs.
-5. Write or append `notes/daily/<YYYY-MM-DD>.md` (today’s local date) including:
-   - run timestamp and scanned window
-   - processed session IDs/files
-   - key insights
-   - files changed (or `none`)
-   - remaining unprocessed count in window
-6. Update `processed-conversations.json` by upserting one record per processed session:
-   - `sessionId`, `sessionFile`, `sessionTimestamp`, `sessionDateLocal`, `processedAt`, `note`
-   - optional short `summary` (one line)
+5. Update `processed-conversations.json` by upserting one record per processed session:
+   - required: `sessionId`, `sessionFile`, `sessionTimestamp`, `sessionDateLocal`, `processedAt`
+   - optional: `summary` (one line), `result` (`updated` or `no-change`)
+   - preserve existing extra fields when present
    - update top-level `updatedAt`
    - keep unique by `sessionId`
-7. Append one run-log line to `processed-days.md`:
-   - `- run=<ISO-8601> | window=<YYYY-MM-DD..YYYY-MM-DD> | processed=<count> | remaining=<count> | note=notes/daily/<YYYY-MM-DD>.md`
+6. Append one run-log line to `processed-days.md`:
+   - `- run=<ISO-8601> | window=<YYYY-MM-DD..YYYY-MM-DD> | processed=<count> | remaining=<count> | changed=<yes|no>`
+7. For tracking artifacts, update only:
+   - `processed-conversations.json`
+   - `processed-days.md`
 8. Keep edits minimal, correct, and scoped to assistant profile memory/workspace files.
+9. Git requirements:
+   - If no files changed after review, report `No conversation-maintenance changes needed.` and stop.
+   - If files changed:
+     - Stage only files changed for this run within:
+       - `profiles/assistant/agent/workspace/projects/conversation-maintenance/**`
+       - intentionally updated `profiles/assistant/agent/AGENTS.md`
+       - intentionally updated `profiles/assistant/agent/skills/**`
+       - intentionally updated `profiles/assistant/agent/workspace/projects/**`
+     - Do **not** stage unrelated repo changes.
+     - Commit message: `chore(assistant): conversation maintenance <YYYY-MM-DD>`
+     - Push to origin.
+     - If push fails, report exact error and stop.
+10. If a commit is created, include the commit SHA in the final status.
 
 Output:
-- Short status with processed count, remaining count, and files updated.
+- Short status with processed count, remaining count, files updated, and commit result.

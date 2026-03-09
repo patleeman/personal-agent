@@ -2,7 +2,7 @@
   "version": 1,
   "profile": "datadog",
   "windowDays": 7,
-  "updatedAt": "2026-03-08T19:44:31Z",
+  "updatedAt": "2026-03-08T22:45:45Z",
   "conversations": [
     {
       "sessionId": "947ebd7c-ff9e-48e4-bd6d-de499ef2c93d",
@@ -10,7 +10,6 @@
       "sessionTimestamp": "2026-03-05T14:24:08.452Z",
       "sessionDateLocal": "2026-03-05",
       "processedAt": "2026-03-08T16:44:47Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
       "summary": "Refactored tmux-orchestration prompt construction to use a template literal."
     },
     {
@@ -19,8 +18,7 @@
       "sessionTimestamp": "2026-03-06T00:53:14.692Z",
       "sessionDateLocal": "2026-03-05",
       "processedAt": "2026-03-08T16:44:47Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
-      "summary": "Fixed Telegram /tmux command buffer overflow handling and reinforced clearer progress updates."
+      "summary": "Fixed Telegram `/tmux` buffer overflow handling; user frustration also reinforced the need for clearer in-flight progress updates."
     },
     {
       "sessionId": "e9bdcb48-87b8-4571-ad60-a9e20a1cf00e",
@@ -28,8 +26,7 @@
       "sessionTimestamp": "2026-03-06T00:57:33.445Z",
       "sessionDateLocal": "2026-03-05",
       "processedAt": "2026-03-08T16:44:47Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
-      "summary": "Handled a /help request with general coding-agent guidance."
+      "summary": "`/help` response."
     },
     {
       "sessionId": "93aa2621-f594-4ce9-824e-2e104514429d",
@@ -37,8 +34,7 @@
       "sessionTimestamp": "2026-03-06T00:59:40.612Z",
       "sessionDateLocal": "2026-03-05",
       "processedAt": "2026-03-08T16:44:47Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
-      "summary": "Handled a /help request with general workspace command guidance."
+      "summary": "`/help` response."
     },
     {
       "sessionId": "a41684d0-0d90-41f7-9efb-3a435c201a82",
@@ -46,8 +42,7 @@
       "sessionTimestamp": "2026-03-06T01:00:00.284Z",
       "sessionDateLocal": "2026-03-05",
       "processedAt": "2026-03-08T16:44:47Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
-      "summary": "Handled a /commands request by listing available gateway commands."
+      "summary": "`/commands` response."
     },
     {
       "sessionId": "3b965125-fd92-4e0b-8dd8-59126e1820d1",
@@ -55,8 +50,7 @@
       "sessionTimestamp": "2026-03-06T01:01:12.563Z",
       "sessionDateLocal": "2026-03-05",
       "processedAt": "2026-03-08T16:44:47Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
-      "summary": "Handled /tmux list when no tmux server was running."
+      "summary": "`/tmux list` with no running tmux server."
     },
     {
       "sessionId": "d8cbf985-82fd-4080-977c-508b582d0bf3",
@@ -64,8 +58,7 @@
       "sessionTimestamp": "2026-03-06T01:01:38.476Z",
       "sessionDateLocal": "2026-03-05",
       "processedAt": "2026-03-08T16:44:47Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
-      "summary": "Handled /tmux help with built-in tmux usage guidance."
+      "summary": "`/tmux help` response."
     },
     {
       "sessionId": "4c771bab-65a7-467a-9a31-991ca470747b",
@@ -73,8 +66,7 @@
       "sessionTimestamp": "2026-03-06T03:18:33.586Z",
       "sessionDateLocal": "2026-03-05",
       "processedAt": "2026-03-08T16:44:47Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
-      "summary": "Completed a git pull/rebase flow and stashed local package-lock work."
+      "summary": "Git pull/rebase flow and stash of local `package-lock.json` work."
     },
     {
       "sessionId": "910f6704-cb05-4dbb-b997-43f04397e76c",
@@ -82,8 +74,7 @@
       "sessionTimestamp": "2026-03-06T03:28:18.752Z",
       "sessionDateLocal": "2026-03-05",
       "processedAt": "2026-03-08T16:44:47Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
-      "summary": "Committed and pushed the pi-coding-agent dependency update."
+      "summary": "Commit/push of the `pi-coding-agent` dependency update."
     },
     {
       "sessionId": "13d538ff-f669-438b-aff5-ba67cd737f22",
@@ -91,8 +82,7 @@
       "sessionTimestamp": "2026-03-06T21:54:56.255Z",
       "sessionDateLocal": "2026-03-06",
       "processedAt": "2026-03-08T16:44:47Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
-      "summary": "Fixed dotfiles/Neovim startup collisions and related shell issues."
+      "summary": "Dotfiles/Neovim startup and shell fixes."
     },
     {
       "sessionId": "5185c46a-0a06-40fc-b2eb-17d0703b6104",
@@ -100,8 +90,7 @@
       "sessionTimestamp": "2026-03-06T22:07:14.600Z",
       "sessionDateLocal": "2026-03-06",
       "processedAt": "2026-03-08T16:44:47Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
-      "summary": "Migrated pi-boy toward the mGBA baseline, validated it, and integrated it into personal-agent."
+      "summary": "Pi-boy migration toward mGBA plus validation/integration into personal-agent."
     },
     {
       "sessionId": "feba3926-74e4-4cde-83d4-86db59ff6bed",
@@ -109,8 +98,7 @@
       "sessionTimestamp": "2026-03-06T23:07:44.908Z",
       "sessionDateLocal": "2026-03-06",
       "processedAt": "2026-03-08T16:44:47Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
-      "summary": "Answered a request about Pi TUI APIs with docs-based guidance."
+      "summary": "Pi TUI docs/help response."
     },
     {
       "sessionId": "cf7b145d-1652-4fa5-be1a-bcae86a1245e",
@@ -118,8 +106,7 @@
       "sessionTimestamp": "2026-03-07T00:32:00.297Z",
       "sessionDateLocal": "2026-03-06",
       "processedAt": "2026-03-08T16:44:47Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
-      "summary": "Combined pi-boy self-test commands into a single self-test command."
+      "summary": "Consolidated pi-boy self tests into one command."
     },
     {
       "sessionId": "a3a83ebd-0869-49ea-98d6-7667c2ee9414",
@@ -127,8 +114,7 @@
       "sessionTimestamp": "2026-03-07T00:46:15.888Z",
       "sessionDateLocal": "2026-03-06",
       "processedAt": "2026-03-08T16:44:47Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
-      "summary": "Added pi-boy settings UI plus suspend-state management and delete-suspend support."
+      "summary": "Added pi-boy settings UI, suspend-state management, and delete-suspend support."
     },
     {
       "sessionId": "9198db6d-5324-4f1f-b8ff-3830757408d5",
@@ -136,8 +122,7 @@
       "sessionTimestamp": "2026-03-07T01:22:16.969Z",
       "sessionDateLocal": "2026-03-06",
       "processedAt": "2026-03-08T16:44:47Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
-      "summary": "Cleaned up pi-boy docs and fixed package-resource loading in personal-agent."
+      "summary": "Pi-boy README cleanup plus fix for package-provided resources being blocked by `pa` launch flags."
     },
     {
       "sessionId": "a8c4359a-a402-4418-aa4b-e03f35851eb8",
@@ -145,8 +130,7 @@
       "sessionTimestamp": "2026-03-07T01:42:00.980Z",
       "sessionDateLocal": "2026-03-06",
       "processedAt": "2026-03-08T16:44:47Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
-      "summary": "Updated Pi, set a new default model, and added pi-boy to assistant defaults."
+      "summary": "Updated Pi, changed default model, and added pi-boy to assistant defaults."
     },
     {
       "sessionId": "df29354c-d333-4885-b159-b640032ae37f",
@@ -154,8 +138,7 @@
       "sessionTimestamp": "2026-03-07T03:24:27.144Z",
       "sessionDateLocal": "2026-03-06",
       "processedAt": "2026-03-08T16:44:47Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
-      "summary": "Handled a vague request with a quick personal-agent repo status check."
+      "summary": "Vague `do something` request handled as a quick personal-agent repo status check."
     },
     {
       "sessionId": "a356670e-a6f6-487f-a5da-ec8494409279",
@@ -163,7 +146,6 @@
       "sessionTimestamp": "2026-03-07T03:26:17.489Z",
       "sessionDateLocal": "2026-03-06",
       "processedAt": "2026-03-08T16:44:47Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
       "summary": "Fixed pi-boy background rendering/input issues and released the patch."
     },
     {
@@ -172,8 +154,7 @@
       "sessionTimestamp": "2026-03-07T03:39:57.322Z",
       "sessionDateLocal": "2026-03-06",
       "processedAt": "2026-03-08T16:44:47Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
-      "summary": "Greeting/no-op conversation."
+      "summary": "Greeting/no-op."
     },
     {
       "sessionId": "f6b8ad0b-61ec-4d36-aba3-9cfc0811c152",
@@ -181,8 +162,7 @@
       "sessionTimestamp": "2026-03-07T03:40:17.017Z",
       "sessionDateLocal": "2026-03-06",
       "processedAt": "2026-03-08T16:44:47Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
-      "summary": "Listed the top-level contents of the pi-boy workspace."
+      "summary": "Listed top-level pi-boy workspace contents."
     },
     {
       "sessionId": "e67b7dc1-d823-4314-9bd9-c2ed5022a05d",
@@ -190,7 +170,6 @@
       "sessionTimestamp": "2026-03-07T03:43:08.782Z",
       "sessionDateLocal": "2026-03-06",
       "processedAt": "2026-03-08T19:44:31Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
       "summary": "One-word `config` request; assistant run aborted without actionable work."
     },
     {
@@ -199,7 +178,6 @@
       "sessionTimestamp": "2026-03-07T03:45:28.307Z",
       "sessionDateLocal": "2026-03-06",
       "processedAt": "2026-03-08T19:44:31Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
       "summary": "Greeting-only hello exchange."
     },
     {
@@ -208,7 +186,6 @@
       "sessionTimestamp": "2026-03-07T03:47:18.692Z",
       "sessionDateLocal": "2026-03-06",
       "processedAt": "2026-03-08T19:44:31Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
       "summary": "Greeting-only hello exchange."
     },
     {
@@ -217,7 +194,6 @@
       "sessionTimestamp": "2026-03-07T03:49:18.458Z",
       "sessionDateLocal": "2026-03-06",
       "processedAt": "2026-03-08T19:44:31Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
       "summary": "Vague `do something` request with no completed action."
     },
     {
@@ -226,7 +202,6 @@
       "sessionTimestamp": "2026-03-07T03:56:48.901Z",
       "sessionDateLocal": "2026-03-06",
       "processedAt": "2026-03-08T19:44:31Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
       "summary": "Vague `do something` request with no completed action."
     },
     {
@@ -235,7 +210,6 @@
       "sessionTimestamp": "2026-03-07T04:04:04.947Z",
       "sessionDateLocal": "2026-03-06",
       "processedAt": "2026-03-08T19:44:31Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
       "summary": "Simple `Say hi` greeting response."
     },
     {
@@ -244,7 +218,6 @@
       "sessionTimestamp": "2026-03-07T04:07:53.702Z",
       "sessionDateLocal": "2026-03-06",
       "processedAt": "2026-03-08T19:44:31Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
       "summary": "Explained how to launch Super Mario Land in pi-boy and listed controls."
     },
     {
@@ -253,7 +226,6 @@
       "sessionTimestamp": "2026-03-07T12:15:34.120Z",
       "sessionDateLocal": "2026-03-07",
       "processedAt": "2026-03-08T19:44:31Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
       "summary": "Committed and pushed dotfiles shell/tmux/Neovim changes."
     },
     {
@@ -262,7 +234,6 @@
       "sessionTimestamp": "2026-03-07T12:30:04.044Z",
       "sessionDateLocal": "2026-03-07",
       "processedAt": "2026-03-08T19:44:31Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
       "summary": "Started a Ghostty config setup request after a stray `tui` message."
     },
     {
@@ -271,7 +242,6 @@
       "sessionTimestamp": "2026-03-07T12:30:55.436Z",
       "sessionDateLocal": "2026-03-07",
       "processedAt": "2026-03-08T19:44:31Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
       "summary": "Set up Ghostty config/symlinks, Nerd Font + terminfo, and SSH TERM fixes."
     },
     {
@@ -280,7 +250,6 @@
       "sessionTimestamp": "2026-03-07T12:42:46.980Z",
       "sessionDateLocal": "2026-03-07",
       "processedAt": "2026-03-08T19:44:31Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
       "summary": "Refined personal-agent tmux/update workflows, merged tmux extensions, added cmux notifications, and preserved WIP safely during git rebases."
     },
     {
@@ -289,7 +258,6 @@
       "sessionTimestamp": "2026-03-07T12:47:26.809Z",
       "sessionDateLocal": "2026-03-07",
       "processedAt": "2026-03-08T19:44:31Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
       "summary": "Built cmux notifications, fixed `pa update` to install latest Pi and rebuild, updated `bender`, and started `gb-tetris-gym` / `gbtap1` experiments."
     },
     {
@@ -298,7 +266,6 @@
       "sessionTimestamp": "2026-03-07T12:55:22.416Z",
       "sessionDateLocal": "2026-03-07",
       "processedAt": "2026-03-08T19:44:31Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
       "summary": "Answered a Pi TUI API/docs question."
     },
     {
@@ -307,7 +274,6 @@
       "sessionTimestamp": "2026-03-07T13:49:26.215Z",
       "sessionDateLocal": "2026-03-07",
       "processedAt": "2026-03-08T19:44:31Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
       "summary": "Implemented and generalized deferred resume in personal-agent while tracking gb-tetris-gym training and evaluation work."
     },
     {
@@ -316,8 +282,7 @@
       "sessionTimestamp": "2026-03-07T14:16:25.296Z",
       "sessionDateLocal": "2026-03-07",
       "processedAt": "2026-03-08T19:44:31Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
-      "summary": "SSH’d into `bender`, ran `pa update`, and restarted personal-agent services."
+      "summary": "SSH\u2019d into `bender`, ran `pa update`, and restarted personal-agent services."
     },
     {
       "sessionId": "557f6417-2b8f-4899-8fe9-0eabf3ccbb81",
@@ -325,7 +290,6 @@
       "sessionTimestamp": "2026-03-07T14:38:30.409Z",
       "sessionDateLocal": "2026-03-07",
       "processedAt": "2026-03-08T19:44:31Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
       "summary": "Investigated pi-boy input lag / long-press regressions and rolled back problematic control-loop changes."
     },
     {
@@ -334,7 +298,6 @@
       "sessionTimestamp": "2026-03-07T14:42:51.305Z",
       "sessionDateLocal": "2026-03-07",
       "processedAt": "2026-03-08T19:44:31Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
       "summary": "Designed single-player GB Tetris LLM experiments and created `gb-tetris-gym` / `gbtap1` proof-of-concept pieces."
     },
     {
@@ -343,7 +306,6 @@
       "sessionTimestamp": "2026-03-07T15:02:25.343Z",
       "sessionDateLocal": "2026-03-07",
       "processedAt": "2026-03-08T19:44:31Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
       "summary": "Listed the top-level contents of the pi-boy workspace."
     },
     {
@@ -352,7 +314,6 @@
       "sessionTimestamp": "2026-03-07T15:40:35.686Z",
       "sessionDateLocal": "2026-03-07",
       "processedAt": "2026-03-08T19:44:31Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
       "summary": "Listed the top-level contents of the pi-boy workspace."
     },
     {
@@ -361,8 +322,143 @@
       "sessionTimestamp": "2026-03-07T20:57:38.047Z",
       "sessionDateLocal": "2026-03-07",
       "processedAt": "2026-03-08T19:44:31Z",
-      "note": "Processed in notes/daily/2026-03-08.md",
       "summary": "Reported Ghostty and tmux scrollback limits (50,000 lines each)."
+    },
+    {
+      "sessionId": "42437f5a-ae40-43e0-87ad-b36376095cd3",
+      "sessionFile": "/Users/patrick/.local/state/personal-agent/pi-agent/sessions/--Users-patrick-workingdir-pi-boy--/2026-03-08T00-52-01-411Z_42437f5a-ae40-43e0-87ad-b36376095cd3.jsonl",
+      "sessionTimestamp": "2026-03-08T00:52:01.411Z",
+      "sessionDateLocal": "2026-03-07",
+      "processedAt": "2026-03-08T22:45:45Z",
+      "summary": "Diagnosed SSH hangs as an offline Tailscale peer and added a faster-fail SSH timeout fix."
+    },
+    {
+      "sessionId": "c14427f2-0fd1-40b2-960e-08f0c641fc7b",
+      "sessionFile": "/Users/patrick/.local/state/personal-agent/pi-agent/sessions/--Users-patrick-workingdir-pi-boy--/2026-03-08T01-06-40-820Z_c14427f2-0fd1-40b2-960e-08f0c641fc7b.jsonl",
+      "sessionTimestamp": "2026-03-08T01:06:40.820Z",
+      "sessionDateLocal": "2026-03-07",
+      "processedAt": "2026-03-08T22:45:45Z",
+      "summary": "SSH\u2019d into `desktop` and wrote assistant workspace notes covering hardware, OS, and usage."
+    },
+    {
+      "sessionId": "f60636e1-fbfc-40c0-b11b-9cabd23fe4da",
+      "sessionFile": "/Users/patrick/.local/state/personal-agent/pi-agent/sessions/--Users-patrick-workingdir-pi-boy--/2026-03-08T01-07-05-294Z_f60636e1-fbfc-40c0-b11b-9cabd23fe4da.jsonl",
+      "sessionTimestamp": "2026-03-08T01:07:05.294Z",
+      "sessionDateLocal": "2026-03-07",
+      "processedAt": "2026-03-08T22:45:45Z",
+      "summary": "Raised Ghostty/cmux scrollback to 200 MiB."
+    },
+    {
+      "sessionId": "d0822862-95cc-4259-9865-b0465ed213c2",
+      "sessionFile": "/Users/patrick/.local/state/personal-agent/pi-agent/sessions/--Users-patrick-workingdir-personal-agent--/2026-03-08T01-16-13-371Z_d0822862-95cc-4259-9865-b0465ed213c2.jsonl",
+      "sessionTimestamp": "2026-03-08T01:16:13.371Z",
+      "sessionDateLocal": "2026-03-07",
+      "processedAt": "2026-03-08T22:45:45Z",
+      "summary": "Checkpointed and pushed the current personal-agent changes."
+    },
+    {
+      "sessionId": "79c4d1d3-36fd-408e-a02e-caf6d11ddaa1",
+      "sessionFile": "/Users/patrick/.local/state/personal-agent/pi-agent/sessions/--Users-patrick--/2026-03-08T03-42-35-420Z_79c4d1d3-36fd-408e-a02e-caf6d11ddaa1.jsonl",
+      "sessionTimestamp": "2026-03-08T03:42:35.420Z",
+      "sessionDateLocal": "2026-03-07",
+      "processedAt": "2026-03-08T22:45:45Z",
+      "summary": "Answered general questions about hypernetworks for LoRA adapters and adapter-bank sizing."
+    },
+    {
+      "sessionId": "b7a07f5a-bc6b-4301-9b22-c04ca9ef85a3",
+      "sessionFile": "/Users/patrick/.local/state/personal-agent/pi-agent/sessions/--Users-patrick-workingdir-personal-agent--/2026-03-08T12-12-34-321Z_b7a07f5a-bc6b-4301-9b22-c04ca9ef85a3.jsonl",
+      "sessionTimestamp": "2026-03-08T12:12:34.321Z",
+      "sessionDateLocal": "2026-03-08",
+      "processedAt": "2026-03-08T22:45:45Z",
+      "summary": "Focused subagent implemented daemon deferred-followups plumbing/tests for same-session deferred resume."
+    },
+    {
+      "sessionId": "63bd4072-d5c1-43af-bed1-d0cb7dbfc221",
+      "sessionFile": "/Users/patrick/.local/state/personal-agent/pi-agent/sessions/--Users-patrick-workingdir-personal-agent--/2026-03-08T12-32-16-124Z_63bd4072-d5c1-43af-bed1-d0cb7dbfc221.jsonl",
+      "sessionTimestamp": "2026-03-08T12:32:16.124Z",
+      "sessionDateLocal": "2026-03-08",
+      "processedAt": "2026-03-08T22:45:45Z",
+      "summary": "Focused subagent performed same-session deferred-resume reconnaissance without a final report."
+    },
+    {
+      "sessionId": "4285d163-d145-4f9f-af49-73b7e4c4b262",
+      "sessionFile": "/Users/patrick/.local/state/personal-agent/pi-agent/sessions/--Users-patrick-workingdir-personal-agent--/2026-03-08T12-37-16-357Z_4285d163-d145-4f9f-af49-73b7e4c4b262.jsonl",
+      "sessionTimestamp": "2026-03-08T12:37:16.357Z",
+      "sessionDateLocal": "2026-03-08",
+      "processedAt": "2026-03-08T22:45:45Z",
+      "summary": "Exact-response `ok` test conversation."
+    },
+    {
+      "sessionId": "89839919-ee98-4f19-90e1-e113ae921385",
+      "sessionFile": "/Users/patrick/.local/state/personal-agent/pi-agent/sessions/--Users-patrick-workingdir-personal-agent--/2026-03-08T12-38-01-387Z_89839919-ee98-4f19-90e1-e113ae921385.jsonl",
+      "sessionTimestamp": "2026-03-08T12:38:01.387Z",
+      "sessionDateLocal": "2026-03-08",
+      "processedAt": "2026-03-08T22:45:45Z",
+      "summary": "Produced an implementation-ready design for daemon-backed deferred resume on the same conversation."
+    },
+    {
+      "sessionId": "20afdeef-14bd-4457-9efb-f8aa6e3aad54",
+      "sessionFile": "/Users/patrick/.local/state/personal-agent/pi-agent/sessions/--Users-patrick-workingdir-personal-agent--/2026-03-08T13-49-51-572Z_20afdeef-14bd-4457-9efb-f8aa6e3aad54.jsonl",
+      "sessionTimestamp": "2026-03-08T13:49:51.572Z",
+      "sessionDateLocal": "2026-03-08",
+      "processedAt": "2026-03-08T22:45:45Z",
+      "summary": "Fixed daemon task discovery to default to the active profile\u2019s task directory and pushed the change."
+    },
+    {
+      "sessionId": "83d6af77-8e9f-47e1-ba46-d5a3b430cabf",
+      "sessionFile": "/Users/patrick/.local/state/personal-agent/pi-agent/sessions/--Users-patrick-workingdir-personal-agent--/2026-03-08T13-50-41-135Z_83d6af77-8e9f-47e1-ba46-d5a3b430cabf.jsonl",
+      "sessionTimestamp": "2026-03-08T13:50:41.135Z",
+      "sessionDateLocal": "2026-03-08",
+      "processedAt": "2026-03-08T22:45:45Z",
+      "summary": "Added rolling 7-day conversation-maintenance tasks plus a structured processed-session index for assistant/datadog."
+    },
+    {
+      "sessionId": "90c1c95c-8d60-49ae-9808-ae000aa65263",
+      "sessionFile": "/Users/patrick/.local/state/personal-agent/pi-agent/sessions/--Users-patrick-workingdir-personal-agent--/2026-03-08T16-11-22-799Z_90c1c95c-8d60-49ae-9808-ae000aa65263.jsonl",
+      "sessionTimestamp": "2026-03-08T16:11:22.799Z",
+      "sessionDateLocal": "2026-03-08",
+      "processedAt": "2026-03-08T22:45:45Z",
+      "summary": "Ran an assistant-profile conversation-maintenance backlog pass and added a progress-update rule."
+    },
+    {
+      "sessionId": "44bb16d2-f673-41e4-a948-63efe477ea18",
+      "sessionFile": "/Users/patrick/.local/state/personal-agent/pi-agent/sessions/--Users-patrick-workingdir-personal-agent--/2026-03-08T16-41-22-739Z_44bb16d2-f673-41e4-a948-63efe477ea18.jsonl",
+      "sessionTimestamp": "2026-03-08T16:41:22.739Z",
+      "sessionDateLocal": "2026-03-08",
+      "processedAt": "2026-03-08T22:45:45Z",
+      "summary": "Ran the first datadog-profile conversation-maintenance backlog pass and updated datadog AGENTS guidance."
+    },
+    {
+      "sessionId": "b4f2f3fd-895d-4d05-b081-80a65e7189ea",
+      "sessionFile": "/Users/patrick/.local/state/personal-agent/pi-agent/sessions/--Users-patrick-workingdir-personal-agent--/2026-03-08T19-11-23-461Z_b4f2f3fd-895d-4d05-b081-80a65e7189ea.jsonl",
+      "sessionTimestamp": "2026-03-08T19:11:23.461Z",
+      "sessionDateLocal": "2026-03-08",
+      "processedAt": "2026-03-08T22:45:45Z",
+      "summary": "Ran a second assistant-profile conversation-maintenance backlog pass."
+    },
+    {
+      "sessionId": "88297a17-34ee-4df1-989b-8fe5839015de",
+      "sessionFile": "/Users/patrick/.local/state/personal-agent/pi-agent/sessions/--Users-patrick-workingdir-personal-agent--/2026-03-08T19-41-23-161Z_88297a17-34ee-4df1-989b-8fe5839015de.jsonl",
+      "sessionTimestamp": "2026-03-08T19:41:23.161Z",
+      "sessionDateLocal": "2026-03-08",
+      "processedAt": "2026-03-08T22:45:45Z",
+      "summary": "Ran a second datadog-profile conversation-maintenance backlog pass with no additional datadog memory changes."
+    },
+    {
+      "sessionId": "4aada249-7332-4978-a681-1c1d4f3e584c",
+      "sessionFile": "/Users/patrick/.local/state/personal-agent/pi-agent/sessions/--Users-patrick-workingdir-personal-agent--/2026-03-08T22-11-24-074Z_4aada249-7332-4978-a681-1c1d4f3e584c.jsonl",
+      "sessionTimestamp": "2026-03-08T22:11:24.074Z",
+      "sessionDateLocal": "2026-03-08",
+      "processedAt": "2026-03-08T22:45:45Z",
+      "summary": "Cleared the remaining assistant-profile conversation-maintenance backlog and validated zero unprocessed sessions."
+    },
+    {
+      "sessionId": "8b602d6a-9f2a-41da-a125-cbb7ca60a7a8",
+      "sessionFile": "/Users/patrick/.local/state/personal-agent/pi-agent/sessions/--Users-patrick-workingdir-personal-agent--/2026-03-08T22-41-24-190Z_8b602d6a-9f2a-41da-a125-cbb7ca60a7a8.jsonl",
+      "sessionTimestamp": "2026-03-08T22:41:24.190Z",
+      "sessionDateLocal": "2026-03-08",
+      "processedAt": "2026-03-08T22:45:45Z",
+      "summary": "Final datadog-profile conversation-maintenance pass over the remaining 7-day backlog."
     }
   ]
 }

@@ -18,15 +18,17 @@ Run a rolling conversation retrospective and capture durable improvements for th
 
 - Structured processed index (source of truth): `notes/processed-conversations.json`
 - Run log: `notes/processed-days.md`
-- Daily run note: `notes/daily/<YYYY-MM-DD>.md`
 - Optional profile updates (skills, project docs, AGENTS) when warranted by conversation patterns.
 
 ## Processing Rules
 
 1. Each run scans the **last 7 days** of conversations and selects unprocessed sessions.
-2. Process sessions oldest-first (conversation-level, not day-level).
-3. Keep AGENTS edits high-level and durable only.
-4. Put reusable Datadog workflows in skills.
-5. Put project-specific details in project workspace docs.
-6. Upsert processed sessions into `notes/processed-conversations.json` by `sessionId`.
-7. Log each run in `notes/processed-days.md` and include session/file details in the daily note.
+2. Treat the selector script JSON output as the source of truth for what is processed in that run.
+3. If the selector reports `index.parseError`, stop and fix the index before making any edits.
+4. Process sessions oldest-first (conversation-level, not day-level).
+5. If more than 20 sessions are unprocessed, process the first 20 oldest and leave an explicit backlog count.
+6. Keep AGENTS edits high-level and durable only.
+7. Put reusable Datadog workflows in skills.
+8. Put project-specific details in project workspace docs.
+9. Upsert processed sessions into `notes/processed-conversations.json` by `sessionId`.
+10. Log each run in `notes/processed-days.md`.
