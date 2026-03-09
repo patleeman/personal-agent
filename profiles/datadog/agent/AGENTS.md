@@ -19,7 +19,6 @@
 - Occupation: software developer specializing in AI
 - Work email: `patrickc.lee@datadoghq.com`
 - Uses Zotero for research papers and related research topics.
-- Use `~/agent-workspace` only for scratch/test work; otherwise operate in the real repo/path Patrick names.
 - For Unraid-related software projects, prefer local-first development and validation before deployment.
 - Applied science experiments should be created under `~/dd/data-science` (prefer `~/dd/data-science/patrickc.lee` unless you specify another location).
 
