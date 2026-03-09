@@ -30,15 +30,17 @@ If local overlay contains `agent/`, that subdir is used; otherwise the overlay d
 - `prompts/` (optional)
 - `themes/` (optional)
 
-### Optional profile workspace + tasks conventions
+### Optional profile memory + tasks conventions
 
-For **non-shared profiles only**, you may keep profile-local project docs under `agent/workspace/` (for example `agent/workspace/projects/<slug>/PROJECT.md`).
+For **non-shared profiles only**, you may keep profile-local memory docs under `agent/memory/` (recommended: flat `agent/memory/*.md`).
 
-- There is no shared workspace (`profiles/shared/agent/workspace` is intentionally unused).
-- Keep scheduled task definitions in `agent/tasks/*.task.md` (adjacent to `workspace/`, not inside it).
+- There is no shared memory dir (`profiles/shared/agent/memory` is intentionally unused).
+- Keep scheduled task definitions in `agent/tasks/*.task.md` (adjacent to `memory/`, not inside it).
+- Keep non-markdown automation state outside memory docs (for example `agent/state/...`).
+- Keep memory docs flat (`agent/memory/*.md`) with YAML frontmatter for machine-readable retrieval.
 - There is also no shared AGENTS ownership; durable behavior memory should be edited in the active non-shared profile's `agent/AGENTS.md`.
 - This is a **repo convention** for operational context (briefs, runbooks, specs).
-- `agent/workspace/` is **not** discovered/materialized as a Pi resource automatically.
+- `agent/memory/` is **not** discovered/materialized as a Pi resource automatically.
 - `agent/tasks/` is used by daemon task discovery when `modules.tasks.taskDir` includes the profile tree.
 - Keep reusable cross-project instructions in `skills/` and durable behavior constraints in the active profile `AGENTS.md`.
 

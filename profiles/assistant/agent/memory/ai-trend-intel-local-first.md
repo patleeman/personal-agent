@@ -1,3 +1,16 @@
+---
+id: ai-trend-intel-local-first
+title: AI Trend Intel — Local-first Runbook
+summary: Bootstrap, execution, and deployment checks for local-first AI trend intel runs.
+type: runbook
+status: active
+tags:
+  - ai-trend-intel
+  - runbook
+  - local-first
+updated: 2026-03-08
+---
+
 # Local-first runbook (AI trend intel)
 
 ## Local bootstrap

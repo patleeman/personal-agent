@@ -19,7 +19,7 @@ You can change the directory in daemon config:
 Repository workflow recommendation:
 
 - keep task files inside the repo (for example under `profiles/<profile>/agent/tasks/`)
-- keep tasks adjacent to `agent/workspace/` (not inside workspace) to reduce accidental edits
+- keep tasks adjacent to `agent/memory/` (not inside memory) to reduce accidental edits
 - commit and push task-file changes right after updates so daemon config/task definitions stay in sync across machines
 
 ---

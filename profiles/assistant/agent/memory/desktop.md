@@ -1,3 +1,16 @@
+---
+id: desktop
+title: Desktop Machine Notes
+summary: Reference notes for Patrick's local Ubuntu GPU workstation and operating workflow.
+type: reference
+status: active
+tags:
+  - desktop
+  - gpu
+  - ubuntu
+updated: 2026-03-09
+---
+
 # Desktop Machine Notes
 
 ## Purpose
@@ -40,19 +53,8 @@ Reference notes for Patrick's local headless Ubuntu GPU box (`desktop`) and how 
 
 ### Tooling currently installed
 
-- Present: `git`, `tmux`, `python3` (3.12.3), `node` (v18.19.1), `npm` (9.2.0)
-- Added during this session: `python3-venv`
+- Present: `git`, `tmux`, `python3` (3.12.3), `python3-venv`, `node` (v18.19.1), `npm` (9.2.0)
 - Not currently installed: `docker`, `docker-compose`, `uv`, `pnpm`, `conda/mamba`, `pipx`
-
-### Session-specific agent setup confirmed
-
-- restricted passwordless sudo works for allowed commands (`apt-get`, `systemctl`)
-- repo staged at `~/workingdir/gb-tetris-gym`
-- repo-local Python env at `~/workingdir/gb-tetris-gym/.venv`
-- trained adapter staged at `~/workingdir/gb-tetris-gym/artifacts/train/gbtap1-qwen35-08b-lora-v1`
-- Tetris ROM staged at `~/workingdir/roms/Tetris.gb`
-- Linux memory-read bridge built at `~/workingdir/gb-tetris-gym/native/build/pi-boy-mgba-bridge-mem`
-- direct bridge `read_memory()` smoke succeeded
 
 ## Practical capabilities (3090 Ti + 24 GB VRAM)
 

@@ -1,3 +1,16 @@
+---
+id: ai-trend-intel
+title: AI Trend Intel — Project Context
+summary: Project brief and operating constraints for the AI trend intelligence pipeline.
+type: project
+status: active
+tags:
+  - ai
+  - trends
+  - pipeline
+updated: 2026-03-08
+---
+
 # AI Trend Intel — Project Context
 
 ## Repository

@@ -10,8 +10,8 @@ Use this skill when the user wants the daemon to run prompts automatically.
 ## Canonical paths
 
 - Task definitions (preferred, in-repo): `<repo>/profiles/<non-shared-profile>/agent/tasks/*.task.md`
-- Keep task files adjacent to `agent/workspace/` (not inside workspace).
-- Do not use a shared-profile workspace path.
+- Keep task files adjacent to `agent/memory/` (not inside memory).
+- Do not use a shared-profile memory path.
 - Daemon discovery root (recommended): `<repo>/profiles` (recursive `*.task.md` discovery)
 - Runtime state: `~/.local/state/personal-agent/daemon/task-state.json`
 - Run logs: `~/.local/state/personal-agent/daemon/task-runs/<task-id>/...`

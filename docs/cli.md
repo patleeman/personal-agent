@@ -11,6 +11,7 @@ This document explains how `pa` works and what each command is responsible for.
    - `pa doctor`
    - `pa daemon ...`
    - `pa tasks ...`
+   - `pa memory ...`
    - `pa tmux ...`
    - `pa gateway ...`
    - `pa restart`
@@ -40,6 +41,11 @@ Machine-readable output:
 - `pa tasks list --json`
 - `pa tasks show <id> --json`
 - `pa tasks validate --json`
+- `pa memory list --json`
+- `pa memory find --json`
+- `pa memory show <id> --json`
+- `pa memory new <id> --json`
+- `pa memory lint --json`
 - `pa tmux list --json`
 - `pa tmux inspect <session> --json`
 - `pa tmux clean --json`
@@ -94,6 +100,7 @@ pa daemon [status|start|stop|restart|logs|service|help]
 pa daemon status [--json]
 pa daemon service [install|status|uninstall|help]
 pa tasks [list|show|validate|logs]
+pa memory [list|find|show|new|lint]
 pa tmux [list|inspect|logs|stop|send|run|clean|help]
 pa restart
 pa update [--repo-only]
@@ -104,6 +111,7 @@ Notes:
 
 - `pa daemon` prints daemon command help.
 - `pa tasks` prints detailed tasks command help.
+- `pa memory` prints memory-doc command help.
 - `pa tmux` manages only agent-tagged tmux sessions (`@pa_agent_session=1`).
 - `pa update` runs `git pull --rebase --autostash`, installs repo dependencies (`npm install`), syncs `@mariozechner/pi-coding-agent` to `@latest` in the repo + gateway workspace, verifies repo-local Pi, rebuilds personal-agent packages (`npm run build`), then restarts background services.
 - `pa update --repo-only` skips dependency refresh but still rebuilds personal-agent packages and restarts background services.
@@ -120,6 +128,21 @@ pa tasks logs <id> [--tail <n>]
 ```
 
 See [Scheduled Tasks](./tasks.md) for schema and runtime semantics.
+
+---
+
+## Memory doc commands
+
+```bash
+pa memory list [--profile <name>] [--json]
+pa memory find [--profile <name>] [--tag <tag>] [--type <type>] [--status <status>] [--text <query>] [--json]
+pa memory show <id> [--profile <name>] [--json]
+pa memory new <id> --title <title> --summary <summary> --tags <tag1,tag2> [--type <type>] [--status <status>] [--profile <name>] [--force] [--json]
+pa memory lint [--profile <name>] [--json]
+```
+
+Memory commands operate on profile-local `agent/memory/*.md` docs with YAML frontmatter.
+`pa memory new` creates a frontmatter-correct starter doc.
 
 ---
 
@@ -208,6 +231,8 @@ pa profile show datadog
 pa doctor
 pa daemon status
 pa tasks list
+pa memory list
+pa memory new quick-note --title "Quick Note" --summary "What this doc tracks" --tags notes
 pa tmux list
 pa tui
 ```

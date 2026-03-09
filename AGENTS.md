@@ -10,17 +10,14 @@
 - Duplicate shared guidance across profile AGENTS files when needed; do not centralize behavior rules in shared AGENTS.
 - Memory and behavior updates should target the active profile's AGENTS path.
 
-## Profile workspace convention
+## Profile memory convention
 
-- Each non-shared profile keeps project-specific context under `profiles/<profile>/agent/workspace/`.
-- There is never a shared-profile workspace (`profiles/shared/agent/workspace` should not exist).
-- Workspace docs are available to the agent via normal file tools (`read`, `edit`, `write`).
-- Use workspace docs for project-local briefs, runbooks, specs, and notes.
-- Recommended layout:
-  - `tasks/<name>.task.md` (scheduled task definitions; kept outside workspace)
-  - `workspace/projects/<project-slug>/PROJECT.md`
-  - `workspace/projects/<project-slug>/runbooks/`
-  - `workspace/projects/<project-slug>/specs/`
-  - `workspace/projects/<project-slug>/notes/`
+- Each non-shared profile keeps project-specific context under `profiles/<profile>/agent/memory/`.
+- There is never a shared-profile memory dir (`profiles/shared/agent/memory` should not exist).
+- Memory docs are available to the agent via normal file tools (`read`, `edit`, `write`).
+- Use memory docs for project-local briefs, runbooks, specs, and notes.
+- Keep memory docs flat at `memory/*.md` (no nested project tree).
+- Every memory doc must include YAML frontmatter with at least: `id`, `title`, `summary`, `tags`, `updated`.
+- Use `pa memory list/find/show/new/lint` for discovery, creation, and validation.
+- Keep non-markdown automation state outside memory (for example `agent/state/...`).
 - Keep reusable cross-project workflows in `skills/`; keep durable behavior/preferences in `AGENTS.md`.
-- For project work, read that project's `PROJECT.md` first when present.

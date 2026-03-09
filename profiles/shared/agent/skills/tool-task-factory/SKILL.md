@@ -197,7 +197,7 @@ task-factory task activity <task-id> --limit 200
 
 - **Schedule one-time check-in later** (recommended for long runs)
   - Create `<repo>/profiles/<active-non-shared-profile>/agent/tasks/task-factory-checkin.task.md` with an `at:` schedule.
-  - Keep task files adjacent to profile workspace (not inside `workspace/`).
+  - Keep task files adjacent to profile memory (not inside `memory/`).
   - In prompt body, ask the agent to inspect the target workspace tasks and summarize status/failures.
   - Validate and monitor:
 

@@ -1,3 +1,16 @@
+---
+id: gb-tetris-gym
+title: gb-tetris-gym Project Notes
+summary: Project memory for model-training architecture and progress on gb-tetris-gym.
+type: project
+status: active
+tags:
+  - gb-tetris-gym
+  - ml
+  - tetris
+updated: 2026-03-08
+---
+
 # gb-tetris-gym Project Notes
 
 Canonical in-repo tracker: `/Users/patrick/workingdir/gb-tetris-gym/PLAN.md`

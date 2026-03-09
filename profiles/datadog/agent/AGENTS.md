@@ -25,4 +25,4 @@
 
 ## Memory Use
 
-- Keep AGENTS focused on durable role and user context; store reusable Datadog workflows in skills and repo-specific context in workspace project docs.
+- Keep AGENTS focused on durable role and user context; store reusable Datadog workflows in skills and repo-specific context in memory docs.

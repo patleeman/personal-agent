@@ -1,3 +1,16 @@
+---
+id: runpod
+title: Runpod Notes
+summary: Reusable operational notes for provisioning and managing short-lived Runpod GPU boxes.
+type: reference
+status: active
+tags:
+  - runpod
+  - gpu
+  - infra
+updated: 2026-03-09
+---
+
 # Runpod Notes
 
 ## Purpose
@@ -34,14 +47,14 @@ runpodctl pod get <pod-id> --include-machine -o json
   - then `RTX A5000` / similar 24 GB class cards
 - For bootstrap SFT on small models, 24 GB class GPUs are enough
 
-### Cost intuition observed
+### Cost intuition
 
-Community pricing seen during this session was roughly:
+A recent community-cloud price snapshot was roughly:
 
 - RTX 4090 on-demand: `~$0.34/hr`
 - RTX 3090 on-demand: `~$0.22/hr`
 
-So a small Runpod top-up is enough for initial SFT experiments.
+Treat these as ballpark examples rather than fixed prices.
 
 ### Common blockers
 
@@ -56,7 +69,7 @@ So a small Runpod top-up is enough for initial SFT experiments.
 
 ## Current working create pattern
 
-The newer `runpodctl` command shape that worked in this session:
+The current `runpodctl` command shape that has worked reliably:
 
 ```bash
 runpodctl pod create \
@@ -103,27 +116,6 @@ Working remote bootstrap approach:
    - creates `.venv`
    - installs project + training dependencies
    - writes a small env helper script for later shells
-
-## Assistant automation added
-
-In `gb-tetris-gym` repo, the following helper files were added for Runpod automation:
-
-- `scripts/runpod_launch_training_pod.py`
-- `scripts/runpod_bootstrap_training.sh`
-- `src/gb_tetris_gym/cloud/runpod.py`
-
-These are the starting point for future assistant-driven Runpod provisioning.
-
-## Latest completed lifecycle
-
-- pod id: `lafpdz6ugpkert`
-- GPU: `RTX 3090`
-- purpose: `gb-tetris-gym` bootstrap SFT
-- artifacts were synced back before teardown
-- pod was deleted after completion
-- verified cleanup state after delete:
-  - `runpodctl pod list` -> `[]`
-  - `runpodctl network-volume list` -> `[]`
 
 ## Operational guidance
 
