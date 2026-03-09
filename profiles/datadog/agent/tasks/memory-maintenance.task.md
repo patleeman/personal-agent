@@ -49,7 +49,7 @@ Execution requirements:
 5. Conversation processing:
    - If `counts.unprocessedInWindow == 0`, skip conversation tracking updates and continue with any needed hygiene-only edits.
    - Otherwise review unprocessed conversations in oldest-first order.
-   - Process all returned unprocessed sessions unless there are more than 20; in that case process the first 20 and leave explicit backlog count.
+   - Process all returned unprocessed sessions.
    - Only promote information when it is high-signal, clearly useful, and high-confidence.
    - Do not store transient chatter, speculative claims, weak inferences, session-only details, or one-off instructions that are unlikely to matter later.
    - Repeated Datadog workflows → update/add `profiles/datadog/agent/skills/*` when genuinely reusable.
