@@ -4,7 +4,7 @@ enabled: true
 cron: "41 */3 * * *"
 profile: "datadog"
 model: "openai-codex/gpt-5.4"
-cwd: "/Users/patrick/workingdir/personal-agent"
+cwd: "/Users/patrickc.lee/personal/personal-agent"
 timeoutSeconds: 2700
 output:
   when: failure

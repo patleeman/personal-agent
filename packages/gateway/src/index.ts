@@ -1801,8 +1801,8 @@ function buildTelegramTmuxRunCliArgs(run: TelegramTmuxRunRequest): string[] {
 }
 
 function parseTmuxRunCliOutput(output: string): { sessionName?: string; logPath?: string } {
-  const sessionMatch = output.match(/^\s*Session:\s*(.+)$/m);
-  const logMatch = output.match(/^\s*Log:\s*(.+)$/m);
+  const sessionMatch = output.match(/^\s*Session(?:\s*:\s*|\s+[·.:-]+\s+)(.+)$/m);
+  const logMatch = output.match(/^\s*Log(?:\s*:\s*|\s+[·.:-]+\s+)(.+)$/m);
 
   return {
     sessionName: sessionMatch?.[1]?.trim(),

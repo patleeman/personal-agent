@@ -51,6 +51,7 @@ import { readTailLines } from './file-utils.js';
 import { memoryCommand } from './memory.js';
 import { readConfig, setDefaultProfile } from './config.js';
 import { tmuxCommand } from './tmux-command.js';
+import { isInteractivePiInvocation, launchPiInWorkspace } from './tui-workspace.js';
 import {
   accent,
   bullet,
@@ -493,23 +494,15 @@ function extractSessionFile(args: string[]): string | undefined {
   return undefined;
 }
 
-async function runPi(profileName: string, piArgs: string[]): Promise<number> {
-  const resolvedProfile = resolveResourceProfile(profileName);
-  const statePaths = resolveStatePaths();
-
-  validateStatePathsOutsideRepo(statePaths, resolvedProfile.repoRoot);
-
-  const piInvocation = ensurePiInstalled(resolvedProfile.repoRoot);
-  await maybeStartDaemon();
-
-  return runPiWithResolvedProfile(resolvedProfile, piArgs, piInvocation);
+interface PreparedPiLaunch {
+  args: string[];
+  env: NodeJS.ProcessEnv;
 }
 
-async function runPiWithResolvedProfile(
+async function preparePiLaunch(
   resolvedProfile: ReturnType<typeof resolveResourceProfile>,
   piArgs: string[],
-  piInvocation: PiCommandInvocation,
-): Promise<number> {
+): Promise<PreparedPiLaunch> {
   const statePaths = resolveStatePaths();
 
   await bootstrapStateOrThrow(statePaths);
@@ -532,23 +525,62 @@ async function runPiWithResolvedProfile(
   const resourceArgs = buildPiResourceArgs(resolvedProfile);
   const withDefaults = applyDefaultModelArgs(piArgs, settings);
 
-  const args = [...resourceArgs, ...withDefaults];
-
-  const result = spawnSync(piInvocation.command, [...piInvocation.argsPrefix, ...args], {
-    stdio: 'inherit',
+  return {
+    args: [...resourceArgs, ...withDefaults],
     env: {
       ...process.env,
       PI_CODING_AGENT_DIR: runtime.agentDir,
       PERSONAL_AGENT_ACTIVE_PROFILE: resolvedProfile.name,
       PERSONAL_AGENT_REPO_ROOT: resolvedProfile.repoRoot,
     },
+  };
+}
+
+async function runPi(profileName: string, piArgs: string[]): Promise<number> {
+  const resolvedProfile = resolveResourceProfile(profileName);
+  const statePaths = resolveStatePaths();
+
+  validateStatePathsOutsideRepo(statePaths, resolvedProfile.repoRoot);
+
+  const interactivePiInvocation = isInteractivePiInvocation(piArgs);
+  const directInteractiveMode = process.env.PERSONAL_AGENT_TUI_DIRECT === '1' || Boolean(process.env.TMUX);
+  const useTmuxWorkspace = interactivePiInvocation && !directInteractiveMode;
+
+  const piInvocation = ensurePiInstalled(resolvedProfile.repoRoot);
+  await maybeStartDaemon();
+
+  if (useTmuxWorkspace) {
+    const prepared = await preparePiLaunch(resolvedProfile, piArgs);
+    return launchPiInWorkspace({
+      cwd: process.cwd(),
+      profileName: resolvedProfile.name,
+      piInvocation,
+      requestedPiArgs: piArgs,
+      launchPiArgs: prepared.args,
+      piEnv: prepared.env,
+    });
+  }
+
+  return runPiWithResolvedProfile(resolvedProfile, piArgs, piInvocation);
+}
+
+async function runPiWithResolvedProfile(
+  resolvedProfile: ReturnType<typeof resolveResourceProfile>,
+  piArgs: string[],
+  piInvocation: PiCommandInvocation,
+): Promise<number> {
+  const prepared = await preparePiLaunch(resolvedProfile, piArgs);
+
+  const result = spawnSync(piInvocation.command, [...piInvocation.argsPrefix, ...prepared.args], {
+    stdio: 'inherit',
+    env: prepared.env,
   });
 
   if (result.error) {
     throw result.error;
   }
 
-  const sessionFile = extractSessionFile(withDefaults);
+  const sessionFile = extractSessionFile(prepared.args);
   const statusCode = result.status ?? 1;
 
   if (statusCode === 0) {
@@ -2366,7 +2398,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     {
       name: 'tui',
       usage: 'tui [args...]',
-      description: 'Run pi TUI with profile resources (supports --profile override)',
+      description: 'Run pi with profile resources (interactive runs use the PA tmux workspace unless already inside tmux)',
       run: runCommand,
     },
     {
@@ -2526,7 +2558,7 @@ Examples:
   pa tmux list
   pa tmux inspect <session>
   pa tmux clean --dry-run
-  pa tmux run code-review -- pa -p "review this diff"
+  pa tmux run code-review --placement pane -- pa -p "review this diff"
 
 `,
     )

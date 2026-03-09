@@ -268,7 +268,12 @@ async function refreshStatus(ctx: ExtensionContext): Promise<void> {
 			return;
 		}
 
-		const icon = sessions.length > 0 ? theme.fg("warning", "●") : theme.fg("dim", "○");
+		if (sessions.length === 0) {
+			ctx.ui.setStatus(STATUS_KEY, undefined);
+			return;
+		}
+
+		const icon = theme.fg("warning", "●");
 		const label = theme.fg("dim", ` tmux:${sessions.length}`);
 		ctx.ui.setStatus(STATUS_KEY, `${icon}${label}`);
 	} catch {

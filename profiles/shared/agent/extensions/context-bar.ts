@@ -1,7 +1,7 @@
 /**
  * Context Bar — Adds a segmented role breakdown line below the default footer.
  *
- * Line 1: default footer (📁 dir │ ⎇ branch │ 🤖 model │ 💭 thinking │ ctx: ████░ 85%)
+ * Line 1: default footer (📁 dir │ ⎇ branch │ 🤖 model thinking │ ctx: ████░ 85%)
  * Line 2: color-coded breakdown by role (sys / user / assistant / tool)
  *
  * Toggle with /context-bar
@@ -179,11 +179,13 @@ export default function (pi: ExtensionAPI) {
 					const gitBranch = footerData.getGitBranch();
 					const modelId = ctx.model?.id ?? "no-model";
 					const thinkingLevel = pi.getThinkingLevel();
+					const modelLabel = typeof thinkingLevel === "string" && thinkingLevel.trim().length > 0
+						? `${modelId} ${thinkingLevel.trim()}`
+						: modelId;
 
 					const leftParts: string[] = [theme.fg("dim", `📁 ${cwd}`)];
 					if (gitBranch) leftParts.push(theme.fg("dim", `⎇ ${gitBranch}`));
-					leftParts.push(theme.fg("dim", `🤖 ${modelId}`));
-					leftParts.push(theme.fg("dim", `💭 ${thinkingLevel}`));
+					leftParts.push(theme.fg("dim", `🤖 ${modelLabel}`));
 
 					const extensionStatuses = Array.from(footerData.getExtensionStatuses().values())
 						.filter((status) => status.trim().length > 0);

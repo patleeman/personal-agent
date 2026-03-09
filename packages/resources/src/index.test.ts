@@ -72,6 +72,23 @@ describe('resources profile loader', () => {
     expect(resolved.agentsFiles.length).toBe(3);
   });
 
+  it('ignores top-level extension test files', () => {
+    const repo = createTempRepo();
+
+    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'profiles/shared/agent/extensions/context-bar.ts'), 'export default {}\n');
+    writeFile(join(repo, 'profiles/shared/agent/extensions/context-bar.test.ts'), 'export default {}\n');
+    writeFile(join(repo, 'profiles/shared/agent/extensions/context-bar.spec.ts'), 'export default {}\n');
+    writeFile(join(repo, 'profiles/shared/agent/extensions/nested/index.ts'), 'export default {}\n');
+
+    const resolved = resolveResourceProfile('shared', { repoRoot: repo });
+
+    expect(resolved.extensionEntries).toEqual([
+      join(repo, 'profiles/shared/agent/extensions/context-bar.ts'),
+      join(repo, 'profiles/shared/agent/extensions/nested/index.ts'),
+    ]);
+  });
+
   it('discovers extension dependency directories for nested extension packages', () => {
     const repo = createTempRepo();
 

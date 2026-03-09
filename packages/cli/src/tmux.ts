@@ -1,4 +1,7 @@
 import { spawnSync } from 'child_process';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { homedir } from 'os';
+import { join } from 'path';
 
 export const PA_TMUX_MANAGED_OPTION = '@pa_agent_session';
 export const PA_TMUX_TASK_OPTION = '@pa_agent_task';
@@ -6,6 +9,17 @@ export const PA_TMUX_LOG_OPTION = '@pa_agent_log';
 export const PA_TMUX_COMMAND_OPTION = '@pa_agent_cmd';
 export const PA_TMUX_NOTIFY_ON_COMPLETE_OPTION = '@pa_agent_notify_on_complete';
 export const PA_TMUX_NOTIFY_CONTEXT_OPTION = '@pa_agent_notify_context';
+export const PA_TMUX_WORKSPACE_OPTION = '@pa_workspace';
+export const PA_TMUX_PROFILE_OPTION = '@pa_profile';
+export const PA_TMUX_CWD_OPTION = '@pa_cwd';
+export const PERSONAL_AGENT_TMUX_WORKSPACE_ENV = 'PERSONAL_AGENT_TMUX_WORKSPACE';
+export const PERSONAL_AGENT_TMUX_SESSION_ENV = 'PERSONAL_AGENT_TMUX_SESSION';
+export const PERSONAL_AGENT_TMUX_SOCKET_ENV = 'PERSONAL_AGENT_TMUX_SOCKET';
+
+const DEFAULT_PA_TMUX_SOCKET = 'pa';
+const PA_TMUX_CONFIG_FILE = 'workspace.tmux.conf';
+const PA_TMUX_WORKSPACE_KEY_TABLE = 'pa-workspace';
+const PA_TMUX_REPEAT_TIME_MS = 1000;
 
 const LIST_SESSIONS_FORMAT = [
   '#{session_name}',
@@ -55,9 +69,228 @@ export interface StartManagedTmuxSessionOptions {
   notifyContext?: string;
 }
 
+export interface OpenManagedTmuxLogPaneOptions {
+  targetPane: string;
+  sessionName: string;
+  logPath: string;
+  title?: string;
+}
+
+function resolveStateRoot(): string {
+  if (process.env.PERSONAL_AGENT_STATE_ROOT) {
+    return process.env.PERSONAL_AGENT_STATE_ROOT;
+  }
+
+  if (process.env.XDG_STATE_HOME) {
+    return join(process.env.XDG_STATE_HOME, 'personal-agent');
+  }
+
+  return join(homedir(), '.local', 'state', 'personal-agent');
+}
+
+function resolvePaTmuxConfigPath(): string {
+  return join(resolveStateRoot(), 'tmux', PA_TMUX_CONFIG_FILE);
+}
+
+export function resolvePaTmuxSocketName(): string {
+  const configured = process.env.PERSONAL_AGENT_TMUX_SOCKET_NAME?.trim();
+  return configured && configured.length > 0 ? configured : DEFAULT_PA_TMUX_SOCKET;
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function buildPressAnyKeyScript(body: string): string {
+  return [
+    body,
+    '',
+    "printf '\\nPress any key to close...'",
+    'stty -echo -icanon time 0 min 1',
+    'dd bs=1 count=1 >/dev/null 2>&1',
+  ].join('\n');
+}
+
+function buildHelpPopupCommand(): string {
+  const helpText = [
+    'PA Workspace',
+    '============',
+    '',
+    'Hotkey: Ctrl+Space',
+    '',
+    'Pane management',
+    '  -   split below',
+    '  |   split right',
+    '  h/j/k/l move focus left/down/up/right',
+    '  H/J/K/L resize pane left/down/up/right (repeat for 1s)',
+    '  Tab cycle to previous pane',
+    '  z   zoom/unzoom pane',
+    '  w   close pane (with confirmation)',
+    '',
+    'Window switching',
+    '  [   previous window',
+    '  ]   next window',
+    '  1-9 switch to window 1-9',
+    '',
+    'Workspace helpers',
+    '  ?   open this shortcut helper',
+    '  t   show managed tmux tasks',
+    '  n   new tmux window in current directory',
+    '  r   reload PA tmux config',
+  ].join('\n');
+
+  const script = buildPressAnyKeyScript(`cat <<'EOF'\n${helpText}\nEOF`);
+  return `sh -lc ${shellQuote(script)}`;
+}
+
+function buildManagedTasksPopupCommand(): string {
+  const script = buildPressAnyKeyScript([
+    'if command -v pa >/dev/null 2>&1; then',
+    '  pa --plain tmux list',
+    'else',
+    `  printf '%s\\n' ${shellQuote('pa is not available on PATH inside this workspace.')}`,
+    'fi',
+  ].join('\n'));
+
+  return `sh -lc ${shellQuote(script)}`;
+}
+
+function buildWorkspaceHintText(): string {
+  return [
+    'PA workspace',
+    '? help',
+    't tasks',
+    '- | split',
+    'h/j/k/l move',
+    'H/J/K/L resize',
+    '[ ] windows',
+    '1-9 switch',
+    'Tab prev',
+    'z zoom',
+    'w close',
+    'n new',
+    'r reload',
+  ].join(' • ');
+}
+
+function buildWorkspaceBindings(
+  configPath: string,
+  helpPopupCommand: string,
+  managedTasksPopupCommand: string,
+): string[] {
+  const workspaceHintText = buildWorkspaceHintText();
+  const windowBindings = Array.from({ length: 9 }, (_, index) => {
+    const windowNumber = String(index + 1);
+    return `bind-key -T ${PA_TMUX_WORKSPACE_KEY_TABLE} ${windowNumber} select-window -t :${windowNumber}`;
+  });
+
+  return [
+    `bind-key -n C-Space display-message -d ${PA_TMUX_REPEAT_TIME_MS} ${shellQuote(workspaceHintText)} \\; switch-client -T ${PA_TMUX_WORKSPACE_KEY_TABLE}`,
+    `bind-key -T ${PA_TMUX_WORKSPACE_KEY_TABLE} ? display-popup -w 70% -h 70% -E ${shellQuote(helpPopupCommand)}`,
+    `bind-key -T ${PA_TMUX_WORKSPACE_KEY_TABLE} t display-popup -w 80% -h 70% -E ${shellQuote(managedTasksPopupCommand)}`,
+    `bind-key -T ${PA_TMUX_WORKSPACE_KEY_TABLE} '-' split-window -v -c '#{pane_current_path}'`,
+    `bind-key -T ${PA_TMUX_WORKSPACE_KEY_TABLE} '|' split-window -h -c '#{pane_current_path}'`,
+    `bind-key -T ${PA_TMUX_WORKSPACE_KEY_TABLE} h select-pane -L`,
+    `bind-key -T ${PA_TMUX_WORKSPACE_KEY_TABLE} j select-pane -D`,
+    `bind-key -T ${PA_TMUX_WORKSPACE_KEY_TABLE} k select-pane -U`,
+    `bind-key -T ${PA_TMUX_WORKSPACE_KEY_TABLE} l select-pane -R`,
+    `bind-key -r -T ${PA_TMUX_WORKSPACE_KEY_TABLE} H resize-pane -L 5`,
+    `bind-key -r -T ${PA_TMUX_WORKSPACE_KEY_TABLE} J resize-pane -D 5`,
+    `bind-key -r -T ${PA_TMUX_WORKSPACE_KEY_TABLE} K resize-pane -U 5`,
+    `bind-key -r -T ${PA_TMUX_WORKSPACE_KEY_TABLE} L resize-pane -R 5`,
+    `bind-key -T ${PA_TMUX_WORKSPACE_KEY_TABLE} Tab last-pane`,
+    `bind-key -T ${PA_TMUX_WORKSPACE_KEY_TABLE} z resize-pane -Z`,
+    `bind-key -T ${PA_TMUX_WORKSPACE_KEY_TABLE} w confirm-before -p "kill-pane #P? (y/n)" kill-pane`,
+    `bind-key -T ${PA_TMUX_WORKSPACE_KEY_TABLE} n new-window -c '#{pane_current_path}'`,
+    `bind-key -T ${PA_TMUX_WORKSPACE_KEY_TABLE} '[' previous-window`,
+    `bind-key -T ${PA_TMUX_WORKSPACE_KEY_TABLE} ']' next-window`,
+    ...windowBindings,
+    `bind-key -T ${PA_TMUX_WORKSPACE_KEY_TABLE} r source-file ${shellQuote(configPath)} \\; display-message ${shellQuote('Reloaded PA tmux config')}`,
+  ];
+}
+
+function buildPaTmuxConfig(): string {
+  const configPath = resolvePaTmuxConfigPath();
+  const helpPopupCommand = buildHelpPopupCommand();
+  const managedTasksPopupCommand = buildManagedTasksPopupCommand();
+  const workspaceBindings = buildWorkspaceBindings(
+    configPath,
+    helpPopupCommand,
+    managedTasksPopupCommand,
+  );
+
+  return [
+    'set -g default-terminal "tmux-256color"',
+    'set -g extended-keys on',
+    'set -g extended-keys-format csi-u',
+    "set -g terminal-features[98] '*:RGB'",
+    "set -g terminal-features[99] 'xterm*:extkeys'",
+    'set -g focus-events on',
+    'set -g mouse on',
+    'set -g initial-repeat-time 1000',
+    'set -g repeat-time 1000',
+    'unbind-key C-b',
+    'unbind-key -n C-Space',
+    'set -g prefix None',
+    'set -g renumber-windows on',
+    'set -g base-index 1',
+    'setw -g pane-base-index 1',
+    'set -g set-titles on',
+    'set -g allow-rename off',
+    'set -g status on',
+    'set -g status-position top',
+    'set -g status-interval 2',
+    'set -g status-left-length 16',
+    'set -g status-right-length 80',
+    'set -g status-style fg=colour255,bg=colour236',
+    'set -g window-status-separator ""',
+    'set -g window-status-style fg=colour250,bg=colour236',
+    'set -g window-status-format "#[fg=colour250,bg=colour236] #I:#W#{?window_flags, #{window_flags},} "',
+    'set -g window-status-current-style fg=colour231,bg=colour25,bold',
+    'set -g window-status-current-format "#[fg=colour231,bg=colour25,bold] #I:#W#{?window_flags, #{window_flags},} "',
+    'set -g window-status-activity-style fg=colour223,bg=colour236,bold',
+    'set -g message-style fg=colour255,bg=colour24',
+    'set -g message-command-style fg=colour255,bg=colour24',
+    'set -g pane-border-style fg=colour240',
+    'set -g pane-active-border-style fg=colour39',
+    'set -g popup-style bg=colour234,fg=colour252',
+    'set -g popup-border-style fg=colour39',
+    'set -g menu-style bg=colour234,fg=colour252',
+    'set -g menu-selected-style bg=colour39,fg=colour231,bold',
+    'set -g status-left "#[fg=colour231,bg=colour25,bold] PA #[default]"',
+    'set -g status-right "#[fg=colour244]Ctrl+Space #[fg=colour252]shortcuts#{?#{@pa_profile}, #[fg=colour244]│ #[fg=colour252]#{@pa_profile},}"',
+    'setw -g pane-border-status top',
+    'setw -g pane-border-format "#{?pane_active,#[fg=colour46]●,#[fg=colour240]○} #[default]#P #{?pane_title,#{pane_title},#{pane_current_command}}"',
+    ...workspaceBindings,
+    '',
+  ].join('\n');
+}
+
+export function ensurePaTmuxConfig(): string {
+  const configPath = resolvePaTmuxConfigPath();
+  const nextConfig = buildPaTmuxConfig();
+  const directory = join(resolveStateRoot(), 'tmux');
+
+  mkdirSync(directory, { recursive: true });
+
+  const currentConfig = existsSync(configPath)
+    ? readFileSync(configPath, 'utf-8')
+    : undefined;
+
+  if (currentConfig !== nextConfig) {
+    writeFileSync(configPath, nextConfig);
+  }
+
+  return configPath;
+}
+
+export function withPaTmuxCliArgs(args: string[]): string[] {
+  return ['-L', resolvePaTmuxSocketName(), '-f', ensurePaTmuxConfig(), ...args];
+}
+
 export function createSpawnSyncTmuxRunner(): TmuxRunner {
   return (args) => {
-    const result = spawnSync('tmux', args, {
+    const result = spawnSync('tmux', withPaTmuxCliArgs(args), {
       encoding: 'utf-8',
     });
 
@@ -350,4 +583,41 @@ export function startManagedTmuxSession(
 
     throw error;
   }
+}
+
+function buildManagedLogViewerCommand(sessionName: string, logPath: string): string {
+  const script = [
+    `printf '%s\\n' ${shellQuote(`PA task viewer: ${sessionName}`)}`,
+    `printf '%s\\n' ${shellQuote(`Log: ${logPath}`)}`,
+    "printf '\\n'",
+    `exec tail -n +1 -F ${shellQuote(logPath)}`,
+  ].join('; ');
+
+  return `sh -lc ${shellQuote(script)}`;
+}
+
+export function openManagedTmuxLogPane(
+  options: OpenManagedTmuxLogPaneOptions,
+  runner: TmuxRunner = createSpawnSyncTmuxRunner(),
+): string | undefined {
+  const command = buildManagedLogViewerCommand(options.sessionName, options.logPath);
+  const args = ['split-window', '-h', '-P', '-F', '#{pane_id}', '-t', options.targetPane, command];
+  const result = runner(args);
+
+  if ((result.status ?? 1) !== 0) {
+    throwTmuxFailure(args, result);
+  }
+
+  const paneId = normalizeOutput(result.stdout);
+
+  if (paneId.length > 0 && options.title) {
+    const titleArgs = ['select-pane', '-t', paneId, '-T', options.title];
+    const titleResult = runner(titleArgs);
+
+    if ((titleResult.status ?? 1) !== 0) {
+      throwTmuxFailure(titleArgs, titleResult);
+    }
+  }
+
+  return paneId.length > 0 ? paneId : undefined;
 }

@@ -6,6 +6,8 @@ Pi auto-discovers:
 - `~/.pi/agent/extensions/*.ts`
 - `~/.pi/agent/extensions/*/index.ts`
 
+Top-level test files like `*.test.ts` and `*.spec.ts` are ignored.
+
 So each extension here uses either a top-level `*.ts` entrypoint or an `index.ts` file one level down.
 
 ## Layout
@@ -16,6 +18,9 @@ extensions/
 │   └── index.ts
 ├── context-bar.ts
 ├── deferred-resume/
+│   └── index.ts
+├── exit-alias.ts
+├── fork-pane/
 │   └── index.ts
 ├── memory/
 │   └── index.ts

@@ -139,6 +139,22 @@ function collectLayerFiles(layers: ProfileLayer[], relativePath: string): string
   return dedupe(files);
 }
 
+function isExtensionEntrypointFile(name: string): boolean {
+  if (!name.endsWith('.ts') && !name.endsWith('.js')) {
+    return false;
+  }
+
+  if (name.endsWith('.test.ts') || name.endsWith('.test.js')) {
+    return false;
+  }
+
+  if (name.endsWith('.spec.ts') || name.endsWith('.spec.js')) {
+    return false;
+  }
+
+  return true;
+}
+
 function discoverExtensionEntries(extensionDir: string): string[] {
   if (!existsSync(extensionDir)) return [];
 
@@ -147,7 +163,7 @@ function discoverExtensionEntries(extensionDir: string): string[] {
 
   for (const entry of entries) {
     if (entry.isFile()) {
-      if (entry.name.endsWith('.ts') || entry.name.endsWith('.js')) {
+      if (isExtensionEntrypointFile(entry.name)) {
         output.push(join(extensionDir, entry.name));
       }
       continue;

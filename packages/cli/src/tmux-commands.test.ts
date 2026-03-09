@@ -10,6 +10,7 @@ const startManagedTmuxSessionMock = vi.fn();
 const stopManagedTmuxSessionMock = vi.fn();
 const sendManagedTmuxCommandMock = vi.fn();
 const captureManagedTmuxPaneMock = vi.fn();
+const openManagedTmuxLogPaneMock = vi.fn();
 
 const runner = vi.fn();
 
@@ -21,6 +22,8 @@ vi.mock('./tmux.js', () => ({
   stopManagedTmuxSession: (...args: unknown[]) => stopManagedTmuxSessionMock(...args),
   sendManagedTmuxCommand: (...args: unknown[]) => sendManagedTmuxCommandMock(...args),
   captureManagedTmuxPane: (...args: unknown[]) => captureManagedTmuxPaneMock(...args),
+  openManagedTmuxLogPane: (...args: unknown[]) => openManagedTmuxLogPaneMock(...args),
+  PERSONAL_AGENT_TMUX_WORKSPACE_ENV: 'PERSONAL_AGENT_TMUX_WORKSPACE',
 }));
 
 import { runCli } from './index.js';
@@ -48,6 +51,7 @@ beforeEach(() => {
   stopManagedTmuxSessionMock.mockReset();
   sendManagedTmuxCommandMock.mockReset();
   captureManagedTmuxPaneMock.mockReset();
+  openManagedTmuxLogPaneMock.mockReset();
   runner.mockReset();
 });
 
@@ -142,6 +146,29 @@ describe('tmux CLI command', () => {
     expect(callArgs.sourceCommand).toBe('pa -p hello world');
     expect(callArgs.command).toContain("'pa' '-p' 'hello world'");
     expect(callArgs.command).toContain('__PA_TMUX_EXIT_CODE');
+  });
+
+  it('opens a live log pane when placement resolves to pane inside pa tui workspace', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-05T13:45:09-05:00'));
+
+    process.env.PERSONAL_AGENT_TMUX_WORKSPACE = '1';
+    process.env.TMUX_PANE = '%7';
+    findManagedTmuxSessionByNameMock.mockReturnValue({
+      name: 'personal-agent-test-20260305-134509',
+    });
+    openManagedTmuxLogPaneMock.mockReturnValue('%9');
+
+    const exitCode = await runCli(['tmux', 'run', 'test', '--placement', 'pane', '--', 'npm', 'test']);
+    expect(exitCode).toBe(0);
+
+    expect(startManagedTmuxSessionMock).toHaveBeenCalledTimes(1);
+    expect(openManagedTmuxLogPaneMock).toHaveBeenCalledTimes(1);
+    expect(openManagedTmuxLogPaneMock.mock.calls[0]?.[0]).toMatchObject({
+      targetPane: '%7',
+      sessionName: 'personal-agent-test-20260305-134509',
+      title: 'test',
+    });
   });
 
   it('passes notify metadata for pa tmux run --notify-on-complete', async () => {

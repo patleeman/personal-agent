@@ -92,4 +92,38 @@ describe("tmux-manager extension", () => {
 
 		await handlers.session_shutdown?.({}, ctx);
 	});
+
+	it("hides tmux footer status when there are no managed tmux sessions", async () => {
+		const handlers: Record<string, (...args: any[]) => Promise<void>> = {};
+
+		const pi = {
+			on: (eventName: string, handler: (...args: any[]) => Promise<void>) => {
+				handlers[eventName] = handler;
+			},
+			registerCommand: vi.fn(),
+		};
+
+		tmuxManagerExtension(pi as never);
+
+		spawnSyncMock.mockReturnValue({
+			status: 0,
+			stdout: "",
+			stderr: "",
+			error: undefined,
+		});
+
+		const setStatus = vi.fn();
+		const ctx = {
+			hasUI: true,
+			ui: {
+				setStatus,
+				theme: {
+					fg: (_tone: string, text: string) => text,
+				},
+			},
+		};
+
+		await handlers.session_start?.({}, ctx);
+		expect(setStatus).toHaveBeenCalledWith("tmux-sessions", undefined);
+	});
 });
