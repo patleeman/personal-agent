@@ -49,12 +49,8 @@ runpodctl pod get <pod-id> --include-machine -o json
 
 ### Cost intuition
 
-A recent community-cloud price snapshot was roughly:
-
-- RTX 4090 on-demand: `~$0.34/hr`
-- RTX 3090 on-demand: `~$0.22/hr`
-
-Treat these as ballpark examples rather than fixed prices.
+- Community-cloud pricing and capacity fluctuate; check current rates and availability right before provisioning.
+- Expect RTX 4090 capacity to be spikier and typically pricier than 3090 / A5000-class fallbacks.
 
 ### Common blockers
 

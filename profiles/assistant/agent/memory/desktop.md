@@ -29,11 +29,11 @@ Reference notes for Patrick's local headless Ubuntu GPU box (`desktop`) and how 
 - RAM: 31 GiB
 - GPU: NVIDIA GeForce RTX 3090 Ti with ~24 GB VRAM
 
-## Environment snapshot
+## Environment notes
 
 - OS observed: Ubuntu 24.04.2 LTS
 - Core tools available: `git`, `tmux`, `python3`, `python3-venv`, `node`, `npm`
-- Not installed at last check: `docker`, `docker-compose`, `uv`, `pnpm`, `conda/mamba`, `pipx`
+- Basic SSH / tmux / Python / Node workflows are ready without extra bootstrap
 
 ## Practical fit
 
