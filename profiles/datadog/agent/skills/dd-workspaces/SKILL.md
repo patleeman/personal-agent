@@ -80,8 +80,8 @@ Set on your **laptop** before workspace creation:
 workspaces secrets set KEY=VALUE           # written to file on workspace
 workspaces secrets set KEY=VALUE --export  # set as env var on workspace
 
-# Common:
-workspaces secrets set GITLAB_TOKEN=$(security find-generic-password -a ${USER} -s gitlab_token -w) --export
+# Common patterns:
+workspaces secrets set GITLAB_TOKEN=<token> --export
 workspaces secrets set ANTHROPIC_APIKEY1=<key> --export
 ```
 
@@ -94,7 +94,7 @@ workspaces secrets set ANTHROPIC_APIKEY1=<key> --export
 
 **Claude Code**: Pre-installed via devcontainer feature in most repos. Set up API key locally first.
 
-**Pi**: Install via dotfiles `install.sh` (`npm install -g @mariozechner/pi-coding-agent`) or manually.
+**Pi**: Install via dotfiles or another reproducible workspace bootstrap path instead of ad-hoc per-host setup.
 
 **Atlassian MCP auth in workspace**: Use VSCode/Cursor (auto port-forwarding handles OAuth redirect). Alternative: two SSH sessions, start OAuth in one, `curl` the redirect URL from the other.
 

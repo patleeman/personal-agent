@@ -1,35 +1,22 @@
 # web-ui Development in a Workspace
 
-Status: rapidly changing — check https://datadoghq.atlassian.net/wiki/spaces/FRON/pages/6142296780 for latest.
+This flow changes often. Treat the FRON page and the `web-ui` repo's current onboarding/dev docs as the source of truth:
+- https://datadoghq.atlassian.net/wiki/spaces/FRON/pages/6142296780
 
 ## Create
 
 ```bash
-cd ~/path/to/web-ui   # or use --repo
 workspaces create <name> --repo web-ui
 ```
 
-## Environment Setup (Inside Workspace)
+## Environment Setup
 
-Restart the terminal after each step if commands are not found.
+Prefer the repo's current bootstrap scripts and docs inside the workspace over hard-coded package-manager recipes here.
 
-```bash
-# Volta (Node.js manager)
-curl https://get.volta.sh | bash
-
-# Yarn
-curl -sS https://repo.yarnpkg.com/install | bash
-rm ~/.volta/bin/yarn ~/.volta/bin/yarnpkg
-
-# Run doctor
-bash doctor
-
-# Linuxbrew + Watchman
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> ~/.bashrc
-brew install watchman
-```
+Typical flow:
+1. Open the `web-ui` repo in the workspace.
+2. Follow the repo's current toolchain/bootstrap instructions.
+3. Re-open the shell or IDE if setup updates PATH or certificates.
 
 ## Run Dev Server
 
@@ -37,30 +24,23 @@ brew install watchman
 cd ~/dd/web-ui
 yarn
 yarn dev
-# Answer password prompt (create or leave blank)
 ```
+
+Expect to forward port `8443` back to your laptop.
 
 ## Access from Laptop
 
-Port 8443 must be forwarded:
-- **VSCode/Cursor**: Automatic
-- **SSH**: `ssh -L 8443:localhost:8443 workspace-<name>`
+- **VSCode/Cursor**: port forwarding is usually automatic
+- **SSH**:
+  ```bash
+  ssh -L 8443:localhost:8443 workspace-<name>
+  ```
 
-Trust the TLS certs on your laptop:
-```bash
-scp workspace-<name>:~/dd/web-ui/dev/ssl/localhost.crt ~
-sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ~/localhost.crt
-# Restart browser!
-```
-
-Then visit:
+Trust the repo-generated local certificate on your laptop using your OS/browser trust workflow, then visit the usual local dev hosts:
 - https://dd-dev-local.datad0g.com/
 - https://app-dev-local.datadoghq.com/
 - https://localhost:8443
 
 ## Git Setup
 
-web-ui has hundreds of engineers. Use filtered fetch to speed up git operations.
-See https://datadoghq.atlassian.net/wiki/spaces/FRON/pages/2446557878 for the optimized git remote config.
-
-Key idea: only fetch your branches + shared branches (prod, preprod, staging), skip tags.
+`web-ui` is large. Prefer the team's filtered-fetch / optimized remote configuration guidance from the FRON docs instead of a default full-history fetch.
