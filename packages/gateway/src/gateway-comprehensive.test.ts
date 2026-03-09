@@ -88,6 +88,11 @@ function createTestConversationControllerFactory(runPrompt: TestRunPrompt) {
           cancelled: false,
         };
       },
+      forkDetached: async ({ conversationId: _conversationId }: { entryId: string; conversationId: string }) => ({
+        sessionFile: `${activeSessionFile}.fork`,
+        selectedText: '',
+        cancelled: false,
+      }),
       getSessionFile: async () => activeSessionFile,
       abortCurrent: async () => {
         if (!activeAbortController) {

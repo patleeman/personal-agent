@@ -11,6 +11,8 @@ import {
   writeFileSync,
 } from 'fs';
 import { basename, dirname, extname, join, resolve } from 'path';
+import { tmpdir } from 'os';
+import { randomUUID } from 'crypto';
 import { fileURLToPath } from 'url';
 import { spawnSync } from 'child_process';
 import TelegramBot from 'node-telegram-bot-api';
@@ -413,12 +415,17 @@ export interface ForkConversationResult {
   sessionFile: string;
 }
 
+interface DetachedForkConversationResult extends ForkConversationResult {
+  controller?: GatewayConversationController;
+}
+
 export interface GatewayConversationController {
   submitPrompt: (input: RunPromptFnInput) => Promise<ConversationSubmitResult>;
   submitFollowUp: (input: RunPromptFnInput) => Promise<ConversationSubmitResult>;
   compact: (customInstructions?: string) => Promise<string>;
   getUserMessagesForForking: () => Promise<ForkableConversationMessage[]>;
   fork: (entryId: string) => Promise<ForkConversationResult>;
+  forkDetached: (input: { entryId: string; conversationId: string }) => Promise<DetachedForkConversationResult>;
   getSessionFile: () => Promise<string>;
   abortCurrent: () => Promise<boolean>;
   waitForIdle: () => Promise<void>;
@@ -510,9 +517,15 @@ type HandleTelegramTmuxRunRequestFn = (input: {
   defaultSourceSessionFile: string;
   getForkableMessages: () => Promise<ForkableConversationMessage[]>;
   forkConversation: (entryId: string) => Promise<ForkConversationResult>;
+  forkConversationDetached: (input: { entryId: string; conversationId: string }) => Promise<DetachedForkConversationResult>;
   setConversationSessionFile: (input: {
     conversationId: string;
     sessionFile: string;
+  }) => void;
+  setConversationController?: (input: {
+    conversationId: string;
+    controller: GatewayConversationController;
+    disposePreviousWhenIdle?: boolean;
   }) => void;
   resolveConversationSessionFile: (input: {
     conversationId: string;
@@ -2969,11 +2982,48 @@ function createPersistentSessionManager(cwd: string, sessionFile: string): Sessi
   return manager;
 }
 
-async function createGatewayAgentSession(options: {
+type GatewaySessionSnapshotEntry = Record<string, unknown> & {
+  type: string;
+  id?: string;
+  parentId?: string | null;
+};
+
+function writeGatewaySessionSnapshot(sessionManager: SessionManager, snapshotFile: string): void {
+  const header = sessionManager.getHeader() as Record<string, unknown> | null;
+  if (!header) {
+    throw new Error('Cannot snapshot a session without a header.');
+  }
+
+  const entries = sessionManager.getEntries() as unknown as GatewaySessionSnapshotEntry[];
+  const lines = [header, ...entries].map((entry) => JSON.stringify(entry));
+  writeFileSync(snapshotFile, `${lines.join('\n')}\n`);
+}
+
+function patchGatewaySessionParentSession(sessionManager: SessionManager, parentSession: string): void {
+  const header = sessionManager.getHeader() as Record<string, unknown> | null;
+  if (!header) {
+    return;
+  }
+
+  header.parentSession = parentSession;
+
+  const sessionFile = sessionManager.getSessionFile();
+  if (!sessionFile || !existsSync(sessionFile)) {
+    return;
+  }
+
+  const internalManager = sessionManager as unknown as {
+    _rewriteFile?: () => void;
+  };
+
+  internalManager._rewriteFile?.();
+}
+
+async function createGatewayAgentSessionWithSessionManager(options: {
   profile: ResolvedProfile;
   agentDir: string;
   cwd: string;
-  sessionFile: string;
+  sessionManager: SessionManager;
   provider?: 'telegram' | 'discord';
   conversationId?: string;
 }): Promise<PiAgentSession> {
@@ -2991,9 +3041,8 @@ async function createGatewayAgentSession(options: {
 
   await resourceLoader.reload();
 
-  const sessionManager = createPersistentSessionManager(options.cwd, options.sessionFile);
   if (options.provider && options.conversationId) {
-    setGatewayExtensionRuntimeContext(sessionManager, {
+    setGatewayExtensionRuntimeContext(options.sessionManager, {
       provider: options.provider,
       conversationId: options.conversationId,
     });
@@ -3002,7 +3051,7 @@ async function createGatewayAgentSession(options: {
   const { session, extensionsResult } = await createAgentSession({
     cwd: options.cwd,
     agentDir: options.agentDir,
-    sessionManager,
+    sessionManager: options.sessionManager,
     settingsManager,
     resourceLoader,
   });
@@ -3012,6 +3061,22 @@ async function createGatewayAgentSession(options: {
   }
 
   return session;
+}
+
+async function createGatewayAgentSession(options: {
+  profile: ResolvedProfile;
+  agentDir: string;
+  cwd: string;
+  sessionFile: string;
+  provider?: 'telegram' | 'discord';
+  conversationId?: string;
+}): Promise<PiAgentSession> {
+  const sessionManager = createPersistentSessionManager(options.cwd, options.sessionFile);
+
+  return createGatewayAgentSessionWithSessionManager({
+    ...options,
+    sessionManager,
+  });
 }
 
 function parseModelReference(model: string): { provider: string; modelId: string } | undefined {
@@ -3284,6 +3349,7 @@ interface PersistentConversationControllerOptions {
   agentDir: string;
   cwd: string;
   sessionFile: string;
+  preloadedSession?: PiAgentSession;
 }
 
 interface ActiveConversationRun {
@@ -3352,6 +3418,14 @@ class PersistentConversationController implements GatewayConversationController 
     this.agentDir = options.agentDir;
     this.cwd = options.cwd;
     this.initialSessionFile = options.sessionFile;
+
+    if (options.preloadedSession) {
+      this.session = options.preloadedSession;
+      this.sessionPromise = Promise.resolve(options.preloadedSession);
+      this.unsubscribe = options.preloadedSession.subscribe((event) => {
+        this.handleSessionEvent(event as unknown as PiJsonEvent);
+      });
+    }
   }
 
   async submitPrompt(input: RunPromptFnInput): Promise<ConversationSubmitResult> {
@@ -3420,10 +3494,6 @@ class PersistentConversationController implements GatewayConversationController 
   async getUserMessagesForForking(): Promise<ForkableConversationMessage[]> {
     this.ensureActive();
 
-    if (this.activeRun) {
-      throw new Error('Cannot fork while a response is running. Use /stop first.');
-    }
-
     const session = await this.getSession();
     const messages = session.getUserMessagesForForking();
 
@@ -3437,7 +3507,7 @@ class PersistentConversationController implements GatewayConversationController 
     this.ensureActive();
 
     if (this.activeRun) {
-      throw new Error('Cannot fork while a response is running. Use /stop first.');
+      throw new Error('Cannot fork while a response is running. Use detached forking instead.');
     }
 
     const trimmedEntryId = entryId.trim();
@@ -3453,6 +3523,90 @@ class PersistentConversationController implements GatewayConversationController 
       cancelled: result.cancelled,
       sessionFile: session.sessionFile ?? this.initialSessionFile,
     };
+  }
+
+  async forkDetached(input: { entryId: string; conversationId: string }): Promise<DetachedForkConversationResult> {
+    this.ensureActive();
+
+    const trimmedEntryId = input.entryId.trim();
+    if (trimmedEntryId.length === 0) {
+      throw new Error('Fork entry ID cannot be empty.');
+    }
+
+    const targetConversationId = input.conversationId.trim();
+    if (targetConversationId.length === 0) {
+      throw new Error('Target conversation ID cannot be empty.');
+    }
+
+    const sourceSession = await this.getSession();
+    const sourceSessionFile = sourceSession.sessionFile ?? this.initialSessionFile;
+    const sourceSessionManager = sourceSession.sessionManager;
+    const snapshotFile = join(tmpdir(), `personal-agent-gateway-fork-${randomUUID()}.jsonl`);
+
+    let detachedSession: PiAgentSession | undefined;
+
+    try {
+      writeGatewaySessionSnapshot(sourceSessionManager, snapshotFile);
+
+      const snapshotSessionManager = SessionManager.open(snapshotFile, sourceSessionManager.getSessionDir());
+      detachedSession = await createGatewayAgentSessionWithSessionManager({
+        profile: this.profile,
+        agentDir: this.agentDir,
+        cwd: this.cwd,
+        sessionManager: snapshotSessionManager,
+        provider: this.provider,
+        conversationId: this.conversationId,
+      });
+
+      const result = await detachedSession.fork(trimmedEntryId);
+      const detachedSessionFile = detachedSession.sessionFile ?? sourceSessionFile;
+
+      if (result.cancelled) {
+        detachedSession.dispose();
+        detachedSession = undefined;
+
+        return {
+          selectedText: result.selectedText,
+          cancelled: true,
+          sessionFile: detachedSessionFile,
+        };
+      }
+
+      patchGatewaySessionParentSession(detachedSession.sessionManager, sourceSessionFile);
+      setGatewayExtensionRuntimeContext(detachedSession.sessionManager, {
+        provider: this.provider,
+        conversationId: targetConversationId,
+      });
+
+      const controller = new PersistentConversationController({
+        provider: this.provider,
+        conversationId: targetConversationId,
+        profile: this.profile,
+        agentDir: this.agentDir,
+        cwd: this.cwd,
+        sessionFile: detachedSessionFile,
+        preloadedSession: detachedSession,
+      });
+
+      detachedSession = undefined;
+
+      return {
+        selectedText: result.selectedText,
+        cancelled: false,
+        sessionFile: detachedSessionFile,
+        controller,
+      };
+    } finally {
+      if (detachedSession) {
+        detachedSession.dispose();
+      }
+
+      try {
+        unlinkSync(snapshotFile);
+      } catch {
+        // best-effort cleanup
+      }
+    }
   }
 
   async getSessionFile(): Promise<string> {
@@ -5768,6 +5922,37 @@ async function getOrCreateConversationController(
   }
 }
 
+function setConversationController(
+  controllers: Map<string, Promise<GatewayConversationController>>,
+  input: {
+    conversationId: string;
+    controller: GatewayConversationController;
+    disposePreviousWhenIdle?: boolean;
+  },
+): void {
+  const nextController = Promise.resolve(input.controller);
+  const previousController = controllers.get(input.conversationId);
+
+  controllers.set(input.conversationId, nextController);
+
+  if (!previousController) {
+    return;
+  }
+
+  void previousController
+    .then(async (controller) => {
+      if (input.disposePreviousWhenIdle === false) {
+        return;
+      }
+
+      await controller.waitForIdle();
+      await controller.dispose();
+    })
+    .catch(() => {
+      // best-effort cleanup
+    });
+}
+
 async function disposeConversationController(
   controllers: Map<string, Promise<GatewayConversationController>>,
   conversationId: string,
@@ -6433,14 +6618,24 @@ model=${model}`,
             name: topicName,
           });
 
-          const forkResult = await controller.fork(selectedEntry.entryId);
+          const targetConversationId = buildTelegramConversationId(chatId, createdTopic.messageThreadId);
+          const forkResult = await controller.forkDetached({
+            entryId: selectedEntry.entryId,
+            conversationId: targetConversationId,
+          });
           if (forkResult.cancelled) {
             await sendMessageToConversation('Fork was cancelled by an extension.');
             return completedMessageProcessingResult();
           }
 
-          const nextSessionFile = forkResult.sessionFile || await controller.getSessionFile();
-          const targetConversationId = buildTelegramConversationId(chatId, createdTopic.messageThreadId);
+          const nextSessionFile = forkResult.sessionFile;
+
+          if (forkResult.controller) {
+            setConversationController(controllers, {
+              conversationId: targetConversationId,
+              controller: forkResult.controller,
+            });
+          }
 
           options.setConversationSessionFile?.({
             conversationId: targetConversationId,
@@ -6507,13 +6702,24 @@ model=${model}`,
             `Unable to create a new topic for /fork (${topicCreationMessage}). Falling back to this chat/topic.`,
           );
 
-          const forkResult = await controller.fork(selectedEntry.entryId);
+          const forkResult = await controller.forkDetached({
+            entryId: selectedEntry.entryId,
+            conversationId,
+          });
           if (forkResult.cancelled) {
             await sendMessageToConversation('Fork was cancelled by an extension.');
             return completedMessageProcessingResult();
           }
 
-          const nextSessionFile = forkResult.sessionFile || await controller.getSessionFile();
+          const nextSessionFile = forkResult.sessionFile;
+
+          if (forkResult.controller) {
+            setConversationController(controllers, {
+              conversationId,
+              controller: forkResult.controller,
+            });
+          }
+
           options.setConversationSessionFile?.({
             conversationId,
             sessionFile: nextSessionFile,
@@ -6570,14 +6776,25 @@ model=${model}`,
       }
 
       const selectedEntry = forkableMessages.find((entry) => entry.entryId === resolvedFork.entryId);
-      const forkResult = await controller.fork(resolvedFork.entryId);
+      const forkResult = await controller.forkDetached({
+        entryId: resolvedFork.entryId,
+        conversationId,
+      });
 
       if (forkResult.cancelled) {
         await sendMessageToConversation('Fork was cancelled by an extension.');
         return completedMessageProcessingResult();
       }
 
-      const nextSessionFile = forkResult.sessionFile || await controller.getSessionFile();
+      const nextSessionFile = forkResult.sessionFile;
+
+      if (forkResult.controller) {
+        setConversationController(controllers, {
+          conversationId,
+          controller: forkResult.controller,
+        });
+      }
+
       options.setConversationSessionFile?.({
         conversationId,
         sessionFile: nextSessionFile,
@@ -6696,10 +6913,28 @@ model=${model}`,
             const controller = await getController();
             return controller.fork(entryId);
           },
+          forkConversationDetached: async ({ entryId, conversationId: targetConversationId }) => {
+            const controller = await getController();
+            return controller.forkDetached({
+              entryId,
+              conversationId: targetConversationId,
+            });
+          },
           setConversationSessionFile: ({ conversationId: targetConversationId, sessionFile: targetSessionFile }) => {
             options.setConversationSessionFile?.({
               conversationId: targetConversationId,
               sessionFile: targetSessionFile,
+            });
+          },
+          setConversationController: ({
+            conversationId: targetConversationId,
+            controller: targetController,
+            disposePreviousWhenIdle,
+          }) => {
+            setConversationController(controllers, {
+              conversationId: targetConversationId,
+              controller: targetController,
+              disposePreviousWhenIdle,
             });
           },
           resolveConversationSessionFile: ({ conversationId: targetConversationId, defaultSessionFile: targetDefaultSessionFile }) => {
@@ -8326,12 +8561,15 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
           throw new Error('No user message is available to fork from yet. Send a prompt first, then retry /tmux run.');
         }
 
-        const forkResult = await input.forkConversation(selectedForkEntry.entryId);
+        const forkResult = await input.forkConversationDetached({
+          entryId: selectedForkEntry.entryId,
+          conversationId: buildTelegramConversationId(sourceChatIdToken, createdThreadId),
+        });
         if (forkResult.cancelled) {
           throw new Error('Fork was cancelled by an extension.');
         }
 
-        const nextSessionFile = forkResult.sessionFile || sourceSessionFile;
+        const nextSessionFile = forkResult.sessionFile;
 
         targetChatId = input.sourceChatId;
         targetMessageThreadId = createdThreadId;
@@ -8339,6 +8577,13 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
         targetTopicName = typeof (topicResult as { name?: string }).name === 'string'
           ? ((topicResult as { name?: string }).name as string)
           : topicName;
+
+        if (forkResult.controller) {
+          input.setConversationController?.({
+            conversationId: targetConversationId,
+            controller: forkResult.controller,
+          });
+        }
 
         input.setConversationSessionFile({
           conversationId: targetConversationId,
