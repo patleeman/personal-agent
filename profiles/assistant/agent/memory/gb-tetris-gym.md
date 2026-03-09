@@ -1,14 +1,14 @@
 ---
 id: gb-tetris-gym
 title: gb-tetris-gym Project Notes
-summary: Project memory for model-training architecture and progress on gb-tetris-gym.
+summary: Project memory for model-training architecture and current direction on gb-tetris-gym.
 type: project
 status: active
 tags:
   - gb-tetris-gym
   - ml
   - tetris
-updated: 2026-03-08
+updated: 2026-03-09
 ---
 
 # gb-tetris-gym Project Notes
@@ -21,8 +21,8 @@ Train a small model to control single-player Game Boy Tetris through the existin
 
 The current control formulation is:
 
-- **streaming semantic state in** via `gbtap1`
-- **short action chunk out** from `[lrabd.]`
+- semantic gameplay state in via `gbtap1`
+- short action chunk out from `[lrabd.]`
 - continuous tail-replacement execution in the emulator
 
 ## Key architecture decisions
@@ -33,11 +33,11 @@ Direct per-tap LLM control is too stale and too brittle.
 
 Main lesson:
 
-- latency that is unacceptable per tap can still be acceptable per short action chunk
+- per-tap latency is unacceptable, but short action chunks are viable
 
 ### 2. `gbtap1` is the right current protocol shape
 
-Important fields:
+Important state fields:
 
 - board
 - current piece
@@ -52,155 +52,80 @@ Important output alphabet:
 
 ### 3. Canonical runtime format and train target should be separated
 
-Canonical protocol can remain:
+Canonical protocol can remain structured, but model training and inference work better when the model emits only the action chunk.
 
-- `O gbtap1 p=... t=... a=...`
+Practical target:
 
-But small chat-model training/inference works better when the model only emits:
+- train on `state -> next 1..8 actions`
+- keep host-side bookkeeping outside the model output
 
-- action chunk only, e.g. `arrddd`
+## Lessons learned
 
-The host can supply `p` and `t` bookkeeping itself.
+### Data and targets matter more than raw compute right now
 
-## What was learned about small-model training
+- the main bottleneck is getting the state/action abstraction and supervision right
+- action-only targets are more reliable than asking tiny models to emit full structured `gbtap1` lines
 
-### 1. Data quality matters more than bigger GPUs right now
+### Synthetic bootstrap data is acceptable, but not the end state
 
-The hard part is not raw compute.
-The hard part is getting the model the right state/action abstraction and good supervision.
-
-### 2. Synthetic bootstrap data is acceptable as a first pass
-
-Current bootstrap uses:
+Current bootstrap data uses:
 
 - synthetic boards
 - lightweight placement teacher
 - deterministic tap-plan slicer
 
-This is good enough for a first trainable policy, but not good enough as the final dataset.
-
-### 3. Real trajectory data is the next major unlock
-
-After bootstrap, the dataset should come from:
+Next useful data sources are:
 
 1. emulator-recorded teacher traces
 2. perturbed recovery traces
 3. human demos
 
-### 4. Small local chat models often echo structured prompts
+## Current working stack
 
-Observed behavior:
+The repo now has end-to-end infrastructure for:
 
-- full `gbtap1` output lines were often echoed incorrectly by tiny models
-- action-only outputs were much easier to elicit reliably
-
-That means the practical training target should stay minimal.
-
-### 5. First training target should be action chunks, not placement IDs
-
-For this project’s current direction:
-
-- train on **state -> next 1..8 actions**
-- not raw tap IDs from old `gbtw1`
-- not full future plans only
-
-## Current repo state after this session
-
-### Added / stabilized
-
-- semantic RAM reader for gameplay state
-- live `gbtap1` eval loop
-- tail-replacement tap executor
-- Runpod launcher/bootstrap tooling
-- `gbtap1` bootstrap dataset generator
-- `gbtap1` QLoRA trainer
-- spawn-state corpus tooling for emulator-backed RL
-- piece-sequence RL environment
+- semantic RAM reading and live `gbtap1` evaluation
+- tail-replacement tap execution
+- bootstrap dataset generation
+- QLoRA / SFT training
+- emulator-backed spawn-state corpora
+- teacher-trace recording
 - PPO rollout/loss scaffolding
-- first `train_gbtap1_rl.py` entrypoint
+- `train_gbtap1_rl.py` with BC-anchor support
 
-### Current bootstrap training stack
+Current bootstrap training setup:
 
 - model: `Qwen/Qwen3.5-0.8B`
 - objective: SFT over action-only `gbtap1` targets
 - dataset file: `data/sft/gbtap1_actions_qwen35_08b_v1.jsonl`
 - training script: `scripts/train_gbtap1_sft.py`
 
-## Completed bootstrap SFT run from this session
+## Current status
 
-Runpod pod used:
+- bootstrap SFT completed and the resulting adapter can be loaded locally on the desktop 3090 Ti
+- local desktop eval plumbing works end-to-end, including the Linux memory bridge and `--backend local-peft`
+- teacher-trace recording is smoke-tested on desktop
+- first mixed adapter and first PPO run completed end-to-end, but still clear `0` lines
 
-- pod id: `lafpdz6ugpkert`
-- GPU: `RTX 3090`
-- price seen: `~$0.22/hr`
-- final status: deleted after artifact sync
+Current likely bottleneck:
 
-Remote run details:
+- data alignment, not emulator plumbing
+- earlier teacher data only supervised the first chunk of each piece, while live play often needs continuation chunks on the same piece
+- continuation-aware chunked-teacher tooling is now implemented
 
-- tmux session: `gbtap1-train-20260307-234734`
-- remote training log: `/workspace/gb-tetris-gym/artifacts/train/gbtap1-train-20260307-234734.log`
-- remote output dir: `/workspace/gb-tetris-gym/artifacts/train/gbtap1-qwen35-08b-lora-v1`
+## Practical guidance for future work
 
-Artifacts synced locally to:
-
-- `/Users/patrick/workingdir/gb-tetris-gym/artifacts/train/gbtap1-qwen35-08b-lora-v1`
-- `/Users/patrick/workingdir/gb-tetris-gym/artifacts/train/gbtap1-train-20260307-234734.log`
-- `/Users/patrick/workingdir/gb-tetris-gym/artifacts/train/runpod-pod-lafpdz6ugpkert.json`
-
-Artifacts staged on desktop:
-
-- host: `desktop`
-- repo: `~/workingdir/gb-tetris-gym`
-- adapter: `~/workingdir/gb-tetris-gym/artifacts/train/gbtap1-qwen35-08b-lora-v1`
-- log: `~/workingdir/gb-tetris-gym/artifacts/train/gbtap1-train-20260307-234734.log`
-- desktop Python env: `~/workingdir/gb-tetris-gym/.venv`
-- smoke load on desktop succeeded with direct Transformers+PEFT load on the 3090 Ti
-- Tetris ROM staged on desktop: `~/workingdir/roms/Tetris.gb`
-- Linux memory-read bridge built on desktop: `~/workingdir/gb-tetris-gym/native/build/pi-boy-mgba-bridge-mem`
-- desktop bridge smoke succeeded via `scripts/run_random_policy.py`
-- direct desktop `read_memory()` smoke succeeded
-- local adapter live eval path added in `scripts/eval_lmstudio_policy.py` via `--backend local-peft`
-- medium desktop eval result: parse success `1.000`, gameplay state stayed at `0x07`, but action output collapsed to constant `d` and cleared `0` lines
-
-## Practical lessons for future work
-
-- Prefer 4090 first, but accept 3090 fallback if it gets the run started quickly
-- Keep all long training runs in remote tmux
-- Validate the trainer with a tiny smoke dataset before starting a multi-hour job
-- Expect Transformers API drift; check exact installed signatures when failures happen
-- Keep project docs updated whenever the data format or training path changes
-
-## Latest implementation progress
-
-- added reusable placement-search teacher module
-- added `scripts/record_teacher_traces.py`
-- added teacher-trace JSONL schema/helpers
-- smoke-tested teacher-trace recording on desktop end-to-end
-
-## Current status update
-
-- the previous spawn-state blocker was traced back to the old reset/bootstrap path still being on the title screen
-- `env.reset()` has now been corrected to reach actual gameplay on desktop
-- corrected smoke spawn states now resume into movable pieces after `load_state`
-- corrected teacher-trace smoke now succeeds with `completion_reason='piece_spawned'`
-- corrected random baseline compare is now complete on the same live path; random also clears `0` lines, but is worse than the current adapter on shaped reward and gameplay-state stability
-- first full overnight pipeline completed cleanly:
-  - `2149` spawn states
-  - `2000` teacher traces
-  - `36k` mixed dataset
-  - first mixed adapter trained successfully
-  - first PPO-on-mixed run completed successfully
-- result so far: infrastructure is fully end-to-end, but the first mixed adapter and first PPO run still clear `0` lines
-- likely next bottleneck is now data alignment, not emulator plumbing: real teacher data only supervised the first chunk of each piece, while live play often needs continuation chunks on the same piece
-- continuation-aware chunked-teacher dataset tooling is now implemented
-- BC-anchor support is now implemented in `train_gbtap1_rl.py`
-- active current worker is building the full chunked continuation dataset, retraining a continuation-aware adapter, then running PPO with a BC anchor
+- prefer 4090 first, but 24 GB-class GPUs are adequate for bootstrap runs
+- keep long training runs in remote tmux
+- validate trainers with tiny smoke datasets before multi-hour runs
+- expect Transformers API drift and check installed signatures when failures appear
+- keep project docs updated when the data format or training path changes
 
 ## Next important steps
 
-1. Finish the chunked continuation dataset build
+1. Finish the continuation-aware dataset build
 2. Retrain the continuation-aware mixed adapter
-3. Evaluate the continuation-aware adapter against bootstrap and mixed-v1
+3. Evaluate continuation-aware results against bootstrap and mixed-v1
 4. Run BC-anchored PPO from the continuation-aware adapter
 5. Compare live behavior across bootstrap vs mixed-v1 vs continuation-aware vs PPO+BC
 6. Add recovery states

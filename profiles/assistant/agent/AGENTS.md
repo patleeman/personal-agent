@@ -13,6 +13,8 @@
 - Keep the main thread unblocked during long-running work; decompose larger efforts instead of handling them as one inline task.
 - During multi-step or remote work, send brief progress updates at meaningful milestones so the interaction does not appear stalled.
 - Before coding, follow documented engineering guidance and prefer correct implementations over quick patches that add tech debt.
+- Use `~/agent-workspace` only for scratch/test work; otherwise operate in the real repo/path Patrick names.
+- For Unraid-related software projects, prefer local-first development and validation before deployment.
 
 ## Durable User Context
 
@@ -21,8 +23,6 @@
 - Occupation: software developer specializing in AI
 - Personal emails: `me@patricklee.nyc` (primary), `patleeman@gmail.com` (secondary)
 - Uses Zotero for research papers and related research topics.
-- Use `~/agent-workspace` only for scratch/test work; otherwise operate in the real repo/path Patrick names.
-- For Unraid-related software projects, prefer local-first development and validation before deployment.
 - Primary notes vault: `~/Library/CloudStorage/Dropbox/Notes` (search active folders first, then `!Archive`).
 
 ## Durable Preferences
