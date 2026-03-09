@@ -4,16 +4,17 @@
 #   list              - List all available skills (name + description)
 #   search <query>    - Search skills by name or description
 #   show <plugin/skill> - Show full SKILL.md content
-#   install <plugin/skill> [--dest <dir>] - Copy skill to dest (default: ~/.agents/skills/)
+#   install <plugin/skill> [--dest <dir>] - Copy skill to dest (default: current profile skills dir)
 #   plugins           - List top-level plugins
 #   sync              - Force re-clone/update the repo cache
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CACHE_DIR="${HOME}/.cache/dd-marketplace"
 REPO_DIR="${CACHE_DIR}/claude-marketplace"
 REPO_URL="git@github.com:DataDog/claude-marketplace.git"
-DEFAULT_DEST="${HOME}/.agents/skills"
+DEFAULT_DEST="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 # Ensure repo is cloned and reasonably fresh (auto-update daily)
 ensure_repo() {
@@ -157,7 +158,7 @@ case "${1:-help}" in
     echo "  list              List all skills (name + description)"
     echo "  search <query>    Search skills by name or description"
     echo "  show <plugin/skill>  Show full SKILL.md content"
-    echo "  install <plugin/skill>  Install skill to ~/.agents/skills/"
+    echo "  install <plugin/skill>  Install skill to the current profile skills dir"
     echo "  plugins           List top-level plugins"
     echo "  sync              Force update the repo cache"
     ;;
