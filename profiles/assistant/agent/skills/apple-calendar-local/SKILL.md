@@ -21,6 +21,8 @@ Avoid `Holidays`, `Birthdays`, and `Scheduled Reminders` unless explicitly reque
 ./scripts/apple-calendar-agenda.py --json
 ```
 
+Use the bundled script for the default agenda view. If the caller needs stricter windows than the script exposes, fall back to per-calendar `osascript` queries guided by `references/quirks.md`.
+
 Common usage:
 
 ```bash
@@ -47,6 +49,8 @@ Common usage:
 
 - Query each calendar independently; do not let one slow account block the whole result.
 - Keep per-calendar AppleScript calls timeout-bounded (~20–25s).
+- For morning-report style reads, prefer narrow windows per calendar (`now → end of today`, then `tomorrow → end of tomorrow`).
+- If a calendar query times out, warm up Calendar.app with `osascript -e 'tell application "Calendar" to launch'` and retry that calendar once before marking it unavailable.
 - Deduplicate exact duplicate rows from Calendar.app.
 - Apply a second overlap filter in Python to suppress stale recurring-master rows.
 - Treat all-day events as valid agenda events.
