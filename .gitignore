@@ -18,3 +18,6 @@ profiles/**/build/
 
 # Logs
 *.log
+
+# Legacy in-repo conversation-maintenance state
+profiles/*/agent/state/conversation-maintenance/processed-conversations.json

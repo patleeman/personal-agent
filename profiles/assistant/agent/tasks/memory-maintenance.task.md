@@ -16,22 +16,20 @@ output:
 Run a unified memory-maintenance pass for the **assistant** profile.
 
 Scope:
-- Only update files under `profiles/assistant/agent/**`.
+- Only update repo-managed files under `profiles/assistant/agent/**`.
+- You may also update the runtime processed index file reported by the selector script `indexPath` field.
 - Do not edit any other profile's AGENTS, skills, memory, state, or task files.
 
-Read first:
-- `profiles/assistant/agent/memory/conversation-maintenance.md`
-
 Authoritative files:
-- Processed index (JSON): `profiles/assistant/agent/state/conversation-maintenance/processed-conversations.json`
-- Run log (markdown): `profiles/assistant/agent/memory/conversation-maintenance-runs.md`
+- Processed index (JSON): use the selector script output `indexPath` field (default runtime path: `~/.local/state/personal-agent/conversation-maintenance/assistant/processed-conversations.json`)
 - Sessions root: `~/.local/state/personal-agent/pi-agent/sessions`
 
 Execution requirements:
 1. Use timezone `America/New_York`.
 2. Generate the unprocessed-session list by running exactly:
-   - `node scripts/conversation-maintenance/list-unprocessed-sessions.mjs --profile assistant --index profiles/assistant/agent/state/conversation-maintenance/processed-conversations.json --days 7 --timezone America/New_York`
+   - `node scripts/conversation-maintenance/list-unprocessed-sessions.mjs --profile assistant --days 7 --timezone America/New_York`
 3. Treat the script JSON output as source of truth.
+   - Use the reported `indexPath` as the authoritative processed-index file to update for this run.
    - If `index.parseError` is present, report failure and stop.
 4. Run a profile-scoped memory hygiene pass whether or not there are unprocessed conversations.
    - Inspect `profiles/assistant/agent/AGENTS.md`.
@@ -57,23 +55,18 @@ Execution requirements:
    - Repeated task patterns → update/add profile skills if genuinely reusable.
    - Durable profile behavior/facts → update `profiles/assistant/agent/AGENTS.md` (high-level only).
    - Project-specific insights → update relevant `profiles/assistant/agent/memory/**/*.md` files.
-6. If any sessions were processed, update `profiles/assistant/agent/state/conversation-maintenance/processed-conversations.json` by upserting one record per processed session:
+6. If any sessions were processed, update the processed index at the selector output `indexPath` by upserting one record per processed session:
    - required: `sessionId`, `sessionFile`, `sessionTimestamp`, `sessionDateLocal`, `processedAt`
    - optional: `summary` (one line), `result` (`updated` or `no-change`)
    - preserve existing extra fields when present
    - update top-level `updatedAt`
    - keep unique by `sessionId`
-7. If any sessions were processed, append one run-log line to `profiles/assistant/agent/memory/conversation-maintenance-runs.md`:
-   - `run=<ISO-8601> | window=<YYYY-MM-DD..YYYY-MM-DD> | processed=<count> | remaining=<count> | changed=<yes|no>`
-8. For conversation tracking artifacts, update only:
-   - `profiles/assistant/agent/state/conversation-maintenance/processed-conversations.json`
-   - `profiles/assistant/agent/memory/conversation-maintenance-runs.md`
-9. Keep edits minimal, correct, and scoped to assistant profile files.
-10. Git requirements:
+7. For conversation tracking artifacts, update only the processed index at the selector output `indexPath`.
+8. Keep edits minimal, correct, and scoped to assistant profile files plus the resolved runtime processed index.
+9. Git requirements:
    - If no files changed after the hygiene pass and conversation processing, report `No memory-maintenance changes needed.` and stop.
    - If files changed:
-     - Stage only files changed for this run within:
-       - `profiles/assistant/agent/state/conversation-maintenance/**`
+     - Stage only repo-managed files changed for this run within:
        - intentionally updated `profiles/assistant/agent/memory/**`
        - intentionally updated `profiles/assistant/agent/AGENTS.md`
        - intentionally updated `profiles/assistant/agent/skills/**`
@@ -81,7 +74,7 @@ Execution requirements:
      - Commit message: `chore(assistant): memory maintenance <YYYY-MM-DD>`
      - Push to origin.
      - If push fails, report exact error and stop.
-11. If a commit is created, include the commit SHA in the final status.
+10. If a commit is created, include the commit SHA in the final status.
 
 Output:
 - Short status with processed count, remaining count, files updated, hygiene summary, and commit result.

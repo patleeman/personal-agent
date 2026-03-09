@@ -4,13 +4,15 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 
+import { ensureConversationMaintenanceIndexPath } from './paths.mjs';
+
 function printUsage() {
   console.error(`Usage:
   node scripts/conversation-maintenance/list-unprocessed-sessions.mjs --profile <assistant|datadog> [options]
 
 Options:
   --profile <name>            Profile name (required)
-  --index <path>              Processed index JSON path (default: profiles/<profile>/agent/workspace/projects/conversation-maintenance/notes/processed-conversations.json)
+  --index <path>              Processed index JSON path (default: <state-root>/conversation-maintenance/<profile>/processed-conversations.json)
   --sessions-root <path>      Sessions root (default: ~/.local/state/personal-agent/pi-agent/sessions)
   --days <n>                  Rolling window size in days (default: 7)
   --timezone <IANA tz>        Timezone for date windowing (default: America/New_York)
@@ -213,10 +215,13 @@ async function main() {
   }
 
   const timezone = typeof args.timezone === 'string' ? args.timezone.trim() : 'America/New_York';
-  const indexPath = asAbsolute(
-    args.index ??
-      `profiles/${profile}/agent/workspace/projects/conversation-maintenance/notes/processed-conversations.json`,
-  );
+  const resolvedIndex = args.index
+    ? {
+        indexPath: asAbsolute(args.index),
+        migratedFrom: null,
+      }
+    : await ensureConversationMaintenanceIndexPath(profile);
+  const indexPath = resolvedIndex.indexPath;
   const sessionsRoot = asAbsolute(args['sessions-root'] ?? '~/.local/state/personal-agent/pi-agent/sessions');
 
   const now = new Date();
@@ -279,6 +284,7 @@ async function main() {
       exists: processedIndex.exists,
       parseError: processedIndex.parseError,
       storedRecords: processedIndex.records.length,
+      migratedFrom: resolvedIndex.migratedFrom,
     },
     counts: {
       sessionFilesScanned: sessionFiles.length,
