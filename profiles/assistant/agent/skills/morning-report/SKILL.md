@@ -13,6 +13,8 @@ Build a concise, mobile-first morning brief for Patrick in `America/New_York`.
 2. Calendar
 3. Reminders
 
+Goal: a short, glanceable, high-signal update that fits naturally in Telegram or Discord.
+
 Keep sections short and finish with `Morning report complete.`
 
 ## Weather
@@ -48,6 +50,7 @@ Keep sections short and finish with `Morning report complete.`
 ## Runtime rules
 
 - Gather fresh data at runtime.
-- Bound network and 1Password-related calls; fail fast instead of hanging.
-- Do not guess missing calendar or reminder data.
+- Bound network and 1Password-related calls; fail fast instead of hanging (roughly 30s max per call path).
+- If any source is unavailable, report it as `Unavailable: <exact reason>`.
+- Do not guess missing calendar, reminder, or weather data.
 - Prefer concise, actionable bullets over long prose.
