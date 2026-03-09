@@ -83,19 +83,3 @@ export interface PullGatewayNotificationsResult {
   notifications: GatewayNotification[];
 }
 
-export interface GatewayDeferredFollowUp {
-  id: string;
-  gateway: GatewayNotificationProvider;
-  conversationId: string;
-  sessionFile: string;
-  prompt: string;
-  dueAt: string;
-  createdAt: string;
-  source: string;
-  initiatedByUserId?: string;
-  telegramChatType?: 'private' | 'group' | 'supergroup' | 'channel';
-}
-
-export interface PullGatewayDeferredFollowUpsResult {
-  followUps: GatewayDeferredFollowUp[];
-}

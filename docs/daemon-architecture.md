@@ -62,13 +62,6 @@ Default files:
 
 See [Scheduled Tasks](./tasks.md) for schema details.
 
-## `deferredFollowUps`
-
-- stores durable deferred follow-ups for gateway conversations
-- schedules future same-conversation follow-up delivery
-- republishes due follow-ups as `gateway.deferred-followup.ready`
-- supports delivery acknowledgement and requeue after failed dispatch
-
 ---
 
 ## Event contract
@@ -82,12 +75,7 @@ Common event types in current flows:
 - `pi.run.failed`
 - `timer.maintenance.cleanup`
 - `timer.tasks.tick`
-- `timer.deferred-followups.tick`
 - `gateway.notification`
-- `gateway.deferred-followup.schedule`
-- `gateway.deferred-followup.ready`
-- `gateway.deferred-followup.delivered`
-- `gateway.deferred-followup.requeue`
 
 Event envelope:
 
@@ -178,11 +166,6 @@ Example:
       "reapAfterDays": 7,
       "defaultTimeoutSeconds": 1800,
       "runTasksInTmux": true
-    },
-    "deferredFollowUps": {
-      "enabled": true,
-      "tickIntervalSeconds": 5,
-      "requeueDelaySeconds": 30
     }
   }
 }

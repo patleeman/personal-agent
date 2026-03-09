@@ -201,10 +201,6 @@ When a new message arrives while a run is active in the same conversation:
 - normal message → steer (interrupt-style)
 - `/followup <text>` → queued follow-up delivered after current response
 - `/followup` (no args) → puts chat into one-shot follow-up capture mode (next message is treated as follow-up)
-- the agent may also call the `deferred_resume` tool to schedule this same durable conversation/session to wake back up later
-  - deferred resumes are daemon-backed background wake-ups
-  - when due and the conversation is still active, the prompt queues as a normal follow-up
-  - when due and the conversation is idle, gateway starts a new run on the same session file
 
 ---
 
@@ -224,7 +220,6 @@ When a new message arrives while a run is active in the same conversation:
 - `/model` / `/models`
 - `/stop`
 - `/followup <text>` (or `/followup` for one-shot follow-up capture mode)
-- `/deferred` (show queued deferred resumes)
 - `/regenerate`
 - `/cancel`
 - `/compact [instructions]` (runs native Pi compaction)
@@ -239,36 +234,6 @@ Telegram registers slash commands via Bot API on startup.
 - `notify=resume` posts completion summary and injects a single follow-up continuation prompt in the work topic when the whole run group finishes.
 
 ## Which mechanism should I use?
-
-### `deferred_resume` tool
-
-Use the `deferred_resume` tool when the **agent itself** should wake this same conversation/session later.
-
-Gateway behavior:
-
-- in Telegram/Discord, it schedules a daemon-backed delayed resume for the **current durable gateway conversation/session**
-- when due, gateway injects the follow-up back into the same chat/thread
-
-Non-gateway note:
-
-- the same tool also works in persisted non-gateway sessions
-- outside gateway, it resumes the same session file in the background rather than posting into a chat thread
-
-General behavior:
-
-- meant for agent-controlled “pause now, continue later” behavior
-- best for waiting on time to pass or for background work to make progress
-- not a user slash command; the assistant should call it directly when appropriate
-
-### `/deferred`
-
-Use `/deferred` when you want to **inspect whether deferred resumes are queued**.
-
-Behavior:
-
-- read-only visibility into queued deferred resumes
-- does not schedule anything
-- useful for checking whether the agent already queued a wake-up
 
 ### `/resume`
 
@@ -286,7 +251,7 @@ Behavior:
 
 - does **not** wait for a timer
 - changes which persisted session file this chat/channel is bound to
-- is for session selection/switching, not delayed wake-up
+- is for session selection/switching
 
 ### `/tmux run ...`
 
@@ -303,8 +268,7 @@ Behavior:
 - starts a managed tmux session in the background
 - the work happens in tmux, not inside the chat request itself
 - logs are attached to the tmux session
-- `notify=resume` is only a **completion hook**: when the tmux run group finishes, gateway posts a summary and injects one continuation follow-up into the target conversation
-- `notify=resume` is not a general timer/scheduler; `deferred_resume` is the delayed same-conversation wake-up mechanism
+- `notify=resume` is a **completion hook**: when the tmux run group finishes, gateway posts a summary and injects one continuation follow-up into the target conversation
 
 ### Scheduled tasks (`*.task.md`)
 
@@ -314,17 +278,13 @@ Behavior:
 
 - independent of the current live conversation flow
 - best for recurring reminders, reports, or unattended automation
-- can send output to gateway chats/channels, but they are daemon jobs, not “pause this exact conversation and resume it later” semantics
+- can send output to gateway chats/channels
 
 Quick rule of thumb:
 
-- **Agent should resume this same conversation later** → `deferred_resume` tool
-- **Check whether deferred resumes are queued** → `/deferred`
 - **Switch this chat to another saved conversation now** → `/resume`
 - **Run a long background shell command** → `/tmux run`
 - **Run something on a calendar/schedule** → scheduled task
-
-In Pi TUI sessions, the footer/status bar also shows a `resume:` indicator for queued deferred resumes. A trailing `*` means the current session has at least one queued deferred resume.
 
 ---
 

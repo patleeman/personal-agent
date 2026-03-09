@@ -7,7 +7,6 @@ import { resolveDaemonPaths } from './paths.js';
 import type {
   DaemonEventInput,
   DaemonStatus,
-  GatewayDeferredFollowUp,
   GatewayNotification,
   GatewayNotificationProvider,
 } from './types.js';
@@ -165,26 +164,6 @@ export async function pullGatewayNotifications(
   );
 
   return result.notifications;
-}
-
-export async function pullGatewayDeferredFollowUps(
-  input: {
-    gateway: GatewayNotificationProvider;
-    limit?: number;
-  },
-  config?: DaemonConfig,
-): Promise<GatewayDeferredFollowUp[]> {
-  const result = await sendRequest<{ followUps: GatewayDeferredFollowUp[] }>(
-    {
-      id: `req_${randomUUID()}`,
-      type: 'deferred-followups.pull',
-      gateway: input.gateway,
-      limit: input.limit,
-    },
-    config,
-  );
-
-  return result.followUps;
 }
 
 export async function emitDaemonEvent(input: DaemonEventInput, config?: DaemonConfig): Promise<boolean> {
