@@ -53,13 +53,13 @@ An outage is **active** if: `end` is null, OR `end` is in the future, OR `status
 **Check specific service:**
 ```bash
 curl -s "https://updog.ai/data/third-party-outages.json" | \
-  jq '.data.attributes.provider_data[] | select(.provider_name | test("github"; "i")) | {display_name, status_url, active_outages: [.outages[] | select(.end == null or .status != "resolved")]}'
+  jq '.data.attributes.provider_data[] | select(.provider_name | test("github"; "i")) | {display_name, status_url, active_outages: [.outages[] | select(.end == null or (.end != null and .end > (now * 1000)) or .status != "resolved")]}'
 ```
 
 **Check all current outages:**
 ```bash
 curl -s "https://updog.ai/data/third-party-outages.json" | \
-  jq '[.data.attributes.provider_data[] | {name: .display_name, service: .provider_service, status_url, active: [.outages[] | select(.end == null or .status != "resolved")]} | select(.active | length > 0)]'
+  jq '[.data.attributes.provider_data[] | {name: .display_name, service: .provider_service, status_url, active: [.outages[] | select(.end == null or (.end != null and .end > (now * 1000)) or .status != "resolved")]} | select(.active | length > 0)]'
 ```
 
 ## Common Providers

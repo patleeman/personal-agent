@@ -60,7 +60,6 @@ All flags from `workspaces create --help` can be saved here.
 - Cannot clone private repos or access secrets from `install.sh`
 - Template: https://github.com/DataDog/workspaces-dotfiles-template
 - Debug: `sudo /opt/doghome/sbin/install_dotfiles.sh -r <dotfiles-url>`
-- Patrick's dotfiles: https://github.com/patleeman/dd.dotfiles
 
 ## Installing Software
 

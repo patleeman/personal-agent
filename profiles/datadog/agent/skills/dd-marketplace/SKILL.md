@@ -5,7 +5,7 @@ description: Browse and install skills from the Datadog Claude Marketplace (Data
 
 # Datadog Claude Marketplace
 
-Browse 107+ skills from DataDog/claude-marketplace and install them locally.
+Browse Datadog Claude Marketplace skills from DataDog/claude-marketplace and install them locally.
 
 The marketplace contains team-contributed skills for Datadog-specific workflows: deployments (Conductor, Rapid), CI debugging, service operations, code review patterns, and more.
 
