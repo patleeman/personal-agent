@@ -46,11 +46,14 @@ Execution requirements:
    - Move project/profile-specific details into memory docs.
    - Condense overlapping bullets into fewer, higher-signal bullets when they describe one cohesive policy.
    - Preserve durable, still-true constraints and preferences.
+   - Only keep high-quality information that is specific, durable, and likely to improve future behavior.
    - Do not invent new profile or project facts.
 5. Conversation processing:
    - If `counts.unprocessedInWindow == 0`, skip conversation tracking updates and continue with any needed hygiene-only edits.
    - Otherwise review unprocessed conversations in oldest-first order.
    - Process all returned unprocessed sessions unless there are more than 20; in that case process the first 20 and leave explicit backlog count.
+   - Only promote information when it is high-signal, clearly useful, and high-confidence.
+   - Do not store transient chatter, speculative claims, weak inferences, session-only details, or one-off instructions that are unlikely to matter later.
    - Repeated Datadog workflows → update/add `profiles/datadog/agent/skills/*` when genuinely reusable.
    - Durable profile behavior/facts → update `profiles/datadog/agent/AGENTS.md` (high-level only).
    - Project-specific Datadog insights → update relevant `profiles/datadog/agent/memory/**/*.md` files.
