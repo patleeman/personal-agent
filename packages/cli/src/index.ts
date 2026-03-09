@@ -556,7 +556,6 @@ async function runPiWithResolvedProfile(
 
   const sessionFile = extractSessionFile(withDefaults);
   const statusCode = result.status ?? 1;
-  const deferredResumeId = process.env.PERSONAL_AGENT_DEFERRED_RESUME_ID?.trim() || undefined;
 
   if (statusCode === 0) {
     await emitDaemonEventNonFatal({
@@ -566,7 +565,6 @@ async function runPiWithResolvedProfile(
         profile: resolvedProfile.name,
         cwd: process.cwd(),
         sessionFile,
-        deferredResumeId,
       },
     });
   }
@@ -579,7 +577,6 @@ async function runPiWithResolvedProfile(
         profile: resolvedProfile.name,
         cwd: process.cwd(),
         statusCode,
-        deferredResumeId,
       },
     });
   }

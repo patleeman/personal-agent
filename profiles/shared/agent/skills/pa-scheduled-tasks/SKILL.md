@@ -52,7 +52,7 @@ id: daily-status
 enabled: true
 cron: "0 9 * * 1-5"
 profile: "shared"
-model: "openai-codex/gpt-5.3-codex"
+model: "openai-codex/gpt-5.4"
 cwd: "~/agent-workspace"
 timeoutSeconds: 1800
 ---
@@ -66,7 +66,7 @@ Summarize yesterday's work and suggest priorities for today.
 id: tax-checklist
 at: "2026-04-15T09:00:00-04:00"
 profile: "shared"
-model: "openai-codex/gpt-5.3-codex"
+model: "openai-codex/gpt-5.4"
 output:
   when: always
   targets:

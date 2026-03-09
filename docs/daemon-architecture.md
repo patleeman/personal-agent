@@ -69,13 +69,6 @@ See [Scheduled Tasks](./tasks.md) for schema details.
 - republishes due follow-ups as `gateway.deferred-followup.ready`
 - supports delivery acknowledgement and requeue after failed dispatch
 
-## `sessionDeferredResumes`
-
-- stores durable deferred resumes for persisted non-gateway sessions
-- schedules future same-session background continuation
-- launches `pa` against the same session file when due
-- tracks pending runs until the resumed session closes or fails
-
 ---
 
 ## Event contract
@@ -90,13 +83,11 @@ Common event types in current flows:
 - `timer.maintenance.cleanup`
 - `timer.tasks.tick`
 - `timer.deferred-followups.tick`
-- `timer.session-deferred-resumes.tick`
 - `gateway.notification`
 - `gateway.deferred-followup.schedule`
 - `gateway.deferred-followup.ready`
 - `gateway.deferred-followup.delivered`
 - `gateway.deferred-followup.requeue`
-- `session.deferred-resume.schedule`
 
 Event envelope:
 
@@ -192,11 +183,6 @@ Example:
       "enabled": true,
       "tickIntervalSeconds": 5,
       "requeueDelaySeconds": 30
-    },
-    "sessionDeferredResumes": {
-      "enabled": true,
-      "tickIntervalSeconds": 5,
-      "retryDelaySeconds": 30
     }
   }
 }

@@ -1,17 +1,12 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const emitDaemonEventMock = vi.fn();
-
-vi.mock('@personal-agent/daemon', () => ({
-  emitDaemonEvent: (...args: unknown[]) => emitDaemonEventMock(...args),
-}));
-
 import deferredResumeExtension, {
   buildDeferredResumeStatusText,
   loadDeferredResumeEntries,
+  resolveDeferredResumeStateFile,
 } from './index';
 
 const originalEnv = process.env;
@@ -19,7 +14,6 @@ const GATEWAY_RUNTIME_CONTEXT_SYMBOL = Symbol.for('personal-agent.gateway.runtim
 
 beforeEach(() => {
   process.env = { ...originalEnv };
-  emitDaemonEventMock.mockReset();
 });
 
 afterEach(() => {
@@ -27,22 +21,82 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('deferred-resume shared extension', () => {
-  it('loads deferred resume entries from daemon state', () => {
+function setupExtension(): {
+  registeredTool: any;
+  handlers: Record<string, (...args: any[]) => Promise<void> | void>;
+  commands: Record<string, { handler: (args: string, ctx: any) => Promise<void> | void }>;
+  sendUserMessage: ReturnType<typeof vi.fn>;
+} {
+  let registeredTool: any;
+  const handlers: Record<string, (...args: any[]) => Promise<void> | void> = {};
+  const commands: Record<string, { handler: (args: string, ctx: any) => Promise<void> | void }> = {};
+  const sendUserMessage = vi.fn();
+
+  const pi = {
+    registerTool: vi.fn((tool) => {
+      registeredTool = tool;
+    }),
+    registerCommand: vi.fn((name: string, command: { handler: (args: string, ctx: any) => Promise<void> | void }) => {
+      commands[name] = command;
+    }),
+    on: vi.fn((event: string, handler: (...args: any[]) => Promise<void> | void) => {
+      handlers[event] = handler;
+    }),
+    sendUserMessage,
+  };
+
+  deferredResumeExtension(pi as never);
+
+  return {
+    registeredTool,
+    handlers,
+    commands,
+    sendUserMessage,
+  };
+}
+
+function createContext(sessionFile: string): {
+  cwd: string;
+  hasUI: boolean;
+  isIdle: () => boolean;
+  sessionManager: { getSessionFile: () => string };
+  ui: {
+    notify: ReturnType<typeof vi.fn>;
+    setStatus: ReturnType<typeof vi.fn>;
+    theme: { fg: (_tone: string, text: string) => string };
+  };
+} {
+  return {
+    cwd: '/tmp/workspace',
+    hasUI: true,
+    isIdle: () => true,
+    sessionManager: {
+      getSessionFile: () => sessionFile,
+    },
+    ui: {
+      notify: vi.fn(),
+      setStatus: vi.fn(),
+      theme: {
+        fg: (_tone: string, text: string) => text,
+      },
+    },
+  };
+}
+
+describe('deferred-resume shared extension (TUI-only)', () => {
+  it('loads deferred resume entries from local state', () => {
     const dir = mkdtempSync(join(tmpdir(), 'deferred-resume-state-'));
-    const stateFile = join(dir, 'deferred-followups-state.json');
+    const stateFile = join(dir, 'state.json');
 
     writeFileSync(stateFile, JSON.stringify({
       version: 1,
-      followUps: {
+      resumes: {
         one: {
           id: 'one',
-          gateway: 'telegram',
-          conversationId: 'chat-1',
           sessionFile: '/tmp/sessions/1.jsonl',
           prompt: 'continue',
           dueAt: '2026-03-08T12:00:00.000Z',
-          status: 'scheduled',
+          createdAt: '2026-03-08T11:50:00.000Z',
           attempts: 0,
         },
       },
@@ -50,32 +104,6 @@ describe('deferred-resume shared extension', () => {
 
     expect(loadDeferredResumeEntries(stateFile)).toEqual([
       { sessionFile: '/tmp/sessions/1.jsonl' },
-    ]);
-
-    rmSync(dir, { recursive: true, force: true });
-  });
-
-  it('also loads generic session deferred resume entries from daemon state', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'session-deferred-resume-state-'));
-    const stateFile = join(dir, 'session-deferred-resumes-state.json');
-
-    writeFileSync(stateFile, JSON.stringify({
-      version: 1,
-      resumes: {
-        one: {
-          id: 'one',
-          sessionFile: '/tmp/sessions/2.jsonl',
-          cwd: '/tmp/workspace',
-          prompt: 'continue',
-          dueAt: '2026-03-08T12:00:00.000Z',
-          status: 'scheduled',
-          attempts: 0,
-        },
-      },
-    }));
-
-    expect(loadDeferredResumeEntries(stateFile)).toEqual([
-      { sessionFile: '/tmp/sessions/2.jsonl' },
     ]);
 
     rmSync(dir, { recursive: true, force: true });
@@ -93,57 +121,43 @@ describe('deferred-resume shared extension', () => {
     })).toContain('resume:1*');
   });
 
-  it('registers deferred_resume and schedules a generic persisted-session resume', async () => {
-    let registeredTool: any;
-
-    const pi = {
-      registerTool: vi.fn((tool) => {
-        registeredTool = tool;
-      }),
-      on: vi.fn(),
+  it('registers deferred_resume and schedules a local TUI resume', async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'deferred-resume-local-'));
+    process.env = {
+      ...originalEnv,
+      PERSONAL_AGENT_STATE_ROOT: tempRoot,
     };
 
-    deferredResumeExtension(pi as never);
-    emitDaemonEventMock.mockResolvedValue(true);
+    const { registeredTool } = setupExtension();
+    const ctx = createContext('/tmp/sessions/current.jsonl');
 
     const result = await registeredTool.execute(
       'tool-1',
       { delay: '10m', prompt: 'check the logs and continue' },
       undefined,
       undefined,
-      {
-        cwd: '/tmp/workspace',
-        sessionManager: {
-          getSessionFile: () => '/tmp/sessions/current.jsonl',
-        },
-        hasUI: false,
-      },
+      ctx,
     );
 
-    expect(emitDaemonEventMock).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'session.deferred-resume.schedule',
-      source: 'extension:deferred-resume',
-      payload: expect.objectContaining({
-        sessionFile: '/tmp/sessions/current.jsonl',
-        cwd: '/tmp/workspace',
-        prompt: 'check the logs and continue',
-      }),
-    }));
     expect(result.isError).not.toBe(true);
-  });
 
-  it('schedules a gateway deferred follow-up when gateway runtime context is present', async () => {
-    let registeredTool: any;
-
-    const pi = {
-      registerTool: vi.fn((tool) => {
-        registeredTool = tool;
-      }),
-      on: vi.fn(),
+    const stateFile = resolveDeferredResumeStateFile();
+    const persisted = JSON.parse(readFileSync(stateFile, 'utf-8')) as {
+      resumes: Record<string, { sessionFile: string; prompt: string }>;
     };
 
-    deferredResumeExtension(pi as never);
-    emitDaemonEventMock.mockResolvedValue(true);
+    const entries = Object.values(persisted.resumes);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toEqual(expect.objectContaining({
+      sessionFile: '/tmp/sessions/current.jsonl',
+      prompt: 'check the logs and continue',
+    }));
+
+    rmSync(tempRoot, { recursive: true, force: true });
+  });
+
+  it('rejects deferred_resume in gateway-bound sessions', async () => {
+    const { registeredTool } = setupExtension();
 
     const sessionManager = {
       getSessionFile: () => '/tmp/sessions/current.jsonl',
@@ -155,95 +169,113 @@ describe('deferred-resume shared extension', () => {
 
     const result = await registeredTool.execute(
       'tool-1',
-      { delay: '10m', prompt: 'check the logs and continue' },
+      { delay: '10m', prompt: 'continue' },
       undefined,
       undefined,
       {
         cwd: '/tmp/workspace',
+        hasUI: true,
+        isIdle: () => true,
         sessionManager,
-        hasUI: false,
+        ui: {
+          notify: vi.fn(),
+          setStatus: vi.fn(),
+          theme: {
+            fg: (_tone: string, text: string) => text,
+          },
+        },
       },
     );
 
-    expect(emitDaemonEventMock).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'gateway.deferred-followup.schedule',
-      payload: expect.objectContaining({
-        gateway: 'telegram',
-        conversationId: 'chat-123',
-        sessionFile: '/tmp/sessions/current.jsonl',
-      }),
-    }));
-    expect(result.isError).not.toBe(true);
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain('disabled in gateway');
   });
 
-  it('sets footer status on session start using both gateway and session resume state', async () => {
-    const handlers: Record<string, (...args: any[]) => Promise<void>> = {};
-
-    const pi = {
-      registerTool: vi.fn(),
-      on: (eventName: string, handler: (...args: any[]) => Promise<void>) => {
-        handlers[eventName] = handler;
-      },
-    };
-
-    deferredResumeExtension(pi as never);
-
-    const tempRoot = mkdtempSync(join(tmpdir(), 'deferred-resume-status-root-'));
+  it('lists and cancels deferred resumes with /deferred', async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'deferred-resume-command-'));
     process.env = {
       ...originalEnv,
       PERSONAL_AGENT_STATE_ROOT: tempRoot,
     };
 
-    mkdirSync(join(tempRoot, 'daemon'), { recursive: true });
-    writeFileSync(join(tempRoot, 'daemon', 'deferred-followups-state.json'), JSON.stringify({
-      version: 1,
-      followUps: {
-        one: {
-          id: 'one',
-          gateway: 'telegram',
-          conversationId: 'chat-1',
-          sessionFile: '/tmp/sessions/current.jsonl',
-          prompt: 'continue',
-          dueAt: '2026-03-08T12:00:00.000Z',
-          status: 'scheduled',
-          attempts: 0,
-        },
-      },
-    }));
-    writeFileSync(join(tempRoot, 'daemon', 'session-deferred-resumes-state.json'), JSON.stringify({
+    const stateFile = resolveDeferredResumeStateFile();
+    mkdirSync(join(tempRoot, 'pi-agent'), { recursive: true });
+    writeFileSync(stateFile, JSON.stringify({
       version: 1,
       resumes: {
-        two: {
-          id: 'two',
+        keep: {
+          id: 'keep',
           sessionFile: '/tmp/sessions/other.jsonl',
-          cwd: '/tmp/workspace',
-          prompt: 'continue',
+          prompt: 'other session',
           dueAt: '2026-03-08T12:00:00.000Z',
-          status: 'scheduled',
+          createdAt: '2026-03-08T11:50:00.000Z',
+          attempts: 0,
+        },
+        remove: {
+          id: 'remove',
+          sessionFile: '/tmp/sessions/current.jsonl',
+          prompt: 'current session',
+          dueAt: '2026-03-08T12:01:00.000Z',
+          createdAt: '2026-03-08T11:50:00.000Z',
           attempts: 0,
         },
       },
     }));
 
-    const setStatus = vi.fn();
-    const ctx = {
-      hasUI: true,
-      sessionManager: {
-        getSessionFile: () => '/tmp/sessions/current.jsonl',
-      },
-      ui: {
-        setStatus,
-        theme: {
-          fg: (_tone: string, text: string) => text,
+    const { commands } = setupExtension();
+    const ctx = createContext('/tmp/sessions/current.jsonl');
+
+    await commands.deferred.handler('', ctx);
+    expect(ctx.ui.notify).toHaveBeenCalledWith(expect.stringContaining('remove'), 'info');
+    expect(ctx.ui.notify).not.toHaveBeenCalledWith(expect.stringContaining('keep'), 'info');
+
+    await commands.deferred.handler('cancel remove', ctx);
+
+    const persisted = JSON.parse(readFileSync(stateFile, 'utf-8')) as {
+      resumes: Record<string, unknown>;
+    };
+
+    expect(Object.keys(persisted.resumes)).toEqual(['keep']);
+
+    rmSync(tempRoot, { recursive: true, force: true });
+  });
+
+  it('delivers due resumes in-session on session start', async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'deferred-resume-delivery-'));
+    process.env = {
+      ...originalEnv,
+      PERSONAL_AGENT_STATE_ROOT: tempRoot,
+    };
+
+    const stateFile = resolveDeferredResumeStateFile();
+    mkdirSync(join(tempRoot, 'pi-agent'), { recursive: true });
+    writeFileSync(stateFile, JSON.stringify({
+      version: 1,
+      resumes: {
+        due: {
+          id: 'due',
+          sessionFile: '/tmp/sessions/current.jsonl',
+          prompt: 'resume now',
+          dueAt: '2026-03-08T12:00:00.000Z',
+          createdAt: '2026-03-08T11:59:00.000Z',
+          attempts: 0,
         },
       },
-    };
+    }));
+
+    const { handlers, sendUserMessage } = setupExtension();
+    const ctx = createContext('/tmp/sessions/current.jsonl');
 
     await handlers.session_start?.({}, ctx);
 
-    const update = setStatus.mock.calls.find((call) => call[0] === 'deferred-resume');
-    expect(update?.[1]).toContain('resume:1*');
+    expect(sendUserMessage).toHaveBeenCalledWith('resume now');
 
+    const persisted = JSON.parse(readFileSync(stateFile, 'utf-8')) as {
+      resumes: Record<string, unknown>;
+    };
+    expect(Object.keys(persisted.resumes)).toEqual([]);
+
+    await handlers.session_shutdown?.({}, ctx);
     rmSync(tempRoot, { recursive: true, force: true });
   });
 });

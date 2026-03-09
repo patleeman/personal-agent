@@ -3,7 +3,7 @@ id: daily-status
 enabled: true
 cron: "0 9 * * 1-5"
 profile: "shared"
-model: "openai-codex/gpt-5.3-codex"
+model: "openai-codex/gpt-5.4"
 cwd: "~/agent-workspace"
 timeoutSeconds: 1800
 runInTmux: true

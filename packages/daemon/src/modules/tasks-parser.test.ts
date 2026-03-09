@@ -11,7 +11,7 @@ enabled: true
 cron: "0 9 * * 1-5"
 profile: assistant
 provider: openai-codex
-model: gpt-5.3-codex
+model: gpt-5.4
 cwd: ~/agent-workspace
 timeoutSeconds: 900
 runInTmux: false
@@ -25,7 +25,7 @@ Summarize yesterday's progress.
     expect(task.enabled).toBe(true);
     expect(task.schedule.type).toBe('cron');
     expect(task.profile).toBe('assistant');
-    expect(task.modelRef).toBe('openai-codex/gpt-5.3-codex');
+    expect(task.modelRef).toBe('openai-codex/gpt-5.4');
     expect(task.cwd).toContain('agent-workspace');
     expect(task.timeoutSeconds).toBe(900);
     expect(task.runInTmux).toBe(false);
@@ -37,7 +37,7 @@ Summarize yesterday's progress.
       filePath: '/tmp/tasks/taxes-reminder.task.md',
       rawContent: `---
 at: "2026-04-15T09:00:00-04:00"
-model: openai-codex/gpt-5.3-codex
+model: openai-codex/gpt-5.4
 output:
   when: always
   targets:
@@ -57,7 +57,7 @@ Prepare tax checklist.
     expect(task.id).toBe('taxes-reminder');
     expect(task.schedule.type).toBe('at');
     expect(task.profile).toBe('shared');
-    expect(task.modelRef).toBe('openai-codex/gpt-5.3-codex');
+    expect(task.modelRef).toBe('openai-codex/gpt-5.4');
     expect(task.timeoutSeconds).toBe(1800);
     expect(task.output).toEqual({
       when: 'always',

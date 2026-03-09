@@ -34,7 +34,7 @@ id: daily-status
 enabled: true
 cron: "0 9 * * 1-5"
 profile: "shared"
-model: "openai-codex/gpt-5.3-codex"
+model: "openai-codex/gpt-5.4"
 cwd: "~/agent-workspace"
 timeoutSeconds: 1800
 runInTmux: true
@@ -53,26 +53,26 @@ Body text is the prompt sent to Pi (`-p <prompt>`).
 
 ## Frontmatter reference
 
-| Key | Required | Default | Notes |
-|---|---|---|---|
-| `id` | no | derived from filename | Must match `[a-zA-Z0-9][a-zA-Z0-9-_]*` |
-| `enabled` | no | `true` | Boolean |
-| `cron` | yes* | — | 5-field cron expression |
-| `at` | yes* | — | One-time timestamp parseable by `Date.parse` |
-| `profile` | no | `shared` | Profile to run task under |
-| `provider` | no | — | Optional when paired with `model` |
-| `model` | no | — | If `provider` is set, this is model id; otherwise treated as full model ref |
-| `cwd` | no | current process cwd | `~` is expanded |
-| `timeoutSeconds` | no | daemon `defaultTimeoutSeconds` (default `1800`) | Positive integer |
-| `runInTmux` | no | daemon `runTasksInTmux` (default `true`) | Boolean override for per-task execution mode |
-| `output` | no | — | Optional gateway notification routing |
+| Key              | Required | Default                                         | Notes                                                                       |
+| ---------------- | -------- | ----------------------------------------------- | --------------------------------------------------------------------------- |
+| `id`             | no       | derived from filename                           | Must match `[a-zA-Z0-9][a-zA-Z0-9-_]*`                                      |
+| `enabled`        | no       | `true`                                          | Boolean                                                                     |
+| `cron`           | yes*     | —                                               | 5-field cron expression                                                     |
+| `at`             | yes*     | —                                               | One-time timestamp parseable by `Date.parse`                                |
+| `profile`        | no       | `shared`                                        | Profile to run task under                                                   |
+| `provider`       | no       | —                                               | Optional when paired with `model`                                           |
+| `model`          | no       | —                                               | If `provider` is set, this is model id; otherwise treated as full model ref |
+| `cwd`            | no       | current process cwd                             | `~` is expanded                                                             |
+| `timeoutSeconds` | no       | daemon `defaultTimeoutSeconds` (default `1800`) | Positive integer                                                            |
+| `runInTmux`      | no       | daemon `runTasksInTmux` (default `true`)        | Boolean override for per-task execution mode                                |
+| `output`         | no       | —                                               | Optional gateway notification routing                                       |
 
 \* Exactly one of `cron` or `at` is required.
 
 ### Model field behavior
 
 - `provider` + `model` → combined into `provider/model`
-- `model` only → used as-is (for example `openai-codex/gpt-5.3-codex`)
+- `model` only → used as-is (for example `openai-codex/gpt-5.4`)
 - `provider` without `model` → validation error
 
 ### Tmux execution mode
