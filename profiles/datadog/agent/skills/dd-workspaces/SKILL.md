@@ -71,7 +71,7 @@ Prefer the least-fragile path:
 
 Keep this skill focused on workspace-specific behavior, not volatile package-manager recipes. For detailed install flows, prefer the official **Auto-Install Tools** / workspace docs below or the repo's own `.devcontainer/` guidance.
 
-Repo devcontainer features often provide language/tooling like `go`, `node`, `kubectl`, and `helm`.
+Tools like `go`, `node`, `kubectl`, and `helm` are often provided by repo devcontainer features.
 
 ## Secrets
 
