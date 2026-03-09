@@ -66,7 +66,7 @@ function buildMemoryPolicyBlock(options: {
   activeAgentsFile?: string;
   activeSkillsDir: string;
   activeTasksDir?: string;
-  activeWorkspaceDir?: string;
+  activeMemoryDir?: string;
 }): string {
   const activeProfileDirDisplay = toDisplayPath(options.cwd, options.activeProfileDir);
   const repoRootDisplay = toDisplayPath(options.cwd, options.repoRoot);
@@ -82,9 +82,13 @@ function buildMemoryPolicyBlock(options: {
     ? `- requested_profile: ${options.requestedProfile}\n- note: requested profile was missing; using "${options.activeProfile}"\n`
     : '';
 
-  const workspaceSection = options.activeWorkspaceDir
-    ? `- Workspace dir: ${toDisplayPath(options.cwd, options.activeWorkspaceDir)}\n- Project context file template: ${toDisplayPath(options.cwd, join(options.activeWorkspaceDir, 'projects', '<project-slug>', 'PROJECT.md'))}`
-    : '- Workspace dir: none (shared profile has no workspace)';
+  const memorySection = options.activeMemoryDir
+    ? `- Memory dir: ${toDisplayPath(options.cwd, options.activeMemoryDir)}\n- Memory doc template: ${toDisplayPath(options.cwd, join(options.activeMemoryDir, '<doc-id>.md'))}`
+    : '- Memory dir: none (shared profile has no memory dir)';
+
+  const memoryRetrievalSection = options.activeMemoryDir
+    ? `- At task start, apply the active AGENTS policy first, then load only the skills and memory docs relevant to the current request.\n- Retrieval order: AGENTS.md for durable policy/facts, skills for reusable workflows/tactics, memory docs for profile/project context.\n- Prefer targeted retrieval over broad scans; do not read the whole memory directory unless the task genuinely requires it.\n- Prefer \`pa memory list --profile ${options.activeProfile}\` to inventory available memory docs.\n- Prefer \`pa memory find --profile ${options.activeProfile} --text <query>\` and/or \`--tag\`, \`--type\`, \`--status\` to locate relevant docs quickly.\n- Use \`pa memory show <id> --profile ${options.activeProfile}\` to inspect a specific memory doc by id.\n- Use CLI discovery first, then use the read tool on the exact file before editing.\n- Use \`pa memory new <id> --profile ${options.activeProfile} ...\` to create a new memory doc with valid frontmatter when needed.\n- Use \`pa memory lint --profile ${options.activeProfile}\` after creating or heavily editing memory docs.`
+    : `- At task start, apply the active AGENTS policy first, then load only the skills relevant to the current request.\n- Retrieval order: AGENTS.md for durable policy/facts, then skills for reusable workflows/tactics.\n- Shared profile has no profile-local memory docs.`;
 
   const docsDirDisplay = toDisplayPath(options.cwd, join(options.repoRoot, 'docs'));
   const docsIndexDisplay = toDisplayPath(options.cwd, join(options.repoRoot, 'docs', 'README.md'));
@@ -101,8 +105,8 @@ Profile memory write targets (edit these locations directly):
 - AGENTS.md edit target: ${activeAgentsTarget}
 - Skills dir: ${activeSkillsDirDisplay}
 - Scheduled tasks dir: ${activeTasksDirDisplay}
-- Scheduled tasks should live adjacent to workspace (not inside workspace).
-${workspaceSection}
+- Scheduled tasks should live adjacent to memory (not inside memory).
+${memorySection}
 
 ## PA documentation
 PA documentation (read when the user asks about pa/personal-agent, CLI, daemon, gateway, tasks, profiles, or extensions):
@@ -112,7 +116,7 @@ PA documentation (read when the user asks about pa/personal-agent, CLI, daemon, 
 - When working on personal-agent features, read relevant docs first before implementing.
 
 ## Durable memory policy
-Use profile-local AGENTS.md, skills, and workspace docs as the durable memory system.
+Use profile-local AGENTS.md, skills, and memory docs as the durable memory system.
 
 ## Memory handling rules
 Memory handling rules:
@@ -123,10 +127,11 @@ Memory handling rules:
 - Store reusable cross-project workflows and domain knowledge in skills.
 - Skills are for workflows and tactics you expect to repeat.
 - Put tool-specific runbooks and version-specific quirks in skills (for example Task Factory behavior notes).
-- Store project-specific briefs, runbooks, specs, and notes under workspace/projects/<project-slug>/.
-- Projects are for repo-specific context and evolving implementation notes.
-- For project work, read workspace/projects/<project-slug>/PROJECT.md first when present.
-- If AGENTS.md contains narrow operational details, migrate them to skills/project docs and simplify AGENTS.md.
+- Store profile-specific briefs, runbooks, specs, and notes under memory/*.md with YAML frontmatter.
+- Keep memory docs flat (single folder) for predictable retrieval.
+${memoryRetrievalSection}
+- Keep non-markdown automation state outside memory docs (for example under agent/state/).
+- If AGENTS.md contains narrow operational details, migrate them to skills/memory docs and simplify AGENTS.md.
 - Do not write durable memory into profiles/shared/agent/AGENTS.md.
 - Do not use MEMORY.md files as durable memory.
 - Never store secrets, credentials, API keys, tokens, or temporary/session-only notes.
@@ -164,9 +169,9 @@ export default function memoryExtension(pi: ExtensionAPI): void {
       ? undefined
       : join(activeProfileDir, 'tasks');
 
-    const activeWorkspaceDir = activeProfile === 'shared'
+    const activeMemoryDir = activeProfile === 'shared'
       ? undefined
-      : join(activeProfileDir, 'workspace');
+      : join(activeProfileDir, 'memory');
 
     const memoryPolicy = buildMemoryPolicyBlock({
       cwd: ctx.cwd,
@@ -177,7 +182,7 @@ export default function memoryExtension(pi: ExtensionAPI): void {
       activeAgentsFile,
       activeSkillsDir,
       activeTasksDir,
-      activeWorkspaceDir,
+      activeMemoryDir,
     });
 
     return {

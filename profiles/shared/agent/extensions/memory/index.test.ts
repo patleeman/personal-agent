@@ -60,15 +60,21 @@ describe('memory extension', () => {
     expect(result?.systemPrompt).toContain('- AGENTS.md edit target: profiles/datadog/agent/AGENTS.md');
     expect(result?.systemPrompt).toContain('- Skills dir: profiles/datadog/agent/skills');
     expect(result?.systemPrompt).toContain('- Scheduled tasks dir: profiles/datadog/agent/tasks');
-    expect(result?.systemPrompt).toContain('Scheduled tasks should live adjacent to workspace (not inside workspace).');
-    expect(result?.systemPrompt).toContain('- Workspace dir: profiles/datadog/agent/workspace');
-    expect(result?.systemPrompt).toContain('workspace/projects/<project-slug>/PROJECT.md');
+    expect(result?.systemPrompt).toContain('Scheduled tasks should live adjacent to memory (not inside memory).');
+    expect(result?.systemPrompt).toContain('- Memory dir: profiles/datadog/agent/memory');
+    expect(result?.systemPrompt).toContain('Memory doc template: profiles/datadog/agent/memory/<doc-id>.md');
     expect(result?.systemPrompt).toContain('PA documentation (read when the user asks about pa/personal-agent');
     expect(result?.systemPrompt).toContain('- Docs folder: docs');
     expect(result?.systemPrompt).toContain('- Start with docs index: docs/README.md');
-    expect(result?.systemPrompt).toContain('Use profile-local AGENTS.md, skills, and workspace docs as the durable memory system.');
+    expect(result?.systemPrompt).toContain('Use profile-local AGENTS.md, skills, and memory docs as the durable memory system.');
     expect(result?.systemPrompt).toContain('AGENTS.md should stay high-level: user facts, durable role constraints, and broad operating policies.');
     expect(result?.systemPrompt).toContain('Skills are for workflows and tactics you expect to repeat.');
+    expect(result?.systemPrompt).toContain('memory/*.md with YAML frontmatter');
+    expect(result?.systemPrompt).toContain('Retrieval order: AGENTS.md for durable policy/facts, skills for reusable workflows/tactics, memory docs for profile/project context.');
+    expect(result?.systemPrompt).toContain('pa memory list --profile datadog');
+    expect(result?.systemPrompt).toContain('pa memory find --profile datadog --text <query>');
+    expect(result?.systemPrompt).toContain('pa memory show <id> --profile datadog');
+    expect(result?.systemPrompt).toContain('Use CLI discovery first, then use the read tool on the exact file before editing.');
     expect(result?.systemPrompt).toContain('Do not write durable memory into profiles/shared/agent/AGENTS.md.');
     expect(result?.systemPrompt).toContain('Do not use MEMORY.md files as durable memory.');
     expect(result?.systemPrompt).not.toContain('- Shared AGENTS.md:');
@@ -109,7 +115,9 @@ describe('memory extension', () => {
     expect(result?.systemPrompt).toContain('requested profile was missing');
     expect(result?.systemPrompt).toContain('- AGENTS.md edit target: none (shared profile does not use AGENTS.md)');
     expect(result?.systemPrompt).toContain('- Scheduled tasks dir: none (shared profile does not use profile task dir)');
-    expect(result?.systemPrompt).toContain('- Workspace dir: none (shared profile has no workspace)');
+    expect(result?.systemPrompt).toContain('- Memory dir: none (shared profile has no memory dir)');
+    expect(result?.systemPrompt).toContain('Shared profile has no profile-local memory docs.');
+    expect(result?.systemPrompt).not.toContain('pa memory list --profile shared');
   });
 
   it('does not inject memory policy for slash commands or empty prompts', async () => {
