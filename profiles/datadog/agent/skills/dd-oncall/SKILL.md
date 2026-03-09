@@ -31,7 +31,7 @@ Headers for all requests:
 **Step 1:** Find the team ID:
 ```bash
 eval $(dd-auth env)
-curl -s "https://api.${DD_SITE}/api/v2/team" \
+curl -sG "https://api.${DD_SITE}/api/v2/team" \
   -H "DD-API-KEY: ${DD_API_KEY}" -H "DD-APPLICATION-KEY: ${DD_APP_KEY}" \
   --data-urlencode "filter[keyword]=<team-name>" | jq '.data[] | {id, name: .attributes.name}'
 ```

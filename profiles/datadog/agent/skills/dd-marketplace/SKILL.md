@@ -11,46 +11,46 @@ The marketplace contains team-contributed skills for Datadog-specific workflows:
 
 ## Script Location
 
-All commands use: `~/.pi/agent/skills/dd-marketplace/scripts/marketplace.sh`
+Use `scripts/marketplace.sh` and resolve it relative to this skill directory.
 
 ## Commands
 
 ### List all available skills
 ```bash
-~/.pi/agent/skills/dd-marketplace/scripts/marketplace.sh list
+scripts/marketplace.sh list
 ```
 
 ### Search by keyword
 ```bash
-~/.pi/agent/skills/dd-marketplace/scripts/marketplace.sh search deploy
-~/.pi/agent/skills/dd-marketplace/scripts/marketplace.sh search "ci failure"
-~/.pi/agent/skills/dd-marketplace/scripts/marketplace.sh search atlas
+scripts/marketplace.sh search deploy
+scripts/marketplace.sh search "ci failure"
+scripts/marketplace.sh search atlas
 ```
 
 ### Show a skill's full content (without installing)
 ```bash
-~/.pi/agent/skills/dd-marketplace/scripts/marketplace.sh show dd/conductor
-~/.pi/agent/skills/dd-marketplace/scripts/marketplace.sh show atlas/faq
+scripts/marketplace.sh show dd/conductor
+scripts/marketplace.sh show atlas/faq
 ```
 
 Use `show` to read a skill's instructions when the user needs guidance on a topic covered by a marketplace skill, even without installing it.
 
 ### Install a skill locally
 ```bash
-~/.pi/agent/skills/dd-marketplace/scripts/marketplace.sh install dd/conductor
-~/.pi/agent/skills/dd-marketplace/scripts/marketplace.sh install atlas/faq
+scripts/marketplace.sh install dd/conductor
+scripts/marketplace.sh install atlas/faq
 ```
 
 Installs to `~/.agents/skills/<skill-name>/` by default. Skills with scripts and reference files are copied too.
 
 ### List plugins (top-level groupings)
 ```bash
-~/.pi/agent/skills/dd-marketplace/scripts/marketplace.sh plugins
+scripts/marketplace.sh plugins
 ```
 
 ### Force-update the cache
 ```bash
-~/.pi/agent/skills/dd-marketplace/scripts/marketplace.sh sync
+scripts/marketplace.sh sync
 ```
 
 The repo is cached at `~/.cache/dd-marketplace/` and auto-updates daily.
