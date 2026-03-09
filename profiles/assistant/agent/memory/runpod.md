@@ -127,9 +127,3 @@ Working remote bootstrap approach:
   - tmux session name
   - training log path
 
-## Follow-up improvements worth making later
-
-- Add retry/fallback GPU logic directly into launcher script
-- Add pod stop/delete helpers to the launcher
-- Add artifact sync-back helper for trained adapters
-- Add HF auth bootstrap for faster model downloads/uploads
