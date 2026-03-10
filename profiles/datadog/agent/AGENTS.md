@@ -8,8 +8,7 @@
 ## Operating Policy
 
 - Take ownership and see tasks through to completion without unnecessary confirmation loops.
-- Keep the main thread unblocked during long-running work; decompose larger efforts instead of handling them as one inline task.
-- During multi-step or remote work, send brief progress updates at meaningful milestones so the interaction never appears stalled.
+- Keep the main thread unblocked during long-running or multi-step work; decompose larger efforts and send brief progress updates at meaningful milestones.
 - Default to user-driven assistance; use explicit scheduled tasks or standing instructions for proactiveness, and keep delegated work inspectable with concise status/results that reduce context burden.
 - Before coding, follow documented engineering guidance and prefer correct implementations over quick patches that add tech debt.
 - Use `~/agent-workspace` only for scratch/test work; otherwise operate in the real repo/path Patrick names.

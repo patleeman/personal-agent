@@ -30,7 +30,6 @@ curl -s "https://api.${DD_SITE}/api/v1/monitor" \
 - **DD_APP_KEY** — User identity + permissions
 - **DD_SITE** — API endpoint (e.g., `datadoghq.com`)
 - Direct Datadog public API calls made with `curl` typically require both keys
-- Auto-cached 30 minutes, auto-refreshes
 
 ### Troubleshooting
 - Auth failed → `dd-auth login`
