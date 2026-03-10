@@ -1,11 +1,10 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import type { MessageBlock } from '../../data/mockConversations';
 import { timeAgo } from '../../utils';
 
-// ── Tiny markdown: bold and inline-code only ─────────────────────────────────
+// ── Markdown renderer ─────────────────────────────────────────────────────────
 
 function InlineText({ text }: { text: string }) {
-  // Split on **bold** and `code`
   const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
   return (
     <>
@@ -20,55 +19,87 @@ function InlineText({ text }: { text: string }) {
   );
 }
 
+function MentionText({ text }: { text: string }) {
+  // Render @workstream-id as amber pill
+  const parts = text.split(/(@[\w-]+)/g);
+  return (
+    <>
+      {parts.map((p, i) => {
+        if (/^@[\w-]+$/.test(p))
+          return <span key={i} className="font-mono text-[0.82em] bg-accent/12 text-accent px-1.5 py-0.5 rounded-full">{p}</span>;
+        return <InlineText key={i} text={p} />;
+      })}
+    </>
+  );
+}
+
 function renderText(text: string) {
   return text.split('\n').map((line, i) => {
+    const isH2 = line.startsWith('## ');
+    const isH3 = line.startsWith('### ') || (line.startsWith('**') && line.endsWith('**'));
     const isBullet = /^[-*] /.test(line);
     const isNumbered = /^\d+\. /.test(line);
-    const isH3 = line.startsWith('### ');
-    const isH2 = line.startsWith('## ');
-    const isH1 = line.startsWith('# ');
-    const isCode = line.startsWith('    ') || line.startsWith('\t');
     const isEmpty = line.trim() === '';
 
     if (isEmpty) return <div key={i} className="h-2" />;
-    if (isCode) return (
-      <code key={i} className="block font-mono text-xs bg-elevated px-3 py-0.5 text-secondary -mx-1 rounded">{line.trim()}</code>
+    if (isH2) return <h2 key={i} className="text-sm font-semibold text-primary mt-3 mb-1">{line.slice(3)}</h2>;
+    if (isH3 && line.startsWith('**')) return (
+      <p key={i} className="text-sm leading-relaxed font-semibold text-primary mt-2"><MentionText text={line} /></p>
     );
-    if (isH1) return <h1 key={i} className="text-base font-bold text-primary mt-2 mb-1">{line.slice(2)}</h1>;
-    if (isH2) return <h2 key={i} className="text-sm font-semibold text-primary mt-2 mb-0.5">{line.slice(3)}</h2>;
-    if (isH3) return <h3 key={i} className="text-sm font-medium text-secondary mt-1.5 mb-0.5">{line.slice(4)}</h3>;
     if (isBullet) return (
       <div key={i} className="flex gap-2 items-start">
-        <span className="text-dim mt-0.5 shrink-0">•</span>
-        <p className="text-sm leading-relaxed"><InlineText text={line.slice(2)} /></p>
+        <span className="text-dim mt-0.5 shrink-0 select-none">•</span>
+        <p className="text-sm leading-relaxed"><MentionText text={line.slice(2)} /></p>
       </div>
     );
     if (isNumbered) {
-      const dotIdx = line.indexOf('. ');
+      const dot = line.indexOf('. ');
       return (
         <div key={i} className="flex gap-2 items-start">
-          <span className="text-dim mt-0.5 shrink-0 font-mono text-xs">{line.slice(0, dotIdx + 1)}</span>
-          <p className="text-sm leading-relaxed"><InlineText text={line.slice(dotIdx + 2)} /></p>
+          <span className="text-dim mt-0.5 shrink-0 font-mono text-xs">{line.slice(0, dot + 1)}</span>
+          <p className="text-sm leading-relaxed"><MentionText text={line.slice(dot + 2)} /></p>
         </div>
       );
     }
-    return <p key={i} className="text-sm leading-relaxed"><InlineText text={line} /></p>;
+    return <p key={i} className="text-sm leading-relaxed"><MentionText text={line} /></p>;
   });
+}
+
+// ── Copy button ───────────────────────────────────────────────────────────────
+
+function CopyBtn({ text, small }: { text: string; small?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  function copy() {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+  return (
+    <button
+      onClick={copy}
+      className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-dim hover:text-secondary hover:bg-elevated/80 transition-colors ${small ? 'text-[10px]' : 'text-[11px]'}`}
+      title="Copy"
+    >
+      {copied ? '✓' : '⎘'}
+    </button>
+  );
 }
 
 // ── Tool icon & color ─────────────────────────────────────────────────────────
 
-const TOOL_META: Record<string, { icon: string; color: string; label: string }> = {
-  bash:        { icon: '$', color: 'text-steel border-steel/30 bg-steel/5',    label: 'bash' },
-  read:        { icon: '≡', color: 'text-teal border-teal/30 bg-teal/5',      label: 'read' },
-  write:       { icon: '✎', color: 'text-accent border-accent/30 bg-accent/5', label: 'write' },
-  edit:        { icon: '✎', color: 'text-accent border-accent/30 bg-accent/5', label: 'edit' },
-  web_search:  { icon: '⌕', color: 'text-success border-success/30 bg-success/5', label: 'web_search' },
-  web_fetch:   { icon: '⌕', color: 'text-success border-success/30 bg-success/5', label: 'web_fetch' },
-  screenshot:  { icon: '⊡', color: 'text-secondary border-border-default bg-elevated', label: 'screenshot' },
+const TOOL_META: Record<string, { icon: string; label: string; color: string }> = {
+  bash:        { icon: '$',  label: 'bash',       color: 'text-steel  border-steel/25  bg-steel/5'   },
+  read:        { icon: '≡',  label: 'read',       color: 'text-teal   border-teal/25   bg-teal/5'    },
+  write:       { icon: '✎', label: 'write',      color: 'text-accent border-accent/25 bg-accent/5'  },
+  edit:        { icon: '✎', label: 'edit',       color: 'text-accent border-accent/25 bg-accent/5'  },
+  web_search:  { icon: '⌕',  label: 'web_search', color: 'text-success border-success/25 bg-success/5' },
+  web_fetch:   { icon: '⌕',  label: 'web_fetch',  color: 'text-success border-success/25 bg-success/5' },
+  screenshot:  { icon: '⊡',  label: 'screenshot', color: 'text-secondary border-border-default bg-elevated' },
+  deferred_resume: { icon: '⏰', label: 'deferred_resume', color: 'text-warning border-warning/25 bg-warning/5' },
 };
-function toolMeta(tool: string) {
-  return TOOL_META[tool] ?? { icon: '⚙', color: 'text-secondary border-border-default bg-elevated', label: tool };
+function toolMeta(t: string) {
+  return TOOL_META[t] ?? { icon: '⚙', label: t, color: 'text-secondary border-border-default bg-elevated' };
 }
 
 // ── ToolBlock ─────────────────────────────────────────────────────────────────
@@ -76,48 +107,53 @@ function toolMeta(tool: string) {
 function ToolBlock({ block }: { block: Extract<MessageBlock, { type: 'tool_use' }> }) {
   const [open, setOpen] = useState(false);
   const meta = toolMeta(block.tool);
-  const inputStr = JSON.stringify(block.input, null, 2);
-  const outputLines = block.output.split('\n').length;
+  const preview = block.input.command
+    ? String(block.input.command).split('\n')[0].slice(0, 64)
+    : block.input.path ? String(block.input.path)
+    : block.input.url  ? String(block.input.url).replace('https://', '').slice(0, 60)
+    : block.input.query ? String(block.input.query).slice(0, 60)
+    : '';
 
   return (
-    <div className={`rounded-lg border text-[12px] font-mono overflow-hidden ${meta.color}`}>
-      {/* Header row */}
+    <div className={`rounded-lg border text-[12px] font-mono overflow-hidden ${meta.color} ${block.error ? 'border-danger/40 bg-danger/5 text-danger' : ''}`}>
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-2 px-3 py-2 hover:bg-black/5 transition-colors text-left"
       >
-        <span className="font-bold w-4 text-center shrink-0">{meta.icon}</span>
+        {block.running ? (
+          <span className="w-4 h-4 border-[1.5px] border-current border-t-transparent rounded-full animate-spin shrink-0 opacity-70" />
+        ) : (
+          <span className="font-bold w-4 text-center shrink-0 select-none">{meta.icon}</span>
+        )}
         <span className="font-semibold">{meta.label}</span>
-
-        {/* Primary input preview */}
-        <span className="flex-1 truncate opacity-60 font-normal">
-          {block.input.command
-            ? String(block.input.command).split('\n')[0].slice(0, 60)
-            : block.input.path
-            ? String(block.input.path)
-            : ''}
-        </span>
-
-        <span className="shrink-0 opacity-50 ml-2">
-          {block.durationMs ? `${(block.durationMs / 1000).toFixed(1)}s` : ''}
-        </span>
-        <span className="shrink-0 ml-1 opacity-40">{open ? '▲' : '▼'}</span>
+        <span className="flex-1 truncate opacity-60 font-normal">{preview}</span>
+        {block.durationMs && !block.running && (
+          <span className="shrink-0 opacity-40 ml-2">{(block.durationMs / 1000).toFixed(1)}s</span>
+        )}
+        {block.running && <span className="shrink-0 text-[10px] opacity-60 ml-2">running…</span>}
+        {!block.running && (
+          <>
+            <CopyBtn text={block.output} small />
+            <span className="shrink-0 opacity-30 text-[10px]">{open ? '▲' : '▼'}</span>
+          </>
+        )}
       </button>
 
-      {/* Expanded body */}
-      {open && (
+      {open && !block.running && (
         <div className="border-t border-inherit">
-          {/* Input */}
           <div className="px-3 py-2 bg-black/5">
-            <p className="text-[10px] uppercase tracking-wider opacity-50 mb-1">input</p>
-            <pre className="whitespace-pre-wrap break-all text-[11px] leading-relaxed opacity-80">{inputStr}</pre>
+            <p className="text-[10px] uppercase tracking-wider opacity-40 mb-1">input</p>
+            <pre className="whitespace-pre-wrap break-all text-[11px] leading-relaxed opacity-75">
+              {JSON.stringify(block.input, null, 2)}
+            </pre>
           </div>
-          {/* Output */}
           <div className="px-3 py-2">
-            <p className="text-[10px] uppercase tracking-wider opacity-50 mb-1">
-              output · {outputLines} {outputLines === 1 ? 'line' : 'lines'}
+            <p className="text-[10px] uppercase tracking-wider opacity-40 mb-1">
+              output · {block.output.split('\n').length} lines
             </p>
-            <pre className="whitespace-pre-wrap break-all text-[11px] leading-relaxed opacity-80">{block.output}</pre>
+            <pre className="whitespace-pre-wrap break-all text-[11px] leading-relaxed opacity-75">
+              {block.output}
+            </pre>
           </div>
         </div>
       )}
@@ -130,21 +166,19 @@ function ToolBlock({ block }: { block: Extract<MessageBlock, { type: 'tool_use' 
 function ThinkingBlock({ block }: { block: Extract<MessageBlock, { type: 'thinking' }> }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-lg border border-border-subtle bg-elevated/50 text-[12px] overflow-hidden">
+    <div className="rounded-lg border border-border-subtle bg-elevated/40 text-[12px] overflow-hidden">
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-elevated transition-colors"
       >
-        <span className="text-dim">💭</span>
+        <span className="text-dim select-none">💭</span>
         <span className="text-secondary font-medium">Thinking</span>
         <span className="flex-1" />
         <span className="text-dim text-[10px]">{open ? '▲ hide' : '▼ show'}</span>
       </button>
       {open && (
-        <div className="px-3 pb-3 text-secondary italic leading-relaxed border-t border-border-subtle pt-2">
-          {block.text.split('\n').map((line, i) =>
-            <p key={i} className="text-[12px]">{line || <br />}</p>
-          )}
+        <div className="px-3 pb-3 pt-2 border-t border-border-subtle text-secondary italic leading-relaxed space-y-1">
+          {block.text.split('\n').map((l, i) => <p key={i} className="text-[12px]">{l || <br />}</p>)}
         </div>
       )}
     </div>
@@ -155,35 +189,30 @@ function ThinkingBlock({ block }: { block: Extract<MessageBlock, { type: 'thinki
 
 function SubagentBlock({ block }: { block: Extract<MessageBlock, { type: 'subagent' }> }) {
   const [open, setOpen] = useState(false);
-  const statusColor = {
-    running:  'text-steel bg-steel/10 border-steel/20',
-    complete: 'text-success bg-success/10 border-success/20',
-    failed:   'text-danger bg-danger/10 border-danger/20',
-  }[block.status];
-
+  const clr = { running: 'text-steel bg-steel/8 border-steel/20', complete: 'text-success bg-success/8 border-success/20', failed: 'text-danger bg-danger/8 border-danger/20' }[block.status];
   return (
-    <div className={`rounded-lg border overflow-hidden text-[12px] ${statusColor}`}>
+    <div className={`rounded-lg border overflow-hidden text-[12px] ${clr}`}>
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-black/5 transition-colors"
       >
-        <span className="font-bold shrink-0">⟳</span>
+        {block.status === 'running'
+          ? <span className="w-4 h-4 border-[1.5px] border-current border-t-transparent rounded-full animate-spin shrink-0" />
+          : <span className="font-bold shrink-0 select-none">⟳</span>}
         <span className="font-semibold font-mono">subagent</span>
         <span className="flex-1 truncate opacity-70 font-normal">{block.name}</span>
-        <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${statusColor}`}>
-          {block.status}
-        </span>
-        <span className="shrink-0 ml-1 opacity-40">{open ? '▲' : '▼'}</span>
+        <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${clr}`}>{block.status}</span>
+        <span className="shrink-0 ml-1 opacity-30 text-[10px]">{open ? '▲' : '▼'}</span>
       </button>
       {open && (
         <div className="border-t border-inherit px-3 py-2 space-y-2 bg-black/5">
           <div>
-            <p className="text-[10px] uppercase tracking-wider opacity-50 mb-1">prompt</p>
+            <p className="text-[10px] uppercase tracking-wider opacity-40 mb-1">prompt</p>
             <p className="opacity-70 leading-relaxed">{block.prompt}</p>
           </div>
           {block.summary && (
             <div>
-              <p className="text-[10px] uppercase tracking-wider opacity-50 mb-1">result</p>
+              <p className="text-[10px] uppercase tracking-wider opacity-40 mb-1">result</p>
               <p className="opacity-80 leading-relaxed">{block.summary}</p>
             </div>
           )}
@@ -193,14 +222,85 @@ function SubagentBlock({ block }: { block: Extract<MessageBlock, { type: 'subage
   );
 }
 
-// ── Message row ───────────────────────────────────────────────────────────────
+// ── ImageBlock ────────────────────────────────────────────────────────────────
+
+function ImageBlock({ block }: { block: Extract<MessageBlock, { type: 'image' }> }) {
+  return (
+    <div className="rounded-lg border border-border-subtle overflow-hidden">
+      {/* Placeholder canvas — in prod this would be an <img src="..." /> */}
+      <div
+        className="w-full bg-elevated flex flex-col items-center justify-center gap-2 text-dim"
+        style={{ aspectRatio: `${block.width ?? 16} / ${block.height ?? 9}`, maxHeight: 220 }}
+      >
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4"
+          strokeLinecap="round" strokeLinejoin="round" className="opacity-40">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <circle cx="8.5" cy="8.5" r="1.5" />
+          <path d="m21 15-5-5L5 21" />
+        </svg>
+        <span className="text-[11px] font-mono opacity-50">{block.alt}</span>
+        {block.width && <span className="text-[10px] opacity-35">{block.width}×{block.height}</span>}
+      </div>
+      {block.caption && (
+        <div className="px-3 py-2 bg-surface border-t border-border-subtle">
+          <p className="text-[11px] text-dim font-mono">{block.caption}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── ErrorBlock ────────────────────────────────────────────────────────────────
+
+function ErrorBlock({ block }: { block: Extract<MessageBlock, { type: 'error' }> }) {
+  return (
+    <div className="rounded-lg border border-danger/30 bg-danger/6 px-3 py-2 text-[12px] font-mono flex gap-2 items-start">
+      <span className="text-danger font-bold shrink-0 mt-0.5 select-none">✕</span>
+      <div className="flex-1 min-w-0">
+        {block.tool && <span className="text-danger/70 font-semibold">{block.tool} · </span>}
+        <span className="text-danger/85 leading-relaxed">{block.message}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Message actions ───────────────────────────────────────────────────────────
+
+function MsgActions({ text, isUser }: { text: string; isUser?: boolean }) {
+  const [forked, setForked] = useState(false);
+  return (
+    <div className={`flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${isUser ? 'justify-start' : 'justify-end'}`}>
+      <CopyBtn text={text} small />
+      {!isUser && (
+        <button
+          onClick={() => setForked(true)}
+          className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] transition-colors ${forked ? 'text-accent' : 'text-dim hover:text-secondary hover:bg-elevated/80'}`}
+          title="Fork from here"
+        >
+          {forked ? '⑂ forked' : '⑂ fork'}
+        </button>
+      )}
+      {isUser && (
+        <button
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-dim hover:text-secondary hover:bg-elevated/80 transition-colors"
+          title="Rewind to here"
+        >
+          ↩ rewind
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── UserMessage ───────────────────────────────────────────────────────────────
 
 function UserMessage({ block }: { block: Extract<MessageBlock, { type: 'user' }> }) {
   return (
-    <div className="flex justify-end">
-      <div className="max-w-[85%]">
+    <div className="group flex flex-col items-end gap-1">
+      <MsgActions text={block.text} isUser />
+      <div className="max-w-[86%]">
         <div className="bg-accent/10 border border-accent/15 rounded-2xl rounded-br-sm px-4 py-2.5">
-          <p className="text-sm leading-relaxed text-primary">{block.text}</p>
+          <p className="text-sm leading-relaxed text-primary"><MentionText text={block.text} /></p>
         </div>
         <p className="text-[10px] text-dim mt-1 text-right pr-1">{timeAgo(block.ts)}</p>
       </div>
@@ -208,15 +308,28 @@ function UserMessage({ block }: { block: Extract<MessageBlock, { type: 'user' }>
   );
 }
 
+// ── AssistantMessage ──────────────────────────────────────────────────────────
+
 function AssistantMessage({ block }: { block: Extract<MessageBlock, { type: 'text' }> }) {
   return (
-    <div className="flex gap-3 items-start">
+    <div className="group flex gap-3 items-start">
       <div className="w-6 h-6 rounded-md bg-accent/20 flex items-center justify-center shrink-0 mt-0.5">
-        <span className="text-accent text-[9px] font-bold font-mono">pa</span>
+        <span className="text-accent text-[9px] font-bold font-mono select-none">pa</span>
       </div>
       <div className="flex-1 min-w-0 space-y-1">
-        <div className="text-primary space-y-1">{renderText(block.text)}</div>
-        <p className="text-[10px] text-dim pt-0.5">{timeAgo(block.ts)}</p>
+        <div className="text-primary space-y-1">
+          {renderText(block.text)}
+          {block.streaming && (
+            <span
+              className="inline-block w-[2px] h-[14px] bg-accent ml-0.5 rounded-sm"
+              style={{ animation: 'cursorBlink 1s step-end infinite', verticalAlign: 'text-bottom' }}
+            />
+          )}
+        </div>
+        <div className="flex items-center gap-2 pt-0.5">
+          <p className="text-[10px] text-dim">{timeAgo(block.ts)}</p>
+          <MsgActions text={block.text} />
+        </div>
       </div>
     </div>
   );
@@ -224,21 +337,24 @@ function AssistantMessage({ block }: { block: Extract<MessageBlock, { type: 'tex
 
 // ── ChatView ──────────────────────────────────────────────────────────────────
 
-interface Props { messages: MessageBlock[]; }
-
-export function ChatView({ messages }: Props) {
+export function ChatView({ messages }: { messages: MessageBlock[] }) {
   return (
-    <div className="space-y-3 px-5 py-4">
-      {messages.map((block, i) => {
-        switch (block.type) {
-          case 'user':     return <UserMessage     key={i} block={block} />;
-          case 'text':     return <AssistantMessage key={i} block={block} />;
-          case 'thinking': return <ThinkingBlock    key={i} block={block} />;
-          case 'tool_use': return <ToolBlock        key={i} block={block} />;
-          case 'subagent': return <SubagentBlock    key={i} block={block} />;
-          default:         return null;
-        }
-      })}
-    </div>
+    <>
+      <style>{`@keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
+      <div className="space-y-3 px-5 py-4">
+        {messages.map((block, i) => {
+          switch (block.type) {
+            case 'user':     return <UserMessage     key={i} block={block} />;
+            case 'text':     return <AssistantMessage key={i} block={block} />;
+            case 'thinking': return <ThinkingBlock    key={i} block={block} />;
+            case 'tool_use': return <ToolBlock        key={i} block={block} />;
+            case 'subagent': return <SubagentBlock    key={i} block={block} />;
+            case 'image':    return <ImageBlock       key={i} block={block} />;
+            case 'error':    return <ErrorBlock       key={i} block={block} />;
+            default: return null;
+          }
+        })}
+      </div>
+    </>
   );
 }

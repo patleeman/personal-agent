@@ -8,16 +8,26 @@ export interface Conversation {
   workstreamId?: string;
   pinned: boolean;
   archived: boolean;
+  running?: boolean;
 }
 
 const STORAGE_KEY = 'pa:conversations';
 
 const SEED: Conversation[] = [
   {
+    id: 'live-research',
+    title: 'LLM tool use research',
+    subtitle: 'Searching arxiv, semantic scholar…',
+    updatedAt: new Date().toISOString(),
+    running: true,
+    pinned: false,
+    archived: false,
+  },
+  {
     id: 'web-ui-iteration',
     title: 'web UI iteration',
-    subtitle: 'Redesigning sidebar with Arc-style tabs',
-    updatedAt: new Date().toISOString(),
+    subtitle: 'Arc sidebar, chat interface, context rail',
+    updatedAt: new Date(Date.now() - 6 * 60_000).toISOString(),
     workstreamId: 'web-ui',
     pinned: false,
     archived: false,
@@ -32,6 +42,15 @@ const SEED: Conversation[] = [
     archived: false,
   },
   {
+    id: 'screenshot-review',
+    title: 'UI screenshot review',
+    subtitle: 'Light/dark mode issues flagged',
+    updatedAt: new Date(Date.now() - 3 * 3600_000).toISOString(),
+    workstreamId: 'web-ui',
+    pinned: false,
+    archived: false,
+  },
+  {
     id: 'daemon-task-wiring',
     title: 'daemon task → activity',
     subtitle: 'Wire task success/failure to durable activity',
@@ -40,11 +59,19 @@ const SEED: Conversation[] = [
     archived: false,
   },
   {
+    id: 'rewind-fork-demo',
+    title: 'pipeline debug + fork',
+    subtitle: 'GitLab CI TS errors, forked at msg 7',
+    updatedAt: new Date(Date.now() - 8 * 3600_000).toISOString(),
+    pinned: false,
+    archived: false,
+  },
+  {
     id: 'daily-standup-0310',
     title: 'daily standup review',
     updatedAt: new Date(Date.now() - 24 * 3600_000).toISOString(),
     pinned: false,
-    archived: false,
+    archived: true,
   },
 ];
 

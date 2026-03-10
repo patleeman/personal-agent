@@ -34,18 +34,18 @@ function ConvTab({ conv, onClose }: { conv: Conversation; onClose: () => void })
     <NavLink
       to={`/conversations/${conv.id}`}
       className={[
-        'group relative flex items-start gap-2.5 px-3 py-2 rounded-lg mx-1 transition-colors border-l-2',
+        'group relative flex items-start gap-2.5 px-3 py-2 rounded-lg mx-1 transition-colors',
         isActive
-          ? 'bg-accent/12 text-primary border-accent'
-          : 'text-secondary hover:bg-elevated hover:text-primary border-transparent',
+          ? 'bg-elevated text-primary'
+          : 'text-secondary hover:bg-elevated/60 hover:text-primary',
       ].join(' ')}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* Active indicator dot */}
+      {/* Indicator dot — pulsing amber if running */}
       <span className={[
         'mt-[5px] w-1.5 h-1.5 rounded-full shrink-0 transition-colors',
-        isActive ? 'bg-accent' : 'bg-border-default',
+        conv.running ? 'bg-accent animate-pulse' : isActive ? 'bg-accent' : 'bg-border-default/60',
       ].join(' ')} />
 
       {/* Text */}
