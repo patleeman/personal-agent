@@ -13,8 +13,6 @@ updated: 2026-03-09
 
 # gb-tetris-gym Project Notes
 
-Canonical in-repo tracker: `/Users/patrick/workingdir/gb-tetris-gym/PLAN.md`
-
 ## Goal
 
 Train a small model to control single-player Game Boy Tetris through the existing pi-boy mGBA bridge stack.

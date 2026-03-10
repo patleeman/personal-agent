@@ -8,7 +8,7 @@ tags:
   - ai
   - trends
   - pipeline
-updated: 2026-03-08
+updated: 2026-03-09
 ---
 
 # AI Trend Intel — Project Context
@@ -37,6 +37,8 @@ Build and operate a local-first, low-cost AI news trend pipeline.
 5. Validate via tests + deterministic rerun checks.
 6. Deploy to Unraid only after explicit approval.
 
-## Runbooks
+## Related repo docs
 
-- Local-first runbook: `./runbooks/local-first.md`
+- Overview: `README.md`
+- Implementation plan: `docs/implementation-plan.md`
+- Unraid notes: `docs/unraid.md`
