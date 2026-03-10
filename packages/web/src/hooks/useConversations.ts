@@ -1,28 +1,30 @@
 /**
- * Unified conversation list — real Pi sessions from the API,
- * with archived state kept in localStorage.
+ * Arc-style tab model:
+ *   - openIds  (localStorage) = sessions promoted to visible tabs
+ *   - shelf    = all other sessions, shown collapsed
  *
- * Falls back to mock data if the API is unreachable.
+ * Clicking a shelf item calls openSession() → adds to openIds → tab appears.
+ * × on an open tab calls closeSession() → removed from openIds → back to shelf.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { MOCK_CONVERSATIONS } from '../data/mockConversations';
 import type { SessionMeta } from '../types';
 
-const ARCHIVED_KEY = 'pa:archived-session-ids';
+const OPEN_KEY = 'pa:open-session-ids';
 
-function loadArchived(): Set<string> {
+function loadOpen(): Set<string> {
   try {
-    const raw = localStorage.getItem(ARCHIVED_KEY);
+    const raw = localStorage.getItem(OPEN_KEY);
     if (raw) return new Set(JSON.parse(raw) as string[]);
   } catch { /* ignore */ }
   return new Set();
 }
 
-function saveArchived(ids: Set<string>) {
-  try { localStorage.setItem(ARCHIVED_KEY, JSON.stringify([...ids])); } catch { /* ignore */ }
+function saveOpen(ids: Set<string>) {
+  try { localStorage.setItem(OPEN_KEY, JSON.stringify([...ids])); } catch { /* ignore */ }
 }
 
-// Fallback when API is unreachable — convert mocks to SessionMeta shape
+// Fallback when API is unreachable
 const FALLBACK_SESSIONS: SessionMeta[] = Object.values(MOCK_CONVERSATIONS).map((conv, i) => ({
   id:           conv.id,
   file:         '',
@@ -36,7 +38,7 @@ const FALLBACK_SESSIONS: SessionMeta[] = Object.values(MOCK_CONVERSATIONS).map((
 
 export function useConversations() {
   const [sessions,    setSessions]    = useState<SessionMeta[]>([]);
-  const [archivedIds, setArchivedIds] = useState<Set<string>>(loadArchived);
+  const [openIds,     setOpenIds]     = useState<Set<string>>(loadOpen);
   const [loading,     setLoading]     = useState(true);
   const [usingFallback, setUsingFallback] = useState(false);
 
@@ -48,16 +50,18 @@ export function useConversations() {
       .catch(() => { setSessions(FALLBACK_SESSIONS); setUsingFallback(true); setLoading(false); });
   }, []);
 
-  const archiveConversation = useCallback((id: string) => {
-    setArchivedIds(prev => { const next = new Set(prev); next.add(id);    saveArchived(next); return next; });
+  const openSession = useCallback((id: string) => {
+    setOpenIds(prev => { const next = new Set(prev); next.add(id);    saveOpen(next); return next; });
   }, []);
 
-  const restoreConversation = useCallback((id: string) => {
-    setArchivedIds(prev => { const next = new Set(prev); next.delete(id); saveArchived(next); return next; });
+  const closeSession = useCallback((id: string) => {
+    setOpenIds(prev => { const next = new Set(prev); next.delete(id); saveOpen(next); return next; });
   }, []);
 
-  const open     = sessions.filter(s => !archivedIds.has(s.id));
-  const archived = sessions.filter(s =>  archivedIds.has(s.id));
+  // Sessions promoted to tabs (preserve insertion order from sessions list)
+  const tabs  = sessions.filter(s =>  openIds.has(s.id));
+  // Everything else goes into the shelf
+  const shelf = sessions.filter(s => !openIds.has(s.id));
 
-  return { open, archived, archiveConversation, restoreConversation, loading, usingFallback };
+  return { tabs, shelf, openSession, closeSession, loading, usingFallback };
 }

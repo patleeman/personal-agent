@@ -46,30 +46,40 @@ const MENTIONS = [
 
 // ── Context bar ───────────────────────────────────────────────────────────────
 
-function ContextBar({ conv }: { conv: MockConversation }) {
-  const win   = conv.contextWindow ?? 200_000;
-  const sys   = conv.systemTokens    ?? 0;
-  const user  = conv.userTokens      ?? 0;
-  const asst  = conv.assistantTokens ?? 0;
-  const tool  = conv.toolTokens      ?? 0;
-  const total = sys + user + asst + tool;
-  if (!total) return null;
+interface ContextBarProps {
+  conv?: MockConversation;
+  messageCount?: number;
+  model?: string;
+}
 
-  const pct = (total / win) * 100;
-  // Each segment width relative to full context window
+function ContextBar({ conv, messageCount, model }: ContextBarProps) {
+  const win   = conv?.contextWindow  ?? 200_000;
+  const sys   = conv?.systemTokens    ?? 0;
+  const user  = conv?.userTokens      ?? 0;
+  const asst  = conv?.assistantTokens ?? 0;
+  const tool  = conv?.toolTokens      ?? 0;
+  const total = sys + user + asst + tool;
+  const hasTokens = total > 0;
+
+  const pct = hasTokens ? (total / win) * 100 : 0;
   const w = (n: number) => `${(n / win) * 100}%`;
 
   return (
     <div className="px-4 py-2 border-t border-border-subtle space-y-1.5">
-      {/* Segmented bar */}
+      {/* Segmented bar — always shown, flat if no token data */}
       <div className="flex h-1.5 rounded-full bg-elevated overflow-hidden gap-px">
-        <div className="rounded-l-full bg-border-default/80"  style={{ width: w(sys)  }} title={`system: ${sys.toLocaleString()}`} />
-        <div className="bg-teal/60"   style={{ width: w(user) }} title={`user: ${user.toLocaleString()}`} />
-        <div className="bg-accent/70" style={{ width: w(asst) }} title={`assistant: ${asst.toLocaleString()}`} />
-        <div className="rounded-r-full bg-steel/60"  style={{ width: w(tool) }} title={`tool: ${tool.toLocaleString()}`} />
+        {hasTokens ? <>
+          <div className="rounded-l-full bg-border-default/80"  style={{ width: w(sys)  }} title={`system: ${sys.toLocaleString()}`} />
+          <div className="bg-teal/60"   style={{ width: w(user) }} title={`user: ${user.toLocaleString()}`} />
+          <div className="bg-accent/70" style={{ width: w(asst) }} title={`assistant: ${asst.toLocaleString()}`} />
+          <div className="rounded-r-full bg-steel/60"  style={{ width: w(tool) }} title={`tool: ${tool.toLocaleString()}`} />
+        </> : (
+          <div className="rounded-full bg-border-default/30 w-full" />
+        )}
       </div>
       {/* Legend */}
       <div className="flex items-center gap-3 text-[10px]">
+        {hasTokens ? <>
         <span className="flex items-center gap-1 text-dim">
           <span className="w-2 h-1.5 rounded-sm bg-border-default/80 inline-block" />
           sys {(sys / 1000).toFixed(1)}k
@@ -89,6 +99,12 @@ function ContextBar({ conv }: { conv: MockConversation }) {
         <span className="flex-1 text-right text-dim">
           {pct.toFixed(1)}% of {(win / 1000).toFixed(0)}k ctx
         </span>
+        </> : (
+          <span className="text-dim">
+            {messageCount ?? 0} messages
+            {model && <span className="ml-2 font-mono opacity-60">{model}</span>}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -392,8 +408,8 @@ export function ConversationPage() {
         </div>
       </div>
 
-      {/* Context bar — below input */}
-      {conv && <ContextBar conv={conv} />}
+      {/* Context bar — always shown */}
+      <ContextBar conv={conv} messageCount={messageCount} model={model} />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useConversations } from '../hooks/useConversations';
 import type { SessionMeta } from '../types';
 import { ThemeSwitcher } from './ThemeSwitcher';
@@ -21,24 +21,44 @@ const PATH = {
   workstreams: 'M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z',
   close:       'M6 18 18 6M6 6l12 12',
   chevron:     'M19.5 8.25l-7.5 7.5-7.5-7.5',
-  plus:        'M12 4.5v15m7.5-7.5h-15',
 };
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// ── Top nav item ───────────────────────────────────────────────────────────
 
-/** Last path segment, truncated */
-function cwdLabel(cwd: string, maxLen = 26): string {
+function TopNavItem({ to, icon, label }: { to: string; icon: string; label: string }) {
+  return (
+    <NavLink
+      to={to}
+      className={({ isActive }) =>
+        `flex items-center gap-2.5 px-3 py-2 mx-1 rounded-lg text-[13px] font-medium transition-colors ${
+          isActive
+            ? 'bg-elevated text-primary'
+            : 'text-secondary hover:bg-elevated/60 hover:text-primary'
+        }`
+      }
+    >
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"
+        className="shrink-0 opacity-70">
+        <path d={icon} />
+      </svg>
+      {label}
+    </NavLink>
+  );
+}
+
+function cwdLabel(cwd: string, maxLen = 24): string {
   const parts = cwd.split('/').filter(Boolean);
   const label = parts[parts.length - 1] ?? cwd;
   return label.length > maxLen ? label.slice(0, maxLen - 1) + '…' : label;
 }
 
-// ── ConvTab ────────────────────────────────────────────────────────────────
+// ── Open tab ───────────────────────────────────────────────────────────────
 
-function ConvTab({ session, onClose }: { session: SessionMeta; onClose: () => void }) {
+function OpenTab({ session, onClose }: { session: SessionMeta; onClose: () => void }) {
   const [hovered, setHovered] = useState(false);
-  const location  = useLocation();
-  const isActive  = location.pathname === `/conversations/${session.id}`;
+  const location = useLocation();
+  const isActive = location.pathname === `/conversations/${session.id}`;
 
   return (
     <NavLink
@@ -52,13 +72,11 @@ function ConvTab({ session, onClose }: { session: SessionMeta; onClose: () => vo
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
-      {/* Indicator dot */}
       <span className={[
         'mt-[5px] w-1.5 h-1.5 rounded-full shrink-0 transition-colors',
         isActive ? 'bg-accent' : 'bg-border-default/50',
       ].join(' ')} />
 
-      {/* Text */}
       <div className="flex-1 min-w-0">
         <p className="text-[13px] leading-snug font-medium truncate">{session.title}</p>
         <p className="text-[11px] text-dim mt-0.5 truncate">
@@ -67,12 +85,12 @@ function ConvTab({ session, onClose }: { session: SessionMeta; onClose: () => vo
         </p>
       </div>
 
-      {/* Close / archive */}
+      {/* × sends back to shelf */}
       {hovered && !isActive && (
         <button
           onClick={e => { e.preventDefault(); e.stopPropagation(); onClose(); }}
           className="shrink-0 mt-0.5 w-4 h-4 rounded flex items-center justify-center text-dim hover:text-primary hover:bg-elevated transition-colors"
-          title="Dismiss conversation"
+          title="Close tab"
         >
           <Ico d={PATH.close} size={10} />
         </button>
@@ -81,18 +99,44 @@ function ConvTab({ session, onClose }: { session: SessionMeta; onClose: () => vo
   );
 }
 
+// ── Shelf row ──────────────────────────────────────────────────────────────
+
+function ShelfRow({ session, onOpen }: { session: SessionMeta; onOpen: () => void }) {
+  return (
+    <button
+      onClick={onOpen}
+      className="w-full flex items-center gap-2.5 px-3 py-1.5 mx-1 rounded-lg text-left transition-colors text-dim hover:text-secondary hover:bg-elevated/50"
+      style={{ width: 'calc(100% - 8px)' }}
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-border-default/40 shrink-0 mt-px" />
+      <div className="flex-1 min-w-0">
+        <p className="text-[12px] leading-snug truncate">{session.title}</p>
+        <p className="text-[10px] text-dim/60 mt-0.5 truncate">
+          {timeAgo(session.timestamp)}
+          <span className="ml-1.5">· {cwdLabel(session.cwd)}</span>
+        </p>
+      </div>
+    </button>
+  );
+}
+
 // ── Sidebar ────────────────────────────────────────────────────────────────
 
 export function Sidebar() {
-  const { open, archived, archiveConversation, restoreConversation, loading, usingFallback } =
-    useConversations();
-  const [archivedOpen, setArchivedOpen] = useState(false);
+  const navigate = useNavigate();
+  const { tabs, shelf, openSession, closeSession, loading, usingFallback } = useConversations();
+  const [shelfOpen, setShelfOpen] = useState(false);
+
+  function handleShelfClick(session: SessionMeta) {
+    openSession(session.id);
+    navigate(`/conversations/${session.id}`);
+  }
 
   return (
     <aside className="flex-1 flex flex-col overflow-hidden">
 
       {/* Header */}
-      <div className="flex items-center gap-2 px-4 pt-4 pb-3">
+      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
         <div className="w-6 h-6 rounded bg-accent/20 flex items-center justify-center shrink-0">
           <span className="text-accent text-[10px] font-bold font-mono">pa</span>
         </div>
@@ -100,87 +144,66 @@ export function Sidebar() {
         <ThemeSwitcher />
       </div>
 
-      {/* Conversations label + loading */}
-      <div className="flex items-center gap-2 px-4 pb-1.5">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-dim">Conversations</span>
-        {loading && <span className="text-[10px] text-dim animate-pulse">loading…</span>}
-        {usingFallback && <span className="text-[10px] text-dim opacity-50" title="API unavailable">demo</span>}
+      {/* ── Top nav ── */}
+      <div className="pb-1 space-y-0.5">
+        <TopNavItem to="/inbox"       icon={PATH.inbox}       label="Inbox"       />
+        <TopNavItem to="/workstreams" icon={PATH.workstreams} label="Workstreams" />
       </div>
 
-      {/* ── Open list ── */}
-      <div className="flex-1 overflow-y-auto py-1 space-y-0.5">
-        {!loading && open.length === 0 && (
-          <p className="px-4 py-3 text-[12px] text-dim">No conversations yet</p>
+      <div className="mx-3 border-t border-border-subtle my-1" />
+
+      {/* ── Open tabs ── */}
+      <div className="flex-1 overflow-y-auto py-1 space-y-0.5 min-h-0">
+        {!loading && tabs.length === 0 && (
+          <p className="px-4 py-2 text-[12px] text-dim">
+            No open tabs — pick one from the shelf below.
+          </p>
         )}
-        {open.map(session => (
-          <ConvTab
+        {tabs.map(session => (
+          <OpenTab
             key={session.id}
             session={session}
-            onClose={() => archiveConversation(session.id)}
+            onClose={() => closeSession(session.id)}
           />
         ))}
       </div>
 
-      {/* ── Archived section ── */}
-      {archived.length > 0 && (
-        <div className="border-t border-border-subtle">
-          <button
-            onClick={() => setArchivedOpen(v => !v)}
-            className="w-full flex items-center gap-2 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-dim hover:text-secondary transition-colors"
+      {/* ── Shelf ── */}
+      <div className="border-t border-border-subtle shrink-0">
+        <button
+          onClick={() => setShelfOpen(v => !v)}
+          className="w-full flex items-center gap-2 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-dim hover:text-secondary transition-colors"
+        >
+          <span
+            className="transition-transform duration-150 shrink-0"
+            style={{ display: 'inline-block', transform: shelfOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }}
           >
-            <span
-              className="transition-transform duration-150"
-              style={{ display: 'inline-block', transform: archivedOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }}
-            >
-              <Ico d={PATH.chevron} size={12} />
-            </span>
-            Dismissed ({archived.length})
-          </button>
+            <Ico d={PATH.chevron} size={11} />
+          </span>
+          <span className="flex-1 text-left">All sessions</span>
+          <span className="text-[10px] tabular-nums opacity-60">
+            {loading ? '…' : shelf.length}
+          </span>
+          {usingFallback && <span className="text-[9px] opacity-40 ml-1">demo</span>}
+        </button>
 
-          {archivedOpen && (
-            <div className="pb-1 space-y-0.5">
-              {archived.map(session => (
-                <button
-                  key={session.id}
-                  onClick={() => restoreConversation(session.id)}
-                  className="w-full flex items-center gap-2.5 px-3 py-1.5 mx-1 rounded text-[12px] text-dim hover:text-secondary hover:bg-elevated transition-colors"
-                  title="Restore conversation"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-border-default shrink-0" />
-                  <span className="flex-1 text-left truncate">{session.title}</span>
-                  <span className="text-[10px] opacity-50 shrink-0">{timeAgo(session.timestamp)}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Bottom dock — Inbox, Workstreams ── */}
-      <div className="border-t border-border-subtle px-2 py-2 flex items-center gap-1">
-        <NavLink
-          to="/inbox"
-          title="Inbox"
-          className={({ isActive }) =>
-            `flex-1 flex items-center justify-center py-1.5 rounded-lg transition-colors ${
-              isActive ? 'bg-accent/12 text-accent' : 'text-dim hover:text-secondary hover:bg-elevated'
-            }`
-          }
-        >
-          <Ico d={PATH.inbox} />
-        </NavLink>
-        <NavLink
-          to="/workstreams"
-          title="Workstreams"
-          className={({ isActive }) =>
-            `flex-1 flex items-center justify-center py-1.5 rounded-lg transition-colors ${
-              isActive ? 'bg-accent/12 text-accent' : 'text-dim hover:text-secondary hover:bg-elevated'
-            }`
-          }
-        >
-          <Ico d={PATH.workstreams} />
-        </NavLink>
+        {shelfOpen && (
+          <div className="pb-2 max-h-72 overflow-y-auto space-y-0.5">
+            {shelf.map(session => (
+              <ShelfRow
+                key={session.id}
+                session={session}
+                onOpen={() => handleShelfClick(session)}
+              />
+            ))}
+            {shelf.length === 0 && (
+              <p className="px-4 py-2 text-[11px] text-dim">All sessions are open.</p>
+            )}
+          </div>
+        )}
       </div>
+
+
     </aside>
   );
 }
