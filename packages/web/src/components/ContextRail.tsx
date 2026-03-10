@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { MOCK_CONVERSATIONS, type MockConversation } from '../data/mockConversations';
 import { timeAgo, formatDate } from '../utils';
@@ -221,6 +222,93 @@ function EmptyContext() {
 
 // ── Root ──────────────────────────────────────────────────────────────────────
 
+// ── Task detail ───────────────────────────────────────────────────────────────
+
+interface TaskDetail {
+  id: string; running: boolean; enabled: boolean;
+  cron?: string; model?: string;
+  lastStatus?: string; lastRunAt?: string; lastLogPath?: string;
+  fileContent: string;
+}
+
+function cronHuman(cron: string): string {
+  const parts = cron.trim().split(/\s+/);
+  if (parts.length !== 5) return cron;
+  const [min, hour] = parts;
+  const intervalMatch = hour.match(/^\*\/(\d+)$/);
+  if (intervalMatch && min !== '*') return `every ${intervalMatch[1]}h at :${min.padStart(2,'0')}`;
+  if (hour !== '*' && min !== '*' && !hour.includes('*')) return `daily at ${hour.padStart(2,'0')}:${min.padStart(2,'0')}`;
+  return cron;
+}
+
+function TaskContext({ id }: { id: string }) {
+  const [task, setTask]     = useState<TaskDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/tasks/${id}`)
+      .then(r => r.json())
+      .then((d: TaskDetail) => { setTask(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [id]);
+
+  if (loading) return <div className="px-4 py-4 text-[12px] text-dim animate-pulse">Loading…</div>;
+  if (!task)   return <div className="px-4 py-4 text-[12px] text-dim">Task not found.</div>;
+
+  // Strip YAML frontmatter, render body
+  const body = task.fileContent.replace(/^---[\s\S]*?---\n?/, '').trim();
+  // Simple line renderer — code spans, bold, bullets
+  const lines = body.split('\n');
+
+  const statusCls = task.running ? 'text-accent' : task.lastStatus === 'success' ? 'text-success' : task.lastStatus === 'failure' ? 'text-danger' : 'text-dim';
+  const statusText = task.running ? 'running' : task.lastStatus ?? 'never run';
+
+  return (
+    <div className="space-y-4 px-4 py-4">
+      {/* Status */}
+      <div className="flex items-center gap-3 text-[12px]">
+        <span className={`font-medium ${statusCls}`}>{statusText}</span>
+        {task.lastRunAt && <span className="text-dim">· {timeAgo(task.lastRunAt)}</span>}
+        {!task.enabled && <span className="text-dim">(disabled)</span>}
+      </div>
+
+      {/* Schedule + model */}
+      <div className="space-y-1.5">
+        {task.cron && (
+          <div className="flex items-center gap-2 text-[11px]">
+            <span className="text-dim w-12 shrink-0">schedule</span>
+            <span className="font-mono text-secondary">{task.cron}</span>
+            <span className="text-dim">({cronHuman(task.cron)})</span>
+          </div>
+        )}
+        {task.model && (
+          <div className="flex items-center gap-2 text-[11px]">
+            <span className="text-dim w-12 shrink-0">model</span>
+            <span className="font-mono text-secondary">{task.model.split('/').pop()}</span>
+          </div>
+        )}
+      </div>
+
+      <div className="border-t border-border-subtle" />
+
+      {/* Prompt body */}
+      <div className="space-y-1.5">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-dim mb-2">Prompt</p>
+        <div className="text-[12px] leading-relaxed text-secondary space-y-1 font-mono whitespace-pre-wrap break-words">
+          {lines.map((line, i) => {
+            if (line.startsWith('## ')) return <p key={i} className="text-primary font-semibold text-[13px] mt-2">{line.slice(3)}</p>;
+            if (line.startsWith('# '))  return <p key={i} className="text-primary font-semibold text-[13px] mt-2">{line.slice(2)}</p>;
+            if (line.startsWith('- ') || line.match(/^\d+\. /)) return <p key={i} className="pl-2">{line}</p>;
+            if (line.trim() === '')     return <div key={i} className="h-1.5" />;
+            return <p key={i}>{line}</p>;
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ContextRail() {
   const location = useLocation();
   const parts = location.pathname.split('/').filter(Boolean);
@@ -250,6 +338,22 @@ export function ContextRail() {
       </div>
     );
   }
+
+  if (section === 'tasks' && id) return (
+    <div className="flex-1 overflow-y-auto">
+      <div className="px-4 pt-4 pb-3 border-b border-border-subtle">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-dim">Task</p>
+        <p className="text-[12px] text-secondary mt-0.5 font-mono truncate">{id}</p>
+      </div>
+      <TaskContext id={id} />
+    </div>
+  );
+
+  if (section === 'tasks') return (
+    <div className="flex-1 flex items-center justify-center px-4">
+      <p className="text-[12px] text-dim text-center">Select a task to see its prompt and schedule.</p>
+    </div>
+  );
 
   if (section === 'inbox') return (
     <div className="flex-1 overflow-y-auto">

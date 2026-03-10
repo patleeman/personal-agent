@@ -89,6 +89,41 @@ app.get('/api/tasks', (_req, res) => {
         res.status(500).json({ error: String(err) });
     }
 });
+app.get('/api/tasks/:id', (req, res) => {
+    try {
+        const stateFile = join(homedir(), '.local/state/personal-agent/daemon/task-state.json');
+        if (!existsSync(stateFile)) {
+            res.status(404).json({ error: 'No task state' });
+            return;
+        }
+        const state = JSON.parse(readFileSync(stateFile, 'utf-8'));
+        const entry = Object.values(state.tasks ?? {}).find((t) => t.id === req.params.id);
+        if (!entry) {
+            res.status(404).json({ error: 'Task not found' });
+            return;
+        }
+        let fileContent = '';
+        let enabled = true;
+        let cron;
+        let model;
+        try {
+            fileContent = readFileSync(entry.filePath, 'utf-8');
+            const fmMatch = fileContent.match(/^---\n([\s\S]*?)\n---/);
+            if (fmMatch) {
+                const fm = fmMatch[1];
+                if (/enabled:\s*false/.test(fm))
+                    enabled = false;
+                cron = fm.match(/cron:\s*"?([^"\n]+)"?/)?.[1]?.trim();
+                model = fm.match(/model:\s*"?([^"\n]+)"?/)?.[1]?.trim();
+            }
+        }
+        catch { /* ignore */ }
+        res.json({ ...entry, enabled, cron, model, fileContent });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
 // ── Sessions ──────────────────────────────────────────────────────────────────
 app.get('/api/sessions', (_req, res) => {
     try {

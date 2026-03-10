@@ -19,6 +19,7 @@ export function App() {
           <Route path="workstreams" element={<WorkstreamsPage />} />
           <Route path="workstreams/:id" element={<WorkstreamDetailPage />} />
           <Route path="tasks" element={<TasksPage />} />
+          <Route path="tasks/:id" element={<TasksPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

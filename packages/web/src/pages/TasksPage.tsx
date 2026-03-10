@@ -1,3 +1,4 @@
+import { Link, useParams } from 'react-router-dom';
 import { usePolling } from '../hooks';
 import { timeAgo } from '../utils';
 
@@ -58,6 +59,7 @@ function cronHuman(cron: string): string {
 }
 
 export function TasksPage() {
+  const { id: selectedId } = useParams<{ id?: string }>();
   const { data: tasks, loading, error, refetch } = usePolling(fetchTasks, 10_000);
 
   return (
@@ -110,8 +112,14 @@ export function TasksPage() {
 
         {!loading && tasks?.map(task => {
           const { text: statusText, cls: statusCls } = statusLabel(task);
+          const isSelected = task.id === selectedId;
           return (
-            <div key={task.id} className="p-4 rounded-xl bg-surface border border-border-subtle hover:border-border-default transition-colors group">
+            <Link key={task.id} to={`/tasks/${task.id}`}
+              className={`block p-4 rounded-xl border transition-colors group ${
+                isSelected
+                  ? 'bg-elevated border-accent/30 ring-1 ring-accent/20'
+                  : 'bg-surface border-border-subtle hover:border-border-default'
+              }`}>
               {/* Top row */}
               <div className="flex items-start gap-3 mb-3">
                 <StatusDot task={task} />
@@ -157,7 +165,7 @@ export function TasksPage() {
               {/* File path */}
               <p className="mt-2 text-[10px] font-mono text-dim/50 truncate"
                 title={task.filePath}>{task.filePath}</p>
-            </div>
+            </Link>
           );
         })}
       </div>
