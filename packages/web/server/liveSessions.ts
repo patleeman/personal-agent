@@ -43,7 +43,7 @@ interface LiveEntry {
   sentTitle:  boolean;
 }
 
-const registry    = new Map<string, LiveEntry>();
+export const registry = new Map<string, LiveEntry>();
 const toolTimings = new Map<string, number>(); // toolCallId → start ms
 
 // ── Auth / model helpers ──────────────────────────────────────────────────────

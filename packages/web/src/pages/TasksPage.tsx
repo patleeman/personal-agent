@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { usePolling } from '../hooks';
 import { api } from '../api';
 import { timeAgo } from '../utils';
@@ -60,19 +60,28 @@ function cronHuman(cron: string): string {
 }
 
 function TaskRow({ task, isSelected, onRefetch }: { task: Task; isSelected: boolean; onRefetch: () => void }) {
-  const [toggling, setToggling] = useState(false);
+  const [toggling,  setToggling]  = useState(false);
+  const [running,   setRunning]   = useState(false);
   const { text, cls } = statusText(task);
+  const navigate = useNavigate();
 
   async function handleToggle(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     if (toggling || task.running) return;
     setToggling(true);
-    try {
-      await api.setTaskEnabled(task.id, !task.enabled);
-      onRefetch();
-    } catch (err) { console.error(err); }
+    try { await api.setTaskEnabled(task.id, !task.enabled); onRefetch(); }
+    catch (err) { console.error(err); }
     finally { setToggling(false); }
+  }
+
+  async function handleRunNow(e: React.MouseEvent) {
+    e.preventDefault(); e.stopPropagation();
+    if (running || task.running) return;
+    setRunning(true);
+    try {
+      const { sessionId } = await api.runTaskNow(task.id);
+      navigate(`/conversations/${sessionId}`);
+    } catch (err) { console.error(err); setRunning(false); }
   }
 
   return (
@@ -122,17 +131,25 @@ function TaskRow({ task, isSelected, onRefetch }: { task: Task; isSelected: bool
         </p>
       </div>
 
-      <button
-        onClick={handleToggle}
-        disabled={toggling || task.running}
-        className={`shrink-0 text-[11px] font-mono transition-colors disabled:opacity-40 mt-0.5 ${
-          task.enabled
-            ? 'text-dim hover:text-danger'
-            : 'text-success hover:text-success/70'
-        }`}
-      >
-        {toggling ? '…' : task.enabled ? 'disable' : 'enable'}
-      </button>
+      <div className="flex items-center gap-3 shrink-0 mt-0.5">
+        <button
+          onClick={handleRunNow}
+          disabled={running || task.running}
+          title="Run now"
+          className="text-[11px] font-mono text-dim hover:text-accent transition-colors disabled:opacity-40"
+        >
+          {running ? '…' : '▷ run'}
+        </button>
+        <button
+          onClick={handleToggle}
+          disabled={toggling || task.running}
+          className={`text-[11px] font-mono transition-colors disabled:opacity-40 ${
+            task.enabled ? 'text-dim hover:text-danger' : 'text-success hover:text-success/70'
+          }`}
+        >
+          {toggling ? '…' : task.enabled ? 'disable' : 'enable'}
+        </button>
+      </div>
     </Link>
   );
 }

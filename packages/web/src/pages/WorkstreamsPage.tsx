@@ -1,9 +1,10 @@
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { usePolling } from '../hooks';
 import { stripMarkdownListMarker, timeAgo } from '../utils';
 
 export function WorkstreamsPage() {
+  const { id: selectedId } = useParams<{ id?: string }>();
   const { data: workstreams, loading, error, refetch } = usePolling(api.workstreams, 15_000);
 
   return (
@@ -44,15 +45,17 @@ export function WorkstreamsPage() {
               const status = stripMarkdownListMarker(ws.status);
               const blockers = stripMarkdownListMarker(ws.blockers);
               const isBlocked = blockers !== 'None';
+              const isSelected = ws.id === selectedId;
 
               return (
                 <Link
                   key={ws.id}
                   to={`/workstreams/${ws.id}`}
-                  className="flex items-start gap-4 px-4 py-3 -mx-2 rounded-lg hover:bg-surface transition-colors group"
+                  className={`flex items-start gap-4 px-4 py-3 -mx-2 rounded-lg transition-colors group ${
+                    isSelected ? 'bg-surface' : 'hover:bg-surface'
+                  }`}
                 >
                   <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${isBlocked ? 'bg-warning' : 'bg-teal'}`} />
-
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] text-primary leading-snug">{ws.objective}</p>
                     <p className="text-[11px] text-dim mt-0.5 font-mono flex items-center gap-1.5 flex-wrap">
@@ -67,8 +70,6 @@ export function WorkstreamsPage() {
                       <span>{timeAgo(ws.updatedAt)}</span>
                     </p>
                   </div>
-
-                  <span className="text-dim group-hover:text-secondary transition-colors text-sm mt-0.5">→</span>
                 </Link>
               );
             })}

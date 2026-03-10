@@ -1,15 +1,33 @@
 import { execSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { listSessions, readSessionBlocks } from './sessions.js';
-import { createSession, resumeSession, getLiveSessions, getSessionStats, isLive, subscribe, promptSession, abortSession, destroySession, } from './liveSessions.js';
+import { createSession, resumeSession, getLiveSessions, getSessionStats, isLive, subscribe, promptSession, abortSession, destroySession, forkSession, registry as liveRegistry, } from './liveSessions.js';
 import { listProfileActivityEntries, listWorkstreamIds, readWorkstreamPlan, readWorkstreamSummary, resolveWorkstreamPaths, } from '@personal-agent/core';
 const PORT = parseInt(process.env.PA_WEB_PORT ?? '3741', 10);
 const REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? process.cwd();
 const PROFILE = process.env.PERSONAL_AGENT_ACTIVE_PROFILE ?? 'shared';
+// ── Activity read-state ───────────────────────────────────────────────────────
+// Stored as a simple JSON set alongside activity files.
+const READ_STATE_FILE = join(REPO_ROOT, `profiles/${PROFILE}/agent/activity/.read-state.json`);
+function loadReadState() {
+    try {
+        return new Set(JSON.parse(readFileSync(READ_STATE_FILE, 'utf-8')));
+    }
+    catch {
+        return new Set();
+    }
+}
+function saveReadState(ids) {
+    try {
+        mkdirSync(dirname(READ_STATE_FILE), { recursive: true });
+        writeFileSync(READ_STATE_FILE, JSON.stringify([...ids]));
+    }
+    catch { /* ignore */ }
+}
 const DIST_DIR = process.env.PA_WEB_DIST ??
     join(dirname(fileURLToPath(import.meta.url)), '../dist');
 const app = express();
@@ -34,7 +52,8 @@ app.get('/api/status', (_req, res) => {
 app.get('/api/activity', (_req, res) => {
     try {
         const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile: PROFILE });
-        res.json(entries.map(({ entry }) => entry));
+        const read = loadReadState();
+        res.json(entries.map(({ entry }) => ({ ...entry, read: read.has(entry.id) })));
     }
     catch (err) {
         res.status(500).json({ error: String(err) });
@@ -43,7 +62,9 @@ app.get('/api/activity', (_req, res) => {
 app.get('/api/activity/count', (_req, res) => {
     try {
         const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile: PROFILE });
-        res.json({ count: entries.length });
+        const read = loadReadState();
+        const unread = entries.filter(({ entry }) => !read.has(entry.id)).length;
+        res.json({ count: unread });
     }
     catch {
         res.json({ count: 0 });
@@ -57,7 +78,25 @@ app.get('/api/activity/:id', (req, res) => {
             res.status(404).json({ error: 'Not found' });
             return;
         }
-        res.json(match.entry);
+        const read = loadReadState();
+        res.json({ ...match.entry, read: read.has(match.entry.id) });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+/** Mark an activity item as read */
+app.patch('/api/activity/:id', (req, res) => {
+    try {
+        const { id } = req.params;
+        const { read } = req.body;
+        const state = loadReadState();
+        if (read === false)
+            state.delete(id);
+        else
+            state.add(id);
+        saveReadState(state);
+        res.json({ ok: true });
     }
     catch (err) {
         res.status(500).json({ error: String(err) });
@@ -232,6 +271,36 @@ app.get('/api/tasks/:id', (req, res) => {
         res.status(500).json({ error: String(err) });
     }
 });
+/** Run a task immediately — creates a live session with the task's prompt */
+app.post('/api/tasks/:id/run', async (req, res) => {
+    try {
+        const stateFile = join(homedir(), '.local/state/personal-agent/daemon/task-state.json');
+        if (!existsSync(stateFile)) {
+            res.status(404).json({ error: 'No task state' });
+            return;
+        }
+        const state = JSON.parse(readFileSync(stateFile, 'utf-8'));
+        const entry = Object.values(state.tasks ?? {}).find((t) => t.id === req.params.id);
+        if (!entry) {
+            res.status(404).json({ error: 'Task not found' });
+            return;
+        }
+        // Parse prompt from file (body after frontmatter)
+        const fileContent = readFileSync(entry.filePath, 'utf-8');
+        const afterFm = fileContent.replace(/^---\n[\s\S]*?\n---\n?/, '').trim();
+        if (!afterFm) {
+            res.status(400).json({ error: 'Task has no prompt body' });
+            return;
+        }
+        const { id: sessionId } = await createSession(REPO_ROOT);
+        // Send prompt asynchronously — don't block the response
+        void promptSession(sessionId, afterFm);
+        res.json({ ok: true, sessionId });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
 // ── Sessions (read-only JSONL) ────────────────────────────────────────────────
 app.get('/api/sessions', (_req, res) => {
     try {
@@ -350,28 +419,70 @@ app.post('/api/live-sessions/:id/abort', async (req, res) => {
 /** Get token usage stats for a live session */
 app.get('/api/live-sessions/:id/context', (req, res) => {
     const { id } = req.params;
-    // Try live session first, then fall back to historical session list
-    const liveSessions = getLiveSessions();
-    const liveEntry = liveSessions.find(s => s.id === id);
+    // cwd: live registry first, then JSONL meta, then session list
+    const liveEntry = liveRegistry.get(id);
     const detail = readSessionBlocks(id);
-    const cwd = liveEntry?.cwd ?? detail?.meta.cwd;
+    const allSessions = listSessions();
+    const sessionMeta = allSessions.find(s => s.id === id);
+    const cwd = liveEntry?.cwd ?? detail?.meta.cwd ?? sessionMeta?.cwd;
     if (!cwd) {
         res.status(404).json({ error: 'Session not found' });
         return;
     }
-    // Git branch for session cwd
+    // Git branch
     let branch = null;
     try {
         branch = execSync('git branch --show-current', { cwd, stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000 })
             .toString().trim() || null;
     }
-    catch { /* not a git repo or git not found */ }
-    // Last 5 user messages
-    const userMessages = (detail?.blocks ?? [])
-        .filter(b => b.type === 'user')
-        .slice(-5)
-        .map(b => ({ id: b.id, ts: b.ts, text: b.text }));
+    catch { /* not a git repo */ }
+    // User messages: prefer live in-memory messages (most up-to-date), fall back to JSONL
+    let userMessages = [];
+    if (liveEntry) {
+        userMessages = liveEntry.session.agent.state.messages
+            .filter(m => m.role === 'user')
+            .slice(-5)
+            .map((m, i) => {
+            const content = m.content;
+            const text = Array.isArray(content)
+                ? content.find((c) => c.type === 'text')?.text ?? ''
+                : String(content);
+            return { id: String(i), ts: new Date().toISOString(), text: text.slice(0, 300) };
+        });
+    }
+    else {
+        userMessages = (detail?.blocks ?? [])
+            .filter(b => b.type === 'user')
+            .slice(-5)
+            .map(b => ({ id: b.id, ts: b.ts, text: b.text }));
+    }
     res.json({ cwd, branch, userMessages });
+});
+app.get('/api/live-sessions/:id/fork-entries', (req, res) => {
+    const liveEntry = liveRegistry.get(req.params.id);
+    if (!liveEntry) {
+        res.status(404).json({ error: 'Session not live' });
+        return;
+    }
+    try {
+        res.json(liveEntry.session.getUserMessagesForForking());
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/live-sessions/:id/fork', async (req, res) => {
+    try {
+        const { entryId } = req.body;
+        if (!entryId) {
+            res.status(400).json({ error: 'entryId required' });
+            return;
+        }
+        res.json(await forkSession(req.params.id, entryId));
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
 });
 app.get('/api/live-sessions/:id/stats', (req, res) => {
     const stats = getSessionStats(req.params.id);

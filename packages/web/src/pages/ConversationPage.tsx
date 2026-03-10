@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ChatView } from '../components/chat/ChatView';
 import { ConversationTree } from '../components/ConversationTree';
@@ -7,6 +7,7 @@ import { useSessionDetail } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../api';
 import type { DisplayBlock } from '../types';
+import { useLiveTitles } from '../contexts';
 
 // ── Model picker ──────────────────────────────────────────────────────────────
 
@@ -309,6 +310,11 @@ export function ConversationPage() {
         ? baseMessages
         : undefined;
 
+  const { setTitle: pushTitle } = useLiveTitles();
+  useEffect(() => {
+    if (id && stream.title) pushTitle(id, stream.title);
+  }, [id, stream.title, pushTitle]);
+
   const title = conv?.title
     ?? stream.title
     ?? sessionDetail?.meta.title
@@ -349,6 +355,11 @@ export function ConversationPage() {
   const [atBottom, setAtBottom] = useState(true);
   const [showTree, setShowTree] = useState(false);
 
+  // Pending steer/followup queue — cleared when the agent finishes its run
+  type PendingMsg = { id: string; text: string; type: 'steer' | 'followUp' };
+  const [pendingQueue, setPendingQueue] = useState<PendingMsg[]>([]);
+  const prevStreamingRef = useRef(false);
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef   = useRef<HTMLDivElement>(null);
 
@@ -381,10 +392,24 @@ export function ConversationPage() {
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollTop = el.scrollHeight;
     el.addEventListener('scroll', handleScroll);
     return () => el.removeEventListener('scroll', handleScroll);
-  }, [conv?.id, handleScroll]);
+  }, [handleScroll]);
+
+  // Scroll to bottom when navigating to a new session.
+  // useLayoutEffect fires synchronously after DOM commit so scrollHeight is accurate.
+  // The flag is reset on id change so each new session gets one initial scroll.
+  const shouldScrollToBottomRef = useRef(true);
+  useEffect(() => {
+    shouldScrollToBottomRef.current = true;
+  }, [id]);
+  useLayoutEffect(() => {
+    if (!shouldScrollToBottomRef.current) return;
+    const messages = realMessages ?? (conv ? conv.messages : undefined);
+    if (!messages?.length || !scrollRef.current) return;
+    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    shouldScrollToBottomRef.current = false;
+  });
 
   // Esc+Esc → open tree
   useEffect(() => {
@@ -407,6 +432,17 @@ export function ConversationPage() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [stream.blocks.length, stream.isStreaming, atBottom]);
+
+  // Focus input on navigation
+  useEffect(() => { textareaRef.current?.focus(); }, [id]);
+
+  // Clear pending queue when agent finishes its run
+  useEffect(() => {
+    if (prevStreamingRef.current && !stream.isStreaming) {
+      setPendingQueue([]);
+    }
+    prevStreamingRef.current = stream.isStreaming;
+  }, [stream.isStreaming]);
 
   // Jump to message by index
   const jumpToMessage = useCallback((index: number) => {
@@ -482,8 +518,21 @@ export function ConversationPage() {
         return;
       }
     }
+    // Alt+Enter = queue as follow-up (runs after agent finishes current turn)
+    if (e.key === 'Enter' && e.altKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      const text = input.trim();
+      if (!text || !isLiveSession) return;
+      setInput('');
+      setAttachments([]);
+      const pid = `${Date.now()}-${Math.random()}`;
+      setPendingQueue(q => [...q, { id: pid, text, type: 'followUp' }]);
+      stream.send(text, 'followUp');
+      return;
+    }
+
     // Enter = send (Shift+Enter = newline)
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       const text = input.trim();
       if (!text) return;
@@ -491,15 +540,36 @@ export function ConversationPage() {
       setAttachments([]);
 
       // Handle slash commands
-      if (text === '/clear')         { void handleClear(); return; }
-      if (text.startsWith('/run '))  { void handleRun(text.slice(5)); return; }
-      if (text.startsWith('/search ')){ sendToAgent(`Search the web for: ${text.slice(8)}`); return; }
-      if (text === '/summarize')     { sendToAgent('Summarize our conversation so far concisely.'); return; }
-      if (text === '/think')         { sendToAgent('Think step-by-step about our conversation so far and share your reasoning.'); return; }
+      if (text === '/clear')           { void handleClear(); return; }
+      if (text.startsWith('/run '))    { void handleRun(text.slice(5)); return; }
+      if (text.startsWith('/search ')) { sendToAgent(`Search the web for: ${text.slice(8)}`); return; }
+      if (text === '/summarize')       { sendToAgent('Summarize our conversation so far concisely.'); return; }
+      if (text === '/think')           { sendToAgent('Think step-by-step about our conversation so far and share your reasoning.'); return; }
       if (text.startsWith('/think '))  { sendToAgent(`Think step-by-step about: ${text.slice(7)}`); return; }
+      if (text === '/fork' && id && isLiveSession) {
+        void (async () => {
+          try {
+            const entries = await api.forkEntries(id);
+            if (entries.length === 0) { sendToAgent('(No forkable messages yet)'); return; }
+            // Fork at most recent message
+            const { newSessionId } = await api.forkSession(id, entries[entries.length - 1].entryId);
+            navigate(`/conversations/${newSessionId}`);
+          } catch (err) {
+            console.error('Fork failed:', err);
+          }
+        })();
+        return;
+      }
 
       if (isLiveSession) {
-        stream.send(text);
+        if (stream.isStreaming) {
+          // Agent is running — queue as a steering message injected mid-run
+          const pid = `${Date.now()}-${Math.random()}`;
+          setPendingQueue(q => [...q, { id: pid, text, type: 'steer' }]);
+          stream.send(text, 'steer');
+        } else {
+          stream.send(text);
+        }
         setTimeout(() => {
           if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }, 50);
@@ -626,6 +696,15 @@ export function ConversationPage() {
             if (c === '/clear')      { setInput(''); void handleClear(); return; }
             if (c === '/summarize')  { setInput(''); sendToAgent('Summarize our conversation so far concisely.'); return; }
             if (c === '/think')      { setInput(''); sendToAgent('Think step-by-step about our conversation so far and share your reasoning.'); return; }
+            if (c === '/fork' && id && isLiveSession) {
+              setInput('');
+              void api.forkEntries(id).then(entries => {
+                if (entries.length === 0) return;
+                return api.forkSession(id, entries[entries.length - 1].entryId)
+                  .then(({ newSessionId }) => navigate(`/conversations/${newSessionId}`));
+              }).catch(console.error);
+              return;
+            }
             setInput(cmd); setSlashIdx(0); textareaRef.current?.focus();
           }} />}
           {showMention && <MentionMenu query={mentionQuery} idx={mentionIdx} onSelect={id  => { setInput(input.replace(/@[\w-]*$/, id + ' ')); setMentionIdx(0); textareaRef.current?.focus(); }} />}
@@ -660,6 +739,29 @@ export function ConversationPage() {
               </div>
             )}
 
+            {/* Pending steer / follow-up queue */}
+            {pendingQueue.length > 0 && (
+              <div className="px-3 pt-2.5 pb-2 border-b border-border-subtle flex flex-col gap-1.5">
+                <span className="text-[9px] font-semibold uppercase tracking-widest text-dim">Queued</span>
+                {pendingQueue.map(msg => (
+                  <div key={msg.id} className="flex items-center gap-2 min-w-0">
+                    <span className={`shrink-0 inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full border ${
+                      msg.type === 'steer'
+                        ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                        : 'bg-teal/10 text-teal border-teal/20'
+                    }`}>
+                      {msg.type === 'steer' ? '⤵ steer' : '↷ followup'}
+                    </span>
+                    <span className="flex-1 text-[11px] text-secondary truncate">{msg.text}</span>
+                    <button
+                      onClick={() => setPendingQueue(q => q.filter(m => m.id !== msg.id))}
+                      className="shrink-0 text-dim hover:text-primary text-[13px] leading-none"
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Textarea */}
             <div className="flex items-end gap-2 px-3 py-2.5">
               <button className="text-dim hover:text-secondary transition-colors shrink-0 mb-0.5" title="Attach file"
@@ -687,12 +789,18 @@ export function ConversationPage() {
                       const text = input.trim();
                       if (!text) return;
                       setInput(''); setAttachments([]);
-                      stream.send(text);
+                      if (stream.isStreaming) {
+                        const pid = `${Date.now()}-${Math.random()}`;
+                        setPendingQueue(q => [...q, { id: pid, text, type: 'steer' }]);
+                        stream.send(text, 'steer');
+                      } else {
+                        stream.send(text);
+                      }
                       setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, 50);
                     }}
                     className="flex items-center gap-1 px-2 py-1 rounded-lg bg-accent text-[11px] font-semibold text-base hover:bg-accent/90 transition-colors"
                   >
-                    Send <span className="opacity-60 text-[10px]">↵</span>
+                    {stream.isStreaming ? 'Steer' : 'Send'} <span className="opacity-60 text-[10px]">↵</span>
                   </button>
                 )}
                 {(!isLiveSession || !input.trim()) && (

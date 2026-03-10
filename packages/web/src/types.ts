@@ -5,6 +5,7 @@ export interface ActivityEntry {
   kind: string;
   summary: string;
   details?: string;
+  read?: boolean;
   relatedWorkstreamIds?: string[];
   relatedConversationIds?: string[];
   notificationState?: string;

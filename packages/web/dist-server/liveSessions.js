@@ -8,7 +8,7 @@ import { homedir } from 'node:os';
 import { AuthStorage, DefaultResourceLoader, ModelRegistry, SessionManager, createAgentSession, } from '@mariozechner/pi-coding-agent';
 const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
 const SESSIONS_DIR = join(AGENT_DIR, 'sessions');
-const registry = new Map();
+export const registry = new Map();
 const toolTimings = new Map(); // toolCallId → start ms
 // ── Auth / model helpers ──────────────────────────────────────────────────────
 function makeAuth() {

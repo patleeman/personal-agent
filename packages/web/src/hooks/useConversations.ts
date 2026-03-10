@@ -6,9 +6,10 @@
  * Clicking a shelf item calls openSession() → adds to openIds → tab appears.
  * × on an open tab calls closeSession() → removed from openIds → back to shelf.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import { MOCK_CONVERSATIONS } from '../data/mockConversations';
 import type { SessionMeta } from '../types';
+import { LiveTitlesContext } from '../contexts';
 
 const OPEN_KEY = 'pa:open-session-ids';
 
@@ -41,6 +42,7 @@ export function useConversations() {
   const [openIds,     setOpenIds]     = useState<Set<string>>(loadOpen);
   const [loading,     setLoading]     = useState(true);
   const [usingFallback, setUsingFallback] = useState(false);
+  const { titles: liveTitles } = useContext(LiveTitlesContext);
 
   const fetchSessions = useCallback(() => {
     setLoading(true);
@@ -60,10 +62,12 @@ export function useConversations() {
     setOpenIds(prev => { const next = new Set(prev); next.delete(id); saveOpen(next); return next; });
   }, []);
 
-  // Sessions promoted to tabs (preserve insertion order from sessions list)
-  const tabs  = sessions.filter(s =>  openIds.has(s.id));
-  // Everything else goes into the shelf
-  const shelf = sessions.filter(s => !openIds.has(s.id));
+  // Apply live title overrides (from streaming sessions not yet flushed to JSONL)
+  const withTitles = sessions.map(s =>
+    liveTitles.has(s.id) ? { ...s, title: liveTitles.get(s.id)! } : s
+  );
+  const tabs  = withTitles.filter(s =>  openIds.has(s.id));
+  const shelf = withTitles.filter(s => !openIds.has(s.id));
 
   return { tabs, shelf, openSession, closeSession, loading, usingFallback, refetch: fetchSessions };
 }

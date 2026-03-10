@@ -2,6 +2,7 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { ContextRail } from './ContextRail';
 import { Sidebar } from './Sidebar';
+import { ThemeSwitcher } from './ThemeSwitcher';
 
 // ── Resize hook ───────────────────────────────────────────────────────────────
 
@@ -111,6 +112,10 @@ export function Layout() {
       {/* Left sidebar */}
       <div style={{ width: sidebar.width }} className="flex-shrink-0 flex flex-col overflow-hidden bg-surface border-r border-border-subtle">
         <Sidebar />
+        {/* Theme toggle pinned to sidebar bottom */}
+        <div className="px-3 py-2 border-t border-border-subtle flex justify-end">
+          <ThemeSwitcher />
+        </div>
       </div>
 
       <ResizeHandle onMouseDown={sidebar.onMouseDown} />

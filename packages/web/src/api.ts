@@ -42,6 +42,8 @@ export const api = {
     patch<{ ok: boolean }>(`/tasks/${encodeURIComponent(id)}`, { enabled }),
   taskLog: (id: string) =>
     get<{ log: string; path: string }>(`/tasks/${encodeURIComponent(id)}/log`),
+  runTaskNow: (id: string) =>
+    post<{ ok: boolean; sessionId: string }>(`/tasks/${encodeURIComponent(id)}/run`),
 
   // ── Shell run ─────────────────────────────────────────────────────────────
   run: (command: string, cwd?: string) =>
@@ -53,7 +55,9 @@ export const api = {
   memoryFileSave: (path: string, content: string) => post<{ ok: boolean }>('/memory/file', { path, content }),
 
   // ── Activity count ────────────────────────────────────────────────────────
-  activityCount: () => get<{ count: number }>('/activity/count'),
+  activityCount:    () => get<{ count: number }>('/activity/count'),
+  markActivityRead: (id: string, read = true) =>
+    patch<{ ok: boolean }>(`/activity/${encodeURIComponent(id)}`, { read }),
 
   // ── Live sessions ─────────────────────────────────────────────────────────
   liveSessions: () => get<LiveSessionMeta[]>('/live-sessions'),
@@ -74,4 +78,9 @@ export const api = {
 
   destroySession: (id: string) =>
     fetch(`/api/live-sessions/${id}`, { method: 'DELETE' }).then(r => r.json()),
+
+  forkEntries: (id: string) =>
+    get<{ entryId: string; text: string }[]>(`/live-sessions/${id}/fork-entries`),
+  forkSession: (id: string, entryId: string) =>
+    post<{ newSessionId: string; sessionFile: string }>(`/live-sessions/${id}/fork`, { entryId }),
 };
