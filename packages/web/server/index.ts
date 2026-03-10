@@ -1,4 +1,5 @@
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
@@ -58,6 +59,45 @@ app.get('/api/activity/:id', (req, res) => {
       return;
     }
     res.json(match.entry);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// ── Tasks ─────────────────────────────────────────────────────────────────────
+
+app.get('/api/tasks', (_req, res) => {
+  try {
+    const stateFile = join(homedir(), '.local/state/personal-agent/daemon/task-state.json');
+    let taskState: Record<string, unknown> = {};
+    if (existsSync(stateFile)) {
+      taskState = JSON.parse(readFileSync(stateFile, 'utf-8')) as Record<string, unknown>;
+    }
+    const tasks = (taskState as { tasks?: Record<string, unknown> }).tasks ?? {};
+
+    // Parse task markdown files to get schedule + prompt
+    const enriched = Object.values(tasks).map((t) => {
+      const task = t as {
+        id: string; filePath: string; scheduleType: string; running: boolean;
+        lastStatus?: string; lastRunAt?: string; lastSuccessAt?: string;
+        lastScheduledMinute?: string; lastAttemptCount?: number; lastLogPath?: string;
+      };
+      let enabled = true; let cron: string | undefined; let prompt = ''; let model: string | undefined;
+      try {
+        const md = readFileSync(task.filePath, 'utf-8');
+        const fmMatch = md.match(/^---\n([\s\S]*?)\n---/);
+        if (fmMatch) {
+          const fm = fmMatch[1];
+          if (/enabled:\s*false/.test(fm)) enabled = false;
+          cron  = fm.match(/cron:\s*"?([^"\n]+)"?/)?.[1]?.trim();
+          model = fm.match(/model:\s*"?([^"\n]+)"?/)?.[1]?.trim();
+        }
+        prompt = md.replace(/^---[\s\S]*?---\n?/, '').trim().split('\n')[0].slice(0, 120);
+      } catch { /* ignore */ }
+      return { ...task, enabled, cron, prompt, model };
+    });
+
+    res.json(enriched);
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }

@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { TasksPage } from './pages/TasksPage';
 import { Layout } from './components/Layout';
 import { ConversationPage } from './pages/ConversationPage';
 import { InboxDetailPage } from './pages/InboxDetailPage';
@@ -17,6 +18,7 @@ export function App() {
           <Route path="inbox/:id" element={<InboxDetailPage />} />
           <Route path="workstreams" element={<WorkstreamsPage />} />
           <Route path="workstreams/:id" element={<WorkstreamDetailPage />} />
+          <Route path="tasks" element={<TasksPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
