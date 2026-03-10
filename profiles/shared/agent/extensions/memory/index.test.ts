@@ -1,9 +1,9 @@
-import { mkdtempSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import memoryExtension from './index';
+import memoryExtension, { buildMemoryBrowserRootMenu, resolveMemoryProfileContext } from './index';
 
 const tempDirs: string[] = [];
 
@@ -40,6 +40,7 @@ describe('memory extension', () => {
           beforeAgentStartHandler = handler as (event: { prompt: string; systemPrompt: string }, ctx: { cwd: string }) => Promise<unknown>;
         }
       },
+      registerCommand: vi.fn(),
       registerTool: vi.fn(),
     };
 
@@ -97,6 +98,7 @@ describe('memory extension', () => {
           beforeAgentStartHandler = handler as (event: { prompt: string; systemPrompt: string }, ctx: { cwd: string }) => Promise<unknown>;
         }
       },
+      registerCommand: vi.fn(),
       registerTool: vi.fn(),
     };
 
@@ -134,6 +136,7 @@ describe('memory extension', () => {
           beforeAgentStartHandler = handler as (event: { prompt: string; systemPrompt: string }, ctx: { cwd: string }) => Promise<unknown>;
         }
       },
+      registerCommand: vi.fn(),
       registerTool: vi.fn(),
     };
 
@@ -157,5 +160,116 @@ describe('memory extension', () => {
 
     expect(slashResult).toBeUndefined();
     expect(emptyResult).toBeUndefined();
+  });
+
+  it('builds a browser tree for skills, memories, and AGENTS files', () => {
+    const repoRoot = createTempDir('memory-browser-repo-');
+    process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
+    process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
+
+    mkdirSync(join(repoRoot, 'profiles', 'shared', 'agent', 'skills', 'shared-skill', 'references'), { recursive: true });
+    mkdirSync(join(repoRoot, 'profiles', 'datadog', 'agent', 'skills', 'dd-skill', 'scripts'), { recursive: true });
+    mkdirSync(join(repoRoot, 'profiles', 'datadog', 'agent', 'memory'), { recursive: true });
+
+    writeFileSync(join(repoRoot, 'profiles', 'shared', 'agent', 'AGENTS.md'), '# Shared\n');
+    writeFileSync(join(repoRoot, 'profiles', 'datadog', 'agent', 'AGENTS.md'), '# Datadog\n');
+    writeFileSync(
+      join(repoRoot, 'profiles', 'shared', 'agent', 'skills', 'shared-skill', 'SKILL.md'),
+      ['---', 'name: shared-skill', 'description: Shared skill description', '---', '', '# Shared Skill', ''].join('\n'),
+    );
+    writeFileSync(join(repoRoot, 'profiles', 'shared', 'agent', 'skills', 'shared-skill', 'references', 'notes.md'), '# Notes\n');
+    writeFileSync(
+      join(repoRoot, 'profiles', 'datadog', 'agent', 'skills', 'dd-skill', 'SKILL.md'),
+      ['---', 'name: dd-skill', 'description: Datadog skill description', '---', '', '# Datadog Skill', ''].join('\n'),
+    );
+    writeFileSync(join(repoRoot, 'profiles', 'datadog', 'agent', 'skills', 'dd-skill', 'scripts', 'run.sh'), '#!/bin/sh\n');
+    writeFileSync(
+      join(repoRoot, 'profiles', 'datadog', 'agent', 'memory', 'runpod.md'),
+      ['---', 'id: runpod', 'title: "Runpod Notes"', 'summary: "GPU host runbook"', 'tags:', '  - infra', 'updated: 2026-03-10', '---', '', '# Runpod', ''].join('\n'),
+    );
+
+    const context = resolveMemoryProfileContext(repoRoot);
+    const rootMenu = buildMemoryBrowserRootMenu(context);
+
+    expect(rootMenu.title).toBe('Memory');
+    expect(rootMenu.items.map((item) => item.label)).toEqual(['Skills', 'Memories folder', 'AGENTS.md']);
+
+    const skillsMenu = rootMenu.items[0]!;
+    expect(skillsMenu.kind).toBe('menu');
+    const layerMenu = skillsMenu.kind === 'menu' ? skillsMenu.buildMenu() : undefined;
+    expect(layerMenu?.items.map((item) => item.label)).toEqual(['shared', 'datadog']);
+
+    const datadogSkills = layerMenu?.items.find((item) => item.label === 'datadog');
+    expect(datadogSkills?.kind).toBe('menu');
+    const datadogSkillsMenu = datadogSkills && datadogSkills.kind === 'menu' ? datadogSkills.buildMenu() : undefined;
+    expect(datadogSkillsMenu?.items.map((item) => item.label)).toContain('dd-skill');
+
+    const skillEntry = datadogSkillsMenu?.items.find((item) => item.label === 'dd-skill');
+    expect(skillEntry?.description).toContain('Datadog skill description');
+    expect(skillEntry?.kind).toBe('menu');
+    const skillFilesMenu = skillEntry && skillEntry.kind === 'menu' ? skillEntry.buildMenu() : undefined;
+    expect(skillFilesMenu?.items.map((item) => item.label)).toContain('SKILL.md');
+    expect(skillFilesMenu?.items.map((item) => item.label)).toContain('scripts');
+
+    const memoriesMenuItem = rootMenu.items[1]!;
+    expect(memoriesMenuItem.kind).toBe('menu');
+    const memoriesMenu = memoriesMenuItem.kind === 'menu' ? memoriesMenuItem.buildMenu() : undefined;
+    expect(memoriesMenu?.items.some((item) => item.kind === 'file' && item.label === 'Runpod Notes')).toBe(true);
+
+    const agentsMenuItem = rootMenu.items[2]!;
+    expect(agentsMenuItem.kind).toBe('menu');
+    const agentsMenu = agentsMenuItem.kind === 'menu' ? agentsMenuItem.buildMenu() : undefined;
+    expect(agentsMenu?.items.map((item) => item.label)).toEqual(['shared', 'datadog']);
+  });
+
+  it('registers a /memory command and footer status entry for the TUI', async () => {
+    let sessionStartHandler: ((event: unknown, ctx: { hasUI: boolean; ui: { setStatus: (key: string, value: string | undefined) => void; theme: { fg: (tone: string, text: string) => string } } }) => Promise<void>) | undefined;
+    let sessionShutdownHandler: ((event: unknown, ctx: { hasUI: boolean; ui: { setStatus: (key: string, value: string | undefined) => void } }) => Promise<void>) | undefined;
+    let memoryCommandHandler: ((args: string, ctx: { hasUI: boolean }) => Promise<void>) | undefined;
+
+    const pi = {
+      on: (eventName: string, handler: unknown) => {
+        if (eventName === 'session_start') {
+          sessionStartHandler = handler as (event: unknown, ctx: { hasUI: boolean; ui: { setStatus: (key: string, value: string | undefined) => void; theme: { fg: (tone: string, text: string) => string } } }) => Promise<void>;
+        }
+
+        if (eventName === 'session_shutdown') {
+          sessionShutdownHandler = handler as (event: unknown, ctx: { hasUI: boolean; ui: { setStatus: (key: string, value: string | undefined) => void } }) => Promise<void>;
+        }
+      },
+      registerCommand: (name: string, config: { handler: (args: string, ctx: { hasUI: boolean }) => Promise<void> }) => {
+        if (name === 'memory') {
+          memoryCommandHandler = config.handler;
+        }
+      },
+      registerTool: vi.fn(),
+    };
+
+    memoryExtension(pi as never);
+    expect(memoryCommandHandler).toBeDefined();
+    expect(sessionStartHandler).toBeDefined();
+    expect(sessionShutdownHandler).toBeDefined();
+
+    const setStatus = vi.fn();
+    await sessionStartHandler!({}, {
+      hasUI: true,
+      ui: {
+        setStatus,
+        theme: {
+          fg: (_tone: string, text: string) => text,
+        },
+      },
+    });
+
+    expect(setStatus).toHaveBeenCalledWith('memory-browser', '🧠 /memory');
+
+    await sessionShutdownHandler!({}, {
+      hasUI: true,
+      ui: {
+        setStatus,
+      },
+    });
+
+    expect(setStatus).toHaveBeenCalledWith('memory-browser', undefined);
   });
 });

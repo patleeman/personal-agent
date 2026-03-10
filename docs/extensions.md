@@ -65,9 +65,9 @@ This allows extension-specific dependencies to be self-contained.
 
 ## Built-in extensions in this repo
 
-- `memory` — active-profile memory policy injection (`AGENTS.md` + `skills/` memory model)
+- `memory` — active-profile memory policy injection plus a `/memory` TUI browser for AGENTS.md, skills, and memory docs
 - `context-bar` — session context display in Pi TUI
-- `pa-header` — appends personal-agent profile/AGENTS provenance to the startup header
+- `pa-header` — shows the active profile prominently and appends AGENTS provenance to the startup header
 - `at-autocomplete-performance` — replaces heavy `@` fuzzy file search with fast path-style completion in large repos
 - `deferred-resume` — schedules this same TUI session to resume later after a delay
 - `web-tools` — web search/fetch tool integration
@@ -78,13 +78,14 @@ This allows extension-specific dependencies to be self-contained.
 
 ## Memory extension behavior
 
-`profiles/shared/agent/extensions/memory/` injects:
+`profiles/shared/agent/extensions/memory/` provides:
 
-- active profile name
-- profile directory metadata
-- memory management policy (AGENTS + skills as durable memory)
+- active profile name and path metadata in the system prompt
+- memory management policy guidance (AGENTS + skills as durable memory)
+- a footer status entry (`🧠 /memory`) in the interactive TUI
+- a `/memory` browser for inspecting and editing layered `AGENTS.md`, skills, and profile memory docs from inside Pi
 
-This aligns agent behavior with profile-layer memory rules.
+This aligns agent behavior with profile-layer memory rules while making memory resources directly browsable in the TUI.
 
 ---
 

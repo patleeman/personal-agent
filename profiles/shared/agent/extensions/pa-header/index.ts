@@ -76,7 +76,8 @@ function toDisplayPath(cwd: string, targetPath: string): string {
 }
 
 interface PaSummary {
-  profile: string;
+  activeProfile: string;
+  requestedProfile: string;
   sourceAgents: string;
   runtimeAgents: string;
 }
@@ -101,10 +102,6 @@ function resolvePaSummary(cwd: string): PaSummary {
     ? join(resolve(runtimeAgentDir), 'AGENTS.md')
     : undefined;
 
-  const profileLabel = requestedProfile === activeProfile
-    ? activeProfile
-    : `${activeProfile} (requested: ${requestedProfile})`;
-
   const sourceAgents = activeAgentsFile
     ? toDisplayPath(cwd, activeAgentsFile)
     : 'none (shared profile)';
@@ -114,7 +111,8 @@ function resolvePaSummary(cwd: string): PaSummary {
     : 'unknown (PI_CODING_AGENT_DIR is not set)';
 
   return {
-    profile: profileLabel,
+    activeProfile,
+    requestedProfile,
     sourceAgents,
     runtimeAgents,
   };
@@ -175,11 +173,22 @@ function applyPaHeader(ctx: ExtensionContext): void {
       render(width: number): string[] {
         const existingHeaderLines = renderHeaderLines(builtInHeader, width);
         const paLines = [
-          truncateToWidth(theme.fg('accent', '[Personal Agent]'), width),
-          truncateToWidth(`${theme.fg('dim', '  active profile: ')}${summary.profile}`, width),
+          truncateToWidth(theme.fg('accent', `[${summary.activeProfile}]`), width),
+        ];
+
+        if (summary.requestedProfile !== summary.activeProfile) {
+          paLines.push(
+            truncateToWidth(
+              `${theme.fg('dim', '  requested profile: ')}${summary.requestedProfile}${theme.fg('dim', ` (using ${summary.activeProfile})`)}`,
+              width,
+            ),
+          );
+        }
+
+        paLines.push(
           truncateToWidth(`${theme.fg('dim', '  source AGENTS.md: ')}${summary.sourceAgents}`, width),
           truncateToWidth(`${theme.fg('dim', '  runtime AGENTS.md: ')}${summary.runtimeAgents}`, width),
-        ];
+        );
 
         if (existingHeaderLines.length === 0) {
           return paLines;
