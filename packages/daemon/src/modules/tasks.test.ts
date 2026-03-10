@@ -194,7 +194,7 @@ describe('tasks module scheduling', () => {
     await module.stop?.(context);
   });
 
-  it('passes tmux execution mode from module defaults with per-task overrides', async () => {
+  it('passes daemon execution mode from module defaults with per-task overrides', async () => {
     const taskDir = createTempDir('tasks-module-definitions-');
     const stateRoot = createTempDir('tasks-module-state-');
 
@@ -205,7 +205,7 @@ describe('tasks module scheduling', () => {
 
     writeFileSync(
       join(taskDir, 'override-mode.task.md'),
-      `---\nid: override-mode\nat: "2026-03-02T10:00:00.000Z"\nrunInTmux: false\n---\nRun without tmux\n`,
+      `---\nid: override-mode\nat: "2026-03-02T10:00:00.000Z"\nrunInTmux: true\n---\nRun with tmux override\n`,
     );
 
     let currentTime = new Date('2026-03-02T09:59:00.000Z');
@@ -219,7 +219,7 @@ describe('tasks module scheduling', () => {
         maxRetries: 3,
         reapAfterDays: 7,
         defaultTimeoutSeconds: 1800,
-        runTasksInTmux: true,
+        runTasksInTmux: false,
       },
       {
         now: () => currentTime,
@@ -244,8 +244,8 @@ describe('tasks module scheduling', () => {
       .sort((left, right) => left.id.localeCompare(right.id));
 
     expect(runModes).toEqual([
-      { id: 'default-mode', runInTmux: true },
-      { id: 'override-mode', runInTmux: false },
+      { id: 'default-mode', runInTmux: false },
+      { id: 'override-mode', runInTmux: true },
     ]);
 
     await module.stop?.(context);
