@@ -47,9 +47,6 @@ ddauth obo -o <orgID>
 # Returns a JWT token (1-hour expiry)
 ```
 
-### Common org IDs
-Use the org ID relevant to your environment. Check with your team for the correct value.
-
 ### Use in API calls
 ```bash
 TOKEN=$(ddauth obo -o 2)
