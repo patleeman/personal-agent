@@ -53,7 +53,7 @@
 html, body, #root { height: 100%; margin: 0; padding: 0; }
 
 body {
-  font-family: 'DM Sans', system-ui, sans-serif;
+  font-family: 'DM Sans Variable', 'DM Sans', system-ui, sans-serif;
   background-color: rgb(var(--color-base));
   color: rgb(var(--color-primary));
   -webkit-font-smoothing: antialiased;

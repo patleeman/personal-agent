@@ -28,7 +28,7 @@ export default {
         steel:            v('--color-steel'),
       },
       fontFamily: {
-        sans: ['DM Sans', 'system-ui', 'sans-serif'],
+        sans: ['DM Sans Variable', 'DM Sans', 'system-ui', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'Menlo', 'monospace'],
       },
       fontSize: {

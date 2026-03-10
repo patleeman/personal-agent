@@ -94,7 +94,15 @@ function TaskRow({ task, isSelected, onRefetch }: { task: Task; isSelected: bool
         </div>
 
         {task.prompt && (
-          <p className="text-[12px] text-secondary mt-0.5 leading-snug line-clamp-1">{task.prompt}</p>
+          <p
+            className="text-[12px] text-secondary mt-0.5 leading-snug line-clamp-1"
+            dangerouslySetInnerHTML={{
+              __html: task.prompt
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/`(.+?)`/g, '<code class="font-mono text-[11px]">$1</code>'),
+            }}
+          />
         )}
 
         <p className="text-[11px] text-dim mt-0.5 font-mono flex items-center gap-1.5 flex-wrap">

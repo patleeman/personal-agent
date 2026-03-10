@@ -11,6 +11,8 @@
     "start": "node dist-server/index.js"
   },
   "dependencies": {
+    "@fontsource-variable/dm-sans": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8",
     "@mariozechner/pi-coding-agent": "*",
     "@personal-agent/core": "*",
     "@personal-agent/resources": "*",
