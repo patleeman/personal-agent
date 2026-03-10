@@ -110,6 +110,7 @@ pa gateway ...
 Notes:
 
 - Interactive `pa tui` runs Pi inside a PA-managed tmux workspace with a repo-managed tmux config when launched from a normal terminal.
+- If that workspace is already attached in another terminal, `pa tui` creates a grouped tmux session with a fresh Pi window so the two terminals do not mirror the same active window.
 - If `pa tui` is launched from inside an existing tmux session, it skips workspace attach and runs Pi directly in the current pane instead of nesting tmux.
 - Workspace shortcuts are exposed via a `Ctrl+Space` tmux shortcut mode with a quick hint overlay, including `?` for the help popup and `t` for managed task status.
 - Non-interactive Pi modes (`-p`, `--mode json`, `--mode rpc`, `--export`, etc.) still run Pi directly without the tmux workspace wrapper.

@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
@@ -32,6 +33,30 @@ function createTestRepo(): string {
   );
 
   return repo;
+}
+
+function sanitizeTmuxNamePart(value: string, fallback: string): string {
+  const normalized = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '')
+    .slice(0, 24);
+
+  return normalized.length > 0 ? normalized : fallback;
+}
+
+function createWorkspaceBaseSessionName(cwd: string, profileName: string): string {
+  const cwdParts = cwd.split('/').filter((part) => part.length > 0);
+  const workspace = sanitizeTmuxNamePart(cwdParts[cwdParts.length - 1] ?? 'workspace', 'workspace');
+  const profile = sanitizeTmuxNamePart(profileName, 'profile');
+  const hash = createHash('sha1').update(cwd).digest('hex').slice(0, 8);
+
+  return `pa-${workspace}-${profile}-${hash}`;
+}
+
+function escapeForRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function createFakePiBinary(invocationLogPath?: string): string {
@@ -81,8 +106,23 @@ while [ $index -lt \${#args[@]} ]; do
   break
 done
 if [ "$subcommand" = "has-session" ]; then
+  if [ "\${PA_FAKE_TMUX_HAS_SESSION:-0}" = "1" ]; then
+    exit 0
+  fi
   echo "can't find session" >&2
   exit 1
+fi
+if [ "$subcommand" = "list-sessions" ]; then
+  if [ -n "\${PA_FAKE_TMUX_LIST_SESSIONS_STDOUT:-}" ]; then
+    printf '%b' "\${PA_FAKE_TMUX_LIST_SESSIONS_STDOUT}"
+  fi
+  exit "\${PA_FAKE_TMUX_LIST_SESSIONS_STATUS:-0}"
+fi
+if [ "$subcommand" = "new-window" ]; then
+  if [ -n "\${PA_FAKE_TMUX_NEW_WINDOW_STDOUT:-}" ]; then
+    printf '%b' "\${PA_FAKE_TMUX_NEW_WINDOW_STDOUT}"
+  fi
+  exit "\${PA_FAKE_TMUX_NEW_WINDOW_STATUS:-0}"
 fi
 exit 0
 `,
@@ -146,6 +186,30 @@ describe('pa tui workspace mode', () => {
     expect(tmuxLog).toContain('attach-session');
     expect(tmuxLog).toContain('PERSONAL_AGENT_TMUX_WORKSPACE=1');
     expect(tmuxLog).toContain('PI_CODING_AGENT_DIR=');
+  });
+
+  it('creates a grouped workspace session with a fresh pi window when the workspace is already attached elsewhere', async () => {
+    const repo = createTestRepo();
+    const stateRoot = createTempDir('personal-agent-cli-state-');
+    const tmuxLogPath = join(createTempDir('personal-agent-cli-log-'), 'tmux-args.log');
+    const fakePiBinDir = createFakePiBinary();
+    const fakeTmuxBinDir = createFakeTmuxBinary(tmuxLogPath);
+    const baseSessionName = createWorkspaceBaseSessionName(process.cwd(), 'shared');
+
+    process.env.PATH = `${fakeTmuxBinDir}:${fakePiBinDir}:${process.env.PATH}`;
+    process.env.PERSONAL_AGENT_REPO_ROOT = repo;
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PA_FAKE_TMUX_HAS_SESSION = '1';
+    process.env.PA_FAKE_TMUX_LIST_SESSIONS_STDOUT = `${baseSessionName}\t1\t0\t\n`;
+
+    const exitCode = await runCli(['tui']);
+    expect(exitCode).toBe(0);
+
+    const tmuxLog = readFileSync(tmuxLogPath, 'utf-8');
+    expect(tmuxLog).toContain('list-sessions');
+    expect(tmuxLog).toMatch(new RegExp(`new-session -d -t ${escapeForRegex(baseSessionName)} -s ${escapeForRegex(baseSessionName)}-client-\\d{8}-\\d{6}-\\d+`));
+    expect(tmuxLog).toMatch(new RegExp(`new-window -t ${escapeForRegex(baseSessionName)}-client-\\d{8}-\\d{6}-\\d+ -n tui-\\d{6}`));
+    expect(tmuxLog).toMatch(new RegExp(`attach-session -t ${escapeForRegex(baseSessionName)}-client-\\d{8}-\\d{6}-\\d+`));
   });
 
   it('runs pa tui directly in the current pane when already inside tmux', async () => {

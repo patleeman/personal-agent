@@ -30,6 +30,20 @@ export interface LaunchPiWorkspaceOptions {
 
 const WORKSPACE_MAIN_WINDOW_NAME = 'main';
 const WORKSPACE_MAIN_PANE_TITLE = 'main';
+const WORKSPACE_ATTACHED_WINDOW_NAME_PREFIX = 'tui';
+const WORKSPACE_ATTACHED_PANE_TITLE = 'tui';
+const LIST_WORKSPACE_SESSIONS_FORMAT = [
+  '#{session_name}',
+  '#{session_attached}',
+  '#{session_grouped}',
+  '#{session_group}',
+].join('\t');
+
+interface WorkspaceSessionSummary {
+  name: string;
+  attachedClients: number;
+  groupName: string | null;
+}
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
@@ -88,6 +102,49 @@ function createWorkspaceSessionName(cwd: string, profileName: string, piArgs: st
   return `${base}-${formatTmuxSessionTimestamp()}`;
 }
 
+function createAttachedWorkspaceSessionName(baseSessionName: string): string {
+  return `${baseSessionName}-client-${formatTmuxSessionTimestamp()}-${process.pid}`;
+}
+
+function createAttachedWorkspaceWindowName(date = new Date()): string {
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+
+  return `${WORKSPACE_ATTACHED_WINDOW_NAME_PREFIX}-${hours}${minutes}${seconds}`;
+}
+
+function parseNumeric(value: string): number {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function toNullableString(value: string): string | null {
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function parseWorkspaceSessionSummary(line: string): WorkspaceSessionSummary | null {
+  if (line.trim().length === 0) {
+    return null;
+  }
+
+  const parts = line.split('\t');
+  const name = parts[0]?.trim() ?? '';
+
+  if (name.length === 0) {
+    return null;
+  }
+
+  return {
+    name,
+    attachedClients: parseNumeric(parts[1]?.trim() ?? '0'),
+    groupName: (parts[2]?.trim() ?? '') === '1'
+      ? toNullableString(parts[3] ?? '')
+      : null,
+  };
+}
+
 function tmuxResultToMessage(stderr: string, stdout: string): string {
   const output = `${stderr}\n${stdout}`.trim();
   return output.length > 0 ? output : 'unknown tmux error';
@@ -124,12 +181,65 @@ function sessionExists(sessionName: string, runner: TmuxRunner): boolean {
   throw new Error(`tmux has-session failed: ${message}`);
 }
 
+function listWorkspaceSessions(runner: TmuxRunner): WorkspaceSessionSummary[] {
+  const result = runner(['list-sessions', '-F', LIST_WORKSPACE_SESSIONS_FORMAT]);
+
+  if ((result.status ?? 1) !== 0) {
+    if (isTmuxMissing(result.error)) {
+      throw new Error('tmux is not installed or not available on PATH.');
+    }
+
+    const message = tmuxResultToMessage(result.stderr, result.stdout);
+    if (isMissingSessionMessage(message)) {
+      return [];
+    }
+
+    throw new Error(`tmux list-sessions failed: ${message}`);
+  }
+
+  return result.stdout
+    .split('\n')
+    .map((line) => parseWorkspaceSessionSummary(line))
+    .filter((session): session is WorkspaceSessionSummary => session !== null);
+}
+
+function getWorkspaceGroupSessions(baseSessionName: string, runner: TmuxRunner): WorkspaceSessionSummary[] {
+  const sessions = listWorkspaceSessions(runner);
+  return sessions.filter((session) => session.name === baseSessionName || session.groupName === baseSessionName);
+}
+
+function countAttachedClientsInWorkspaceGroup(baseSessionName: string, runner: TmuxRunner): number {
+  return getWorkspaceGroupSessions(baseSessionName, runner)
+    .reduce((total, session) => total + session.attachedClients, 0);
+}
+
+function cleanupDetachedAttachedWorkspaceSessions(baseSessionName: string, runner: TmuxRunner): void {
+  const attachedSessionPrefix = `${baseSessionName}-client-`;
+
+  for (const session of getWorkspaceGroupSessions(baseSessionName, runner)) {
+    if (!session.name.startsWith(attachedSessionPrefix) || session.attachedClients > 0) {
+      continue;
+    }
+
+    const result = runner(['kill-session', '-t', session.name]);
+    if ((result.status ?? 1) !== 0) {
+      continue;
+    }
+  }
+}
+
 function setSessionOption(sessionName: string, option: string, value: string, runner: TmuxRunner): void {
   const result = runner(['set-option', '-t', sessionName, option, value]);
 
   if ((result.status ?? 1) !== 0) {
     throw new Error(`tmux set-option failed: ${tmuxResultToMessage(result.stderr, result.stdout)}`);
   }
+}
+
+function tagWorkspaceSession(sessionName: string, profileName: string, cwd: string, runner: TmuxRunner): void {
+  setSessionOption(sessionName, PA_TMUX_WORKSPACE_OPTION, '1', runner);
+  setSessionOption(sessionName, PA_TMUX_PROFILE_OPTION, profileName, runner);
+  setSessionOption(sessionName, PA_TMUX_CWD_OPTION, cwd, runner);
 }
 
 function sourceWorkspaceConfigIfServerRunning(runner: TmuxRunner): void {
@@ -156,6 +266,56 @@ function trySetPaneTitle(target: string, title: string, runner: TmuxRunner): voi
   if ((result.status ?? 1) !== 0) {
     return;
   }
+}
+
+function createAttachedWorkspaceSession(
+  baseSessionName: string,
+  attachedSessionName: string,
+  profileName: string,
+  cwd: string,
+  command: string,
+  runner: TmuxRunner,
+): void {
+  const createSessionResult = runner([
+    'new-session',
+    '-d',
+    '-t',
+    baseSessionName,
+    '-s',
+    attachedSessionName,
+  ]);
+
+  if ((createSessionResult.status ?? 1) !== 0) {
+    if (isTmuxMissing(createSessionResult.error)) {
+      throw new Error('tmux is not installed or not available on PATH.');
+    }
+
+    throw new Error(`tmux new-session failed: ${tmuxResultToMessage(createSessionResult.stderr, createSessionResult.stdout)}`);
+  }
+
+  tagWorkspaceSession(attachedSessionName, profileName, cwd, runner);
+
+  const windowName = createAttachedWorkspaceWindowName();
+  const createWindowResult = runner([
+    'new-window',
+    '-t',
+    attachedSessionName,
+    '-n',
+    windowName,
+    '-c',
+    cwd,
+    command,
+  ]);
+
+  if ((createWindowResult.status ?? 1) !== 0) {
+    if (isTmuxMissing(createWindowResult.error)) {
+      throw new Error('tmux is not installed or not available on PATH.');
+    }
+
+    throw new Error(`tmux new-window failed: ${tmuxResultToMessage(createWindowResult.stderr, createWindowResult.stdout)}`);
+  }
+
+  trySetPaneTitle(`${attachedSessionName}:${windowName}`, WORKSPACE_ATTACHED_PANE_TITLE, runner);
 }
 
 function buildPiWorkspaceCommand(
@@ -225,9 +385,17 @@ export function launchPiInWorkspace(options: LaunchPiWorkspaceOptions): number {
 
   const runner = createSpawnSyncTmuxRunner();
   sourceWorkspaceConfigIfServerRunning(runner);
+
   const canReuseExistingWorkspace = options.requestedPiArgs.length === 0;
-  const sessionName = createWorkspaceSessionName(options.cwd, options.profileName, options.requestedPiArgs);
-  const exists = canReuseExistingWorkspace ? sessionExists(sessionName, runner) : false;
+  const baseSessionName = createWorkspaceBaseSessionName(options.cwd, options.profileName);
+  let sessionName = canReuseExistingWorkspace
+    ? baseSessionName
+    : createWorkspaceSessionName(options.cwd, options.profileName, options.requestedPiArgs);
+  const exists = canReuseExistingWorkspace ? sessionExists(baseSessionName, runner) : false;
+
+  if (exists) {
+    cleanupDetachedAttachedWorkspaceSessions(baseSessionName, runner);
+  }
 
   if (!exists) {
     const command = buildPiWorkspaceCommand(sessionName, options.piInvocation, options.launchPiArgs, options.piEnv);
@@ -251,10 +419,19 @@ export function launchPiInWorkspace(options: LaunchPiWorkspaceOptions): number {
       throw new Error(`tmux new-session failed: ${tmuxResultToMessage(createResult.stderr, createResult.stdout)}`);
     }
 
-    setSessionOption(sessionName, PA_TMUX_WORKSPACE_OPTION, '1', runner);
-    setSessionOption(sessionName, PA_TMUX_PROFILE_OPTION, options.profileName, runner);
-    setSessionOption(sessionName, PA_TMUX_CWD_OPTION, options.cwd, runner);
+    tagWorkspaceSession(sessionName, options.profileName, options.cwd, runner);
     trySetPaneTitle(`${sessionName}:${WORKSPACE_MAIN_WINDOW_NAME}`, WORKSPACE_MAIN_PANE_TITLE, runner);
+  } else if (countAttachedClientsInWorkspaceGroup(baseSessionName, runner) > 0) {
+    sessionName = createAttachedWorkspaceSessionName(baseSessionName);
+    const command = buildPiWorkspaceCommand(sessionName, options.piInvocation, options.launchPiArgs, options.piEnv);
+    createAttachedWorkspaceSession(
+      baseSessionName,
+      sessionName,
+      options.profileName,
+      options.cwd,
+      command,
+      runner,
+    );
   }
 
   const attachResult = spawnSync('tmux', withPaTmuxCliArgs(['attach-session', '-t', sessionName]), {
