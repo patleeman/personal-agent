@@ -48,8 +48,9 @@ export const api = {
     post<{ output: string; exitCode: number }>('/run', { command, cwd }),
 
   // ── Memory browser ────────────────────────────────────────────────────────
-  memory:     () => get<MemoryData>('/memory'),
-  memoryFile: (path: string) => get<{ content: string; path: string }>(`/memory/file?path=${encodeURIComponent(path)}`),
+  memory:         () => get<MemoryData>('/memory'),
+  memoryFile:     (path: string) => get<{ content: string; path: string }>(`/memory/file?path=${encodeURIComponent(path)}`),
+  memoryFileSave: (path: string, content: string) => post<{ ok: boolean }>('/memory/file', { path, content }),
 
   // ── Activity count ────────────────────────────────────────────────────────
   activityCount: () => get<{ count: number }>('/activity/count'),

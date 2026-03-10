@@ -9,6 +9,7 @@ import {
   createSession,
   resumeSession,
   getLiveSessions,
+  getSessionStats,
   isLive,
   subscribe,
   promptSession,
@@ -351,6 +352,13 @@ app.post('/api/live-sessions/:id/abort', async (req, res) => {
   }
 });
 
+/** Get token usage stats for a live session */
+app.get('/api/live-sessions/:id/stats', (req, res) => {
+  const stats = getSessionStats(req.params.id);
+  if (!stats) { res.status(404).json({ error: 'Not found' }); return; }
+  res.json(stats);
+});
+
 /** Destroy / close a live session */
 app.delete('/api/live-sessions/:id', (req, res) => {
   destroySession(req.params.id);
@@ -527,6 +535,20 @@ app.get('/api/memory/file', (req, res) => {
     if (!existsSync(filePath)) { res.status(404).json({ error: 'File not found' }); return; }
     const content = readFileSync(filePath, 'utf-8');
     res.json({ content, path: filePath });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/memory/file', (req, res) => {
+  try {
+    const { path: filePath, content } = req.body as { path: string; content: string };
+    if (!filePath || content === undefined) { res.status(400).json({ error: 'path and content required' }); return; }
+    if (!filePath.startsWith(REPO_ROOT) || !filePath.endsWith('.md')) {
+      res.status(403).json({ error: 'Access denied' }); return;
+    }
+    writeFileSync(filePath, content, 'utf-8');
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }

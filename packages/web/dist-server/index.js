@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { listSessions, readSessionBlocks } from './sessions.js';
-import { createSession, resumeSession, getLiveSessions, isLive, subscribe, promptSession, abortSession, destroySession, } from './liveSessions.js';
+import { createSession, resumeSession, getLiveSessions, getSessionStats, isLive, subscribe, promptSession, abortSession, destroySession, } from './liveSessions.js';
 import { listProfileActivityEntries, listWorkstreamIds, readWorkstreamPlan, readWorkstreamSummary, resolveWorkstreamPaths, } from '@personal-agent/core';
 const PORT = parseInt(process.env.PA_WEB_PORT ?? '3741', 10);
 const REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? process.cwd();
@@ -347,6 +347,15 @@ app.post('/api/live-sessions/:id/abort', async (req, res) => {
         res.status(500).json({ error: String(err) });
     }
 });
+/** Get token usage stats for a live session */
+app.get('/api/live-sessions/:id/stats', (req, res) => {
+    const stats = getSessionStats(req.params.id);
+    if (!stats) {
+        res.status(404).json({ error: 'Not found' });
+        return;
+    }
+    res.json(stats);
+});
 /** Destroy / close a live session */
 app.delete('/api/live-sessions/:id', (req, res) => {
     destroySession(req.params.id);
@@ -536,6 +545,24 @@ app.get('/api/memory/file', (req, res) => {
         }
         const content = readFileSync(filePath, 'utf-8');
         res.json({ content, path: filePath });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/memory/file', (req, res) => {
+    try {
+        const { path: filePath, content } = req.body;
+        if (!filePath || content === undefined) {
+            res.status(400).json({ error: 'path and content required' });
+            return;
+        }
+        if (!filePath.startsWith(REPO_ROOT) || !filePath.endsWith('.md')) {
+            res.status(403).json({ error: 'Access denied' });
+            return;
+        }
+        writeFileSync(filePath, content, 'utf-8');
+        res.json({ ok: true });
     }
     catch (err) {
         res.status(500).json({ error: String(err) });

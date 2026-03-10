@@ -1,14 +1,58 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { useApi } from '../hooks';
 import type { MemoryAgentsItem, MemoryDocItem, MemorySkillItem } from '../types';
 
-// ── File content viewer ───────────────────────────────────────────────────────
+// ── File content viewer + editor ──────────────────────────────────────────────
 
 function FileContent({ path }: { path: string }) {
-  const { data, loading, error } = useApi(
+  const { data, loading, error, refetch } = useApi(
     useCallback(() => api.memoryFile(path), [path]),
   );
+  const [editing, setEditing]   = useState(false);
+  const [draft,   setDraft]     = useState('');
+  const [saving,  setSaving]    = useState(false);
+  const [saveErr, setSaveErr]   = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // When file loads, seed draft
+  useEffect(() => {
+    if (data?.content !== undefined) setDraft(data.content);
+  }, [data?.content]);
+
+  // Auto-size textarea to content
+  useEffect(() => {
+    if (editing && textareaRef.current) {
+      const el = textareaRef.current;
+      el.style.height = 'auto';
+      el.style.height = `${Math.min(el.scrollHeight, 600)}px`;
+    }
+  }, [editing, draft]);
+
+  function startEdit() {
+    if (data?.content !== undefined) setDraft(data.content);
+    setSaveErr(null);
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+    setSaveErr(null);
+  }
+
+  async function save() {
+    setSaving(true);
+    setSaveErr(null);
+    try {
+      await api.memoryFileSave(path, draft);
+      setEditing(false);
+      refetch();
+    } catch (e) {
+      setSaveErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
 
   if (loading) return (
     <div className="px-4 py-3 text-[11px] text-dim animate-pulse font-mono">Loading…</div>
@@ -16,10 +60,50 @@ function FileContent({ path }: { path: string }) {
   if (error) return (
     <div className="px-4 py-3 text-[11px] text-danger/80 font-mono">Error: {error}</div>
   );
+
   return (
-    <pre className="px-4 py-3 text-[11px] font-mono text-secondary leading-relaxed whitespace-pre-wrap break-words overflow-x-auto max-h-96 overflow-y-auto">
-      {data?.content}
-    </pre>
+    <div>
+      {editing ? (
+        <div className="px-4 py-3 space-y-2">
+          <textarea
+            ref={textareaRef}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            className="w-full text-[11px] font-mono text-secondary leading-relaxed bg-base border border-border-default rounded-lg px-3 py-2 resize-none focus:outline-none focus:border-accent/60 min-h-[120px]"
+            spellCheck={false}
+          />
+          {saveErr && <p className="text-[11px] text-danger/80">{saveErr}</p>}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={save}
+              disabled={saving}
+              className="text-[11px] px-3 py-1.5 rounded-lg bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors disabled:opacity-40 font-medium"
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              onClick={cancelEdit}
+              disabled={saving}
+              className="text-[11px] px-3 py-1.5 rounded-lg text-secondary hover:bg-elevated transition-colors disabled:opacity-40"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="relative group/content">
+          <pre className="px-4 py-3 text-[11px] font-mono text-secondary leading-relaxed whitespace-pre-wrap break-words overflow-x-auto max-h-96 overflow-y-auto">
+            {data?.content}
+          </pre>
+          <button
+            onClick={startEdit}
+            className="absolute top-2 right-2 opacity-0 group-hover/content:opacity-100 transition-opacity text-[10px] px-2 py-1 rounded bg-elevated border border-border-subtle text-secondary hover:text-primary hover:border-border-default"
+          >
+            Edit
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -79,7 +163,6 @@ function AgentsRow({ item, expanded, onToggle }: {
     <Card expanded={expanded}>
       <button
         onClick={onToggle}
-        disabled={!item.exists}
         className="w-full flex items-center gap-3 px-4 py-3 text-left"
       >
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
@@ -88,12 +171,9 @@ function AgentsRow({ item, expanded, onToggle }: {
           <path d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z" />
         </svg>
         <span className="flex-1 text-[13px] font-medium text-primary font-mono truncate">{label}</span>
-        {!item.exists
-          ? <span className="text-[10px] text-dim">missing</span>
-          : <Chevron open={expanded} />
-        }
+        <Chevron open={expanded} />
       </button>
-      {expanded && item.exists && (
+      {expanded && (
         <div className="border-t border-border-subtle">
           <FileContent path={item.path} />
         </div>
@@ -237,19 +317,25 @@ export function MemoryPage() {
         {!loading && data && (
           <>
             {/* Config */}
-            <div>
-              <SectionHeader label="Config" count={data.agentsMd.length} />
-              <div className="space-y-2">
-                {data.agentsMd.map(item => (
-                  <AgentsRow
-                    key={item.path}
-                    item={item}
-                    expanded={expandedPath === item.path}
-                    onToggle={() => toggle(item.path)}
-                  />
-                ))}
-              </div>
-            </div>
+            {(() => {
+              const existing = data.agentsMd.filter(i => i.exists);
+              if (existing.length === 0) return null;
+              return (
+                <div>
+                  <SectionHeader label="Config" count={existing.length} />
+                  <div className="space-y-2">
+                    {existing.map(item => (
+                      <AgentsRow
+                        key={item.path}
+                        item={item}
+                        expanded={expandedPath === item.path}
+                        onToggle={() => toggle(item.path)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Skills */}
             <div>
