@@ -373,10 +373,11 @@ function MemoryFileContext({ path }: { path: string }) {
   const { data, loading, error, refetch } = useApi(
     useCallback(() => api.memoryFile(path), [path]),
   );
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft]     = useState('');
-  const [saving, setSaving]   = useState(false);
-  const [saveErr, setSaveErr] = useState<string | null>(null);
+  const [editing,  setEditing]  = useState(false);
+  const [draft,    setDraft]    = useState('');
+  const [saving,   setSaving]   = useState(false);
+  const [saveErr,  setSaveErr]  = useState<string | null>(null);
+  const [savedOk,  setSavedOk]  = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -393,10 +394,12 @@ function MemoryFileContext({ path }: { path: string }) {
   }, [editing, draft]);
 
   async function save() {
-    setSaving(true); setSaveErr(null);
+    setSaving(true); setSaveErr(null); setSavedOk(false);
     try {
       await api.memoryFileSave(path, draft);
       setEditing(false);
+      setSavedOk(true);
+      setTimeout(() => setSavedOk(false), 2000);
       refetch();
     } catch (e) {
       setSaveErr(e instanceof Error ? e.message : String(e));
@@ -421,10 +424,11 @@ function MemoryFileContext({ path }: { path: string }) {
             spellCheck={false}
           />
           {saveErr && <p className="text-[11px] text-danger/80">{saveErr}</p>}
-          <div className="flex gap-3">
+          <div className="flex items-center gap-3">
             <button onClick={save} disabled={saving} className="text-[11px] font-medium text-accent hover:text-accent/70 transition-colors disabled:opacity-40">
               {saving ? 'Saving…' : 'Save'}
             </button>
+            {savedOk && <span className="text-[11px] text-success">✓ Saved</span>}
             <button onClick={() => setEditing(false)} disabled={saving} className="text-[11px] text-secondary hover:text-primary transition-colors disabled:opacity-40">
               Cancel
             </button>
