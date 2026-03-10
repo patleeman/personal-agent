@@ -39,7 +39,7 @@ curl -s "https://gitlab.ddbuild.io/api/v4/projects/DataDog%2Fdd-source/pipelines
   -H "PRIVATE-TOKEN: ${GITLAB_TOKEN}" | jq '.[] | select(.status == "failed") | {id, name, stage, status, web_url}'
 ```
 
-### Get Job Log (THIS IS WHERE THE ERRORS ARE)
+### Get Job Log
 ```bash
 curl -s "https://gitlab.ddbuild.io/api/v4/projects/DataDog%2Fdd-source/jobs/<job_id>/trace" \
   -H "PRIVATE-TOKEN: ${GITLAB_TOKEN}" | tail -100
@@ -61,7 +61,7 @@ curl -s "https://gitlab.ddbuild.io/api/v4/projects/DataDog%2Fdd-source/merge_req
 
 ## RCA Workflow for Pipeline Failures
 
-**Pipeline details alone don't show why it failed. You must fetch job logs.**
+**Pipeline metadata rarely explains the failure on its own; fetch the failed job logs.**
 
 ### Step 1: Get pipeline overview + failed jobs (parallel)
 Run both simultaneously:
@@ -77,8 +77,8 @@ curl -s "https://gitlab.ddbuild.io/api/v4/projects/<project>/pipelines/<pipeline
   -H "PRIVATE-TOKEN: ${GITLAB_TOKEN}" | jq '[.[] | select(.status == "failed") | {id, name, stage}]'
 ```
 
-### Step 2: Fetch ALL failed job logs (parallel)
-For each failed job, fetch the log simultaneously:
+### Step 2: Fetch all failed job logs in parallel
+For each failed job, fetch the log:
 ```bash
 curl -s "https://gitlab.ddbuild.io/api/v4/projects/<project>/jobs/<job_id>/trace" \
   -H "PRIVATE-TOKEN: ${GITLAB_TOKEN}" | tail -100
