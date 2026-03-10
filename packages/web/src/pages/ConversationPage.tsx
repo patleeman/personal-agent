@@ -799,7 +799,7 @@ export function ConversationPage() {
                       }
                       setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, 50);
                     }}
-                    className="flex items-center gap-1 px-2 py-1 rounded-lg bg-accent text-[11px] font-semibold text-base hover:bg-accent/90 transition-colors"
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg bg-accent text-[11px] font-semibold text-white hover:bg-accent/90 transition-colors"
                   >
                     {stream.isStreaming ? 'Steer' : 'Send'} <span className="opacity-60 text-[10px]">↵</span>
                   </button>
@@ -829,6 +829,18 @@ export function ConversationPage() {
           messages={realMessages ?? conv!.messages}
           onJump={jumpToMessage}
           onClose={() => setShowTree(false)}
+          onFork={isLiveSession && id ? (blockIdx) => {
+            // Fork at the nth user message — find its entryId via fork-entries
+            const allMsgs = realMessages ?? conv?.messages ?? [];
+            const userMsgsBefore = allMsgs.slice(0, blockIdx + 1).filter(b => b.type === 'user').length;
+            void api.forkEntries(id).then(entries => {
+              const entry = entries[userMsgsBefore - 1] ?? entries[entries.length - 1];
+              if (!entry) return;
+              return api.forkSession(id, entry.entryId).then(({ newSessionId }) => {
+                navigate(`/conversations/${newSessionId}`);
+              });
+            }).catch(console.error);
+          } : undefined}
         />
       )}
     </div>
