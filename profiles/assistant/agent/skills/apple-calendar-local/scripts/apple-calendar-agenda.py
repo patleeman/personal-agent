@@ -38,6 +38,8 @@ tell application "Calendar"
 end tell
 '''
 
+WARMUP_CALENDAR_SCRIPT = 'tell application "Calendar" to launch'
+
 # Returns tab-delimited rows:
 # start_iso<TAB>end_iso<TAB>all_day<TAB>title
 QUERY_SCRIPT = r'''
@@ -142,6 +144,10 @@ def _parse_datetime(value: str) -> datetime:
     return dt
 
 
+def _warmup_calendar(timeout_s: int = 10) -> None:
+    _run_osascript(WARMUP_CALENDAR_SCRIPT, [], timeout_s=max(1, timeout_s))
+
+
 def list_calendars(timeout_s: int) -> list[str]:
     output = _run_osascript(LIST_CALENDARS_SCRIPT, [], timeout_s=timeout_s)
     if not output or output == "NONE":
@@ -153,7 +159,13 @@ def fetch_calendar_events(calendar: str, timeout_s: int) -> tuple[list[Event], s
     try:
         output = _run_osascript(QUERY_SCRIPT, [calendar], timeout_s=timeout_s)
     except TimeoutError:
-        return [], "timed out"
+        try:
+            _warmup_calendar(timeout_s=min(10, timeout_s))
+            output = _run_osascript(QUERY_SCRIPT, [calendar], timeout_s=timeout_s)
+        except TimeoutError:
+            return [], "timed out"
+        except Exception as exc:
+            return [], f"osascript failure after retry: {exc}"
     except Exception as exc:
         return [], f"osascript failure: {exc}"
 

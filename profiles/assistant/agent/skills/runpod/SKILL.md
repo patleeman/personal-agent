@@ -16,19 +16,17 @@ Use this skill for short-lived remote GPU boxes.
 ## Local prerequisites
 
 - `runpodctl` installed locally
-- `runpodctl doctor` should pass before automation
-- expected checks:
-  - API key configured
-  - API connectivity passes
-  - SSH key synced to the Runpod account
+- CLI configured with an API key via `runpodctl config --apiKey ...`
+- at least one SSH public key added to the Runpod account
 
 Useful commands:
 
 ```bash
-runpodctl doctor
-runpodctl gpu list
-runpodctl pod list
-runpodctl pod get <pod-id> --include-machine -o json
+runpodctl version
+runpodctl get cloud 1 --community
+runpodctl get pod --allfields
+runpodctl ssh list-keys
+runpodctl ssh add-key --key-file ~/.ssh/id_ed25519.pub
 ```
 
 ## Provisioning defaults
@@ -45,45 +43,47 @@ runpodctl pod get <pod-id> --include-machine -o json
 1. Low account balance
 2. Machine capacity failure (`This machine does not have the resources to deploy your pod`)
 3. `runpodctl` CLI syntax drift
+   - re-check `runpodctl create pod --help` before assuming older examples still apply
 
 ## Current working create pattern
 
 ```bash
-runpodctl pod create \
+runpodctl create pod \
   --name <name> \
-  --gpu-id 'NVIDIA GeForce RTX 4090' \
-  --gpu-count 1 \
-  --cloud-type COMMUNITY \
-  --image 'runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04' \
-  --container-disk-in-gb 30 \
-  --volume-in-gb 50 \
-  --volume-mount-path /workspace \
-  --ports '22/tcp,8888/http' \
-  --public-ip \
-  --ssh \
-  -o json
+  --gpuType "NVIDIA GeForce RTX 4090" \
+  --gpuCount 1 \
+  --communityCloud \
+  --imageName "runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04" \
+  --containerDiskSize 30 \
+  --volumeSize 50 \
+  --volumePath /workspace \
+  --ports 22/tcp \
+  --ports 8888/http
 ```
 
 ## SSH and bootstrap
 
-Get connection details from:
+Inspect pod details with:
 
 ```bash
-runpodctl pod get <pod-id> --include-machine -o json
+runpodctl get pod <pod-id> --allfields
 ```
 
-Look at the returned `ssh` object for:
-- `ip`
-- `port`
-- `ssh_command`
-- `ssh_key.path`
+For full SSH/SCP/SFTP access, the pod needs a public IP and TCP port 22 exposed. Official Runpod PyTorch images already have SSH configured.
+
+Typical SSH form:
+
+```bash
+ssh root@<pod-ip> -p <ssh-port> -i <private-key-path>
+```
 
 Remote bootstrap pattern:
-1. Start from the official PyTorch image.
-2. SSH in with the Runpod-managed key.
-3. Bootstrap the box with `git`, `tmux`, `python3-venv`, and `build-essential`.
-4. Clone the repo into `/workspace/<repo>`.
-5. Create `.venv` and install dependencies.
+1. Start from an official PyTorch image.
+2. Ensure public IP + TCP port 22 are enabled.
+3. SSH in with the Runpod account key.
+4. Bootstrap the box with `git`, `tmux`, `python3-venv`, and `build-essential`.
+5. Clone the repo into `/workspace/<repo>`.
+6. Create `.venv` and install dependencies.
 
 ## Operating rules
 
@@ -91,4 +91,3 @@ Remote bootstrap pattern:
 - Put long runs inside **remote tmux**.
 - Record the pod id, GPU type, hourly cost, SSH command, tmux session name, and training log path.
 - Do not leave pods idling unnecessarily.
-

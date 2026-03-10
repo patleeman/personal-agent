@@ -7,6 +7,8 @@ description: Query local Apple Calendar (Calendar.app) via osascript for agenda/
 
 Use this skill for Calendar.app reads on this Mac.
 
+All `./scripts/...` paths below are relative to this skill directory.
+
 ## Default scope (Patrick)
 
 - `Patrick Lee` (personal)
@@ -49,7 +51,7 @@ Common usage:
 
 - Query each calendar independently; do not let one slow account block the whole result.
 - Keep per-calendar AppleScript calls timeout-bounded (~20–25s).
-- For morning-report style reads, prefer narrow windows per calendar (`now → end of today`, then `tomorrow → end of tomorrow`).
+- For morning-report style reads, prefer narrow windows per calendar (`now → end of today`, then `tomorrow 00:00 → tomorrow 12:00`).
 - If a calendar query times out, warm up Calendar.app with `osascript -e 'tell application "Calendar" to launch'` and retry that calendar once before marking it unavailable.
 - Deduplicate exact duplicate rows from Calendar.app.
 - Apply a second overlap filter in Python to suppress stale recurring-master rows.

@@ -45,9 +45,11 @@ Default output shape:
 - Query each target calendar independently with bounded AppleScript timeouts (~20–25s).
 - Use narrow windows:
   - now → end of today
-  - start of tomorrow → end of tomorrow
+  - start of tomorrow → tomorrow 12:00 PM
 - If a calendar query times out, warm up Calendar.app with `osascript -e 'tell application "Calendar" to launch'` and retry that calendar once before marking it unavailable.
-- Include today and tomorrow events with time, title, and calendar name. Add an `Upcoming` line only for clearly notable items later in the next week.
+- Include today events and the first tomorrow-before-noon event with time, title, and calendar name.
+- Render one calendar event per bullet; do not compress multiple events into a single semicolon-separated line.
+- Add an `Upcoming` line only for clearly notable items later in the next week.
 - If local calendar access is unavailable or times out, report it as `Unavailable: <exact reason>`.
 
 ## Reminders
@@ -55,10 +57,10 @@ Default output shape:
 - Read Apple Reminders via `osascript` with bounded timeouts.
 - Group reminders as:
   - overdue + due today
-  - due tomorrow
   - only truly important upcoming reminders in the next 7 days
 - Keep Reminders AppleScript timeout around 25–30s per attempt.
 - If the first Reminders query times out, warm up Reminders with `osascript -e 'tell application "Reminders" to launch'` and retry once before reporting unavailable.
+- Avoid AppleScript filters like `whose due date is not missing value`; iterate defensively because Reminders can throw `missing value` coercion errors when some items have no due date.
 - For each item include due date/time when present, list name, and title.
 - If Reminders access fails or times out, report it as `Unavailable: <exact reason>`.
 
