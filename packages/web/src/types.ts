@@ -1,3 +1,12 @@
+export type MessageBlock =
+  | { type: 'user';      id: string; ts: string; text: string }
+  | { type: 'text';      id: string; ts: string; text: string; streaming?: boolean }
+  | { type: 'thinking';  id: string; ts: string; text: string }
+  | { type: 'tool_use';  id: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; running?: boolean; status?: 'running' | 'ok' | 'error'; error?: boolean; _toolCallId?: string }
+  | { type: 'subagent';  id: string; ts: string; name: string; prompt: string; status: 'running' | 'complete' | 'failed'; summary?: string }
+  | { type: 'image';     id: string; ts: string; alt: string; width?: number; height?: number; caption?: string }
+  | { type: 'error';     id: string; ts: string; tool?: string; message: string };
+
 export interface ActivityEntry {
   id: string;
   createdAt: string;

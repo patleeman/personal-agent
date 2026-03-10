@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import type { MessageBlock } from '../../data/mockConversations';
+import type { MessageBlock } from '../../types';
 import { timeAgo } from '../../utils';
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@
  * a growing MessageBlock list in real time.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { MessageBlock } from '../data/mockConversations';
+import type { MessageBlock } from '../types';
 import type { SseEvent } from '../types';
 import { api } from '../api';
 

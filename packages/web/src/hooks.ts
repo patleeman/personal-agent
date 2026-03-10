@@ -7,7 +7,11 @@ export interface UseApiResult<T> {
   refetch: () => void;
 }
 
-export function useApi<T>(fetcher: () => Promise<T>): UseApiResult<T> {
+/**
+ * useApi — fires the fetcher once on mount (and on refetch()).
+ * Pass `key` to re-fire automatically when it changes (e.g. a route id).
+ */
+export function useApi<T>(fetcher: () => Promise<T>, key?: string): UseApiResult<T> {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -18,26 +22,19 @@ export function useApi<T>(fetcher: () => Promise<T>): UseApiResult<T> {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setError(null);
 
     fetcherRef.current()
       .then((result) => {
-        if (!cancelled) {
-          setData(result);
-          setError(null);
-          setLoading(false);
-        }
+        if (!cancelled) { setData(result); setLoading(false); }
       })
       .catch((err: Error) => {
-        if (!cancelled) {
-          setError(err.message);
-          setLoading(false);
-        }
+        if (!cancelled) { setError(err.message); setLoading(false); }
       });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [tick]);
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick, key]);
 
   const refetch = useCallback(() => setTick((t) => t + 1), []);
   return { data, loading, error, refetch };

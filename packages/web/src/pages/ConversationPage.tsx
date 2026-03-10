@@ -2,7 +2,8 @@ import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } fr
 import { useParams, useNavigate } from 'react-router-dom';
 import { ChatView } from '../components/chat/ChatView';
 import { ConversationTree } from '../components/ConversationTree';
-import { MOCK_CONVERSATIONS, type MockConversation, type MessageBlock } from '../data/mockConversations';
+import { MOCK_CONVERSATIONS, type MockConversation } from '../data/mockConversations';
+import type { MessageBlock } from '../types';
 import { useSessionDetail } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../api';

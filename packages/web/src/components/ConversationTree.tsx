@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
-import type { MessageBlock } from '../data/mockConversations';
+import type { MessageBlock } from '../types';
 
 // ── Filters ────────────────────────────────────────────────────────────────────
 

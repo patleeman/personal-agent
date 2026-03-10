@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
 import { formatDate, kindMeta, timeAgo } from '../utils';
-import type { LiveSessionContext } from '../types';
+import type { ActivityEntry, LiveSessionContext } from '../types';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -224,12 +224,6 @@ function TaskLogSection({ taskId }: { taskId: string }) {
 
 // ── Inbox item detail ─────────────────────────────────────────────────────────
 
-interface ActivityEntry {
-  id: string; kind: string; profile: string; summary: string;
-  details?: string; createdAt: string; notificationState?: string;
-  relatedWorkstreamIds?: string[];
-}
-
 function InboxItemContext({ id }: { id: string }) {
   const [entry, setEntry] = useState<ActivityEntry | null>(null);
   const [loading, setLoading] = useState(true);
@@ -388,12 +382,7 @@ function WorkstreamDetailContext({ id }: { id: string }) {
 
 function MemoryFileContext({ path }: { path: string }) {
   const fetcher = useCallback(() => api.memoryFile(path), [path]);
-  const { data, loading, error, refetch } = useApi(fetcher);
-  // Re-fetch when path changes (useApi's fetcherRef doesn't re-trigger on dep changes)
-  const prevPath = useRef(path);
-  useEffect(() => {
-    if (prevPath.current !== path) { prevPath.current = path; refetch(); }
-  }, [path, refetch]);
+  const { data, loading, error, refetch } = useApi(fetcher, path);
   const [editing,  setEditing]  = useState(false);
   const [draft,    setDraft]    = useState('');
   const [saving,   setSaving]   = useState(false);
