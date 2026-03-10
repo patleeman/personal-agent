@@ -300,7 +300,7 @@ function UserMessage({ block }: { block: Extract<MessageBlock, { type: 'user' }>
       <MsgActions text={block.text} isUser />
       <div className="max-w-[86%]">
         <div className="bg-accent/10 border border-accent/15 rounded-2xl rounded-br-sm px-4 py-2.5">
-          <p className="text-sm leading-relaxed text-primary"><MentionText text={block.text} /></p>
+          <p className="text-sm leading-relaxed text-primary whitespace-pre-wrap"><MentionText text={block.text} /></p>
         </div>
         <p className="text-[10px] text-dim mt-1 text-right pr-1">{timeAgo(block.ts)}</p>
       </div>
