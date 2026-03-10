@@ -42,6 +42,33 @@ export interface WorkstreamDetail {
   artifactCount: number;
 }
 
+// ── Sessions ──────────────────────────────────────────────────────────────────
+
+export interface SessionMeta {
+  id: string;
+  file: string;
+  timestamp: string;
+  cwd: string;
+  cwdSlug: string;
+  model: string;
+  title: string;
+  messageCount: number;
+}
+
+export type DisplayBlock =
+  | { type: 'user';     id: string; ts: string; text: string }
+  | { type: 'text';     id: string; ts: string; text: string }
+  | { type: 'thinking'; id: string; ts: string; text: string }
+  | { type: 'tool_use'; id: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; toolCallId: string }
+  | { type: 'error';    id: string; ts: string; tool?: string; message: string };
+
+export interface SessionDetail {
+  meta: SessionMeta;
+  blocks: DisplayBlock[];
+}
+
+// ── App status ─────────────────────────────────────────────────────────────────
+
 export interface AppStatus {
   profile: string;
   repoRoot: string;

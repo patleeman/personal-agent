@@ -2,6 +2,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
+import { listSessions, readSessionBlocks } from './sessions.js';
 import {
   listProfileActivityEntries,
   listWorkstreamIds,
@@ -57,6 +58,26 @@ app.get('/api/activity/:id', (req, res) => {
       return;
     }
     res.json(match.entry);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// ── Sessions ──────────────────────────────────────────────────────────────────
+
+app.get('/api/sessions', (_req, res) => {
+  try {
+    res.json(listSessions());
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.get('/api/sessions/:id', (req, res) => {
+  try {
+    const result = readSessionBlocks(req.params.id);
+    if (!result) { res.status(404).json({ error: 'Session not found' }); return; }
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }

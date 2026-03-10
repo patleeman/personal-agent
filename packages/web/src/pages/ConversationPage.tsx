@@ -1,7 +1,26 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { ChatView } from '../components/chat/ChatView';
-import { MOCK_CONVERSATIONS, type MockConversation } from '../data/mockConversations';
+import { MOCK_CONVERSATIONS, type MockConversation, type MessageBlock } from '../data/mockConversations';
+import { useSessionDetail } from '../hooks/useSessions';
+import type { DisplayBlock } from '../types';
+
+// ── Real session → MessageBlock converter ─────────────────────────────────────
+
+function displayBlockToMessageBlock(b: DisplayBlock): MessageBlock {
+  switch (b.type) {
+    case 'user':
+      return { type: 'user', text: b.text, ts: b.ts };
+    case 'text':
+      return { type: 'text', text: b.text, ts: b.ts };
+    case 'thinking':
+      return { type: 'thinking', text: b.text, ts: b.ts };
+    case 'tool_use':
+      return { type: 'tool_use', tool: b.tool, input: b.input, output: b.output, durationMs: b.durationMs, ts: b.ts };
+    case 'error':
+      return { type: 'error', tool: b.tool, message: b.message, ts: b.ts };
+  }
+}
 
 // ── Slash commands ────────────────────────────────────────────────────────────
 
@@ -141,8 +160,25 @@ function fileIcon(type: string) {
 
 export function ConversationPage() {
   const { id } = useParams<{ id: string }>();
-  const conv = id ? MOCK_CONVERSATIONS[id] : undefined;
-  const title = conv?.title ?? id?.replace(/-/g, ' ') ?? 'conversation';
+  const mockConv = id ? MOCK_CONVERSATIONS[id] : undefined;
+
+  // If not a mock, fetch real session
+  const { detail: sessionDetail, loading: sessionLoading } = useSessionDetail(
+    mockConv ? undefined : id
+  );
+
+  // Resolve what to display
+  const conv: MockConversation | undefined = mockConv;
+  const realMessages: MessageBlock[] | undefined = sessionDetail
+    ? sessionDetail.blocks.map(displayBlockToMessageBlock)
+    : undefined;
+
+  const title = conv?.title
+    ?? sessionDetail?.meta.title
+    ?? id?.replace(/-/g, ' ')
+    ?? 'conversation';
+  const model = conv?.model ?? sessionDetail?.meta.model;
+  const messageCount = conv?.messages.length ?? sessionDetail?.meta.messageCount ?? 0;
 
   // Input state
   const [input, setInput] = useState('');
@@ -231,7 +267,7 @@ export function ConversationPage() {
     setAttachments(prev => prev.filter((_, j) => j !== i));
   }
 
-  const isRunning = conv?.messages.some(m => m.type === 'tool_use' && (m as { running?: boolean }).running);
+  const isRunning = conv?.messages.some(m => m.type === 'tool_use' && (m as { running?: boolean }).running) ?? false;
 
   return (
     <div className="flex flex-col h-full">
@@ -240,11 +276,20 @@ export function ConversationPage() {
         <div className="flex-1 min-w-0">
           <h1 className="text-sm font-semibold text-primary truncate">{title}</h1>
           <div className="flex items-center gap-2 mt-0.5">
-            <p className="text-[11px] text-secondary">{conv?.messages.length ?? 0} messages</p>
-            {conv?.model && <>
+            <p className="text-[11px] text-secondary">{messageCount} messages</p>
+            {model && <>
               <span className="text-border-default">·</span>
-              <span className="text-[11px] font-mono text-dim">{conv.model}</span>
+              <span className="text-[11px] font-mono text-dim">{model}</span>
             </>}
+            {sessionDetail && (
+              <>
+                <span className="text-border-default">·</span>
+                <span className="text-[11px] text-dim truncate max-w-[160px]"
+                  title={sessionDetail.meta.cwd}>
+                  {sessionDetail.meta.cwd.split('/').slice(-2).join('/')}
+                </span>
+              </>
+            )}
           </div>
         </div>
         {isRunning && (
@@ -253,12 +298,20 @@ export function ConversationPage() {
             <span className="text-[10px] text-accent font-medium">running</span>
           </div>
         )}
-        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-elevated text-dim border border-border-subtle">mock</span>
+        {conv && <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-elevated text-dim border border-border-subtle">mock</span>}
+        {sessionDetail && <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-teal/10 text-teal border border-teal/20">live</span>}
       </div>
 
       {/* Messages */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto relative">
-        {conv ? <ChatView messages={conv.messages} /> : (
+        {(conv || realMessages) ? (
+          <ChatView messages={realMessages ?? conv!.messages} />
+        ) : sessionLoading ? (
+          <div className="flex items-center justify-center h-full gap-3 text-dim">
+            <span className="animate-spin">⟳</span>
+            <span className="text-sm">Loading session…</span>
+          </div>
+        ) : (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-8">
             <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-accent">
@@ -277,7 +330,7 @@ export function ConversationPage() {
         )}
       </div>
 
-      {/* Context bar */}
+      {/* Context bar — only for mock convs that have token breakdowns */}
       {conv && <ContextBar conv={conv} />}
 
       {/* Input area */}

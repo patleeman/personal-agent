@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useConversations, type Conversation } from '../hooks/useConversations';
+import { useSessions } from '../hooks/useSessions';
+import type { SessionMeta } from '../types';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { timeAgo } from '../utils';
 
@@ -12,6 +14,42 @@ function Ico({ d, size = 16 }: { d: string; size?: number }) {
       stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
       <path d={d} />
     </svg>
+  );
+}
+
+function cwdShort(cwd: string): string {
+  // /Users/patrickc.lee/personal/personal-agent-20260310-101009 → personal-agent-20260310..
+  const parts = cwd.split('/');
+  const last  = parts[parts.length - 1] ?? cwd;
+  return last.length > 28 ? last.slice(0, 25) + '…' : last;
+}
+
+// ── SessionTab ─────────────────────────────────────────────────────────────
+
+function SessionTab({ session }: { session: SessionMeta }) {
+  const location = useLocation();
+  const isActive = location.pathname === `/conversations/${session.id}`;
+
+  return (
+    <NavLink
+      to={`/conversations/${session.id}`}
+      className={[
+        'group relative flex items-start gap-2.5 px-3 py-2 rounded-lg mx-1 transition-colors',
+        isActive ? 'bg-elevated text-primary' : 'text-secondary hover:bg-elevated/60 hover:text-primary',
+      ].join(' ')}
+    >
+      <span className={[
+        'mt-[5px] w-1.5 h-1.5 rounded-full shrink-0 transition-colors',
+        isActive ? 'bg-accent' : 'bg-border-default/50',
+      ].join(' ')} />
+      <div className="flex-1 min-w-0">
+        <p className="text-[13px] leading-snug font-medium truncate">{session.title}</p>
+        <p className="text-[11px] text-dim mt-0.5 truncate">
+          {timeAgo(session.timestamp)}
+          <span className="ml-1.5 opacity-60">· {cwdShort(session.cwd)}</span>
+        </p>
+      </div>
+    </NavLink>
   );
 }
 
@@ -78,7 +116,10 @@ function ConvTab({ conv, onClose }: { conv: Conversation; onClose: () => void })
 export function Sidebar() {
   const navigate = useNavigate();
   const { open, archived, archiveConversation, restoreConversation, newConversation } = useConversations();
-  const [archivedOpen, setArchivedOpen] = useState(false);
+  const { sessions, loading: sessionsLoading } = useSessions();
+  const [archivedOpen,  setArchivedOpen]  = useState(false);
+  const [sessionsOpen,  setSessionsOpen]  = useState(true);
+  const recentSessions = sessions.slice(0, 20);
 
   function handleNew() {
     const conv = newConversation();
@@ -125,6 +166,32 @@ export function Sidebar() {
           ))
         )}
       </div>
+
+      {/* Real sessions section */}
+      {(recentSessions.length > 0 || sessionsLoading) && (
+        <div className="border-t border-border-subtle">
+          <button
+            onClick={() => setSessionsOpen(v => !v)}
+            className="w-full flex items-center gap-2 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-dim hover:text-secondary transition-colors"
+          >
+            <span
+              className="transition-transform duration-150"
+              style={{ display: 'inline-block', transform: sessionsOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }}
+            >
+              <Ico d={PATH.chevron} size={12} />
+            </span>
+            <span className="flex-1 text-left">Sessions</span>
+            {sessionsLoading && <span className="text-[10px] opacity-50">loading…</span>}
+          </button>
+          {sessionsOpen && (
+            <div className="pb-1 space-y-0.5 max-h-64 overflow-y-auto">
+              {recentSessions.map(s => (
+                <SessionTab key={s.id} session={s} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Archived section */}
       {archived.length > 0 && (
