@@ -330,9 +330,6 @@ export function ConversationPage() {
         )}
       </div>
 
-      {/* Context bar — only for mock convs that have token breakdowns */}
-      {conv && <ContextBar conv={conv} />}
-
       {/* Input area */}
       <div
         className={`px-4 pb-4 pt-2 transition-colors ${dragOver ? 'bg-accent/5' : ''}`}
@@ -394,6 +391,9 @@ export function ConversationPage() {
           </div>
         </div>
       </div>
+
+      {/* Context bar — below input */}
+      {conv && <ContextBar conv={conv} />}
     </div>
   );
 }
