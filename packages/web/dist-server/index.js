@@ -426,6 +426,121 @@ app.post('/api/run', (req, res) => {
         res.status(500).json({ error: String(err) });
     }
 });
+function parseFrontmatter(filePath) {
+    try {
+        const raw = readFileSync(filePath, 'utf-8');
+        const m = raw.match(/^---\n([\s\S]*?)\n---/);
+        if (!m)
+            return {};
+        const fm = m[1];
+        const result = {};
+        const lines = fm.split('\n');
+        let i = 0;
+        while (i < lines.length) {
+            const line = lines[i];
+            const kv = line.match(/^([\w-]+):\s*(.*)/);
+            if (!kv) {
+                i++;
+                continue;
+            }
+            const key = kv[1];
+            const val = kv[2].trim();
+            if (val === '') {
+                const items = [];
+                i++;
+                while (i < lines.length && /^\s+-\s+/.test(lines[i])) {
+                    items.push(lines[i].replace(/^\s+-\s+/, '').trim());
+                    i++;
+                }
+                result[key] = items;
+                continue;
+            }
+            else if (val.startsWith('[')) {
+                result[key] = val.replace(/^\[|\]$/g, '').split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+            }
+            else {
+                result[key] = val.replace(/^["']|["']$/g, '');
+            }
+            i++;
+        }
+        return result;
+    }
+    catch {
+        return {};
+    }
+}
+app.get('/api/memory', (_req, res) => {
+    try {
+        const sharedPath = join(REPO_ROOT, 'profiles/shared/agent/AGENTS.md');
+        const profilePath = join(REPO_ROOT, `profiles/${PROFILE}/agent/AGENTS.md`);
+        const agentsMd = [{ source: 'shared', path: sharedPath, exists: existsSync(sharedPath) }];
+        if (PROFILE !== 'shared') {
+            agentsMd.push({ source: PROFILE, path: profilePath, exists: existsSync(profilePath) });
+        }
+        const skills = [];
+        const skillSources = PROFILE === 'shared' ? ['shared'] : ['shared', PROFILE];
+        for (const src of skillSources) {
+            const dir = join(REPO_ROOT, `profiles/${src}/agent/skills`);
+            if (!existsSync(dir))
+                continue;
+            for (const name of readdirSync(dir)) {
+                const skillMd = join(dir, name, 'SKILL.md');
+                if (!existsSync(skillMd))
+                    continue;
+                const fm = parseFrontmatter(skillMd);
+                skills.push({
+                    source: src,
+                    name: String(fm.name ?? name),
+                    description: String(fm.description ?? ''),
+                    path: skillMd,
+                });
+            }
+        }
+        const memoryDocs = [];
+        const memDir = join(REPO_ROOT, `profiles/${PROFILE}/agent/memory`);
+        if (existsSync(memDir)) {
+            for (const file of readdirSync(memDir).filter(f => f.endsWith('.md'))) {
+                const fp = join(memDir, file);
+                const fm = parseFrontmatter(fp);
+                const id = file.replace(/\.md$/, '');
+                const tags = fm.tags;
+                memoryDocs.push({
+                    id: String(fm.id ?? id),
+                    title: String(fm.title ?? id),
+                    summary: String(fm.summary ?? ''),
+                    tags: Array.isArray(tags) ? tags.map(String) : typeof tags === 'string' ? [tags] : [],
+                    path: fp,
+                });
+            }
+        }
+        res.json({ profile: PROFILE, agentsMd, skills, memoryDocs });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.get('/api/memory/file', (req, res) => {
+    try {
+        const filePath = req.query.path;
+        if (!filePath) {
+            res.status(400).json({ error: 'path required' });
+            return;
+        }
+        if (!filePath.startsWith(REPO_ROOT) || !filePath.endsWith('.md')) {
+            res.status(403).json({ error: 'Access denied' });
+            return;
+        }
+        if (!existsSync(filePath)) {
+            res.status(404).json({ error: 'File not found' });
+            return;
+        }
+        const content = readFileSync(filePath, 'utf-8');
+        res.json({ content, path: filePath });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
 // ── Static + SPA fallback ─────────────────────────────────────────────────────
 if (existsSync(DIST_DIR)) {
     app.use(express.static(DIST_DIR));
