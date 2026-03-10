@@ -46,13 +46,40 @@ export function useConversations() {
 
   const fetchSessions = useCallback(() => {
     setLoading(true);
-    return fetch('/api/sessions')
-      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() as Promise<SessionMeta[]>; })
-      .then(data  => { setSessions(data);             setUsingFallback(false); setLoading(false); })
-      .catch(() => { setSessions(FALLBACK_SESSIONS); setUsingFallback(true);  setLoading(false); });
+    // Fetch JSONL sessions + live sessions in parallel
+    return Promise.all([
+      fetch('/api/sessions').then(r => r.ok ? r.json() as Promise<SessionMeta[]> : []),
+      fetch('/api/live-sessions').then(r => r.ok ? r.json() as Promise<{ id: string; cwd: string; sessionFile: string; isStreaming: boolean }[]> : []),
+    ])
+      .then(([jsonl, live]) => {
+        const jsonlIds = new Set((jsonl as SessionMeta[]).map((s: SessionMeta) => s.id));
+        // Inject live sessions that don't have a JSONL entry yet
+        const syntheticLive: SessionMeta[] = (live as { id: string; cwd: string; sessionFile: string; isStreaming: boolean }[])
+          .filter(l => !jsonlIds.has(l.id))
+          .map(l => ({
+            id:           l.id,
+            file:         l.sessionFile,
+            timestamp:    new Date().toISOString(),
+            cwd:          l.cwd,
+            cwdSlug:      l.cwd.replace(/\//g, '-'),
+            model:        '',
+            title:        '(new conversation)',
+            messageCount: 0,
+          }));
+        const merged = [...syntheticLive, ...(jsonl as SessionMeta[])];
+        setSessions(merged);
+        setUsingFallback(false);
+        setLoading(false);
+      })
+      .catch(() => { setSessions(FALLBACK_SESSIONS); setUsingFallback(true); setLoading(false); });
   }, []);
 
-  useEffect(() => { void fetchSessions(); }, [fetchSessions]);
+  // Poll every 10s (was previously only fetching once)
+  useEffect(() => {
+    void fetchSessions();
+    const timer = setInterval(() => void fetchSessions(), 10_000);
+    return () => clearInterval(timer);
+  }, [fetchSessions]);
 
   const openSession = useCallback((id: string) => {
     setOpenIds(prev => { const next = new Set(prev); next.add(id);    saveOpen(next); return next; });

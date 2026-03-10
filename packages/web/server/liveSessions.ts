@@ -157,6 +157,17 @@ export function getLiveSessions() {
   }));
 }
 
+export function getAvailableModels() {
+  const auth = makeAuth();
+  const registry = makeRegistry(auth);
+  return registry.getAvailable().map(m => ({
+    id:      m.id,
+    name:    m.name ?? m.id,
+    context: m.contextWindow ?? 128_000,
+    provider: (m as { provider?: string }).provider ?? '',
+  }));
+}
+
 export function getSessionStats(sessionId: string) {
   const entry = registry.get(sessionId);
   if (!entry) return null;

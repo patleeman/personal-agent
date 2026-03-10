@@ -70,13 +70,15 @@ function fmtDuration(ms?: number) {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 interface Props {
-  messages:     MessageBlock[];
+  messages:      MessageBlock[];
   currentIndex?: number;
-  onJump:       (index: number) => void;
-  onClose:      () => void;
+  onJump:        (index: number) => void;
+  onClose:       () => void;
+  /** If provided, user-message rows show a ⑂ fork button */
+  onFork?:       (blockIndex: number) => void;
 }
 
-export function ConversationTree({ messages, currentIndex = 0, onJump, onClose }: Props) {
+export function ConversationTree({ messages, currentIndex = 0, onJump, onClose, onFork }: Props) {
   const [query,     setQuery]     = useState('');
   const [filterIdx, setFilterIdx] = useState(0);
   const [cursor,    setCursor]    = useState(currentIndex);
@@ -236,7 +238,7 @@ export function ConversationTree({ messages, currentIndex = 0, onJump, onClose }
                 data-idx={vi}
                 onClick={() => { onJump(entry.index); onClose(); }}
                 className={[
-                  'w-full flex items-baseline gap-3 px-5 py-1.5 text-left font-mono transition-colors',
+                  'group w-full flex items-baseline gap-3 px-5 py-1.5 text-left font-mono transition-colors',
                   isCursor ? 'bg-elevated' : 'hover:bg-elevated/40',
                 ].join(' ')}
               >
@@ -263,6 +265,17 @@ export function ConversationTree({ messages, currentIndex = 0, onJump, onClose }
                 {/* Duration */}
                 {entry.duration != null && (
                   <span className="text-[10px] text-dim/60 shrink-0 tabular-nums">{fmtDuration(entry.duration)}</span>
+                )}
+
+                {/* Fork button — only for user messages when onFork provided */}
+                {onFork && entry.type === 'user' && (
+                  <button
+                    onClick={e => { e.stopPropagation(); onFork(entry.index); onClose(); }}
+                    title="Fork from here"
+                    className="shrink-0 text-[11px] text-dim/50 hover:text-accent opacity-0 group-hover:opacity-100 transition-all px-1"
+                  >
+                    ⑂
+                  </button>
                 )}
               </button>
             );

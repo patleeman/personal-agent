@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { listSessions, readSessionBlocks } from './sessions.js';
-import { createSession, resumeSession, getLiveSessions, getSessionStats, isLive, subscribe, promptSession, abortSession, destroySession, forkSession, registry as liveRegistry, } from './liveSessions.js';
+import { createSession, resumeSession, getLiveSessions, getSessionStats, getAvailableModels, isLive, subscribe, promptSession, abortSession, destroySession, forkSession, registry as liveRegistry, } from './liveSessions.js';
 import { listProfileActivityEntries, listWorkstreamIds, readWorkstreamPlan, readWorkstreamSummary, resolveWorkstreamPaths, } from '@personal-agent/core';
 const PORT = parseInt(process.env.PA_WEB_PORT ?? '3741', 10);
 const REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? process.cwd();
@@ -119,13 +119,23 @@ const BUILT_IN_MODELS = [
 const SETTINGS_FILE = join(homedir(), '.local/state/personal-agent/pi-agent/settings.json');
 app.get('/api/models', (_req, res) => {
     try {
-        let currentModel = 'claude-sonnet-4-6';
+        let currentModel = '';
         if (existsSync(SETTINGS_FILE)) {
             const s = JSON.parse(readFileSync(SETTINGS_FILE, 'utf-8'));
             if (s.defaultModel)
                 currentModel = s.defaultModel;
         }
-        res.json({ currentModel, models: BUILT_IN_MODELS });
+        // Live model list from SDK registry (available = have auth configured)
+        let models = BUILT_IN_MODELS;
+        try {
+            const live = getAvailableModels();
+            if (live.length > 0)
+                models = live;
+        }
+        catch { /* fall back to built-in list */ }
+        if (!currentModel && models.length > 0)
+            currentModel = models[0].id;
+        res.json({ currentModel, models });
     }
     catch (err) {
         res.status(500).json({ error: String(err) });

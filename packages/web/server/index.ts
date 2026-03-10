@@ -10,6 +10,7 @@ import {
   resumeSession,
   getLiveSessions,
   getSessionStats,
+  getAvailableModels,
   isLive,
   subscribe,
   promptSession,
@@ -136,12 +137,19 @@ const SETTINGS_FILE = join(homedir(), '.local/state/personal-agent/pi-agent/sett
 
 app.get('/api/models', (_req, res) => {
   try {
-    let currentModel = 'claude-sonnet-4-6';
+    let currentModel = '';
     if (existsSync(SETTINGS_FILE)) {
       const s = JSON.parse(readFileSync(SETTINGS_FILE, 'utf-8')) as { defaultModel?: string };
       if (s.defaultModel) currentModel = s.defaultModel;
     }
-    res.json({ currentModel, models: BUILT_IN_MODELS });
+    // Live model list from SDK registry (available = have auth configured)
+    let models = BUILT_IN_MODELS;
+    try {
+      const live = getAvailableModels();
+      if (live.length > 0) models = live;
+    } catch { /* fall back to built-in list */ }
+    if (!currentModel && models.length > 0) currentModel = models[0].id;
+    res.json({ currentModel, models });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }

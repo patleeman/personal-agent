@@ -107,6 +107,16 @@ export function getLiveSessions() {
         isStreaming: e.session.isStreaming,
     }));
 }
+export function getAvailableModels() {
+    const auth = makeAuth();
+    const registry = makeRegistry(auth);
+    return registry.getAvailable().map(m => ({
+        id: m.id,
+        name: m.name ?? m.id,
+        context: m.contextWindow ?? 128_000,
+        provider: m.provider ?? '',
+    }));
+}
 export function getSessionStats(sessionId) {
     const entry = registry.get(sessionId);
     if (!entry)
