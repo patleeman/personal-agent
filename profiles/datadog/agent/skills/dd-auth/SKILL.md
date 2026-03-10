@@ -1,11 +1,11 @@
 ---
 name: dd-auth
-description: Use when asked about Datadog API authentication, getting API keys, app keys, or JWT tokens for internal services. Covers dd-auth (public APIs) and ddauth (internal services like Lambo). Also use when troubleshooting authentication failures.
+description: Use when asked about Datadog API authentication, getting API keys/app keys, internal JWTs, or ddtool auth/OIDC login flows. Covers dd-auth (public APIs), ddauth (internal services like Lambo), and ddtool auth troubleshooting.
 ---
 
 # Datadog Authentication
 
-Two CLI tools for Datadog API authentication.
+Three CLI paths cover most Datadog auth workflows: `dd-auth` for public APIs, `ddauth` for internal service JWTs, and `ddtool auth` for identity- or vault-backed flows.
 
 ## dd-auth (Public APIs)
 
@@ -69,6 +69,15 @@ ddtool auth gitlab login
 ddtool auth token sdm --datacenter=us1.release.mgmt.dog
 ```
 
+### Headless / SSH login
+```bash
+ddtool auth login --mode device
+ddtool auth login --mode device --datacenter <dc>
+```
+
+- Use device mode when `ddtool`, `kubectl`, or another Datadog CLI tries to open browser-based OIDC from a headless shell, SSH session, or remote workspace.
+- Add `--datacenter <dc>` when the command needs a specific Datadog identity or vault target.
+
 ## Limitations
 
 - No browser cookies available from CLI
@@ -81,6 +90,7 @@ ddtool auth token sdm --datacenter=us1.release.mgmt.dog
 |------|---------|
 | Public API keys | `eval $(dd-auth env)` |
 | Internal JWT | `ddauth obo -o <orgID>` |
+| Headless `ddtool` / `kubectl` login | `ddtool auth login --mode device` |
 | GitLab token | `ddtool auth gitlab token` |
 | Force re-login | `dd-auth login` |
 | Check status | `dd-auth status` |
