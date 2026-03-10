@@ -91,8 +91,20 @@ function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => v
 // ── Layout ────────────────────────────────────────────────────────────────────
 
 export function Layout() {
-  const sidebar = useResize({ initial: 224, min: 160, max: 320, storageKey: 'pa:sidebar-width',    side: 'left'  });
-  const rail    = useResize({ initial: 380, min: 220, max: 560, storageKey: 'pa:rail-width',        side: 'right' });
+  const sidebar = useResize({ initial: 224, min: 160, max: 320, storageKey: 'pa:sidebar-width', side: 'left'  });
+  const rail    = useResize({ initial: 380, min: 220, max: 560, storageKey: 'pa:rail-width',    side: 'right' });
+
+  const [railCollapsed, setRailCollapsed] = useState(() => {
+    try { return localStorage.getItem('pa:rail-collapsed') === 'true'; } catch { return false; }
+  });
+
+  function toggleRail() {
+    setRailCollapsed(v => {
+      const next = !v;
+      try { localStorage.setItem('pa:rail-collapsed', String(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-base text-primary select-none">
@@ -103,17 +115,32 @@ export function Layout() {
 
       <ResizeHandle onMouseDown={sidebar.onMouseDown} />
 
-      {/* Center — main route content */}
+      {/* Center */}
       <main className="flex-1 min-w-0 overflow-y-auto select-text">
         <Outlet />
       </main>
 
-      <ResizeHandle onMouseDown={rail.onMouseDown} />
-
-      {/* Right — context rail */}
-      <div style={{ width: rail.width }} className="flex-shrink-0 flex flex-col overflow-hidden">
-        <ContextRail />
-      </div>
+      {railCollapsed ? (
+        /* Collapsed strip — click to expand */
+        <div className="flex-shrink-0 w-8 border-l border-border-subtle flex flex-col items-center pt-3 bg-surface">
+          <button
+            onClick={toggleRail}
+            title="Show context panel"
+            className="text-dim hover:text-secondary transition-colors p-1 rounded"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+        </div>
+      ) : (
+        <>
+          <ResizeHandle onMouseDown={rail.onMouseDown} />
+          <div style={{ width: rail.width }} className="flex-shrink-0 flex flex-col overflow-hidden">
+            <ContextRail onCollapse={toggleRail} />
+          </div>
+        </>
+      )}
     </div>
   );
 }

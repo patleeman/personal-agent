@@ -343,7 +343,7 @@ export function ChatView({ messages }: { messages: MessageBlock[] }) {
       <style>{`@keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
       <div className="space-y-3 px-5 py-4">
         {messages.map((block, i) => {
-          switch (block.type) {
+          const el = (() => { switch (block.type) {
             case 'user':     return <UserMessage     key={i} block={block} />;
             case 'text':     return <AssistantMessage key={i} block={block} />;
             case 'thinking': return <ThinkingBlock    key={i} block={block} />;
@@ -352,7 +352,8 @@ export function ChatView({ messages }: { messages: MessageBlock[] }) {
             case 'image':    return <ImageBlock       key={i} block={block} />;
             case 'error':    return <ErrorBlock       key={i} block={block} />;
             default: return null;
-          }
+          }})();
+          return el ? <div key={i} id={`msg-${i}`}>{el}</div> : null;
         })}
       </div>
     </>

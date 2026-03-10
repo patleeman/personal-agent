@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { ChatView } from '../components/chat/ChatView';
+import { ConversationTree } from '../components/ConversationTree';
 import { MOCK_CONVERSATIONS, type MockConversation, type MessageBlock } from '../data/mockConversations';
 import { useSessionDetail } from '../hooks/useSessions';
 import type { DisplayBlock } from '../types';
@@ -28,6 +29,7 @@ const SLASH_CMDS = [
   { cmd: '/think',       icon: '💭', desc: 'Add a reasoning step'       },
   { cmd: '/search',      icon: '⌕',  desc: 'Search the web'             },
   { cmd: '/task',        icon: '⏰', desc: 'Schedule a background task' },
+  { cmd: '/tree',        icon: '⎇',  desc: 'Open session tree'          },
   { cmd: '/fork',        icon: '⑂',  desc: 'Fork conversation here'     },
   { cmd: '/run',         icon: '$',  desc: 'Run a shell command'        },
   { cmd: '/workstream',  icon: '□',  desc: 'Link workstream context'    },
@@ -203,6 +205,7 @@ export function ConversationPage() {
   const [attachments, setAttachments] = useState<File[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
+  const [showTree, setShowTree] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef   = useRef<HTMLDivElement>(null);
@@ -239,6 +242,26 @@ export function ConversationPage() {
     el.addEventListener('scroll', handleScroll);
     return () => el.removeEventListener('scroll', handleScroll);
   }, [conv?.id, handleScroll]);
+
+  // Esc+Esc → open tree
+  useEffect(() => {
+    let lastEsc = 0;
+    function handler(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return;
+      if (showTree) return; // let tree handle its own Esc
+      const now = Date.now();
+      if (now - lastEsc < 500) { setShowTree(true); lastEsc = 0; }
+      else lastEsc = now;
+    }
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [showTree]);
+
+  // Jump to message by index
+  const jumpToMessage = useCallback((index: number) => {
+    const el = scrollRef.current?.querySelector(`#msg-${index}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, []);
 
   // Keyboard handling
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -354,7 +377,7 @@ export function ConversationPage() {
         onDrop={handleDrop}
       >
         <div className="relative">
-          {showSlash   && <SlashMenu   query={slashQuery}   idx={slashIdx}   onSelect={cmd => { setInput(cmd); setSlashIdx(0);   textareaRef.current?.focus(); }} />}
+          {showSlash   && <SlashMenu   query={slashQuery}   idx={slashIdx}   onSelect={cmd => { if (cmd.startsWith('/tree')) { setInput(''); setShowTree(true); } else { setInput(cmd); setSlashIdx(0); textareaRef.current?.focus(); } }} />}
           {showMention && <MentionMenu query={mentionQuery} idx={mentionIdx} onSelect={id  => { setInput(input.replace(/@[\w-]*$/, id + ' ')); setMentionIdx(0); textareaRef.current?.focus(); }} />}
 
           <div className={`rounded-xl border transition-all ${dragOver ? 'border-accent/50 ring-2 ring-accent/20 bg-accent/5' : showSlash || showMention ? 'border-accent/40 ring-1 ring-accent/15' : 'border-border-subtle'} bg-elevated`}>
@@ -410,6 +433,15 @@ export function ConversationPage() {
 
       {/* Context bar — always shown */}
       <ContextBar conv={conv} messageCount={messageCount} model={model} />
+
+      {/* Session tree overlay */}
+      {showTree && (realMessages ?? conv?.messages) && (
+        <ConversationTree
+          messages={realMessages ?? conv!.messages}
+          onJump={jumpToMessage}
+          onClose={() => setShowTree(false)}
+        />
+      )}
     </div>
   );
 }

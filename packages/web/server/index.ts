@@ -64,6 +64,36 @@ app.get('/api/activity/:id', (req, res) => {
   }
 });
 
+// ── Models ────────────────────────────────────────────────────────────────────
+
+const BUILT_IN_MODELS = [
+  // Anthropic
+  { id: 'claude-opus-4-6',    provider: 'anthropic',    name: 'Claude Opus 4.6',     context: 200_000 },
+  { id: 'claude-sonnet-4-6',  provider: 'anthropic',    name: 'Claude Sonnet 4.6',   context: 200_000 },
+  { id: 'claude-haiku-4-6',   provider: 'anthropic',    name: 'Claude Haiku 4.6',    context: 200_000 },
+  // OpenAI / Codex
+  { id: 'gpt-5.4',            provider: 'openai-codex', name: 'GPT-5.4',             context: 128_000 },
+  { id: 'gpt-5.2',            provider: 'openai-codex', name: 'GPT-5.2',             context: 128_000 },
+  { id: 'gpt-4o',             provider: 'openai',       name: 'GPT-4o',              context: 128_000 },
+  // Google
+  { id: 'gemini-2.5-pro',     provider: 'google',       name: 'Gemini 2.5 Pro',      context: 1_000_000 },
+  { id: 'gemini-3.1-pro-high',provider: 'google',       name: 'Gemini 3.1 Pro High', context: 1_000_000 },
+];
+
+app.get('/api/models', (_req, res) => {
+  try {
+    const settingsFile = join(homedir(), '.local/state/personal-agent/pi-agent/settings.json');
+    let currentModel = 'gpt-5.4';
+    if (existsSync(settingsFile)) {
+      const s = JSON.parse(readFileSync(settingsFile, 'utf-8')) as { defaultModel?: string };
+      if (s.defaultModel) currentModel = s.defaultModel;
+    }
+    res.json({ currentModel, models: BUILT_IN_MODELS });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // ── Tasks ─────────────────────────────────────────────────────────────────────
 
 app.get('/api/tasks', (_req, res) => {

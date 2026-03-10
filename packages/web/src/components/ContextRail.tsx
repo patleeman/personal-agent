@@ -309,7 +309,18 @@ function TaskContext({ id }: { id: string }) {
   );
 }
 
-export function ContextRail() {
+function CollapseBtn({ onCollapse }: { onCollapse: () => void }) {
+  return (
+    <button onClick={onCollapse} title="Hide context panel"
+      className="text-dim hover:text-secondary transition-colors p-1 rounded shrink-0">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 18l6-6-6-6" />
+      </svg>
+    </button>
+  );
+}
+
+export function ContextRail({ onCollapse }: { onCollapse?: () => void }) {
   const location = useLocation();
   const parts = location.pathname.split('/').filter(Boolean);
   const section = parts[0];
@@ -321,15 +332,18 @@ export function ContextRail() {
     return (
       <div className="flex-1 overflow-y-auto">
         {/* Header */}
-        <div className="px-4 pt-4 pb-3 border-b border-border-subtle">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-dim">Context</p>
-          {conv && (
-            <p className="text-[12px] text-secondary mt-0.5 truncate">
-              {conv.workstreamId
-                ? <>linked to <span className="text-accent font-mono">{conv.workstreamId}</span></>
-                : 'no workstream linked'}
-            </p>
-          )}
+        <div className="px-4 pt-4 pb-3 border-b border-border-subtle flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-dim">Context</p>
+            {conv && (
+              <p className="text-[12px] text-secondary mt-0.5 truncate">
+                {conv.workstreamId
+                  ? <>linked to <span className="text-accent font-mono">{conv.workstreamId}</span></>
+                  : 'no workstream linked'}
+              </p>
+            )}
+          </div>
+          {onCollapse && <CollapseBtn onCollapse={onCollapse} />}
         </div>
         {conv
           ? <ConversationContext conv={conv} />
@@ -341,24 +355,34 @@ export function ContextRail() {
 
   if (section === 'tasks' && id) return (
     <div className="flex-1 overflow-y-auto">
-      <div className="px-4 pt-4 pb-3 border-b border-border-subtle">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-dim">Task</p>
-        <p className="text-[12px] text-secondary mt-0.5 font-mono truncate">{id}</p>
+      <div className="px-4 pt-4 pb-3 border-b border-border-subtle flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-dim">Task</p>
+          <p className="text-[12px] text-secondary mt-0.5 font-mono truncate">{id}</p>
+        </div>
+        {onCollapse && <CollapseBtn onCollapse={onCollapse} />}
       </div>
       <TaskContext id={id} />
     </div>
   );
 
   if (section === 'tasks') return (
-    <div className="flex-1 flex items-center justify-center px-4">
-      <p className="text-[12px] text-dim text-center">Select a task to see its prompt and schedule.</p>
+    <div className="flex-1 flex flex-col">
+      <div className="px-4 pt-4 pb-3 border-b border-border-subtle flex items-center justify-between">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-dim">Tasks</p>
+        {onCollapse && <CollapseBtn onCollapse={onCollapse} />}
+      </div>
+      <div className="flex-1 flex items-center justify-center px-4">
+        <p className="text-[12px] text-dim text-center">Select a task to see its prompt and schedule.</p>
+      </div>
     </div>
   );
 
   if (section === 'inbox') return (
     <div className="flex-1 overflow-y-auto">
-      <div className="px-4 pt-4 pb-3 border-b border-border-subtle">
+      <div className="px-4 pt-4 pb-3 border-b border-border-subtle flex items-center justify-between">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-dim">Inbox</p>
+        {onCollapse && <CollapseBtn onCollapse={onCollapse} />}
       </div>
       <InboxContext />
     </div>
@@ -366,8 +390,9 @@ export function ContextRail() {
 
   if (section === 'workstreams') return (
     <div className="flex-1 overflow-y-auto">
-      <div className="px-4 pt-4 pb-3 border-b border-border-subtle">
+      <div className="px-4 pt-4 pb-3 border-b border-border-subtle flex items-center justify-between">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-dim">Workstreams</p>
+        {onCollapse && <CollapseBtn onCollapse={onCollapse} />}
       </div>
       <WorkstreamsContext />
     </div>
