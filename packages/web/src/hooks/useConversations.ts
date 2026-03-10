@@ -1,125 +1,63 @@
-import { useState, useCallback } from 'react';
+/**
+ * Unified conversation list — real Pi sessions from the API,
+ * with archived state kept in localStorage.
+ *
+ * Falls back to mock data if the API is unreachable.
+ */
+import { useCallback, useEffect, useState } from 'react';
+import { MOCK_CONVERSATIONS } from '../data/mockConversations';
+import type { SessionMeta } from '../types';
 
-export interface Conversation {
-  id: string;
-  title: string;
-  subtitle?: string;
-  updatedAt: string;
-  workstreamId?: string;
-  pinned: boolean;
-  archived: boolean;
-  running?: boolean;
-}
+const ARCHIVED_KEY = 'pa:archived-session-ids';
 
-const STORAGE_KEY = 'pa:conversations';
-
-const SEED: Conversation[] = [
-  {
-    id: 'live-research',
-    title: 'LLM tool use research',
-    subtitle: 'Searching arxiv, semantic scholar…',
-    updatedAt: new Date().toISOString(),
-    running: true,
-    pinned: false,
-    archived: false,
-  },
-  {
-    id: 'web-ui-iteration',
-    title: 'web UI iteration',
-    subtitle: 'Arc sidebar, chat interface, context rail',
-    updatedAt: new Date(Date.now() - 6 * 60_000).toISOString(),
-    workstreamId: 'web-ui',
-    pinned: false,
-    archived: false,
-  },
-  {
-    id: 'artifact-model-planning',
-    title: 'artifact model planning',
-    subtitle: 'Define workstream + artifact schema',
-    updatedAt: new Date(Date.now() - 2 * 3600_000).toISOString(),
-    workstreamId: 'artifact-model',
-    pinned: false,
-    archived: false,
-  },
-  {
-    id: 'screenshot-review',
-    title: 'UI screenshot review',
-    subtitle: 'Light/dark mode issues flagged',
-    updatedAt: new Date(Date.now() - 3 * 3600_000).toISOString(),
-    workstreamId: 'web-ui',
-    pinned: false,
-    archived: false,
-  },
-  {
-    id: 'daemon-task-wiring',
-    title: 'daemon task → activity',
-    subtitle: 'Wire task success/failure to durable activity',
-    updatedAt: new Date(Date.now() - 6 * 3600_000).toISOString(),
-    pinned: false,
-    archived: false,
-  },
-  {
-    id: 'rewind-fork-demo',
-    title: 'pipeline debug + fork',
-    subtitle: 'GitLab CI TS errors, forked at msg 7',
-    updatedAt: new Date(Date.now() - 8 * 3600_000).toISOString(),
-    pinned: false,
-    archived: false,
-  },
-  {
-    id: 'daily-standup-0310',
-    title: 'daily standup review',
-    updatedAt: new Date(Date.now() - 24 * 3600_000).toISOString(),
-    pinned: false,
-    archived: true,
-  },
-];
-
-function load(): Conversation[] {
+function loadArchived(): Set<string> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as Conversation[];
+    const raw = localStorage.getItem(ARCHIVED_KEY);
+    if (raw) return new Set(JSON.parse(raw) as string[]);
   } catch { /* ignore */ }
-  const seed = SEED;
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(seed)); } catch { /* ignore */ }
-  return seed;
+  return new Set();
 }
 
-function save(convs: Conversation[]) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(convs)); } catch { /* ignore */ }
+function saveArchived(ids: Set<string>) {
+  try { localStorage.setItem(ARCHIVED_KEY, JSON.stringify([...ids])); } catch { /* ignore */ }
 }
+
+// Fallback when API is unreachable — convert mocks to SessionMeta shape
+const FALLBACK_SESSIONS: SessionMeta[] = Object.values(MOCK_CONVERSATIONS).map((conv, i) => ({
+  id:           conv.id,
+  file:         '',
+  timestamp:    new Date(Date.now() - i * 3_600_000).toISOString(),
+  cwd:          '/Users/patrickc.lee/personal/personal-agent',
+  cwdSlug:      '--Users-patrickc.lee-personal-personal-agent--',
+  model:        conv.model ?? 'claude-sonnet-4-6',
+  title:        conv.title,
+  messageCount: conv.messages.length,
+}));
 
 export function useConversations() {
-  const [conversations, setConversations] = useState<Conversation[]>(load);
+  const [sessions,    setSessions]    = useState<SessionMeta[]>([]);
+  const [archivedIds, setArchivedIds] = useState<Set<string>>(loadArchived);
+  const [loading,     setLoading]     = useState(true);
+  const [usingFallback, setUsingFallback] = useState(false);
 
-  const update = useCallback((next: Conversation[]) => {
-    setConversations(next);
-    save(next);
+  useEffect(() => {
+    setLoading(true);
+    fetch('/api/sessions')
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() as Promise<SessionMeta[]>; })
+      .then(data  => { setSessions(data);             setLoading(false); })
+      .catch(() => { setSessions(FALLBACK_SESSIONS); setUsingFallback(true); setLoading(false); });
   }, []);
 
   const archiveConversation = useCallback((id: string) => {
-    update(conversations.map(c => c.id === id ? { ...c, archived: true } : c));
-  }, [conversations, update]);
+    setArchivedIds(prev => { const next = new Set(prev); next.add(id);    saveArchived(next); return next; });
+  }, []);
 
   const restoreConversation = useCallback((id: string) => {
-    update(conversations.map(c => c.id === id ? { ...c, archived: false } : c));
-  }, [conversations, update]);
+    setArchivedIds(prev => { const next = new Set(prev); next.delete(id); saveArchived(next); return next; });
+  }, []);
 
-  const newConversation = useCallback((): Conversation => {
-    const id = `conv-${Date.now()}`;
-    const conv: Conversation = {
-      id,
-      title: 'new conversation',
-      updatedAt: new Date().toISOString(),
-      pinned: false,
-      archived: false,
-    };
-    update([conv, ...conversations]);
-    return conv;
-  }, [conversations, update]);
+  const open     = sessions.filter(s => !archivedIds.has(s.id));
+  const archived = sessions.filter(s =>  archivedIds.has(s.id));
 
-  const open = conversations.filter(c => !c.archived);
-  const archived = conversations.filter(c => c.archived);
-
-  return { open, archived, archiveConversation, restoreConversation, newConversation };
+  return { open, archived, archiveConversation, restoreConversation, loading, usingFallback };
 }
