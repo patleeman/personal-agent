@@ -175,16 +175,6 @@ function ConversationContext({ conv }: { conv: MockConversation }) {
 
   return (
     <div className="space-y-5 px-4 py-4">
-      {/* Model + token info */}
-      {conv.model && (
-        <div className="flex items-center justify-between text-[11px] text-dim py-2 border-b border-border-subtle">
-          <span className="font-mono">{conv.model}</span>
-          {conv.inputTokens && (
-            <span>{((conv.inputTokens + (conv.outputTokens ?? 0)) / 1000).toFixed(1)}k tokens</span>
-          )}
-        </div>
-      )}
-
       {conv.plan && <PlanSection plan={conv.plan} />}
       {conv.tasks && conv.tasks.length > 0 && <TasksSection tasks={conv.tasks} />}
       {conv.artifacts && conv.artifacts.length > 0 && <ArtifactsSection artifacts={conv.artifacts} />}

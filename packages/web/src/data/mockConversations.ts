@@ -44,8 +44,13 @@ export interface MockConversation {
   id: string;
   title: string;
   model?: string;
+  contextWindow?: number;   // default 200_000
   inputTokens?: number;
   outputTokens?: number;
+  systemTokens?: number;
+  userTokens?: number;
+  assistantTokens?: number;
+  toolTokens?: number;
   workstreamId?: string;
   messages: MessageBlock[];
   // Right-rail context
@@ -62,8 +67,9 @@ const webUi: MockConversation = {
   id: 'web-ui-iteration',
   title: 'web UI iteration',
   model: 'claude-sonnet-4-6',
-  inputTokens: 14280,
-  outputTokens: 3140,
+  contextWindow: 200_000,
+  inputTokens: 14280, outputTokens: 3140,
+  systemTokens: 2100, userTokens: 5200, assistantTokens: 3140, toolTokens: 6980,
   workstreamId: 'web-ui',
   tasks: [
     { id: 't1', title: 'Daily build verification', schedule: '0 9 * * *', status: 'pending' },
@@ -109,8 +115,9 @@ const artifactModel: MockConversation = {
   id: 'artifact-model-planning',
   title: 'artifact model planning',
   model: 'claude-sonnet-4-6',
-  inputTokens: 8920,
-  outputTokens: 2410,
+  contextWindow: 200_000,
+  inputTokens: 8920, outputTokens: 2410,
+  systemTokens: 2100, userTokens: 3200, assistantTokens: 2410, toolTokens: 3620,
   workstreamId: 'artifact-model',
   artifacts: [
     { id: 'a1', name: 'workstreams.ts',           type: 'code', language: 'TypeScript', lines: 142, path: 'packages/core/src/', updatedAt: '2026-03-10T10:00:03Z' },
@@ -147,8 +154,9 @@ const daemonWiring: MockConversation = {
   id: 'daemon-task-wiring',
   title: 'daemon task → activity',
   model: 'claude-sonnet-4-6',
-  inputTokens: 4100,
-  outputTokens: 890,
+  contextWindow: 200_000,
+  inputTokens: 4100, outputTokens: 890,
+  systemTokens: 2100, userTokens: 1200, assistantTokens: 890, toolTokens: 800,
   workstreamId: 'artifact-model',
   files: [
     { path: 'packages/daemon/src/modules/tasks.ts', action: 'read' },
@@ -176,8 +184,9 @@ const liveResearch: MockConversation = {
   id: 'live-research',
   title: 'LLM tool use research',
   model: 'claude-opus-4',
-  inputTokens: 22480,
-  outputTokens: 1840,
+  contextWindow: 200_000,
+  inputTokens: 22480, outputTokens: 1840,
+  systemTokens: 2100, userTokens: 3800, assistantTokens: 1840, toolTokens: 16580,
   tasks: [
     { id: 't1', title: 'Weekly research digest', schedule: '0 8 * * 1', status: 'pending' },
   ],
@@ -206,8 +215,9 @@ const screenshotReview: MockConversation = {
   id: 'screenshot-review',
   title: 'UI screenshot review',
   model: 'claude-sonnet-4-6',
-  inputTokens: 18650,
-  outputTokens: 2290,
+  contextWindow: 200_000,
+  inputTokens: 18650, outputTokens: 2290,
+  systemTokens: 2100, userTokens: 4200, assistantTokens: 2290, toolTokens: 12350,
   workstreamId: 'web-ui',
   artifacts: [
     { id: 'a1', name: 'ui-light.png',  type: 'image', updatedAt: '2026-03-10T11:00:04Z' },
@@ -241,8 +251,9 @@ const rewindForkDemo: MockConversation = {
   id: 'rewind-fork-demo',
   title: 'pipeline debug + fork',
   model: 'claude-sonnet-4-6',
-  inputTokens: 9340,
-  outputTokens: 1980,
+  contextWindow: 200_000,
+  inputTokens: 9340, outputTokens: 1980,
+  systemTokens: 2100, userTokens: 3500, assistantTokens: 1980, toolTokens: 3740,
   files: [
     { path: 'packages/web/src/components/Sidebar.tsx',      action: 'edit' },
     { path: 'packages/web/src/pages/ConversationPage.tsx',  action: 'read' },
