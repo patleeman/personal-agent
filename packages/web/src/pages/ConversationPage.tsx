@@ -6,6 +6,62 @@ import { MOCK_CONVERSATIONS, type MockConversation, type MessageBlock } from '..
 import { useSessionDetail } from '../hooks/useSessions';
 import type { DisplayBlock } from '../types';
 
+// ── Model picker ──────────────────────────────────────────────────────────────
+
+interface ModelInfo { id: string; provider: string; name: string; context: number; }
+
+function useModels() {
+  const [models, setModels]        = useState<ModelInfo[]>([]);
+  const [currentModel, setCurrent] = useState<string>('');
+  useEffect(() => {
+    fetch('/api/models')
+      .then(r => r.json())
+      .then((d: { currentModel: string; models: ModelInfo[] }) => {
+        setModels(d.models); setCurrent(d.currentModel);
+      }).catch(() => {});
+  }, []);
+  return { models, currentModel, setCurrent };
+}
+
+function ModelPicker({ models, currentModel, idx, onSelect, onClose }:
+  { models: ModelInfo[]; currentModel: string; idx: number; onSelect: (id: string) => void; onClose: () => void }) {
+  if (!models.length) return null;
+  const groups: Record<string, ModelInfo[]> = {};
+  for (const m of models) { (groups[m.provider] ??= []).push(m); }
+  const flat = models;
+  const sel  = flat[((idx % flat.length) + flat.length) % flat.length];
+  const fmtCtx = (n: number) => n >= 1_000_000 ? `${n / 1_000_000}M` : `${n / 1_000}k`;
+
+  return (
+    <div className="absolute bottom-full left-0 right-0 mb-2 bg-surface border border-border-default rounded-xl shadow-xl overflow-hidden z-50">
+      <div className="px-3 pt-2.5 pb-1.5 border-b border-border-subtle flex items-center justify-between">
+        <p className="text-[10px] uppercase tracking-wider text-dim font-medium">Switch model</p>
+        <button onClick={onClose} className="text-[11px] text-dim hover:text-primary">esc</button>
+      </div>
+      {Object.entries(groups).map(([provider, ms]) => (
+        <div key={provider}>
+          <p className="px-3 pt-2 pb-0.5 text-[9px] uppercase tracking-widest text-dim/60 font-semibold">{provider}</p>
+          {ms.map(m => {
+            const isCurrent = m.id === currentModel;
+            const isFocused = m.id === sel?.id;
+            return (
+              <button key={m.id} onMouseDown={e => { e.preventDefault(); onSelect(m.id); }}
+                className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
+                  isFocused ? 'bg-elevated text-primary' : 'text-secondary hover:bg-elevated/50'
+                }`}>
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isCurrent ? 'bg-accent' : 'bg-transparent border border-border-default'}`} />
+                <span className="flex-1 text-[13px] font-medium">{m.name}</span>
+                <span className="font-mono text-[11px] text-dim">{m.id}</span>
+                <span className="text-[10px] text-dim/60 shrink-0">{fmtCtx(m.context)}</span>
+              </button>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Real session → MessageBlock converter ─────────────────────────────────────
 
 function displayBlockToMessageBlock(b: DisplayBlock): MessageBlock {
@@ -198,6 +254,11 @@ export function ConversationPage() {
   const model = conv?.model ?? sessionDetail?.meta.model;
   const messageCount = conv?.messages.length ?? sessionDetail?.meta.messageCount ?? 0;
 
+  // Model
+  const { models, currentModel, setCurrent } = useModels();
+  const [modelNotice, setModelNotice] = useState<string | null>(null);
+  const [modelIdx, setModelIdx] = useState(0);
+
   // Input state
   const [input, setInput] = useState('');
   const [slashIdx, setSlashIdx] = useState(0);
@@ -210,13 +271,14 @@ export function ConversationPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const scrollRef   = useRef<HTMLDivElement>(null);
 
-  // Derive menu states
-  const slashMatch   = input.match(/^(\/[\w]*)$/);
-  const mentionMatch = input.match(/(^|.*\s)(@[\w-]*)$/);
-  const showSlash    = !!slashMatch;
-  const showMention  = !!mentionMatch && !showSlash;
-  const slashQuery   = slashMatch?.[1] ?? '';
-  const mentionQuery = mentionMatch?.[2] ?? '';
+  // Derive menu states — /model needs exact match including trailing space
+  const slashMatch    = input.match(/^(\/[\w]*)$/);
+  const showModelPicker = input === '/model ';
+  const mentionMatch  = input.match(/(^|.*\s)(@[\w-]*)$/);
+  const showSlash     = !!slashMatch && !showModelPicker;
+  const showMention   = !!mentionMatch && !showSlash && !showModelPicker;
+  const slashQuery    = slashMatch?.[1] ?? '';
+  const mentionQuery  = mentionMatch?.[2] ?? '';
 
   // Auto-resize textarea
   const resize = useCallback(() => {
@@ -263,8 +325,28 @@ export function ConversationPage() {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, []);
 
+  function selectModel(id: string) {
+    setCurrent(id);
+    setInput('');
+    setModelIdx(0);
+    const m = models.find(x => x.id === id);
+    if (m) { setModelNotice(m.name); setTimeout(() => setModelNotice(null), 2500); }
+    textareaRef.current?.focus();
+  }
+
   // Keyboard handling
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (showModelPicker) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setModelIdx(i => (i + 1) % models.length); return; }
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setModelIdx(i => (i - 1 + models.length) % models.length); return; }
+      if (e.key === 'Escape')    { e.preventDefault(); setInput(''); return; }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const sel = models[modelIdx % models.length];
+        if (sel) selectModel(sel.id);
+        return;
+      }
+    }
     if (showSlash || showMention) {
       if (e.key === 'ArrowDown') { e.preventDefault(); showSlash ? setSlashIdx(i => i + 1) : setMentionIdx(i => i + 1); return; }
       if (e.key === 'ArrowUp')   { e.preventDefault(); showSlash ? setSlashIdx(i => Math.max(0, i - 1)) : setMentionIdx(i => Math.max(0, i - 1)); return; }
@@ -379,8 +461,15 @@ export function ConversationPage() {
         <div className="relative">
           {showSlash   && <SlashMenu   query={slashQuery}   idx={slashIdx}   onSelect={cmd => { if (cmd.startsWith('/tree')) { setInput(''); setShowTree(true); } else { setInput(cmd); setSlashIdx(0); textareaRef.current?.focus(); } }} />}
           {showMention && <MentionMenu query={mentionQuery} idx={mentionIdx} onSelect={id  => { setInput(input.replace(/@[\w-]*$/, id + ' ')); setMentionIdx(0); textareaRef.current?.focus(); }} />}
+          {showModelPicker && <ModelPicker models={models} currentModel={currentModel} idx={modelIdx}
+            onSelect={selectModel} onClose={() => { setInput(''); textareaRef.current?.focus(); }} />}
 
-          <div className={`rounded-xl border transition-all ${dragOver ? 'border-accent/50 ring-2 ring-accent/20 bg-accent/5' : showSlash || showMention ? 'border-accent/40 ring-1 ring-accent/15' : 'border-border-subtle'} bg-elevated`}>
+          <div className={`rounded-xl border transition-all ${
+            dragOver          ? 'border-accent/50 ring-2 ring-accent/20 bg-accent/5' :
+            showModelPicker   ? 'border-accent/40 ring-1 ring-accent/15' :
+            showSlash || showMention ? 'border-accent/40 ring-1 ring-accent/15' :
+            'border-border-subtle'
+          } bg-elevated`}>
 
             {/* Drag overlay hint */}
             {dragOver && (
@@ -423,7 +512,17 @@ export function ConversationPage() {
                 style={{ minHeight: '24px', maxHeight: '160px' }}
               />
 
-              <div className="flex items-center gap-1 shrink-0 mb-0.5">
+              <div className="flex items-center gap-1.5 shrink-0 mb-0.5">
+                {/* Current model pill — click to open picker */}
+                {currentModel && (
+                  <button
+                    onMouseDown={e => { e.preventDefault(); setInput('/model '); textareaRef.current?.focus(); }}
+                    className="text-[10px] font-mono text-dim hover:text-secondary px-1.5 py-0.5 rounded hover:bg-elevated transition-colors"
+                    title="Switch model (/model)"
+                  >
+                    {currentModel.split('/').pop()}
+                  </button>
+                )}
                 <kbd className="text-[10px] text-dim bg-surface border border-border-subtle rounded px-1.5 py-0.5 font-mono leading-tight">⌘↵</kbd>
               </div>
             </div>
@@ -431,8 +530,15 @@ export function ConversationPage() {
         </div>
       </div>
 
+      {/* Model switch notice */}
+      {modelNotice && (
+        <div className="mx-4 mb-1 px-3 py-1.5 rounded-lg bg-accent/10 border border-accent/20 text-[12px] text-accent text-center">
+          Switched to {modelNotice}
+        </div>
+      )}
+
       {/* Context bar — always shown */}
-      <ContextBar conv={conv} messageCount={messageCount} model={model} />
+      <ContextBar conv={conv} messageCount={messageCount} model={currentModel || model} />
 
       {/* Session tree overlay */}
       {showTree && (realMessages ?? conv?.messages) && (
