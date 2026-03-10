@@ -1,6 +1,6 @@
 ---
 name: morning-report
-description: Build Patrick's morning report / daily brief for Telegram or Discord. Use when asked for a morning report, daily brief, or agenda+weather+reminders summary, or when maintaining the assistant morning-report workflow.
+description: Build Patrick's morning report / daily brief for Telegram or daemon-task delivery. Use when asked for a morning report, daily brief, or agenda+weather+reminders summary, or when maintaining the assistant morning-report workflow.
 ---
 
 # Morning Report
