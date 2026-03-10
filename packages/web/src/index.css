@@ -24,17 +24,22 @@
 
 /* ─── Dark theme ──────────────────────────────────────────────────────────── */
 [data-theme="dark"] {
-  --color-base:           36  34  28;
-  --color-surface:        44  42  35;
-  --color-elevated:       52  49  42;
-  --color-panel:          30  28  22;
-  --color-border-subtle:  58  56  48;
-  --color-border-default: 72  69  60;
-  --color-primary:        240 238 234;
-  --color-secondary:      132 146 178;
-  --color-dim:            126 138 170;
+  /* Backgrounds — warm dark grey, not near-black */
+  --color-base:           52  49  43;
+  --color-surface:        60  57  51;
+  --color-elevated:       70  67  60;
+  --color-panel:          46  44  38;
+  /* Borders */
+  --color-border-subtle:  78  75  66;
+  --color-border-default: 96  92  82;
+  /* Text — warm grey, not blue-grey */
+  --color-primary:        242 239 232;
+  --color-secondary:      182 176 162;
+  --color-dim:            142 136 122;
+  /* Accent */
   --color-accent:         224 152 48;
-  --color-accent-bg:      51  40  14;
+  --color-accent-bg:      72  54  18;
+  /* Semantic */
   --color-success:        61  186 130;
   --color-warning:        224 122 72;
   --color-danger:         224 89  89;
