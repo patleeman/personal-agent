@@ -9,7 +9,9 @@ import { createInterface } from 'readline';
 import { Command, CommanderError } from 'commander';
 import {
   bootstrapStateOrThrow,
+  listProfileActivityEntries,
   preparePiAgentDir,
+  resolveProfileActivityDir,
   resolveStatePaths,
   validateStatePathsOutsideRepo,
 } from '@personal-agent/core';
@@ -2355,6 +2357,240 @@ Commands:
   throw new Error(`Unknown tasks subcommand: ${subcommand}`);
 }
 
+function inboxListUsageText(): string {
+  return 'Usage: pa inbox [list] [--json] [--limit <count>]';
+}
+
+function parseInboxListOptions(args: string[]): {
+  jsonMode: boolean;
+  limit: number;
+} {
+  let jsonMode = false;
+  let limit = 20;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] as string;
+
+    if (arg === '--json') {
+      jsonMode = true;
+      continue;
+    }
+
+    if (arg === '--limit') {
+      const nextValue = args[index + 1];
+      if (!nextValue) {
+        throw new Error(inboxListUsageText());
+      }
+
+      const parsed = Number.parseInt(nextValue, 10);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        throw new Error(inboxListUsageText());
+      }
+
+      limit = parsed;
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--limit=')) {
+      const value = arg.slice('--limit='.length);
+      const parsed = Number.parseInt(value, 10);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        throw new Error(inboxListUsageText());
+      }
+
+      limit = parsed;
+      continue;
+    }
+
+    throw new Error(inboxListUsageText());
+  }
+
+  return {
+    jsonMode,
+    limit,
+  };
+}
+
+function loadInboxEntries(): {
+  profile: string;
+  activityDir: string;
+  entries: ReturnType<typeof listProfileActivityEntries>;
+} {
+  const profile = resolveProfileName();
+  const repoRoot = getRepoRoot();
+  const activityDir = resolveProfileActivityDir({ repoRoot, profile });
+  const entries = listProfileActivityEntries({ repoRoot, profile });
+
+  return {
+    profile,
+    activityDir,
+    entries,
+  };
+}
+
+async function inboxCommand(args: string[]): Promise<number> {
+  const [subcommand, ...rest] = args;
+  const treatAsList = !subcommand || subcommand === 'list' || subcommand.startsWith('--');
+  const effectiveSubcommand = treatAsList ? 'list' : subcommand;
+
+  if (effectiveSubcommand === 'list') {
+    const listArgs = !subcommand || subcommand.startsWith('--') ? args : rest;
+    const { jsonMode, limit } = parseInboxListOptions(listArgs);
+    const { profile, activityDir, entries } = loadInboxEntries();
+    const limitedEntries = entries.slice(0, limit);
+
+    const payload = {
+      profile,
+      activityDir,
+      count: entries.length,
+      limit,
+      entries: limitedEntries.map(({ path, entry }) => ({
+        path,
+        ...entry,
+      })),
+    };
+
+    if (jsonMode) {
+      console.log(JSON.stringify(payload, null, 2));
+      return 0;
+    }
+
+    console.log(section('Inbox'));
+    console.log(keyValue('Profile', profile));
+    console.log(keyValue('Activity directory', activityDir));
+    console.log(keyValue('Showing', `${limitedEntries.length} of ${entries.length}`));
+
+    if (limitedEntries.length === 0) {
+      console.log(dim('No activity yet.'));
+      return 0;
+    }
+
+    for (const { entry } of limitedEntries) {
+      console.log('');
+      console.log(bullet(`${entry.id}: ${entry.summary}`));
+      console.log(keyValue('Kind', entry.kind, 4));
+      console.log(keyValue('Created', new Date(entry.createdAt).toLocaleString(), 4));
+      console.log(keyValue('Notification', entry.notificationState ?? 'none', 4));
+
+      if (entry.relatedWorkstreamIds && entry.relatedWorkstreamIds.length > 0) {
+        console.log(keyValue('Workstreams', entry.relatedWorkstreamIds.join(', '), 4));
+      }
+
+      if (entry.relatedConversationIds && entry.relatedConversationIds.length > 0) {
+        console.log(keyValue('Conversations', entry.relatedConversationIds.join(', '), 4));
+      }
+    }
+
+    return 0;
+  }
+
+  if (effectiveSubcommand === 'show') {
+    const jsonMode = hasOption(rest, '--json');
+    const nonJsonArgs = rest.filter((arg) => arg !== '--json');
+    const unknownOptions = rest.filter((arg) => arg.startsWith('--') && arg !== '--json');
+
+    if (unknownOptions.length > 0 || nonJsonArgs.length !== 1) {
+      throw new Error('Usage: pa inbox show <id> [--json]');
+    }
+
+    const inboxId = nonJsonArgs[0] as string;
+    const { profile, activityDir, entries } = loadInboxEntries();
+    const match = entries.find(({ entry }) => entry.id === inboxId);
+
+    if (!match) {
+      throw new Error(`No inbox activity found with id: ${inboxId}`);
+    }
+
+    const payload = {
+      profile,
+      activityDir,
+      path: match.path,
+      entry: match.entry,
+    };
+
+    if (jsonMode) {
+      console.log(JSON.stringify(payload, null, 2));
+      return 0;
+    }
+
+    console.log(section(`Inbox item: ${match.entry.id}`));
+    console.log(keyValue('Profile', profile));
+    console.log(keyValue('Activity directory', activityDir));
+    console.log(keyValue('Path', match.path));
+    console.log(keyValue('Kind', match.entry.kind));
+    console.log(keyValue('Created', new Date(match.entry.createdAt).toLocaleString()));
+    console.log(keyValue('Notification', match.entry.notificationState ?? 'none'));
+
+    if (match.entry.relatedWorkstreamIds && match.entry.relatedWorkstreamIds.length > 0) {
+      console.log(keyValue('Workstreams', match.entry.relatedWorkstreamIds.join(', ')));
+    }
+
+    if (match.entry.relatedConversationIds && match.entry.relatedConversationIds.length > 0) {
+      console.log(keyValue('Conversations', match.entry.relatedConversationIds.join(', ')));
+    }
+
+    console.log('');
+    console.log(section('Summary'));
+    console.log(match.entry.summary);
+
+    if (match.entry.details) {
+      console.log('');
+      console.log(section('Details'));
+      console.log(match.entry.details);
+    }
+
+    return 0;
+  }
+
+  throw new Error(`Unknown inbox subcommand: ${effectiveSubcommand}`);
+}
+
+async function uiCommand(args: string[]): Promise<number> {
+  const port = (() => {
+    const idx = args.indexOf('--port');
+    if (idx !== -1 && args[idx + 1]) {
+      return parseInt(args[idx + 1] as string, 10);
+    }
+    return 3741;
+  })();
+
+  const openBrowser = hasOption(args, '--open');
+  const repoRoot = getRepoRoot();
+  const config = readConfig();
+  const profile = config.defaultProfile;
+
+  const serverPath = join(repoRoot, 'packages', 'web', 'dist-server', 'index.js');
+  const distPath = join(repoRoot, 'packages', 'web', 'dist');
+
+  if (!existsSync(serverPath)) {
+    console.error(uiError('Web UI server not built.'));
+    console.error(formatHint(`Run: cd ${join(repoRoot, 'packages', 'web')} && npm run build`));
+    return 1;
+  }
+
+  if (openBrowser) {
+    setTimeout(() => {
+      spawnSync('open', [`http://localhost:${port}`], { stdio: 'inherit' });
+    }, 1200);
+  }
+
+  console.log(success(`Starting web UI on http://localhost:${port}`));
+
+  const result = spawnSync(process.execPath, [serverPath], {
+    stdio: 'inherit',
+    env: {
+      ...process.env,
+      PA_WEB_PORT: String(port),
+      PA_WEB_DIST: distPath,
+      PERSONAL_AGENT_REPO_ROOT: repoRoot,
+      PERSONAL_AGENT_ACTIVE_PROFILE: profile,
+    },
+  });
+
+  return result.status ?? 0;
+}
+
 type CommandHandler = (args: string[]) => Promise<number>;
 
 interface CliCommandDefinition {
@@ -2428,6 +2664,18 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       usage: 'tasks [list|show|validate|logs] [args...]',
       description: 'Inspect and validate scheduled daemon tasks',
       run: tasksCommand,
+    },
+    {
+      name: 'inbox',
+      usage: 'inbox [list|show] [args...]',
+      description: 'Inspect activity/inbox items for the active profile',
+      run: inboxCommand,
+    },
+    {
+      name: 'ui',
+      usage: 'ui [args...]',
+      description: 'Start the personal agent web UI',
+      run: uiCommand,
     },
     {
       name: 'memory',

@@ -20,6 +20,8 @@ extensions/
 ├── deferred-resume/
 │   └── index.ts
 ├── exit-alias.ts
+├── inbox-shell/
+│   └── index.ts
 ├── memory/
 │   └── index.ts
 ├── pa-header/

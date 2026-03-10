@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Light theme (default) ───────────────────────────────────────────────── */
+:root {
+  --color-base:           245 241 235;
+  --color-surface:        237 233 226;
+  --color-elevated:       229 224 216;
+  --color-panel:          240 236 229;
+  --color-border-subtle:  216 210 200;
+  --color-border-default: 200 194 182;
+  --color-primary:        28  26  20;
+  --color-secondary:      90  84  72;
+  --color-dim:            110 100 86;
+  --color-accent:         149 90  16;
+  --color-accent-bg:      254 243 224;
+  --color-success:        22  110 72;
+  --color-warning:        179 78  20;
+  --color-danger:         196 48  48;
+  --color-teal:           26  120 120;
+  --color-steel:          30  90  150;
+}
+
+/* ─── Dark theme ──────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  --color-base:           36  34  28;
+  --color-surface:        44  42  35;
+  --color-elevated:       52  49  42;
+  --color-panel:          30  28  22;
+  --color-border-subtle:  58  56  48;
+  --color-border-default: 72  69  60;
+  --color-primary:        240 238 234;
+  --color-secondary:      132 146 178;
+  --color-dim:            126 138 170;
+  --color-accent:         224 152 48;
+  --color-accent-bg:      51  40  14;
+  --color-success:        61  186 130;
+  --color-warning:        224 122 72;
+  --color-danger:         224 89  89;
+  --color-teal:           61  168 168;
+  --color-steel:          91  144 204;
+}
+
+/* ─── Base ────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; padding: 0; }
+
+body {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  background-color: rgb(var(--color-base));
+  color: rgb(var(--color-primary));
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+::-webkit-scrollbar        { width: 3px; height: 3px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: rgb(var(--color-border-default)); border-radius: 2px; }

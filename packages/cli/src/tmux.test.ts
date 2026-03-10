@@ -37,6 +37,7 @@ describe('tmux helpers', () => {
       expect(config).toContain('set -g prefix None');
       expect(config).toContain('set -g extended-keys on');
       expect(config).toContain('set -g extended-keys-format csi-u');
+      expect(config).toContain("set -g terminal-features[97] 'tmux*:extkeys'");
       expect(config).toContain("set -g terminal-features[98] '*:RGB'");
       expect(config).toContain("set -g terminal-features[99] 'xterm*:extkeys'");
       expect(config).toContain('set -g window-status-style fg=colour250,bg=colour236');
@@ -62,6 +63,7 @@ describe('tmux helpers', () => {
       expect(config).toContain(']   next window');
       expect(config).toContain('1-9 switch to window 1-9');
       expect(config).toContain('Ctrl+Space #[fg=colour252]shortcuts');
+      expect(config).toContain('bind-key -n S-Enter send-keys Escape "[13;2u"');
       expect(config).toContain('menu-selected-style');
       expect(config).toContain('#{@pa_profile}');
       expect(config).toContain('confirm-before -p "kill-pane #P? (y/n)" kill-pane');

@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { listProfileActivityEntries } from '@personal-agent/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DaemonConfig } from '../config.js';
 import type { DaemonEvent, DaemonPaths, EventPayload } from '../types.js';
@@ -194,7 +195,7 @@ describe('tasks module scheduling', () => {
     await module.stop?.(context);
   });
 
-  it('passes tmux execution mode from module defaults with per-task overrides', async () => {
+  it('passes daemon execution mode from module defaults with per-task overrides', async () => {
     const taskDir = createTempDir('tasks-module-definitions-');
     const stateRoot = createTempDir('tasks-module-state-');
 
@@ -205,7 +206,7 @@ describe('tasks module scheduling', () => {
 
     writeFileSync(
       join(taskDir, 'override-mode.task.md'),
-      `---\nid: override-mode\nat: "2026-03-02T10:00:00.000Z"\nrunInTmux: false\n---\nRun without tmux\n`,
+      `---\nid: override-mode\nat: "2026-03-02T10:00:00.000Z"\nrunInTmux: true\n---\nRun with tmux override\n`,
     );
 
     let currentTime = new Date('2026-03-02T09:59:00.000Z');
@@ -219,7 +220,7 @@ describe('tasks module scheduling', () => {
         maxRetries: 3,
         reapAfterDays: 7,
         defaultTimeoutSeconds: 1800,
-        runTasksInTmux: true,
+        runTasksInTmux: false,
       },
       {
         now: () => currentTime,
@@ -244,9 +245,71 @@ describe('tasks module scheduling', () => {
       .sort((left, right) => left.id.localeCompare(right.id));
 
     expect(runModes).toEqual([
-      { id: 'default-mode', runInTmux: true },
-      { id: 'override-mode', runInTmux: false },
+      { id: 'default-mode', runInTmux: false },
+      { id: 'override-mode', runInTmux: true },
     ]);
+
+    await module.stop?.(context);
+  });
+
+  it('writes durable activity entries for successful task runs', async () => {
+    const repoRoot = createTempDir('tasks-module-repo-');
+    const taskDir = join(repoRoot, 'profiles', 'datadog', 'agent', 'tasks');
+    mkdirSync(taskDir, { recursive: true });
+    const stateRoot = createTempDir('tasks-module-state-');
+    const taskPath = join(taskDir, 'daily-report.task.md');
+
+    writeFileSync(taskPath, `---
+id: daily-report
+at: "2026-03-02T10:00:00.000Z"
+profile: datadog
+---
+Write daily report
+`);
+
+    let currentTime = new Date('2026-03-02T09:59:00.000Z');
+
+    const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(
+      request,
+      true,
+      currentTime.toISOString(),
+      undefined,
+      'Daily report generated successfully.',
+    ));
+
+    const module = createTasksModule(
+      {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
+      {
+        now: () => currentTime,
+        runTask,
+      },
+    );
+
+    const { context } = createContext(taskDir, stateRoot);
+
+    await module.start(context);
+
+    currentTime = new Date('2026-03-02T10:00:10.000Z');
+    await module.handleEvent(createTimerEvent(), context);
+
+    await waitForCondition(() => listProfileActivityEntries({ repoRoot, profile: 'datadog' }).length === 1);
+
+    const entries = listProfileActivityEntries({ repoRoot, profile: 'datadog' });
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.entry).toMatchObject({
+      kind: 'scheduled-task',
+      summary: 'Scheduled task daily-report completed.',
+      profile: 'datadog',
+      notificationState: 'none',
+    });
+    expect(entries[0]?.entry.details).toContain('Daily report generated successfully.');
 
     await module.stop?.(context);
   });

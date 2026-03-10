@@ -1,5 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'fs';
 import { join, resolve } from 'path';
+import {
+  createWorkstreamActivityEntry,
+  writeProfileActivityEntry,
+} from '@personal-agent/core';
 import type { TasksModuleConfig } from '../config.js';
 import type { DaemonModule } from './types.js';
 import {
@@ -125,6 +129,15 @@ function sanitizePathSegment(value: string): string {
   return sanitized.length > 0 ? sanitized : 'task';
 }
 
+function sanitizeActivityIdSegment(value: string): string {
+  const sanitized = value
+    .replace(/[^a-zA-Z0-9-_]+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+
+  return sanitized.length > 0 ? sanitized : 'activity';
+}
+
 function toMinuteKey(at: Date): string {
   const rounded = new Date(at);
   rounded.setSeconds(0, 0);
@@ -186,6 +199,63 @@ function ensureTaskRecord(taskState: TaskStateFile, task: ParsedTaskDefinition):
   return created;
 }
 
+function inferRepoRootFromTaskFile(filePath: string, profile: string): string | undefined {
+  const normalizedPath = resolve(filePath).replace(/\\/g, '/');
+  const marker = `/profiles/${profile}/agent/tasks/`;
+  const markerIndex = normalizedPath.indexOf(marker);
+
+  if (markerIndex >= 0) {
+    return normalizedPath.slice(0, markerIndex) || '/';
+  }
+
+  const fallbackMarker = `/profiles/${profile}/agent/tasks`;
+  const fallbackIndex = normalizedPath.indexOf(fallbackMarker);
+  if (fallbackIndex >= 0) {
+    return normalizedPath.slice(0, fallbackIndex) || '/';
+  }
+
+  return undefined;
+}
+
+function shouldQueueTaskNotification(task: ParsedTaskDefinition, status: TaskRunOutcomeStatus): boolean {
+  if (!task.output) {
+    return false;
+  }
+
+  return shouldPublishTaskOutput(task.output, status);
+}
+
+function toTaskActivitySummary(taskId: string, status: TaskRunOutcomeStatus): string {
+  if (status === 'success') {
+    return `Scheduled task ${taskId} completed.`;
+  }
+
+  return `Scheduled task ${taskId} failed.`;
+}
+
+function toTaskActivityDetails(input: {
+  outputText?: string;
+  error?: string;
+  logPath?: string;
+}): string | undefined {
+  const sections: string[] = [];
+
+  const outputText = normalizeTaskOutput(input.outputText);
+  if (outputText) {
+    sections.push(`Output:\n${outputText}`);
+  }
+
+  if (input.error) {
+    sections.push(`Error:\n${input.error}`);
+  }
+
+  if (input.logPath) {
+    sections.push(`Log:\n${input.logPath}`);
+  }
+
+  return sections.length > 0 ? sections.join('\n\n') : undefined;
+}
+
 export function createTasksModule(
   config: TasksModuleConfig,
   dependencies: TasksModuleDependencies = {},
@@ -198,7 +268,7 @@ export function createTasksModule(
   const maxRetries = Math.max(1, Math.floor(config.maxRetries));
   const reapAfterDays = Math.max(0, Math.floor(config.reapAfterDays));
   const defaultTimeoutSeconds = Math.max(30, Math.floor(config.defaultTimeoutSeconds));
-  const runTasksInTmuxByDefault = config.runTasksInTmux ?? true;
+  const runTasksInTmuxByDefault = config.runTasksInTmux ?? false;
 
   const state: TasksModuleState = {
     knownTasks: 0,
@@ -279,6 +349,49 @@ export function createTasksModule(
     }
   };
 
+  const writeTaskActivity = (
+    task: ParsedTaskDefinition,
+    status: TaskRunOutcomeStatus,
+    context: { logger: { info: (message: string) => void; warn: (message: string) => void } },
+    details: {
+      finishedAt: string;
+      outputText?: string;
+      error?: string;
+      logPath?: string;
+    },
+  ): void => {
+    try {
+      const repoRoot = inferRepoRootFromTaskFile(task.filePath, task.profile);
+      if (!repoRoot) {
+        context.logger.warn(`unable to infer repo root for task activity id=${task.id} file=${task.filePath}`);
+        return;
+      }
+
+      const activityId = [
+        'task',
+        sanitizeActivityIdSegment(task.id),
+        sanitizeActivityIdSegment(details.finishedAt.replace(/[.:]/g, '-')),
+        status,
+      ].join('-');
+
+      writeProfileActivityEntry({
+        repoRoot,
+        profile: task.profile,
+        entry: createWorkstreamActivityEntry({
+          id: activityId,
+          createdAt: details.finishedAt,
+          profile: task.profile,
+          kind: 'scheduled-task',
+          summary: toTaskActivitySummary(task.id, status),
+          details: toTaskActivityDetails(details),
+          notificationState: shouldQueueTaskNotification(task, status) ? 'queued' : 'none',
+        }),
+      });
+    } catch (error) {
+      context.logger.warn(`failed to write task activity id=${task.id}: ${(error as Error).message}`);
+    }
+  };
+
   const executeTaskRun = async (
     task: ParsedTaskDefinition,
     record: TaskRuntimeState,
@@ -344,6 +457,12 @@ export function createTasksModule(
       });
       context.logger.info(`task completed id=${task.id} log=${finalResult.logPath}`);
 
+      writeTaskActivity(task, 'success', context, {
+        finishedAt,
+        outputText: finalResult.outputText,
+        logPath: finalResult.logPath,
+      });
+
       publishTaskOutputNotifications(task, 'success', context, {
         finishedAt,
         outputText: finalResult.outputText,
@@ -377,6 +496,13 @@ export function createTasksModule(
         logPath: finalResult?.logPath,
       });
       context.logger.warn(`task failed id=${task.id} error=${record.lastError}`);
+
+      writeTaskActivity(task, 'failed', context, {
+        finishedAt,
+        outputText: finalResult?.outputText,
+        error: record.lastError,
+        logPath: finalResult?.logPath,
+      });
 
       publishTaskOutputNotifications(task, 'failed', context, {
         finishedAt,

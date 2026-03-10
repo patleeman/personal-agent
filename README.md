@@ -193,6 +193,7 @@ Built-in extensions in this repo:
 
 - `memory` - Active-profile memory policy (AGENTS.md + skills)
 - `context-bar` - Session context display
+- `inbox-shell` - Inbox/context widget, footer attention status, and right-side overlay panel in TUI
 - `pa-header` - Startup header/profile provenance
 - `at-autocomplete-performance` - Faster `@` path completion in large repos
 - `deferred-resume` - Resume this same TUI session later after a delay

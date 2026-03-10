@@ -2,6 +2,7 @@ import { chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from '
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
+import { createWorkstreamActivityEntry, writeProfileActivityEntry } from '@personal-agent/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runCli } from './index.js';
 
@@ -268,6 +269,79 @@ describe('CLI command flows', () => {
 
     expect(logs.some((line) => line.includes(taskDir))).toBe(true);
     expect(logs.some((line) => line.includes('demo'))).toBe(true);
+
+    logSpy.mockRestore();
+  });
+
+  it('lists inbox activity for the active profile', async () => {
+    const repo = createTestRepo();
+    const configDir = createTempDir('personal-agent-cli-config-');
+    const configPath = join(configDir, 'config.json');
+
+    writeFileSync(configPath, JSON.stringify({ defaultProfile: 'datadog' }));
+
+    writeProfileActivityEntry({
+      repoRoot: repo,
+      profile: 'datadog',
+      entry: createWorkstreamActivityEntry({
+        id: 'daily-report',
+        createdAt: '2026-03-10T14:00:00.000Z',
+        profile: 'datadog',
+        kind: 'scheduled-task',
+        summary: 'Daily report completed.',
+        details: 'Generated the daily report artifact.',
+      }),
+    });
+
+    process.env.PERSONAL_AGENT_REPO_ROOT = repo;
+    process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
+      logs.push(String(message ?? ''));
+    });
+
+    expect(await runCli(['inbox'])).toBe(0);
+
+    expect(logs.some((line) => line.includes('daily-report'))).toBe(true);
+    expect(logs.some((line) => line.includes('Daily report completed.'))).toBe(true);
+
+    logSpy.mockRestore();
+  });
+
+  it('shows one inbox activity item as json', async () => {
+    const repo = createTestRepo();
+    const configDir = createTempDir('personal-agent-cli-config-');
+    const configPath = join(configDir, 'config.json');
+
+    writeFileSync(configPath, JSON.stringify({ defaultProfile: 'datadog' }));
+
+    writeProfileActivityEntry({
+      repoRoot: repo,
+      profile: 'datadog',
+      entry: createWorkstreamActivityEntry({
+        id: 'daily-report',
+        createdAt: '2026-03-10T14:00:00.000Z',
+        profile: 'datadog',
+        kind: 'scheduled-task',
+        summary: 'Daily report completed.',
+        details: 'Generated the daily report artifact.',
+      }),
+    });
+
+    process.env.PERSONAL_AGENT_REPO_ROOT = repo;
+    process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
+      logs.push(String(message ?? ''));
+    });
+
+    expect(await runCli(['inbox', 'show', 'daily-report', '--json'])).toBe(0);
+
+    const output = logs.join('\n');
+    expect(output).toContain('"id": "daily-report"');
+    expect(output).toContain('"kind": "scheduled-task"');
 
     logSpy.mockRestore();
   });
