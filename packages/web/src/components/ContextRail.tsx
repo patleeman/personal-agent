@@ -228,7 +228,14 @@ function InboxItemContext({ id }: { id: string }) {
     setLoading(true);
     fetch(`/api/activity/${encodeURIComponent(id)}`)
       .then(r => r.ok ? r.json() : Promise.reject())
-      .then(d => { setEntry(d); setLoading(false); })
+      .then((d: ActivityEntry & { read?: boolean }) => {
+        setEntry(d);
+        setLoading(false);
+        // Mark as read when detail opens
+        if (!d.read) {
+          void fetch(`/api/activity/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ read: true }) });
+        }
+      })
       .catch(() => setLoading(false));
   }, [id]);
 

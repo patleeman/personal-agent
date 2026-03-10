@@ -3,69 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { usePolling } from '../hooks';
 import { kindMeta, timeAgo } from '../utils';
-import type { ActivityEntry } from '../types';
 
-function InboxItemDetail({ entry, onRead }: { entry: ActivityEntry; onRead: () => void }) {
-  // Mark as read when detail opens
-  useEffect(() => {
-    if (!entry.read) {
-      void api.markActivityRead(entry.id).then(onRead);
-    }
-  }, [entry.id, entry.read, onRead]);
-
-  const meta = kindMeta(entry.kind);
-
-  return (
-    <div className="border-t border-border-subtle px-6 py-5 space-y-4">
-      <div className="flex items-start gap-3">
-        <span className={`mt-1 w-2 h-2 rounded-full shrink-0 ${meta.dot}`} />
-        <div>
-          <p className="text-[13px] font-medium text-primary leading-snug">{entry.summary}</p>
-          <p className="text-[11px] text-dim mt-1 font-mono">
-            <span className={meta.color}>{meta.label}</span>
-            <span className="opacity-40 mx-1.5">·</span>
-            {timeAgo(entry.createdAt)}
-          </p>
-        </div>
-      </div>
-
-      {entry.details && (
-        <div className="bg-surface rounded-lg px-4 py-3">
-          <p className="text-[10px] uppercase tracking-wider text-dim mb-2">Details</p>
-          <pre className="text-[12px] text-secondary font-mono whitespace-pre-wrap leading-relaxed">{entry.details}</pre>
-        </div>
-      )}
-
-      {entry.relatedConversationIds && entry.relatedConversationIds.length > 0 && (
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-dim mb-2">Sessions</p>
-          <div className="space-y-1">
-            {entry.relatedConversationIds.map(cid => (
-              <Link key={cid} to={`/conversations/${cid}`}
-                className="block text-[12px] font-mono text-accent hover:underline truncate">
-                {cid}
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {entry.relatedWorkstreamIds && entry.relatedWorkstreamIds.length > 0 && (
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-dim mb-2">Workstreams</p>
-          <div className="space-y-1">
-            {entry.relatedWorkstreamIds.map(wsId => (
-              <Link key={wsId} to={`/workstreams/${wsId}`}
-                className="block text-[12px] font-mono text-accent hover:underline truncate">
-                {wsId}
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function InboxPage() {
   const { id: selectedId } = useParams<{ id?: string }>();
@@ -74,7 +12,6 @@ export function InboxPage() {
   const [filter, setFilter] = useState<'all' | 'unread'>('unread');
   const [markingAll, setMarkingAll] = useState(false);
 
-  const selected = activity?.find(e => e.id === selectedId);
   const unreadCount = activity?.filter(e => !e.read).length ?? 0;
   const visible = activity
     ? (filter === 'unread' ? activity.filter(e => !e.read) : activity)
@@ -204,13 +141,7 @@ export function InboxPage() {
             })}
           </div>
 
-          {/* Inline detail panel */}
-          {selected && (
-            <InboxItemDetail
-              entry={selected}
-              onRead={refetch}
-            />
-          )}
+
         </div>
       )}
     </div>
