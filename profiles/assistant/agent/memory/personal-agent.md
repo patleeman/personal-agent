@@ -1,7 +1,7 @@
 ---
 id: personal-agent
 title: "personal-agent Project Notes"
-summary: "Current project direction and UX constraints for the personal-agent repo."
+summary: "Current project direction, UX constraints, and core model notes for the personal-agent repo."
 type: "project"
 status: "active"
 tags:
@@ -23,6 +23,20 @@ updated: 2026-03-10
 
 - Discord support was intentionally removed because Patrick does not use it.
 - Telegram gateway and daemon tasks remain first-class surfaces.
+
+## Core model direction
+
+- Treat `personal-agent` as one personal agent for Patrick, not a general multi-user product.
+- Profiles are domain/context boundaries layered on top of a shared agent identity; in practice, each machine usually has one dominant active profile.
+- New conversations should start from durable profile memory (`AGENTS.md`, skills, memory docs), not from blank transcript state.
+- Tasks should be first-class, profile-scoped objects that can start in one surface, run elsewhere, and later be resumed or checked from another surface.
+- Portability should prioritize syncing durable memory/configuration and task summaries or metadata across machines over raw chat history.
+
+## Inspectability and context reduction
+
+- Keep the full conversation or execution trail inspectable when Patrick needs to drill in.
+- Also maintain compact summaries that expose durable facts, progress, blockers, decisions, artifacts, and next actions without reloading the full transcript.
+- Treat inspectability as a core trust requirement, not only a debugging aid.
 
 ## Revisit gate
 
