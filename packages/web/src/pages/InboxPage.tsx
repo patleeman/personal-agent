@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { usePolling } from '../hooks';
@@ -71,25 +71,76 @@ export function InboxPage() {
   const { id: selectedId } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const { data: activity, loading, error, refetch } = usePolling(api.activity, 15_000);
+  const [filter, setFilter] = useState<'all' | 'unread'>('unread');
+  const [markingAll, setMarkingAll] = useState(false);
 
   const selected = activity?.find(e => e.id === selectedId);
   const unreadCount = activity?.filter(e => !e.read).length ?? 0;
+  const visible = activity
+    ? (filter === 'unread' ? activity.filter(e => !e.read) : activity)
+    : [];
+
+  // Switch to 'all' automatically if unread list becomes empty after marking
+  useEffect(() => {
+    if (filter === 'unread' && activity && unreadCount === 0 && activity.length > 0) {
+      setFilter('all');
+    }
+  }, [filter, activity, unreadCount]);
+
+  const markAllRead = useCallback(async () => {
+    if (!activity) return;
+    const unread = activity.filter(e => !e.read);
+    if (unread.length === 0) return;
+    setMarkingAll(true);
+    try {
+      await Promise.all(unread.map(e => api.markActivityRead(e.id)));
+      await refetch();
+    } finally {
+      setMarkingAll(false);
+    }
+  }, [activity, refetch]);
 
   return (
     <div className="flex flex-col h-full">
-      <div className="sticky top-0 z-10 bg-base/95 backdrop-blur-sm border-b border-border-subtle px-6 py-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-base font-semibold text-primary">Inbox</h1>
+      <div className="sticky top-0 z-10 bg-base/95 backdrop-blur-sm border-b border-border-subtle px-6 py-4 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4 min-w-0">
+          <h1 className="text-base font-semibold text-primary shrink-0">Inbox</h1>
+          {/* Unread / All toggle */}
           {activity && (
-            <p className="text-xs text-secondary mt-0.5 font-mono">
-              {activity.length} {activity.length === 1 ? 'item' : 'items'}
-              {unreadCount > 0 && <span className="ml-2 text-accent font-semibold">· {unreadCount} unread</span>}
-            </p>
+            <div className="flex items-center gap-px bg-elevated rounded-lg p-0.5">
+              <button
+                onClick={() => setFilter('unread')}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                  filter === 'unread' ? 'bg-surface text-primary shadow-sm' : 'text-dim hover:text-secondary'
+                }`}
+              >
+                Unread{unreadCount > 0 && <span className="ml-1 text-accent">{unreadCount}</span>}
+              </button>
+              <button
+                onClick={() => setFilter('all')}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                  filter === 'all' ? 'bg-surface text-primary shadow-sm' : 'text-dim hover:text-secondary'
+                }`}
+              >
+                All{activity.length > 0 && <span className="ml-1 opacity-50">{activity.length}</span>}
+              </button>
+            </div>
           )}
         </div>
-        <button onClick={refetch} className="text-xs text-secondary hover:text-primary transition-colors px-2 py-1 rounded hover:bg-surface">
-          ↻ Refresh
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {unreadCount > 0 && (
+            <button
+              onClick={markAllRead}
+              disabled={markingAll}
+              className="text-[11px] text-dim hover:text-secondary transition-colors px-2 py-1 rounded hover:bg-surface disabled:opacity-40"
+            >
+              {markingAll ? 'Marking…' : 'Mark all read'}
+            </button>
+          )}
+          <button onClick={refetch} className="text-xs text-secondary hover:text-primary transition-colors px-2 py-1 rounded hover:bg-surface">
+            ↻
+          </button>
+        </div>
       </div>
 
       {loading && (
@@ -107,10 +158,20 @@ export function InboxPage() {
         </div>
       )}
 
-      {!loading && activity && activity.length > 0 && (
+      {!loading && activity && activity.length > 0 && filter === 'unread' && unreadCount === 0 && (
+        <div className="py-16 text-center">
+          <p className="text-2xl mb-3">✓</p>
+          <p className="text-sm text-primary">All caught up.</p>
+          <button onClick={() => setFilter('all')} className="text-xs text-accent hover:underline mt-1">
+            View all {activity.length} notifications →
+          </button>
+        </div>
+      )}
+
+      {!loading && activity && visible.length > 0 && (
         <div className="flex-1 overflow-y-auto">
           <div className="px-6 py-4 space-y-px">
-            {activity.map((entry) => {
+            {visible.map((entry) => {
               const meta = kindMeta(entry.kind);
               const isSelected = entry.id === selectedId;
               return (
