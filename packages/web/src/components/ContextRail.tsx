@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { api } from '../api';
-import { useApi } from '../hooks';
 import { formatDate, kindMeta, timeAgo } from '../utils';
 import type { LiveSessionContext } from '../types';
 
@@ -54,9 +53,19 @@ function truncate(text: string, max: number) {
 }
 
 function LiveSessionContextPanel({ id }: { id: string }) {
-  const { data, loading, error } = useApi<LiveSessionContext>(
-    useCallback(() => api.liveSessionContext(id), [id]),
-  );
+  const [data,    setData]    = useState<LiveSessionContext | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(false);
+    api.liveSessionContext(id)
+      .then(d => { if (!cancelled) { setData(d); setLoading(false); } })
+      .catch(() => { if (!cancelled) { setError(true); setLoading(false); } });
+    return () => { cancelled = true; };
+  }, [id]);
 
   if (loading) return <div className="px-4 py-4 text-[12px] text-dim animate-pulse">Loading…</div>;
   if (error)   return <div className="px-4 py-4 text-[12px] text-dim/60">Unable to load context.</div>;
