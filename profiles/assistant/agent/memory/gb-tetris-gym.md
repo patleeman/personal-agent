@@ -8,7 +8,7 @@ tags:
   - gb-tetris-gym
   - ml
   - tetris
-updated: 2026-03-09
+updated: 2026-03-10
 ---
 
 # gb-tetris-gym Project Notes
@@ -102,31 +102,31 @@ Current bootstrap training setup:
 
 ## Current status
 
-- bootstrap SFT completed and the resulting adapter can be loaded locally on the desktop 3090 Ti
-- local desktop eval plumbing works end-to-end, including the Linux memory bridge and `--backend local-peft`
-- teacher-trace recording is smoke-tested on desktop
-- first mixed adapter and first PPO run completed end-to-end, but still clear `0` lines
+- emulator-backed `gbplan1` teacher evaluation, teacher-trace recording, and spawn-state recording/replay all work end-to-end on `desktop`
+- continuation-aware mixed SFT and BC-anchored PPO both completed successfully but still failed to clear lines live
+- the locked current live teacher baseline is still internal heuristic/search teacher v2 with preset `aggressive`
+- an exploratory teacher corpus improved offline search signal, but the current internal teacher family still plateaus at `0` live line clears
 
 Current likely bottleneck:
 
-- data alignment, not emulator plumbing
-- earlier teacher data only supervised the first chunk of each piece, while live play often needs continuation chunks on the same piece
-- continuation-aware chunked-teacher tooling is now implemented
+- teacher quality + state distribution / trace quality, not emulator plumbing
+- continuation-aware chunking fixed one data-alignment problem, but it was not enough to change live outcomes
+- the next meaningful gain likely comes from a stronger offline teacher/search design rather than more small student retrains
 
 ## Practical guidance for future work
 
 - prefer 4090 first, but 24 GB-class GPUs are adequate for bootstrap runs
 - keep long training runs in remote tmux
+- use bounded live teacher eval as a sanity check, but optimize new teacher work first for better trace/data extraction
 - validate trainers with tiny smoke datasets before multi-hour runs
 - expect Transformers API drift and check installed signatures when failures appear
 - keep project docs updated when the data format or training path changes
 
 ## Next important steps
 
-1. Finish the continuation-aware dataset build
-2. Retrain the continuation-aware mixed adapter
-3. Evaluate continuation-aware results against bootstrap and mixed-v1
-4. Run BC-anchored PPO from the continuation-aware adapter
-5. Compare live behavior across bootstrap vs mixed-v1 vs continuation-aware vs PPO+BC
-6. Add recovery states
-7. Add human demonstration recording
+1. Improve the offline teacher/data path before another major student-training cycle
+2. Adapt a stronger StackRabbit-style search/eval teacher into the GB-specific teacher path
+3. Use that stronger teacher to record better traces, spawn rollouts, and recovery states
+4. Keep bounded live teacher comparisons as a sanity gate while focusing the main hill-climb on data quality
+5. Resume student training only after teacher/data quality improves materially
+6. Add human demonstration recording
