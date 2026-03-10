@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { api } from '../api';
+import { useApi } from '../hooks';
 import { formatDate, kindMeta, timeAgo } from '../utils';
 import type { LiveSessionContext } from '../types';
 
@@ -386,9 +387,13 @@ function WorkstreamDetailContext({ id }: { id: string }) {
 // ── Memory file content ───────────────────────────────────────────────────────
 
 function MemoryFileContext({ path }: { path: string }) {
-  const { data, loading, error, refetch } = useApi(
-    useCallback(() => api.memoryFile(path), [path]),
-  );
+  const fetcher = useCallback(() => api.memoryFile(path), [path]);
+  const { data, loading, error, refetch } = useApi(fetcher);
+  // Re-fetch when path changes (useApi's fetcherRef doesn't re-trigger on dep changes)
+  const prevPath = useRef(path);
+  useEffect(() => {
+    if (prevPath.current !== path) { prevPath.current = path; refetch(); }
+  }, [path, refetch]);
   const [editing,  setEditing]  = useState(false);
   const [draft,    setDraft]    = useState('');
   const [saving,   setSaving]   = useState(false);
