@@ -5,6 +5,16 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { listSessions, readSessionBlocks } from './sessions.js';
 import {
+  createSession,
+  resumeSession,
+  getLiveSessions,
+  isLive,
+  subscribe,
+  promptSession,
+  abortSession,
+  destroySession,
+} from './liveSessions.js';
+import {
   listProfileActivityEntries,
   listWorkstreamIds,
   readWorkstreamPlan,
@@ -162,7 +172,7 @@ app.get('/api/tasks/:id', (req, res) => {
   }
 });
 
-// ── Sessions ──────────────────────────────────────────────────────────────────
+// ── Sessions (read-only JSONL) ────────────────────────────────────────────────
 
 app.get('/api/sessions', (_req, res) => {
   try {
@@ -180,6 +190,101 @@ app.get('/api/sessions/:id', (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
+});
+
+// ── Live sessions (Pi SDK) ────────────────────────────────────────────────────
+
+/** List all in-process live sessions */
+app.get('/api/live-sessions', (_req, res) => {
+  res.json(getLiveSessions());
+});
+
+/** Create a new live session */
+app.post('/api/live-sessions', async (req, res) => {
+  try {
+    const cwd = (req.body as { cwd?: string }).cwd ?? REPO_ROOT;
+    const result = await createSession(cwd);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/** Resume an existing session file into a live session */
+app.post('/api/live-sessions/resume', async (req, res) => {
+  try {
+    const { sessionFile } = req.body as { sessionFile: string };
+    if (!sessionFile) { res.status(400).json({ error: 'sessionFile required' }); return; }
+    const result = await resumeSession(sessionFile);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/** Check if a session is live */
+app.get('/api/live-sessions/:id', (req, res) => {
+  const live = isLive(req.params.id);
+  if (!live) { res.status(404).json({ live: false }); return; }
+  const all = getLiveSessions();
+  const entry = all.find(s => s.id === req.params.id);
+  res.json({ live: true, ...entry });
+});
+
+/** SSE stream for a live session */
+app.get('/api/live-sessions/:id/events', (req, res) => {
+  const { id } = req.params;
+  if (!isLive(id)) { res.status(404).json({ error: 'Not a live session' }); return; }
+
+  res.setHeader('Content-Type',  'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection',    'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  // Send a heartbeat comment every 15s so the connection stays alive
+  const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), 15_000);
+
+  const unsubscribe = subscribe(id, (event) => {
+    res.write(`data: ${JSON.stringify(event)}\n\n`);
+  });
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    unsubscribe?.();
+  });
+});
+
+/** Send a prompt to a live session */
+app.post('/api/live-sessions/:id/prompt', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { text, behavior } = req.body as { text: string; behavior?: 'steer' | 'followUp' };
+    if (!text) { res.status(400).json({ error: 'text required' }); return; }
+    // Don't await — streaming response goes over SSE
+    promptSession(id, text, behavior).catch(err => {
+      console.error(`[live] prompt error for ${id}:`, err);
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/** Abort a running agent */
+app.post('/api/live-sessions/:id/abort', async (req, res) => {
+  try {
+    await abortSession(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/** Destroy / close a live session */
+app.delete('/api/live-sessions/:id', (req, res) => {
+  destroySession(req.params.id);
+  res.json({ ok: true });
 });
 
 // ── Workstreams ───────────────────────────────────────────────────────────────

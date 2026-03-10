@@ -11,6 +11,7 @@
     "start": "node dist-server/index.js"
   },
   "dependencies": {
+    "@mariozechner/pi-coding-agent": "*",
     "@personal-agent/core": "*",
     "@personal-agent/resources": "*",
     "express": "^4.18.2",

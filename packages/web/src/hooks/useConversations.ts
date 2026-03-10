@@ -42,13 +42,15 @@ export function useConversations() {
   const [loading,     setLoading]     = useState(true);
   const [usingFallback, setUsingFallback] = useState(false);
 
-  useEffect(() => {
+  const fetchSessions = useCallback(() => {
     setLoading(true);
-    fetch('/api/sessions')
+    return fetch('/api/sessions')
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() as Promise<SessionMeta[]>; })
-      .then(data  => { setSessions(data);             setLoading(false); })
-      .catch(() => { setSessions(FALLBACK_SESSIONS); setUsingFallback(true); setLoading(false); });
+      .then(data  => { setSessions(data);             setUsingFallback(false); setLoading(false); })
+      .catch(() => { setSessions(FALLBACK_SESSIONS); setUsingFallback(true);  setLoading(false); });
   }, []);
+
+  useEffect(() => { void fetchSessions(); }, [fetchSessions]);
 
   const openSession = useCallback((id: string) => {
     setOpenIds(prev => { const next = new Set(prev); next.add(id);    saveOpen(next); return next; });
@@ -63,5 +65,5 @@ export function useConversations() {
   // Everything else goes into the shelf
   const shelf = sessions.filter(s => !openIds.has(s.id));
 
-  return { tabs, shelf, openSession, closeSession, loading, usingFallback };
+  return { tabs, shelf, openSession, closeSession, loading, usingFallback, refetch: fetchSessions };
 }

@@ -69,6 +69,28 @@ export interface SessionDetail {
 
 // ── App status ─────────────────────────────────────────────────────────────────
 
+// ── Live session ──────────────────────────────────────────────────────────────
+
+export interface LiveSessionMeta {
+  id:          string;
+  cwd:         string;
+  sessionFile: string;
+  isStreaming: boolean;
+}
+
+// ── SSE events from /api/live-sessions/:id/events ────────────────────────────
+
+export type SseEvent =
+  | { type: 'agent_start' }
+  | { type: 'agent_end' }
+  | { type: 'turn_end' }
+  | { type: 'text_delta';      delta: string }
+  | { type: 'thinking_delta';  delta: string }
+  | { type: 'tool_start';      toolCallId: string; toolName: string; args: Record<string, string> }
+  | { type: 'tool_update';     toolCallId: string; partialResult: unknown }
+  | { type: 'tool_end';        toolCallId: string; toolName: string; isError: boolean; durationMs: number }
+  | { type: 'error';           message: string };
+
 export interface AppStatus {
   profile: string;
   repoRoot: string;

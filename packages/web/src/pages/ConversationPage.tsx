@@ -4,6 +4,8 @@ import { ChatView } from '../components/chat/ChatView';
 import { ConversationTree } from '../components/ConversationTree';
 import { MOCK_CONVERSATIONS, type MockConversation, type MessageBlock } from '../data/mockConversations';
 import { useSessionDetail } from '../hooks/useSessions';
+import { useSessionStream } from '../hooks/useSessionStream';
+import { api } from '../api';
 import type { DisplayBlock } from '../types';
 
 // ── Model picker ──────────────────────────────────────────────────────────────
@@ -236,23 +238,52 @@ export function ConversationPage() {
   const { id } = useParams<{ id: string }>();
   const mockConv = id ? MOCK_CONVERSATIONS[id] : undefined;
 
-  // If not a mock, fetch real session
+  // ── Live session detection ─────────────────────────────────────────────────
+  // null = checking, false = not live, true = live
+  const [liveStatus, setLiveStatus] = useState<null | false | true>(null);
+  const [resuming, setResuming] = useState(false);
+
+  useEffect(() => {
+    if (!id || mockConv) { setLiveStatus(false); return; }
+    setLiveStatus(null);
+    api.liveSession(id)
+      .then(r => setLiveStatus(r.live ? true : false))
+      .catch(() => setLiveStatus(false));
+  }, [id, mockConv]);
+
+  const isLiveSession = liveStatus === true;
+
+  // ── Pi SDK stream (only when live) ────────────────────────────────────────
+  const stream = useSessionStream(isLiveSession ? (id ?? null) : null);
+
+  // ── Existing session data (read-only JSONL) ───────────────────────────────
   const { detail: sessionDetail, loading: sessionLoading } = useSessionDetail(
     mockConv ? undefined : id
   );
 
-  // Resolve what to display
+  // ── Resolve what to display ───────────────────────────────────────────────
   const conv: MockConversation | undefined = mockConv;
-  const realMessages: MessageBlock[] | undefined = sessionDetail
+
+  // Historical messages from the JSONL snapshot (doesn't update after load)
+  const baseMessages: MessageBlock[] = sessionDetail
     ? sessionDetail.blocks.map(displayBlockToMessageBlock)
-    : undefined;
+    : [];
+
+  // When live, combine snapshot + stream; when not, show snapshot only
+  const realMessages: MessageBlock[] | undefined = mockConv
+    ? undefined
+    : isLiveSession
+      ? [...baseMessages, ...stream.blocks]
+      : sessionDetail
+        ? baseMessages
+        : undefined;
 
   const title = conv?.title
     ?? sessionDetail?.meta.title
     ?? id?.replace(/-/g, ' ')
     ?? 'conversation';
   const model = conv?.model ?? sessionDetail?.meta.model;
-  const messageCount = conv?.messages.length ?? sessionDetail?.meta.messageCount ?? 0;
+  const messageCount = conv?.messages.length ?? (realMessages?.length ?? 0);
 
   // Model
   const { models, currentModel, setCurrent } = useModels();
@@ -319,6 +350,14 @@ export function ConversationPage() {
     return () => window.removeEventListener('keydown', handler);
   }, [showTree]);
 
+  // Auto-scroll when streaming adds new content
+  useEffect(() => {
+    if (!stream.isStreaming) return;
+    if (atBottom && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [stream.blocks.length, stream.isStreaming, atBottom]);
+
   // Jump to message by index
   const jumpToMessage = useCallback((index: number) => {
     const el = scrollRef.current?.querySelector(`#msg-${index}`);
@@ -367,11 +406,20 @@ export function ConversationPage() {
         return;
       }
     }
-    // Cmd+Enter = send
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    // Enter = send (Shift+Enter = newline)
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
-      setInput('');
-      setAttachments([]);
+      const text = input.trim();
+      if (text) {
+        if (isLiveSession) {
+          stream.send(text);
+          setTimeout(() => {
+            if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }, 50);
+        }
+        setInput('');
+        setAttachments([]);
+      }
     }
   }
 
@@ -388,7 +436,18 @@ export function ConversationPage() {
     setAttachments(prev => prev.filter((_, j) => j !== i));
   }
 
-  const isRunning = conv?.messages.some(m => m.type === 'tool_use' && (m as { running?: boolean }).running) ?? false;
+  async function handleResume() {
+    if (!id || !sessionDetail) return;
+    setResuming(true);
+    try {
+      await api.resumeSession(sessionDetail.meta.file);
+      setLiveStatus(true);
+    } catch (err) {
+      console.error('Resume failed:', err);
+    } finally {
+      setResuming(false);
+    }
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -405,22 +464,39 @@ export function ConversationPage() {
             {sessionDetail && (
               <>
                 <span className="text-border-default">·</span>
-                <span className="text-[11px] text-dim truncate max-w-[160px]"
-                  title={sessionDetail.meta.cwd}>
+                <span className="text-[11px] text-dim truncate max-w-[160px]" title={sessionDetail.meta.cwd}>
                   {sessionDetail.meta.cwd.split('/').slice(-2).join('/')}
                 </span>
               </>
             )}
           </div>
         </div>
-        {isRunning && (
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-accent/10 border border-accent/20">
-            <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse shrink-0" />
-            <span className="text-[10px] text-accent font-medium">running</span>
+
+        {/* Streaming: running indicator + abort */}
+        {stream.isStreaming && (
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-accent/10 border border-accent/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse shrink-0" />
+              <span className="text-[10px] text-accent font-medium">running</span>
+            </div>
+            <button onClick={() => stream.abort()}
+              className="px-2 py-1 text-[11px] rounded-lg bg-danger/10 border border-danger/20 text-danger hover:bg-danger/20 transition-colors">
+              ■ stop
+            </button>
           </div>
         )}
-        {conv && <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-elevated text-dim border border-border-subtle">mock</span>}
-        {sessionDetail && <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-teal/10 text-teal border border-teal/20">live</span>}
+
+        {/* Resume button for read-only sessions */}
+        {!mockConv && !isLiveSession && sessionDetail && liveStatus === false && (
+          <button onClick={handleResume} disabled={resuming}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-lg bg-accent/10 border border-accent/20 text-accent hover:bg-accent/20 transition-colors disabled:opacity-50">
+            {resuming ? <span className="animate-spin text-[10px]">⟳</span> : '▷'} Resume
+          </button>
+        )}
+
+        {conv      && <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-elevated text-dim border border-border-subtle">mock</span>}
+        {isLiveSession && <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20">live</span>}
+        {!mockConv && !isLiveSession && sessionDetail && <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-teal/10 text-teal border border-teal/20">read-only</span>}
       </div>
 
       {/* Messages */}
@@ -508,22 +584,12 @@ export function ConversationPage() {
                 onKeyDown={handleKeyDown}
                 rows={1}
                 className="flex-1 bg-transparent text-sm text-primary placeholder:text-dim outline-none resize-none leading-relaxed"
-                placeholder="Message… (/ for commands, @ to mention)"
+                placeholder={isLiveSession ? 'Message… (/ for commands, @ to mention)' : 'Resume session to send messages'}
                 style={{ minHeight: '24px', maxHeight: '160px' }}
               />
 
               <div className="flex items-center gap-1.5 shrink-0 mb-0.5">
-                {/* Current model pill — click to open picker */}
-                {currentModel && (
-                  <button
-                    onMouseDown={e => { e.preventDefault(); setInput('/model '); textareaRef.current?.focus(); }}
-                    className="text-[10px] font-mono text-dim hover:text-secondary px-1.5 py-0.5 rounded hover:bg-elevated transition-colors"
-                    title="Switch model (/model)"
-                  >
-                    {currentModel.split('/').pop()}
-                  </button>
-                )}
-                <kbd className="text-[10px] text-dim bg-surface border border-border-subtle rounded px-1.5 py-0.5 font-mono leading-tight">⌘↵</kbd>
+                <kbd className="text-[10px] text-dim bg-surface border border-border-subtle rounded px-1.5 py-0.5 font-mono leading-tight">↵</kbd>
               </div>
             </div>
           </div>

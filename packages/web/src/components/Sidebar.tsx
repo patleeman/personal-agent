@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useConversations } from '../hooks/useConversations';
+import { api } from '../api';
 import type { SessionMeta } from '../types';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { timeAgo } from '../utils';
@@ -127,10 +128,27 @@ export function Sidebar() {
   const navigate = useNavigate();
   const { tabs, shelf, openSession, closeSession, loading, usingFallback } = useConversations();
   const [shelfOpen, setShelfOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   function handleShelfClick(session: SessionMeta) {
     openSession(session.id);
     navigate(`/conversations/${session.id}`);
+  }
+
+  async function handleNewConversation() {
+    if (creating) return;
+    setCreating(true);
+    try {
+      const res = await fetch('/api/live-sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json() as { id: string };
+      openSession(data.id);
+      navigate(`/conversations/${data.id}`);
+    } catch (err) {
+      console.error('Failed to create session:', err);
+    } finally {
+      setCreating(false);
+    }
   }
 
   return (
@@ -153,6 +171,21 @@ export function Sidebar() {
       </div>
 
       <div className="mx-3 border-t border-border-subtle my-1" />
+
+      {/* ── New conversation ── */}
+      <div className="px-1 pb-1">
+        <button
+          onClick={handleNewConversation}
+          disabled={creating}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium text-secondary hover:bg-elevated/60 hover:text-primary transition-colors disabled:opacity-40"
+        >
+          {creating
+            ? <span className="w-4 h-4 border-[1.5px] border-current border-t-transparent rounded-full animate-spin shrink-0 opacity-70" />
+            : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70"><path d="M12 5v14M5 12h14"/></svg>
+          }
+          New conversation
+        </button>
+      </div>
 
       {/* ── Open tabs ── */}
       <div className="flex-1 overflow-y-auto py-1 space-y-0.5 min-h-0">
