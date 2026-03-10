@@ -4,6 +4,7 @@ import { Layout } from './components/Layout';
 import { ConversationPage } from './pages/ConversationPage';
 import { InboxDetailPage } from './pages/InboxDetailPage';
 import { InboxPage } from './pages/InboxPage';
+import { MemoryPage } from './pages/MemoryPage';
 import { WorkstreamDetailPage } from './pages/WorkstreamDetailPage';
 import { WorkstreamsPage } from './pages/WorkstreamsPage';
 
@@ -20,6 +21,7 @@ export function App() {
           <Route path="workstreams/:id" element={<WorkstreamDetailPage />} />
           <Route path="tasks" element={<TasksPage />} />
           <Route path="tasks/:id" element={<TasksPage />} />
+          <Route path="memory" element={<MemoryPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

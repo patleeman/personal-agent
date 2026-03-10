@@ -526,5 +526,29 @@ export function ContextRail({ onCollapse }: { onCollapse?: () => void }) {
     </div>
   );
 
+  if (section === 'memory') return (
+    <div className="flex-1 overflow-y-auto">
+      <div className="px-4 pt-4 pb-3 border-b border-border-subtle flex items-center justify-between">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-dim">Memory</p>
+        {onCollapse && <CollapseBtn onCollapse={onCollapse} />}
+      </div>
+      <div className="px-4 py-4 space-y-5">
+        <Section title="About">
+          <p className="text-[12px] text-secondary leading-relaxed">
+            Memory shows the agent's durable knowledge: AGENTS.md config, loaded skills, and memory docs.
+            Click any item in the main panel to read its content.
+          </p>
+        </Section>
+        <Section title="Sections">
+          <div className="space-y-2 text-[12px] text-secondary">
+            <p><span className="text-primary font-medium">Config</span> — AGENTS.md files for shared and active profile</p>
+            <p><span className="text-primary font-medium">Skills</span> — reusable workflow files loaded by the agent</p>
+            <p><span className="text-primary font-medium">Memory Docs</span> — profile-specific notes, runbooks, and context</p>
+          </div>
+        </Section>
+      </div>
+    </div>
+  );
+
   return <EmptyContext />;
 }
