@@ -1,4 +1,5 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -60,6 +61,15 @@ app.get('/api/activity', (_req, res) => {
   }
 });
 
+app.get('/api/activity/count', (_req, res) => {
+  try {
+    const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile: PROFILE });
+    res.json({ count: entries.length });
+  } catch {
+    res.json({ count: 0 });
+  }
+});
+
 app.get('/api/activity/:id', (req, res) => {
   try {
     const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile: PROFILE });
@@ -90,15 +100,32 @@ const BUILT_IN_MODELS = [
   { id: 'gemini-3.1-pro-high',provider: 'google',       name: 'Gemini 3.1 Pro High', context: 1_000_000 },
 ];
 
+const SETTINGS_FILE = join(homedir(), '.local/state/personal-agent/pi-agent/settings.json');
+
 app.get('/api/models', (_req, res) => {
   try {
-    const settingsFile = join(homedir(), '.local/state/personal-agent/pi-agent/settings.json');
-    let currentModel = 'gpt-5.4';
-    if (existsSync(settingsFile)) {
-      const s = JSON.parse(readFileSync(settingsFile, 'utf-8')) as { defaultModel?: string };
+    let currentModel = 'claude-sonnet-4-6';
+    if (existsSync(SETTINGS_FILE)) {
+      const s = JSON.parse(readFileSync(SETTINGS_FILE, 'utf-8')) as { defaultModel?: string };
       if (s.defaultModel) currentModel = s.defaultModel;
     }
     res.json({ currentModel, models: BUILT_IN_MODELS });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.patch('/api/models/current', (req, res) => {
+  try {
+    const { model } = req.body as { model: string };
+    if (!model) { res.status(400).json({ error: 'model required' }); return; }
+    let settings: Record<string, unknown> = {};
+    if (existsSync(SETTINGS_FILE)) {
+      settings = JSON.parse(readFileSync(SETTINGS_FILE, 'utf-8')) as Record<string, unknown>;
+    }
+    settings.defaultModel = model;
+    writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2) + '\n');
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
@@ -138,6 +165,49 @@ app.get('/api/tasks', (_req, res) => {
     });
 
     res.json(enriched);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.patch('/api/tasks/:id', (req, res) => {
+  try {
+    const { enabled } = req.body as { enabled: boolean };
+    const stateFile = join(homedir(), '.local/state/personal-agent/daemon/task-state.json');
+    if (!existsSync(stateFile)) { res.status(404).json({ error: 'No task state' }); return; }
+    const state = JSON.parse(readFileSync(stateFile, 'utf-8')) as { tasks?: Record<string, unknown> };
+    const entry = Object.values(state.tasks ?? {}).find(
+      t => (t as { id: string }).id === req.params.id
+    ) as { id: string; filePath: string } | undefined;
+    if (!entry) { res.status(404).json({ error: 'Task not found' }); return; }
+
+    let content = readFileSync(entry.filePath, 'utf-8');
+    if (/enabled:\s*(true|false)/.test(content)) {
+      content = content.replace(/enabled:\s*(true|false)/, `enabled: ${enabled}`);
+    } else {
+      // Inject into frontmatter after opening ---
+      content = content.replace(/^---\n/, `---\nenabled: ${enabled}\n`);
+    }
+    writeFileSync(entry.filePath, content, 'utf-8');
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.get('/api/tasks/:id/log', (req, res) => {
+  try {
+    const stateFile = join(homedir(), '.local/state/personal-agent/daemon/task-state.json');
+    if (!existsSync(stateFile)) { res.status(404).json({ error: 'No task state' }); return; }
+    const state = JSON.parse(readFileSync(stateFile, 'utf-8')) as { tasks?: Record<string, unknown> };
+    const entry = Object.values(state.tasks ?? {}).find(
+      t => (t as { id: string }).id === req.params.id
+    ) as { id: string; lastLogPath?: string } | undefined;
+    if (!entry?.lastLogPath || !existsSync(entry.lastLogPath)) {
+      res.status(404).json({ error: 'No log available' }); return;
+    }
+    const log = readFileSync(entry.lastLogPath, 'utf-8');
+    res.json({ log, path: entry.lastLogPath });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
@@ -329,6 +399,136 @@ app.get('/api/workstreams/:id', (req, res) => {
     res.json({ id: req.params.id, summary, plan, taskCount, artifactCount });
   } catch {
     res.status(404).json({ error: 'Workstream not found' });
+  }
+});
+
+// ── Shell run ─────────────────────────────────────────────────────────────────
+
+app.post('/api/run', (req, res) => {
+  try {
+    const { command, cwd: runCwd } = req.body as { command: string; cwd?: string };
+    if (!command) { res.status(400).json({ error: 'command required' }); return; }
+    let output = '';
+    let exitCode = 0;
+    try {
+      output = execSync(command, {
+        cwd: runCwd ?? REPO_ROOT,
+        timeout: 30_000,
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+    } catch (err: unknown) {
+      const e = err as { stderr?: string; stdout?: string; status?: number; message?: string };
+      output = (e.stdout ?? '') + (e.stderr ?? e.message ?? '');
+      exitCode = e.status ?? 1;
+    }
+    res.json({ output: output.slice(0, 50_000), exitCode });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// ── Memory browser ────────────────────────────────────────────────────────────
+
+interface SkillItem  { source: string; name: string; description: string; path: string }
+interface MemoryDocItem { id: string; title: string; summary: string; tags: string[]; path: string }
+interface AgentsItem { source: string; path: string; exists: boolean }
+
+function parseFrontmatter(filePath: string): Record<string, unknown> {
+  try {
+    const raw = readFileSync(filePath, 'utf-8');
+    const m = raw.match(/^---\n([\s\S]*?)\n---/);
+    if (!m) return {};
+    const fm = m[1];
+    const result: Record<string, unknown> = {};
+    const lines = fm.split('\n');
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      const kv = line.match(/^([\w-]+):\s*(.*)/);
+      if (!kv) { i++; continue; }
+      const key = kv[1]; const val = kv[2].trim();
+      if (val === '') {
+        const items: string[] = [];
+        i++;
+        while (i < lines.length && /^\s+-\s+/.test(lines[i])) {
+          items.push(lines[i].replace(/^\s+-\s+/, '').trim()); i++;
+        }
+        result[key] = items; continue;
+      } else if (val.startsWith('[')) {
+        result[key] = val.replace(/^\[|\]$/g, '').split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean);
+      } else {
+        result[key] = val.replace(/^["']|["']$/g, '');
+      }
+      i++;
+    }
+    return result;
+  } catch { return {}; }
+}
+
+app.get('/api/memory', (_req, res) => {
+  try {
+    const sharedPath  = join(REPO_ROOT, 'profiles/shared/agent/AGENTS.md');
+    const profilePath = join(REPO_ROOT, `profiles/${PROFILE}/agent/AGENTS.md`);
+    const agentsMd: AgentsItem[] = [{ source: 'shared', path: sharedPath, exists: existsSync(sharedPath) }];
+    if (PROFILE !== 'shared') {
+      agentsMd.push({ source: PROFILE, path: profilePath, exists: existsSync(profilePath) });
+    }
+
+    const skills: SkillItem[] = [];
+    const skillSources = PROFILE === 'shared' ? ['shared'] : ['shared', PROFILE];
+    for (const src of skillSources) {
+      const dir = join(REPO_ROOT, `profiles/${src}/agent/skills`);
+      if (!existsSync(dir)) continue;
+      for (const name of readdirSync(dir)) {
+        const skillMd = join(dir, name, 'SKILL.md');
+        if (!existsSync(skillMd)) continue;
+        const fm = parseFrontmatter(skillMd);
+        skills.push({
+          source: src,
+          name: String(fm.name ?? name),
+          description: String(fm.description ?? ''),
+          path: skillMd,
+        });
+      }
+    }
+
+    const memoryDocs: MemoryDocItem[] = [];
+    const memDir = join(REPO_ROOT, `profiles/${PROFILE}/agent/memory`);
+    if (existsSync(memDir)) {
+      for (const file of readdirSync(memDir).filter(f => f.endsWith('.md'))) {
+        const fp = join(memDir, file);
+        const fm = parseFrontmatter(fp);
+        const id = file.replace(/\.md$/, '');
+        const tags = fm.tags;
+        memoryDocs.push({
+          id:      String(fm.id ?? id),
+          title:   String(fm.title ?? id),
+          summary: String(fm.summary ?? ''),
+          tags:    Array.isArray(tags) ? tags.map(String) : typeof tags === 'string' ? [tags] : [],
+          path:    fp,
+        });
+      }
+    }
+
+    res.json({ profile: PROFILE, agentsMd, skills, memoryDocs });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.get('/api/memory/file', (req, res) => {
+  try {
+    const filePath = req.query.path as string;
+    if (!filePath) { res.status(400).json({ error: 'path required' }); return; }
+    if (!filePath.startsWith(REPO_ROOT) || !filePath.endsWith('.md')) {
+      res.status(403).json({ error: 'Access denied' }); return;
+    }
+    if (!existsSync(filePath)) { res.status(404).json({ error: 'File not found' }); return; }
+    const content = readFileSync(filePath, 'utf-8');
+    res.json({ content, path: filePath });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
   }
 });
 

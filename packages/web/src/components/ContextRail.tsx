@@ -212,6 +212,85 @@ function WorkstreamsContext() {
   );
 }
 
+interface WsDetail {
+  id: string;
+  summary: { objective: string; status: string; blockers: string; updatedAt: string };
+  plan: { steps: { text: string; completed: boolean }[] };
+  taskCount: number;
+  artifactCount: number;
+}
+
+function WorkstreamDetailContext({ id }: { id: string }) {
+  const [ws, setWs] = useState<WsDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/workstreams/${id}`)
+      .then(r => r.ok ? r.json() as Promise<WsDetail> : Promise.reject())
+      .then(d => { setWs(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [id]);
+
+  if (loading) return <div className="px-4 py-4 text-[12px] text-dim animate-pulse">Loading…</div>;
+  if (!ws)     return <div className="px-4 py-4 text-[12px] text-dim">Workstream not found.</div>;
+
+  const status   = ws.summary.status.replace(/^[-*]\s*/, '');
+  const blockers = ws.summary.blockers.replace(/^[-*]\s*/, '');
+  const isBlocked = blockers !== 'None' && blockers !== 'none' && blockers.length > 0;
+  const done  = ws.plan.steps.filter(s => s.completed).length;
+  const total = ws.plan.steps.length;
+  const pct   = total === 0 ? 0 : Math.round((done / total) * 100);
+
+  return (
+    <div className="space-y-4 px-4 py-4">
+      {/* Objective */}
+      <div>
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-dim mb-1.5">Objective</p>
+        <p className="text-[12px] text-primary leading-relaxed">{ws.summary.objective}</p>
+      </div>
+
+      {/* Status */}
+      <div className="space-y-1">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-dim">Status</p>
+        <p className="text-[12px] text-secondary">{status}</p>
+        {isBlocked && <p className="text-[12px] text-warning">⚠ {blockers}</p>}
+      </div>
+
+      {/* Plan progress */}
+      {total > 0 && (
+        <div>
+          <div className="flex items-center justify-between text-[10px] text-dim mb-1">
+            <span className="font-semibold uppercase tracking-wider">Plan</span>
+            <span className="tabular-nums">{done}/{total} · {pct}%</span>
+          </div>
+          <div className="h-1 rounded-full bg-elevated overflow-hidden mb-2">
+            <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
+          </div>
+          <ul className="space-y-1">
+            {ws.plan.steps.map((step, i) => (
+              <li key={i} className="flex items-start gap-2 text-[11px]">
+                <span className={`mt-0.5 shrink-0 ${step.completed ? 'text-success' : 'text-dim'}`}>
+                  {step.completed ? '✓' : '○'}
+                </span>
+                <span className={step.completed ? 'text-dim line-through' : 'text-secondary'}>
+                  {step.text}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Counts */}
+      <div className="border-t border-border-subtle pt-3 flex gap-6 text-[11px] text-dim">
+        <span><span className="font-mono text-primary">{ws.taskCount}</span> tasks</span>
+        <span><span className="font-mono text-primary">{ws.artifactCount}</span> artifacts</span>
+      </div>
+    </div>
+  );
+}
+
 function EmptyContext() {
   return (
     <div className="flex flex-col items-center justify-center h-full gap-2 text-center px-6">
@@ -305,6 +384,42 @@ function TaskContext({ id }: { id: string }) {
           })}
         </div>
       </div>
+
+      <TaskLogSection taskId={id} />
+    </div>
+  );
+}
+
+function TaskLogSection({ taskId }: { taskId: string }) {
+  const [log,     setLog]     = useState<string | null>(null);
+  const [logPath, setLogPath] = useState<string | null>(null);
+  const [open,    setOpen]    = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  function loadLog() {
+    if (log !== null) { setOpen(o => !o); return; }
+    setLoading(true);
+    fetch(`/api/tasks/${taskId}/log`)
+      .then(r => r.ok ? r.json() as Promise<{ log: string; path: string }> : Promise.reject())
+      .then(d => { setLog(d.log); setLogPath(d.path); setOpen(true); setLoading(false); })
+      .catch(() => { setLog('No log available.'); setOpen(true); setLoading(false); });
+  }
+
+  return (
+    <div className="border-t border-border-subtle pt-3">
+      <button onClick={loadLog}
+        className="text-[11px] text-accent hover:underline flex items-center gap-1.5">
+        {loading ? <span className="animate-spin text-[10px]">⟳</span> : (open ? '▾' : '▸')}
+        Last run log
+      </button>
+      {open && log !== null && (
+        <div className="mt-2">
+          {logPath && <p className="text-[9px] font-mono text-dim/50 truncate mb-1" title={logPath}>{logPath.split('/').slice(-1)[0]}</p>}
+          <pre className="text-[10px] font-mono text-secondary whitespace-pre-wrap break-all bg-elevated rounded-lg p-2.5 max-h-64 overflow-y-auto leading-relaxed">
+            {log || '(empty)'}
+          </pre>
+        </div>
+      )}
     </div>
   );
 }
@@ -385,6 +500,19 @@ export function ContextRail({ onCollapse }: { onCollapse?: () => void }) {
         {onCollapse && <CollapseBtn onCollapse={onCollapse} />}
       </div>
       <InboxContext />
+    </div>
+  );
+
+  if (section === 'workstreams' && id) return (
+    <div className="flex-1 overflow-y-auto">
+      <div className="px-4 pt-4 pb-3 border-b border-border-subtle flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-dim">Workstream</p>
+          <p className="text-[12px] text-secondary mt-0.5 font-mono truncate">{id}</p>
+        </div>
+        {onCollapse && <CollapseBtn onCollapse={onCollapse} />}
+      </div>
+      <WorkstreamDetailContext id={id} />
     </div>
   );
 

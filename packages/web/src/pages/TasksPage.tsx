@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { usePolling } from '../hooks';
+import { api } from '../api';
 import { timeAgo } from '../utils';
 
 interface Task {
@@ -114,6 +116,32 @@ export function TasksPage() {
           const { text: statusText, cls: statusCls } = statusLabel(task);
           const isSelected = task.id === selectedId;
           return (
+            <TaskCard key={task.id} task={task} isSelected={isSelected} statusText={statusText} statusCls={statusCls} onRefetch={refetch} />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function TaskCard({ task, isSelected, statusText, statusCls, onRefetch }: {
+  task: Task; isSelected: boolean; statusText: string; statusCls: string; onRefetch: () => void;
+}) {
+  const [toggling, setToggling] = useState(false);
+
+  async function handleToggle(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (toggling || task.running) return;
+    setToggling(true);
+    try {
+      await api.setTaskEnabled(task.id, !task.enabled);
+      onRefetch();
+    } catch (err) { console.error(err); }
+    finally { setToggling(false); }
+  }
+
+  return (
             <Link key={task.id} to={`/tasks/${task.id}`}
               className={`block p-4 rounded-xl border transition-colors group ${
                 isSelected
@@ -129,9 +157,6 @@ export function TasksPage() {
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${statusCls}`}>
                       {statusText}
                     </span>
-                    {!task.enabled && (
-                      <span className="text-[10px] text-dim">disabled</span>
-                    )}
                   </div>
                   {task.prompt && (
                     <p className="text-[12px] text-secondary mt-1 leading-snug">{task.prompt}</p>
@@ -162,13 +187,21 @@ export function TasksPage() {
                 )}
               </div>
 
-              {/* File path */}
-              <p className="mt-2 text-[10px] font-mono text-dim/50 truncate"
-                title={task.filePath}>{task.filePath}</p>
+              {/* File path + toggle */}
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <p className="text-[10px] font-mono text-dim/50 truncate" title={task.filePath}>{task.filePath}</p>
+                <button
+                  onClick={handleToggle}
+                  disabled={toggling || task.running}
+                  className={`shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full border transition-colors disabled:opacity-40 ${
+                    task.enabled
+                      ? 'text-dim border-border-subtle hover:text-danger hover:border-danger/30'
+                      : 'text-success border-success/30 hover:bg-success/10'
+                  }`}
+                >
+                  {toggling ? '…' : task.enabled ? 'disable' : 'enable'}
+                </button>
+              </div>
             </Link>
-          );
-        })}
-      </div>
-    </div>
   );
 }

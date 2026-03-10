@@ -91,6 +91,36 @@ export type SseEvent =
   | { type: 'tool_end';        toolCallId: string; toolName: string; isError: boolean; durationMs: number }
   | { type: 'error';           message: string };
 
+// ── Memory browser ────────────────────────────────────────────────────────────
+
+export interface MemoryAgentsItem {
+  source: string;
+  path: string;
+  exists: boolean;
+}
+
+export interface MemorySkillItem {
+  source: string;
+  name: string;
+  description: string;
+  path: string;
+}
+
+export interface MemoryDocItem {
+  id: string;
+  title: string;
+  summary: string;
+  tags: string[];
+  path: string;
+}
+
+export interface MemoryData {
+  profile: string;
+  agentsMd: MemoryAgentsItem[];
+  skills: MemorySkillItem[];
+  memoryDocs: MemoryDocItem[];
+}
+
 export interface AppStatus {
   profile: string;
   repoRoot: string;

@@ -1,4 +1,5 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -39,6 +40,15 @@ app.get('/api/activity', (_req, res) => {
         res.status(500).json({ error: String(err) });
     }
 });
+app.get('/api/activity/count', (_req, res) => {
+    try {
+        const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile: PROFILE });
+        res.json({ count: entries.length });
+    }
+    catch {
+        res.json({ count: 0 });
+    }
+});
 app.get('/api/activity/:id', (req, res) => {
     try {
         const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile: PROFILE });
@@ -67,16 +77,35 @@ const BUILT_IN_MODELS = [
     { id: 'gemini-2.5-pro', provider: 'google', name: 'Gemini 2.5 Pro', context: 1_000_000 },
     { id: 'gemini-3.1-pro-high', provider: 'google', name: 'Gemini 3.1 Pro High', context: 1_000_000 },
 ];
+const SETTINGS_FILE = join(homedir(), '.local/state/personal-agent/pi-agent/settings.json');
 app.get('/api/models', (_req, res) => {
     try {
-        const settingsFile = join(homedir(), '.local/state/personal-agent/pi-agent/settings.json');
-        let currentModel = 'gpt-5.4';
-        if (existsSync(settingsFile)) {
-            const s = JSON.parse(readFileSync(settingsFile, 'utf-8'));
+        let currentModel = 'claude-sonnet-4-6';
+        if (existsSync(SETTINGS_FILE)) {
+            const s = JSON.parse(readFileSync(SETTINGS_FILE, 'utf-8'));
             if (s.defaultModel)
                 currentModel = s.defaultModel;
         }
         res.json({ currentModel, models: BUILT_IN_MODELS });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.patch('/api/models/current', (req, res) => {
+    try {
+        const { model } = req.body;
+        if (!model) {
+            res.status(400).json({ error: 'model required' });
+            return;
+        }
+        let settings = {};
+        if (existsSync(SETTINGS_FILE)) {
+            settings = JSON.parse(readFileSync(SETTINGS_FILE, 'utf-8'));
+        }
+        settings.defaultModel = model;
+        writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2) + '\n');
+        res.json({ ok: true });
     }
     catch (err) {
         res.status(500).json({ error: String(err) });
@@ -114,6 +143,55 @@ app.get('/api/tasks', (_req, res) => {
             return { ...task, enabled, cron, prompt, model };
         });
         res.json(enriched);
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.patch('/api/tasks/:id', (req, res) => {
+    try {
+        const { enabled } = req.body;
+        const stateFile = join(homedir(), '.local/state/personal-agent/daemon/task-state.json');
+        if (!existsSync(stateFile)) {
+            res.status(404).json({ error: 'No task state' });
+            return;
+        }
+        const state = JSON.parse(readFileSync(stateFile, 'utf-8'));
+        const entry = Object.values(state.tasks ?? {}).find(t => t.id === req.params.id);
+        if (!entry) {
+            res.status(404).json({ error: 'Task not found' });
+            return;
+        }
+        let content = readFileSync(entry.filePath, 'utf-8');
+        if (/enabled:\s*(true|false)/.test(content)) {
+            content = content.replace(/enabled:\s*(true|false)/, `enabled: ${enabled}`);
+        }
+        else {
+            // Inject into frontmatter after opening ---
+            content = content.replace(/^---\n/, `---\nenabled: ${enabled}\n`);
+        }
+        writeFileSync(entry.filePath, content, 'utf-8');
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.get('/api/tasks/:id/log', (req, res) => {
+    try {
+        const stateFile = join(homedir(), '.local/state/personal-agent/daemon/task-state.json');
+        if (!existsSync(stateFile)) {
+            res.status(404).json({ error: 'No task state' });
+            return;
+        }
+        const state = JSON.parse(readFileSync(stateFile, 'utf-8'));
+        const entry = Object.values(state.tasks ?? {}).find(t => t.id === req.params.id);
+        if (!entry?.lastLogPath || !existsSync(entry.lastLogPath)) {
+            res.status(404).json({ error: 'No log available' });
+            return;
+        }
+        const log = readFileSync(entry.lastLogPath, 'utf-8');
+        res.json({ log, path: entry.lastLogPath });
     }
     catch (err) {
         res.status(500).json({ error: String(err) });
@@ -317,6 +395,35 @@ app.get('/api/workstreams/:id', (req, res) => {
     }
     catch {
         res.status(404).json({ error: 'Workstream not found' });
+    }
+});
+// ── Shell run ─────────────────────────────────────────────────────────────────
+app.post('/api/run', (req, res) => {
+    try {
+        const { command, cwd: runCwd } = req.body;
+        if (!command) {
+            res.status(400).json({ error: 'command required' });
+            return;
+        }
+        let output = '';
+        let exitCode = 0;
+        try {
+            output = execSync(command, {
+                cwd: runCwd ?? REPO_ROOT,
+                timeout: 30_000,
+                encoding: 'utf-8',
+                stdio: ['pipe', 'pipe', 'pipe'],
+            });
+        }
+        catch (err) {
+            const e = err;
+            output = (e.stdout ?? '') + (e.stderr ?? e.message ?? '');
+            exitCode = e.status ?? 1;
+        }
+        res.json({ output: output.slice(0, 50_000), exitCode });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
     }
 });
 // ── Static + SPA fallback ─────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { ChatView } from '../components/chat/ChatView';
 import { ConversationTree } from '../components/ConversationTree';
 import { MOCK_CONVERSATIONS, type MockConversation, type MessageBlock } from '../data/mockConversations';
@@ -106,18 +106,43 @@ const MENTIONS = [
 
 // ── Context bar ───────────────────────────────────────────────────────────────
 
+interface TokenCounts {
+  sys: number;
+  user: number;
+  asst: number;
+  tool: number;
+  contextWindow: number;
+}
+
 interface ContextBarProps {
   conv?: MockConversation;
   messageCount?: number;
   model?: string;
+  tokens?: TokenCounts;
 }
 
-function ContextBar({ conv, messageCount, model }: ContextBarProps) {
-  const win   = conv?.contextWindow  ?? 200_000;
-  const sys   = conv?.systemTokens    ?? 0;
-  const user  = conv?.userTokens      ?? 0;
-  const asst  = conv?.assistantTokens ?? 0;
-  const tool  = conv?.toolTokens      ?? 0;
+function estimateTokens(chars: number) { return Math.ceil(chars / 4); }
+
+function computeTokensFromBlocks(blocks: DisplayBlock[], contextWindow: number): TokenCounts {
+  let user = 0, asst = 0, tool = 0;
+  for (const b of blocks) {
+    if (b.type === 'user') {
+      user += estimateTokens(b.text.length);
+    } else if (b.type === 'text' || b.type === 'thinking') {
+      asst += estimateTokens(b.text.length);
+    } else if (b.type === 'tool_use') {
+      tool += estimateTokens(JSON.stringify(b.input).length + b.output.length);
+    }
+  }
+  return { sys: 0, user, asst, tool, contextWindow };
+}
+
+function ContextBar({ conv, messageCount, model, tokens }: ContextBarProps) {
+  const win   = tokens?.contextWindow ?? conv?.contextWindow  ?? 200_000;
+  const sys   = tokens?.sys  ?? conv?.systemTokens    ?? 0;
+  const user  = tokens?.user ?? conv?.userTokens      ?? 0;
+  const asst  = tokens?.asst ?? conv?.assistantTokens ?? 0;
+  const tool  = tokens?.tool ?? conv?.toolTokens      ?? 0;
   const total = sys + user + asst + tool;
   const hasTokens = total > 0;
 
@@ -126,11 +151,11 @@ function ContextBar({ conv, messageCount, model }: ContextBarProps) {
 
   return (
     <div className="px-4 py-2 border-t border-border-subtle space-y-1.5">
-      {/* Segmented bar — always shown, flat if no token data */}
+      {/* Segmented bar */}
       <div className="flex h-1.5 rounded-full bg-elevated overflow-hidden gap-px">
         {hasTokens ? <>
-          <div className="rounded-l-full bg-border-default/80"  style={{ width: w(sys)  }} title={`system: ${sys.toLocaleString()}`} />
-          <div className="bg-teal/60"   style={{ width: w(user) }} title={`user: ${user.toLocaleString()}`} />
+          {sys  > 0 && <div className="rounded-l-full bg-border-default/80" style={{ width: w(sys)  }} title={`system: ${sys.toLocaleString()}`} />}
+          <div className={`${sys === 0 ? 'rounded-l-full' : ''} bg-teal/60`}   style={{ width: w(user) }} title={`user: ${user.toLocaleString()}`} />
           <div className="bg-accent/70" style={{ width: w(asst) }} title={`assistant: ${asst.toLocaleString()}`} />
           <div className="rounded-r-full bg-steel/60"  style={{ width: w(tool) }} title={`tool: ${tool.toLocaleString()}`} />
         </> : (
@@ -140,10 +165,12 @@ function ContextBar({ conv, messageCount, model }: ContextBarProps) {
       {/* Legend */}
       <div className="flex items-center gap-3 text-[10px]">
         {hasTokens ? <>
-        <span className="flex items-center gap-1 text-dim">
-          <span className="w-2 h-1.5 rounded-sm bg-border-default/80 inline-block" />
-          sys {(sys / 1000).toFixed(1)}k
-        </span>
+        {sys > 0 && (
+          <span className="flex items-center gap-1 text-dim">
+            <span className="w-2 h-1.5 rounded-sm bg-border-default/80 inline-block" />
+            sys {(sys / 1000).toFixed(1)}k
+          </span>
+        )}
         <span className="flex items-center gap-1 text-teal/80">
           <span className="w-2 h-1.5 rounded-sm bg-teal/60 inline-block" />
           user {(user / 1000).toFixed(1)}k
@@ -236,6 +263,7 @@ function fileIcon(type: string) {
 
 export function ConversationPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const mockConv = id ? MOCK_CONVERSATIONS[id] : undefined;
 
   // ── Live session detection ─────────────────────────────────────────────────
@@ -287,6 +315,14 @@ export function ConversationPage() {
 
   // Model
   const { models, currentModel, setCurrent } = useModels();
+
+  // Token estimates from real session blocks
+  const sessionTokens = useMemo(() => {
+    if (!sessionDetail) return undefined;
+    const modelInfo = models.find(m => m.id === (currentModel || model));
+    const contextWindow = modelInfo?.context ?? 128_000;
+    return computeTokensFromBlocks(sessionDetail.blocks, contextWindow);
+  }, [sessionDetail, models, currentModel, model]);
   const [modelNotice, setModelNotice] = useState<string | null>(null);
   const [modelIdx, setModelIdx] = useState(0);
 
@@ -364,13 +400,39 @@ export function ConversationPage() {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, []);
 
-  function selectModel(id: string) {
-    setCurrent(id);
+  function selectModel(modelId: string) {
+    setCurrent(modelId);
     setInput('');
     setModelIdx(0);
-    const m = models.find(x => x.id === id);
+    const m = models.find(x => x.id === modelId);
     if (m) { setModelNotice(m.name); setTimeout(() => setModelNotice(null), 2500); }
     textareaRef.current?.focus();
+    // Persist to settings.json
+    api.setModel(modelId).catch(console.error);
+  }
+
+  // /clear — destroy current session, create new one in same cwd
+  async function handleClear() {
+    if (!id) return;
+    if (stream.isStreaming) await stream.abort();
+    await api.destroySession(id).catch(() => {});
+    const cwd = sessionDetail?.meta.cwd ?? undefined;
+    const { id: newId } = await api.createLiveSession(cwd);
+    navigate(`/conversations/${newId}`);
+  }
+
+  // /run <cmd> — run a shell command and show output as a system message
+  async function handleRun(command: string) {
+    if (!command.trim()) return;
+    if (isLiveSession) {
+      // Let the agent run it with its bash tool
+      stream.send(`Run this shell command and show me the output:\n\`\`\`\n${command}\n\`\`\``);
+    }
+  }
+
+  // Generic send-to-agent helper for slash shortcut commands
+  function sendToAgent(text: string) {
+    if (isLiveSession && text.trim()) stream.send(text);
   }
 
   // Keyboard handling
@@ -410,15 +472,23 @@ export function ConversationPage() {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       const text = input.trim();
-      if (text) {
-        if (isLiveSession) {
-          stream.send(text);
-          setTimeout(() => {
-            if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-          }, 50);
-        }
-        setInput('');
-        setAttachments([]);
+      if (!text) return;
+      setInput('');
+      setAttachments([]);
+
+      // Handle slash commands
+      if (text === '/clear')         { void handleClear(); return; }
+      if (text.startsWith('/run '))  { void handleRun(text.slice(5)); return; }
+      if (text.startsWith('/search ')){ sendToAgent(`Search the web for: ${text.slice(8)}`); return; }
+      if (text === '/summarize')     { sendToAgent('Summarize our conversation so far concisely.'); return; }
+      if (text === '/think')         { sendToAgent('Think step-by-step about our conversation so far and share your reasoning.'); return; }
+      if (text.startsWith('/think '))  { sendToAgent(`Think step-by-step about: ${text.slice(7)}`); return; }
+
+      if (isLiveSession) {
+        stream.send(text);
+        setTimeout(() => {
+          if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }, 50);
       }
     }
   }
@@ -535,7 +605,14 @@ export function ConversationPage() {
         onDrop={handleDrop}
       >
         <div className="relative">
-          {showSlash   && <SlashMenu   query={slashQuery}   idx={slashIdx}   onSelect={cmd => { if (cmd.startsWith('/tree')) { setInput(''); setShowTree(true); } else { setInput(cmd); setSlashIdx(0); textareaRef.current?.focus(); } }} />}
+          {showSlash   && <SlashMenu   query={slashQuery}   idx={slashIdx}   onSelect={cmd => {
+            const c = cmd.trim();
+            if (c === '/tree')       { setInput(''); setShowTree(true); return; }
+            if (c === '/clear')      { setInput(''); void handleClear(); return; }
+            if (c === '/summarize')  { setInput(''); sendToAgent('Summarize our conversation so far concisely.'); return; }
+            if (c === '/think')      { setInput(''); sendToAgent('Think step-by-step about our conversation so far and share your reasoning.'); return; }
+            setInput(cmd); setSlashIdx(0); textareaRef.current?.focus();
+          }} />}
           {showMention && <MentionMenu query={mentionQuery} idx={mentionIdx} onSelect={id  => { setInput(input.replace(/@[\w-]*$/, id + ' ')); setMentionIdx(0); textareaRef.current?.focus(); }} />}
           {showModelPicker && <ModelPicker models={models} currentModel={currentModel} idx={modelIdx}
             onSelect={selectModel} onClose={() => { setInput(''); textareaRef.current?.focus(); }} />}

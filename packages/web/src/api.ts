@@ -1,4 +1,4 @@
-import type { ActivityEntry, AppStatus, LiveSessionMeta, WorkstreamDetail, WorkstreamSummary } from './types';
+import type { ActivityEntry, AppStatus, LiveSessionMeta, MemoryData, WorkstreamDetail, WorkstreamSummary } from './types';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch('/api' + path);
@@ -16,6 +16,16 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function patch<T>(path: string, body?: unknown): Promise<T> {
+  const res = await fetch('/api' + path, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json() as Promise<T>;
+}
+
 export const api = {
   // ── Core ──────────────────────────────────────────────────────────────────
   status:         () => get<AppStatus>('/status'),
@@ -23,6 +33,26 @@ export const api = {
   activityById:   (id: string) => get<ActivityEntry>(`/activity/${encodeURIComponent(id)}`),
   workstreams:    () => get<WorkstreamSummary[]>('/workstreams'),
   workstreamById: (id: string) => get<WorkstreamDetail>(`/workstreams/${encodeURIComponent(id)}`),
+
+  // ── Models ────────────────────────────────────────────────────────────────
+  setModel:    (model: string) => patch<{ ok: boolean }>('/models/current', { model }),
+
+  // ── Tasks ─────────────────────────────────────────────────────────────────
+  setTaskEnabled: (id: string, enabled: boolean) =>
+    patch<{ ok: boolean }>(`/tasks/${encodeURIComponent(id)}`, { enabled }),
+  taskLog: (id: string) =>
+    get<{ log: string; path: string }>(`/tasks/${encodeURIComponent(id)}/log`),
+
+  // ── Shell run ─────────────────────────────────────────────────────────────
+  run: (command: string, cwd?: string) =>
+    post<{ output: string; exitCode: number }>('/run', { command, cwd }),
+
+  // ── Memory browser ────────────────────────────────────────────────────────
+  memory:     () => get<MemoryData>('/memory'),
+  memoryFile: (path: string) => get<{ content: string; path: string }>(`/memory/file?path=${encodeURIComponent(path)}`),
+
+  // ── Activity count ────────────────────────────────────────────────────────
+  activityCount: () => get<{ count: number }>('/activity/count'),
 
   // ── Live sessions ─────────────────────────────────────────────────────────
   liveSessions: () => get<LiveSessionMeta[]>('/live-sessions'),

@@ -1,10 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useConversations } from '../hooks/useConversations';
 import { api } from '../api';
 import type { SessionMeta } from '../types';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { timeAgo } from '../utils';
+
+function useInboxCount() {
+  const [count, setCount] = useState<number | null>(null);
+  useEffect(() => {
+    const fetch = () => api.activityCount().then(r => setCount(r.count)).catch(() => {});
+    void fetch();
+    const t = setInterval(fetch, 30_000);
+    return () => clearInterval(t);
+  }, []);
+  return count;
+}
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 
@@ -27,7 +38,7 @@ const PATH = {
 
 // ── Top nav item ───────────────────────────────────────────────────────────
 
-function TopNavItem({ to, icon, label }: { to: string; icon: string; label: string }) {
+function TopNavItem({ to, icon, label, badge }: { to: string; icon: string; label: string; badge?: number | null }) {
   return (
     <NavLink
       to={to}
@@ -44,7 +55,12 @@ function TopNavItem({ to, icon, label }: { to: string; icon: string; label: stri
         className="shrink-0 opacity-70">
         <path d={icon} />
       </svg>
-      {label}
+      <span className="flex-1">{label}</span>
+      {badge != null && badge > 0 && (
+        <span className="ml-auto text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded-full bg-accent/15 text-accent min-w-[18px] text-center">
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
     </NavLink>
   );
 }
@@ -129,6 +145,7 @@ export function Sidebar() {
   const { tabs, shelf, openSession, closeSession, loading, usingFallback } = useConversations();
   const [shelfOpen, setShelfOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const inboxCount = useInboxCount();
 
   function handleShelfClick(session: SessionMeta) {
     openSession(session.id);
@@ -165,7 +182,7 @@ export function Sidebar() {
 
       {/* ── Top nav ── */}
       <div className="pb-1 space-y-0.5">
-        <TopNavItem to="/inbox"       icon={PATH.inbox}       label="Inbox"       />
+        <TopNavItem to="/inbox"       icon={PATH.inbox}       label="Inbox"       badge={inboxCount} />
         <TopNavItem to="/tasks"       icon={PATH.tasks}       label="Tasks"       />
         <TopNavItem to="/workstreams" icon={PATH.workstreams} label="Workstreams" />
       </div>
