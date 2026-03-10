@@ -8,7 +8,6 @@ export function WorkstreamsPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <div className="sticky top-0 z-10 bg-base/95 backdrop-blur-sm border-b border-border-subtle px-6 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-base font-semibold text-primary">Workstreams</h1>
@@ -18,15 +17,11 @@ export function WorkstreamsPage() {
             </p>
           )}
         </div>
-        <button
-          onClick={refetch}
-          className="text-xs text-secondary hover:text-primary transition-colors px-2 py-1 rounded hover:bg-surface"
-        >
+        <button onClick={refetch} className="text-xs text-secondary hover:text-primary transition-colors px-2 py-1 rounded hover:bg-surface">
           ↻ Refresh
         </button>
       </div>
 
-      {/* Content */}
       <div className="flex-1 px-6 py-4">
         {loading && (
           <div className="flex items-center gap-2 text-sm text-dim py-8">
@@ -34,25 +29,17 @@ export function WorkstreamsPage() {
             <span>Loading workstreams…</span>
           </div>
         )}
-
-        {error && (
-          <div className="py-8 text-sm text-danger/80">
-            Failed to load workstreams: {error}
-          </div>
-        )}
-
+        {error && <div className="py-8 text-sm text-danger/80">Failed to load workstreams: {error}</div>}
         {!loading && !error && workstreams?.length === 0 && (
           <div className="py-16 text-center">
             <p className="text-2xl mb-3">🗂</p>
             <p className="text-sm text-primary">No workstreams yet.</p>
-            <p className="text-xs text-secondary mt-1">
-              Workstreams group related artifacts, tasks, and activity.
-            </p>
+            <p className="text-xs text-secondary mt-1">Workstreams group related artifacts, tasks, and activity.</p>
           </div>
         )}
 
         {!loading && workstreams && workstreams.length > 0 && (
-          <div className="grid grid-cols-1 gap-3">
+          <div className="space-y-px">
             {workstreams.map((ws) => {
               const status = stripMarkdownListMarker(ws.status);
               const blockers = stripMarkdownListMarker(ws.blockers);
@@ -62,23 +49,26 @@ export function WorkstreamsPage() {
                 <Link
                   key={ws.id}
                   to={`/workstreams/${ws.id}`}
-                  className="block p-4 rounded-xl bg-surface border border-border-subtle hover:border-border-default hover:bg-elevated transition-all group"
+                  className="flex items-start gap-4 px-4 py-3 -mx-2 rounded-lg hover:bg-surface transition-colors group"
                 >
-                  <div className="flex items-start justify-between gap-4 mb-2">
-                    <span className="text-xs font-mono text-dim">{ws.id}</span>
-                    <span className="text-2xs text-dim shrink-0">{timeAgo(ws.updatedAt)}</span>
+                  <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${isBlocked ? 'bg-warning' : 'bg-teal'}`} />
+
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] text-primary leading-snug">{ws.objective}</p>
+                    <p className="text-[11px] text-dim mt-0.5 font-mono flex items-center gap-1.5 flex-wrap">
+                      <span className="text-secondary">{status}</span>
+                      {isBlocked && (
+                        <>
+                          <span className="opacity-40">·</span>
+                          <span className="text-warning">⚠ {blockers}</span>
+                        </>
+                      )}
+                      <span className="opacity-40">·</span>
+                      <span>{timeAgo(ws.updatedAt)}</span>
+                    </p>
                   </div>
 
-                  <p className="text-sm font-medium text-primary group-hover:text-white leading-snug mb-3">
-                    {ws.objective}
-                  </p>
-
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-secondary">{status}</span>
-                    {isBlocked && (
-                      <span className="text-xs text-warning">⚠ {blockers}</span>
-                    )}
-                  </div>
+                  <span className="text-dim group-hover:text-secondary transition-colors text-sm mt-0.5">→</span>
                 </Link>
               );
             })}

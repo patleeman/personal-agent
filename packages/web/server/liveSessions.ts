@@ -8,6 +8,7 @@ import { homedir } from 'node:os';
 import {
   AgentSession,
   AuthStorage,
+  DefaultResourceLoader,
   ModelRegistry,
   SessionManager,
   createAgentSession,
@@ -27,7 +28,9 @@ export type SseEvent =
   | { type: 'thinking_delta';  delta: string }
   | { type: 'tool_start';      toolCallId: string; toolName: string; args: unknown }
   | { type: 'tool_update';     toolCallId: string; partialResult: unknown }
-  | { type: 'tool_end';        toolCallId: string; toolName: string; isError: boolean; durationMs: number }
+  | { type: 'tool_end';        toolCallId: string; toolName: string; isError: boolean; durationMs: number; output: string }
+  | { type: 'title_update';    title: string }
+  | { type: 'stats_update';    tokens: { input: number; output: number; total: number }; cost: number }
   | { type: 'error';           message: string };
 
 // ── Internal entry ────────────────────────────────────────────────────────────
@@ -36,6 +39,8 @@ interface LiveEntry {
   session:    AgentSession;
   cwd:        string;
   listeners:  Set<(e: SseEvent) => void>;
+  title:      string;
+  sentTitle:  boolean;
 }
 
 const registry    = new Map<string, LiveEntry>();
@@ -54,10 +59,33 @@ function makeRegistry(auth: AuthStorage) {
 // ── Event wiring ──────────────────────────────────────────────────────────────
 
 function wireSession(id: string, session: AgentSession, cwd: string) {
-  const entry: LiveEntry = { session, cwd, listeners: new Set() };
+  const entry: LiveEntry = { session, cwd, listeners: new Set(), title: '', sentTitle: false };
   registry.set(id, entry);
 
   session.subscribe((event: AgentSessionEvent) => {
+    // Extract title from first user message
+    if (!entry.sentTitle && event.type === 'turn_end') {
+      const msgs = session.agent.state.messages;
+      const firstUser = msgs.find(m => m.role === 'user');
+      if (firstUser) {
+        const content = firstUser.content;
+        const text = Array.isArray(content)
+          ? (content.find((c: { type: string; text?: string }) => c.type === 'text') as { text?: string } | undefined)?.text ?? ''
+          : String(content);
+        entry.title = text.trim().replace(/\n/g, ' ').slice(0, 80);
+        entry.sentTitle = true;
+        broadcast(entry, { type: 'title_update', title: entry.title });
+      }
+    }
+
+    // Emit stats after agent_end
+    if (event.type === 'agent_end') {
+      try {
+        const stats = session.getSessionStats();
+        broadcast(entry, { type: 'stats_update', tokens: stats.tokens, cost: stats.cost });
+      } catch { /* ignore */ }
+    }
+
     const sse = toSse(event);
     if (sse) broadcast(entry, sse);
   });
@@ -88,12 +116,20 @@ function toSse(event: AgentSessionEvent): SseEvent | null {
     case 'tool_execution_end': {
       const start = toolTimings.get(event.toolCallId) ?? Date.now();
       toolTimings.delete(event.toolCallId);
+      // Extract final text output from result
+      const result = event.result as { content?: Array<{ type: string; text?: string }> } | undefined;
+      const outputText = result?.content
+        ?.filter(c => c.type === 'text')
+        .map(c => c.text ?? '')
+        .join('\n')
+        .slice(0, 8000) ?? '';
       return {
-        type: 'tool_end',
+        type:       'tool_end',
         toolCallId: event.toolCallId,
         toolName:   event.toolName,
         isError:    event.isError,
         durationMs: Date.now() - start,
+        output:     outputText,
       };
     }
 
@@ -115,20 +151,34 @@ export function isLive(sessionId: string): boolean {
 export function getLiveSessions() {
   return Array.from(registry.entries()).map(([id, e]) => ({
     id,
-    cwd:        e.cwd,
+    cwd:         e.cwd,
     sessionFile: e.session.sessionFile ?? '',
     isStreaming: e.session.isStreaming,
   }));
 }
 
+export function getSessionStats(sessionId: string) {
+  const entry = registry.get(sessionId);
+  if (!entry) return null;
+  try { return entry.session.getSessionStats(); } catch { return null; }
+}
+
+async function makeLoader(cwd: string) {
+  const loader = new DefaultResourceLoader({ cwd, agentDir: AGENT_DIR });
+  await loader.reload();
+  return loader;
+}
+
 /** Create a brand-new Pi session. */
 export async function createSession(cwd: string): Promise<{ id: string; sessionFile: string }> {
-  const auth = makeAuth();
-  const { session } = await createAgentSession({
+  const auth         = makeAuth();
+  const resourceLoader = await makeLoader(cwd);
+  const { session }  = await createAgentSession({
     cwd,
-    agentDir: AGENT_DIR,
+    agentDir:      AGENT_DIR,
     authStorage:   auth,
     modelRegistry: makeRegistry(auth),
+    resourceLoader,
     sessionManager: SessionManager.create(cwd, SESSIONS_DIR),
   });
 
@@ -144,11 +194,16 @@ export async function resumeSession(sessionFile: string): Promise<{ id: string }
     if (e.session.sessionFile === sessionFile) return { id };
   }
 
-  const auth = makeAuth();
+  const auth   = makeAuth();
+  // Derive cwd from sessions dir parent — best effort
+  const cwd    = SESSIONS_DIR;
+  const resourceLoader = await makeLoader(cwd);
   const { session } = await createAgentSession({
-    agentDir: AGENT_DIR,
+    cwd,
+    agentDir:       AGENT_DIR,
     authStorage:    auth,
     modelRegistry:  makeRegistry(auth),
+    resourceLoader,
     sessionManager: SessionManager.open(sessionFile),
   });
 

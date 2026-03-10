@@ -5,7 +5,7 @@
  */
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { AuthStorage, ModelRegistry, SessionManager, createAgentSession, } from '@mariozechner/pi-coding-agent';
+import { AuthStorage, DefaultResourceLoader, ModelRegistry, SessionManager, createAgentSession, } from '@mariozechner/pi-coding-agent';
 const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
 const SESSIONS_DIR = join(AGENT_DIR, 'sessions');
 const registry = new Map();
@@ -19,9 +19,31 @@ function makeRegistry(auth) {
 }
 // ── Event wiring ──────────────────────────────────────────────────────────────
 function wireSession(id, session, cwd) {
-    const entry = { session, cwd, listeners: new Set() };
+    const entry = { session, cwd, listeners: new Set(), title: '', sentTitle: false };
     registry.set(id, entry);
     session.subscribe((event) => {
+        // Extract title from first user message
+        if (!entry.sentTitle && event.type === 'turn_end') {
+            const msgs = session.agent.state.messages;
+            const firstUser = msgs.find(m => m.role === 'user');
+            if (firstUser) {
+                const content = firstUser.content;
+                const text = Array.isArray(content)
+                    ? content.find((c) => c.type === 'text')?.text ?? ''
+                    : String(content);
+                entry.title = text.trim().replace(/\n/g, ' ').slice(0, 80);
+                entry.sentTitle = true;
+                broadcast(entry, { type: 'title_update', title: entry.title });
+            }
+        }
+        // Emit stats after agent_end
+        if (event.type === 'agent_end') {
+            try {
+                const stats = session.getSessionStats();
+                broadcast(entry, { type: 'stats_update', tokens: stats.tokens, cost: stats.cost });
+            }
+            catch { /* ignore */ }
+        }
         const sse = toSse(event);
         if (sse)
             broadcast(entry, sse);
@@ -49,12 +71,20 @@ function toSse(event) {
         case 'tool_execution_end': {
             const start = toolTimings.get(event.toolCallId) ?? Date.now();
             toolTimings.delete(event.toolCallId);
+            // Extract final text output from result
+            const result = event.result;
+            const outputText = result?.content
+                ?.filter(c => c.type === 'text')
+                .map(c => c.text ?? '')
+                .join('\n')
+                .slice(0, 8000) ?? '';
             return {
                 type: 'tool_end',
                 toolCallId: event.toolCallId,
                 toolName: event.toolName,
                 isError: event.isError,
                 durationMs: Date.now() - start,
+                output: outputText,
             };
         }
         default:
@@ -77,14 +107,32 @@ export function getLiveSessions() {
         isStreaming: e.session.isStreaming,
     }));
 }
+export function getSessionStats(sessionId) {
+    const entry = registry.get(sessionId);
+    if (!entry)
+        return null;
+    try {
+        return entry.session.getSessionStats();
+    }
+    catch {
+        return null;
+    }
+}
+async function makeLoader(cwd) {
+    const loader = new DefaultResourceLoader({ cwd, agentDir: AGENT_DIR });
+    await loader.reload();
+    return loader;
+}
 /** Create a brand-new Pi session. */
 export async function createSession(cwd) {
     const auth = makeAuth();
+    const resourceLoader = await makeLoader(cwd);
     const { session } = await createAgentSession({
         cwd,
         agentDir: AGENT_DIR,
         authStorage: auth,
         modelRegistry: makeRegistry(auth),
+        resourceLoader,
         sessionManager: SessionManager.create(cwd, SESSIONS_DIR),
     });
     const id = session.sessionId;
@@ -99,10 +147,15 @@ export async function resumeSession(sessionFile) {
             return { id };
     }
     const auth = makeAuth();
+    // Derive cwd from sessions dir parent — best effort
+    const cwd = SESSIONS_DIR;
+    const resourceLoader = await makeLoader(cwd);
     const { session } = await createAgentSession({
+        cwd,
         agentDir: AGENT_DIR,
         authStorage: auth,
         modelRegistry: makeRegistry(auth),
+        resourceLoader,
         sessionManager: SessionManager.open(sessionFile),
     });
     // Derive cwd from the session file directory name (best-effort)

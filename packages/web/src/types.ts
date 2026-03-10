@@ -88,7 +88,9 @@ export type SseEvent =
   | { type: 'thinking_delta';  delta: string }
   | { type: 'tool_start';      toolCallId: string; toolName: string; args: Record<string, string> }
   | { type: 'tool_update';     toolCallId: string; partialResult: unknown }
-  | { type: 'tool_end';        toolCallId: string; toolName: string; isError: boolean; durationMs: number }
+  | { type: 'tool_end';        toolCallId: string; toolName: string; isError: boolean; durationMs: number; output: string }
+  | { type: 'title_update';    title: string }
+  | { type: 'stats_update';    tokens: { input: number; output: number; total: number }; cost: number }
   | { type: 'error';           message: string };
 
 // ── Memory browser ────────────────────────────────────────────────────────────

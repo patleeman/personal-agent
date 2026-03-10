@@ -2,7 +2,7 @@ export type MessageBlock =
   | { type: 'user';      text: string; ts: string }
   | { type: 'text';      text: string; ts: string; streaming?: boolean }
   | { type: 'thinking';  text: string; ts: string }
-  | { type: 'tool_use';  tool: string; input: Record<string, unknown>; output: string; durationMs?: number; ts: string; running?: boolean; error?: boolean }
+  | { type: 'tool_use';  tool: string; input: Record<string, unknown>; output: string; durationMs?: number; ts: string; running?: boolean; status?: 'running' | 'ok' | 'error'; error?: boolean; _toolCallId?: string }
   | { type: 'subagent';  name: string; prompt: string; status: 'running' | 'complete' | 'failed'; summary?: string; ts: string }
   | { type: 'image';     alt: string; width?: number; height?: number; caption?: string; ts: string }
   | { type: 'error';     tool?: string; message: string; ts: string };

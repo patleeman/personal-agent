@@ -15,12 +15,10 @@ function FileContent({ path }: { path: string }) {
   const [saveErr, setSaveErr]   = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // When file loads, seed draft
   useEffect(() => {
     if (data?.content !== undefined) setDraft(data.content);
   }, [data?.content]);
 
-  // Auto-size textarea to content
   useEffect(() => {
     if (editing && textareaRef.current) {
       const el = textareaRef.current;
@@ -54,17 +52,13 @@ function FileContent({ path }: { path: string }) {
     }
   }
 
-  if (loading) return (
-    <div className="px-4 py-3 text-[11px] text-dim animate-pulse font-mono">Loading…</div>
-  );
-  if (error) return (
-    <div className="px-4 py-3 text-[11px] text-danger/80 font-mono">Error: {error}</div>
-  );
+  if (loading) return <div className="pl-6 pr-4 pb-3 text-[11px] text-dim animate-pulse font-mono">Loading…</div>;
+  if (error)   return <div className="pl-6 pr-4 pb-3 text-[11px] text-danger/80 font-mono">Error: {error}</div>;
 
   return (
-    <div>
+    <div className="pl-6 pr-4 pb-3">
       {editing ? (
-        <div className="px-4 py-3 space-y-2">
+        <div className="space-y-2">
           <textarea
             ref={textareaRef}
             value={draft}
@@ -73,18 +67,18 @@ function FileContent({ path }: { path: string }) {
             spellCheck={false}
           />
           {saveErr && <p className="text-[11px] text-danger/80">{saveErr}</p>}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <button
               onClick={save}
               disabled={saving}
-              className="text-[11px] px-3 py-1.5 rounded-lg bg-accent/10 text-accent border border-accent/20 hover:bg-accent/20 transition-colors disabled:opacity-40 font-medium"
+              className="text-[11px] font-medium text-accent hover:text-accent/70 transition-colors disabled:opacity-40"
             >
               {saving ? 'Saving…' : 'Save'}
             </button>
             <button
               onClick={cancelEdit}
               disabled={saving}
-              className="text-[11px] px-3 py-1.5 rounded-lg text-secondary hover:bg-elevated transition-colors disabled:opacity-40"
+              className="text-[11px] text-secondary hover:text-primary transition-colors disabled:opacity-40"
             >
               Cancel
             </button>
@@ -92,12 +86,12 @@ function FileContent({ path }: { path: string }) {
         </div>
       ) : (
         <div className="relative group/content">
-          <pre className="px-4 py-3 text-[11px] font-mono text-secondary leading-relaxed whitespace-pre-wrap break-words overflow-x-auto max-h-96 overflow-y-auto">
+          <pre className="text-[11px] font-mono text-secondary leading-relaxed whitespace-pre-wrap break-words overflow-x-auto max-h-96 overflow-y-auto">
             {data?.content}
           </pre>
           <button
             onClick={startEdit}
-            className="absolute top-2 right-2 opacity-0 group-hover/content:opacity-100 transition-opacity text-[10px] px-2 py-1 rounded bg-elevated border border-border-subtle text-secondary hover:text-primary hover:border-border-default"
+            className="absolute top-0 right-0 opacity-0 group-hover/content:opacity-100 transition-opacity text-[10px] text-secondary hover:text-primary"
           >
             Edit
           </button>
@@ -111,11 +105,9 @@ function FileContent({ path }: { path: string }) {
 
 function SectionHeader({ label, count }: { label: string; count?: number }) {
   return (
-    <div className="flex items-center gap-2 px-1 py-2">
+    <div className="flex items-center gap-2 px-2 pt-4 pb-1.5">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-dim">{label}</p>
-      {count !== undefined && (
-        <span className="text-[10px] tabular-nums text-dim/50">{count}</span>
-      )}
+      {count !== undefined && <span className="text-[10px] tabular-nums text-dim/50">{count}</span>}
     </div>
   );
 }
@@ -134,16 +126,56 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-// ── Card wrapper ──────────────────────────────────────────────────────────────
+// ── Row wrapper ───────────────────────────────────────────────────────────────
 
-function Card({ expanded, children }: { expanded: boolean; children: React.ReactNode }) {
+function ExpandRow({
+  icon, title, subtitle, badge, tags, expanded, onToggle, children,
+}: {
+  icon?: React.ReactNode;
+  title: string;
+  subtitle?: string;
+  badge?: { text: string; cls: string };
+  tags?: string[];
+  expanded: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
   return (
-    <div className={`rounded-xl border transition-colors ${
-      expanded
-        ? 'bg-elevated border-border-default'
-        : 'bg-surface border-border-subtle hover:border-border-default'
-    }`}>
-      {children}
+    <div className={`-mx-2 rounded-lg transition-colors ${expanded ? 'bg-surface' : ''}`}>
+      <button
+        onClick={onToggle}
+        className={`w-full flex items-start gap-4 px-4 py-3 text-left rounded-lg transition-colors ${
+          expanded ? '' : 'hover:bg-surface'
+        }`}
+      >
+        {icon
+          ? <span className="mt-0.5 shrink-0 text-secondary opacity-60">{icon}</span>
+          : <span className="mt-1.5 w-2 h-2 rounded-full shrink-0 bg-border-default/60" />
+        }
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <span className="text-[13px] font-mono font-medium text-primary">{title}</span>
+            {badge && <span className={`text-[11px] font-mono ${badge.cls}`}>{badge.text}</span>}
+          </div>
+          {subtitle && (
+            <p className="text-[12px] text-secondary mt-0.5 leading-snug line-clamp-2">{subtitle}</p>
+          )}
+          {tags && tags.length > 0 && (
+            <p className="text-[11px] text-dim mt-0.5 font-mono">
+              {tags.join(' · ')}
+            </p>
+          )}
+        </div>
+
+        <Chevron open={expanded} />
+      </button>
+
+      {expanded && (
+        <div className="border-t border-border-subtle/60">
+          {children}
+        </div>
+      )}
     </div>
   );
 }
@@ -155,30 +187,20 @@ function AgentsRow({ item, expanded, onToggle }: {
   expanded: boolean;
   onToggle: () => void;
 }) {
-  // Extract human-readable label from path: "shared/AGENTS.md" or "datadog/AGENTS.md"
   const parts = item.path.split('/profiles/')[1]?.split('/agent/') ?? [];
   const label = parts.length >= 1 ? `${parts[0]}/AGENTS.md` : item.path;
 
+  const icon = (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z" />
+    </svg>
+  );
+
   return (
-    <Card expanded={expanded}>
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left"
-      >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-          stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"
-          className="shrink-0 text-secondary opacity-70">
-          <path d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25ZM6.75 12h.008v.008H6.75V12Zm0 3h.008v.008H6.75V15Zm0 3h.008v.008H6.75V18Z" />
-        </svg>
-        <span className="flex-1 text-[13px] font-medium text-primary font-mono truncate">{label}</span>
-        <Chevron open={expanded} />
-      </button>
-      {expanded && (
-        <div className="border-t border-border-subtle">
-          <FileContent path={item.path} />
-        </div>
-      )}
-    </Card>
+    <ExpandRow icon={icon} title={label} expanded={expanded} onToggle={onToggle}>
+      <FileContent path={item.path} />
+    </ExpandRow>
   );
 }
 
@@ -189,34 +211,21 @@ function SkillRow({ item, expanded, onToggle }: {
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const badge = {
+    text: item.source,
+    cls: item.source === 'shared' ? 'text-teal' : 'text-accent',
+  };
+
   return (
-    <Card expanded={expanded}>
-      <button onClick={onToggle} className="w-full flex items-start gap-3 px-4 py-3 text-left">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[13px] font-medium text-primary font-mono">{item.name}</span>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${
-              item.source === 'shared'
-                ? 'text-teal bg-teal/10 border-teal/20'
-                : 'text-accent bg-accent-bg border-accent/20'
-            }`}>
-              {item.source}
-            </span>
-          </div>
-          {item.description && (
-            <p className="text-[12px] text-secondary mt-0.5 leading-snug line-clamp-2">
-              {item.description}
-            </p>
-          )}
-        </div>
-        <Chevron open={expanded} />
-      </button>
-      {expanded && (
-        <div className="border-t border-border-subtle">
-          <FileContent path={item.path} />
-        </div>
-      )}
-    </Card>
+    <ExpandRow
+      title={item.name}
+      subtitle={item.description}
+      badge={badge}
+      expanded={expanded}
+      onToggle={onToggle}
+    >
+      <FileContent path={item.path} />
+    </ExpandRow>
   );
 }
 
@@ -228,41 +237,15 @@ function MemoryDocRow({ item, expanded, onToggle }: {
   onToggle: () => void;
 }) {
   return (
-    <Card expanded={expanded}>
-      <button onClick={onToggle} className="w-full flex items-start gap-3 px-4 py-3 text-left">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[13px] font-medium text-primary">{item.title}</span>
-            {item.id !== item.title && (
-              <span className="text-[11px] font-mono text-dim">{item.id}</span>
-            )}
-          </div>
-          {item.summary && (
-            <p className="text-[12px] text-secondary mt-0.5 leading-snug line-clamp-2">
-              {item.summary}
-            </p>
-          )}
-          {item.tags.length > 0 && (
-            <div className="flex items-center gap-1 flex-wrap mt-1.5">
-              {item.tags.map(tag => (
-                <span
-                  key={tag}
-                  className="text-[10px] px-1.5 py-0.5 rounded bg-surface text-dim border border-border-subtle"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-        <Chevron open={expanded} />
-      </button>
-      {expanded && (
-        <div className="border-t border-border-subtle">
-          <FileContent path={item.path} />
-        </div>
-      )}
-    </Card>
+    <ExpandRow
+      title={item.title}
+      subtitle={item.summary}
+      tags={item.tags}
+      expanded={expanded}
+      onToggle={onToggle}
+    >
+      <FileContent path={item.path} />
+    </ExpandRow>
   );
 }
 
@@ -278,7 +261,6 @@ export function MemoryPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <div className="sticky top-0 z-10 bg-base/95 backdrop-blur-sm border-b border-border-subtle px-6 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-base font-semibold text-primary">Memory</h1>
@@ -292,38 +274,29 @@ export function MemoryPage() {
             </p>
           )}
         </div>
-        <button
-          onClick={refetch}
-          className="text-xs text-secondary hover:text-primary transition-colors px-2 py-1 rounded hover:bg-surface"
-        >
+        <button onClick={refetch} className="text-xs text-secondary hover:text-primary transition-colors px-2 py-1 rounded hover:bg-surface">
           ↻ Refresh
         </button>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
-
+      <div className="flex-1 overflow-y-auto px-6 py-2">
         {loading && (
           <div className="flex items-center gap-2 text-sm text-dim py-8">
             <span className="animate-pulse">●</span>
             <span>Loading memory…</span>
           </div>
         )}
-
-        {error && (
-          <div className="py-8 text-sm text-danger/80">Failed to load memory: {error}</div>
-        )}
+        {error && <div className="py-8 text-sm text-danger/80">Failed to load memory: {error}</div>}
 
         {!loading && data && (
           <>
-            {/* Config */}
             {(() => {
               const existing = data.agentsMd.filter(i => i.exists);
               if (existing.length === 0) return null;
               return (
                 <div>
                   <SectionHeader label="Config" count={existing.length} />
-                  <div className="space-y-2">
+                  <div className="space-y-px">
                     {existing.map(item => (
                       <AgentsRow
                         key={item.path}
@@ -337,12 +310,11 @@ export function MemoryPage() {
               );
             })()}
 
-            {/* Skills */}
             <div>
               <SectionHeader label="Skills" count={data.skills.length} />
-              <div className="space-y-2">
+              <div className="space-y-px">
                 {data.skills.length === 0 && (
-                  <p className="text-[12px] text-dim px-1">No skills found.</p>
+                  <p className="text-[12px] text-dim px-2">No skills found.</p>
                 )}
                 {data.skills.map(item => (
                   <SkillRow
@@ -355,12 +327,11 @@ export function MemoryPage() {
               </div>
             </div>
 
-            {/* Memory docs */}
-            <div>
+            <div className="pb-4">
               <SectionHeader label="Memory Docs" count={data.memoryDocs.length} />
-              <div className="space-y-2">
+              <div className="space-y-px">
                 {data.memoryDocs.length === 0 && (
-                  <p className="text-[12px] text-dim px-1">No memory docs found.</p>
+                  <p className="text-[12px] text-dim px-2">No memory docs found.</p>
                 )}
                 {data.memoryDocs.map(item => (
                   <MemoryDocRow

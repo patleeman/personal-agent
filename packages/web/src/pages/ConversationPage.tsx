@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ChatView } from '../components/chat/ChatView';
 import { ConversationTree } from '../components/ConversationTree';
@@ -267,22 +267,25 @@ export function ConversationPage() {
   const mockConv = id ? MOCK_CONVERSATIONS[id] : undefined;
 
   // ── Live session detection ─────────────────────────────────────────────────
-  // null = checking, false = not live, true = live
-  const [liveStatus, setLiveStatus] = useState<null | false | true>(null);
+  // Always attempt SSE connection — useSessionStream handles 404 gracefully.
+  // We use a confirmed-live flag only for UI badge / resume button logic.
+  const [confirmedLive, setConfirmedLive] = useState<boolean | null>(null);
   const [resuming, setResuming] = useState(false);
 
+  // ── Pi SDK stream — attempt connection immediately for all real sessions ──
+  const stream = useSessionStream(!mockConv && !!id ? id : null);
+
+  // Confirm live status via API (for badge + resume button, not for stream)
   useEffect(() => {
-    if (!id || mockConv) { setLiveStatus(false); return; }
-    setLiveStatus(null);
+    if (!id || mockConv) { setConfirmedLive(false); return; }
     api.liveSession(id)
-      .then(r => setLiveStatus(r.live ? true : false))
-      .catch(() => setLiveStatus(false));
+      .then(r => setConfirmedLive(r.live))
+      .catch(() => setConfirmedLive(false));
   }, [id, mockConv]);
 
-  const isLiveSession = liveStatus === true;
-
-  // ── Pi SDK stream (only when live) ────────────────────────────────────────
-  const stream = useSessionStream(isLiveSession ? (id ?? null) : null);
+  // Session is "live" if SSE connected (has blocks) OR API confirms it
+  const isLiveSession = stream.blocks.length > 0 || stream.isStreaming || confirmedLive === true;
+  const liveStatus = confirmedLive;
 
   // ── Existing session data (read-only JSONL) ───────────────────────────────
   const { detail: sessionDetail, loading: sessionLoading } = useSessionDetail(
@@ -307,9 +310,10 @@ export function ConversationPage() {
         : undefined;
 
   const title = conv?.title
+    ?? stream.title
     ?? sessionDetail?.meta.title
     ?? id?.replace(/-/g, ' ')
-    ?? 'conversation';
+    ?? 'New conversation';
   const model = conv?.model ?? sessionDetail?.meta.model;
   const messageCount = conv?.messages.length ?? (realMessages?.length ?? 0);
 
@@ -318,11 +322,21 @@ export function ConversationPage() {
 
   // Token estimates from real session blocks
   const sessionTokens = useMemo(() => {
+    // Live session: use SDK token counts if available
+    if (isLiveSession && stream.tokens) {
+      const modelInfo = models.find(m => m.id === (currentModel || model));
+      const win = modelInfo?.context ?? 200_000;
+      const total = stream.tokens.input + stream.tokens.output;
+      return {
+        sys: 0, user: stream.tokens.input, asst: stream.tokens.output, tool: 0,
+        total, contextWindow: win, pct: Math.round((total / win) * 100),
+      } as TokenCounts;
+    }
     if (!sessionDetail) return undefined;
     const modelInfo = models.find(m => m.id === (currentModel || model));
     const contextWindow = modelInfo?.context ?? 128_000;
     return computeTokensFromBlocks(sessionDetail.blocks, contextWindow);
-  }, [sessionDetail, models, currentModel, model]);
+  }, [isLiveSession, stream.tokens, sessionDetail, models, currentModel, model]);
   const [modelNotice, setModelNotice] = useState<string | null>(null);
   const [modelIdx, setModelIdx] = useState(0);
 
@@ -436,7 +450,7 @@ export function ConversationPage() {
   }
 
   // Keyboard handling
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+  async function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (showModelPicker) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setModelIdx(i => (i + 1) % models.length); return; }
       if (e.key === 'ArrowUp')   { e.preventDefault(); setModelIdx(i => (i - 1 + models.length) % models.length); return; }
@@ -489,6 +503,16 @@ export function ConversationPage() {
         setTimeout(() => {
           if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }, 50);
+      } else if (sessionDetail) {
+        // Auto-resume: activate the session then send
+        try {
+          await api.resumeSession(sessionDetail.meta.file);
+          setLiveStatus(true);
+          // Small delay to let the stream connect before sending
+          setTimeout(() => stream.send(text), 150);
+        } catch (err) {
+          console.error('Auto-resume failed:', err);
+        }
       }
     }
   }
@@ -556,17 +580,8 @@ export function ConversationPage() {
           </div>
         )}
 
-        {/* Resume button for read-only sessions */}
-        {!mockConv && !isLiveSession && sessionDetail && liveStatus === false && (
-          <button onClick={handleResume} disabled={resuming}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-lg bg-accent/10 border border-accent/20 text-accent hover:bg-accent/20 transition-colors disabled:opacity-50">
-            {resuming ? <span className="animate-spin text-[10px]">⟳</span> : '▷'} Resume
-          </button>
-        )}
-
         {conv      && <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-elevated text-dim border border-border-subtle">mock</span>}
         {isLiveSession && <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20">live</span>}
-        {!mockConv && !isLiveSession && sessionDetail && <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-teal/10 text-teal border border-teal/20">read-only</span>}
       </div>
 
       {/* Messages */}
@@ -661,12 +676,28 @@ export function ConversationPage() {
                 onKeyDown={handleKeyDown}
                 rows={1}
                 className="flex-1 bg-transparent text-sm text-primary placeholder:text-dim outline-none resize-none leading-relaxed"
-                placeholder={isLiveSession ? 'Message… (/ for commands, @ to mention)' : 'Resume session to send messages'}
+                placeholder="Message… (/ for commands, @ to mention)"
                 style={{ minHeight: '24px', maxHeight: '160px' }}
               />
 
               <div className="flex items-center gap-1.5 shrink-0 mb-0.5">
-                <kbd className="text-[10px] text-dim bg-surface border border-border-subtle rounded px-1.5 py-0.5 font-mono leading-tight">↵</kbd>
+                {isLiveSession && input.trim() && (
+                  <button
+                    onClick={() => {
+                      const text = input.trim();
+                      if (!text) return;
+                      setInput(''); setAttachments([]);
+                      stream.send(text);
+                      setTimeout(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, 50);
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg bg-accent text-[11px] font-semibold text-base hover:bg-accent/90 transition-colors"
+                  >
+                    Send <span className="opacity-60 text-[10px]">↵</span>
+                  </button>
+                )}
+                {(!isLiveSession || !input.trim()) && (
+                  <kbd className="text-[10px] text-dim bg-surface border border-border-subtle rounded px-1.5 py-0.5 font-mono leading-tight">↵</kbd>
+                )}
               </div>
             </div>
           </div>
@@ -681,7 +712,7 @@ export function ConversationPage() {
       )}
 
       {/* Context bar — always shown */}
-      <ContextBar conv={conv} messageCount={messageCount} model={currentModel || model} />
+      <ContextBar conv={conv} messageCount={messageCount} model={currentModel || model} tokens={sessionTokens} />
 
       {/* Session tree overlay */}
       {showTree && (realMessages ?? conv?.messages) && (

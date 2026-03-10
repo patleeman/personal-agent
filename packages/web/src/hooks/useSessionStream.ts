@@ -11,9 +11,12 @@ export interface StreamState {
   blocks:      MessageBlock[];
   isStreaming: boolean;
   error:       string | null;
+  title:       string | null;
+  tokens:      { input: number; output: number; total: number } | null;
+  cost:        number | null;
 }
 
-const INIT: StreamState = { blocks: [], isStreaming: false, error: null };
+const INIT: StreamState = { blocks: [], isStreaming: false, error: null, title: null, tokens: null, cost: null };
 
 // Tool color map (matches ConversationTree)
 const TOOL_COLORS: Record<string, string> = {
@@ -62,8 +65,12 @@ export function useSessionStream(sessionId: string | null) {
       es.onerror = () => {
         if (closed) return;
         es.close();
-        // Retry after 2s if still mounted
-        if (!closed) setTimeout(connect, 2_000);
+        // Check if 404 (session not live) — don't retry in that case
+        fetch(`/api/live-sessions/${sessionId}`)
+          .then(r => {
+            if (!closed && r.ok) setTimeout(connect, 2_000); // retry if still live
+          })
+          .catch(() => { /* not live, stop */ });
       };
     }
 
@@ -125,14 +132,11 @@ function applyEvent(
 
     case 'tool_start': {
       const args = (event.args ?? {}) as Record<string, string>;
-      const input = args.command ?? args.path ?? args.url ?? JSON.stringify(args).slice(0, 200);
       blocks.push({
         type: 'tool_use',
         tool: event.toolName,
         input: args,
-        inputPreview: input,
-        result: '',
-        resultPreview: '',
+        output: '',
         status: 'running',
         ts: new Date().toISOString(),
         _toolCallId: event.toolCallId,
@@ -142,14 +146,16 @@ function applyEvent(
     }
 
     case 'tool_update': {
-      // Find the running tool block for this callId and append partial output
       const idx = blocks.findLastIndex(
         b => b.type === 'tool_use' && (b as MessageBlock & { _toolCallId?: string })._toolCallId === event.toolCallId,
       );
       if (idx >= 0) {
         const b = blocks[idx] as Extract<MessageBlock, { type: 'tool_use' }>;
-        const partial = String(event.partialResult ?? '');
-        blocks[idx] = { ...b, result: (b.result ?? '') + partial };
+        // partialResult from Pi is an AgentToolResult; content[0].text holds the text
+        const pr = event.partialResult as { content?: { text?: string }[] } | string | undefined;
+        const partial = typeof pr === 'string' ? pr
+          : pr?.content?.[0]?.text ?? '';
+        blocks[idx] = { ...b, output: (b.output ?? '') + partial };
       }
       blocksRef.current = blocks;
       return { ...prev, blocks };
@@ -163,13 +169,20 @@ function applyEvent(
         const b = blocks[idx] as Extract<MessageBlock, { type: 'tool_use' }>;
         blocks[idx] = {
           ...b,
-          status:   event.isError ? 'error' : 'ok',
+          output:     event.output,   // replace partial with final
+          status:     event.isError ? 'error' : 'ok',
           durationMs: event.durationMs,
         };
       }
       blocksRef.current = blocks;
       return { ...prev, blocks };
     }
+
+    case 'title_update':
+      return { ...prev, title: event.title };
+
+    case 'stats_update':
+      return { ...prev, tokens: event.tokens, cost: event.cost };
 
     case 'error': {
       blocks.push({ type: 'error', message: event.message, ts: new Date().toISOString() });

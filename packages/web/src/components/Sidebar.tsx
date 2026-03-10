@@ -157,11 +157,11 @@ export function Sidebar() {
     if (creating) return;
     setCreating(true);
     try {
-      const res = await fetch('/api/live-sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json() as { id: string };
+      const data = await api.createLiveSession();
       openSession(data.id);
       navigate(`/conversations/${data.id}`);
+      // Refetch after a brief delay so the new session file appears in the shelf
+      setTimeout(() => void refetch?.(), 1500);
     } catch (err) {
       console.error('Failed to create session:', err);
     } finally {

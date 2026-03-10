@@ -107,39 +107,53 @@ function toolMeta(t: string) {
 function ToolBlock({ block }: { block: Extract<MessageBlock, { type: 'tool_use' }> }) {
   const [open, setOpen] = useState(false);
   const meta = toolMeta(block.tool);
+
+  // Normalise: stream hook uses `status`, mocks use `running`/`error`
+  const isRunning = block.status === 'running' || !!block.running;
+  const isError   = block.status === 'error'   || !!block.error;
+  // Normalise output: mocks use `output`, stream hook uses `output` (we fixed it)
+  const output    = block.output ?? '';
+
   const preview = block.input.command
     ? String(block.input.command).split('\n')[0].slice(0, 64)
-    : block.input.path ? String(block.input.path)
-    : block.input.url  ? String(block.input.url).replace('https://', '').slice(0, 60)
+    : block.input.path  ? String(block.input.path)
+    : block.input.url   ? String(block.input.url).replace('https://', '').slice(0, 60)
     : block.input.query ? String(block.input.query).slice(0, 60)
     : '';
 
   return (
-    <div className={`rounded-lg border text-[12px] font-mono overflow-hidden ${meta.color} ${block.error ? 'border-danger/40 bg-danger/5 text-danger' : ''}`}>
+    <div className={`rounded-lg border text-[12px] font-mono overflow-hidden transition-colors ${meta.color} ${isError ? 'border-danger/40 bg-danger/5 text-danger' : ''}`}>
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-2 px-3 py-2 hover:bg-black/5 transition-colors text-left"
       >
-        {block.running ? (
+        {isRunning ? (
           <span className="w-4 h-4 border-[1.5px] border-current border-t-transparent rounded-full animate-spin shrink-0 opacity-70" />
         ) : (
           <span className="font-bold w-4 text-center shrink-0 select-none">{meta.icon}</span>
         )}
         <span className="font-semibold">{meta.label}</span>
         <span className="flex-1 truncate opacity-60 font-normal">{preview}</span>
-        {block.durationMs && !block.running && (
+        {block.durationMs && !isRunning && (
           <span className="shrink-0 opacity-40 ml-2">{(block.durationMs / 1000).toFixed(1)}s</span>
         )}
-        {block.running && <span className="shrink-0 text-[10px] opacity-60 ml-2">running…</span>}
-        {!block.running && (
+        {isRunning && <span className="shrink-0 text-[10px] opacity-60 ml-2">running…</span>}
+        {!isRunning && (
           <>
-            <CopyBtn text={block.output} small />
+            <CopyBtn text={output} small />
             <span className="shrink-0 opacity-30 text-[10px]">{open ? '▲' : '▼'}</span>
           </>
         )}
       </button>
 
-      {open && !block.running && (
+      {/* Live partial output while running */}
+      {isRunning && output && (
+        <div className="border-t border-inherit px-3 py-2 max-h-32 overflow-y-auto">
+          <pre className="whitespace-pre-wrap break-all text-[11px] leading-relaxed opacity-60">{output}</pre>
+        </div>
+      )}
+
+      {open && !isRunning && (
         <div className="border-t border-inherit">
           <div className="px-3 py-2 bg-black/5">
             <p className="text-[10px] uppercase tracking-wider opacity-40 mb-1">input</p>
@@ -147,14 +161,16 @@ function ToolBlock({ block }: { block: Extract<MessageBlock, { type: 'tool_use' 
               {JSON.stringify(block.input, null, 2)}
             </pre>
           </div>
-          <div className="px-3 py-2">
-            <p className="text-[10px] uppercase tracking-wider opacity-40 mb-1">
-              output · {block.output.split('\n').length} lines
-            </p>
-            <pre className="whitespace-pre-wrap break-all text-[11px] leading-relaxed opacity-75">
-              {block.output}
-            </pre>
-          </div>
+          {output && (
+            <div className="px-3 py-2">
+              <p className="text-[10px] uppercase tracking-wider opacity-40 mb-1">
+                output · {output.split('\n').length} lines
+              </p>
+              <pre className="whitespace-pre-wrap break-all text-[11px] leading-relaxed opacity-75">
+                {output}
+              </pre>
+            </div>
+          )}
         </div>
       )}
     </div>
