@@ -40,7 +40,6 @@ A task is markdown with YAML frontmatter.
   - `when`: `success` | `failure` | `always` (default: `success`)
   - `targets`: list of gateway targets
     - Telegram: `{ gateway: "telegram", chatId: "..." }` or `chatIds: ["...", ...]`
-    - Discord: `{ gateway: "discord", channelId: "..." }` or `channelIds: ["...", ...]`
 
 ## Examples
 
@@ -72,8 +71,6 @@ output:
   targets:
     - gateway: telegram
       chatId: "123456789"
-    - gateway: discord
-      channelId: "987654321"
 ---
 Prepare a tax filing checklist.
 ```

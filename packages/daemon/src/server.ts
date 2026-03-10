@@ -35,7 +35,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isGatewayProvider(value: unknown): value is GatewayNotificationProvider {
-  return value === 'telegram' || value === 'discord';
+  return value === 'telegram';
 }
 
 function toOptionalString(value: unknown): string | undefined {

@@ -7,7 +7,7 @@
 - repo-managed resources (profiles, skills, extensions, themes, prompts)
 - local runtime state (auth, sessions, daemon state, gateway spools)
 - a wrapper CLI (`pa`) for deterministic profile launches
-- chat gateways (Telegram/Discord) that reuse the same profile/runtime plumbing
+- chat gateway (Telegram) that reuses the same profile/runtime plumbing
 - one shared local daemon (`personal-agentd`) for background orchestration
 
 No symlink sync workflows are required.
@@ -58,7 +58,7 @@ Owns user-facing CLI command surface:
 
 ### `@personal-agent/gateway`
 
-Owns Telegram/Discord transports:
+Owns Telegram transport:
 
 - allowlist access control
 - per-chat/per-channel persisted Pi sessions
@@ -115,9 +115,8 @@ Default root: `~/.local/state/personal-agent`
 4. materialize merged profile artifacts into runtime agent dir
 5. auto-install extension dependencies when missing
 6. decide interactive vs non-interactive Pi launch mode
-7. interactive: launch or attach to a PA-managed tmux workspace, then run Pi inside that workspace with PA-owned tmux config
-8. non-interactive: launch Pi directly with explicit resource args and `PI_CODING_AGENT_DIR`
-9. emit daemon events for direct Pi runs (non-fatal if daemon unavailable)
+7. launch Pi directly with explicit resource args and `PI_CODING_AGENT_DIR`
+8. emit daemon events for direct Pi runs (non-fatal if daemon unavailable)
 
 ## Gateway flow (`pa gateway ... start`)
 

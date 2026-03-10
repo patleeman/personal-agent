@@ -51,7 +51,6 @@ import { readTailLines } from './file-utils.js';
 import { memoryCommand } from './memory.js';
 import { readConfig, setDefaultProfile } from './config.js';
 import { tmuxCommand } from './tmux-command.js';
-import { isInteractivePiInvocation, launchPiInWorkspace } from './tui-workspace.js';
 import {
   accent,
   bullet,
@@ -456,6 +455,14 @@ function readRuntimeSettings(settingsPath: string, fallbackSettings: Record<stri
   }
 }
 
+function mergeResolvedProfileSettings(
+  resolvedProfile: ReturnType<typeof resolveResourceProfile>,
+): Record<string, unknown> {
+  return resolvedProfile.settingsFiles.length > 0
+    ? mergeJsonFiles(resolvedProfile.settingsFiles)
+    : {};
+}
+
 function applySystemThemeOverride(settingsPath: string, settings: Record<string, unknown>): Record<string, unknown> {
   const mappingStatus = getSystemThemeMappingStatus(settings);
   const targetTheme = mappingStatus.selectedTheme;
@@ -515,9 +522,7 @@ async function preparePiLaunch(
   materializeProfileToAgentDir(resolvedProfile, runtime.agentDir);
   ensureExtensionDependencies(resolvedProfile);
 
-  const fallbackSettings = resolvedProfile.settingsFiles.length > 0
-    ? mergeJsonFiles(resolvedProfile.settingsFiles)
-    : {};
+  const fallbackSettings = mergeResolvedProfileSettings(resolvedProfile);
   const settingsPath = join(runtime.agentDir, 'settings.json');
   const runtimeSettings = readRuntimeSettings(settingsPath, fallbackSettings);
   const settings = applySystemThemeOverride(settingsPath, runtimeSettings);
@@ -542,24 +547,8 @@ async function runPi(profileName: string, piArgs: string[]): Promise<number> {
 
   validateStatePathsOutsideRepo(statePaths, resolvedProfile.repoRoot);
 
-  const interactivePiInvocation = isInteractivePiInvocation(piArgs);
-  const directInteractiveMode = process.env.PERSONAL_AGENT_TUI_DIRECT === '1' || Boolean(process.env.TMUX);
-  const useTmuxWorkspace = interactivePiInvocation && !directInteractiveMode;
-
   const piInvocation = ensurePiInstalled(resolvedProfile.repoRoot);
   await maybeStartDaemon();
-
-  if (useTmuxWorkspace) {
-    const prepared = await preparePiLaunch(resolvedProfile, piArgs);
-    return launchPiInWorkspace({
-      cwd: process.cwd(),
-      profileName: resolvedProfile.name,
-      piInvocation,
-      requestedPiArgs: piArgs,
-      launchPiArgs: prepared.args,
-      piEnv: prepared.env,
-    });
-  }
 
   return runPiWithResolvedProfile(resolvedProfile, piArgs, piInvocation);
 }
@@ -1832,14 +1821,10 @@ function formatTaskOutputTargets(task: ParsedTaskDefinition): string {
   }
 
   const parts = task.output.targets.map((target) => {
-    if (target.gateway === 'telegram') {
-      const threadSuffix = target.messageThreadId !== undefined
-        ? `#thread:${target.messageThreadId}`
-        : '';
-      return `telegram:${target.chatId}${threadSuffix}`;
-    }
-
-    return `discord:${target.channelId}`;
+    const threadSuffix = target.messageThreadId !== undefined
+      ? `#thread:${target.messageThreadId}`
+      : '';
+    return `telegram:${target.chatId}${threadSuffix}`;
   });
 
   return `${task.output.when} -> ${parts.join(', ')}`;
@@ -2398,7 +2383,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     {
       name: 'tui',
       usage: 'tui [args...]',
-      description: 'Run pi with profile resources (interactive runs use the PA tmux workspace unless already inside tmux)',
+      description: 'Run pi with profile resources',
       run: runCommand,
     },
     {
@@ -2541,7 +2526,6 @@ Examples:
   pa update
   pa update --repo-only
   pa gateway telegram start
-  pa gateway discord start
   pa gateway service install telegram
   pa daemon
   pa daemon status
@@ -2558,7 +2542,7 @@ Examples:
   pa tmux list
   pa tmux inspect <session>
   pa tmux clean --dry-run
-  pa tmux run code-review --placement pane -- pa -p "review this diff"
+  pa tmux run code-review -- pa -p "review this diff"
 
 `,
     )

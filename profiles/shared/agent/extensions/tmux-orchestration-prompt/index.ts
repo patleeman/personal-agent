@@ -7,8 +7,6 @@ const TMUX_ORCHESTRATION_POLICY = `TMUX_ORCHESTRATION_POLICY
 - Mark agent-managed sessions with tmux options: @pa_agent_session=1, @pa_agent_task=<task-slug>, @pa_agent_log=<log-path>, @pa_agent_cmd=<command>.
 - Prefer pa tmux (run|list|inspect|logs|stop|clean) for session management so non-agent sessions stay hidden.
 - Prefer 'pa tmux run' over raw 'tmux' when launching agent-managed work.
-- When the user asks to open a new pane or wants visible live output, use 'pa tmux run --placement pane'.
-- When running inside a 'pa tui' workspace and placement is not specified, prefer 'pa tmux run --placement auto'.
 - Use raw 'tmux' only for short inspection/debugging, not as the default way to launch managed work.
 - Keep one primary window per session for the main worker; add extra windows only for explicit parallel subtasks.
 - Name sessions/windows to match user-facing task labels so progress reports are easy to map back to requests.

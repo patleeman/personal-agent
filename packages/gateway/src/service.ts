@@ -7,9 +7,9 @@ import { getStateRoot } from '@personal-agent/core';
 import { loadDaemonConfig, resolveDaemonPaths } from '@personal-agent/daemon';
 import { readGatewayConfig, type TelegramStoredConfig } from './config.js';
 
-export type GatewayProvider = 'telegram' | 'discord';
+export type GatewayProvider = 'telegram';
 
-export const SUPPORTED_GATEWAY_PROVIDERS: readonly GatewayProvider[] = ['telegram', 'discord'];
+export const SUPPORTED_GATEWAY_PROVIDERS: readonly GatewayProvider[] = ['telegram'];
 
 export type GatewayServicePlatform = 'launchd' | 'systemd';
 
@@ -135,32 +135,24 @@ function quoteSystemdValue(value: string): string {
 
 function validateProviderSetup(provider: GatewayProvider): string {
   const stored = readGatewayConfig();
-  const providerConfig = provider === 'telegram' ? stored.telegram : stored.discord;
+  const providerConfig = stored.telegram;
 
   if (!providerConfig?.token) {
     throw new Error(`Gateway ${provider} token missing. Run \`pa gateway ${provider} setup\` first.`);
   }
 
-  if (provider === 'telegram') {
-    const telegramConfig = providerConfig as TelegramStoredConfig;
-    const hasAllowlist = Array.isArray(telegramConfig.allowlist) && telegramConfig.allowlist.length > 0;
-    const hasAllowedUsers = Array.isArray(telegramConfig.allowedUserIds) && telegramConfig.allowedUserIds.length > 0;
+  const telegramConfig = providerConfig as TelegramStoredConfig;
+  const hasAllowlist = Array.isArray(telegramConfig.allowlist) && telegramConfig.allowlist.length > 0;
+  const hasAllowedUsers = Array.isArray(telegramConfig.allowedUserIds) && telegramConfig.allowedUserIds.length > 0;
 
-    if (!hasAllowlist && !hasAllowedUsers) {
-      throw new Error(
-        'Gateway telegram allowlist or allowed user IDs missing. ' +
-        'Run `pa gateway telegram setup` first.',
-      );
-    }
-
-    return telegramConfig.workingDirectory ?? homedir();
+  if (!hasAllowlist && !hasAllowedUsers) {
+    throw new Error(
+      'Gateway telegram allowlist or allowed user IDs missing. ' +
+      'Run `pa gateway telegram setup` first.',
+    );
   }
 
-  if (!providerConfig.allowlist || providerConfig.allowlist.length === 0) {
-    throw new Error(`Gateway ${provider} allowlist missing. Run \`pa gateway ${provider} setup\` first.`);
-  }
-
-  return providerConfig.workingDirectory ?? homedir();
+  return telegramConfig.workingDirectory ?? homedir();
 }
 
 function getGatewayLogFile(provider: GatewayProvider): string {

@@ -118,14 +118,11 @@ Examples:
 
 - `TELEGRAM_BOT_TOKEN is required`
 - `PERSONAL_AGENT_TELEGRAM_ALLOWLIST is required`
-- `DISCORD_BOT_TOKEN is required`
-- `PERSONAL_AGENT_DISCORD_ALLOWLIST is required`
 
 Fix via setup:
 
 ```bash
 pa gateway setup telegram
-pa gateway setup discord
 ```
 
 Or provide environment variables directly.
@@ -146,7 +143,6 @@ Inspect status:
 
 ```bash
 pa gateway service status telegram
-pa gateway service status discord
 ```
 
 Then inspect logs:
@@ -237,7 +233,6 @@ Install if needed:
 
 ```bash
 pa gateway service install telegram
-pa gateway service install discord
 ```
 
 ---

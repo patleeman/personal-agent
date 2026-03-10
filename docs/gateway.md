@@ -7,7 +7,6 @@
 Current providers:
 
 - Telegram
-- Discord
 
 The command is registered into `pa` at startup:
 
@@ -22,11 +21,10 @@ pa gateway ...
 ```bash
 pa gateway
 pa gateway help
-pa gateway setup [telegram|discord]
-pa gateway start [telegram|discord]
-pa gateway service [install|status|uninstall|help] [telegram|discord]
+pa gateway setup [telegram]
+pa gateway start [telegram]
+pa gateway service [install|status|uninstall|help] [telegram]
 pa gateway telegram [setup|start|help]
-pa gateway discord [setup|start|help]
 ```
 
 Defaults:
@@ -64,7 +62,6 @@ Use setup instead of manual env export when possible:
 
 ```bash
 pa gateway setup telegram
-pa gateway setup discord
 ```
 
 Setup writes provider token/allowlist/allowed-user-ids/blocked-user-ids/cwd/max-pending/tool-activity/clear-on-new values to `gateway.json`.
@@ -128,29 +125,6 @@ Telegram behavior highlights:
 
 ---
 
-## Discord
-
-Required (setup or env):
-
-- `DISCORD_BOT_TOKEN`
-- `PERSONAL_AGENT_DISCORD_ALLOWLIST` (comma-separated channel IDs)
-
-Optional:
-
-- `PERSONAL_AGENT_DISCORD_CWD`
-- `PERSONAL_AGENT_DISCORD_MAX_PENDING_PER_CHANNEL` (default `20`)
-
-Run:
-
-```bash
-pa gateway discord setup
-pa gateway discord start
-```
-
-Foreground mode stays attached to terminal (`Ctrl+C` to stop).
-
----
-
 ## Background service mode (recommended for 24/7)
 
 Supported platforms:
@@ -161,9 +135,9 @@ Supported platforms:
 Commands:
 
 ```bash
-pa gateway service install [telegram|discord]
-pa gateway service status [telegram|discord]
-pa gateway service uninstall [telegram|discord]
+pa gateway service install [telegram]
+pa gateway service status [telegram]
+pa gateway service uninstall [telegram]
 ```
 
 Notes:
@@ -189,7 +163,7 @@ Telegram persists conversation→session bindings (used by `/fork`) and source-c
 Gateway runs append a gateway-specific system-prompt block before each turn so the model knows:
 
 - it is operating in chat-gateway mode (not TUI)
-- which gateway/provider is active (Telegram or Discord)
+- which gateway/provider is active (Telegram)
 - what gateway features and commands are available
 - how media/file delivery behaves
 - chat-style response rules (concise by default; no code snippets/file paths unless asked)
@@ -299,7 +273,6 @@ Gateway emits non-fatal daemon events:
 Gateway also pulls daemon notifications (`notifications.pull`) and delivers:
 
 - Telegram notifications
-- Discord notifications
 
 This powers scheduled task output routing (`output.targets`).
 
@@ -313,7 +286,6 @@ Disable daemon integration explicitly with:
 
 ## Access control
 
-- Discord: channel allowlist is mandatory.
 - Telegram: chat allowlist is optional (you can start empty and approve rooms as the bot is added).
 - Telegram `allowedUserIds` can restrict bot control to specific Telegram user IDs.
 - Direct messages from `allowedUserIds` work even if their DM chat ID is not pre-allowlisted.
@@ -336,7 +308,6 @@ Run setup:
 
 ```bash
 pa gateway setup telegram
-pa gateway setup discord
 ```
 
 ### Service install says token/access settings missing
@@ -348,6 +319,5 @@ Provider setup must be completed first. Telegram service install requires either
 Increase pending limits only if needed:
 
 - `PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT`
-- `PERSONAL_AGENT_DISCORD_MAX_PENDING_PER_CHANNEL`
 
 For broader incident playbooks, see [Troubleshooting](./troubleshooting.md).

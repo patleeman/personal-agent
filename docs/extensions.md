@@ -72,7 +72,6 @@ This allows extension-specific dependencies to be self-contained.
 - `deferred-resume` — schedules this same TUI session to resume later after a delay
 - `web-tools` — web search/fetch tool integration
 - `tmux-manager` — `/tmux` command + footer status for agent-managed tmux sessions only
-- `fork-pane` — `/fork-pane` command + `Ctrl+Shift+F` shortcut to fork the current conversation into a new PA workspace pane
 - `tmux-orchestration-prompt` — system-prompt tmux orchestration/status policy injection
 
 ---

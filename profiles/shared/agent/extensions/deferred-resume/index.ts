@@ -30,7 +30,7 @@ interface DeferredResumeEntry {
 }
 
 interface GatewayRuntimeContext {
-  provider: 'telegram' | 'discord';
+  provider: 'telegram';
   conversationId: string;
 }
 
@@ -197,7 +197,7 @@ function getGatewayRuntimeContext(sessionManager: object): GatewayRuntimeContext
     return undefined;
   }
 
-  if ((candidate.provider !== 'telegram' && candidate.provider !== 'discord') || !candidate.conversationId?.trim()) {
+  if (candidate.provider !== 'telegram' || !candidate.conversationId?.trim()) {
     return undefined;
   }
 

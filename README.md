@@ -4,14 +4,14 @@ A personal application layer over Pi that keeps:
 
 - **profiles/resources in git** (`profiles/*`)
 - **runtime state local** (`~/.local/state/personal-agent`)
-- **chat gateways** (Telegram + Discord)
+- **chat gateways** (Telegram)
 
 ## Features
 
 - **Profile system** - Layered configs (shared → profile → local) with skills, extensions, themes
 - **`pa tui`** - Launch Pi with layered profile resources and memory policy injection
 - **Daemon** - Background processing for maintenance + scheduled tasks
-- **Gateways** - Telegram and Discord bot integration with per-chat sessions
+- **Gateways** - Telegram bot integration with per-chat sessions
 - **Extensions** - Pi extensions auto-discovered from profiles with dependency auto-install
 
 ## Packages
@@ -20,7 +20,7 @@ A personal application layer over Pi that keeps:
 - `@personal-agent/resources` — profile discovery/materialization + Pi resource args
 - `@personal-agent/daemon` — shared background daemon (`personal-agentd`) with event bus + modules
 - `@personal-agent/cli` — `pa` wrapper command
-- `@personal-agent/gateway` — Telegram + Discord gateways (registered as `pa gateway` command)
+- `@personal-agent/gateway` — Telegram gateway (registered as `pa gateway` command)
 
 ## Documentation
 
@@ -147,18 +147,13 @@ pa tmux clean --dry-run
 pa tmux run code-review -- pa -p "review this diff"
 ```
 
-### Gateway (Telegram/Discord)
+### Gateway (Telegram)
 
 ```bash
 # Setup and run Telegram gateway
 pa gateway setup telegram
 pa gateway telegram start
 pa gateway service install telegram
-
-# Setup and run Discord gateway
-pa gateway setup discord
-pa gateway discord start
-pa gateway service install discord
 
 # Service management
 pa gateway service status telegram
@@ -262,29 +257,6 @@ pa gateway service install telegram
 
 Foreground gateway starts (`pa gateway ... start`) auto-start `personal-agentd` if needed.
 
-### Discord
-
-Required configuration (via setup or env vars):
-
-- `DISCORD_BOT_TOKEN`
-- `PERSONAL_AGENT_DISCORD_ALLOWLIST` (comma-separated channel IDs)
-
-`DISCORD_BOT_TOKEN` and allowlist values may be plain strings or `op://...` 1Password references.
-
-Optional:
-
-- `PERSONAL_AGENT_DISCORD_CWD` (working directory for Pi calls)
-- `PERSONAL_AGENT_DISCORD_MAX_PENDING_PER_CHANNEL` (default: `20`)
-
-Run bridge:
-
-```bash
-pa gateway discord setup
-pa gateway discord start
-# or run as background service (recommended for long-running use)
-pa gateway service install discord
-```
-
 Gateway slash commands include:
 
 - `/status`, `/new` (resets session; on Telegram, optionally best-effort clears recent tracked messages), `/commands`
@@ -316,5 +288,5 @@ See docs:
 - `docs/extensions.md` - extension authoring guide
 - `docs/daemon-architecture.md` - daemon design and event system
 - `docs/tasks.md` - scheduled task schema + runtime behavior
-- `docs/gateway.md` - Telegram/Discord gateway setup
+- `docs/gateway.md` - Telegram gateway setup
 - `docs/troubleshooting.md` - debugging and incident playbooks

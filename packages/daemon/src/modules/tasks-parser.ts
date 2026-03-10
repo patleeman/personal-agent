@@ -41,12 +41,7 @@ export interface ParsedTaskOutputTargetTelegram {
   messageThreadId?: number;
 }
 
-export interface ParsedTaskOutputTargetDiscord {
-  gateway: 'discord';
-  channelId: string;
-}
-
-export type ParsedTaskOutputTarget = ParsedTaskOutputTargetTelegram | ParsedTaskOutputTargetDiscord;
+export type ParsedTaskOutputTarget = ParsedTaskOutputTargetTelegram;
 
 export interface ParsedTaskOutput {
   when: TaskOutputWhen;
@@ -384,14 +379,6 @@ function parseOutputTarget(rawTarget: unknown): ParsedTaskOutputTarget[] {
       gateway: 'telegram' as const,
       chatId,
       ...(messageThreadId !== undefined ? { messageThreadId } : {}),
-    }));
-  }
-
-  if (gateway === 'discord') {
-    const channelIds = parseOutputDestinationId(rawTarget, 'channelId', 'channelIds', 'discord');
-    return channelIds.map((channelId) => ({
-      gateway: 'discord' as const,
-      channelId,
     }));
   }
 

@@ -20,8 +20,6 @@ extensions/
 ├── deferred-resume/
 │   └── index.ts
 ├── exit-alias.ts
-├── fork-pane/
-│   └── index.ts
 ├── memory/
 │   └── index.ts
 ├── pa-header/

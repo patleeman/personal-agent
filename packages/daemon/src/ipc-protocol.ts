@@ -69,7 +69,7 @@ function hasId(value: Record<string, unknown>): value is Record<string, unknown>
 }
 
 function isGatewayNotificationProvider(value: unknown): value is GatewayNotificationProvider {
-  return value === 'telegram' || value === 'discord';
+  return value === 'telegram';
 }
 
 function readOptionalLimit(value: unknown): number | undefined {
@@ -105,7 +105,7 @@ export function parseRequest(raw: string): DaemonRequest {
 
   if (parsed.type === 'notifications.pull') {
     if (!isGatewayNotificationProvider(parsed.gateway)) {
-      throw new Error('notifications.pull gateway must be telegram or discord');
+      throw new Error('notifications.pull gateway must be telegram');
     }
 
     return {

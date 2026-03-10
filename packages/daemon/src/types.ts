@@ -64,7 +64,7 @@ export interface EmitResult {
   reason?: string;
 }
 
-export type GatewayNotificationProvider = 'telegram' | 'discord';
+export type GatewayNotificationProvider = 'telegram';
 
 export interface GatewayNotification {
   id: string;

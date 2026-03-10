@@ -109,11 +109,7 @@ pa gateway ...
 
 Notes:
 
-- Interactive `pa tui` runs Pi inside a PA-managed tmux workspace with a repo-managed tmux config when launched from a normal terminal.
-- If that workspace is already attached in another terminal, `pa tui` creates a grouped tmux session with a fresh Pi window so the two terminals do not mirror the same active window.
-- If `pa tui` is launched from inside an existing tmux session, it skips workspace attach and runs Pi directly in the current pane instead of nesting tmux.
-- Workspace shortcuts are exposed via a `Ctrl+Space` tmux shortcut mode with a quick hint overlay, including `?` for the help popup and `t` for managed task status.
-- Non-interactive Pi modes (`-p`, `--mode json`, `--mode rpc`, `--export`, etc.) still run Pi directly without the tmux workspace wrapper.
+- `pa tui` launches Pi directly with the resolved profile resources and runtime state.
 - `pa daemon` prints daemon command help.
 - `pa tasks` prints detailed tasks command help.
 - `pa memory` prints memory-doc command help.
@@ -159,30 +155,12 @@ pa tmux inspect <session> [--json]
 pa tmux logs <session> [--tail <n>]
 pa tmux stop <session>
 pa tmux send <session> <command>
-pa tmux run <task-slug> [--cwd <path>] [--placement <auto|background|pane>] [--notify-on-complete] [--notify-context <value>] [--] <command...>
+pa tmux run <task-slug> [--cwd <path>] [--notify-on-complete] [--notify-context <value>] [--] <command...>
 pa tmux clean [--dry-run] [--json]
 ```
 
 `pa tmux` intentionally ignores non-agent sessions and only operates on sessions tagged with `@pa_agent_session=1`.
-`pa tmux run --placement auto` opens a live log pane when invoked from a `pa tui` workspace and falls back to background mode elsewhere.
 `pa tmux clean` removes stale managed-session log files after sessions have completed.
-
-### `pa tui` workspace shortcuts
-
-Inside the managed workspace, press `Ctrl+Space`, then press:
-
-- `?` — shortcut helper popup
-- `t` — managed tmux task popup
-- `-` / `|` — split below / split right
-- `h` `j` `k` `l` — move between panes
-- `[` / `]` — previous / next window
-- `1` … `9` — switch to window 1 … 9
-- `H` `J` `K` `L` — resize panes (repeatable for ~1s after the first press)
-- `Tab` — jump to previous pane
-- `z` — zoom active pane
-- `w` — close pane with confirmation
-- `n` — new tmux window in current directory
-- `r` — reload PA tmux config
 
 ---
 
@@ -220,8 +198,7 @@ When `pa` runs Pi (`pa`, `pa tui`, or `pa <pi args>`), it:
 7. builds explicit Pi resource args (`--skill`, `-e`, `--prompt-template`, `--theme`)
 8. applies optional system dark/light theme mapping (`themeDark`/`themeLight`)
 9. injects default model/thinking from settings if omitted
-10. for interactive runs, launches or attaches to a PA-managed tmux workspace and starts Pi inside it
-11. for non-interactive runs, launches Pi directly with `PI_CODING_AGENT_DIR` pointed at runtime agent dir
+10. launches Pi directly with `PI_CODING_AGENT_DIR` pointed at runtime agent dir
 
 ---
 

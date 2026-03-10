@@ -101,11 +101,6 @@ beforeEach(() => {
       allowlist: ['123'],
       workingDirectory: '/work/telegram',
     },
-    discord: {
-      token: 'discord-token',
-      allowlist: ['chan-1'],
-      workingDirectory: '/work/discord',
-    },
   });
 
   mocks.spawnSync.mockReturnValue({ status: 0, stdout: '', stderr: '' });
@@ -262,28 +257,28 @@ describe('gateway service management', () => {
   it('installs and uninstalls systemd service units on linux', () => {
     setPlatform('linux');
 
-    const installed = installGatewayService('discord');
+    const installed = installGatewayService('telegram');
 
     expect(installed).toMatchObject({
       platform: 'systemd',
-      provider: 'discord',
-      identifier: 'personal-agent-gateway-discord.service',
-      manifestPath: '/Users/tester/.config/systemd/user/personal-agent-gateway-discord.service',
+      provider: 'telegram',
+      identifier: 'personal-agent-gateway-telegram.service',
+      manifestPath: '/Users/tester/.config/systemd/user/personal-agent-gateway-telegram.service',
     });
 
-    const manifestWrite = mocks.writeFileSync.mock.calls.find((call) => String(call[0]).includes('gateway-discord.service'));
+    const manifestWrite = mocks.writeFileSync.mock.calls.find((call) => String(call[0]).includes('gateway-telegram.service'));
     expect(String(manifestWrite?.[1] ?? '')).toContain('Environment=PERSONAL_AGENT_GATEWAY_PROVIDER');
 
-    const removed = uninstallGatewayService('discord');
+    const removed = uninstallGatewayService('telegram');
     expect(removed).toMatchObject({
       platform: 'systemd',
-      provider: 'discord',
-      identifier: 'personal-agent-gateway-discord.service',
+      provider: 'telegram',
+      identifier: 'personal-agent-gateway-telegram.service',
     });
 
     const commands = mocks.spawnSync.mock.calls.map((call) => `${call[0]} ${(call[1] as string[]).join(' ')}`);
-    expect(commands).toContain('systemctl --user enable --now personal-agent-gateway-discord.service');
-    expect(commands).toContain('systemctl --user disable --now personal-agent-gateway-discord.service');
+    expect(commands).toContain('systemctl --user enable --now personal-agent-gateway-telegram.service');
+    expect(commands).toContain('systemctl --user disable --now personal-agent-gateway-telegram.service');
   });
 
   it('supports managed daemon service install/uninstall/status and restart-if-installed', () => {

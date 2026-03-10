@@ -88,12 +88,11 @@ Override file location with:
 
 ### `~/.config/personal-agent/gateway.json`
 
-Stores setup-generated Telegram/Discord gateway values.
+Stores setup-generated Telegram gateway values.
 
 Created/updated by:
 
 - `pa gateway setup telegram`
-- `pa gateway setup discord`
 
 Override file location with:
 
@@ -150,12 +149,6 @@ Telegram:
 - `PERSONAL_AGENT_TELEGRAM_TOOL_ACTIVITY_STREAM` (default `false`)
 - `PERSONAL_AGENT_TELEGRAM_CLEAR_RECENT_MESSAGES_ON_NEW` (default `true`)
 
-Discord:
-
-- `DISCORD_BOT_TOKEN`
-- `PERSONAL_AGENT_DISCORD_ALLOWLIST`
-- `PERSONAL_AGENT_DISCORD_CWD`
-- `PERSONAL_AGENT_DISCORD_MAX_PENDING_PER_CHANNEL` (default `20`)
 
 ---
 

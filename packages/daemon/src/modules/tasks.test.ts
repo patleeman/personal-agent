@@ -334,8 +334,8 @@ at: "2026-03-02T10:00:00.000Z"
 output:
   when: failure
   targets:
-    - gateway: discord
-      channelId: "channel-1"
+    - gateway: telegram
+      chatId: "channel-1"
 ---
 This run should fail
 `);
@@ -380,7 +380,7 @@ This run should fail
     const notifications = published.filter((event) => event.type === 'gateway.notification');
     expect(notifications.length).toBe(1);
     expect(notifications[0]?.payload).toMatchObject({
-      gateway: 'discord',
+      gateway: 'telegram',
       destinationId: 'channel-1',
       taskId: 'failing',
       status: 'failed',

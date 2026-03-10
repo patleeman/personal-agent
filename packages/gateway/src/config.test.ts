@@ -54,9 +54,6 @@ describe('gateway config', () => {
         toolActivityStream: true,
         clearRecentMessagesOnNew: false,
       },
-      discord: {
-        allowlist: [],
-      },
     }));
 
     expect(readGatewayConfig()).toEqual({
@@ -71,7 +68,6 @@ describe('gateway config', () => {
         toolActivityStream: true,
         clearRecentMessagesOnNew: false,
       },
-      discord: undefined,
     });
   });
 
@@ -79,9 +75,9 @@ describe('gateway config', () => {
     const file = join(tempDir('pa-gateway-'), 'gateway.json');
     process.env.PERSONAL_AGENT_GATEWAY_CONFIG_FILE = file;
 
-    writeGatewayConfig({ profile: 'datadog', telegram: { token: 'x', allowlist: ['1'] } });
+    writeGatewayConfig({ profile: 'assistant', telegram: { token: 'x', allowlist: ['1'] } });
 
     const saved = JSON.parse(readFileSync(file, 'utf-8')) as { profile: string };
-    expect(saved.profile).toBe('datadog');
+    expect(saved.profile).toBe('assistant');
   });
 });

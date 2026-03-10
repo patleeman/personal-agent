@@ -22,7 +22,6 @@
     "@personal-agent/core": "*",
     "@personal-agent/daemon": "*",
     "@personal-agent/resources": "*",
-    "discord.js": "^14.25.1",
     "node-telegram-bot-api": "^0.66.0"
   },
   "devDependencies": {

@@ -14,7 +14,6 @@ import { basename, dirname, extname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { spawnSync } from 'child_process';
 import TelegramBot from 'node-telegram-bot-api';
-import * as DiscordJs from 'discord.js';
 import {
   DefaultResourceLoader,
   SessionManager,
@@ -55,7 +54,6 @@ import {
 } from './secret-resolver.js';
 import { parseAllowlist } from './allowlist.js';
 import {
-  isGatewayProvider,
   parseGatewayCliArgs,
   printGatewayHelp,
   printGatewayServiceHelp,
@@ -63,6 +61,15 @@ import {
   runGatewaySetup,
 } from './cli-helpers.js';
 import { setGatewayExtensionRuntimeContext } from './extensions/runtime-context.js';
+import {
+  buildTelegramTmuxRunCliArgs,
+  parseTelegramTmuxRunRequest,
+  parseTmuxRunCliOutput,
+  runGatewayTmuxCli,
+  runTelegramTmuxCommand,
+  type TelegramTmuxNotifyMode,
+  type TelegramTmuxRunRequest,
+} from './telegram-tmux.js';
 
 export {
   SUPPORTED_GATEWAY_PROVIDERS,
@@ -138,14 +145,6 @@ export interface TelegramBridgeConfig {
   maxPendingPerChat?: number;
   toolActivityStream?: boolean;
   clearRecentMessagesOnNew?: boolean;
-}
-
-export interface DiscordBridgeConfig {
-  token: string;
-  profile: string;
-  allowlist: Set<string>;
-  workingDirectory: string;
-  maxPendingPerChannel?: number;
 }
 
 type TelegramParseMode = 'HTML';
@@ -482,19 +481,6 @@ type HandleTelegramRoomAdminCommandFn = (input: {
   args: string;
 }) => Promise<string>;
 
-export type TelegramTmuxForkMode = 'none' | 'auto' | 'new-topic' | 'reuse-topic';
-export type TelegramTmuxNotifyMode = 'none' | 'message' | 'resume';
-
-export interface TelegramTmuxRunRequest {
-  taskSlug: string;
-  commandText: string;
-  cwd?: string;
-  forkMode: TelegramTmuxForkMode;
-  notifyMode: TelegramTmuxNotifyMode;
-  group: string;
-  topic: string;
-}
-
 type HandleTelegramTmuxCommandFn = (input: {
   args: string;
 }) => Promise<string>;
@@ -578,62 +564,8 @@ export interface QueuedTelegramMessageHandler {
   waitForIdle: (chatId?: string) => Promise<void>;
 }
 
-export interface DiscordMessageLike {
-  channelId: string;
-  content?: string;
-  authorIsBot?: boolean;
-  authorUsername?: string;
-  authorId?: string;
-  sendMessage: SendTextFn;
-  sendTyping: () => Promise<unknown>;
-}
-
-interface DiscordInboundMessageLike {
-  channel: unknown;
-  channelId: string;
-  content: string;
-  author?: {
-    bot?: boolean;
-    username?: string;
-    id?: string;
-  };
-}
-
-export interface CreateDiscordMessageHandlerOptions {
-  allowlist: Set<string>;
-  profileName: string;
-  agentDir: string;
-  discordSessionDir: string;
-  workingDirectory: string;
-  createConversationController: CreateConversationControllerFn;
-  commandHelpText?: string;
-  skillsHelpText?: string;
-  sessionFileExists?: (path: string) => boolean;
-  removeSessionFile?: (path: string) => Promise<void>;
-  maxPendingPerChannel?: number;
-  modelCommands?: ModelCommandSupport;
-  listScheduledTasks?: ListScheduledTasksFn;
-  resolveConversationSessionFile?: (input: {
-    conversationId: string;
-    defaultSessionFile: string;
-  }) => string;
-  setConversationSessionFile?: (input: {
-    conversationId: string;
-    sessionFile: string;
-  }) => void;
-  clearConversationSessionFile?: (input: {
-    conversationId: string;
-  }) => void;
-}
-
-export interface QueuedDiscordMessageHandler {
-  handleMessage: (message: DiscordMessageLike) => void;
-  waitForIdle: (channelId?: string) => Promise<void>;
-}
-
 const DEFAULT_PI_TIMEOUT_MS = 1_800_000;
 const DEFAULT_MAX_PENDING_PER_CHAT = 20;
-const DEFAULT_MAX_PENDING_PER_CHANNEL = 20;
 const TYPING_HEARTBEAT_INTERVAL_MS = 4_000;
 const DEFAULT_TELEGRAM_RETRY_ATTEMPTS = 3;
 const DEFAULT_TELEGRAM_RETRY_BASE_DELAY_MS = 300;
@@ -677,47 +609,7 @@ function gatewayKeyValue(key: string, value: string | number): string {
   return `  ${key}: ${value}`;
 }
 
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  if (!value || typeof value !== 'object') {
-    return undefined;
-  }
-
-  return value as Record<string, unknown>;
-}
-
-function resolveDiscordIntentFlags(): number[] {
-  const discordModule = asRecord(DiscordJs);
-  const bits = asRecord(discordModule?.GatewayIntentBits);
-  if (bits) {
-    return [bits.Guilds, bits.GuildMessages, bits.DirectMessages, bits.MessageContent]
-      .filter((value): value is number => typeof value === 'number');
-  }
-
-  const legacyIntents = asRecord(discordModule?.Intents);
-  const legacyFlags = asRecord(legacyIntents?.FLAGS);
-  if (legacyFlags) {
-    return [
-      legacyFlags.GUILDS,
-      legacyFlags.GUILD_MESSAGES,
-      legacyFlags.DIRECT_MESSAGES,
-      legacyFlags.MESSAGE_CONTENT,
-    ].filter((value): value is number => typeof value === 'number');
-  }
-
-  return [];
-}
-
-function resolveDiscordChannelPartial(): unknown {
-  const discordModule = asRecord(DiscordJs);
-  const partials = asRecord(discordModule?.Partials);
-  if (!partials) {
-    return undefined;
-  }
-
-  return partials.Channel ?? partials.CHANNEL;
-}
-
-export type GatewayProvider = 'telegram' | 'discord';
+export type GatewayProvider = 'telegram';
 
 type ResolvedProfile = ReturnType<typeof resolveResourceProfile>;
 type PiAgentSession = Awaited<ReturnType<typeof createAgentSession>>['session'];
@@ -893,9 +785,6 @@ const DEFAULT_TELEGRAM_COMMANDS: TelegramCommandDefinition[] = [
   { command: 'fork', description: 'Fork to new topic (usage: /fork [topic name])' },
   { command: 'resume', description: 'Resume a saved conversation (usage: /resume [index|id|file])' },
 ];
-
-const DEFAULT_DISCORD_COMMANDS: TelegramCommandDefinition[] = DEFAULT_TELEGRAM_COMMANDS
-  .filter((command) => command.command !== 'fork' && command.command !== 'clear');
 
 function toTelegramCommandName(rawCommand: string): string | undefined {
   let value = rawCommand.trim().toLowerCase();
@@ -1411,24 +1300,6 @@ function parseTelegramConversationFromSessionFileName(
   };
 }
 
-function parseDiscordConversationFromSessionFileName(
-  sessionFileName: string,
-): { conversationId: string; label: string } | undefined {
-  if (!sessionFileName.endsWith('.jsonl')) {
-    return undefined;
-  }
-
-  const conversationId = sessionFileName.slice(0, -'.jsonl'.length).trim();
-  if (conversationId.length === 0) {
-    return undefined;
-  }
-
-  return {
-    conversationId,
-    label: `channel ${conversationId}`,
-  };
-}
-
 function buildResumeConversationOptions(input: {
   sessionDir: string;
   currentSessionFile: string;
@@ -1627,393 +1498,6 @@ function normalizeTelegramCommandText(text: string): {
 function gatewayTaskListUsageText(): string {
   return `Usage: /tasks [all|${GATEWAY_TASK_STATUS_FILTERS.join('|')}]`;
 }
-
-function gatewayTmuxUsageText(): string {
-  return [
-    'Usage: /tmux <subcommand>',
-    '',
-    'Subcommands:',
-    '- /tmux list',
-    '- /tmux inspect <session>',
-    '- /tmux logs <session> [tail=<n>]',
-    '- /tmux stop <session>',
-    '- /tmux send <session> -- <command>',
-    '- /tmux run <task-slug> [cwd=<path>] [fork=<none|auto|new-topic|reuse-topic>] [notify=<none|message|resume>] [group=<id|auto>] [topic=<name|auto>] -- <command>',
-    '- /tmux clean [dry-run]',
-  ].join('\n');
-}
-
-function parseTelegramTmuxRunRequest(rawArgs: string):
-  | { kind: 'pass' }
-  | { kind: 'invalid'; message: string }
-  | { kind: 'run'; value: TelegramTmuxRunRequest } {
-  const trimmed = rawArgs.trim();
-  if (trimmed.length === 0) {
-    return { kind: 'pass' };
-  }
-
-  const delimiterMatch = trimmed.match(/^(.*?)(?:\s+--\s+)([\s\S]+)$/);
-  const headText = delimiterMatch?.[1]?.trim() ?? trimmed;
-  const commandText = delimiterMatch?.[2]?.trim();
-  const tokens = headText.split(/\s+/).filter((token) => token.length > 0);
-  const subcommand = (tokens[0] ?? '').toLowerCase();
-
-  if (subcommand !== 'run') {
-    return { kind: 'pass' };
-  }
-
-  if (!commandText) {
-    return {
-      kind: 'invalid',
-      message: `Usage: /tmux run <task-slug> [cwd=<path>] [fork=<none|auto|new-topic|reuse-topic>] [notify=<none|message|resume>] [group=<id|auto>] [topic=<name|auto>] -- <command>\n\n${gatewayTmuxUsageText()}`,
-    };
-  }
-
-  const taskSlug = tokens[1];
-  if (!taskSlug) {
-    return {
-      kind: 'invalid',
-      message: `Usage: /tmux run <task-slug> [cwd=<path>] [fork=<none|auto|new-topic|reuse-topic>] [notify=<none|message|resume>] [group=<id|auto>] [topic=<name|auto>] -- <command>\n\n${gatewayTmuxUsageText()}`,
-    };
-  }
-
-  let cwd: string | undefined;
-  let forkMode: TelegramTmuxForkMode = 'none';
-  let notifyMode: TelegramTmuxNotifyMode = 'message';
-  let group = 'auto';
-  let topic = 'auto';
-
-  for (let index = 2; index < tokens.length; index += 1) {
-    const token = tokens[index] as string;
-
-    if (token === '--cwd') {
-      const next = tokens[index + 1];
-      if (!next) {
-        return {
-          kind: 'invalid',
-          message: `Usage: /tmux run <task-slug> [cwd=<path>] [fork=<none|auto|new-topic|reuse-topic>] [notify=<none|message|resume>] [group=<id|auto>] [topic=<name|auto>] -- <command>\n\n${gatewayTmuxUsageText()}`,
-        };
-      }
-
-      cwd = next;
-      index += 1;
-      continue;
-    }
-
-    if (token.startsWith('cwd=')) {
-      const value = token.slice('cwd='.length).trim();
-      if (value.length === 0) {
-        return {
-          kind: 'invalid',
-          message: `CWD cannot be empty.\n\n${gatewayTmuxUsageText()}`,
-        };
-      }
-
-      cwd = value;
-      continue;
-    }
-
-    if (token.startsWith('fork=')) {
-      const value = token.slice('fork='.length).trim().toLowerCase();
-      if (value === 'none' || value === 'auto' || value === 'new-topic' || value === 'reuse-topic') {
-        forkMode = value;
-        continue;
-      }
-
-      return {
-        kind: 'invalid',
-        message: `Invalid fork mode: ${value}. Use one of none, auto, new-topic, reuse-topic.\n\n${gatewayTmuxUsageText()}`,
-      };
-    }
-
-    if (token.startsWith('notify=')) {
-      const value = token.slice('notify='.length).trim().toLowerCase();
-      if (value === 'none' || value === 'message' || value === 'resume') {
-        notifyMode = value;
-        continue;
-      }
-
-      return {
-        kind: 'invalid',
-        message: `Invalid notify mode: ${value}. Use one of none, message, resume.\n\n${gatewayTmuxUsageText()}`,
-      };
-    }
-
-    if (token.startsWith('group=')) {
-      const value = token.slice('group='.length).trim();
-      if (value.length === 0) {
-        return {
-          kind: 'invalid',
-          message: `Group cannot be empty.\n\n${gatewayTmuxUsageText()}`,
-        };
-      }
-
-      group = value;
-      continue;
-    }
-
-    if (token.startsWith('topic=')) {
-      const value = token.slice('topic='.length).trim();
-      if (value.length === 0) {
-        return {
-          kind: 'invalid',
-          message: `Topic cannot be empty.\n\n${gatewayTmuxUsageText()}`,
-        };
-      }
-
-      topic = value;
-      continue;
-    }
-
-    return {
-      kind: 'invalid',
-      message: `Unknown /tmux run option: ${token}.\n\n${gatewayTmuxUsageText()}`,
-    };
-  }
-
-  return {
-    kind: 'run',
-    value: {
-      taskSlug,
-      commandText,
-      cwd,
-      forkMode,
-      notifyMode,
-      group,
-      topic,
-    },
-  };
-}
-
-function buildTelegramTmuxRunCliArgs(run: TelegramTmuxRunRequest): string[] {
-  const cliArgs = ['run', run.taskSlug];
-
-  if (run.cwd && run.cwd.length > 0) {
-    cliArgs.push('--cwd', run.cwd);
-  }
-
-  if (run.notifyMode !== 'none') {
-    cliArgs.push('--notify-on-complete');
-  }
-
-  cliArgs.push('--', 'sh', '-lc', run.commandText);
-  return cliArgs;
-}
-
-function parseTmuxRunCliOutput(output: string): { sessionName?: string; logPath?: string } {
-  const sessionMatch = output.match(/^\s*Session(?:\s*:\s*|\s+[·.:-]+\s+)(.+)$/m);
-  const logMatch = output.match(/^\s*Log(?:\s*:\s*|\s+[·.:-]+\s+)(.+)$/m);
-
-  return {
-    sessionName: sessionMatch?.[1]?.trim(),
-    logPath: logMatch?.[1]?.trim(),
-  };
-}
-
-function parseGatewayTmuxCommand(rawArgs: string): { cliArgs?: string[]; message?: string } {
-  const trimmed = rawArgs.trim();
-  if (trimmed.length === 0 || trimmed.toLowerCase() === 'help') {
-    return { message: gatewayTmuxUsageText() };
-  }
-
-  const delimiterMatch = trimmed.match(/^(.*?)(?:\s+--\s+)([\s\S]+)$/);
-  const headText = delimiterMatch?.[1]?.trim() ?? trimmed;
-  const commandText = delimiterMatch?.[2]?.trim();
-  const tokens = headText.split(/\s+/).filter((token) => token.length > 0);
-  const subcommand = (tokens[0] ?? '').toLowerCase();
-
-  const invalidArgs = (detail: string): { message: string } => ({
-    message: `${detail}\n\n${gatewayTmuxUsageText()}`,
-  });
-
-  if (subcommand === 'list') {
-    if (tokens.length !== 1) {
-      return invalidArgs('Usage: /tmux list');
-    }
-
-    return { cliArgs: ['list'] };
-  }
-
-  if (subcommand === 'inspect') {
-    if (tokens.length !== 2) {
-      return invalidArgs('Usage: /tmux inspect <session>');
-    }
-
-    return { cliArgs: ['inspect', tokens[1] as string] };
-  }
-
-  if (subcommand === 'logs') {
-    if (tokens.length < 2 || tokens.length > 3) {
-      return invalidArgs('Usage: /tmux logs <session> [tail=<n>]');
-    }
-
-    const sessionName = tokens[1] as string;
-    const cliArgs = ['logs', sessionName];
-
-    if (tokens.length === 3) {
-      const tailToken = tokens[2] as string;
-      const rawTail = tailToken.startsWith('tail=')
-        ? tailToken.slice('tail='.length)
-        : tailToken;
-      const tail = Number.parseInt(rawTail, 10);
-
-      if (!Number.isFinite(tail) || tail <= 0) {
-        return invalidArgs('Tail must be a positive integer.');
-      }
-
-      cliArgs.push('--tail', String(tail));
-    }
-
-    return { cliArgs };
-  }
-
-  if (subcommand === 'stop') {
-    if (tokens.length !== 2) {
-      return invalidArgs('Usage: /tmux stop <session>');
-    }
-
-    return { cliArgs: ['stop', tokens[1] as string] };
-  }
-
-  if (subcommand === 'send') {
-    if (tokens.length !== 2 || !commandText) {
-      return invalidArgs('Usage: /tmux send <session> -- <command>');
-    }
-
-    return {
-      cliArgs: ['send', tokens[1] as string, commandText],
-    };
-  }
-
-  if (subcommand === 'run') {
-    if (tokens.length < 2 || !commandText) {
-      return invalidArgs('Usage: /tmux run <task-slug> [cwd=<path>] -- <command>');
-    }
-
-    const taskSlug = tokens[1] as string;
-    const cliArgs = ['run', taskSlug];
-
-    if (tokens.length > 2) {
-      let cwdArg: string | undefined;
-
-      if (tokens.length === 3 && (tokens[2] as string).startsWith('cwd=')) {
-        cwdArg = (tokens[2] as string).slice('cwd='.length);
-      } else if (tokens.length === 4 && tokens[2] === '--cwd') {
-        cwdArg = tokens[3] as string;
-      } else {
-        return invalidArgs('Usage: /tmux run <task-slug> [cwd=<path>] -- <command>');
-      }
-
-      if (!cwdArg || cwdArg.length === 0) {
-        return invalidArgs('CWD cannot be empty.');
-      }
-
-      cliArgs.push('--cwd', cwdArg);
-    }
-
-    cliArgs.push('--', 'sh', '-lc', commandText);
-    return { cliArgs };
-  }
-
-  if (subcommand === 'clean') {
-    if (tokens.length === 1) {
-      return { cliArgs: ['clean'] };
-    }
-
-    if (tokens.length === 2 && (tokens[1] === 'dry-run' || tokens[1] === '--dry-run')) {
-      return { cliArgs: ['clean', '--dry-run'] };
-    }
-
-    return invalidArgs('Usage: /tmux clean [dry-run]');
-  }
-
-  return invalidArgs(`Unknown /tmux subcommand: ${subcommand}`);
-}
-
-const ANSI_ESCAPE_SEQUENCE_REGEX = new RegExp(`${String.fromCharCode(27)}\\[[0-9;?]*[ -/]*[@-~]`, 'g');
-
-function normalizeGatewayTerminalOutput(value: string): string {
-  return value
-    .replace(ANSI_ESCAPE_SEQUENCE_REGEX, '')
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .trim();
-}
-
-function resolveGatewayCliEntryPath(): string | undefined {
-  const gatewayModulePath = fileURLToPath(import.meta.url);
-  const candidate = resolve(dirname(gatewayModulePath), '../../cli/dist/index.js');
-  return existsSync(candidate) ? candidate : undefined;
-}
-
-const GATEWAY_TMUX_CLI_MAX_BUFFER_BYTES = 20 * 1024 * 1024;
-
-function runGatewayTmuxCli(tmuxArgs: string[], workingDirectory: string): { ok: boolean; output: string } {
-  const cliEntryPath = resolveGatewayCliEntryPath();
-  const command = cliEntryPath ? process.execPath : 'pa';
-  const args = cliEntryPath
-    ? [cliEntryPath, 'tmux', ...tmuxArgs]
-    : ['tmux', ...tmuxArgs];
-
-  const result = spawnSync(command, args, {
-    cwd: workingDirectory,
-    encoding: 'utf-8',
-    maxBuffer: GATEWAY_TMUX_CLI_MAX_BUFFER_BYTES,
-  });
-
-  const stdout = normalizeGatewayTerminalOutput(result.stdout ?? '');
-  const stderr = normalizeGatewayTerminalOutput(result.stderr ?? '');
-  const output = [stdout, stderr].filter((value) => value.length > 0).join('\n');
-
-  if (result.error) {
-    const error = result.error as NodeJS.ErrnoException;
-
-    if (error.code === 'ENOBUFS') {
-      const maxBufferMb = Math.floor(GATEWAY_TMUX_CLI_MAX_BUFFER_BYTES / (1024 * 1024));
-      const bufferMessage = `Gateway /tmux output exceeded ${maxBufferMb}MB. Try narrowing the command output.`;
-
-      return {
-        ok: false,
-        output: output.length > 0 ? `${output}\n\n${bufferMessage}` : bufferMessage,
-      };
-    }
-
-    return {
-      ok: false,
-      output: output.length > 0 ? output : error.message,
-    };
-  }
-
-  if ((result.status ?? 1) !== 0) {
-    return {
-      ok: false,
-      output: output.length > 0 ? output : `tmux command failed with exit code ${String(result.status ?? 1)}.`,
-    };
-  }
-
-  return {
-    ok: true,
-    output: output.length > 0 ? output : 'Done.',
-  };
-}
-
-
-const runTelegramTmuxCommand = async (input: {
-  args: string;
-  workingDirectory: string;
-}): Promise<string> => {
-  const parsed = parseGatewayTmuxCommand(input.args);
-  if (!parsed.cliArgs) {
-    return parsed.message ?? gatewayTmuxUsageText();
-  }
-
-  const result = runGatewayTmuxCli(parsed.cliArgs, input.workingDirectory);
-  if (!result.ok) {
-    return `Unable to run /tmux command: ${result.output}`;
-  }
-
-  return result.output;
-};
 
 function parseGatewayTaskStatusFilter(rawArgs: string): GatewayTaskStatusFilter | undefined {
   const trimmed = rawArgs.trim();
@@ -2974,7 +2458,7 @@ async function createGatewayAgentSession(options: {
   agentDir: string;
   cwd: string;
   sessionFile: string;
-  provider?: 'telegram' | 'discord';
+  provider?: 'telegram';
   conversationId?: string;
 }): Promise<PiAgentSession> {
   const settingsManager = buildGatewaySettingsManager(options.profile, options.cwd, options.agentDir);
@@ -3278,7 +2762,7 @@ async function runPiPrintPrompt(options: RunPiPrintPromptOptions): Promise<strin
 }
 
 interface PersistentConversationControllerOptions {
-  provider: 'telegram' | 'discord';
+  provider: 'telegram';
   conversationId: string;
   profile: ResolvedProfile;
   agentDir: string;
@@ -3330,7 +2814,7 @@ function delay(ms: number): Promise<void> {
 }
 
 class PersistentConversationController implements GatewayConversationController {
-  private readonly provider: 'telegram' | 'discord';
+  private readonly provider: 'telegram';
   private readonly conversationId: string;
   private readonly profile: ResolvedProfile;
   private readonly agentDir: string;
@@ -4642,11 +4126,11 @@ function createTelegramToolActivityStreamer(options: TelegramToolActivityStreame
 }
 
 export interface FlushGatewayNotificationsOptions {
-  gateway: 'telegram' | 'discord';
+  gateway: 'telegram';
   limit?: number;
   deliverNotification: (notification: GatewayNotification) => Promise<void>;
   pullNotifications?: (input: {
-    gateway: 'telegram' | 'discord';
+    gateway: 'telegram';
     limit?: number;
   }) => Promise<GatewayNotification[]>;
   requeueNotification?: (notification: GatewayNotification) => Promise<void>;
@@ -8989,750 +8473,6 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
   logSystem('telegram', `Bridge started for profile=${effectiveConfig.profile}`);
 }
 
-async function processDiscordMessage(
-  options: CreateDiscordMessageHandlerOptions,
-  message: DiscordMessageLike,
-  controllers: Map<string, Promise<GatewayConversationController>>,
-  registerRunTask: (task: Promise<void>) => void,
-): Promise<void> {
-  if (message.authorIsBot) {
-    return;
-  }
-
-  const channelId = message.channelId;
-
-  if (!options.allowlist.has(channelId)) {
-    await message.sendMessage('This channel is not allowed.');
-    return;
-  }
-
-  const text = message.content?.trim();
-  if (!text) {
-    await message.sendMessage('Please send text messages only.');
-    return;
-  }
-
-  logIncomingMessage('discord', channelId, message.authorUsername, text);
-
-  const defaultSessionFile = join(options.discordSessionDir, `${channelId}.jsonl`);
-  const sessionFile = options.resolveConversationSessionFile
-    ? options.resolveConversationSessionFile({
-      conversationId: channelId,
-      defaultSessionFile,
-    })
-    : defaultSessionFile;
-  const sessionFileExists = options.sessionFileExists ?? existsSync;
-  const removeSessionFile = options.removeSessionFile ?? ((path: string) => rm(path, { force: true }));
-
-  const normalized = normalizeTelegramCommandText(text);
-  const command = normalized.command;
-
-  const modelCommandHandled = await handleModelCommand({
-    conversationId: channelId,
-    conversationLabel: 'channel',
-    command,
-    args: normalized.args,
-    normalizedText: normalized.normalizedText,
-    modelCommands: options.modelCommands,
-    sendMessage: message.sendMessage,
-  });
-
-  if (modelCommandHandled) {
-    return;
-  }
-
-  if (command === '/new') {
-    await disposeConversationController(controllers, channelId);
-
-    options.clearConversationSessionFile?.({
-      conversationId: channelId,
-    });
-
-    if (sessionFileExists(defaultSessionFile)) {
-      await removeSessionFile(defaultSessionFile);
-    }
-
-    await emitDaemonEventNonFatal({
-      type: 'session.closed',
-      source: 'gateway',
-      payload: {
-        sessionFile,
-        profile: options.profileName,
-        cwd: options.workingDirectory,
-        reason: 'discord-new-command',
-      },
-    });
-
-    await message.sendMessage('Started a new session.');
-    return;
-  }
-
-  if (command === '/status') {
-    const activeModel = options.modelCommands?.activeModelsByConversation.get(channelId);
-    const configuredModel = options.modelCommands?.defaultModel;
-    const model = activeModel ?? configuredModel ?? '(pi default)';
-
-    await message.sendMessage(
-      `profile=${options.profileName}
-agentDir=${options.agentDir}
-session=${sessionFile}
-model=${model}`,
-    );
-    return;
-  }
-
-  if (command === '/chatid') {
-    await message.sendMessage(`channelId=${channelId}`);
-    return;
-  }
-
-  if (command === '/resume') {
-    const resumeOptions = buildResumeConversationOptions({
-      sessionDir: options.discordSessionDir,
-      currentSessionFile: sessionFile,
-      parseConversation: parseDiscordConversationFromSessionFileName,
-    });
-
-    const resumeSelectionPrompt = formatResumeConversationSelectionPrompt({
-      entries: resumeOptions,
-      currentSessionFile: sessionFile,
-    });
-
-    const selectionArg = normalized.args.trim();
-    if (selectionArg.length === 0) {
-      await sendLongText(message.sendMessage, resumeSelectionPrompt);
-      return;
-    }
-
-    const resolvedResume = resolveResumeConversationSelection(selectionArg, resumeOptions);
-    if (!resolvedResume.entry) {
-      await sendLongText(
-        message.sendMessage,
-        `${resolvedResume.error ?? 'Unable to resolve resume target.'}\n\n${resumeSelectionPrompt}`,
-      );
-      return;
-    }
-
-    const selectedResume = resolvedResume.entry;
-    if (selectedResume.sessionFile === sessionFile) {
-      await message.sendMessage('Already using that conversation in this channel.');
-      return;
-    }
-
-    await disposeConversationController(controllers, channelId);
-
-    options.setConversationSessionFile?.({
-      conversationId: channelId,
-      sessionFile: selectedResume.sessionFile,
-    });
-
-    const resumedTarget = selectedResume.conversationId ?? selectedResume.sessionFileName;
-    await message.sendMessage(`Resumed ${resumedTarget}. Continue chatting in this channel.`);
-    return;
-  }
-
-  if (command === '/compact') {
-    await message.sendMessage(
-      'Manual /compact is not supported in gateway print mode yet. Open this session in Pi TUI to compact.',
-    );
-    return;
-  }
-
-  if (command === '/commands') {
-    const commandHelp = options.commandHelpText
-      ?? formatTelegramCommands(DEFAULT_DISCORD_COMMANDS);
-    await sendLongText(message.sendMessage, commandHelp);
-    return;
-  }
-
-  if (command === '/skills') {
-    const skillsHelp = options.skillsHelpText ?? formatTelegramSkills([]);
-    await sendLongText(message.sendMessage, skillsHelp);
-    return;
-  }
-
-  if (command === '/tasks') {
-    const statusFilter = parseGatewayTaskStatusFilter(normalized.args);
-    if (!statusFilter) {
-      await message.sendMessage(`${gatewayTaskListUsageText()}\nExample: /tasks completed`);
-      return;
-    }
-
-    try {
-      const taskText = await (options.listScheduledTasks ?? listScheduledTasks)({ statusFilter });
-      await sendLongText(message.sendMessage, taskText);
-    } catch (error) {
-      await message.sendMessage(`Unable to list scheduled tasks: ${(error as Error).message}`);
-    }
-
-    return;
-  }
-
-  if (command === '/stop') {
-    const controllerPromise = controllers.get(channelId);
-    if (!controllerPromise) {
-      await message.sendMessage(NO_ACTIVE_REQUEST_MESSAGE);
-      return;
-    }
-
-    const controller = await controllerPromise;
-    const aborted = await controller.abortCurrent();
-    if (aborted) {
-      await message.sendMessage(STOPPED_ACTIVE_REQUEST_MESSAGE);
-      return;
-    }
-
-    await message.sendMessage(NO_ACTIVE_REQUEST_MESSAGE);
-    return;
-  }
-
-  let prompt = normalized.normalizedText;
-  if (command === '/skill') {
-    if (normalized.args.length === 0) {
-      await message.sendMessage('Usage: /skill <name>\nExample: /skill tdd-feature\nAlso works: /skill:tdd-feature');
-      return;
-    }
-
-    prompt = `/skill:${normalized.args}`;
-  } else if (command === '/followup') {
-    if (normalized.args.length === 0) {
-      await message.sendMessage('Usage: /followup <message>');
-      return;
-    }
-
-    prompt = normalized.args;
-  }
-
-  const controller = await getOrCreateConversationController(
-    controllers,
-    channelId,
-    sessionFile,
-    options.createConversationController,
-  );
-
-  const submissionInput: RunPromptFnInput = {
-    prompt,
-    sessionFile,
-    cwd: options.workingDirectory,
-    model: options.modelCommands?.activeModelsByConversation.get(channelId),
-    logContext: {
-      source: 'discord',
-      userId: channelId,
-      userName: message.authorUsername,
-    },
-  };
-
-  const submission = command === '/followup'
-    ? await controller.submitFollowUp(submissionInput)
-    : await controller.submitPrompt(submissionInput);
-
-  if (submission.mode === 'started') {
-    const stopTypingHeartbeat = startTypingHeartbeat(message.sendTyping);
-
-    const runTask = submission.run
-      .then(async (output) => {
-        await emitDaemonEventNonFatal({
-          type: 'session.updated',
-          source: 'gateway',
-          payload: {
-            sessionFile,
-            profile: options.profileName,
-            cwd: options.workingDirectory,
-            channelId,
-          },
-        });
-
-        await sendLongText(message.sendMessage, output || '(no output)');
-      })
-      .catch(async (error) => {
-        const errorMessage = (error as Error).message;
-
-        if (errorMessage === PROMPT_CANCELLED_ERROR_MESSAGE) {
-          return;
-        }
-
-        await emitDaemonEventNonFatal({
-          type: 'session.processing.failed',
-          source: 'gateway',
-          payload: {
-            sessionFile,
-            profile: options.profileName,
-            cwd: options.workingDirectory,
-            channelId,
-            message: errorMessage,
-          },
-        });
-
-        await message.sendMessage(`Error: ${errorMessage}`);
-      })
-      .finally(() => {
-        stopTypingHeartbeat();
-      });
-
-    registerRunTask(runTask);
-    return;
-  }
-
-  if (submission.mode === 'steered') {
-    await message.sendMessage(STEERING_ACTIVE_REQUEST_MESSAGE);
-    return;
-  }
-
-  await message.sendMessage(FOLLOWUP_QUEUED_MESSAGE);
-}
-
-export function createQueuedDiscordMessageHandler(
-  options: CreateDiscordMessageHandlerOptions,
-): QueuedDiscordMessageHandler {
-  const channelQueue = new Map<string, Promise<void>>();
-  const pendingPerChannel = new Map<string, number>();
-  const controllers = new Map<string, Promise<GatewayConversationController>>();
-  const runTasks = new Map<string, Set<Promise<void>>>();
-  const maxPendingPerChannel = options.maxPendingPerChannel ?? DEFAULT_MAX_PENDING_PER_CHANNEL;
-  const conversationSessionOverrides = new Map<string, string>();
-
-  const resolveConversationSessionFile = (input: {
-    conversationId: string;
-    defaultSessionFile: string;
-  }): string => {
-    if (options.resolveConversationSessionFile) {
-      return options.resolveConversationSessionFile(input);
-    }
-
-    return conversationSessionOverrides.get(input.conversationId) ?? input.defaultSessionFile;
-  };
-
-  const setConversationSessionFile = (input: {
-    conversationId: string;
-    sessionFile: string;
-  }): void => {
-    if (options.setConversationSessionFile) {
-      options.setConversationSessionFile(input);
-      return;
-    }
-
-    conversationSessionOverrides.set(input.conversationId, input.sessionFile);
-  };
-
-  const clearConversationSessionFile = (input: {
-    conversationId: string;
-  }): void => {
-    if (options.clearConversationSessionFile) {
-      options.clearConversationSessionFile(input);
-      return;
-    }
-
-    conversationSessionOverrides.delete(input.conversationId);
-  };
-
-  const runtimeOptions: CreateDiscordMessageHandlerOptions = {
-    ...options,
-    resolveConversationSessionFile,
-    setConversationSessionFile,
-    clearConversationSessionFile,
-  };
-
-  const trackRunTask = (channelId: string, task: Promise<void>): void => {
-    const existing = runTasks.get(channelId) ?? new Set<Promise<void>>();
-    existing.add(task);
-    runTasks.set(channelId, existing);
-
-    void task.finally(() => {
-      const tasksForChannel = runTasks.get(channelId);
-      if (!tasksForChannel) {
-        return;
-      }
-
-      tasksForChannel.delete(task);
-      if (tasksForChannel.size === 0) {
-        runTasks.delete(channelId);
-      }
-    });
-  };
-
-  const waitForRunTasks = async (channelId?: string): Promise<void> => {
-    if (channelId) {
-      let tasksForChannel = runTasks.get(channelId);
-      while (tasksForChannel && tasksForChannel.size > 0) {
-        await Promise.allSettled([...tasksForChannel]);
-        tasksForChannel = runTasks.get(channelId);
-      }
-      return;
-    }
-
-    while (runTasks.size > 0) {
-      const allTasks = [...runTasks.values()].flatMap((tasksForChannel) => [...tasksForChannel]);
-      if (allTasks.length === 0) {
-        return;
-      }
-
-      await Promise.allSettled(allTasks);
-    }
-  };
-
-  const enqueue = (channelId: string, task: () => Promise<void>) => {
-    const previous = channelQueue.get(channelId) ?? Promise.resolve();
-
-    const next = previous
-      .then(task)
-      .catch((error) => {
-        console.error(`[discord:${channelId}]`, error);
-      })
-      .finally(() => {
-        if (channelQueue.get(channelId) === next) {
-          channelQueue.delete(channelId);
-        }
-      });
-
-    channelQueue.set(channelId, next);
-  };
-
-  return {
-    handleMessage(message: DiscordMessageLike): void {
-      const channelId = message.channelId;
-      const pending = pendingPerChannel.get(channelId) ?? 0;
-
-      if (pending >= maxPendingPerChannel) {
-        void message.sendMessage(
-          `Too many pending messages for this channel (limit: ${maxPendingPerChannel}). Please wait and try again.`,
-        );
-        return;
-      }
-
-      pendingPerChannel.set(channelId, pending + 1);
-
-      enqueue(channelId, async () => {
-        try {
-          await processDiscordMessage(
-            runtimeOptions,
-            message,
-            controllers,
-            (task) => trackRunTask(channelId, task),
-          );
-        } finally {
-          const nextPending = (pendingPerChannel.get(channelId) ?? 1) - 1;
-          if (nextPending <= 0) {
-            pendingPerChannel.delete(channelId);
-          } else {
-            pendingPerChannel.set(channelId, nextPending);
-          }
-        }
-      });
-    },
-
-    async waitForIdle(channelId?: string): Promise<void> {
-      if (channelId) {
-        await (channelQueue.get(channelId) ?? Promise.resolve());
-        const controllerPromise = controllers.get(channelId);
-        if (controllerPromise) {
-          const controller = await controllerPromise;
-          await controller.waitForIdle();
-        }
-
-        await waitForRunTasks(channelId);
-        return;
-      }
-
-      await Promise.all([...channelQueue.values()]);
-
-      const allControllers = await Promise.all([...controllers.values()]);
-      await Promise.all(allControllers.map(async (controller) => controller.waitForIdle()));
-      await waitForRunTasks();
-    },
-  };
-}
-
-async function createDiscordConfigFromEnv(): Promise<DiscordBridgeConfig> {
-  const stored = readGatewayConfig();
-  const storedDiscord = stored.discord;
-
-  const token = resolveConfiguredValue(
-    process.env.DISCORD_BOT_TOKEN ?? storedDiscord?.token,
-    { fieldName: 'DISCORD_BOT_TOKEN (or gateway.discord.token)' },
-  );
-
-  if (!token) {
-    throw new Error('DISCORD_BOT_TOKEN is required. Run `pa gateway setup discord` or set DISCORD_BOT_TOKEN.');
-  }
-
-  const profile = process.env.PERSONAL_AGENT_PROFILE || stored.profile || 'shared';
-
-  const allowlistFromEnv = parseAllowlist(resolveConfiguredValue(
-    process.env.PERSONAL_AGENT_DISCORD_ALLOWLIST,
-    { fieldName: 'PERSONAL_AGENT_DISCORD_ALLOWLIST' },
-  ));
-  const storedAllowlist = resolveConfiguredAllowlistEntries(
-    storedDiscord?.allowlist,
-    { fieldName: 'gateway.discord.allowlist' },
-  );
-  const allowlist = allowlistFromEnv.size > 0
-    ? allowlistFromEnv
-    : storedAllowlist;
-
-  if (allowlist.size === 0) {
-    throw new Error(
-      'PERSONAL_AGENT_DISCORD_ALLOWLIST is required (comma-separated channel IDs). ' +
-      'Run `pa gateway setup discord` or set PERSONAL_AGENT_DISCORD_ALLOWLIST.',
-    );
-  }
-
-  const workingDirectory = process.env.PERSONAL_AGENT_DISCORD_CWD
-    || storedDiscord?.workingDirectory
-    || process.cwd();
-
-  const maxPendingPerChannel = toPositiveInteger(process.env.PERSONAL_AGENT_DISCORD_MAX_PENDING_PER_CHANNEL)
-    ?? storedDiscord?.maxPendingPerChannel;
-
-  return {
-    token,
-    profile,
-    allowlist,
-    workingDirectory,
-    maxPendingPerChannel,
-  };
-}
-
-function hasDiscordChannelMessaging(channel: unknown): channel is {
-  send: (text: string) => Promise<unknown>;
-  sendTyping: () => Promise<unknown>;
-} {
-  if (!channel || typeof channel !== 'object') {
-    return false;
-  }
-
-  const candidate = channel as Record<string, unknown>;
-  return typeof candidate.send === 'function' && typeof candidate.sendTyping === 'function';
-}
-
-function hasDiscordChannelSender(channel: unknown): channel is {
-  send: (text: string) => Promise<unknown>;
-} {
-  if (!channel || typeof channel !== 'object') {
-    return false;
-  }
-
-  const candidate = channel as Record<string, unknown>;
-  return typeof candidate.send === 'function';
-}
-
-export async function startDiscordBridge(config?: DiscordBridgeConfig): Promise<void> {
-  const effectiveConfig = config ?? await createDiscordConfigFromEnv();
-  process.env.PERSONAL_AGENT_GATEWAY_MODE = '1';
-  process.env.PERSONAL_AGENT_GATEWAY_PROVIDER = 'discord';
-
-  const { resolvedProfile, statePaths, runtime } = await prepareGatewayRuntime(effectiveConfig.profile);
-
-  const discordSessionDir = join(statePaths.session, 'discord');
-  await mkdir(discordSessionDir, { recursive: true });
-
-  const discordConversationBindingPath = join(statePaths.root, 'gateway', 'state', 'discord-conversation-bindings.json');
-  const discordConversationSessionBindings = loadTelegramConversationBindings(discordConversationBindingPath);
-
-  const persistDiscordConversationSessionBindings = (): void => {
-    writeTelegramConversationBindings(discordConversationBindingPath, discordConversationSessionBindings);
-  };
-
-  const resolveDiscordConversationSessionFile = (input: {
-    conversationId: string;
-    defaultSessionFile: string;
-  }): string => discordConversationSessionBindings.get(input.conversationId) ?? input.defaultSessionFile;
-
-  const setDiscordConversationSessionFile = (input: {
-    conversationId: string;
-    sessionFile: string;
-  }): void => {
-    const normalizedConversationId = input.conversationId.trim();
-    const normalizedSessionFile = input.sessionFile.trim();
-
-    if (normalizedConversationId.length === 0 || normalizedSessionFile.length === 0) {
-      return;
-    }
-
-    const previous = discordConversationSessionBindings.get(normalizedConversationId);
-    if (previous === normalizedSessionFile) {
-      return;
-    }
-
-    discordConversationSessionBindings.set(normalizedConversationId, normalizedSessionFile);
-    persistDiscordConversationSessionBindings();
-  };
-
-  const clearDiscordConversationSessionFile = (input: {
-    conversationId: string;
-  }): void => {
-    const normalizedConversationId = input.conversationId.trim();
-    if (normalizedConversationId.length === 0) {
-      return;
-    }
-
-    if (discordConversationSessionBindings.delete(normalizedConversationId)) {
-      persistDiscordConversationSessionBindings();
-    }
-  };
-
-  const maxPendingPerChannel = effectiveConfig.maxPendingPerChannel ?? DEFAULT_MAX_PENDING_PER_CHANNEL;
-
-  const discoveredHelp = await discoverPiHelpFromPi({
-    profile: resolvedProfile,
-    agentDir: runtime.agentDir,
-    cwd: effectiveConfig.workingDirectory,
-    sessionFile: join(discordSessionDir, '__commands__.jsonl'),
-  });
-  const discoveredProfileSkills = discoverProfileSkillsFromFilesystem(resolvedProfile);
-  const discoveredSkills = discoveredProfileSkills.length > 0
-    ? discoveredProfileSkills
-    : discoveredHelp.skills;
-  const discordCommands = mergeTelegramCommands(DEFAULT_DISCORD_COMMANDS, discoveredHelp.commands);
-  const commandHelpText = formatTelegramCommands(discordCommands);
-  const skillsHelpText = formatTelegramSkills(discoveredSkills);
-
-  const modelCommands: ModelCommandSupport = {
-    listModels: (search) => listPiModels({
-      profile: resolvedProfile,
-      agentDir: runtime.agentDir,
-      cwd: effectiveConfig.workingDirectory,
-      search,
-    }),
-    activeModelsByConversation: new Map(),
-    pendingSelectionsByConversation: new Map(),
-    defaultModel: getProfileDefaultModel(resolvedProfile),
-  };
-
-  const handler = createQueuedDiscordMessageHandler({
-    allowlist: effectiveConfig.allowlist,
-    profileName: effectiveConfig.profile,
-    agentDir: runtime.agentDir,
-    discordSessionDir,
-    workingDirectory: effectiveConfig.workingDirectory,
-    maxPendingPerChannel,
-    commandHelpText,
-    skillsHelpText,
-    modelCommands,
-    resolveConversationSessionFile: resolveDiscordConversationSessionFile,
-    setConversationSessionFile: setDiscordConversationSessionFile,
-    clearConversationSessionFile: clearDiscordConversationSessionFile,
-    createConversationController: ({ conversationId, sessionFile }) => createPersistentConversationController({
-      provider: 'discord',
-      conversationId,
-      profile: resolvedProfile,
-      agentDir: runtime.agentDir,
-      cwd: effectiveConfig.workingDirectory,
-      sessionFile,
-    }),
-  });
-
-  interface DiscordClientLike {
-    on(event: 'messageCreate', handler: (message: DiscordInboundMessageLike) => void): void;
-    on(event: 'error', handler: (error: unknown) => void): void;
-    once(event: 'ready', handler: () => void): void;
-    login(token: string): Promise<unknown>;
-    channels: {
-      cache: {
-        get: (id: string) => unknown;
-      };
-      fetch: (id: string) => Promise<unknown>;
-    };
-  }
-  type DiscordClientConstructor = new (options: { intents: number[]; partials: unknown[] }) => DiscordClientLike;
-
-  const discordModule = asRecord(DiscordJs);
-  const DiscordClient = discordModule?.Client;
-  if (typeof DiscordClient !== 'function') {
-    throw new Error('Discord client is unavailable from discord.js');
-  }
-
-  const intentFlags = resolveDiscordIntentFlags();
-  const channelPartial = resolveDiscordChannelPartial();
-
-  const client = new (DiscordClient as DiscordClientConstructor)({
-    intents: intentFlags,
-    partials: channelPartial ? [channelPartial] : [],
-  });
-
-  client.on('messageCreate', (message: DiscordInboundMessageLike) => {
-    const channel = message.channel;
-    if (!hasDiscordChannelMessaging(channel)) {
-      return;
-    }
-
-    handler.handleMessage({
-      channelId: message.channelId,
-      content: message.content,
-      authorIsBot: message.author?.bot ?? false,
-      authorUsername: message.author?.username,
-      authorId: message.author?.id,
-      sendMessage: (text) => channel.send(text),
-      sendTyping: () => channel.sendTyping(),
-    });
-  });
-
-  let daemonNotificationFlushInFlight = false;
-
-  const triggerDaemonNotificationFlush = (): void => {
-    if (daemonNotificationFlushInFlight) {
-      return;
-    }
-
-    daemonNotificationFlushInFlight = true;
-    void flushGatewayNotifications({
-      gateway: 'discord',
-      limit: 10,
-      deliverNotification: async (notification) => {
-        if (!effectiveConfig.allowlist.has(notification.destinationId)) {
-          console.warn(gatewayWarning(
-            `Dropping daemon discord notification for non-allowlisted channel ${notification.destinationId}`,
-          ));
-          return;
-        }
-
-        const cachedChannel = client.channels.cache.get(notification.destinationId);
-        const channel = cachedChannel ?? await client.channels.fetch(notification.destinationId);
-        if (!hasDiscordChannelSender(channel)) {
-          console.warn(gatewayWarning(
-            `Dropping daemon discord notification for non-sendable channel ${notification.destinationId}`,
-          ));
-          return;
-        }
-
-        await sendLongText((text) => channel.send(text), notification.message);
-      },
-    })
-      .then((deliveredCount) => {
-        if (deliveredCount > 0) {
-          logSystem('discord', `Delivered ${deliveredCount} daemon notification(s)`);
-        }
-      })
-      .catch((error) => {
-        console.warn(gatewayWarning(`Failed to flush daemon notifications: ${(error as Error).message}`));
-      })
-      .finally(() => {
-        daemonNotificationFlushInFlight = false;
-      });
-  };
-
-  client.once('ready', () => {
-    console.log(gatewaySuccess(`Discord bridge started (profile=${effectiveConfig.profile})`));
-    console.log(gatewayKeyValue('Allowed channels', [...effectiveConfig.allowlist].join(', ')));
-    console.log(gatewayKeyValue('Working directory', effectiveConfig.workingDirectory));
-    console.log(gatewayKeyValue('Available commands', discordCommands.length));
-    logSystem('discord', `Bridge started for profile=${effectiveConfig.profile}`);
-
-    triggerDaemonNotificationFlush();
-    const daemonNotificationInterval = setInterval(
-      triggerDaemonNotificationFlush,
-      DAEMON_NOTIFICATION_POLL_INTERVAL_MS,
-    );
-    daemonNotificationInterval.unref();
-
-  });
-
-  client.on('error', (error: unknown) => {
-    console.error('Discord bridge error:', error);
-  });
-
-  await client.login(effectiveConfig.token);
-}
-
 async function ensureDaemonRunningForGatewayStartup(): Promise<void> {
   if (process.env.PERSONAL_AGENT_DISABLE_DAEMON_EVENTS === '1') {
     return;
@@ -9745,13 +8485,8 @@ async function ensureDaemonRunningForGatewayStartup(): Promise<void> {
   }
 }
 
-async function startGateway(provider: GatewayProvider): Promise<void> {
-  if (provider === 'telegram') {
-    await startTelegramBridge();
-    return;
-  }
-
-  await startDiscordBridge();
+async function startGateway(_provider: GatewayProvider): Promise<void> {
+  await startTelegramBridge();
 }
 
 function waitIndefinitely(): Promise<void> {
@@ -9804,7 +8539,7 @@ export type CliCommandRegistrar = (command: RegisteredCliCommand) => void;
 export function registerGatewayCliCommands(register: CliCommandRegistrar): void {
   register({
     name: 'gateway',
-    usage: 'pa gateway [telegram|discord|service] [subcommand]',
+    usage: 'pa gateway [telegram|service] [subcommand]',
     description: 'Run messaging gateway commands',
     run: runGatewayCommand,
   });
@@ -9813,17 +8548,11 @@ export function registerGatewayCliCommands(register: CliCommandRegistrar): void 
 async function startGatewayFromEnv(): Promise<void> {
   const providerValue = process.env.PERSONAL_AGENT_GATEWAY_PROVIDER?.trim().toLowerCase();
 
-  if (!providerValue) {
-    await startTelegramBridge();
-    await waitIndefinitely();
-    return;
-  }
-
-  if (!isGatewayProvider(providerValue)) {
+  if (providerValue && providerValue !== 'telegram') {
     throw new Error(`Unsupported PERSONAL_AGENT_GATEWAY_PROVIDER: ${providerValue}`);
   }
 
-  await startGateway(providerValue);
+  await startTelegramBridge();
   await waitIndefinitely();
 }
 

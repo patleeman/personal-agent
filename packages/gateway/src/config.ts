@@ -13,17 +13,9 @@ export interface TelegramStoredConfig {
   clearRecentMessagesOnNew?: boolean;
 }
 
-export interface DiscordStoredConfig {
-  token?: string;
-  allowlist?: string[];
-  workingDirectory?: string;
-  maxPendingPerChannel?: number;
-}
-
 export interface GatewayStoredConfig {
   profile?: string;
   telegram?: TelegramStoredConfig;
-  discord?: DiscordStoredConfig;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -102,28 +94,6 @@ function sanitizeTelegram(value: unknown): TelegramStoredConfig | undefined {
   };
 }
 
-function sanitizeDiscord(value: unknown): DiscordStoredConfig | undefined {
-  if (!isRecord(value)) {
-    return undefined;
-  }
-
-  const token = toOptionalString(value.token);
-  const allowlist = toOptionalStringArray(value.allowlist);
-  const workingDirectory = toOptionalString(value.workingDirectory);
-  const maxPendingPerChannel = toOptionalPositiveInt(value.maxPendingPerChannel);
-
-  if (!token && !allowlist && !workingDirectory && !maxPendingPerChannel) {
-    return undefined;
-  }
-
-  return {
-    token,
-    allowlist,
-    workingDirectory,
-    maxPendingPerChannel,
-  };
-}
-
 export function getGatewayConfigFilePath(): string {
   const explicit = process.env.PERSONAL_AGENT_GATEWAY_CONFIG_FILE;
   if (explicit && explicit.trim().length > 0) {
@@ -150,7 +120,6 @@ export function readGatewayConfig(): GatewayStoredConfig {
     return {
       profile: toOptionalString(parsed.profile),
       telegram: sanitizeTelegram(parsed.telegram),
-      discord: sanitizeDiscord(parsed.discord),
     };
   } catch {
     return {};

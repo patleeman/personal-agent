@@ -1,10 +1,10 @@
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 
-type GatewayProvider = 'telegram' | 'discord' | 'unknown';
+type GatewayProvider = 'telegram' | 'unknown';
 
 function resolveGatewayProvider(): GatewayProvider {
   const raw = (process.env.PERSONAL_AGENT_GATEWAY_PROVIDER ?? '').trim().toLowerCase();
-  if (raw === 'telegram' || raw === 'discord') {
+  if (raw === 'telegram') {
     return raw;
   }
 
@@ -43,13 +43,6 @@ function buildGatewayContextBlock(provider: GatewayProvider): string {
       '- Inline action buttons are available: Stop, New, Regenerate, Follow up.',
       '- Available gateway commands include: /commands, /skill, /tasks, /room, /tmux, /model, /stop, /followup, /regenerate, /compact, /new, /clear, /status, /resume.',
       '- Telegram slash menu may include auto-generated /skill_* shortcuts mapped to profile skills.',
-    );
-  } else if (provider === 'discord') {
-    lines.push(
-      '',
-      'Discord-specific capabilities:',
-      '- Gateway supports per-channel persisted sessions and queued message handling.',
-      '- Available gateway commands include: /commands, /skills, /skill, /tasks, /model, /stop, /followup, /regenerate, /compact, /new, /status, /resume.',
     );
   }
 

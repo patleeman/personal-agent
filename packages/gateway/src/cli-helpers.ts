@@ -3,7 +3,6 @@ import { resolve } from 'path';
 import {
   getGatewayConfigFilePath,
   readGatewayConfig,
-  type DiscordStoredConfig,
   type GatewayStoredConfig,
   type TelegramStoredConfig,
   writeGatewayConfig,
@@ -16,7 +15,6 @@ import {
 } from './service.js';
 import { parseAllowlist } from './allowlist.js';
 
-const GATEWAY_PROVIDERS: readonly GatewayProvider[] = ['telegram', 'discord'];
 const GATEWAY_SERVICE_ACTIONS = ['install', 'uninstall', 'status'] as const;
 
 type GatewayServiceRuntimeAction = (typeof GATEWAY_SERVICE_ACTIONS)[number];
@@ -30,10 +28,6 @@ function gatewaySuccess(message: string): string {
   return `✓ ${message}`;
 }
 
-function gatewayWarning(message: string): string {
-  return `⚠ ${message}`;
-}
-
 function gatewayNext(command: string): string {
   return `Next: ${command}`;
 }
@@ -43,11 +37,7 @@ function gatewayKeyValue(key: string, value: string | number): string {
 }
 
 export function isGatewayProvider(value: string | undefined): value is GatewayProvider {
-  if (!value) {
-    return false;
-  }
-
-  return (GATEWAY_PROVIDERS as readonly string[]).includes(value);
+  return value === 'telegram';
 }
 
 function isHelpToken(value: string | undefined): boolean {
@@ -319,29 +309,10 @@ async function promptBoolean(
 }
 
 async function resolveGatewayProviderForSetup(
-  ask: (question: string) => Promise<string>,
+  _ask: (question: string) => Promise<string>,
   provider?: GatewayProvider,
 ): Promise<GatewayProvider> {
-  if (provider) {
-    return provider;
-  }
-
-  let input = (await ask('Provider [telegram/discord] [telegram]: ')).trim().toLowerCase();
-
-  while (input.length > 0 && !isGatewayProvider(input)) {
-    console.log(gatewayWarning('Please enter telegram or discord.'));
-    input = (await ask('Provider [telegram/discord] [telegram]: ')).trim().toLowerCase();
-  }
-
-  if (input.length === 0) {
-    return 'telegram';
-  }
-
-  if (!isGatewayProvider(input)) {
-    return 'telegram';
-  }
-
-  return input;
+  return provider ?? 'telegram';
 }
 
 export async function runGatewaySetup(provider?: GatewayProvider): Promise<void> {
@@ -354,8 +325,7 @@ export async function runGatewaySetup(provider?: GatewayProvider): Promise<void>
     const profileDefault = current.profile ?? 'shared';
     const profile = await promptWithDefault(prompt.ask, 'Profile', profileDefault);
 
-    const existingProviderConfig: TelegramStoredConfig | DiscordStoredConfig | undefined =
-      selectedProvider === 'telegram' ? current.telegram : current.discord;
+    const existingProviderConfig: TelegramStoredConfig | undefined = current.telegram;
 
     let resolvedToken = existingProviderConfig?.token;
 
@@ -378,32 +348,25 @@ export async function runGatewaySetup(provider?: GatewayProvider): Promise<void>
       : await prompt.ask('Allowlist (comma-separated IDs) [optional for telegram]: ');
 
     const allowlist = [...parseAllowlist(allowlistInput)];
-    if (selectedProvider === 'discord' && allowlist.length === 0) {
-      throw new Error('At least one allowlist entry is required for Discord.');
-    }
 
-    const allowedUserIds = selectedProvider === 'telegram'
-      ? (() => {
-        const defaultValue = current.telegram?.allowedUserIds?.join(',') ?? '';
-        return defaultValue.length > 0
-          ? promptWithDefault(prompt.ask, 'Allowed Telegram user IDs (comma-separated)', defaultValue)
-          : prompt.ask('Allowed Telegram user IDs (comma-separated, optional): ');
-      })()
-      : Promise.resolve('');
+    const allowedUserIds = (() => {
+      const defaultValue = current.telegram?.allowedUserIds?.join(',') ?? '';
+      return defaultValue.length > 0
+        ? promptWithDefault(prompt.ask, 'Allowed Telegram user IDs (comma-separated)', defaultValue)
+        : prompt.ask('Allowed Telegram user IDs (comma-separated, optional): ');
+    })();
 
-    const blockedUserIds = selectedProvider === 'telegram'
-      ? (() => {
-        const defaultValue = current.telegram?.blockedUserIds?.join(',') ?? '';
-        return defaultValue.length > 0
-          ? promptWithDefault(prompt.ask, 'Blocked Telegram user IDs (comma-separated)', defaultValue)
-          : prompt.ask('Blocked Telegram user IDs (comma-separated, optional): ');
-      })()
-      : Promise.resolve('');
+    const blockedUserIds = (() => {
+      const defaultValue = current.telegram?.blockedUserIds?.join(',') ?? '';
+      return defaultValue.length > 0
+        ? promptWithDefault(prompt.ask, 'Blocked Telegram user IDs (comma-separated)', defaultValue)
+        : prompt.ask('Blocked Telegram user IDs (comma-separated, optional): ');
+    })();
 
     const resolvedAllowedUserIds = [...parseAllowlist(await allowedUserIds)];
     const resolvedBlockedUserIds = [...parseAllowlist(await blockedUserIds)];
 
-    if (selectedProvider === 'telegram' && allowlist.length === 0 && resolvedAllowedUserIds.length === 0) {
+    if (allowlist.length === 0 && resolvedAllowedUserIds.length === 0) {
       throw new Error('For Telegram, configure at least one allowlist chat ID or one allowed user ID.');
     }
 
@@ -412,54 +375,38 @@ export async function runGatewaySetup(provider?: GatewayProvider): Promise<void>
 
     const maxPending = await promptPositiveInteger(
       prompt.ask,
-      selectedProvider === 'telegram' ? 'Max pending messages per conversation' : 'Max pending messages per channel',
-      selectedProvider === 'telegram'
-        ? current.telegram?.maxPendingPerChat
-        : current.discord?.maxPendingPerChannel,
+      'Max pending messages per conversation',
+      current.telegram?.maxPendingPerChat,
     );
 
-    const toolActivityStream = selectedProvider === 'telegram'
-      ? await promptBoolean(
-        prompt.ask,
-        'Show temporary tool activity acknowledgement while responses are running',
-        current.telegram?.toolActivityStream ?? false,
-      )
-      : undefined;
+    const toolActivityStream = await promptBoolean(
+      prompt.ask,
+      'Show temporary tool activity acknowledgement while responses are running',
+      current.telegram?.toolActivityStream ?? false,
+    );
 
-    const clearRecentMessagesOnNew = selectedProvider === 'telegram'
-      ? await promptBoolean(
-        prompt.ask,
-        'Best-effort clear recent tracked messages when /new is used',
-        current.telegram?.clearRecentMessagesOnNew ?? true,
-      )
-      : undefined;
+    const clearRecentMessagesOnNew = await promptBoolean(
+      prompt.ask,
+      'Best-effort clear recent tracked messages when /new is used',
+      current.telegram?.clearRecentMessagesOnNew ?? true,
+    );
 
     const updated: GatewayStoredConfig = {
       ...current,
       profile,
     };
 
-    if (selectedProvider === 'telegram') {
-      updated.telegram = {
-        ...current.telegram,
-        token: resolvedToken,
-        allowlist,
-        allowedUserIds: resolvedAllowedUserIds.length > 0 ? resolvedAllowedUserIds : undefined,
-        blockedUserIds: resolvedBlockedUserIds.length > 0 ? resolvedBlockedUserIds : undefined,
-        workingDirectory,
-        maxPendingPerChat: maxPending,
-        toolActivityStream,
-        clearRecentMessagesOnNew,
-      };
-    } else {
-      updated.discord = {
-        ...current.discord,
-        token: resolvedToken,
-        allowlist,
-        workingDirectory,
-        maxPendingPerChannel: maxPending,
-      };
-    }
+    updated.telegram = {
+      ...current.telegram,
+      token: resolvedToken,
+      allowlist,
+      allowedUserIds: resolvedAllowedUserIds.length > 0 ? resolvedAllowedUserIds : undefined,
+      blockedUserIds: resolvedBlockedUserIds.length > 0 ? resolvedBlockedUserIds : undefined,
+      workingDirectory,
+      maxPendingPerChat: maxPending,
+      toolActivityStream,
+      clearRecentMessagesOnNew,
+    };
 
     writeGatewayConfig(updated);
     console.log(gatewaySuccess(`Saved ${selectedProvider} gateway config`));
@@ -610,28 +557,6 @@ export function printGatewayHelp(provider?: GatewayProvider): void {
     return;
   }
 
-  if (provider === 'discord') {
-    console.log(gatewaySection('Gateway · Discord'));
-    console.log('');
-    console.log('Commands:');
-    console.log('  pa gateway discord setup                  Interactive setup for Discord gateway');
-    console.log('  pa gateway discord start                  Start Discord bridge in foreground');
-    console.log('  pa gateway discord help                   Show Discord gateway help');
-    console.log('  pa gateway service install discord        Install Discord background service');
-    console.log('  pa gateway service status discord         Show Discord service status');
-    console.log('  pa gateway service uninstall discord      Remove Discord background service');
-    console.log('');
-    console.log('Config keys (written by setup):');
-    console.log('  DISCORD_BOT_TOKEN');
-    console.log('  PERSONAL_AGENT_DISCORD_ALLOWLIST');
-    console.log('  PERSONAL_AGENT_PROFILE (optional, default: shared)');
-    console.log('  PERSONAL_AGENT_DISCORD_CWD (optional, default: current working directory)');
-    console.log('  PERSONAL_AGENT_DISCORD_MAX_PENDING_PER_CHANNEL (optional, default: 20)');
-    console.log('');
-    console.log(gatewayNext('pa gateway discord setup'));
-    return;
-  }
-
   console.log(gatewaySection('Gateway commands'));
   console.log('');
   console.log('Commands:');
@@ -640,7 +565,6 @@ export function printGatewayHelp(provider?: GatewayProvider): void {
   console.log('  pa gateway start [provider]                              Start provider (default: telegram)');
   console.log('  pa gateway service [install|status|uninstall|help] [...] Manage background service');
   console.log('  pa gateway telegram [setup|start|help]                   Telegram gateway commands');
-  console.log('  pa gateway discord [setup|start|help]                    Discord gateway commands');
   console.log('');
   console.log(`Config file: ${getGatewayConfigFilePath()}`);
   console.log('');

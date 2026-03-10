@@ -1,5 +1,5 @@
 export interface GatewayExtensionRuntimeContext {
-  provider: 'telegram' | 'discord';
+  provider: 'telegram';
   conversationId: string;
 }
 

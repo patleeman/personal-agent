@@ -100,21 +100,14 @@ function shouldPublishTaskOutput(output: ParsedTaskOutput, status: TaskRunOutcom
 }
 
 function toGatewayNotificationPayload(target: ParsedTaskOutputTarget): {
-  gateway: 'telegram' | 'discord';
+  gateway: 'telegram';
   destinationId: string;
   messageThreadId?: number;
 } {
-  if (target.gateway === 'telegram') {
-    return {
-      gateway: 'telegram',
-      destinationId: target.chatId,
-      messageThreadId: target.messageThreadId,
-    };
-  }
-
   return {
-    gateway: 'discord',
-    destinationId: target.channelId,
+    gateway: 'telegram',
+    destinationId: target.chatId,
+    messageThreadId: target.messageThreadId,
   };
 }
 

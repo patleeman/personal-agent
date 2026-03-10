@@ -9,15 +9,11 @@ import {
   createSpawnSyncTmuxRunner,
   findManagedTmuxSessionByName,
   listManagedTmuxSessions,
-  openManagedTmuxLogPane,
-  PERSONAL_AGENT_TMUX_WORKSPACE_ENV,
   sendManagedTmuxCommand,
   startManagedTmuxSession,
   stopManagedTmuxSession,
 } from './tmux.js';
 import { bullet, dim, keyValue, section, statusChip, success, warning } from './ui.js';
-
-type TmuxRunPlacement = 'auto' | 'background' | 'pane';
 
 interface TmuxRunOptions {
   taskSlug: string;
@@ -25,7 +21,6 @@ interface TmuxRunOptions {
   cwd: string;
   notifyOnComplete: boolean;
   notifyContext?: string;
-  placement: TmuxRunPlacement;
 }
 
 interface TmuxCleanOptions {
@@ -58,7 +53,7 @@ function tmuxSendUsageText(): string {
 }
 
 function tmuxRunUsageText(): string {
-  return 'Usage: pa tmux run <task-slug> [--cwd <path>] [--placement <auto|background|pane>] [--notify-on-complete] [--notify-context <value>] [--] <command...>';
+  return 'Usage: pa tmux run <task-slug> [--cwd <path>] [--notify-on-complete] [--notify-context <value>] [--] <command...>';
 }
 
 function tmuxCleanUsageText(): string {
@@ -77,14 +72,6 @@ function parseTmuxTailCount(raw: string): number {
   }
 
   return Math.min(1000, count);
-}
-
-function parseTmuxRunPlacement(raw: string): TmuxRunPlacement {
-  if (raw === 'auto' || raw === 'background' || raw === 'pane') {
-    return raw;
-  }
-
-  throw new Error(tmuxRunUsageText());
 }
 
 function sanitizeTmuxNamePart(value: string, fallback: string): string {
@@ -162,20 +149,6 @@ function resolveTmuxLogDirectory(): string {
   return logDirectory;
 }
 
-function canOpenTmuxViewerPane(): boolean {
-  return process.env[PERSONAL_AGENT_TMUX_WORKSPACE_ENV] === '1'
-    && typeof process.env.TMUX_PANE === 'string'
-    && process.env.TMUX_PANE.length > 0;
-}
-
-function resolveEffectiveTmuxRunPlacement(placement: TmuxRunPlacement): Exclude<TmuxRunPlacement, 'auto'> {
-  if (placement === 'auto') {
-    return canOpenTmuxViewerPane() ? 'pane' : 'background';
-  }
-
-  return placement;
-}
-
 function parseTmuxCleanOptions(args: string[]): TmuxCleanOptions {
   let dryRun = false;
   let jsonMode = false;
@@ -234,7 +207,6 @@ function parseTmuxRunOptions(args: string[]): TmuxRunOptions {
   let readingCommand = false;
   let notifyOnComplete = false;
   let notifyContext: string | undefined;
-  let placement: TmuxRunPlacement = 'auto';
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] as string;
@@ -262,27 +234,6 @@ function parseTmuxRunOptions(args: string[]): TmuxRunOptions {
       }
 
       cwd = resolve(value);
-      continue;
-    }
-
-    if (!readingCommand && arg === '--placement') {
-      const value = args[index + 1];
-      if (!value || value.startsWith('--')) {
-        throw new Error(tmuxRunUsageText());
-      }
-
-      placement = parseTmuxRunPlacement(value);
-      index += 1;
-      continue;
-    }
-
-    if (!readingCommand && arg.startsWith('--placement=')) {
-      const value = arg.slice('--placement='.length);
-      if (!value) {
-        throw new Error(tmuxRunUsageText());
-      }
-
-      placement = parseTmuxRunPlacement(value);
       continue;
     }
 
@@ -335,7 +286,6 @@ function parseTmuxRunOptions(args: string[]): TmuxRunOptions {
     cwd,
     notifyOnComplete,
     notifyContext,
-    placement,
   };
 }
 
@@ -347,7 +297,7 @@ export async function tmuxCommand(args: string[]): Promise<number> {
   if (subcommand === 'help') {
     console.log(section('Tmux commands'));
     console.log('');
-    console.log(`Usage: pa tmux [list|inspect|logs|stop|send|run|clean|help] [args...]\n\nCommands:\n  list [--json]                    List agent-managed tmux sessions\n  inspect <session> [--json]       Show details for one managed tmux session\n  logs <session> [--tail <count>]  Show session logs (or pane output fallback)\n  stop <session>                   Stop one managed tmux session\n  send <session> <command>         Send command to session (tmux send-keys + Enter)\n  run <task-slug> [--cwd <path>] [--placement <auto|background|pane>] [--notify-on-complete] [--notify-context <value>] [--] <command...>\n                                   Start a managed tmux session and optionally open a live log pane\n  clean [--dry-run] [--json]       Remove stale managed tmux logs for completed sessions\n`);
+    console.log(`Usage: pa tmux [list|inspect|logs|stop|send|run|clean|help] [args...]\n\nCommands:\n  list [--json]                    List agent-managed tmux sessions\n  inspect <session> [--json]       Show details for one managed tmux session\n  logs <session> [--tail <count>]  Show session logs (or pane output fallback)\n  stop <session>                   Stop one managed tmux session\n  send <session> <command>         Send command to session (tmux send-keys + Enter)\n  run <task-slug> [--cwd <path>] [--notify-on-complete] [--notify-context <value>] [--] <command...>\n                                   Start a managed tmux session\n  clean [--dry-run] [--json]       Remove stale managed tmux logs for completed sessions\n`);
     return 0;
   }
 
@@ -512,12 +462,6 @@ export async function tmuxCommand(args: string[]): Promise<number> {
 
   if (subcommand === 'run') {
     const runOptions = parseTmuxRunOptions(rest);
-    const effectivePlacement = resolveEffectiveTmuxRunPlacement(runOptions.placement);
-
-    if (effectivePlacement === 'pane' && !canOpenTmuxViewerPane()) {
-      throw new Error('Pane placement requires pa tui workspace mode. Start pa tui first, then rerun pa tmux run inside that workspace.');
-    }
-
     const sessionName = createManagedTmuxSessionName(runOptions.cwd, runOptions.taskSlug);
     const logDirectory = resolveTmuxLogDirectory();
     const logPath = join(logDirectory, `${sessionName}.log`);
@@ -541,20 +485,6 @@ export async function tmuxCommand(args: string[]): Promise<number> {
       notifyContext: runOptions.notifyContext,
     }, runner);
 
-    let viewerPaneId: string | undefined;
-    if (effectivePlacement === 'pane') {
-      try {
-        viewerPaneId = openManagedTmuxLogPane({
-          targetPane: process.env.TMUX_PANE as string,
-          sessionName,
-          logPath,
-          title: runOptions.taskSlug,
-        }, runner);
-      } catch (error) {
-        console.log(warning(`Task started, but live log pane could not be opened: ${(error as Error).message}`));
-      }
-    }
-
     const session = findManagedTmuxSessionByName(sessionName, runner);
 
     console.log(section('Managed tmux session started'));
@@ -563,10 +493,6 @@ export async function tmuxCommand(args: string[]): Promise<number> {
     console.log(keyValue('CWD', runOptions.cwd));
     console.log(keyValue('Log', logPath));
     console.log(keyValue('Command', displayCommand));
-    console.log(keyValue('Placement', effectivePlacement));
-    if (viewerPaneId) {
-      console.log(keyValue('Viewer pane', viewerPaneId));
-    }
     console.log(keyValue('Notify on complete', runOptions.notifyOnComplete ? 'yes' : 'no'));
     if (runOptions.notifyContext) {
       console.log(keyValue('Notify context', runOptions.notifyContext));

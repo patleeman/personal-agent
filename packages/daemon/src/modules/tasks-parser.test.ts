@@ -32,7 +32,7 @@ Summarize yesterday's progress.
     expect(task.prompt).toContain('Summarize yesterday');
   });
 
-  it('parses one-time at tasks with nested output targets', () => {
+  it('parses one-time at tasks with telegram output targets', () => {
     const task = parseTaskDefinition({
       filePath: '/tmp/tasks/taxes-reminder.task.md',
       rawContent: `---
@@ -42,12 +42,10 @@ output:
   when: always
   targets:
     - gateway: telegram
-      chatId: "123"
+      chatIds:
+        - "123"
+        - "456"
       messageThreadId: 22
-    - gateway: discord
-      channelIds:
-        - "abc"
-        - "def"
 ---
 Prepare tax checklist.
 `,
@@ -63,8 +61,7 @@ Prepare tax checklist.
       when: 'always',
       targets: [
         { gateway: 'telegram', chatId: '123', messageThreadId: 22 },
-        { gateway: 'discord', channelId: 'abc' },
-        { gateway: 'discord', channelId: 'def' },
+        { gateway: 'telegram', chatId: '456', messageThreadId: 22 },
       ],
     });
   });
