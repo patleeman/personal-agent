@@ -74,7 +74,7 @@ Example:
       "maxRetries": 3,
       "reapAfterDays": 7,
       "defaultTimeoutSeconds": 1800,
-      "runTasksInTmux": true
+      "runTasksInTmux": false
     }
   }
 }

@@ -71,3 +71,4 @@ This workflow depends on local Codex setup:
   ```
 - `~/.config/mcp/mcp_servers.json` must include a `codex-cli` server using `codex mcp-server --enable apps`
 - Slack must be connected in Codex via `/apps`
+- If a user explicitly wants Slack's official remote MCP in `mcp-cli`, note that a plain `url: "https://mcp.slack.com/mcp"` config returns `missing_token`, and a generic `mcp-remote` wrapper needs the static OAuth client info from Slack's Claude docs. Prefer the Codex app route unless the task is MCP setup/debugging.

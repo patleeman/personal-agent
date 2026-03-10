@@ -56,7 +56,7 @@ Default files:
 - discovers `*.task.md` files from configured task directory
 - parses frontmatter + prompt body
 - schedules cron/at tasks
-- executes tasks with retries and timeout (inside tmux by default)
+- executes tasks with retries and timeout (direct daemon-managed subprocess by default; tmux optional)
 - writes per-run logs and updates task state
 - publishes `gateway.notification` events when `output` routing is configured
 
@@ -165,7 +165,7 @@ Example:
       "maxRetries": 3,
       "reapAfterDays": 7,
       "defaultTimeoutSeconds": 1800,
-      "runTasksInTmux": true
+      "runTasksInTmux": false
     }
   }
 }
