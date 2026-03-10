@@ -353,6 +353,29 @@ app.post('/api/live-sessions/:id/abort', async (req, res) => {
 });
 
 /** Get token usage stats for a live session */
+app.get('/api/live-sessions/:id/context', (req, res) => {
+  const { id } = req.params;
+  const sessions = getLiveSessions();
+  const entry = sessions.find(s => s.id === id);
+  if (!entry) { res.status(404).json({ error: 'Session not found' }); return; }
+
+  // Git branch for session cwd
+  let branch: string | null = null;
+  try {
+    branch = execSync('git branch --show-current', { cwd: entry.cwd, stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000 })
+      .toString().trim() || null;
+  } catch { /* not a git repo or git not found */ }
+
+  // Last N user messages
+  const detail = readSessionBlocks(id);
+  const userMessages = (detail?.blocks ?? [])
+    .filter(b => b.type === 'user')
+    .slice(-5)
+    .map(b => ({ id: b.id, ts: b.ts, text: (b as { text: string }).text }));
+
+  res.json({ cwd: entry.cwd, branch, userMessages });
+});
+
 app.get('/api/live-sessions/:id/stats', (req, res) => {
   const stats = getSessionStats(req.params.id);
   if (!stats) { res.status(404).json({ error: 'Not found' }); return; }

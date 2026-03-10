@@ -1,4 +1,4 @@
-import type { ActivityEntry, AppStatus, LiveSessionMeta, MemoryData, WorkstreamDetail, WorkstreamSummary } from './types';
+import type { ActivityEntry, AppStatus, LiveSessionContext, LiveSessionMeta, MemoryData, WorkstreamDetail, WorkstreamSummary } from './types';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch('/api' + path);
@@ -57,7 +57,8 @@ export const api = {
 
   // ── Live sessions ─────────────────────────────────────────────────────────
   liveSessions: () => get<LiveSessionMeta[]>('/live-sessions'),
-  liveSession:  (id: string) => get<LiveSessionMeta & { live: boolean }>(`/live-sessions/${id}`),
+  liveSession:        (id: string) => get<LiveSessionMeta & { live: boolean }>(`/live-sessions/${id}`),
+  liveSessionContext: (id: string) => get<LiveSessionContext>(`/live-sessions/${id}/context`),
 
   createLiveSession: (cwd?: string) =>
     post<{ id: string; sessionFile: string }>('/live-sessions', { cwd }),

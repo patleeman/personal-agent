@@ -71,6 +71,12 @@ export interface SessionDetail {
 
 // ── Live session ──────────────────────────────────────────────────────────────
 
+export interface LiveSessionContext {
+  cwd: string;
+  branch: string | null;
+  userMessages: Array<{ id: string; ts: string; text: string }>;
+}
+
 export interface LiveSessionMeta {
   id:          string;
   cwd:         string;
