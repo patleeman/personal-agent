@@ -1,4 +1,4 @@
-import type { ActivityEntry, AppStatus, ConversationWorkstreamLinks, LiveSessionContext, LiveSessionMeta, MemoryData, ProfileState, PromptImageInput, SessionContextUsage, WorkstreamDetail, WorkstreamSummary } from './types';
+import type { ActivityEntry, AppStatus, ConversationProjectLinks, LiveSessionContext, LiveSessionMeta, MemoryData, ProfileState, ProjectDetail, ProjectSummary, PromptImageInput, SessionContextUsage } from './types';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch('/api' + path);
@@ -28,16 +28,16 @@ async function patch<T>(path: string, body?: unknown): Promise<T> {
 
 export const api = {
   // ── Core ──────────────────────────────────────────────────────────────────
-  status:         () => get<AppStatus>('/status'),
-  activity:       () => get<ActivityEntry[]>('/activity'),
-  activityById:   (id: string) => get<ActivityEntry>(`/activity/${encodeURIComponent(id)}`),
-  workstreams:    () => get<WorkstreamSummary[]>('/workstreams'),
-  workstreamById: (id: string) => get<WorkstreamDetail>(`/workstreams/${encodeURIComponent(id)}`),
-  profiles:       () => get<ProfileState>('/profiles'),
+  status:       () => get<AppStatus>('/status'),
+  activity:     () => get<ActivityEntry[]>('/activity'),
+  activityById: (id: string) => get<ActivityEntry>(`/activity/${encodeURIComponent(id)}`),
+  projects:     () => get<ProjectSummary[]>('/projects'),
+  projectById:  (id: string) => get<ProjectDetail>(`/projects/${encodeURIComponent(id)}`),
+  profiles:     () => get<ProfileState>('/profiles'),
   setCurrentProfile: (profile: string) => patch<{ ok: boolean; currentProfile: string }>('/profiles/current', { profile }),
 
   // ── Models ────────────────────────────────────────────────────────────────
-  setModel:    (model: string) => patch<{ ok: boolean }>('/models/current', { model }),
+  setModel: (model: string) => patch<{ ok: boolean }>('/models/current', { model }),
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
   setTaskEnabled: (id: string, enabled: boolean) =>
@@ -57,22 +57,22 @@ export const api = {
   memoryFileSave: (path: string, content: string) => post<{ ok: boolean }>('/memory/file', { path, content }),
 
   // ── Activity count ────────────────────────────────────────────────────────
-  activityCount:    () => get<{ count: number }>('/activity/count'),
+  activityCount: () => get<{ count: number }>('/activity/count'),
   markActivityRead: (id: string, read = true) =>
     patch<{ ok: boolean }>(`/activity/${encodeURIComponent(id)}`, { read }),
 
   // ── Live sessions ─────────────────────────────────────────────────────────
   liveSessions: () => get<LiveSessionMeta[]>('/live-sessions'),
-  liveSession:        (id: string) => get<LiveSessionMeta & { live: boolean }>(`/live-sessions/${id}`),
+  liveSession: (id: string) => get<LiveSessionMeta & { live: boolean }>(`/live-sessions/${id}`),
   liveSessionContext: (id: string) => get<LiveSessionContext>(`/live-sessions/${id}/context`),
   liveSessionContextUsage: (id: string) => get<SessionContextUsage>(`/live-sessions/${encodeURIComponent(id)}/context-usage`),
-  conversationWorkstreams: (id: string) => get<ConversationWorkstreamLinks>(`/conversations/${encodeURIComponent(id)}/workstreams`),
-  addConversationWorkstream: (id: string, workstreamId: string) =>
-    post<ConversationWorkstreamLinks>(`/conversations/${encodeURIComponent(id)}/workstreams`, { workstreamId }),
-  removeConversationWorkstream: (id: string, workstreamId: string) =>
-    fetch(`/api/conversations/${encodeURIComponent(id)}/workstreams/${encodeURIComponent(workstreamId)}`, { method: 'DELETE' }).then(r => {
+  conversationProjects: (id: string) => get<ConversationProjectLinks>(`/conversations/${encodeURIComponent(id)}/projects`),
+  addConversationProject: (id: string, projectId: string) =>
+    post<ConversationProjectLinks>(`/conversations/${encodeURIComponent(id)}/projects`, { projectId }),
+  removeConversationProject: (id: string, projectId: string) =>
+    fetch(`/api/conversations/${encodeURIComponent(id)}/projects/${encodeURIComponent(projectId)}`, { method: 'DELETE' }).then(r => {
       if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-      return r.json() as Promise<ConversationWorkstreamLinks>;
+      return r.json() as Promise<ConversationProjectLinks>;
     }),
 
   createLiveSession: (cwd?: string) =>

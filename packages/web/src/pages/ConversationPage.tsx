@@ -4,7 +4,6 @@ import { ChatView } from '../components/chat/ChatView';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import { ConversationTree } from '../components/ConversationTree';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import { MOCK_CONVERSATIONS, type MockConversation } from '../data/mockConversations';
 import type { ContextUsageSegment, DisplayBlock, MessageBlock, PromptImageInput } from '../types';
 import { useApi } from '../hooks';
 import { useSessionDetail } from '../hooks/useSessions';
@@ -138,10 +137,10 @@ function displayBlockToMessageBlock(b: DisplayBlock): MessageBlock {
 // ── Slash commands ────────────────────────────────────────────────────────────
 
 const MENTIONS = [
-  { id: '@artifact-model', label: 'artifact-model', kind: 'workstream' },
-  { id: '@web-ui',         label: 'web-ui',         kind: 'workstream' },
-  { id: '@inbox',          label: 'inbox',          kind: 'view'       },
-  { id: '@tasks',          label: 'tasks',          kind: 'view'       },
+  { id: '@artifact-model', label: 'artifact-model', kind: 'project' },
+  { id: '@web-ui',         label: 'web-ui',         kind: 'project' },
+  { id: '@inbox',          label: 'inbox',          kind: 'view'    },
+  { id: '@tasks',          label: 'tasks',          kind: 'view'    },
 ];
 
 // ── Context bar ───────────────────────────────────────────────────────────────
@@ -153,7 +152,6 @@ interface TokenCounts {
 }
 
 interface ContextBarProps {
-  conv?: MockConversation;
   model?: string;
   thinkingLevel?: string;
   tokens?: TokenCounts;
@@ -168,15 +166,9 @@ const CONTEXT_SEGMENT_STYLES: Record<ContextUsageSegment['key'], string> = {
   other: 'bg-border-default/80',
 };
 
-function ContextBar({ conv, model, thinkingLevel, tokens }: ContextBarProps) {
-  const win = tokens?.contextWindow ?? conv?.contextWindow ?? 200_000;
-  const fallbackSegments: ContextUsageSegment[] = [
-    { key: 'system', label: 'system', tokens: conv?.systemTokens ?? 0 },
-    { key: 'user', label: 'user', tokens: conv?.userTokens ?? 0 },
-    { key: 'assistant', label: 'assistant', tokens: conv?.assistantTokens ?? 0 },
-    { key: 'tool', label: 'tool', tokens: conv?.toolTokens ?? 0 },
-  ].filter((segment) => segment.tokens > 0);
-  const segments = (tokens?.segments ?? fallbackSegments)
+function ContextBar({ model, thinkingLevel, tokens }: ContextBarProps) {
+  const win = tokens?.contextWindow ?? 200_000;
+  const segments = (tokens?.segments ?? [])
     .filter((segment) => segment.tokens > 0)
     .map((segment) => ({
       ...segment,
@@ -343,34 +335,28 @@ async function buildPromptImages(files: File[]): Promise<PromptImageInput[]> {
 export function ConversationPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const mockConv = id ? MOCK_CONVERSATIONS[id] : undefined;
 
   // ── Live session detection ─────────────────────────────────────────────────
   // Always attempt SSE connection — useSessionStream handles 404 gracefully.
   // We use a confirmed-live flag only for lightweight session-state labeling.
   const [confirmedLive, setConfirmedLive] = useState<boolean | null>(null);
 
-  // ── Pi SDK stream — attempt connection immediately for all real sessions ──
-  const stream = useSessionStream(!mockConv && !!id ? id : null);
+  // ── Pi SDK stream — attempt connection immediately for all sessions ───────
+  const stream = useSessionStream(id ?? null);
 
   // Confirm live status via API (for session-state labeling, not for stream)
   useEffect(() => {
-    if (!id || mockConv) { setConfirmedLive(false); return; }
+    if (!id) { setConfirmedLive(false); return; }
     api.liveSession(id)
       .then(r => setConfirmedLive(r.live))
       .catch(() => setConfirmedLive(false));
-  }, [id, mockConv]);
+  }, [id]);
 
   // Session is "live" if SSE connected (has blocks) OR API confirms it
   const isLiveSession = stream.blocks.length > 0 || stream.isStreaming || confirmedLive === true;
 
   // ── Existing session data (read-only JSONL) ───────────────────────────────
-  const { detail: sessionDetail, loading: sessionLoading } = useSessionDetail(
-    mockConv ? undefined : id
-  );
-
-  // ── Resolve what to display ───────────────────────────────────────────────
-  const conv: MockConversation | undefined = mockConv;
+  const { detail: sessionDetail, loading: sessionLoading } = useSessionDetail(id);
 
   // Historical messages from the JSONL snapshot (doesn't update after load)
   const baseMessages: MessageBlock[] = sessionDetail
@@ -378,13 +364,11 @@ export function ConversationPage() {
     : [];
 
   // When live, combine snapshot + stream; when not, show snapshot only
-  const realMessages: MessageBlock[] | undefined = mockConv
-    ? undefined
-    : isLiveSession
-      ? [...baseMessages, ...stream.blocks]
-      : sessionDetail
-        ? baseMessages
-        : undefined;
+  const realMessages: MessageBlock[] | undefined = isLiveSession
+    ? [...baseMessages, ...stream.blocks]
+    : sessionDetail
+      ? baseMessages
+      : undefined;
 
   const { setTitle: pushTitle } = useLiveTitles();
   useEffect(() => {
@@ -394,12 +378,11 @@ export function ConversationPage() {
   const [titleOverride, setTitleOverride] = useState<string | null>(null);
 
   const title = titleOverride
-    ?? conv?.title
     ?? stream.title
     ?? sessionDetail?.meta.title
     ?? id?.replace(/-/g, ' ')
     ?? 'New conversation';
-  const model = conv?.model ?? sessionDetail?.meta.model;
+  const model = sessionDetail?.meta.model;
 
   // Model
   const { models, currentModel, currentThinkingLevel, setCurrent } = useModels();
@@ -496,8 +479,7 @@ export function ConversationPage() {
   }, [id]);
   useLayoutEffect(() => {
     if (!shouldScrollToBottomRef.current) return;
-    const messages = realMessages ?? (conv ? conv.messages : undefined);
-    if (!messages?.length || !scrollRef.current) return;
+    if (!realMessages?.length || !scrollRef.current) return;
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     shouldScrollToBottomRef.current = false;
   });
@@ -740,22 +722,21 @@ export function ConversationPage() {
                 </button>
               </>
             )}
-            {conv && <span className="text-dim">mock</span>}
             {isLiveSession && <span className="text-accent">{formatLiveSessionLabel(isLiveSession)}</span>}
           </div>
         )}
       >
         <div className="flex-1 min-w-0">
           <h1 className="ui-page-title truncate">{title}</h1>
-          <ContextBar conv={conv} model={currentModel || model} thinkingLevel={currentThinkingLevel} tokens={sessionTokens} />
+          <ContextBar model={currentModel || model} thinkingLevel={currentThinkingLevel} tokens={sessionTokens} />
         </div>
       </PageHeader>
 
       {/* Messages */}
       <div className="relative flex-1 min-h-0">
         <div ref={scrollRef} className="conversation-scroll-shell h-full overflow-y-auto overflow-x-hidden">
-          {(conv || realMessages) ? (
-            <ChatView messages={realMessages ?? conv!.messages} />
+          {realMessages ? (
+            <ChatView messages={realMessages} />
           ) : sessionLoading ? (
             <LoadingState label="Loading session…" className="justify-center h-full" />
           ) : (
@@ -781,9 +762,9 @@ export function ConversationPage() {
             </button>
           )}
         </div>
-        {(conv || realMessages) && (
+        {realMessages && (
           <ConversationRail
-            messages={realMessages ?? conv!.messages}
+            messages={realMessages}
             scrollContainerRef={scrollRef}
             onJumpToMessage={jumpToMessage}
           />
@@ -930,14 +911,14 @@ export function ConversationPage() {
       )}
 
       {/* Session tree overlay */}
-      {showTree && (realMessages ?? conv?.messages) && (
+      {showTree && realMessages && (
         <ConversationTree
-          messages={realMessages ?? conv!.messages}
+          messages={realMessages}
           onJump={jumpToMessage}
           onClose={() => setShowTree(false)}
           onFork={isLiveSession && id ? (blockIdx) => {
             // Fork at the nth user message — find its entryId via fork-entries
-            const allMsgs = realMessages ?? conv?.messages ?? [];
+            const allMsgs = realMessages;
             const userMsgsBefore = allMsgs.slice(0, blockIdx + 1).filter(b => b.type === 'user').length;
             void api.forkEntries(id).then(entries => {
               const entry = entries[userMsgsBefore - 1] ?? entries[entries.length - 1];

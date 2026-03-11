@@ -1,8 +1,8 @@
 import { join, resolve, sep } from 'path';
 import {
   activateDueDeferredResumes,
-  createWorkstreamActivityEntry,
-  getConversationWorkstreamLink,
+  createProjectActivityEntry,
+  getConversationProjectLink,
   loadDeferredResumeState,
   readSessionConversationId,
   saveDeferredResumeState,
@@ -85,18 +85,18 @@ function writeDeferredResumeFiredActivity(input: {
   profile: string;
 }): void {
   const conversationId = readSessionConversationId(input.entry.sessionFile);
-  const relatedWorkstreamIds = conversationId
-    ? (getConversationWorkstreamLink({
+  const relatedProjectIds = conversationId
+    ? (getConversationProjectLink({
         repoRoot: input.repoRoot,
         profile: input.profile,
         conversationId,
-      })?.relatedWorkstreamIds ?? [])
+      })?.relatedProjectIds ?? [])
     : [];
 
   writeProfileActivityEntry({
     repoRoot: input.repoRoot,
     profile: input.profile,
-    entry: createWorkstreamActivityEntry({
+    entry: createProjectActivityEntry({
       id: `deferred-resume-fired-${sanitizeActivityIdSegment(input.entry.id)}`,
       createdAt: input.entry.readyAt ?? input.entry.dueAt,
       profile: input.profile,
@@ -109,7 +109,7 @@ function writeDeferredResumeFiredActivity(input: {
         `Prompt: ${input.entry.prompt}`,
       ].join('\n'),
       relatedConversationIds: conversationId ? [conversationId] : undefined,
-      relatedWorkstreamIds: relatedWorkstreamIds.length > 0 ? relatedWorkstreamIds : undefined,
+      relatedProjectIds: relatedProjectIds.length > 0 ? relatedProjectIds : undefined,
       notificationState: 'none',
     }),
   });

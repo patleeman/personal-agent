@@ -7,7 +7,6 @@
  * × on an open tab calls closeSession() → removed from openIds → back to shelf.
  */
 import { useCallback, useContext, useEffect, useState } from 'react';
-import { MOCK_CONVERSATIONS } from '../data/mockConversations';
 import type { SessionMeta } from '../types';
 import { LiveTitlesContext } from '../contexts';
 
@@ -25,23 +24,10 @@ function saveOpen(ids: Set<string>) {
   try { localStorage.setItem(OPEN_KEY, JSON.stringify([...ids])); } catch { /* ignore */ }
 }
 
-// Fallback when API is unreachable
-const FALLBACK_SESSIONS: SessionMeta[] = Object.values(MOCK_CONVERSATIONS).map((conv, i) => ({
-  id:           conv.id,
-  file:         '',
-  timestamp:    new Date(Date.now() - i * 3_600_000).toISOString(),
-  cwd:          '/Users/patrickc.lee/personal/personal-agent',
-  cwdSlug:      '--Users-patrickc.lee-personal-personal-agent--',
-  model:        conv.model ?? 'claude-sonnet-4-6',
-  title:        conv.title,
-  messageCount: conv.messages.length,
-}));
-
 export function useConversations() {
   const [sessions,    setSessions]    = useState<SessionMeta[]>([]);
   const [openIds,     setOpenIds]     = useState<Set<string>>(loadOpen);
   const [loading,     setLoading]     = useState(true);
-  const [usingFallback, setUsingFallback] = useState(false);
   const { titles: liveTitles } = useContext(LiveTitlesContext);
 
   const fetchSessions = useCallback(() => {
@@ -68,10 +54,12 @@ export function useConversations() {
           }));
         const merged = [...syntheticLive, ...(jsonl as SessionMeta[])];
         setSessions(merged);
-        setUsingFallback(false);
         setLoading(false);
       })
-      .catch(() => { setSessions(FALLBACK_SESSIONS); setUsingFallback(true); setLoading(false); });
+      .catch(() => {
+        setSessions([]);
+        setLoading(false);
+      });
   }, []);
 
   // Poll every 10s (was previously only fetching once)
@@ -96,5 +84,5 @@ export function useConversations() {
   const tabs  = withTitles.filter(s =>  openIds.has(s.id));
   const shelf = withTitles.filter(s => !openIds.has(s.id));
 
-  return { tabs, shelf, openSession, closeSession, loading, usingFallback, refetch: fetchSessions };
+  return { tabs, shelf, openSession, closeSession, loading, refetch: fetchSessions };
 }

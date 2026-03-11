@@ -4,14 +4,14 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  addConversationWorkstreamLink,
-  getConversationWorkstreamLink,
-  removeConversationWorkstreamLink,
+  addConversationProjectLink,
+  getConversationProjectLink,
+  removeConversationProjectLink,
   resolveConversationLinkPath,
   resolveProfileConversationLinksDir,
-  setConversationWorkstreamLinks,
+  setConversationProjectLinks,
   validateConversationId,
-} from './conversation-links.js';
+} from './conversation-project-links.js';
 
 const tempDirs: string[] = [];
 
@@ -43,19 +43,19 @@ describe('conversation link paths', () => {
   });
 });
 
-describe('conversation workstream links', () => {
-  it('writes and reads a conversation workstream link document', () => {
+describe('conversation project links', () => {
+  it('writes and reads a conversation project link document', () => {
     const repo = createTempRepo();
 
-    setConversationWorkstreamLinks({
+    setConversationProjectLinks({
       repoRoot: repo,
       profile: 'assistant',
       conversationId: 'conv-123',
-      relatedWorkstreamIds: ['web-ui', 'artifact-model'],
+      relatedProjectIds: ['web-ui', 'artifact-model'],
       updatedAt: '2026-03-10T20:00:00.000Z',
     });
 
-    const stored = getConversationWorkstreamLink({
+    const stored = getConversationProjectLink({
       repoRoot: repo,
       profile: 'assistant',
       conversationId: 'conv-123',
@@ -64,52 +64,52 @@ describe('conversation workstream links', () => {
     expect(stored).toEqual({
       conversationId: 'conv-123',
       updatedAt: '2026-03-10T20:00:00.000Z',
-      relatedWorkstreamIds: ['web-ui', 'artifact-model'],
+      relatedProjectIds: ['web-ui', 'artifact-model'],
     });
   });
 
   it('adds links idempotently and keeps the file on disk', () => {
     const repo = createTempRepo();
 
-    addConversationWorkstreamLink({ repoRoot: repo, profile: 'assistant', conversationId: 'conv-123', workstreamId: 'web-ui', updatedAt: '2026-03-10T20:00:00.000Z' });
-    addConversationWorkstreamLink({ repoRoot: repo, profile: 'assistant', conversationId: 'conv-123', workstreamId: 'web-ui', updatedAt: '2026-03-10T20:01:00.000Z' });
-    addConversationWorkstreamLink({ repoRoot: repo, profile: 'assistant', conversationId: 'conv-123', workstreamId: 'artifact-model', updatedAt: '2026-03-10T20:02:00.000Z' });
+    addConversationProjectLink({ repoRoot: repo, profile: 'assistant', conversationId: 'conv-123', projectId: 'web-ui', updatedAt: '2026-03-10T20:00:00.000Z' });
+    addConversationProjectLink({ repoRoot: repo, profile: 'assistant', conversationId: 'conv-123', projectId: 'web-ui', updatedAt: '2026-03-10T20:01:00.000Z' });
+    addConversationProjectLink({ repoRoot: repo, profile: 'assistant', conversationId: 'conv-123', projectId: 'artifact-model', updatedAt: '2026-03-10T20:02:00.000Z' });
 
     const path = resolveConversationLinkPath({ repoRoot: repo, profile: 'assistant', conversationId: 'conv-123' });
     expect(existsSync(path)).toBe(true);
-    expect(getConversationWorkstreamLink({ repoRoot: repo, profile: 'assistant', conversationId: 'conv-123' }))
+    expect(getConversationProjectLink({ repoRoot: repo, profile: 'assistant', conversationId: 'conv-123' }))
       .toEqual({
         conversationId: 'conv-123',
         updatedAt: '2026-03-10T20:02:00.000Z',
-        relatedWorkstreamIds: ['web-ui', 'artifact-model'],
+        relatedProjectIds: ['web-ui', 'artifact-model'],
       });
   });
 
-  it('removes a workstream link and leaves an empty durable record when none remain', () => {
+  it('removes a project link and leaves an empty durable record when none remain', () => {
     const repo = createTempRepo();
 
-    setConversationWorkstreamLinks({
+    setConversationProjectLinks({
       repoRoot: repo,
       profile: 'assistant',
       conversationId: 'conv-123',
-      relatedWorkstreamIds: ['web-ui'],
+      relatedProjectIds: ['web-ui'],
       updatedAt: '2026-03-10T20:00:00.000Z',
     });
 
-    const updated = removeConversationWorkstreamLink({
+    const updated = removeConversationProjectLink({
       repoRoot: repo,
       profile: 'assistant',
       conversationId: 'conv-123',
-      workstreamId: 'web-ui',
+      projectId: 'web-ui',
       updatedAt: '2026-03-10T20:05:00.000Z',
     });
 
     expect(updated).toEqual({
       conversationId: 'conv-123',
       updatedAt: '2026-03-10T20:05:00.000Z',
-      relatedWorkstreamIds: [],
+      relatedProjectIds: [],
     });
-    expect(getConversationWorkstreamLink({ repoRoot: repo, profile: 'assistant', conversationId: 'conv-123' }))
+    expect(getConversationProjectLink({ repoRoot: repo, profile: 'assistant', conversationId: 'conv-123' }))
       .toEqual(updated);
   });
 });

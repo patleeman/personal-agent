@@ -10,7 +10,7 @@ import {
   validateActivityId,
   writeProfileActivityEntry,
 } from './activity.js';
-import { createWorkstreamActivityEntry } from './workstream-artifacts.js';
+import { createProjectActivityEntry } from './project-artifacts.js';
 
 const tempDirs: string[] = [];
 
@@ -49,7 +49,7 @@ describe('activity storage', () => {
     const olderPath = writeProfileActivityEntry({
       repoRoot: repo,
       profile: 'datadog',
-      entry: createWorkstreamActivityEntry({
+      entry: createProjectActivityEntry({
         id: 'older',
         createdAt: '2026-03-10T10:00:00.000Z',
         profile: 'datadog',
@@ -61,7 +61,7 @@ describe('activity storage', () => {
     const newerPath = writeProfileActivityEntry({
       repoRoot: repo,
       profile: 'datadog',
-      entry: createWorkstreamActivityEntry({
+      entry: createProjectActivityEntry({
         id: 'newer',
         createdAt: '2026-03-10T12:00:00.000Z',
         profile: 'datadog',

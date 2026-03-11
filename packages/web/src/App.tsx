@@ -5,7 +5,7 @@ import { Layout } from './components/Layout';
 import { ConversationPage } from './pages/ConversationPage';
 import { InboxPage } from './pages/InboxPage';
 import { MemoryPage } from './pages/MemoryPage';
-import { WorkstreamsPage } from './pages/WorkstreamsPage';
+import { ProjectsPage } from './pages/ProjectsPage';
 import { LiveTitlesContext } from './contexts';
 
 export function App() {
@@ -27,8 +27,8 @@ export function App() {
             <Route path="conversations/:id" element={<ConversationPage />} />
             <Route path="inbox" element={<InboxPage />} />
             <Route path="inbox/:id" element={<InboxPage />} />
-            <Route path="workstreams" element={<WorkstreamsPage />} />
-            <Route path="workstreams/:id" element={<WorkstreamsPage />} />
+            <Route path="projects" element={<ProjectsPage />} />
+            <Route path="projects/:id" element={<ProjectsPage />} />
             <Route path="tasks" element={<TasksPage />} />
             <Route path="tasks/:id" element={<TasksPage />} />
             <Route path="memory" element={<MemoryPage />} />

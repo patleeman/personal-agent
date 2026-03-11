@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'fs';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
 import {
-  createWorkstreamActivityEntry,
+  createProjectActivityEntry,
   writeProfileActivityEntry,
 } from '@personal-agent/core';
 import type { TasksModuleConfig } from '../config.js';
@@ -421,7 +421,7 @@ export function createTasksModule(
       writeProfileActivityEntry({
         repoRoot,
         profile: task.profile,
-        entry: createWorkstreamActivityEntry({
+        entry: createProjectActivityEntry({
           id: activityId,
           createdAt: details.finishedAt,
           profile: task.profile,

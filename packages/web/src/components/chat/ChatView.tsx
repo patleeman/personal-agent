@@ -21,7 +21,7 @@ function InlineText({ text }: { text: string }) {
 }
 
 function MentionText({ text }: { text: string }) {
-  // Render @workstream-id as amber pill
+  // Render @project-id as amber pill
   const parts = text.split(/(@[\w-]+)/g);
   return (
     <>
@@ -109,10 +109,9 @@ function ToolBlock({ block }: { block: Extract<MessageBlock, { type: 'tool_use' 
   const [open, setOpen] = useState(false);
   const meta = toolMeta(block.tool);
 
-  // Normalise: stream hook uses `status`, mocks use `running`/`error`
+  // Normalise tool state across streamed and persisted entries.
   const isRunning = block.status === 'running' || !!block.running;
   const isError   = block.status === 'error'   || !!block.error;
-  // Normalise output: mocks use `output`, stream hook uses `output` (we fixed it)
   const output    = block.output ?? '';
 
   const preview = block.input.command

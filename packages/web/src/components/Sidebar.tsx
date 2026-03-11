@@ -3,8 +3,8 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useConversations } from '../hooks/useConversations';
 import { useApi } from '../hooks';
 import { api } from '../api';
-import type { SessionMeta } from '../types';
-import { ThemeSwitcher } from './ThemeSwitcher';
+import type { ProfileState, SessionMeta } from '../types';
+import { useTheme } from '../theme';
 import { timeAgo } from '../utils';
 
 function useInboxCount() {
@@ -30,9 +30,9 @@ function Ico({ d, size = 16 }: { d: string; size?: number }) {
 }
 
 const PATH = {
-  inbox:       'M2.25 13.5h3.86a2.25 2.25 0 0 1 2.012 1.244l.256.512a2.25 2.25 0 0 0 2.013 1.244h3.218a2.25 2.25 0 0 0 2.013-1.244l.256-.512a2.25 2.25 0 0 1 2.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 0 0-2.15-1.588H6.911a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.661Z',
-  workstreams: 'M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z',
-  tasks:       'M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
+  inbox:    'M2.25 13.5h3.86a2.25 2.25 0 0 1 2.012 1.244l.256.512a2.25 2.25 0 0 0 2.013 1.244h3.218a2.25 2.25 0 0 0 2.013-1.244l.256-.512a2.25 2.25 0 0 1 2.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 0 0-2.15-1.588H6.911a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.661Z',
+  projects: 'M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z',
+  tasks:    'M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
   memory:      'M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25',
   close:       'M6 18 18 6M6 6l12 12',
   chevron:     'M19.5 8.25l-7.5 7.5-7.5-7.5',
@@ -134,11 +134,83 @@ function ShelfRow({ session, onOpen }: { session: SessionMeta; onOpen: () => voi
   );
 }
 
+function SidebarFooter({
+  profileState,
+  switchingProfile,
+  profileError,
+  theme,
+  onToggleTheme,
+  onProfileChange,
+}: {
+  profileState?: ProfileState;
+  switchingProfile: boolean;
+  profileError: string | null;
+  theme: 'light' | 'dark';
+  onToggleTheme: () => void;
+  onProfileChange: (profile: string) => void;
+}) {
+  const nextTheme = theme === 'light' ? 'dark' : 'light';
+  const profileHint = switchingProfile
+    ? 'Switching profile and reloading…'
+    : 'Changes inbox, projects, memory, and new live sessions.';
+  const rowClass = [
+    'w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-secondary transition-colors',
+    'hover:bg-elevated/60 hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/30',
+  ].join(' ');
+
+  return (
+    <div className="border-t border-border-subtle px-2 py-2 shrink-0">
+      <div className="space-y-1">
+        <button
+          type="button"
+          onClick={onToggleTheme}
+          className={rowClass}
+          title={`Switch to ${nextTheme} theme`}
+          aria-label={`Switch to ${nextTheme} theme`}
+        >
+          <span className="flex-1 text-[13px] font-medium">Theme</span>
+          <span className="text-[11px] text-dim capitalize">{theme}</span>
+        </button>
+
+        {profileState && profileState.profiles.length > 0 && (
+          <div className="relative" title={profileHint}>
+            <div className={rowClass}>
+              <span className="flex-1 text-[13px] font-medium">Profile</span>
+              <span className="max-w-[7rem] truncate text-[11px] text-dim">{profileState.currentProfile}</span>
+              <span className="pointer-events-none shrink-0 text-dim/70">
+                <Ico d={PATH.chevron} size={11} />
+              </span>
+            </div>
+
+            <select
+              value={profileState.currentProfile}
+              onChange={(event) => { onProfileChange(event.target.value); }}
+              disabled={switchingProfile}
+              aria-label="Active profile"
+              className="absolute inset-0 z-10 h-full w-full cursor-pointer appearance-none opacity-0 disabled:cursor-not-allowed"
+            >
+              {profileState.profiles.map((profile) => (
+                <option key={profile} value={profile}>{profile}</option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {switchingProfile && (
+        <p className="px-3 pt-1 text-[10px] text-dim">Switching profile and reloading…</p>
+      )}
+      {profileError && <p className="px-3 pt-1 text-[10px] text-danger">{profileError}</p>}
+    </div>
+  );
+}
+
 // ── Sidebar ────────────────────────────────────────────────────────────────
 
 export function Sidebar() {
   const navigate = useNavigate();
-  const { tabs, shelf, openSession, closeSession, loading, usingFallback, refetch } = useConversations();
+  const { theme, toggle: toggleTheme } = useTheme();
+  const { tabs, shelf, openSession, closeSession, loading, refetch } = useConversations();
   const { data: profileState } = useApi(api.profiles);
   const [shelfOpen, setShelfOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -188,48 +260,14 @@ export function Sidebar() {
           <span className="ui-brand-mark-text">pa</span>
         </div>
         <span className="text-[13px] font-semibold text-primary truncate flex-1">personal agent</span>
-        <ThemeSwitcher />
       </div>
 
       <div className="pb-1 space-y-0.5">
-        <TopNavItem to="/inbox"       icon={PATH.inbox}       label="Inbox"       badge={inboxCount} />
-        <TopNavItem to="/tasks"       icon={PATH.tasks}       label="Tasks"       />
-        <TopNavItem to="/workstreams" icon={PATH.workstreams} label="Workstreams" />
-        <TopNavItem to="/memory"      icon={PATH.memory}      label="Memory"      />
+        <TopNavItem to="/inbox"    icon={PATH.inbox}       label="Inbox"    badge={inboxCount} />
+        <TopNavItem to="/tasks"    icon={PATH.tasks}       label="Tasks"    />
+        <TopNavItem to="/projects" icon={PATH.projects} label="Projects" />
+        <TopNavItem to="/memory"   icon={PATH.memory}      label="Memory"   />
       </div>
-
-      {profileState && profileState.profiles.length > 0 && (
-        <div className="px-3 pt-2 pb-1">
-          <div className="mx-1 rounded-lg border border-border-subtle bg-elevated/45 px-3 py-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className="ui-section-label">Profile</span>
-              <span className="text-[11px] font-mono text-secondary">{profileState.currentProfile}</span>
-            </div>
-
-            <div className="relative mt-2">
-              <select
-                value={profileState.currentProfile}
-                onChange={(event) => { void handleProfileChange(event.target.value); }}
-                disabled={switchingProfile}
-                aria-label="Active profile"
-                className="w-full appearance-none bg-base border border-border-subtle rounded-lg px-2.5 py-2 pr-8 text-[12px] text-secondary focus:outline-none focus:border-accent/60 disabled:opacity-50"
-              >
-                {profileState.profiles.map((profile) => (
-                  <option key={profile} value={profile}>{profile}</option>
-                ))}
-              </select>
-              <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-dim/70">
-                <Ico d={PATH.chevron} size={11} />
-              </span>
-            </div>
-
-            <p className="mt-2 text-[10px] text-dim">
-              {switchingProfile ? 'Switching profile and reloading…' : 'Changes inbox, workstreams, memory, and new live sessions.'}
-            </p>
-            {profileError && <p className="mt-1 text-[10px] text-danger">{profileError}</p>}
-          </div>
-        </div>
-      )}
 
       <div className="mx-3 border-t border-border-subtle my-2" />
 
@@ -280,7 +318,6 @@ export function Sidebar() {
           <span className="text-[10px] tabular-nums opacity-60">
             {loading ? '…' : shelf.length}
           </span>
-          {usingFallback && <span className="text-[9px] opacity-40 ml-1">demo</span>}
         </button>
 
         {shelfOpen && (
@@ -299,7 +336,14 @@ export function Sidebar() {
         )}
       </div>
 
-
+      <SidebarFooter
+        profileState={profileState}
+        switchingProfile={switchingProfile}
+        profileError={profileError}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onProfileChange={(profile) => { void handleProfileChange(profile); }}
+      />
     </aside>
   );
 }

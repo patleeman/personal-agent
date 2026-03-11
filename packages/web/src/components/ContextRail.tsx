@@ -2,16 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { api } from '../api';
 import {
-  getPlanProgress,
-  hasMeaningfulBlockers,
-  normalizeWorkstreamText,
-  pickAttachWorkstreamId,
-  pickFocusedWorkstreamId,
-  summarizeWorkstreamPreview,
-} from '../contextRailWorkstream';
+  pickAttachProjectId,
+  pickFocusedProjectId,
+} from '../contextRailProject';
 import { useApi } from '../hooks';
-import type { ActivityEntry, LiveSessionContext, WorkstreamDetail, WorkstreamSummary } from '../types';
+import type { ActivityEntry, LiveSessionContext, ProjectDetail, ProjectSummary } from '../types';
 import { formatDate, kindMeta, timeAgo } from '../utils';
+import { ProjectOverviewPanel } from './ProjectOverviewPanel';
 import { IconButton, Pill, SurfacePanel } from './ui';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -57,99 +54,30 @@ function RailHeader({ label, sub, onCollapse }: { label: string; sub?: string; o
 
 // ── Live session context ──────────────────────────────────────────────────────
 
-function WorkstreamOverviewPanel({
-  workstream,
+function LinkedProjectOverviewPanel({
+  project,
   onRemove,
   removeDisabled = false,
 }: {
-  workstream: WorkstreamDetail;
+  project: ProjectDetail;
   onRemove?: () => void;
   removeDisabled?: boolean;
 }) {
-  const status = normalizeWorkstreamText(workstream.summary.status);
-  const blockers = normalizeWorkstreamText(workstream.summary.blockers);
-  const isBlocked = hasMeaningfulBlockers(workstream.summary.blockers);
-  const preview = summarizeWorkstreamPreview(workstream.summary.currentPlan, workstream.summary.blockers);
-  const { done, total, pct } = getPlanProgress(workstream.plan.steps);
-  const visibleSteps = workstream.plan.steps.slice(0, 6);
-  const hiddenSteps = Math.max(0, total - visibleSteps.length);
-
   return (
-    <SurfacePanel muted className="px-3.5 py-3.5 space-y-3.5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <Pill tone="muted" mono>{workstream.id}</Pill>
-            <span className="ui-card-meta">updated {timeAgo(workstream.summary.updatedAt)}</span>
-          </div>
-          <div className="min-w-0 space-y-1.5">
-            <p className="ui-card-title">{workstream.summary.objective}</p>
-            <p className="ui-card-body">{preview}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Link to={`/workstreams/${workstream.id}`} className="ui-action-button text-accent hover:text-accent/80">
-            open
-          </Link>
-          {onRemove && (
-            <IconButton
-              onClick={onRemove}
-              disabled={removeDisabled}
-              compact
-              title={`Unlink ${workstream.id}`}
-              aria-label={`Unlink ${workstream.id}`}
-            >
-              ×
-            </IconButton>
-          )}
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Pill tone={isBlocked ? 'warning' : 'teal'}>{status}</Pill>
-        <Pill tone="muted">{workstream.todoCount} todos</Pill>
-        <Pill tone="muted">{workstream.artifactCount} artifacts</Pill>
-      </div>
-
-      {isBlocked && (
-        <div className="border-t border-border-subtle pt-3">
-          <p className="ui-section-label mb-1.5">Blockers</p>
-          <p className="ui-card-body text-warning">⚠ {blockers}</p>
-        </div>
-      )}
-
-      {total > 0 && (
-        <div className="border-t border-border-subtle pt-3">
-          <div className="flex items-center justify-between mb-2 gap-3">
-            <p className="ui-section-label">Plan</p>
-            <Pill tone="muted" mono>{done}/{total} · {pct}%</Pill>
-          </div>
-          <div className="h-1 rounded-full bg-base overflow-hidden mb-3">
-            <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
-          </div>
-          <ul className="space-y-2">
-            {visibleSteps.map((step, index) => (
-              <li key={index} className="flex items-start gap-2.5 text-[12px] leading-relaxed">
-                <span className={`mt-[2px] shrink-0 ${step.completed ? 'text-success' : 'text-dim'}`}>
-                  {step.completed ? '✓' : '○'}
-                </span>
-                <span className={step.completed ? 'text-dim line-through' : 'text-secondary'}>{step.text}</span>
-              </li>
-            ))}
-          </ul>
-          {hiddenSteps > 0 && <p className="ui-card-meta mt-2">+{hiddenSteps} more steps in the full workstream view</p>}
-        </div>
-      )}
-    </SurfacePanel>
+    <ProjectOverviewPanel
+      project={project}
+      onRemove={onRemove}
+      removeDisabled={removeDisabled}
+    />
   );
 }
 
 function LiveSessionContextPanel({ id }: { id: string }) {
   const [data, setData] = useState<LiveSessionContext | null>(null);
-  const [allWorkstreams, setAllWorkstreams] = useState<WorkstreamSummary[]>([]);
-  const [focusedWorkstreamId, setFocusedWorkstreamId] = useState('');
-  const [attachWorkstreamId, setAttachWorkstreamId] = useState('');
-  const [focusedWorkstream, setFocusedWorkstream] = useState<WorkstreamDetail | null>(null);
+  const [allProjects, setAllProjects] = useState<ProjectSummary[]>([]);
+  const [focusedProjectId, setFocusedProjectId] = useState('');
+  const [attachProjectId, setAttachProjectId] = useState('');
+  const [focusedProject, setFocusedProject] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [linkBusy, setLinkBusy] = useState(false);
@@ -159,11 +87,11 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     let cancelled = false;
     setLoading(true);
     setError(false);
-    Promise.all([api.liveSessionContext(id), api.workstreams()])
-      .then(([context, workstreams]) => {
+    Promise.all([api.liveSessionContext(id), api.projects()])
+      .then(([context, projects]) => {
         if (cancelled) return;
         setData(context);
-        setAllWorkstreams(workstreams);
+        setAllProjects(projects);
         setLoading(false);
       })
       .catch(() => {
@@ -176,65 +104,65 @@ function LiveSessionContextPanel({ id }: { id: string }) {
 
   useEffect(() => load(), [load]);
 
-  const relatedWorkstreamIds = data?.relatedWorkstreamIds ?? [];
-  const availableWorkstreams = allWorkstreams.filter((workstream) => !relatedWorkstreamIds.includes(workstream.id));
-  const availableWorkstreamIds = availableWorkstreams.map((workstream) => workstream.id);
+  const relatedProjectIds = data?.relatedProjectIds ?? [];
+  const availableProjects = allProjects.filter((project) => !relatedProjectIds.includes(project.id));
+  const availableProjectIds = availableProjects.map((project) => project.id);
 
   useEffect(() => {
-    const nextFocusedWorkstreamId = pickFocusedWorkstreamId(relatedWorkstreamIds, focusedWorkstreamId);
-    if (nextFocusedWorkstreamId !== focusedWorkstreamId) {
-      setFocusedWorkstreamId(nextFocusedWorkstreamId);
+    const nextFocusedProjectId = pickFocusedProjectId(relatedProjectIds, focusedProjectId);
+    if (nextFocusedProjectId !== focusedProjectId) {
+      setFocusedProjectId(nextFocusedProjectId);
     }
-  }, [focusedWorkstreamId, relatedWorkstreamIds]);
+  }, [focusedProjectId, relatedProjectIds]);
 
   useEffect(() => {
-    const nextAttachWorkstreamId = pickAttachWorkstreamId(availableWorkstreamIds, attachWorkstreamId);
-    if (nextAttachWorkstreamId !== attachWorkstreamId) {
-      setAttachWorkstreamId(nextAttachWorkstreamId);
+    const nextAttachProjectId = pickAttachProjectId(availableProjectIds, attachProjectId);
+    if (nextAttachProjectId !== attachProjectId) {
+      setAttachProjectId(nextAttachProjectId);
     }
-  }, [attachWorkstreamId, availableWorkstreamIds]);
+  }, [attachProjectId, availableProjectIds]);
 
   useEffect(() => {
     let cancelled = false;
 
-    if (!focusedWorkstreamId) {
-      setFocusedWorkstream(null);
+    if (!focusedProjectId) {
+      setFocusedProject(null);
       setFocusedLoading(false);
       return () => { cancelled = true; };
     }
 
     setFocusedLoading(true);
-    api.workstreamById(focusedWorkstreamId)
+    api.projectById(focusedProjectId)
       .then((detail) => {
         if (cancelled) return;
-        setFocusedWorkstream(detail);
+        setFocusedProject(detail);
         setFocusedLoading(false);
       })
       .catch(() => {
         if (cancelled) return;
-        setFocusedWorkstream(null);
+        setFocusedProject(null);
         setFocusedLoading(false);
       });
 
     return () => { cancelled = true; };
-  }, [focusedWorkstreamId]);
+  }, [focusedProjectId]);
 
-  async function attachSelectedWorkstream() {
-    if (!attachWorkstreamId || linkBusy) return;
+  async function attachSelectedProject() {
+    if (!attachProjectId || linkBusy) return;
     setLinkBusy(true);
     try {
-      await api.addConversationWorkstream(id, attachWorkstreamId);
+      await api.addConversationProject(id, attachProjectId);
       load();
     } finally {
       setLinkBusy(false);
     }
   }
 
-  async function removeLinkedWorkstream(workstreamId: string) {
+  async function removeLinkedProject(projectId: string) {
     if (linkBusy) return;
     setLinkBusy(true);
     try {
-      await api.removeConversationWorkstream(id, workstreamId);
+      await api.removeConversationProject(id, projectId);
       load();
     } finally {
       setLinkBusy(false);
@@ -267,62 +195,62 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         </SurfacePanel>
       </Section>
 
-      <Section title="Workstream">
+      <Section title="Project">
         <div className="space-y-3">
-          {relatedWorkstreamIds.length > 1 && (
+          {relatedProjectIds.length > 1 && (
             <div className="flex flex-wrap items-center gap-2">
-              {relatedWorkstreamIds.map((workstreamId) => {
-                const isFocused = workstreamId === focusedWorkstreamId;
+              {relatedProjectIds.map((projectId) => {
+                const isFocused = projectId === focusedProjectId;
                 return (
                   <button
-                    key={workstreamId}
-                    onClick={() => setFocusedWorkstreamId(workstreamId)}
+                    key={projectId}
+                    onClick={() => setFocusedProjectId(projectId)}
                     className={isFocused ? 'ui-pill ui-pill-accent font-mono' : 'ui-pill ui-pill-muted font-mono hover:text-primary'}
-                    title={`Focus ${workstreamId}`}
+                    title={`Focus project ${projectId}`}
                   >
-                    {workstreamId}
+                    {projectId}
                   </button>
                 );
               })}
             </div>
           )}
 
-          {focusedLoading && <div className="text-[12px] text-dim animate-pulse">Loading workstream…</div>}
-          {!focusedLoading && focusedWorkstream && (
-            <WorkstreamOverviewPanel
-              workstream={focusedWorkstream}
-              onRemove={() => { void removeLinkedWorkstream(focusedWorkstream.id); }}
+          {focusedLoading && <div className="text-[12px] text-dim animate-pulse">Loading project…</div>}
+          {!focusedLoading && focusedProject && (
+            <LinkedProjectOverviewPanel
+              project={focusedProject}
+              onRemove={() => { void removeLinkedProject(focusedProject.id); }}
               removeDisabled={linkBusy}
             />
           )}
 
-          {availableWorkstreams.length > 0 && (
+          {availableProjects.length > 0 && (
             <SurfacePanel muted className="px-3 py-3 space-y-2.5">
-              <p className="ui-section-label">Attach workstream</p>
+              <p className="ui-section-label">Attach project</p>
               <div className="flex items-center gap-2">
                 <select
-                  value={attachWorkstreamId}
-                  onChange={(event) => setAttachWorkstreamId(event.target.value)}
+                  value={attachProjectId}
+                  onChange={(event) => setAttachProjectId(event.target.value)}
                   className="flex-1 bg-base border border-border-subtle rounded-lg px-2.5 py-2 text-[12px] text-secondary focus:outline-none focus:border-accent/60"
-                  aria-label="Attach workstream"
+                  aria-label="Attach project"
                 >
-                  {availableWorkstreams.map((workstream) => (
-                    <option key={workstream.id} value={workstream.id}>{workstream.id}</option>
+                  {availableProjects.map((project) => (
+                    <option key={project.id} value={project.id}>{project.id}</option>
                   ))}
                 </select>
                 <button
-                  onClick={() => { void attachSelectedWorkstream(); }}
-                  disabled={!attachWorkstreamId || linkBusy}
+                  onClick={() => { void attachSelectedProject(); }}
+                  disabled={!attachProjectId || linkBusy}
                   className="ui-pill ui-pill-accent disabled:opacity-40"
                 >
-                  {linkBusy ? 'Saving…' : 'Link'}
+                  {linkBusy ? 'Saving…' : 'Attach'}
                 </button>
               </div>
             </SurfacePanel>
           )}
 
-          {!focusedWorkstream && !focusedLoading && availableWorkstreams.length === 0 && relatedWorkstreamIds.length === 0 && (
-            <p className="text-[12px] text-dim">No workstreams available.</p>
+          {!focusedProject && !focusedLoading && availableProjects.length === 0 && relatedProjectIds.length === 0 && (
+            <p className="text-[12px] text-dim">No projects available.</p>
           )}
         </div>
       </Section>
@@ -494,12 +422,12 @@ function InboxItemContext({ id }: { id: string }) {
         </div>
       )}
 
-      {entry.relatedWorkstreamIds && entry.relatedWorkstreamIds.length > 0 && (
+      {entry.relatedProjectIds && entry.relatedProjectIds.length > 0 && (
         <div className="border-t border-border-subtle pt-3">
           <p className="ui-section-label mb-2">Related</p>
           <div className="flex flex-wrap gap-2">
-            {entry.relatedWorkstreamIds.map(wsId => (
-              <Link key={wsId} to={`/workstreams/${wsId}`} className="ui-pill ui-pill-accent font-mono hover:text-accent/80">
+            {entry.relatedProjectIds.map(wsId => (
+              <Link key={wsId} to={`/projects/${wsId}`} className="ui-pill ui-pill-accent font-mono hover:text-accent/80">
                 {wsId}
               </Link>
             ))}
@@ -525,25 +453,25 @@ function InboxItemContext({ id }: { id: string }) {
   );
 }
 
-// ── Workstream detail ─────────────────────────────────────────────────────────
+// ── Project detail ───────────────────────────────────────────────────────────
 
-function WorkstreamDetailContext({ id }: { id: string }) {
-  const [ws, setWs] = useState<WorkstreamDetail | null>(null);
+function ProjectDetailContext({ id }: { id: string }) {
+  const [ws, setWs] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    api.workstreamById(id)
+    api.projectById(id)
       .then((detail) => { setWs(detail); setLoading(false); })
       .catch(() => setLoading(false));
   }, [id]);
 
   if (loading) return <div className="px-4 py-4 text-[12px] text-dim animate-pulse">Loading…</div>;
-  if (!ws)     return <div className="px-4 py-4 text-[12px] text-dim">Workstream not found.</div>;
+  if (!ws)     return <div className="px-4 py-4 text-[12px] text-dim">Project not found.</div>;
 
   return (
     <div className="px-4 py-4 overflow-y-auto">
-      <WorkstreamOverviewPanel workstream={ws} />
+      <LinkedProjectOverviewPanel project={ws} />
     </div>
   );
 }
@@ -677,19 +605,19 @@ export function ContextRail({ onCollapse }: { onCollapse?: () => void }) {
     </div>
   );
 
-  // Workstreams
-  if (section === 'workstreams' && id) return (
+  // Projects
+  if (section === 'projects' && id) return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <RailHeader label="Workstream" sub={id} onCollapse={onCollapse} />
+      <RailHeader label="Project" sub={id} onCollapse={onCollapse} />
       <div className="flex-1 overflow-y-auto">
-        <WorkstreamDetailContext id={id} />
+        <ProjectDetailContext id={id} />
       </div>
     </div>
   );
-  if (section === 'workstreams') return (
+  if (section === 'projects') return (
     <div className="flex-1 flex flex-col">
-      <RailHeader label="Workstreams" onCollapse={onCollapse} />
-      <EmptyPrompt text="Select a workstream to see its plan." />
+      <RailHeader label="Projects" onCollapse={onCollapse} />
+      <EmptyPrompt text="Select a project to see its summary, plan, and tasks." />
     </div>
   );
 
@@ -717,7 +645,7 @@ export function ContextRail({ onCollapse }: { onCollapse?: () => void }) {
 
   return (
     <div className="flex flex-col items-center justify-center h-full gap-2 text-center px-6">
-      <p className="text-[12px] text-dim">Select a conversation, workstream, or inbox item to see context.</p>
+      <p className="text-[12px] text-dim">Select a conversation, project, or inbox item to see context.</p>
     </div>
   );
 }

@@ -6,7 +6,7 @@ updatedAt: 2026-03-10T10:00:00.000Z
 
 ## Objective
 
-Build the durable artifact and workstream model for personal-agent.
+Build the durable artifact and project model for personal-agent.
 
 ## Steps
 

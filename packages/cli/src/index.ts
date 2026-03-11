@@ -2473,8 +2473,8 @@ async function inboxCommand(args: string[]): Promise<number> {
       console.log(keyValue('Created', new Date(entry.createdAt).toLocaleString(), 4));
       console.log(keyValue('Notification', entry.notificationState ?? 'none', 4));
 
-      if (entry.relatedWorkstreamIds && entry.relatedWorkstreamIds.length > 0) {
-        console.log(keyValue('Workstreams', entry.relatedWorkstreamIds.join(', '), 4));
+      if (entry.relatedProjectIds && entry.relatedProjectIds.length > 0) {
+        console.log(keyValue('Projects', entry.relatedProjectIds.join(', '), 4));
       }
 
       if (entry.relatedConversationIds && entry.relatedConversationIds.length > 0) {
@@ -2522,8 +2522,8 @@ async function inboxCommand(args: string[]): Promise<number> {
     console.log(keyValue('Created', new Date(match.entry.createdAt).toLocaleString()));
     console.log(keyValue('Notification', match.entry.notificationState ?? 'none'));
 
-    if (match.entry.relatedWorkstreamIds && match.entry.relatedWorkstreamIds.length > 0) {
-      console.log(keyValue('Workstreams', match.entry.relatedWorkstreamIds.join(', ')));
+    if (match.entry.relatedProjectIds && match.entry.relatedProjectIds.length > 0) {
+      console.log(keyValue('Projects', match.entry.relatedProjectIds.join(', ')));
     }
 
     if (match.entry.relatedConversationIds && match.entry.relatedConversationIds.length > 0) {

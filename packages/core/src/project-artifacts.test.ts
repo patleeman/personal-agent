@@ -4,31 +4,31 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  createInitialWorkstreamPlan,
-  createInitialWorkstreamSummary,
-  createWorkstreamActivityEntry,
-  createWorkstreamTodo,
-  formatWorkstreamActivityEntry,
-  formatWorkstreamPlan,
-  formatWorkstreamSummary,
-  formatWorkstreamTodo,
-  parseWorkstreamActivityEntry,
-  parseWorkstreamPlan,
-  parseWorkstreamSummary,
-  parseWorkstreamTodo,
-  readWorkstreamActivityEntry,
-  readWorkstreamPlan,
-  readWorkstreamSummary,
-  readWorkstreamTodo,
-  writeWorkstreamActivityEntry,
-  writeWorkstreamPlan,
-  writeWorkstreamSummary,
-  writeWorkstreamTodo,
-  type WorkstreamActivityEntryDocument,
-  type WorkstreamPlanDocument,
-  type WorkstreamSummaryDocument,
-  type WorkstreamTodoDocument,
-} from './workstream-artifacts.js';
+  createInitialProjectPlan,
+  createInitialProjectSummary,
+  createProjectActivityEntry,
+  createProjectTask,
+  formatProjectActivityEntry,
+  formatProjectPlan,
+  formatProjectSummary,
+  formatProjectTask,
+  parseProjectActivityEntry,
+  parseProjectPlan,
+  parseProjectSummary,
+  parseProjectTask,
+  readProjectActivityEntry,
+  readProjectPlan,
+  readProjectSummary,
+  readProjectTask,
+  writeProjectActivityEntry,
+  writeProjectPlan,
+  writeProjectSummary,
+  writeProjectTask,
+  type ProjectActivityEntryDocument,
+  type ProjectPlanDocument,
+  type ProjectSummaryDocument,
+  type ProjectTaskDocument,
+} from './project-artifacts.js';
 
 const tempDirs: string[] = [];
 
@@ -42,9 +42,9 @@ function createTempDir(): string {
   return dir;
 }
 
-describe('workstream summary artifacts', () => {
+describe('project summary artifacts', () => {
   it('creates the default summary document', () => {
-    const summary = createInitialWorkstreamSummary({
+    const summary = createInitialProjectSummary({
       id: 'artifact-model',
       objective: 'Create a durable artifact model.',
       createdAt: '2026-03-10T12:00:00.000Z',
@@ -64,7 +64,7 @@ describe('workstream summary artifacts', () => {
   });
 
   it('formats and parses summary markdown as a round trip', () => {
-    const document: WorkstreamSummaryDocument = {
+    const document: ProjectSummaryDocument = {
       id: 'artifact-model',
       createdAt: '2026-03-10T12:00:00.000Z',
       updatedAt: '2026-03-10T13:00:00.000Z',
@@ -72,15 +72,15 @@ describe('workstream summary artifacts', () => {
       currentPlan: 'Finalize the initial schema and lock it in.',
       status: '- In progress',
       blockers: '- Need to settle the activity entry shape',
-      completedItems: '- Added workstream scaffold\n- Added path helpers',
+      completedItems: '- Added project scaffold\n- Added path helpers',
       openTasks: '- Implement artifact IO helpers',
     };
 
-    const markdown = formatWorkstreamSummary(document);
+    const markdown = formatProjectSummary(document);
     expect(markdown).toContain('# Summary');
     expect(markdown).toContain('## Completed items');
 
-    expect(parseWorkstreamSummary(markdown)).toEqual(document);
+    expect(parseProjectSummary(markdown)).toEqual(document);
   });
 
   it('rejects summary markdown missing required sections', () => {
@@ -96,28 +96,28 @@ updatedAt: 2026-03-10T12:00:00.000Z
 Create a durable artifact model.
 `;
 
-    expect(() => parseWorkstreamSummary(markdown)).toThrow('Missing required section in Summary markdown: Current plan');
+    expect(() => parseProjectSummary(markdown)).toThrow('Missing required section in Summary markdown: Current plan');
   });
 
   it('writes and reads summary files', () => {
     const dir = createTempDir();
     const path = join(dir, 'summary.md');
-    const document = createInitialWorkstreamSummary({
+    const document = createInitialProjectSummary({
       id: 'artifact-model',
       objective: 'Create a durable artifact model.',
       createdAt: '2026-03-10T12:00:00.000Z',
     });
 
-    writeWorkstreamSummary(path, document);
+    writeProjectSummary(path, document);
 
     expect(readFileSync(path, 'utf-8')).toContain('## Status');
-    expect(readWorkstreamSummary(path)).toEqual(document);
+    expect(readProjectSummary(path)).toEqual(document);
   });
 });
 
-describe('workstream plan artifacts', () => {
+describe('project plan artifacts', () => {
   it('creates the default plan document', () => {
-    const plan = createInitialWorkstreamPlan({
+    const plan = createInitialProjectPlan({
       id: 'artifact-model',
       objective: 'Create a durable artifact model.',
       updatedAt: '2026-03-10T12:00:00.000Z',
@@ -131,7 +131,7 @@ describe('workstream plan artifacts', () => {
   });
 
   it('formats and parses plan markdown as a round trip', () => {
-    const document: WorkstreamPlanDocument = {
+    const document: ProjectPlanDocument = {
       id: 'artifact-model',
       updatedAt: '2026-03-10T13:00:00.000Z',
       objective: 'Create a durable artifact model.',
@@ -142,11 +142,11 @@ describe('workstream plan artifacts', () => {
       ],
     };
 
-    const markdown = formatWorkstreamPlan(document);
+    const markdown = formatProjectPlan(document);
     expect(markdown).toContain('# Plan');
     expect(markdown).toContain('- [x] Finalize the artifact schema');
 
-    expect(parseWorkstreamPlan(markdown)).toEqual(document);
+    expect(parseProjectPlan(markdown)).toEqual(document);
   });
 
   it('rejects invalid plan checklist items', () => {
@@ -165,28 +165,28 @@ Create a durable artifact model.
 - finalize the artifact schema
 `;
 
-    expect(() => parseWorkstreamPlan(markdown)).toThrow('Invalid checklist step');
+    expect(() => parseProjectPlan(markdown)).toThrow('Invalid checklist step');
   });
 
   it('writes and reads plan files', () => {
     const dir = createTempDir();
     const path = join(dir, 'plan.md');
-    const document = createInitialWorkstreamPlan({
+    const document = createInitialProjectPlan({
       id: 'artifact-model',
       objective: 'Create a durable artifact model.',
       updatedAt: '2026-03-10T12:00:00.000Z',
     });
 
-    writeWorkstreamPlan(path, document);
+    writeProjectPlan(path, document);
 
     expect(readFileSync(path, 'utf-8')).toContain('## Steps');
-    expect(readWorkstreamPlan(path)).toEqual(document);
+    expect(readProjectPlan(path)).toEqual(document);
   });
 });
 
-describe('workstream activity artifacts', () => {
+describe('project activity artifacts', () => {
   it('creates the default activity document', () => {
-    const entry = createWorkstreamActivityEntry({
+    const entry = createProjectActivityEntry({
       id: 'daily-report',
       createdAt: '2026-03-10T14:00:00.000Z',
       profile: 'datadog',
@@ -199,59 +199,59 @@ describe('workstream activity artifacts', () => {
   });
 
   it('formats and parses activity markdown as a round trip', () => {
-    const document: WorkstreamActivityEntryDocument = {
+    const document: ProjectActivityEntryDocument = {
       id: 'daily-report',
       createdAt: '2026-03-10T14:00:00.000Z',
       profile: 'datadog',
       kind: 'scheduled-task',
       summary: 'Daily report completed.',
       details: 'Wrote the daily report artifact and refreshed the executive summary.',
-      relatedWorkstreamIds: ['artifact-model', 'daily-review'],
+      relatedProjectIds: ['artifact-model', 'daily-review'],
       relatedConversationIds: ['conv-123'],
       notificationState: 'queued',
     };
 
-    const markdown = formatWorkstreamActivityEntry(document);
+    const markdown = formatProjectActivityEntry(document);
     expect(markdown).toContain('# Activity');
-    expect(markdown).toContain('relatedWorkstreamIds: artifact-model, daily-review');
+    expect(markdown).toContain('relatedProjectIds: artifact-model, daily-review');
 
-    expect(parseWorkstreamActivityEntry(markdown)).toEqual(document);
+    expect(parseProjectActivityEntry(markdown)).toEqual(document);
   });
 
   it('writes and reads activity files', () => {
     const dir = createTempDir();
     const path = join(dir, 'activity.md');
-    const document = createWorkstreamActivityEntry({
+    const document = createProjectActivityEntry({
       id: 'daily-report',
       createdAt: '2026-03-10T14:00:00.000Z',
       profile: 'datadog',
       kind: 'scheduled-task',
       summary: 'Daily report completed.',
-      relatedWorkstreamIds: ['artifact-model'],
+      relatedProjectIds: ['artifact-model'],
     });
 
-    writeWorkstreamActivityEntry(path, document);
+    writeProjectActivityEntry(path, document);
 
     expect(readFileSync(path, 'utf-8')).toContain('## Summary');
-    expect(readWorkstreamActivityEntry(path)).toEqual(document);
+    expect(readProjectActivityEntry(path)).toEqual(document);
   });
 });
 
-describe('workstream todo artifacts', () => {
-  it('creates the default todo document', () => {
-    const todo = createWorkstreamTodo({
+describe('project task artifacts', () => {
+  it('creates the default task document', () => {
+    const task = createProjectTask({
       id: 'implement-activity',
       createdAt: '2026-03-10T15:00:00.000Z',
       status: 'pending',
       title: 'Implement activity records',
     });
 
-    expect(todo.updatedAt).toBe('2026-03-10T15:00:00.000Z');
-    expect(todo.status).toBe('pending');
+    expect(task.updatedAt).toBe('2026-03-10T15:00:00.000Z');
+    expect(task.status).toBe('pending');
   });
 
-  it('formats and parses todo markdown as a round trip', () => {
-    const document: WorkstreamTodoDocument = {
+  it('formats and parses task markdown as a round trip', () => {
+    const document: ProjectTaskDocument = {
       id: 'implement-activity',
       createdAt: '2026-03-10T15:00:00.000Z',
       updatedAt: '2026-03-10T16:00:00.000Z',
@@ -260,17 +260,17 @@ describe('workstream todo artifacts', () => {
       summary: 'Wire daemon task runs into durable activity output.',
     };
 
-    const markdown = formatWorkstreamTodo(document);
-    expect(markdown).toContain('# Todo');
+    const markdown = formatProjectTask(document);
+    expect(markdown).toContain('# Task');
     expect(markdown).toContain('status: running');
 
-    expect(parseWorkstreamTodo(markdown)).toEqual(document);
+    expect(parseProjectTask(markdown)).toEqual(document);
   });
 
-  it('writes and reads todo files', () => {
+  it('writes and reads task files', () => {
     const dir = createTempDir();
-    const path = join(dir, 'todo.md');
-    const document = createWorkstreamTodo({
+    const path = join(dir, 'task.md');
+    const document = createProjectTask({
       id: 'implement-activity',
       createdAt: '2026-03-10T15:00:00.000Z',
       status: 'pending',
@@ -278,9 +278,9 @@ describe('workstream todo artifacts', () => {
       summary: 'Start with the daemon scheduled-task path.',
     });
 
-    writeWorkstreamTodo(path, document);
+    writeProjectTask(path, document);
 
     expect(readFileSync(path, 'utf-8')).toContain('## Title');
-    expect(readWorkstreamTodo(path)).toEqual(document);
+    expect(readProjectTask(path)).toEqual(document);
   });
 });

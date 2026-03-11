@@ -2,7 +2,7 @@ import { chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from '
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
-import { createWorkstreamActivityEntry, writeProfileActivityEntry } from '@personal-agent/core';
+import { createProjectActivityEntry, writeProfileActivityEntry } from '@personal-agent/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runCli } from './index.js';
 
@@ -283,7 +283,7 @@ describe('CLI command flows', () => {
     writeProfileActivityEntry({
       repoRoot: repo,
       profile: 'datadog',
-      entry: createWorkstreamActivityEntry({
+      entry: createProjectActivityEntry({
         id: 'daily-report',
         createdAt: '2026-03-10T14:00:00.000Z',
         profile: 'datadog',
@@ -319,7 +319,7 @@ describe('CLI command flows', () => {
     writeProfileActivityEntry({
       repoRoot: repo,
       profile: 'datadog',
-      entry: createWorkstreamActivityEntry({
+      entry: createProjectActivityEntry({
         id: 'daily-report',
         createdAt: '2026-03-10T14:00:00.000Z',
         profile: 'datadog',

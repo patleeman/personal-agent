@@ -31,12 +31,12 @@ export interface ActivityEntry {
   summary: string;
   details?: string;
   read?: boolean;
-  relatedWorkstreamIds?: string[];
+  relatedProjectIds?: string[];
   relatedConversationIds?: string[];
   notificationState?: string;
 }
 
-export interface WorkstreamSummary {
+export interface ProjectSummary {
   id: string;
   createdAt: string;
   updatedAt: string;
@@ -48,24 +48,34 @@ export interface WorkstreamSummary {
   openTasks?: string;
 }
 
-export interface WorkstreamPlanStep {
+export interface ProjectPlanStep {
   text: string;
   completed: boolean;
 }
 
-export interface WorkstreamPlan {
+export interface ProjectPlan {
   id: string;
   updatedAt: string;
   objective: string;
-  steps: WorkstreamPlanStep[];
+  steps: ProjectPlanStep[];
 }
 
-export interface WorkstreamDetail {
+export interface ProjectTask {
   id: string;
-  summary: WorkstreamSummary;
-  plan: WorkstreamPlan;
-  todoCount: number;
+  createdAt: string;
+  updatedAt: string;
+  status: string;
+  title: string;
+  summary?: string;
+}
+
+export interface ProjectDetail {
+  id: string;
+  summary: ProjectSummary;
+  plan: ProjectPlan;
+  taskCount: number;
   artifactCount: number;
+  tasks: ProjectTask[];
 }
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
@@ -111,20 +121,18 @@ export interface SessionDetail {
   contextUsage: SessionContextUsage | null;
 }
 
-// ── App status ─────────────────────────────────────────────────────────────────
-
 // ── Live session ──────────────────────────────────────────────────────────────
 
 export interface LiveSessionContext {
   cwd: string;
   branch: string | null;
   userMessages: Array<{ id: string; ts: string; text: string; imageCount: number }>;
-  relatedWorkstreamIds: string[];
+  relatedProjectIds: string[];
 }
 
-export interface ConversationWorkstreamLinks {
+export interface ConversationProjectLinks {
   conversationId: string;
-  relatedWorkstreamIds: string[];
+  relatedProjectIds: string[];
 }
 
 export interface LiveSessionMeta {
@@ -183,7 +191,7 @@ export interface AppStatus {
   profile: string;
   repoRoot: string;
   activityCount: number;
-  workstreamCount: number;
+  projectCount: number;
 }
 
 export interface ProfileState {

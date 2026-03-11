@@ -8,8 +8,9 @@ import { listSessions, readSessionBlocks } from './sessions.js';
 import { readSavedModelPreferences } from './modelPreferences.js';
 import { getProfileConfigFilePath, readSavedProfilePreferences, resolveActiveProfile, writeSavedProfilePreferences, } from './profilePreferences.js';
 import { createSession, resumeSession, getLiveSessions, getSessionStats, getSessionContextUsage, getAvailableModels, isLive, subscribe, promptSession, compactSession, reloadSessionResources, exportSessionHtml, renameSession, abortSession, destroySession, forkSession, registry as liveRegistry, } from './liveSessions.js';
-import { addConversationWorkstreamLink, getConversationWorkstreamLink, listProfileActivityEntries, listWorkstreamIds, readWorkstreamPlan, readWorkstreamSummary, removeConversationWorkstreamLink, resolveWorkstreamPaths, } from '@personal-agent/core';
+import { addConversationProjectLink, getConversationProjectLink, listProfileActivityEntries, listProjectIds, readProjectSummary, removeConversationProjectLink, resolveProjectPaths, } from '@personal-agent/core';
 import { listProfiles, materializeProfileToAgentDir, resolveResourceProfile, } from '@personal-agent/resources';
+import { readProjectDetailFromProject } from './projects.js';
 const PORT = parseInt(process.env.PA_WEB_PORT ?? '3741', 10);
 const REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? process.cwd();
 const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
@@ -116,12 +117,12 @@ app.get('/api/status', (_req, res) => {
     try {
         const profile = getCurrentProfile();
         const activities = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile });
-        const workstreamIds = listWorkstreamIds({ repoRoot: REPO_ROOT, profile });
+        const projectIds = listProjectIds({ repoRoot: REPO_ROOT, profile });
         res.json({
             profile,
             repoRoot: REPO_ROOT,
             activityCount: activities.length,
-            workstreamCount: workstreamIds.length,
+            projectCount: projectIds.length,
         });
     }
     catch (err) {
@@ -597,57 +598,57 @@ app.get('/api/live-sessions/:id/context', (req, res) => {
             imageCount: 'images' in b && Array.isArray(b.images) ? b.images.length : 0,
         }));
     }
-    const relatedWorkstreamIds = getConversationWorkstreamLink({
+    const relatedProjectIds = getConversationProjectLink({
         repoRoot: REPO_ROOT,
         profile: getCurrentProfile(),
         conversationId: id,
-    })?.relatedWorkstreamIds ?? [];
-    res.json({ cwd, branch, userMessages, relatedWorkstreamIds });
+    })?.relatedProjectIds ?? [];
+    res.json({ cwd, branch, userMessages, relatedProjectIds });
 });
-app.get('/api/conversations/:id/workstreams', (req, res) => {
+app.get('/api/conversations/:id/projects', (req, res) => {
     try {
         const profile = getCurrentProfile();
-        const relatedWorkstreamIds = getConversationWorkstreamLink({
+        const relatedProjectIds = getConversationProjectLink({
             repoRoot: REPO_ROOT,
             profile,
             conversationId: req.params.id,
-        })?.relatedWorkstreamIds ?? [];
-        res.json({ conversationId: req.params.id, relatedWorkstreamIds });
+        })?.relatedProjectIds ?? [];
+        res.json({ conversationId: req.params.id, relatedProjectIds });
     }
     catch (err) {
         res.status(500).json({ error: String(err) });
     }
 });
-app.post('/api/conversations/:id/workstreams', (req, res) => {
+app.post('/api/conversations/:id/projects', (req, res) => {
     try {
         const profile = getCurrentProfile();
-        const { workstreamId } = req.body;
-        if (!workstreamId) {
-            res.status(400).json({ error: 'workstreamId required' });
+        const { projectId } = req.body;
+        if (!projectId) {
+            res.status(400).json({ error: 'projectId required' });
             return;
         }
-        const document = addConversationWorkstreamLink({
+        const document = addConversationProjectLink({
             repoRoot: REPO_ROOT,
             profile,
             conversationId: req.params.id,
-            workstreamId,
+            projectId,
         });
-        res.json({ conversationId: req.params.id, relatedWorkstreamIds: document.relatedWorkstreamIds });
+        res.json({ conversationId: req.params.id, relatedProjectIds: document.relatedProjectIds });
     }
     catch (err) {
         res.status(500).json({ error: String(err) });
     }
 });
-app.delete('/api/conversations/:id/workstreams/:workstreamId', (req, res) => {
+app.delete('/api/conversations/:id/projects/:projectId', (req, res) => {
     try {
         const profile = getCurrentProfile();
-        const document = removeConversationWorkstreamLink({
+        const document = removeConversationProjectLink({
             repoRoot: REPO_ROOT,
             profile,
             conversationId: req.params.id,
-            workstreamId: req.params.workstreamId,
+            projectId: req.params.projectId,
         });
-        res.json({ conversationId: req.params.id, relatedWorkstreamIds: document.relatedWorkstreamIds });
+        res.json({ conversationId: req.params.id, relatedProjectIds: document.relatedProjectIds });
     }
     catch (err) {
         res.status(500).json({ error: String(err) });
@@ -700,51 +701,44 @@ app.delete('/api/live-sessions/:id', (req, res) => {
     destroySession(req.params.id);
     res.json({ ok: true });
 });
-// ── Workstreams ───────────────────────────────────────────────────────────────
-app.get('/api/workstreams', (_req, res) => {
+// ── Projects ─────────────────────────────────────────────────────────────────
+function listProjectSummariesForCurrentProfile() {
+    const profile = getCurrentProfile();
+    const ids = listProjectIds({ repoRoot: REPO_ROOT, profile });
+    const summaries = ids.flatMap((id) => {
+        try {
+            const paths = resolveProjectPaths({
+                repoRoot: REPO_ROOT,
+                profile,
+                projectId: id,
+            });
+            return [readProjectSummary(paths.summaryFile)];
+        }
+        catch {
+            return [];
+        }
+    });
+    summaries.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return summaries;
+}
+app.get('/api/projects', (_req, res) => {
     try {
-        const profile = getCurrentProfile();
-        const ids = listWorkstreamIds({ repoRoot: REPO_ROOT, profile });
-        const summaries = ids.flatMap((id) => {
-            try {
-                const paths = resolveWorkstreamPaths({
-                    repoRoot: REPO_ROOT,
-                    profile,
-                    workstreamId: id,
-                });
-                return [readWorkstreamSummary(paths.summaryFile)];
-            }
-            catch {
-                return [];
-            }
-        });
-        summaries.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-        res.json(summaries);
+        res.json(listProjectSummariesForCurrentProfile());
     }
     catch (err) {
         res.status(500).json({ error: String(err) });
     }
 });
-app.get('/api/workstreams/:id', (req, res) => {
+app.get('/api/projects/:id', (req, res) => {
     try {
-        const profile = getCurrentProfile();
-        const paths = resolveWorkstreamPaths({
+        res.json(readProjectDetailFromProject({
             repoRoot: REPO_ROOT,
-            profile,
-            workstreamId: req.params.id,
-        });
-        const summary = readWorkstreamSummary(paths.summaryFile);
-        const plan = readWorkstreamPlan(paths.planFile);
-        const todoCount = existsSync(paths.todosDir)
-            ? readdirSync(paths.todosDir).filter((f) => f.endsWith('.md')).length
-            : 0;
-        const artifactCount = existsSync(paths.artifactsDir)
-            ? readdirSync(paths.artifactsDir).filter((f) => f.endsWith('.md')).length
-            : 0;
-        res.json({ id: req.params.id, summary, plan, todoCount, artifactCount });
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+        }));
     }
     catch {
-        res.status(404).json({ error: 'Workstream not found' });
+        res.status(404).json({ error: 'Project not found' });
     }
 });
 // ── Shell run ─────────────────────────────────────────────────────────────────

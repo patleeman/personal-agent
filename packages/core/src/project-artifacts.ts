@@ -3,7 +3,7 @@ import { dirname } from 'path';
 
 const FRONTMATTER_DELIMITER = '---';
 
-export interface WorkstreamSummaryDocument {
+export interface ProjectSummaryDocument {
   id: string;
   createdAt: string;
   updatedAt: string;
@@ -15,19 +15,19 @@ export interface WorkstreamSummaryDocument {
   openTasks?: string;
 }
 
-export interface WorkstreamPlanStep {
+export interface ProjectPlanStep {
   text: string;
   completed: boolean;
 }
 
-export interface WorkstreamPlanDocument {
+export interface ProjectPlanDocument {
   id: string;
   updatedAt: string;
   objective: string;
-  steps: WorkstreamPlanStep[];
+  steps: ProjectPlanStep[];
 }
 
-export type WorkstreamActivityKind =
+export type ProjectActivityKind =
   | 'scheduled-task'
   | 'deferred-resume'
   | 'subagent-run'
@@ -36,27 +36,27 @@ export type WorkstreamActivityKind =
   | 'follow-up'
   | 'note';
 
-export type WorkstreamActivityNotificationState = 'none' | 'queued' | 'sent' | 'failed';
+export type ProjectActivityNotificationState = 'none' | 'queued' | 'sent' | 'failed';
 
-export interface WorkstreamActivityEntryDocument {
+export interface ProjectActivityEntryDocument {
   id: string;
   createdAt: string;
   profile: string;
-  kind: WorkstreamActivityKind | (string & {});
+  kind: ProjectActivityKind | (string & {});
   summary: string;
   details?: string;
-  relatedWorkstreamIds?: string[];
+  relatedProjectIds?: string[];
   relatedConversationIds?: string[];
-  notificationState?: WorkstreamActivityNotificationState;
+  notificationState?: ProjectActivityNotificationState;
 }
 
-export type WorkstreamTodoStatus = 'pending' | 'running' | 'blocked' | 'completed' | 'failed' | 'cancelled';
+export type ProjectTaskStatus = 'pending' | 'running' | 'blocked' | 'completed' | 'failed' | 'cancelled';
 
-export interface WorkstreamTodoDocument {
+export interface ProjectTaskDocument {
   id: string;
   createdAt: string;
   updatedAt: string;
-  status: WorkstreamTodoStatus | (string & {});
+  status: ProjectTaskStatus | (string & {});
   title: string;
   summary?: string;
 }
@@ -226,8 +226,8 @@ function formatMarkdownDocument(title: string, sections: Array<[string, string |
   return `# ${title}\n\n${renderedSections.join('\n\n')}\n`;
 }
 
-function parseChecklist(content: string): WorkstreamPlanStep[] {
-  const steps: WorkstreamPlanStep[] = [];
+function parseChecklist(content: string): ProjectPlanStep[] {
+  const steps: ProjectPlanStep[] = [];
 
   for (const rawLine of normalizeMarkdown(content).split('\n')) {
     const line = rawLine.trim();
@@ -254,7 +254,7 @@ function parseChecklist(content: string): WorkstreamPlanStep[] {
   return steps;
 }
 
-function formatChecklist(steps: WorkstreamPlanStep[]): string {
+function formatChecklist(steps: ProjectPlanStep[]): string {
   if (steps.length === 0) {
     throw new Error('Plan must contain at least one step.');
   }
@@ -294,12 +294,12 @@ function formatOptionalListAttribute(values?: string[]): string | undefined {
   return normalized.length > 0 ? normalized : undefined;
 }
 
-export function createInitialWorkstreamSummary(input: {
+export function createInitialProjectSummary(input: {
   id: string;
   objective: string;
   createdAt: string;
   updatedAt?: string;
-}): WorkstreamSummaryDocument {
+}): ProjectSummaryDocument {
   const objective = assertNonEmptyText(input.objective, 'Summary objective');
   const updatedAt = input.updatedAt ?? input.createdAt;
 
@@ -316,11 +316,11 @@ export function createInitialWorkstreamSummary(input: {
   };
 }
 
-export function createInitialWorkstreamPlan(input: {
+export function createInitialProjectPlan(input: {
   id: string;
   objective: string;
   updatedAt: string;
-}): WorkstreamPlanDocument {
+}): ProjectPlanDocument {
   return {
     id: assertNonEmptyText(input.id, 'Plan id'),
     updatedAt: assertNonEmptyText(input.updatedAt, 'Plan updatedAt'),
@@ -333,7 +333,7 @@ export function createInitialWorkstreamPlan(input: {
   };
 }
 
-export function formatWorkstreamSummary(document: WorkstreamSummaryDocument): string {
+export function formatProjectSummary(document: ProjectSummaryDocument): string {
   const frontmatter = formatFrontmatter({
     id: assertNonEmptyText(document.id, 'Summary id'),
     createdAt: assertNonEmptyText(document.createdAt, 'Summary createdAt'),
@@ -352,7 +352,7 @@ export function formatWorkstreamSummary(document: WorkstreamSummaryDocument): st
   return `${frontmatter}\n${body}`;
 }
 
-export function parseWorkstreamSummary(markdown: string): WorkstreamSummaryDocument {
+export function parseProjectSummary(markdown: string): ProjectSummaryDocument {
   const { attributes, body } = splitFrontmatter(markdown, 'Summary');
   const sections = parseMarkdownSections(body, 'Summary', 'Summary');
 
@@ -369,16 +369,16 @@ export function parseWorkstreamSummary(markdown: string): WorkstreamSummaryDocum
   };
 }
 
-export function readWorkstreamSummary(path: string): WorkstreamSummaryDocument {
-  return parseWorkstreamSummary(readFileSync(path, 'utf-8'));
+export function readProjectSummary(path: string): ProjectSummaryDocument {
+  return parseProjectSummary(readFileSync(path, 'utf-8'));
 }
 
-export function writeWorkstreamSummary(path: string, document: WorkstreamSummaryDocument): void {
+export function writeProjectSummary(path: string, document: ProjectSummaryDocument): void {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, formatWorkstreamSummary(document));
+  writeFileSync(path, formatProjectSummary(document));
 }
 
-export function formatWorkstreamPlan(document: WorkstreamPlanDocument): string {
+export function formatProjectPlan(document: ProjectPlanDocument): string {
   const frontmatter = formatFrontmatter({
     id: assertNonEmptyText(document.id, 'Plan id'),
     updatedAt: assertNonEmptyText(document.updatedAt, 'Plan updatedAt'),
@@ -392,7 +392,7 @@ export function formatWorkstreamPlan(document: WorkstreamPlanDocument): string {
   return `${frontmatter}\n${body}`;
 }
 
-export function parseWorkstreamPlan(markdown: string): WorkstreamPlanDocument {
+export function parseProjectPlan(markdown: string): ProjectPlanDocument {
   const { attributes, body } = splitFrontmatter(markdown, 'Plan');
   const sections = parseMarkdownSections(body, 'Plan', 'Plan');
 
@@ -404,26 +404,26 @@ export function parseWorkstreamPlan(markdown: string): WorkstreamPlanDocument {
   };
 }
 
-export function readWorkstreamPlan(path: string): WorkstreamPlanDocument {
-  return parseWorkstreamPlan(readFileSync(path, 'utf-8'));
+export function readProjectPlan(path: string): ProjectPlanDocument {
+  return parseProjectPlan(readFileSync(path, 'utf-8'));
 }
 
-export function writeWorkstreamPlan(path: string, document: WorkstreamPlanDocument): void {
+export function writeProjectPlan(path: string, document: ProjectPlanDocument): void {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, formatWorkstreamPlan(document));
+  writeFileSync(path, formatProjectPlan(document));
 }
 
-export function createWorkstreamActivityEntry(input: {
+export function createProjectActivityEntry(input: {
   id: string;
   createdAt: string;
   profile: string;
-  kind: WorkstreamActivityEntryDocument['kind'];
+  kind: ProjectActivityEntryDocument['kind'];
   summary: string;
   details?: string;
-  relatedWorkstreamIds?: string[];
+  relatedProjectIds?: string[];
   relatedConversationIds?: string[];
-  notificationState?: WorkstreamActivityNotificationState;
-}): WorkstreamActivityEntryDocument {
+  notificationState?: ProjectActivityNotificationState;
+}): ProjectActivityEntryDocument {
   return {
     id: assertNonEmptyText(input.id, 'Activity id'),
     createdAt: assertNonEmptyText(input.createdAt, 'Activity createdAt'),
@@ -431,13 +431,13 @@ export function createWorkstreamActivityEntry(input: {
     kind: assertNonEmptyText(input.kind, 'Activity kind'),
     summary: assertNonEmptyText(input.summary, 'Activity summary'),
     details: input.details ? assertNonEmptyText(input.details, 'Activity details') : undefined,
-    relatedWorkstreamIds: input.relatedWorkstreamIds?.map((value) => assertNonEmptyText(value, 'Related workstream id')),
+    relatedProjectIds: input.relatedProjectIds?.map((value) => assertNonEmptyText(value, 'Related project id')),
     relatedConversationIds: input.relatedConversationIds?.map((value) => assertNonEmptyText(value, 'Related conversation id')),
     notificationState: input.notificationState ?? 'none',
   };
 }
 
-export function formatWorkstreamActivityEntry(document: WorkstreamActivityEntryDocument): string {
+export function formatProjectActivityEntry(document: ProjectActivityEntryDocument): string {
   const frontmatterAttributes: Record<string, string> = {
     id: assertNonEmptyText(document.id, 'Activity id'),
     createdAt: assertNonEmptyText(document.createdAt, 'Activity createdAt'),
@@ -446,9 +446,9 @@ export function formatWorkstreamActivityEntry(document: WorkstreamActivityEntryD
     notificationState: document.notificationState ?? 'none',
   };
 
-  const relatedWorkstreamIds = formatOptionalListAttribute(document.relatedWorkstreamIds);
-  if (relatedWorkstreamIds) {
-    frontmatterAttributes.relatedWorkstreamIds = relatedWorkstreamIds;
+  const relatedProjectIds = formatOptionalListAttribute(document.relatedProjectIds);
+  if (relatedProjectIds) {
+    frontmatterAttributes.relatedProjectIds = relatedProjectIds;
   }
 
   const relatedConversationIds = formatOptionalListAttribute(document.relatedConversationIds);
@@ -465,7 +465,7 @@ export function formatWorkstreamActivityEntry(document: WorkstreamActivityEntryD
   return `${frontmatter}\n${body}`;
 }
 
-export function parseWorkstreamActivityEntry(markdown: string): WorkstreamActivityEntryDocument {
+export function parseProjectActivityEntry(markdown: string): ProjectActivityEntryDocument {
   const { attributes, body } = splitFrontmatter(markdown, 'Activity');
   const sections = parseMarkdownSections(body, 'Activity', 'Activity');
 
@@ -476,49 +476,49 @@ export function parseWorkstreamActivityEntry(markdown: string): WorkstreamActivi
     kind: readRequiredAttribute(attributes, 'kind', 'Activity'),
     summary: readRequiredSection(sections, 'Summary', 'Activity'),
     details: sections.Details ? assertNonEmptyText(sections.Details, 'Activity section Details') : undefined,
-    relatedWorkstreamIds: parseOptionalListAttribute(attributes, 'relatedWorkstreamIds'),
+    relatedProjectIds: parseOptionalListAttribute(attributes, 'relatedProjectIds'),
     relatedConversationIds: parseOptionalListAttribute(attributes, 'relatedConversationIds'),
-    notificationState: (attributes.notificationState as WorkstreamActivityNotificationState | undefined) ?? 'none',
+    notificationState: (attributes.notificationState as ProjectActivityNotificationState | undefined) ?? 'none',
   };
 }
 
-export function readWorkstreamActivityEntry(path: string): WorkstreamActivityEntryDocument {
-  return parseWorkstreamActivityEntry(readFileSync(path, 'utf-8'));
+export function readProjectActivityEntry(path: string): ProjectActivityEntryDocument {
+  return parseProjectActivityEntry(readFileSync(path, 'utf-8'));
 }
 
-export function writeWorkstreamActivityEntry(path: string, document: WorkstreamActivityEntryDocument): void {
+export function writeProjectActivityEntry(path: string, document: ProjectActivityEntryDocument): void {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, formatWorkstreamActivityEntry(document));
+  writeFileSync(path, formatProjectActivityEntry(document));
 }
 
-export function createWorkstreamTodo(input: {
+export function createProjectTask(input: {
   id: string;
   createdAt: string;
   updatedAt?: string;
-  status: WorkstreamTodoDocument['status'];
+  status: ProjectTaskDocument['status'];
   title: string;
   summary?: string;
-}): WorkstreamTodoDocument {
+}): ProjectTaskDocument {
   return {
-    id: assertNonEmptyText(input.id, 'Todo id'),
-    createdAt: assertNonEmptyText(input.createdAt, 'Todo createdAt'),
-    updatedAt: assertNonEmptyText(input.updatedAt ?? input.createdAt, 'Todo updatedAt'),
-    status: assertNonEmptyText(input.status, 'Todo status'),
-    title: assertNonEmptyText(input.title, 'Todo title'),
-    summary: input.summary ? assertNonEmptyText(input.summary, 'Todo summary') : undefined,
+    id: assertNonEmptyText(input.id, 'Task id'),
+    createdAt: assertNonEmptyText(input.createdAt, 'Task createdAt'),
+    updatedAt: assertNonEmptyText(input.updatedAt ?? input.createdAt, 'Task updatedAt'),
+    status: assertNonEmptyText(input.status, 'Task status'),
+    title: assertNonEmptyText(input.title, 'Task title'),
+    summary: input.summary ? assertNonEmptyText(input.summary, 'Task summary') : undefined,
   };
 }
 
-export function formatWorkstreamTodo(document: WorkstreamTodoDocument): string {
+export function formatProjectTask(document: ProjectTaskDocument): string {
   const frontmatterAttributes: Record<string, string> = {
-    id: assertNonEmptyText(document.id, 'Todo id'),
-    createdAt: assertNonEmptyText(document.createdAt, 'Todo createdAt'),
-    updatedAt: assertNonEmptyText(document.updatedAt, 'Todo updatedAt'),
-    status: assertNonEmptyText(document.status, 'Todo status'),
+    id: assertNonEmptyText(document.id, 'Task id'),
+    createdAt: assertNonEmptyText(document.createdAt, 'Task createdAt'),
+    updatedAt: assertNonEmptyText(document.updatedAt, 'Task updatedAt'),
+    status: assertNonEmptyText(document.status, 'Task status'),
   };
 
   const frontmatter = formatFrontmatter(frontmatterAttributes);
-  const body = formatMarkdownDocument('Todo', [
+  const body = formatMarkdownDocument('Task', [
     ['Title', document.title],
     ['Summary', document.summary],
   ]);
@@ -526,25 +526,25 @@ export function formatWorkstreamTodo(document: WorkstreamTodoDocument): string {
   return `${frontmatter}\n${body}`;
 }
 
-export function parseWorkstreamTodo(markdown: string): WorkstreamTodoDocument {
-  const { attributes, body } = splitFrontmatter(markdown, 'Todo');
-  const sections = parseMarkdownSections(body, 'Todo', 'Todo');
+export function parseProjectTask(markdown: string): ProjectTaskDocument {
+  const { attributes, body } = splitFrontmatter(markdown, 'Task');
+  const sections = parseMarkdownSections(body, 'Task', 'Task');
 
   return {
-    id: readRequiredAttribute(attributes, 'id', 'Todo'),
-    createdAt: readRequiredAttribute(attributes, 'createdAt', 'Todo'),
-    updatedAt: readRequiredAttribute(attributes, 'updatedAt', 'Todo'),
-    status: readRequiredAttribute(attributes, 'status', 'Todo'),
-    title: readRequiredSection(sections, 'Title', 'Todo'),
-    summary: sections.Summary ? assertNonEmptyText(sections.Summary, 'Todo section Summary') : undefined,
+    id: readRequiredAttribute(attributes, 'id', 'Task'),
+    createdAt: readRequiredAttribute(attributes, 'createdAt', 'Task'),
+    updatedAt: readRequiredAttribute(attributes, 'updatedAt', 'Task'),
+    status: readRequiredAttribute(attributes, 'status', 'Task'),
+    title: readRequiredSection(sections, 'Title', 'Task'),
+    summary: sections.Summary ? assertNonEmptyText(sections.Summary, 'Task section Summary') : undefined,
   };
 }
 
-export function readWorkstreamTodo(path: string): WorkstreamTodoDocument {
-  return parseWorkstreamTodo(readFileSync(path, 'utf-8'));
+export function readProjectTask(path: string): ProjectTaskDocument {
+  return parseProjectTask(readFileSync(path, 'utf-8'));
 }
 
-export function writeWorkstreamTodo(path: string, document: WorkstreamTodoDocument): void {
+export function writeProjectTask(path: string, document: ProjectTaskDocument): void {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, formatWorkstreamTodo(document));
+  writeFileSync(path, formatProjectTask(document));
 }

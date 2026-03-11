@@ -7,7 +7,7 @@ import {
   listProfileActivityEntries,
   saveDeferredResumeState,
   scheduleDeferredResume,
-  setConversationWorkstreamLinks,
+  setConversationProjectLinks,
   loadDeferredResumeState,
 } from '@personal-agent/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -128,11 +128,11 @@ describe('deferred resume daemon module', () => {
       JSON.stringify({ type: 'session', id: 'conv-123', timestamp: '2026-03-10T12:00:00.000Z', cwd: '/tmp/workspace' }) + '\n',
     );
 
-    setConversationWorkstreamLinks({
+    setConversationProjectLinks({
       repoRoot,
       profile: 'assistant',
       conversationId: 'conv-123',
-      relatedWorkstreamIds: ['web-ui'],
+      relatedProjectIds: ['web-ui'],
       updatedAt: '2026-03-10T12:00:00.000Z',
     });
 
@@ -165,7 +165,7 @@ describe('deferred resume daemon module', () => {
     expect(activity).toHaveLength(1);
     expect(activity[0]?.entry.summary).toBe('Deferred resume fired. Open the conversation to continue.');
     expect(activity[0]?.entry.relatedConversationIds).toEqual(['conv-123']);
-    expect(activity[0]?.entry.relatedWorkstreamIds).toEqual(['web-ui']);
+    expect(activity[0]?.entry.relatedProjectIds).toEqual(['web-ui']);
 
     expect(published).toContainEqual({
       type: 'deferred-resume.tick.completed',

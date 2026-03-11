@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
-import { validateWorkstreamId } from './workstreams.js';
+import { validateProjectId } from './projects.js';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 const CONVERSATION_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/;
@@ -14,10 +14,10 @@ export interface ResolveConversationLinkPathOptions extends ResolveConversationL
   conversationId: string;
 }
 
-export interface ConversationWorkstreamLinkDocument {
+export interface ConversationProjectLinkDocument {
   conversationId: string;
   updatedAt: string;
-  relatedWorkstreamIds: string[];
+  relatedProjectIds: string[];
 }
 
 function getRepoRoot(repoRoot?: string): string {
@@ -51,29 +51,29 @@ export function resolveConversationLinkPath(options: ResolveConversationLinkPath
   return join(resolveProfileConversationLinksDir(options), `${options.conversationId}.json`);
 }
 
-function normalizeRelatedWorkstreamIds(workstreamIds: string[]): string[] {
+function normalizeRelatedProjectIds(projectIds: string[]): string[] {
   const unique: string[] = [];
   const seen = new Set<string>();
 
-  for (const workstreamId of workstreamIds) {
-    validateWorkstreamId(workstreamId);
-    if (seen.has(workstreamId)) {
+  for (const projectId of projectIds) {
+    validateProjectId(projectId);
+    if (seen.has(projectId)) {
       continue;
     }
 
-    seen.add(workstreamId);
-    unique.push(workstreamId);
+    seen.add(projectId);
+    unique.push(projectId);
   }
 
   return unique;
 }
 
-export function readConversationWorkstreamLink(path: string): ConversationWorkstreamLinkDocument {
-  const parsed = JSON.parse(readFileSync(path, 'utf-8')) as Partial<ConversationWorkstreamLinkDocument>;
+export function readConversationProjectLink(path: string): ConversationProjectLinkDocument {
+  const parsed = JSON.parse(readFileSync(path, 'utf-8')) as Partial<ConversationProjectLinkDocument>;
   const conversationId = typeof parsed.conversationId === 'string' ? parsed.conversationId.trim() : '';
   const updatedAt = typeof parsed.updatedAt === 'string' ? parsed.updatedAt.trim() : '';
-  const relatedWorkstreamIds = Array.isArray(parsed.relatedWorkstreamIds)
-    ? parsed.relatedWorkstreamIds.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+  const relatedProjectIds = Array.isArray(parsed.relatedProjectIds)
+    ? parsed.relatedProjectIds.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
     : [];
 
   validateConversationId(conversationId);
@@ -84,23 +84,23 @@ export function readConversationWorkstreamLink(path: string): ConversationWorkst
   return {
     conversationId,
     updatedAt: new Date(Date.parse(updatedAt)).toISOString(),
-    relatedWorkstreamIds: normalizeRelatedWorkstreamIds(relatedWorkstreamIds),
+    relatedProjectIds: normalizeRelatedProjectIds(relatedProjectIds),
   };
 }
 
-export function getConversationWorkstreamLink(options: ResolveConversationLinkPathOptions): ConversationWorkstreamLinkDocument | null {
+export function getConversationProjectLink(options: ResolveConversationLinkPathOptions): ConversationProjectLinkDocument | null {
   const path = resolveConversationLinkPath(options);
   if (!existsSync(path)) {
     return null;
   }
 
-  return readConversationWorkstreamLink(path);
+  return readConversationProjectLink(path);
 }
 
-export function writeConversationWorkstreamLink(options: {
+export function writeConversationProjectLink(options: {
   repoRoot?: string;
   profile: string;
-  document: ConversationWorkstreamLinkDocument;
+  document: ConversationProjectLinkDocument;
 }): string {
   validateProfileName(options.profile);
   validateConversationId(options.document.conversationId);
@@ -111,10 +111,10 @@ export function writeConversationWorkstreamLink(options: {
     conversationId: options.document.conversationId,
   });
 
-  const normalized: ConversationWorkstreamLinkDocument = {
+  const normalized: ConversationProjectLinkDocument = {
     conversationId: options.document.conversationId,
     updatedAt: new Date(Date.parse(options.document.updatedAt)).toISOString(),
-    relatedWorkstreamIds: normalizeRelatedWorkstreamIds(options.document.relatedWorkstreamIds),
+    relatedProjectIds: normalizeRelatedProjectIds(options.document.relatedProjectIds),
   };
 
   mkdirSync(resolveProfileConversationLinksDir({ repoRoot: options.repoRoot, profile: options.profile }), { recursive: true });
@@ -122,20 +122,20 @@ export function writeConversationWorkstreamLink(options: {
   return path;
 }
 
-export function setConversationWorkstreamLinks(options: {
+export function setConversationProjectLinks(options: {
   repoRoot?: string;
   profile: string;
   conversationId: string;
-  relatedWorkstreamIds: string[];
+  relatedProjectIds: string[];
   updatedAt?: string;
-}): ConversationWorkstreamLinkDocument {
-  const document: ConversationWorkstreamLinkDocument = {
+}): ConversationProjectLinkDocument {
+  const document: ConversationProjectLinkDocument = {
     conversationId: options.conversationId,
     updatedAt: options.updatedAt ?? new Date().toISOString(),
-    relatedWorkstreamIds: normalizeRelatedWorkstreamIds(options.relatedWorkstreamIds),
+    relatedProjectIds: normalizeRelatedProjectIds(options.relatedProjectIds),
   };
 
-  writeConversationWorkstreamLink({
+  writeConversationProjectLink({
     repoRoot: options.repoRoot,
     profile: options.profile,
     document,
@@ -144,40 +144,40 @@ export function setConversationWorkstreamLinks(options: {
   return document;
 }
 
-export function addConversationWorkstreamLink(options: {
+export function addConversationProjectLink(options: {
   repoRoot?: string;
   profile: string;
   conversationId: string;
-  workstreamId: string;
+  projectId: string;
   updatedAt?: string;
-}): ConversationWorkstreamLinkDocument {
-  const existing = getConversationWorkstreamLink(options);
-  return setConversationWorkstreamLinks({
+}): ConversationProjectLinkDocument {
+  const existing = getConversationProjectLink(options);
+  return setConversationProjectLinks({
     repoRoot: options.repoRoot,
     profile: options.profile,
     conversationId: options.conversationId,
-    relatedWorkstreamIds: [
-      ...(existing?.relatedWorkstreamIds ?? []),
-      options.workstreamId,
+    relatedProjectIds: [
+      ...(existing?.relatedProjectIds ?? []),
+      options.projectId,
     ],
     updatedAt: options.updatedAt,
   });
 }
 
-export function removeConversationWorkstreamLink(options: {
+export function removeConversationProjectLink(options: {
   repoRoot?: string;
   profile: string;
   conversationId: string;
-  workstreamId: string;
+  projectId: string;
   updatedAt?: string;
-}): ConversationWorkstreamLinkDocument {
-  validateWorkstreamId(options.workstreamId);
-  const existing = getConversationWorkstreamLink(options);
-  return setConversationWorkstreamLinks({
+}): ConversationProjectLinkDocument {
+  validateProjectId(options.projectId);
+  const existing = getConversationProjectLink(options);
+  return setConversationProjectLinks({
     repoRoot: options.repoRoot,
     profile: options.profile,
     conversationId: options.conversationId,
-    relatedWorkstreamIds: (existing?.relatedWorkstreamIds ?? []).filter((id) => id !== options.workstreamId),
+    relatedProjectIds: (existing?.relatedProjectIds ?? []).filter((id) => id !== options.projectId),
     updatedAt: options.updatedAt,
   });
 }

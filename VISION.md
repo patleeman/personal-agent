@@ -2,7 +2,7 @@
 
 _Status: working draft_
 
-_Last updated: 2026-03-10_
+_Last updated: 2026-03-11_
 
 ## Why this document exists
 
@@ -36,7 +36,7 @@ The core idea is:
 
 - **conversations are the primary interaction model**
 - **artifacts are the durable handles for work**
-- **workstreams are mostly internal structure that organize related artifacts**
+- **projects are mostly internal structure that organize related artifacts**
 - **surfaces are peer interfaces into the same agent**
 - **autonomous work should surface through artifacts, activity, and optional notifications**
 
@@ -138,7 +138,7 @@ Likely default TUI shell:
 
 - **left sidebar** — inbox first, then conversations; conversations that need attention should bubble to the top
 - **center panel** — the Pi conversation panel
-- **right panel** — current objective/intent, summary, plan, activities, artifacts, and related workstreams
+- **right panel** — current objective/intent, summary, plan, activities, artifacts, and related projects
 
 The inbox is best understood as a surfaced attention view over conversations and activity, not necessarily as a separate durable object in the core model.
 
@@ -163,30 +163,30 @@ These artifacts matter more than preserving raw chat as the primary continuity m
 
 Raw transcripts still matter for inspectability, but they should not be the only way to understand or resume work.
 
-### 7. Workstreams are durable internal grouping, not the main UX
+### 7. Projects are durable internal groupings, not the main UX
 
-The system appears to need some internal container that groups related work over time. `workstream` is the current name for that concept.
+The system appears to need some internal container that groups related work over time. `project` is the current name for that concept.
 
-A workstream should:
+A project should:
 
 - group related artifacts
 - let work span multiple conversations and surfaces
 - let the agent keep track of what belongs together
 - make it possible to resume work without depending on one transcript
 
-But the workstream does **not** need to be a heavy user-facing concept.
+But the project does **not** need to be a heavy user-facing concept.
 
-Patrick does not need to manage workstreams directly the way a project-management tool would force him to. The main thing that matters is that the agent can keep artifacts together and expose them in one place when needed.
+Patrick does not need to manage projects directly the way a project-management tool would force him to. The main thing that matters is that the agent can keep artifacts together and expose them in one place when needed.
 
-### 8. A plan is part of a workstream
+### 8. A plan is part of a project
 
 A plan should be a durable summarized artifact that survives compaction and helps the agent keep track of the work.
 
-The cleanest current model is that a workstream has a plan attached to it rather than treating plan as a completely separate top-level concept.
+The cleanest current model is that a project has a plan attached to it rather than treating plan as a completely separate top-level concept.
 
 A plan should ideally have revision history. Plain text in git is attractive when practical.
 
-### 9. Tasks/jobs are execution units inside a workstream
+### 9. Tasks/jobs are execution units inside a project
 
 Tasks or jobs are useful, but they are not the whole system.
 
@@ -269,19 +269,19 @@ Current direction:
 
 This makes activity a better default surfacing layer than forcing every result back into an active conversation.
 
-### 14. The agent should create workstreams when durable structure is needed
+### 14. The agent should create projects when durable structure is needed
 
-A conversation can exist with no workstream at all.
+A conversation can exist with no project at all.
 
-When the agent needs durable organization for the work, it should be able to create a workstream intentionally. That creation unlocks the ability to:
+When the agent needs durable organization for the work, it should be able to create a project intentionally. That creation unlocks the ability to:
 
 - attach a plan
-- create workstream todos
+- create project tasks
 - collect artifacts in one place
 - maintain an executive summary
 - continue the work from another conversation or surface later
 
-This may become a structural requirement for some actions. For example, background work or scheduled work may implicitly require a workstream so the resulting artifacts have a durable home.
+This may become a structural requirement for some actions. For example, background work or scheduled work may implicitly require a project so the resulting artifacts have a durable home.
 
 ### 15. Conversations can reference work without owning it
 
@@ -289,9 +289,9 @@ A conversation should not be the owner of durable work.
 
 Current direction:
 
-- a conversation may exist with no workstream
-- a conversation may reference one or more workstreams
-- a workstream may span multiple conversations and surfaces
+- a conversation may exist with no project
+- a conversation may reference one or more projects
+- a project may span multiple conversations and surfaces
 - any conversation should be able to pick up related work
 - a conversation can have one practical focus while still referring to others
 
@@ -344,7 +344,7 @@ The exact split between markdown, structured metadata, and machine-local executi
 
 ### 19. Work should fade, not require heavy curation
 
-Patrick should not have to manually cull old workstreams.
+Patrick should not have to manually cull old projects.
 
 A better model is more like a conversation list or stream of historical work:
 
@@ -352,7 +352,7 @@ A better model is more like a conversation list or stream of historical work:
 - attention can be derived from recency, blockers, open work, recent activity, or unresolved follow-up
 - the system should avoid forcing explicit cleanup as routine maintenance
 
-This argues against a heavy explicit workstream lifecycle or project-management-style state machine.
+This argues against a heavy explicit project lifecycle or project-management-style state machine.
 
 ## Canonical internal model (working)
 
@@ -363,9 +363,9 @@ A likely core model is:
 - **Surface** — TUI, Telegram, background daemon, future app/web UI
 - **Conversation** — the primary interaction thread between Patrick and the agent on a given surface
 - **Deferred Resume** — a scheduled continuation of a specific conversation
-- **Workstream** — a mostly internal durable grouping for related artifacts and execution
+- **Project** — a mostly internal durable grouping for related artifacts and execution
 - **Artifact** — a durable output or record of work, such as a plan, summary, task list, report, transcript, or verification result
-- **Task/Job** — an execution unit inside a workstream
+- **Task/Job** — an execution unit inside a project
 - **Execution** — a concrete run or attempt performed for a task/job or other structured action
 - **Summary** — a compressed, attention-ordered view of ongoing work
 - **Activity** — an autonomous update or item needing attention, independent of any currently active conversation
@@ -376,17 +376,17 @@ Likely relationships:
 
 - one **agent** spans many **profiles** and **surfaces**
 - a **profile** shapes what memory, tools, and policies apply
-- a **conversation** may remain purely conversational or may lead the agent to create a **workstream**
+- a **conversation** may remain purely conversational or may lead the agent to create a **project**
 - a **deferred resume** targets a specific **conversation**
-- a **workstream** groups related **artifacts**, **todos**, **executions**, and **summaries**
-- a **plan** is an artifact attached to a workstream
-- a **conversation** can reference multiple **workstreams**
-- a **workstream** can span multiple **conversations** and **surfaces**
+- a **project** groups related **artifacts**, **tasks**, **executions**, and **summaries**
+- a **plan** is an artifact attached to a project
+- a **conversation** can reference multiple **projects**
+- a **project** can span multiple **conversations** and **surfaces**
 - background or scheduled work may create **activity** even when no active conversation is open
 - **notifications** should usually deliver or point to **activity**, rather than being the only durable record of autonomous work
 - surfaces should likely expose an inbox view that combines **activity** and **conversations needing attention**
-- forked conversations may inherit references to workstreams but should be detached by default unless intentionally reattached
-- workstream importance should be derived from attention signals rather than requiring a heavy explicit state machine
+- forked conversations may inherit references to projects but should be detached by default unless intentionally reattached
+- project importance should be derived from attention signals rather than requiring a heavy explicit state machine
 - durable **memory** should be partially profile-scoped and partially part of a shared core identity
 
 ## Core product loops
@@ -408,9 +408,9 @@ This is especially important between TUI and gateway.
 ### 3. Planning and execution loop
 
 A conversation crystallizes into real work.
-The agent creates a workstream when durable organization is useful.
+The agent creates a project when durable organization is useful.
 A plan is attached.
-Workstream todos may be created.
+Project tasks may be created.
 Artifacts accumulate.
 Verification happens.
 A summary captures what matters next.
@@ -438,7 +438,7 @@ It also reviews, deduplicates, reorganizes, and refines stored memory so continu
 - **Conversation-first UX** — preserve the Pi thread model as the primary interaction paradigm
 - **Peer surfaces** — TUI and gateway should be different interfaces to the same agent, not different classes of interaction
 - **Artifacts over raw transcript reliance** — durable work should be recoverable from compact artifacts and summaries, not only from chat history
-- **Workstreams as internal structure** — organize work durably without forcing project-management UX onto the user
+- **Projects as internal structure** — organize work durably without forcing project-management UX onto the user
 - **Profiles as operating contexts** — domain/context should shape behavior more than UI surface does
 - **Git-backed durable resources** with clear separation between committed resources and machine-local execution state
 - **Portable by construction** — durable identity, memory, and work artifacts should move cleanly across machines
@@ -477,17 +477,17 @@ Questions:
 
 - What artifact types should exist from the beginning?
 - Which artifacts should be plain markdown/text files versus structured metadata files?
-- What minimal schema should plans, summaries, todos, activity entries, and verification results share?
+- What minimal schema should plans, summaries, tasks, activity entries, and verification results share?
 - How should noisy artifacts such as subagent transcripts and tool traces be summarized and referenced?
 
-### 4. Workstream creation rules
+### 4. Project creation rules
 
 Questions:
 
-- Exactly when should the agent create a workstream?
-- Which actions should implicitly require a workstream, such as background tasks or scheduled jobs?
-- How explicit should workstream creation be in the UX, if the concept itself is mostly internal?
-- Should every task/job belong to a workstream, or are there valid standalone cases?
+- Exactly when should the agent create a project?
+- Which actions should implicitly require a project, such as background tasks or scheduled jobs?
+- How explicit should project creation be in the UX, if the concept itself is mostly internal?
+- Should every task/job belong to a project, or are there valid standalone cases?
 
 ### 5. Surface and gateway model
 
@@ -506,7 +506,7 @@ Questions:
 
 - What should the activity/inbox stream look like?
 - Which autonomous outputs should create activity entries by default?
-- How should activity relate to conversations, workstreams, and artifacts?
+- How should activity relate to conversations, projects, and artifacts?
 - When should activity also send a gateway notification?
 - How should scheduled work surface back into a conversation when there is no active TUI session?
 
@@ -524,7 +524,7 @@ Questions:
 Questions:
 
 - What should live in git versus machine-local state?
-- Where should workstream files, artifacts, and activity records live?
+- Where should project files, artifacts, and activity records live?
 - How much structured metadata is needed alongside plain text documents?
 - What indexing or lookup layer is needed so the agent can reliably find relevant work artifacts later?
 
@@ -557,7 +557,7 @@ A reasonable next design sequence is:
    - activity entry structure
    - inspectability vs noise management
 
-2. **Define workstream creation and organization**
+2. **Define project creation and organization**
    - when the agent creates one
    - whether some actions require one
    - how artifacts attach to it
@@ -580,10 +580,10 @@ A reasonable next design sequence is:
 5. **Define file-backed durability**
    - git-backed vs machine-local state
    - markdown vs metadata split
-   - storage layout for plans, todos, summaries, activity, and execution artifacts
+   - storage layout for plans, tasks, summaries, activity, and execution artifacts
 
 6. **Define architecture around the canonical model**
-   - how agent/profile/conversation/deferred-resume/workstream/artifact/activity/execution concepts map onto implementation boundaries
+   - how agent/profile/conversation/deferred-resume/project/artifact/activity/execution concepts map onto implementation boundaries
    - which concepts deserve first-class storage and APIs versus remaining conventions
 
 ## Non-goals to clarify later
@@ -619,12 +619,12 @@ Potential non-goals and boundaries:
 - Conversations are the main interaction model and should not all be forced into tasks.
 - The common workflow is closer to: chat → create plan → break into tasks → complete tasks → verify → complete.
 - Plans should be durable summarized artifacts that survive compaction and help track work over time.
-- Some internal container is still needed to group plans, tasks, and related artifacts; `workstream` is the current term.
-- A workstream should have a plan attached and may span multiple conversations and surfaces.
-- Workstreams should mainly be internal organization for the agent, not a heavy user-facing concept to manage directly.
-- Tasks/jobs are execution units inside a workstream and may be created automatically by the agent when needed.
-- The agent should be able to create workstreams automatically when durable organization is needed, especially for background work, subagents, or other long-running execution.
-- A conversation can reference multiple workstreams; any conversation can pick work up later.
+- Some internal container is still needed to group plans, tasks, and related artifacts; `project` is the current term.
+- A project should have a plan attached and may span multiple conversations and surfaces.
+- Projects should mainly be internal organization for the agent, not a heavy user-facing concept to manage directly.
+- Tasks/jobs are execution units inside a project and may be created automatically by the agent when needed.
+- The agent should be able to create projects automatically when durable organization is needed, especially for background work, subagents, or other long-running execution.
+- A conversation can reference multiple projects; any conversation can pick work up later.
 - If a conversation is forked, the fork should inherit references to related work but be detached by default unless intentionally reattached.
 - The user-facing priority is access to artifacts and concise executive summaries, not exposure to the underlying grouping model.
 - Summary quality is critical for reducing context-switching burden; the summary should prioritize objective, current plan, status, and blockers first.

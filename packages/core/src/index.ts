@@ -20,11 +20,11 @@ export * from './activity.js';
 // Deferred resume state exports
 export * from './deferred-resume.js';
 
-// Conversation ↔ workstream link exports
-export * from './conversation-links.js';
+// Conversation ↔ project link exports
+export * from './conversation-project-links.js';
 
-// Workstream artifact exports
-export * from './workstream-artifacts.js';
+// Project artifact exports
+export * from './project-artifacts.js';
 
-// Workstream exports
-export * from './workstreams.js';
+// Project exports
+export * from './projects.js';

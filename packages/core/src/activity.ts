@@ -1,10 +1,10 @@
 import { existsSync, readdirSync } from 'fs';
 import { join, resolve } from 'path';
 import {
-  readWorkstreamActivityEntry,
-  writeWorkstreamActivityEntry,
-  type WorkstreamActivityEntryDocument,
-} from './workstream-artifacts.js';
+  readProjectActivityEntry,
+  writeProjectActivityEntry,
+  type ProjectActivityEntryDocument,
+} from './project-artifacts.js';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 const ACTIVITY_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
@@ -20,7 +20,7 @@ export interface ResolveActivityEntryPathOptions extends ResolveActivityOptions 
 
 export interface StoredActivityEntry {
   path: string;
-  entry: WorkstreamActivityEntryDocument;
+  entry: ProjectActivityEntryDocument;
 }
 
 function getRepoRoot(repoRoot?: string): string {
@@ -58,7 +58,7 @@ export function resolveActivityEntryPath(options: ResolveActivityEntryPathOption
 export function writeProfileActivityEntry(options: {
   repoRoot?: string;
   profile: string;
-  entry: WorkstreamActivityEntryDocument;
+  entry: ProjectActivityEntryDocument;
 }): string {
   const path = resolveActivityEntryPath({
     repoRoot: options.repoRoot,
@@ -66,7 +66,7 @@ export function writeProfileActivityEntry(options: {
     activityId: options.entry.id,
   });
 
-  writeWorkstreamActivityEntry(path, options.entry);
+  writeProjectActivityEntry(path, options.entry);
   return path;
 }
 
@@ -83,7 +83,7 @@ export function listProfileActivityEntries(options: ResolveActivityOptions): Sto
       const path = join(activityDir, entry.name);
       return {
         path,
-        entry: readWorkstreamActivityEntry(path),
+        entry: readProjectActivityEntry(path),
       };
     });
 
