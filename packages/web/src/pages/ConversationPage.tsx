@@ -399,6 +399,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [pendingQueue, setPendingQueue] = useState<PendingMsg[]>([]);
   const prevStreamingRef = useRef(false);
   const { data: memoryData } = useApi(api.memory);
+  const { data: profileState } = useApi(api.profiles);
   const { projects, tasks, setProjects } = useAppData();
   const conversationProjectsFetcher = useCallback(async () => {
     if (!id) {
@@ -428,16 +429,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const mentionQuery  = mentionMatch?.[2] ?? '';
   const slashItems = useMemo(() => buildSlashMenuItems(input, memoryData?.skills ?? []), [input, memoryData]);
   const modelItems = useMemo(() => filterModelPickerItems(models, modelQuery), [models, modelQuery]);
-  const mentionItems = useMemo(() => {
-    const hasProfileItem = Boolean(memoryData?.agentsMd.some((item) => item.source === memoryData.profile && item.exists));
-    return buildMentionItems({
-      projects: projects ?? [],
-      tasks: tasks ?? [],
-      memoryDocs: memoryData?.memoryDocs ?? [],
-      skills: memoryData?.skills ?? [],
-      profileName: hasProfileItem ? (memoryData?.profile ?? null) : null,
-    });
-  }, [projects, tasks, memoryData]);
+  const mentionItems = useMemo(() => buildMentionItems({
+    projects: projects ?? [],
+    tasks: tasks ?? [],
+    memoryDocs: memoryData?.memoryDocs ?? [],
+    skills: memoryData?.skills ?? [],
+    profiles: profileState?.profiles ?? [],
+  }), [projects, tasks, memoryData, profileState]);
   const referencedProjectIds = conversationProjects?.relatedProjectIds ?? [];
   const draftMentionItems = useMemo(() => resolveMentionItems(input, mentionItems)
     .filter((item) => item.kind !== 'project' || !referencedProjectIds.includes(item.label)), [input, mentionItems, referencedProjectIds]);
@@ -1100,7 +1098,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 className="flex-1 bg-transparent text-sm text-primary placeholder:text-dim outline-none resize-none leading-relaxed disabled:cursor-wait disabled:text-dim"
                 placeholder={draft
                   ? 'Creating conversation…'
-                  : 'Message… (/ for commands, @ to reference projects, tasks, knowledge, skills, and profile)'}
+                  : 'Message… (/ for commands, @ to reference projects, tasks, knowledge, skills, and profiles)'}
                 style={{ minHeight: '24px', maxHeight: '160px' }}
               />
 

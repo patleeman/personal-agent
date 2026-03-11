@@ -55,10 +55,19 @@ const SKILLS: PromptReferenceSkill[] = [
 
 const PROFILES: PromptReferenceProfile[] = [
   {
-    id: 'profile',
-    profile: 'datadog',
+    id: 'assistant',
+    source: 'assistant',
+    path: '/repo/profiles/assistant/agent/AGENTS.md',
+  },
+  {
+    id: 'datadog',
     source: 'datadog',
     path: '/repo/profiles/datadog/agent/AGENTS.md',
+  },
+  {
+    id: 'shared',
+    source: 'shared',
+    path: '/repo/profiles/shared/agent/AGENTS.md',
   },
 ];
 
@@ -72,7 +81,7 @@ describe('promptReferences', () => {
 
   it('resolves project, task, memory doc, skill, and profile mentions independently', () => {
     expect(resolvePromptReferences({
-      text: 'Use @web-ui with @memory-maintenance @project-state-model @dd-pup-cli and @profile.',
+      text: 'Use @web-ui with @memory-maintenance @project-state-model @dd-pup-cli and @datadog.',
       availableProjectIds: ['web-ui', 'artifact-model'],
       tasks: TASKS,
       memoryDocs: MEMORY_DOCS,
@@ -83,7 +92,7 @@ describe('promptReferences', () => {
       taskIds: ['memory-maintenance'],
       memoryDocIds: ['project-state-model'],
       skillNames: ['dd-pup-cli'],
-      profileIds: ['profile'],
+      profileIds: ['datadog'],
     });
   });
 
@@ -93,6 +102,7 @@ describe('promptReferences', () => {
       'daily-review',
     ]);
     expect(pickPromptReferencesInOrder(['dd-pup-cli'], SKILLS).map((skill) => skill.name)).toEqual(['dd-pup-cli']);
+    expect(pickPromptReferencesInOrder(['shared', 'assistant'], PROFILES).map((profile) => profile.id)).toEqual(['shared', 'assistant']);
   });
 
   it('builds scheduled task context with file paths and status', () => {
@@ -122,7 +132,8 @@ describe('promptReferences', () => {
 
     const profilesContext = buildReferencedProfilesContext(PROFILES, '/repo');
     expect(profilesContext).toContain('Referenced profile instructions:');
-    expect(profilesContext).toContain('@profile: datadog');
+    expect(profilesContext).toContain('@datadog: datadog profile');
     expect(profilesContext).toContain('profiles/datadog/agent/AGENTS.md');
+    expect(profilesContext).toContain('@shared: shared profile');
   });
 });

@@ -29,7 +29,6 @@ export interface PromptReferenceSkill {
 
 export interface PromptReferenceProfile {
   id: string;
-  profile: string;
   source: string;
   path: string;
 }
@@ -219,7 +218,7 @@ export function buildReferencedProfilesContext(profiles: PromptReferenceProfile[
   return [
     'Referenced profile instructions:',
     ...profiles.map((profile) => [
-      `- @${profile.id}: ${profile.profile}`,
+      `- @${profile.id}: ${profile.id} profile`,
       `  path: ${relative(repoRoot, profile.path)}`,
       `  source: ${profile.source}`,
     ].join('\n')),

@@ -700,33 +700,25 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
     const tasks = listTasksForCurrentProfile();
     const memoryDocs = listMemoryDocsForCurrentProfile();
     const skills = listSkillsForCurrentProfile();
-    const currentProfileAgent = getCurrentProfileAgentItem();
+    const profileAgents = listProfileAgentItems().map((item) => ({
+      id: item.source,
+      source: item.source,
+      path: item.path,
+    }));
     const promptReferences = resolvePromptReferences({
       text,
       availableProjectIds: listProjectIds({ repoRoot: REPO_ROOT, profile: currentProfile }),
       tasks,
       memoryDocs,
       skills,
-      profiles: currentProfileAgent ? [{
-        id: 'profile',
-        profile: currentProfile,
-        source: currentProfileAgent.source,
-        path: currentProfileAgent.path,
-      }] : [],
+      profiles: profileAgents,
     });
 
     const relatedProjectIds = syncConversationProjectReferences(id, promptReferences.projectIds);
     const referencedTasks = pickPromptReferencesInOrder(promptReferences.taskIds, tasks);
     const referencedMemoryDocs = pickPromptReferencesInOrder(promptReferences.memoryDocIds, memoryDocs);
     const referencedSkills = pickPromptReferencesInOrder(promptReferences.skillNames, skills);
-    const referencedProfiles = currentProfileAgent && promptReferences.profileIds.includes('profile')
-      ? [{
-          id: 'profile',
-          profile: currentProfile,
-          source: currentProfileAgent.source,
-          path: currentProfileAgent.path,
-        }]
-      : [];
+    const referencedProfiles = pickPromptReferencesInOrder(promptReferences.profileIds, profileAgents);
     const queuedContextBlocks = [
       relatedProjectIds.length > 0 ? buildReferencedProjectsContext(relatedProjectIds) : '',
       referencedTasks.length > 0 ? buildReferencedTasksContext(referencedTasks, REPO_ROOT) : '',
@@ -1409,19 +1401,24 @@ function listSkillsForCurrentProfile(): SkillItem[] {
   return skills;
 }
 
-function getCurrentProfileAgentItem(): AgentsItem | null {
-  const profile = getCurrentProfile();
-  const filePath = join(REPO_ROOT, `profiles/${profile}/agent/AGENTS.md`);
-  if (!existsSync(filePath)) {
-    return null;
+function listProfileAgentItems(): AgentsItem[] {
+  const items: AgentsItem[] = [];
+
+  for (const profile of listAvailableProfiles()) {
+    const filePath = join(REPO_ROOT, `profiles/${profile}/agent/AGENTS.md`);
+    if (!existsSync(filePath)) {
+      continue;
+    }
+
+    items.push({
+      source: profile,
+      path: filePath,
+      exists: true,
+      content: readFileSync(filePath, 'utf-8'),
+    });
   }
 
-  return {
-    source: profile,
-    path: filePath,
-    exists: true,
-    content: readFileSync(filePath, 'utf-8'),
-  };
+  return items;
 }
 
 function buildRecentReadUsage(trackedPaths: string[]): Map<string, MemoryUsageSummary> {
