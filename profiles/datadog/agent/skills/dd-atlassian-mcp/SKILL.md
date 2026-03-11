@@ -42,7 +42,8 @@ Use `mcp-cli` with the `atlassian` server from `~/.config/mcp/mcp_servers.json`.
 ```
 mcp-cli call atlassian getAccessibleAtlassianResources '{}'
 ```
-- Pick the `cloudId` from the response (use the Confluence one for Confluence search).
+- Pick the `cloudId` from the response (use the Confluence-scoped entry for Confluence search).
+- The same `cloudId` can appear more than once with different scope sets (for example Confluence scopes vs Jira scopes).
 
 ### Search Confluence (CQL)
 ```
@@ -51,7 +52,7 @@ mcp-cli call atlassian searchConfluenceUsingCql '{"cloudId":"<id>","cql":"text ~
 
 ### Search Jira (JQL)
 ```
-mcp-cli call atlassian searchJiraIssuesUsingJql '{"cloudId":"<id>","jql":"project = ABC order by updated desc","limit":5}'
+mcp-cli call atlassian searchJiraIssuesUsingJql '{"cloudId":"<id>","jql":"project = ABC order by updated desc","maxResults":5}'
 ```
 
 ### Cross-system search (Rovo Search)
@@ -62,8 +63,9 @@ mcp-cli call atlassian search '{"query":"datadog"}'
 
 ### Read a Confluence page
 ```
-mcp-cli call atlassian getConfluencePage '{"cloudId":"<id>","pageId":"123456"}'
+mcp-cli call atlassian getConfluencePage '{"cloudId":"<id>","pageId":"123456","contentFormat":"markdown"}'
 ```
+- `contentFormat` currently accepts `markdown` or `adf` (not `storage`). Prefer `markdown` for agent-readable output.
 
 ### Edit a Jira issue
 ```
