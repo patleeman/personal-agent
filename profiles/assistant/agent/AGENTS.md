@@ -23,7 +23,7 @@
 - Occupation: software developer specializing in AI
 - Personal emails: `me@patricklee.nyc` (primary), `patleeman@gmail.com` (secondary)
 - Uses Zotero for research papers and related research topics.
-- Primary notes vault: `~/Library/CloudStorage/Dropbox/Notes` (search active folders first, then `!Archive`).
+- Primary notes vault: `~/Library/CloudStorage/Dropbox/Notes`.
 
 ## Durable Preferences
 
