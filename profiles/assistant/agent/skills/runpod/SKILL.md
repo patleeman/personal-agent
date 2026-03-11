@@ -92,9 +92,3 @@ Remote bootstrap pattern:
 - Record the pod id, GPU type, hourly cost, SSH command, tmux session name, and training log path.
 - Do not leave pods idling unnecessarily.
 
-## Follow-up improvements worth making later
-
-- add retry/fallback GPU logic to launcher scripts
-- add pod stop/delete helpers
-- add artifact sync-back helpers
-- add HF auth bootstrap for faster model downloads/uploads
