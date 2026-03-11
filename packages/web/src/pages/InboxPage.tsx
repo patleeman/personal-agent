@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAppData, useSseConnection } from '../contexts';
@@ -20,12 +20,6 @@ export function InboxPage() {
   const visibleError = activity === null && sseStatus === 'offline'
     ? refreshError ?? 'Live updates are offline. Use refresh to load the latest activity.'
     : refreshError;
-
-  useEffect(() => {
-    if (filter === 'unread' && entries.length > 0 && unreadCount === 0) {
-      setFilter('all');
-    }
-  }, [entries.length, filter, unreadCount]);
 
   const refreshActivity = useCallback(async () => {
     try {
