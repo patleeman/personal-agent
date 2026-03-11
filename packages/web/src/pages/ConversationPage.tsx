@@ -1169,7 +1169,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           messages={realMessages}
           onJump={jumpToMessage}
           onClose={() => setShowTree(false)}
-          onFork={isLiveSession && id ? (blockIdx) => {
+          onFork={isLiveSession && id && !stream.isStreaming ? (blockIdx) => {
             void forkMessageIntoNewTab(blockIdx);
           } : undefined}
         />
