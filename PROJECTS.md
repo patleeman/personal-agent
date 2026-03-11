@@ -470,13 +470,58 @@ Acceptance criteria:
 - Patrick can understand current state from summaries first
 - raw transcripts/logs are only needed for deep inspection
 
-## Immediate implementation slice
+## Checkpoint status — 2026-03-10
 
-Start with:
+Completed in the current branch:
 
-1. introduce the project file model in core
-2. add a first-class Projects page in the web UI
-3. expose read-only project detail from durable files
-4. leave deeper editing, daemon linkage, and migration for follow-up slices
+- added the core on-disk project model and typed artifact helpers
+- added tests for project pathing, parsing, and scaffold behavior
+- exposed a first-class **Projects** area in the web UI
+- replaced the visible `/workstreams` navigation path with `/projects`
+- added project read APIs for listing and loading full project detail
+- added edit APIs for:
+  - creating projects
+  - updating project overview fields
+  - updating project plans
+  - creating tasks
+  - updating tasks
+  - creating/updating task summaries
+- added inline UI editing for:
+  - project overview
+  - plan objective + steps
+  - task fields
+  - task completion summaries
 
-That gives us a concrete foundation without waiting for the full end-state.
+Current state of the feature:
+
+- projects are now first-class, inspectable, and editable in the web UI
+- tasks and task summaries are durable project artifacts
+- the project model is usable as a foundation, but it is not fully integrated into the rest of the product yet
+
+## Remaining work
+
+Highest-priority next work:
+
+1. replace remaining workstream-oriented conversation/context-rail linkage with project-aware linkage
+2. surface linked conversations directly in project detail
+3. decide whether raw markdown inspect/edit mode should ship alongside the structured editors
+4. connect daemon/background execution output to project tasks and task summaries
+5. attach activity entries to project/task entities so updates route back to durable state
+
+Important follow-up work:
+
+- add migration utilities from old `workstreams/` layouts if needed
+- add project/task creation UX polish and validation improvements
+- add project-level summary/rollup views for quick scanning
+- add better empty-state/bootstrap flow when a profile has no projects yet
+- verify how project creation should be triggered from conversations in the conversation-first UX
+
+## Immediate next implementation slice
+
+Continue with:
+
+1. conversation ↔ project linkage
+2. context rail updates to show and edit project links
+3. project-aware daemon/activity plumbing
+
+That keeps the current project foundation moving toward the `VISION.md` end state.
