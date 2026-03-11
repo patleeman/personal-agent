@@ -18,7 +18,7 @@ export TODOIST_API_TOKEN="op://Assistant/TODOIST_API_TOKEN/credential"
 # Optional override for reference path when TODOIST_API_TOKEN is unset
 export TODOIST_API_TOKEN_OP_REF="op://Assistant/TODOIST_API_TOKEN/credential"
 
-export TODOIST_API_BASE="https://api.todoist.com/api/v1"
+export TODOIST_API_BASE="https://api.todoist.com/rest/v2"
 ```
 
 Get token from: `https://todoist.com/app/settings/integrations`
@@ -52,16 +52,16 @@ todoist_api() {
     return 1
   fi
 
-  local base="${TODOIST_API_BASE:-https://api.todoist.com/api/v1}"
+  local base="${TODOIST_API_BASE:-https://api.todoist.com/rest/v2}"
 
   if [ -n "$data" ]; then
-    curl -sS -X "$method" \
+    curl -sS --fail-with-body -X "$method" \
       -H "Authorization: Bearer $token" \
       -H "Content-Type: application/json" \
       "$base$path" \
       -d "$data"
   else
-    curl -sS -X "$method" \
+    curl -sS --fail-with-body -X "$method" \
       -H "Authorization: Bearer $token" \
       "$base$path"
   fi
@@ -71,7 +71,7 @@ todoist_api() {
 Sanity check auth:
 
 ```bash
-todoist_api GET "/projects" | jq '.results[0:]'
+todoist_api GET "/projects" | jq '.[0:]'
 ```
 
 ## Common workflows
@@ -79,7 +79,7 @@ todoist_api GET "/projects" | jq '.results[0:]'
 ### 1) List projects (Todoist "lists")
 
 ```bash
-todoist_api GET "/projects" | jq '.results[] | {id, name, color, is_favorite}'
+todoist_api GET "/projects" | jq '.[] | {id, name, color, is_favorite}'
 ```
 
 ### 2) Create / update / delete a project
@@ -87,16 +87,23 @@ todoist_api GET "/projects" | jq '.results[] | {id, name, color, is_favorite}'
 ```bash
 # Create
 payload=$(jq -n --arg name "Personal Admin" '{name: $name}')
-todoist_api POST "/projects" "$payload" | jq '{id, name}'
+curl -sS --fail-with-body \
+  -X POST \
+  -H "Authorization: Bearer $(resolve_todoist_api_token)" \
+  -H "Content-Type: application/json" \
+  -H "X-Request-Id: $(uuidgen)" \
+  "${TODOIST_API_BASE:-https://api.todoist.com/rest/v2}/projects" \
+  -d "$payload" \
+  | jq '{id, name}'
 
 # Rename (POST /projects/{id})
 project_id="<project-id>"
 payload=$(jq -n --arg name "Personal" '{name: $name}')
-todoist_api POST "/projects/$project_id" "$payload"
+todoist_api POST "/projects/$project_id" "$payload" | jq '{id, name, color, is_favorite}'
 
 # Delete (returns 204)
 token="$(resolve_todoist_api_token)"
-base="${TODOIST_API_BASE:-https://api.todoist.com/api/v1}"
+base="${TODOIST_API_BASE:-https://api.todoist.com/rest/v2}"
 curl -sS -o /dev/null -w "%{http_code}\n" \
   -X DELETE \
   -H "Authorization: Bearer $token" \
@@ -107,24 +114,24 @@ curl -sS -o /dev/null -w "%{http_code}\n" \
 
 ```bash
 # All active tasks
-todoist_api GET "/tasks" | jq '.results[] | {id, content, project_id, priority, due}'
+todoist_api GET "/tasks" | jq '.[] | {id, content, project_id, priority, due}'
 
 # By natural-language filter (today, overdue, etc.)
 token="$(resolve_todoist_api_token)"
-base="${TODOIST_API_BASE:-https://api.todoist.com/api/v1}"
-curl -sS --get \
+base="${TODOIST_API_BASE:-https://api.todoist.com/rest/v2}"
+curl -sS --fail-with-body --get \
   -H "Authorization: Bearer $token" \
   "$base/tasks" \
   --data-urlencode "filter=today | overdue" \
-  | jq '.results[] | {id, content, due}'
+  | jq '.[] | {id, content, due}'
 
 # By project_id
 project_id="<project-id>"
-curl -sS --get \
+curl -sS --fail-with-body --get \
   -H "Authorization: Bearer $token" \
   "$base/tasks" \
   --data-urlencode "project_id=$project_id" \
-  | jq '.results[] | {id, content, priority, due}'
+  | jq '.[] | {id, content, priority, due}'
 ```
 
 ### 4) Add a task
@@ -136,7 +143,14 @@ payload=$(jq -n \
   --argjson priority 3 \
   '{content: $content, due_string: $due, priority: $priority}')
 
-todoist_api POST "/tasks" "$payload" | jq '{id, content, priority, due}'
+curl -sS --fail-with-body \
+  -X POST \
+  -H "Authorization: Bearer $(resolve_todoist_api_token)" \
+  -H "Content-Type: application/json" \
+  -H "X-Request-Id: $(uuidgen)" \
+  "${TODOIST_API_BASE:-https://api.todoist.com/rest/v2}/tasks" \
+  -d "$payload" \
+  | jq '{id, content, priority, due}'
 ```
 
 Add task to a project:
@@ -147,7 +161,14 @@ payload=$(jq -n \
   --arg project_id "$project_id" \
   '{content: $content, project_id: $project_id}')
 
-todoist_api POST "/tasks" "$payload" | jq '{id, content, project_id}'
+curl -sS --fail-with-body \
+  -X POST \
+  -H "Authorization: Bearer $(resolve_todoist_api_token)" \
+  -H "Content-Type: application/json" \
+  -H "X-Request-Id: $(uuidgen)" \
+  "${TODOIST_API_BASE:-https://api.todoist.com/rest/v2}/tasks" \
+  -d "$payload" \
+  | jq '{id, content, project_id}'
 ```
 
 ### 5) Update / complete / reopen / delete a task
@@ -155,23 +176,31 @@ todoist_api POST "/tasks" "$payload" | jq '{id, content, project_id}'
 ```bash
 task_id="<task-id>"
 
-# Update task fields (POST /tasks/{id})
+# Update task fields (POST /tasks/{id}; returns 204)
 payload=$(jq -n --arg content "Buy oat milk" --argjson priority 2 '{content: $content, priority: $priority}')
-todoist_api POST "/tasks/$task_id" "$payload"
-
 token="$(resolve_todoist_api_token)"
-base="${TODOIST_API_BASE:-https://api.todoist.com/api/v1}"
+base="${TODOIST_API_BASE:-https://api.todoist.com/rest/v2}"
+
+curl -sS -o /dev/null -w "%{http_code}\n" \
+  -X POST \
+  -H "Authorization: Bearer $token" \
+  -H "Content-Type: application/json" \
+  -H "X-Request-Id: $(uuidgen)" \
+  "$base/tasks/$task_id" \
+  -d "$payload"
 
 # Complete task (close)
 curl -sS -o /dev/null -w "%{http_code}\n" \
   -X POST \
   -H "Authorization: Bearer $token" \
+  -H "X-Request-Id: $(uuidgen)" \
   "$base/tasks/$task_id/close"
 
 # Reopen task
 curl -sS -o /dev/null -w "%{http_code}\n" \
   -X POST \
   -H "Authorization: Bearer $token" \
+  -H "X-Request-Id: $(uuidgen)" \
   "$base/tasks/$task_id/reopen"
 
 # Delete task
@@ -186,21 +215,29 @@ curl -sS -o /dev/null -w "%{http_code}\n" \
 ```bash
 # List sections in a project
 token="$(resolve_todoist_api_token)"
-base="${TODOIST_API_BASE:-https://api.todoist.com/api/v1}"
-curl -sS --get \
+base="${TODOIST_API_BASE:-https://api.todoist.com/rest/v2}"
+curl -sS --fail-with-body --get \
   -H "Authorization: Bearer $token" \
   "$base/sections" \
   --data-urlencode "project_id=$project_id" \
-  | jq '.results[] | {id, name, project_id, order}'
+  | jq '.[] | {id, name, project_id, order}'
 
 # Create section
 payload=$(jq -n --arg name "This Week" --arg project_id "$project_id" '{name: $name, project_id: $project_id}')
-todoist_api POST "/sections" "$payload" | jq '{id, name, project_id}'
+curl -sS --fail-with-body \
+  -X POST \
+  -H "Authorization: Bearer $(resolve_todoist_api_token)" \
+  -H "Content-Type: application/json" \
+  -H "X-Request-Id: $(uuidgen)" \
+  "${TODOIST_API_BASE:-https://api.todoist.com/rest/v2}/sections" \
+  -d "$payload" \
+  | jq '{id, name, project_id}'
 ```
 
 ## Notes
 
+- The current REST API base is `https://api.todoist.com/rest/v2`; GET list endpoints return JSON arrays, not `{results: ...}` wrappers.
 - Prefer `jq -n` to build JSON payloads safely (avoid quoting bugs).
 - Todoist IDs are strings; keep them quoted in payloads.
-- For create calls, you can add `-H "X-Request-Id: $(uuidgen)"` to avoid accidental duplicates on retries.
-- Successful update/delete/close/reopen usually return HTTP `204` with empty body.
+- Add `X-Request-Id: $(uuidgen)` on POST mutations to avoid accidental duplicates on retries.
+- Successful delete/close/reopen operations usually return HTTP `204` with empty body.

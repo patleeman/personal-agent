@@ -318,17 +318,19 @@ hevy_api GET "/v1/exercise_templates?page=1&pageSize=20" \
   | jq '.exercise_templates[] | {id, name: .name}'
 ```
 
-Create a custom exercise template via `POST /v1/exercise_templates` with `CreateCustomExerciseRequestBody`:
+Create a custom exercise template via `POST /v1/exercise_templates` with `CreateCustomExerciseRequestBody`.
+
+Before posting, inspect the current Swagger schema for the exact required fields; this endpoint is still evolving. Build the payload with `jq -n` and only send it once you have populated all currently required fields.
 
 ```bash
+# Skeleton only: add every field currently required by CreateCustomExerciseRequestBody
 exercise_payload=$(jq -n \
   --arg name "Trap Bar Deadlift" \
-  '{
-    name: $name,
-    // fill in other CreateCustomExerciseRequestBody fields as needed
-  }')
+  '{name: $name}')
 
-hevy_api POST "/v1/exercise_templates" "$exercise_payload" | jq '.'
+printf '%s\n' "$exercise_payload" | jq '.'
+# When complete, POST it:
+# hevy_api POST "/v1/exercise_templates" "$exercise_payload" | jq '.'
 ```
 
 Get a specific template:
