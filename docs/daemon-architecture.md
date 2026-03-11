@@ -63,6 +63,13 @@ Default files:
 
 See [Scheduled Tasks](./tasks.md) for schema details.
 
+## `deferred-resume`
+
+- watches queued deferred-resume state under the runtime Pi state root
+- marks due conversation continuations as ready even when no TUI is open
+- creates durable profile activity entries when a deferred resume fires
+- leaves actual prompt delivery to the matching conversation runtime when that conversation is active or reopened
+
 ---
 
 ## Event contract

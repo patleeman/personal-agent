@@ -8,14 +8,15 @@
  *   rest:   { type:'message', id, parentId, timestamp, message: { role, content } }
  *
  * Roles:
- *   user         → content: [{type:'text', text}]
+ *   user         → content: [{type:'text', text}|{type:'image', data, mimeType}]
  *   assistant    → content: [{type:'thinking', thinking}, {type:'toolCall', id, name, arguments}, {type:'text', text}]
- *   toolResult   → toolCallId, toolName, content: [{type:'text', text}|{type:'image', data}]
+ *   toolResult   → toolCallId, toolName, content: [{type:'text', text}|{type:'image', data, mimeType}]
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { readSessionContextUsageFromFile, type SessionContextUsageSnapshot } from './sessionContextUsage.js';
 
 export const SESSIONS_DIR = join(homedir(), '.local/state/personal-agent/pi-agent/sessions');
 
@@ -45,8 +46,11 @@ interface RawContentBlock {
   arguments?: Record<string, unknown>;
   // image
   data?: string;
+  mimeType?: string;
   mediaType?: string;
 }
+
+type RawMessageContent = string | RawContentBlock[];
 
 interface RawMessage {
   type: 'message';
@@ -55,7 +59,7 @@ interface RawMessage {
   timestamp: string;
   message: {
     role: 'user' | 'assistant' | 'toolResult';
-    content: RawContentBlock[];
+    content: RawMessageContent;
     toolCallId?: string;
     toolName?: string;
   };
@@ -76,11 +80,24 @@ export interface SessionMeta {
   messageCount: number;
 }
 
+export interface SessionDetail {
+  meta: SessionMeta;
+  blocks: DisplayBlock[];
+  contextUsage: SessionContextUsageSnapshot | null;
+}
+
+interface DisplayImage {
+  alt: string;
+  src?: string;
+  mimeType?: string;
+}
+
 export type DisplayBlock =
-  | { type: 'user';     id: string; ts: string; text: string }
+  | { type: 'user';     id: string; ts: string; text: string; images?: DisplayImage[] }
   | { type: 'text';     id: string; ts: string; text: string }
   | { type: 'thinking'; id: string; ts: string; text: string }
   | { type: 'tool_use'; id: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; toolCallId: string }
+  | { type: 'image';    id: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string }
   | { type: 'error';    id: string; ts: string; tool?: string; message: string };
 
 // ── Parsing ────────────────────────────────────────────────────────────────────
@@ -93,15 +110,51 @@ function parseJsonl(filePath: string): RawLine[] {
     .flatMap(l => { try { return [JSON.parse(l) as RawLine]; } catch { return []; } });
 }
 
+function normalizeContent(content: RawMessageContent): RawContentBlock[] {
+  if (Array.isArray(content)) return content;
+  if (typeof content === 'string' && content.length > 0) return [{ type: 'text', text: content }];
+  return [];
+}
+
+function imageMimeType(block: RawContentBlock): string | undefined {
+  return block.mimeType ?? block.mediaType;
+}
+
+function imageSrc(block: RawContentBlock): string | undefined {
+  const mimeType = imageMimeType(block);
+  if (!mimeType || !block.data) return undefined;
+  return `data:${mimeType};base64,${block.data}`;
+}
+
+function extractUserContent(content: RawMessageContent): { text: string; images: DisplayImage[] } {
+  const blocks = normalizeContent(content);
+  const text = blocks
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text ?? '')
+    .join('\n')
+    .trim();
+  const images = blocks
+    .filter((block) => block.type === 'image')
+    .map((block) => ({
+      alt: 'Attached image',
+      src: imageSrc(block),
+      mimeType: imageMimeType(block),
+    }));
+  return { text, images };
+}
+
 function extractTitle(lines: RawLine[]): string {
   for (const line of lines) {
     if (line.type !== 'message') continue;
     const msg = (line as RawMessage).message;
     if (msg.role !== 'user') continue;
-    for (const block of msg.content) {
-      if (block.type === 'text' && block.text?.trim()) {
-        return block.text.slice(0, 80).replace(/\n/g, ' ').trim();
-      }
+
+    const { text, images } = extractUserContent(msg.content);
+    if (text) {
+      return text.slice(0, 80).replace(/\n/g, ' ').trim();
+    }
+    if (images.length > 0) {
+      return images.length === 1 ? '(image attachment)' : `(${images.length} image attachments)`;
     }
   }
   return '(untitled)';
@@ -157,7 +210,7 @@ export function listSessions(): SessionMeta[] {
   return metas;
 }
 
-export function readSessionBlocks(sessionId: string): { meta: SessionMeta; blocks: DisplayBlock[] } | null {
+export function readSessionBlocks(sessionId: string): SessionDetail | null {
   const metas = listSessions();
   const meta  = metas.find(m => m.id === sessionId);
   if (!meta) return null;
@@ -169,15 +222,24 @@ export function readSessionBlocks(sessionId: string): { meta: SessionMeta; block
   const toolCallIndex = new Map<string, number>(); // toolCallId → index in blocks
 
   for (const msg of messages) {
-    const { role, content, toolCallId } = msg.message;
+    const { role, content, toolCallId, toolName } = msg.message;
     const ts = msg.timestamp;
+    const contentBlocks = normalizeContent(content);
 
     if (role === 'user') {
-      const text = content.filter(b => b.type === 'text').map(b => b.text ?? '').join('\n').trim();
-      if (text) blocks.push({ type: 'user', id: msg.id, ts, text });
+      const { text, images } = extractUserContent(content);
+      if (text || images.length > 0) {
+        blocks.push({
+          type: 'user',
+          id: msg.id,
+          ts,
+          text,
+          ...(images.length > 0 ? { images } : {}),
+        });
+      }
 
     } else if (role === 'assistant') {
-      for (const block of content) {
+      for (const block of contentBlocks) {
         if (block.type === 'thinking' && block.thinking?.trim()) {
           blocks.push({ type: 'thinking', id: `${msg.id}-t${blocks.length}`, ts, text: block.thinking });
 
@@ -203,20 +265,35 @@ export function readSessionBlocks(sessionId: string): { meta: SessionMeta; block
       const idx = toolCallIndex.get(toolCallId);
       if (idx !== undefined) {
         const existing = blocks[idx] as DisplayBlock & { type: 'tool_use' };
-        // Collect only text blocks from result (skip raw image data)
-        const resultText = content
-          .filter(b => b.type === 'text')
-          .map(b => b.text ?? '')
+        const resultText = contentBlocks
+          .filter((block) => block.type === 'text')
+          .map((block) => block.text ?? '')
           .join('\n')
-          .slice(0, 8000); // cap at 8k chars
-        // Compute rough duration from timestamps
+          .slice(0, 8000);
         const startMs  = new Date(existing.ts).getTime();
         const endMs    = new Date(ts).getTime();
         const duration = endMs > startMs ? endMs - startMs : undefined;
         blocks[idx] = { ...existing, output: resultText, durationMs: duration };
       }
+
+      const resultImages = contentBlocks
+        .filter((block) => block.type === 'image')
+        .map((block, imageIndex) => ({
+          type: 'image' as const,
+          id: `${msg.id}-i${imageIndex}`,
+          ts,
+          alt: toolName ? `${toolName} image result` : 'Tool image result',
+          src: imageSrc(block),
+          mimeType: imageMimeType(block),
+          caption: toolName,
+        }));
+      blocks.push(...resultImages);
     }
   }
 
-  return { meta, blocks };
+  return {
+    meta,
+    blocks,
+    contextUsage: readSessionContextUsageFromFile(meta.file),
+  };
 }

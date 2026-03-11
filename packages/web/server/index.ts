@@ -5,60 +5,165 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { listSessions, readSessionBlocks } from './sessions.js';
+import { readSavedModelPreferences } from './modelPreferences.js';
+import {
+  getProfileConfigFilePath,
+  readSavedProfilePreferences,
+  resolveActiveProfile,
+  writeSavedProfilePreferences,
+} from './profilePreferences.js';
 import {
   createSession,
   resumeSession,
   getLiveSessions,
   getSessionStats,
+  getSessionContextUsage,
   getAvailableModels,
   isLive,
   subscribe,
   promptSession,
+  compactSession,
+  reloadSessionResources,
+  exportSessionHtml,
+  renameSession,
   abortSession,
   destroySession,
   forkSession,
   registry as liveRegistry,
 } from './liveSessions.js';
 import {
+  addConversationWorkstreamLink,
+  getConversationWorkstreamLink,
   listProfileActivityEntries,
   listWorkstreamIds,
   readWorkstreamPlan,
   readWorkstreamSummary,
+  removeConversationWorkstreamLink,
   resolveWorkstreamPaths,
 } from '@personal-agent/core';
+import {
+  listProfiles,
+  materializeProfileToAgentDir,
+  resolveResourceProfile,
+} from '@personal-agent/resources';
 
 const PORT = parseInt(process.env.PA_WEB_PORT ?? '3741', 10);
 const REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? process.cwd();
-const PROFILE = process.env.PERSONAL_AGENT_ACTIVE_PROFILE ?? 'shared';
+const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
+const PROFILE_CONFIG_FILE = getProfileConfigFilePath();
+
+function listAvailableProfiles(): string[] {
+  return listProfiles({ repoRoot: REPO_ROOT });
+}
+
+function materializeWebProfile(profile: string): void {
+  const resolved = resolveResourceProfile(profile, { repoRoot: REPO_ROOT });
+  materializeProfileToAgentDir(resolved, AGENT_DIR);
+}
+
+let currentProfile = resolveActiveProfile({
+  explicitProfile: process.env.PERSONAL_AGENT_ACTIVE_PROFILE,
+  savedProfile: readSavedProfilePreferences(PROFILE_CONFIG_FILE).defaultProfile,
+  availableProfiles: listAvailableProfiles(),
+});
+
+try {
+  materializeWebProfile(currentProfile);
+} catch (error) {
+  console.warn(`[web] failed to materialize initial profile ${currentProfile}: ${(error as Error).message}`);
+}
+
+function getCurrentProfile(): string {
+  return currentProfile;
+}
+
+function setCurrentProfile(profile: string): string {
+  const availableProfiles = listAvailableProfiles();
+  if (!availableProfiles.includes(profile)) {
+    throw new Error(`Unknown profile: ${profile}`);
+  }
+
+  materializeWebProfile(profile);
+  currentProfile = profile;
+  writeSavedProfilePreferences(profile, PROFILE_CONFIG_FILE);
+  return currentProfile;
+}
 
 // ── Activity read-state ───────────────────────────────────────────────────────
 // Stored as a simple JSON set alongside activity files.
-const READ_STATE_FILE = join(REPO_ROOT, `profiles/${PROFILE}/agent/activity/.read-state.json`);
-
-function loadReadState(): Set<string> {
-  try { return new Set(JSON.parse(readFileSync(READ_STATE_FILE, 'utf-8')) as string[]); } catch { return new Set(); }
+function resolveReadStateFile(profile = getCurrentProfile()): string {
+  return join(REPO_ROOT, `profiles/${profile}/agent/activity/.read-state.json`);
 }
-function saveReadState(ids: Set<string>) {
+
+function loadReadState(profile = getCurrentProfile()): Set<string> {
+  try { return new Set(JSON.parse(readFileSync(resolveReadStateFile(profile), 'utf-8')) as string[]); } catch { return new Set(); }
+}
+function saveReadState(ids: Set<string>, profile = getCurrentProfile()) {
   try {
-    mkdirSync(dirname(READ_STATE_FILE), { recursive: true });
-    writeFileSync(READ_STATE_FILE, JSON.stringify([...ids]));
+    const readStateFile = resolveReadStateFile(profile);
+    mkdirSync(dirname(readStateFile), { recursive: true });
+    writeFileSync(readStateFile, JSON.stringify([...ids]));
   } catch { /* ignore */ }
 }
+
+function summarizeUserMessageContent(content: unknown): { text: string; imageCount: number } {
+  const blocks = Array.isArray(content)
+    ? content as Array<{ type?: string; text?: string }>
+    : typeof content === 'string'
+      ? [{ type: 'text', text: content }]
+      : [];
+
+  const text = blocks
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text ?? '')
+    .join('\n')
+    .trim();
+  const imageCount = blocks.filter((block) => block.type === 'image').length;
+
+  return { text, imageCount };
+}
+
 const DIST_DIR =
   process.env.PA_WEB_DIST ??
   join(dirname(fileURLToPath(import.meta.url)), '../dist');
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '25mb' }));
+
+// ── Profiles ────────────────────────────────────────────────────────────────
+
+app.get('/api/profiles', (_req, res) => {
+  try {
+    res.json({
+      currentProfile: getCurrentProfile(),
+      profiles: listAvailableProfiles(),
+    });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.patch('/api/profiles/current', (req, res) => {
+  try {
+    const { profile } = req.body as { profile?: string };
+    if (!profile) { res.status(400).json({ error: 'profile required' }); return; }
+    res.json({ ok: true, currentProfile: setCurrentProfile(profile) });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.startsWith('Unknown profile:') ? 400 : 500;
+    res.status(status).json({ error: message });
+  }
+});
 
 // ── Status ──────────────────────────────────────────────────────────────────
 
 app.get('/api/status', (_req, res) => {
   try {
-    const activities = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile: PROFILE });
-    const workstreamIds = listWorkstreamIds({ repoRoot: REPO_ROOT, profile: PROFILE });
+    const profile = getCurrentProfile();
+    const activities = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile });
+    const workstreamIds = listWorkstreamIds({ repoRoot: REPO_ROOT, profile });
     res.json({
-      profile: PROFILE,
+      profile,
       repoRoot: REPO_ROOT,
       activityCount: activities.length,
       workstreamCount: workstreamIds.length,
@@ -72,8 +177,9 @@ app.get('/api/status', (_req, res) => {
 
 app.get('/api/activity', (_req, res) => {
   try {
-    const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile: PROFILE });
-    const read = loadReadState();
+    const profile = getCurrentProfile();
+    const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile });
+    const read = loadReadState(profile);
     res.json(entries.map(({ entry }) => ({ ...entry, read: read.has(entry.id) })));
   } catch (err) {
     res.status(500).json({ error: String(err) });
@@ -82,8 +188,9 @@ app.get('/api/activity', (_req, res) => {
 
 app.get('/api/activity/count', (_req, res) => {
   try {
-    const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile: PROFILE });
-    const read = loadReadState();
+    const profile = getCurrentProfile();
+    const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile });
+    const read = loadReadState(profile);
     const unread = entries.filter(({ entry }) => !read.has(entry.id)).length;
     res.json({ count: unread });
   } catch {
@@ -93,10 +200,11 @@ app.get('/api/activity/count', (_req, res) => {
 
 app.get('/api/activity/:id', (req, res) => {
   try {
-    const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile: PROFILE });
+    const profile = getCurrentProfile();
+    const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile });
     const match = entries.find(({ entry }) => entry.id === req.params.id);
     if (!match) { res.status(404).json({ error: 'Not found' }); return; }
-    const read = loadReadState();
+    const read = loadReadState(profile);
     res.json({ ...match.entry, read: read.has(match.entry.id) });
   } catch (err) {
     res.status(500).json({ error: String(err) });
@@ -106,11 +214,12 @@ app.get('/api/activity/:id', (req, res) => {
 /** Mark an activity item as read */
 app.patch('/api/activity/:id', (req, res) => {
   try {
+    const profile = getCurrentProfile();
     const { id } = req.params;
     const { read } = req.body as { read?: boolean };
-    const state = loadReadState();
+    const state = loadReadState(profile);
     if (read === false) state.delete(id); else state.add(id);
-    saveReadState(state);
+    saveReadState(state, profile);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: String(err) });
@@ -137,11 +246,9 @@ const SETTINGS_FILE = join(homedir(), '.local/state/personal-agent/pi-agent/sett
 
 app.get('/api/models', (_req, res) => {
   try {
-    let currentModel = '';
-    if (existsSync(SETTINGS_FILE)) {
-      const s = JSON.parse(readFileSync(SETTINGS_FILE, 'utf-8')) as { defaultModel?: string };
-      if (s.defaultModel) currentModel = s.defaultModel;
-    }
+    const saved = readSavedModelPreferences(SETTINGS_FILE);
+    let currentModel = saved.currentModel;
+    const currentThinkingLevel = saved.currentThinkingLevel;
     // Live model list from SDK registry (available = have auth configured)
     let models = BUILT_IN_MODELS;
     try {
@@ -149,7 +256,7 @@ app.get('/api/models', (_req, res) => {
       if (live.length > 0) models = live;
     } catch { /* fall back to built-in list */ }
     if (!currentModel && models.length > 0) currentModel = models[0].id;
-    res.json({ currentModel, models });
+    res.json({ currentModel, currentThinkingLevel, models });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
@@ -394,13 +501,69 @@ app.get('/api/live-sessions/:id/events', (req, res) => {
 app.post('/api/live-sessions/:id/prompt', async (req, res) => {
   try {
     const { id } = req.params;
-    const { text, behavior } = req.body as { text: string; behavior?: 'steer' | 'followUp' };
-    if (!text) { res.status(400).json({ error: 'text required' }); return; }
+    const { text = '', behavior, images } = req.body as {
+      text?: string;
+      behavior?: 'steer' | 'followUp';
+      images?: Array<{ type?: 'image'; data: string; mimeType: string }>;
+    };
+    if (!text && (!images || images.length === 0)) {
+      res.status(400).json({ error: 'text or images required' });
+      return;
+    }
     // Don't await — streaming response goes over SSE
-    promptSession(id, text, behavior).catch(err => {
+    promptSession(id, text, behavior, images?.map((image) => ({
+      type: 'image' as const,
+      data: image.data,
+      mimeType: image.mimeType,
+    }))).catch(err => {
       console.error(`[live] prompt error for ${id}:`, err);
     });
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/live-sessions/:id/compact', async (req, res) => {
+  try {
+    const { customInstructions } = req.body as { customInstructions?: string };
+    const result = await compactSession(req.params.id, customInstructions?.trim() || undefined);
+    res.json({ ok: true, result });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/live-sessions/:id/reload', async (req, res) => {
+  try {
+    await reloadSessionResources(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/live-sessions/:id/export', async (req, res) => {
+  try {
+    const { outputPath } = req.body as { outputPath?: string };
+    const path = await exportSessionHtml(req.params.id, outputPath?.trim() || undefined);
+    res.json({ ok: true, path });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.patch('/api/live-sessions/:id/name', async (req, res) => {
+  try {
+    const { name } = req.body as { name?: string };
+    const nextName = name?.trim();
+    if (!nextName) {
+      res.status(400).json({ error: 'name required' });
+      return;
+    }
+
+    renameSession(req.params.id, nextName);
+    res.json({ ok: true, name: nextName });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
@@ -436,26 +599,83 @@ app.get('/api/live-sessions/:id/context', (req, res) => {
   } catch { /* not a git repo */ }
 
   // User messages: prefer live in-memory messages (most up-to-date), fall back to JSONL
-  let userMessages: { id: string; ts: string; text: string }[] = [];
+  let userMessages: { id: string; ts: string; text: string; imageCount: number }[] = [];
   if (liveEntry) {
     userMessages = liveEntry.session.agent.state.messages
       .filter(m => m.role === 'user')
       .slice(-5)
       .map((m, i) => {
-        const content = m.content;
-        const text = Array.isArray(content)
-          ? (content.find((c: { type: string; text?: string }) => c.type === 'text') as { text?: string } | undefined)?.text ?? ''
-          : String(content);
-        return { id: String(i), ts: new Date().toISOString(), text: text.slice(0, 300) };
+        const { text, imageCount } = summarizeUserMessageContent(m.content);
+        return { id: String(i), ts: new Date().toISOString(), text: text.slice(0, 300), imageCount };
       });
   } else {
     userMessages = (detail?.blocks ?? [])
-      .filter(b => b.type === 'user')
+      .filter((b) => b.type === 'user')
       .slice(-5)
-      .map(b => ({ id: b.id, ts: b.ts, text: (b as { text: string }).text }));
+      .map((b) => ({
+        id: b.id,
+        ts: b.ts,
+        text: 'text' in b ? b.text : '',
+        imageCount: 'images' in b && Array.isArray(b.images) ? b.images.length : 0,
+      }));
   }
 
-  res.json({ cwd, branch, userMessages });
+  const relatedWorkstreamIds = getConversationWorkstreamLink({
+    repoRoot: REPO_ROOT,
+    profile: getCurrentProfile(),
+    conversationId: id,
+  })?.relatedWorkstreamIds ?? [];
+
+  res.json({ cwd, branch, userMessages, relatedWorkstreamIds });
+});
+
+app.get('/api/conversations/:id/workstreams', (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const relatedWorkstreamIds = getConversationWorkstreamLink({
+      repoRoot: REPO_ROOT,
+      profile,
+      conversationId: req.params.id,
+    })?.relatedWorkstreamIds ?? [];
+    res.json({ conversationId: req.params.id, relatedWorkstreamIds });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/conversations/:id/workstreams', (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const { workstreamId } = req.body as { workstreamId?: string };
+    if (!workstreamId) { res.status(400).json({ error: 'workstreamId required' }); return; }
+
+    const document = addConversationWorkstreamLink({
+      repoRoot: REPO_ROOT,
+      profile,
+      conversationId: req.params.id,
+      workstreamId,
+    });
+
+    res.json({ conversationId: req.params.id, relatedWorkstreamIds: document.relatedWorkstreamIds });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.delete('/api/conversations/:id/workstreams/:workstreamId', (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const document = removeConversationWorkstreamLink({
+      repoRoot: REPO_ROOT,
+      profile,
+      conversationId: req.params.id,
+      workstreamId: req.params.workstreamId,
+    });
+
+    res.json({ conversationId: req.params.id, relatedWorkstreamIds: document.relatedWorkstreamIds });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 app.get('/api/live-sessions/:id/fork-entries', (req, res) => {
@@ -484,6 +704,12 @@ app.get('/api/live-sessions/:id/stats', (req, res) => {
   res.json(stats);
 });
 
+app.get('/api/live-sessions/:id/context-usage', (req, res) => {
+  const usage = getSessionContextUsage(req.params.id);
+  if (!usage) { res.status(404).json({ error: 'Not found' }); return; }
+  res.json(usage);
+});
+
 /** Destroy / close a live session */
 app.delete('/api/live-sessions/:id', (req, res) => {
   destroySession(req.params.id);
@@ -494,12 +720,13 @@ app.delete('/api/live-sessions/:id', (req, res) => {
 
 app.get('/api/workstreams', (_req, res) => {
   try {
-    const ids = listWorkstreamIds({ repoRoot: REPO_ROOT, profile: PROFILE });
+    const profile = getCurrentProfile();
+    const ids = listWorkstreamIds({ repoRoot: REPO_ROOT, profile });
     const summaries = ids.flatMap((id) => {
       try {
         const paths = resolveWorkstreamPaths({
           repoRoot: REPO_ROOT,
-          profile: PROFILE,
+          profile,
           workstreamId: id,
         });
         return [readWorkstreamSummary(paths.summaryFile)];
@@ -516,20 +743,21 @@ app.get('/api/workstreams', (_req, res) => {
 
 app.get('/api/workstreams/:id', (req, res) => {
   try {
+    const profile = getCurrentProfile();
     const paths = resolveWorkstreamPaths({
       repoRoot: REPO_ROOT,
-      profile: PROFILE,
+      profile,
       workstreamId: req.params.id,
     });
     const summary = readWorkstreamSummary(paths.summaryFile);
     const plan = readWorkstreamPlan(paths.planFile);
-    const taskCount = existsSync(paths.tasksDir)
-      ? readdirSync(paths.tasksDir).filter((f) => f.endsWith('.md')).length
+    const todoCount = existsSync(paths.todosDir)
+      ? readdirSync(paths.todosDir).filter((f) => f.endsWith('.md')).length
       : 0;
     const artifactCount = existsSync(paths.artifactsDir)
       ? readdirSync(paths.artifactsDir).filter((f) => f.endsWith('.md')).length
       : 0;
-    res.json({ id: req.params.id, summary, plan, taskCount, artifactCount });
+    res.json({ id: req.params.id, summary, plan, todoCount, artifactCount });
   } catch {
     res.status(404).json({ error: 'Workstream not found' });
   }
@@ -601,15 +829,16 @@ function parseFrontmatter(filePath: string): Record<string, unknown> {
 
 app.get('/api/memory', (_req, res) => {
   try {
+    const profile = getCurrentProfile();
     const sharedPath  = join(REPO_ROOT, 'profiles/shared/agent/AGENTS.md');
-    const profilePath = join(REPO_ROOT, `profiles/${PROFILE}/agent/AGENTS.md`);
+    const profilePath = join(REPO_ROOT, `profiles/${profile}/agent/AGENTS.md`);
     const agentsMd: AgentsItem[] = [{ source: 'shared', path: sharedPath, exists: existsSync(sharedPath) }];
-    if (PROFILE !== 'shared') {
-      agentsMd.push({ source: PROFILE, path: profilePath, exists: existsSync(profilePath) });
+    if (profile !== 'shared') {
+      agentsMd.push({ source: profile, path: profilePath, exists: existsSync(profilePath) });
     }
 
     const skills: SkillItem[] = [];
-    const skillSources = PROFILE === 'shared' ? ['shared'] : ['shared', PROFILE];
+    const skillSources = profile === 'shared' ? ['shared'] : ['shared', profile];
     for (const src of skillSources) {
       const dir = join(REPO_ROOT, `profiles/${src}/agent/skills`);
       if (!existsSync(dir)) continue;
@@ -627,7 +856,7 @@ app.get('/api/memory', (_req, res) => {
     }
 
     const memoryDocs: MemoryDocItem[] = [];
-    const memDir = join(REPO_ROOT, `profiles/${PROFILE}/agent/memory`);
+    const memDir = join(REPO_ROOT, `profiles/${profile}/agent/memory`);
     if (existsSync(memDir)) {
       for (const file of readdirSync(memDir).filter(f => f.endsWith('.md'))) {
         const fp = join(memDir, file);
@@ -644,7 +873,7 @@ app.get('/api/memory', (_req, res) => {
       }
     }
 
-    res.json({ profile: PROFILE, agentsMd, skills, memoryDocs });
+    res.json({ profile, agentsMd, skills, memoryDocs });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
@@ -701,7 +930,7 @@ if (existsSync(DIST_DIR)) {
 app.listen(PORT, () => {
   console.log(`\n  personal-agent web UI`);
   console.log(`  → http://localhost:${PORT}\n`);
-  console.log(`  profile : ${PROFILE}`);
+  console.log(`  profile : ${getCurrentProfile()}`);
   console.log(`  repo    : ${REPO_ROOT}`);
   console.log(`  dist    : ${DIST_DIR}`);
   console.log();

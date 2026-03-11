@@ -1,29 +1,25 @@
 import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI, ExtensionContext } from '@mariozechner/pi-coding-agent';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import {
+  activateDueDeferredResumes,
+  getDueScheduledSessionDeferredResumeEntries,
+  getReadySessionDeferredResumeEntries,
+  getSessionDeferredResumeEntries,
+  loadDeferredResumeEntries as loadDeferredResumeEntriesFromCore,
+  loadDeferredResumeState,
+  removeDeferredResume,
+  resolveDeferredResumeStateFile as resolveDeferredResumeStateFileFromCore,
+  retryDeferredResume,
+  saveDeferredResumeState,
+  scheduleDeferredResume,
+  type DeferredResumeRecord,
+} from '@personal-agent/core';
 
 const STATUS_KEY = 'deferred-resume';
 const HEARTBEAT_MS = 3_000;
 const RETRY_DELAY_MS = 30_000;
 const DEFAULT_PROMPT = 'Continue from where you left off and keep going.';
-const STATE_FILE_NAME = 'tui-deferred-resumes-state.json';
 const GATEWAY_RUNTIME_CONTEXT_SYMBOL = Symbol.for('personal-agent.gateway.runtime-context');
-
-interface DeferredResumeRecord {
-  id: string;
-  sessionFile: string;
-  prompt: string;
-  dueAt: string;
-  createdAt: string;
-  attempts: number;
-}
-
-interface DeferredResumeStateFile {
-  version: 1;
-  resumes: Record<string, DeferredResumeRecord>;
-}
 
 interface DeferredResumeEntry {
   sessionFile: string;
@@ -34,128 +30,8 @@ interface GatewayRuntimeContext {
   conversationId: string;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function toString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
-}
-
-function toAttempts(value: unknown): number {
-  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
-    return value;
-  }
-
-  return 0;
-}
-
-function normalizeIsoTimestamp(value: string): string | undefined {
-  const parsedMs = Date.parse(value);
-  if (!Number.isFinite(parsedMs)) {
-    return undefined;
-  }
-
-  return new Date(parsedMs).toISOString();
-}
-
-function parseRecord(value: unknown): DeferredResumeRecord | undefined {
-  if (!isRecord(value)) {
-    return undefined;
-  }
-
-  const id = toString(value.id);
-  const sessionFile = toString(value.sessionFile);
-  const prompt = toString(value.prompt);
-  const dueAtRaw = toString(value.dueAt);
-
-  if (!id || !sessionFile || !prompt || !dueAtRaw) {
-    return undefined;
-  }
-
-  const dueAt = normalizeIsoTimestamp(dueAtRaw);
-  if (!dueAt) {
-    return undefined;
-  }
-
-  const createdAt = normalizeIsoTimestamp(toString(value.createdAt) ?? dueAt) ?? dueAt;
-
-  return {
-    id,
-    sessionFile,
-    prompt,
-    dueAt,
-    createdAt,
-    attempts: toAttempts(value.attempts),
-  };
-}
-
-function createEmptyState(): DeferredResumeStateFile {
-  return {
-    version: 1,
-    resumes: {},
-  };
-}
-
-function resolveStateRoot(): string {
-  if (process.env.PERSONAL_AGENT_STATE_ROOT) {
-    return process.env.PERSONAL_AGENT_STATE_ROOT;
-  }
-
-  if (process.env.XDG_STATE_HOME) {
-    return join(process.env.XDG_STATE_HOME, 'personal-agent');
-  }
-
-  return join(homedir(), '.local', 'state', 'personal-agent');
-}
-
-export function resolveDeferredResumeStateFile(): string {
-  return join(resolveStateRoot(), 'pi-agent', STATE_FILE_NAME);
-}
-
-function loadState(path = resolveDeferredResumeStateFile()): DeferredResumeStateFile {
-  if (!existsSync(path)) {
-    return createEmptyState();
-  }
-
-  try {
-    const raw = readFileSync(path, 'utf-8').trim();
-    if (raw.length === 0) {
-      return createEmptyState();
-    }
-
-    const parsed = JSON.parse(raw) as unknown;
-    if (!isRecord(parsed) || !isRecord(parsed.resumes)) {
-      return createEmptyState();
-    }
-
-    const resumes: Record<string, DeferredResumeRecord> = {};
-    for (const value of Object.values(parsed.resumes)) {
-      const record = parseRecord(value);
-      if (!record) {
-        continue;
-      }
-
-      resumes[record.id] = record;
-    }
-
-    return {
-      version: 1,
-      resumes,
-    };
-  } catch {
-    return createEmptyState();
-  }
-}
-
-function saveState(state: DeferredResumeStateFile, path = resolveDeferredResumeStateFile()): void {
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  writeFileSync(path, JSON.stringify(state, null, 2));
-}
-
-export function loadDeferredResumeEntries(stateFile = resolveDeferredResumeStateFile()): DeferredResumeEntry[] {
-  const state = loadState(stateFile);
-  return Object.values(state.resumes).map((record) => ({ sessionFile: record.sessionFile }));
+function createId(): string {
+  return `resume_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function parseDelayMs(raw: string): number | undefined {
@@ -182,10 +58,6 @@ function parseDelayMs(raw: string): number | undefined {
     default:
       return undefined;
   }
-}
-
-function createId(): string {
-  return `resume_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function getGatewayRuntimeContext(sessionManager: object): GatewayRuntimeContext | undefined {
@@ -239,10 +111,19 @@ function buildListLines(entries: DeferredResumeRecord[]): string[] {
   const lines = [`Deferred resumes (${entries.length}):`];
 
   for (const entry of entries) {
-    lines.push(`- ${entry.id} · due in ${formatDueIn(entry.dueAt)} · ${entry.prompt}`);
+    const stateSuffix = entry.status === 'ready' ? ' · ready' : '';
+    lines.push(`- ${entry.id} · due in ${formatDueIn(entry.dueAt)}${stateSuffix} · ${entry.prompt}`);
   }
 
   return lines;
+}
+
+export function resolveDeferredResumeStateFile(): string {
+  return resolveDeferredResumeStateFileFromCore();
+}
+
+export function loadDeferredResumeEntries(stateFile = resolveDeferredResumeStateFile()): DeferredResumeEntry[] {
+  return loadDeferredResumeEntriesFromCore(stateFile);
 }
 
 export function buildDeferredResumeStatusText(input: {
@@ -281,18 +162,6 @@ async function refreshStatus(ctx: ExtensionContext): Promise<void> {
   }));
 }
 
-function getSessionEntries(state: DeferredResumeStateFile, sessionFile: string): DeferredResumeRecord[] {
-  return Object.values(state.resumes)
-    .filter((entry) => entry.sessionFile === sessionFile)
-    .sort((left, right) => Date.parse(left.dueAt) - Date.parse(right.dueAt));
-}
-
-function getDueSessionEntries(state: DeferredResumeStateFile, sessionFile: string): DeferredResumeRecord[] {
-  const nowMs = Date.now();
-  return getSessionEntries(state, sessionFile)
-    .filter((entry) => Date.parse(entry.dueAt) <= nowMs);
-}
-
 export default function deferredResumeExtension(pi: ExtensionAPI): void {
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let processingDueResumes = false;
@@ -325,9 +194,25 @@ export default function deferredResumeExtension(pi: ExtensionAPI): void {
     processingDueResumes = true;
 
     try {
-      const state = loadState();
-      const dueEntries = getDueSessionEntries(state, sessionFile);
-      const entry = dueEntries[0];
+      const state = loadDeferredResumeState();
+      let entry = getReadySessionDeferredResumeEntries(state, sessionFile)[0];
+
+      if (!entry) {
+        const scheduledDueEntries = getDueScheduledSessionDeferredResumeEntries(state, sessionFile);
+        if (scheduledDueEntries.length > 0) {
+          const activated = activateDueDeferredResumes(state, {
+            at: new Date(),
+            sessionFile,
+          });
+
+          if (activated.length > 0) {
+            saveDeferredResumeState(state);
+          }
+
+          entry = activated[0] ?? getReadySessionDeferredResumeEntries(state, sessionFile)[0];
+        }
+      }
+
       if (!entry) {
         await refreshStatus(ctx);
         return;
@@ -340,15 +225,14 @@ export default function deferredResumeExtension(pi: ExtensionAPI): void {
           pi.sendUserMessage(entry.prompt, { deliverAs: 'followUp' });
         }
 
-        delete state.resumes[entry.id];
-        saveState(state);
+        removeDeferredResume(state, entry.id);
+        saveDeferredResumeState(state);
       } catch {
-        const current = state.resumes[entry.id];
-        if (current) {
-          current.attempts += 1;
-          current.dueAt = new Date(Date.now() + RETRY_DELAY_MS).toISOString();
-          saveState(state);
-        }
+        retryDeferredResume(state, {
+          id: entry.id,
+          dueAt: new Date(Date.now() + RETRY_DELAY_MS).toISOString(),
+        });
+        saveDeferredResumeState(state);
       }
 
       await refreshStatus(ctx);
@@ -431,19 +315,19 @@ export default function deferredResumeExtension(pi: ExtensionAPI): void {
         const prompt = (params.prompt ?? '').trim() || DEFAULT_PROMPT;
         const dueAt = new Date(Date.now() + delayMs).toISOString();
 
-        const state = loadState();
+        const state = loadDeferredResumeState();
         const id = createId();
 
-        state.resumes[id] = {
+        scheduleDeferredResume(state, {
           id,
           sessionFile,
           prompt,
           dueAt,
           createdAt: new Date().toISOString(),
           attempts: 0,
-        };
+        });
 
-        saveState(state);
+        saveDeferredResumeState(state);
         await refreshStatus(ctx);
 
         return {
@@ -469,7 +353,7 @@ export default function deferredResumeExtension(pi: ExtensionAPI): void {
         }
 
         const tokens = args.trim().split(/\s+/).filter((token) => token.length > 0);
-        const state = loadState();
+        const state = loadDeferredResumeState();
 
         if (tokens[0] === 'cancel') {
           const target = tokens[1];
@@ -482,12 +366,12 @@ export default function deferredResumeExtension(pi: ExtensionAPI): void {
             const beforeCount = Object.keys(state.resumes).length;
             for (const entry of Object.values(state.resumes)) {
               if (entry.sessionFile === sessionFile) {
-                delete state.resumes[entry.id];
+                removeDeferredResume(state, entry.id);
               }
             }
 
             const afterCount = Object.keys(state.resumes).length;
-            saveState(state);
+            saveDeferredResumeState(state);
             await refreshStatus(ctx);
             ctx.ui.notify(`Cancelled ${beforeCount - afterCount} deferred resume(s) for this session.`, 'info');
             return;
@@ -499,8 +383,8 @@ export default function deferredResumeExtension(pi: ExtensionAPI): void {
             return;
           }
 
-          delete state.resumes[target];
-          saveState(state);
+          removeDeferredResume(state, target);
+          saveDeferredResumeState(state);
           await refreshStatus(ctx);
           ctx.ui.notify(`Cancelled deferred resume ${target}.`, 'info');
           return;
@@ -513,7 +397,7 @@ export default function deferredResumeExtension(pi: ExtensionAPI): void {
 
         const entries = tokens[0] === 'all'
           ? Object.values(state.resumes).sort((left, right) => Date.parse(left.dueAt) - Date.parse(right.dueAt))
-          : getSessionEntries(state, sessionFile);
+          : getSessionDeferredResumeEntries(state, sessionFile);
 
         ctx.ui.notify(buildListLines(entries).join('\n'), 'info');
       },

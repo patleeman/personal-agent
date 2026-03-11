@@ -1,7 +1,9 @@
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { api } from '../api';
+import { hasMeaningfulBlockers, normalizeWorkstreamText, summarizeWorkstreamPreview } from '../contextRailWorkstream';
 import { usePolling } from '../hooks';
-import { stripMarkdownListMarker, timeAgo } from '../utils';
+import { timeAgo } from '../utils';
+import { EmptyState, ErrorState, ListLinkRow, LoadingState, PageHeader, PageHeading, Pill, ToolbarButton } from '../components/ui';
 
 export function WorkstreamsPage() {
   const { id: selectedId } = useParams<{ id?: string }>();
@@ -9,68 +11,64 @@ export function WorkstreamsPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="sticky top-0 z-10 bg-base/95 backdrop-blur-sm border-b border-border-subtle px-6 py-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-base font-semibold text-primary">Workstreams</h1>
-          {workstreams && (
-            <p className="text-xs text-secondary mt-0.5 font-mono">
-              {workstreams.length} {workstreams.length === 1 ? 'workstream' : 'workstreams'}
-            </p>
-          )}
-        </div>
-        <button onClick={refetch} className="text-xs text-secondary hover:text-primary transition-colors px-2 py-1 rounded hover:bg-surface">
-          ↻ Refresh
-        </button>
-      </div>
+      <PageHeader actions={<ToolbarButton onClick={refetch}>↻ Refresh</ToolbarButton>}>
+        <PageHeading
+          title="Workstreams"
+          meta={
+            workstreams && (
+              <>
+                {workstreams.length} {workstreams.length === 1 ? 'workstream' : 'workstreams'}
+              </>
+            )
+          }
+        />
+      </PageHeader>
 
       <div className="flex-1 px-6 py-4">
-        {loading && (
-          <div className="flex items-center gap-2 text-sm text-dim py-8">
-            <span className="animate-pulse">●</span>
-            <span>Loading workstreams…</span>
-          </div>
-        )}
-        {error && <div className="py-8 text-sm text-danger/80">Failed to load workstreams: {error}</div>}
+        {loading && <LoadingState label="Loading workstreams…" />}
+        {error && <ErrorState message={`Failed to load workstreams: ${error}`} />}
         {!loading && !error && workstreams?.length === 0 && (
-          <div className="py-16 text-center">
-            <p className="text-2xl mb-3">🗂</p>
-            <p className="text-sm text-primary">No workstreams yet.</p>
-            <p className="text-xs text-secondary mt-1">Workstreams group related artifacts, tasks, and activity.</p>
-          </div>
+          <EmptyState
+            icon="🗂"
+            title="No workstreams yet."
+            body="Workstreams group related artifacts, tasks, and activity."
+          />
         )}
 
         {!loading && workstreams && workstreams.length > 0 && (
           <div className="space-y-px">
-            {workstreams.map((ws) => {
-              const status = stripMarkdownListMarker(ws.status);
-              const blockers = stripMarkdownListMarker(ws.blockers);
-              const isBlocked = blockers !== 'None';
-              const isSelected = ws.id === selectedId;
+            {workstreams.map((workstream) => {
+              const status = normalizeWorkstreamText(workstream.status);
+              const blockers = normalizeWorkstreamText(workstream.blockers);
+              const isBlocked = hasMeaningfulBlockers(workstream.blockers);
+              const isSelected = workstream.id === selectedId;
+              const preview = summarizeWorkstreamPreview(workstream.currentPlan, workstream.blockers);
+              const dotClass = isBlocked ? 'bg-warning' : 'bg-teal';
 
               return (
-                <Link
-                  key={ws.id}
-                  to={`/workstreams/${ws.id}`}
-                  className={`flex items-start gap-4 px-4 py-3 -mx-2 rounded-lg transition-colors group ${
-                    isSelected ? 'bg-surface' : 'hover:bg-surface'
-                  }`}
+                <ListLinkRow
+                  key={workstream.id}
+                  to={`/workstreams/${workstream.id}`}
+                  selected={isSelected}
+                  leading={<span className={`mt-2 w-2 h-2 rounded-full shrink-0 ${dotClass}`} />}
                 >
-                  <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${isBlocked ? 'bg-warning' : 'bg-teal'}`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] text-primary leading-snug">{ws.objective}</p>
-                    <p className="text-[11px] text-dim mt-0.5 font-mono flex items-center gap-1.5 flex-wrap">
-                      <span className="text-secondary">{status}</span>
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <p className="ui-card-title">{workstream.objective}</p>
+                      <Pill tone={isBlocked ? 'warning' : 'teal'}>{status}</Pill>
+                    </div>
+                    <p className="ui-row-summary">{preview}</p>
+                    <div className="flex items-center gap-2 flex-wrap ui-card-meta">
+                      <span>{timeAgo(workstream.updatedAt)}</span>
                       {isBlocked && (
                         <>
                           <span className="opacity-40">·</span>
-                          <span className="text-warning">⚠ {blockers}</span>
+                          <span className="text-warning">{blockers}</span>
                         </>
                       )}
-                      <span className="opacity-40">·</span>
-                      <span>{timeAgo(ws.updatedAt)}</span>
-                    </p>
+                    </div>
                   </div>
-                </Link>
+                </ListLinkRow>
               );
             })}
           </div>

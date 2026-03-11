@@ -276,7 +276,7 @@ A conversation can exist with no workstream at all.
 When the agent needs durable organization for the work, it should be able to create a workstream intentionally. That creation unlocks the ability to:
 
 - attach a plan
-- create long-running tasks/jobs
+- create workstream todos
 - collect artifacts in one place
 - maintain an executive summary
 - continue the work from another conversation or surface later
@@ -378,7 +378,7 @@ Likely relationships:
 - a **profile** shapes what memory, tools, and policies apply
 - a **conversation** may remain purely conversational or may lead the agent to create a **workstream**
 - a **deferred resume** targets a specific **conversation**
-- a **workstream** groups related **artifacts**, **tasks/jobs**, **executions**, and **summaries**
+- a **workstream** groups related **artifacts**, **todos**, **executions**, and **summaries**
 - a **plan** is an artifact attached to a workstream
 - a **conversation** can reference multiple **workstreams**
 - a **workstream** can span multiple **conversations** and **surfaces**
@@ -410,7 +410,7 @@ This is especially important between TUI and gateway.
 A conversation crystallizes into real work.
 The agent creates a workstream when durable organization is useful.
 A plan is attached.
-Execution tasks/jobs may be created.
+Workstream todos may be created.
 Artifacts accumulate.
 Verification happens.
 A summary captures what matters next.
@@ -477,7 +477,7 @@ Questions:
 
 - What artifact types should exist from the beginning?
 - Which artifacts should be plain markdown/text files versus structured metadata files?
-- What minimal schema should plans, summaries, task records, activity entries, and verification results share?
+- What minimal schema should plans, summaries, todos, activity entries, and verification results share?
 - How should noisy artifacts such as subagent transcripts and tool traces be summarized and referenced?
 
 ### 4. Workstream creation rules
@@ -580,7 +580,7 @@ A reasonable next design sequence is:
 5. **Define file-backed durability**
    - git-backed vs machine-local state
    - markdown vs metadata split
-   - storage layout for plans, task records, summaries, activity, and execution artifacts
+   - storage layout for plans, todos, summaries, activity, and execution artifacts
 
 6. **Define architecture around the canonical model**
    - how agent/profile/conversation/deferred-resume/workstream/artifact/activity/execution concepts map onto implementation boundaries

@@ -50,13 +50,13 @@ export interface WorkstreamActivityEntryDocument {
   notificationState?: WorkstreamActivityNotificationState;
 }
 
-export type WorkstreamTaskRecordStatus = 'pending' | 'running' | 'blocked' | 'completed' | 'failed' | 'cancelled';
+export type WorkstreamTodoStatus = 'pending' | 'running' | 'blocked' | 'completed' | 'failed' | 'cancelled';
 
-export interface WorkstreamTaskRecordDocument {
+export interface WorkstreamTodoDocument {
   id: string;
   createdAt: string;
   updatedAt: string;
-  status: WorkstreamTaskRecordStatus | (string & {});
+  status: WorkstreamTodoStatus | (string & {});
   title: string;
   summary?: string;
 }
@@ -491,34 +491,34 @@ export function writeWorkstreamActivityEntry(path: string, document: WorkstreamA
   writeFileSync(path, formatWorkstreamActivityEntry(document));
 }
 
-export function createWorkstreamTaskRecord(input: {
+export function createWorkstreamTodo(input: {
   id: string;
   createdAt: string;
   updatedAt?: string;
-  status: WorkstreamTaskRecordDocument['status'];
+  status: WorkstreamTodoDocument['status'];
   title: string;
   summary?: string;
-}): WorkstreamTaskRecordDocument {
+}): WorkstreamTodoDocument {
   return {
-    id: assertNonEmptyText(input.id, 'Task record id'),
-    createdAt: assertNonEmptyText(input.createdAt, 'Task record createdAt'),
-    updatedAt: assertNonEmptyText(input.updatedAt ?? input.createdAt, 'Task record updatedAt'),
-    status: assertNonEmptyText(input.status, 'Task record status'),
-    title: assertNonEmptyText(input.title, 'Task record title'),
-    summary: input.summary ? assertNonEmptyText(input.summary, 'Task record summary') : undefined,
+    id: assertNonEmptyText(input.id, 'Todo id'),
+    createdAt: assertNonEmptyText(input.createdAt, 'Todo createdAt'),
+    updatedAt: assertNonEmptyText(input.updatedAt ?? input.createdAt, 'Todo updatedAt'),
+    status: assertNonEmptyText(input.status, 'Todo status'),
+    title: assertNonEmptyText(input.title, 'Todo title'),
+    summary: input.summary ? assertNonEmptyText(input.summary, 'Todo summary') : undefined,
   };
 }
 
-export function formatWorkstreamTaskRecord(document: WorkstreamTaskRecordDocument): string {
+export function formatWorkstreamTodo(document: WorkstreamTodoDocument): string {
   const frontmatterAttributes: Record<string, string> = {
-    id: assertNonEmptyText(document.id, 'Task record id'),
-    createdAt: assertNonEmptyText(document.createdAt, 'Task record createdAt'),
-    updatedAt: assertNonEmptyText(document.updatedAt, 'Task record updatedAt'),
-    status: assertNonEmptyText(document.status, 'Task record status'),
+    id: assertNonEmptyText(document.id, 'Todo id'),
+    createdAt: assertNonEmptyText(document.createdAt, 'Todo createdAt'),
+    updatedAt: assertNonEmptyText(document.updatedAt, 'Todo updatedAt'),
+    status: assertNonEmptyText(document.status, 'Todo status'),
   };
 
   const frontmatter = formatFrontmatter(frontmatterAttributes);
-  const body = formatMarkdownDocument('Task Record', [
+  const body = formatMarkdownDocument('Todo', [
     ['Title', document.title],
     ['Summary', document.summary],
   ]);
@@ -526,25 +526,25 @@ export function formatWorkstreamTaskRecord(document: WorkstreamTaskRecordDocumen
   return `${frontmatter}\n${body}`;
 }
 
-export function parseWorkstreamTaskRecord(markdown: string): WorkstreamTaskRecordDocument {
-  const { attributes, body } = splitFrontmatter(markdown, 'Task Record');
-  const sections = parseMarkdownSections(body, 'Task Record', 'Task Record');
+export function parseWorkstreamTodo(markdown: string): WorkstreamTodoDocument {
+  const { attributes, body } = splitFrontmatter(markdown, 'Todo');
+  const sections = parseMarkdownSections(body, 'Todo', 'Todo');
 
   return {
-    id: readRequiredAttribute(attributes, 'id', 'Task Record'),
-    createdAt: readRequiredAttribute(attributes, 'createdAt', 'Task Record'),
-    updatedAt: readRequiredAttribute(attributes, 'updatedAt', 'Task Record'),
-    status: readRequiredAttribute(attributes, 'status', 'Task Record'),
-    title: readRequiredSection(sections, 'Title', 'Task Record'),
-    summary: sections.Summary ? assertNonEmptyText(sections.Summary, 'Task Record section Summary') : undefined,
+    id: readRequiredAttribute(attributes, 'id', 'Todo'),
+    createdAt: readRequiredAttribute(attributes, 'createdAt', 'Todo'),
+    updatedAt: readRequiredAttribute(attributes, 'updatedAt', 'Todo'),
+    status: readRequiredAttribute(attributes, 'status', 'Todo'),
+    title: readRequiredSection(sections, 'Title', 'Todo'),
+    summary: sections.Summary ? assertNonEmptyText(sections.Summary, 'Todo section Summary') : undefined,
   };
 }
 
-export function readWorkstreamTaskRecord(path: string): WorkstreamTaskRecordDocument {
-  return parseWorkstreamTaskRecord(readFileSync(path, 'utf-8'));
+export function readWorkstreamTodo(path: string): WorkstreamTodoDocument {
+  return parseWorkstreamTodo(readFileSync(path, 'utf-8'));
 }
 
-export function writeWorkstreamTaskRecord(path: string, document: WorkstreamTaskRecordDocument): void {
+export function writeWorkstreamTodo(path: string, document: WorkstreamTodoDocument): void {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, formatWorkstreamTaskRecord(document));
+  writeFileSync(path, formatWorkstreamTodo(document));
 }

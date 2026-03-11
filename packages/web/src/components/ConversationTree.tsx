@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MessageBlock } from '../types';
+import { IconButton, Keycap, Pill, cx } from './ui';
 
 // ── Filters ────────────────────────────────────────────────────────────────────
 
@@ -16,25 +17,40 @@ type FilterKey = (typeof FILTERS)[number]['key'];
 // ── Entry builder ──────────────────────────────────────────────────────────────
 
 interface TreeEntry {
-  index:    number;
-  label:    string;
-  preview:  string;
-  color:    string;
-  ts:       string;
+  index: number;
+  type: MessageBlock['type'];
+  label: string;
+  preview: string;
+  color: string;
+  ts: string;
   duration?: number;
 }
 
 function buildEntries(messages: MessageBlock[]): TreeEntry[] {
   return messages.map((b, i) => {
     switch (b.type) {
-      case 'user':
-        return { index: i, label: 'user',  color: 'text-accent',
-          preview: b.text.replace(/\n/g, ' ').slice(0, 120), ts: b.ts };
+      case 'user': {
+        const imageCount = b.images?.length ?? 0;
+        const textPreview = b.text.replace(/\n/g, ' ').slice(0, 120);
+        const attachmentPreview = imageCount > 0
+          ? `${imageCount} image attachment${imageCount === 1 ? '' : 's'}`
+          : '';
+        return {
+          index: i,
+          type: 'user',
+          label: 'user',
+          color: 'text-accent',
+          preview: textPreview
+            ? `${textPreview}${attachmentPreview ? ` · ${attachmentPreview}` : ''}`
+            : attachmentPreview || '(empty message)',
+          ts: b.ts,
+        };
+      }
       case 'text':
-        return { index: i, label: 'asst',  color: 'text-primary',
+        return { index: i, type: 'text', label: 'asst',  color: 'text-primary',
           preview: b.text.replace(/\n/g, ' ').slice(0, 120), ts: b.ts };
       case 'thinking':
-        return { index: i, label: 'think', color: 'text-steel/80',
+        return { index: i, type: 'thinking', label: 'think', color: 'text-steel/80',
           preview: b.text.replace(/\n/g, ' ').slice(0, 110), ts: b.ts };
       case 'tool_use': {
         const inp = b.input as Record<string, string>;
@@ -43,20 +59,20 @@ function buildEntries(messages: MessageBlock[]): TreeEntry[] {
           bash: 'text-steel', read: 'text-teal', write: 'text-accent',
           edit: 'text-accent', web_fetch: 'text-success', web_search: 'text-success',
         };
-        return { index: i, label: b.tool,  color: colorMap[b.tool] ?? 'text-secondary',
+        return { index: i, type: 'tool_use', label: b.tool,  color: colorMap[b.tool] ?? 'text-secondary',
           preview, ts: b.ts, duration: b.durationMs };
       }
       case 'subagent':
-        return { index: i, label: 'subagent', color: 'text-warning',
+        return { index: i, type: 'subagent', label: 'subagent', color: 'text-warning',
           preview: b.name + ': ' + b.prompt.slice(0, 80), ts: b.ts };
       case 'image':
-        return { index: i, label: 'image', color: 'text-teal',
+        return { index: i, type: 'image', label: 'image', color: 'text-teal',
           preview: b.alt || `${b.width}×${b.height}`, ts: b.ts };
       case 'error':
-        return { index: i, label: 'error', color: 'text-danger',
+        return { index: i, type: 'error', label: 'error', color: 'text-danger',
           preview: b.message.slice(0, 100), ts: b.ts };
       default:
-        return { index: i, label: '?', color: 'text-dim', preview: '', ts: '' };
+        return { index: i, type: b.type, label: '?', color: 'text-dim', preview: '', ts: '' };
     }
   });
 }
@@ -154,29 +170,33 @@ export function ConversationTree({ messages, currentIndex = 0, onJump, onClose, 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-12"
+      className="ui-overlay-backdrop"
       style={{ background: 'rgb(0 0 0 / 0.55)', backdropFilter: 'blur(2px)' }}
       onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div
-        className="w-full mx-6 rounded-2xl shadow-2xl overflow-hidden flex flex-col bg-surface border border-border-default"
-        style={{ maxWidth: '900px', maxHeight: 'calc(100vh - 6rem)' }}
-      >
-        {/* ── Header ── */}
+      <div className="ui-dialog-shell" style={{ maxWidth: '900px', maxHeight: 'calc(100vh - 6rem)' }}>
         <div className="px-4 pt-3 pb-0 border-b border-border-subtle">
-          <div className="flex items-center justify-between mb-2.5">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-dim">Session Tree</p>
-            <div className="flex items-center gap-3 text-[10px] text-dim/60 font-mono">
-              <span>↑↓ move</span>
-              <span>Tab filter</span>
-              <span>↵ jump</span>
-              <span>esc close</span>
-              <span className="tabular-nums text-dim">{filtered.length}/{all.length}</span>
+          <div className="flex items-center justify-between mb-2.5 gap-3">
+            <div>
+              <p className="ui-section-label text-[11px]">Session Tree</p>
+              <p className="text-[12px] text-secondary mt-1">Jump through the conversation without losing context.</p>
+            </div>
+            <div className="flex items-center gap-2 text-[10px] text-dim/70 font-mono">
+              <Keycap>↑↓</Keycap>
+              <span>move</span>
+              <Keycap>Tab</Keycap>
+              <span>filter</span>
+              <Keycap>↵</Keycap>
+              <span>jump</span>
+              <Pill tone="muted" mono className="tabular-nums">{filtered.length}/{all.length}</Pill>
+              <IconButton onClick={onClose} title="Close tree" aria-label="Close tree" compact>
+                ✕
+              </IconButton>
             </div>
           </div>
 
           {/* Search */}
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-elevated border border-border-subtle mb-2.5">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-elevated border border-border-subtle mb-2.5">
             <span className="text-dim text-[12px]">⌕</span>
             <input
               ref={inputRef}
@@ -192,7 +212,7 @@ export function ConversationTree({ messages, currentIndex = 0, onJump, onClose, 
           </div>
 
           {/* Filter tabs */}
-          <div className="flex items-center gap-0.5 -mx-1 px-1">
+          <div className="ui-segmented-control inline-flex mb-3">
             {FILTERS.map((f, i) => {
               const active = i === filterIdx;
               const count  = counts[f.key as FilterKey];
@@ -200,12 +220,7 @@ export function ConversationTree({ messages, currentIndex = 0, onJump, onClose, 
                 <button
                   key={f.key}
                   onClick={() => { setFilterIdx(i); setCursor(0); inputRef.current?.focus(); }}
-                  className={[
-                    'flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-t-lg transition-colors border-b-2 -mb-px',
-                    active
-                      ? 'text-primary border-accent bg-elevated'
-                      : 'text-dim border-transparent hover:text-secondary hover:bg-elevated/50',
-                  ].join(' ')}
+                  className={cx('ui-segmented-button', active && 'ui-segmented-button-active', 'flex items-center gap-1.5')}
                 >
                   <span>{f.label}</span>
                   {count > 0 && (
@@ -283,8 +298,8 @@ export function ConversationTree({ messages, currentIndex = 0, onJump, onClose, 
         </div>
 
         {/* ── Footer ── */}
-        <div className="px-5 py-2 border-t border-border-subtle flex items-center justify-between text-[10px] text-dim/60 font-mono">
-          <span>{filtered.length > 0 ? `${cursor + 1} / ${filtered.length}` : '0 / 0'}</span>
+        <div className="px-5 py-2.5 border-t border-border-subtle flex items-center justify-between text-[10px] text-dim/60 font-mono gap-3">
+          <Pill tone="muted" mono>{filtered.length > 0 ? `${cursor + 1} / ${filtered.length}` : '0 / 0'}</Pill>
           <span>Tab / Shift+Tab cycle filters · click or ↵ to jump · esc to close</span>
         </div>
       </div>

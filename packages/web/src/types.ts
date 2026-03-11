@@ -1,11 +1,27 @@
+export interface MessageImage {
+  alt: string;
+  src?: string;
+  mimeType?: string;
+  width?: number;
+  height?: number;
+  caption?: string;
+}
+
+export interface PromptImageInput {
+  name?: string;
+  mimeType: string;
+  data: string;
+  previewUrl?: string;
+}
+
 export type MessageBlock =
-  | { type: 'user';      id: string; ts: string; text: string }
-  | { type: 'text';      id: string; ts: string; text: string; streaming?: boolean }
-  | { type: 'thinking';  id: string; ts: string; text: string }
-  | { type: 'tool_use';  id: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; running?: boolean; status?: 'running' | 'ok' | 'error'; error?: boolean; _toolCallId?: string }
-  | { type: 'subagent';  id: string; ts: string; name: string; prompt: string; status: 'running' | 'complete' | 'failed'; summary?: string }
-  | { type: 'image';     id: string; ts: string; alt: string; width?: number; height?: number; caption?: string }
-  | { type: 'error';     id: string; ts: string; tool?: string; message: string };
+  | { type: 'user';      id?: string; ts: string; text: string; images?: MessageImage[] }
+  | { type: 'text';      id?: string; ts: string; text: string; streaming?: boolean }
+  | { type: 'thinking';  id?: string; ts: string; text: string }
+  | { type: 'tool_use';  id?: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; running?: boolean; status?: 'running' | 'ok' | 'error'; error?: boolean; _toolCallId?: string }
+  | { type: 'subagent';  id?: string; ts: string; name: string; prompt: string; status: 'running' | 'complete' | 'failed'; summary?: string }
+  | { type: 'image';     id?: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string }
+  | { type: 'error';     id?: string; ts: string; tool?: string; message: string };
 
 export interface ActivityEntry {
   id: string;
@@ -48,7 +64,7 @@ export interface WorkstreamDetail {
   id: string;
   summary: WorkstreamSummary;
   plan: WorkstreamPlan;
-  taskCount: number;
+  todoCount: number;
   artifactCount: number;
 }
 
@@ -66,15 +82,33 @@ export interface SessionMeta {
 }
 
 export type DisplayBlock =
-  | { type: 'user';     id: string; ts: string; text: string }
+  | { type: 'user';     id: string; ts: string; text: string; images?: MessageImage[] }
   | { type: 'text';     id: string; ts: string; text: string }
   | { type: 'thinking'; id: string; ts: string; text: string }
   | { type: 'tool_use'; id: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; toolCallId: string }
+  | { type: 'image';    id: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string }
   | { type: 'error';    id: string; ts: string; tool?: string; message: string };
+
+export type ContextUsageSegmentKey = 'system' | 'user' | 'assistant' | 'tool' | 'summary' | 'other';
+
+export interface ContextUsageSegment {
+  key: ContextUsageSegmentKey;
+  label: string;
+  tokens: number;
+}
+
+export interface SessionContextUsage {
+  tokens: number | null;
+  modelId?: string;
+  contextWindow?: number;
+  percent?: number | null;
+  segments?: ContextUsageSegment[];
+}
 
 export interface SessionDetail {
   meta: SessionMeta;
   blocks: DisplayBlock[];
+  contextUsage: SessionContextUsage | null;
 }
 
 // ── App status ─────────────────────────────────────────────────────────────────
@@ -84,7 +118,13 @@ export interface SessionDetail {
 export interface LiveSessionContext {
   cwd: string;
   branch: string | null;
-  userMessages: Array<{ id: string; ts: string; text: string }>;
+  userMessages: Array<{ id: string; ts: string; text: string; imageCount: number }>;
+  relatedWorkstreamIds: string[];
+}
+
+export interface ConversationWorkstreamLinks {
+  conversationId: string;
+  relatedWorkstreamIds: string[];
 }
 
 export interface LiveSessionMeta {
@@ -144,4 +184,9 @@ export interface AppStatus {
   repoRoot: string;
   activityCount: number;
   workstreamCount: number;
+}
+
+export interface ProfileState {
+  currentProfile: string;
+  profiles: string[];
 }

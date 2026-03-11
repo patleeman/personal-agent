@@ -1,15 +1,17 @@
 import { useTheme } from '../theme';
+import { IconButton } from './ui';
 
 export function ThemeSwitcher() {
   const { theme, toggle } = useTheme();
 
   return (
-    <button
+    <IconButton
       onClick={toggle}
       title={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
-      className="w-7 h-7 rounded-md flex items-center justify-center text-secondary hover:text-primary hover:bg-elevated transition-colors text-sm"
+      aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} theme`}
+      compact
     >
       {theme === 'light' ? '◐' : '○'}
-    </button>
+    </IconButton>
   );
 }

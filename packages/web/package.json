@@ -4,9 +4,10 @@
   "description": "Personal agent web UI",
   "type": "module",
   "scripts": {
-    "build": "vite build && tsc -p tsconfig.server.json",
+    "build:deps": "npm --prefix ../core run build && npm --prefix ../resources run build",
+    "build": "npm run build:deps && vite build && tsc -p tsconfig.server.json",
     "build:client": "vite build",
-    "build:server": "tsc -p tsconfig.server.json",
+    "build:server": "npm run build:deps && tsc -p tsconfig.server.json",
     "dev:client": "vite",
     "start": "node dist-server/index.js"
   },

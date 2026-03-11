@@ -2,6 +2,8 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import { ContextRail } from './ContextRail';
 import { Sidebar } from './Sidebar';
+import { IconButton } from './ui';
+import { clampPanelWidth, getRailMaxWidth } from '../layoutSizing';
 
 // ── Resize hook ───────────────────────────────────────────────────────────────
 
@@ -18,11 +20,10 @@ function useResize({ initial, min, max, storageKey, side }: ResizeOptions) {
     try {
       const stored = localStorage.getItem(storageKey);
       if (stored) {
-        const n = parseInt(stored, 10);
-        if (n >= min && n <= max) return n;
+        return clampPanelWidth(parseInt(stored, 10), min, max);
       }
     } catch { /* ignore */ }
-    return initial;
+    return clampPanelWidth(initial, min, max);
   });
 
   const dragging = useRef(false);
@@ -40,7 +41,7 @@ function useResize({ initial, min, max, storageKey, side }: ResizeOptions) {
     function onMove(e: MouseEvent) {
       if (!dragging.current) return;
       const dx   = side === 'left' ? e.clientX - startX.current : startX.current - e.clientX;
-      const next = Math.max(min, Math.min(max, startW.current + dx));
+      const next = clampPanelWidth(startW.current + dx, min, max);
       setWidth(next);
       try { localStorage.setItem(storageKey, String(next)); } catch { /* ignore */ }
     }
@@ -56,6 +57,16 @@ function useResize({ initial, min, max, storageKey, side }: ResizeOptions) {
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup',   onUp);
   }, [width, min, max, side, storageKey]);
+
+  useEffect(() => {
+    setWidth((current) => {
+      const next = clampPanelWidth(current, min, max);
+      if (next !== current) {
+        try { localStorage.setItem(storageKey, String(next)); } catch { /* ignore */ }
+      }
+      return next;
+    });
+  }, [min, max, storageKey]);
 
   return { width, onMouseDown };
 }
@@ -90,9 +101,32 @@ function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => v
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 
+function useViewportWidth() {
+  const [viewportWidth, setViewportWidth] = useState(() => (
+    typeof window === 'undefined' ? 1440 : window.innerWidth
+  ));
+
+  useEffect(() => {
+    function onResize() {
+      setViewportWidth(window.innerWidth);
+    }
+
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  return viewportWidth;
+}
+
 export function Layout() {
+  const viewportWidth = useViewportWidth();
   const sidebar = useResize({ initial: 224, min: 160, max: 320, storageKey: 'pa:sidebar-width', side: 'left'  });
-  const rail    = useResize({ initial: 380, min: 220, max: 560, storageKey: 'pa:rail-width',    side: 'right' });
+  const railMaxWidth = getRailMaxWidth({
+    viewportWidth,
+    sidebarWidth: sidebar.width,
+    railMinWidth: 220,
+  });
+  const rail    = useResize({ initial: 380, min: 220, max: railMaxWidth, storageKey: 'pa:rail-width', side: 'right' });
 
   const [railCollapsed, setRailCollapsed] = useState(() => {
     try { return localStorage.getItem('pa:rail-collapsed') === 'true'; } catch { return false; }
@@ -116,22 +150,23 @@ export function Layout() {
       <ResizeHandle onMouseDown={sidebar.onMouseDown} />
 
       {/* Center */}
-      <main className="flex-1 min-w-0 overflow-y-auto select-text">
+      <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden select-text">
         <Outlet />
       </main>
 
       {railCollapsed ? (
         /* Collapsed strip — click to expand */
         <div className="flex-shrink-0 w-8 border-l border-border-subtle flex flex-col items-center pt-3 bg-surface">
-          <button
+          <IconButton
             onClick={toggleRail}
             title="Show context panel"
-            className="text-dim hover:text-secondary transition-colors p-1 rounded"
+            aria-label="Show context panel"
+            compact
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M15 18l-6-6 6-6" />
             </svg>
-          </button>
+          </IconButton>
         </div>
       ) : (
         <>

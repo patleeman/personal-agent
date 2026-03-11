@@ -44,8 +44,10 @@ Owns background orchestration:
 - built-in modules:
   - `maintenance`
   - `tasks`
+  - `deferred-resume`
 - module status/diagnostics + queue status
 - gateway notification queue (for task output routing)
+- deferred-resume firing when a queued conversation continuation becomes due
 
 ### `@personal-agent/cli`
 

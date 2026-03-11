@@ -8,8 +8,8 @@ import {
   listWorkstreamIds,
   resolveProfileWorkstreamsDir,
   resolveWorkstreamPaths,
-  resolveWorkstreamTaskRecordPath,
-  validateTaskRecordId,
+  resolveWorkstreamTodoPath,
+  validateTodoId,
   validateWorkstreamId,
   workstreamExists,
 } from './workstreams.js';
@@ -53,13 +53,13 @@ describe('validateWorkstreamId', () => {
   });
 });
 
-describe('validateTaskRecordId', () => {
-  it('accepts simple task record ids', () => {
-    expect(() => validateTaskRecordId('implement-activity')).not.toThrow();
+describe('validateTodoId', () => {
+  it('accepts simple todo ids', () => {
+    expect(() => validateTodoId('implement-activity')).not.toThrow();
   });
 
-  it('rejects invalid task record ids', () => {
-    expect(() => validateTaskRecordId('bad/id')).toThrow('Invalid task record id');
+  it('rejects invalid todo ids', () => {
+    expect(() => validateTodoId('bad/id')).toThrow('Invalid todo id');
   });
 });
 
@@ -75,20 +75,20 @@ describe('resolveWorkstreamPaths', () => {
     expect(paths.workstreamDir).toBe(join(repo, 'profiles', 'datadog', 'agent', 'workstreams', 'artifact-model'));
     expect(paths.summaryFile).toBe(join(paths.workstreamDir, 'summary.md'));
     expect(paths.planFile).toBe(join(paths.workstreamDir, 'plan.md'));
-    expect(paths.tasksDir).toBe(join(paths.workstreamDir, 'tasks'));
+    expect(paths.todosDir).toBe(join(paths.workstreamDir, 'todos'));
     expect(paths.artifactsDir).toBe(join(paths.workstreamDir, 'artifacts'));
   });
 
-  it('builds the expected path for a workstream task record', () => {
+  it('builds the expected path for a workstream todo', () => {
     const repo = createTempRepo();
-    const path = resolveWorkstreamTaskRecordPath({
+    const path = resolveWorkstreamTodoPath({
       repoRoot: repo,
       profile: 'datadog',
       workstreamId: 'artifact-model',
-      taskRecordId: 'implement-activity',
+      todoId: 'implement-activity',
     });
 
-    expect(path).toBe(join(repo, 'profiles', 'datadog', 'agent', 'workstreams', 'artifact-model', 'tasks', 'implement-activity.md'));
+    expect(path).toBe(join(repo, 'profiles', 'datadog', 'agent', 'workstreams', 'artifact-model', 'todos', 'implement-activity.md'));
   });
 });
 
@@ -109,7 +109,7 @@ describe('createWorkstreamScaffold', () => {
     ]);
 
     expect(existsSync(result.paths.workstreamDir)).toBe(true);
-    expect(existsSync(result.paths.tasksDir)).toBe(true);
+    expect(existsSync(result.paths.todosDir)).toBe(true);
     expect(existsSync(result.paths.artifactsDir)).toBe(true);
 
     const summary = readFileSync(result.paths.summaryFile, 'utf-8');

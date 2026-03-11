@@ -3,7 +3,7 @@
  * a growing MessageBlock list in real time.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { MessageBlock } from '../types';
+import type { MessageBlock, PromptImageInput } from '../types';
 import type { SseEvent } from '../types';
 import { api } from '../api';
 
@@ -30,13 +30,28 @@ export function useSessionStream(sessionId: string | null) {
   const blocksRef    = useRef<MessageBlock[]>([]);
   const streamingRef = useRef(false);
 
-  const send = useCallback(async (text: string, behavior?: 'steer' | 'followUp') => {
+  const send = useCallback(async (text: string, behavior?: 'steer' | 'followUp', images?: PromptImageInput[]) => {
     if (!sessionId) return;
-    // Optimistically append user message
-    const userBlock: MessageBlock = { type: 'user', text, ts: new Date().toISOString() };
+    const ts = new Date().toISOString();
+    const userBlock: MessageBlock = {
+      type: 'user',
+      id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      text,
+      ts,
+      ...(images && images.length > 0
+        ? {
+            images: images.map((image) => ({
+              alt: image.name ?? 'Attached image',
+              src: image.previewUrl,
+              mimeType: image.mimeType,
+              caption: image.name,
+            })),
+          }
+        : {}),
+    };
     blocksRef.current = [...blocksRef.current, userBlock];
     setState(s => ({ ...s, blocks: blocksRef.current }));
-    await api.promptSession(sessionId, text, behavior);
+    await api.promptSession(sessionId, text, behavior, images);
   }, [sessionId]);
 
   const abort = useCallback(async () => {

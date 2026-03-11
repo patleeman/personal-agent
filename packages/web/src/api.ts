@@ -1,4 +1,4 @@
-import type { ActivityEntry, AppStatus, LiveSessionContext, LiveSessionMeta, MemoryData, WorkstreamDetail, WorkstreamSummary } from './types';
+import type { ActivityEntry, AppStatus, ConversationWorkstreamLinks, LiveSessionContext, LiveSessionMeta, MemoryData, ProfileState, PromptImageInput, SessionContextUsage, WorkstreamDetail, WorkstreamSummary } from './types';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch('/api' + path);
@@ -33,6 +33,8 @@ export const api = {
   activityById:   (id: string) => get<ActivityEntry>(`/activity/${encodeURIComponent(id)}`),
   workstreams:    () => get<WorkstreamSummary[]>('/workstreams'),
   workstreamById: (id: string) => get<WorkstreamDetail>(`/workstreams/${encodeURIComponent(id)}`),
+  profiles:       () => get<ProfileState>('/profiles'),
+  setCurrentProfile: (profile: string) => patch<{ ok: boolean; currentProfile: string }>('/profiles/current', { profile }),
 
   // ── Models ────────────────────────────────────────────────────────────────
   setModel:    (model: string) => patch<{ ok: boolean }>('/models/current', { model }),
@@ -63,6 +65,15 @@ export const api = {
   liveSessions: () => get<LiveSessionMeta[]>('/live-sessions'),
   liveSession:        (id: string) => get<LiveSessionMeta & { live: boolean }>(`/live-sessions/${id}`),
   liveSessionContext: (id: string) => get<LiveSessionContext>(`/live-sessions/${id}/context`),
+  liveSessionContextUsage: (id: string) => get<SessionContextUsage>(`/live-sessions/${encodeURIComponent(id)}/context-usage`),
+  conversationWorkstreams: (id: string) => get<ConversationWorkstreamLinks>(`/conversations/${encodeURIComponent(id)}/workstreams`),
+  addConversationWorkstream: (id: string, workstreamId: string) =>
+    post<ConversationWorkstreamLinks>(`/conversations/${encodeURIComponent(id)}/workstreams`, { workstreamId }),
+  removeConversationWorkstream: (id: string, workstreamId: string) =>
+    fetch(`/api/conversations/${encodeURIComponent(id)}/workstreams/${encodeURIComponent(workstreamId)}`, { method: 'DELETE' }).then(r => {
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      return r.json() as Promise<ConversationWorkstreamLinks>;
+    }),
 
   createLiveSession: (cwd?: string) =>
     post<{ id: string; sessionFile: string }>('/live-sessions', { cwd }),
@@ -70,8 +81,25 @@ export const api = {
   resumeSession: (sessionFile: string) =>
     post<{ id: string }>('/live-sessions/resume', { sessionFile }),
 
-  promptSession: (id: string, text: string, behavior?: 'steer' | 'followUp') =>
-    post<{ ok: boolean }>(`/live-sessions/${id}/prompt`, { text, behavior }),
+  promptSession: (id: string, text: string, behavior?: 'steer' | 'followUp', images?: PromptImageInput[]) =>
+    post<{ ok: boolean }>(`/live-sessions/${id}/prompt`, {
+      text,
+      behavior,
+      images: images?.map((image) => ({
+        type: 'image' as const,
+        data: image.data,
+        mimeType: image.mimeType,
+        ...(image.name ? { name: image.name } : {}),
+      })),
+    }),
+  compactSession: (id: string, customInstructions?: string) =>
+    post<{ ok: boolean; result: unknown }>(`/live-sessions/${id}/compact`, { customInstructions }),
+  reloadSession: (id: string) =>
+    post<{ ok: boolean }>(`/live-sessions/${id}/reload`),
+  exportSession: (id: string, outputPath?: string) =>
+    post<{ ok: boolean; path: string }>(`/live-sessions/${id}/export`, { outputPath }),
+  renameSession: (id: string, name: string) =>
+    patch<{ ok: boolean; name: string }>(`/live-sessions/${id}/name`, { name }),
 
   abortSession: (id: string) =>
     post<{ ok: boolean }>(`/live-sessions/${id}/abort`),

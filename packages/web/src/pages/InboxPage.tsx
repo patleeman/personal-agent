@@ -1,23 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { api } from '../api';
 import { usePolling } from '../hooks';
 import { kindMeta, timeAgo } from '../utils';
-
+import { EmptyState, ErrorState, ListLinkRow, LoadingState, PageHeader, ToolbarButton } from '../components/ui';
 
 export function InboxPage() {
   const { id: selectedId } = useParams<{ id?: string }>();
-  const navigate = useNavigate();
   const { data: activity, loading, error, refetch } = usePolling(api.activity, 15_000);
   const [filter, setFilter] = useState<'all' | 'unread'>('unread');
   const [markingAll, setMarkingAll] = useState(false);
 
-  const unreadCount = activity?.filter(e => !e.read).length ?? 0;
+  const unreadCount = activity?.filter((entry) => !entry.read).length ?? 0;
   const visible = activity
-    ? (filter === 'unread' ? activity.filter(e => !e.read) : activity)
+    ? (filter === 'unread' ? activity.filter((entry) => !entry.read) : activity)
     : [];
 
-  // Switch to 'all' automatically if unread list becomes empty after marking
   useEffect(() => {
     if (filter === 'unread' && activity && unreadCount === 0 && activity.length > 0) {
       setFilter('all');
@@ -26,11 +24,13 @@ export function InboxPage() {
 
   const markAllRead = useCallback(async () => {
     if (!activity) return;
-    const unread = activity.filter(e => !e.read);
+
+    const unread = activity.filter((entry) => !entry.read);
     if (unread.length === 0) return;
+
     setMarkingAll(true);
     try {
-      await Promise.all(unread.map(e => api.markActivityRead(e.id)));
+      await Promise.all(unread.map((entry) => api.markActivityRead(entry.id)));
       await refetch();
     } finally {
       setMarkingAll(false);
@@ -39,70 +39,64 @@ export function InboxPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="sticky top-0 z-10 bg-base/95 backdrop-blur-sm border-b border-border-subtle px-6 py-4 flex items-center justify-between gap-4">
+      <PageHeader
+        actions={(
+          <>
+            {unreadCount > 0 && (
+              <ToolbarButton
+                onClick={markAllRead}
+                disabled={markingAll}
+                className="text-[11px]"
+              >
+                {markingAll ? 'Marking…' : 'Mark all read'}
+              </ToolbarButton>
+            )}
+            <ToolbarButton onClick={refetch}>↻</ToolbarButton>
+          </>
+        )}
+      >
         <div className="flex items-center gap-4 min-w-0">
-          <h1 className="text-base font-semibold text-primary shrink-0">Inbox</h1>
-          {/* Unread / All toggle */}
+          <h1 className="ui-page-title shrink-0">Inbox</h1>
           {activity && (
-            <div className="flex items-center gap-px bg-elevated rounded-lg p-0.5">
+            <div className="ui-segmented-control">
               <button
                 onClick={() => setFilter('unread')}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
-                  filter === 'unread' ? 'bg-surface text-primary shadow-sm' : 'text-dim hover:text-secondary'
-                }`}
+                className={filter === 'unread' ? 'ui-segmented-button ui-segmented-button-active' : 'ui-segmented-button'}
               >
                 Unread{unreadCount > 0 && <span className="ml-1 text-accent">{unreadCount}</span>}
               </button>
               <button
                 onClick={() => setFilter('all')}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
-                  filter === 'all' ? 'bg-surface text-primary shadow-sm' : 'text-dim hover:text-secondary'
-                }`}
+                className={filter === 'all' ? 'ui-segmented-button ui-segmented-button-active' : 'ui-segmented-button'}
               >
                 All{activity.length > 0 && <span className="ml-1 opacity-50">{activity.length}</span>}
               </button>
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {unreadCount > 0 && (
-            <button
-              onClick={markAllRead}
-              disabled={markingAll}
-              className="text-[11px] text-dim hover:text-secondary transition-colors px-2 py-1 rounded hover:bg-surface disabled:opacity-40"
-            >
-              {markingAll ? 'Marking…' : 'Mark all read'}
-            </button>
-          )}
-          <button onClick={refetch} className="text-xs text-secondary hover:text-primary transition-colors px-2 py-1 rounded hover:bg-surface">
-            ↻
-          </button>
-        </div>
-      </div>
+      </PageHeader>
 
-      {loading && (
-        <div className="flex items-center gap-2 text-sm text-dim px-6 py-8">
-          <span className="animate-pulse">●</span>
-          <span>Loading activity…</span>
-        </div>
-      )}
-      {error && <div className="px-6 py-8 text-sm text-danger/80">Failed to load activity: {error}</div>}
+      {loading && <LoadingState label="Loading activity…" className="px-6" />}
+      {error && <ErrorState message={`Failed to load activity: ${error}`} className="px-6" />}
+
       {!loading && !error && activity?.length === 0 && (
-        <div className="py-16 text-center">
-          <p className="text-2xl mb-3">📭</p>
-          <p className="text-sm text-primary">No activity yet.</p>
-          <p className="text-xs text-secondary mt-1">Activity is created when scheduled tasks run or deferred resumes fire.</p>
-        </div>
+        <EmptyState
+          icon="📭"
+          title="No activity yet."
+          body="Activity is created when scheduled tasks run or deferred resumes fire."
+        />
       )}
 
       {!loading && activity && activity.length > 0 && filter === 'unread' && unreadCount === 0 && (
-        <div className="py-16 text-center">
-          <p className="text-2xl mb-3">✓</p>
-          <p className="text-sm text-primary">All caught up.</p>
-          <button onClick={() => setFilter('all')} className="text-xs text-accent hover:underline mt-1">
-            View all {activity.length} notifications →
-          </button>
-        </div>
+        <EmptyState
+          icon="✓"
+          title="All caught up."
+          action={(
+            <button onClick={() => setFilter('all')} className="text-xs text-accent hover:underline">
+              View all {activity.length} notifications →
+            </button>
+          )}
+        />
       )}
 
       {!loading && activity && visible.length > 0 && (
@@ -111,37 +105,29 @@ export function InboxPage() {
             {visible.map((entry) => {
               const meta = kindMeta(entry.kind);
               const isSelected = entry.id === selectedId;
+              const titleClass = entry.read ? 'ui-row-title text-secondary' : 'ui-row-title';
+              const leadingClass = entry.read
+                ? 'mt-1.5 w-2 h-2 rounded-full shrink-0 transition-all border border-border-default bg-transparent'
+                : `mt-1.5 w-2 h-2 rounded-full shrink-0 transition-all ${meta.dot}`;
+
               return (
-                <Link
+                <ListLinkRow
                   key={entry.id}
                   to={`/inbox/${entry.id}`}
-                  className={`flex items-start gap-4 px-4 py-3 -mx-2 rounded-lg transition-colors group ${
-                    isSelected ? 'bg-surface' : 'hover:bg-surface'
-                  }`}
+                  selected={isSelected}
+                  leading={<span className={leadingClass} />}
+                  trailing={!entry.read && <span className="shrink-0 self-center w-1.5 h-1.5 rounded-full bg-accent" />}
                 >
-                  {/* Unread dot: solid if unread, hollow ring if read */}
-                  <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 transition-all ${
-                    entry.read ? 'border border-border-default bg-transparent' : meta.dot
-                  }`} />
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-[13px] leading-snug ${entry.read ? 'text-secondary' : 'text-primary'}`}>
-                      {entry.summary}
-                    </p>
-                    <p className="text-[11px] text-dim mt-0.5 font-mono">
-                      <span className={meta.color}>{meta.label}</span>
-                      <span className="opacity-40 mx-1.5">·</span>
-                      {timeAgo(entry.createdAt)}
-                    </p>
-                  </div>
-                  {!entry.read && (
-                    <span className="shrink-0 self-center w-1.5 h-1.5 rounded-full bg-accent" />
-                  )}
-                </Link>
+                  <p className={titleClass}>{entry.summary}</p>
+                  <p className="ui-row-meta">
+                    <span className={meta.color}>{meta.label}</span>
+                    <span className="opacity-40 mx-1.5">·</span>
+                    {timeAgo(entry.createdAt)}
+                  </p>
+                </ListLinkRow>
               );
             })}
           </div>
-
-
         </div>
       )}
     </div>

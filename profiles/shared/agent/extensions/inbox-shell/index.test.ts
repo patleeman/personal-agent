@@ -37,7 +37,7 @@ describe('inbox shell snapshot', () => {
 
     mkdirSync(join(repoRoot, 'profiles', profile, 'agent', 'activity'), { recursive: true });
     const workstreamPaths = resolveWorkstreamPaths({ repoRoot, profile, workstreamId: 'artifact-model' });
-    mkdirSync(workstreamPaths.tasksDir, { recursive: true });
+    mkdirSync(workstreamPaths.todosDir, { recursive: true });
     mkdirSync(workstreamPaths.artifactsDir, { recursive: true });
 
     writeWorkstreamSummary(workstreamPaths.summaryFile, createInitialWorkstreamSummary({
@@ -98,7 +98,7 @@ describe('inbox shell snapshot', () => {
           blockers: 'None',
           completedSteps: 1,
           totalSteps: 3,
-          taskRecordCount: 2,
+          todoCount: 2,
           artifactCount: 4,
         },
       ],
@@ -110,7 +110,7 @@ describe('inbox shell snapshot', () => {
         blockers: 'None',
         completedSteps: 1,
         totalSteps: 3,
-        taskRecordCount: 2,
+        todoCount: 2,
         artifactCount: 4,
       },
     };

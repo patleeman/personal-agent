@@ -83,6 +83,14 @@ function createContext(sessionFile: string): {
   };
 }
 
+function createSessionFile(root: string, sessionId = 'conv-123'): string {
+  const sessionDir = join(root, 'sessions');
+  mkdirSync(sessionDir, { recursive: true });
+  const sessionFile = join(sessionDir, `${sessionId}.jsonl`);
+  writeFileSync(sessionFile, JSON.stringify({ type: 'session', id: sessionId, timestamp: '2026-03-10T12:00:00.000Z', cwd: '/tmp/workspace' }) + '\n');
+  return sessionFile;
+}
+
 describe('deferred-resume shared extension (TUI-only)', () => {
   it('loads deferred resume entries from local state', () => {
     const dir = mkdtempSync(join(tmpdir(), 'deferred-resume-state-'));
@@ -121,15 +129,16 @@ describe('deferred-resume shared extension (TUI-only)', () => {
     })).toContain('resume:1*');
   });
 
-  it('registers deferred_resume and schedules a local TUI resume', async () => {
+  it('registers deferred_resume and persists scheduled state', async () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'deferred-resume-local-'));
+    const sessionFile = createSessionFile(tempRoot, 'conv-scheduled');
     process.env = {
       ...originalEnv,
       PERSONAL_AGENT_STATE_ROOT: tempRoot,
     };
 
     const { registeredTool } = setupExtension();
-    const ctx = createContext('/tmp/sessions/current.jsonl');
+    const ctx = createContext(sessionFile);
 
     const result = await registeredTool.execute(
       'tool-1',
@@ -143,14 +152,15 @@ describe('deferred-resume shared extension (TUI-only)', () => {
 
     const stateFile = resolveDeferredResumeStateFile();
     const persisted = JSON.parse(readFileSync(stateFile, 'utf-8')) as {
-      resumes: Record<string, { sessionFile: string; prompt: string }>;
+      resumes: Record<string, { sessionFile: string; prompt: string; status: string }>;
     };
 
     const entries = Object.values(persisted.resumes);
     expect(entries).toHaveLength(1);
     expect(entries[0]).toEqual(expect.objectContaining({
-      sessionFile: '/tmp/sessions/current.jsonl',
+      sessionFile,
       prompt: 'check the logs and continue',
+      status: 'scheduled',
     }));
 
     rmSync(tempRoot, { recursive: true, force: true });
@@ -240,8 +250,9 @@ describe('deferred-resume shared extension (TUI-only)', () => {
     rmSync(tempRoot, { recursive: true, force: true });
   });
 
-  it('delivers due resumes in-session on session start', async () => {
+  it('delivers due resumes in-session on session start and clears them from state', async () => {
     const tempRoot = mkdtempSync(join(tmpdir(), 'deferred-resume-delivery-'));
+    const sessionFile = createSessionFile(tempRoot, 'conv-delivery');
     process.env = {
       ...originalEnv,
       PERSONAL_AGENT_STATE_ROOT: tempRoot,
@@ -254,7 +265,7 @@ describe('deferred-resume shared extension (TUI-only)', () => {
       resumes: {
         due: {
           id: 'due',
-          sessionFile: '/tmp/sessions/current.jsonl',
+          sessionFile,
           prompt: 'resume now',
           dueAt: '2026-03-08T12:00:00.000Z',
           createdAt: '2026-03-08T11:59:00.000Z',
@@ -264,7 +275,7 @@ describe('deferred-resume shared extension (TUI-only)', () => {
     }));
 
     const { handlers, sendUserMessage } = setupExtension();
-    const ctx = createContext('/tmp/sessions/current.jsonl');
+    const ctx = createContext(sessionFile);
 
     await handlers.session_start?.({}, ctx);
 

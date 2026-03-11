@@ -36,7 +36,7 @@ export interface InboxShellWorkstreamItem {
   blockers: string;
   completedSteps: number;
   totalSteps: number;
-  taskRecordCount: number;
+  todoCount: number;
   artifactCount: number;
 }
 
@@ -133,7 +133,7 @@ export function loadInboxShellSnapshot(repoRoot = resolveInboxShellRepoRoot(), p
           blockers: stripMarkdownListMarker(summary.blockers),
           completedSteps,
           totalSteps: plan.steps.length,
-          taskRecordCount: countDirectoryMarkdownFiles(paths.tasksDir),
+          todoCount: countDirectoryMarkdownFiles(paths.todosDir),
           artifactCount: countDirectoryMarkdownFiles(paths.artifactsDir),
         } satisfies InboxShellWorkstreamItem;
       } catch {
@@ -183,7 +183,7 @@ export function buildContextWidgetLines(snapshot: InboxShellSnapshot): string[] 
 
   return [
     truncateLine(`🧭 ${workstream.id} — ${workstream.status}`),
-    truncateLine(`plan ${workstream.completedSteps}/${workstream.totalSteps} · tasks ${workstream.taskRecordCount} · artifacts ${workstream.artifactCount}`),
+    truncateLine(`plan ${workstream.completedSteps}/${workstream.totalSteps} · todos ${workstream.todoCount} · artifacts ${workstream.artifactCount}`),
   ];
 }
 
@@ -278,7 +278,7 @@ class InboxPanelComponent {
       lines.push(row(` Status: ${latest.status}`));
       lines.push(row(` Blockers: ${latest.blockers}`));
       lines.push(row(` Plan: ${latest.completedSteps}/${latest.totalSteps}`));
-      lines.push(row(` Tasks: ${latest.taskRecordCount} · Artifacts: ${latest.artifactCount}`));
+      lines.push(row(` Todos: ${latest.todoCount} · Artifacts: ${latest.artifactCount}`));
     }
 
     lines.push(row(''));

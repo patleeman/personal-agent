@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useConversations } from '../hooks/useConversations';
+import { useApi } from '../hooks';
 import { api } from '../api';
 import type { SessionMeta } from '../types';
 import { ThemeSwitcher } from './ThemeSwitcher';
@@ -43,13 +44,10 @@ function TopNavItem({ to, icon, label, badge }: { to: string; icon: string; labe
   return (
     <NavLink
       to={to}
-      className={({ isActive }) =>
-        `flex items-center gap-2.5 px-3 py-2 mx-1 rounded-lg text-[13px] font-medium transition-colors ${
-          isActive
-            ? 'bg-elevated text-primary'
-            : 'text-secondary hover:bg-elevated/60 hover:text-primary'
-        }`
-      }
+      className={({ isActive }) => [
+        'ui-sidebar-nav-item',
+        isActive && 'ui-sidebar-nav-item-active',
+      ].filter(Boolean).join(' ')}
     >
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
         stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"
@@ -58,7 +56,7 @@ function TopNavItem({ to, icon, label, badge }: { to: string; icon: string; labe
       </svg>
       <span className="flex-1">{label}</span>
       {badge != null && badge > 0 && (
-        <span className="ml-auto text-[10px] font-semibold tabular-nums px-1.5 py-0.5 rounded-full bg-accent/15 text-accent min-w-[18px] text-center">
+        <span className="ui-sidebar-nav-badge">
           {badge > 99 ? '99+' : badge}
         </span>
       )}
@@ -83,11 +81,9 @@ function OpenTab({ session, onClose }: { session: SessionMeta; onClose: () => vo
     <NavLink
       to={`/conversations/${session.id}`}
       className={[
-        'group relative flex items-start gap-2.5 px-3 py-2 rounded-lg mx-1 transition-colors',
-        isActive
-          ? 'bg-elevated text-primary'
-          : 'text-secondary hover:bg-elevated/60 hover:text-primary',
-      ].join(' ')}
+        'ui-sidebar-session-row',
+        isActive && 'ui-sidebar-session-row-active',
+      ].filter(Boolean).join(' ')}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -97,18 +93,17 @@ function OpenTab({ session, onClose }: { session: SessionMeta; onClose: () => vo
       ].join(' ')} />
 
       <div className="flex-1 min-w-0">
-        <p className="text-[13px] leading-snug font-medium truncate">{session.title}</p>
-        <p className="text-[11px] text-dim mt-0.5 truncate">
+        <p className="ui-row-title truncate">{session.title}</p>
+        <p className="ui-sidebar-session-meta">
           {timeAgo(session.timestamp)}
           <span className="ml-1.5 opacity-55">· {cwdLabel(session.cwd)}</span>
         </p>
       </div>
 
-      {/* × sends back to shelf */}
       {hovered && !isActive && (
         <button
           onClick={e => { e.preventDefault(); e.stopPropagation(); onClose(); }}
-          className="shrink-0 mt-0.5 w-4 h-4 rounded flex items-center justify-center text-dim hover:text-primary hover:bg-elevated transition-colors"
+          className="ui-icon-button ui-icon-button-compact shrink-0 mt-0.5"
           title="Close tab"
         >
           <Ico d={PATH.close} size={10} />
@@ -124,7 +119,7 @@ function ShelfRow({ session, onOpen }: { session: SessionMeta; onOpen: () => voi
   return (
     <button
       onClick={onOpen}
-      className="w-full flex items-center gap-2.5 px-3 py-1.5 mx-1 rounded-lg text-left transition-colors text-dim hover:text-secondary hover:bg-elevated/50"
+      className="ui-sidebar-shelf-row"
       style={{ width: 'calc(100% - 8px)' }}
     >
       <span className="w-1.5 h-1.5 rounded-full bg-border-default/40 shrink-0 mt-px" />
@@ -143,9 +138,12 @@ function ShelfRow({ session, onOpen }: { session: SessionMeta; onOpen: () => voi
 
 export function Sidebar() {
   const navigate = useNavigate();
-  const { tabs, shelf, openSession, closeSession, loading, usingFallback } = useConversations();
+  const { tabs, shelf, openSession, closeSession, loading, usingFallback, refetch } = useConversations();
+  const { data: profileState } = useApi(api.profiles);
   const [shelfOpen, setShelfOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [switchingProfile, setSwitchingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const inboxCount = useInboxCount();
 
   function handleShelfClick(session: SessionMeta) {
@@ -161,7 +159,7 @@ export function Sidebar() {
       openSession(data.id);
       navigate(`/conversations/${data.id}`);
       // Refetch after a brief delay so the new session file appears in the shelf
-      setTimeout(() => void refetch?.(), 1500);
+      setTimeout(() => void refetch(), 1500);
     } catch (err) {
       console.error('Failed to create session:', err);
     } finally {
@@ -169,19 +167,30 @@ export function Sidebar() {
     }
   }
 
+  async function handleProfileChange(profile: string) {
+    if (!profileState || profile === profileState.currentProfile || switchingProfile) return;
+    setProfileError(null);
+    setSwitchingProfile(true);
+    try {
+      await api.setCurrentProfile(profile);
+      window.location.reload();
+    } catch (err) {
+      console.error('Failed to switch profile:', err);
+      setProfileError('Could not switch profile.');
+      setSwitchingProfile(false);
+    }
+  }
+
   return (
     <aside className="flex-1 flex flex-col overflow-hidden">
-
-      {/* Header */}
-      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-        <div className="w-6 h-6 rounded bg-accent/20 flex items-center justify-center shrink-0">
-          <span className="text-accent text-[10px] font-bold font-mono">pa</span>
+      <div className="flex items-center gap-2 px-4 pt-4 pb-3">
+        <div className="ui-brand-mark">
+          <span className="ui-brand-mark-text">pa</span>
         </div>
         <span className="text-[13px] font-semibold text-primary truncate flex-1">personal agent</span>
         <ThemeSwitcher />
       </div>
 
-      {/* ── Top nav ── */}
       <div className="pb-1 space-y-0.5">
         <TopNavItem to="/inbox"       icon={PATH.inbox}       label="Inbox"       badge={inboxCount} />
         <TopNavItem to="/tasks"       icon={PATH.tasks}       label="Tasks"       />
@@ -189,14 +198,47 @@ export function Sidebar() {
         <TopNavItem to="/memory"      icon={PATH.memory}      label="Memory"      />
       </div>
 
-      <div className="mx-3 border-t border-border-subtle my-1" />
+      {profileState && profileState.profiles.length > 0 && (
+        <div className="px-3 pt-2 pb-1">
+          <div className="mx-1 rounded-lg border border-border-subtle bg-elevated/45 px-3 py-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="ui-section-label">Profile</span>
+              <span className="text-[11px] font-mono text-secondary">{profileState.currentProfile}</span>
+            </div>
 
-      {/* ── New conversation ── */}
+            <div className="relative mt-2">
+              <select
+                value={profileState.currentProfile}
+                onChange={(event) => { void handleProfileChange(event.target.value); }}
+                disabled={switchingProfile}
+                aria-label="Active profile"
+                className="w-full appearance-none bg-base border border-border-subtle rounded-lg px-2.5 py-2 pr-8 text-[12px] text-secondary focus:outline-none focus:border-accent/60 disabled:opacity-50"
+              >
+                {profileState.profiles.map((profile) => (
+                  <option key={profile} value={profile}>{profile}</option>
+                ))}
+              </select>
+              <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-dim/70">
+                <Ico d={PATH.chevron} size={11} />
+              </span>
+            </div>
+
+            <p className="mt-2 text-[10px] text-dim">
+              {switchingProfile ? 'Switching profile and reloading…' : 'Changes inbox, workstreams, memory, and new live sessions.'}
+            </p>
+            {profileError && <p className="mt-1 text-[10px] text-danger">{profileError}</p>}
+          </div>
+        </div>
+      )}
+
+      <div className="mx-3 border-t border-border-subtle my-2" />
+
       <div className="px-1 pb-1">
         <button
           onClick={handleNewConversation}
           disabled={creating}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] font-medium text-secondary hover:bg-elevated/60 hover:text-primary transition-colors disabled:opacity-40"
+          className="ui-sidebar-nav-item disabled:opacity-40"
+          style={{ width: 'calc(100% - 8px)' }}
         >
           {creating
             ? <span className="w-4 h-4 border-[1.5px] border-current border-t-transparent rounded-full animate-spin shrink-0 opacity-70" />

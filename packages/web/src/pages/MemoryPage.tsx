@@ -1,59 +1,64 @@
-import { useNavigate, useLocation } from 'react-router-dom';
+import type { ReactNode } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
 import type { MemoryAgentsItem, MemoryDocItem, MemorySkillItem } from '../types';
+import { ErrorState, ListButtonRow, LoadingState, PageHeader, PageHeading, SectionLabel, ToolbarButton } from '../components/ui';
 
-// ── Section header ────────────────────────────────────────────────────────────
-
-function SectionHeader({ label, count }: { label: string; count?: number }) {
-  return (
-    <div className="flex items-center gap-2 px-2 pt-4 pb-1.5">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-dim">{label}</p>
-      {count !== undefined && <span className="text-[10px] tabular-nums text-dim/50">{count}</span>}
-    </div>
-  );
-}
-
-// ── Row ───────────────────────────────────────────────────────────────────────
-
-function MemoryRow({ icon, title, subtitle, badge, tags, path, selected, onClick }: {
-  icon?: React.ReactNode;
+function MemoryRow({
+  icon,
+  title,
+  subtitle,
+  badge,
+  tags,
+  selected,
+  onClick,
+}: {
+  icon?: ReactNode;
   title: string;
   subtitle?: string;
   badge?: { text: string; cls: string };
   tags?: string[];
-  path: string;
   selected: boolean;
   onClick: () => void;
 }) {
   return (
-    <button
+    <ListButtonRow
       onClick={onClick}
-      className={`w-full flex items-start gap-4 px-4 py-3 -mx-2 rounded-lg text-left transition-colors ${
-        selected ? 'bg-surface' : 'hover:bg-surface'
-      }`}
-    >
-      {icon
-        ? <span className="mt-0.5 shrink-0 text-secondary opacity-60">{icon}</span>
-        : <span className="mt-1.5 w-2 h-2 rounded-full shrink-0 bg-border-default/60" />
+      selected={selected}
+      className="w-full text-left"
+      leading={
+        icon
+          ? <span className="mt-0.5 shrink-0 text-secondary opacity-60">{icon}</span>
+          : <span className="mt-1.5 w-2 h-2 rounded-full shrink-0 bg-border-default/60" />
       }
-      <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-2 flex-wrap">
-          <span className="text-[13px] font-mono font-medium text-primary">{title}</span>
-          {badge && <span className={`text-[11px] font-mono ${badge.cls}`}>{badge.text}</span>}
-        </div>
-        {subtitle && (
-          <p className="text-[12px] text-secondary mt-0.5 leading-snug line-clamp-2">{subtitle}</p>
-        )}
-        {tags && tags.length > 0 && (
-          <p className="text-[11px] text-dim mt-0.5 font-mono">{tags.join(' · ')}</p>
-        )}
+    >
+      <div className="flex items-baseline gap-2 flex-wrap">
+        <span className="ui-row-title-mono font-medium">{title}</span>
+        {badge && <span className={`text-[11px] font-mono ${badge.cls}`}>{badge.text}</span>}
       </div>
-    </button>
+      {subtitle && <p className="ui-row-summary line-clamp-2">{subtitle}</p>}
+      {tags && tags.length > 0 && <p className="ui-row-meta">{tags.join(' · ')}</p>}
+    </ListButtonRow>
   );
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+function SectionBlock({
+  label,
+  count,
+  children,
+}: {
+  label: string;
+  count?: number;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <SectionLabel label={label} count={count} className="px-2 pt-4 pb-1.5" />
+      <div className="space-y-px">{children}</div>
+    </div>
+  );
+}
 
 export function MemoryPage() {
   const { data, loading, error, refetch } = useApi(api.memory);
@@ -75,95 +80,79 @@ export function MemoryPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="sticky top-0 z-10 bg-base/95 backdrop-blur-sm border-b border-border-subtle px-6 py-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-base font-semibold text-primary">Memory</h1>
-          {data && (
-            <p className="text-xs text-secondary mt-0.5 font-mono">
+      <PageHeader actions={<ToolbarButton onClick={refetch}>↻ Refresh</ToolbarButton>}>
+        <PageHeading
+          title="Memory"
+          meta={data && (
+            <>
               <span className="text-accent">{data.profile}</span>
               {' · '}
               {data.skills.length} {data.skills.length === 1 ? 'skill' : 'skills'}
               {' · '}
               {data.memoryDocs.length} {data.memoryDocs.length === 1 ? 'doc' : 'docs'}
-            </p>
+            </>
           )}
-        </div>
-        <button onClick={refetch} className="text-xs text-secondary hover:text-primary transition-colors px-2 py-1 rounded hover:bg-surface">
-          ↻ Refresh
-        </button>
-      </div>
+        />
+      </PageHeader>
 
       <div className="flex-1 overflow-y-auto px-6 py-2">
-        {loading && (
-          <div className="flex items-center gap-2 text-sm text-dim py-8">
-            <span className="animate-pulse">●</span>
-            <span>Loading memory…</span>
-          </div>
-        )}
-        {error && <div className="py-8 text-sm text-danger/80">Failed to load memory: {error}</div>}
+        {loading && <LoadingState label="Loading memory…" />}
+        {error && <ErrorState message={`Failed to load memory: ${error}`} />}
 
         {!loading && data && (
           <>
             {(() => {
-              const existing = data.agentsMd.filter(i => i.exists);
+              const existing = data.agentsMd.filter((item) => item.exists);
               if (existing.length === 0) return null;
+
               const labelFor = (item: MemoryAgentsItem) => {
                 const parts = item.path.split('/profiles/')[1]?.split('/agent/') ?? [];
                 return parts.length >= 1 ? `${parts[0]}/AGENTS.md` : item.path;
               };
+
               return (
-                <div>
-                  <SectionHeader label="Config" count={existing.length} />
-                  <div className="space-y-px">
-                    {existing.map(item => (
-                      <MemoryRow
-                        key={item.path}
-                        icon={agentsIcon}
-                        title={labelFor(item)}
-                        path={item.path}
-                        selected={selectedPath === item.path}
-                        onClick={() => select(item.path)}
-                      />
-                    ))}
-                  </div>
-                </div>
+                <SectionBlock label="Config" count={existing.length}>
+                  {existing.map((item) => (
+                    <MemoryRow
+                      key={item.path}
+                      icon={agentsIcon}
+                      title={labelFor(item)}
+                      selected={selectedPath === item.path}
+                      onClick={() => select(item.path)}
+                    />
+                  ))}
+                </SectionBlock>
               );
             })()}
 
-            <div>
-              <SectionHeader label="Skills" count={data.skills.length} />
-              <div className="space-y-px">
-                {data.skills.length === 0 && <p className="text-[12px] text-dim px-2">No skills found.</p>}
-                {data.skills.map((item: MemorySkillItem) => (
-                  <MemoryRow
-                    key={item.path}
-                    title={item.name}
-                    subtitle={item.description}
-                    badge={{ text: item.source, cls: item.source === 'shared' ? 'text-teal' : 'text-accent' }}
-                    path={item.path}
-                    selected={selectedPath === item.path}
-                    onClick={() => select(item.path)}
-                  />
-                ))}
-              </div>
-            </div>
+            <SectionBlock label="Skills" count={data.skills.length}>
+              {data.skills.length === 0 && <p className="ui-empty-body px-2 text-left">No skills found.</p>}
+              {data.skills.map((item: MemorySkillItem) => (
+                <MemoryRow
+                  key={item.path}
+                  title={item.name}
+                  subtitle={item.description}
+                  badge={{ text: item.source, cls: item.source === 'shared' ? 'text-teal' : 'text-accent' }}
+                  selected={selectedPath === item.path}
+                  onClick={() => select(item.path)}
+                />
+              ))}
+            </SectionBlock>
 
             <div className="pb-4">
-              <SectionHeader label="Memory Docs" count={data.memoryDocs.length} />
-              <div className="space-y-px">
-                {data.memoryDocs.length === 0 && <p className="text-[12px] text-dim px-2">No memory docs found.</p>}
+              <SectionBlock label="Memory Docs" count={data.memoryDocs.length}>
+                {data.memoryDocs.length === 0 && <p className="ui-empty-body px-2 text-left">No memory docs found.</p>}
                 {data.memoryDocs.map((item: MemoryDocItem) => (
                   <MemoryRow
                     key={item.path}
                     title={item.title}
                     subtitle={item.summary}
                     tags={item.tags}
-                    path={item.path}
                     selected={selectedPath === item.path}
                     onClick={() => select(item.path)}
                   />
                 ))}
-              </div>
+              </SectionBlock>
             </div>
           </>
         )}

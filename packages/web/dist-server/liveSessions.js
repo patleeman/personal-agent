@@ -6,6 +6,7 @@
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { AuthStorage, DefaultResourceLoader, ModelRegistry, SessionManager, createAgentSession, } from '@mariozechner/pi-coding-agent';
+import { estimateContextUsageSegments } from './sessionContextUsage.js';
 const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
 const SESSIONS_DIR = join(AGENT_DIR, 'sessions');
 export const registry = new Map();
@@ -17,6 +18,35 @@ function makeAuth() {
 function makeRegistry(auth) {
     return new ModelRegistry(auth);
 }
+function summarizeUserMessageContent(content) {
+    const blocks = Array.isArray(content)
+        ? content
+        : typeof content === 'string'
+            ? [{ type: 'text', text: content }]
+            : [];
+    const text = blocks
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text ?? '')
+        .join('\n')
+        .trim();
+    const imageCount = blocks.filter((block) => block.type === 'image').length;
+    return { text, imageCount };
+}
+function isLikelyUnsupportedImageInputError(error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const normalized = message.toLowerCase();
+    const mentionsImageInput = normalized.includes('image')
+        || normalized.includes('vision')
+        || normalized.includes('multimodal');
+    const indicatesUnsupported = normalized.includes('not support')
+        || normalized.includes('unsupported')
+        || normalized.includes('not enabled')
+        || normalized.includes('text-only')
+        || normalized.includes('text only')
+        || normalized.includes('invalid image')
+        || normalized.includes('image input');
+    return mentionsImageInput && indicatesUnsupported;
+}
 // ── Event wiring ──────────────────────────────────────────────────────────────
 function wireSession(id, session, cwd) {
     const entry = { session, cwd, listeners: new Set(), title: '', sentTitle: false };
@@ -27,11 +57,9 @@ function wireSession(id, session, cwd) {
             const msgs = session.agent.state.messages;
             const firstUser = msgs.find(m => m.role === 'user');
             if (firstUser) {
-                const content = firstUser.content;
-                const text = Array.isArray(content)
-                    ? content.find((c) => c.type === 'text')?.text ?? ''
-                    : String(content);
-                entry.title = text.trim().replace(/\n/g, ' ').slice(0, 80);
+                const { text, imageCount } = summarizeUserMessageContent(firstUser.content);
+                entry.title = text.trim().replace(/\n/g, ' ').slice(0, 80)
+                    || (imageCount === 1 ? '(image attachment)' : imageCount > 1 ? `(${imageCount} image attachments)` : '(untitled)');
                 entry.sentTitle = true;
                 broadcast(entry, { type: 'title_update', title: entry.title });
             }
@@ -128,6 +156,27 @@ export function getSessionStats(sessionId) {
         return null;
     }
 }
+export function getSessionContextUsage(sessionId) {
+    const entry = registry.get(sessionId);
+    if (!entry)
+        return null;
+    try {
+        const usage = entry.session.getContextUsage();
+        if (!usage) {
+            return null;
+        }
+        return {
+            ...usage,
+            modelId: entry.session.model?.id,
+            ...(usage.tokens !== null
+                ? { segments: estimateContextUsageSegments(entry.session.messages, usage.tokens) }
+                : {}),
+        };
+    }
+    catch {
+        return null;
+    }
+}
 async function makeLoader(cwd) {
     const loader = new DefaultResourceLoader({ cwd, agentDir: AGENT_DIR });
     await loader.reload();
@@ -183,16 +232,53 @@ export function subscribe(sessionId, listener) {
     return () => entry.listeners.delete(listener);
 }
 /** Send a prompt to a live session. */
-export async function promptSession(sessionId, text, behavior) {
+export async function promptSession(sessionId, text, behavior, images) {
     const entry = registry.get(sessionId);
     if (!entry)
         throw new Error(`Session ${sessionId} is not live`);
     const { session } = entry;
-    if (behavior === 'steer')
-        return session.steer(text);
-    if (behavior === 'followUp')
-        return session.followUp(text);
-    return session.prompt(text);
+    const hasImages = Boolean(images && images.length > 0);
+    try {
+        if (behavior === 'steer')
+            return hasImages ? session.steer(text, images) : session.steer(text);
+        if (behavior === 'followUp')
+            return hasImages ? session.followUp(text, images) : session.followUp(text);
+        return hasImages ? session.prompt(text, { images }) : session.prompt(text);
+    }
+    catch (error) {
+        if (!hasImages || !isLikelyUnsupportedImageInputError(error)) {
+            throw error;
+        }
+        if (behavior === 'steer')
+            return session.steer(text);
+        if (behavior === 'followUp')
+            return session.followUp(text);
+        return session.prompt(text);
+    }
+}
+export async function compactSession(sessionId, customInstructions) {
+    const entry = registry.get(sessionId);
+    if (!entry)
+        throw new Error(`Session ${sessionId} is not live`);
+    return entry.session.compact(customInstructions);
+}
+export async function reloadSessionResources(sessionId) {
+    const entry = registry.get(sessionId);
+    if (!entry)
+        throw new Error(`Session ${sessionId} is not live`);
+    await entry.session.reload();
+}
+export async function exportSessionHtml(sessionId, outputPath) {
+    const entry = registry.get(sessionId);
+    if (!entry)
+        throw new Error(`Session ${sessionId} is not live`);
+    return entry.session.exportToHtml(outputPath);
+}
+export function renameSession(sessionId, name) {
+    const entry = registry.get(sessionId);
+    if (!entry)
+        throw new Error(`Session ${sessionId} is not live`);
+    entry.session.setSessionName(name);
 }
 /** Abort the current agent run. */
 export async function abortSession(sessionId) {

@@ -14,6 +14,7 @@ import {
   createAgentSession,
   type AgentSessionEvent,
 } from '@mariozechner/pi-coding-agent';
+import { estimateContextUsageSegments } from './sessionContextUsage.js';
 
 const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
 const SESSIONS_DIR = join(AGENT_DIR, 'sessions');
@@ -32,6 +33,12 @@ export type SseEvent =
   | { type: 'title_update';    title: string }
   | { type: 'stats_update';    tokens: { input: number; output: number; total: number }; cost: number }
   | { type: 'error';           message: string };
+
+export interface PromptImageAttachment {
+  type: 'image';
+  data: string;
+  mimeType: string;
+}
 
 // ── Internal entry ────────────────────────────────────────────────────────────
 
@@ -56,6 +63,42 @@ function makeRegistry(auth: AuthStorage) {
   return new ModelRegistry(auth);
 }
 
+function summarizeUserMessageContent(content: unknown): { text: string; imageCount: number } {
+  const blocks = Array.isArray(content)
+    ? content as Array<{ type?: string; text?: string }>
+    : typeof content === 'string'
+      ? [{ type: 'text', text: content }]
+      : [];
+
+  const text = blocks
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text ?? '')
+    .join('\n')
+    .trim();
+  const imageCount = blocks.filter((block) => block.type === 'image').length;
+
+  return { text, imageCount };
+}
+
+function isLikelyUnsupportedImageInputError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+
+  const mentionsImageInput = normalized.includes('image')
+    || normalized.includes('vision')
+    || normalized.includes('multimodal');
+
+  const indicatesUnsupported = normalized.includes('not support')
+    || normalized.includes('unsupported')
+    || normalized.includes('not enabled')
+    || normalized.includes('text-only')
+    || normalized.includes('text only')
+    || normalized.includes('invalid image')
+    || normalized.includes('image input');
+
+  return mentionsImageInput && indicatesUnsupported;
+}
+
 // ── Event wiring ──────────────────────────────────────────────────────────────
 
 function wireSession(id: string, session: AgentSession, cwd: string) {
@@ -68,11 +111,9 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
       const msgs = session.agent.state.messages;
       const firstUser = msgs.find(m => m.role === 'user');
       if (firstUser) {
-        const content = firstUser.content;
-        const text = Array.isArray(content)
-          ? (content.find((c: { type: string; text?: string }) => c.type === 'text') as { text?: string } | undefined)?.text ?? ''
-          : String(content);
-        entry.title = text.trim().replace(/\n/g, ' ').slice(0, 80);
+        const { text, imageCount } = summarizeUserMessageContent(firstUser.content);
+        entry.title = text.trim().replace(/\n/g, ' ').slice(0, 80)
+          || (imageCount === 1 ? '(image attachment)' : imageCount > 1 ? `(${imageCount} image attachments)` : '(untitled)');
         entry.sentTitle = true;
         broadcast(entry, { type: 'title_update', title: entry.title });
       }
@@ -174,6 +215,27 @@ export function getSessionStats(sessionId: string) {
   try { return entry.session.getSessionStats(); } catch { return null; }
 }
 
+export function getSessionContextUsage(sessionId: string) {
+  const entry = registry.get(sessionId);
+  if (!entry) return null;
+  try {
+    const usage = entry.session.getContextUsage();
+    if (!usage) {
+      return null;
+    }
+
+    return {
+      ...usage,
+      modelId: entry.session.model?.id,
+      ...(usage.tokens !== null
+        ? { segments: estimateContextUsageSegments(entry.session.messages, usage.tokens) }
+        : {}),
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function makeLoader(cwd: string) {
   const loader = new DefaultResourceLoader({ cwd, agentDir: AGENT_DIR });
   await loader.reload();
@@ -241,14 +303,50 @@ export async function promptSession(
   sessionId: string,
   text: string,
   behavior?: 'steer' | 'followUp',
+  images?: PromptImageAttachment[],
 ): Promise<void> {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
   const { session } = entry;
+  const hasImages = Boolean(images && images.length > 0);
 
-  if (behavior === 'steer')     return session.steer(text);
-  if (behavior === 'followUp')  return session.followUp(text);
-  return session.prompt(text);
+  try {
+    if (behavior === 'steer')     return hasImages ? session.steer(text, images) : session.steer(text);
+    if (behavior === 'followUp')  return hasImages ? session.followUp(text, images) : session.followUp(text);
+    return hasImages ? session.prompt(text, { images }) : session.prompt(text);
+  } catch (error) {
+    if (!hasImages || !isLikelyUnsupportedImageInputError(error)) {
+      throw error;
+    }
+
+    if (behavior === 'steer')     return session.steer(text);
+    if (behavior === 'followUp')  return session.followUp(text);
+    return session.prompt(text);
+  }
+}
+
+export async function compactSession(sessionId: string, customInstructions?: string) {
+  const entry = registry.get(sessionId);
+  if (!entry) throw new Error(`Session ${sessionId} is not live`);
+  return entry.session.compact(customInstructions);
+}
+
+export async function reloadSessionResources(sessionId: string): Promise<void> {
+  const entry = registry.get(sessionId);
+  if (!entry) throw new Error(`Session ${sessionId} is not live`);
+  await entry.session.reload();
+}
+
+export async function exportSessionHtml(sessionId: string, outputPath?: string): Promise<string> {
+  const entry = registry.get(sessionId);
+  if (!entry) throw new Error(`Session ${sessionId} is not live`);
+  return entry.session.exportToHtml(outputPath);
+}
+
+export function renameSession(sessionId: string, name: string): void {
+  const entry = registry.get(sessionId);
+  if (!entry) throw new Error(`Session ${sessionId} is not live`);
+  entry.session.setSessionName(name);
 }
 
 /** Abort the current agent run. */
