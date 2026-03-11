@@ -14,6 +14,12 @@
 - For personal-agent web UI work, prefer server-pushed updates (SSE + POST) over client polling when the backend can publish change events.
 - Use `~/agent-workspace` only for scratch/test work; otherwise operate in the real repo/path Patrick names.
 
+## UI Design Bans
+
+- For personal-agent web UI work, BANNED: nested bordered containers/cards (`boxes inside boxes`). Do not stack inset panels, card-within-card layouts, or form wrappers inside larger bordered boxes unless there is a truly unavoidable reason.
+- For personal-agent web UI work, BANNED: overusing pills/chips as a default UI treatment. Use pills only when they are semantically justified (for example compact status or tags), not as a repeated decorative pattern.
+- Prefer flatter layouts with spacing, typography, and alignment creating hierarchy instead of extra borders and pill chrome.
+
 ## Durable User Context
 
 - User: Patrick Lee
