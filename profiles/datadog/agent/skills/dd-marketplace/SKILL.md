@@ -73,4 +73,3 @@ The repo is cached at `~/.cache/dd-marketplace/` and auto-updates daily.
 
 - Skills may reference Claude Code-specific features (`allowed-tools`, `${SKILL_PATH}`) — these are ignored by Pi but the instructions and scripts still work
 - Some skills include helper scripts in `scripts/` — these are copied on install
-- The repo is shallow-cloned on first use (~5 seconds)
