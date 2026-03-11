@@ -57,7 +57,7 @@ Search Datadog Slack for discussion in #agent-platform during the last 7 days ab
 
 ### Find messages from a person
 ```text
-Search Datadog Slack for messages from Patrick Lee in the last 14 days mentioning Codex apps, Slack search, or MCP. Return the matching messages with timestamps and full Slack permalinks.
+Search Datadog Slack for messages from <person name> in the last 14 days mentioning Codex apps, Slack search, or MCP. Return the matching messages with timestamps and full Slack permalinks.
 ```
 
 ## Setup expectations
