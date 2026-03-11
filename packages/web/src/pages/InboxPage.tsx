@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAppData, useSseConnection } from '../contexts';
 import { kindMeta, timeAgo } from '../utils';
-import { EmptyState, ErrorState, ListLinkRow, LoadingState, PageHeader, ToolbarButton } from '../components/ui';
+import { EmptyState, ErrorState, ListLinkRow, LoadingState, PageHeader, PageHeading, ToolbarButton } from '../components/ui';
 
 export function InboxPage() {
   const { id: selectedId } = useParams<{ id?: string }>();
@@ -63,6 +63,22 @@ export function InboxPage() {
       <PageHeader
         actions={(
           <>
+            {activity && (
+              <div className="ui-segmented-control">
+                <button
+                  onClick={() => setFilter('unread')}
+                  className={filter === 'unread' ? 'ui-segmented-button ui-segmented-button-active' : 'ui-segmented-button'}
+                >
+                  Unread{unreadCount > 0 && <span className="ml-1 text-accent">{unreadCount}</span>}
+                </button>
+                <button
+                  onClick={() => setFilter('all')}
+                  className={filter === 'all' ? 'ui-segmented-button ui-segmented-button-active' : 'ui-segmented-button'}
+                >
+                  All{entries.length > 0 && <span className="ml-1 opacity-50">{entries.length}</span>}
+                </button>
+              </div>
+            )}
             {unreadCount > 0 && (
               <ToolbarButton
                 onClick={markAllRead}
@@ -72,29 +88,20 @@ export function InboxPage() {
                 {markingAll ? 'Marking…' : 'Mark all read'}
               </ToolbarButton>
             )}
-            <ToolbarButton onClick={() => { void refreshActivity(); }}>↻</ToolbarButton>
+            <ToolbarButton onClick={() => { void refreshActivity(); }}>↻ Refresh</ToolbarButton>
           </>
         )}
       >
-        <div className="flex items-center gap-4 min-w-0">
-          <h1 className="ui-page-title shrink-0">Inbox</h1>
-          {activity && (
-            <div className="ui-segmented-control">
-              <button
-                onClick={() => setFilter('unread')}
-                className={filter === 'unread' ? 'ui-segmented-button ui-segmented-button-active' : 'ui-segmented-button'}
-              >
-                Unread{unreadCount > 0 && <span className="ml-1 text-accent">{unreadCount}</span>}
-              </button>
-              <button
-                onClick={() => setFilter('all')}
-                className={filter === 'all' ? 'ui-segmented-button ui-segmented-button-active' : 'ui-segmented-button'}
-              >
-                All{entries.length > 0 && <span className="ml-1 opacity-50">{entries.length}</span>}
-              </button>
-            </div>
+        <PageHeading
+          title="Inbox"
+          meta={activity && (
+            <>
+              {unreadCount} unread
+              {' · '}
+              {entries.length} {entries.length === 1 ? 'item' : 'items'}
+            </>
           )}
-        </div>
+        />
       </PageHeader>
 
       {isLoading && <LoadingState label="Loading activity…" className="px-6" />}
@@ -102,19 +109,17 @@ export function InboxPage() {
 
       {!isLoading && !visibleError && entries.length === 0 && (
         <EmptyState
-          icon="📭"
           title="No activity yet."
-          body="Activity is created when scheduled tasks run or deferred resumes fire."
+          body="Activity appears here when scheduled tasks run or deferred resumes fire."
         />
       )}
 
       {!isLoading && entries.length > 0 && filter === 'unread' && unreadCount === 0 && (
         <EmptyState
-          icon="✓"
           title="All caught up."
           action={(
             <button onClick={() => setFilter('all')} className="text-xs text-accent hover:underline">
-              View all {entries.length} notifications →
+              View all {entries.length} items →
             </button>
           )}
         />

@@ -92,7 +92,7 @@ function TaskRow({ task, isSelected, onRefetch }: { task: ScheduledTaskSummary; 
             title="Run now"
             className="text-[11px] font-mono text-dim hover:text-accent transition-colors disabled:opacity-40"
           >
-            {running ? '…' : '▷ run'}
+            {running ? '…' : 'run'}
           </button>
           <button
             onClick={handleToggle}
@@ -107,13 +107,7 @@ function TaskRow({ task, isSelected, onRefetch }: { task: ScheduledTaskSummary; 
         </div>
       )}
     >
-      <div className="flex items-baseline gap-2 flex-wrap">
-        <span className="ui-row-title-mono">{task.id}</span>
-        <span className={`text-[11px] font-mono ${cls}`}>{text}</span>
-        {task.lastAttemptCount !== undefined && task.lastAttemptCount > 1 && (
-          <span className="text-[11px] text-warning font-mono">attempt {task.lastAttemptCount}</span>
-        )}
-      </div>
+      <p className="ui-row-title-mono">{task.id}</p>
 
       {task.prompt && (
         <p
@@ -130,13 +124,25 @@ function TaskRow({ task, isSelected, onRefetch }: { task: ScheduledTaskSummary; 
       )}
 
       <p className="ui-row-meta flex items-center gap-1.5 flex-wrap">
-        {task.cron && (
+        <span className={cls}>{text}</span>
+        {task.lastAttemptCount !== undefined && task.lastAttemptCount > 1 && (
           <>
-            <span>{cronHuman(task.cron)}</span>
             <span className="opacity-40">·</span>
+            <span className="text-warning">attempt {task.lastAttemptCount}</span>
           </>
         )}
-        {task.lastRunAt && <span>last run {timeAgo(task.lastRunAt)}</span>}
+        {task.cron && (
+          <>
+            <span className="opacity-40">·</span>
+            <span>{cronHuman(task.cron)}</span>
+          </>
+        )}
+        {task.lastRunAt && (
+          <>
+            <span className="opacity-40">·</span>
+            <span>last run {timeAgo(task.lastRunAt)}</span>
+          </>
+        )}
         {task.model && (
           <>
             <span className="opacity-40">·</span>
@@ -171,18 +177,20 @@ export function TasksPage() {
     }
   }, [setTasks]);
 
+  const runningCount = tasks?.filter((task) => task.running).length ?? 0;
+
   return (
     <div className="flex flex-col h-full">
       <PageHeader actions={<ToolbarButton onClick={() => { void refreshTasks(); }}>↻ Refresh</ToolbarButton>}>
         <PageHeading
-          title="Scheduled Tasks"
+          title="Scheduled"
           meta={
             tasks && (
               <>
-                {tasks.length} {tasks.length === 1 ? 'scheduled task' : 'scheduled tasks'}
-                {tasks.filter((task) => task.running).length > 0 && (
+                {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}
+                {runningCount > 0 && (
                   <span className="ml-2 text-accent animate-pulse">
-                    · {tasks.filter((task) => task.running).length} running
+                    · {runningCount} running
                   </span>
                 )}
               </>
@@ -196,7 +204,6 @@ export function TasksPage() {
         {visibleError && <ErrorState message={`Failed to load scheduled tasks: ${visibleError}`} />}
         {!isLoading && !visibleError && tasks?.length === 0 && (
           <EmptyState
-            icon="⏰"
             title="No scheduled tasks."
             body={
               <>

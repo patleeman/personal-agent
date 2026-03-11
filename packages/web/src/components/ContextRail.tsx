@@ -6,13 +6,14 @@ import {
   pickFocusedProjectId,
 } from '../contextRailProject';
 import { useApi } from '../hooks';
+import { buildCapabilityCards, buildIdentitySummary, buildKnowledgeSections, buildMemoryPageSummary } from '../memoryOverview';
 import type { ActivityEntry, LiveSessionContext, ProjectDetail, ProjectRecord } from '../types';
 import { formatDate, kindMeta, timeAgo } from '../utils';
 import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
 import { CONVERSATION_PROJECTS_CHANGED_EVENT, emitConversationProjectsChanged } from '../conversationProjectEvents';
 import { ProjectDetailPanel } from './ProjectDetailPanel';
 import { ProjectOverviewPanel } from './ProjectOverviewPanel';
-import { IconButton, Pill, SurfacePanel } from './ui';
+import { ErrorState, IconButton, LoadingState, Pill, SurfacePanel } from './ui';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -315,23 +316,26 @@ function TaskContext({ id }: { id: string }) {
   const lines = body.split('\n');
   const statusCls = task.running ? 'text-accent' : task.lastStatus === 'success' ? 'text-success' : task.lastStatus === 'failure' ? 'text-danger' : 'text-dim';
   const statusText = task.running ? 'running' : task.lastStatus ?? 'never run';
+  const scheduleText = task.cron ? cronHuman(task.cron) : null;
 
   return (
     <div className="space-y-4 px-4 py-4">
-      <div className="flex items-center gap-2 flex-wrap">
-        <Pill tone={task.running ? 'accent' : task.lastStatus === 'success' ? 'success' : task.lastStatus === 'failure' ? 'danger' : 'muted'}>
+      <div className="space-y-1">
+        <p className="ui-card-title font-mono">{id}</p>
+        <p className="ui-card-meta">
           <span className={statusCls}>{statusText}</span>
-        </Pill>
-        {task.lastRunAt && <span className="ui-card-meta">last run {timeAgo(task.lastRunAt)}</span>}
-        {!task.enabled && <Pill tone="muted">disabled</Pill>}
+          {task.lastRunAt && <><span className="opacity-40 mx-1.5">·</span>last run {timeAgo(task.lastRunAt)}</>}
+          {!task.enabled && <><span className="opacity-40 mx-1.5">·</span>disabled</>}
+        </p>
       </div>
-      <SurfacePanel muted className="px-3 py-3">
+
+      <div className="border-t border-border-subtle pt-3">
         <div className="ui-detail-list">
-          {task.cron && (
+          {scheduleText && (
             <div className="ui-detail-row">
               <span className="ui-detail-label">schedule</span>
               <div className="min-w-0">
-                <p className="ui-detail-value">{cronHuman(task.cron)}</p>
+                <p className="ui-detail-value">{scheduleText}</p>
                 <p className="ui-card-meta mt-0.5">{task.cron}</p>
               </div>
             </div>
@@ -343,19 +347,18 @@ function TaskContext({ id }: { id: string }) {
             </div>
           )}
         </div>
-      </SurfacePanel>
-      <div>
+      </div>
+
+      <div className="border-t border-border-subtle pt-3">
         <p className="ui-section-label mb-2">Prompt</p>
-        <SurfacePanel muted className="px-3 py-3">
-          <div className="text-[12px] leading-relaxed text-secondary space-y-1 whitespace-pre-wrap break-words">
-            {lines.map((line, i) => {
-              if (line.startsWith('## ') || line.startsWith('# ')) return <p key={i} className="text-primary font-semibold text-[13px] mt-2">{line.replace(/^#+\s/, '')}</p>;
-              if (line.startsWith('- ') || line.match(/^\d+\. /)) return <p key={i} className="pl-2">{line}</p>;
-              if (line.trim() === '') return <div key={i} className="h-1.5" />;
-              return <p key={i}>{line}</p>;
-            })}
-          </div>
-        </SurfacePanel>
+        <div className="text-[12px] leading-relaxed text-secondary space-y-1 whitespace-pre-wrap break-words">
+          {lines.map((line, i) => {
+            if (line.startsWith('## ') || line.startsWith('# ')) return <p key={i} className="text-primary font-semibold text-[13px] mt-2">{line.replace(/^#+\s/, '')}</p>;
+            if (line.startsWith('- ') || line.match(/^\d+\. /)) return <p key={i} className="pl-2">{line}</p>;
+            if (line.trim() === '') return <div key={i} className="h-1.5" />;
+            return <p key={i}>{line}</p>;
+          })}
+        </div>
       </div>
       <TaskLogSection taskId={id} />
     </div>
@@ -423,30 +426,30 @@ function InboxItemContext({ id }: { id: string }) {
 
   return (
     <div className="px-4 py-4 space-y-4 overflow-y-auto">
-      <p className="ui-card-title">{entry.summary}</p>
-
-      <div className="flex items-center gap-2 flex-wrap">
-        <Pill tone="muted">{meta.label}</Pill>
-        <span className="ui-card-meta">{formatDate(entry.createdAt)}</span>
+      <div className="space-y-1">
+        <p className="ui-card-title">{entry.summary}</p>
+        <p className="ui-card-meta">
+          <span className={meta.color}>{meta.label}</span>
+          <span className="opacity-40 mx-1.5">·</span>
+          {formatDate(entry.createdAt)}
+        </p>
       </div>
 
       {entry.details && (
-        <div>
+        <div className="border-t border-border-subtle pt-3">
           <p className="ui-section-label mb-1.5">Details</p>
-          <SurfacePanel muted className="px-3 py-3">
-            <div className="text-[12px] text-secondary whitespace-pre-wrap break-words leading-relaxed">
-              {entry.details}
-            </div>
-          </SurfacePanel>
+          <div className="text-[12px] text-secondary whitespace-pre-wrap break-words leading-relaxed">
+            {entry.details}
+          </div>
         </div>
       )}
 
       {entry.relatedProjectIds && entry.relatedProjectIds.length > 0 && (
         <div className="border-t border-border-subtle pt-3">
           <p className="ui-section-label mb-2">Related</p>
-          <div className="flex flex-wrap gap-2">
-            {entry.relatedProjectIds.map(wsId => (
-              <Link key={wsId} to={`/projects/${wsId}`} className="ui-pill ui-pill-accent font-mono hover:text-accent/80">
+          <div className="space-y-1.5">
+            {entry.relatedProjectIds.map((wsId) => (
+              <Link key={wsId} to={`/projects/${wsId}`} className="ui-card-meta font-mono text-accent hover:text-accent/80">
                 {wsId}
               </Link>
             ))}
@@ -590,6 +593,61 @@ function MemoryFileContext({ path }: { path: string }) {
   );
 }
 
+function MemoryOverviewContext() {
+  const { data, loading, error } = useApi(api.memory);
+
+  if (loading) return <LoadingState label="Loading memory…" className="px-4 py-4" />;
+  if (error) return <ErrorState message={`Failed to load memory: ${error}`} className="px-4 py-4" />;
+  if (!data) return null;
+
+  const summary = buildMemoryPageSummary(data);
+  const identity = buildIdentitySummary(data);
+  const capabilities = buildCapabilityCards(data).slice(0, 3);
+  const knowledge = buildKnowledgeSections(data);
+
+  return (
+    <div className="px-4 py-4 space-y-4">
+      <div className="space-y-1">
+        <p className="ui-card-title">Agent memory</p>
+        <p className="ui-card-meta">Select an item on the left to inspect the raw markdown.</p>
+      </div>
+
+      <p className="ui-card-meta">
+        {summary.role}
+        {' · '}
+        {summary.knowledgeCount} knowledge items
+        {' · '}
+        {summary.capabilityCount} capabilities
+      </p>
+
+      <div className="space-y-3 border-t border-border-subtle pt-4">
+        <div className="space-y-1.5">
+          <p className="ui-section-label">Identity</p>
+          <p className="ui-card-meta">{identity.ruleCount} behavior rules · {identity.role}</p>
+        </div>
+
+        <div className="space-y-1.5 border-t border-border-subtle pt-4">
+          <p className="ui-section-label">Knowledge</p>
+          {knowledge.recent.length === 0
+            ? <p className="ui-card-meta">No recently used knowledge yet.</p>
+            : knowledge.recent.map((item) => (
+              <p key={item.item.path} className="ui-card-meta">{item.title} · {item.usageLabel}</p>
+            ))}
+        </div>
+
+        <div className="space-y-1.5 border-t border-border-subtle pt-4">
+          <p className="ui-section-label">Capabilities</p>
+          {capabilities.length === 0
+            ? <p className="ui-card-meta">No capabilities loaded yet.</p>
+            : capabilities.map((item) => (
+              <p key={item.item.path} className="ui-card-meta">{item.title} · {item.usageLabel}</p>
+            ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Root ──────────────────────────────────────────────────────────────────────
 
 export function ContextRail({ onCollapse }: { onCollapse?: () => void }) {
@@ -668,9 +726,11 @@ export function ContextRail({ onCollapse }: { onCollapse?: () => void }) {
       );
     }
     return (
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col overflow-hidden">
         <RailHeader label="Memory" onCollapse={onCollapse} />
-        <EmptyPrompt text="Select an item to read its content." />
+        <div className="flex-1 overflow-y-auto">
+          <MemoryOverviewContext />
+        </div>
       </div>
     );
   }

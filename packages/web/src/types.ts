@@ -51,6 +51,7 @@ export interface ProjectMilestone {
 export interface ProjectPlan {
   currentMilestoneId?: string;
   milestones: ProjectMilestone[];
+  tasks: ProjectTask[];
 }
 
 export interface ProjectRecord {
@@ -68,16 +69,9 @@ export interface ProjectRecord {
 
 export interface ProjectTask {
   id: string;
-  createdAt: string;
-  updatedAt: string;
   status: string;
   title: string;
-  summary?: string;
-  order?: number;
-  milestoneId?: string;
-  acceptanceCriteria?: string[];
-  plan?: string[];
-  notes?: string;
+  milestoneId: string;
 }
 
 export interface ProjectDetail {
@@ -180,6 +174,7 @@ export interface LiveSessionMeta {
 // ── SSE events from /api/live-sessions/:id/events ────────────────────────────
 
 export type SseEvent =
+  | { type: 'snapshot';        blocks: DisplayBlock[] }
   | { type: 'agent_start' }
   | { type: 'agent_end' }
   | { type: 'turn_end' }
@@ -199,6 +194,7 @@ export interface MemoryAgentsItem {
   source: string;
   path: string;
   exists: boolean;
+  content?: string;
 }
 
 export interface MemorySkillItem {
@@ -206,6 +202,9 @@ export interface MemorySkillItem {
   name: string;
   description: string;
   path: string;
+  recentSessionCount?: number;
+  lastUsedAt?: string | null;
+  usedInLastSession?: boolean;
 }
 
 export interface MemoryDocItem {
@@ -214,6 +213,12 @@ export interface MemoryDocItem {
   summary: string;
   tags: string[];
   path: string;
+  type?: string;
+  status?: string;
+  updated?: string;
+  recentSessionCount?: number;
+  lastUsedAt?: string | null;
+  usedInLastSession?: boolean;
 }
 
 export interface MemoryData {

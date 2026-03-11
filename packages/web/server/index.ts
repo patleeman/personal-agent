@@ -1,7 +1,7 @@
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { listSessions, readSessionBlocks } from './sessions.js';
@@ -24,7 +24,7 @@ import {
   isLive,
   subscribe,
   promptSession,
-  queueReferencedProjectsContext,
+  queuePromptContext,
   compactSession,
   reloadSessionResources,
   exportSessionHtml,
@@ -34,6 +34,14 @@ import {
   forkSession,
   registry as liveRegistry,
 } from './liveSessions.js';
+import {
+  buildReferencedMemoryDocsContext,
+  buildReferencedProfilesContext,
+  buildReferencedSkillsContext,
+  buildReferencedTasksContext,
+  pickPromptReferencesInOrder,
+  resolvePromptReferences,
+} from './promptReferences.js';
 import {
   addConversationProjectLink,
   getConversationProjectLink,
@@ -60,9 +68,7 @@ import {
   moveProjectTaskRecord,
   readProjectDetailFromProject,
   readProjectSource,
-  readProjectTaskSource,
   saveProjectSource,
-  saveProjectTaskSource,
   updateProjectMilestone,
   updateProjectRecord,
   updateProjectTaskRecord,
@@ -219,7 +225,7 @@ function listConversationSessionsSnapshot() {
       cwd: entry.cwd,
       cwdSlug: entry.cwd.replace(/\//g, '-'),
       model: '',
-      title: '(new conversation)',
+      title: 'New Conversation',
       messageCount: 0,
     }));
 
@@ -631,25 +637,7 @@ app.get('/api/live-sessions/:id/events', (req, res) => {
   });
 });
 
-function extractMentionedProjectIds(text: string, availableProjectIds: Set<string>): string[] {
-  const matches = text.match(/@[a-zA-Z0-9][a-zA-Z0-9-_]*/g) ?? [];
-  const projectIds: string[] = [];
-  const seen = new Set<string>();
-
-  for (const match of matches) {
-    const projectId = match.slice(1);
-    if (!availableProjectIds.has(projectId) || seen.has(projectId)) {
-      continue;
-    }
-
-    seen.add(projectId);
-    projectIds.push(projectId);
-  }
-
-  return projectIds;
-}
-
-function syncConversationProjectReferencesForPrompt(conversationId: string, text: string): string[] {
+function syncConversationProjectReferences(conversationId: string, mentionedProjectIds: string[]): string[] {
   const profile = getCurrentProfile();
   const availableProjectIds = listProjectIds({ repoRoot: REPO_ROOT, profile });
   const availableProjectIdSet = new Set(availableProjectIds);
@@ -658,7 +646,6 @@ function syncConversationProjectReferencesForPrompt(conversationId: string, text
     profile,
     conversationId,
   })?.relatedProjectIds ?? []).filter((projectId) => availableProjectIdSet.has(projectId));
-  const mentionedProjectIds = extractMentionedProjectIds(text, availableProjectIdSet);
   const relatedProjectIds = [...new Set([...existingProjectIds, ...mentionedProjectIds])];
 
   const existingMatches = existingProjectIds.length === relatedProjectIds.length
@@ -685,7 +672,7 @@ function buildReferencedProjectsContext(projectIds: string[]): string {
       projectId,
     });
 
-    return `- @${projectId}: ${relative(REPO_ROOT, paths.projectFile)} (tasks: ${relative(REPO_ROOT, paths.tasksDir)}/*.yaml)`;
+    return `- @${projectId}: ${relative(REPO_ROOT, paths.projectFile)}`;
   });
 
   return [
@@ -709,9 +696,47 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
       return;
     }
 
-    const relatedProjectIds = syncConversationProjectReferencesForPrompt(id, text);
-    if (relatedProjectIds.length > 0) {
-      await queueReferencedProjectsContext(id, buildReferencedProjectsContext(relatedProjectIds));
+    const currentProfile = getCurrentProfile();
+    const tasks = listTasksForCurrentProfile();
+    const memoryDocs = listMemoryDocsForCurrentProfile();
+    const skills = listSkillsForCurrentProfile();
+    const currentProfileAgent = getCurrentProfileAgentItem();
+    const promptReferences = resolvePromptReferences({
+      text,
+      availableProjectIds: listProjectIds({ repoRoot: REPO_ROOT, profile: currentProfile }),
+      tasks,
+      memoryDocs,
+      skills,
+      profiles: currentProfileAgent ? [{
+        id: 'profile',
+        profile: currentProfile,
+        source: currentProfileAgent.source,
+        path: currentProfileAgent.path,
+      }] : [],
+    });
+
+    const relatedProjectIds = syncConversationProjectReferences(id, promptReferences.projectIds);
+    const referencedTasks = pickPromptReferencesInOrder(promptReferences.taskIds, tasks);
+    const referencedMemoryDocs = pickPromptReferencesInOrder(promptReferences.memoryDocIds, memoryDocs);
+    const referencedSkills = pickPromptReferencesInOrder(promptReferences.skillNames, skills);
+    const referencedProfiles = currentProfileAgent && promptReferences.profileIds.includes('profile')
+      ? [{
+          id: 'profile',
+          profile: currentProfile,
+          source: currentProfileAgent.source,
+          path: currentProfileAgent.path,
+        }]
+      : [];
+    const queuedContextBlocks = [
+      relatedProjectIds.length > 0 ? buildReferencedProjectsContext(relatedProjectIds) : '',
+      referencedTasks.length > 0 ? buildReferencedTasksContext(referencedTasks, REPO_ROOT) : '',
+      referencedMemoryDocs.length > 0 ? buildReferencedMemoryDocsContext(referencedMemoryDocs, REPO_ROOT) : '',
+      referencedSkills.length > 0 ? buildReferencedSkillsContext(referencedSkills, REPO_ROOT) : '',
+      referencedProfiles.length > 0 ? buildReferencedProfilesContext(referencedProfiles, REPO_ROOT) : '',
+    ].filter(Boolean);
+
+    if (queuedContextBlocks.length > 0) {
+      await queuePromptContext(id, 'referenced_context', queuedContextBlocks.join('\n\n'));
     }
 
     // Don't await — streaming response goes over SSE
@@ -722,7 +747,14 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
     }))).catch(err => {
       console.error(`[live] prompt error for ${id}:`, err);
     });
-    res.json({ ok: true, relatedProjectIds });
+    res.json({
+      ok: true,
+      relatedProjectIds,
+      referencedTaskIds: promptReferences.taskIds,
+      referencedMemoryDocIds: promptReferences.memoryDocIds,
+      referencedSkillNames: promptReferences.skillNames,
+      referencedProfileIds: promptReferences.profileIds,
+    });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
@@ -970,7 +1002,6 @@ app.get('/api/projects/:id', (req, res) => {
 app.post('/api/projects', (req, res) => {
   try {
     const body = req.body as {
-      id?: string;
       description?: string;
       summary?: string;
       status?: string;
@@ -982,7 +1013,6 @@ app.post('/api/projects', (req, res) => {
     res.status(201).json(createProjectRecord({
       repoRoot: REPO_ROOT,
       profile: getCurrentProfile(),
-      projectId: body.id ?? '',
       description: body.description ?? '',
       summary: body.summary,
       status: body.status,
@@ -1039,7 +1069,6 @@ app.delete('/api/projects/:id', (req, res) => {
 app.post('/api/projects/:id/milestones', (req, res) => {
   try {
     const body = req.body as {
-      id?: string;
       title?: string;
       status?: string;
       summary?: string;
@@ -1050,7 +1079,6 @@ app.post('/api/projects/:id/milestones', (req, res) => {
       repoRoot: REPO_ROOT,
       profile: getCurrentProfile(),
       projectId: req.params.id,
-      id: body.id ?? '',
       title: body.title ?? '',
       status: body.status ?? '',
       summary: body.summary,
@@ -1088,28 +1116,18 @@ app.patch('/api/projects/:id/milestones/:milestoneId', (req, res) => {
 app.post('/api/projects/:id/tasks', (req, res) => {
   try {
     const body = req.body as {
-      id?: string;
       title?: string;
       status?: string;
-      summary?: string;
       milestoneId?: string | null;
-      acceptanceCriteria?: string[];
-      plan?: string[];
-      notes?: string | null;
     };
 
     res.status(201).json(createProjectTaskRecord({
       repoRoot: REPO_ROOT,
       profile: getCurrentProfile(),
       projectId: req.params.id,
-      taskId: body.id ?? '',
       title: body.title ?? '',
       status: body.status ?? '',
-      summary: body.summary,
       milestoneId: body.milestoneId,
-      acceptanceCriteria: body.acceptanceCriteria,
-      plan: body.plan,
-      notes: body.notes,
     }));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
@@ -1121,11 +1139,7 @@ app.patch('/api/projects/:id/tasks/:taskId', (req, res) => {
     const body = req.body as {
       title?: string;
       status?: string;
-      summary?: string | null;
       milestoneId?: string | null;
-      acceptanceCriteria?: string[];
-      plan?: string[];
-      notes?: string | null;
     };
 
     res.json(updateProjectTaskRecord({
@@ -1135,11 +1149,7 @@ app.patch('/api/projects/:id/tasks/:taskId', (req, res) => {
       taskId: req.params.taskId,
       title: body.title,
       status: body.status,
-      summary: body.summary,
       milestoneId: body.milestoneId,
-      acceptanceCriteria: body.acceptanceCriteria,
-      plan: body.plan,
-      notes: body.notes,
     }));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
@@ -1230,34 +1240,6 @@ app.post('/api/projects/:id/source', (req, res) => {
   }
 });
 
-app.get('/api/projects/:id/tasks/:taskId/source', (req, res) => {
-  try {
-    res.json(readProjectTaskSource({
-      repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
-      projectId: req.params.id,
-      taskId: req.params.taskId,
-    }));
-  } catch (error) {
-    res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
-  }
-});
-
-app.post('/api/projects/:id/tasks/:taskId/source', (req, res) => {
-  try {
-    const body = req.body as { content?: string };
-    res.json(saveProjectTaskSource({
-      repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
-      projectId: req.params.id,
-      taskId: req.params.taskId,
-      content: body.content ?? '',
-    }));
-  } catch (error) {
-    res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
-  }
-});
-
 // ── Shell run ─────────────────────────────────────────────────────────────────
 
 app.post('/api/run', (req, res) => {
@@ -1286,9 +1268,36 @@ app.post('/api/run', (req, res) => {
 
 // ── Memory browser ────────────────────────────────────────────────────────────
 
-interface SkillItem  { source: string; name: string; description: string; path: string }
-interface MemoryDocItem { id: string; title: string; summary: string; tags: string[]; path: string }
-interface AgentsItem { source: string; path: string; exists: boolean }
+interface MemoryUsageSummary {
+  recentSessionCount: number;
+  lastUsedAt: string | null;
+  usedInLastSession: boolean;
+}
+
+interface SkillItem extends MemoryUsageSummary {
+  source: string;
+  name: string;
+  description: string;
+  path: string;
+}
+
+interface MemoryDocItem extends MemoryUsageSummary {
+  id: string;
+  title: string;
+  summary: string;
+  tags: string[];
+  path: string;
+  type?: string;
+  status?: string;
+  updated?: string;
+}
+
+interface AgentsItem {
+  source: string;
+  path: string;
+  exists: boolean;
+  content?: string;
+}
 
 function parseFrontmatter(filePath: string): Record<string, unknown> {
   try {
@@ -1322,50 +1331,221 @@ function parseFrontmatter(filePath: string): Record<string, unknown> {
   } catch { return {}; }
 }
 
+function normalizeMemoryPath(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return normalize(trimmed.startsWith('/') ? trimmed : join(REPO_ROOT, trimmed));
+}
+
+function listMemoryDocsForCurrentProfile(): MemoryDocItem[] {
+  const profile = getCurrentProfile();
+  const memoryDocs: MemoryDocItem[] = [];
+  const memDir = join(REPO_ROOT, `profiles/${profile}/agent/memory`);
+  if (!existsSync(memDir)) {
+    return memoryDocs;
+  }
+
+  for (const file of readdirSync(memDir).filter((name) => name.endsWith('.md'))) {
+    const filePath = join(memDir, file);
+    const fm = parseFrontmatter(filePath);
+    const id = file.replace(/\.md$/, '');
+    const tags = fm.tags;
+
+    memoryDocs.push({
+      id: String(fm.id ?? id),
+      title: String(fm.title ?? id),
+      summary: String(fm.summary ?? ''),
+      tags: Array.isArray(tags) ? tags.map(String) : typeof tags === 'string' ? [tags] : [],
+      path: filePath,
+      type: typeof fm.type === 'string' ? fm.type : undefined,
+      status: typeof fm.status === 'string' ? fm.status : undefined,
+      updated: typeof fm.updated === 'string' ? fm.updated : undefined,
+      recentSessionCount: 0,
+      lastUsedAt: null,
+      usedInLastSession: false,
+    });
+  }
+
+  return memoryDocs;
+}
+
+function listSkillsForCurrentProfile(): SkillItem[] {
+  const profile = getCurrentProfile();
+  const skills: SkillItem[] = [];
+  const skillSources = profile === 'shared' ? ['shared'] : ['shared', profile];
+
+  for (const src of skillSources) {
+    const dir = join(REPO_ROOT, `profiles/${src}/agent/skills`);
+    if (!existsSync(dir)) {
+      continue;
+    }
+
+    for (const name of readdirSync(dir)) {
+      const skillMd = join(dir, name, 'SKILL.md');
+      if (!existsSync(skillMd)) {
+        continue;
+      }
+
+      const fm = parseFrontmatter(skillMd);
+      skills.push({
+        source: src,
+        name: String(fm.name ?? name),
+        description: String(fm.description ?? ''),
+        path: skillMd,
+        recentSessionCount: 0,
+        lastUsedAt: null,
+        usedInLastSession: false,
+      });
+    }
+  }
+
+  return skills;
+}
+
+function getCurrentProfileAgentItem(): AgentsItem | null {
+  const profile = getCurrentProfile();
+  const filePath = join(REPO_ROOT, `profiles/${profile}/agent/AGENTS.md`);
+  if (!existsSync(filePath)) {
+    return null;
+  }
+
+  return {
+    source: profile,
+    path: filePath,
+    exists: true,
+    content: readFileSync(filePath, 'utf-8'),
+  };
+}
+
+function buildRecentReadUsage(trackedPaths: string[]): Map<string, MemoryUsageSummary> {
+  const usageMap = new Map<string, MemoryUsageSummary>();
+  const tracked = new Set(trackedPaths.map((itemPath) => normalize(itemPath)));
+
+  for (const itemPath of tracked) {
+    usageMap.set(itemPath, {
+      recentSessionCount: 0,
+      lastUsedAt: null,
+      usedInLastSession: false,
+    });
+  }
+
+  if (tracked.size === 0) {
+    return usageMap;
+  }
+
+  const sessions = listSessions();
+  if (sessions.length === 0) {
+    return usageMap;
+  }
+
+  const recentWindowStart = Date.now() - (7 * 24 * 60 * 60 * 1000);
+  const latestSessionId = sessions[0]?.id;
+
+  for (const session of sessions.slice(0, 60)) {
+    const detail = readSessionBlocks(session.id);
+    if (!detail) {
+      continue;
+    }
+
+    const touchedPaths = new Set<string>();
+    for (const block of detail.blocks) {
+      if (block.type !== 'tool_use' || block.tool !== 'read') {
+        continue;
+      }
+
+      const normalizedPath = normalizeMemoryPath(block.input.path);
+      if (!normalizedPath || !tracked.has(normalizedPath)) {
+        continue;
+      }
+
+      touchedPaths.add(normalizedPath);
+    }
+
+    if (touchedPaths.size === 0) {
+      continue;
+    }
+
+    const sessionTimestamp = detail.meta.timestamp;
+    const sessionTimeMs = new Date(sessionTimestamp).getTime();
+
+    for (const itemPath of touchedPaths) {
+      const current = usageMap.get(itemPath);
+      if (!current) {
+        continue;
+      }
+
+      if (Number.isFinite(sessionTimeMs) && sessionTimeMs >= recentWindowStart) {
+        current.recentSessionCount += 1;
+      }
+
+      if (!current.lastUsedAt || sessionTimestamp > current.lastUsedAt) {
+        current.lastUsedAt = sessionTimestamp;
+      }
+
+      if (session.id === latestSessionId) {
+        current.usedInLastSession = true;
+      }
+    }
+  }
+
+  return usageMap;
+}
+
 app.get('/api/memory', (_req, res) => {
   try {
     const profile = getCurrentProfile();
     const sharedPath  = join(REPO_ROOT, 'profiles/shared/agent/AGENTS.md');
     const profilePath = join(REPO_ROOT, `profiles/${profile}/agent/AGENTS.md`);
-    const agentsMd: AgentsItem[] = [{ source: 'shared', path: sharedPath, exists: existsSync(sharedPath) }];
+    const agentsMd: AgentsItem[] = [{
+      source: 'shared',
+      path: sharedPath,
+      exists: existsSync(sharedPath),
+      content: existsSync(sharedPath) ? readFileSync(sharedPath, 'utf-8') : undefined,
+    }];
     if (profile !== 'shared') {
-      agentsMd.push({ source: profile, path: profilePath, exists: existsSync(profilePath) });
+      agentsMd.push({
+        source: profile,
+        path: profilePath,
+        exists: existsSync(profilePath),
+        content: existsSync(profilePath) ? readFileSync(profilePath, 'utf-8') : undefined,
+      });
     }
 
-    const skills: SkillItem[] = [];
-    const skillSources = profile === 'shared' ? ['shared'] : ['shared', profile];
-    for (const src of skillSources) {
-      const dir = join(REPO_ROOT, `profiles/${src}/agent/skills`);
-      if (!existsSync(dir)) continue;
-      for (const name of readdirSync(dir)) {
-        const skillMd = join(dir, name, 'SKILL.md');
-        if (!existsSync(skillMd)) continue;
-        const fm = parseFrontmatter(skillMd);
-        skills.push({
-          source: src,
-          name: String(fm.name ?? name),
-          description: String(fm.description ?? ''),
-          path: skillMd,
-        });
+    const skills = listSkillsForCurrentProfile();
+    const memoryDocs = listMemoryDocsForCurrentProfile();
+
+    const usageByPath = buildRecentReadUsage([
+      ...skills.map((item) => item.path),
+      ...memoryDocs.map((item) => item.path),
+    ]);
+
+    for (const skill of skills) {
+      const usage = usageByPath.get(normalize(skill.path));
+      if (!usage) {
+        continue;
       }
+
+      skill.recentSessionCount = usage.recentSessionCount;
+      skill.lastUsedAt = usage.lastUsedAt;
+      skill.usedInLastSession = usage.usedInLastSession;
     }
 
-    const memoryDocs: MemoryDocItem[] = [];
-    const memDir = join(REPO_ROOT, `profiles/${profile}/agent/memory`);
-    if (existsSync(memDir)) {
-      for (const file of readdirSync(memDir).filter(f => f.endsWith('.md'))) {
-        const fp = join(memDir, file);
-        const fm = parseFrontmatter(fp);
-        const id = file.replace(/\.md$/, '');
-        const tags = fm.tags;
-        memoryDocs.push({
-          id:      String(fm.id ?? id),
-          title:   String(fm.title ?? id),
-          summary: String(fm.summary ?? ''),
-          tags:    Array.isArray(tags) ? tags.map(String) : typeof tags === 'string' ? [tags] : [],
-          path:    fp,
-        });
+    for (const doc of memoryDocs) {
+      const usage = usageByPath.get(normalize(doc.path));
+      if (!usage) {
+        continue;
       }
+
+      doc.recentSessionCount = usage.recentSessionCount;
+      doc.lastUsedAt = usage.lastUsedAt;
+      doc.usedInLastSession = usage.usedInLastSession;
     }
 
     res.json({ profile, agentsMd, skills, memoryDocs });
