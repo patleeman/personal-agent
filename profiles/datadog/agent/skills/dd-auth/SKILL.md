@@ -5,7 +5,7 @@ description: Use when asked about Datadog API authentication, getting API keys/a
 
 # Datadog Authentication
 
-Three CLI paths cover most Datadog auth workflows: `dd-auth` for public APIs, `ddauth` for internal service JWTs, and `ddtool auth` for identity- or vault-backed flows.
+Four common CLI paths cover most Datadog auth workflows: `dd-auth` for public APIs, `ddauth` for internal service JWTs, `ddtool auth` for identity- or vault-backed flows, and `pup auth` for OAuth-backed Datadog CLI access.
 
 ## dd-auth (Public APIs)
 
@@ -74,6 +74,16 @@ ddtool auth login --mode device --datacenter <dc>
 - Use device mode when `ddtool`, `kubectl`, or another Datadog CLI tries to open browser-based OIDC from a headless shell, SSH session, or remote workspace.
 - Add `--datacenter <dc>` when the command needs a specific Datadog identity or vault target.
 
+### pup auth (Datadog CLI OAuth2)
+```bash
+pup auth status --output table
+pup auth login
+pup auth login --agent
+```
+
+- Prefer `pup auth status` over `pup test` when debugging auth; `pup test` is useful for site/output checks but may still show API keys as unset under OAuth2.
+- Use `pup auth login --agent` for agent-driven CLI flows that still complete a local browser callback.
+
 ## Limitations
 
 - No browser cookies available from CLI
@@ -87,6 +97,8 @@ ddtool auth login --mode device --datacenter <dc>
 | Public API keys | `eval $(dd-auth env)` |
 | Internal JWT | `ddauth obo -o <orgID>` |
 | Headless `ddtool` / `kubectl` login | `ddtool auth login --mode device` |
+| pup OAuth status | `pup auth status --output table` |
+| pup OAuth login | `pup auth login --agent` |
 | GitLab token | `ddtool auth gitlab token` |
 | Force re-login | `dd-auth login` |
 | Check status | `dd-auth status` |
