@@ -58,9 +58,17 @@ Default files:
 - schedules cron/at tasks
 - executes tasks with retries and timeout (direct daemon-managed subprocess by default; tmux optional)
 - writes per-run logs and updates task state
+- creates durable profile activity entries for successful/failed task runs when task files live under profile resources
 - publishes `gateway.notification` events when `output` routing is configured
 
 See [Scheduled Tasks](./tasks.md) for schema details.
+
+## `deferred-resume`
+
+- watches queued deferred-resume state under the runtime Pi state root
+- marks due conversation continuations as ready even when no TUI is open
+- creates durable profile activity entries when a deferred resume fires
+- leaves actual prompt delivery to the matching conversation runtime when that conversation is active or reopened
 
 ---
 

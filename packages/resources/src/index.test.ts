@@ -76,16 +76,19 @@ describe('resources profile loader', () => {
     const repo = createTempRepo();
 
     writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(repo, 'profiles/shared/agent/extensions/context-bar.ts'), 'export default {}\n');
-    writeFile(join(repo, 'profiles/shared/agent/extensions/context-bar.test.ts'), 'export default {}\n');
-    writeFile(join(repo, 'profiles/shared/agent/extensions/context-bar.spec.ts'), 'export default {}\n');
+    writeFile(join(repo, 'profiles/shared/agent/extensions/sample.ts'), 'export default {}\n');
+    writeFile(join(repo, 'profiles/shared/agent/extensions/sample.test.ts'), 'export default {}\n');
+    writeFile(join(repo, 'profiles/shared/agent/extensions/sample.spec.ts'), 'export default {}\n');
     writeFile(join(repo, 'profiles/shared/agent/extensions/nested/index.ts'), 'export default {}\n');
 
-    const resolved = resolveResourceProfile('shared', { repoRoot: repo });
+    const resolved = resolveResourceProfile('shared', {
+      repoRoot: repo,
+      localProfileDir: join(repo, '.local-profile'),
+    });
 
     expect(resolved.extensionEntries).toEqual([
-      join(repo, 'profiles/shared/agent/extensions/context-bar.ts'),
       join(repo, 'profiles/shared/agent/extensions/nested/index.ts'),
+      join(repo, 'profiles/shared/agent/extensions/sample.ts'),
     ]);
   });
 
@@ -114,7 +117,10 @@ describe('resources profile loader', () => {
     writeFile(join(repo, 'profiles/shared/agent/skills/shared-skill/SKILL.md'), '# Shared Skill\n');
     writeFile(join(repo, 'profiles/datadog/agent/skills/dd-skill/SKILL.md'), '# Datadog Skill\n');
 
-    const resolved = resolveResourceProfile('datadog', { repoRoot: repo });
+    const resolved = resolveResourceProfile('datadog', {
+      repoRoot: repo,
+      localProfileDir: join(repo, '.local-profile'),
+    });
 
     expect(resolved.layers.map((layer) => layer.name)).toEqual(['shared', 'datadog']);
     expect(resolved.agentsFiles).toEqual([join(repo, 'profiles/shared/agent/AGENTS.md')]);

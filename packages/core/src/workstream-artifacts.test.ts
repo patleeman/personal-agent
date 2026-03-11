@@ -7,21 +7,27 @@ import {
   createInitialWorkstreamPlan,
   createInitialWorkstreamSummary,
   createWorkstreamActivityEntry,
+  createWorkstreamTodo,
   formatWorkstreamActivityEntry,
   formatWorkstreamPlan,
   formatWorkstreamSummary,
+  formatWorkstreamTodo,
   parseWorkstreamActivityEntry,
   parseWorkstreamPlan,
   parseWorkstreamSummary,
+  parseWorkstreamTodo,
   readWorkstreamActivityEntry,
   readWorkstreamPlan,
   readWorkstreamSummary,
+  readWorkstreamTodo,
   writeWorkstreamActivityEntry,
   writeWorkstreamPlan,
   writeWorkstreamSummary,
+  writeWorkstreamTodo,
   type WorkstreamActivityEntryDocument,
   type WorkstreamPlanDocument,
   type WorkstreamSummaryDocument,
+  type WorkstreamTodoDocument,
 } from './workstream-artifacts.js';
 
 const tempDirs: string[] = [];
@@ -228,5 +234,53 @@ describe('workstream activity artifacts', () => {
 
     expect(readFileSync(path, 'utf-8')).toContain('## Summary');
     expect(readWorkstreamActivityEntry(path)).toEqual(document);
+  });
+});
+
+describe('workstream todo artifacts', () => {
+  it('creates the default todo document', () => {
+    const todo = createWorkstreamTodo({
+      id: 'implement-activity',
+      createdAt: '2026-03-10T15:00:00.000Z',
+      status: 'pending',
+      title: 'Implement activity records',
+    });
+
+    expect(todo.updatedAt).toBe('2026-03-10T15:00:00.000Z');
+    expect(todo.status).toBe('pending');
+  });
+
+  it('formats and parses todo markdown as a round trip', () => {
+    const document: WorkstreamTodoDocument = {
+      id: 'implement-activity',
+      createdAt: '2026-03-10T15:00:00.000Z',
+      updatedAt: '2026-03-10T16:00:00.000Z',
+      status: 'running',
+      title: 'Implement activity records',
+      summary: 'Wire daemon task runs into durable activity output.',
+    };
+
+    const markdown = formatWorkstreamTodo(document);
+    expect(markdown).toContain('# Todo');
+    expect(markdown).toContain('status: running');
+
+    expect(parseWorkstreamTodo(markdown)).toEqual(document);
+  });
+
+  it('writes and reads todo files', () => {
+    const dir = createTempDir();
+    const path = join(dir, 'todo.md');
+    const document = createWorkstreamTodo({
+      id: 'implement-activity',
+      createdAt: '2026-03-10T15:00:00.000Z',
+      status: 'pending',
+      title: 'Implement activity records',
+      summary: 'Start with the daemon scheduled-task path.',
+    });
+
+    writeWorkstreamTodo(path, document);
+
+    expect(readFileSync(path, 'utf-8')).toContain('## Title');
+    expect(readWorkstreamTodo(path)).toEqual(document);
   });
 });

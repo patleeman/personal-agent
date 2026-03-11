@@ -17,6 +17,12 @@ export * from './runtime/index.js';
 // Activity exports
 export * from './activity.js';
 
+// Deferred resume state exports
+export * from './deferred-resume.js';
+
+// Conversation ↔ workstream link exports
+export * from './conversation-links.js';
+
 // Workstream artifact exports
 export * from './workstream-artifacts.js';
 

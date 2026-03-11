@@ -1,5 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'fs';
+import { homedir } from 'os';
 import { join, resolve } from 'path';
+import {
+  createWorkstreamActivityEntry,
+  writeProfileActivityEntry,
+} from '@personal-agent/core';
 import type { TasksModuleConfig } from '../config.js';
 import type { DaemonModule } from './types.js';
 import {
@@ -116,6 +121,43 @@ export interface TasksModuleDependencies {
   runTask?: (request: TaskRunRequest) => Promise<TaskRunResult>;
 }
 
+/**
+ * Find Pi session IDs that were created within a ±5 minute window of a task run.
+ * Sessions live at ~/.local/state/personal-agent/pi-agent/sessions/<cwd-slug>/<ts>_<uuid>.jsonl
+ */
+function findRelatedSessionIds(startedAt: string, endedAt: string): string[] {
+  try {
+    const sessionsBase = join(homedir(), '.local', 'state', 'personal-agent', 'pi-agent', 'sessions');
+    if (!existsSync(sessionsBase)) return [];
+
+    const startMs = new Date(startedAt).getTime() - 60_000;   // 1 min before
+    const endMs   = new Date(endedAt).getTime()   + 60_000;   // 1 min after
+
+    const ids: string[] = [];
+    const cwdDirs = readdirSync(sessionsBase, { withFileTypes: true })
+      .filter(d => d.isDirectory())
+      .map(d => join(sessionsBase, d.name));
+
+    for (const dir of cwdDirs) {
+      const files = readdirSync(dir).filter(f => f.endsWith('.jsonl'));
+      for (const file of files) {
+        // filename: 2026-03-10T19-41-53-445Z_UUID.jsonl
+        // Format: 2026-03-10T19-41-53-445Z — last segment is ms before Z
+        const normalized = file.slice(0, 24)
+          .replace(/T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z/, 'T$1:$2:$3.$4Z');
+        const fileMs = new Date(normalized).getTime();
+        if (!isNaN(fileMs) && fileMs >= startMs && fileMs <= endMs) {
+          const uuid = file.slice(25, file.length - 5); // strip timestamp_ and .jsonl
+          if (uuid) ids.push(uuid);
+        }
+      }
+    }
+    return ids;
+  } catch {
+    return [];
+  }
+}
+
 function sanitizePathSegment(value: string): string {
   const sanitized = value
     .replace(/[^a-zA-Z0-9._-]+/g, '-')
@@ -123,6 +165,15 @@ function sanitizePathSegment(value: string): string {
     .replace(/-+$/, '');
 
   return sanitized.length > 0 ? sanitized : 'task';
+}
+
+function sanitizeActivityIdSegment(value: string): string {
+  const sanitized = value
+    .replace(/[^a-zA-Z0-9-_]+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+
+  return sanitized.length > 0 ? sanitized : 'activity';
 }
 
 function toMinuteKey(at: Date): string {
@@ -184,6 +235,63 @@ function ensureTaskRecord(taskState: TaskStateFile, task: ParsedTaskDefinition):
 
   taskState.tasks[task.key] = created;
   return created;
+}
+
+function inferRepoRootFromTaskFile(filePath: string, profile: string): string | undefined {
+  const normalizedPath = resolve(filePath).replace(/\\/g, '/');
+  const marker = `/profiles/${profile}/agent/tasks/`;
+  const markerIndex = normalizedPath.indexOf(marker);
+
+  if (markerIndex >= 0) {
+    return normalizedPath.slice(0, markerIndex) || '/';
+  }
+
+  const fallbackMarker = `/profiles/${profile}/agent/tasks`;
+  const fallbackIndex = normalizedPath.indexOf(fallbackMarker);
+  if (fallbackIndex >= 0) {
+    return normalizedPath.slice(0, fallbackIndex) || '/';
+  }
+
+  return undefined;
+}
+
+function shouldQueueTaskNotification(task: ParsedTaskDefinition, status: TaskRunOutcomeStatus): boolean {
+  if (!task.output) {
+    return false;
+  }
+
+  return shouldPublishTaskOutput(task.output, status);
+}
+
+function toTaskActivitySummary(taskId: string, status: TaskRunOutcomeStatus): string {
+  if (status === 'success') {
+    return `Scheduled task ${taskId} completed.`;
+  }
+
+  return `Scheduled task ${taskId} failed.`;
+}
+
+function toTaskActivityDetails(input: {
+  outputText?: string;
+  error?: string;
+  logPath?: string;
+}): string | undefined {
+  const sections: string[] = [];
+
+  const outputText = normalizeTaskOutput(input.outputText);
+  if (outputText) {
+    sections.push(`Output:\n${outputText}`);
+  }
+
+  if (input.error) {
+    sections.push(`Error:\n${input.error}`);
+  }
+
+  if (input.logPath) {
+    sections.push(`Log:\n${input.logPath}`);
+  }
+
+  return sections.length > 0 ? sections.join('\n\n') : undefined;
 }
 
 export function createTasksModule(
@@ -279,6 +387,56 @@ export function createTasksModule(
     }
   };
 
+  const writeTaskActivity = (
+    task: ParsedTaskDefinition,
+    status: TaskRunOutcomeStatus,
+    context: { logger: { info: (message: string) => void; warn: (message: string) => void } },
+    details: {
+      startedAt?: string;
+      finishedAt: string;
+      outputText?: string;
+      error?: string;
+      logPath?: string;
+    },
+  ): void => {
+    try {
+      const repoRoot = inferRepoRootFromTaskFile(task.filePath, task.profile);
+      if (!repoRoot) {
+        context.logger.warn(`unable to infer repo root for task activity id=${task.id} file=${task.filePath}`);
+        return;
+      }
+
+      const activityId = [
+        'task',
+        sanitizeActivityIdSegment(task.id),
+        sanitizeActivityIdSegment(details.finishedAt.replace(/[.:]/g, '-')),
+        status,
+      ].join('-');
+
+      // Find Pi sessions created during this task run for cross-linking
+      const relatedConversationIds = details.startedAt
+        ? findRelatedSessionIds(details.startedAt, details.finishedAt)
+        : [];
+
+      writeProfileActivityEntry({
+        repoRoot,
+        profile: task.profile,
+        entry: createWorkstreamActivityEntry({
+          id: activityId,
+          createdAt: details.finishedAt,
+          profile: task.profile,
+          kind: 'scheduled-task',
+          summary: toTaskActivitySummary(task.id, status),
+          details: toTaskActivityDetails(details),
+          relatedConversationIds: relatedConversationIds.length > 0 ? relatedConversationIds : undefined,
+          notificationState: shouldQueueTaskNotification(task, status) ? 'queued' : 'none',
+        }),
+      });
+    } catch (error) {
+      context.logger.warn(`failed to write task activity id=${task.id}: ${(error as Error).message}`);
+    }
+  };
+
   const executeTaskRun = async (
     task: ParsedTaskDefinition,
     record: TaskRuntimeState,
@@ -344,6 +502,13 @@ export function createTasksModule(
       });
       context.logger.info(`task completed id=${task.id} log=${finalResult.logPath}`);
 
+      writeTaskActivity(task, 'success', context, {
+        startedAt: finalResult.startedAt,
+        finishedAt,
+        outputText: finalResult.outputText,
+        logPath: finalResult.logPath,
+      });
+
       publishTaskOutputNotifications(task, 'success', context, {
         finishedAt,
         outputText: finalResult.outputText,
@@ -377,6 +542,14 @@ export function createTasksModule(
         logPath: finalResult?.logPath,
       });
       context.logger.warn(`task failed id=${task.id} error=${record.lastError}`);
+
+      writeTaskActivity(task, 'failed', context, {
+        startedAt: finalResult?.startedAt,
+        finishedAt,
+        outputText: finalResult?.outputText,
+        error: record.lastError,
+        logPath: finalResult?.logPath,
+      });
 
       publishTaskOutputNotifications(task, 'failed', context, {
         finishedAt,

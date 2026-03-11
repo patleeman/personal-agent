@@ -16,13 +16,10 @@ So each extension here uses either a top-level `*.ts` entrypoint or an `index.ts
 extensions/
 ├── at-autocomplete-performance/
 │   └── index.ts
-├── context-bar.ts
 ├── deferred-resume/
 │   └── index.ts
 ├── exit-alias.ts
 ├── memory/
-│   └── index.ts
-├── pa-header/
 │   └── index.ts
 ├── tmux-manager/
 │   └── index.ts

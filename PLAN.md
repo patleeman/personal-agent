@@ -41,15 +41,32 @@ Implement the conversation-first, artifact-centric model from `VISION.md` in sma
 - [x] Add typed core read/write helpers for summary and plan artifacts.
 - [x] Refactor scaffold generation to use typed artifact helpers.
 - [x] Add round-trip artifact parsing/writing tests.
+- [x] Define initial task/job record artifact conventions.
+- [x] Integrate daemon task runs with durable activity output.
+- [x] Build the first substantial web surface in `packages/web` with inbox, conversations, workstreams, tasks, memory, live Pi sessions, fork, and context rail.
+- [x] Prove the inbox-first shell on both surfaces: lightweight TUI extension shell plus richer web implementation.
 
 ### Not done yet
 
-- [ ] Finish the broader artifact model for task/job records.
+- [x] Finish the broader artifact model for workstream todos at an initial file-backed level.
 - [x] Define activity/inbox records at an initial file-backed level.
-- [ ] Define how deferred resume and scheduled tasks connect to artifacts and activity.
-- [ ] Define the UI shell and attention model.
-- [ ] Define how conversations pick up prior work across surfaces.
-- [ ] Integrate daemon tasks and gateway output with the new model.
+- [x] Define how deferred resume emits durable activity without turning into a scheduled task.
+- [x] Add persistent conversation ↔ workstream references so conversations can pick up prior work across surfaces.
+- [ ] Add derived attention/inbox ranking that can bubble related conversations based on activity.
+- [ ] Integrate gateway output more fully with the new model.
+- [x] Restore clean web install/build verification and keep browser-driven verification in the normal dev loop.
+- [x] Add an explicit web profile switcher so active-profile mismatches are visible and correctable in-app.
+
+## Reality check
+
+The branch has already moved past a TUI-only shell. The fast-moving implementation surface is now the web app in `packages/web`, while the TUI inbox shell remains a lighter proof of the same model.
+
+So the active execution focus is no longer “invent the first shell.” It is:
+
+- tighten the continuity model underneath the shell
+- connect deferred resume, activity, and conversations cleanly
+- add durable conversation ↔ workstream links
+- preserve the web shell as the main implementation surface without drifting away from the canonical model
 
 ## Current on-disk foundation
 
@@ -57,7 +74,7 @@ Implement the conversation-first, artifact-centric model from `VISION.md` in sma
 profiles/<profile>/agent/workstreams/<workstream-id>/
   summary.md
   plan.md
-  tasks/
+  todos/
   artifacts/
 ```
 
@@ -65,8 +82,8 @@ Current intent:
 
 - `summary.md` = executive summary / context-switching entrypoint
 - `plan.md` = current plan artifact
-- `tasks/` = execution-unit records later
-- `artifacts/` = other durable outputs later
+- `todos/` = focused execution-unit records
+- `artifacts/` = other durable outputs
 
 ## Implementation sequence
 
@@ -78,12 +95,12 @@ Deliverables completed:
 
 - workstream id validation
 - profile-scoped workstream path resolution
-- scaffold creation for `summary.md`, `plan.md`, `tasks/`, `artifacts/`
+- scaffold creation for `summary.md`, `plan.md`, `todos/`, `artifacts/`
 - tests and build verification
 
 ### Phase 1 — Artifact model
 
-_Status: in progress_
+_Status: done_
 
 Goal:
 
@@ -95,16 +112,16 @@ Deliverables:
   - [x] `summary.md`
   - [x] `plan.md`
   - [x] activity entries
-  - [ ] task/job records
+  - [x] workstream todos
 - [x] add typed read/write helpers in core for summary and plan artifacts
 - [x] make scaffold generation use the typed helpers instead of inline string formatting
 - [x] add tests for round-trip parsing and writing
 
 Acceptance criteria:
 
-- the repo has one obvious way to read and write summary/plan artifacts
-- artifact files remain plain text and git-friendly
-- the minimum schema is small and easy to evolve
+- [x] the repo has one obvious way to read and write summary/plan/activity/todo artifacts
+- [x] artifact files remain plain text and git-friendly
+- [x] the minimum schema is small and easy to evolve
 
 ### Phase 2 — Activity / inbox model
 
@@ -119,6 +136,7 @@ Deliverables:
 - [x] define an activity entry format
 - [x] choose a file-backed storage layout for activity
 - [x] add core helpers to create/list/read activity entries
+- [x] connect daemon task results to create activity entries by default
 - [x] define minimal fields such as:
   - id
   - createdAt
@@ -136,7 +154,7 @@ Acceptance criteria:
 
 ### Phase 3 — UI shell and conversation continuity
 
-_Status: planned_
+_Status: in progress_
 
 Goal:
 
@@ -144,32 +162,43 @@ Define the default UI shell and how conversations re-enter prior context across 
 
 Deliverables:
 
-- define the left sidebar model:
-  - inbox first
-  - conversations ordered by attention
-  - conversations needing attention bubbled to the top
-- define the center panel as the primary Pi conversation panel
-- define the right panel as the context stack for:
-  - objective/intent
-  - summary
-  - plan
-  - activities
-  - artifacts
-  - related workstreams
+- [x] define the left sidebar model:
+  - [x] inbox first
+  - [x] conversations ordered by attention
+  - [x] conversations needing attention bubbled to the top
+- [x] define the center panel as the primary Pi conversation panel
+- [x] define the first usable right-panel approximation for:
+  - [x] objective/intent
+  - [x] summary
+  - [x] plan
+  - [x] activities
+  - [x] artifacts
+  - [x] related workstreams
+- [x] ship a first usable web shell implementing that model in `packages/web`
+  - [x] inbox page
+  - [x] live/historical conversations
+  - [x] workstreams page
+  - [x] tasks page
+  - [x] memory browser
+  - [x] live Pi session create/resume/stream/fork
 - define the distinction between:
   - normal conversation continuation
   - deferred resume
   - activity surfacing
-- define how a conversation references workstreams and artifacts
+- [x] define and implement how a conversation references workstreams at an initial durable file-backed level
 - define how background activity can bubble a related conversation into the inbox/sidebar
 - define how a conversation can move between TUI and gateway while staying conceptually the same conversation
 - add any minimal identifiers or metadata needed for cross-surface continuation
+- add browser-driven verification for core shell flows so the web app does not drift from working behavior
 
 Acceptance criteria:
 
 - deferred resume is clearly modeled as conversation-level continuity
 - conversations can pick up relevant work without owning it
-- the default UI shell is clear enough to guide implementation without inventing a project-management UI
+- related activity can influence conversation attention ordering
+- [x] the default UI shell is clear enough to guide implementation without inventing a project-management UI
+- [x] the TUI has a usable first-shell implementation via inbox/context widgets plus an overlay side panel
+- [x] the web app is a real implementation surface rather than a mock-only demo shell
 
 ### Phase 4 — Daemon-first scheduled task and autonomy integration
 
@@ -238,10 +267,11 @@ Acceptance criteria:
 
 ## Immediate next actions
 
-1. Define the minimal artifact shape for task/job records.
-2. Connect daemon task results to artifact + activity output by default.
-3. Decide how deferred resume should emit activity without becoming a scheduled task.
-4. Define how activity bubbles related conversations into the inbox/sidebar attention model.
+1. Turn the conversation right rail into focused workstream context: summary, plan, todos, activity, and artifacts.
+2. Remove transcript-like `Recent Messages` from the rail and let the conversation pane / future scrollbar design own transcript navigation.
+3. Add the first derived attention/inbox ranking rules using activity + conversation linkage.
+4. Integrate gateway output more intentionally on top of the artifact + activity path.
+5. Keep browser-driven verification in the normal loop as shell behavior evolves.
 
 ## Explicitly out of scope for now
 

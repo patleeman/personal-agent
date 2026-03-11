@@ -9,6 +9,7 @@ import {
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 const WORKSTREAM_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
+const TODO_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 
 export interface ResolveWorkstreamOptions {
   repoRoot?: string;
@@ -22,12 +23,16 @@ export interface WorkstreamPaths {
   workstreamDir: string;
   summaryFile: string;
   planFile: string;
-  tasksDir: string;
+  todosDir: string;
   artifactsDir: string;
 }
 
 export interface ResolveWorkstreamPathsOptions extends ResolveWorkstreamOptions {
   workstreamId: string;
+}
+
+export interface ResolveWorkstreamTodoPathOptions extends ResolveWorkstreamPathsOptions {
+  todoId: string;
 }
 
 export interface CreateWorkstreamScaffoldOptions extends ResolveWorkstreamPathsOptions {
@@ -61,6 +66,14 @@ export function validateWorkstreamId(workstreamId: string): void {
   }
 }
 
+export function validateTodoId(todoId: string): void {
+  if (!TODO_ID_PATTERN.test(todoId)) {
+    throw new Error(
+      `Invalid todo id "${todoId}". Todo ids may only include letters, numbers, dashes, and underscores.`,
+    );
+  }
+}
+
 function formatIsoTimestamp(date: Date): string {
   return date.toISOString();
 }
@@ -89,7 +102,7 @@ export function resolveWorkstreamPaths(options: ResolveWorkstreamPathsOptions): 
     workstreamDir,
     summaryFile: join(workstreamDir, 'summary.md'),
     planFile: join(workstreamDir, 'plan.md'),
-    tasksDir: join(workstreamDir, 'tasks'),
+    todosDir: join(workstreamDir, 'todos'),
     artifactsDir: join(workstreamDir, 'artifacts'),
   };
 }
@@ -106,6 +119,12 @@ export function listWorkstreamIds(options: ResolveWorkstreamOptions): string[] {
     .filter((entry) => entry.isDirectory() && WORKSTREAM_ID_PATTERN.test(entry.name))
     .map((entry) => entry.name)
     .sort((left, right) => left.localeCompare(right));
+}
+
+export function resolveWorkstreamTodoPath(options: ResolveWorkstreamTodoPathOptions): string {
+  const paths = resolveWorkstreamPaths(options);
+  validateTodoId(options.todoId);
+  return join(paths.todosDir, `${options.todoId}.md`);
 }
 
 function assertWorkstreamCanBeCreated(paths: WorkstreamPaths, overwrite: boolean): void {
@@ -143,7 +162,7 @@ export function createWorkstreamScaffold(
   const writtenFiles: string[] = [];
 
   mkdirSync(paths.workstreamDir, { recursive: true });
-  mkdirSync(paths.tasksDir, { recursive: true });
+  mkdirSync(paths.todosDir, { recursive: true });
   mkdirSync(paths.artifactsDir, { recursive: true });
 
   writeWorkstreamSummary(

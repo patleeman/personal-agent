@@ -50,13 +50,13 @@ export interface WorkstreamActivityEntryDocument {
   notificationState?: WorkstreamActivityNotificationState;
 }
 
-export type WorkstreamTaskRecordStatus = 'pending' | 'running' | 'blocked' | 'completed' | 'failed' | 'cancelled';
+export type WorkstreamTodoStatus = 'pending' | 'running' | 'blocked' | 'completed' | 'failed' | 'cancelled';
 
-export interface WorkstreamTaskRecordDocument {
+export interface WorkstreamTodoDocument {
   id: string;
   createdAt: string;
   updatedAt: string;
-  status: WorkstreamTaskRecordStatus | (string & {});
+  status: WorkstreamTodoStatus | (string & {});
   title: string;
   summary?: string;
 }
@@ -489,4 +489,62 @@ export function readWorkstreamActivityEntry(path: string): WorkstreamActivityEnt
 export function writeWorkstreamActivityEntry(path: string, document: WorkstreamActivityEntryDocument): void {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, formatWorkstreamActivityEntry(document));
+}
+
+export function createWorkstreamTodo(input: {
+  id: string;
+  createdAt: string;
+  updatedAt?: string;
+  status: WorkstreamTodoDocument['status'];
+  title: string;
+  summary?: string;
+}): WorkstreamTodoDocument {
+  return {
+    id: assertNonEmptyText(input.id, 'Todo id'),
+    createdAt: assertNonEmptyText(input.createdAt, 'Todo createdAt'),
+    updatedAt: assertNonEmptyText(input.updatedAt ?? input.createdAt, 'Todo updatedAt'),
+    status: assertNonEmptyText(input.status, 'Todo status'),
+    title: assertNonEmptyText(input.title, 'Todo title'),
+    summary: input.summary ? assertNonEmptyText(input.summary, 'Todo summary') : undefined,
+  };
+}
+
+export function formatWorkstreamTodo(document: WorkstreamTodoDocument): string {
+  const frontmatterAttributes: Record<string, string> = {
+    id: assertNonEmptyText(document.id, 'Todo id'),
+    createdAt: assertNonEmptyText(document.createdAt, 'Todo createdAt'),
+    updatedAt: assertNonEmptyText(document.updatedAt, 'Todo updatedAt'),
+    status: assertNonEmptyText(document.status, 'Todo status'),
+  };
+
+  const frontmatter = formatFrontmatter(frontmatterAttributes);
+  const body = formatMarkdownDocument('Todo', [
+    ['Title', document.title],
+    ['Summary', document.summary],
+  ]);
+
+  return `${frontmatter}\n${body}`;
+}
+
+export function parseWorkstreamTodo(markdown: string): WorkstreamTodoDocument {
+  const { attributes, body } = splitFrontmatter(markdown, 'Todo');
+  const sections = parseMarkdownSections(body, 'Todo', 'Todo');
+
+  return {
+    id: readRequiredAttribute(attributes, 'id', 'Todo'),
+    createdAt: readRequiredAttribute(attributes, 'createdAt', 'Todo'),
+    updatedAt: readRequiredAttribute(attributes, 'updatedAt', 'Todo'),
+    status: readRequiredAttribute(attributes, 'status', 'Todo'),
+    title: readRequiredSection(sections, 'Title', 'Todo'),
+    summary: sections.Summary ? assertNonEmptyText(sections.Summary, 'Todo section Summary') : undefined,
+  };
+}
+
+export function readWorkstreamTodo(path: string): WorkstreamTodoDocument {
+  return parseWorkstreamTodo(readFileSync(path, 'utf-8'));
+}
+
+export function writeWorkstreamTodo(path: string, document: WorkstreamTodoDocument): void {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, formatWorkstreamTodo(document));
 }

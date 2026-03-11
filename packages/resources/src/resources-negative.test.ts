@@ -67,7 +67,10 @@ describe('resources negative tests', () => {
       mkdirSync(extensionsDir, { recursive: true });
       writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
 
-      const resolved = resolveResourceProfile('shared', { repoRoot: repo });
+      const resolved = resolveResourceProfile('shared', {
+        repoRoot: repo,
+        localProfileDir: join(repo, '.local-profile'),
+      });
 
       expect(resolved.extensionDirs).toEqual([extensionsDir]);
       expect(resolved.extensionEntries).toEqual([]);
@@ -79,7 +82,10 @@ describe('resources negative tests', () => {
       mkdirSync(skillsDir, { recursive: true });
       writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
 
-      const resolved = resolveResourceProfile('shared', { repoRoot: repo });
+      const resolved = resolveResourceProfile('shared', {
+        repoRoot: repo,
+        localProfileDir: join(repo, '.local-profile'),
+      });
 
       expect(resolved.skillDirs).toEqual([skillsDir]);
     });

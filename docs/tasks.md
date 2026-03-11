@@ -131,6 +131,7 @@ Also supported:
 - Overlap is prevented: if previous run is active, the next run is skipped
 - Retries happen up to `maxRetries` (default `3`)
 - Each attempt writes a run log under daemon `task-runs`
+- Successful and failed task runs create durable profile activity entries by default when the task file lives under `profiles/<profile>/agent/tasks`
 - Task output captured for notifications is truncated to protect message size
 
 One-time task lifecycle:

@@ -8,6 +8,8 @@ import {
   listWorkstreamIds,
   resolveProfileWorkstreamsDir,
   resolveWorkstreamPaths,
+  resolveWorkstreamTodoPath,
+  validateTodoId,
   validateWorkstreamId,
   workstreamExists,
 } from './workstreams.js';
@@ -51,6 +53,16 @@ describe('validateWorkstreamId', () => {
   });
 });
 
+describe('validateTodoId', () => {
+  it('accepts simple todo ids', () => {
+    expect(() => validateTodoId('implement-activity')).not.toThrow();
+  });
+
+  it('rejects invalid todo ids', () => {
+    expect(() => validateTodoId('bad/id')).toThrow('Invalid todo id');
+  });
+});
+
 describe('resolveWorkstreamPaths', () => {
   it('builds the expected file layout for a workstream', () => {
     const repo = createTempRepo();
@@ -63,8 +75,20 @@ describe('resolveWorkstreamPaths', () => {
     expect(paths.workstreamDir).toBe(join(repo, 'profiles', 'datadog', 'agent', 'workstreams', 'artifact-model'));
     expect(paths.summaryFile).toBe(join(paths.workstreamDir, 'summary.md'));
     expect(paths.planFile).toBe(join(paths.workstreamDir, 'plan.md'));
-    expect(paths.tasksDir).toBe(join(paths.workstreamDir, 'tasks'));
+    expect(paths.todosDir).toBe(join(paths.workstreamDir, 'todos'));
     expect(paths.artifactsDir).toBe(join(paths.workstreamDir, 'artifacts'));
+  });
+
+  it('builds the expected path for a workstream todo', () => {
+    const repo = createTempRepo();
+    const path = resolveWorkstreamTodoPath({
+      repoRoot: repo,
+      profile: 'datadog',
+      workstreamId: 'artifact-model',
+      todoId: 'implement-activity',
+    });
+
+    expect(path).toBe(join(repo, 'profiles', 'datadog', 'agent', 'workstreams', 'artifact-model', 'todos', 'implement-activity.md'));
   });
 });
 
@@ -85,7 +109,7 @@ describe('createWorkstreamScaffold', () => {
     ]);
 
     expect(existsSync(result.paths.workstreamDir)).toBe(true);
-    expect(existsSync(result.paths.tasksDir)).toBe(true);
+    expect(existsSync(result.paths.todosDir)).toBe(true);
     expect(existsSync(result.paths.artifactsDir)).toBe(true);
 
     const summary = readFileSync(result.paths.summaryFile, 'utf-8');

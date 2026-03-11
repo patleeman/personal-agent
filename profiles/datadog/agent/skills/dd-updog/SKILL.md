@@ -9,15 +9,13 @@ Check third-party service outages using data from [updog.ai](https://updog.ai).
 
 ## Usage
 
-Fetch outage data via web_fetch or curl:
+Fetch outage data with `curl`:
 
 ```bash
 curl -s "https://updog.ai/data/third-party-outages.json" | jq .
 ```
 
-Or use `web_fetch` with URL `https://updog.ai/data/third-party-outages.json`.
-
-For impact assessments: `https://updog.ai/data/third-party-impacts.json`
+For impact assessments, use `https://updog.ai/data/third-party-impacts.json`.
 
 ## Response Structure
 
