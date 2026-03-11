@@ -95,7 +95,7 @@ function OpenTab({ session, onClose }: { session: SessionMeta; onClose: () => vo
         </p>
       </div>
 
-      {hovered && !isActive && (
+      {hovered && (
         <button
           onClick={e => { e.preventDefault(); e.stopPropagation(); onClose(); }}
           className="ui-icon-button ui-icon-button-compact shrink-0 mt-0.5"
@@ -213,6 +213,7 @@ function SidebarFooter({
 
 export function Sidebar() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { theme, toggle: toggleTheme } = useTheme();
   const { tabs, shelf, openSession, closeSession, loading, refetch } = useConversations();
   const { data: profileState } = useApi(api.profiles);
@@ -225,6 +226,24 @@ export function Sidebar() {
   function handleShelfClick(session: SessionMeta) {
     openSession(session.id);
     navigate(`/conversations/${session.id}`);
+  }
+
+  function handleCloseTab(sessionId: string) {
+    const isActive = location.pathname === `/conversations/${sessionId}`;
+    closeSession(sessionId);
+
+    if (!isActive) {
+      return;
+    }
+
+    const remainingTabs = tabs.filter((session) => session.id !== sessionId);
+    const nextTab = remainingTabs[0];
+    if (nextTab) {
+      navigate(`/conversations/${nextTab.id}`);
+      return;
+    }
+
+    navigate('/inbox');
   }
 
   async function handleNewConversation() {
@@ -303,7 +322,7 @@ export function Sidebar() {
           <OpenTab
             key={session.id}
             session={session}
-            onClose={() => closeSession(session.id)}
+            onClose={() => handleCloseTab(session.id)}
           />
         ))}
       </div>

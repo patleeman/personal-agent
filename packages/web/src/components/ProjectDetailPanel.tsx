@@ -14,9 +14,11 @@ const INPUT_CLASS = 'w-full rounded-xl border border-border-default bg-base px-4
 const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[132px] resize-y`;
 const SELECT_CLASS = `${INPUT_CLASS} pr-10`;
 const ACTION_BUTTON_CLASS = 'text-[12px] text-accent hover:text-accent/70 transition-colors disabled:opacity-40';
+const STATUS_ACTION_BUTTON_CLASS = 'rounded-full border px-2.5 py-1 text-[11px] font-medium capitalize transition-colors disabled:opacity-40';
 
 const PROJECT_STATUSES = ['created', 'in_progress', 'blocked', 'completed', 'cancelled'];
 const MILESTONE_STATUSES = ['pending', 'in_progress', 'blocked', 'completed', 'cancelled'];
+const MILESTONE_QUICK_STATUSES = ['pending', 'in_progress', 'blocked', 'completed'];
 const TASK_STATUSES = ['pending', 'running', 'blocked', 'completed', 'failed', 'cancelled'];
 
 interface DetailSectionProps {
@@ -85,6 +87,15 @@ function dotClassForStatus(status: string): string {
     default:
       return 'bg-border-default';
   }
+}
+
+function milestoneStatusButtonClass(isActive: boolean): string {
+  return cx(
+    STATUS_ACTION_BUTTON_CLASS,
+    isActive
+      ? 'border-accent/30 bg-accent/10 text-accent'
+      : 'border-border-subtle bg-base text-dim hover:border-border-default hover:text-primary',
+  );
 }
 
 function detailSection({ id, title, meta, actions, children }: DetailSectionProps) {
@@ -185,6 +196,21 @@ export function ProjectDetailPanel({
   const milestones = record.plan.milestones;
   const currentMilestone = pickCurrentMilestone(record.plan);
   const { done, total, pct } = getPlanProgress(milestones);
+  const tasksByMilestone = new Map<string, ProjectTask[]>();
+  const unassignedTasks: ProjectTask[] = [];
+  const taskIndexById = new Map<string, number>();
+
+  project.tasks.forEach((task, index) => {
+    taskIndexById.set(task.id, index);
+    if (task.milestoneId) {
+      const existing = tasksByMilestone.get(task.milestoneId) ?? [];
+      existing.push(task);
+      tasksByMilestone.set(task.milestoneId, existing);
+      return;
+    }
+
+    unassignedTasks.push(task);
+  });
 
   const [editingProject, setEditingProject] = useState(false);
   const [projectForm, setProjectForm] = useState<ProjectFormState>(() => projectFormFromDetail(project));
@@ -196,7 +222,11 @@ export function ProjectDetailPanel({
   const [milestoneBusy, setMilestoneBusy] = useState(false);
   const [milestoneError, setMilestoneError] = useState<string | null>(null);
 
-  const [taskEditor, setTaskEditor] = useState<{ mode: 'add' } | { mode: 'edit'; taskId: string } | null>(null);
+  const [taskEditor, setTaskEditor] = useState<
+    | { mode: 'add'; anchorMilestoneId?: string }
+    | { mode: 'edit'; taskId: string; anchorMilestoneId?: string }
+    | null
+  >(null);
   const [taskForm, setTaskForm] = useState<TaskFormState>(() => emptyTaskForm());
   const [taskBusy, setTaskBusy] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
@@ -315,14 +345,44 @@ export function ProjectDetailPanel({
     }
   }
 
-  function openTaskAdd() {
-    setTaskEditor({ mode: 'add' });
-    setTaskForm(emptyTaskForm());
+  async function setMilestoneStatus(milestoneId: string, status: string) {
+    setMilestoneBusy(true);
+    setMilestoneError(null);
+
+    try {
+      await api.updateProjectMilestone(record.id, milestoneId, status === 'in_progress'
+        ? { status, makeCurrent: true }
+        : { status });
+
+      const isCurrent = currentMilestone?.id === milestoneId;
+      if (isCurrent && (status === 'completed' || status === 'cancelled')) {
+        const nextCurrentMilestone = milestones.find((milestone) => (
+          milestone.id !== milestoneId
+          && milestone.status !== 'completed'
+          && milestone.status !== 'cancelled'
+        ));
+        await api.updateProject(record.id, { currentMilestoneId: nextCurrentMilestone?.id ?? null });
+      }
+
+      onChanged?.();
+    } catch (error) {
+      setMilestoneError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setMilestoneBusy(false);
+    }
+  }
+
+  function openTaskAdd(milestoneId?: string) {
+    setTaskEditor(milestoneId ? { mode: 'add', anchorMilestoneId: milestoneId } : { mode: 'add' });
+    setTaskForm({
+      ...emptyTaskForm(),
+      ...(milestoneId ? { milestoneId } : {}),
+    });
     setTaskError(null);
   }
 
   function openTaskEdit(task: ProjectTask) {
-    setTaskEditor({ mode: 'edit', taskId: task.id });
+    setTaskEditor({ mode: 'edit', taskId: task.id, ...(task.milestoneId ? { anchorMilestoneId: task.milestoneId } : {}) });
     setTaskForm(taskFormFromTask(task));
     setTaskError(null);
   }
@@ -488,6 +548,189 @@ export function ProjectDetailPanel({
       setDeleteBusy(false);
     }
   }
+
+  function renderTaskEditorForm() {
+    if (!taskEditor) {
+      return null;
+    }
+
+    return (
+      <form onSubmit={saveTask} className="space-y-5 border border-border-subtle rounded-xl px-5 py-5">
+        <div className="flex items-center justify-between gap-3">
+          <p className="ui-card-meta">{taskEditor.mode === 'add' ? 'New task' : `Edit task ${taskEditor.taskId}`}</p>
+          <button type="button" onClick={() => setTaskEditor(null)} className={ACTION_BUTTON_CLASS}>Cancel</button>
+        </div>
+
+        {taskEditor.mode === 'add' ? (
+          <div className="space-y-1.5">
+            <label className="ui-card-meta">Task ID</label>
+            <input
+              value={taskForm.id}
+              onChange={(event) => setTaskForm((current) => ({ ...current, id: event.target.value }))}
+              className={INPUT_CLASS}
+              placeholder="edit-project-fields"
+            />
+          </div>
+        ) : (
+          <p className="ui-card-meta font-mono">{taskForm.id}</p>
+        )}
+
+        <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_15rem_15rem]">
+          <div className="space-y-1.5">
+            <label className="ui-card-meta">Title</label>
+            <input
+              value={taskForm.title}
+              onChange={(event) => setTaskForm((current) => ({ ...current, title: event.target.value }))}
+              className={INPUT_CLASS}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="ui-card-meta">Status</label>
+            <select
+              value={taskForm.status}
+              onChange={(event) => setTaskForm((current) => ({ ...current, status: event.target.value }))}
+              className={SELECT_CLASS}
+            >
+              {TASK_STATUSES.map((status) => (
+                <option key={status} value={status}>{formatProjectStatus(status)}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="ui-card-meta">Milestone</label>
+            <select
+              value={taskForm.milestoneId}
+              onChange={(event) => setTaskForm((current) => ({ ...current, milestoneId: event.target.value }))}
+              className={SELECT_CLASS}
+            >
+              <option value="">No milestone</option>
+              {milestones.map((milestone) => (
+                <option key={milestone.id} value={milestone.id}>{milestone.title}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="ui-card-meta">Summary</label>
+          <textarea
+            value={taskForm.summary}
+            onChange={(event) => setTaskForm((current) => ({ ...current, summary: event.target.value }))}
+            className={TEXTAREA_CLASS}
+          />
+        </div>
+
+        <div className="grid gap-5 xl:grid-cols-2">
+          <div className="space-y-1.5">
+            <label className="ui-card-meta">Acceptance criteria (one per line)</label>
+            <textarea
+              value={taskForm.acceptanceCriteria}
+              onChange={(event) => setTaskForm((current) => ({ ...current, acceptanceCriteria: event.target.value }))}
+              className={TEXTAREA_CLASS}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="ui-card-meta">Task plan (one per line)</label>
+            <textarea
+              value={taskForm.plan}
+              onChange={(event) => setTaskForm((current) => ({ ...current, plan: event.target.value }))}
+              className={TEXTAREA_CLASS}
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="ui-card-meta">Notes</label>
+          <textarea
+            value={taskForm.notes}
+            onChange={(event) => setTaskForm((current) => ({ ...current, notes: event.target.value }))}
+            className={TEXTAREA_CLASS}
+          />
+        </div>
+
+        {taskError && <p className="text-[12px] text-danger">{taskError}</p>}
+
+        <div className="flex items-center gap-3">
+          <ToolbarButton type="submit" disabled={taskBusy}>{taskBusy ? 'Saving…' : 'Save task'}</ToolbarButton>
+        </div>
+      </form>
+    );
+  }
+
+  function renderTaskCard(task: ProjectTask) {
+    const isEditing = taskEditor?.mode === 'edit' && taskEditor.taskId === task.id;
+    const taskIndex = taskIndexById.get(task.id) ?? 0;
+
+    if (isEditing) {
+      return (
+        <div key={task.id} id={`project-task-${task.id}`} className="py-4 scroll-mt-6">
+          {renderTaskEditorForm()}
+        </div>
+      );
+    }
+
+    return (
+      <article key={task.id} id={`project-task-${task.id}`} className="py-4 space-y-3 scroll-mt-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[15px] font-medium leading-relaxed text-primary">{task.title}</p>
+              <span className="ui-card-meta font-mono">{task.id}</span>
+              {task.milestoneId && <span className="ui-card-meta">milestone {task.milestoneId}</span>}
+            </div>
+            {task.summary && <p className="ui-card-body">{task.summary}</p>}
+          </div>
+          <div className="flex items-center gap-3 shrink-0 flex-wrap justify-end">
+            <button type="button" onClick={() => { void moveTask(task.id, 'up'); }} className={ACTION_BUTTON_CLASS} disabled={taskBusy || taskIndex === 0}>↑</button>
+            <button type="button" onClick={() => { void moveTask(task.id, 'down'); }} className={ACTION_BUTTON_CLASS} disabled={taskBusy || taskIndex === project.tasks.length - 1}>↓</button>
+            <button type="button" onClick={() => openTaskEdit(task)} className={ACTION_BUTTON_CLASS}>Edit</button>
+            <button type="button" onClick={() => { void deleteTask(task.id); }} className="text-[12px] text-danger hover:text-danger/75 transition-colors disabled:opacity-40" disabled={taskBusy}>Delete</button>
+            <Pill tone={toneForStatus(task.status)}>{formatProjectStatus(task.status)}</Pill>
+          </div>
+        </div>
+
+        {task.acceptanceCriteria && task.acceptanceCriteria.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="ui-card-meta">Acceptance criteria</p>
+            <ul className="space-y-1.5">
+              {task.acceptanceCriteria.map((item) => (
+                <li key={item} className="flex items-start gap-2 text-[14px] leading-relaxed text-secondary">
+                  <span className="mt-[2px] shrink-0 text-accent">•</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {task.plan && task.plan.length > 0 && (
+          <div className="space-y-1.5">
+            <p className="ui-card-meta">Task plan</p>
+            <ol className="space-y-1.5">
+              {task.plan.map((item, index) => (
+                <li key={`${task.id}-plan-${index}`} className="flex items-start gap-2 text-[14px] leading-relaxed text-secondary">
+                  <span className="mt-[2px] shrink-0 font-mono text-[11px] text-dim">{index + 1}.</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+
+        {task.notes && (
+          <div className="space-y-1.5">
+            <p className="ui-card-meta">Notes</p>
+            <p className="ui-card-body">{task.notes}</p>
+          </div>
+        )}
+      </article>
+    );
+  }
+
+  const showStandaloneTasksSection = milestones.length === 0 || unassignedTasks.length > 0 || (taskEditor != null && !taskEditor.anchorMilestoneId);
 
   return (
     <div className="min-w-0 space-y-10 px-4 py-3">
@@ -695,26 +938,22 @@ export function ProjectDetailPanel({
             <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
           </div>
 
-          {milestoneEditor && (
+          {milestoneEditor && milestoneEditor.mode === 'add' && (
             <form onSubmit={saveMilestone} className="space-y-5 border border-border-subtle rounded-xl px-5 py-5">
               <div className="flex items-center justify-between gap-3">
-                <p className="ui-card-meta">{milestoneEditor.mode === 'add' ? 'New milestone' : `Edit milestone ${milestoneEditor.milestoneId}`}</p>
+                <p className="ui-card-meta">New milestone</p>
                 <button type="button" onClick={() => setMilestoneEditor(null)} className={ACTION_BUTTON_CLASS}>Cancel</button>
               </div>
 
-              {milestoneEditor.mode === 'add' ? (
-                <div className="space-y-1.5">
-                  <label className="ui-card-meta">Milestone ID</label>
-                  <input
-                    value={milestoneForm.id}
-                    onChange={(event) => setMilestoneForm((current) => ({ ...current, id: event.target.value }))}
-                    className={INPUT_CLASS}
-                    placeholder="editing-flows"
-                  />
-                </div>
-              ) : (
-                <p className="ui-card-meta font-mono">{milestoneForm.id}</p>
-              )}
+              <div className="space-y-1.5">
+                <label className="ui-card-meta">Milestone ID</label>
+                <input
+                  value={milestoneForm.id}
+                  onChange={(event) => setMilestoneForm((current) => ({ ...current, id: event.target.value }))}
+                  className={INPUT_CLASS}
+                  placeholder="editing-flows"
+                />
+              </div>
 
               <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_15rem]">
                 <div className="space-y-1.5">
@@ -766,10 +1005,20 @@ export function ProjectDetailPanel({
             </form>
           )}
 
+          {milestones.length === 0 && !milestoneEditor && (
+            <EmptyState
+              title="No milestones yet."
+              body="Add milestones to define the durable plan. Tasks can then live inside each milestone instead of feeling disconnected from the roadmap."
+              className="border border-dashed border-border-subtle rounded-xl max-w-3xl"
+            />
+          )}
+
           <div className="space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
             {milestones.map((milestone, milestoneIndex) => {
               const isCurrent = currentMilestone?.id === milestone.id;
               const isEditing = milestoneEditor?.mode === 'edit' && milestoneEditor.milestoneId === milestone.id;
+              const milestoneTasks = tasksByMilestone.get(milestone.id) ?? [];
+              const taskEditorIsAnchoredHere = taskEditor != null && taskEditor.anchorMilestoneId === milestone.id;
 
               if (isEditing) {
                 return (
@@ -831,7 +1080,7 @@ export function ProjectDetailPanel({
               }
 
               return (
-                <div key={milestone.id} className="py-4" id={`project-milestone-${milestone.id}`}>
+                <div key={milestone.id} className="py-4 space-y-4" id={`project-milestone-${milestone.id}`}>
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1 space-y-1.5">
                       <div className="flex items-start gap-2.5">
@@ -840,6 +1089,7 @@ export function ProjectDetailPanel({
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="text-[14px] font-medium leading-relaxed text-primary">{milestone.title}</p>
                             {isCurrent && <span className="ui-card-meta">current</span>}
+                            <Pill tone={toneForStatus(milestone.status)}>{formatProjectStatus(milestone.status)}</Pill>
                           </div>
                           {milestone.summary && <p className="ui-card-meta mt-1 break-words">{milestone.summary}</p>}
                         </div>
@@ -863,297 +1113,89 @@ export function ProjectDetailPanel({
                       <button type="button" onClick={() => { void deleteMilestone(milestone.id); }} className="text-[12px] text-danger hover:text-danger/75 transition-colors disabled:opacity-40" disabled={milestoneBusy}>
                         Delete
                       </button>
-                      <Pill tone={toneForStatus(milestone.status)}>{formatProjectStatus(milestone.status)}</Pill>
+                    </div>
+                  </div>
+
+                  <div className="ml-5 space-y-4">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="ui-card-meta">State</span>
+                      {MILESTONE_QUICK_STATUSES.map((status) => (
+                        <button
+                          key={`${milestone.id}-${status}`}
+                          type="button"
+                          onClick={() => { void setMilestoneStatus(milestone.id, status); }}
+                          className={milestoneStatusButtonClass(milestone.status === status)}
+                          disabled={milestoneBusy || milestone.status === status}
+                        >
+                          {formatProjectStatus(status)}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="rounded-xl border border-border-subtle bg-base/40 px-4 py-4 space-y-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="ui-card-meta">Tasks for this milestone</p>
+                          <p className="ui-card-meta mt-1">{milestoneTasks.length} {milestoneTasks.length === 1 ? 'task' : 'tasks'}</p>
+                        </div>
+                        <button type="button" onClick={() => openTaskAdd(milestone.id)} className={ACTION_BUTTON_CLASS} disabled={taskBusy}>
+                          + Add task
+                        </button>
+                      </div>
+
+                      {taskEditorIsAnchoredHere && renderTaskEditorForm()}
+
+                      {milestoneTasks.length > 0 ? (
+                        <div className="space-y-0 divide-y divide-border-subtle border-t border-border-subtle">
+                          {milestoneTasks.map((task) => renderTaskCard(task))}
+                        </div>
+                      ) : !taskEditorIsAnchoredHere ? (
+                        <p className="ui-card-meta">No tasks for this milestone yet.</p>
+                      ) : null}
                     </div>
                   </div>
                 </div>
               );
             })}
           </div>
-          {milestoneError && <p className="text-[12px] text-danger">{milestoneError}</p>}
+          {milestoneError && !milestoneEditor && <p className="text-[12px] text-danger">{milestoneError}</p>}
         </div>
       </DetailSection>
 
-      <DetailSection
-        id="project-tasks"
-        title="Tasks"
-        meta={project.taskCount > 0 ? 'Execution tasks from tasks/*.yaml' : undefined}
-        actions={(
-          <button type="button" onClick={openTaskAdd} className={ACTION_BUTTON_CLASS} disabled={taskBusy}>
-            + Add task
-          </button>
-        )}
-      >
-        {taskEditor && (
-          <form onSubmit={saveTask} className="max-w-5xl space-y-5 border border-border-subtle rounded-xl px-5 py-5">
-            <div className="flex items-center justify-between gap-3">
-              <p className="ui-card-meta">{taskEditor.mode === 'add' ? 'New task' : `Edit task ${taskEditor.taskId}`}</p>
-              <button type="button" onClick={() => setTaskEditor(null)} className={ACTION_BUTTON_CLASS}>Cancel</button>
-            </div>
+      {showStandaloneTasksSection && (
+        <DetailSection
+          id="project-tasks"
+          title={milestones.length === 0 ? 'Tasks' : 'Standalone tasks'}
+          meta={milestones.length === 0
+            ? (project.taskCount > 0 ? 'Execution tasks from tasks/*.yaml' : undefined)
+            : 'Tasks not attached to a milestone'}
+          actions={(
+            <button type="button" onClick={() => openTaskAdd()} className={ACTION_BUTTON_CLASS} disabled={taskBusy}>
+              + Add task
+            </button>
+          )}
+        >
+          <div className="max-w-5xl space-y-5">
+            {taskEditor && !taskEditor.anchorMilestoneId && renderTaskEditorForm()}
 
-            {taskEditor.mode === 'add' ? (
-              <div className="space-y-1.5">
-                <label className="ui-card-meta">Task ID</label>
-                <input
-                  value={taskForm.id}
-                  onChange={(event) => setTaskForm((current) => ({ ...current, id: event.target.value }))}
-                  className={INPUT_CLASS}
-                  placeholder="edit-project-fields"
-                />
-              </div>
-            ) : (
-              <p className="ui-card-meta font-mono">{taskForm.id}</p>
-            )}
-
-            <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_15rem_15rem]">
-              <div className="space-y-1.5">
-                <label className="ui-card-meta">Title</label>
-                <input
-                  value={taskForm.title}
-                  onChange={(event) => setTaskForm((current) => ({ ...current, title: event.target.value }))}
-                  className={INPUT_CLASS}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="ui-card-meta">Status</label>
-                <select
-                  value={taskForm.status}
-                  onChange={(event) => setTaskForm((current) => ({ ...current, status: event.target.value }))}
-                  className={SELECT_CLASS}
-                >
-                  {TASK_STATUSES.map((status) => (
-                    <option key={status} value={status}>{formatProjectStatus(status)}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="ui-card-meta">Milestone</label>
-                <select
-                  value={taskForm.milestoneId}
-                  onChange={(event) => setTaskForm((current) => ({ ...current, milestoneId: event.target.value }))}
-                  className={SELECT_CLASS}
-                >
-                  <option value="">No milestone</option>
-                  {milestones.map((milestone) => (
-                    <option key={milestone.id} value={milestone.id}>{milestone.title}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="ui-card-meta">Summary</label>
-              <textarea
-                value={taskForm.summary}
-                onChange={(event) => setTaskForm((current) => ({ ...current, summary: event.target.value }))}
-                className={TEXTAREA_CLASS}
+            {unassignedTasks.length === 0 && !taskEditor ? (
+              <EmptyState
+                title={milestones.length === 0 ? 'No project tasks yet.' : 'No standalone tasks.'}
+                body={milestones.length === 0
+                  ? 'Add task YAML files when work needs acceptance criteria or a task-level plan.'
+                  : 'Assigned tasks now live inside each milestone. Use standalone tasks only when the work is truly project-wide.'}
+                className="border border-dashed border-border-subtle rounded-xl max-w-3xl"
               />
-            </div>
-
-            <div className="grid gap-5 xl:grid-cols-2">
-              <div className="space-y-1.5">
-                <label className="ui-card-meta">Acceptance criteria (one per line)</label>
-                <textarea
-                  value={taskForm.acceptanceCriteria}
-                  onChange={(event) => setTaskForm((current) => ({ ...current, acceptanceCriteria: event.target.value }))}
-                  className={TEXTAREA_CLASS}
-                />
+            ) : unassignedTasks.length > 0 ? (
+              <div className="space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
+                {unassignedTasks.map((task) => renderTaskCard(task))}
               </div>
+            ) : null}
 
-              <div className="space-y-1.5">
-                <label className="ui-card-meta">Task plan (one per line)</label>
-                <textarea
-                  value={taskForm.plan}
-                  onChange={(event) => setTaskForm((current) => ({ ...current, plan: event.target.value }))}
-                  className={TEXTAREA_CLASS}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="ui-card-meta">Notes</label>
-              <textarea
-                value={taskForm.notes}
-                onChange={(event) => setTaskForm((current) => ({ ...current, notes: event.target.value }))}
-                className={TEXTAREA_CLASS}
-              />
-            </div>
-
-            {taskError && <p className="text-[12px] text-danger">{taskError}</p>}
-
-            <div className="flex items-center gap-3">
-              <ToolbarButton type="submit" disabled={taskBusy}>{taskBusy ? 'Saving…' : 'Save task'}</ToolbarButton>
-            </div>
-          </form>
-        )}
-
-        {project.tasks.length === 0 && !taskEditor ? (
-          <EmptyState
-            title="No project tasks yet."
-            body="This project has milestones, but no execution task files yet. Add task YAML files when work needs acceptance criteria or a task-level plan."
-            className="border border-dashed border-border-subtle rounded-xl max-w-3xl"
-          />
-        ) : project.tasks.length > 0 ? (
-          <div className="max-w-4xl space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
-            {project.tasks.map((task, taskIndex) => {
-              const isEditing = taskEditor?.mode === 'edit' && taskEditor.taskId === task.id;
-
-              if (isEditing) {
-                return (
-                  <form key={task.id} onSubmit={saveTask} id={`project-task-${task.id}`} className="py-6 space-y-5 scroll-mt-6">
-                    <p className="ui-card-meta font-mono">{task.id}</p>
-
-                    <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_15rem_15rem]">
-                      <div className="space-y-1.5">
-                        <label className="ui-card-meta">Title</label>
-                        <input
-                          value={taskForm.title}
-                          onChange={(event) => setTaskForm((current) => ({ ...current, title: event.target.value }))}
-                          className={INPUT_CLASS}
-                        />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="ui-card-meta">Status</label>
-                        <select
-                          value={taskForm.status}
-                          onChange={(event) => setTaskForm((current) => ({ ...current, status: event.target.value }))}
-                          className={SELECT_CLASS}
-                        >
-                          {TASK_STATUSES.map((status) => (
-                            <option key={status} value={status}>{formatProjectStatus(status)}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="ui-card-meta">Milestone</label>
-                        <select
-                          value={taskForm.milestoneId}
-                          onChange={(event) => setTaskForm((current) => ({ ...current, milestoneId: event.target.value }))}
-                          className={SELECT_CLASS}
-                        >
-                          <option value="">No milestone</option>
-                          {milestones.map((milestone) => (
-                            <option key={milestone.id} value={milestone.id}>{milestone.title}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="ui-card-meta">Summary</label>
-                      <textarea
-                        value={taskForm.summary}
-                        onChange={(event) => setTaskForm((current) => ({ ...current, summary: event.target.value }))}
-                        className={TEXTAREA_CLASS}
-                      />
-                    </div>
-
-                    <div className="grid gap-5 xl:grid-cols-2">
-                      <div className="space-y-1.5">
-                        <label className="ui-card-meta">Acceptance criteria (one per line)</label>
-                        <textarea
-                          value={taskForm.acceptanceCriteria}
-                          onChange={(event) => setTaskForm((current) => ({ ...current, acceptanceCriteria: event.target.value }))}
-                          className={TEXTAREA_CLASS}
-                        />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="ui-card-meta">Task plan (one per line)</label>
-                        <textarea
-                          value={taskForm.plan}
-                          onChange={(event) => setTaskForm((current) => ({ ...current, plan: event.target.value }))}
-                          className={TEXTAREA_CLASS}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="ui-card-meta">Notes</label>
-                      <textarea
-                        value={taskForm.notes}
-                        onChange={(event) => setTaskForm((current) => ({ ...current, notes: event.target.value }))}
-                        className={TEXTAREA_CLASS}
-                      />
-                    </div>
-
-                    {taskError && <p className="text-[12px] text-danger">{taskError}</p>}
-
-                    <div className="flex items-center gap-3">
-                      <ToolbarButton type="submit" disabled={taskBusy}>{taskBusy ? 'Saving…' : 'Save task'}</ToolbarButton>
-                      <button type="button" onClick={() => setTaskEditor(null)} className="text-[13px] text-secondary hover:text-primary transition-colors">
-                        Cancel
-                      </button>
-                    </div>
-                  </form>
-                );
-              }
-
-              return (
-                <article key={task.id} id={`project-task-${task.id}`} className="py-5 space-y-3 scroll-mt-6">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 space-y-1.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-[15px] font-medium leading-relaxed text-primary">{task.title}</p>
-                        <span className="ui-card-meta font-mono">{task.id}</span>
-                        {task.milestoneId && <span className="ui-card-meta">milestone {task.milestoneId}</span>}
-                      </div>
-                      {task.summary && <p className="ui-card-body">{task.summary}</p>}
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0 flex-wrap justify-end">
-                      <button type="button" onClick={() => { void moveTask(task.id, 'up'); }} className={ACTION_BUTTON_CLASS} disabled={taskBusy || taskIndex === 0}>↑</button>
-                      <button type="button" onClick={() => { void moveTask(task.id, 'down'); }} className={ACTION_BUTTON_CLASS} disabled={taskBusy || taskIndex === project.tasks.length - 1}>↓</button>
-                      <button type="button" onClick={() => openTaskEdit(task)} className={ACTION_BUTTON_CLASS}>Edit</button>
-                      <button type="button" onClick={() => { void deleteTask(task.id); }} className="text-[12px] text-danger hover:text-danger/75 transition-colors disabled:opacity-40" disabled={taskBusy}>Delete</button>
-                      <Pill tone={toneForStatus(task.status)}>{formatProjectStatus(task.status)}</Pill>
-                    </div>
-                  </div>
-
-                  {task.acceptanceCriteria && task.acceptanceCriteria.length > 0 && (
-                    <div className="space-y-1.5">
-                      <p className="ui-card-meta">Acceptance criteria</p>
-                      <ul className="space-y-1.5">
-                        {task.acceptanceCriteria.map((item) => (
-                          <li key={item} className="flex items-start gap-2 text-[14px] leading-relaxed text-secondary">
-                            <span className="mt-[2px] shrink-0 text-accent">•</span>
-                            <span>{item}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {task.plan && task.plan.length > 0 && (
-                    <div className="space-y-1.5">
-                      <p className="ui-card-meta">Task plan</p>
-                      <ol className="space-y-1.5">
-                        {task.plan.map((item, index) => (
-                          <li key={`${task.id}-plan-${index}`} className="flex items-start gap-2 text-[14px] leading-relaxed text-secondary">
-                            <span className="mt-[2px] shrink-0 font-mono text-[11px] text-dim">{index + 1}.</span>
-                            <span>{item}</span>
-                          </li>
-                        ))}
-                      </ol>
-                    </div>
-                  )}
-
-                  {task.notes && (
-                    <div className="space-y-1.5">
-                      <p className="ui-card-meta">Notes</p>
-                      <p className="ui-card-body">{task.notes}</p>
-                    </div>
-                  )}
-                </article>
-              );
-            })}
+            {taskError && !taskEditor && <p className="text-[12px] text-danger max-w-4xl">{taskError}</p>}
           </div>
-        ) : null}
-        {taskError && <p className="text-[12px] text-danger max-w-4xl">{taskError}</p>}
-      </DetailSection>
+        </DetailSection>
+      )}
     </div>
   );
 }
