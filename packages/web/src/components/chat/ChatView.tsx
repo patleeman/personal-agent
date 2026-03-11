@@ -103,10 +103,40 @@ function toolMeta(t: string) {
   return TOOL_META[t] ?? { icon: '⚙', label: t, color: 'text-secondary border-border-default bg-elevated', tone: 'muted' as const };
 }
 
+type DisclosurePreference = 'auto' | 'open' | 'closed';
+
+export function resolveDisclosureOpen(autoOpen: boolean, preference: DisclosurePreference): boolean {
+  if (preference === 'open') return true;
+  if (preference === 'closed') return false;
+  return autoOpen;
+}
+
+export function toggleDisclosurePreference(autoOpen: boolean, preference: DisclosurePreference): DisclosurePreference {
+  return resolveDisclosureOpen(autoOpen, preference) ? 'closed' : 'open';
+}
+
+export function shouldAutoOpenConversationBlock(
+  block: MessageBlock,
+  index: number,
+  total: number,
+  isStreaming: boolean,
+): boolean {
+  if (block.type === 'tool_use') {
+    return block.status === 'running' || !!block.running;
+  }
+
+  if (block.type === 'thinking') {
+    return isStreaming && index === total - 1;
+  }
+
+  return false;
+}
+
 // ── ToolBlock ─────────────────────────────────────────────────────────────────
 
-function ToolBlock({ block }: { block: Extract<MessageBlock, { type: 'tool_use' }> }) {
-  const [open, setOpen] = useState(false);
+function ToolBlock({ block, autoOpen }: { block: Extract<MessageBlock, { type: 'tool_use' }>; autoOpen: boolean }) {
+  const [preference, setPreference] = useState<DisclosurePreference>('auto');
+  const open = resolveDisclosureOpen(autoOpen, preference);
   const meta = toolMeta(block.tool);
 
   // Normalise tool state across streamed and persisted entries.
@@ -124,7 +154,7 @@ function ToolBlock({ block }: { block: Extract<MessageBlock, { type: 'tool_use' 
   return (
     <div className={cx('rounded-xl border text-[12px] font-mono overflow-hidden transition-colors', meta.color, isError && 'border-danger/40 bg-danger/5 text-danger')}>
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => setPreference((current) => toggleDisclosurePreference(autoOpen, current))}
         className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-black/5 transition-colors text-left"
       >
         {isRunning ? (
@@ -139,8 +169,12 @@ function ToolBlock({ block }: { block: Extract<MessageBlock, { type: 'tool_use' 
         {block.durationMs && !isRunning && (
           <span className="shrink-0 opacity-40 ml-2">{(block.durationMs / 1000).toFixed(1)}s</span>
         )}
-        {isRunning && <span className="shrink-0 text-[10px] opacity-60 ml-2">running…</span>}
-        {!isRunning && (
+        {isRunning ? (
+          <>
+            <span className="shrink-0 text-[10px] opacity-60 ml-2">running…</span>
+            <span className="shrink-0 opacity-30 text-[10px]">{open ? '▲' : '▼'}</span>
+          </>
+        ) : (
           <>
             <CopyBtn text={output} small />
             <span className="shrink-0 opacity-30 text-[10px]">{open ? '▲' : '▼'}</span>
@@ -148,13 +182,7 @@ function ToolBlock({ block }: { block: Extract<MessageBlock, { type: 'tool_use' 
         )}
       </button>
 
-      {isRunning && output && (
-        <div className="border-t border-inherit px-3 py-2.5 max-h-32 overflow-y-auto bg-black/5">
-          <pre className="whitespace-pre-wrap break-all text-[11px] leading-relaxed opacity-70">{output}</pre>
-        </div>
-      )}
-
-      {open && !isRunning && (
+      {open && (
         <div className="border-t border-inherit">
           <div className="px-3 py-2.5 bg-black/5">
             <p className="text-[10px] uppercase tracking-wider opacity-40 mb-1">input</p>
@@ -162,14 +190,18 @@ function ToolBlock({ block }: { block: Extract<MessageBlock, { type: 'tool_use' 
               {JSON.stringify(block.input, null, 2)}
             </pre>
           </div>
-          {output && (
-            <div className="px-3 py-2.5">
+          {(isRunning || output) && (
+            <div className={cx('px-3 py-2.5', isRunning && output && 'max-h-40 overflow-y-auto')}>
               <p className="text-[10px] uppercase tracking-wider opacity-40 mb-1">
-                output · {output.split('\n').length} lines
+                {isRunning ? 'live output' : `output · ${output.split('\n').length} lines`}
               </p>
-              <pre className="whitespace-pre-wrap break-all text-[11px] leading-relaxed opacity-75">
-                {output}
-              </pre>
+              {output ? (
+                <pre className="whitespace-pre-wrap break-all text-[11px] leading-relaxed opacity-75">
+                  {output}
+                </pre>
+              ) : isRunning ? (
+                <p className="text-[11px] italic leading-relaxed opacity-55">Waiting for output…</p>
+              ) : null}
             </div>
           )}
         </div>
@@ -180,17 +212,20 @@ function ToolBlock({ block }: { block: Extract<MessageBlock, { type: 'tool_use' 
 
 // ── ThinkingBlock ─────────────────────────────────────────────────────────────
 
-function ThinkingBlock({ block }: { block: Extract<MessageBlock, { type: 'thinking' }> }) {
-  const [open, setOpen] = useState(false);
+function ThinkingBlock({ block, autoOpen }: { block: Extract<MessageBlock, { type: 'thinking' }>; autoOpen: boolean }) {
+  const [preference, setPreference] = useState<DisclosurePreference>('auto');
+  const open = resolveDisclosureOpen(autoOpen, preference);
+
   return (
     <SurfacePanel muted className="overflow-hidden text-[12px]">
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => setPreference((current) => toggleDisclosurePreference(autoOpen, current))}
         className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-elevated transition-colors"
       >
         <span className="text-dim select-none">💭</span>
         <Pill tone="muted">Thinking</Pill>
         <span className="flex-1" />
+        {autoOpen && <span className="text-[10px] uppercase tracking-[0.14em] text-dim/55">live</span>}
         <span className="text-dim text-[10px]">{open ? '▲ hide' : '▼ show'}</span>
       </button>
       {open && (
@@ -403,7 +438,7 @@ function AssistantMessage({ block }: { block: Extract<MessageBlock, { type: 'tex
 
 // ── ChatView ──────────────────────────────────────────────────────────────────
 
-export function ChatView({ messages }: { messages: MessageBlock[] }) {
+export function ChatView({ messages, isStreaming = false }: { messages: MessageBlock[]; isStreaming?: boolean }) {
   return (
     <>
       <style>{`@keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
@@ -414,12 +449,13 @@ export function ChatView({ messages }: { messages: MessageBlock[] }) {
             : block.type === 'text'
               ? 'assistant'
               : undefined;
+          const autoOpen = shouldAutoOpenConversationBlock(block, i, messages.length, isStreaming);
 
           const el = (() => { switch (block.type) {
             case 'user':     return <UserMessage      key={i} block={block} />;
             case 'text':     return <AssistantMessage key={i} block={block} />;
-            case 'thinking': return <ThinkingBlock    key={i} block={block} />;
-            case 'tool_use': return <ToolBlock        key={i} block={block} />;
+            case 'thinking': return <ThinkingBlock    key={i} block={block} autoOpen={autoOpen} />;
+            case 'tool_use': return <ToolBlock        key={i} block={block} autoOpen={autoOpen} />;
             case 'subagent': return <SubagentBlock    key={i} block={block} />;
             case 'image':    return <ImageBlock       key={i} block={block} />;
             case 'error':    return <ErrorBlock       key={i} block={block} />;

@@ -5,9 +5,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MessageBlock, PromptImageInput, SessionContextUsage, SseEvent } from '../types';
 import { api } from '../api';
+import { displayBlockToMessageBlock } from '../messageBlocks';
 
 export interface StreamState {
   blocks: MessageBlock[];
+  hasSnapshot: boolean;
   isStreaming: boolean;
   error: string | null;
   title: string | null;
@@ -16,8 +18,9 @@ export interface StreamState {
   contextUsage: SessionContextUsage | null;
 }
 
-const INIT: StreamState = {
+export const INITIAL_STREAM_STATE: StreamState = {
   blocks: [],
+  hasSnapshot: false,
   isStreaming: false,
   error: null,
   title: null,
@@ -26,11 +29,20 @@ const INIT: StreamState = {
   contextUsage: null,
 };
 
+export function selectVisibleStreamState(
+  state: StreamState,
+  stateSessionId: string | null,
+  requestedSessionId: string | null,
+): StreamState {
+  return stateSessionId === requestedSessionId ? state : INITIAL_STREAM_STATE;
+}
+
 export function useSessionStream(sessionId: string | null) {
-  const [state, setState] = useState<StreamState>(INIT);
+  const [state, setState] = useState<StreamState>(INITIAL_STREAM_STATE);
   // Mutable refs to avoid stale closures in the SSE handler
-  const blocksRef    = useRef<MessageBlock[]>([]);
+  const blocksRef = useRef<MessageBlock[]>([]);
   const streamingRef = useRef(false);
+  const stateSessionIdRef = useRef<string | null>(sessionId);
 
   const send = useCallback(async (text: string, behavior?: 'steer' | 'followUp', images?: PromptImageInput[]) => {
     if (!sessionId) return;
@@ -62,9 +74,10 @@ export function useSessionStream(sessionId: string | null) {
   }, [sessionId]);
 
   useEffect(() => {
+    stateSessionIdRef.current = sessionId;
     blocksRef.current = [];
     streamingRef.current = false;
-    setState(INIT);
+    setState(INITIAL_STREAM_STATE);
   }, [sessionId]);
 
   useEffect(() => {
@@ -105,7 +118,9 @@ export function useSessionStream(sessionId: string | null) {
     };
   }, [sessionId]);
 
-  return { ...state, send, abort };
+  const visibleState = selectVisibleStreamState(state, stateSessionIdRef.current, sessionId);
+
+  return { ...visibleState, send, abort };
 }
 
 // ── Event → block reducer ─────────────────────────────────────────────────────
@@ -119,6 +134,12 @@ function applyEvent(
   const blocks = [...blocksRef.current];
 
   switch (event.type) {
+    case 'snapshot': {
+      const snapshotBlocks = event.blocks.map(displayBlockToMessageBlock);
+      blocksRef.current = snapshotBlocks;
+      return { ...prev, blocks: snapshotBlocks, hasSnapshot: true, error: null };
+    }
+
     case 'agent_start': {
       streamingRef.current = true;
       blocksRef.current = blocks;

@@ -4,15 +4,11 @@ import {
   createProjectScaffold,
   createProjectTask,
   formatProject,
-  formatProjectTask,
+  listProjectIds,
   parseProject,
-  parseProjectTask,
   readProject,
-  readProjectTask,
   resolveProjectPaths,
-  resolveProjectTaskPath,
   writeProject,
-  writeProjectTask,
   type ProjectDocument,
   type ProjectMilestoneDocument,
   type ProjectTaskDocument,
@@ -28,7 +24,7 @@ export interface ProjectDetail {
 export interface CreateProjectRecordInput {
   repoRoot?: string;
   profile: string;
-  projectId: string;
+  projectId?: string;
   description: string;
   summary?: string;
   status?: string;
@@ -65,7 +61,7 @@ export interface AddProjectMilestoneInput {
   repoRoot?: string;
   profile: string;
   projectId: string;
-  id: string;
+  id?: string;
   title: string;
   status: string;
   summary?: string;
@@ -87,14 +83,10 @@ export interface CreateProjectTaskRecordInput {
   repoRoot?: string;
   profile: string;
   projectId: string;
-  taskId: string;
+  taskId?: string;
   title: string;
   status: string;
-  summary?: string;
   milestoneId?: string | null;
-  acceptanceCriteria?: string[];
-  plan?: string[];
-  notes?: string | null;
 }
 
 export interface UpdateProjectTaskRecordInput {
@@ -104,11 +96,7 @@ export interface UpdateProjectTaskRecordInput {
   taskId: string;
   title?: string;
   status?: string;
-  summary?: string | null;
   milestoneId?: string | null;
-  acceptanceCriteria?: string[];
-  plan?: string[];
-  notes?: string | null;
 }
 
 export interface DeleteProjectMilestoneInput {
@@ -146,27 +134,6 @@ export interface SaveProjectSourceInput {
   profile: string;
   projectId: string;
   content: string;
-}
-
-export interface SaveProjectTaskSourceInput {
-  repoRoot?: string;
-  profile: string;
-  projectId: string;
-  taskId: string;
-  content: string;
-}
-
-const TASK_STATUS_RANK: Record<string, number> = {
-  running: 0,
-  blocked: 1,
-  failed: 2,
-  pending: 3,
-  completed: 4,
-  cancelled: 5,
-};
-
-function taskStatusRank(status: string): number {
-  return TASK_STATUS_RANK[status] ?? TASK_STATUS_RANK.pending;
 }
 
 function listFiles(dir: string, extension?: string): string[] {
@@ -233,10 +200,6 @@ function readProjectRecord(options: {
   };
 }
 
-function taskOrderValue(task: ProjectTaskDocument): number | undefined {
-  return typeof task.order === 'number' ? task.order : undefined;
-}
-
 function moveArrayItem<T>(items: T[], index: number, direction: 'up' | 'down'): T[] {
   const nextIndex = direction === 'up' ? index - 1 : index + 1;
 
@@ -250,44 +213,33 @@ function moveArrayItem<T>(items: T[], index: number, direction: 'up' | 'down'): 
   return output;
 }
 
-function reindexTaskOrder(tasks: ProjectTaskDocument[]): ProjectTaskDocument[] {
-  return tasks.map((task, index) => ({
-    ...task,
-    order: index,
-  }));
+function slugifyIdentifier(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-{2,}/g, '-');
+}
+
+function generateUniqueId(title: string, existingIds: string[], fallbackBase: 'project' | 'milestone' | 'task'): string {
+  const base = slugifyIdentifier(title) || fallbackBase;
+  const used = new Set(existingIds);
+
+  if (!used.has(base)) {
+    return base;
+  }
+
+  let index = 2;
+  while (used.has(`${base}-${index}`)) {
+    index += 1;
+  }
+
+  return `${base}-${index}`;
 }
 
 export function sortProjectTasks(tasks: ProjectTaskDocument[]): ProjectTaskDocument[] {
-  return [...tasks].sort((left, right) => {
-    const leftOrder = taskOrderValue(left);
-    const rightOrder = taskOrderValue(right);
-
-    if (leftOrder !== undefined || rightOrder !== undefined) {
-      const normalizedLeftOrder = leftOrder ?? Number.MAX_SAFE_INTEGER;
-      const normalizedRightOrder = rightOrder ?? Number.MAX_SAFE_INTEGER;
-      const orderCompare = normalizedLeftOrder - normalizedRightOrder;
-      if (orderCompare !== 0) {
-        return orderCompare;
-      }
-    }
-
-    const statusCompare = taskStatusRank(left.status) - taskStatusRank(right.status);
-    if (statusCompare !== 0) {
-      return statusCompare;
-    }
-
-    const updatedAtCompare = right.updatedAt.localeCompare(left.updatedAt);
-    if (updatedAtCompare !== 0) {
-      return updatedAtCompare;
-    }
-
-    return left.id.localeCompare(right.id);
-  });
-}
-
-function readProjectTasks(dir: string): ProjectTaskDocument[] {
-  const tasks = listFiles(dir, '.yaml').map((fileName) => readProjectTask(join(dir, fileName)));
-  return sortProjectTasks(tasks);
+  return [...tasks];
 }
 
 export function readProjectDetailFromProject(options: {
@@ -296,10 +248,11 @@ export function readProjectDetailFromProject(options: {
   projectId: string;
 }): ProjectDetail {
   const paths = resolveProjectPaths(options);
-  const tasks = readProjectTasks(paths.tasksDir);
+  const project = readProject(paths.projectFile);
+  const tasks = sortProjectTasks(project.plan.tasks ?? []);
 
   return {
-    project: readProject(paths.projectFile),
+    project,
     taskCount: tasks.length,
     artifactCount: listFiles(paths.artifactsDir).length,
     tasks,
@@ -307,17 +260,21 @@ export function readProjectDetailFromProject(options: {
 }
 
 export function createProjectRecord(input: CreateProjectRecordInput): ProjectDetail {
+  const description = readRequiredString(input.description, 'Project description');
+  const projectId = readOptionalString(input.projectId)
+    ?? generateUniqueId(description, listProjectIds({ repoRoot: input.repoRoot, profile: input.profile }), 'project');
+
   createProjectScaffold({
     repoRoot: input.repoRoot,
     profile: input.profile,
-    projectId: input.projectId,
-    objective: readRequiredString(input.description, 'Project description'),
+    projectId,
+    objective: description,
   });
 
-  const { paths, project } = readProjectRecord(input);
+  const { paths, project } = readProjectRecord({ ...input, projectId });
   const updatedProject: ProjectDocument = {
     ...project,
-    description: readRequiredString(input.description, 'Project description'),
+    description,
     summary: readOptionalString(input.summary) ?? project.summary,
     status: readOptionalString(input.status) ?? project.status,
     currentFocus: readOptionalString(input.currentFocus) ?? project.currentFocus,
@@ -327,7 +284,7 @@ export function createProjectRecord(input: CreateProjectRecordInput): ProjectDet
   };
 
   writeProject(paths.projectFile, updatedProject);
-  return readProjectDetailFromProject(input);
+  return readProjectDetailFromProject({ ...input, projectId });
 }
 
 export function updateProjectRecord(input: UpdateProjectRecordInput): ProjectDetail {
@@ -367,7 +324,9 @@ export function deleteProjectRecord(input: DeleteProjectRecordInput): DeleteProj
 
 export function addProjectMilestone(input: AddProjectMilestoneInput): ProjectDetail {
   const { paths, project } = readProjectRecord(input);
-  const milestoneId = readRequiredString(input.id, 'Milestone id');
+  const milestoneTitle = readRequiredString(input.title, 'Milestone title');
+  const milestoneId = readOptionalString(input.id)
+    ?? generateUniqueId(milestoneTitle, project.plan.milestones.map((milestone) => milestone.id), 'milestone');
 
   if (project.plan.milestones.some((milestone) => milestone.id === milestoneId)) {
     throw new Error(`Milestone already exists in project ${project.id}: ${milestoneId}`);
@@ -375,7 +334,7 @@ export function addProjectMilestone(input: AddProjectMilestoneInput): ProjectDet
 
   const milestone: ProjectMilestoneDocument = {
     id: milestoneId,
-    title: readRequiredString(input.title, 'Milestone title'),
+    title: milestoneTitle,
     status: readRequiredString(input.status, 'Milestone status'),
     summary: readOptionalString(input.summary),
   };
@@ -384,6 +343,7 @@ export function addProjectMilestone(input: AddProjectMilestoneInput): ProjectDet
     ...project,
     updatedAt: nowIso(),
     plan: {
+      ...project.plan,
       currentMilestoneId: input.makeCurrent ? milestone.id : project.plan.currentMilestoneId,
       milestones: [...project.plan.milestones, milestone],
     },
@@ -416,6 +376,7 @@ export function updateProjectMilestone(input: UpdateProjectMilestoneInput): Proj
     ...project,
     updatedAt: nowIso(),
     plan: {
+      ...project.plan,
       currentMilestoneId: input.makeCurrent ? updatedMilestone.id : project.plan.currentMilestoneId,
       milestones,
     },
@@ -427,75 +388,83 @@ export function updateProjectMilestone(input: UpdateProjectMilestoneInput): Proj
 
 export function createProjectTaskRecord(input: CreateProjectTaskRecordInput): ProjectDetail {
   const { paths, project } = readProjectRecord(input);
-  const taskId = readRequiredString(input.taskId, 'Task id');
-  const taskPath = resolveProjectTaskPath({
-    repoRoot: input.repoRoot,
-    profile: input.profile,
-    projectId: input.projectId,
-    taskId,
-  });
+  const milestoneId = readOptionalString(input.milestoneId) ?? project.plan.currentMilestoneId;
 
-  if (existsSync(taskPath)) {
+  if (!milestoneId) {
+    throw new Error(`Task milestoneId must not be empty.`);
+  }
+
+  assertMilestoneExists(project, milestoneId);
+
+  const title = readRequiredString(input.title, 'Task title');
+  const existingTasks = sortProjectTasks(project.plan.tasks ?? []);
+  const taskId = readOptionalString(input.taskId)
+    ?? generateUniqueId(title, existingTasks.map((task) => task.id), 'task');
+
+  if (existingTasks.some((task) => task.id === taskId)) {
     throw new Error(`Task already exists in project ${input.projectId}: ${taskId}`);
   }
 
-  const milestoneId = readOptionalString(input.milestoneId);
-  assertMilestoneExists(project, milestoneId);
-  const existingTasks = readProjectTasks(paths.tasksDir);
-  const nextOrder = existingTasks.length === 0
-    ? 0
-    : Math.max(...existingTasks.map((task) => task.order ?? -1)) + 1;
-
-  writeProjectTask(
-    taskPath,
+  const nextTasks = [
+    ...existingTasks,
     createProjectTask({
       id: taskId,
-      createdAt: nowIso(),
       status: readRequiredString(input.status, 'Task status'),
-      title: readRequiredString(input.title, 'Task title'),
-      summary: readOptionalString(input.summary),
-      order: nextOrder,
+      title,
       milestoneId,
-      acceptanceCriteria: input.acceptanceCriteria ? readStringList(input.acceptanceCriteria, 'Task acceptanceCriteria') : undefined,
-      plan: input.plan ? readStringList(input.plan, 'Task plan') : undefined,
-      notes: readOptionalString(input.notes),
     }),
-  );
+  ];
+
+  writeProject(paths.projectFile, {
+    ...project,
+    updatedAt: nowIso(),
+    plan: {
+      ...project.plan,
+      tasks: nextTasks,
+    },
+  });
 
   return readProjectDetailFromProject(input);
 }
 
 export function updateProjectTaskRecord(input: UpdateProjectTaskRecordInput): ProjectDetail {
-  readProjectRecord(input);
-  const taskPath = resolveProjectTaskPath({
-    repoRoot: input.repoRoot,
-    profile: input.profile,
-    projectId: input.projectId,
-    taskId: input.taskId,
-  });
+  const { paths, project } = readProjectRecord(input);
+  const taskIndex = (project.plan.tasks ?? []).findIndex((task) => task.id === input.taskId);
 
-  if (!existsSync(taskPath)) {
+  if (taskIndex === -1) {
     throw new Error(`Task not found in project ${input.projectId}: ${input.taskId}`);
   }
 
-  const existingTask = readProjectTask(taskPath);
-  const { project } = readProjectRecord(input);
-  const milestoneId = input.milestoneId !== undefined ? readOptionalString(input.milestoneId) : existingTask.milestoneId;
+  const existingTask = project.plan.tasks[taskIndex] as ProjectTaskDocument;
+  const milestoneId = input.milestoneId !== undefined
+    ? readOptionalString(input.milestoneId)
+    : existingTask.milestoneId;
+
+  if (!milestoneId) {
+    throw new Error('Task milestoneId must not be empty.');
+  }
+
   assertMilestoneExists(project, milestoneId);
 
   const updatedTask: ProjectTaskDocument = {
     ...existingTask,
     ...(input.title !== undefined ? { title: readRequiredString(input.title, 'Task title') } : {}),
     ...(input.status !== undefined ? { status: readRequiredString(input.status, 'Task status') } : {}),
-    ...(input.summary !== undefined ? { summary: readOptionalString(input.summary) } : {}),
-    ...(input.milestoneId !== undefined ? { milestoneId } : {}),
-    ...(input.acceptanceCriteria !== undefined ? { acceptanceCriteria: readStringList(input.acceptanceCriteria, 'Task acceptanceCriteria') } : {}),
-    ...(input.plan !== undefined ? { plan: readStringList(input.plan, 'Task plan') } : {}),
-    ...(input.notes !== undefined ? { notes: readOptionalString(input.notes) } : {}),
-    updatedAt: nowIso(),
+    milestoneId,
   };
 
-  writeProjectTask(taskPath, updatedTask);
+  const nextTasks = [...project.plan.tasks];
+  nextTasks[taskIndex] = updatedTask;
+
+  writeProject(paths.projectFile, {
+    ...project,
+    updatedAt: nowIso(),
+    plan: {
+      ...project.plan,
+      tasks: nextTasks,
+    },
+  });
+
   return readProjectDetailFromProject(input);
 }
 
@@ -507,6 +476,10 @@ export function deleteProjectMilestone(input: DeleteProjectMilestoneInput): Proj
     throw new Error(`Milestone not found in project ${project.id}: ${input.milestoneId}`);
   }
 
+  if ((project.plan.tasks ?? []).some((task) => task.milestoneId === input.milestoneId)) {
+    throw new Error(`Cannot delete milestone ${input.milestoneId} while it still has tasks. Move or delete the tasks first.`);
+  }
+
   const nextMilestones = project.plan.milestones.filter((milestone) => milestone.id !== input.milestoneId);
   const nextCurrentMilestoneId = project.plan.currentMilestoneId === input.milestoneId
     ? nextMilestones[0]?.id
@@ -516,31 +489,11 @@ export function deleteProjectMilestone(input: DeleteProjectMilestoneInput): Proj
     ...project,
     updatedAt: nowIso(),
     plan: {
+      ...project.plan,
       currentMilestoneId: nextCurrentMilestoneId,
       milestones: nextMilestones,
     },
   });
-
-  const tasks = readProjectTasks(paths.tasksDir);
-  for (const task of tasks) {
-    if (task.milestoneId !== input.milestoneId) {
-      continue;
-    }
-
-    writeProjectTask(
-      resolveProjectTaskPath({
-        repoRoot: input.repoRoot,
-        profile: input.profile,
-        projectId: input.projectId,
-        taskId: task.id,
-      }),
-      {
-        ...task,
-        milestoneId: undefined,
-        updatedAt: nowIso(),
-      },
-    );
-  }
 
   return readProjectDetailFromProject(input);
 }
@@ -567,60 +520,57 @@ export function moveProjectMilestone(input: MoveProjectMilestoneInput): ProjectD
 }
 
 export function deleteProjectTaskRecord(input: DeleteProjectTaskRecordInput): ProjectDetail {
-  const { paths } = readProjectRecord(input);
-  const taskPath = resolveProjectTaskPath({
-    repoRoot: input.repoRoot,
-    profile: input.profile,
-    projectId: input.projectId,
-    taskId: input.taskId,
-  });
+  const { paths, project } = readProjectRecord(input);
+  const nextTasks = (project.plan.tasks ?? []).filter((task) => task.id !== input.taskId);
 
-  if (!existsSync(taskPath)) {
+  if (nextTasks.length === (project.plan.tasks ?? []).length) {
     throw new Error(`Task not found in project ${input.projectId}: ${input.taskId}`);
   }
 
-  rmSync(taskPath);
-
-  const tasks = reindexTaskOrder(readProjectTasks(paths.tasksDir));
-  for (const task of tasks) {
-    writeProjectTask(
-      resolveProjectTaskPath({
-        repoRoot: input.repoRoot,
-        profile: input.profile,
-        projectId: input.projectId,
-        taskId: task.id,
-      }),
-      task,
-    );
-  }
+  writeProject(paths.projectFile, {
+    ...project,
+    updatedAt: nowIso(),
+    plan: {
+      ...project.plan,
+      tasks: nextTasks,
+    },
+  });
 
   return readProjectDetailFromProject(input);
 }
 
 export function moveProjectTaskRecord(input: MoveProjectTaskRecordInput): ProjectDetail {
-  const { paths } = readProjectRecord(input);
-  const tasks = reindexTaskOrder(readProjectTasks(paths.tasksDir));
-  const taskIndex = tasks.findIndex((task) => task.id === input.taskId);
+  const { paths, project } = readProjectRecord(input);
+  const tasks = sortProjectTasks(project.plan.tasks ?? []);
+  const task = tasks.find((entry) => entry.id === input.taskId);
 
-  if (taskIndex === -1) {
+  if (!task) {
     throw new Error(`Task not found in project ${input.projectId}: ${input.taskId}`);
   }
 
-  const movedTasks = reindexTaskOrder(moveArrayItem(tasks, taskIndex, input.direction));
-  for (const task of movedTasks) {
-    writeProjectTask(
-      resolveProjectTaskPath({
-        repoRoot: input.repoRoot,
-        profile: input.profile,
-        projectId: input.projectId,
-        taskId: task.id,
-      }),
-      {
-        ...task,
-        updatedAt: nowIso(),
-      },
-    );
-  }
+  const milestoneTasks = tasks.filter((entry) => entry.milestoneId === task.milestoneId);
+  const taskIndex = milestoneTasks.findIndex((entry) => entry.id === input.taskId);
+  const movedMilestoneTasks = moveArrayItem(milestoneTasks, taskIndex, input.direction);
+
+  let milestoneCursor = 0;
+  const nextTasks = tasks.map((entry) => {
+    if (entry.milestoneId !== task.milestoneId) {
+      return entry;
+    }
+
+    const replacement = movedMilestoneTasks[milestoneCursor];
+    milestoneCursor += 1;
+    return replacement as ProjectTaskDocument;
+  });
+
+  writeProject(paths.projectFile, {
+    ...project,
+    updatedAt: nowIso(),
+    plan: {
+      ...project.plan,
+      tasks: nextTasks,
+    },
+  });
 
   return readProjectDetailFromProject(input);
 }
@@ -646,39 +596,5 @@ export function saveProjectSource(input: SaveProjectSourceInput): ProjectDetail 
   }
 
   writeFileSync(paths.projectFile, formatProject(parsedProject));
-  return readProjectDetailFromProject(input);
-}
-
-export function readProjectTaskSource(options: {
-  repoRoot?: string;
-  profile: string;
-  projectId: string;
-  taskId: string;
-}): { path: string; content: string } {
-  const taskPath = resolveProjectTaskPath(options);
-
-  if (!existsSync(taskPath)) {
-    throw new Error(`Task not found in project ${options.projectId}: ${options.taskId}`);
-  }
-
-  return {
-    path: taskPath,
-    content: readFileSync(taskPath, 'utf-8'),
-  };
-}
-
-export function saveProjectTaskSource(input: SaveProjectTaskSourceInput): ProjectDetail {
-  const taskPath = resolveProjectTaskPath(input);
-
-  if (!existsSync(taskPath)) {
-    throw new Error(`Task not found in project ${input.projectId}: ${input.taskId}`);
-  }
-
-  const parsedTask = parseProjectTask(input.content);
-  if (parsedTask.id !== input.taskId) {
-    throw new Error(`Task YAML id must match route id ${input.taskId}.`);
-  }
-
-  writeFileSync(taskPath, formatProjectTask(parsedTask));
   return readProjectDetailFromProject(input);
 }

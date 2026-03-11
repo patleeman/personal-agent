@@ -248,15 +248,26 @@ export function Sidebar() {
 
   async function handleNewConversation() {
     if (creating) return;
+
+    const draftPath = '/conversations/new';
+    navigate(draftPath);
     setCreating(true);
+
     try {
       const data = await api.createLiveSession();
       openSession(data.id);
-      navigate(`/conversations/${data.id}`);
+
+      if (window.location.pathname === draftPath) {
+        navigate(`/conversations/${data.id}`, { replace: true });
+      }
+
       // Refetch after a brief delay so the new session file appears in the shelf
       setTimeout(() => void refetch(), 1500);
     } catch (err) {
       console.error('Failed to create session:', err);
+      if (window.location.pathname === draftPath) {
+        navigate('/inbox', { replace: true });
+      }
     } finally {
       setCreating(false);
     }
@@ -362,7 +373,7 @@ export function Sidebar() {
       </div>
 
       <SidebarFooter
-        profileState={profileState}
+        profileState={profileState ?? undefined}
         switchingProfile={switchingProfile}
         profileError={profileError}
         theme={theme}

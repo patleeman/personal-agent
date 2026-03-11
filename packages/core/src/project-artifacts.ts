@@ -6,7 +6,7 @@ const FRONTMATTER_DELIMITER = '---';
 
 export type ProjectStatus = 'created' | 'in_progress' | 'blocked' | 'completed' | 'cancelled';
 export type ProjectMilestoneStatus = 'pending' | 'in_progress' | 'blocked' | 'completed' | 'cancelled';
-export type ProjectTaskStatus = 'pending' | 'running' | 'blocked' | 'completed' | 'failed' | 'cancelled';
+export type ProjectTaskStatus = 'pending' | 'in_progress' | 'blocked' | 'completed' | 'cancelled';
 
 export interface ProjectMilestoneDocument {
   id: string;
@@ -15,9 +15,17 @@ export interface ProjectMilestoneDocument {
   summary?: string;
 }
 
+export interface ProjectTaskDocument {
+  id: string;
+  status: ProjectTaskStatus | (string & {});
+  title: string;
+  milestoneId: string;
+}
+
 export interface ProjectPlanDocument {
   currentMilestoneId?: string;
   milestones: ProjectMilestoneDocument[];
+  tasks: ProjectTaskDocument[];
 }
 
 export interface ProjectDocument {
@@ -54,20 +62,6 @@ export interface ProjectActivityEntryDocument {
   relatedProjectIds?: string[];
   relatedConversationIds?: string[];
   notificationState?: ProjectActivityNotificationState;
-}
-
-export interface ProjectTaskDocument {
-  id: string;
-  createdAt: string;
-  updatedAt: string;
-  status: ProjectTaskStatus | (string & {});
-  title: string;
-  summary?: string;
-  order?: number;
-  milestoneId?: string;
-  acceptanceCriteria?: string[];
-  plan?: string[];
-  notes?: string;
 }
 
 interface FrontmatterSection {
@@ -168,20 +162,6 @@ function readOptionalYamlStringArray(
   return readYamlStringArray(value, `${label}.${key}`);
 }
 
-function readOptionalYamlNumber(object: Record<string, unknown>, key: string, label: string): number | undefined {
-  const value = object[key];
-
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new Error(`${label}.${key} must be a number.`);
-  }
-
-  return value;
-}
-
 function readRequiredYamlObject(
   object: Record<string, unknown>,
   key: string,
@@ -207,8 +187,9 @@ function stringifyYamlDocument(value: Record<string, unknown>): string {
   }).trimEnd() + '\n';
 }
 
-function validateMilestones(
+function validateProjectPlan(
   milestones: ProjectMilestoneDocument[],
+  tasks: ProjectTaskDocument[],
   currentMilestoneId: string | undefined,
   label: string,
 ): void {
@@ -225,6 +206,19 @@ function validateMilestones(
   if (currentMilestoneId && !seenMilestoneIds.has(currentMilestoneId)) {
     throw new Error(`Current milestone id ${currentMilestoneId} does not exist in ${label}.`);
   }
+
+  const seenTaskIds = new Set<string>();
+  for (const task of tasks) {
+    if (seenTaskIds.has(task.id)) {
+      throw new Error(`Duplicate task id in ${label}: ${task.id}`);
+    }
+
+    seenTaskIds.add(task.id);
+
+    if (!seenMilestoneIds.has(task.milestoneId)) {
+      throw new Error(`Task ${task.id} references missing milestone ${task.milestoneId} in ${label}.`);
+    }
+  }
 }
 
 function parseProjectMilestone(value: unknown, label: string): ProjectMilestoneDocument {
@@ -238,6 +232,17 @@ function parseProjectMilestone(value: unknown, label: string): ProjectMilestoneD
   };
 }
 
+function parseProjectTaskValue(value: unknown, label: string): ProjectTaskDocument {
+  const object = assertPlainObject(value, label);
+
+  return {
+    id: readRequiredYamlString(object, 'id', label),
+    status: readRequiredYamlString(object, 'status', label),
+    title: readRequiredYamlString(object, 'title', label),
+    milestoneId: readRequiredYamlString(object, 'milestoneId', label),
+  };
+}
+
 function formatProjectPlan(plan: ProjectPlanDocument): Record<string, unknown> {
   const currentMilestoneId = normalizeOptionalText(plan.currentMilestoneId, 'Project currentMilestoneId');
   const milestones = plan.milestones.map((milestone, index) => ({
@@ -248,13 +253,25 @@ function formatProjectPlan(plan: ProjectPlanDocument): Record<string, unknown> {
       ? { summary: normalizeOptionalText(milestone.summary, `Project milestone[${index}] summary`) }
       : {}),
   }));
+  const tasks = plan.tasks.map((task, index) => ({
+    id: assertNonEmptyText(task.id, `Project task[${index}] id`),
+    status: assertNonEmptyText(task.status, `Project task[${index}] status`),
+    title: assertNonEmptyText(task.title, `Project task[${index}] title`),
+    milestoneId: assertNonEmptyText(task.milestoneId, `Project task[${index}] milestoneId`),
+  }));
 
-  validateMilestones(
+  validateProjectPlan(
     milestones.map((milestone) => ({
       id: milestone.id as string,
       title: milestone.title as string,
       status: milestone.status as ProjectMilestoneStatus,
       summary: milestone.summary as string | undefined,
+    })),
+    tasks.map((task) => ({
+      id: task.id as string,
+      status: task.status as ProjectTaskStatus,
+      title: task.title as string,
+      milestoneId: task.milestoneId as string,
     })),
     currentMilestoneId,
     'project plan',
@@ -263,6 +280,7 @@ function formatProjectPlan(plan: ProjectPlanDocument): Record<string, unknown> {
   return {
     ...(currentMilestoneId ? { currentMilestoneId } : {}),
     milestones,
+    ...(tasks.length > 0 ? { tasks } : {}),
   };
 }
 
@@ -293,6 +311,7 @@ export function createInitialProject(input: {
         { id: 'execute-work', title: 'Execute the work', status: 'pending' },
         { id: 'verify-result', title: 'Verify the result', status: 'pending' },
       ],
+      tasks: [],
     },
   };
 }
@@ -324,6 +343,7 @@ export function parseProject(yaml: string): ProjectDocument {
   const object = parseYamlDocument(yaml, 'Project');
   const planObject = readRequiredYamlObject(object, 'plan', 'Project');
   const milestoneValues = planObject.milestones;
+  const taskValues = planObject.tasks;
 
   let parsedMilestones: ProjectMilestoneDocument[] = [];
   if (milestoneValues !== undefined) {
@@ -334,8 +354,17 @@ export function parseProject(yaml: string): ProjectDocument {
     parsedMilestones = milestoneValues.map((value, index) => parseProjectMilestone(value, `Project.plan.milestones[${index}]`));
   }
 
+  let parsedTasks: ProjectTaskDocument[] = [];
+  if (taskValues !== undefined) {
+    if (!Array.isArray(taskValues)) {
+      throw new Error('Project.plan.tasks must be a YAML list.');
+    }
+
+    parsedTasks = taskValues.map((value, index) => parseProjectTaskValue(value, `Project.plan.tasks[${index}]`));
+  }
+
   const currentMilestoneId = readOptionalYamlString(planObject, 'currentMilestoneId', 'Project.plan');
-  validateMilestones(parsedMilestones, currentMilestoneId, 'Project.plan');
+  validateProjectPlan(parsedMilestones, parsedTasks, currentMilestoneId, 'Project.plan');
 
   return {
     id: readRequiredYamlString(object, 'id', 'Project'),
@@ -350,6 +379,7 @@ export function parseProject(yaml: string): ProjectDocument {
     plan: {
       currentMilestoneId,
       milestones: parsedMilestones,
+      tasks: parsedTasks,
     },
   };
 }
@@ -616,55 +646,24 @@ export function writeProjectActivityEntry(path: string, document: ProjectActivit
 
 export function createProjectTask(input: {
   id: string;
-  createdAt: string;
-  updatedAt?: string;
   status: ProjectTaskDocument['status'];
   title: string;
-  summary?: string;
-  order?: number;
-  milestoneId?: string;
-  acceptanceCriteria?: string[];
-  plan?: string[];
-  notes?: string;
+  milestoneId: string;
 }): ProjectTaskDocument {
   return {
     id: assertNonEmptyText(input.id, 'Task id'),
-    createdAt: assertNonEmptyText(input.createdAt, 'Task createdAt'),
-    updatedAt: assertNonEmptyText(input.updatedAt ?? input.createdAt, 'Task updatedAt'),
     status: assertNonEmptyText(input.status, 'Task status'),
     title: assertNonEmptyText(input.title, 'Task title'),
-    ...(input.order !== undefined ? { order: input.order } : {}),
-    summary: normalizeOptionalText(input.summary, 'Task summary'),
-    milestoneId: normalizeOptionalText(input.milestoneId, 'Task milestoneId'),
-    acceptanceCriteria: normalizeOptionalTextList(input.acceptanceCriteria, 'Task acceptanceCriteria'),
-    plan: normalizeOptionalTextList(input.plan, 'Task plan'),
-    notes: normalizeOptionalText(input.notes, 'Task notes'),
+    milestoneId: assertNonEmptyText(input.milestoneId, 'Task milestoneId'),
   };
 }
 
 export function formatProjectTask(document: ProjectTaskDocument): string {
   const output: Record<string, unknown> = {
     id: assertNonEmptyText(document.id, 'Task id'),
-    createdAt: assertNonEmptyText(document.createdAt, 'Task createdAt'),
-    updatedAt: assertNonEmptyText(document.updatedAt, 'Task updatedAt'),
     status: assertNonEmptyText(document.status, 'Task status'),
     title: assertNonEmptyText(document.title, 'Task title'),
-    ...(document.order !== undefined ? { order: document.order } : {}),
-    ...(normalizeOptionalText(document.summary, 'Task summary')
-      ? { summary: normalizeOptionalText(document.summary, 'Task summary') }
-      : {}),
-    ...(normalizeOptionalText(document.milestoneId, 'Task milestoneId')
-      ? { milestoneId: normalizeOptionalText(document.milestoneId, 'Task milestoneId') }
-      : {}),
-    ...(normalizeOptionalTextList(document.acceptanceCriteria, 'Task acceptanceCriteria')
-      ? { acceptanceCriteria: normalizeOptionalTextList(document.acceptanceCriteria, 'Task acceptanceCriteria') }
-      : {}),
-    ...(normalizeOptionalTextList(document.plan, 'Task plan')
-      ? { plan: normalizeOptionalTextList(document.plan, 'Task plan') }
-      : {}),
-    ...(normalizeOptionalText(document.notes, 'Task notes')
-      ? { notes: normalizeOptionalText(document.notes, 'Task notes') }
-      : {}),
+    milestoneId: assertNonEmptyText(document.milestoneId, 'Task milestoneId'),
   };
 
   return stringifyYamlDocument(output);
@@ -675,16 +674,9 @@ export function parseProjectTask(yaml: string): ProjectTaskDocument {
 
   return {
     id: readRequiredYamlString(object, 'id', 'Task'),
-    createdAt: readRequiredYamlString(object, 'createdAt', 'Task'),
-    updatedAt: readRequiredYamlString(object, 'updatedAt', 'Task'),
     status: readRequiredYamlString(object, 'status', 'Task'),
     title: readRequiredYamlString(object, 'title', 'Task'),
-    order: readOptionalYamlNumber(object, 'order', 'Task'),
-    summary: readOptionalYamlString(object, 'summary', 'Task'),
-    milestoneId: readOptionalYamlString(object, 'milestoneId', 'Task'),
-    acceptanceCriteria: readOptionalYamlStringArray(object, 'acceptanceCriteria', 'Task'),
-    plan: readOptionalYamlStringArray(object, 'plan', 'Task'),
-    notes: readOptionalYamlString(object, 'notes', 'Task'),
+    milestoneId: readRequiredYamlString(object, 'milestoneId', 'Task'),
   };
 }
 

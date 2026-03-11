@@ -65,7 +65,6 @@ describe('project agent extension', () => {
       'tool-1',
       {
         action: 'create',
-        projectId: 'web-ui',
         description: 'Build the web UI shell.',
       },
       undefined,
@@ -74,25 +73,25 @@ describe('project agent extension', () => {
     );
 
     expect(result.isError).not.toBe(true);
-    expect(result.content[0]?.text).toContain('Created and referenced @web-ui');
+    expect(result.content[0]?.text).toContain('Created and referenced @build-the-web-ui-shell');
 
-    const detail = readProjectDetailFromProject({ repoRoot, profile: 'datadog', projectId: 'web-ui' });
+    const detail = readProjectDetailFromProject({ repoRoot, profile: 'datadog', projectId: 'build-the-web-ui-shell' });
     expect(detail.project.description).toBe('Build the web UI shell.');
 
     const link = getConversationProjectLink({ repoRoot, profile: 'datadog', conversationId: 'conv-123' });
-    expect(link?.relatedProjectIds).toEqual(['web-ui']);
+    expect(link?.relatedProjectIds).toEqual(['build-the-web-ui-shell']);
   });
 
   it('adds milestones and tasks to an existing project', async () => {
     const repoRoot = createTempRepo();
     const projectTool = registerProjectTool(repoRoot);
     const ctx = createToolContext();
+    const createdProjectId = 'build-the-artifact-model';
 
     await projectTool.execute(
       'tool-1',
       {
         action: 'create',
-        projectId: 'artifact-model',
         description: 'Build the artifact model.',
         referenceInConversation: false,
       },
@@ -105,8 +104,7 @@ describe('project agent extension', () => {
       'tool-2',
       {
         action: 'add_milestone',
-        projectId: 'artifact-model',
-        milestoneId: 'schema',
+        projectId: createdProjectId,
         title: 'Finalize the schema',
         milestoneStatus: 'in_progress',
         makeCurrent: true,
@@ -120,13 +118,10 @@ describe('project agent extension', () => {
       'tool-3',
       {
         action: 'add_task',
-        projectId: 'artifact-model',
-        taskId: 'write-parser',
+        projectId: createdProjectId,
         title: 'Write the YAML parser',
-        taskStatus: 'running',
-        taskMilestoneId: 'schema',
-        acceptanceCriteria: ['project YAML parses correctly'],
-        taskPlan: ['implement parser', 'add tests'],
+        taskStatus: 'in_progress',
+        taskMilestoneId: 'finalize-the-schema',
       },
       undefined,
       undefined,
@@ -134,15 +129,15 @@ describe('project agent extension', () => {
     );
 
     expect(taskResult.isError).not.toBe(true);
-    expect(taskResult.content[0]?.text).toContain('Added task write-parser');
+    expect(taskResult.content[0]?.text).toContain(`Added task to project ${createdProjectId}`);
 
-    const detail = readProjectDetailFromProject({ repoRoot, profile: 'datadog', projectId: 'artifact-model' });
-    expect(detail.project.plan.currentMilestoneId).toBe('schema');
-    expect(detail.project.plan.milestones.some((milestone) => milestone.id === 'schema')).toBe(true);
+    const detail = readProjectDetailFromProject({ repoRoot, profile: 'datadog', projectId: createdProjectId });
+    expect(detail.project.plan.currentMilestoneId).toBe('finalize-the-schema');
+    expect(detail.project.plan.milestones.some((milestone) => milestone.id === 'finalize-the-schema')).toBe(true);
     expect(detail.tasks[0]).toEqual(expect.objectContaining({
-      id: 'write-parser',
-      status: 'running',
-      milestoneId: 'schema',
+      id: 'write-the-yaml-parser',
+      status: 'in_progress',
+      milestoneId: 'finalize-the-schema',
     }));
   });
 });

@@ -10,7 +10,7 @@ import { readSavedModelPreferences } from './modelPreferences.js';
 import { getProfileConfigFilePath, readSavedProfilePreferences, resolveActiveProfile, writeSavedProfilePreferences, } from './profilePreferences.js';
 import { createProjectAgentExtension } from './projectAgentExtension.js';
 import { createSession, resumeSession, getLiveSessions, getSessionStats, getSessionContextUsage, getAvailableModels, isLive, subscribe, promptSession, queuePromptContext, compactSession, reloadSessionResources, exportSessionHtml, renameSession, abortSession, destroySession, forkSession, registry as liveRegistry, } from './liveSessions.js';
-import { buildReferencedMemoryDocsContext, buildReferencedTasksContext, pickPromptReferencesInOrder, resolvePromptReferences, } from './promptReferences.js';
+import { buildReferencedMemoryDocsContext, buildReferencedProfilesContext, buildReferencedSkillsContext, buildReferencedTasksContext, pickPromptReferencesInOrder, resolvePromptReferences, } from './promptReferences.js';
 import { addConversationProjectLink, getConversationProjectLink, listProfileActivityEntries, listProjectIds, readProject, removeConversationProjectLink, resolveProjectPaths, setConversationProjectLinks, } from '@personal-agent/core';
 import { listProfiles, materializeProfileToAgentDir, resolveResourceProfile, } from '@personal-agent/resources';
 import { addProjectMilestone, createProjectRecord, createProjectTaskRecord, deleteProjectMilestone, deleteProjectRecord, deleteProjectTaskRecord, moveProjectMilestone, moveProjectTaskRecord, readProjectDetailFromProject, readProjectSource, saveProjectSource, updateProjectMilestone, updateProjectRecord, updateProjectTaskRecord, } from './projects.js';
@@ -625,21 +625,42 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
             res.status(400).json({ error: 'text or images required' });
             return;
         }
+        const currentProfile = getCurrentProfile();
         const tasks = listTasksForCurrentProfile();
         const memoryDocs = listMemoryDocsForCurrentProfile();
+        const skills = listSkillsForCurrentProfile();
+        const currentProfileAgent = getCurrentProfileAgentItem();
         const promptReferences = resolvePromptReferences({
             text,
-            availableProjectIds: listProjectIds({ repoRoot: REPO_ROOT, profile: getCurrentProfile() }),
+            availableProjectIds: listProjectIds({ repoRoot: REPO_ROOT, profile: currentProfile }),
             tasks,
             memoryDocs,
+            skills,
+            profiles: currentProfileAgent ? [{
+                    id: 'profile',
+                    profile: currentProfile,
+                    source: currentProfileAgent.source,
+                    path: currentProfileAgent.path,
+                }] : [],
         });
         const relatedProjectIds = syncConversationProjectReferences(id, promptReferences.projectIds);
         const referencedTasks = pickPromptReferencesInOrder(promptReferences.taskIds, tasks);
         const referencedMemoryDocs = pickPromptReferencesInOrder(promptReferences.memoryDocIds, memoryDocs);
+        const referencedSkills = pickPromptReferencesInOrder(promptReferences.skillNames, skills);
+        const referencedProfiles = currentProfileAgent && promptReferences.profileIds.includes('profile')
+            ? [{
+                    id: 'profile',
+                    profile: currentProfile,
+                    source: currentProfileAgent.source,
+                    path: currentProfileAgent.path,
+                }]
+            : [];
         const queuedContextBlocks = [
             relatedProjectIds.length > 0 ? buildReferencedProjectsContext(relatedProjectIds) : '',
             referencedTasks.length > 0 ? buildReferencedTasksContext(referencedTasks, REPO_ROOT) : '',
             referencedMemoryDocs.length > 0 ? buildReferencedMemoryDocsContext(referencedMemoryDocs, REPO_ROOT) : '',
+            referencedSkills.length > 0 ? buildReferencedSkillsContext(referencedSkills, REPO_ROOT) : '',
+            referencedProfiles.length > 0 ? buildReferencedProfilesContext(referencedProfiles, REPO_ROOT) : '',
         ].filter(Boolean);
         if (queuedContextBlocks.length > 0) {
             await queuePromptContext(id, 'referenced_context', queuedContextBlocks.join('\n\n'));
@@ -657,6 +678,8 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
             relatedProjectIds,
             referencedTaskIds: promptReferences.taskIds,
             referencedMemoryDocIds: promptReferences.memoryDocIds,
+            referencedSkillNames: promptReferences.skillNames,
+            referencedProfileIds: promptReferences.profileIds,
         });
     }
     catch (err) {
@@ -1216,6 +1239,47 @@ function listMemoryDocsForCurrentProfile() {
     }
     return memoryDocs;
 }
+function listSkillsForCurrentProfile() {
+    const profile = getCurrentProfile();
+    const skills = [];
+    const skillSources = profile === 'shared' ? ['shared'] : ['shared', profile];
+    for (const src of skillSources) {
+        const dir = join(REPO_ROOT, `profiles/${src}/agent/skills`);
+        if (!existsSync(dir)) {
+            continue;
+        }
+        for (const name of readdirSync(dir)) {
+            const skillMd = join(dir, name, 'SKILL.md');
+            if (!existsSync(skillMd)) {
+                continue;
+            }
+            const fm = parseFrontmatter(skillMd);
+            skills.push({
+                source: src,
+                name: String(fm.name ?? name),
+                description: String(fm.description ?? ''),
+                path: skillMd,
+                recentSessionCount: 0,
+                lastUsedAt: null,
+                usedInLastSession: false,
+            });
+        }
+    }
+    return skills;
+}
+function getCurrentProfileAgentItem() {
+    const profile = getCurrentProfile();
+    const filePath = join(REPO_ROOT, `profiles/${profile}/agent/AGENTS.md`);
+    if (!existsSync(filePath)) {
+        return null;
+    }
+    return {
+        source: profile,
+        path: filePath,
+        exists: true,
+        content: readFileSync(filePath, 'utf-8'),
+    };
+}
 function buildRecentReadUsage(trackedPaths) {
     const usageMap = new Map();
     const tracked = new Set(trackedPaths.map((itemPath) => normalize(itemPath)));
@@ -1293,28 +1357,7 @@ app.get('/api/memory', (_req, res) => {
                 content: existsSync(profilePath) ? readFileSync(profilePath, 'utf-8') : undefined,
             });
         }
-        const skills = [];
-        const skillSources = profile === 'shared' ? ['shared'] : ['shared', profile];
-        for (const src of skillSources) {
-            const dir = join(REPO_ROOT, `profiles/${src}/agent/skills`);
-            if (!existsSync(dir))
-                continue;
-            for (const name of readdirSync(dir)) {
-                const skillMd = join(dir, name, 'SKILL.md');
-                if (!existsSync(skillMd))
-                    continue;
-                const fm = parseFrontmatter(skillMd);
-                skills.push({
-                    source: src,
-                    name: String(fm.name ?? name),
-                    description: String(fm.description ?? ''),
-                    path: skillMd,
-                    recentSessionCount: 0,
-                    lastUsedAt: null,
-                    usedInLastSession: false,
-                });
-            }
-        }
+        const skills = listSkillsForCurrentProfile();
         const memoryDocs = listMemoryDocsForCurrentProfile();
         const usageByPath = buildRecentReadUsage([
             ...skills.map((item) => item.path),

@@ -3,6 +3,7 @@
  * Wraps @mariozechner/pi-coding-agent SDK sessions in-process and
  * exposes a pub/sub SSE event layer for the web server.
  */
+import { appendFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import {
@@ -16,6 +17,7 @@ import {
   type ExtensionFactory,
 } from '@mariozechner/pi-coding-agent';
 import { invalidateAppTopics, publishAppEvent } from './appEvents.js';
+import { buildDisplayBlocksFromEntries, type DisplayBlock } from './sessions.js';
 import { estimateContextUsageSegments } from './sessionContextUsage.js';
 
 const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
@@ -38,6 +40,7 @@ export interface LiveContextUsage {
 }
 
 export type SseEvent =
+  | { type: 'snapshot';        blocks: DisplayBlock[] }
   | { type: 'agent_start' }
   | { type: 'agent_end' }
   | { type: 'turn_end' }
@@ -81,6 +84,61 @@ function makeAuth() {
 
 function makeRegistry(auth: AuthStorage) {
   return new ModelRegistry(auth);
+}
+
+interface PersistableSessionManager {
+  persist?: boolean;
+  sessionFile?: string;
+  flushed?: boolean;
+  _rewriteFile?: () => void;
+  _persist?: (entry: unknown) => void;
+}
+
+const SESSION_MANAGER_PERSISTENCE_PATCH = Symbol('pa.session-manager-persistence-patch');
+
+export function patchSessionManagerPersistence(sessionManager: SessionManager): void {
+  const manager = sessionManager as SessionManager & PersistableSessionManager & {
+    [SESSION_MANAGER_PERSISTENCE_PATCH]?: boolean;
+  };
+
+  if (manager[SESSION_MANAGER_PERSISTENCE_PATCH]) {
+    return;
+  }
+
+  if (typeof manager._rewriteFile !== 'function') {
+    return;
+  }
+
+  const rewriteFile = manager._rewriteFile.bind(manager);
+  manager._persist = (entry: unknown) => {
+    if (!manager.persist || !manager.sessionFile) {
+      return;
+    }
+
+    if (!manager.flushed || !existsSync(manager.sessionFile)) {
+      rewriteFile();
+      manager.flushed = true;
+      return;
+    }
+
+    appendFileSync(manager.sessionFile, `${JSON.stringify(entry)}\n`);
+  };
+
+  manager[SESSION_MANAGER_PERSISTENCE_PATCH] = true;
+}
+
+export function ensureSessionFileExists(sessionManager: SessionManager): void {
+  const manager = sessionManager as SessionManager & PersistableSessionManager;
+  if (!manager.persist || !manager.sessionFile || typeof manager._rewriteFile !== 'function') {
+    return;
+  }
+
+  if (existsSync(manager.sessionFile) && manager.flushed) {
+    return;
+  }
+
+  manager._rewriteFile();
+  manager.flushed = true;
 }
 
 function summarizeUserMessageContent(content: unknown): { text: string; imageCount: number } {
@@ -136,6 +194,29 @@ function readContextUsagePayload(session: AgentSession): LiveContextUsage | null
   } catch {
     return null;
   }
+}
+
+function buildLiveSnapshotBlocks(session: AgentSession): DisplayBlock[] {
+  const state = session.state;
+  const messages = state.messages.slice();
+  const streamMessage = state.streamMessage;
+
+  if (streamMessage) {
+    messages.push(streamMessage);
+  }
+
+  return buildDisplayBlocksFromEntries(messages.map((message, index) => ({
+    id: `live-${index}`,
+    timestamp: typeof (message as { timestamp?: string | number }).timestamp !== 'undefined'
+      ? (message as { timestamp?: string | number }).timestamp
+      : index,
+    message: {
+      role: (message as { role?: string }).role ?? 'unknown',
+      content: (message as { content?: unknown }).content,
+      toolCallId: (message as { toolCallId?: string }).toolCallId,
+      toolName: (message as { toolName?: string }).toolName,
+    },
+  })));
 }
 
 function broadcastTitle(entry: LiveEntry): void {
@@ -350,6 +431,9 @@ export async function createSession(
     sessionManager: SessionManager.create(cwd, SESSIONS_DIR),
   });
 
+  patchSessionManagerPersistence(session.sessionManager);
+  ensureSessionFileExists(session.sessionManager);
+
   const id = session.sessionId;
   wireSession(id, session, cwd);
   return { id, sessionFile: session.sessionFile ?? '' };
@@ -378,6 +462,8 @@ export async function resumeSession(
     sessionManager: SessionManager.open(sessionFile),
   });
 
+  patchSessionManagerPersistence(session.sessionManager);
+
   // Derive cwd from the session file directory name (best-effort)
   const derivedCwd = sessionFile.replace(/[/\\][^/\\]+$/, '') ?? process.cwd();
   const id = session.sessionId;
@@ -394,6 +480,7 @@ export function subscribe(
   if (!entry) return null;
   entry.listeners.add(listener);
 
+  listener({ type: 'snapshot', blocks: buildLiveSnapshotBlocks(entry.session) });
   if (entry.sentTitle && entry.title) {
     listener({ type: 'title_update', title: entry.title });
   }
@@ -405,9 +492,10 @@ export function subscribe(
   return () => entry.listeners.delete(listener);
 }
 
-/** Send a prompt to a live session. */
-export async function queueReferencedProjectsContext(
+/** Queue hidden context for the next turn of a live session. */
+export async function queuePromptContext(
   sessionId: string,
+  customType: string,
   content: string,
 ): Promise<void> {
   const entry = registry.get(sessionId);
@@ -418,7 +506,7 @@ export async function queueReferencedProjectsContext(
   }
 
   await entry.session.sendCustomMessage({
-    customType: 'referenced_projects',
+    customType,
     content: message,
     display: false,
     details: undefined,
@@ -494,6 +582,9 @@ export async function forkSession(
 
   const { cancelled } = await entry.session.fork(entryId);
   if (cancelled) throw new Error('Fork cancelled');
+
+  patchSessionManagerPersistence(entry.session.sessionManager);
+  ensureSessionFileExists(entry.session.sessionManager);
 
   // fork() creates a new session file and switches the current session to it
   const newId   = entry.session.sessionId;

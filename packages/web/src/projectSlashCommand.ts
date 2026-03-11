@@ -1,9 +1,9 @@
 import { parseSlashInput } from './slashMenu';
 
-export const PROJECT_SLASH_USAGE = 'Usage: /project new <id> <description> | /project reference <id> | /project unreference <id>';
+export const PROJECT_SLASH_USAGE = 'Usage: /project new <description> | /project reference <id> | /project unreference <id>';
 
 export type ProjectSlashCommand =
-  | { action: 'new'; projectId: string; description: string }
+  | { action: 'new'; description: string }
   | { action: 'reference'; projectId: string }
   | { action: 'unreference'; projectId: string };
 
@@ -26,13 +26,12 @@ export function parseProjectSlashCommand(input: string): ProjectSlashParseResult
   const subcommand = rawSubcommand.toLowerCase();
 
   if (subcommand === 'new' || subcommand === 'create') {
-    const projectId = restTokens[0]?.trim() ?? '';
-    const description = restTokens.slice(1).join(' ').trim();
+    const description = restTokens.join(' ').trim();
 
-    if (!projectId || !description) {
+    if (!description) {
       return {
         kind: 'invalid',
-        message: 'Usage: /project new <id> <description>',
+        message: 'Usage: /project new <description>',
       };
     }
 
@@ -40,7 +39,6 @@ export function parseProjectSlashCommand(input: string): ProjectSlashParseResult
       kind: 'command',
       command: {
         action: 'new',
-        projectId,
         description,
       },
     };

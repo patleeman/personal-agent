@@ -3,10 +3,12 @@
  * Wraps @mariozechner/pi-coding-agent SDK sessions in-process and
  * exposes a pub/sub SSE event layer for the web server.
  */
+import { appendFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { AuthStorage, DefaultResourceLoader, ModelRegistry, SessionManager, createAgentSession, } from '@mariozechner/pi-coding-agent';
 import { invalidateAppTopics, publishAppEvent } from './appEvents.js';
+import { buildDisplayBlocksFromEntries } from './sessions.js';
 import { estimateContextUsageSegments } from './sessionContextUsage.js';
 const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
 const SESSIONS_DIR = join(AGENT_DIR, 'sessions');
@@ -18,6 +20,40 @@ function makeAuth() {
 }
 function makeRegistry(auth) {
     return new ModelRegistry(auth);
+}
+const SESSION_MANAGER_PERSISTENCE_PATCH = Symbol('pa.session-manager-persistence-patch');
+export function patchSessionManagerPersistence(sessionManager) {
+    const manager = sessionManager;
+    if (manager[SESSION_MANAGER_PERSISTENCE_PATCH]) {
+        return;
+    }
+    if (typeof manager._rewriteFile !== 'function') {
+        return;
+    }
+    const rewriteFile = manager._rewriteFile.bind(manager);
+    manager._persist = (entry) => {
+        if (!manager.persist || !manager.sessionFile) {
+            return;
+        }
+        if (!manager.flushed || !existsSync(manager.sessionFile)) {
+            rewriteFile();
+            manager.flushed = true;
+            return;
+        }
+        appendFileSync(manager.sessionFile, `${JSON.stringify(entry)}\n`);
+    };
+    manager[SESSION_MANAGER_PERSISTENCE_PATCH] = true;
+}
+export function ensureSessionFileExists(sessionManager) {
+    const manager = sessionManager;
+    if (!manager.persist || !manager.sessionFile || typeof manager._rewriteFile !== 'function') {
+        return;
+    }
+    if (existsSync(manager.sessionFile) && manager.flushed) {
+        return;
+    }
+    manager._rewriteFile();
+    manager.flushed = true;
 }
 function summarizeUserMessageContent(content) {
     const blocks = Array.isArray(content)
@@ -65,6 +101,26 @@ function readContextUsagePayload(session) {
     catch {
         return null;
     }
+}
+function buildLiveSnapshotBlocks(session) {
+    const state = session.state;
+    const messages = state.messages.slice();
+    const streamMessage = state.streamMessage;
+    if (streamMessage) {
+        messages.push(streamMessage);
+    }
+    return buildDisplayBlocksFromEntries(messages.map((message, index) => ({
+        id: `live-${index}`,
+        timestamp: typeof message.timestamp !== 'undefined'
+            ? message.timestamp
+            : index,
+        message: {
+            role: message.role ?? 'unknown',
+            content: message.content,
+            toolCallId: message.toolCallId,
+            toolName: message.toolName,
+        },
+    })));
 }
 function broadcastTitle(entry) {
     if (!entry.title) {
@@ -255,6 +311,8 @@ export async function createSession(cwd, options = {}) {
         resourceLoader,
         sessionManager: SessionManager.create(cwd, SESSIONS_DIR),
     });
+    patchSessionManagerPersistence(session.sessionManager);
+    ensureSessionFileExists(session.sessionManager);
     const id = session.sessionId;
     wireSession(id, session, cwd);
     return { id, sessionFile: session.sessionFile ?? '' };
@@ -278,6 +336,7 @@ export async function resumeSession(sessionFile, options = {}) {
         resourceLoader,
         sessionManager: SessionManager.open(sessionFile),
     });
+    patchSessionManagerPersistence(session.sessionManager);
     // Derive cwd from the session file directory name (best-effort)
     const derivedCwd = sessionFile.replace(/[/\\][^/\\]+$/, '') ?? process.cwd();
     const id = session.sessionId;
@@ -290,6 +349,7 @@ export function subscribe(sessionId, listener) {
     if (!entry)
         return null;
     entry.listeners.add(listener);
+    listener({ type: 'snapshot', blocks: buildLiveSnapshotBlocks(entry.session) });
     if (entry.sentTitle && entry.title) {
         listener({ type: 'title_update', title: entry.title });
     }
@@ -299,8 +359,8 @@ export function subscribe(sessionId, listener) {
     }
     return () => entry.listeners.delete(listener);
 }
-/** Send a prompt to a live session. */
-export async function queueReferencedProjectsContext(sessionId, content) {
+/** Queue hidden context for the next turn of a live session. */
+export async function queuePromptContext(sessionId, customType, content) {
     const entry = registry.get(sessionId);
     if (!entry)
         throw new Error(`Session ${sessionId} is not live`);
@@ -309,7 +369,7 @@ export async function queueReferencedProjectsContext(sessionId, content) {
         return;
     }
     await entry.session.sendCustomMessage({
-        customType: 'referenced_projects',
+        customType,
         content: message,
         display: false,
         details: undefined,
@@ -380,6 +440,8 @@ export async function forkSession(sessionId, entryId) {
     const { cancelled } = await entry.session.fork(entryId);
     if (cancelled)
         throw new Error('Fork cancelled');
+    patchSessionManagerPersistence(entry.session.sessionManager);
+    ensureSessionFileExists(entry.session.sessionManager);
     // fork() creates a new session file and switches the current session to it
     const newId = entry.session.sessionId;
     const newFile = entry.session.sessionFile ?? '';

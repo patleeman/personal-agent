@@ -19,7 +19,7 @@ const STATUS_ACTION_BUTTON_CLASS = 'rounded-full border px-2.5 py-1 text-[11px] 
 const PROJECT_STATUSES = ['created', 'in_progress', 'blocked', 'completed', 'cancelled'];
 const MILESTONE_STATUSES = ['pending', 'in_progress', 'blocked', 'completed', 'cancelled'];
 const MILESTONE_QUICK_STATUSES = ['pending', 'in_progress', 'blocked', 'completed'];
-const TASK_STATUSES = ['pending', 'running', 'blocked', 'completed', 'failed', 'cancelled'];
+const TASK_STATUSES = ['pending', 'in_progress', 'blocked', 'completed', 'cancelled'];
 
 interface DetailSectionProps {
   id: string;
@@ -39,7 +39,6 @@ interface ProjectFormState {
 }
 
 interface MilestoneFormState {
-  id: string;
   title: string;
   status: string;
   summary: string;
@@ -47,14 +46,9 @@ interface MilestoneFormState {
 }
 
 interface TaskFormState {
-  id: string;
   title: string;
   status: string;
-  summary: string;
   milestoneId: string;
-  acceptanceCriteria: string;
-  plan: string;
-  notes: string;
 }
 
 function toneForStatus(status: string): PillTone {
@@ -126,7 +120,6 @@ function projectFormFromDetail(project: ProjectDetail): ProjectFormState {
 
 function emptyMilestoneForm(): MilestoneFormState {
   return {
-    id: '',
     title: '',
     status: 'pending',
     summary: '',
@@ -136,7 +129,6 @@ function emptyMilestoneForm(): MilestoneFormState {
 
 function milestoneFormFromMilestone(milestone: ProjectMilestone, isCurrent: boolean): MilestoneFormState {
   return {
-    id: milestone.id,
     title: milestone.title,
     status: milestone.status,
     summary: milestone.summary ?? '',
@@ -146,27 +138,17 @@ function milestoneFormFromMilestone(milestone: ProjectMilestone, isCurrent: bool
 
 function emptyTaskForm(): TaskFormState {
   return {
-    id: '',
     title: '',
     status: 'pending',
-    summary: '',
     milestoneId: '',
-    acceptanceCriteria: '',
-    plan: '',
-    notes: '',
   };
 }
 
 function taskFormFromTask(task: ProjectTask): TaskFormState {
   return {
-    id: task.id,
     title: task.title,
     status: task.status,
-    summary: task.summary ?? '',
-    milestoneId: task.milestoneId ?? '',
-    acceptanceCriteria: (task.acceptanceCriteria ?? []).join('\n'),
-    plan: (task.plan ?? []).join('\n'),
-    notes: task.notes ?? '',
+    milestoneId: task.milestoneId,
   };
 }
 
@@ -197,19 +179,11 @@ export function ProjectDetailPanel({
   const currentMilestone = pickCurrentMilestone(record.plan);
   const { done, total, pct } = getPlanProgress(milestones);
   const tasksByMilestone = new Map<string, ProjectTask[]>();
-  const unassignedTasks: ProjectTask[] = [];
-  const taskIndexById = new Map<string, number>();
 
-  project.tasks.forEach((task, index) => {
-    taskIndexById.set(task.id, index);
-    if (task.milestoneId) {
-      const existing = tasksByMilestone.get(task.milestoneId) ?? [];
-      existing.push(task);
-      tasksByMilestone.set(task.milestoneId, existing);
-      return;
-    }
-
-    unassignedTasks.push(task);
+  project.tasks.forEach((task) => {
+    const existing = tasksByMilestone.get(task.milestoneId) ?? [];
+    existing.push(task);
+    tasksByMilestone.set(task.milestoneId, existing);
   });
 
   const [editingProject, setEditingProject] = useState(false);
@@ -306,7 +280,6 @@ export function ProjectDetailPanel({
     try {
       if (milestoneEditor.mode === 'add') {
         await api.addProjectMilestone(record.id, {
-          id: milestoneForm.id,
           title: milestoneForm.title,
           status: milestoneForm.status,
           summary: milestoneForm.summary.trim() || undefined,
@@ -372,17 +345,17 @@ export function ProjectDetailPanel({
     }
   }
 
-  function openTaskAdd(milestoneId?: string) {
-    setTaskEditor(milestoneId ? { mode: 'add', anchorMilestoneId: milestoneId } : { mode: 'add' });
+  function openTaskAdd(milestoneId: string) {
+    setTaskEditor({ mode: 'add', anchorMilestoneId: milestoneId });
     setTaskForm({
       ...emptyTaskForm(),
-      ...(milestoneId ? { milestoneId } : {}),
+      milestoneId,
     });
     setTaskError(null);
   }
 
   function openTaskEdit(task: ProjectTask) {
-    setTaskEditor({ mode: 'edit', taskId: task.id, ...(task.milestoneId ? { anchorMilestoneId: task.milestoneId } : {}) });
+    setTaskEditor({ mode: 'edit', taskId: task.id, anchorMilestoneId: task.milestoneId });
     setTaskForm(taskFormFromTask(task));
     setTaskError(null);
   }
@@ -398,18 +371,11 @@ export function ProjectDetailPanel({
       const payload = {
         title: taskForm.title,
         status: taskForm.status,
-        summary: taskForm.summary.trim() || null,
         milestoneId: taskForm.milestoneId.trim() || null,
-        acceptanceCriteria: splitLines(taskForm.acceptanceCriteria),
-        plan: splitLines(taskForm.plan),
-        notes: taskForm.notes.trim() || null,
       };
 
       if (taskEditor.mode === 'add') {
-        await api.createProjectTask(record.id, {
-          id: taskForm.id,
-          ...payload,
-        });
+        await api.createProjectTask(record.id, payload);
       } else {
         await api.updateProjectTask(record.id, taskEditor.taskId, payload);
       }
@@ -531,7 +497,7 @@ export function ProjectDetailPanel({
   }
 
   async function deleteProject() {
-    if (!window.confirm(`Delete project ${record.id}? This removes PROJECT.yaml, task files, and artifacts.`)) {
+    if (!window.confirm(`Delete project ${record.id}? This removes PROJECT.yaml and project artifacts.`)) {
       return;
     }
 
@@ -561,18 +527,8 @@ export function ProjectDetailPanel({
           <button type="button" onClick={() => setTaskEditor(null)} className={ACTION_BUTTON_CLASS}>Cancel</button>
         </div>
 
-        {taskEditor.mode === 'add' ? (
-          <div className="space-y-1.5">
-            <label className="ui-card-meta">Task ID</label>
-            <input
-              value={taskForm.id}
-              onChange={(event) => setTaskForm((current) => ({ ...current, id: event.target.value }))}
-              className={INPUT_CLASS}
-              placeholder="edit-project-fields"
-            />
-          </div>
-        ) : (
-          <p className="ui-card-meta font-mono">{taskForm.id}</p>
+        {taskEditor.mode === 'edit' && (
+          <p className="ui-card-meta font-mono">{taskEditor.taskId}</p>
         )}
 
         <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_15rem_15rem]">
@@ -605,50 +561,11 @@ export function ProjectDetailPanel({
               onChange={(event) => setTaskForm((current) => ({ ...current, milestoneId: event.target.value }))}
               className={SELECT_CLASS}
             >
-              <option value="">No milestone</option>
               {milestones.map((milestone) => (
                 <option key={milestone.id} value={milestone.id}>{milestone.title}</option>
               ))}
             </select>
           </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="ui-card-meta">Summary</label>
-          <textarea
-            value={taskForm.summary}
-            onChange={(event) => setTaskForm((current) => ({ ...current, summary: event.target.value }))}
-            className={TEXTAREA_CLASS}
-          />
-        </div>
-
-        <div className="grid gap-5 xl:grid-cols-2">
-          <div className="space-y-1.5">
-            <label className="ui-card-meta">Acceptance criteria (one per line)</label>
-            <textarea
-              value={taskForm.acceptanceCriteria}
-              onChange={(event) => setTaskForm((current) => ({ ...current, acceptanceCriteria: event.target.value }))}
-              className={TEXTAREA_CLASS}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="ui-card-meta">Task plan (one per line)</label>
-            <textarea
-              value={taskForm.plan}
-              onChange={(event) => setTaskForm((current) => ({ ...current, plan: event.target.value }))}
-              className={TEXTAREA_CLASS}
-            />
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="ui-card-meta">Notes</label>
-          <textarea
-            value={taskForm.notes}
-            onChange={(event) => setTaskForm((current) => ({ ...current, notes: event.target.value }))}
-            className={TEXTAREA_CLASS}
-          />
         </div>
 
         {taskError && <p className="text-[12px] text-danger">{taskError}</p>}
@@ -660,9 +577,8 @@ export function ProjectDetailPanel({
     );
   }
 
-  function renderTaskCard(task: ProjectTask) {
+  function renderTaskCard(task: ProjectTask, taskIndex: number, taskCount: number) {
     const isEditing = taskEditor?.mode === 'edit' && taskEditor.taskId === task.id;
-    const taskIndex = taskIndexById.get(task.id) ?? 0;
 
     if (isEditing) {
       return (
@@ -673,64 +589,25 @@ export function ProjectDetailPanel({
     }
 
     return (
-      <article key={task.id} id={`project-task-${task.id}`} className="py-4 space-y-3 scroll-mt-6">
+      <article key={task.id} id={`project-task-${task.id}`} className="py-4 scroll-mt-6">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-[15px] font-medium leading-relaxed text-primary">{task.title}</p>
               <span className="ui-card-meta font-mono">{task.id}</span>
-              {task.milestoneId && <span className="ui-card-meta">milestone {task.milestoneId}</span>}
             </div>
-            {task.summary && <p className="ui-card-body">{task.summary}</p>}
           </div>
           <div className="flex items-center gap-3 shrink-0 flex-wrap justify-end">
             <button type="button" onClick={() => { void moveTask(task.id, 'up'); }} className={ACTION_BUTTON_CLASS} disabled={taskBusy || taskIndex === 0}>↑</button>
-            <button type="button" onClick={() => { void moveTask(task.id, 'down'); }} className={ACTION_BUTTON_CLASS} disabled={taskBusy || taskIndex === project.tasks.length - 1}>↓</button>
+            <button type="button" onClick={() => { void moveTask(task.id, 'down'); }} className={ACTION_BUTTON_CLASS} disabled={taskBusy || taskIndex === taskCount - 1}>↓</button>
             <button type="button" onClick={() => openTaskEdit(task)} className={ACTION_BUTTON_CLASS}>Edit</button>
             <button type="button" onClick={() => { void deleteTask(task.id); }} className="text-[12px] text-danger hover:text-danger/75 transition-colors disabled:opacity-40" disabled={taskBusy}>Delete</button>
             <Pill tone={toneForStatus(task.status)}>{formatProjectStatus(task.status)}</Pill>
           </div>
         </div>
-
-        {task.acceptanceCriteria && task.acceptanceCriteria.length > 0 && (
-          <div className="space-y-1.5">
-            <p className="ui-card-meta">Acceptance criteria</p>
-            <ul className="space-y-1.5">
-              {task.acceptanceCriteria.map((item) => (
-                <li key={item} className="flex items-start gap-2 text-[14px] leading-relaxed text-secondary">
-                  <span className="mt-[2px] shrink-0 text-accent">•</span>
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {task.plan && task.plan.length > 0 && (
-          <div className="space-y-1.5">
-            <p className="ui-card-meta">Task plan</p>
-            <ol className="space-y-1.5">
-              {task.plan.map((item, index) => (
-                <li key={`${task.id}-plan-${index}`} className="flex items-start gap-2 text-[14px] leading-relaxed text-secondary">
-                  <span className="mt-[2px] shrink-0 font-mono text-[11px] text-dim">{index + 1}.</span>
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ol>
-          </div>
-        )}
-
-        {task.notes && (
-          <div className="space-y-1.5">
-            <p className="ui-card-meta">Notes</p>
-            <p className="ui-card-body">{task.notes}</p>
-          </div>
-        )}
       </article>
     );
   }
-
-  const showStandaloneTasksSection = milestones.length === 0 || unassignedTasks.length > 0 || (taskEditor != null && !taskEditor.anchorMilestoneId);
 
   return (
     <div className="min-w-0 space-y-10 px-4 py-3">
@@ -945,16 +822,6 @@ export function ProjectDetailPanel({
                 <button type="button" onClick={() => setMilestoneEditor(null)} className={ACTION_BUTTON_CLASS}>Cancel</button>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="ui-card-meta">Milestone ID</label>
-                <input
-                  value={milestoneForm.id}
-                  onChange={(event) => setMilestoneForm((current) => ({ ...current, id: event.target.value }))}
-                  className={INPUT_CLASS}
-                  placeholder="editing-flows"
-                />
-              </div>
-
               <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_15rem]">
                 <div className="space-y-1.5">
                   <label className="ui-card-meta">Title</label>
@@ -1147,7 +1014,7 @@ export function ProjectDetailPanel({
 
                       {milestoneTasks.length > 0 ? (
                         <div className="space-y-0 divide-y divide-border-subtle border-t border-border-subtle">
-                          {milestoneTasks.map((task) => renderTaskCard(task))}
+                          {milestoneTasks.map((task, taskIndex) => renderTaskCard(task, taskIndex, milestoneTasks.length))}
                         </div>
                       ) : !taskEditorIsAnchoredHere ? (
                         <p className="ui-card-meta">No tasks for this milestone yet.</p>
@@ -1159,43 +1026,9 @@ export function ProjectDetailPanel({
             })}
           </div>
           {milestoneError && !milestoneEditor && <p className="text-[12px] text-danger">{milestoneError}</p>}
+          {taskError && !taskEditor && <p className="text-[12px] text-danger max-w-4xl">{taskError}</p>}
         </div>
       </DetailSection>
-
-      {showStandaloneTasksSection && (
-        <DetailSection
-          id="project-tasks"
-          title={milestones.length === 0 ? 'Tasks' : 'Standalone tasks'}
-          meta={milestones.length === 0
-            ? (project.taskCount > 0 ? 'Execution tasks from tasks/*.yaml' : undefined)
-            : 'Tasks not attached to a milestone'}
-          actions={(
-            <button type="button" onClick={() => openTaskAdd()} className={ACTION_BUTTON_CLASS} disabled={taskBusy}>
-              + Add task
-            </button>
-          )}
-        >
-          <div className="max-w-5xl space-y-5">
-            {taskEditor && !taskEditor.anchorMilestoneId && renderTaskEditorForm()}
-
-            {unassignedTasks.length === 0 && !taskEditor ? (
-              <EmptyState
-                title={milestones.length === 0 ? 'No project tasks yet.' : 'No standalone tasks.'}
-                body={milestones.length === 0
-                  ? 'Add task YAML files when work needs acceptance criteria or a task-level plan.'
-                  : 'Assigned tasks now live inside each milestone. Use standalone tasks only when the work is truly project-wide.'}
-                className="border border-dashed border-border-subtle rounded-xl max-w-3xl"
-              />
-            ) : unassignedTasks.length > 0 ? (
-              <div className="space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
-                {unassignedTasks.map((task) => renderTaskCard(task))}
-              </div>
-            ) : null}
-
-            {taskError && !taskEditor && <p className="text-[12px] text-danger max-w-4xl">{taskError}</p>}
-          </div>
-        </DetailSection>
-      )}
     </div>
   );
 }

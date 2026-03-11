@@ -4,18 +4,21 @@ import { ChatView } from '../components/chat/ChatView';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import { ConversationTree } from '../components/ConversationTree';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, DisplayBlock, MessageBlock, PromptImageInput } from '../types';
+import type { ContextUsageSegment, MessageBlock, PromptImageInput } from '../types';
 import { useApi } from '../hooks';
 import { useSessionDetail } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../api';
 import { formatContextShareLabel, formatContextUsageLabel, formatContextWindowLabel, formatLiveSessionLabel, formatThinkingLevelLabel, getContextUsagePercent } from '../conversationHeader';
+import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE } from '../conversationTitle';
 import { emitConversationProjectsChanged, CONVERSATION_PROJECTS_CHANGED_EVENT } from '../conversationProjectEvents';
+import { displayBlockToMessageBlock } from '../messageBlocks';
 import { useAppData, useLiveTitles } from '../contexts';
 import { filterModelPickerItems } from '../modelPicker';
 import { emitProjectsChanged } from '../projectEvents';
 import { parseProjectSlashCommand, type ProjectSlashCommand } from '../projectSlashCommand';
 import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../slashMenu';
+import { buildMentionItems, filterMentionItems, resolveMentionItems, type MentionItem } from '../conversationMentions';
 
 // ── Model picker ──────────────────────────────────────────────────────────────
 
@@ -82,31 +85,7 @@ function ModelPicker({ models, currentModel, query, idx, onSelect, onClose }:
   );
 }
 
-// ── Real session → MessageBlock converter ─────────────────────────────────────
-
-function displayBlockToMessageBlock(b: DisplayBlock): MessageBlock {
-  switch (b.type) {
-    case 'user':
-      return { type: 'user', id: b.id, text: b.text, images: b.images, ts: b.ts };
-    case 'text':
-      return { type: 'text', id: b.id, text: b.text, ts: b.ts };
-    case 'thinking':
-      return { type: 'thinking', id: b.id, text: b.text, ts: b.ts };
-    case 'tool_use':
-      return { type: 'tool_use', id: b.id, tool: b.tool, input: b.input, output: b.output, durationMs: b.durationMs, ts: b.ts };
-    case 'image':
-      return { type: 'image', id: b.id, alt: b.alt, src: b.src, mimeType: b.mimeType, width: b.width, height: b.height, caption: b.caption, ts: b.ts };
-    case 'error':
-      return { type: 'error', id: b.id, tool: b.tool, message: b.message, ts: b.ts };
-  }
-}
-
 // ── Slash commands ────────────────────────────────────────────────────────────
-
-const STATIC_MENTIONS = [
-  { id: '@inbox', label: 'inbox', kind: 'view' },
-  { id: '@scheduled', label: 'scheduled', kind: 'view' },
-] as const;
 
 // ── Context bar ───────────────────────────────────────────────────────────────
 
@@ -232,13 +211,12 @@ function MentionMenu({
   idx,
   onSelect,
 }: {
-  items: Array<{ id: string; label: string; kind: string }>;
+  items: MentionItem[];
   query: string;
   idx: number;
   onSelect: (id: string) => void;
 }) {
-  const q = query.slice(1).toLowerCase();
-  const filtered = items.filter((item) => !q || item.label.startsWith(q));
+  const filtered = filterMentionItems(items, query);
   if (!filtered.length) return null;
   return (
     <div className="ui-menu-shell">
@@ -247,12 +225,19 @@ function MentionMenu({
       </div>
       {filtered.map((item, i) => (
         <button
-          key={item.id}
-          onMouseDown={(event) => { event.preventDefault(); onSelect(item.id + ' '); }}
-          className={cx('w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors', i === idx % filtered.length ? 'bg-elevated text-primary' : 'text-secondary hover:bg-elevated/50')}
+          key={`${item.kind}:${item.id}`}
+          onMouseDown={(event) => { event.preventDefault(); onSelect(item.id); }}
+          className={cx('w-full flex items-start gap-3 px-3 py-2.5 text-left transition-colors', i === idx % filtered.length ? 'bg-elevated text-primary' : 'text-secondary hover:bg-elevated/50')}
         >
           <Pill tone="muted">{item.kind}</Pill>
-          <span className="font-mono text-[13px] text-accent truncate">{item.id}</span>
+          <div className="min-w-0 flex-1">
+            <p className="font-mono text-[13px] text-accent truncate">{item.id}</p>
+            {(item.summary || (item.title && item.title !== item.label)) && (
+              <p className="mt-0.5 truncate text-[12px] text-dim/90">
+                {item.summary || item.title}
+              </p>
+            )}
+          </div>
         </button>
       ))}
     </div>
@@ -307,8 +292,9 @@ async function buildPromptImages(files: File[]): Promise<PromptImageInput[]> {
 
 // ── ConversationPage ──────────────────────────────────────────────────────────
 
-export function ConversationPage() {
-  const { id } = useParams<{ id: string }>();
+export function ConversationPage({ draft = false }: { draft?: boolean }) {
+  const { id: routeId } = useParams<{ id?: string }>();
+  const id = draft ? undefined : routeId;
   const navigate = useNavigate();
 
   // ── Live session detection ─────────────────────────────────────────────────
@@ -338,9 +324,11 @@ export function ConversationPage() {
     ? sessionDetail.blocks.map(displayBlockToMessageBlock)
     : [];
 
-  // When live, combine snapshot + stream; when not, show snapshot only
+  // Live sessions hydrate from the SSE snapshot; until that arrives, fall back to JSONL + live deltas.
   const realMessages: MessageBlock[] | undefined = isLiveSession
-    ? [...baseMessages, ...stream.blocks]
+    ? stream.hasSnapshot
+      ? stream.blocks
+      : [...baseMessages, ...stream.blocks]
     : sessionDetail
       ? baseMessages
       : undefined;
@@ -350,13 +338,11 @@ export function ConversationPage() {
     if (id && stream.title) pushTitle(id, stream.title);
   }, [id, stream.title, pushTitle]);
 
-  const [titleOverride, setTitleOverride] = useState<string | null>(null);
+  const titleOverride = null;
 
-  const title = titleOverride
-    ?? stream.title
-    ?? sessionDetail?.meta.title
-    ?? id?.replace(/-/g, ' ')
-    ?? 'New conversation';
+  const title = draft
+    ? NEW_CONVERSATION_TITLE
+    : getConversationDisplayTitle(titleOverride, stream.title, sessionDetail?.meta.title);
   const model = sessionDetail?.meta.model;
 
   // Model
@@ -396,12 +382,24 @@ export function ConversationPage() {
   const [atBottom, setAtBottom] = useState(true);
   const [showTree, setShowTree] = useState(false);
 
+  useEffect(() => {
+    if (!draft) {
+      return;
+    }
+
+    setInput('');
+    setAttachments([]);
+    setDragOver(false);
+    setSlashIdx(0);
+    setMentionIdx(0);
+  }, [draft]);
+
   // Pending steer/followup queue — cleared when the agent finishes its run
   type PendingMsg = { id: string; text: string; type: 'steer' | 'followUp' };
   const [pendingQueue, setPendingQueue] = useState<PendingMsg[]>([]);
   const prevStreamingRef = useRef(false);
   const { data: memoryData } = useApi(api.memory);
-  const { projects, setProjects } = useAppData();
+  const { projects, tasks, setProjects } = useAppData();
   const conversationProjectsFetcher = useCallback(async () => {
     if (!id) {
       return { conversationId: '', relatedProjectIds: [] };
@@ -430,15 +428,19 @@ export function ConversationPage() {
   const mentionQuery  = mentionMatch?.[2] ?? '';
   const slashItems = useMemo(() => buildSlashMenuItems(input, memoryData?.skills ?? []), [input, memoryData]);
   const modelItems = useMemo(() => filterModelPickerItems(models, modelQuery), [models, modelQuery]);
-  const mentionItems = useMemo(() => [
-    ...(projects ?? []).map((project) => ({
-      id: `@${project.id}`,
-      label: project.id,
-      kind: 'project',
-    })),
-    ...STATIC_MENTIONS,
-  ], [projects]);
+  const mentionItems = useMemo(() => {
+    const hasProfileItem = Boolean(memoryData?.agentsMd.some((item) => item.source === memoryData.profile && item.exists));
+    return buildMentionItems({
+      projects: projects ?? [],
+      tasks: tasks ?? [],
+      memoryDocs: memoryData?.memoryDocs ?? [],
+      skills: memoryData?.skills ?? [],
+      profileName: hasProfileItem ? (memoryData?.profile ?? null) : null,
+    });
+  }, [projects, tasks, memoryData]);
   const referencedProjectIds = conversationProjects?.relatedProjectIds ?? [];
+  const draftMentionItems = useMemo(() => resolveMentionItems(input, mentionItems)
+    .filter((item) => item.kind !== 'project' || !referencedProjectIds.includes(item.label)), [input, mentionItems, referencedProjectIds]);
 
   // Auto-resize textarea
   const resize = useCallback(() => {
@@ -602,6 +604,10 @@ export function ConversationPage() {
   }
 
   function openFilePicker() {
+    if (draft) {
+      return;
+    }
+
     fileInputRef.current?.click();
   }
 
@@ -629,19 +635,19 @@ export function ConversationPage() {
   async function handleProjectSlashCommand(command: ProjectSlashCommand) {
     try {
       if (command.action === 'new') {
-        await api.createProject({
-          id: command.projectId,
+        const detail = await api.createProject({
           description: command.description,
         });
+        const createdProjectId = detail.project.id;
         await refreshProjectMentions();
 
         if (id) {
-          await api.addConversationProject(id, command.projectId);
+          await api.addConversationProject(id, createdProjectId);
           await refetchConversationProjects({ resetLoading: false });
           emitConversationProjectsChanged(id);
-          showNotice('accent', `Created and referenced @${command.projectId}`);
+          showNotice('accent', `Created and referenced @${createdProjectId}`);
         } else {
-          showNotice('accent', `Created project @${command.projectId}`);
+          showNotice('accent', `Created project @${createdProjectId}`);
         }
 
         setInput('');
@@ -675,6 +681,10 @@ export function ConversationPage() {
   }
 
   async function submitComposer(behavior?: 'steer' | 'followUp') {
+    if (draft) {
+      return;
+    }
+
     const text = input.trim();
     const pendingAttachments = attachments;
     if (!text && pendingAttachments.length === 0) return;
@@ -761,6 +771,10 @@ export function ConversationPage() {
   }
 
   function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    if (draft) {
+      return;
+    }
+
     const files = Array.from(e.clipboardData.files).filter((file) => file.type.startsWith('image/'));
     if (files.length === 0) return;
     e.preventDefault();
@@ -802,8 +816,7 @@ export function ConversationPage() {
             }
           }
         } else {
-          const q = mentionQuery.slice(1).toLowerCase();
-          const filtered = mentionItems.filter((item) => !q || item.label.startsWith(q));
+          const filtered = filterMentionItems(mentionItems, mentionQuery);
           const sel = filtered[mentionIdx % (filtered.length || 1)];
           if (sel) { setInput(input.replace(/@[\w-]*$/, sel.id + ' ')); setMentionIdx(0); }
         }
@@ -823,11 +836,24 @@ export function ConversationPage() {
   }
 
   // Drag-and-drop
-  function handleDragOver(e: React.DragEvent) { e.preventDefault(); setDragOver(true); }
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+
+    if (draft) {
+      return;
+    }
+
+    setDragOver(true);
+  }
   function handleDragLeave() { setDragOver(false); }
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     setDragOver(false);
+
+    if (draft) {
+      return;
+    }
+
     const files = Array.from(e.dataTransfer.files);
     if (files.length) addImageAttachments(files);
   }
@@ -835,7 +861,7 @@ export function ConversationPage() {
     setAttachments(prev => prev.filter((_, j) => j !== i));
   }
 
-  const composerHasContent = input.trim().length > 0 || attachments.length > 0;
+  const composerHasContent = !draft && (input.trim().length > 0 || attachments.length > 0);
 
   return (
     <div className="flex flex-col h-full">
@@ -843,18 +869,24 @@ export function ConversationPage() {
         className="gap-3 py-2"
         actions={(
           <div className="flex shrink-0 items-center gap-2.5 text-[10px] font-medium leading-none">
-            {stream.isStreaming && (
+            {draft ? (
+              <span className="text-dim">creating session…</span>
+            ) : (
               <>
-                <span className="inline-flex items-center gap-1.5 text-accent">
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent animate-pulse" />
-                  running
-                </span>
-                <button onClick={() => stream.abort()} className="text-danger transition-colors hover:text-danger/80">
-                  stop
-                </button>
+                {stream.isStreaming && (
+                  <>
+                    <span className="inline-flex items-center gap-1.5 text-accent">
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent animate-pulse" />
+                      running
+                    </span>
+                    <button onClick={() => stream.abort()} className="text-danger transition-colors hover:text-danger/80">
+                      stop
+                    </button>
+                  </>
+                )}
+                {isLiveSession && <span className="text-accent">{formatLiveSessionLabel(isLiveSession)}</span>}
               </>
             )}
-            {isLiveSession && <span className="text-accent">{formatLiveSessionLabel(isLiveSession)}</span>}
           </div>
         )}
       >
@@ -868,21 +900,25 @@ export function ConversationPage() {
       <div className="relative flex-1 min-h-0">
         <div ref={scrollRef} className="conversation-scroll-shell h-full overflow-y-auto overflow-x-hidden">
           {realMessages ? (
-            <ChatView messages={realMessages} />
+            <ChatView messages={realMessages} isStreaming={stream.isStreaming} />
           ) : sessionLoading ? (
             <LoadingState label="Loading session…" className="justify-center h-full" />
           ) : (
             <EmptyState
               className="h-full flex flex-col justify-center px-8"
-              icon={(
+              icon={draft ? (
+                <div className="mx-auto h-10 w-10 rounded-full border-2 border-accent/25 border-t-accent animate-spin" />
+              ) : (
                 <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center mx-auto">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-accent">
                     <path d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 0 1-.825-.242m9.345-8.334a2.126 2.126 0 0 0-.476-.095 48.64 48.64 0 0 0-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0 0 11.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" />
                   </svg>
                 </div>
               )}
-              title="New conversation"
-              body="Start a Pi session to populate this conversation."
+              title={NEW_CONVERSATION_TITLE}
+              body={draft
+                ? 'Creating a Pi session…'
+                : 'Start a Pi session to populate this conversation.'}
             />
           )}
           {!atBottom && (
@@ -945,6 +981,23 @@ export function ConversationPage() {
             {dragOver && (
               <div className="px-4 py-3 text-center text-[12px] text-accent border-b border-accent/20">
                 📎 Drop files to attach
+              </div>
+            )}
+
+            {/* Prompt references */}
+            {draftMentionItems.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-3 pt-3 pb-2.5">
+                <span className="ui-section-label">Prompt references</span>
+                {draftMentionItems.map((item) => (
+                  <span
+                    key={`${item.kind}:${item.id}`}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-elevated px-2 py-1 text-[11px] text-secondary"
+                    title={item.summary || item.title || item.id}
+                  >
+                    <span className="text-[10px] uppercase tracking-[0.14em] text-dim/70">{item.kind}</span>
+                    <span className="font-mono text-accent">{item.id}</span>
+                  </span>
+                ))}
               </div>
             )}
 
@@ -1024,7 +1077,13 @@ export function ConversationPage() {
                 }}
               />
 
-              <IconButton className="shrink-0 mb-0.5" title="Attach image" aria-label="Attach image" onClick={openFilePicker}>
+              <IconButton
+                className="shrink-0 mb-0.5"
+                title={draft ? 'Creating conversation' : 'Attach image'}
+                aria-label={draft ? 'Creating conversation' : 'Attach image'}
+                onClick={openFilePicker}
+                disabled={draft}
+              >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
                 </svg>
@@ -1037,8 +1096,11 @@ export function ConversationPage() {
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
                 rows={1}
-                className="flex-1 bg-transparent text-sm text-primary placeholder:text-dim outline-none resize-none leading-relaxed"
-                placeholder="Message… (/ for commands, @ to reference projects)"
+                disabled={draft}
+                className="flex-1 bg-transparent text-sm text-primary placeholder:text-dim outline-none resize-none leading-relaxed disabled:cursor-wait disabled:text-dim"
+                placeholder={draft
+                  ? 'Creating conversation…'
+                  : 'Message… (/ for commands, @ to reference projects, tasks, knowledge, skills, and profile)'}
                 style={{ minHeight: '24px', maxHeight: '160px' }}
               />
 

@@ -14,6 +14,7 @@ import {
   LiveTitlesContext,
   SseConnectionContext,
 } from './contexts';
+import { NEW_CONVERSATION_TITLE } from './conversationTitle';
 import type {
   ActivitySnapshot,
   AppEvent,
@@ -40,7 +41,7 @@ async function fetchSessionsSnapshot(): Promise<SessionMeta[]> {
       cwd: entry.cwd,
       cwdSlug: entry.cwd.replace(/\//g, '-'),
       model: '',
-      title: '(new conversation)',
+      title: NEW_CONVERSATION_TITLE,
       messageCount: 0,
     }));
 
@@ -180,6 +181,7 @@ export function App() {
               <Routes>
                 <Route path="/" element={<Layout />}>
                   <Route index element={<Navigate to="/inbox" replace />} />
+                  <Route path="conversations/new" element={<ConversationPage draft />} />
                   <Route path="conversations/:id" element={<ConversationPage />} />
                   <Route path="inbox" element={<InboxPage />} />
                   <Route path="inbox/:id" element={<InboxPage />} />

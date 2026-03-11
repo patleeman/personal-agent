@@ -13,12 +13,15 @@
  *   toolResult   → toolCallId, toolName, content: [{type:'text', text}|{type:'image', data, mimeType}]
  */
 
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { readSessionContextUsageFromFile, type SessionContextUsageSnapshot } from './sessionContextUsage.js';
 
-export const SESSIONS_DIR = join(homedir(), '.local/state/personal-agent/pi-agent/sessions');
+export const DEFAULT_SESSIONS_DIR = join(homedir(), '.local/state/personal-agent/pi-agent/sessions');
+export const SESSIONS_DIR = DEFAULT_SESSIONS_DIR;
+export const DEFAULT_SESSIONS_INDEX_FILE = join(homedir(), '.local/state/personal-agent/pi-agent/session-meta-index.json');
+export const SESSIONS_INDEX_FILE = DEFAULT_SESSIONS_INDEX_FILE;
 
 // ── Raw JSONL types ────────────────────────────────────────────────────────────
 
@@ -100,20 +103,90 @@ export type DisplayBlock =
   | { type: 'image';    id: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string }
   | { type: 'error';    id: string; ts: string; tool?: string; message: string };
 
+interface CachedSessionMeta {
+  signature: string;
+  meta: SessionMeta;
+}
+
+interface PersistentSessionIndexEntry {
+  filePath: string;
+  signature: string;
+  meta: SessionMeta;
+}
+
+interface PersistentSessionIndexDocument {
+  version: 1;
+  sessionsDir: string;
+  entries: PersistentSessionIndexEntry[];
+}
+
+const sessionMetaCache = new Map<string, CachedSessionMeta>();
+let sessionFileById = new Map<string, string>();
+let loadedPersistentIndexKey: string | null = null;
+let persistedIndexJson: string | null = null;
+
 // ── Parsing ────────────────────────────────────────────────────────────────────
+
+function resolveSessionsDir(): string {
+  return process.env.PA_SESSIONS_DIR ?? DEFAULT_SESSIONS_DIR;
+}
+
+function resolveSessionsIndexFile(): string {
+  const sessionsDir = resolveSessionsDir();
+  return process.env.PA_SESSIONS_INDEX_FILE ?? join(dirname(sessionsDir), 'session-meta-index.json');
+}
+
+function parseJsonLine(rawLine: string): RawLine | null {
+  try {
+    return JSON.parse(rawLine) as RawLine;
+  } catch {
+    return null;
+  }
+}
 
 function parseJsonl(filePath: string): RawLine[] {
   const raw = readFileSync(filePath, 'utf-8');
-  return raw
-    .split('\n')
-    .filter(l => l.trim())
-    .flatMap(l => { try { return [JSON.parse(l) as RawLine]; } catch { return []; } });
+  const lines: RawLine[] = [];
+
+  for (const rawLine of raw.split('\n')) {
+    if (!rawLine.trim()) {
+      continue;
+    }
+
+    const line = parseJsonLine(rawLine);
+    if (line) {
+      lines.push(line);
+    }
+  }
+
+  return lines;
 }
 
-function normalizeContent(content: RawMessageContent): RawContentBlock[] {
-  if (Array.isArray(content)) return content;
+export interface DisplayMessageEntryLike {
+  id: string;
+  timestamp: string | number;
+  message: {
+    role: string;
+    content: unknown;
+    toolCallId?: string;
+    toolName?: string;
+  };
+}
+
+function normalizeContent(content: unknown): RawContentBlock[] {
+  if (Array.isArray(content)) return content as RawContentBlock[];
   if (typeof content === 'string' && content.length > 0) return [{ type: 'text', text: content }];
   return [];
+}
+
+function normalizeTimestamp(timestamp: string | number | undefined): string {
+  if (typeof timestamp === 'string' && timestamp.trim()) {
+    return timestamp;
+  }
+  if (typeof timestamp === 'number' && Number.isFinite(timestamp)) {
+    return new Date(timestamp).toISOString();
+  }
+  return new Date(0).toISOString();
 }
 
 function imageMimeType(block: RawContentBlock): string | undefined {
@@ -126,7 +199,7 @@ function imageSrc(block: RawContentBlock): string | undefined {
   return `data:${mimeType};base64,${block.data}`;
 }
 
-function extractUserContent(content: RawMessageContent): { text: string; images: DisplayImage[] } {
+function extractUserContent(content: unknown): { text: string; images: DisplayImage[] } {
   const blocks = normalizeContent(content);
   const text = blocks
     .filter((block) => block.type === 'text')
@@ -143,125 +216,60 @@ function extractUserContent(content: RawMessageContent): { text: string; images:
   return { text, images };
 }
 
-function extractTitle(lines: RawLine[]): string {
-  for (const line of lines) {
-    if (line.type !== 'message') continue;
-    const msg = (line as RawMessage).message;
-    if (msg.role !== 'user') continue;
+export function buildDisplayBlocksFromEntries(messages: DisplayMessageEntryLike[]): DisplayBlock[] {
+  const blocks: DisplayBlock[] = [];
+  const toolCallIndex = new Map<string, number>();
 
-    const { text, images } = extractUserContent(msg.content);
-    if (text) {
-      return text.slice(0, 80).replace(/\n/g, ' ').trim();
-    }
-    if (images.length > 0) {
-      return images.length === 1 ? '(image attachment)' : `(${images.length} image attachments)`;
-    }
-  }
-  return '(untitled)';
-}
-
-function slugToCwd(slug: string): string {
-  // slug: --Users-patrickc.lee-personal-personal-agent-- → /Users/patrickc.lee/personal/personal-agent
-  return slug
-    .replace(/^--/, '')
-    .replace(/--$/, '')
-    .replace(/-/g, '/');
-}
-
-// ── Public API ─────────────────────────────────────────────────────────────────
-
-export function listSessions(): SessionMeta[] {
-  if (!existsSync(SESSIONS_DIR)) return [];
-
-  const metas: SessionMeta[] = [];
-
-  for (const dirName of readdirSync(SESSIONS_DIR)) {
-    const dirPath = join(SESSIONS_DIR, dirName);
-    let files: string[];
-    try { files = readdirSync(dirPath).filter(f => f.endsWith('.jsonl')); }
-    catch { continue; }
-
-    for (const fileName of files) {
-      const filePath = join(dirPath, fileName);
-      try {
-        const lines = parseJsonl(filePath);
-        const sessionRec = lines.find(l => l.type === 'session') as RawSessionRecord | undefined;
-        if (!sessionRec) continue;
-
-        const modelRec = lines.find(l => l.type === 'model_change') as RawModelChange | undefined;
-        const messageLines = lines.filter(l => l.type === 'message') as RawMessage[];
-
-        metas.push({
-          id:           sessionRec.id,
-          file:         filePath,
-          timestamp:    sessionRec.timestamp,
-          cwd:          sessionRec.cwd ?? slugToCwd(dirName),
-          cwdSlug:      dirName,
-          model:        modelRec?.modelId ?? 'unknown',
-          title:        extractTitle(lines),
-          messageCount: messageLines.length,
-        });
-      } catch { continue; }
-    }
-  }
-
-  // Most-recent first
-  metas.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-  return metas;
-}
-
-export function readSessionBlocks(sessionId: string): SessionDetail | null {
-  const metas = listSessions();
-  const meta  = metas.find(m => m.id === sessionId);
-  if (!meta) return null;
-
-  const lines    = parseJsonl(meta.file);
-  const messages = lines.filter(l => l.type === 'message') as RawMessage[];
-
-  const blocks: DisplayBlock[]                  = [];
-  const toolCallIndex = new Map<string, number>(); // toolCallId → index in blocks
-
-  for (const msg of messages) {
+  for (const [messageIndex, msg] of messages.entries()) {
     const { role, content, toolCallId, toolName } = msg.message;
-    const ts = msg.timestamp;
+    const ts = normalizeTimestamp(msg.timestamp);
     const contentBlocks = normalizeContent(content);
+    const baseId = msg.id || `msg-${messageIndex}`;
 
     if (role === 'user') {
       const { text, images } = extractUserContent(content);
       if (text || images.length > 0) {
         blocks.push({
           type: 'user',
-          id: msg.id,
+          id: baseId,
           ts,
           text,
           ...(images.length > 0 ? { images } : {}),
         });
       }
+      continue;
+    }
 
-    } else if (role === 'assistant') {
+    if (role === 'assistant') {
       for (const block of contentBlocks) {
         if (block.type === 'thinking' && block.thinking?.trim()) {
-          blocks.push({ type: 'thinking', id: `${msg.id}-t${blocks.length}`, ts, text: block.thinking });
+          blocks.push({ type: 'thinking', id: `${baseId}-t${blocks.length}`, ts, text: block.thinking });
+          continue;
+        }
 
-        } else if (block.type === 'text' && block.text?.trim()) {
-          blocks.push({ type: 'text', id: `${msg.id}-x${blocks.length}`, ts, text: block.text });
+        if (block.type === 'text' && block.text?.trim()) {
+          blocks.push({ type: 'text', id: `${baseId}-x${blocks.length}`, ts, text: block.text });
+          continue;
+        }
 
-        } else if (block.type === 'toolCall' && block.id) {
+        if (block.type === 'toolCall' && block.id) {
           const idx = blocks.length;
           toolCallIndex.set(block.id, idx);
           blocks.push({
-            type:       'tool_use',
-            id:         `${msg.id}-c${blocks.length}`,
+            type: 'tool_use',
+            id: `${baseId}-c${blocks.length}`,
             ts,
-            tool:       block.name ?? 'unknown',
-            input:      block.arguments ?? {},
-            output:     '',
+            tool: block.name ?? 'unknown',
+            input: block.arguments ?? {},
+            output: '',
             toolCallId: block.id,
           });
         }
       }
+      continue;
+    }
 
-    } else if (role === 'toolResult' && toolCallId) {
+    if (role === 'toolResult' && toolCallId) {
       const idx = toolCallIndex.get(toolCallId);
       if (idx !== undefined) {
         const existing = blocks[idx] as DisplayBlock & { type: 'tool_use' };
@@ -270,8 +278,8 @@ export function readSessionBlocks(sessionId: string): SessionDetail | null {
           .map((block) => block.text ?? '')
           .join('\n')
           .slice(0, 8000);
-        const startMs  = new Date(existing.ts).getTime();
-        const endMs    = new Date(ts).getTime();
+        const startMs = new Date(existing.ts).getTime();
+        const endMs = new Date(ts).getTime();
         const duration = endMs > startMs ? endMs - startMs : undefined;
         blocks[idx] = { ...existing, output: resultText, durationMs: duration };
       }
@@ -280,7 +288,7 @@ export function readSessionBlocks(sessionId: string): SessionDetail | null {
         .filter((block) => block.type === 'image')
         .map((block, imageIndex) => ({
           type: 'image' as const,
-          id: `${msg.id}-i${imageIndex}`,
+          id: `${baseId}-i${imageIndex}`,
           ts,
           alt: toolName ? `${toolName} image result` : 'Tool image result',
           src: imageSrc(block),
@@ -291,9 +299,332 @@ export function readSessionBlocks(sessionId: string): SessionDetail | null {
     }
   }
 
+  return blocks;
+}
+
+function extractTitleFromMessage(message: RawMessage['message']): string | null {
+  if (message.role !== 'user') {
+    return null;
+  }
+
+  const { text, images } = extractUserContent(message.content);
+  if (text) {
+    return text.slice(0, 80).replace(/\n/g, ' ').trim();
+  }
+  if (images.length > 0) {
+    return images.length === 1 ? '(image attachment)' : `(${images.length} image attachments)`;
+  }
+
+  return null;
+}
+
+function slugToCwd(slug: string): string {
+  // slug: --Users-patrickc.lee-personal-personal-agent-- → /Users/patrickc.lee/personal/personal-agent
+  return slug
+    .replace(/^--/, '')
+    .replace(/--$/, '')
+    .replace(/-/g, '/');
+}
+
+function getFileSignature(filePath: string): string | null {
+  try {
+    const stats = statSync(filePath);
+    return `${stats.size}:${stats.mtimeMs}`;
+  } catch {
+    return null;
+  }
+}
+
+function readSessionMetaFromFile(filePath: string, cwdSlug: string): SessionMeta | null {
+  const raw = readFileSync(filePath, 'utf-8');
+  let sessionRecord: RawSessionRecord | null = null;
+  let model = 'unknown';
+  let title: string | null = null;
+  let messageCount = 0;
+
+  for (const rawLine of raw.split('\n')) {
+    if (!rawLine.trim()) {
+      continue;
+    }
+
+    const line = parseJsonLine(rawLine);
+    if (!line) {
+      continue;
+    }
+
+    if (line.type === 'session') {
+      sessionRecord = line as RawSessionRecord;
+      continue;
+    }
+
+    if (line.type === 'model_change' && model === 'unknown') {
+      model = (line as RawModelChange).modelId ?? 'unknown';
+      continue;
+    }
+
+    if (line.type !== 'message') {
+      continue;
+    }
+
+    const message = line as RawMessage;
+    messageCount += 1;
+
+    if (title === null) {
+      title = extractTitleFromMessage(message.message);
+    }
+  }
+
+  if (!sessionRecord) {
+    return null;
+  }
+
+  return {
+    id: sessionRecord.id,
+    file: filePath,
+    timestamp: sessionRecord.timestamp,
+    cwd: sessionRecord.cwd ?? slugToCwd(cwdSlug),
+    cwdSlug,
+    model,
+    title: title ?? 'New Conversation',
+    messageCount,
+  };
+}
+
+function serializePersistentSessionIndex(document: PersistentSessionIndexDocument): string {
+  return JSON.stringify(document);
+}
+
+function buildPersistentSessionIndexDocument(sessionsDir: string): PersistentSessionIndexDocument {
+  const entries = [...sessionMetaCache.entries()]
+    .map(([filePath, cached]) => ({
+      filePath,
+      signature: cached.signature,
+      meta: cached.meta,
+    }))
+    .sort((left, right) => left.filePath.localeCompare(right.filePath));
+
+  return {
+    version: 1,
+    sessionsDir,
+    entries,
+  };
+}
+
+function loadPersistentSessionIndexEntry(value: unknown): PersistentSessionIndexEntry | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const entry = value as Partial<PersistentSessionIndexEntry>;
+  const meta = entry.meta as Partial<SessionMeta> | undefined;
+  if (typeof entry.filePath !== 'string' || typeof entry.signature !== 'string' || !meta) {
+    return null;
+  }
+  if (
+    typeof meta.id !== 'string'
+    || typeof meta.timestamp !== 'string'
+    || typeof meta.cwd !== 'string'
+    || typeof meta.cwdSlug !== 'string'
+    || typeof meta.model !== 'string'
+    || typeof meta.title !== 'string'
+    || typeof meta.messageCount !== 'number'
+  ) {
+    return null;
+  }
+
+  return {
+    filePath: entry.filePath,
+    signature: entry.signature,
+    meta: {
+      id: meta.id,
+      file: entry.filePath,
+      timestamp: meta.timestamp,
+      cwd: meta.cwd,
+      cwdSlug: meta.cwdSlug,
+      model: meta.model,
+      title: meta.title,
+      messageCount: meta.messageCount,
+    },
+  };
+}
+
+function ensurePersistentIndexLoaded(): void {
+  const sessionsDir = resolveSessionsDir();
+  const indexFile = resolveSessionsIndexFile();
+  const indexKey = `${sessionsDir}::${indexFile}`;
+
+  if (loadedPersistentIndexKey === indexKey) {
+    return;
+  }
+
+  sessionMetaCache.clear();
+  sessionFileById.clear();
+  loadedPersistentIndexKey = indexKey;
+  persistedIndexJson = null;
+
+  if (!existsSync(indexFile)) {
+    return;
+  }
+
+  try {
+    const raw = readFileSync(indexFile, 'utf-8').trim();
+    if (!raw) {
+      return;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<PersistentSessionIndexDocument>;
+    if (parsed.version !== 1 || parsed.sessionsDir !== sessionsDir || !Array.isArray(parsed.entries)) {
+      return;
+    }
+
+    for (const value of parsed.entries) {
+      const entry = loadPersistentSessionIndexEntry(value);
+      if (!entry) {
+        continue;
+      }
+
+      sessionMetaCache.set(entry.filePath, {
+        signature: entry.signature,
+        meta: entry.meta,
+      });
+      sessionFileById.set(entry.meta.id, entry.filePath);
+    }
+
+    persistedIndexJson = serializePersistentSessionIndex(buildPersistentSessionIndexDocument(sessionsDir));
+  } catch {
+    sessionMetaCache.clear();
+    sessionFileById.clear();
+    persistedIndexJson = null;
+  }
+}
+
+function persistSessionIndex(): void {
+  const sessionsDir = resolveSessionsDir();
+  const indexFile = resolveSessionsIndexFile();
+  const nextJson = serializePersistentSessionIndex(buildPersistentSessionIndexDocument(sessionsDir));
+  if (nextJson === persistedIndexJson) {
+    return;
+  }
+
+  try {
+    mkdirSync(dirname(indexFile), { recursive: true });
+    writeFileSync(indexFile, nextJson);
+    persistedIndexJson = nextJson;
+  } catch {
+    // Ignore persistence failures; the in-memory cache still helps.
+  }
+}
+
+function readCachedSessionMeta(filePath: string, cwdSlug: string): SessionMeta | null {
+  const signature = getFileSignature(filePath);
+  if (!signature) {
+    sessionMetaCache.delete(filePath);
+    return null;
+  }
+
+  const cached = sessionMetaCache.get(filePath);
+  if (cached && cached.signature === signature) {
+    return cached.meta;
+  }
+
+  const meta = readSessionMetaFromFile(filePath, cwdSlug);
+  if (!meta) {
+    sessionMetaCache.delete(filePath);
+    return null;
+  }
+
+  sessionMetaCache.set(filePath, { signature, meta });
+  return meta;
+}
+
+function scanSessionMetas(): SessionMeta[] {
+  ensurePersistentIndexLoaded();
+
+  const sessionsDir = resolveSessionsDir();
+  if (!existsSync(sessionsDir)) {
+    sessionMetaCache.clear();
+    sessionFileById.clear();
+    persistSessionIndex();
+    return [];
+  }
+
+  const metas: SessionMeta[] = [];
+  const seenFiles = new Set<string>();
+  const nextSessionFileById = new Map<string, string>();
+
+  for (const cwdSlug of readdirSync(sessionsDir)) {
+    const dirPath = join(sessionsDir, cwdSlug);
+    let files: string[];
+    try {
+      files = readdirSync(dirPath).filter((fileName) => fileName.endsWith('.jsonl'));
+    } catch {
+      continue;
+    }
+
+    for (const fileName of files) {
+      const filePath = join(dirPath, fileName);
+      seenFiles.add(filePath);
+
+      const meta = readCachedSessionMeta(filePath, cwdSlug);
+      if (!meta) {
+        continue;
+      }
+
+      metas.push(meta);
+      nextSessionFileById.set(meta.id, filePath);
+    }
+  }
+
+  for (const filePath of sessionMetaCache.keys()) {
+    if (!seenFiles.has(filePath)) {
+      sessionMetaCache.delete(filePath);
+    }
+  }
+
+  sessionFileById = nextSessionFileById;
+  metas.sort((left, right) => right.timestamp.localeCompare(left.timestamp));
+  persistSessionIndex();
+  return metas;
+}
+
+function resolveSessionMeta(sessionId: string): SessionMeta | null {
+  ensurePersistentIndexLoaded();
+
+  const cachedFilePath = sessionFileById.get(sessionId);
+  if (cachedFilePath) {
+    const cachedMeta = readCachedSessionMeta(cachedFilePath, basename(dirname(cachedFilePath)));
+    if (cachedMeta?.id === sessionId) {
+      return cachedMeta;
+    }
+  }
+
+  const metas = scanSessionMetas();
+  return metas.find((meta) => meta.id === sessionId) ?? null;
+}
+
+export function clearSessionCaches(): void {
+  sessionMetaCache.clear();
+  sessionFileById.clear();
+  loadedPersistentIndexKey = null;
+  persistedIndexJson = null;
+}
+
+// ── Public API ─────────────────────────────────────────────────────────────────
+
+export function listSessions(): SessionMeta[] {
+  return scanSessionMetas();
+}
+
+export function readSessionBlocks(sessionId: string): SessionDetail | null {
+  const meta = resolveSessionMeta(sessionId);
+  if (!meta) return null;
+
+  const lines = parseJsonl(meta.file);
+  const messages = lines.filter(l => l.type === 'message') as RawMessage[];
+
   return {
     meta,
-    blocks,
+    blocks: buildDisplayBlocksFromEntries(messages),
     contextUsage: readSessionContextUsageFromFile(meta.file),
   };
 }

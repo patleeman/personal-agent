@@ -22,7 +22,7 @@ plan:
     - id: unified-project-model
       title: Align the rail and project page around one project model
       status: in_progress
-      summary: Treat the project as one object with a high-level plan and separate execution tasks.
+      summary: Treat the project as one object with milestones and lightweight tasks in PROJECT.yaml.
     - id: richer-previews
       title: Add richer task, activity, and artifact previews
       status: pending

@@ -7,11 +7,10 @@ describe('parseProjectSlashCommand', () => {
   });
 
   it('parses project creation commands', () => {
-    expect(parseProjectSlashCommand('/project new web-ui Build the web UI shell')).toEqual({
+    expect(parseProjectSlashCommand('/project new Build the web UI shell')).toEqual({
       kind: 'command',
       command: {
         action: 'new',
-        projectId: 'web-ui',
         description: 'Build the web UI shell',
       },
     });
@@ -42,9 +41,9 @@ describe('parseProjectSlashCommand', () => {
       kind: 'invalid',
       message: PROJECT_SLASH_USAGE,
     });
-    expect(parseProjectSlashCommand('/project new web-ui')).toEqual({
+    expect(parseProjectSlashCommand('/project new')).toEqual({
       kind: 'invalid',
-      message: 'Usage: /project new <id> <description>',
+      message: 'Usage: /project new <description>',
     });
   });
 });

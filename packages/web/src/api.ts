@@ -41,7 +41,6 @@ export const api = {
   projects:     () => get<ProjectRecord[]>('/projects'),
   projectById:  (id: string) => get<ProjectDetail>(`/projects/${encodeURIComponent(id)}`),
   createProject: (input: {
-    id: string;
     description: string;
     summary?: string;
     status?: string;
@@ -61,7 +60,6 @@ export const api = {
   deleteProject: (id: string) =>
     del<{ ok: true; deletedProjectId: string }>(`/projects/${encodeURIComponent(id)}`),
   addProjectMilestone: (id: string, input: {
-    id: string;
     title: string;
     status: string;
     summary?: string;
@@ -78,23 +76,14 @@ export const api = {
   moveProjectMilestone: (id: string, milestoneId: string, direction: 'up' | 'down') =>
     post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/milestones/${encodeURIComponent(milestoneId)}/move`, { direction }),
   createProjectTask: (id: string, input: {
-    id: string;
     title: string;
     status: string;
-    summary?: string;
     milestoneId?: string | null;
-    acceptanceCriteria?: string[];
-    plan?: string[];
-    notes?: string | null;
   }) => post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/tasks`, input),
   updateProjectTask: (id: string, taskId: string, patchBody: {
     title?: string;
     status?: string;
-    summary?: string | null;
     milestoneId?: string | null;
-    acceptanceCriteria?: string[];
-    plan?: string[];
-    notes?: string | null;
   }) => patch<ProjectDetail>(`/projects/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}`, patchBody),
   deleteProjectTask: (id: string, taskId: string) =>
     del<ProjectDetail>(`/projects/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}`),
@@ -102,10 +91,6 @@ export const api = {
     post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}/move`, { direction }),
   projectSource: (id: string) => get<{ path: string; content: string }>(`/projects/${encodeURIComponent(id)}/source`),
   saveProjectSource: (id: string, content: string) => post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/source`, { content }),
-  projectTaskSource: (id: string, taskId: string) =>
-    get<{ path: string; content: string }>(`/projects/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}/source`),
-  saveProjectTaskSource: (id: string, taskId: string, content: string) =>
-    post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}/source`, { content }),
   profiles:     () => get<ProfileState>('/profiles'),
   setCurrentProfile: (profile: string) => patch<{ ok: boolean; currentProfile: string }>('/profiles/current', { profile }),
 

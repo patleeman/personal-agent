@@ -61,6 +61,7 @@ describe('project artifacts', () => {
           { id: 'execute-work', title: 'Execute the work', status: 'pending' },
           { id: 'verify-result', title: 'Verify the result', status: 'pending' },
         ],
+        tasks: [],
       },
     });
   });
@@ -82,6 +83,9 @@ describe('project artifacts', () => {
           { id: 'schema', title: 'Finalize the artifact schema', status: 'completed' },
           { id: 'helpers', title: 'Implement read/write helpers', status: 'completed' },
           { id: 'cli-inbox', title: 'Build the CLI inbox surface', status: 'in_progress', summary: 'Keep it compact and durable.' },
+        ],
+        tasks: [
+          { id: 'wire-inbox', title: 'Wire the inbox command', status: 'in_progress', milestoneId: 'cli-inbox' },
         ],
       },
     };
@@ -122,6 +126,7 @@ plan:
     - id: refine-plan
       title: Refine the plan
       status: in_progress
+  tasks: []
 `;
 
     expect(() => parseProject(yaml)).toThrow('Current milestone id missing does not exist');
@@ -200,40 +205,30 @@ describe('project task artifacts', () => {
   it('creates the default task document', () => {
     const task = createProjectTask({
       id: 'implement-activity',
-      createdAt: '2026-03-10T15:00:00.000Z',
       status: 'pending',
       title: 'Implement activity records',
+      milestoneId: 'durable-activity',
     });
 
-    expect(task.updatedAt).toBe('2026-03-10T15:00:00.000Z');
-    expect(task.status).toBe('pending');
+    expect(task).toEqual({
+      id: 'implement-activity',
+      status: 'pending',
+      title: 'Implement activity records',
+      milestoneId: 'durable-activity',
+    });
   });
 
   it('formats and parses task yaml as a round trip', () => {
     const document: ProjectTaskDocument = {
       id: 'implement-activity',
-      createdAt: '2026-03-10T15:00:00.000Z',
-      updatedAt: '2026-03-10T16:00:00.000Z',
-      status: 'running',
+      status: 'in_progress',
       title: 'Implement activity records',
-      order: 2,
-      summary: 'Wire daemon task runs into durable activity output.',
       milestoneId: 'durable-activity',
-      acceptanceCriteria: [
-        'scheduled task runs emit activity entries',
-        'activity entries link back to the project',
-      ],
-      plan: [
-        'update the daemon task module',
-        'write project activity entries',
-      ],
-      notes: 'Start with the scheduled-task path.',
     };
 
     const yaml = formatProjectTask(document);
-    expect(yaml).toContain('status: running');
-    expect(yaml).toContain('order: 2');
-    expect(yaml).toContain('acceptanceCriteria:');
+    expect(yaml).toContain('status: in_progress');
+    expect(yaml).toContain('milestoneId: durable-activity');
 
     expect(parseProjectTask(yaml)).toEqual(document);
   });
@@ -243,12 +238,9 @@ describe('project task artifacts', () => {
     const path = join(dir, 'task.yaml');
     const document = createProjectTask({
       id: 'implement-activity',
-      createdAt: '2026-03-10T15:00:00.000Z',
       status: 'pending',
       title: 'Implement activity records',
-      summary: 'Start with the daemon scheduled-task path.',
-      acceptanceCriteria: ['activity entries exist after a task run'],
-      plan: ['update the daemon module'],
+      milestoneId: 'durable-activity',
     });
 
     writeProjectTask(path, document);

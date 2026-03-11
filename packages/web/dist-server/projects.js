@@ -1,17 +1,5 @@
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { createProjectScaffold, createProjectTask, formatProject, formatProjectTask, parseProject, parseProjectTask, readProject, readProjectTask, resolveProjectPaths, resolveProjectTaskPath, writeProject, writeProjectTask, } from '@personal-agent/core';
-const TASK_STATUS_RANK = {
-    running: 0,
-    blocked: 1,
-    failed: 2,
-    pending: 3,
-    completed: 4,
-    cancelled: 5,
-};
-function taskStatusRank(status) {
-    return TASK_STATUS_RANK[status] ?? TASK_STATUS_RANK.pending;
-}
+import { createProjectScaffold, createProjectTask, formatProject, listProjectIds, parseProject, readProject, resolveProjectPaths, writeProject, } from '@personal-agent/core';
 function listFiles(dir, extension) {
     if (!existsSync(dir)) {
         return [];
@@ -59,9 +47,6 @@ function readProjectRecord(options) {
         project: readProject(paths.projectFile),
     };
 }
-function taskOrderValue(task) {
-    return typeof task.order === 'number' ? task.order : undefined;
-}
 function moveArrayItem(items, index, direction) {
     const nextIndex = direction === 'up' ? index - 1 : index + 1;
     if (index < 0 || nextIndex < 0 || nextIndex >= items.length) {
@@ -72,60 +57,54 @@ function moveArrayItem(items, index, direction) {
     output.splice(nextIndex, 0, item);
     return output;
 }
-function reindexTaskOrder(tasks) {
-    return tasks.map((task, index) => ({
-        ...task,
-        order: index,
-    }));
+function slugifyIdentifier(value) {
+    return value
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .replace(/-{2,}/g, '-');
+}
+function generateUniqueId(title, existingIds, fallbackBase) {
+    const base = slugifyIdentifier(title) || fallbackBase;
+    const used = new Set(existingIds);
+    if (!used.has(base)) {
+        return base;
+    }
+    let index = 2;
+    while (used.has(`${base}-${index}`)) {
+        index += 1;
+    }
+    return `${base}-${index}`;
 }
 export function sortProjectTasks(tasks) {
-    return [...tasks].sort((left, right) => {
-        const leftOrder = taskOrderValue(left);
-        const rightOrder = taskOrderValue(right);
-        if (leftOrder !== undefined || rightOrder !== undefined) {
-            const normalizedLeftOrder = leftOrder ?? Number.MAX_SAFE_INTEGER;
-            const normalizedRightOrder = rightOrder ?? Number.MAX_SAFE_INTEGER;
-            const orderCompare = normalizedLeftOrder - normalizedRightOrder;
-            if (orderCompare !== 0) {
-                return orderCompare;
-            }
-        }
-        const statusCompare = taskStatusRank(left.status) - taskStatusRank(right.status);
-        if (statusCompare !== 0) {
-            return statusCompare;
-        }
-        const updatedAtCompare = right.updatedAt.localeCompare(left.updatedAt);
-        if (updatedAtCompare !== 0) {
-            return updatedAtCompare;
-        }
-        return left.id.localeCompare(right.id);
-    });
-}
-function readProjectTasks(dir) {
-    const tasks = listFiles(dir, '.yaml').map((fileName) => readProjectTask(join(dir, fileName)));
-    return sortProjectTasks(tasks);
+    return [...tasks];
 }
 export function readProjectDetailFromProject(options) {
     const paths = resolveProjectPaths(options);
-    const tasks = readProjectTasks(paths.tasksDir);
+    const project = readProject(paths.projectFile);
+    const tasks = sortProjectTasks(project.plan.tasks ?? []);
     return {
-        project: readProject(paths.projectFile),
+        project,
         taskCount: tasks.length,
         artifactCount: listFiles(paths.artifactsDir).length,
         tasks,
     };
 }
 export function createProjectRecord(input) {
+    const description = readRequiredString(input.description, 'Project description');
+    const projectId = readOptionalString(input.projectId)
+        ?? generateUniqueId(description, listProjectIds({ repoRoot: input.repoRoot, profile: input.profile }), 'project');
     createProjectScaffold({
         repoRoot: input.repoRoot,
         profile: input.profile,
-        projectId: input.projectId,
-        objective: readRequiredString(input.description, 'Project description'),
+        projectId,
+        objective: description,
     });
-    const { paths, project } = readProjectRecord(input);
+    const { paths, project } = readProjectRecord({ ...input, projectId });
     const updatedProject = {
         ...project,
-        description: readRequiredString(input.description, 'Project description'),
+        description,
         summary: readOptionalString(input.summary) ?? project.summary,
         status: readOptionalString(input.status) ?? project.status,
         currentFocus: readOptionalString(input.currentFocus) ?? project.currentFocus,
@@ -134,7 +113,7 @@ export function createProjectRecord(input) {
         updatedAt: nowIso(),
     };
     writeProject(paths.projectFile, updatedProject);
-    return readProjectDetailFromProject(input);
+    return readProjectDetailFromProject({ ...input, projectId });
 }
 export function updateProjectRecord(input) {
     const { paths, project } = readProjectRecord(input);
@@ -168,13 +147,15 @@ export function deleteProjectRecord(input) {
 }
 export function addProjectMilestone(input) {
     const { paths, project } = readProjectRecord(input);
-    const milestoneId = readRequiredString(input.id, 'Milestone id');
+    const milestoneTitle = readRequiredString(input.title, 'Milestone title');
+    const milestoneId = readOptionalString(input.id)
+        ?? generateUniqueId(milestoneTitle, project.plan.milestones.map((milestone) => milestone.id), 'milestone');
     if (project.plan.milestones.some((milestone) => milestone.id === milestoneId)) {
         throw new Error(`Milestone already exists in project ${project.id}: ${milestoneId}`);
     }
     const milestone = {
         id: milestoneId,
-        title: readRequiredString(input.title, 'Milestone title'),
+        title: milestoneTitle,
         status: readRequiredString(input.status, 'Milestone status'),
         summary: readOptionalString(input.summary),
     };
@@ -182,6 +163,7 @@ export function addProjectMilestone(input) {
         ...project,
         updatedAt: nowIso(),
         plan: {
+            ...project.plan,
             currentMilestoneId: input.makeCurrent ? milestone.id : project.plan.currentMilestoneId,
             milestones: [...project.plan.milestones, milestone],
         },
@@ -208,6 +190,7 @@ export function updateProjectMilestone(input) {
         ...project,
         updatedAt: nowIso(),
         plan: {
+            ...project.plan,
             currentMilestoneId: input.makeCurrent ? updatedMilestone.id : project.plan.currentMilestoneId,
             milestones,
         },
@@ -217,63 +200,67 @@ export function updateProjectMilestone(input) {
 }
 export function createProjectTaskRecord(input) {
     const { paths, project } = readProjectRecord(input);
-    const taskId = readRequiredString(input.taskId, 'Task id');
-    const taskPath = resolveProjectTaskPath({
-        repoRoot: input.repoRoot,
-        profile: input.profile,
-        projectId: input.projectId,
-        taskId,
-    });
-    if (existsSync(taskPath)) {
+    const milestoneId = readOptionalString(input.milestoneId) ?? project.plan.currentMilestoneId;
+    if (!milestoneId) {
+        throw new Error(`Task milestoneId must not be empty.`);
+    }
+    assertMilestoneExists(project, milestoneId);
+    const title = readRequiredString(input.title, 'Task title');
+    const existingTasks = sortProjectTasks(project.plan.tasks ?? []);
+    const taskId = readOptionalString(input.taskId)
+        ?? generateUniqueId(title, existingTasks.map((task) => task.id), 'task');
+    if (existingTasks.some((task) => task.id === taskId)) {
         throw new Error(`Task already exists in project ${input.projectId}: ${taskId}`);
     }
-    const milestoneId = readOptionalString(input.milestoneId);
-    assertMilestoneExists(project, milestoneId);
-    const existingTasks = readProjectTasks(paths.tasksDir);
-    const nextOrder = existingTasks.length === 0
-        ? 0
-        : Math.max(...existingTasks.map((task) => task.order ?? -1)) + 1;
-    writeProjectTask(taskPath, createProjectTask({
-        id: taskId,
-        createdAt: nowIso(),
-        status: readRequiredString(input.status, 'Task status'),
-        title: readRequiredString(input.title, 'Task title'),
-        summary: readOptionalString(input.summary),
-        order: nextOrder,
-        milestoneId,
-        acceptanceCriteria: input.acceptanceCriteria ? readStringList(input.acceptanceCriteria, 'Task acceptanceCriteria') : undefined,
-        plan: input.plan ? readStringList(input.plan, 'Task plan') : undefined,
-        notes: readOptionalString(input.notes),
-    }));
+    const nextTasks = [
+        ...existingTasks,
+        createProjectTask({
+            id: taskId,
+            status: readRequiredString(input.status, 'Task status'),
+            title,
+            milestoneId,
+        }),
+    ];
+    writeProject(paths.projectFile, {
+        ...project,
+        updatedAt: nowIso(),
+        plan: {
+            ...project.plan,
+            tasks: nextTasks,
+        },
+    });
     return readProjectDetailFromProject(input);
 }
 export function updateProjectTaskRecord(input) {
-    readProjectRecord(input);
-    const taskPath = resolveProjectTaskPath({
-        repoRoot: input.repoRoot,
-        profile: input.profile,
-        projectId: input.projectId,
-        taskId: input.taskId,
-    });
-    if (!existsSync(taskPath)) {
+    const { paths, project } = readProjectRecord(input);
+    const taskIndex = (project.plan.tasks ?? []).findIndex((task) => task.id === input.taskId);
+    if (taskIndex === -1) {
         throw new Error(`Task not found in project ${input.projectId}: ${input.taskId}`);
     }
-    const existingTask = readProjectTask(taskPath);
-    const { project } = readProjectRecord(input);
-    const milestoneId = input.milestoneId !== undefined ? readOptionalString(input.milestoneId) : existingTask.milestoneId;
+    const existingTask = project.plan.tasks[taskIndex];
+    const milestoneId = input.milestoneId !== undefined
+        ? readOptionalString(input.milestoneId)
+        : existingTask.milestoneId;
+    if (!milestoneId) {
+        throw new Error('Task milestoneId must not be empty.');
+    }
     assertMilestoneExists(project, milestoneId);
     const updatedTask = {
         ...existingTask,
         ...(input.title !== undefined ? { title: readRequiredString(input.title, 'Task title') } : {}),
         ...(input.status !== undefined ? { status: readRequiredString(input.status, 'Task status') } : {}),
-        ...(input.summary !== undefined ? { summary: readOptionalString(input.summary) } : {}),
-        ...(input.milestoneId !== undefined ? { milestoneId } : {}),
-        ...(input.acceptanceCriteria !== undefined ? { acceptanceCriteria: readStringList(input.acceptanceCriteria, 'Task acceptanceCriteria') } : {}),
-        ...(input.plan !== undefined ? { plan: readStringList(input.plan, 'Task plan') } : {}),
-        ...(input.notes !== undefined ? { notes: readOptionalString(input.notes) } : {}),
-        updatedAt: nowIso(),
+        milestoneId,
     };
-    writeProjectTask(taskPath, updatedTask);
+    const nextTasks = [...project.plan.tasks];
+    nextTasks[taskIndex] = updatedTask;
+    writeProject(paths.projectFile, {
+        ...project,
+        updatedAt: nowIso(),
+        plan: {
+            ...project.plan,
+            tasks: nextTasks,
+        },
+    });
     return readProjectDetailFromProject(input);
 }
 export function deleteProjectMilestone(input) {
@@ -281,6 +268,9 @@ export function deleteProjectMilestone(input) {
     const milestoneIndex = project.plan.milestones.findIndex((milestone) => milestone.id === input.milestoneId);
     if (milestoneIndex === -1) {
         throw new Error(`Milestone not found in project ${project.id}: ${input.milestoneId}`);
+    }
+    if ((project.plan.tasks ?? []).some((task) => task.milestoneId === input.milestoneId)) {
+        throw new Error(`Cannot delete milestone ${input.milestoneId} while it still has tasks. Move or delete the tasks first.`);
     }
     const nextMilestones = project.plan.milestones.filter((milestone) => milestone.id !== input.milestoneId);
     const nextCurrentMilestoneId = project.plan.currentMilestoneId === input.milestoneId
@@ -290,26 +280,11 @@ export function deleteProjectMilestone(input) {
         ...project,
         updatedAt: nowIso(),
         plan: {
+            ...project.plan,
             currentMilestoneId: nextCurrentMilestoneId,
             milestones: nextMilestones,
         },
     });
-    const tasks = readProjectTasks(paths.tasksDir);
-    for (const task of tasks) {
-        if (task.milestoneId !== input.milestoneId) {
-            continue;
-        }
-        writeProjectTask(resolveProjectTaskPath({
-            repoRoot: input.repoRoot,
-            profile: input.profile,
-            projectId: input.projectId,
-            taskId: task.id,
-        }), {
-            ...task,
-            milestoneId: undefined,
-            updatedAt: nowIso(),
-        });
-    }
     return readProjectDetailFromProject(input);
 }
 export function moveProjectMilestone(input) {
@@ -330,47 +305,48 @@ export function moveProjectMilestone(input) {
     return readProjectDetailFromProject(input);
 }
 export function deleteProjectTaskRecord(input) {
-    const { paths } = readProjectRecord(input);
-    const taskPath = resolveProjectTaskPath({
-        repoRoot: input.repoRoot,
-        profile: input.profile,
-        projectId: input.projectId,
-        taskId: input.taskId,
-    });
-    if (!existsSync(taskPath)) {
+    const { paths, project } = readProjectRecord(input);
+    const nextTasks = (project.plan.tasks ?? []).filter((task) => task.id !== input.taskId);
+    if (nextTasks.length === (project.plan.tasks ?? []).length) {
         throw new Error(`Task not found in project ${input.projectId}: ${input.taskId}`);
     }
-    rmSync(taskPath);
-    const tasks = reindexTaskOrder(readProjectTasks(paths.tasksDir));
-    for (const task of tasks) {
-        writeProjectTask(resolveProjectTaskPath({
-            repoRoot: input.repoRoot,
-            profile: input.profile,
-            projectId: input.projectId,
-            taskId: task.id,
-        }), task);
-    }
+    writeProject(paths.projectFile, {
+        ...project,
+        updatedAt: nowIso(),
+        plan: {
+            ...project.plan,
+            tasks: nextTasks,
+        },
+    });
     return readProjectDetailFromProject(input);
 }
 export function moveProjectTaskRecord(input) {
-    const { paths } = readProjectRecord(input);
-    const tasks = reindexTaskOrder(readProjectTasks(paths.tasksDir));
-    const taskIndex = tasks.findIndex((task) => task.id === input.taskId);
-    if (taskIndex === -1) {
+    const { paths, project } = readProjectRecord(input);
+    const tasks = sortProjectTasks(project.plan.tasks ?? []);
+    const task = tasks.find((entry) => entry.id === input.taskId);
+    if (!task) {
         throw new Error(`Task not found in project ${input.projectId}: ${input.taskId}`);
     }
-    const movedTasks = reindexTaskOrder(moveArrayItem(tasks, taskIndex, input.direction));
-    for (const task of movedTasks) {
-        writeProjectTask(resolveProjectTaskPath({
-            repoRoot: input.repoRoot,
-            profile: input.profile,
-            projectId: input.projectId,
-            taskId: task.id,
-        }), {
-            ...task,
-            updatedAt: nowIso(),
-        });
-    }
+    const milestoneTasks = tasks.filter((entry) => entry.milestoneId === task.milestoneId);
+    const taskIndex = milestoneTasks.findIndex((entry) => entry.id === input.taskId);
+    const movedMilestoneTasks = moveArrayItem(milestoneTasks, taskIndex, input.direction);
+    let milestoneCursor = 0;
+    const nextTasks = tasks.map((entry) => {
+        if (entry.milestoneId !== task.milestoneId) {
+            return entry;
+        }
+        const replacement = movedMilestoneTasks[milestoneCursor];
+        milestoneCursor += 1;
+        return replacement;
+    });
+    writeProject(paths.projectFile, {
+        ...project,
+        updatedAt: nowIso(),
+        plan: {
+            ...project.plan,
+            tasks: nextTasks,
+        },
+    });
     return readProjectDetailFromProject(input);
 }
 export function readProjectSource(options) {
@@ -387,27 +363,5 @@ export function saveProjectSource(input) {
         throw new Error(`Project YAML id must match route id ${input.projectId}.`);
     }
     writeFileSync(paths.projectFile, formatProject(parsedProject));
-    return readProjectDetailFromProject(input);
-}
-export function readProjectTaskSource(options) {
-    const taskPath = resolveProjectTaskPath(options);
-    if (!existsSync(taskPath)) {
-        throw new Error(`Task not found in project ${options.projectId}: ${options.taskId}`);
-    }
-    return {
-        path: taskPath,
-        content: readFileSync(taskPath, 'utf-8'),
-    };
-}
-export function saveProjectTaskSource(input) {
-    const taskPath = resolveProjectTaskPath(input);
-    if (!existsSync(taskPath)) {
-        throw new Error(`Task not found in project ${input.projectId}: ${input.taskId}`);
-    }
-    const parsedTask = parseProjectTask(input.content);
-    if (parsedTask.id !== input.taskId) {
-        throw new Error(`Task YAML id must match route id ${input.taskId}.`);
-    }
-    writeFileSync(taskPath, formatProjectTask(parsedTask));
     return readProjectDetailFromProject(input);
 }

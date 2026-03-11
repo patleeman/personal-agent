@@ -16,25 +16,22 @@ const PROJECT_ACTION_VALUES = [
 ];
 const ProjectToolParams = Type.Object({
     action: Type.Union(PROJECT_ACTION_VALUES.map((value) => Type.Literal(value))),
-    projectId: Type.Optional(Type.String({ description: 'Project id, for example web-ui.' })),
+    projectId: Type.Optional(Type.String({ description: 'Project id, for example web-ui. Required for get/reference/unreference/update actions.' })),
     description: Type.Optional(Type.String({ description: 'Project description for create/update actions.' })),
-    summary: Type.Optional(Type.String({ description: 'Project, milestone, or task summary text.' })),
+    summary: Type.Optional(Type.String({ description: 'Project or milestone summary text.' })),
     status: Type.Optional(Type.String({ description: 'Project status for create/update actions.' })),
     currentFocus: Type.Optional(Type.String({ description: 'Current focus for the project.' })),
     blockers: Type.Optional(Type.Array(Type.String({ description: 'Project blocker.' }))),
     recentProgress: Type.Optional(Type.Array(Type.String({ description: 'Recent progress item.' }))),
     currentMilestoneId: Type.Optional(Type.String({ description: 'Current milestone id for the project.' })),
     referenceInConversation: Type.Optional(Type.Boolean({ description: 'Whether to reference the project in the current conversation. Defaults to true for create.' })),
-    milestoneId: Type.Optional(Type.String({ description: 'Milestone id for milestone actions.' })),
+    milestoneId: Type.Optional(Type.String({ description: 'Milestone id for update_milestone actions.' })),
     title: Type.Optional(Type.String({ description: 'Milestone or task title.' })),
     milestoneStatus: Type.Optional(Type.String({ description: 'Milestone status.' })),
     makeCurrent: Type.Optional(Type.Boolean({ description: 'Set the milestone as the current milestone.' })),
-    taskId: Type.Optional(Type.String({ description: 'Task id for task actions.' })),
+    taskId: Type.Optional(Type.String({ description: 'Task id for update_task actions.' })),
     taskStatus: Type.Optional(Type.String({ description: 'Task status.' })),
-    taskMilestoneId: Type.Optional(Type.String({ description: 'Milestone id to associate with the task.' })),
-    acceptanceCriteria: Type.Optional(Type.Array(Type.String({ description: 'Task acceptance criterion.' }))),
-    taskPlan: Type.Optional(Type.Array(Type.String({ description: 'Task plan step.' }))),
-    notes: Type.Optional(Type.String({ description: 'Task notes.' })),
+    taskMilestoneId: Type.Optional(Type.String({ description: 'Milestone id to associate with the task. Defaults to the current milestone when omitted on add.' })),
 });
 function readRequiredString(value, label) {
     const normalized = value?.trim();
@@ -61,11 +58,7 @@ function hasMilestoneMutation(params) {
 function hasTaskMutation(params) {
     return params.title !== undefined
         || params.taskStatus !== undefined
-        || params.summary !== undefined
-        || params.taskMilestoneId !== undefined
-        || params.acceptanceCriteria !== undefined
-        || params.taskPlan !== undefined
-        || params.notes !== undefined;
+        || params.taskMilestoneId !== undefined;
 }
 function formatConversationReferences(relatedProjectIds) {
     return relatedProjectIds.length > 0
@@ -145,12 +138,12 @@ export function createProjectAgentExtension(options) {
         pi.registerTool({
             name: 'project',
             label: 'Project',
-            description: 'Create, reference, inspect, and update durable projects backed by PROJECT.yaml and tasks/*.yaml.',
+            description: 'Create, reference, inspect, and update durable projects backed by PROJECT.yaml.',
             promptSnippet: 'Create, reference, inspect, and update durable projects and their milestones/tasks.',
             promptGuidelines: [
                 'Use this tool when the user asks to create a project, inspect project state, or update milestones/tasks durably.',
                 'Reference a project in the current conversation when it should stay in working context for later turns.',
-                'Prefer the project tool over hand-editing PROJECT.yaml or tasks/*.yaml when you are managing structured project state.',
+                'Prefer the project tool over hand-editing PROJECT.yaml when you are managing structured project state.',
             ],
             parameters: ProjectToolParams,
             async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
@@ -176,11 +169,9 @@ export function createProjectAgentExtension(options) {
                             };
                         }
                         case 'create': {
-                            const projectId = readRequiredString(params.projectId, 'projectId');
                             const detail = createProjectRecord({
                                 repoRoot: options.repoRoot,
                                 profile,
-                                projectId,
                                 description: readRequiredString(params.description, 'description'),
                                 ...(params.summary !== undefined ? { summary: params.summary } : {}),
                                 ...(params.status !== undefined ? { status: params.status } : {}),
@@ -188,13 +179,14 @@ export function createProjectAgentExtension(options) {
                                 ...(params.blockers !== undefined ? { blockers: params.blockers } : {}),
                                 ...(params.recentProgress !== undefined ? { recentProgress: params.recentProgress } : {}),
                             });
+                            const createdProjectId = detail.project.id;
                             const shouldReference = params.referenceInConversation ?? true;
                             if (shouldReference) {
                                 addConversationProjectLink({
                                     repoRoot: options.repoRoot,
                                     profile,
                                     conversationId,
-                                    projectId,
+                                    projectId: createdProjectId,
                                 });
                             }
                             invalidateAppTopics('projects');
@@ -204,9 +196,9 @@ export function createProjectAgentExtension(options) {
                             return {
                                 content: [{
                                         type: 'text',
-                                        text: `${shouldReference ? `Created and referenced @${projectId}.` : `Created project ${projectId}.`}\n\n${formatProjectDetail(detail, nextRelatedProjectIds)}`,
+                                        text: `${shouldReference ? `Created and referenced @${createdProjectId}.` : `Created project ${createdProjectId}.`}\n\n${formatProjectDetail(detail, nextRelatedProjectIds)}`,
                                     }],
-                                details: { action: 'create', projectId, referenced: shouldReference, relatedProjectIds: nextRelatedProjectIds },
+                                details: { action: 'create', projectId: createdProjectId, referenced: shouldReference, relatedProjectIds: nextRelatedProjectIds },
                             };
                         }
                         case 'reference': {
@@ -261,12 +253,10 @@ export function createProjectAgentExtension(options) {
                         }
                         case 'add_milestone': {
                             const projectId = readRequiredString(params.projectId, 'projectId');
-                            const milestoneId = readRequiredString(params.milestoneId, 'milestoneId');
                             const detail = addProjectMilestone({
                                 repoRoot: options.repoRoot,
                                 profile,
                                 projectId,
-                                id: milestoneId,
                                 title: readRequiredString(params.title, 'title'),
                                 status: params.milestoneStatus?.trim() || 'pending',
                                 ...(params.summary !== undefined ? { summary: params.summary } : {}),
@@ -274,8 +264,8 @@ export function createProjectAgentExtension(options) {
                             });
                             invalidateAppTopics('projects');
                             return {
-                                content: [{ type: 'text', text: `Added milestone ${milestoneId} to project ${projectId}.\n\n${formatProjectDetail(detail, relatedProjectIds)}` }],
-                                details: { action: 'add_milestone', projectId, milestoneId },
+                                content: [{ type: 'text', text: `Added milestone to project ${projectId}.\n\n${formatProjectDetail(detail, relatedProjectIds)}` }],
+                                details: { action: 'add_milestone', projectId },
                             };
                         }
                         case 'update_milestone': {
@@ -302,24 +292,18 @@ export function createProjectAgentExtension(options) {
                         }
                         case 'add_task': {
                             const projectId = readRequiredString(params.projectId, 'projectId');
-                            const taskId = readRequiredString(params.taskId, 'taskId');
                             const detail = createProjectTaskRecord({
                                 repoRoot: options.repoRoot,
                                 profile,
                                 projectId,
-                                taskId,
                                 title: readRequiredString(params.title, 'title'),
                                 status: params.taskStatus?.trim() || 'pending',
-                                ...(params.summary !== undefined ? { summary: params.summary } : {}),
                                 ...(params.taskMilestoneId !== undefined ? { milestoneId: params.taskMilestoneId } : {}),
-                                ...(params.acceptanceCriteria !== undefined ? { acceptanceCriteria: params.acceptanceCriteria } : {}),
-                                ...(params.taskPlan !== undefined ? { plan: params.taskPlan } : {}),
-                                ...(params.notes !== undefined ? { notes: params.notes } : {}),
                             });
                             invalidateAppTopics('projects');
                             return {
-                                content: [{ type: 'text', text: `Added task ${taskId} to project ${projectId}.\n\n${formatProjectDetail(detail, relatedProjectIds)}` }],
-                                details: { action: 'add_task', projectId, taskId },
+                                content: [{ type: 'text', text: `Added task to project ${projectId}.\n\n${formatProjectDetail(detail, relatedProjectIds)}` }],
+                                details: { action: 'add_task', projectId },
                             };
                         }
                         case 'update_task': {
@@ -335,11 +319,7 @@ export function createProjectAgentExtension(options) {
                                 taskId,
                                 ...(params.title !== undefined ? { title: params.title } : {}),
                                 ...(params.taskStatus !== undefined ? { status: params.taskStatus } : {}),
-                                ...(params.summary !== undefined ? { summary: params.summary } : {}),
                                 ...(params.taskMilestoneId !== undefined ? { milestoneId: params.taskMilestoneId } : {}),
-                                ...(params.acceptanceCriteria !== undefined ? { acceptanceCriteria: params.acceptanceCriteria } : {}),
-                                ...(params.taskPlan !== undefined ? { plan: params.taskPlan } : {}),
-                                ...(params.notes !== undefined ? { notes: params.notes } : {}),
                             });
                             invalidateAppTopics('projects');
                             return {
@@ -364,5 +344,5 @@ export function createProjectAgentExtension(options) {
 }
 export function describeProjectFileLayout(repoRoot, profile, projectId) {
     const paths = resolveProjectPaths({ repoRoot, profile, projectId });
-    return `${paths.projectFile} | ${paths.tasksDir}/*.yaml`;
+    return paths.projectFile;
 }

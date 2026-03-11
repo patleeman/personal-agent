@@ -8,8 +8,9 @@
  */
 import { useCallback, useContext, useState } from 'react';
 import { api } from '../api';
-import type { SessionMeta } from '../types';
 import { LiveTitlesContext, useAppData, useSseConnection } from '../contexts';
+import { NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversationTitle';
+import type { SessionMeta } from '../types';
 
 const OPEN_KEY = 'pa:open-session-ids';
 
@@ -37,7 +38,7 @@ async function fetchSessionsSnapshot(): Promise<SessionMeta[]> {
       cwd: entry.cwd,
       cwdSlug: entry.cwd.replace(/\//g, '-'),
       model: '',
-      title: '(new conversation)',
+      title: NEW_CONVERSATION_TITLE,
       messageCount: 0,
     }));
 
@@ -74,9 +75,13 @@ export function useConversations() {
     });
   }, []);
 
-  const withTitles = (sessions ?? []).map((session) =>
-    liveTitles.has(session.id) ? { ...session, title: liveTitles.get(session.id)! } : session,
-  );
+  const withTitles = (sessions ?? []).map((session) => {
+    const liveTitle = normalizeConversationTitle(liveTitles.get(session.id));
+    const sessionTitle = normalizeConversationTitle(session.title) ?? NEW_CONVERSATION_TITLE;
+    const title = liveTitle ?? sessionTitle;
+
+    return title === session.title ? session : { ...session, title };
+  });
   const tabs = withTitles.filter((session) => openIds.has(session.id));
   const shelf = withTitles.filter((session) => !openIds.has(session.id));
   const loading = sessions === null && (sseStatus === 'connecting' || sseStatus === 'reconnecting');

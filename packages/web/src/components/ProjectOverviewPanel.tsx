@@ -208,7 +208,7 @@ export function ProjectOverviewPanel({
           <div className="flex items-start justify-between mb-2 gap-3">
             <div>
               <p className="ui-section-label">Tasks</p>
-              <p className="ui-card-meta mt-1">Execution tasks from tasks/*.yaml</p>
+              <p className="ui-card-meta mt-1">Execution tasks attached to milestones in PROJECT.yaml</p>
             </div>
             <Pill tone="muted" mono>{project.taskCount}</Pill>
           </div>
@@ -219,8 +219,7 @@ export function ProjectOverviewPanel({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 space-y-1">
                     <p className="text-[12px] font-medium text-primary leading-relaxed">{task.title}</p>
-                    {task.summary && <p className="ui-card-meta break-words">{task.summary}</p>}
-                    {task.milestoneId && <p className="ui-card-meta">milestone: {task.milestoneId}</p>}
+                    <p className="ui-card-meta">milestone: {task.milestoneId}</p>
                   </div>
                   <Pill tone={taskTone(task.status)}>{formatTaskStatus(task.status)}</Pill>
                 </div>
@@ -228,7 +227,7 @@ export function ProjectOverviewPanel({
             ))}
           </ul>
 
-          {hiddenTasks > 0 && <p className="ui-card-meta mt-2">+{hiddenTasks} more task files in the full project view</p>}
+          {hiddenTasks > 0 && <p className="ui-card-meta mt-2">+{hiddenTasks} more tasks in the full project view</p>}
         </div>
       )}
     </SurfacePanel>
