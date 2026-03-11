@@ -168,6 +168,9 @@ export const api = {
 
   forkEntries: (id: string) =>
     get<{ entryId: string; text: string }[]>(`/live-sessions/${id}/fork-entries`),
-  forkSession: (id: string, entryId: string) =>
-    post<{ newSessionId: string; sessionFile: string }>(`/live-sessions/${id}/fork`, { entryId }),
+  forkSession: (id: string, entryId: string, options?: { preserveSource?: boolean }) =>
+    post<{ newSessionId: string; sessionFile: string }>(`/live-sessions/${id}/fork`, {
+      entryId,
+      preserveSource: options?.preserveSource,
+    }),
 };

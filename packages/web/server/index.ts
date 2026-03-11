@@ -918,9 +918,12 @@ app.get('/api/live-sessions/:id/fork-entries', (req, res) => {
 
 app.post('/api/live-sessions/:id/fork', async (req, res) => {
   try {
-    const { entryId } = req.body as { entryId: string };
+    const { entryId, preserveSource } = req.body as { entryId: string; preserveSource?: boolean };
     if (!entryId) { res.status(400).json({ error: 'entryId required' }); return; }
-    res.json(await forkSession(req.params.id, entryId));
+    res.json(await forkSession(req.params.id, entryId, {
+      preserveSource,
+      extensionFactories: buildLiveSessionExtensionFactories(),
+    }));
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
