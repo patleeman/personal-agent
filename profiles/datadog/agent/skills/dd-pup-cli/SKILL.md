@@ -9,16 +9,21 @@ Query any Datadog data using `pup`, a Go-based CLI wrapper for Datadog APIs.
 
 ## Authentication
 
-pup uses OAuth2 (recommended) or API keys. Test connectivity first:
+pup supports OAuth2 (recommended) or API keys.
+
+Check the actual auth state first:
 
 ```bash
-pup test
+pup auth status --output table
 ```
 
 If not authenticated:
 ```bash
-pup auth login    # OAuth2 browser-based login
+pup auth login
+pup auth login --agent  # Better for agent-driven CLI flows
 ```
+
+`pup test` is still useful for confirming site/output settings, but it may show API keys as unset even when OAuth2 is the intended auth path, so do not treat that alone as an auth failure.
 
 ## Output Formats
 
@@ -63,6 +68,36 @@ pup metrics list
 pup metrics list --filter="system.*"
 pup metrics metadata get system.cpu.user
 ```
+
+### APM Services / Traces
+
+```bash
+# List services seen in APM for an environment
+pup apm services list --env prod --from 7d --output json | jq -r '.data.attributes.services[]'
+
+# Service latency/request stats for one service
+pup apm services stats --env prod --from 1h --output json | jq '.data.attributes.services_stats[] | select(.service=="my-service")'
+
+# Find entities when the exact service name is unclear
+pup apm entities list --types service --env prod --from 7d --limit 100
+
+# Inspect downstream dependencies for a service
+pup apm dependencies list --env prod --from 1h --output json | jq '.["my-service"]'
+
+# Aggregate span latency or volume
+pup traces aggregate --query="service:my-service env:prod" --compute="percentile(@duration, 95)" --from 1h
+pup traces aggregate --query="service:my-service env:prod" --compute="count" --group-by="operation_name" --from 1h
+
+# Sample individual slow spans (@duration is in nanoseconds)
+pup traces search --query="service:my-service env:prod @duration:>1000000000" --from 2h --limit 20
+```
+
+APM output shapes are inconsistent across commands:
+- `pup apm services list` → `.data.attributes.services[]`
+- `pup apm services stats` → `.data.attributes.services_stats[]`
+- `pup apm dependencies list` → top-level object keyed by service name
+
+If a wide APM stats query returns HTTP 503, retry with a narrower window first (for example `1h` or `24h`), then compare windows with `pup traces aggregate`.
 
 ### Dashboards
 
@@ -161,6 +196,26 @@ pup on-call teams list
 | `pup vulnerabilities` | Security vulnerabilities |
 
 Use `pup <command> --help` for subcommand details.
+
+## Latency Investigation Workflow
+
+For requests like "this service got slower" or "latency increased since Monday":
+
+1. **Confirm auth + service name**
+   - `pup auth status`
+   - `pup apm services list --env prod --from 7d --output json | jq -r '.data.attributes.services[]' | rg '<service-fragment>'`
+2. **Measure the regression**
+   - `pup traces aggregate --query='service:<service> env:prod' --compute='percentile(@duration, 95)' --from 1h`
+   - Compare `1h`, `24h`, and `7d` windows.
+3. **Break latency down by operation**
+   - `pup traces aggregate --query='service:<service> env:prod' --compute='percentile(@duration, 95)' --group-by='operation_name' --from 1h`
+   - Also check request volume: `--compute='count'`.
+4. **Inspect slow examples**
+   - `pup traces search --query='service:<service> env:prod @duration:>1000000000' --from 2h --limit 20`
+5. **Check dependencies**
+   - `pup apm dependencies list --env prod --from 1h --output json | jq '.["<service>"]'`
+6. **Report concrete evidence**
+   - Name the slow operations, latency percentiles, sample durations, dependency fan-out, and precise time window.
 
 ## Datadog Links
 
