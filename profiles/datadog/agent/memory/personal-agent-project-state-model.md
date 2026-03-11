@@ -1,0 +1,40 @@
+---
+id: personal-agent-project-state-model
+title: "Personal-agent project state model"
+summary: "Canonical boundaries for milestones, project tasks, and scheduled tasks in personal-agent."
+type: "project"
+status: "active"
+tags:
+  - "personal-agent"
+  - "projects"
+  - "data-model"
+  - "planning"
+updated: 2026-03-11
+---
+
+# Personal-agent project state model
+
+High-signal notes for how personal-agent project planning should be represented.
+
+## Canonical boundaries
+
+- Keep **scheduled tasks** separate from project planning. Scheduled tasks are automation jobs in `profiles/<profile>/agent/tasks/*.task.md`.
+- Keep **project tasks** inside the project plan. They represent execution work for a specific project, not daemon automation.
+- Treat `profiles/<profile>/agent/projects/<projectId>/PROJECT.yaml` as the canonical project-planning file.
+
+## Preferred plan shape
+
+- A project's durable plan lives under `plan` in `PROJECT.yaml`.
+- Milestones and lightweight project tasks should live together in that plan model so the UI and data model describe the same object.
+- `currentMilestoneId` should point at the actively driven milestone.
+
+## Project task expectations
+
+- Default to a lightweight task shape: auto-generated `id`, `title`, `status`, and `milestoneId`.
+- Do not bloat routine project tasks with extra fields such as per-task acceptance criteria, plans, or notes unless there is a clear need.
+- In the UI, tasks should normally appear within their milestone; only genuinely unassigned tasks should sit outside milestone sections.
+
+## UX implications
+
+- Milestone state transitions should be easy to do inline.
+- The project UI should not force users to think about multiple competing task models for the same project work.
