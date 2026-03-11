@@ -94,7 +94,7 @@ workspaces secrets set ANTHROPIC_APIKEY1=<key> --export
 
 **Claude Code**: Pre-installed via devcontainer feature in most repos. Set up API key locally first.
 
-**Pi**: Install via dotfiles `install.sh` (`npm install -g @mariozechner/pi-coding-agent`) or manually.
+**Pi**: Add it to dotfiles or other repeatable workspace bootstrap, and prefer the current official install instructions instead of hard-coding package-manager recipes here.
 
 **Atlassian MCP auth in workspace**: Use VSCode/Cursor (auto port-forwarding handles OAuth redirect). Alternative: two SSH sessions, start OAuth in one, `curl` the redirect URL from the other.
 
