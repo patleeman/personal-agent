@@ -1,13 +1,4 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.extractMentionIds = extractMentionIds;
-exports.resolvePromptReferences = resolvePromptReferences;
-exports.pickPromptReferencesInOrder = pickPromptReferencesInOrder;
-exports.buildReferencedTasksContext = buildReferencedTasksContext;
-exports.buildReferencedMemoryDocsContext = buildReferencedMemoryDocsContext;
-exports.buildReferencedSkillsContext = buildReferencedSkillsContext;
-exports.buildReferencedProfilesContext = buildReferencedProfilesContext;
-const node_path_1 = require("node:path");
+import { relative } from 'node:path';
 function appendUnique(target, seen, value) {
     if (seen.has(value)) {
         return;
@@ -15,7 +6,7 @@ function appendUnique(target, seen, value) {
     seen.add(value);
     target.push(value);
 }
-function extractMentionIds(text) {
+export function extractMentionIds(text) {
     const matches = text.match(/@[a-zA-Z0-9][a-zA-Z0-9-_]*/g) ?? [];
     const result = [];
     const seen = new Set();
@@ -25,7 +16,7 @@ function extractMentionIds(text) {
     }
     return result;
 }
-function resolvePromptReferences(input) {
+export function resolvePromptReferences(input) {
     const mentionIds = extractMentionIds(input.text);
     const projectIdSet = new Set(input.availableProjectIds);
     const taskIdSet = new Set(input.tasks.map((task) => task.id));
@@ -67,7 +58,7 @@ function resolvePromptReferences(input) {
         profileIds,
     };
 }
-function pickPromptReferencesInOrder(ids, items) {
+export function pickPromptReferencesInOrder(ids, items) {
     const byId = new Map();
     for (const item of items) {
         const key = item.id ?? item.name;
@@ -81,13 +72,13 @@ function pickPromptReferencesInOrder(ids, items) {
         return item ? [item] : [];
     });
 }
-function buildReferencedTasksContext(tasks, repoRoot) {
+export function buildReferencedTasksContext(tasks, repoRoot) {
     return [
         'Referenced scheduled tasks:',
         ...tasks.map((task) => {
             const lines = [
                 `- @${task.id}`,
-                `  path: ${(0, node_path_1.relative)(repoRoot, task.filePath)}`,
+                `  path: ${relative(repoRoot, task.filePath)}`,
             ];
             if (task.cron) {
                 lines.push(`  cron: ${task.cron}`);
@@ -111,13 +102,13 @@ function buildReferencedTasksContext(tasks, repoRoot) {
         'These are durable scheduled-task definitions. Read the task file before changing automation behavior, schedules, or runtime settings.',
     ].join('\n');
 }
-function buildReferencedMemoryDocsContext(memoryDocs, repoRoot) {
+export function buildReferencedMemoryDocsContext(memoryDocs, repoRoot) {
     return [
         'Referenced knowledge docs:',
         ...memoryDocs.map((doc) => {
             const lines = [
                 `- @${doc.id}: ${doc.title}`,
-                `  path: ${(0, node_path_1.relative)(repoRoot, doc.path)}`,
+                `  path: ${relative(repoRoot, doc.path)}`,
             ];
             if (doc.summary) {
                 lines.push(`  summary: ${doc.summary}`);
@@ -133,13 +124,13 @@ function buildReferencedMemoryDocsContext(memoryDocs, repoRoot) {
         'These are durable knowledge docs. Read them when the user refers to that knowledge, asks for details, or wants the information updated.',
     ].join('\n');
 }
-function buildReferencedSkillsContext(skills, repoRoot) {
+export function buildReferencedSkillsContext(skills, repoRoot) {
     return [
         'Referenced skills:',
         ...skills.map((skill) => {
             const lines = [
                 `- @${skill.name}`,
-                `  path: ${(0, node_path_1.relative)(repoRoot, skill.path)}`,
+                `  path: ${relative(repoRoot, skill.path)}`,
                 `  source: ${skill.source}`,
             ];
             if (skill.description) {
@@ -150,12 +141,12 @@ function buildReferencedSkillsContext(skills, repoRoot) {
         'These are reusable workflow skills. Read the skill file when the user refers to that workflow, asks how it works, or wants it applied.',
     ].join('\n');
 }
-function buildReferencedProfilesContext(profiles, repoRoot) {
+export function buildReferencedProfilesContext(profiles, repoRoot) {
     return [
         'Referenced profile instructions:',
         ...profiles.map((profile) => [
             `- @${profile.id}: ${profile.id} profile`,
-            `  path: ${(0, node_path_1.relative)(repoRoot, profile.path)}`,
+            `  path: ${relative(repoRoot, profile.path)}`,
             `  source: ${profile.source}`,
         ].join('\n')),
         'These are active profile instructions. Read them when the user refers to profile behavior, durable preferences, or operating constraints.',
