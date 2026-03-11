@@ -323,11 +323,10 @@ Create a custom exercise template via `POST /v1/exercise_templates` with `Create
 ```bash
 exercise_payload=$(jq -n \
   --arg name "Trap Bar Deadlift" \
-  '{
-    name: $name,
-    // fill in other CreateCustomExerciseRequestBody fields as needed
-  }')
+  '{name: $name}')
 
+# Add any other CreateCustomExerciseRequestBody fields required by the API version
+# or account setup before POSTing.
 hevy_api POST "/v1/exercise_templates" "$exercise_payload" | jq '.'
 ```
 
