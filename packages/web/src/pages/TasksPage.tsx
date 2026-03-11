@@ -1,32 +1,12 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { usePolling } from '../hooks';
 import { api } from '../api';
+import { useAppData, useSseConnection } from '../contexts';
+import type { ScheduledTaskSummary } from '../types';
 import { timeAgo } from '../utils';
 import { EmptyState, ErrorState, ListLinkRow, LoadingState, PageHeader, PageHeading, ToolbarButton } from '../components/ui';
 
-interface Task {
-  id: string;
-  filePath: string;
-  scheduleType: string;
-  running: boolean;
-  enabled: boolean;
-  cron?: string;
-  prompt: string;
-  model?: string;
-  lastStatus?: string;
-  lastRunAt?: string;
-  lastSuccessAt?: string;
-  lastAttemptCount?: number;
-}
-
-async function fetchTasks(): Promise<Task[]> {
-  const response = await fetch('/api/tasks');
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.json();
-}
-
-function statusDotClass(task: Task) {
+function statusDotClass(task: ScheduledTaskSummary) {
   if (task.running) return 'bg-accent animate-pulse';
   if (task.lastStatus === 'success') return 'bg-success';
   if (task.lastStatus === 'failure') return 'bg-danger';
@@ -34,7 +14,7 @@ function statusDotClass(task: Task) {
   return 'bg-border-default/50';
 }
 
-function statusText(task: Task): { text: string; cls: string } {
+function statusText(task: ScheduledTaskSummary): { text: string; cls: string } {
   if (task.running) return { text: 'running', cls: 'text-accent' };
   if (task.lastStatus === 'success') return { text: 'ok', cls: 'text-success' };
   if (task.lastStatus === 'failure') return { text: 'failed', cls: 'text-danger' };
@@ -62,7 +42,7 @@ function cronHuman(cron: string): string {
   return cron;
 }
 
-function TaskRow({ task, isSelected, onRefetch }: { task: Task; isSelected: boolean; onRefetch: () => void }) {
+function TaskRow({ task, isSelected, onRefetch }: { task: ScheduledTaskSummary; isSelected: boolean; onRefetch: () => void }) {
   const [toggling, setToggling] = useState(false);
   const [running, setRunning] = useState(false);
   const navigate = useNavigate();
@@ -101,7 +81,7 @@ function TaskRow({ task, isSelected, onRefetch }: { task: Task; isSelected: bool
 
   return (
     <ListLinkRow
-      to={`/tasks/${task.id}`}
+      to={`/scheduled/${task.id}`}
       selected={isSelected}
       leading={<span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${statusDotClass(task)}`} />}
       trailing={(
@@ -170,17 +150,36 @@ function TaskRow({ task, isSelected, onRefetch }: { task: Task; isSelected: bool
 
 export function TasksPage() {
   const { id: selectedId } = useParams<{ id?: string }>();
-  const { data: tasks, loading, error, refetch } = usePolling(fetchTasks, 10_000);
+  const { tasks, setTasks } = useAppData();
+  const { status: sseStatus } = useSseConnection();
+  const [refreshError, setRefreshError] = useState<string | null>(null);
+  const isLoading = tasks === null && (sseStatus === 'connecting' || sseStatus === 'reconnecting');
+  const visibleError = tasks === null && sseStatus === 'offline'
+    ? refreshError ?? 'Live updates are offline. Use refresh to load the latest scheduled tasks.'
+    : refreshError;
+
+  const refreshTasks = useCallback(async () => {
+    try {
+      const next = await api.tasks();
+      setTasks(next);
+      setRefreshError(null);
+      return next;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setRefreshError(message);
+      return null;
+    }
+  }, [setTasks]);
 
   return (
     <div className="flex flex-col h-full">
-      <PageHeader actions={<ToolbarButton onClick={refetch}>↻ Refresh</ToolbarButton>}>
+      <PageHeader actions={<ToolbarButton onClick={() => { void refreshTasks(); }}>↻ Refresh</ToolbarButton>}>
         <PageHeading
           title="Scheduled Tasks"
           meta={
             tasks && (
               <>
-                {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}
+                {tasks.length} {tasks.length === 1 ? 'scheduled task' : 'scheduled tasks'}
                 {tasks.filter((task) => task.running).length > 0 && (
                   <span className="ml-2 text-accent animate-pulse">
                     · {tasks.filter((task) => task.running).length} running
@@ -193,27 +192,27 @@ export function TasksPage() {
       </PageHeader>
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        {loading && <LoadingState label="Loading tasks…" />}
-        {error && <ErrorState message={`Failed to load tasks: ${error}`} />}
-        {!loading && !error && tasks?.length === 0 && (
+        {isLoading && <LoadingState label="Loading scheduled tasks…" />}
+        {visibleError && <ErrorState message={`Failed to load scheduled tasks: ${visibleError}`} />}
+        {!isLoading && !visibleError && tasks?.length === 0 && (
           <EmptyState
             icon="⏰"
             title="No scheduled tasks."
             body={
               <>
-                Create a <code className="font-mono text-accent">*.task.md</code> file in your profile&apos;s tasks folder.
+                Create a <code className="font-mono text-accent">*.task.md</code> file in your profile&apos;s <code className="font-mono text-secondary">agent/tasks</code> folder.
               </>
             }
           />
         )}
-        {!loading && tasks && (
+        {!isLoading && tasks && (
           <div className="space-y-px">
             {tasks.map((task) => (
               <TaskRow
                 key={task.id}
                 task={task}
                 isSelected={task.id === selectedId}
-                onRefetch={refetch}
+                onRefetch={() => { void refreshTasks(); }}
               />
             ))}
           </div>

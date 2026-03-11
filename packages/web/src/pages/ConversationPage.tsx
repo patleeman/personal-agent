@@ -10,9 +10,12 @@ import { useSessionDetail } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../api';
 import { formatContextShareLabel, formatContextUsageLabel, formatContextWindowLabel, formatLiveSessionLabel, formatThinkingLevelLabel, getContextUsagePercent } from '../conversationHeader';
-import { useLiveTitles } from '../contexts';
-import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../slashMenu';
+import { emitConversationProjectsChanged, CONVERSATION_PROJECTS_CHANGED_EVENT } from '../conversationProjectEvents';
+import { useAppData, useLiveTitles } from '../contexts';
 import { filterModelPickerItems } from '../modelPicker';
+import { emitProjectsChanged } from '../projectEvents';
+import { parseProjectSlashCommand, type ProjectSlashCommand } from '../projectSlashCommand';
+import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../slashMenu';
 
 // ── Model picker ──────────────────────────────────────────────────────────────
 
@@ -32,42 +35,6 @@ function useModels() {
       }).catch(() => {});
   }, []);
   return { models, currentModel, currentThinkingLevel, setCurrent };
-}
-
-function useLiveContextUsage(sessionId: string | null) {
-  const [usage, setUsage] = useState<{ tokens: number | null; contextWindow?: number; modelId?: string } | null>(null);
-
-  useEffect(() => {
-    if (!sessionId) {
-      setUsage(null);
-      return;
-    }
-
-    let cancelled = false;
-
-    const load = () => {
-      api.liveSessionContextUsage(sessionId)
-        .then((data) => {
-          if (!cancelled) {
-            setUsage(data);
-          }
-        })
-        .catch(() => {
-          if (!cancelled) {
-            setUsage(null);
-          }
-        });
-    };
-
-    load();
-    const timer = setInterval(load, 2_000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [sessionId]);
-
-  return usage;
 }
 
 function ModelPicker({ models, currentModel, query, idx, onSelect, onClose }:
@@ -136,12 +103,10 @@ function displayBlockToMessageBlock(b: DisplayBlock): MessageBlock {
 
 // ── Slash commands ────────────────────────────────────────────────────────────
 
-const MENTIONS = [
-  { id: '@artifact-model', label: 'artifact-model', kind: 'project' },
-  { id: '@web-ui',         label: 'web-ui',         kind: 'project' },
-  { id: '@inbox',          label: 'inbox',          kind: 'view'    },
-  { id: '@tasks',          label: 'tasks',          kind: 'view'    },
-];
+const STATIC_MENTIONS = [
+  { id: '@inbox', label: 'inbox', kind: 'view' },
+  { id: '@scheduled', label: 'scheduled', kind: 'view' },
+] as const;
 
 // ── Context bar ───────────────────────────────────────────────────────────────
 
@@ -261,23 +226,33 @@ function SlashMenu({ items, idx, onSelect }: { items: SlashMenuItem[]; idx: numb
   );
 }
 
-function MentionMenu({ query, idx, onSelect }: { query: string; idx: number; onSelect: (id: string) => void }) {
+function MentionMenu({
+  items,
+  query,
+  idx,
+  onSelect,
+}: {
+  items: Array<{ id: string; label: string; kind: string }>;
+  query: string;
+  idx: number;
+  onSelect: (id: string) => void;
+}) {
   const q = query.slice(1).toLowerCase();
-  const filtered = MENTIONS.filter(m => !q || m.label.startsWith(q));
+  const filtered = items.filter((item) => !q || item.label.startsWith(q));
   if (!filtered.length) return null;
   return (
     <div className="ui-menu-shell">
       <div className="px-3 pt-2 pb-1">
         <p className="ui-section-label">Mention</p>
       </div>
-      {filtered.map((m, i) => (
+      {filtered.map((item, i) => (
         <button
-          key={m.id}
-          onMouseDown={e => { e.preventDefault(); onSelect(m.id + ' '); }}
+          key={item.id}
+          onMouseDown={(event) => { event.preventDefault(); onSelect(item.id + ' '); }}
           className={cx('w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors', i === idx % filtered.length ? 'bg-elevated text-primary' : 'text-secondary hover:bg-elevated/50')}
         >
-          <Pill tone="muted">{m.kind}</Pill>
-          <span className="font-mono text-[13px] text-accent truncate">{m.id}</span>
+          <Pill tone="muted">{item.kind}</Pill>
+          <span className="font-mono text-[13px] text-accent truncate">{item.id}</span>
         </button>
       ))}
     </div>
@@ -386,16 +361,15 @@ export function ConversationPage() {
 
   // Model
   const { models, currentModel, currentThinkingLevel, setCurrent } = useModels();
-  const liveContextUsage = useLiveContextUsage(isLiveSession && id ? id : null);
 
   // Current context usage (compaction-aware)
   const sessionTokens = useMemo(() => {
     if (isLiveSession) {
-      const modelInfo = models.find(m => m.id === (liveContextUsage?.modelId || currentModel || model));
+      const modelInfo = models.find(m => m.id === (stream.contextUsage?.modelId || currentModel || model));
       return {
-        total: liveContextUsage?.tokens ?? null,
-        contextWindow: liveContextUsage?.contextWindow ?? modelInfo?.context ?? 200_000,
-        segments: liveContextUsage?.segments,
+        total: stream.contextUsage?.tokens ?? null,
+        contextWindow: stream.contextUsage?.contextWindow ?? modelInfo?.context ?? 200_000,
+        segments: stream.contextUsage?.segments,
       } satisfies TokenCounts;
     }
 
@@ -408,7 +382,7 @@ export function ConversationPage() {
       contextWindow: modelInfo?.context ?? 128_000,
       segments: historicalUsage?.segments,
     } satisfies TokenCounts;
-  }, [isLiveSession, liveContextUsage, sessionDetail, models, currentModel, model]);
+  }, [isLiveSession, stream.contextUsage, sessionDetail, models, currentModel, model]);
   const [notice, setNotice] = useState<{ tone: 'accent' | 'danger'; text: string } | null>(null);
   const [modelIdx, setModelIdx] = useState(0);
   const noticeTimeoutRef = useRef<number | null>(null);
@@ -426,7 +400,20 @@ export function ConversationPage() {
   type PendingMsg = { id: string; text: string; type: 'steer' | 'followUp' };
   const [pendingQueue, setPendingQueue] = useState<PendingMsg[]>([]);
   const prevStreamingRef = useRef(false);
-  const { data: memoryData, refetch: refetchMemoryData } = useApi(api.memory);
+  const { data: memoryData } = useApi(api.memory);
+  const { projects, setProjects } = useAppData();
+  const conversationProjectsFetcher = useCallback(async () => {
+    if (!id) {
+      return { conversationId: '', relatedProjectIds: [] };
+    }
+
+    return api.conversationProjects(id);
+  }, [id]);
+  const {
+    data: conversationProjects,
+    refetch: refetchConversationProjects,
+  } = useApi(conversationProjectsFetcher, id ?? 'no-conversation');
+  const [conversationProjectsBusy, setConversationProjectsBusy] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -443,6 +430,15 @@ export function ConversationPage() {
   const mentionQuery  = mentionMatch?.[2] ?? '';
   const slashItems = useMemo(() => buildSlashMenuItems(input, memoryData?.skills ?? []), [input, memoryData]);
   const modelItems = useMemo(() => filterModelPickerItems(models, modelQuery), [models, modelQuery]);
+  const mentionItems = useMemo(() => [
+    ...(projects ?? []).map((project) => ({
+      id: `@${project.id}`,
+      label: project.id,
+      kind: 'project',
+    })),
+    ...STATIC_MENTIONS,
+  ], [projects]);
+  const referencedProjectIds = conversationProjects?.relatedProjectIds ?? [];
 
   // Auto-resize textarea
   const resize = useCallback(() => {
@@ -453,8 +449,28 @@ export function ConversationPage() {
   }, []);
 
   useEffect(() => { resize(); }, [input, resize]);
+
   useEffect(() => { setSlashIdx(0); }, [slashQuery]);
   useEffect(() => { setModelIdx(0); }, [modelQuery]);
+
+  useEffect(() => {
+    function handleConversationProjectsChanged(event: Event) {
+      const detail = (event as CustomEvent<{ conversationId?: string }>).detail;
+      if (detail?.conversationId && detail.conversationId !== id) {
+        return;
+      }
+
+      void refetchConversationProjects({ resetLoading: false });
+    }
+
+    window.addEventListener(CONVERSATION_PROJECTS_CHANGED_EVENT, handleConversationProjectsChanged);
+    return () => {
+      window.removeEventListener(CONVERSATION_PROJECTS_CHANGED_EVENT, handleConversationProjectsChanged);
+      if (noticeTimeoutRef.current !== null) {
+        window.clearTimeout(noticeTimeoutRef.current);
+      }
+    };
+  }, [id, refetchConversationProjects]);
 
   // Scroll tracking
   const handleScroll = useCallback(() => {
@@ -498,24 +514,27 @@ export function ConversationPage() {
     return () => window.removeEventListener('keydown', handler);
   }, [showTree]);
 
-  // Auto-scroll when streaming adds new content
-  useEffect(() => {
+  // Auto-scroll when streaming changes the current tail block.
+  // Text deltas usually mutate the last streamed block in place, so keying on
+  // blocks.length only follows new blocks and misses most of the live output.
+  useLayoutEffect(() => {
     if (!stream.isStreaming) return;
     if (atBottom && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [stream.blocks.length, stream.isStreaming, atBottom]);
+  }, [stream.blocks, stream.isStreaming, atBottom]);
 
   // Focus input on navigation
   useEffect(() => { textareaRef.current?.focus(); }, [id]);
 
-  // Clear pending queue when agent finishes its run
+  // Clear pending queue and refresh referenced projects when the agent finishes its run
   useEffect(() => {
     if (prevStreamingRef.current && !stream.isStreaming) {
       setPendingQueue([]);
+      void refetchConversationProjects({ resetLoading: false });
     }
     prevStreamingRef.current = stream.isStreaming;
-  }, [stream.isStreaming]);
+  }, [stream.isStreaming, refetchConversationProjects]);
 
   // Jump to message by index
   const jumpToMessage = useCallback((index: number) => {
@@ -523,12 +542,27 @@ export function ConversationPage() {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, []);
 
+  function showNotice(tone: 'accent' | 'danger', text: string, durationMs = 2500) {
+    setNotice({ tone, text });
+    if (noticeTimeoutRef.current !== null) {
+      window.clearTimeout(noticeTimeoutRef.current);
+    }
+    noticeTimeoutRef.current = window.setTimeout(() => {
+      setNotice(null);
+      noticeTimeoutRef.current = null;
+    }, durationMs);
+  }
+
   function selectModel(modelId: string) {
     setCurrent(modelId);
     setInput('');
     setModelIdx(0);
-    const m = models.find(x => x.id === modelId);
-    if (m) { setModelNotice(m.name); setTimeout(() => setModelNotice(null), 2500); }
+
+    const selectedModel = models.find((candidate) => candidate.id === modelId);
+    if (selectedModel) {
+      showNotice('accent', `Switched to ${selectedModel.name}`);
+    }
+
     textareaRef.current?.focus();
     // Persist to settings.json
     api.setModel(modelId).catch(console.error);
@@ -571,10 +605,91 @@ export function ConversationPage() {
     fileInputRef.current?.click();
   }
 
+  async function refreshProjectMentions() {
+    const nextProjects = await api.projects();
+    setProjects(nextProjects);
+    emitProjectsChanged();
+  }
+
+  async function removeReferencedProject(projectId: string) {
+    if (!id || conversationProjectsBusy) {
+      return;
+    }
+
+    setConversationProjectsBusy(true);
+    try {
+      await api.removeConversationProject(id, projectId);
+      await refetchConversationProjects({ resetLoading: false });
+      emitConversationProjectsChanged(id);
+    } finally {
+      setConversationProjectsBusy(false);
+    }
+  }
+
+  async function handleProjectSlashCommand(command: ProjectSlashCommand) {
+    try {
+      if (command.action === 'new') {
+        await api.createProject({
+          id: command.projectId,
+          description: command.description,
+        });
+        await refreshProjectMentions();
+
+        if (id) {
+          await api.addConversationProject(id, command.projectId);
+          await refetchConversationProjects({ resetLoading: false });
+          emitConversationProjectsChanged(id);
+          showNotice('accent', `Created and referenced @${command.projectId}`);
+        } else {
+          showNotice('accent', `Created project @${command.projectId}`);
+        }
+
+        setInput('');
+        return;
+      }
+
+      if (!id) {
+        showNotice('danger', 'Project references are only available inside a conversation.');
+        return;
+      }
+
+      setConversationProjectsBusy(true);
+      try {
+        if (command.action === 'reference') {
+          await api.addConversationProject(id, command.projectId);
+          showNotice('accent', `Now referencing @${command.projectId}`);
+        } else {
+          await api.removeConversationProject(id, command.projectId);
+          showNotice('accent', `Stopped referencing @${command.projectId}`);
+        }
+
+        await refetchConversationProjects({ resetLoading: false });
+        emitConversationProjectsChanged(id);
+        setInput('');
+      } finally {
+        setConversationProjectsBusy(false);
+      }
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    }
+  }
+
   async function submitComposer(behavior?: 'steer' | 'followUp') {
     const text = input.trim();
     const pendingAttachments = attachments;
     if (!text && pendingAttachments.length === 0) return;
+
+    if (pendingAttachments.length === 0) {
+      const projectSlash = parseProjectSlashCommand(text);
+      if (projectSlash) {
+        if (projectSlash.kind === 'invalid') {
+          showNotice('danger', projectSlash.message, 4000);
+        } else {
+          await handleProjectSlashCommand(projectSlash.command);
+        }
+        return;
+      }
+    }
 
     try {
       const promptImages = await buildPromptImages(pendingAttachments);
@@ -610,7 +725,11 @@ export function ConversationPage() {
           const pid = `${Date.now()}-${Math.random()}`;
           setPendingQueue((q) => [...q, { id: pid, text: queueLabel, type: queuedBehavior }]);
         }
-        stream.send(text, queuedBehavior, promptImages);
+        await stream.send(text, queuedBehavior, promptImages);
+        if (id) {
+          await refetchConversationProjects({ resetLoading: false });
+          emitConversationProjectsChanged(id);
+        }
         setTimeout(() => {
           if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }, 50);
@@ -618,7 +737,20 @@ export function ConversationPage() {
         try {
           await api.resumeSession(sessionDetail.meta.file);
           setConfirmedLive(true);
-          setTimeout(() => stream.send(text, queuedBehavior, promptImages), 150);
+          setTimeout(() => {
+            void stream.send(text, queuedBehavior, promptImages)
+              .then(async () => {
+                if (!id) {
+                  return;
+                }
+
+                await refetchConversationProjects({ resetLoading: false });
+                emitConversationProjectsChanged(id);
+              })
+              .catch((error) => {
+                console.error('Send after auto-resume failed:', error);
+              });
+          }, 150);
         } catch (err) {
           console.error('Auto-resume failed:', err);
         }
@@ -671,7 +803,7 @@ export function ConversationPage() {
           }
         } else {
           const q = mentionQuery.slice(1).toLowerCase();
-          const filtered = MENTIONS.filter(m => !q || m.label.startsWith(q));
+          const filtered = mentionItems.filter((item) => !q || item.label.startsWith(q));
           const sel = filtered[mentionIdx % (filtered.length || 1)];
           if (sel) { setInput(input.replace(/@[\w-]*$/, sel.id + ' ')); setMentionIdx(0); }
         }
@@ -797,7 +929,7 @@ export function ConversationPage() {
             }
             setInput(item.insertText); setSlashIdx(0); textareaRef.current?.focus();
           }} />}
-          {showMention && <MentionMenu query={mentionQuery} idx={mentionIdx} onSelect={id  => { setInput(input.replace(/@[\w-]*$/, id + ' ')); setMentionIdx(0); textareaRef.current?.focus(); }} />}
+          {showMention && <MentionMenu items={mentionItems} query={mentionQuery} idx={mentionIdx} onSelect={id  => { setInput(input.replace(/@[\w-]*$/, id + ' ')); setMentionIdx(0); textareaRef.current?.focus(); }} />}
           {showModelPicker && <ModelPicker models={modelItems} currentModel={currentModel} query={modelQuery} idx={modelIdx}
             onSelect={selectModel} onClose={() => { setInput(''); textareaRef.current?.focus(); }} />}
 
@@ -813,6 +945,28 @@ export function ConversationPage() {
             {dragOver && (
               <div className="px-4 py-3 text-center text-[12px] text-accent border-b border-accent/20">
                 📎 Drop files to attach
+              </div>
+            )}
+
+            {/* Referenced projects */}
+            {referencedProjectIds.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-3 pt-3 pb-2.5">
+                <span className="ui-section-label">Referenced projects</span>
+                {referencedProjectIds.map((projectId) => (
+                  <span key={projectId} className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-2 py-1 text-[11px] text-accent">
+                    <span className="font-mono">@{projectId}</span>
+                    <button
+                      type="button"
+                      onClick={() => { void removeReferencedProject(projectId); }}
+                      className="text-accent/70 transition-colors hover:text-accent disabled:opacity-40"
+                      disabled={conversationProjectsBusy}
+                      title={`Stop referencing ${projectId}`}
+                      aria-label={`Stop referencing ${projectId}`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
               </div>
             )}
 
@@ -884,7 +1038,7 @@ export function ConversationPage() {
                 onPaste={handlePaste}
                 rows={1}
                 className="flex-1 bg-transparent text-sm text-primary placeholder:text-dim outline-none resize-none leading-relaxed"
-                placeholder="Message… (/ for commands, @ to mention)"
+                placeholder="Message… (/ for commands, @ to reference projects)"
                 style={{ minHeight: '24px', maxHeight: '160px' }}
               />
 
@@ -903,10 +1057,10 @@ export function ConversationPage() {
         </div>
       </div>
 
-      {/* Model switch notice */}
-      {modelNotice && (
+      {/* Inline notice */}
+      {notice && (
         <div className="mx-4 mb-1 text-center">
-          <Pill tone="accent">Switched to {modelNotice}</Pill>
+          <Pill tone={notice.tone}>{notice.text}</Pill>
         </div>
       )}
 

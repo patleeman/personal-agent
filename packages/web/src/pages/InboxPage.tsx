@@ -1,41 +1,62 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { api } from '../api';
-import { usePolling } from '../hooks';
+import { useAppData, useSseConnection } from '../contexts';
 import { kindMeta, timeAgo } from '../utils';
 import { EmptyState, ErrorState, ListLinkRow, LoadingState, PageHeader, ToolbarButton } from '../components/ui';
 
 export function InboxPage() {
   const { id: selectedId } = useParams<{ id?: string }>();
-  const { data: activity, loading, error, refetch } = usePolling(api.activity, 15_000);
+  const { activity, setActivity } = useAppData();
+  const { status: sseStatus } = useSseConnection();
   const [filter, setFilter] = useState<'all' | 'unread'>('unread');
   const [markingAll, setMarkingAll] = useState(false);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
-  const unreadCount = activity?.filter((entry) => !entry.read).length ?? 0;
-  const visible = activity
-    ? (filter === 'unread' ? activity.filter((entry) => !entry.read) : activity)
-    : [];
+  const unreadCount = activity?.unreadCount ?? 0;
+  const entries = activity?.entries ?? [];
+  const visible = filter === 'unread' ? entries.filter((entry) => !entry.read) : entries;
+  const isLoading = activity === null && (sseStatus === 'connecting' || sseStatus === 'reconnecting');
+  const visibleError = activity === null && sseStatus === 'offline'
+    ? refreshError ?? 'Live updates are offline. Use refresh to load the latest activity.'
+    : refreshError;
 
   useEffect(() => {
-    if (filter === 'unread' && activity && unreadCount === 0 && activity.length > 0) {
+    if (filter === 'unread' && entries.length > 0 && unreadCount === 0) {
       setFilter('all');
     }
-  }, [filter, activity, unreadCount]);
+  }, [entries.length, filter, unreadCount]);
+
+  const refreshActivity = useCallback(async () => {
+    try {
+      const next = await api.activity();
+      setActivity({
+        entries: next,
+        unreadCount: next.filter((entry) => !entry.read).length,
+      });
+      setRefreshError(null);
+      return next;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setRefreshError(message);
+      return null;
+    }
+  }, [setActivity]);
 
   const markAllRead = useCallback(async () => {
-    if (!activity) return;
+    if (entries.length === 0) return;
 
-    const unread = activity.filter((entry) => !entry.read);
+    const unread = entries.filter((entry) => !entry.read);
     if (unread.length === 0) return;
 
     setMarkingAll(true);
     try {
       await Promise.all(unread.map((entry) => api.markActivityRead(entry.id)));
-      await refetch();
+      await refreshActivity();
     } finally {
       setMarkingAll(false);
     }
-  }, [activity, refetch]);
+  }, [entries, refreshActivity]);
 
   return (
     <div className="flex flex-col h-full">
@@ -51,7 +72,7 @@ export function InboxPage() {
                 {markingAll ? 'Marking…' : 'Mark all read'}
               </ToolbarButton>
             )}
-            <ToolbarButton onClick={refetch}>↻</ToolbarButton>
+            <ToolbarButton onClick={() => { void refreshActivity(); }}>↻</ToolbarButton>
           </>
         )}
       >
@@ -69,17 +90,17 @@ export function InboxPage() {
                 onClick={() => setFilter('all')}
                 className={filter === 'all' ? 'ui-segmented-button ui-segmented-button-active' : 'ui-segmented-button'}
               >
-                All{activity.length > 0 && <span className="ml-1 opacity-50">{activity.length}</span>}
+                All{entries.length > 0 && <span className="ml-1 opacity-50">{entries.length}</span>}
               </button>
             </div>
           )}
         </div>
       </PageHeader>
 
-      {loading && <LoadingState label="Loading activity…" className="px-6" />}
-      {error && <ErrorState message={`Failed to load activity: ${error}`} className="px-6" />}
+      {isLoading && <LoadingState label="Loading activity…" className="px-6" />}
+      {visibleError && <ErrorState message={`Failed to load activity: ${visibleError}`} className="px-6" />}
 
-      {!loading && !error && activity?.length === 0 && (
+      {!isLoading && !visibleError && entries.length === 0 && (
         <EmptyState
           icon="📭"
           title="No activity yet."
@@ -87,19 +108,19 @@ export function InboxPage() {
         />
       )}
 
-      {!loading && activity && activity.length > 0 && filter === 'unread' && unreadCount === 0 && (
+      {!isLoading && entries.length > 0 && filter === 'unread' && unreadCount === 0 && (
         <EmptyState
           icon="✓"
           title="All caught up."
           action={(
             <button onClick={() => setFilter('all')} className="text-xs text-accent hover:underline">
-              View all {activity.length} notifications →
+              View all {entries.length} notifications →
             </button>
           )}
         />
       )}
 
-      {!loading && activity && visible.length > 0 && (
+      {!isLoading && visible.length > 0 && (
         <div className="flex-1 overflow-y-auto">
           <div className="px-6 py-4 space-y-px">
             {visible.map((entry) => {

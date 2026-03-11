@@ -4,29 +4,23 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  createInitialProjectPlan,
-  createInitialProjectSummary,
+  createInitialProject,
   createProjectActivityEntry,
   createProjectTask,
+  formatProject,
   formatProjectActivityEntry,
-  formatProjectPlan,
-  formatProjectSummary,
   formatProjectTask,
+  parseProject,
   parseProjectActivityEntry,
-  parseProjectPlan,
-  parseProjectSummary,
   parseProjectTask,
+  readProject,
   readProjectActivityEntry,
-  readProjectPlan,
-  readProjectSummary,
   readProjectTask,
+  writeProject,
   writeProjectActivityEntry,
-  writeProjectPlan,
-  writeProjectSummary,
   writeProjectTask,
   type ProjectActivityEntryDocument,
-  type ProjectPlanDocument,
-  type ProjectSummaryDocument,
+  type ProjectDocument,
   type ProjectTaskDocument,
 } from './project-artifacts.js';
 
@@ -42,145 +36,110 @@ function createTempDir(): string {
   return dir;
 }
 
-describe('project summary artifacts', () => {
-  it('creates the default summary document', () => {
-    const summary = createInitialProjectSummary({
+describe('project artifacts', () => {
+  it('creates the default project document', () => {
+    const project = createInitialProject({
       id: 'artifact-model',
-      objective: 'Create a durable artifact model.',
+      description: 'Create a durable artifact model.',
       createdAt: '2026-03-10T12:00:00.000Z',
     });
 
-    expect(summary).toEqual({
+    expect(project).toEqual({
       id: 'artifact-model',
       createdAt: '2026-03-10T12:00:00.000Z',
       updatedAt: '2026-03-10T12:00:00.000Z',
-      objective: 'Create a durable artifact model.',
-      currentPlan: 'See [plan.md](./plan.md).',
-      status: '- Created',
-      blockers: '- None',
-      completedItems: '- None',
-      openTasks: '- None',
+      description: 'Create a durable artifact model.',
+      summary: 'Project created. Refine the plan before executing the work.',
+      status: 'created',
+      blockers: [],
+      currentFocus: 'Refine the project plan.',
+      recentProgress: [],
+      plan: {
+        currentMilestoneId: 'refine-plan',
+        milestones: [
+          { id: 'refine-plan', title: 'Refine the plan', status: 'in_progress' },
+          { id: 'execute-work', title: 'Execute the work', status: 'pending' },
+          { id: 'verify-result', title: 'Verify the result', status: 'pending' },
+        ],
+      },
     });
   });
 
-  it('formats and parses summary markdown as a round trip', () => {
-    const document: ProjectSummaryDocument = {
+  it('formats and parses project yaml as a round trip', () => {
+    const document: ProjectDocument = {
       id: 'artifact-model',
       createdAt: '2026-03-10T12:00:00.000Z',
       updatedAt: '2026-03-10T13:00:00.000Z',
-      objective: 'Create a durable artifact model.',
-      currentPlan: 'Finalize the initial schema and lock it in.',
-      status: '- In progress',
-      blockers: '- Need to settle the activity entry shape',
-      completedItems: '- Added project scaffold\n- Added path helpers',
-      openTasks: '- Implement artifact IO helpers',
+      description: 'Create a durable artifact model.',
+      summary: 'Core storage is in place and the CLI surface is next.',
+      status: 'in_progress',
+      blockers: ['Need to settle the activity entry shape'],
+      currentFocus: 'Build the CLI inbox surface.',
+      recentProgress: ['Added project scaffold', 'Added path helpers'],
+      plan: {
+        currentMilestoneId: 'cli-inbox',
+        milestones: [
+          { id: 'schema', title: 'Finalize the artifact schema', status: 'completed' },
+          { id: 'helpers', title: 'Implement read/write helpers', status: 'completed' },
+          { id: 'cli-inbox', title: 'Build the CLI inbox surface', status: 'in_progress', summary: 'Keep it compact and durable.' },
+        ],
+      },
     };
 
-    const markdown = formatProjectSummary(document);
-    expect(markdown).toContain('# Summary');
-    expect(markdown).toContain('## Completed items');
+    const yaml = formatProject(document);
+    expect(yaml).toContain('description: Create a durable artifact model.');
+    expect(yaml).toContain('currentMilestoneId: cli-inbox');
 
-    expect(parseProjectSummary(markdown)).toEqual(document);
+    expect(parseProject(yaml)).toEqual(document);
   });
 
-  it('rejects summary markdown missing required sections', () => {
-    const markdown = `---
-id: artifact-model
+  it('rejects project yaml with a missing required plan block', () => {
+    const yaml = `id: artifact-model
 createdAt: 2026-03-10T12:00:00.000Z
 updatedAt: 2026-03-10T12:00:00.000Z
----
-# Summary
-
-## Objective
-
-Create a durable artifact model.
+description: Create a durable artifact model.
+summary: Project created.
+status: created
+blockers: []
+recentProgress: []
 `;
 
-    expect(() => parseProjectSummary(markdown)).toThrow('Missing required section in Summary markdown: Current plan');
+    expect(() => parseProject(yaml)).toThrow('Missing required key plan in Project');
   });
 
-  it('writes and reads summary files', () => {
+  it('rejects a current milestone id that is not present in the milestone list', () => {
+    const yaml = `id: artifact-model
+createdAt: 2026-03-10T12:00:00.000Z
+updatedAt: 2026-03-10T12:00:00.000Z
+description: Create a durable artifact model.
+summary: Project created.
+status: created
+blockers: []
+recentProgress: []
+plan:
+  currentMilestoneId: missing
+  milestones:
+    - id: refine-plan
+      title: Refine the plan
+      status: in_progress
+`;
+
+    expect(() => parseProject(yaml)).toThrow('Current milestone id missing does not exist');
+  });
+
+  it('writes and reads project files', () => {
     const dir = createTempDir();
-    const path = join(dir, 'summary.md');
-    const document = createInitialProjectSummary({
+    const path = join(dir, 'PROJECT.yaml');
+    const document = createInitialProject({
       id: 'artifact-model',
-      objective: 'Create a durable artifact model.',
+      description: 'Create a durable artifact model.',
       createdAt: '2026-03-10T12:00:00.000Z',
     });
 
-    writeProjectSummary(path, document);
+    writeProject(path, document);
 
-    expect(readFileSync(path, 'utf-8')).toContain('## Status');
-    expect(readProjectSummary(path)).toEqual(document);
-  });
-});
-
-describe('project plan artifacts', () => {
-  it('creates the default plan document', () => {
-    const plan = createInitialProjectPlan({
-      id: 'artifact-model',
-      objective: 'Create a durable artifact model.',
-      updatedAt: '2026-03-10T12:00:00.000Z',
-    });
-
-    expect(plan.steps).toEqual([
-      { text: 'Refine the plan', completed: false },
-      { text: 'Execute the work', completed: false },
-      { text: 'Verify the result', completed: false },
-    ]);
-  });
-
-  it('formats and parses plan markdown as a round trip', () => {
-    const document: ProjectPlanDocument = {
-      id: 'artifact-model',
-      updatedAt: '2026-03-10T13:00:00.000Z',
-      objective: 'Create a durable artifact model.',
-      steps: [
-        { text: 'Finalize the artifact schema', completed: true },
-        { text: 'Implement summary IO helpers', completed: false },
-        { text: 'Implement plan IO helpers', completed: false },
-      ],
-    };
-
-    const markdown = formatProjectPlan(document);
-    expect(markdown).toContain('# Plan');
-    expect(markdown).toContain('- [x] Finalize the artifact schema');
-
-    expect(parseProjectPlan(markdown)).toEqual(document);
-  });
-
-  it('rejects invalid plan checklist items', () => {
-    const markdown = `---
-id: artifact-model
-updatedAt: 2026-03-10T13:00:00.000Z
----
-# Plan
-
-## Objective
-
-Create a durable artifact model.
-
-## Steps
-
-- finalize the artifact schema
-`;
-
-    expect(() => parseProjectPlan(markdown)).toThrow('Invalid checklist step');
-  });
-
-  it('writes and reads plan files', () => {
-    const dir = createTempDir();
-    const path = join(dir, 'plan.md');
-    const document = createInitialProjectPlan({
-      id: 'artifact-model',
-      objective: 'Create a durable artifact model.',
-      updatedAt: '2026-03-10T12:00:00.000Z',
-    });
-
-    writeProjectPlan(path, document);
-
-    expect(readFileSync(path, 'utf-8')).toContain('## Steps');
-    expect(readProjectPlan(path)).toEqual(document);
+    expect(readFileSync(path, 'utf-8')).toContain('plan:');
+    expect(readProject(path)).toEqual(document);
   });
 });
 
@@ -250,37 +209,51 @@ describe('project task artifacts', () => {
     expect(task.status).toBe('pending');
   });
 
-  it('formats and parses task markdown as a round trip', () => {
+  it('formats and parses task yaml as a round trip', () => {
     const document: ProjectTaskDocument = {
       id: 'implement-activity',
       createdAt: '2026-03-10T15:00:00.000Z',
       updatedAt: '2026-03-10T16:00:00.000Z',
       status: 'running',
       title: 'Implement activity records',
+      order: 2,
       summary: 'Wire daemon task runs into durable activity output.',
+      milestoneId: 'durable-activity',
+      acceptanceCriteria: [
+        'scheduled task runs emit activity entries',
+        'activity entries link back to the project',
+      ],
+      plan: [
+        'update the daemon task module',
+        'write project activity entries',
+      ],
+      notes: 'Start with the scheduled-task path.',
     };
 
-    const markdown = formatProjectTask(document);
-    expect(markdown).toContain('# Task');
-    expect(markdown).toContain('status: running');
+    const yaml = formatProjectTask(document);
+    expect(yaml).toContain('status: running');
+    expect(yaml).toContain('order: 2');
+    expect(yaml).toContain('acceptanceCriteria:');
 
-    expect(parseProjectTask(markdown)).toEqual(document);
+    expect(parseProjectTask(yaml)).toEqual(document);
   });
 
   it('writes and reads task files', () => {
     const dir = createTempDir();
-    const path = join(dir, 'task.md');
+    const path = join(dir, 'task.yaml');
     const document = createProjectTask({
       id: 'implement-activity',
       createdAt: '2026-03-10T15:00:00.000Z',
       status: 'pending',
       title: 'Implement activity records',
       summary: 'Start with the daemon scheduled-task path.',
+      acceptanceCriteria: ['activity entries exist after a task run'],
+      plan: ['update the daemon module'],
     });
 
     writeProjectTask(path, document);
 
-    expect(readFileSync(path, 'utf-8')).toContain('## Title');
+    expect(readFileSync(path, 'utf-8')).toContain('title: Implement activity records');
     expect(readProjectTask(path)).toEqual(document);
   });
 });

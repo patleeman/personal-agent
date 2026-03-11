@@ -1,21 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useConversations } from '../hooks/useConversations';
 import { useApi } from '../hooks';
+import { useAppData } from '../contexts';
 import { api } from '../api';
 import type { ProfileState, SessionMeta } from '../types';
 import { useTheme } from '../theme';
 import { timeAgo } from '../utils';
 
 function useInboxCount() {
-  const [count, setCount] = useState<number | null>(null);
-  useEffect(() => {
-    const fetch = () => api.activityCount().then(r => setCount(r.count)).catch(() => {});
-    void fetch();
-    const t = setInterval(fetch, 30_000);
-    return () => clearInterval(t);
-  }, []);
-  return count;
+  const { activity } = useAppData();
+  return activity?.unreadCount ?? null;
 }
 
 // ── Icons ──────────────────────────────────────────────────────────────────
@@ -131,6 +126,15 @@ function ShelfRow({ session, onOpen }: { session: SessionMeta; onOpen: () => voi
         </p>
       </div>
     </button>
+  );
+}
+
+function SectionHeader({ label, count }: { label: string; count?: number | string }) {
+  return (
+    <div className="flex items-center gap-2 px-4 pt-2 pb-1">
+      <span className="ui-section-label">{label}</span>
+      {count != null && <span className="ui-section-count ml-auto">{count}</span>}
+    </div>
   );
 }
 
@@ -262,16 +266,7 @@ export function Sidebar() {
         <span className="text-[13px] font-semibold text-primary truncate flex-1">personal agent</span>
       </div>
 
-      <div className="pb-1 space-y-0.5">
-        <TopNavItem to="/inbox"    icon={PATH.inbox}       label="Inbox"    badge={inboxCount} />
-        <TopNavItem to="/tasks"    icon={PATH.tasks}       label="Tasks"    />
-        <TopNavItem to="/projects" icon={PATH.projects} label="Projects" />
-        <TopNavItem to="/memory"   icon={PATH.memory}      label="Memory"   />
-      </div>
-
-      <div className="mx-3 border-t border-border-subtle my-2" />
-
-      <div className="px-1 pb-1">
+      <div className="px-1 pb-2">
         <button
           onClick={handleNewConversation}
           disabled={creating}
@@ -282,15 +277,26 @@ export function Sidebar() {
             ? <span className="w-4 h-4 border-[1.5px] border-current border-t-transparent rounded-full animate-spin shrink-0 opacity-70" />
             : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70"><path d="M12 5v14M5 12h14"/></svg>
           }
-          New conversation
+          New chat
         </button>
       </div>
+
+      <div className="pb-1 space-y-0.5">
+        <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={inboxCount} />
+        <TopNavItem to="/scheduled" icon={PATH.tasks} label="Scheduled" />
+        <TopNavItem to="/projects" icon={PATH.projects} label="Projects" />
+        <TopNavItem to="/memory" icon={PATH.memory} label="Memory" />
+      </div>
+
+      <div className="mx-3 border-t border-border-subtle my-2" />
+
+      <SectionHeader label="Open conversations" count={loading ? '…' : tabs.length} />
 
       {/* ── Open tabs ── */}
       <div className="flex-1 overflow-y-auto py-1 space-y-0.5 min-h-0">
         {!loading && tabs.length === 0 && (
           <p className="px-4 py-2 text-[12px] text-dim">
-            No open tabs — pick one from the shelf below.
+            No open conversations yet.
           </p>
         )}
         {tabs.map(session => (
@@ -314,7 +320,7 @@ export function Sidebar() {
           >
             <Ico d={PATH.chevron} size={11} />
           </span>
-          <span className="flex-1 text-left">All sessions</span>
+          <span className="flex-1 text-left">Recent conversations</span>
           <span className="text-[10px] tabular-nums opacity-60">
             {loading ? '…' : shelf.length}
           </span>
@@ -330,7 +336,7 @@ export function Sidebar() {
               />
             ))}
             {shelf.length === 0 && (
-              <p className="px-4 py-2 text-[11px] text-dim">All sessions are open.</p>
+              <p className="px-4 py-2 text-[11px] text-dim">All conversations are already open.</p>
             )}
           </div>
         )}

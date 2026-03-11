@@ -1,5 +1,4 @@
-import type { ProjectPlanStep } from './types';
-import { stripMarkdownListMarker } from './utils';
+import type { ProjectMilestone, ProjectPlan, ProjectRecord } from './types';
 
 export function pickFocusedProjectId(
   linkedProjectIds: string[],
@@ -23,50 +22,69 @@ export function pickAttachProjectId(
   return availableProjectIds[0] ?? '';
 }
 
-export function normalizeProjectText(value: string | undefined): string {
-  return stripMarkdownListMarker(value)
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/[*_]+/g, '')
-    .trim();
+export function formatProjectStatus(status: string | undefined): string {
+  const normalized = (status ?? '').replace(/[-_]+/g, ' ').trim();
+  return normalized.length > 0 ? normalized : 'unknown';
 }
 
-export function parseProjectListItems(value: string | undefined): string[] {
-  if (!value || value.trim().length === 0) {
-    return [];
+export function hasMeaningfulBlockers(blockers: string[] | undefined): boolean {
+  return (blockers ?? []).some((blocker) => blocker.trim().length > 0);
+}
+
+function isActiveMilestoneStatus(status: string): boolean {
+  return status === 'in_progress' || status === 'blocked';
+}
+
+function isClosedMilestoneStatus(status: string): boolean {
+  return status === 'completed' || status === 'cancelled';
+}
+
+export function pickCurrentMilestone(plan: ProjectPlan): ProjectMilestone | undefined {
+  if (plan.currentMilestoneId) {
+    const explicitMilestone = plan.milestones.find((milestone) => milestone.id === plan.currentMilestoneId);
+    if (explicitMilestone) {
+      return explicitMilestone;
+    }
   }
 
-  return value
-    .split('\n')
-    .map((line) => normalizeProjectText(line))
-    .filter((line) => line.length > 0 && line.toLowerCase() !== 'none');
-}
-
-export function hasMeaningfulBlockers(blockers: string | undefined): boolean {
-  const normalized = normalizeProjectText(blockers).toLowerCase();
-  return normalized.length > 0 && normalized !== 'none';
-}
-
-export function summarizeProjectPreview(currentPlan: string | undefined, blockers: string | undefined): string {
-  const plan = normalizeProjectText(currentPlan);
-  if (plan.length > 0 && plan.toLowerCase() !== 'none') {
-    return plan;
+  const activeMilestone = plan.milestones.find((milestone) => isActiveMilestoneStatus(milestone.status));
+  if (activeMilestone) {
+    return activeMilestone;
   }
 
-  if (hasMeaningfulBlockers(blockers)) {
-    return `Blocked: ${normalizeProjectText(blockers)}`;
+  const nextMilestone = plan.milestones.find((milestone) => !isClosedMilestoneStatus(milestone.status));
+  if (nextMilestone) {
+    return nextMilestone;
   }
 
-  return 'No plan summary yet.';
+  return plan.milestones[0];
 }
 
-export function getPlanProgress(steps: ProjectPlanStep[]): {
+export function summarizeProjectPreview(project: Pick<ProjectRecord, 'summary' | 'currentFocus' | 'blockers'>): string {
+  const currentFocus = project.currentFocus?.trim();
+  if (currentFocus) {
+    return currentFocus;
+  }
+
+  const summary = project.summary.trim();
+  if (summary.length > 0) {
+    return summary;
+  }
+
+  if (hasMeaningfulBlockers(project.blockers)) {
+    return `Blocked: ${project.blockers[0]}`;
+  }
+
+  return 'No summary yet.';
+}
+
+export function getPlanProgress(milestones: ProjectMilestone[]): {
   done: number;
   total: number;
   pct: number;
 } {
-  const total = steps.length;
-  const done = steps.filter((step) => step.completed).length;
+  const total = milestones.length;
+  const done = milestones.filter((milestone) => milestone.status === 'completed').length;
   const pct = total === 0 ? 0 : Math.round((done / total) * 100);
 
   return { done, total, pct };

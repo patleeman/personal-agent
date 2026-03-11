@@ -80,7 +80,7 @@ export function MemoryPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <PageHeader actions={<ToolbarButton onClick={refetch}>↻ Refresh</ToolbarButton>}>
+      <PageHeader actions={<ToolbarButton onClick={() => { void refetch(); }}>↻ Refresh</ToolbarButton>}>
         <PageHeading
           title="Memory"
           meta={data && (

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampPanelWidth, getRailMaxWidth } from './layoutSizing.js';
+import { clampPanelWidth, getRailLayoutPrefs, getRailMaxWidth } from './layoutSizing.js';
 
 describe('layout sizing helpers', () => {
   it('clamps panel width to the provided bounds', () => {
@@ -9,12 +9,30 @@ describe('layout sizing helpers', () => {
     expect(clampPanelWidth(Number.NaN, 220, 700)).toBe(220);
   });
 
-  it('caps the rail at half of the main viewport width', () => {
+  it('returns per-route rail preferences', () => {
+    expect(getRailLayoutPrefs('/projects/web-ui')).toEqual({
+      storageKey: 'pa:rail-width:projects',
+      initialWidth: 560,
+    });
+
+    expect(getRailLayoutPrefs('/conversations/session-123')).toEqual({
+      storageKey: 'pa:rail-width:conversations',
+      initialWidth: 380,
+    });
+
+    expect(getRailLayoutPrefs('/tasks/daily-review')).toEqual({
+      storageKey: 'pa:rail-width:scheduled',
+      initialWidth: 380,
+    });
+  });
+
+  it('lets the rail expand until the main pane reaches its minimum width', () => {
     expect(getRailMaxWidth({
       viewportWidth: 1600,
       sidebarWidth: 224,
-      railMinWidth: 220,
-    })).toBe(683);
+      railMinWidth: 160,
+      mainMinWidth: 320,
+    })).toBe(1046);
   });
 
   it('never returns less than the rail minimum width', () => {

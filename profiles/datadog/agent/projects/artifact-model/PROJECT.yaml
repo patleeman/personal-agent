@@ -1,0 +1,31 @@
+id: artifact-model
+createdAt: 2026-03-10T10:00:00.000Z
+updatedAt: 2026-03-11T10:10:00.000Z
+description: Build the durable artifact and project model for personal-agent.
+summary: Core durable project/artifact storage is in place. The remaining work is to finish the inbox-facing surfaces and tighten the project/task model so project plans stay high-level while execution details live in task files.
+status: in_progress
+blockers: []
+currentFocus: Move the project model to PROJECT.yaml plus task YAML files.
+recentProgress:
+  - Defined the durable project/artifact data model.
+  - Implemented core project read/write helpers.
+  - Wired daemon task activity into durable activity records.
+plan:
+  currentMilestoneId: project-schema
+  milestones:
+    - id: foundation
+      title: Establish durable artifact and activity storage
+      status: completed
+      summary: Core storage and activity plumbing are in place.
+    - id: project-schema
+      title: Tighten the project/task schema
+      status: in_progress
+      summary: Move project-level state into PROJECT.yaml and keep execution details in task YAML files.
+    - id: cli-surface
+      title: Build the CLI inbox/project surface
+      status: pending
+      summary: Expose durable project state cleanly in the CLI.
+    - id: web-surface
+      title: Align the web UI with the durable project model
+      status: pending
+      summary: Make the web shell reflect the scoped project/task model without duplication.

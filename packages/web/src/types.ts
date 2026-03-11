@@ -36,28 +36,34 @@ export interface ActivityEntry {
   notificationState?: string;
 }
 
-export interface ProjectSummary {
-  id: string;
-  createdAt: string;
-  updatedAt: string;
-  objective: string;
-  currentPlan: string;
-  status: string;
-  blockers: string;
-  completedItems?: string;
-  openTasks?: string;
+export interface ActivitySnapshot {
+  entries: ActivityEntry[];
+  unreadCount: number;
 }
 
-export interface ProjectPlanStep {
-  text: string;
-  completed: boolean;
+export interface ProjectMilestone {
+  id: string;
+  title: string;
+  status: string;
+  summary?: string;
 }
 
 export interface ProjectPlan {
+  currentMilestoneId?: string;
+  milestones: ProjectMilestone[];
+}
+
+export interface ProjectRecord {
   id: string;
+  createdAt: string;
   updatedAt: string;
-  objective: string;
-  steps: ProjectPlanStep[];
+  description: string;
+  summary: string;
+  status: string;
+  blockers: string[];
+  currentFocus?: string;
+  recentProgress: string[];
+  plan: ProjectPlan;
 }
 
 export interface ProjectTask {
@@ -67,15 +73,33 @@ export interface ProjectTask {
   status: string;
   title: string;
   summary?: string;
+  order?: number;
+  milestoneId?: string;
+  acceptanceCriteria?: string[];
+  plan?: string[];
+  notes?: string;
 }
 
 export interface ProjectDetail {
-  id: string;
-  summary: ProjectSummary;
-  plan: ProjectPlan;
+  project: ProjectRecord;
   taskCount: number;
   artifactCount: number;
   tasks: ProjectTask[];
+}
+
+export interface ScheduledTaskSummary {
+  id: string;
+  filePath: string;
+  scheduleType: string;
+  running: boolean;
+  enabled: boolean;
+  cron?: string;
+  prompt: string;
+  model?: string;
+  lastStatus?: string;
+  lastRunAt?: string;
+  lastSuccessAt?: string;
+  lastAttemptCount?: number;
 }
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
@@ -121,6 +145,17 @@ export interface SessionDetail {
   contextUsage: SessionContextUsage | null;
 }
 
+export type AppEventTopic = 'activity' | 'projects' | 'sessions' | 'tasks';
+
+export type AppEvent =
+  | { type: 'connected' }
+  | { type: 'invalidate'; topics: AppEventTopic[] }
+  | { type: 'live_title'; sessionId: string; title: string }
+  | { type: 'activity_snapshot'; entries: ActivityEntry[]; unreadCount: number }
+  | { type: 'projects_snapshot'; projects: ProjectRecord[] }
+  | { type: 'sessions_snapshot'; sessions: SessionMeta[] }
+  | { type: 'tasks_snapshot'; tasks: ScheduledTaskSummary[] };
+
 // ── Live session ──────────────────────────────────────────────────────────────
 
 export interface LiveSessionContext {
@@ -154,6 +189,7 @@ export type SseEvent =
   | { type: 'tool_update';     toolCallId: string; partialResult: unknown }
   | { type: 'tool_end';        toolCallId: string; toolName: string; isError: boolean; durationMs: number; output: string }
   | { type: 'title_update';    title: string }
+  | { type: 'context_usage';   usage: SessionContextUsage | null }
   | { type: 'stats_update';    tokens: { input: number; output: number; total: number }; cost: number }
   | { type: 'error';           message: string };
 

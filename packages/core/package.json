@@ -17,6 +17,7 @@
     "test": "vitest run",
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
-  "dependencies": {},
-  "devDependencies": {}
+  "dependencies": {
+    "yaml": "^2.8.2"
+  }
 }

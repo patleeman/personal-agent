@@ -17,7 +17,7 @@ export function formatDate(iso: string): string {
 }
 
 const KIND_META: Record<string, { label: string; color: string; dot: string }> = {
-  'scheduled-task':  { label: 'task',      color: 'text-accent bg-accent-bg',   dot: 'bg-accent' },
+  'scheduled-task':  { label: 'scheduled', color: 'text-accent bg-accent-bg',   dot: 'bg-accent' },
   'deferred-resume': { label: 'resume',    color: 'text-teal bg-teal/10',        dot: 'bg-teal' },
   'subagent-run':    { label: 'subagent',  color: 'text-steel bg-steel/10',      dot: 'bg-steel' },
   'background-run':  { label: 'run',       color: 'text-steel bg-steel/10',      dot: 'bg-steel' },

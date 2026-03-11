@@ -1,30 +1,36 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname } from 'path';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 const FRONTMATTER_DELIMITER = '---';
 
-export interface ProjectSummaryDocument {
-  id: string;
-  createdAt: string;
-  updatedAt: string;
-  objective: string;
-  currentPlan: string;
-  status: string;
-  blockers: string;
-  completedItems?: string;
-  openTasks?: string;
-}
+export type ProjectStatus = 'created' | 'in_progress' | 'blocked' | 'completed' | 'cancelled';
+export type ProjectMilestoneStatus = 'pending' | 'in_progress' | 'blocked' | 'completed' | 'cancelled';
+export type ProjectTaskStatus = 'pending' | 'running' | 'blocked' | 'completed' | 'failed' | 'cancelled';
 
-export interface ProjectPlanStep {
-  text: string;
-  completed: boolean;
+export interface ProjectMilestoneDocument {
+  id: string;
+  title: string;
+  status: ProjectMilestoneStatus | (string & {});
+  summary?: string;
 }
 
 export interface ProjectPlanDocument {
+  currentMilestoneId?: string;
+  milestones: ProjectMilestoneDocument[];
+}
+
+export interface ProjectDocument {
   id: string;
+  createdAt: string;
   updatedAt: string;
-  objective: string;
-  steps: ProjectPlanStep[];
+  description: string;
+  summary: string;
+  status: ProjectStatus | (string & {});
+  blockers: string[];
+  currentFocus?: string;
+  recentProgress: string[];
+  plan: ProjectPlanDocument;
 }
 
 export type ProjectActivityKind =
@@ -50,8 +56,6 @@ export interface ProjectActivityEntryDocument {
   notificationState?: ProjectActivityNotificationState;
 }
 
-export type ProjectTaskStatus = 'pending' | 'running' | 'blocked' | 'completed' | 'failed' | 'cancelled';
-
 export interface ProjectTaskDocument {
   id: string;
   createdAt: string;
@@ -59,6 +63,11 @@ export interface ProjectTaskDocument {
   status: ProjectTaskStatus | (string & {});
   title: string;
   summary?: string;
+  order?: number;
+  milestoneId?: string;
+  acceptanceCriteria?: string[];
+  plan?: string[];
+  notes?: string;
 }
 
 interface FrontmatterSection {
@@ -78,6 +87,280 @@ function assertNonEmptyText(value: string, label: string): string {
   }
 
   return trimmed;
+}
+
+function normalizeOptionalText(value: string | undefined, label: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return assertNonEmptyText(value, label);
+}
+
+function normalizeOptionalTextList(values: string[] | undefined, label: string): string[] | undefined {
+  if (values === undefined) {
+    return undefined;
+  }
+
+  const normalized = values
+    .map((value, index) => assertNonEmptyText(value, `${label}[${index}]`));
+
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function assertPlainObject(value: unknown, label: string): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`${label} must be a YAML object.`);
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function readYamlString(value: unknown, label: string): string {
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value !== 'string') {
+    throw new Error(`${label} must be a string.`);
+  }
+
+  return assertNonEmptyText(value, label);
+}
+
+function readRequiredYamlString(object: Record<string, unknown>, key: string, label: string): string {
+  if (!(key in object)) {
+    throw new Error(`Missing required key ${key} in ${label}.`);
+  }
+
+  return readYamlString(object[key], `${label}.${key}`);
+}
+
+function readOptionalYamlString(object: Record<string, unknown>, key: string, label: string): string | undefined {
+  const value = object[key];
+
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  return readYamlString(value, `${label}.${key}`);
+}
+
+function readYamlStringArray(value: unknown, label: string): string[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`${label} must be a YAML list.`);
+  }
+
+  return value.map((entry, index) => readYamlString(entry, `${label}[${index}]`));
+}
+
+function readOptionalYamlStringArray(
+  object: Record<string, unknown>,
+  key: string,
+  label: string,
+): string[] | undefined {
+  const value = object[key];
+
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  return readYamlStringArray(value, `${label}.${key}`);
+}
+
+function readOptionalYamlNumber(object: Record<string, unknown>, key: string, label: string): number | undefined {
+  const value = object[key];
+
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`${label}.${key} must be a number.`);
+  }
+
+  return value;
+}
+
+function readRequiredYamlObject(
+  object: Record<string, unknown>,
+  key: string,
+  label: string,
+): Record<string, unknown> {
+  if (!(key in object)) {
+    throw new Error(`Missing required key ${key} in ${label}.`);
+  }
+
+  return assertPlainObject(object[key], `${label}.${key}`);
+}
+
+function parseYamlDocument(yaml: string, label: string): Record<string, unknown> {
+  const parsed = parseYaml(yaml);
+  return assertPlainObject(parsed, label);
+}
+
+function stringifyYamlDocument(value: Record<string, unknown>): string {
+  return stringifyYaml(value, {
+    lineWidth: 0,
+    indent: 2,
+    minContentWidth: 0,
+  }).trimEnd() + '\n';
+}
+
+function validateMilestones(
+  milestones: ProjectMilestoneDocument[],
+  currentMilestoneId: string | undefined,
+  label: string,
+): void {
+  const seenMilestoneIds = new Set<string>();
+
+  for (const milestone of milestones) {
+    if (seenMilestoneIds.has(milestone.id)) {
+      throw new Error(`Duplicate milestone id in ${label}: ${milestone.id}`);
+    }
+
+    seenMilestoneIds.add(milestone.id);
+  }
+
+  if (currentMilestoneId && !seenMilestoneIds.has(currentMilestoneId)) {
+    throw new Error(`Current milestone id ${currentMilestoneId} does not exist in ${label}.`);
+  }
+}
+
+function parseProjectMilestone(value: unknown, label: string): ProjectMilestoneDocument {
+  const object = assertPlainObject(value, label);
+
+  return {
+    id: readRequiredYamlString(object, 'id', label),
+    title: readRequiredYamlString(object, 'title', label),
+    status: readRequiredYamlString(object, 'status', label),
+    summary: readOptionalYamlString(object, 'summary', label),
+  };
+}
+
+function formatProjectPlan(plan: ProjectPlanDocument): Record<string, unknown> {
+  const currentMilestoneId = normalizeOptionalText(plan.currentMilestoneId, 'Project currentMilestoneId');
+  const milestones = plan.milestones.map((milestone, index) => ({
+    id: assertNonEmptyText(milestone.id, `Project milestone[${index}] id`),
+    title: assertNonEmptyText(milestone.title, `Project milestone[${index}] title`),
+    status: assertNonEmptyText(milestone.status, `Project milestone[${index}] status`),
+    ...(normalizeOptionalText(milestone.summary, `Project milestone[${index}] summary`)
+      ? { summary: normalizeOptionalText(milestone.summary, `Project milestone[${index}] summary`) }
+      : {}),
+  }));
+
+  validateMilestones(
+    milestones.map((milestone) => ({
+      id: milestone.id as string,
+      title: milestone.title as string,
+      status: milestone.status as ProjectMilestoneStatus,
+      summary: milestone.summary as string | undefined,
+    })),
+    currentMilestoneId,
+    'project plan',
+  );
+
+  return {
+    ...(currentMilestoneId ? { currentMilestoneId } : {}),
+    milestones,
+  };
+}
+
+export function createInitialProject(input: {
+  id: string;
+  description: string;
+  createdAt: string;
+  updatedAt?: string;
+}): ProjectDocument {
+  const description = assertNonEmptyText(input.description, 'Project description');
+  const createdAt = assertNonEmptyText(input.createdAt, 'Project createdAt');
+  const updatedAt = assertNonEmptyText(input.updatedAt ?? input.createdAt, 'Project updatedAt');
+
+  return {
+    id: assertNonEmptyText(input.id, 'Project id'),
+    createdAt,
+    updatedAt,
+    description,
+    summary: 'Project created. Refine the plan before executing the work.',
+    status: 'created',
+    blockers: [],
+    currentFocus: 'Refine the project plan.',
+    recentProgress: [],
+    plan: {
+      currentMilestoneId: 'refine-plan',
+      milestones: [
+        { id: 'refine-plan', title: 'Refine the plan', status: 'in_progress' },
+        { id: 'execute-work', title: 'Execute the work', status: 'pending' },
+        { id: 'verify-result', title: 'Verify the result', status: 'pending' },
+      ],
+    },
+  };
+}
+
+export function formatProject(document: ProjectDocument): string {
+  const blockers = normalizeOptionalTextList(document.blockers, 'Project blockers') ?? [];
+  const recentProgress = normalizeOptionalTextList(document.recentProgress, 'Project recentProgress') ?? [];
+  const plan = formatProjectPlan(document.plan);
+
+  const output: Record<string, unknown> = {
+    id: assertNonEmptyText(document.id, 'Project id'),
+    createdAt: assertNonEmptyText(document.createdAt, 'Project createdAt'),
+    updatedAt: assertNonEmptyText(document.updatedAt, 'Project updatedAt'),
+    description: assertNonEmptyText(document.description, 'Project description'),
+    summary: assertNonEmptyText(document.summary, 'Project summary'),
+    status: assertNonEmptyText(document.status, 'Project status'),
+    blockers,
+    ...(normalizeOptionalText(document.currentFocus, 'Project currentFocus')
+      ? { currentFocus: normalizeOptionalText(document.currentFocus, 'Project currentFocus') }
+      : {}),
+    recentProgress,
+    plan,
+  };
+
+  return stringifyYamlDocument(output);
+}
+
+export function parseProject(yaml: string): ProjectDocument {
+  const object = parseYamlDocument(yaml, 'Project');
+  const planObject = readRequiredYamlObject(object, 'plan', 'Project');
+  const milestoneValues = planObject.milestones;
+
+  let parsedMilestones: ProjectMilestoneDocument[] = [];
+  if (milestoneValues !== undefined) {
+    if (!Array.isArray(milestoneValues)) {
+      throw new Error('Project.plan.milestones must be a YAML list.');
+    }
+
+    parsedMilestones = milestoneValues.map((value, index) => parseProjectMilestone(value, `Project.plan.milestones[${index}]`));
+  }
+
+  const currentMilestoneId = readOptionalYamlString(planObject, 'currentMilestoneId', 'Project.plan');
+  validateMilestones(parsedMilestones, currentMilestoneId, 'Project.plan');
+
+  return {
+    id: readRequiredYamlString(object, 'id', 'Project'),
+    createdAt: readRequiredYamlString(object, 'createdAt', 'Project'),
+    updatedAt: readRequiredYamlString(object, 'updatedAt', 'Project'),
+    description: readRequiredYamlString(object, 'description', 'Project'),
+    summary: readRequiredYamlString(object, 'summary', 'Project'),
+    status: readRequiredYamlString(object, 'status', 'Project'),
+    blockers: readOptionalYamlStringArray(object, 'blockers', 'Project') ?? [],
+    currentFocus: readOptionalYamlString(object, 'currentFocus', 'Project'),
+    recentProgress: readOptionalYamlStringArray(object, 'recentProgress', 'Project') ?? [],
+    plan: {
+      currentMilestoneId,
+      milestones: parsedMilestones,
+    },
+  };
+}
+
+export function readProject(path: string): ProjectDocument {
+  return parseProject(readFileSync(path, 'utf-8'));
+}
+
+export function writeProject(path: string, document: ProjectDocument): void {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, formatProject(document));
 }
 
 function stripWrappingQuotes(value: string): string {
@@ -226,47 +509,6 @@ function formatMarkdownDocument(title: string, sections: Array<[string, string |
   return `# ${title}\n\n${renderedSections.join('\n\n')}\n`;
 }
 
-function parseChecklist(content: string): ProjectPlanStep[] {
-  const steps: ProjectPlanStep[] = [];
-
-  for (const rawLine of normalizeMarkdown(content).split('\n')) {
-    const line = rawLine.trim();
-    if (line.length === 0) {
-      continue;
-    }
-
-    const match = /^- \[( |x)\] (.+)$/.exec(line);
-    if (!match) {
-      throw new Error(`Invalid checklist step: ${rawLine}`);
-    }
-
-    const text = assertNonEmptyText(match[2] ?? '', 'Plan step text');
-    steps.push({
-      text,
-      completed: (match[1] ?? ' ') === 'x',
-    });
-  }
-
-  if (steps.length === 0) {
-    throw new Error('Plan must contain at least one checklist step.');
-  }
-
-  return steps;
-}
-
-function formatChecklist(steps: ProjectPlanStep[]): string {
-  if (steps.length === 0) {
-    throw new Error('Plan must contain at least one step.');
-  }
-
-  return steps
-    .map((step) => {
-      const text = assertNonEmptyText(step.text, 'Plan step text');
-      return `- [${step.completed ? 'x' : ' '}] ${text}`;
-    })
-    .join('\n');
-}
-
 function parseOptionalListAttribute(attributes: Record<string, string>, key: string): string[] | undefined {
   const raw = attributes[key];
 
@@ -292,125 +534,6 @@ function formatOptionalListAttribute(values?: string[]): string | undefined {
     .join(', ');
 
   return normalized.length > 0 ? normalized : undefined;
-}
-
-export function createInitialProjectSummary(input: {
-  id: string;
-  objective: string;
-  createdAt: string;
-  updatedAt?: string;
-}): ProjectSummaryDocument {
-  const objective = assertNonEmptyText(input.objective, 'Summary objective');
-  const updatedAt = input.updatedAt ?? input.createdAt;
-
-  return {
-    id: assertNonEmptyText(input.id, 'Summary id'),
-    createdAt: assertNonEmptyText(input.createdAt, 'Summary createdAt'),
-    updatedAt: assertNonEmptyText(updatedAt, 'Summary updatedAt'),
-    objective,
-    currentPlan: 'See [plan.md](./plan.md).',
-    status: '- Created',
-    blockers: '- None',
-    completedItems: '- None',
-    openTasks: '- None',
-  };
-}
-
-export function createInitialProjectPlan(input: {
-  id: string;
-  objective: string;
-  updatedAt: string;
-}): ProjectPlanDocument {
-  return {
-    id: assertNonEmptyText(input.id, 'Plan id'),
-    updatedAt: assertNonEmptyText(input.updatedAt, 'Plan updatedAt'),
-    objective: assertNonEmptyText(input.objective, 'Plan objective'),
-    steps: [
-      { text: 'Refine the plan', completed: false },
-      { text: 'Execute the work', completed: false },
-      { text: 'Verify the result', completed: false },
-    ],
-  };
-}
-
-export function formatProjectSummary(document: ProjectSummaryDocument): string {
-  const frontmatter = formatFrontmatter({
-    id: assertNonEmptyText(document.id, 'Summary id'),
-    createdAt: assertNonEmptyText(document.createdAt, 'Summary createdAt'),
-    updatedAt: assertNonEmptyText(document.updatedAt, 'Summary updatedAt'),
-  });
-
-  const body = formatMarkdownDocument('Summary', [
-    ['Objective', document.objective],
-    ['Current plan', document.currentPlan],
-    ['Status', document.status],
-    ['Blockers', document.blockers],
-    ['Completed items', document.completedItems],
-    ['Open tasks', document.openTasks],
-  ]);
-
-  return `${frontmatter}\n${body}`;
-}
-
-export function parseProjectSummary(markdown: string): ProjectSummaryDocument {
-  const { attributes, body } = splitFrontmatter(markdown, 'Summary');
-  const sections = parseMarkdownSections(body, 'Summary', 'Summary');
-
-  return {
-    id: readRequiredAttribute(attributes, 'id', 'Summary'),
-    createdAt: readRequiredAttribute(attributes, 'createdAt', 'Summary'),
-    updatedAt: readRequiredAttribute(attributes, 'updatedAt', 'Summary'),
-    objective: readRequiredSection(sections, 'Objective', 'Summary'),
-    currentPlan: readRequiredSection(sections, 'Current plan', 'Summary'),
-    status: readRequiredSection(sections, 'Status', 'Summary'),
-    blockers: readRequiredSection(sections, 'Blockers', 'Summary'),
-    completedItems: sections['Completed items'] ? assertNonEmptyText(sections['Completed items'], 'Summary section Completed items') : undefined,
-    openTasks: sections['Open tasks'] ? assertNonEmptyText(sections['Open tasks'], 'Summary section Open tasks') : undefined,
-  };
-}
-
-export function readProjectSummary(path: string): ProjectSummaryDocument {
-  return parseProjectSummary(readFileSync(path, 'utf-8'));
-}
-
-export function writeProjectSummary(path: string, document: ProjectSummaryDocument): void {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, formatProjectSummary(document));
-}
-
-export function formatProjectPlan(document: ProjectPlanDocument): string {
-  const frontmatter = formatFrontmatter({
-    id: assertNonEmptyText(document.id, 'Plan id'),
-    updatedAt: assertNonEmptyText(document.updatedAt, 'Plan updatedAt'),
-  });
-
-  const body = formatMarkdownDocument('Plan', [
-    ['Objective', document.objective],
-    ['Steps', formatChecklist(document.steps)],
-  ]);
-
-  return `${frontmatter}\n${body}`;
-}
-
-export function parseProjectPlan(markdown: string): ProjectPlanDocument {
-  const { attributes, body } = splitFrontmatter(markdown, 'Plan');
-  const sections = parseMarkdownSections(body, 'Plan', 'Plan');
-
-  return {
-    id: readRequiredAttribute(attributes, 'id', 'Plan'),
-    updatedAt: readRequiredAttribute(attributes, 'updatedAt', 'Plan'),
-    objective: readRequiredSection(sections, 'Objective', 'Plan'),
-    steps: parseChecklist(readRequiredSection(sections, 'Steps', 'Plan')),
-  };
-}
-
-export function readProjectPlan(path: string): ProjectPlanDocument {
-  return parseProjectPlan(readFileSync(path, 'utf-8'));
-}
-
-export function writeProjectPlan(path: string, document: ProjectPlanDocument): void {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, formatProjectPlan(document));
 }
 
 export function createProjectActivityEntry(input: {
@@ -498,6 +621,11 @@ export function createProjectTask(input: {
   status: ProjectTaskDocument['status'];
   title: string;
   summary?: string;
+  order?: number;
+  milestoneId?: string;
+  acceptanceCriteria?: string[];
+  plan?: string[];
+  notes?: string;
 }): ProjectTaskDocument {
   return {
     id: assertNonEmptyText(input.id, 'Task id'),
@@ -505,38 +633,58 @@ export function createProjectTask(input: {
     updatedAt: assertNonEmptyText(input.updatedAt ?? input.createdAt, 'Task updatedAt'),
     status: assertNonEmptyText(input.status, 'Task status'),
     title: assertNonEmptyText(input.title, 'Task title'),
-    summary: input.summary ? assertNonEmptyText(input.summary, 'Task summary') : undefined,
+    ...(input.order !== undefined ? { order: input.order } : {}),
+    summary: normalizeOptionalText(input.summary, 'Task summary'),
+    milestoneId: normalizeOptionalText(input.milestoneId, 'Task milestoneId'),
+    acceptanceCriteria: normalizeOptionalTextList(input.acceptanceCriteria, 'Task acceptanceCriteria'),
+    plan: normalizeOptionalTextList(input.plan, 'Task plan'),
+    notes: normalizeOptionalText(input.notes, 'Task notes'),
   };
 }
 
 export function formatProjectTask(document: ProjectTaskDocument): string {
-  const frontmatterAttributes: Record<string, string> = {
+  const output: Record<string, unknown> = {
     id: assertNonEmptyText(document.id, 'Task id'),
     createdAt: assertNonEmptyText(document.createdAt, 'Task createdAt'),
     updatedAt: assertNonEmptyText(document.updatedAt, 'Task updatedAt'),
     status: assertNonEmptyText(document.status, 'Task status'),
+    title: assertNonEmptyText(document.title, 'Task title'),
+    ...(document.order !== undefined ? { order: document.order } : {}),
+    ...(normalizeOptionalText(document.summary, 'Task summary')
+      ? { summary: normalizeOptionalText(document.summary, 'Task summary') }
+      : {}),
+    ...(normalizeOptionalText(document.milestoneId, 'Task milestoneId')
+      ? { milestoneId: normalizeOptionalText(document.milestoneId, 'Task milestoneId') }
+      : {}),
+    ...(normalizeOptionalTextList(document.acceptanceCriteria, 'Task acceptanceCriteria')
+      ? { acceptanceCriteria: normalizeOptionalTextList(document.acceptanceCriteria, 'Task acceptanceCriteria') }
+      : {}),
+    ...(normalizeOptionalTextList(document.plan, 'Task plan')
+      ? { plan: normalizeOptionalTextList(document.plan, 'Task plan') }
+      : {}),
+    ...(normalizeOptionalText(document.notes, 'Task notes')
+      ? { notes: normalizeOptionalText(document.notes, 'Task notes') }
+      : {}),
   };
 
-  const frontmatter = formatFrontmatter(frontmatterAttributes);
-  const body = formatMarkdownDocument('Task', [
-    ['Title', document.title],
-    ['Summary', document.summary],
-  ]);
-
-  return `${frontmatter}\n${body}`;
+  return stringifyYamlDocument(output);
 }
 
-export function parseProjectTask(markdown: string): ProjectTaskDocument {
-  const { attributes, body } = splitFrontmatter(markdown, 'Task');
-  const sections = parseMarkdownSections(body, 'Task', 'Task');
+export function parseProjectTask(yaml: string): ProjectTaskDocument {
+  const object = parseYamlDocument(yaml, 'Task');
 
   return {
-    id: readRequiredAttribute(attributes, 'id', 'Task'),
-    createdAt: readRequiredAttribute(attributes, 'createdAt', 'Task'),
-    updatedAt: readRequiredAttribute(attributes, 'updatedAt', 'Task'),
-    status: readRequiredAttribute(attributes, 'status', 'Task'),
-    title: readRequiredSection(sections, 'Title', 'Task'),
-    summary: sections.Summary ? assertNonEmptyText(sections.Summary, 'Task section Summary') : undefined,
+    id: readRequiredYamlString(object, 'id', 'Task'),
+    createdAt: readRequiredYamlString(object, 'createdAt', 'Task'),
+    updatedAt: readRequiredYamlString(object, 'updatedAt', 'Task'),
+    status: readRequiredYamlString(object, 'status', 'Task'),
+    title: readRequiredYamlString(object, 'title', 'Task'),
+    order: readOptionalYamlNumber(object, 'order', 'Task'),
+    summary: readOptionalYamlString(object, 'summary', 'Task'),
+    milestoneId: readOptionalYamlString(object, 'milestoneId', 'Task'),
+    acceptanceCriteria: readOptionalYamlStringArray(object, 'acceptanceCriteria', 'Task'),
+    plan: readOptionalYamlStringArray(object, 'plan', 'Task'),
+    notes: readOptionalYamlString(object, 'notes', 'Task'),
   };
 }
 

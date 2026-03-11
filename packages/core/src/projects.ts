@@ -1,15 +1,13 @@
 import { existsSync, mkdirSync, readdirSync, statSync } from 'fs';
 import { join, resolve } from 'path';
 import {
-  createInitialProjectPlan,
-  createInitialProjectSummary,
-  writeProjectPlan,
-  writeProjectSummary,
+  createInitialProject,
+  writeProject,
 } from './project-artifacts.js';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
-const WORKSTREAM_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
-const TODO_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
+const PROJECT_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
+const TASK_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 
 export interface ResolveProjectOptions {
   repoRoot?: string;
@@ -21,8 +19,7 @@ export interface ProjectPaths {
   profile: string;
   projectsDir: string;
   projectDir: string;
-  summaryFile: string;
-  planFile: string;
+  projectFile: string;
   tasksDir: string;
   artifactsDir: string;
 }
@@ -59,7 +56,7 @@ function validateProfileName(profile: string): void {
 }
 
 export function validateProjectId(projectId: string): void {
-  if (!WORKSTREAM_ID_PATTERN.test(projectId)) {
+  if (!PROJECT_ID_PATTERN.test(projectId)) {
     throw new Error(
       `Invalid project id "${projectId}". Project ids may only include letters, numbers, dashes, and underscores.`,
     );
@@ -67,7 +64,7 @@ export function validateProjectId(projectId: string): void {
 }
 
 export function validateTaskId(taskId: string): void {
-  if (!TODO_ID_PATTERN.test(taskId)) {
+  if (!TASK_ID_PATTERN.test(taskId)) {
     throw new Error(
       `Invalid task id "${taskId}". Task ids may only include letters, numbers, dashes, and underscores.`,
     );
@@ -100,8 +97,7 @@ export function resolveProjectPaths(options: ResolveProjectPathsOptions): Projec
     profile: options.profile,
     projectsDir,
     projectDir,
-    summaryFile: join(projectDir, 'summary.md'),
-    planFile: join(projectDir, 'plan.md'),
+    projectFile: join(projectDir, 'PROJECT.yaml'),
     tasksDir: join(projectDir, 'tasks'),
     artifactsDir: join(projectDir, 'artifacts'),
   };
@@ -116,7 +112,7 @@ export function listProjectIds(options: ResolveProjectOptions): string[] {
 
   const entries = readdirSync(projectsDir, { withFileTypes: true });
   return entries
-    .filter((entry) => entry.isDirectory() && WORKSTREAM_ID_PATTERN.test(entry.name))
+    .filter((entry) => entry.isDirectory() && PROJECT_ID_PATTERN.test(entry.name))
     .map((entry) => entry.name)
     .sort((left, right) => left.localeCompare(right));
 }
@@ -124,7 +120,7 @@ export function listProjectIds(options: ResolveProjectOptions): string[] {
 export function resolveProjectTaskPath(options: ResolveProjectTaskPathOptions): string {
   const paths = resolveProjectPaths(options);
   validateTaskId(options.taskId);
-  return join(paths.tasksDir, `${options.taskId}.md`);
+  return join(paths.tasksDir, `${options.taskId}.yaml`);
 }
 
 function assertProjectCanBeCreated(paths: ProjectPaths, overwrite: boolean): void {
@@ -132,12 +128,8 @@ function assertProjectCanBeCreated(paths: ProjectPaths, overwrite: boolean): voi
     return;
   }
 
-  const existingTargets = [paths.summaryFile, paths.planFile].filter((path) => existsSync(path));
-
-  if (existingTargets.length > 0) {
-    throw new Error(
-      `Project already exists at ${paths.projectDir}. Existing files: ${existingTargets.join(', ')}`,
-    );
+  if (existsSync(paths.projectFile)) {
+    throw new Error(`Project already exists at ${paths.projectDir}. Existing file: ${paths.projectFile}`);
   }
 
   if (existsSync(paths.projectDir) && readdirSync(paths.projectDir).length > 0) {
@@ -165,26 +157,16 @@ export function createProjectScaffold(
   mkdirSync(paths.tasksDir, { recursive: true });
   mkdirSync(paths.artifactsDir, { recursive: true });
 
-  writeProjectSummary(
-    paths.summaryFile,
-    createInitialProjectSummary({
+  writeProject(
+    paths.projectFile,
+    createInitialProject({
       id: options.projectId,
-      objective,
+      description: objective,
       createdAt: timestamp,
       updatedAt: timestamp,
     }),
   );
-  writtenFiles.push(paths.summaryFile);
-
-  writeProjectPlan(
-    paths.planFile,
-    createInitialProjectPlan({
-      id: options.projectId,
-      objective,
-      updatedAt: timestamp,
-    }),
-  );
-  writtenFiles.push(paths.planFile);
+  writtenFiles.push(paths.projectFile);
 
   return {
     paths,

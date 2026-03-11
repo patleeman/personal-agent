@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import {
   pickAttachProjectId,
   pickFocusedProjectId,
 } from '../contextRailProject';
 import { useApi } from '../hooks';
-import type { ActivityEntry, LiveSessionContext, ProjectDetail, ProjectSummary } from '../types';
+import type { ActivityEntry, LiveSessionContext, ProjectDetail, ProjectRecord } from '../types';
 import { formatDate, kindMeta, timeAgo } from '../utils';
+import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
+import { CONVERSATION_PROJECTS_CHANGED_EVENT, emitConversationProjectsChanged } from '../conversationProjectEvents';
+import { ProjectDetailPanel } from './ProjectDetailPanel';
 import { ProjectOverviewPanel } from './ProjectOverviewPanel';
 import { IconButton, Pill, SurfacePanel } from './ui';
 
@@ -74,7 +77,7 @@ function LinkedProjectOverviewPanel({
 
 function LiveSessionContextPanel({ id }: { id: string }) {
   const [data, setData] = useState<LiveSessionContext | null>(null);
-  const [allProjects, setAllProjects] = useState<ProjectSummary[]>([]);
+  const [allProjects, setAllProjects] = useState<ProjectRecord[]>([]);
   const [focusedProjectId, setFocusedProjectId] = useState('');
   const [attachProjectId, setAttachProjectId] = useState('');
   const [focusedProject, setFocusedProject] = useState<ProjectDetail | null>(null);
@@ -103,6 +106,20 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   }, [id]);
 
   useEffect(() => load(), [load]);
+
+  useEffect(() => {
+    function handleConversationProjectsChanged(event: Event) {
+      const detail = (event as CustomEvent<{ conversationId?: string }>).detail;
+      if (detail?.conversationId && detail.conversationId !== id) {
+        return;
+      }
+
+      load();
+    }
+
+    window.addEventListener(CONVERSATION_PROJECTS_CHANGED_EVENT, handleConversationProjectsChanged);
+    return () => window.removeEventListener(CONVERSATION_PROJECTS_CHANGED_EVENT, handleConversationProjectsChanged);
+  }, [id, load]);
 
   const relatedProjectIds = data?.relatedProjectIds ?? [];
   const availableProjects = allProjects.filter((project) => !relatedProjectIds.includes(project.id));
@@ -152,6 +169,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     setLinkBusy(true);
     try {
       await api.addConversationProject(id, attachProjectId);
+      emitConversationProjectsChanged(id);
       load();
     } finally {
       setLinkBusy(false);
@@ -163,6 +181,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     setLinkBusy(true);
     try {
       await api.removeConversationProject(id, projectId);
+      emitConversationProjectsChanged(id);
       load();
     } finally {
       setLinkBusy(false);
@@ -195,7 +214,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         </SurfacePanel>
       </Section>
 
-      <Section title="Project">
+      <Section title="Referenced projects">
         <div className="space-y-3">
           {relatedProjectIds.length > 1 && (
             <div className="flex flex-wrap items-center gap-2">
@@ -206,7 +225,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
                     key={projectId}
                     onClick={() => setFocusedProjectId(projectId)}
                     className={isFocused ? 'ui-pill ui-pill-accent font-mono' : 'ui-pill ui-pill-muted font-mono hover:text-primary'}
-                    title={`Focus project ${projectId}`}
+                    title={`Focus referenced project ${projectId}`}
                   >
                     {projectId}
                   </button>
@@ -226,13 +245,13 @@ function LiveSessionContextPanel({ id }: { id: string }) {
 
           {availableProjects.length > 0 && (
             <SurfacePanel muted className="px-3 py-3 space-y-2.5">
-              <p className="ui-section-label">Attach project</p>
+              <p className="ui-section-label">Reference project</p>
               <div className="flex items-center gap-2">
                 <select
                   value={attachProjectId}
                   onChange={(event) => setAttachProjectId(event.target.value)}
                   className="flex-1 bg-base border border-border-subtle rounded-lg px-2.5 py-2 text-[12px] text-secondary focus:outline-none focus:border-accent/60"
-                  aria-label="Attach project"
+                  aria-label="Reference project"
                 >
                   {availableProjects.map((project) => (
                     <option key={project.id} value={project.id}>{project.id}</option>
@@ -243,7 +262,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
                   disabled={!attachProjectId || linkBusy}
                   className="ui-pill ui-pill-accent disabled:opacity-40"
                 >
-                  {linkBusy ? 'Saving…' : 'Attach'}
+                  {linkBusy ? 'Saving…' : 'Reference'}
                 </button>
               </div>
             </SurfacePanel>
@@ -456,23 +475,35 @@ function InboxItemContext({ id }: { id: string }) {
 // ── Project detail ───────────────────────────────────────────────────────────
 
 function ProjectDetailContext({ id }: { id: string }) {
-  const [ws, setWs] = useState<ProjectDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+  const fetcher = useCallback(() => api.projectById(id), [id]);
+  const { data: project, loading, error, refetch } = useApi(fetcher, id);
 
   useEffect(() => {
-    setLoading(true);
-    api.projectById(id)
-      .then((detail) => { setWs(detail); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, [id]);
+    function handleProjectChanged() {
+      refetch();
+    }
+
+    window.addEventListener(PROJECTS_CHANGED_EVENT, handleProjectChanged);
+    return () => window.removeEventListener(PROJECTS_CHANGED_EVENT, handleProjectChanged);
+  }, [refetch]);
 
   if (loading) return <div className="px-4 py-4 text-[12px] text-dim animate-pulse">Loading…</div>;
-  if (!ws)     return <div className="px-4 py-4 text-[12px] text-dim">Project not found.</div>;
+  if (error) return <div className="px-4 py-4 text-[12px] text-dim">Project not found.</div>;
+  if (!project) return <div className="px-4 py-4 text-[12px] text-dim">Project not found.</div>;
 
   return (
-    <div className="px-4 py-4 overflow-y-auto">
-      <LinkedProjectOverviewPanel project={ws} />
-    </div>
+    <ProjectDetailPanel
+      project={project}
+      onChanged={() => {
+        void refetch();
+        emitProjectsChanged();
+      }}
+      onDeleted={() => {
+        navigate('/projects');
+        emitProjectsChanged();
+      }}
+    />
   );
 }
 
@@ -566,6 +597,7 @@ export function ContextRail({ onCollapse }: { onCollapse?: () => void }) {
   const parts = location.pathname.split('/').filter(Boolean);
   const section = parts[0];
   const id = parts[1];
+  const scheduledSection = section === 'scheduled' || section === 'automations' || section === 'tasks';
 
   // Conversations
   if (section === 'conversations' && id) return (
@@ -575,17 +607,17 @@ export function ContextRail({ onCollapse }: { onCollapse?: () => void }) {
     </div>
   );
 
-  // Tasks
-  if (section === 'tasks' && id) return (
+  // Scheduled tasks
+  if (scheduledSection && id) return (
     <div className="flex-1 overflow-y-auto flex flex-col">
-      <RailHeader label="Task" sub={id} onCollapse={onCollapse} />
+      <RailHeader label="Scheduled task" sub={id} onCollapse={onCollapse} />
       <TaskContext id={id} />
     </div>
   );
-  if (section === 'tasks') return (
+  if (scheduledSection) return (
     <div className="flex-1 flex flex-col">
-      <RailHeader label="Tasks" onCollapse={onCollapse} />
-      <EmptyPrompt text="Select a task to see its prompt and schedule." />
+      <RailHeader label="Scheduled" onCollapse={onCollapse} />
+      <EmptyPrompt text="Select a scheduled task to see its prompt and schedule." />
     </div>
   );
 
@@ -608,7 +640,7 @@ export function ContextRail({ onCollapse }: { onCollapse?: () => void }) {
   // Projects
   if (section === 'projects' && id) return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <RailHeader label="Project" sub={id} onCollapse={onCollapse} />
+      <RailHeader label="Project" onCollapse={onCollapse} />
       <div className="flex-1 overflow-y-auto">
         <ProjectDetailContext id={id} />
       </div>
@@ -616,8 +648,8 @@ export function ContextRail({ onCollapse }: { onCollapse?: () => void }) {
   );
   if (section === 'projects') return (
     <div className="flex-1 flex flex-col">
-      <RailHeader label="Projects" onCollapse={onCollapse} />
-      <EmptyPrompt text="Select a project to see its summary, plan, and tasks." />
+      <RailHeader label="Project" onCollapse={onCollapse} />
+      <EmptyPrompt text="Select a project to inspect and edit it." />
     </div>
   );
 

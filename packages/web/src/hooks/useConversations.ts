@@ -6,9 +6,10 @@
  * Clicking a shelf item calls openSession() → adds to openIds → tab appears.
  * × on an open tab calls closeSession() → removed from openIds → back to shelf.
  */
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useState } from 'react';
+import { api } from '../api';
 import type { SessionMeta } from '../types';
-import { LiveTitlesContext } from '../contexts';
+import { LiveTitlesContext, useAppData, useSseConnection } from '../contexts';
 
 const OPEN_KEY = 'pa:open-session-ids';
 
@@ -24,65 +25,61 @@ function saveOpen(ids: Set<string>) {
   try { localStorage.setItem(OPEN_KEY, JSON.stringify([...ids])); } catch { /* ignore */ }
 }
 
+async function fetchSessionsSnapshot(): Promise<SessionMeta[]> {
+  const [jsonl, live] = await Promise.all([api.sessions(), api.liveSessions()]);
+  const jsonlIds = new Set(jsonl.map((session) => session.id));
+  const syntheticLive: SessionMeta[] = live
+    .filter((entry) => !jsonlIds.has(entry.id))
+    .map((entry) => ({
+      id: entry.id,
+      file: entry.sessionFile,
+      timestamp: new Date().toISOString(),
+      cwd: entry.cwd,
+      cwdSlug: entry.cwd.replace(/\//g, '-'),
+      model: '',
+      title: '(new conversation)',
+      messageCount: 0,
+    }));
+
+  return [...syntheticLive, ...jsonl];
+}
+
 export function useConversations() {
-  const [sessions,    setSessions]    = useState<SessionMeta[]>([]);
-  const [openIds,     setOpenIds]     = useState<Set<string>>(loadOpen);
-  const [loading,     setLoading]     = useState(true);
+  const [openIds, setOpenIds] = useState<Set<string>>(loadOpen);
   const { titles: liveTitles } = useContext(LiveTitlesContext);
+  const { sessions, setSessions } = useAppData();
+  const { status: sseStatus } = useSseConnection();
 
-  const fetchSessions = useCallback(() => {
-    setLoading(true);
-    // Fetch JSONL sessions + live sessions in parallel
-    return Promise.all([
-      fetch('/api/sessions').then(r => r.ok ? r.json() as Promise<SessionMeta[]> : []),
-      fetch('/api/live-sessions').then(r => r.ok ? r.json() as Promise<{ id: string; cwd: string; sessionFile: string; isStreaming: boolean }[]> : []),
-    ])
-      .then(([jsonl, live]) => {
-        const jsonlIds = new Set((jsonl as SessionMeta[]).map((s: SessionMeta) => s.id));
-        // Inject live sessions that don't have a JSONL entry yet
-        const syntheticLive: SessionMeta[] = (live as { id: string; cwd: string; sessionFile: string; isStreaming: boolean }[])
-          .filter(l => !jsonlIds.has(l.id))
-          .map(l => ({
-            id:           l.id,
-            file:         l.sessionFile,
-            timestamp:    new Date().toISOString(),
-            cwd:          l.cwd,
-            cwdSlug:      l.cwd.replace(/\//g, '-'),
-            model:        '',
-            title:        '(new conversation)',
-            messageCount: 0,
-          }));
-        const merged = [...syntheticLive, ...(jsonl as SessionMeta[])];
-        setSessions(merged);
-        setLoading(false);
-      })
-      .catch(() => {
-        setSessions([]);
-        setLoading(false);
-      });
-  }, []);
-
-  // Poll every 10s (was previously only fetching once)
-  useEffect(() => {
-    void fetchSessions();
-    const timer = setInterval(() => void fetchSessions(), 10_000);
-    return () => clearInterval(timer);
-  }, [fetchSessions]);
+  const refetch = useCallback(async () => {
+    const next = await fetchSessionsSnapshot();
+    setSessions(next);
+    return next;
+  }, [setSessions]);
 
   const openSession = useCallback((id: string) => {
-    setOpenIds(prev => { const next = new Set(prev); next.add(id);    saveOpen(next); return next; });
+    setOpenIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      saveOpen(next);
+      return next;
+    });
   }, []);
 
   const closeSession = useCallback((id: string) => {
-    setOpenIds(prev => { const next = new Set(prev); next.delete(id); saveOpen(next); return next; });
+    setOpenIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      saveOpen(next);
+      return next;
+    });
   }, []);
 
-  // Apply live title overrides (from streaming sessions not yet flushed to JSONL)
-  const withTitles = sessions.map(s =>
-    liveTitles.has(s.id) ? { ...s, title: liveTitles.get(s.id)! } : s
+  const withTitles = (sessions ?? []).map((session) =>
+    liveTitles.has(session.id) ? { ...session, title: liveTitles.get(session.id)! } : session,
   );
-  const tabs  = withTitles.filter(s =>  openIds.has(s.id));
-  const shelf = withTitles.filter(s => !openIds.has(s.id));
+  const tabs = withTitles.filter((session) => openIds.has(session.id));
+  const shelf = withTitles.filter((session) => !openIds.has(session.id));
+  const loading = sessions === null && (sseStatus === 'connecting' || sseStatus === 'reconnecting');
 
-  return { tabs, shelf, openSession, closeSession, loading, refetch: fetchSessions };
+  return { tabs, shelf, openSession, closeSession, loading, refetch };
 }

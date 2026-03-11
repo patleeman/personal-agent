@@ -6,12 +6,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   createProjectScaffold,
   listProjectIds,
+  projectExists,
   resolveProfileProjectsDir,
   resolveProjectPaths,
   resolveProjectTaskPath,
   validateTaskId,
   validateProjectId,
-  projectExists,
 } from './projects.js';
 
 const tempDirs: string[] = [];
@@ -73,8 +73,7 @@ describe('resolveProjectPaths', () => {
     });
 
     expect(paths.projectDir).toBe(join(repo, 'profiles', 'datadog', 'agent', 'projects', 'artifact-model'));
-    expect(paths.summaryFile).toBe(join(paths.projectDir, 'summary.md'));
-    expect(paths.planFile).toBe(join(paths.projectDir, 'plan.md'));
+    expect(paths.projectFile).toBe(join(paths.projectDir, 'PROJECT.yaml'));
     expect(paths.tasksDir).toBe(join(paths.projectDir, 'tasks'));
     expect(paths.artifactsDir).toBe(join(paths.projectDir, 'artifacts'));
   });
@@ -88,7 +87,7 @@ describe('resolveProjectPaths', () => {
       taskId: 'implement-activity',
     });
 
-    expect(path).toBe(join(repo, 'profiles', 'datadog', 'agent', 'projects', 'artifact-model', 'tasks', 'implement-activity.md'));
+    expect(path).toBe(join(repo, 'profiles', 'datadog', 'agent', 'projects', 'artifact-model', 'tasks', 'implement-activity.yaml'));
   });
 });
 
@@ -104,24 +103,18 @@ describe('createProjectScaffold', () => {
     });
 
     expect(result.writtenFiles).toEqual([
-      join(repo, 'profiles', 'datadog', 'agent', 'projects', 'artifact-model', 'summary.md'),
-      join(repo, 'profiles', 'datadog', 'agent', 'projects', 'artifact-model', 'plan.md'),
+      join(repo, 'profiles', 'datadog', 'agent', 'projects', 'artifact-model', 'PROJECT.yaml'),
     ]);
 
     expect(existsSync(result.paths.projectDir)).toBe(true);
     expect(existsSync(result.paths.tasksDir)).toBe(true);
     expect(existsSync(result.paths.artifactsDir)).toBe(true);
 
-    const summary = readFileSync(result.paths.summaryFile, 'utf-8');
-    expect(summary).toContain('id: artifact-model');
-    expect(summary).toContain('Create a durable artifact model for ongoing work.');
-    expect(summary).toContain('## Current plan');
-    expect(summary).toContain('See [plan.md](./plan.md).');
-
-    const plan = readFileSync(result.paths.planFile, 'utf-8');
-    expect(plan).toContain('# Plan');
-    expect(plan).toContain('## Steps');
-    expect(plan).toContain('- [ ] Verify the result');
+    const projectFile = readFileSync(result.paths.projectFile, 'utf-8');
+    expect(projectFile).toContain('id: artifact-model');
+    expect(projectFile).toContain('description: Create a durable artifact model for ongoing work.');
+    expect(projectFile).toContain('currentMilestoneId: refine-plan');
+    expect(projectFile).toContain('title: Verify the result');
   });
 
   it('rejects empty objectives', () => {
@@ -173,9 +166,9 @@ describe('createProjectScaffold', () => {
     });
 
     expect(second.paths.projectDir).toBe(first.paths.projectDir);
-    const summary = readFileSync(second.paths.summaryFile, 'utf-8');
-    expect(summary).toContain('Updated objective');
-    expect(summary).toContain('updatedAt: 2026-03-10T13:00:00.000Z');
+    const projectFile = readFileSync(second.paths.projectFile, 'utf-8');
+    expect(projectFile).toContain('description: Updated objective');
+    expect(projectFile).toContain('updatedAt: 2026-03-10T13:00:00.000Z');
   });
 });
 

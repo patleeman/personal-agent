@@ -1,4 +1,4 @@
-import type { ActivityEntry, AppStatus, ConversationProjectLinks, LiveSessionContext, LiveSessionMeta, MemoryData, ProfileState, ProjectDetail, ProjectSummary, PromptImageInput, SessionContextUsage } from './types';
+import type { ActivityEntry, AppStatus, ConversationProjectLinks, LiveSessionContext, LiveSessionMeta, MemoryData, ProfileState, ProjectDetail, ProjectRecord, PromptImageInput, ScheduledTaskSummary, SessionContextUsage, SessionMeta } from './types';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch('/api' + path);
@@ -26,13 +26,86 @@ async function patch<T>(path: string, body?: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function del<T>(path: string): Promise<T> {
+  const res = await fetch('/api' + path, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json() as Promise<T>;
+}
+
 export const api = {
   // ── Core ──────────────────────────────────────────────────────────────────
   status:       () => get<AppStatus>('/status'),
   activity:     () => get<ActivityEntry[]>('/activity'),
   activityById: (id: string) => get<ActivityEntry>(`/activity/${encodeURIComponent(id)}`),
-  projects:     () => get<ProjectSummary[]>('/projects'),
+  sessions:     () => get<SessionMeta[]>('/sessions'),
+  projects:     () => get<ProjectRecord[]>('/projects'),
   projectById:  (id: string) => get<ProjectDetail>(`/projects/${encodeURIComponent(id)}`),
+  createProject: (input: {
+    id: string;
+    description: string;
+    summary?: string;
+    status?: string;
+    currentFocus?: string | null;
+    blockers?: string[];
+    recentProgress?: string[];
+  }) => post<ProjectDetail>('/projects', input),
+  updateProject: (id: string, patchBody: {
+    description?: string;
+    summary?: string;
+    status?: string;
+    currentFocus?: string | null;
+    currentMilestoneId?: string | null;
+    blockers?: string[];
+    recentProgress?: string[];
+  }) => patch<ProjectDetail>(`/projects/${encodeURIComponent(id)}`, patchBody),
+  deleteProject: (id: string) =>
+    del<{ ok: true; deletedProjectId: string }>(`/projects/${encodeURIComponent(id)}`),
+  addProjectMilestone: (id: string, input: {
+    id: string;
+    title: string;
+    status: string;
+    summary?: string;
+    makeCurrent?: boolean;
+  }) => post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/milestones`, input),
+  updateProjectMilestone: (id: string, milestoneId: string, patchBody: {
+    title?: string;
+    status?: string;
+    summary?: string | null;
+    makeCurrent?: boolean;
+  }) => patch<ProjectDetail>(`/projects/${encodeURIComponent(id)}/milestones/${encodeURIComponent(milestoneId)}`, patchBody),
+  deleteProjectMilestone: (id: string, milestoneId: string) =>
+    del<ProjectDetail>(`/projects/${encodeURIComponent(id)}/milestones/${encodeURIComponent(milestoneId)}`),
+  moveProjectMilestone: (id: string, milestoneId: string, direction: 'up' | 'down') =>
+    post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/milestones/${encodeURIComponent(milestoneId)}/move`, { direction }),
+  createProjectTask: (id: string, input: {
+    id: string;
+    title: string;
+    status: string;
+    summary?: string;
+    milestoneId?: string | null;
+    acceptanceCriteria?: string[];
+    plan?: string[];
+    notes?: string | null;
+  }) => post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/tasks`, input),
+  updateProjectTask: (id: string, taskId: string, patchBody: {
+    title?: string;
+    status?: string;
+    summary?: string | null;
+    milestoneId?: string | null;
+    acceptanceCriteria?: string[];
+    plan?: string[];
+    notes?: string | null;
+  }) => patch<ProjectDetail>(`/projects/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}`, patchBody),
+  deleteProjectTask: (id: string, taskId: string) =>
+    del<ProjectDetail>(`/projects/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}`),
+  moveProjectTask: (id: string, taskId: string, direction: 'up' | 'down') =>
+    post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}/move`, { direction }),
+  projectSource: (id: string) => get<{ path: string; content: string }>(`/projects/${encodeURIComponent(id)}/source`),
+  saveProjectSource: (id: string, content: string) => post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/source`, { content }),
+  projectTaskSource: (id: string, taskId: string) =>
+    get<{ path: string; content: string }>(`/projects/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}/source`),
+  saveProjectTaskSource: (id: string, taskId: string, content: string) =>
+    post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}/source`, { content }),
   profiles:     () => get<ProfileState>('/profiles'),
   setCurrentProfile: (profile: string) => patch<{ ok: boolean; currentProfile: string }>('/profiles/current', { profile }),
 
@@ -40,6 +113,7 @@ export const api = {
   setModel: (model: string) => patch<{ ok: boolean }>('/models/current', { model }),
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
+  tasks: () => get<ScheduledTaskSummary[]>('/tasks'),
   setTaskEnabled: (id: string, enabled: boolean) =>
     patch<{ ok: boolean }>(`/tasks/${encodeURIComponent(id)}`, { enabled }),
   taskLog: (id: string) =>

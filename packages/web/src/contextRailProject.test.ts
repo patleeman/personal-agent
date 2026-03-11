@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  formatProjectStatus,
   getPlanProgress,
   hasMeaningfulBlockers,
-  normalizeProjectText,
-  parseProjectListItems,
   pickAttachProjectId,
+  pickCurrentMilestone,
   pickFocusedProjectId,
   summarizeProjectPreview,
 } from './contextRailProject.js';
@@ -28,36 +28,62 @@ describe('context rail project helpers', () => {
     expect(pickAttachProjectId([], 'missing')).toBe('');
   });
 
-  it('normalizes project text for UI display', () => {
-    expect(normalizeProjectText('- See [plan.md](./plan.md) and `ship` this.')).toBe('See plan.md and ship this.');
+  it('formats project status labels for UI display', () => {
+    expect(formatProjectStatus('in_progress')).toBe('in progress');
+    expect(formatProjectStatus('blocked')).toBe('blocked');
+    expect(formatProjectStatus(undefined)).toBe('unknown');
   });
 
   it('detects whether blockers are meaningful', () => {
-    expect(hasMeaningfulBlockers('- waiting on review')).toBe(true);
-    expect(hasMeaningfulBlockers('None')).toBe(false);
+    expect(hasMeaningfulBlockers(['waiting on review'])).toBe(true);
+    expect(hasMeaningfulBlockers([])).toBe(false);
     expect(hasMeaningfulBlockers(undefined)).toBe(false);
   });
 
-  it('parses markdown bullet lists into plain text items', () => {
-    expect(parseProjectListItems('- first item\n- [linked](./plan.md) `task`\n- None')).toEqual([
-      'first item',
-      'linked task',
-    ]);
-    expect(parseProjectListItems(undefined)).toEqual([]);
+  it('picks the current milestone from the explicit plan pointer first', () => {
+    expect(pickCurrentMilestone({
+      currentMilestoneId: 'execute-work',
+      milestones: [
+        { id: 'refine-plan', title: 'Refine the plan', status: 'completed' },
+        { id: 'execute-work', title: 'Execute the work', status: 'pending' },
+      ],
+    })).toEqual({ id: 'execute-work', title: 'Execute the work', status: 'pending' });
   });
 
-  it('prefers the plan summary for project previews and falls back to blockers', () => {
-    expect(summarizeProjectPreview('- Finish durable activity ranking', '- waiting on API')).toBe('Finish durable activity ranking');
-    expect(summarizeProjectPreview('- See [plan.md](./plan.md).', '- waiting on API')).toBe('See plan.md.');
-    expect(summarizeProjectPreview('', '- waiting on API')).toBe('Blocked: waiting on API');
-    expect(summarizeProjectPreview(undefined, 'None')).toBe('No plan summary yet.');
+  it('falls back to the active or next incomplete milestone when needed', () => {
+    expect(pickCurrentMilestone({
+      milestones: [
+        { id: 'refine-plan', title: 'Refine the plan', status: 'completed' },
+        { id: 'execute-work', title: 'Execute the work', status: 'blocked' },
+      ],
+    }))?.toEqual({ id: 'execute-work', title: 'Execute the work', status: 'blocked' });
+
+    expect(pickCurrentMilestone({
+      milestones: [
+        { id: 'refine-plan', title: 'Refine the plan', status: 'completed' },
+        { id: 'verify-result', title: 'Verify the result', status: 'pending' },
+      ],
+    }))?.toEqual({ id: 'verify-result', title: 'Verify the result', status: 'pending' });
   });
 
-  it('computes plan progress counts and percentage', () => {
+  it('prefers the current focus for project previews and falls back to summary', () => {
+    expect(summarizeProjectPreview({
+      currentFocus: 'Unify the right rail around one coherent project view.',
+      summary: 'The project is in progress.',
+      blockers: [],
+    })).toBe('Unify the right rail around one coherent project view.');
+
+    expect(summarizeProjectPreview({
+      summary: 'The project is in progress.',
+      blockers: ['waiting on API'],
+    })).toBe('The project is in progress.');
+  });
+
+  it('computes milestone progress counts and percentage', () => {
     expect(getPlanProgress([
-      { text: 'one', completed: true },
-      { text: 'two', completed: false },
-      { text: 'three', completed: true },
+      { id: 'one', title: 'One', status: 'completed' },
+      { id: 'two', title: 'Two', status: 'pending' },
+      { id: 'three', title: 'Three', status: 'completed' },
     ])).toEqual({ done: 2, total: 3, pct: 67 });
 
     expect(getPlanProgress([])).toEqual({ done: 0, total: 0, pct: 0 });

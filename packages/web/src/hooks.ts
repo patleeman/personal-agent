@@ -1,52 +1,87 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+export interface RefetchOptions {
+  resetLoading?: boolean;
+}
+
 export interface UseApiResult<T> {
   data: T | null;
   loading: boolean;
+  refreshing: boolean;
   error: string | null;
-  refetch: () => void;
+  refetch: (options?: RefetchOptions) => Promise<T | null>;
 }
 
 /**
- * useApi — fires the fetcher once on mount (and on refetch()).
- * Pass `key` to re-fire automatically when it changes (e.g. a route id).
+ * useApi — fetch once on mount/key change, then support background refetches
+ * without dropping the current UI back into a loading state.
  */
 export function useApi<T>(fetcher: () => Promise<T>, key?: string): UseApiResult<T> {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tick, setTick] = useState(0);
   const fetcherRef = useRef(fetcher);
+  const requestIdRef = useRef(0);
+  const mountedRef = useRef(true);
+  const dataRef = useRef<T | null>(null);
+
   fetcherRef.current = fetcher;
+  dataRef.current = data;
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
-    fetcherRef.current()
-      .then((result) => {
-        if (!cancelled) { setData(result); setLoading(false); }
-      })
-      .catch((err: Error) => {
-        if (!cancelled) { setError(err.message); setLoading(false); }
-      });
+  const runFetch = useCallback(async (options?: RefetchOptions): Promise<T | null> => {
+    const requestId = ++requestIdRef.current;
+    const hasData = dataRef.current !== null;
+    const resetLoading = options?.resetLoading ?? !hasData;
 
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tick, key]);
+    if (resetLoading) {
+      setLoading(true);
+    } else {
+      setRefreshing(true);
+    }
 
-  const refetch = useCallback(() => setTick((t) => t + 1), []);
-  return { data, loading, error, refetch };
-}
+    if (!hasData || resetLoading) {
+      setError(null);
+    }
 
-export function usePolling<T>(fetcher: () => Promise<T>, intervalMs = 10_000): UseApiResult<T> {
-  const result = useApi(fetcher);
+    try {
+      const result = await fetcherRef.current();
+      if (!mountedRef.current || requestId !== requestIdRef.current) {
+        return null;
+      }
+
+      dataRef.current = result;
+      setData(result);
+      setError(null);
+      setLoading(false);
+      setRefreshing(false);
+      return result;
+    } catch (err) {
+      if (!mountedRef.current || requestId !== requestIdRef.current) {
+        return null;
+      }
+
+      const message = err instanceof Error ? err.message : String(err);
+      if (!hasData || resetLoading) {
+        setError(message);
+      }
+      setLoading(false);
+      setRefreshing(false);
+      return null;
+    }
+  }, []);
 
   useEffect(() => {
-    const timer = setInterval(result.refetch, intervalMs);
-    return () => clearInterval(timer);
-  }, [result.refetch, intervalMs]);
+    void runFetch({ resetLoading: true });
+  }, [key, runFetch]);
 
-  return result;
+  return { data, loading, refreshing, error, refetch: runFetch };
 }
+

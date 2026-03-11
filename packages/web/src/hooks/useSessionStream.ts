@@ -3,25 +3,27 @@
  * a growing MessageBlock list in real time.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { MessageBlock, PromptImageInput } from '../types';
-import type { SseEvent } from '../types';
+import type { MessageBlock, PromptImageInput, SessionContextUsage, SseEvent } from '../types';
 import { api } from '../api';
 
 export interface StreamState {
-  blocks:      MessageBlock[];
+  blocks: MessageBlock[];
   isStreaming: boolean;
-  error:       string | null;
-  title:       string | null;
-  tokens:      { input: number; output: number; total: number } | null;
-  cost:        number | null;
+  error: string | null;
+  title: string | null;
+  tokens: { input: number; output: number; total: number } | null;
+  cost: number | null;
+  contextUsage: SessionContextUsage | null;
 }
 
-const INIT: StreamState = { blocks: [], isStreaming: false, error: null, title: null, tokens: null, cost: null };
-
-// Tool color map (matches ConversationTree)
-const TOOL_COLORS: Record<string, string> = {
-  bash: '#6b8fa3', read: '#4db6ac', write: '#f0a832', edit: '#f0a832',
-  web_fetch: '#4caf82', web_search: '#4caf82',
+const INIT: StreamState = {
+  blocks: [],
+  isStreaming: false,
+  error: null,
+  title: null,
+  tokens: null,
+  cost: null,
+  contextUsage: null,
 };
 
 export function useSessionStream(sessionId: string | null) {
@@ -57,6 +59,12 @@ export function useSessionStream(sessionId: string | null) {
   const abort = useCallback(async () => {
     if (!sessionId) return;
     await api.abortSession(sessionId);
+  }, [sessionId]);
+
+  useEffect(() => {
+    blocksRef.current = [];
+    streamingRef.current = false;
+    setState(INIT);
   }, [sessionId]);
 
   useEffect(() => {
@@ -195,6 +203,9 @@ function applyEvent(
 
     case 'title_update':
       return { ...prev, title: event.title };
+
+    case 'context_usage':
+      return { ...prev, contextUsage: event.usage };
 
     case 'stats_update':
       return { ...prev, tokens: event.tokens, cost: event.cost };

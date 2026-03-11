@@ -13,13 +13,29 @@ import {
   SessionManager,
   createAgentSession,
   type AgentSessionEvent,
+  type ExtensionFactory,
 } from '@mariozechner/pi-coding-agent';
+import { invalidateAppTopics, publishAppEvent } from './appEvents.js';
 import { estimateContextUsageSegments } from './sessionContextUsage.js';
 
 const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
 const SESSIONS_DIR = join(AGENT_DIR, 'sessions');
 
 // ── SSE event types sent to clients ──────────────────────────────────────────
+
+export interface LiveContextUsageSegment {
+  key: 'system' | 'user' | 'assistant' | 'tool' | 'summary' | 'other';
+  label: string;
+  tokens: number;
+}
+
+export interface LiveContextUsage {
+  tokens: number | null;
+  modelId?: string;
+  contextWindow?: number;
+  percent?: number | null;
+  segments?: LiveContextUsageSegment[];
+}
 
 export type SseEvent =
   | { type: 'agent_start' }
@@ -31,6 +47,7 @@ export type SseEvent =
   | { type: 'tool_update';     toolCallId: string; partialResult: unknown }
   | { type: 'tool_end';        toolCallId: string; toolName: string; isError: boolean; durationMs: number; output: string }
   | { type: 'title_update';    title: string }
+  | { type: 'context_usage';   usage: LiveContextUsage | null }
   | { type: 'stats_update';    tokens: { input: number; output: number; total: number }; cost: number }
   | { type: 'error';           message: string };
 
@@ -43,11 +60,14 @@ export interface PromptImageAttachment {
 // ── Internal entry ────────────────────────────────────────────────────────────
 
 interface LiveEntry {
-  session:    AgentSession;
-  cwd:        string;
-  listeners:  Set<(e: SseEvent) => void>;
-  title:      string;
-  sentTitle:  boolean;
+  sessionId: string;
+  session: AgentSession;
+  cwd: string;
+  listeners: Set<(e: SseEvent) => void>;
+  title: string;
+  sentTitle: boolean;
+  lastContextUsageJson: string | null;
+  contextUsageTimer?: ReturnType<typeof setTimeout>;
 }
 
 export const registry = new Map<string, LiveEntry>();
@@ -99,11 +119,80 @@ function isLikelyUnsupportedImageInputError(error: unknown): boolean {
   return mentionsImageInput && indicatesUnsupported;
 }
 
+function readContextUsagePayload(session: AgentSession): LiveContextUsage | null {
+  try {
+    const usage = session.getContextUsage();
+    if (!usage) {
+      return null;
+    }
+
+    return {
+      ...usage,
+      modelId: session.model?.id,
+      ...(usage.tokens !== null
+        ? { segments: estimateContextUsageSegments(session.messages, usage.tokens) }
+        : {}),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function broadcastTitle(entry: LiveEntry): void {
+  if (!entry.title) {
+    return;
+  }
+
+  broadcast(entry, { type: 'title_update', title: entry.title });
+  publishAppEvent({ type: 'live_title', sessionId: entry.sessionId, title: entry.title });
+  invalidateAppTopics('sessions');
+}
+
+function broadcastContextUsage(entry: LiveEntry, force = false): void {
+  const usage = readContextUsagePayload(entry.session);
+  const nextJson = JSON.stringify(usage);
+  if (!force && entry.lastContextUsageJson === nextJson) {
+    return;
+  }
+
+  entry.lastContextUsageJson = nextJson;
+  broadcast(entry, { type: 'context_usage', usage });
+}
+
+function scheduleContextUsage(entry: LiveEntry, delayMs = 400): void {
+  if (entry.contextUsageTimer) {
+    return;
+  }
+
+  entry.contextUsageTimer = setTimeout(() => {
+    entry.contextUsageTimer = undefined;
+    broadcastContextUsage(entry);
+  }, delayMs);
+}
+
+function clearContextUsageTimer(entry: LiveEntry): void {
+  if (!entry.contextUsageTimer) {
+    return;
+  }
+
+  clearTimeout(entry.contextUsageTimer);
+  entry.contextUsageTimer = undefined;
+}
+
 // ── Event wiring ──────────────────────────────────────────────────────────────
 
 function wireSession(id: string, session: AgentSession, cwd: string) {
-  const entry: LiveEntry = { session, cwd, listeners: new Set(), title: '', sentTitle: false };
+  const entry: LiveEntry = {
+    sessionId: id,
+    session,
+    cwd,
+    listeners: new Set(),
+    title: '',
+    sentTitle: false,
+    lastContextUsageJson: null,
+  };
   registry.set(id, entry);
+  invalidateAppTopics('sessions');
 
   session.subscribe((event: AgentSessionEvent) => {
     // Extract title from first user message
@@ -115,8 +204,12 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
         entry.title = text.trim().replace(/\n/g, ' ').slice(0, 80)
           || (imageCount === 1 ? '(image attachment)' : imageCount > 1 ? `(${imageCount} image attachments)` : '(untitled)');
         entry.sentTitle = true;
-        broadcast(entry, { type: 'title_update', title: entry.title });
+        broadcastTitle(entry);
       }
+    }
+
+    if (event.type === 'agent_start' || event.type === 'message_update' || event.type === 'tool_execution_start' || event.type === 'tool_execution_update' || event.type === 'tool_execution_end') {
+      scheduleContextUsage(entry);
     }
 
     // Emit stats after agent_end
@@ -125,10 +218,20 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
         const stats = session.getSessionStats();
         broadcast(entry, { type: 'stats_update', tokens: stats.tokens, cost: stats.cost });
       } catch { /* ignore */ }
+      clearContextUsageTimer(entry);
+      broadcastContextUsage(entry, true);
+    }
+
+    if (event.type === 'turn_end') {
+      clearContextUsageTimer(entry);
+      broadcastContextUsage(entry, true);
+      invalidateAppTopics('sessions');
     }
 
     const sse = toSse(event);
-    if (sse) broadcast(entry, sse);
+    if (sse) {
+      broadcast(entry, sse);
+    }
   });
 
   return entry;
@@ -215,37 +318,29 @@ export function getSessionStats(sessionId: string) {
   try { return entry.session.getSessionStats(); } catch { return null; }
 }
 
-export function getSessionContextUsage(sessionId: string) {
+export function getSessionContextUsage(sessionId: string): LiveContextUsage | null {
   const entry = registry.get(sessionId);
   if (!entry) return null;
-  try {
-    const usage = entry.session.getContextUsage();
-    if (!usage) {
-      return null;
-    }
-
-    return {
-      ...usage,
-      modelId: entry.session.model?.id,
-      ...(usage.tokens !== null
-        ? { segments: estimateContextUsageSegments(entry.session.messages, usage.tokens) }
-        : {}),
-    };
-  } catch {
-    return null;
-  }
+  return readContextUsagePayload(entry.session);
 }
 
-async function makeLoader(cwd: string) {
-  const loader = new DefaultResourceLoader({ cwd, agentDir: AGENT_DIR });
+async function makeLoader(cwd: string, extensionFactories: ExtensionFactory[] = []) {
+  const loader = new DefaultResourceLoader({
+    cwd,
+    agentDir: AGENT_DIR,
+    extensionFactories,
+  });
   await loader.reload();
   return loader;
 }
 
 /** Create a brand-new Pi session. */
-export async function createSession(cwd: string): Promise<{ id: string; sessionFile: string }> {
+export async function createSession(
+  cwd: string,
+  options: { extensionFactories?: ExtensionFactory[] } = {},
+): Promise<{ id: string; sessionFile: string }> {
   const auth         = makeAuth();
-  const resourceLoader = await makeLoader(cwd);
+  const resourceLoader = await makeLoader(cwd, options.extensionFactories);
   const { session }  = await createAgentSession({
     cwd,
     agentDir:      AGENT_DIR,
@@ -261,7 +356,10 @@ export async function createSession(cwd: string): Promise<{ id: string; sessionF
 }
 
 /** Resume an existing session file into a live session. */
-export async function resumeSession(sessionFile: string): Promise<{ id: string }> {
+export async function resumeSession(
+  sessionFile: string,
+  options: { extensionFactories?: ExtensionFactory[] } = {},
+): Promise<{ id: string }> {
   // Don't re-create if already live
   for (const [id, e] of registry.entries()) {
     if (e.session.sessionFile === sessionFile) return { id };
@@ -270,7 +368,7 @@ export async function resumeSession(sessionFile: string): Promise<{ id: string }
   const auth   = makeAuth();
   // Derive cwd from sessions dir parent — best effort
   const cwd    = SESSIONS_DIR;
-  const resourceLoader = await makeLoader(cwd);
+  const resourceLoader = await makeLoader(cwd, options.extensionFactories);
   const { session } = await createAgentSession({
     cwd,
     agentDir:       AGENT_DIR,
@@ -295,10 +393,40 @@ export function subscribe(
   const entry = registry.get(sessionId);
   if (!entry) return null;
   entry.listeners.add(listener);
+
+  if (entry.sentTitle && entry.title) {
+    listener({ type: 'title_update', title: entry.title });
+  }
+  listener({ type: 'context_usage', usage: readContextUsagePayload(entry.session) });
+  if (entry.session.isStreaming) {
+    listener({ type: 'agent_start' });
+  }
+
   return () => entry.listeners.delete(listener);
 }
 
 /** Send a prompt to a live session. */
+export async function queueReferencedProjectsContext(
+  sessionId: string,
+  content: string,
+): Promise<void> {
+  const entry = registry.get(sessionId);
+  if (!entry) throw new Error(`Session ${sessionId} is not live`);
+  const message = content.trim();
+  if (!message) {
+    return;
+  }
+
+  await entry.session.sendCustomMessage({
+    customType: 'referenced_projects',
+    content: message,
+    display: false,
+    details: undefined,
+  }, {
+    deliverAs: 'nextTurn',
+  });
+}
+
 export async function promptSession(
   sessionId: string,
   text: string,
@@ -347,6 +475,7 @@ export function renameSession(sessionId: string, name: string): void {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
   entry.session.setSessionName(name);
+  invalidateAppTopics('sessions');
 }
 
 /** Abort the current agent run. */
@@ -372,7 +501,9 @@ export async function forkSession(
 
   // Re-register under the new ID
   registry.delete(sessionId);
+  entry.sessionId = newId;
   registry.set(newId, entry);
+  invalidateAppTopics('sessions');
 
   return { newSessionId: newId, sessionFile: newFile };
 }
@@ -381,6 +512,8 @@ export async function forkSession(
 export function destroySession(sessionId: string): void {
   const entry = registry.get(sessionId);
   if (!entry) return;
+  clearContextUsageTimer(entry);
   entry.session.dispose();
   registry.delete(sessionId);
+  invalidateAppTopics('sessions');
 }

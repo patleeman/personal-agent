@@ -1,19 +1,24 @@
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { listSessions, readSessionBlocks } from './sessions.js';
+import { invalidateAppTopics, startAppEventMonitor, subscribeAppEvents } from './appEvents.js';
 import { readSavedModelPreferences } from './modelPreferences.js';
 import { getProfileConfigFilePath, readSavedProfilePreferences, resolveActiveProfile, writeSavedProfilePreferences, } from './profilePreferences.js';
-import { createSession, resumeSession, getLiveSessions, getSessionStats, getSessionContextUsage, getAvailableModels, isLive, subscribe, promptSession, compactSession, reloadSessionResources, exportSessionHtml, renameSession, abortSession, destroySession, forkSession, registry as liveRegistry, } from './liveSessions.js';
-import { addConversationProjectLink, getConversationProjectLink, listProfileActivityEntries, listProjectIds, readProjectSummary, removeConversationProjectLink, resolveProjectPaths, } from '@personal-agent/core';
+import { createProjectAgentExtension } from './projectAgentExtension.js';
+import { createSession, resumeSession, getLiveSessions, getSessionStats, getSessionContextUsage, getAvailableModels, isLive, subscribe, promptSession, queueReferencedProjectsContext, compactSession, reloadSessionResources, exportSessionHtml, renameSession, abortSession, destroySession, forkSession, registry as liveRegistry, } from './liveSessions.js';
+import { addConversationProjectLink, getConversationProjectLink, listProfileActivityEntries, listProjectIds, readProject, removeConversationProjectLink, resolveProjectPaths, setConversationProjectLinks, } from '@personal-agent/core';
 import { listProfiles, materializeProfileToAgentDir, resolveResourceProfile, } from '@personal-agent/resources';
-import { readProjectDetailFromProject } from './projects.js';
+import { addProjectMilestone, createProjectRecord, createProjectTaskRecord, deleteProjectMilestone, deleteProjectRecord, deleteProjectTaskRecord, moveProjectMilestone, moveProjectTaskRecord, readProjectDetailFromProject, readProjectSource, readProjectTaskSource, saveProjectSource, saveProjectTaskSource, updateProjectMilestone, updateProjectRecord, updateProjectTaskRecord, } from './projects.js';
 const PORT = parseInt(process.env.PA_WEB_PORT ?? '3741', 10);
-const REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? process.cwd();
+const DEFAULT_REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
+const REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? DEFAULT_REPO_ROOT;
 const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
+const SESSIONS_DIR = join(AGENT_DIR, 'sessions');
+const TASK_STATE_FILE = join(homedir(), '.local/state/personal-agent/daemon/task-state.json');
 const PROFILE_CONFIG_FILE = getProfileConfigFilePath();
 function listAvailableProfiles() {
     return listProfiles({ repoRoot: REPO_ROOT });
@@ -45,6 +50,14 @@ function setCurrentProfile(profile) {
     currentProfile = profile;
     writeSavedProfilePreferences(profile, PROFILE_CONFIG_FILE);
     return currentProfile;
+}
+function buildLiveSessionExtensionFactories() {
+    return [
+        createProjectAgentExtension({
+            repoRoot: REPO_ROOT,
+            getCurrentProfile,
+        }),
+    ];
 }
 // ── Activity read-state ───────────────────────────────────────────────────────
 // Stored as a simple JSON set alongside activity files.
@@ -81,10 +94,122 @@ function summarizeUserMessageContent(content) {
     const imageCount = blocks.filter((block) => block.type === 'image').length;
     return { text, imageCount };
 }
+function listActivityForCurrentProfile() {
+    const profile = getCurrentProfile();
+    const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile });
+    const read = loadReadState(profile);
+    return entries.map(({ entry }) => ({ ...entry, read: read.has(entry.id) }));
+}
+function getActivitySnapshotForCurrentProfile() {
+    const entries = listActivityForCurrentProfile();
+    return {
+        entries,
+        unreadCount: entries.filter((entry) => !entry.read).length,
+    };
+}
+function listTasksForCurrentProfile() {
+    const stateFile = TASK_STATE_FILE;
+    let taskState = {};
+    if (existsSync(stateFile)) {
+        taskState = JSON.parse(readFileSync(stateFile, 'utf-8'));
+    }
+    const tasks = taskState.tasks ?? {};
+    return Object.values(tasks).map((value) => {
+        const task = value;
+        let enabled = true;
+        let cron;
+        let prompt = '';
+        let model;
+        try {
+            const md = readFileSync(task.filePath, 'utf-8');
+            const fmMatch = md.match(/^---\n([\s\S]*?)\n---/);
+            if (fmMatch) {
+                const fm = fmMatch[1];
+                if (/enabled:\s*false/.test(fm))
+                    enabled = false;
+                cron = fm.match(/cron:\s*"?([^"\n]+)"?/)?.[1]?.trim();
+                model = fm.match(/model:\s*"?([^"\n]+)"?/)?.[1]?.trim();
+            }
+            prompt = md.replace(/^---[\s\S]*?---\n?/, '').trim().split('\n')[0].slice(0, 120);
+        }
+        catch { /* ignore */ }
+        return { ...task, enabled, cron, prompt, model };
+    });
+}
+function listConversationSessionsSnapshot() {
+    const jsonl = listSessions();
+    const live = getLiveSessions();
+    const jsonlIds = new Set(jsonl.map((session) => session.id));
+    const syntheticLive = live
+        .filter((entry) => !jsonlIds.has(entry.id))
+        .map((entry) => ({
+        id: entry.id,
+        file: entry.sessionFile,
+        timestamp: new Date().toISOString(),
+        cwd: entry.cwd,
+        cwdSlug: entry.cwd.replace(/\//g, '-'),
+        model: '',
+        title: '(new conversation)',
+        messageCount: 0,
+    }));
+    return [...syntheticLive, ...jsonl];
+}
+function buildSnapshotEvents(topics) {
+    const uniqueTopics = [...new Set(topics)];
+    return uniqueTopics.map((topic) => {
+        switch (topic) {
+            case 'activity': {
+                const snapshot = getActivitySnapshotForCurrentProfile();
+                return { type: 'activity_snapshot', entries: snapshot.entries, unreadCount: snapshot.unreadCount };
+            }
+            case 'projects':
+                return { type: 'projects_snapshot', projects: listProjectsForCurrentProfile() };
+            case 'sessions':
+                return { type: 'sessions_snapshot', sessions: listConversationSessionsSnapshot() };
+            case 'tasks':
+                return { type: 'tasks_snapshot', tasks: listTasksForCurrentProfile() };
+            default:
+                return null;
+        }
+    }).filter((event) => event !== null);
+}
 const DIST_DIR = process.env.PA_WEB_DIST ??
     join(dirname(fileURLToPath(import.meta.url)), '../dist');
 const app = express();
 app.use(express.json({ limit: '25mb' }));
+startAppEventMonitor({
+    repoRoot: REPO_ROOT,
+    sessionsDir: SESSIONS_DIR,
+    taskStateFile: TASK_STATE_FILE,
+    getCurrentProfile,
+});
+app.get('/api/events', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+    const writeEvent = (event) => {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
+    writeEvent({ type: 'connected' });
+    for (const event of buildSnapshotEvents(['activity', 'projects', 'sessions', 'tasks'])) {
+        writeEvent(event);
+    }
+    const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), 15_000);
+    const unsubscribe = subscribeAppEvents((event) => {
+        if (event.type === 'invalidate') {
+            for (const snapshotEvent of buildSnapshotEvents(event.topics)) {
+                writeEvent(snapshotEvent);
+            }
+        }
+        writeEvent(event);
+    });
+    req.on('close', () => {
+        clearInterval(heartbeat);
+        unsubscribe();
+    });
+});
 // ── Profiles ────────────────────────────────────────────────────────────────
 app.get('/api/profiles', (_req, res) => {
     try {
@@ -132,10 +257,7 @@ app.get('/api/status', (_req, res) => {
 // ── Activity ─────────────────────────────────────────────────────────────────
 app.get('/api/activity', (_req, res) => {
     try {
-        const profile = getCurrentProfile();
-        const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile });
-        const read = loadReadState(profile);
-        res.json(entries.map(({ entry }) => ({ ...entry, read: read.has(entry.id) })));
+        res.json(listActivityForCurrentProfile());
     }
     catch (err) {
         res.status(500).json({ error: String(err) });
@@ -143,11 +265,7 @@ app.get('/api/activity', (_req, res) => {
 });
 app.get('/api/activity/count', (_req, res) => {
     try {
-        const profile = getCurrentProfile();
-        const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile });
-        const read = loadReadState(profile);
-        const unread = entries.filter(({ entry }) => !read.has(entry.id)).length;
-        res.json({ count: unread });
+        res.json({ count: getActivitySnapshotForCurrentProfile().unreadCount });
     }
     catch {
         res.json({ count: 0 });
@@ -181,6 +299,7 @@ app.patch('/api/activity/:id', (req, res) => {
         else
             state.add(id);
         saveReadState(state, profile);
+        invalidateAppTopics('activity');
         res.json({ ok: true });
     }
     catch (err) {
@@ -245,35 +364,7 @@ app.patch('/api/models/current', (req, res) => {
 // ── Tasks ─────────────────────────────────────────────────────────────────────
 app.get('/api/tasks', (_req, res) => {
     try {
-        const stateFile = join(homedir(), '.local/state/personal-agent/daemon/task-state.json');
-        let taskState = {};
-        if (existsSync(stateFile)) {
-            taskState = JSON.parse(readFileSync(stateFile, 'utf-8'));
-        }
-        const tasks = taskState.tasks ?? {};
-        // Parse task markdown files to get schedule + prompt
-        const enriched = Object.values(tasks).map((t) => {
-            const task = t;
-            let enabled = true;
-            let cron;
-            let prompt = '';
-            let model;
-            try {
-                const md = readFileSync(task.filePath, 'utf-8');
-                const fmMatch = md.match(/^---\n([\s\S]*?)\n---/);
-                if (fmMatch) {
-                    const fm = fmMatch[1];
-                    if (/enabled:\s*false/.test(fm))
-                        enabled = false;
-                    cron = fm.match(/cron:\s*"?([^"\n]+)"?/)?.[1]?.trim();
-                    model = fm.match(/model:\s*"?([^"\n]+)"?/)?.[1]?.trim();
-                }
-                prompt = md.replace(/^---[\s\S]*?---\n?/, '').trim().split('\n')[0].slice(0, 120);
-            }
-            catch { /* ignore */ }
-            return { ...task, enabled, cron, prompt, model };
-        });
-        res.json(enriched);
+        res.json(listTasksForCurrentProfile());
     }
     catch (err) {
         res.status(500).json({ error: String(err) });
@@ -282,7 +373,7 @@ app.get('/api/tasks', (_req, res) => {
 app.patch('/api/tasks/:id', (req, res) => {
     try {
         const { enabled } = req.body;
-        const stateFile = join(homedir(), '.local/state/personal-agent/daemon/task-state.json');
+        const stateFile = TASK_STATE_FILE;
         if (!existsSync(stateFile)) {
             res.status(404).json({ error: 'No task state' });
             return;
@@ -302,6 +393,7 @@ app.patch('/api/tasks/:id', (req, res) => {
             content = content.replace(/^---\n/, `---\nenabled: ${enabled}\n`);
         }
         writeFileSync(entry.filePath, content, 'utf-8');
+        invalidateAppTopics('tasks');
         res.json({ ok: true });
     }
     catch (err) {
@@ -310,7 +402,7 @@ app.patch('/api/tasks/:id', (req, res) => {
 });
 app.get('/api/tasks/:id/log', (req, res) => {
     try {
-        const stateFile = join(homedir(), '.local/state/personal-agent/daemon/task-state.json');
+        const stateFile = TASK_STATE_FILE;
         if (!existsSync(stateFile)) {
             res.status(404).json({ error: 'No task state' });
             return;
@@ -330,7 +422,7 @@ app.get('/api/tasks/:id/log', (req, res) => {
 });
 app.get('/api/tasks/:id', (req, res) => {
     try {
-        const stateFile = join(homedir(), '.local/state/personal-agent/daemon/task-state.json');
+        const stateFile = TASK_STATE_FILE;
         if (!existsSync(stateFile)) {
             res.status(404).json({ error: 'No task state' });
             return;
@@ -366,7 +458,7 @@ app.get('/api/tasks/:id', (req, res) => {
 /** Run a task immediately — creates a live session with the task's prompt */
 app.post('/api/tasks/:id/run', async (req, res) => {
     try {
-        const stateFile = join(homedir(), '.local/state/personal-agent/daemon/task-state.json');
+        const stateFile = TASK_STATE_FILE;
         if (!existsSync(stateFile)) {
             res.status(404).json({ error: 'No task state' });
             return;
@@ -384,7 +476,9 @@ app.post('/api/tasks/:id/run', async (req, res) => {
             res.status(400).json({ error: 'Task has no prompt body' });
             return;
         }
-        const { id: sessionId } = await createSession(REPO_ROOT);
+        const { id: sessionId } = await createSession(REPO_ROOT, {
+            extensionFactories: buildLiveSessionExtensionFactories(),
+        });
         // Send prompt asynchronously — don't block the response
         void promptSession(sessionId, afterFm);
         res.json({ ok: true, sessionId });
@@ -424,7 +518,9 @@ app.get('/api/live-sessions', (_req, res) => {
 app.post('/api/live-sessions', async (req, res) => {
     try {
         const cwd = req.body.cwd ?? REPO_ROOT;
-        const result = await createSession(cwd);
+        const result = await createSession(cwd, {
+            extensionFactories: buildLiveSessionExtensionFactories(),
+        });
         res.json(result);
     }
     catch (err) {
@@ -439,7 +535,9 @@ app.post('/api/live-sessions/resume', async (req, res) => {
             res.status(400).json({ error: 'sessionFile required' });
             return;
         }
-        const result = await resumeSession(sessionFile);
+        const result = await resumeSession(sessionFile, {
+            extensionFactories: buildLiveSessionExtensionFactories(),
+        });
         res.json(result);
     }
     catch (err) {
@@ -479,6 +577,59 @@ app.get('/api/live-sessions/:id/events', (req, res) => {
         unsubscribe?.();
     });
 });
+function extractMentionedProjectIds(text, availableProjectIds) {
+    const matches = text.match(/@[a-zA-Z0-9][a-zA-Z0-9-_]*/g) ?? [];
+    const projectIds = [];
+    const seen = new Set();
+    for (const match of matches) {
+        const projectId = match.slice(1);
+        if (!availableProjectIds.has(projectId) || seen.has(projectId)) {
+            continue;
+        }
+        seen.add(projectId);
+        projectIds.push(projectId);
+    }
+    return projectIds;
+}
+function syncConversationProjectReferencesForPrompt(conversationId, text) {
+    const profile = getCurrentProfile();
+    const availableProjectIds = listProjectIds({ repoRoot: REPO_ROOT, profile });
+    const availableProjectIdSet = new Set(availableProjectIds);
+    const existingProjectIds = (getConversationProjectLink({
+        repoRoot: REPO_ROOT,
+        profile,
+        conversationId,
+    })?.relatedProjectIds ?? []).filter((projectId) => availableProjectIdSet.has(projectId));
+    const mentionedProjectIds = extractMentionedProjectIds(text, availableProjectIdSet);
+    const relatedProjectIds = [...new Set([...existingProjectIds, ...mentionedProjectIds])];
+    const existingMatches = existingProjectIds.length === relatedProjectIds.length
+        && existingProjectIds.every((projectId, index) => projectId === relatedProjectIds[index]);
+    if (!existingMatches) {
+        setConversationProjectLinks({
+            repoRoot: REPO_ROOT,
+            profile,
+            conversationId,
+            relatedProjectIds,
+        });
+    }
+    return relatedProjectIds;
+}
+function buildReferencedProjectsContext(projectIds) {
+    const profile = getCurrentProfile();
+    const lines = projectIds.map((projectId) => {
+        const paths = resolveProjectPaths({
+            repoRoot: REPO_ROOT,
+            profile,
+            projectId,
+        });
+        return `- @${projectId}: ${relative(REPO_ROOT, paths.projectFile)} (tasks: ${relative(REPO_ROOT, paths.tasksDir)}/*.yaml)`;
+    });
+    return [
+        'Referenced projects for this conversation:',
+        ...lines,
+        'These are durable project files. Read and update them when the user asks you to track or change project state.',
+    ].join('\n');
+}
 /** Send a prompt to a live session */
 app.post('/api/live-sessions/:id/prompt', async (req, res) => {
     try {
@@ -488,6 +639,10 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
             res.status(400).json({ error: 'text or images required' });
             return;
         }
+        const relatedProjectIds = syncConversationProjectReferencesForPrompt(id, text);
+        if (relatedProjectIds.length > 0) {
+            await queueReferencedProjectsContext(id, buildReferencedProjectsContext(relatedProjectIds));
+        }
         // Don't await — streaming response goes over SSE
         promptSession(id, text, behavior, images?.map((image) => ({
             type: 'image',
@@ -496,7 +651,7 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
         }))).catch(err => {
             console.error(`[live] prompt error for ${id}:`, err);
         });
-        res.json({ ok: true });
+        res.json({ ok: true, relatedProjectIds });
     }
     catch (err) {
         res.status(500).json({ error: String(err) });
@@ -702,28 +857,32 @@ app.delete('/api/live-sessions/:id', (req, res) => {
     res.json({ ok: true });
 });
 // ── Projects ─────────────────────────────────────────────────────────────────
-function listProjectSummariesForCurrentProfile() {
+function listProjectsForCurrentProfile() {
     const profile = getCurrentProfile();
     const ids = listProjectIds({ repoRoot: REPO_ROOT, profile });
-    const summaries = ids.flatMap((id) => {
+    const projects = ids.flatMap((id) => {
         try {
             const paths = resolveProjectPaths({
                 repoRoot: REPO_ROOT,
                 profile,
                 projectId: id,
             });
-            return [readProjectSummary(paths.summaryFile)];
+            return [readProject(paths.projectFile)];
         }
         catch {
             return [];
         }
     });
-    summaries.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-    return summaries;
+    projects.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return projects;
+}
+function projectErrorStatus(error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return /not found/i.test(message) ? 404 : 400;
 }
 app.get('/api/projects', (_req, res) => {
     try {
-        res.json(listProjectSummariesForCurrentProfile());
+        res.json(listProjectsForCurrentProfile());
     }
     catch (err) {
         res.status(500).json({ error: String(err) });
@@ -739,6 +898,245 @@ app.get('/api/projects/:id', (req, res) => {
     }
     catch {
         res.status(404).json({ error: 'Project not found' });
+    }
+});
+app.post('/api/projects', (req, res) => {
+    try {
+        const body = req.body;
+        res.status(201).json(createProjectRecord({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: body.id ?? '',
+            description: body.description ?? '',
+            summary: body.summary,
+            status: body.status,
+            currentFocus: body.currentFocus,
+            blockers: body.blockers,
+            recentProgress: body.recentProgress,
+        }));
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+});
+app.patch('/api/projects/:id', (req, res) => {
+    try {
+        const body = req.body;
+        res.json(updateProjectRecord({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+            description: body.description,
+            summary: body.summary,
+            status: body.status,
+            currentFocus: body.currentFocus,
+            currentMilestoneId: body.currentMilestoneId,
+            blockers: body.blockers,
+            recentProgress: body.recentProgress,
+        }));
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+});
+app.delete('/api/projects/:id', (req, res) => {
+    try {
+        res.json(deleteProjectRecord({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+        }));
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+});
+app.post('/api/projects/:id/milestones', (req, res) => {
+    try {
+        const body = req.body;
+        res.status(201).json(addProjectMilestone({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+            id: body.id ?? '',
+            title: body.title ?? '',
+            status: body.status ?? '',
+            summary: body.summary,
+            makeCurrent: body.makeCurrent,
+        }));
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+});
+app.patch('/api/projects/:id/milestones/:milestoneId', (req, res) => {
+    try {
+        const body = req.body;
+        res.json(updateProjectMilestone({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+            milestoneId: req.params.milestoneId,
+            title: body.title,
+            status: body.status,
+            summary: body.summary,
+            makeCurrent: body.makeCurrent,
+        }));
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+});
+app.post('/api/projects/:id/tasks', (req, res) => {
+    try {
+        const body = req.body;
+        res.status(201).json(createProjectTaskRecord({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+            taskId: body.id ?? '',
+            title: body.title ?? '',
+            status: body.status ?? '',
+            summary: body.summary,
+            milestoneId: body.milestoneId,
+            acceptanceCriteria: body.acceptanceCriteria,
+            plan: body.plan,
+            notes: body.notes,
+        }));
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+});
+app.patch('/api/projects/:id/tasks/:taskId', (req, res) => {
+    try {
+        const body = req.body;
+        res.json(updateProjectTaskRecord({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+            taskId: req.params.taskId,
+            title: body.title,
+            status: body.status,
+            summary: body.summary,
+            milestoneId: body.milestoneId,
+            acceptanceCriteria: body.acceptanceCriteria,
+            plan: body.plan,
+            notes: body.notes,
+        }));
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+});
+app.delete('/api/projects/:id/milestones/:milestoneId', (req, res) => {
+    try {
+        res.json(deleteProjectMilestone({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+            milestoneId: req.params.milestoneId,
+        }));
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+});
+app.post('/api/projects/:id/milestones/:milestoneId/move', (req, res) => {
+    try {
+        const body = req.body;
+        res.json(moveProjectMilestone({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+            milestoneId: req.params.milestoneId,
+            direction: body.direction ?? 'up',
+        }));
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+});
+app.delete('/api/projects/:id/tasks/:taskId', (req, res) => {
+    try {
+        res.json(deleteProjectTaskRecord({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+            taskId: req.params.taskId,
+        }));
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+});
+app.post('/api/projects/:id/tasks/:taskId/move', (req, res) => {
+    try {
+        const body = req.body;
+        res.json(moveProjectTaskRecord({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+            taskId: req.params.taskId,
+            direction: body.direction ?? 'up',
+        }));
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+});
+app.get('/api/projects/:id/source', (req, res) => {
+    try {
+        res.json(readProjectSource({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+        }));
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+});
+app.post('/api/projects/:id/source', (req, res) => {
+    try {
+        const body = req.body;
+        res.json(saveProjectSource({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+            content: body.content ?? '',
+        }));
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+});
+app.get('/api/projects/:id/tasks/:taskId/source', (req, res) => {
+    try {
+        res.json(readProjectTaskSource({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+            taskId: req.params.taskId,
+        }));
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+});
+app.post('/api/projects/:id/tasks/:taskId/source', (req, res) => {
+    try {
+        const body = req.body;
+        res.json(saveProjectTaskSource({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+            taskId: req.params.taskId,
+            content: body.content ?? '',
+        }));
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
     }
 });
 // ── Shell run ─────────────────────────────────────────────────────────────────

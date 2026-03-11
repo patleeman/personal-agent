@@ -6,6 +6,7 @@
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { AuthStorage, DefaultResourceLoader, ModelRegistry, SessionManager, createAgentSession, } from '@mariozechner/pi-coding-agent';
+import { invalidateAppTopics, publishAppEvent } from './appEvents.js';
 import { estimateContextUsageSegments } from './sessionContextUsage.js';
 const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
 const SESSIONS_DIR = join(AGENT_DIR, 'sessions');
@@ -47,10 +48,70 @@ function isLikelyUnsupportedImageInputError(error) {
         || normalized.includes('image input');
     return mentionsImageInput && indicatesUnsupported;
 }
+function readContextUsagePayload(session) {
+    try {
+        const usage = session.getContextUsage();
+        if (!usage) {
+            return null;
+        }
+        return {
+            ...usage,
+            modelId: session.model?.id,
+            ...(usage.tokens !== null
+                ? { segments: estimateContextUsageSegments(session.messages, usage.tokens) }
+                : {}),
+        };
+    }
+    catch {
+        return null;
+    }
+}
+function broadcastTitle(entry) {
+    if (!entry.title) {
+        return;
+    }
+    broadcast(entry, { type: 'title_update', title: entry.title });
+    publishAppEvent({ type: 'live_title', sessionId: entry.sessionId, title: entry.title });
+    invalidateAppTopics('sessions');
+}
+function broadcastContextUsage(entry, force = false) {
+    const usage = readContextUsagePayload(entry.session);
+    const nextJson = JSON.stringify(usage);
+    if (!force && entry.lastContextUsageJson === nextJson) {
+        return;
+    }
+    entry.lastContextUsageJson = nextJson;
+    broadcast(entry, { type: 'context_usage', usage });
+}
+function scheduleContextUsage(entry, delayMs = 400) {
+    if (entry.contextUsageTimer) {
+        return;
+    }
+    entry.contextUsageTimer = setTimeout(() => {
+        entry.contextUsageTimer = undefined;
+        broadcastContextUsage(entry);
+    }, delayMs);
+}
+function clearContextUsageTimer(entry) {
+    if (!entry.contextUsageTimer) {
+        return;
+    }
+    clearTimeout(entry.contextUsageTimer);
+    entry.contextUsageTimer = undefined;
+}
 // ── Event wiring ──────────────────────────────────────────────────────────────
 function wireSession(id, session, cwd) {
-    const entry = { session, cwd, listeners: new Set(), title: '', sentTitle: false };
+    const entry = {
+        sessionId: id,
+        session,
+        cwd,
+        listeners: new Set(),
+        title: '',
+        sentTitle: false,
+        lastContextUsageJson: null,
+    };
     registry.set(id, entry);
+    invalidateAppTopics('sessions');
     session.subscribe((event) => {
         // Extract title from first user message
         if (!entry.sentTitle && event.type === 'turn_end') {
@@ -61,8 +122,11 @@ function wireSession(id, session, cwd) {
                 entry.title = text.trim().replace(/\n/g, ' ').slice(0, 80)
                     || (imageCount === 1 ? '(image attachment)' : imageCount > 1 ? `(${imageCount} image attachments)` : '(untitled)');
                 entry.sentTitle = true;
-                broadcast(entry, { type: 'title_update', title: entry.title });
+                broadcastTitle(entry);
             }
+        }
+        if (event.type === 'agent_start' || event.type === 'message_update' || event.type === 'tool_execution_start' || event.type === 'tool_execution_update' || event.type === 'tool_execution_end') {
+            scheduleContextUsage(entry);
         }
         // Emit stats after agent_end
         if (event.type === 'agent_end') {
@@ -71,10 +135,18 @@ function wireSession(id, session, cwd) {
                 broadcast(entry, { type: 'stats_update', tokens: stats.tokens, cost: stats.cost });
             }
             catch { /* ignore */ }
+            clearContextUsageTimer(entry);
+            broadcastContextUsage(entry, true);
+        }
+        if (event.type === 'turn_end') {
+            clearContextUsageTimer(entry);
+            broadcastContextUsage(entry, true);
+            invalidateAppTopics('sessions');
         }
         const sse = toSse(event);
-        if (sse)
+        if (sse) {
             broadcast(entry, sse);
+        }
     });
     return entry;
 }
@@ -160,32 +232,21 @@ export function getSessionContextUsage(sessionId) {
     const entry = registry.get(sessionId);
     if (!entry)
         return null;
-    try {
-        const usage = entry.session.getContextUsage();
-        if (!usage) {
-            return null;
-        }
-        return {
-            ...usage,
-            modelId: entry.session.model?.id,
-            ...(usage.tokens !== null
-                ? { segments: estimateContextUsageSegments(entry.session.messages, usage.tokens) }
-                : {}),
-        };
-    }
-    catch {
-        return null;
-    }
+    return readContextUsagePayload(entry.session);
 }
-async function makeLoader(cwd) {
-    const loader = new DefaultResourceLoader({ cwd, agentDir: AGENT_DIR });
+async function makeLoader(cwd, extensionFactories = []) {
+    const loader = new DefaultResourceLoader({
+        cwd,
+        agentDir: AGENT_DIR,
+        extensionFactories,
+    });
     await loader.reload();
     return loader;
 }
 /** Create a brand-new Pi session. */
-export async function createSession(cwd) {
+export async function createSession(cwd, options = {}) {
     const auth = makeAuth();
-    const resourceLoader = await makeLoader(cwd);
+    const resourceLoader = await makeLoader(cwd, options.extensionFactories);
     const { session } = await createAgentSession({
         cwd,
         agentDir: AGENT_DIR,
@@ -199,7 +260,7 @@ export async function createSession(cwd) {
     return { id, sessionFile: session.sessionFile ?? '' };
 }
 /** Resume an existing session file into a live session. */
-export async function resumeSession(sessionFile) {
+export async function resumeSession(sessionFile, options = {}) {
     // Don't re-create if already live
     for (const [id, e] of registry.entries()) {
         if (e.session.sessionFile === sessionFile)
@@ -208,7 +269,7 @@ export async function resumeSession(sessionFile) {
     const auth = makeAuth();
     // Derive cwd from sessions dir parent — best effort
     const cwd = SESSIONS_DIR;
-    const resourceLoader = await makeLoader(cwd);
+    const resourceLoader = await makeLoader(cwd, options.extensionFactories);
     const { session } = await createAgentSession({
         cwd,
         agentDir: AGENT_DIR,
@@ -229,9 +290,33 @@ export function subscribe(sessionId, listener) {
     if (!entry)
         return null;
     entry.listeners.add(listener);
+    if (entry.sentTitle && entry.title) {
+        listener({ type: 'title_update', title: entry.title });
+    }
+    listener({ type: 'context_usage', usage: readContextUsagePayload(entry.session) });
+    if (entry.session.isStreaming) {
+        listener({ type: 'agent_start' });
+    }
     return () => entry.listeners.delete(listener);
 }
 /** Send a prompt to a live session. */
+export async function queueReferencedProjectsContext(sessionId, content) {
+    const entry = registry.get(sessionId);
+    if (!entry)
+        throw new Error(`Session ${sessionId} is not live`);
+    const message = content.trim();
+    if (!message) {
+        return;
+    }
+    await entry.session.sendCustomMessage({
+        customType: 'referenced_projects',
+        content: message,
+        display: false,
+        details: undefined,
+    }, {
+        deliverAs: 'nextTurn',
+    });
+}
 export async function promptSession(sessionId, text, behavior, images) {
     const entry = registry.get(sessionId);
     if (!entry)
@@ -279,6 +364,7 @@ export function renameSession(sessionId, name) {
     if (!entry)
         throw new Error(`Session ${sessionId} is not live`);
     entry.session.setSessionName(name);
+    invalidateAppTopics('sessions');
 }
 /** Abort the current agent run. */
 export async function abortSession(sessionId) {
@@ -299,7 +385,9 @@ export async function forkSession(sessionId, entryId) {
     const newFile = entry.session.sessionFile ?? '';
     // Re-register under the new ID
     registry.delete(sessionId);
+    entry.sessionId = newId;
     registry.set(newId, entry);
+    invalidateAppTopics('sessions');
     return { newSessionId: newId, sessionFile: newFile };
 }
 /** Cleanly dispose a live session. */
@@ -307,6 +395,8 @@ export function destroySession(sessionId) {
     const entry = registry.get(sessionId);
     if (!entry)
         return;
+    clearContextUsageTimer(entry);
     entry.session.dispose();
     registry.delete(sessionId);
+    invalidateAppTopics('sessions');
 }

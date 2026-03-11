@@ -1,9 +1,9 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { ContextRail } from './ContextRail';
 import { Sidebar } from './Sidebar';
 import { IconButton } from './ui';
-import { clampPanelWidth, getRailMaxWidth } from '../layoutSizing';
+import { clampPanelWidth, getRailLayoutPrefs, getRailMaxWidth } from '../layoutSizing';
 
 // ── Resize hook ───────────────────────────────────────────────────────────────
 
@@ -15,20 +15,36 @@ interface ResizeOptions {
   side: 'left' | 'right'; // which side of the handle the panel is on
 }
 
-function useResize({ initial, min, max, storageKey, side }: ResizeOptions) {
-  const [width, setWidth] = useState(() => {
-    try {
-      const stored = localStorage.getItem(storageKey);
-      if (stored) {
-        return clampPanelWidth(parseInt(stored, 10), min, max);
+function readStoredWidth(storageKey: string, initial: number, min: number): number {
+  try {
+    const stored = localStorage.getItem(storageKey);
+    if (stored) {
+      const parsed = parseInt(stored, 10);
+      if (Number.isFinite(parsed)) {
+        return Math.max(min, parsed);
       }
-    } catch { /* ignore */ }
-    return clampPanelWidth(initial, min, max);
-  });
+    }
+  } catch { /* ignore */ }
+
+  return Math.max(min, initial);
+}
+
+function useResize({ initial, min, max, storageKey, side }: ResizeOptions) {
+  const [desiredWidth, setDesiredWidth] = useState(() => readStoredWidth(storageKey, initial, min));
 
   const dragging = useRef(false);
   const startX   = useRef(0);
   const startW   = useRef(0);
+  const width = clampPanelWidth(desiredWidth, min, max);
+
+  const persistWidth = useCallback((nextWidth: number) => {
+    setDesiredWidth(nextWidth);
+    try { localStorage.setItem(storageKey, String(nextWidth)); } catch { /* ignore */ }
+  }, [storageKey]);
+
+  const reset = useCallback(() => {
+    persistWidth(Math.max(min, initial));
+  }, [initial, min, persistWidth]);
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -42,8 +58,7 @@ function useResize({ initial, min, max, storageKey, side }: ResizeOptions) {
       if (!dragging.current) return;
       const dx   = side === 'left' ? e.clientX - startX.current : startX.current - e.clientX;
       const next = clampPanelWidth(startW.current + dx, min, max);
-      setWidth(next);
-      try { localStorage.setItem(storageKey, String(next)); } catch { /* ignore */ }
+      persistWidth(next);
     }
 
     function onUp() {
@@ -56,29 +71,30 @@ function useResize({ initial, min, max, storageKey, side }: ResizeOptions) {
 
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup',   onUp);
-  }, [width, min, max, side, storageKey]);
+  }, [width, min, max, side, persistWidth]);
 
   useEffect(() => {
-    setWidth((current) => {
-      const next = clampPanelWidth(current, min, max);
-      if (next !== current) {
-        try { localStorage.setItem(storageKey, String(next)); } catch { /* ignore */ }
-      }
-      return next;
-    });
-  }, [min, max, storageKey]);
+    setDesiredWidth(readStoredWidth(storageKey, initial, min));
+  }, [storageKey, initial, min]);
 
-  return { width, onMouseDown };
+  return { width, onMouseDown, reset };
 }
 
 // ── Resize handle ─────────────────────────────────────────────────────────────
 
-function ResizeHandle({ onMouseDown }: { onMouseDown: (e: React.MouseEvent) => void }) {
+function ResizeHandle({
+  onMouseDown,
+  onDoubleClick,
+}: {
+  onMouseDown: (e: React.MouseEvent) => void;
+  onDoubleClick?: () => void;
+}) {
   const [hovered, setHovered] = useState(false);
   return (
     <div
       className="relative flex-shrink-0 w-[5px] cursor-col-resize select-none z-10 group"
       onMouseDown={onMouseDown}
+      onDoubleClick={onDoubleClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
@@ -119,14 +135,24 @@ function useViewportWidth() {
 }
 
 export function Layout() {
+  const location = useLocation();
   const viewportWidth = useViewportWidth();
   const sidebar = useResize({ initial: 224, min: 160, max: 320, storageKey: 'pa:sidebar-width', side: 'left'  });
+  const railPrefs = getRailLayoutPrefs(location.pathname);
+  const railMinWidth = 160;
   const railMaxWidth = getRailMaxWidth({
     viewportWidth,
     sidebarWidth: sidebar.width,
-    railMinWidth: 220,
+    railMinWidth,
+    mainMinWidth: 320,
   });
-  const rail    = useResize({ initial: 380, min: 220, max: railMaxWidth, storageKey: 'pa:rail-width', side: 'right' });
+  const rail = useResize({
+    initial: railPrefs.initialWidth,
+    min: railMinWidth,
+    max: railMaxWidth,
+    storageKey: railPrefs.storageKey,
+    side: 'right',
+  });
 
   const [railCollapsed, setRailCollapsed] = useState(() => {
     try { return localStorage.getItem('pa:rail-collapsed') === 'true'; } catch { return false; }
@@ -170,7 +196,7 @@ export function Layout() {
         </div>
       ) : (
         <>
-          <ResizeHandle onMouseDown={rail.onMouseDown} />
+          <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
           <div style={{ width: rail.width }} className="flex-shrink-0 flex flex-col overflow-hidden">
             <ContextRail onCollapse={toggleRail} />
           </div>

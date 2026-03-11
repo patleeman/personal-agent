@@ -54,4 +54,9 @@ describe('buildSlashMenuItems', () => {
     expect(items.some((item) => item.kind === 'skill')).toBe(false);
     expect(items.some((item) => item.displayCmd === '/model')).toBe(true);
   });
+
+  it('includes the project slash command in the command menu', () => {
+    const items = buildSlashMenuItems('/pro', SKILLS);
+    expect(items.some((item) => item.displayCmd === '/project')).toBe(true);
+  });
 });
