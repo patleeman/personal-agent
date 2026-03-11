@@ -576,27 +576,68 @@ export async function abortSession(sessionId: string): Promise<void> {
 export async function forkSession(
   sessionId: string,
   entryId: string,
+  options: { preserveSource?: boolean; extensionFactories?: ExtensionFactory[] } = {},
 ): Promise<{ newSessionId: string; sessionFile: string }> {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
+  if (entry.session.isStreaming) throw new Error('Cannot fork while a response is running. Use stop first.');
 
-  const { cancelled } = await entry.session.fork(entryId);
-  if (cancelled) throw new Error('Fork cancelled');
+  if (!options.preserveSource) {
+    const { cancelled } = await entry.session.fork(entryId);
+    if (cancelled) throw new Error('Fork cancelled');
 
-  patchSessionManagerPersistence(entry.session.sessionManager);
-  ensureSessionFileExists(entry.session.sessionManager);
+    patchSessionManagerPersistence(entry.session.sessionManager);
+    ensureSessionFileExists(entry.session.sessionManager);
 
-  // fork() creates a new session file and switches the current session to it
-  const newId   = entry.session.sessionId;
-  const newFile = entry.session.sessionFile ?? '';
+    // fork() creates a new session file and switches the current session to it
+    const newId = entry.session.sessionId;
+    const newFile = entry.session.sessionFile ?? '';
 
-  // Re-register under the new ID
-  registry.delete(sessionId);
-  entry.sessionId = newId;
-  registry.set(newId, entry);
-  invalidateAppTopics('sessions');
+    // Re-register under the new ID
+    registry.delete(sessionId);
+    entry.sessionId = newId;
+    registry.set(newId, entry);
+    invalidateAppTopics('sessions');
 
-  return { newSessionId: newId, sessionFile: newFile };
+    return { newSessionId: newId, sessionFile: newFile };
+  }
+
+  const sourceSessionFile = entry.session.sessionFile;
+  if (!sourceSessionFile) {
+    throw new Error('Cannot fork a live session without a session file.');
+  }
+
+  const auth = makeAuth();
+  const resourceLoader = await makeLoader(entry.cwd, options.extensionFactories);
+  let forkedSession: AgentSession | null = null;
+
+  try {
+    const { session } = await createAgentSession({
+      cwd: entry.cwd,
+      agentDir: AGENT_DIR,
+      authStorage: auth,
+      modelRegistry: makeRegistry(auth),
+      resourceLoader,
+      sessionManager: SessionManager.open(sourceSessionFile),
+    });
+
+    forkedSession = session;
+    patchSessionManagerPersistence(forkedSession.sessionManager);
+
+    const { cancelled } = await forkedSession.fork(entryId);
+    if (cancelled) throw new Error('Fork cancelled');
+
+    ensureSessionFileExists(forkedSession.sessionManager);
+
+    const newId = forkedSession.sessionId;
+    const newFile = forkedSession.sessionFile ?? '';
+    wireSession(newId, forkedSession, entry.cwd);
+
+    return { newSessionId: newId, sessionFile: newFile };
+  } catch (error) {
+    forkedSession?.dispose();
+    throw error;
+  }
 }
 
 /** Cleanly dispose a live session. */

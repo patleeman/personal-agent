@@ -19,6 +19,7 @@ import { emitProjectsChanged } from '../projectEvents';
 import { parseProjectSlashCommand, type ProjectSlashCommand } from '../projectSlashCommand';
 import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../slashMenu';
 import { buildMentionItems, filterMentionItems, resolveMentionItems, type MentionItem } from '../conversationMentions';
+import { buildConversationHref, resolveForkEntryForMessage } from '../forking';
 
 // ── Model picker ──────────────────────────────────────────────────────────────
 
@@ -542,7 +543,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, []);
 
-  function showNotice(tone: 'accent' | 'danger', text: string, durationMs = 2500) {
+  const showNotice = useCallback((tone: 'accent' | 'danger', text: string, durationMs = 2500) => {
     setNotice({ tone, text });
     if (noticeTimeoutRef.current !== null) {
       window.clearTimeout(noticeTimeoutRef.current);
@@ -551,7 +552,41 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       setNotice(null);
       noticeTimeoutRef.current = null;
     }, durationMs);
-  }
+  }, []);
+
+  const forkMessageIntoNewTab = useCallback(async (messageIndex: number) => {
+    if (!id || !isLiveSession || !realMessages) {
+      return;
+    }
+
+    const forkTab = window.open('about:blank', '_blank');
+    if (!forkTab) {
+      showNotice('danger', 'Allow pop-ups to open forked conversations in a new tab.');
+      return;
+    }
+
+    if (forkTab.document.body) {
+      forkTab.document.title = 'Forking conversation…';
+      forkTab.document.body.innerHTML = '<p style="font-family: system-ui; padding: 24px; color: #444;">Forking conversation…</p>';
+    }
+
+    try {
+      const entries = await api.forkEntries(id);
+      const entry = resolveForkEntryForMessage(realMessages, messageIndex, entries);
+      if (!entry) {
+        throw new Error('No forkable message found for that point in the conversation.');
+      }
+
+      const { newSessionId } = await api.forkSession(id, entry.entryId, { preserveSource: true });
+      forkTab.location.href = buildConversationHref(newSessionId, window.location.href);
+      forkTab.focus();
+    } catch (error) {
+      if (!forkTab.closed) {
+        forkTab.close();
+      }
+      showNotice('danger', `Fork failed: ${(error as Error).message}`);
+    }
+  }, [id, isLiveSession, realMessages, showNotice]);
 
   function selectModel(modelId: string) {
     setCurrent(modelId);
@@ -898,7 +933,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       <div className="relative flex-1 min-h-0">
         <div ref={scrollRef} className="conversation-scroll-shell h-full overflow-y-auto overflow-x-hidden">
           {realMessages ? (
-            <ChatView messages={realMessages} isStreaming={stream.isStreaming} />
+            <ChatView
+              messages={realMessages}
+              isStreaming={stream.isStreaming}
+              onForkMessage={isLiveSession && id && !stream.isStreaming ? forkMessageIntoNewTab : undefined}
+            />
           ) : sessionLoading ? (
             <LoadingState label="Loading session…" className="justify-center h-full" />
           ) : (
@@ -1131,16 +1170,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           onJump={jumpToMessage}
           onClose={() => setShowTree(false)}
           onFork={isLiveSession && id ? (blockIdx) => {
-            // Fork at the nth user message — find its entryId via fork-entries
-            const allMsgs = realMessages;
-            const userMsgsBefore = allMsgs.slice(0, blockIdx + 1).filter(b => b.type === 'user').length;
-            void api.forkEntries(id).then(entries => {
-              const entry = entries[userMsgsBefore - 1] ?? entries[entries.length - 1];
-              if (!entry) return;
-              return api.forkSession(id, entry.entryId).then(({ newSessionId }) => {
-                navigate(`/conversations/${newSessionId}`);
-              });
-            }).catch(console.error);
+            void forkMessageIntoNewTab(blockIdx);
           } : undefined}
         />
       )}

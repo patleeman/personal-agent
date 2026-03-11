@@ -345,18 +345,41 @@ function ErrorBlock({ block }: { block: Extract<MessageBlock, { type: 'error' }>
 
 // ── Message actions ───────────────────────────────────────────────────────────
 
-function MsgActions({ text, isUser }: { text: string; isUser?: boolean }) {
-  const [forked, setForked] = useState(false);
+function MsgActions({
+  text,
+  isUser,
+  onFork,
+}: {
+  text: string;
+  isUser?: boolean;
+  onFork?: () => Promise<void> | void;
+}) {
+  const [isForking, setIsForking] = useState(false);
+
+  async function handleFork() {
+    if (!onFork || isForking) {
+      return;
+    }
+
+    try {
+      setIsForking(true);
+      await onFork();
+    } finally {
+      setIsForking(false);
+    }
+  }
+
   return (
     <div className={`flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${isUser ? 'justify-start' : 'justify-end'}`}>
       <CopyBtn text={text} small />
-      {!isUser && (
+      {!isUser && onFork && (
         <button
-          onClick={() => setForked(true)}
-          className={cx('ui-action-button', forked && 'text-accent')}
-          title="Fork from here"
+          onClick={() => { void handleFork(); }}
+          className={cx('ui-action-button', isForking && 'text-accent')}
+          title="Fork from here in a new tab"
+          disabled={isForking}
         >
-          {forked ? '⑂ forked' : '⑂ fork'}
+          {isForking ? '⑂ forking…' : '⑂ fork'}
         </button>
       )}
       {isUser && (
@@ -411,7 +434,13 @@ function UserMessage({ block }: { block: Extract<MessageBlock, { type: 'user' }>
 
 // ── AssistantMessage ──────────────────────────────────────────────────────────
 
-function AssistantMessage({ block }: { block: Extract<MessageBlock, { type: 'text' }> }) {
+function AssistantMessage({
+  block,
+  onFork,
+}: {
+  block: Extract<MessageBlock, { type: 'text' }>;
+  onFork?: () => Promise<void> | void;
+}) {
   return (
     <div className="group flex gap-3 items-start">
       <div className="ui-chat-avatar mt-0.5">
@@ -429,7 +458,7 @@ function AssistantMessage({ block }: { block: Extract<MessageBlock, { type: 'tex
         </div>
         <div className="flex items-center gap-2 pt-0.5">
           <p className="ui-message-meta">{timeAgo(block.ts)}</p>
-          <MsgActions text={block.text} />
+          <MsgActions text={block.text} onFork={onFork} />
         </div>
       </div>
     </div>
@@ -438,7 +467,15 @@ function AssistantMessage({ block }: { block: Extract<MessageBlock, { type: 'tex
 
 // ── ChatView ──────────────────────────────────────────────────────────────────
 
-export function ChatView({ messages, isStreaming = false }: { messages: MessageBlock[]; isStreaming?: boolean }) {
+export function ChatView({
+  messages,
+  isStreaming = false,
+  onForkMessage,
+}: {
+  messages: MessageBlock[];
+  isStreaming?: boolean;
+  onForkMessage?: (messageIndex: number) => Promise<void> | void;
+}) {
   return (
     <>
       <style>{`@keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
@@ -452,14 +489,22 @@ export function ChatView({ messages, isStreaming = false }: { messages: MessageB
           const autoOpen = shouldAutoOpenConversationBlock(block, i, messages.length, isStreaming);
 
           const el = (() => { switch (block.type) {
-            case 'user':     return <UserMessage      key={i} block={block} />;
-            case 'text':     return <AssistantMessage key={i} block={block} />;
-            case 'thinking': return <ThinkingBlock    key={i} block={block} autoOpen={autoOpen} />;
-            case 'tool_use': return <ToolBlock        key={i} block={block} autoOpen={autoOpen} />;
-            case 'subagent': return <SubagentBlock    key={i} block={block} />;
-            case 'image':    return <ImageBlock       key={i} block={block} />;
-            case 'error':    return <ErrorBlock       key={i} block={block} />;
-            default: return null;
+            case 'user':
+              return <UserMessage key={i} block={block} />;
+            case 'text':
+              return <AssistantMessage key={i} block={block} onFork={onForkMessage ? () => onForkMessage(i) : undefined} />;
+            case 'thinking':
+              return <ThinkingBlock key={i} block={block} autoOpen={autoOpen} />;
+            case 'tool_use':
+              return <ToolBlock key={i} block={block} autoOpen={autoOpen} />;
+            case 'subagent':
+              return <SubagentBlock key={i} block={block} />;
+            case 'image':
+              return <ImageBlock key={i} block={block} />;
+            case 'error':
+              return <ErrorBlock key={i} block={block} />;
+            default:
+              return null;
           }})();
 
           return el ? (
