@@ -23,6 +23,12 @@ export * from './deferred-resume.js';
 // Conversation ↔ workstream link exports
 export * from './conversation-links.js';
 
+// Project artifact exports
+export * from './project-artifacts.js';
+
+// Project exports
+export * from './projects.js';
+
 // Workstream artifact exports
 export * from './workstream-artifacts.js';
 

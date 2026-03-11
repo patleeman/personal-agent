@@ -33,13 +33,29 @@ import {
 } from './liveSessions.js';
 import {
   addConversationWorkstreamLink,
+  createProjectScaffold,
+  createProjectTask,
+  createProjectTaskSummary,
   getConversationWorkstreamLink,
   listProfileActivityEntries,
+  listProjectIds,
+  listProjectTaskIds,
   listWorkstreamIds,
+  readProjectDocument,
+  readProjectPlan,
+  readProjectTask,
+  readProjectTaskSummary,
   readWorkstreamPlan,
   readWorkstreamSummary,
   removeConversationWorkstreamLink,
+  resolveProjectPaths,
+  resolveProjectTaskFilePath,
+  resolveProjectTaskSummaryFilePath,
   resolveWorkstreamPaths,
+  writeProjectDocument,
+  writeProjectPlan,
+  writeProjectTask,
+  writeProjectTaskSummary,
 } from '@personal-agent/core';
 import {
   listProfiles,
@@ -714,6 +730,379 @@ app.get('/api/live-sessions/:id/context-usage', (req, res) => {
 app.delete('/api/live-sessions/:id', (req, res) => {
   destroySession(req.params.id);
   res.json({ ok: true });
+});
+
+function normalizeStringList(input: unknown): string[] | undefined {
+  if (!Array.isArray(input)) {
+    return undefined;
+  }
+
+  const values = input
+    .map((value) => String(value ?? '').trim())
+    .filter((value) => value.length > 0);
+
+  return values.length > 0 ? values : [];
+}
+
+function slugifyId(value: string, fallback: string): string {
+  const slug = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+
+  return slug.length > 0 ? slug : fallback;
+}
+
+function allocateProjectId(projectsDir: string, title: string): string {
+  const base = slugifyId(title, 'project');
+  let candidate = base;
+  let counter = 2;
+
+  while (existsSync(join(projectsDir, candidate))) {
+    candidate = `${base}-${counter}`;
+    counter += 1;
+  }
+
+  return candidate;
+}
+
+function allocateProjectTaskId(tasksDir: string, title: string): string {
+  const base = slugifyId(title, 'task');
+  let candidate = base;
+  let counter = 2;
+
+  while (existsSync(join(tasksDir, `${candidate}.md`)) || existsSync(join(tasksDir, `${candidate}.summary.md`))) {
+    candidate = `${base}-${counter}`;
+    counter += 1;
+  }
+
+  return candidate;
+}
+
+// ── Projects ─────────────────────────────────────────────────────────────────
+
+app.get('/api/projects', (_req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const ids = listProjectIds({ repoRoot: REPO_ROOT, profile });
+    const projects = ids.flatMap((id) => {
+      try {
+        const paths = resolveProjectPaths({
+          repoRoot: REPO_ROOT,
+          profile,
+          projectId: id,
+        });
+        return [readProjectDocument(paths.projectFile)];
+      } catch {
+        return [];
+      }
+    });
+
+    projects.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    res.json(projects);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/projects', (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const body = req.body as { title?: string; objective?: string; projectId?: string };
+    const title = String(body.title ?? '').trim();
+    const objective = String(body.objective ?? '').trim();
+    if (!title || !objective) {
+      res.status(400).json({ error: 'title and objective are required' });
+      return;
+    }
+
+    const projectsDir = resolveProjectPaths({
+      repoRoot: REPO_ROOT,
+      profile,
+      projectId: 'placeholder',
+    }).projectsDir;
+    const projectId = body.projectId?.trim() || allocateProjectId(projectsDir, title);
+
+    const result = createProjectScaffold({
+      repoRoot: REPO_ROOT,
+      profile,
+      projectId,
+      title,
+      objective,
+    });
+    const project = readProjectDocument(result.paths.projectFile);
+    res.status(201).json(project);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.get('/api/projects/:id', (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const paths = resolveProjectPaths({
+      repoRoot: REPO_ROOT,
+      profile,
+      projectId: req.params.id,
+    });
+    const project = readProjectDocument(paths.projectFile);
+    const plan = readProjectPlan(paths.planFile);
+    const taskIds = listProjectTaskIds({
+      repoRoot: REPO_ROOT,
+      profile,
+      projectId: req.params.id,
+    });
+    const tasks = taskIds.map((taskId) => {
+      const task = readProjectTask(resolveProjectTaskFilePath({
+        repoRoot: REPO_ROOT,
+        profile,
+        projectId: req.params.id,
+        taskId,
+      }));
+      const summaryPath = resolveProjectTaskSummaryFilePath({
+        repoRoot: REPO_ROOT,
+        profile,
+        projectId: req.params.id,
+        taskId,
+      });
+
+      return {
+        ...task,
+        summary: existsSync(summaryPath) ? readProjectTaskSummary(summaryPath) : undefined,
+      };
+    });
+
+    const artifactCount = existsSync(paths.artifactsDir)
+      ? readdirSync(paths.artifactsDir).filter((f) => f.endsWith('.md')).length
+      : 0;
+
+    res.json({ id: req.params.id, project, plan, tasks, artifactCount });
+  } catch {
+    res.status(404).json({ error: 'Project not found' });
+  }
+});
+
+app.patch('/api/projects/:id', (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const paths = resolveProjectPaths({ repoRoot: REPO_ROOT, profile, projectId: req.params.id });
+    const project = readProjectDocument(paths.projectFile);
+    const body = req.body as {
+      title?: string;
+      status?: string;
+      objective?: string;
+      currentStatus?: string;
+      blockers?: string;
+      nextActions?: string;
+      relatedConversationIds?: string[];
+    };
+
+    if (body.title !== undefined) project.title = String(body.title).trim();
+    if (body.status !== undefined) project.status = String(body.status).trim();
+    if (body.objective !== undefined) project.objective = String(body.objective).trim();
+    if (body.currentStatus !== undefined) project.currentStatus = String(body.currentStatus).trim();
+    if (body.blockers !== undefined) {
+      const next = String(body.blockers).trim();
+      project.blockers = next.length > 0 ? next : undefined;
+    }
+    if (body.nextActions !== undefined) {
+      const next = String(body.nextActions).trim();
+      project.nextActions = next.length > 0 ? next : undefined;
+    }
+    if (body.relatedConversationIds !== undefined) project.relatedConversationIds = normalizeStringList(body.relatedConversationIds);
+    project.updatedAt = new Date().toISOString();
+
+    if (!project.title || !project.objective || !project.currentStatus) {
+      res.status(400).json({ error: 'title, objective, and currentStatus must not be empty' });
+      return;
+    }
+
+    writeProjectDocument(paths.projectFile, project);
+    res.json(project);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.patch('/api/projects/:id/plan', (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const paths = resolveProjectPaths({ repoRoot: REPO_ROOT, profile, projectId: req.params.id });
+    const plan = readProjectPlan(paths.planFile);
+    const body = req.body as {
+      objective?: string;
+      steps?: Array<{ text: string; completed: boolean }>;
+    };
+
+    if (body.objective !== undefined) {
+      plan.objective = String(body.objective).trim();
+    }
+
+    if (body.steps !== undefined) {
+      const steps = Array.isArray(body.steps)
+        ? body.steps
+          .map((step) => ({ text: String(step?.text ?? '').trim(), completed: Boolean(step?.completed) }))
+          .filter((step) => step.text.length > 0)
+        : [];
+
+      if (steps.length === 0) {
+        res.status(400).json({ error: 'plan must include at least one step' });
+        return;
+      }
+
+      plan.steps = steps;
+    }
+
+    if (!plan.objective) {
+      res.status(400).json({ error: 'objective must not be empty' });
+      return;
+    }
+
+    plan.updatedAt = new Date().toISOString();
+    writeProjectPlan(paths.planFile, plan);
+    res.json(plan);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/projects/:id/tasks', (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const paths = resolveProjectPaths({ repoRoot: REPO_ROOT, profile, projectId: req.params.id });
+    const body = req.body as {
+      title?: string;
+      objective?: string;
+      status?: string;
+      acceptanceCriteria?: string[];
+      dependencies?: string[];
+      notes?: string;
+      relatedConversationIds?: string[];
+    };
+
+    const title = String(body.title ?? '').trim();
+    const objective = String(body.objective ?? '').trim();
+    if (!title || !objective) {
+      res.status(400).json({ error: 'title and objective are required' });
+      return;
+    }
+
+    const taskId = allocateProjectTaskId(paths.tasksDir, title);
+    const now = new Date().toISOString();
+    const task = createProjectTask({
+      id: taskId,
+      createdAt: now,
+      updatedAt: now,
+      status: body.status,
+      title,
+      objective,
+      acceptanceCriteria: normalizeStringList(body.acceptanceCriteria),
+      dependencies: normalizeStringList(body.dependencies),
+      notes: body.notes ? String(body.notes) : undefined,
+      relatedConversationIds: normalizeStringList(body.relatedConversationIds),
+    });
+
+    writeProjectTask(resolveProjectTaskFilePath({ repoRoot: REPO_ROOT, profile, projectId: req.params.id, taskId }), task);
+    res.status(201).json(task);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.patch('/api/projects/:id/tasks/:taskId', (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const taskPath = resolveProjectTaskFilePath({ repoRoot: REPO_ROOT, profile, projectId: req.params.id, taskId: req.params.taskId });
+    const task = readProjectTask(taskPath);
+    const body = req.body as {
+      title?: string;
+      objective?: string;
+      status?: string;
+      acceptanceCriteria?: string[];
+      dependencies?: string[];
+      notes?: string;
+      relatedConversationIds?: string[];
+    };
+
+    if (body.title !== undefined) task.title = String(body.title).trim();
+    if (body.objective !== undefined) task.objective = String(body.objective).trim();
+    if (body.status !== undefined) task.status = String(body.status).trim();
+    if (body.acceptanceCriteria !== undefined) task.acceptanceCriteria = normalizeStringList(body.acceptanceCriteria);
+    if (body.dependencies !== undefined) task.dependencies = normalizeStringList(body.dependencies);
+    if (body.notes !== undefined) {
+      const next = String(body.notes).trim();
+      task.notes = next.length > 0 ? next : undefined;
+    }
+    if (body.relatedConversationIds !== undefined) task.relatedConversationIds = normalizeStringList(body.relatedConversationIds);
+    task.updatedAt = new Date().toISOString();
+
+    if (!task.title || !task.objective) {
+      res.status(400).json({ error: 'title and objective must not be empty' });
+      return;
+    }
+
+    writeProjectTask(taskPath, task);
+    res.json(task);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.patch('/api/projects/:id/tasks/:taskId/summary', (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const summaryPath = resolveProjectTaskSummaryFilePath({
+      repoRoot: REPO_ROOT,
+      profile,
+      projectId: req.params.id,
+      taskId: req.params.taskId,
+    });
+    const existing = existsSync(summaryPath) ? readProjectTaskSummary(summaryPath) : undefined;
+    const body = req.body as {
+      outcome?: string;
+      summary?: string;
+      criteriaValidation?: Array<{ criterion: string; status: 'pass' | 'fail' | 'pending'; evidence: string }>;
+      keyChanges?: string[];
+      artifacts?: string[];
+      followUps?: string[];
+    };
+
+    const now = new Date().toISOString();
+    const outcome = String(body.outcome ?? existing?.outcome ?? '').trim();
+    const summaryText = String(body.summary ?? existing?.summary ?? '').trim();
+
+    if (!outcome || !summaryText) {
+      res.status(400).json({ error: 'outcome and summary are required' });
+      return;
+    }
+
+    const summary = createProjectTaskSummary({
+      taskId: req.params.taskId,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      outcome,
+      summary: summaryText,
+      criteriaValidation: Array.isArray(body.criteriaValidation)
+        ? body.criteriaValidation
+          .map((entry) => ({
+            criterion: String(entry?.criterion ?? '').trim(),
+            status: entry?.status,
+            evidence: String(entry?.evidence ?? '').trim(),
+          }))
+          .filter((entry) => entry.criterion.length > 0)
+        : existing?.criteriaValidation,
+      keyChanges: body.keyChanges !== undefined ? normalizeStringList(body.keyChanges) : existing?.keyChanges,
+      artifacts: body.artifacts !== undefined ? normalizeStringList(body.artifacts) : existing?.artifacts,
+      followUps: body.followUps !== undefined ? normalizeStringList(body.followUps) : existing?.followUps,
+    });
+
+    writeProjectTaskSummary(summaryPath, summary);
+    res.json(summary);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 // ── Workstreams ───────────────────────────────────────────────────────────────

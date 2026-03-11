@@ -36,6 +36,73 @@ export interface ActivityEntry {
   notificationState?: string;
 }
 
+export interface ProjectSummary {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  status: string;
+  title: string;
+  objective: string;
+  currentStatus: string;
+  blockers?: string;
+  nextActions?: string;
+  relatedConversationIds?: string[];
+}
+
+export interface ProjectPlanStep {
+  text: string;
+  completed: boolean;
+}
+
+export interface ProjectPlan {
+  id: string;
+  updatedAt: string;
+  objective: string;
+  steps: ProjectPlanStep[];
+}
+
+export type ProjectTaskStatus = 'backlog' | 'ready' | 'running' | 'blocked' | 'done' | 'cancelled' | string;
+
+export interface ProjectTaskCriterionValidation {
+  criterion: string;
+  status: 'pass' | 'fail' | 'pending' | string;
+  evidence: string;
+}
+
+export interface ProjectTaskSummary {
+  taskId: string;
+  createdAt: string;
+  updatedAt: string;
+  outcome: string;
+  summary: string;
+  criteriaValidation?: ProjectTaskCriterionValidation[];
+  keyChanges?: string[];
+  artifacts?: string[];
+  followUps?: string[];
+}
+
+export interface ProjectTask {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  status: ProjectTaskStatus;
+  title: string;
+  objective: string;
+  acceptanceCriteria?: string[];
+  dependencies?: string[];
+  notes?: string;
+  relatedConversationIds?: string[];
+  summary?: ProjectTaskSummary;
+}
+
+export interface ProjectDetail {
+  id: string;
+  project: ProjectSummary;
+  plan: ProjectPlan;
+  tasks: ProjectTask[];
+  artifactCount: number;
+}
+
 export interface WorkstreamSummary {
   id: string;
   createdAt: string;

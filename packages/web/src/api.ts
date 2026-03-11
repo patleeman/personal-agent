@@ -1,4 +1,4 @@
-import type { ActivityEntry, AppStatus, ConversationWorkstreamLinks, LiveSessionContext, LiveSessionMeta, MemoryData, ProfileState, PromptImageInput, SessionContextUsage, WorkstreamDetail, WorkstreamSummary } from './types';
+import type { ActivityEntry, AppStatus, ConversationWorkstreamLinks, LiveSessionContext, LiveSessionMeta, MemoryData, ProfileState, ProjectDetail, ProjectSummary, PromptImageInput, SessionContextUsage, WorkstreamDetail, WorkstreamSummary } from './types';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch('/api' + path);
@@ -31,6 +31,47 @@ export const api = {
   status:         () => get<AppStatus>('/status'),
   activity:       () => get<ActivityEntry[]>('/activity'),
   activityById:   (id: string) => get<ActivityEntry>(`/activity/${encodeURIComponent(id)}`),
+  projects:       () => get<ProjectSummary[]>('/projects'),
+  projectById:    (id: string) => get<ProjectDetail>(`/projects/${encodeURIComponent(id)}`),
+  updateProject:  (id: string, body: {
+    title?: string;
+    status?: string;
+    objective?: string;
+    currentStatus?: string;
+    blockers?: string;
+    nextActions?: string;
+    relatedConversationIds?: string[];
+  }) => patch<ProjectSummary>(`/projects/${encodeURIComponent(id)}`, body),
+  updateProjectPlan: (id: string, body: {
+    objective?: string;
+    steps?: Array<{ text: string; completed: boolean }>;
+  }) => patch<ProjectDetail['plan']>(`/projects/${encodeURIComponent(id)}/plan`, body),
+  createProjectTask: (projectId: string, body: {
+    title: string;
+    objective: string;
+    status?: string;
+    acceptanceCriteria?: string[];
+    dependencies?: string[];
+    notes?: string;
+    relatedConversationIds?: string[];
+  }) => post<ProjectDetail['tasks'][number]>(`/projects/${encodeURIComponent(projectId)}/tasks`, body),
+  updateProjectTask: (projectId: string, taskId: string, body: {
+    title?: string;
+    objective?: string;
+    status?: string;
+    acceptanceCriteria?: string[];
+    dependencies?: string[];
+    notes?: string;
+    relatedConversationIds?: string[];
+  }) => patch<ProjectDetail['tasks'][number]>(`/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}`, body),
+  updateProjectTaskSummary: (projectId: string, taskId: string, body: {
+    outcome?: string;
+    summary?: string;
+    criteriaValidation?: Array<{ criterion: string; status: 'pass' | 'fail' | 'pending'; evidence: string }>;
+    keyChanges?: string[];
+    artifacts?: string[];
+    followUps?: string[];
+  }) => patch<ProjectDetail['tasks'][number]['summary']>(`/projects/${encodeURIComponent(projectId)}/tasks/${encodeURIComponent(taskId)}/summary`, body),
   workstreams:    () => get<WorkstreamSummary[]>('/workstreams'),
   workstreamById: (id: string) => get<WorkstreamDetail>(`/workstreams/${encodeURIComponent(id)}`),
   profiles:       () => get<ProfileState>('/profiles'),

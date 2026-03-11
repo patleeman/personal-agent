@@ -192,10 +192,10 @@ export function Sidebar() {
       </div>
 
       <div className="pb-1 space-y-0.5">
-        <TopNavItem to="/inbox"       icon={PATH.inbox}       label="Inbox"       badge={inboxCount} />
-        <TopNavItem to="/tasks"       icon={PATH.tasks}       label="Tasks"       />
-        <TopNavItem to="/workstreams" icon={PATH.workstreams} label="Workstreams" />
-        <TopNavItem to="/memory"      icon={PATH.memory}      label="Memory"      />
+        <TopNavItem to="/inbox"    icon={PATH.inbox}       label="Inbox"    badge={inboxCount} />
+        <TopNavItem to="/tasks"    icon={PATH.tasks}       label="Tasks"    />
+        <TopNavItem to="/projects" icon={PATH.workstreams} label="Projects" />
+        <TopNavItem to="/memory"   icon={PATH.memory}      label="Memory"   />
       </div>
 
       {profileState && profileState.profiles.length > 0 && (
@@ -224,7 +224,7 @@ export function Sidebar() {
             </div>
 
             <p className="mt-2 text-[10px] text-dim">
-              {switchingProfile ? 'Switching profile and reloading…' : 'Changes inbox, workstreams, memory, and new live sessions.'}
+              {switchingProfile ? 'Switching profile and reloading…' : 'Changes inbox, projects, memory, and new live sessions.'}
             </p>
             {profileError && <p className="mt-1 text-[10px] text-danger">{profileError}</p>}
           </div>
