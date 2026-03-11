@@ -76,16 +76,16 @@ describe('resources profile loader', () => {
     const repo = createTempRepo();
 
     writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(repo, 'profiles/shared/agent/extensions/context-bar.ts'), 'export default {}\n');
-    writeFile(join(repo, 'profiles/shared/agent/extensions/context-bar.test.ts'), 'export default {}\n');
-    writeFile(join(repo, 'profiles/shared/agent/extensions/context-bar.spec.ts'), 'export default {}\n');
+    writeFile(join(repo, 'profiles/shared/agent/extensions/sample.ts'), 'export default {}\n');
+    writeFile(join(repo, 'profiles/shared/agent/extensions/sample.test.ts'), 'export default {}\n');
+    writeFile(join(repo, 'profiles/shared/agent/extensions/sample.spec.ts'), 'export default {}\n');
     writeFile(join(repo, 'profiles/shared/agent/extensions/nested/index.ts'), 'export default {}\n');
 
     const resolved = resolveResourceProfile('shared', { repoRoot: repo });
 
     expect(resolved.extensionEntries).toEqual([
-      join(repo, 'profiles/shared/agent/extensions/context-bar.ts'),
       join(repo, 'profiles/shared/agent/extensions/nested/index.ts'),
+      join(repo, 'profiles/shared/agent/extensions/sample.ts'),
     ]);
   });
 

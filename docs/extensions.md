@@ -23,7 +23,6 @@ Higher layer resources are appended after lower layers; path dedupe prevents dup
 
 ```text
 extensions/
-├── context-bar.ts
 ├── memory/
 │   └── index.ts
 ├── web-tools/
@@ -66,9 +65,6 @@ This allows extension-specific dependencies to be self-contained.
 ## Built-in extensions in this repo
 
 - `memory` — active-profile memory policy injection (`AGENTS.md` + `skills/` memory model)
-- `context-bar` — session context display in Pi TUI
-- `inbox-shell` — inbox/context widget + footer attention status + right-side overlay panel for TUI
-- `pa-header` — appends personal-agent profile/AGENTS provenance to the startup header
 - `at-autocomplete-performance` — replaces heavy `@` fuzzy file search with fast path-style completion in large repos
 - `deferred-resume` — schedules this same TUI session to resume later after a delay; actual due/firing is daemon-backed when available
 - `web-tools` — web search/fetch tool integration
