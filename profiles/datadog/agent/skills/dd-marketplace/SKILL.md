@@ -41,7 +41,15 @@ scripts/marketplace.sh install dd/conductor
 scripts/marketplace.sh install atlas/faq
 ```
 
-Installs to `~/.agents/skills/<skill-name>/` by default. Skills with scripts and reference files are copied too.
+The script installs to `~/.agents/skills/<skill-name>/` by default. Skills with scripts and reference files are copied too.
+
+For **repo-managed durable use in this Datadog profile**, install into the profile skills directory instead of the default:
+
+```bash
+scripts/marketplace.sh install dd/conductor --dest profiles/datadog/agent/skills
+```
+
+Use the default `~/.agents/skills/` destination only for ad hoc local installs outside this repo-managed memory system.
 
 ### List plugins (top-level groupings)
 ```bash
@@ -59,7 +67,7 @@ The repo is cached at `~/.cache/dd-marketplace/` and auto-updates daily.
 
 1. **User asks about a Datadog topic not covered by existing skills** → search the marketplace
 2. **Found a relevant skill** → use `show` to read its instructions and answer the user's question
-3. **User wants it permanently** → use `install` to add it to `~/.agents/skills/`
+3. **User wants it permanently in this repo/profile** → use `install --dest profiles/datadog/agent/skills` so the skill is tracked in the Datadog profile
 
 ## Notes
 
