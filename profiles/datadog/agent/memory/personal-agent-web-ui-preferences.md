@@ -9,7 +9,7 @@ tags:
   - "web-ui"
   - "ux"
   - "product"
-updated: 2026-03-11
+updated: 2026-03-12
 ---
 
 # Personal-agent web UI preferences
@@ -28,6 +28,14 @@ Durable UX preferences repeatedly expressed for the personal-agent web interface
 - Keep active or open conversations visually distinct from recent conversation history.
 - Use the right rail for high-value project detail and editing instead of pushing low-value summary chrome into the main pane.
 - Favor fast, direct controls for common actions instead of burying state changes behind extra navigation.
+- Preserve primary conversation drafts across reloads.
+- Make archived-conversation restore and conversation forking first-class in-app flows rather than tiny popovers or new browser tabs.
+- Show queued follow-ups, live running status, and committed transcript messages as clearly distinct states.
+- Prefer human-readable project labels in the UI, with raw ids secondary.
+
+## Settings and defaults
+
+- Put editable runtime defaults and appearance controls on a dedicated settings surface rather than scattering them across incidental UI chrome.
 
 ## Memory surface
 

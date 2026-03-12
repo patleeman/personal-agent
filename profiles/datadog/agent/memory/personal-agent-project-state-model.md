@@ -9,7 +9,7 @@ tags:
   - "projects"
   - "data-model"
   - "planning"
-updated: 2026-03-11
+updated: 2026-03-12
 ---
 
 # Personal-agent project state model
@@ -33,6 +33,12 @@ High-signal notes for how personal-agent project planning should be represented.
 - Default to a lightweight task shape: auto-generated `id`, `title`, `status`, and `milestoneId`.
 - Do not bloat routine project tasks with extra fields such as per-task acceptance criteria, plans, or notes unless there is a clear need.
 - In the UI, tasks should normally appear within their milestone; only genuinely unassigned tasks should sit outside milestone sections.
+
+## Repo roots and conversation cwd
+
+- Projects may store an optional durable `repoRoot` in `PROJECT.yaml` when work should default to a specific repository root.
+- New conversations without an explicit cwd should inherit from a single referenced project `repoRoot` when one is available.
+- When no explicit or project-derived cwd exists, default to the current process cwd rather than assuming the web app repo root.
 
 ## UX implications
 
