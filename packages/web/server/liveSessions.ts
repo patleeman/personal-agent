@@ -17,10 +17,15 @@ import {
   type ExtensionFactory,
 } from '@mariozechner/pi-coding-agent';
 import { invalidateAppTopics, publishAppEvent } from './appEvents.js';
+import {
+  generateConversationTitle,
+  hasAssistantTitleSourceMessage,
+} from './conversationAutoTitle.js';
 import { buildDisplayBlocksFromEntries, type DisplayBlock } from './sessions.js';
 import { estimateContextUsageSegments } from './sessionContextUsage.js';
 
 const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
+const SETTINGS_FILE = join(AGENT_DIR, 'settings.json');
 const SESSIONS_DIR = join(AGENT_DIR, 'sessions');
 
 export function resolvePersistentSessionDir(cwd: string): string {
@@ -75,7 +80,7 @@ interface LiveEntry {
   cwd: string;
   listeners: Set<(e: SseEvent) => void>;
   title: string;
-  sentTitle: boolean;
+  autoTitleRequested: boolean;
   lastContextUsageJson: string | null;
   lastQueueStateJson: string | null;
   contextUsageTimer?: ReturnType<typeof setTimeout>;
@@ -189,6 +194,11 @@ function getSessionMessages(session: AgentSession): Array<{ role?: string; conte
 }
 
 function resolveEntryTitle(entry: LiveEntry): string {
+  const sessionName = entry.session.sessionName?.trim();
+  if (sessionName) {
+    return sessionName;
+  }
+
   if (entry.title.trim()) {
     return entry.title;
   }
@@ -302,6 +312,63 @@ function broadcastTitle(entry: LiveEntry): void {
   invalidateAppTopics('sessions');
 }
 
+function applySessionTitle(entry: LiveEntry, title: string): void {
+  const normalizedTitle = title.trim();
+  if (!normalizedTitle) {
+    return;
+  }
+
+  entry.session.setSessionName(normalizedTitle);
+  entry.title = normalizedTitle;
+  broadcastTitle(entry);
+}
+
+function maybeAutoTitleConversation(entry: LiveEntry): void {
+  if (entry.autoTitleRequested) {
+    return;
+  }
+
+  if (entry.session.sessionName?.trim()) {
+    entry.autoTitleRequested = true;
+    return;
+  }
+
+  const messages = getSessionMessages(entry.session);
+  if (!hasAssistantTitleSourceMessage(messages)) {
+    return;
+  }
+
+  entry.autoTitleRequested = true;
+  void generateConversationTitle({
+    messages,
+    modelRegistry: entry.session.modelRegistry,
+    settingsFile: SETTINGS_FILE,
+  })
+    .then((title) => {
+      if (!title) {
+        return;
+      }
+
+      if (registry.get(entry.sessionId) !== entry) {
+        return;
+      }
+
+      if (entry.session.sessionName?.trim()) {
+        return;
+      }
+
+      applySessionTitle(entry, title);
+    })
+    .catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+      console.error(`[${new Date().toISOString()}] [web] [error] conversation auto-title failed sessionId=${entry.sessionId} message=${message}`);
+      if (stack) {
+        console.error(stack);
+      }
+    });
+}
+
 function broadcastContextUsage(entry: LiveEntry, force = false): void {
   const usage = readContextUsagePayload(entry.session);
   const nextJson = JSON.stringify(usage);
@@ -346,14 +413,19 @@ function clearContextUsageTimer(entry: LiveEntry): void {
 
 // ── Event wiring ──────────────────────────────────────────────────────────────
 
-function wireSession(id: string, session: AgentSession, cwd: string) {
+function wireSession(
+  id: string,
+  session: AgentSession,
+  cwd: string,
+  options: { autoTitleRequested?: boolean } = {},
+) {
   const entry: LiveEntry = {
     sessionId: id,
     session,
     cwd,
     listeners: new Set(),
     title: '',
-    sentTitle: false,
+    autoTitleRequested: options.autoTitleRequested ?? false,
     lastContextUsageJson: null,
     lastQueueStateJson: null,
   };
@@ -361,14 +433,8 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
   invalidateAppTopics('sessions');
 
   session.subscribe((event: AgentSessionEvent) => {
-    // Extract title from first user message
-    if (!entry.sentTitle && event.type === 'turn_end') {
-      const title = resolveEntryTitle(entry);
-      if (title) {
-        entry.title = title;
-        entry.sentTitle = true;
-        broadcastTitle(entry);
-      }
+    if (event.type === 'turn_end') {
+      maybeAutoTitleConversation(entry);
     }
 
     if (event.type === 'agent_start' || event.type === 'message_update' || event.type === 'tool_execution_start' || event.type === 'tool_execution_update' || event.type === 'tool_execution_end') {
@@ -493,6 +559,58 @@ export function getAvailableModels() {
   }));
 }
 
+export async function inspectAvailableTools(
+  cwd: string,
+  options: LiveSessionLoaderOptions = {},
+): Promise<{
+  cwd: string;
+  activeTools: string[];
+  tools: Array<{
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+    active: boolean;
+  }>;
+}> {
+  const auth = makeAuth();
+  const resourceLoader = await makeLoader(cwd, options);
+  const { session } = await createAgentSession({
+    cwd,
+    agentDir: AGENT_DIR,
+    authStorage: auth,
+    modelRegistry: makeRegistry(auth),
+    resourceLoader,
+    sessionManager: SessionManager.inMemory(cwd),
+  });
+
+  try {
+    const activeTools = session.getActiveToolNames();
+    const activeToolSet = new Set(activeTools);
+    const tools = session.getAllTools()
+      .map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.parameters as Record<string, unknown>,
+        active: activeToolSet.has(tool.name),
+      }))
+      .sort((left, right) => {
+        if (left.active !== right.active) {
+          return left.active ? -1 : 1;
+        }
+
+        return left.name.localeCompare(right.name);
+      });
+
+    return {
+      cwd,
+      activeTools,
+      tools,
+    };
+  } finally {
+    session.dispose();
+  }
+}
+
 export function getSessionStats(sessionId: string) {
   const entry = registry.get(sessionId);
   if (!entry) return null;
@@ -505,11 +623,23 @@ export function getSessionContextUsage(sessionId: string): LiveContextUsage | nu
   return readContextUsagePayload(entry.session);
 }
 
-async function makeLoader(cwd: string, extensionFactories: ExtensionFactory[] = []) {
+interface LiveSessionLoaderOptions {
+  extensionFactories?: ExtensionFactory[];
+  additionalExtensionPaths?: string[];
+  additionalSkillPaths?: string[];
+  additionalPromptTemplatePaths?: string[];
+  additionalThemePaths?: string[];
+}
+
+async function makeLoader(cwd: string, options: LiveSessionLoaderOptions = {}) {
   const loader = new DefaultResourceLoader({
     cwd,
     agentDir: AGENT_DIR,
-    extensionFactories,
+    extensionFactories: options.extensionFactories,
+    additionalExtensionPaths: options.additionalExtensionPaths,
+    additionalSkillPaths: options.additionalSkillPaths,
+    additionalPromptTemplatePaths: options.additionalPromptTemplatePaths,
+    additionalThemePaths: options.additionalThemePaths,
   });
   await loader.reload();
   return loader;
@@ -518,10 +648,10 @@ async function makeLoader(cwd: string, extensionFactories: ExtensionFactory[] = 
 /** Create a brand-new Pi session. */
 export async function createSession(
   cwd: string,
-  options: { extensionFactories?: ExtensionFactory[] } = {},
+  options: LiveSessionLoaderOptions = {},
 ): Promise<{ id: string; sessionFile: string }> {
   const auth         = makeAuth();
-  const resourceLoader = await makeLoader(cwd, options.extensionFactories);
+  const resourceLoader = await makeLoader(cwd, options);
   const { session }  = await createAgentSession({
     cwd,
     agentDir:      AGENT_DIR,
@@ -539,10 +669,35 @@ export async function createSession(
   return { id, sessionFile: session.sessionFile ?? '' };
 }
 
+/** Create a new live session in a different cwd from an existing session file. */
+export async function createSessionFromExisting(
+  sessionFile: string,
+  cwd: string,
+  options: LiveSessionLoaderOptions = {},
+): Promise<{ id: string; sessionFile: string }> {
+  const auth = makeAuth();
+  const resourceLoader = await makeLoader(cwd, options);
+  const { session } = await createAgentSession({
+    cwd,
+    agentDir: AGENT_DIR,
+    authStorage: auth,
+    modelRegistry: makeRegistry(auth),
+    resourceLoader,
+    sessionManager: SessionManager.forkFrom(sessionFile, cwd, resolvePersistentSessionDir(cwd)),
+  });
+
+  patchSessionManagerPersistence(session.sessionManager);
+  ensureSessionFileExists(session.sessionManager);
+
+  const id = session.sessionId;
+  wireSession(id, session, cwd);
+  return { id, sessionFile: session.sessionFile ?? '' };
+}
+
 /** Resume an existing session file into a live session. */
 export async function resumeSession(
   sessionFile: string,
-  options: { extensionFactories?: ExtensionFactory[] } = {},
+  options: LiveSessionLoaderOptions = {},
 ): Promise<{ id: string }> {
   // Don't re-create if already live
   for (const [id, e] of registry.entries()) {
@@ -552,7 +707,7 @@ export async function resumeSession(
   const auth = makeAuth();
   const sessionManager = SessionManager.open(sessionFile);
   const cwd = sessionManager.getCwd();
-  const resourceLoader = await makeLoader(cwd, options.extensionFactories);
+  const resourceLoader = await makeLoader(cwd, options);
   const { session } = await createAgentSession({
     cwd,
     agentDir: AGENT_DIR,
@@ -565,7 +720,9 @@ export async function resumeSession(
   patchSessionManagerPersistence(session.sessionManager);
 
   const id = session.sessionId;
-  wireSession(id, session, cwd);
+  wireSession(id, session, cwd, {
+    autoTitleRequested: Boolean(session.sessionName?.trim()) || hasAssistantTitleSourceMessage(getSessionMessages(session)),
+  });
   return { id };
 }
 
@@ -674,8 +831,8 @@ export async function exportSessionHtml(sessionId: string, outputPath?: string):
 export function renameSession(sessionId: string, name: string): void {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
-  entry.session.setSessionName(name);
-  invalidateAppTopics('sessions');
+  entry.autoTitleRequested = true;
+  applySessionTitle(entry, name);
 }
 
 /** Abort the current agent run. */
@@ -688,7 +845,7 @@ export async function abortSession(sessionId: string): Promise<void> {
 export async function forkSession(
   sessionId: string,
   entryId: string,
-  options: { preserveSource?: boolean; extensionFactories?: ExtensionFactory[] } = {},
+  options: LiveSessionLoaderOptions & { preserveSource?: boolean } = {},
 ): Promise<{ newSessionId: string; sessionFile: string }> {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
@@ -720,7 +877,7 @@ export async function forkSession(
   }
 
   const auth = makeAuth();
-  const resourceLoader = await makeLoader(entry.cwd, options.extensionFactories);
+  const resourceLoader = await makeLoader(entry.cwd, options);
   let forkedSession: AgentSession | null = null;
 
   try {

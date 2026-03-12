@@ -1,8 +1,8 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import { ensureSessionFileExists, getLiveSessions, patchSessionManagerPersistence, registry, resolvePersistentSessionDir, subscribe, toSse } from './liveSessions.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ensureSessionFileExists, getLiveSessions, patchSessionManagerPersistence, registry, renameSession, resolvePersistentSessionDir, subscribe, toSse } from './liveSessions.js';
 const tempDirs = [];
 afterEach(() => {
     registry.clear();
@@ -17,7 +17,7 @@ describe('live session subscriptions', () => {
             cwd: '/tmp/workspace',
             listeners: new Set(),
             title: '',
-            sentTitle: false,
+            autoTitleRequested: false,
             lastContextUsageJson: null,
             session: {
                 state: {
@@ -82,7 +82,7 @@ describe('live session subscriptions', () => {
             cwd: '/tmp/workspace',
             listeners: new Set(),
             title: '',
-            sentTitle: false,
+            autoTitleRequested: false,
             lastContextUsageJson: null,
             session: {
                 sessionFile: '/tmp/workspace/session-2.jsonl',
@@ -109,6 +109,85 @@ describe('live session subscriptions', () => {
                 isStreaming: false,
             },
         ]);
+    });
+    it('prefers the persisted session name over the first user message fallback', () => {
+        registry.set('session-3', {
+            sessionId: 'session-3',
+            cwd: '/tmp/workspace',
+            listeners: new Set(),
+            title: '',
+            autoTitleRequested: true,
+            lastContextUsageJson: null,
+            lastQueueStateJson: null,
+            session: {
+                sessionFile: '/tmp/workspace/session-3.jsonl',
+                sessionName: 'Generated title',
+                state: {
+                    messages: [
+                        {
+                            role: 'user',
+                            content: [{ type: 'text', text: 'Fallback first prompt' }],
+                            timestamp: 1,
+                        },
+                    ],
+                    streamMessage: null,
+                },
+                getContextUsage: () => null,
+                isStreaming: false,
+            },
+        });
+        expect(getLiveSessions()[0]).toEqual(expect.objectContaining({
+            id: 'session-3',
+            title: 'Generated title',
+        }));
+        const events = [];
+        subscribe('session-3', (event) => {
+            events.push(event);
+        });
+        expect(events[1]).toEqual({ type: 'title_update', title: 'Generated title' });
+    });
+    it('broadcasts manual renames immediately', () => {
+        const session = {
+            sessionFile: '/tmp/workspace/session-rename.jsonl',
+            sessionName: undefined,
+            state: {
+                messages: [
+                    {
+                        role: 'user',
+                        content: [{ type: 'text', text: 'Fallback first prompt' }],
+                        timestamp: 1,
+                    },
+                ],
+                streamMessage: null,
+            },
+            getContextUsage: () => null,
+            isStreaming: false,
+            setSessionName: vi.fn((name) => {
+                session.sessionName = name;
+            }),
+        };
+        registry.set('session-rename', {
+            sessionId: 'session-rename',
+            cwd: '/tmp/workspace',
+            listeners: new Set(),
+            title: '',
+            autoTitleRequested: false,
+            lastContextUsageJson: null,
+            lastQueueStateJson: null,
+            session,
+        });
+        const events = [];
+        subscribe('session-rename', (event) => {
+            events.push(event);
+        });
+        events.length = 0;
+        renameSession('session-rename', 'Better generated title');
+        expect(session.setSessionName).toHaveBeenCalledWith('Better generated title');
+        expect(getLiveSessions()[0]).toEqual(expect.objectContaining({
+            id: 'session-rename',
+            title: 'Better generated title',
+        }));
+        expect(events).toContainEqual({ type: 'title_update', title: 'Better generated title' });
     });
 });
 describe('event translation', () => {

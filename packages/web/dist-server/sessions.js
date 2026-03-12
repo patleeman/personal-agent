@@ -185,6 +185,13 @@ function extractTitleFromMessage(message) {
     }
     return null;
 }
+function normalizeSessionName(name) {
+    if (typeof name !== 'string') {
+        return null;
+    }
+    const normalized = name.replace(/\s+/g, ' ').trim();
+    return normalized.length > 0 ? normalized : null;
+}
 function slugToCwd(slug) {
     // slug: --Users-patrickc.lee-personal-personal-agent-- → /Users/patrickc.lee/personal/personal-agent
     return slug
@@ -205,7 +212,9 @@ function readSessionMetaFromFile(filePath, cwdSlug) {
     const raw = readFileSync(filePath, 'utf-8');
     let sessionRecord = null;
     let model = 'unknown';
-    let title = null;
+    let fallbackTitle = null;
+    let namedTitle = null;
+    let sawSessionInfo = false;
     let messageCount = 0;
     for (const rawLine of raw.split('\n')) {
         if (!rawLine.trim()) {
@@ -223,13 +232,18 @@ function readSessionMetaFromFile(filePath, cwdSlug) {
             model = line.modelId ?? 'unknown';
             continue;
         }
+        if (line.type === 'session_info') {
+            sawSessionInfo = true;
+            namedTitle = normalizeSessionName(line.name);
+            continue;
+        }
         if (line.type !== 'message') {
             continue;
         }
         const message = line;
         messageCount += 1;
-        if (title === null) {
-            title = extractTitleFromMessage(message.message);
+        if (fallbackTitle === null) {
+            fallbackTitle = extractTitleFromMessage(message.message);
         }
     }
     if (!sessionRecord) {
@@ -242,7 +256,7 @@ function readSessionMetaFromFile(filePath, cwdSlug) {
         cwd: sessionRecord.cwd ?? slugToCwd(cwdSlug),
         cwdSlug,
         model,
-        title: title ?? 'New Conversation',
+        title: (sawSessionInfo ? namedTitle : null) ?? fallbackTitle ?? 'New Conversation',
         messageCount,
     };
 }

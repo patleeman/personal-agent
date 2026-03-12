@@ -28,6 +28,9 @@ function writeSessionFile(options) {
     const cwd = options.cwd ?? '/tmp/project';
     const title = options.title ?? 'Initial title';
     const assistantTexts = options.assistantTexts ?? ['Assistant reply'];
+    const lastAssistantId = assistantTexts.length > 0
+        ? `${options.sessionId}-assistant-${assistantTexts.length}`
+        : `${options.sessionId}-user-1`;
     const lines = [
         JSON.stringify({ type: 'session', id: options.sessionId, timestamp, cwd }),
         JSON.stringify({ type: 'model_change', modelId: options.modelId ?? 'test-model' }),
@@ -48,6 +51,15 @@ function writeSessionFile(options) {
                 content: [{ type: 'text', text }],
             },
         })),
+        ...(options.sessionName
+            ? [JSON.stringify({
+                    type: 'session_info',
+                    id: `${options.sessionId}-session-info`,
+                    parentId: lastAssistantId,
+                    timestamp: '2026-03-11T12:00:59.000Z',
+                    name: options.sessionName,
+                })]
+            : []),
     ];
     const filePath = join(dir, fileName);
     writeFileSync(filePath, lines.join('\n') + '\n');
@@ -83,6 +95,23 @@ describe('sessions', () => {
         expect(detail?.blocks.filter((block) => block.type === 'text').map((block) => block.text)).toEqual([
             'Loaded without listing first',
         ]);
+    });
+    it('prefers a persisted session display name over the first user message fallback', () => {
+        const sessionsDir = createTempSessionsDir();
+        configureSessionEnv(sessionsDir);
+        writeSessionFile({
+            sessionsDir,
+            sessionId: 'session-named',
+            title: 'Fallback first user prompt',
+            assistantTexts: ['Generated answer'],
+            sessionName: 'Generated conversation title',
+        });
+        expect(listSessions()[0]).toEqual(expect.objectContaining({
+            id: 'session-named',
+            title: 'Generated conversation title',
+            messageCount: 2,
+        }));
+        expect(readSessionBlocks('session-named')?.meta.title).toBe('Generated conversation title');
     });
     it('writes a persistent session index and reuses it after cache clear', () => {
         const sessionsDir = createTempSessionsDir();

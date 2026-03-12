@@ -26,6 +26,11 @@ interface RawModelChange {
   modelId?: string;
 }
 
+interface RawSessionInfo {
+  type: 'session_info';
+  name?: string;
+}
+
 interface RawContentBlock {
   type: 'text' | 'image';
   text?: string;
@@ -40,7 +45,7 @@ interface RawMessage {
   };
 }
 
-type RawLine = RawSessionRecord | RawModelChange | RawMessage | { type: string };
+type RawLine = RawSessionRecord | RawModelChange | RawSessionInfo | RawMessage | { type: string };
 
 function resolveDefaultSessionsDir(): string {
   return join(getStateRoot(), 'pi-agent', 'sessions');
@@ -84,6 +89,15 @@ function extractUserTitle(content: unknown): string | null {
   }
 
   return null;
+}
+
+function normalizeSessionName(name: unknown): string | null {
+  if (typeof name !== 'string') {
+    return null;
+  }
+
+  const normalized = name.replace(/\s+/g, ' ').trim();
+  return normalized.length > 0 ? normalized : null;
 }
 
 function slugToCwd(slug: string): string {
@@ -144,7 +158,9 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): StoredSessi
     const raw = readFileSync(filePath, 'utf-8');
     let sessionRecord: RawSessionRecord | null = null;
     let model = 'unknown';
-    let title: string | null = null;
+    let fallbackTitle: string | null = null;
+    let namedTitle: string | null = null;
+    let sawSessionInfo = false;
     let messageCount = 0;
     let lastMessageTimestamp: string | undefined;
 
@@ -168,6 +184,12 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): StoredSessi
         continue;
       }
 
+      if (line.type === 'session_info') {
+        sawSessionInfo = true;
+        namedTitle = normalizeSessionName((line as RawSessionInfo).name);
+        continue;
+      }
+
       if (line.type !== 'message') {
         continue;
       }
@@ -176,8 +198,8 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): StoredSessi
       messageCount += 1;
       lastMessageTimestamp = message.timestamp;
 
-      if (title === null && message.message.role === 'user') {
-        title = extractUserTitle(message.message.content);
+      if (fallbackTitle === null && message.message.role === 'user') {
+        fallbackTitle = extractUserTitle(message.message.content);
       }
     }
 
@@ -194,7 +216,7 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): StoredSessi
       cwd: sessionRecord.cwd ?? slugToCwd(cwdSlug),
       cwdSlug,
       model,
-      title: title ?? 'New Conversation',
+      title: (sawSessionInfo ? namedTitle : null) ?? fallbackTitle ?? 'New Conversation',
       messageCount,
       lastActivityAt: normalizeIsoTimestamp(lastMessageTimestamp, fallbackTimestamp),
     };

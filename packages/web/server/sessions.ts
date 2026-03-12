@@ -39,6 +39,11 @@ interface RawModelChange {
   modelId?: string;
 }
 
+interface RawSessionInfo {
+  type: 'session_info';
+  name?: string;
+}
+
 interface RawContentBlock {
   type: 'text' | 'thinking' | 'toolCall' | 'image';
   text?: string;
@@ -68,7 +73,7 @@ interface RawMessage {
   };
 }
 
-type RawLine = RawSessionRecord | RawModelChange | RawMessage | { type: string };
+type RawLine = RawSessionRecord | RawModelChange | RawSessionInfo | RawMessage | { type: string };
 
 // ── Public types ───────────────────────────────────────────────────────────────
 
@@ -79,7 +84,7 @@ export interface SessionMeta {
   cwd: string;
   cwdSlug: string;       // directory name without leading/trailing --
   model: string;
-  title: string;         // first user message (truncated)
+  title: string;         // session display name or derived fallback title
   messageCount: number;
   isRunning?: boolean;
 }
@@ -319,6 +324,15 @@ function extractTitleFromMessage(message: RawMessage['message']): string | null 
   return null;
 }
 
+function normalizeSessionName(name: unknown): string | null {
+  if (typeof name !== 'string') {
+    return null;
+  }
+
+  const normalized = name.replace(/\s+/g, ' ').trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
 function slugToCwd(slug: string): string {
   // slug: --Users-patrickc.lee-personal-personal-agent-- → /Users/patrickc.lee/personal/personal-agent
   return slug
@@ -340,7 +354,9 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): SessionMeta
   const raw = readFileSync(filePath, 'utf-8');
   let sessionRecord: RawSessionRecord | null = null;
   let model = 'unknown';
-  let title: string | null = null;
+  let fallbackTitle: string | null = null;
+  let namedTitle: string | null = null;
+  let sawSessionInfo = false;
   let messageCount = 0;
 
   for (const rawLine of raw.split('\n')) {
@@ -363,6 +379,12 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): SessionMeta
       continue;
     }
 
+    if (line.type === 'session_info') {
+      sawSessionInfo = true;
+      namedTitle = normalizeSessionName((line as RawSessionInfo).name);
+      continue;
+    }
+
     if (line.type !== 'message') {
       continue;
     }
@@ -370,8 +392,8 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): SessionMeta
     const message = line as RawMessage;
     messageCount += 1;
 
-    if (title === null) {
-      title = extractTitleFromMessage(message.message);
+    if (fallbackTitle === null) {
+      fallbackTitle = extractTitleFromMessage(message.message);
     }
   }
 
@@ -386,7 +408,7 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): SessionMeta
     cwd: sessionRecord.cwd ?? slugToCwd(cwdSlug),
     cwdSlug,
     model,
-    title: title ?? 'New Conversation',
+    title: (sawSessionInfo ? namedTitle : null) ?? fallbackTitle ?? 'New Conversation',
     messageCount,
   };
 }

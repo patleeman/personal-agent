@@ -69,4 +69,24 @@ describe('listStoredSessions', () => {
       },
     ]);
   });
+
+  it('prefers persisted session names over the first user message fallback', () => {
+    const sessionsDir = createTempDir('personal-agent-session-meta-');
+
+    writeFile(
+      join(sessionsDir, '--Users-patrick-project', '2026-03-12T12-08-00-000Z_named.jsonl'),
+      [
+        JSON.stringify({ type: 'session', id: 'conv-named', timestamp: '2026-03-12T12:08:00.000Z', cwd: '/Users/patrick/project' }),
+        JSON.stringify({ type: 'message', timestamp: '2026-03-12T12:08:01.000Z', message: { role: 'user', content: [{ type: 'text', text: 'Fallback first message title' }] } }),
+        JSON.stringify({ type: 'message', timestamp: '2026-03-12T12:08:02.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Done.' }] } }),
+        JSON.stringify({ type: 'session_info', name: 'Generated session title' }),
+      ].join('\n') + '\n',
+    );
+
+    expect(listStoredSessions({ sessionsDir })[0]).toEqual(expect.objectContaining({
+      id: 'conv-named',
+      title: 'Generated session title',
+      messageCount: 2,
+    }));
+  });
 });
