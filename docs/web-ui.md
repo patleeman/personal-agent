@@ -1,0 +1,250 @@
+# Web UI Guide
+
+The web UI is the easiest way to work with `personal-agent` day to day.
+
+It gives you one place to see:
+
+- inbox activity
+- conversations
+- projects
+- scheduled tasks
+- gateway state
+- daemon state
+- memory
+- profile and model settings
+
+## Start the UI
+
+```bash
+pa ui
+pa ui --open
+pa ui --port 4000
+```
+
+Default address:
+
+- `http://localhost:3741`
+
+The web app uses the current active profile.
+
+## What the UI is for
+
+Use the UI when you want:
+
+- a persistent inbox
+- easy conversation browsing and branching
+- project management backed by `PROJECT.yaml`
+- visibility into daemon and gateway state
+- a visual memory browser
+- live updates without polling
+
+## Main sections
+
+### Inbox
+
+The Inbox page shows activity items for the active profile.
+
+Typical examples:
+
+- scheduled task output
+- deferred resume activity
+- background failures
+- other asynchronous summaries
+
+You can:
+
+- filter unread vs all
+- mark everything read
+- open individual items
+
+See [Inbox and Activity](./inbox.md).
+
+### Conversations
+
+Conversations are where live work happens.
+
+The UI supports:
+
+- live sessions
+- resumed sessions from saved history
+- message streaming
+- conversation forks
+- branch navigation
+- context usage display
+- file/image input
+
+A new draft conversation becomes a live session when you send the first prompt.
+
+### Projects
+
+Projects are durable work trackers.
+
+From the Projects page you can:
+
+- create a project from a short description
+- inspect current status, blockers, milestones, and tasks
+- edit the canonical `PROJECT.yaml`
+- link project state to active conversations
+
+See [Projects](./projects.md).
+
+### Scheduled
+
+The Scheduled page is the UI for daemon tasks.
+
+You can:
+
+- see discovered tasks
+- see current status and recent runs
+- enable or disable a task
+- run a task immediately
+
+See [Scheduled Tasks](./scheduled-tasks.md).
+
+### Gateway
+
+The Gateway page shows Telegram state.
+
+It surfaces:
+
+- service status
+- tracked gateway conversations
+- pending durable inbound messages
+- access settings
+- recent logs
+
+You can also install, start, stop, restart, or uninstall the managed gateway service from the UI.
+
+See [Gateway Guide](./gateway.md).
+
+### Daemon
+
+The Daemon page shows background automation status.
+
+It surfaces:
+
+- whether the daemon service is installed and running
+- runtime connection status
+- PID and uptime information
+- recent logs
+
+You can also manage the daemon service from the UI.
+
+See [Daemon and Background Automation](./daemon.md).
+
+### Memory
+
+The Memory page is a user-facing browser for:
+
+- profile `AGENTS.md`
+- skills
+- memory docs
+
+It is meant to answer:
+
+- who is this profile supposed to be?
+- what reusable workflows does it have?
+- what durable notes and references does it know?
+
+See [Profiles, Memory, and Skills](./profiles-memory-skills.md).
+
+### Settings
+
+Settings lets you change:
+
+- browser theme
+- active profile
+- default model
+- default thinking level
+- Pi light/dark theme mapping
+- saved UI state
+
+Switching the active profile affects:
+
+- inbox
+- projects
+- memory
+- gateway state
+- new live sessions
+
+## Prompt references in conversations
+
+The composer supports `@` references.
+
+You can reference:
+
+- projects
+- scheduled tasks
+- memory docs
+- skills
+- profiles
+
+When you mention these items, the UI resolves them and injects durable context into the live session.
+
+This makes the conversation aware of the durable objects you are pointing at, instead of copying them manually into the prompt.
+
+## Referenced projects and working directory selection
+
+Referenced projects matter in two ways:
+
+1. they stay attached to the conversation as durable project context
+2. if a new conversation references exactly one project with a `repoRoot`, that repo root can become the initial working directory when no explicit cwd is set
+
+That makes project references more than just labels.
+
+## Common conversation composer commands
+
+The UI supports slash-style commands in the composer.
+
+Common ones include:
+
+- `/model` — pick a model
+- `/project new <description>` — create a project
+- `/project reference <id>` — reference a project in this conversation
+- `/project unreference <id>` — stop referencing a project
+- `/fork` — fork a conversation branch
+- `/compact` — compact context
+- `/reload` — reload profile resources
+- `/new` — start a new session
+- `/tree` — open branch navigation
+
+There are also convenience commands such as `/run`, `/search`, `/summarize`, and `/think`.
+
+## Live updates
+
+The UI uses server-sent events for snapshots and updates.
+
+That means:
+
+- inbox, projects, sessions, and tasks update live
+- you usually do not need to refresh manually
+- if the SSE connection drops, the UI will try to reconnect
+
+If live updates are offline, refresh buttons remain available on each page.
+
+## Relationship to the CLI and gateway
+
+The web UI is not a separate system.
+
+It uses the same underlying state as:
+
+- `pa tui`
+- `pa tasks`
+- `pa inbox`
+- `pa gateway`
+- `pa daemon`
+
+So, for example:
+
+- a scheduled task run can create an inbox item visible in the UI
+- a Telegram session can be resumed into a web conversation
+- a project created in the UI is the same durable project the agent can update in a conversation
+
+## Related docs
+
+- [How personal-agent works](./how-it-works.md)
+- [Projects](./projects.md)
+- [Inbox and Activity](./inbox.md)
+- [Scheduled Tasks](./scheduled-tasks.md)
+- [Gateway Guide](./gateway.md)
+- [Daemon and Background Automation](./daemon.md)

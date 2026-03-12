@@ -1,51 +1,56 @@
 # Troubleshooting
 
-This page covers common `pa` failures and quick fixes.
+This page covers the most common user-facing failures in `personal-agent`.
 
-## First-line diagnostics
+## Start here
 
 Run these first:
 
 ```bash
 pa doctor
-pa doctor --json
 pa daemon status
-pa daemon status --json
 pa profile show
 ```
 
-For scheduled tasks:
+If scheduled tasks are involved:
 
 ```bash
 pa tasks list
 pa tasks validate --all
 ```
 
----
-
-## CLI and startup issues
-
-## "Unable to find a runnable pi binary"
-
-`pa` looks for Pi in this order:
-
-1. repo-local `node_modules/@mariozechner/pi-coding-agent/dist/cli.js`
-2. global `pi` on PATH
-
-Fixes:
+If the gateway is involved:
 
 ```bash
-# From repo root
+pa gateway service status telegram
+```
+
+## `pa` cannot find Pi
+
+Typical message:
+
+- `Unable to find a runnable pi binary`
+
+Fix:
+
+```bash
 npm install
 npm run build
+```
 
-# Optional global fallback
+Optional global fallback:
+
+```bash
 npm install -g @mariozechner/pi-coding-agent
 ```
 
-## "Unknown profile: <name>" or "Profile not found"
+## Unknown or missing profile
 
-Check profiles:
+Typical message:
+
+- `Unknown profile: <name>`
+
+Check available profiles:
 
 ```bash
 pa profile list
@@ -54,149 +59,134 @@ pa profile list
 Set a valid default:
 
 ```bash
-pa profile use shared
-# or
-pa profile use datadog
+pa profile use assistant
 ```
 
-## Runtime state path errors (inside repo)
+## Runtime state path points inside the repo
 
-`pa` requires mutable state outside the git repo.
+`personal-agent` expects mutable runtime state outside the git repo.
 
-Fix by setting a safe state root:
+Fix by resetting or overriding the state root:
 
 ```bash
 export PERSONAL_AGENT_STATE_ROOT="$HOME/.local/state/personal-agent"
 ```
 
-(Or unset custom overrides that pointed inside repo.)
+## Web UI does not start
 
----
+Common reason:
 
-## Daemon issues
+- the web app build is missing
 
-## "daemon is not running; background events are disabled"
+Build it:
 
-Start daemon manually:
+```bash
+npm run build
+```
+
+Then start again:
+
+```bash
+pa ui --open
+```
+
+## Daemon is not running
+
+Typical symptom:
+
+- scheduled tasks do not run
+- background automation is missing
+- warnings mention disabled background events
+
+Fix:
 
 ```bash
 pa daemon start
 ```
 
-Install managed service (recommended for always-on behavior):
+Recommended long-term fix:
 
 ```bash
 pa daemon service install
 ```
 
-## Service manager errors (`launchctl`/`systemctl` missing)
-
-Managed services only support:
-
-- macOS (`launchd`)
-- Linux (`systemd --user`)
-
-If unavailable, run daemon/gateway in foreground mode instead.
-
-## Need to suppress daemon integration temporarily
-
-Set:
+Check status:
 
 ```bash
-export PERSONAL_AGENT_DISABLE_DAEMON_EVENTS=1
+pa daemon status
 ```
 
-This disables daemon event emission and gateway daemon auto-start.
+## Gateway setup fails
 
----
+Common causes:
 
-## Gateway issues
+- missing `TELEGRAM_BOT_TOKEN`
+- missing access control settings
+- `op://...` secret resolution failure
 
-## Missing token/allowlist errors
-
-Examples:
-
-- `TELEGRAM_BOT_TOKEN is required`
-- `PERSONAL_AGENT_TELEGRAM_ALLOWLIST is required`
-
-Fix via setup:
+Best fix:
 
 ```bash
 pa gateway setup telegram
 ```
 
-Or provide environment variables directly.
+If you use 1Password references, confirm:
 
-## `op://...` secrets fail to resolve
+- `op` is installed
+- you are authenticated
+- `OP_SERVICE_ACCOUNT_TOKEN` is set if needed
+
+## Gateway service is installed but inactive
 
 Check:
 
-- `op` CLI is installed and authenticated
-- `OP_SERVICE_ACCOUNT_TOKEN` is set if using service-account auth
-- Optional overrides are correct:
-  - `PERSONAL_AGENT_OP_BIN`
-  - `PERSONAL_AGENT_OP_READ_TIMEOUT_MS`
-
-## Gateway service installs but appears inactive
-
-Inspect status:
-
 ```bash
 pa gateway service status telegram
+pa daemon status
 ```
 
-Then inspect logs:
+Useful logs:
 
-- macOS: `~/.local/state/personal-agent/gateway/logs/<provider>.log`
-- Linux: `journalctl --user -u personal-agent-gateway-<provider>.service -f`
+- macOS: `~/.local/state/personal-agent/gateway/logs/telegram.log`
+- Linux: `journalctl --user -u personal-agent-gateway-telegram.service -f`
 
----
+## Scheduled task is missing
 
-## Scheduled task issues
+Check that the file:
 
-## "No valid task files found"
+- is in the configured task directory
+- ends with `.task.md`
+- has valid YAML frontmatter
+- has a non-empty Markdown body
 
-Ensure files:
-
-- are in configured task dir (`pa daemon status` shows it)
-- end with `.task.md`
-- contain valid YAML frontmatter + non-empty body
-
-Validate all files:
+Validate everything:
 
 ```bash
 pa tasks validate --all
 ```
 
-## Task parse errors
-
-Use:
-
-```bash
-pa tasks list
-pa tasks validate --all
-```
-
-to get file-level parse failures.
-
-## Task skipped unexpectedly
+## Scheduled task was skipped
 
 Common reasons:
 
-- previous run still active (overlap skip)
-- one-time `at` task was due while daemon was offline
+- the previous run was still active
+- a one-time `at` task was due while the daemon was offline
 
-Inspect runtime state:
+Inspect:
 
 ```bash
 pa tasks show <id>
 ```
 
-Look at `Last error`, `Last status`, and one-time fields.
+Look at last status, last error, and one-time resolution fields.
 
-## "No logs found for task"
+## No task logs found
 
-The task may never have run yet, or state/logs may have been reaped.
+Either:
+
+- the task has never run
+- logs were reaped
+- the task id is wrong
 
 Check:
 
@@ -205,41 +195,74 @@ pa tasks show <id>
 pa tasks list --status running
 ```
 
----
+## Inbox looks empty or stale
 
-## Update/restart issues
+Remember:
 
-## `pa update` fails during repo dependency install
+- the current inbox is activity-backed
+- not every conversation reply creates an inbox item
+- the inbox mainly reflects asynchronous events
 
-`pa update` executes:
+Refresh or inspect via CLI:
 
-- `git pull --rebase --autostash`
-- `npm install` in the personal-agent repo
-- `npm install @mariozechner/pi-coding-agent@latest` in repo root + `@personal-agent/gateway` workspace
-- `npm run build` in the personal-agent repo
-- background service restart
+```bash
+pa inbox list
+pa inbox list --unread
+```
 
-If you need to skip dependency refresh temporarily, use (`npm run build` + restart still run):
+If you expected a task result, verify the task actually ran.
+
+## Memory docs fail to parse
+
+Run:
+
+```bash
+pa memory lint
+```
+
+Common problems:
+
+- missing YAML frontmatter
+- missing required keys
+- invalid `updated` date format
+- duplicate ids
+- empty body
+
+## `pa update` fails
+
+`pa update` does several things:
+
+- pulls latest repo changes
+- refreshes dependencies
+- rebuilds packages
+- restarts background services
+
+If dependency refresh is the problem, try:
 
 ```bash
 pa update --repo-only
 ```
 
-## `pa restart` skips gateway services
+## Need logs and machine-readable state
 
-This is expected when gateway managed services are not installed.
-
-Install if needed:
+Useful commands:
 
 ```bash
-pa gateway service install telegram
+pa doctor --json
+pa daemon status --json
+pa tasks list --json
+pa inbox list --json
+pa memory list --json
 ```
 
----
+Useful log locations:
+
+- daemon: `~/.local/state/personal-agent/daemon/logs/daemon.log`
+- gateway: `~/.local/state/personal-agent/gateway/logs/telegram.log`
 
 ## Still stuck?
 
-Capture these for debugging:
+Collect:
 
 ```bash
 pa doctor --json
@@ -248,4 +271,4 @@ pa profile show
 pa tasks list --json
 ```
 
-and include recent daemon/gateway logs.
+and include relevant recent logs.

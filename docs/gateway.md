@@ -1,323 +1,265 @@
 # Gateway Guide (`pa gateway`)
 
-## Overview
+The gateway lets you talk to the same `personal-agent` through chat.
 
-`@personal-agent/gateway` runs Pi through chat platforms.
-
-Current providers:
+Current provider:
 
 - Telegram
 
-The command is registered into `pa` at startup:
+The gateway is not a separate agent. It uses the same profile, memory, projects, daemon integration, and durable state model.
+
+## Why use the gateway
+
+Use the gateway when you want to:
+
+- interact with the agent from Telegram
+- receive scheduled task output in chat
+- keep conversation threads outside the local UI
+- resume or continue work remotely
+
+## Basic setup
+
+Interactive setup:
 
 ```bash
-pa gateway ...
+pa gateway setup telegram
 ```
 
----
-
-## Command surface
+Foreground run:
 
 ```bash
-pa gateway
-pa gateway help
-pa gateway setup [telegram]
-pa gateway start [telegram]
-pa gateway service [install|status|uninstall|help] [telegram]
-pa gateway telegram [setup|start|help]
+pa gateway telegram start
 ```
 
-Defaults:
+Recommended for 24/7 use:
 
-- `pa gateway` → help
-- `pa gateway setup` → interactive provider prompt
-- `pa gateway start` → starts Telegram in foreground
-- `pa gateway service install` → installs Telegram managed service
+```bash
+pa gateway service install telegram
+```
 
----
+Installing the gateway service also provisions the managed daemon so background events stay enabled.
 
 ## Configuration model
 
 Gateway config file:
 
 - `~/.config/personal-agent/gateway.json`
-- override path: `PERSONAL_AGENT_GATEWAY_CONFIG_FILE`
 
-Precedence per provider setting:
+Per-setting precedence:
 
 1. environment variable
-2. gateway config file value
+2. `gateway.json`
 3. built-in default
 
 Examples:
 
-- profile: `PERSONAL_AGENT_PROFILE` > `gateway.json.profile` > `shared`
-- Telegram token: `TELEGRAM_BOT_TOKEN` > `gateway.json.telegram.token`
+- profile: `PERSONAL_AGENT_PROFILE` → `gateway.json.profile` → `shared`
+- Telegram token: `TELEGRAM_BOT_TOKEN` → `gateway.json.telegram.token`
 
----
+## Required Telegram setup
 
-## Setup walkthrough
-
-Use setup instead of manual env export when possible:
-
-```bash
-pa gateway setup telegram
-```
-
-Setup writes provider token/allowlist/allowed-user-ids/blocked-user-ids/cwd/max-pending/tool-activity/clear-on-new values to `gateway.json`.
-
----
-
-## Shared environment variables
-
-- `PERSONAL_AGENT_PROFILE` (default `shared`)
-- `PERSONAL_AGENT_PI_TIMEOUT_MS` (default `1800000` / 30 minutes; set `0` to disable timeout)
-
-If using `op://...` references, ensure 1Password CLI (`op`) is installed/authenticated.
-
-Optional 1Password overrides:
-
-- `PERSONAL_AGENT_OP_BIN` (default `op`)
-- `PERSONAL_AGENT_OP_READ_TIMEOUT_MS` (default `15000`)
-
----
-
-## Telegram
-
-Required (setup or env):
+Required:
 
 - `TELEGRAM_BOT_TOKEN`
 
 Strongly recommended:
 
-- `PERSONAL_AGENT_TELEGRAM_ALLOWED_USER_IDS` (comma-separated Telegram user IDs allowed to control the bot)
+- `PERSONAL_AGENT_TELEGRAM_ALLOWED_USER_IDS`
 
 Optional:
 
-- `PERSONAL_AGENT_TELEGRAM_ALLOWLIST` (comma-separated chat IDs)
-- `PERSONAL_AGENT_TELEGRAM_BLOCKED_USER_IDS` (comma-separated Telegram user IDs)
+- `PERSONAL_AGENT_TELEGRAM_ALLOWLIST`
+- `PERSONAL_AGENT_TELEGRAM_BLOCKED_USER_IDS`
 - `PERSONAL_AGENT_TELEGRAM_CWD`
-- `PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT` (default `20`)
-- `PERSONAL_AGENT_TELEGRAM_RETRY_ATTEMPTS` (default `3`)
-- `PERSONAL_AGENT_TELEGRAM_RETRY_BASE_DELAY_MS` (default `300`)
-- `PERSONAL_AGENT_TELEGRAM_TOOL_ACTIVITY_STREAM` (default `false`) — show a temporary tool-running acknowledgement while a run is active (deleted when reply completes)
-- `PERSONAL_AGENT_TELEGRAM_CLEAR_RECENT_MESSAGES_ON_NEW` (default `true`) — best-effort clear recent tracked Telegram messages when `/new` is used
+- `PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT`
+- `PERSONAL_AGENT_TELEGRAM_TOOL_ACTIVITY_STREAM`
+- `PERSONAL_AGENT_TELEGRAM_CLEAR_RECENT_MESSAGES_ON_NEW`
 
-Run:
+If you use `op://...` values, make sure the 1Password CLI is installed and authenticated.
 
-```bash
-pa gateway telegram setup
-pa gateway telegram start
-```
+## Access control
 
-Foreground mode stays attached to terminal (`Ctrl+C` to stop).
+Telegram access control is built around:
 
-Telegram behavior highlights:
+- allowed user ids
+- optional chat allowlist
+- optional blocked user ids
 
-- Inbound support: text, documents, photos, and voice notes
-- Image attachments are passed to Pi as native image inputs
-- Rich HTML formatting for code blocks/headings/links in bot replies
-- Streaming uses message edits in private chats; group/supergroup chats use chunked message streaming to reduce edit-rate limits
-- Optional tool activity indicator can show a temporary “running tools” acknowledgement, then delete it when the assistant reply completes
-- Very long outputs are sent as `.txt` document attachments
-- Inline action buttons on replies: Stop, New, Regenerate, Follow up
-- Telegram slash menu auto-registers `/skill_*` shortcuts for discovered profile skills (mapped to `/skill:<skill-name>`)
+Practical rules:
 
----
+- direct messages from allowed users work even if the DM chat id is not pre-allowlisted
+- non-private chats can be auto-authorized when added by an allowed user
+- blocked users are ignored
 
-## Background service mode (recommended for 24/7)
+## Session model
 
-Supported platforms:
+Each Telegram chat has its own persisted Pi session.
 
-- macOS (`launchd` user agents)
-- Linux (`systemd --user` units)
+For Telegram forum topics, the unit is:
 
-Commands:
+- `chat_id + message_thread_id`
 
-```bash
-pa gateway service install [telegram]
-pa gateway service status [telegram]
-pa gateway service uninstall [telegram]
-```
+Useful consequences:
 
-Notes:
+- each room or topic can have its own ongoing conversation
+- `/new` resets the current session binding
+- `/resume` can switch the chat to a saved conversation
+- forked work can be routed into separate topics
 
-- Install validates provider token + access settings first
-- Installing gateway service also provisions managed `personal-agentd`
-- macOS logs: `~/.local/state/personal-agent/gateway/logs/<provider>.log`
-- Linux logs: `journalctl --user -u personal-agent-gateway-<provider>.service -f`
-- Telegram durable inbox path: `~/.local/state/personal-agent/gateway/pending/telegram`
+## What the gateway can do
 
----
+Telegram supports:
 
-## Chat/session behavior
+- text messages
+- documents
+- photos
+- voice notes
+- streaming replies
+- inline action buttons on replies
+- long-output `.txt` attachment fallback
+- pending message replay after restart or crash
 
-Each chat/channel has its own persisted Pi session file. Telegram forum topics/threads are isolated per `chat_id + message_thread_id`.
+This makes it useful for both quick chats and long-running remote workflows.
 
-Telegram persists conversation→session bindings (used by `/fork`) and source-conversation→work-topic bindings (used by `/tmux run ... fork=auto`) under the gateway state directory so branch routing survives restarts.
+## Common slash commands
 
-`/new` resets the Pi session file and (when enabled) attempts to delete recent tracked Telegram messages in that same chat/topic (best-effort, permission/age limits apply). Configure via `PERSONAL_AGENT_TELEGRAM_CLEAR_RECENT_MESSAGES_ON_NEW` or `gateway.telegram.clearRecentMessagesOnNew`.
-
-`/clear` (Telegram) keeps the current session and best-effort clears recent messages in the current chat/topic. In forum topics, it clears tracked messages for that topic to avoid deleting other topics. Use `/clear all` for a deeper non-topic sweep.
-
-Gateway runs append a gateway-specific system-prompt block before each turn so the model knows:
-
-- it is operating in chat-gateway mode (not TUI)
-- which gateway/provider is active (Telegram)
-- what gateway features and commands are available
-- how media/file delivery behaves
-- chat-style response rules (concise by default; no code snippets/file paths unless asked)
-
-Telegram additionally durably spools inbound messages before processing; pending messages are replayed after restart/crash.
-
-When a new message arrives while a run is active in the same conversation:
-
-- normal message → steer (interrupt-style)
-- `/followup <text>` → queued follow-up delivered after current response
-- `/followup` (no args) → puts chat into one-shot follow-up capture mode (next message is treated as follow-up)
-
----
-
-## Gateway slash commands
+### Session control
 
 - `/status`
-- `/chatid` (show current room/chat ID; includes topic thread ID in Telegram forums)
-- `/new` (start a fresh session and, when enabled, best-effort clear recent tracked messages in the current chat/topic)
-- `/clear` (Telegram only; best-effort clear recent messages in the current chat/topic without resetting the session; supports `/clear all` for deeper non-topic sweeps)
-- `/commands`
-- `/skills` (compatibility alias; Telegram slash menu hides this)
-- `/skill <name>` (and `/skill:<name>`)
-- `/tasks [status]` (`all|running|active|completed|disabled|pending|error`)
-- `/room [help|pending|approve <chatId>|deny <chatId>|blocked]` (Telegram room authorization admin)
-- `/tmux [help|list|inspect|logs|stop|send|run|clean]` (Telegram managed tmux command helper)
-  - `/tmux run <task> [fork=none|auto|new-topic|reuse-topic] [notify=none|message|resume] [group=<id>|auto] [topic=<name>|auto] -- <command>`
-- `/model` / `/models`
+- `/new`
+- `/clear`
+- `/resume`
 - `/stop`
-- `/followup <text>` (or `/followup` for one-shot follow-up capture mode)
 - `/regenerate`
 - `/cancel`
-- `/compact [instructions]` (runs native Pi compaction)
-- `/fork [topic name]` (Telegram only; by default creates a new forum topic and forks Pi into that topic branch. `/fork` auto-generates a topic name, `/fork <topic name>` uses your name.)
-- `/resume [index|conversation-id|file]` (list saved conversations and switch this chat/channel to one)
+- `/followup`
 
-Telegram registers slash commands via Bot API on startup.
+### Skills and models
 
-`/tmux run` orchestration notes:
-- `fork=auto` creates one work topic per source conversation (first run) and then reuses it.
-- `group=auto` groups parallel runs targeting the same source+work conversation while active.
-- `notify=resume` posts completion summary and injects a single follow-up continuation prompt in the work topic when the whole run group finishes.
+- `/commands`
+- `/skills`
+- `/skill <name>`
+- `/skill:<name>`
+- `/model`
+- `/models`
+- `/compact`
+
+### Background and orchestration
+
+- `/tasks [status]`
+- `/tmux ...`
+- `/fork [topic name]`
+- `/room ...`
 
 ## Which mechanism should I use?
 
 ### `/resume`
 
-Use `/resume` when you want to **switch this chat/channel to an existing saved conversation immediately**.
-
-Examples:
-
-```text
-/resume
-/resume 2
-/resume some-session.jsonl
-```
-
-Behavior:
-
-- does **not** wait for a timer
-- changes which persisted session file this chat/channel is bound to
-- is for session selection/switching
+Use `/resume` when you want to switch this chat to an existing saved conversation immediately.
 
 ### `/tmux run ...`
 
-Use `/tmux run` when you want to launch a **detached shell job** (training run, scraper, test suite, long script).
+Use `/tmux run` when you want to launch a detached shell job.
 
-Example:
+Good examples:
 
-```text
-/tmux run train notify=resume -- python scripts/train.py
-```
-
-Behavior:
-
-- starts a managed tmux session in the background
-- the work happens in tmux, not inside the chat request itself
-- logs are attached to the tmux session
-- `notify=resume` is a **completion hook**: when the tmux run group finishes, gateway posts a summary and injects one continuation follow-up into the target conversation
+- training jobs
+- scripts
+- long test runs
+- scrapers
 
 ### Scheduled tasks (`*.task.md`)
 
-Use scheduled tasks when you want **daemon-managed automation on cron/at schedules**, even if no one is currently chatting.
+Use scheduled tasks when you want daemon-managed automation on a calendar or one-time schedule, even if nobody is chatting.
 
-Behavior:
+Quick rule:
 
-- independent of the current live conversation flow
-- best for recurring reminders, reports, or unattended automation
-- can send output to gateway chats/channels
+- switch this chat to another session now → `/resume`
+- launch a long detached shell job → `/tmux run`
+- run automation on a schedule → scheduled task
 
-Quick rule of thumb:
+## Relationship to the daemon
 
-- **Switch this chat to another saved conversation now** → `/resume`
-- **Run a long background shell command** → `/tmux run`
-- **Run something on a calendar/schedule** → scheduled task
+The gateway works best with the daemon running.
 
----
+Daemon integration is what powers things like:
 
-## Daemon integration
+- scheduled task output routing to Telegram
+- background notifications
+- durable pending message handling around restarts
 
-Gateway emits non-fatal daemon events:
+If the daemon is unavailable, gateway request handling can still continue, but background integration is reduced.
 
-- `session.updated`
-- `session.closed`
-- `session.processing.failed`
+## Service mode
 
-Gateway also pulls daemon notifications (`notifications.pull`) and delivers:
+Recommended for daily use:
 
-- Telegram notifications
+```bash
+pa gateway service install telegram
+pa gateway service status telegram
+```
 
-This powers scheduled task output routing (`output.targets`).
+Foreground mode is fine for testing, but service mode is the right default for always-on chat access.
 
-If daemon is unavailable, gateway continues processing requests.
+## Web UI integration
 
-Disable daemon integration explicitly with:
+The web UI has a Gateway page that shows:
 
-- `PERSONAL_AGENT_DISABLE_DAEMON_EVENTS=1`
+- service status
+- tracked gateway conversations
+- pending durable inbound messages
+- access lists
+- recent logs
 
----
+It can also open a gateway-backed conversation into the normal web conversation view.
 
-## Access control
+See [Web UI Guide](./web-ui.md).
 
-- Telegram: chat allowlist is optional (you can start empty and approve rooms as the bot is added).
-- Telegram `allowedUserIds` can restrict bot control to specific Telegram user IDs.
-- Direct messages from `allowedUserIds` work even if their DM chat ID is not pre-allowlisted.
-- Non-private chats added by an `allowedUserIds` user are auto-authorized and persisted.
-- Telegram `blockedUserIds` are silently ignored.
+## Scheduled task output routing
 
-Telegram room authorization flow:
+A scheduled task can target Telegram in its `output` section.
 
-- When the bot is added to a non-private chat by someone outside `allowedUserIds`, it can DM allowed users with approve/deny buttons.
-- Approve adds the room to the Telegram allowlist.
-- Deny removes the room, leaves the chat, and adds the inviter to blocked user IDs (with best-effort in-chat ban when permissions allow).
+Example:
 
----
+```yaml
+output:
+  when: failure
+  targets:
+    - gateway: telegram
+      chatId: "123456789"
+```
 
-## Troubleshooting
+This is the main path for unattended automation to message you later.
 
-### Missing token/allowlist/allowed users
+## Troubleshooting quick hits
 
-Run setup:
+### Missing token or access settings
+
+Run:
 
 ```bash
 pa gateway setup telegram
 ```
 
-### Service install says token/access settings missing
+### Service installs but nothing seems to happen
 
-Provider setup must be completed first. Telegram service install requires either a chat allowlist or allowed user IDs.
+Check:
 
-### Gateway feels backlogged
+```bash
+pa gateway service status telegram
+pa daemon status
+```
 
-Increase pending limits only if needed:
+### Need logs
 
-- `PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT`
+- macOS: `~/.local/state/personal-agent/gateway/logs/telegram.log`
+- Linux: `journalctl --user -u personal-agent-gateway-telegram.service -f`
 
-For broader incident playbooks, see [Troubleshooting](./troubleshooting.md).
+For broader debugging, see [Troubleshooting](./troubleshooting.md).
+
+## Related docs
+
+- [Daemon and Background Automation](./daemon.md)
+- [Scheduled Tasks](./scheduled-tasks.md)
+- [Web UI Guide](./web-ui.md)
+- [Configuration](./configuration.md)

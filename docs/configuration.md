@@ -1,78 +1,53 @@
 # Configuration
 
-This guide documents where `pa` reads configuration from, and what wins when multiple sources are set.
+This page explains the user-facing configuration model for `personal-agent`.
 
-## Quick precedence summary
+The guiding principle is:
 
-`pa` uses different precedence stacks per subsystem.
+- keep durable defaults in files
+- use environment variables mainly for runtime overrides and secrets
 
-### Profile resources (skills/extensions/themes/prompts/settings/models)
-
-1. `profiles/shared/agent`
-2. `profiles/<selected-profile>/agent`
-3. local overlay (`~/.config/personal-agent/local` by default)
-
-Higher layers override lower layers (for mergeable files) or append (for layered directories).
-
-See [Profile Schema](./profile-schema.md) for merge semantics.
-
-### Profile selection
-
-1. `--profile <name>` passed to `pa tui ...` / `pa <pi args>`
-2. `defaultProfile` in `~/.config/personal-agent/config.json`
-3. fallback: `shared`
-
-### Gateway runtime config (per provider)
-
-1. Environment variables (for token, allowlist, cwd, queue size, profile)
-2. `~/.config/personal-agent/gateway.json`
-3. hardcoded defaults (for example profile=`shared`)
-
-### Daemon config
-
-1. defaults in code
-2. `~/.config/personal-agent/daemon.json` (or `PERSONAL_AGENT_DAEMON_CONFIG`)
-
-`PERSONAL_AGENT_DAEMON_SOCKET_PATH` seeds the default socket path, but `daemon.json` can still override it.
-
----
-
-## Config files
+## The main config files
 
 ### `~/.config/personal-agent/config.json`
 
-Used by `pa profile use/show/list` and default profile resolution.
+This stores the default profile.
 
 Example:
 
 ```json
 {
-  "defaultProfile": "datadog"
+  "defaultProfile": "assistant"
 }
 ```
 
-Override file location with:
+Useful command:
 
-- `PERSONAL_AGENT_CONFIG_FILE`
+```bash
+pa profile use assistant
+```
 
 ### `~/.config/personal-agent/daemon.json`
 
-Configures daemon queue, socket, and modules.
+This configures the background daemon.
+
+Common reasons to edit it:
+
+- change task discovery path
+- change timeouts or retry behavior
+- change socket or queue settings
 
 Example:
 
 ```json
 {
   "logLevel": "info",
-  "queue": { "maxDepth": 1000 },
   "modules": {
-    "maintenance": { "enabled": true, "cleanupIntervalMinutes": 60 },
     "tasks": {
       "enabled": true,
-      "taskDir": "/path/to/personal-agent/profiles/<active-profile>/agent/tasks",
+      "taskDir": "/path/to/personal-agent/profiles/assistant/agent/tasks",
       "tickIntervalSeconds": 30,
       "maxRetries": 3,
-      "reapAfterDays": 7,
       "defaultTimeoutSeconds": 1800,
       "runTasksInTmux": false
     }
@@ -80,100 +55,148 @@ Example:
 }
 ```
 
-If `modules.tasks.taskDir` is omitted, daemon defaults to `<repo>/profiles/<active-profile>/agent/tasks`, where `<active-profile>` resolves from `PERSONAL_AGENT_PROFILE` or `defaultProfile` in `~/.config/personal-agent/config.json` (fallback: `shared`).
-
-Override file location with:
-
-- `PERSONAL_AGENT_DAEMON_CONFIG`
+See [Daemon and Background Automation](./daemon.md) and [Scheduled Tasks](./scheduled-tasks.md).
 
 ### `~/.config/personal-agent/gateway.json`
 
-Stores setup-generated Telegram gateway values.
+This stores gateway setup, typically written by:
 
-Created/updated by:
+```bash
+pa gateway setup telegram
+```
 
-- `pa gateway setup telegram`
+Use it for:
 
-Override file location with:
+- Telegram token
+- allowlisted chats
+- allowed user ids
+- gateway cwd and queue limits
 
-- `PERSONAL_AGENT_GATEWAY_CONFIG_FILE`
+See [Gateway Guide](./gateway.md).
 
----
+## Profile resource configuration
 
-## Runtime state paths
+Profile defaults live in the repo under `profiles/**/agent`.
 
-Default runtime root:
+Common files:
+
+- `settings.json`
+- `models.json`
+- `AGENTS.md`
+- `skills/`
+- `memory/`
+- `tasks/`
+- `projects/`
+- `themes/`
+- `extensions/`
+
+See [Profiles, Memory, and Skills](./profiles-memory-skills.md).
+
+## Layering and precedence
+
+Profile resources resolve in this order:
+
+1. `profiles/shared/agent`
+2. `profiles/<selected-profile>/agent`
+3. local overlay (`~/.config/personal-agent/local` by default)
+
+Higher layers override lower layers where that makes sense.
+
+A simple way to think about it:
+
+- `shared` = common defaults
+- profile = persona or context-specific overrides
+- local overlay = machine-local additions
+
+## Runtime state location
+
+Mutable runtime state is kept outside the repo.
+
+Default root:
 
 - `~/.local/state/personal-agent`
 
-Resolution:
+This includes:
 
-1. `PERSONAL_AGENT_STATE_ROOT`
-2. else `XDG_STATE_HOME/personal-agent`
-3. else `~/.local/state/personal-agent`
+- auth
+- live/saved session state
+- daemon state and logs
+- gateway spools and logs
+- conversation-local bindings
 
-Subpaths (overrideable):
+Do not point runtime state inside the git repo.
 
-- auth: `PERSONAL_AGENT_AUTH_PATH`
-- session: `PERSONAL_AGENT_SESSION_PATH`
-- cache: `PERSONAL_AGENT_CACHE_PATH`
+## Important environment variables
 
-`pa` validates runtime paths are **outside the repository**.
+### Profile and repo selection
 
----
+- `PERSONAL_AGENT_REPO_ROOT` — override the repo root
+- `PERSONAL_AGENT_LOCAL_PROFILE_DIR` — override the local overlay dir
+- `PERSONAL_AGENT_PROFILE` — override the active profile for some runtime surfaces, especially gateway and daemon contexts
 
-## Profile layer path controls
+### Runtime state
 
-- `PERSONAL_AGENT_REPO_ROOT` — override repository root for profile discovery
-- `PERSONAL_AGENT_LOCAL_PROFILE_DIR` — override local overlay root (default `~/.config/personal-agent/local`)
+- `PERSONAL_AGENT_STATE_ROOT` — override the runtime state root
+- `PERSONAL_AGENT_AUTH_PATH`
+- `PERSONAL_AGENT_SESSION_PATH`
+- `PERSONAL_AGENT_CACHE_PATH`
 
----
+### Daemon
 
-## Gateway environment variables
+- `PERSONAL_AGENT_DAEMON_CONFIG` — alternate daemon config file
+- `PERSONAL_AGENT_DAEMON_SOCKET_PATH` — default daemon socket path
+- `PERSONAL_AGENT_DISABLE_DAEMON_EVENTS=1` — disable daemon integration explicitly
 
-Shared:
+### Gateway
 
-- `PERSONAL_AGENT_PROFILE` (default `shared`)
-- `PERSONAL_AGENT_PI_TIMEOUT_MS` (default `1800000`; set `0` to disable timeout)
-
-Telegram:
-
+- `PERSONAL_AGENT_GATEWAY_CONFIG_FILE` — alternate gateway config file
 - `TELEGRAM_BOT_TOKEN`
-- `PERSONAL_AGENT_TELEGRAM_ALLOWLIST` (optional)
-- `PERSONAL_AGENT_TELEGRAM_ALLOWED_USER_IDS` (recommended)
-- `PERSONAL_AGENT_TELEGRAM_BLOCKED_USER_IDS` (optional)
-- `PERSONAL_AGENT_TELEGRAM_CWD`
-- `PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT` (default `20`)
-- `PERSONAL_AGENT_TELEGRAM_RETRY_ATTEMPTS` (default `3`)
-- `PERSONAL_AGENT_TELEGRAM_RETRY_BASE_DELAY_MS` (default `300`)
-- `PERSONAL_AGENT_TELEGRAM_TOOL_ACTIVITY_STREAM` (default `false`)
-- `PERSONAL_AGENT_TELEGRAM_CLEAR_RECENT_MESSAGES_ON_NEW` (default `true`)
+- `PERSONAL_AGENT_TELEGRAM_ALLOWED_USER_IDS`
+- `PERSONAL_AGENT_TELEGRAM_ALLOWLIST`
 
+### 1Password secrets
 
----
-
-## 1Password integration variables
-
-When config values are `op://...` references:
+If you store secrets as `op://...` references:
 
 - `PERSONAL_AGENT_OP_BIN` (default `op`)
-- `PERSONAL_AGENT_OP_READ_TIMEOUT_MS` (default `15000`)
-- `OP_SERVICE_ACCOUNT_TOKEN` (for service-account auth)
+- `PERSONAL_AGENT_OP_READ_TIMEOUT_MS`
+- `OP_SERVICE_ACCOUNT_TOKEN` if using a 1Password service account
 
----
+## Model and theme defaults
 
-## CLI/daemon behavior toggles
+The agent's default model, thinking level, and theme mapping usually belong in profile `settings.json`.
 
-- `PERSONAL_AGENT_PLAIN_OUTPUT=1` or `NO_COLOR=1` — disable rich ANSI UI
-- `PERSONAL_AGENT_NO_DAEMON_PROMPT=1` — skip interactive “start daemon?” prompt in CLI
-- `PERSONAL_AGENT_DISABLE_DAEMON_EVENTS=1` — disable daemon event emission and gateway daemon auto-start
+Example:
 
----
+```json
+{
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.4",
+  "defaultThinkingLevel": "xhigh",
+  "themeDark": "cobalt2",
+  "themeLight": "cobalt2-light",
+  "themeMode": "system"
+}
+```
+
+These defaults are used when a run does not explicitly override them.
+
+You can also adjust model and theme settings from the web UI Settings page.
+
+## Recommended approach
+
+For most setups:
+
+1. set the default profile with `pa profile use <name>`
+2. keep profile behavior and durable knowledge in `profiles/**/agent`
+3. keep daemon behavior in `daemon.json`
+4. use `pa gateway setup telegram` for gateway config
+5. keep secrets in 1Password or env vars, not directly in repo files
 
 ## Related docs
 
-- [CLI Guide](./cli.md)
-- [Profile Schema](./profile-schema.md)
+- [Getting Started](./getting-started.md)
+- [Profiles, Memory, and Skills](./profiles-memory-skills.md)
+- [Scheduled Tasks](./scheduled-tasks.md)
 - [Gateway Guide](./gateway.md)
-- [Scheduled Tasks](./tasks.md)
 - [Troubleshooting](./troubleshooting.md)

@@ -26,10 +26,14 @@ A personal application layer over Pi that keeps:
 
 Start here:
 
-- `docs/README.md` - full docs map
-- `docs/cli.md` - CLI usage and command reference
-- `docs/configuration.md` - config files, env vars, and precedence
-- `docs/tasks.md` - scheduled task schema + behavior
+- `docs/README.md` - user-facing docs map
+- `docs/getting-started.md` - first-run setup
+- `docs/how-it-works.md` - mental model and durable surfaces
+- `docs/web-ui.md` - web UI guide
+- `docs/projects.md` - durable project tracking
+- `docs/profiles-memory-skills.md` - profiles, memory, and skills
+- `docs/scheduled-tasks.md` - scheduled tasks and daemon automation
+- `docs/gateway.md` - Telegram gateway setup and use
 - `docs/troubleshooting.md` - common failures and fixes
 
 ## Installation (from source)
@@ -198,7 +202,7 @@ Built-in extensions in this repo:
 - `tmux-manager` - `/tmux` command + footer status for agent-managed tmux sessions only
 - `tmux-orchestration-prompt` - System-prompt policy for tmux-based background orchestration and status reporting
 
-See `docs/extensions.md` for authoring guide.
+See `docs/skills-and-capabilities.md` for a user-facing overview of skills and runtime capabilities.
 
 ## Messaging gateways
 
@@ -279,12 +283,14 @@ Optional local overlay:
 
 See docs:
 
-- `docs/README.md` - docs map
-- `docs/cli.md` - CLI usage and command reference
-- `docs/configuration.md` - config files, env vars, precedence
-- `docs/profile-schema.md` - profile layer semantics
-- `docs/extensions.md` - extension authoring guide
-- `docs/daemon-architecture.md` - daemon design and event system
-- `docs/tasks.md` - scheduled task schema + runtime behavior
-- `docs/gateway.md` - Telegram gateway setup
-- `docs/troubleshooting.md` - debugging and incident playbooks
+- `docs/README.md` - user-facing docs map
+- `docs/getting-started.md` - first-run setup
+- `docs/how-it-works.md` - mental model and durable surfaces
+- `docs/web-ui.md` - web UI guide
+- `docs/projects.md` - durable project tracking
+- `docs/profiles-memory-skills.md` - profiles, memory, and skills
+- `docs/skills-and-capabilities.md` - skills and runtime capabilities
+- `docs/daemon.md` - daemon and background automation
+- `docs/scheduled-tasks.md` - scheduled tasks
+- `docs/gateway.md` - Telegram gateway guide
+- `docs/troubleshooting.md` - debugging and recovery
