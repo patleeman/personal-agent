@@ -28,7 +28,7 @@
 ## Durable Preferences
 
 - Prefer 1Password CLI (`op`) for secrets and runtime secret loading.
-- Morning reports should include weather, calendar, and upcoming Apple Reminders; prefer free weather sources when possible.
+- Morning reports should be short, glanceable, and high-signal; include weather, calendar, and upcoming Apple Reminders; prefer free weather sources when possible.
 - Prefer local calendar reads for agenda and morning-report calendar data.
 - For Fastmail automation, prefer app-password-backed IMAP/CalDAV workflows.
 - During active development, do not add backward-compatibility shims, aliases, or migration layers unless Patrick explicitly asks for them.

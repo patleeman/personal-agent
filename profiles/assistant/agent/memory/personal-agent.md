@@ -37,6 +37,7 @@ updated: 2026-03-12
 
 - Discord support was intentionally removed because Patrick does not use it.
 - Telegram gateway and daemon tasks remain first-class surfaces.
+- Background daemon work should default to the currently active profile instead of opportunistically running every profile's tasks.
 
 ## Core model direction
 
@@ -44,7 +45,13 @@ updated: 2026-03-12
 - Profiles are domain/context boundaries layered on top of a shared agent identity; in practice, each machine usually has one dominant active profile.
 - New conversations should start from durable profile memory (`AGENTS.md`, skills, memory docs), not from blank transcript state.
 - Tasks should be first-class, profile-scoped objects that can start in one surface, run elsewhere, and later be resumed or checked from another surface.
-- Portability should prioritize syncing durable memory/configuration and task summaries or metadata across machines over raw chat history.
+
+## Conversation durability and locality
+
+- Conversation state and metadata are machine-local runtime state under `~/.local/state/personal-agent/**`, not repo-managed profile artifacts.
+- Portable repo artifacts must not reference conversation ids; when something needs to sync across machines, use stable task/project identifiers plus summaries or other durable metadata instead.
+- Agent runs should survive UI restarts so the web UI can reconnect to durable local workers instead of owning the run lifecycle.
+- Archived/open conversation views should enumerate all locally available personal-agent conversations rather than filtering to the current cwd, and fork flows should stay in-app.
 
 ## Inspectability and context reduction
 
