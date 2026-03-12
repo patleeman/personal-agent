@@ -35,6 +35,8 @@ Durable UX preferences repeatedly expressed for the personal-agent web interface
 - Prefer human-readable labels in the UI. Fresh chats should render as `New Conversation`, raw ids should stay secondary, and open conversation titles/status should keep updating live without click-to-refresh.
 - Prefer conversation titles that summarize the session from the first assistant response rather than copying the raw first user prompt when that makes the list easier to scan.
 - Keep running state and needs-attention state separate. A running conversation does not automatically need attention; attention should surface when there is unseen output or the agent has stopped and now needs review.
+- When a turn contains many tool calls or thinking blocks, collapse that internal activity into a single turn-level disclosure so the triggering user message and the assistant's visible answer stay in view together.
+- Prefer conversation-centric turn rendering over a raw event-log feel; internal activity should stay inspectable on demand without dominating the main transcript.
 - Prefer explicit labels over multiple ambiguous status dots when distinguishing states such as `running` and `needs review`.
 
 ## Keyboard workflow
