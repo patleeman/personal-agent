@@ -1,11 +1,13 @@
 ---
 name: todoist
-description: Manage Todoist tasks and lists using direct Todoist REST API calls (curl + jq). Use when the user asks to add/list/update/complete tasks, or manage Todoist projects/sections.
+description: Manage Todoist tasks and lists using direct Todoist REST API calls (curl + jq). Use only when Patrick explicitly asks for Todoist tasks/projects/sections or Todoist-specific operations.
 ---
 
 # Todoist (API-first)
 
 Use direct HTTP requests to the Todoist REST API.
+
+Only use this skill when Patrick explicitly asks for Todoist. For default reminders or follow-ups, prefer Apple Reminders.
 
 ## Setup
 
