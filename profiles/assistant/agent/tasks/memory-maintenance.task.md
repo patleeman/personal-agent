@@ -1,7 +1,7 @@
 ---
 id: assistant-memory-maintenance
 enabled: true
-cron: "11 */3 * * *"
+cron: "11 */4 * * *"
 profile: "assistant"
 model: "openai-codex/gpt-5.4"
 cwd: "/Users/patrick/workingdir/personal-agent"

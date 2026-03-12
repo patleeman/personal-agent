@@ -1,7 +1,7 @@
 ---
 id: datadog-memory-maintenance
 enabled: true
-cron: "41 */3 * * *"
+cron: "41 */4 * * *"
 profile: "datadog"
 model: "openai-codex/gpt-5.4"
 cwd: "/Users/patrickc.lee/personal/personal-agent"
