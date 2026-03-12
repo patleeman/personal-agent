@@ -11,25 +11,9 @@ workspaces create <name> --repo web-ui
 
 ## Environment Setup (Inside Workspace)
 
-Restart the terminal after each step if commands are not found.
+Follow the latest FRON workspace guide and the `web-ui` repo's own onboarding instructions for tool installation and bootstrap. The exact Volta/Yarn/Linuxbrew/Watchman sequence changes frequently and is intentionally not duplicated here.
 
-```bash
-# Volta (Node.js manager)
-curl https://get.volta.sh | bash
-
-# Yarn
-curl -sS https://repo.yarnpkg.com/install | bash
-rm ~/.volta/bin/yarn ~/.volta/bin/yarnpkg
-
-# Run doctor
-bash doctor
-
-# Linuxbrew + Watchman
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> ~/.bashrc
-brew install watchman
-```
+If commands are missing after a setup step, restart the terminal and continue with the current documented bootstrap flow for `web-ui`.
 
 ## Run Dev Server
 
