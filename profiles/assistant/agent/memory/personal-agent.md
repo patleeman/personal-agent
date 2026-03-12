@@ -8,7 +8,7 @@ tags:
   - "personal-agent"
   - "tui"
   - "gateway"
-updated: 2026-03-10
+updated: 2026-03-12
 ---
 
 # personal-agent Project Notes
@@ -25,7 +25,14 @@ updated: 2026-03-10
 - Keep conversation-header metadata compact and low-noise: prefer plain text over pill badges, keep model/thinking/context on one row when practical, and avoid redundant manual resume controls when send already auto-resumes the session.
 - Context-usage UI and any breakdowns must be compaction-aware: derive from the effective current context, never from lifetime totals or the full transcript.
 - Treat the chat scrollbar as a quiet right-edge conversation rail that preserves transcript width and makes user turns more prominent landmarks than assistant turns.
+- Use human-readable project labels/descriptions as the primary UI text; opaque generated project ids are secondary metadata.
 - In the right rail/project UI, prefer a single focused project card with inline remove controls over nested pill-plus-box chrome.
+- Web conversations should stay cwd-agnostic by default: explicit `cwd` wins; otherwise inherit from a single referenced project's durable `repoRoot` instead of assuming the server working directory.
+
+## Conversation + inbox model
+
+- Keep the roles distinct: the conversation is the live work thread, while the inbox is the resurfacing layer for asynchronous or dormant work.
+- Do not duplicate the same result into both places when Patrick is already looking at the active conversation; use the inbox for background-task output and other completions that need to be surfaced later.
 
 ## Gateway scope
 
