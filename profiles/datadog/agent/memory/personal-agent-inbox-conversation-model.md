@@ -25,6 +25,7 @@ High-signal product guidance for how inbox should relate to conversations.
 ## What belongs in inbox
 
 - **Standalone activity** with no conversation, such as scheduled-task output, reports, daemon or gateway events, or imported external signals.
+- **Missed scheduled-task runs caused by daemon downtime** should create inbox items so the user can decide whether to rerun them manually.
 - **Inactive or archived conversations that now need attention**, such as background work finishing later, resumed conversations, blocked or needs-input states, failures, or new external input.
 
 ## What should not be duplicated
