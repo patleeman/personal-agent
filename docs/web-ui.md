@@ -202,7 +202,7 @@ The UI supports slash-style commands in the composer.
 Common ones include:
 
 - `/model` — pick a model
-- `/project new <description>` — create a project
+- `/project new <title>` — create a project quickly using the same text for both title and description
 - `/project reference <id>` — reference a project in this conversation
 - `/project unreference <id>` — stop referencing a project
 - `/fork` — fork a conversation branch

@@ -1,6 +1,6 @@
 import { parseSlashInput } from './slashMenu';
 
-export const PROJECT_SLASH_USAGE = 'Usage: /project new <description> | /project reference <id> | /project unreference <id>';
+export const PROJECT_SLASH_USAGE = 'Usage: /project new <title> | /project reference <id> | /project unreference <id>';
 
 export type ProjectSlashCommand =
   | { action: 'new'; description: string }
@@ -31,7 +31,7 @@ export function parseProjectSlashCommand(input: string): ProjectSlashParseResult
     if (!description) {
       return {
         kind: 'invalid',
-        message: 'Usage: /project new <description>',
+        message: 'Usage: /project new <title>',
       };
     }
 

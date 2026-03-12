@@ -1003,6 +1003,8 @@ function buildReferencedProjectsContext(projectIds: string[]): string {
 
     try {
       const project = readProject(paths.projectFile);
+      lineParts.push(`  title: ${project.title}`);
+      lineParts.push(`  description: ${project.description}`);
       if (project.repoRoot) {
         lineParts.push(`  repoRoot: ${project.repoRoot}`);
       }

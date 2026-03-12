@@ -43,7 +43,7 @@ describe('parseProjectSlashCommand', () => {
     });
     expect(parseProjectSlashCommand('/project new')).toEqual({
       kind: 'invalid',
-      message: 'Usage: /project new <description>',
+      message: 'Usage: /project new <title>',
     });
   });
 });
