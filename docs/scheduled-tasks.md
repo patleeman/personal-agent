@@ -134,7 +134,7 @@ Important behavior to understand:
 - overlap is prevented; if one run is still active, the next due run is skipped
 - retries happen up to the configured retry limit
 - each run writes a log
-- successful and failed runs create inbox activity by default when the task file lives under profile resources
+- successful and failed runs create local inbox activity by default when the task file lives under profile resources
 
 One-time tasks resolve once and do not run again.
 

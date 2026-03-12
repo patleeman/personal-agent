@@ -52,7 +52,7 @@ export function buildMentionItems(input: {
       id: `@${project.id}`,
       label: project.id,
       kind: 'project' as const,
-      title: project.id,
+      title: project.title,
       summary: project.summary || project.description,
     })),
     ...input.tasks.map((task) => ({

@@ -37,7 +37,9 @@ type ProjectAction = (typeof PROJECT_ACTION_VALUES)[number];
 const ProjectToolParams = Type.Object({
   action: Type.Union(PROJECT_ACTION_VALUES.map((value) => Type.Literal(value))),
   projectId: Type.Optional(Type.String({ description: 'Project id, for example web-ui. Required for get/reference/unreference/update actions.' })),
+  title: Type.Optional(Type.String({ description: 'Project, milestone, or task title depending on the action.' })),
   description: Type.Optional(Type.String({ description: 'Project description for create/update actions.' })),
+  repoRoot: Type.Optional(Type.String({ description: 'Project repo root. Used as the conversation cwd when this project is the sole referenced project with a repo root and no explicit cwd is set.' })),
   summary: Type.Optional(Type.String({ description: 'Project or milestone summary text.' })),
   status: Type.Optional(Type.String({ description: 'Project status for create/update actions.' })),
   currentFocus: Type.Optional(Type.String({ description: 'Current focus for the project.' })),
@@ -46,7 +48,6 @@ const ProjectToolParams = Type.Object({
   currentMilestoneId: Type.Optional(Type.String({ description: 'Current milestone id for the project.' })),
   referenceInConversation: Type.Optional(Type.Boolean({ description: 'Whether to reference the project in the current conversation. Defaults to true for create.' })),
   milestoneId: Type.Optional(Type.String({ description: 'Milestone id for update_milestone actions.' })),
-  title: Type.Optional(Type.String({ description: 'Milestone or task title.' })),
   milestoneStatus: Type.Optional(Type.String({ description: 'Milestone status.' })),
   makeCurrent: Type.Optional(Type.Boolean({ description: 'Set the milestone as the current milestone.' })),
   taskId: Type.Optional(Type.String({ description: 'Task id for update_task actions.' })),
@@ -64,7 +65,9 @@ function readRequiredString(value: string | undefined, label: string): string {
 }
 
 function hasProjectMutation(params: {
+  title?: string;
   description?: string;
+  repoRoot?: string;
   summary?: string;
   status?: string;
   currentFocus?: string;
@@ -72,7 +75,9 @@ function hasProjectMutation(params: {
   recentProgress?: string[];
   currentMilestoneId?: string;
 }): boolean {
-  return params.description !== undefined
+  return params.title !== undefined
+    || params.description !== undefined
+    || params.repoRoot !== undefined
     || params.summary !== undefined
     || params.status !== undefined
     || params.currentFocus !== undefined
@@ -121,7 +126,9 @@ function formatProjectList(details: ProjectDetail[], relatedProjectIds: string[]
   ];
 
   for (const detail of details) {
-    lines.push(`- ${detail.project.id} [${detail.project.status}] ${detail.project.description}`);
+    const description = detail.project.description.trim();
+    const suffix = description.length > 0 ? ` — ${description}` : '';
+    lines.push(`- ${detail.project.id} [${detail.project.status}] ${detail.project.title}${suffix}`);
   }
 
   return lines.join('\n');
@@ -135,11 +142,16 @@ function formatProjectDetail(detail: ProjectDetail, relatedProjectIds: string[])
 
   const lines = [
     `Project ${detail.project.id}`,
+    `Title: ${detail.project.title}`,
     `Referenced in this conversation: ${formatConversationReferences(relatedProjectIds)}`,
     `Status: ${detail.project.status}`,
     `Description: ${detail.project.description}`,
     `Summary: ${detail.project.summary}`,
   ];
+
+  if (detail.project.repoRoot) {
+    lines.push(`Repo root: ${detail.project.repoRoot}`);
+  }
 
   if (detail.project.currentFocus) {
     lines.push(`Current focus: ${detail.project.currentFocus}`);
@@ -182,9 +194,13 @@ function formatProjectDetail(detail: ProjectDetail, relatedProjectIds: string[])
   return lines.join('\n');
 }
 
-function getConversationProjectIds(repoRoot: string, profile: string, conversationId: string): string[] {
+function getConversationProjectIds(
+  profile: string,
+  conversationId: string,
+  stateRoot?: string,
+): string[] {
   return getConversationProjectLink({
-    repoRoot,
+    stateRoot,
     profile,
     conversationId,
   })?.relatedProjectIds ?? [];
@@ -192,6 +208,7 @@ function getConversationProjectIds(repoRoot: string, profile: string, conversati
 
 export function createProjectAgentExtension(options: {
   repoRoot: string;
+  stateRoot?: string;
   getCurrentProfile: () => string;
 }): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
@@ -210,7 +227,7 @@ export function createProjectAgentExtension(options: {
         try {
           const profile = options.getCurrentProfile();
           const conversationId = ctx.sessionManager.getSessionId();
-          const relatedProjectIds = getConversationProjectIds(options.repoRoot, profile, conversationId);
+          const relatedProjectIds = getConversationProjectIds(profile, conversationId, options.stateRoot);
 
           switch (params.action as ProjectAction) {
             case 'list': {
@@ -236,7 +253,9 @@ export function createProjectAgentExtension(options: {
               const detail = createProjectRecord({
                 repoRoot: options.repoRoot,
                 profile,
+                title: readRequiredString(params.title, 'title'),
                 description: readRequiredString(params.description, 'description'),
+                ...(params.repoRoot !== undefined ? { projectRepoRoot: params.repoRoot } : {}),
                 ...(params.summary !== undefined ? { summary: params.summary } : {}),
                 ...(params.status !== undefined ? { status: params.status } : {}),
                 ...(params.currentFocus !== undefined ? { currentFocus: params.currentFocus } : {}),
@@ -248,7 +267,7 @@ export function createProjectAgentExtension(options: {
               const shouldReference = params.referenceInConversation ?? true;
               if (shouldReference) {
                 addConversationProjectLink({
-                  repoRoot: options.repoRoot,
+                  stateRoot: options.stateRoot,
                   profile,
                   conversationId,
                   projectId: createdProjectId,
@@ -257,7 +276,7 @@ export function createProjectAgentExtension(options: {
 
               invalidateAppTopics('projects');
               const nextRelatedProjectIds = shouldReference
-                ? getConversationProjectIds(options.repoRoot, profile, conversationId)
+                ? getConversationProjectIds(profile, conversationId, options.stateRoot)
                 : relatedProjectIds;
 
               return {
@@ -273,7 +292,7 @@ export function createProjectAgentExtension(options: {
               const projectId = readRequiredString(params.projectId, 'projectId');
               readProjectDetailFromProject({ repoRoot: options.repoRoot, profile, projectId });
               const document = addConversationProjectLink({
-                repoRoot: options.repoRoot,
+                stateRoot: options.stateRoot,
                 profile,
                 conversationId,
                 projectId,
@@ -288,7 +307,7 @@ export function createProjectAgentExtension(options: {
             case 'unreference': {
               const projectId = readRequiredString(params.projectId, 'projectId');
               const document = removeConversationProjectLink({
-                repoRoot: options.repoRoot,
+                stateRoot: options.stateRoot,
                 profile,
                 conversationId,
                 projectId,
@@ -310,7 +329,9 @@ export function createProjectAgentExtension(options: {
                 repoRoot: options.repoRoot,
                 profile,
                 projectId,
+                ...(params.title !== undefined ? { title: params.title } : {}),
                 ...(params.description !== undefined ? { description: params.description } : {}),
+                ...(params.repoRoot !== undefined ? { projectRepoRoot: params.repoRoot } : {}),
                 ...(params.summary !== undefined ? { summary: params.summary } : {}),
                 ...(params.status !== undefined ? { status: params.status } : {}),
                 ...(params.currentFocus !== undefined ? { currentFocus: params.currentFocus } : {}),

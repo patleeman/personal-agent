@@ -26,7 +26,7 @@ function configureSessionEnv(sessionsDir: string): string {
 
 function writeSessionFile(options: {
   sessionsDir: string;
-  cwdSlug?: string;
+  cwdSlug?: string | null;
   fileName?: string;
   sessionId: string;
   timestamp?: string;
@@ -37,7 +37,7 @@ function writeSessionFile(options: {
 }): string {
   const cwdSlug = options.cwdSlug ?? '--tmp-project--';
   const fileName = options.fileName ?? `2026-03-11T12-00-00-000Z_${options.sessionId}.jsonl`;
-  const dir = join(options.sessionsDir, cwdSlug);
+  const dir = cwdSlug ? join(options.sessionsDir, cwdSlug) : options.sessionsDir;
   mkdirSync(dir, { recursive: true });
 
   const timestamp = options.timestamp ?? '2026-03-11T12:00:00.000Z';
@@ -174,6 +174,39 @@ describe('sessions', () => {
       title: 'Updated title that is definitely different',
       messageCount: 3,
     }));
+  });
+
+  it('lists sessions stored directly in the sessions root after restart', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    writeSessionFile({
+      sessionsDir,
+      cwdSlug: null,
+      sessionId: 'session-root',
+      title: 'Root-level session',
+      assistantTexts: ['Root reply'],
+    });
+
+    expect(listSessions()).toEqual([
+      expect.objectContaining({
+        id: 'session-root',
+        title: 'Root-level session',
+        cwd: '/tmp/project',
+      }),
+    ]);
+
+    clearSessionCaches();
+
+    expect(listSessions()).toEqual([
+      expect.objectContaining({
+        id: 'session-root',
+        title: 'Root-level session',
+      }),
+    ]);
+    expect(readSessionBlocks('session-root')?.blocks.filter((block) => block.type === 'text').map((block) => block.text)).toEqual([
+      'Root reply',
+    ]);
   });
 
   it('refreshes persisted metadata after a restart when the file changes', () => {

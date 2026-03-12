@@ -34,35 +34,131 @@ function MentionText({ text }: { text: string }) {
   );
 }
 
-function renderText(text: string) {
-  return text.split('\n').map((line, i) => {
-    const isH2 = line.startsWith('## ');
-    const isH3 = line.startsWith('### ') || (line.startsWith('**') && line.endsWith('**'));
-    const isBullet = /^[-*] /.test(line);
-    const isNumbered = /^\d+\. /.test(line);
-    const isEmpty = line.trim() === '';
+type ParsedMarkdownLikeLine = {
+  kind: 'empty' | 'h2' | 'h3' | 'bullet' | 'numbered' | 'paragraph';
+  leadingWhitespace: number;
+  content: string;
+  marker?: string;
+};
 
-    if (isEmpty) return <div key={i} className="h-2" />;
-    if (isH2) return <h2 key={i} className="text-sm font-semibold text-primary mt-3 mb-1">{line.slice(3)}</h2>;
-    if (isH3 && line.startsWith('**')) return (
-      <p key={i} className="text-sm leading-relaxed font-semibold text-primary mt-2"><MentionText text={line} /></p>
-    );
-    if (isBullet) return (
-      <div key={i} className="flex gap-2 items-start">
-        <span className="text-dim mt-0.5 shrink-0 select-none">•</span>
-        <p className="text-sm leading-relaxed"><MentionText text={line.slice(2)} /></p>
-      </div>
-    );
-    if (isNumbered) {
-      const dot = line.indexOf('. ');
-      return (
-        <div key={i} className="flex gap-2 items-start">
-          <span className="text-dim mt-0.5 shrink-0 font-mono text-xs">{line.slice(0, dot + 1)}</span>
-          <p className="text-sm leading-relaxed"><MentionText text={line.slice(dot + 2)} /></p>
-        </div>
-      );
+function countLeadingWhitespace(line: string): number {
+  let count = 0;
+
+  for (const char of line) {
+    if (char === ' ') {
+      count += 1;
+      continue;
     }
-    return <p key={i} className="text-sm leading-relaxed"><MentionText text={line} /></p>;
+
+    if (char === '\t') {
+      count += 2;
+      continue;
+    }
+
+    break;
+  }
+
+  return count;
+}
+
+export function getRenderedMarkdownIndentPx(leadingWhitespace: number): number {
+  return Math.min(Math.max(leadingWhitespace, 0) * 8, 96);
+}
+
+export function parseMarkdownLikeLine(line: string): ParsedMarkdownLikeLine {
+  const leadingWhitespace = countLeadingWhitespace(line);
+  const trimmed = line.trimStart();
+
+  if (trimmed.length === 0) {
+    return {
+      kind: 'empty',
+      leadingWhitespace,
+      content: '',
+    };
+  }
+
+  if (trimmed.startsWith('## ')) {
+    return {
+      kind: 'h2',
+      leadingWhitespace,
+      content: trimmed.slice(3),
+    };
+  }
+
+  if (trimmed.startsWith('### ')) {
+    return {
+      kind: 'h3',
+      leadingWhitespace,
+      content: trimmed.slice(4),
+    };
+  }
+
+  if (trimmed.startsWith('**') && trimmed.endsWith('**')) {
+    return {
+      kind: 'h3',
+      leadingWhitespace,
+      content: trimmed,
+    };
+  }
+
+  const bulletMatch = trimmed.match(/^[-*]\s+(.*)$/);
+  if (bulletMatch) {
+    return {
+      kind: 'bullet',
+      leadingWhitespace,
+      content: bulletMatch[1] ?? '',
+      marker: '•',
+    };
+  }
+
+  const numberedMatch = trimmed.match(/^(\d+)\.\s+(.*)$/);
+  if (numberedMatch) {
+    return {
+      kind: 'numbered',
+      leadingWhitespace,
+      content: numberedMatch[2] ?? '',
+      marker: `${numberedMatch[1]}.`,
+    };
+  }
+
+  return {
+    kind: 'paragraph',
+    leadingWhitespace,
+    content: trimmed,
+  };
+}
+
+export function renderText(text: string) {
+  return text.split('\n').map((line, i) => {
+    const parsed = parseMarkdownLikeLine(line);
+    const indentPx = getRenderedMarkdownIndentPx(parsed.leadingWhitespace);
+    const indentStyle = indentPx > 0 ? { paddingLeft: `${indentPx}px` } : undefined;
+
+    switch (parsed.kind) {
+      case 'empty':
+        return <div key={i} className="h-2" />;
+      case 'h2':
+        return <h2 key={i} className="text-sm font-semibold text-primary mt-3 mb-1">{parsed.content}</h2>;
+      case 'h3':
+        return <p key={i} className="text-sm leading-relaxed font-semibold text-primary mt-2"><MentionText text={parsed.content} /></p>;
+      case 'bullet':
+        return (
+          <div key={i} className="flex gap-2 items-start" style={indentStyle}>
+            <span className="text-dim mt-0.5 shrink-0 select-none">{parsed.marker}</span>
+            <p className="text-sm leading-relaxed"><MentionText text={parsed.content} /></p>
+          </div>
+        );
+      case 'numbered':
+        return (
+          <div key={i} className="flex gap-2 items-start" style={indentStyle}>
+            <span className="text-dim mt-0.5 shrink-0 font-mono text-xs">{parsed.marker}</span>
+            <p className="text-sm leading-relaxed"><MentionText text={parsed.content} /></p>
+          </div>
+        );
+      case 'paragraph':
+      default:
+        return <p key={i} className="text-sm leading-relaxed" style={indentStyle}><MentionText text={parsed.content} /></p>;
+    }
   });
 }
 
@@ -130,6 +226,34 @@ export function shouldAutoOpenConversationBlock(
   }
 
   return false;
+}
+
+export function getStreamingStatusLabel(messages: MessageBlock[], isStreaming: boolean): string | null {
+  if (!isStreaming) {
+    return null;
+  }
+
+  const last = messages[messages.length - 1];
+  if (!last) {
+    return 'Working…';
+  }
+
+  switch (last.type) {
+    case 'thinking':
+      return 'Thinking…';
+    case 'tool_use':
+      return last.status === 'running' || !!last.running
+        ? `Running ${toolMeta(last.tool).label}…`
+        : 'Working…';
+    case 'subagent':
+      return last.status === 'running'
+        ? `Running ${last.name}…`
+        : 'Working…';
+    case 'text':
+      return 'Responding…';
+    default:
+      return 'Working…';
+  }
 }
 
 // ── ToolBlock ─────────────────────────────────────────────────────────────────
@@ -376,7 +500,7 @@ function MsgActions({
         <button
           onClick={() => { void handleFork(); }}
           className={cx('ui-action-button', isForking && 'text-accent')}
-          title="Fork from here in a new tab"
+          title="Fork into a new conversation from here"
           disabled={isForking}
         >
           {isForking ? '⑂ forking…' : '⑂ fork'}
@@ -437,10 +561,14 @@ function UserMessage({ block }: { block: Extract<MessageBlock, { type: 'user' }>
 function AssistantMessage({
   block,
   onFork,
+  showCursor = false,
 }: {
   block: Extract<MessageBlock, { type: 'text' }>;
   onFork?: () => Promise<void> | void;
+  showCursor?: boolean;
 }) {
+  const shouldShowCursor = showCursor || !!block.streaming;
+
   return (
     <div className="group flex gap-3 items-start">
       <div className="ui-chat-avatar mt-0.5">
@@ -449,7 +577,7 @@ function AssistantMessage({
       <div className="flex-1 min-w-0 space-y-1.5">
         <div className="ui-message-card-assistant text-primary space-y-1">
           {renderText(block.text)}
-          {block.streaming && (
+          {shouldShowCursor && (
             <span
               className="inline-block w-[2px] h-[14px] bg-accent ml-0.5 rounded-sm"
               style={{ animation: 'cursorBlink 1s step-end infinite', verticalAlign: 'text-bottom' }}
@@ -460,6 +588,20 @@ function AssistantMessage({
           <p className="ui-message-meta">{timeAgo(block.ts)}</p>
           <MsgActions text={block.text} onFork={onFork} />
         </div>
+      </div>
+    </div>
+  );
+}
+
+function StreamingIndicator({ label }: { label: string }) {
+  return (
+    <div className="flex gap-3 items-start" role="status" aria-live="polite">
+      <div className="ui-chat-avatar mt-0.5">
+        <span className="ui-chat-avatar-mark">pa</span>
+      </div>
+      <div className="flex items-center gap-2 pt-1 text-[12px] text-secondary italic">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent animate-pulse not-italic" />
+        <span>{label}</span>
       </div>
     </div>
   );
@@ -476,6 +618,10 @@ export function ChatView({
   isStreaming?: boolean;
   onForkMessage?: (messageIndex: number) => Promise<void> | void;
 }) {
+  const streamingStatusLabel = getStreamingStatusLabel(messages, isStreaming);
+  const lastBlock = messages[messages.length - 1];
+  const showStreamingIndicator = !!streamingStatusLabel && lastBlock?.type !== 'text';
+
   return (
     <>
       <style>{`@keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
@@ -487,12 +633,13 @@ export function ChatView({
               ? 'assistant'
               : undefined;
           const autoOpen = shouldAutoOpenConversationBlock(block, i, messages.length, isStreaming);
+          const showStreamingCursor = isStreaming && block.type === 'text' && i === messages.length - 1;
 
           const el = (() => { switch (block.type) {
             case 'user':
               return <UserMessage key={i} block={block} />;
             case 'text':
-              return <AssistantMessage key={i} block={block} onFork={onForkMessage ? () => onForkMessage(i) : undefined} />;
+              return <AssistantMessage key={i} block={block} showCursor={showStreamingCursor} onFork={onForkMessage ? () => onForkMessage(i) : undefined} />;
             case 'thinking':
               return <ThinkingBlock key={i} block={block} autoOpen={autoOpen} />;
             case 'tool_use':
@@ -518,6 +665,7 @@ export function ChatView({
             </div>
           ) : null;
         })}
+        {showStreamingIndicator && <StreamingIndicator label={streamingStatusLabel ?? 'Working…'} />}
       </div>
     </>
   );

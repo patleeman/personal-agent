@@ -4,6 +4,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import {
   createEmptyDeferredResumeState,
+  getActivityConversationLink,
   listProfileActivityEntries,
   saveDeferredResumeState,
   scheduleDeferredResume,
@@ -129,7 +130,6 @@ describe('deferred resume daemon module', () => {
     );
 
     setConversationProjectLinks({
-      repoRoot,
       profile: 'assistant',
       conversationId: 'conv-123',
       relatedProjectIds: ['web-ui'],
@@ -161,11 +161,15 @@ describe('deferred resume daemon module', () => {
       readyAt: '2026-03-10T12:05:00.000Z',
     });
 
-    const activity = listProfileActivityEntries({ repoRoot, profile: 'assistant' });
+    const activity = listProfileActivityEntries({ stateRoot, profile: 'assistant' });
     expect(activity).toHaveLength(1);
     expect(activity[0]?.entry.summary).toBe('Deferred resume fired. Open the conversation to continue.');
-    expect(activity[0]?.entry.relatedConversationIds).toEqual(['conv-123']);
     expect(activity[0]?.entry.relatedProjectIds).toEqual(['web-ui']);
+    expect(getActivityConversationLink({
+      stateRoot,
+      profile: 'assistant',
+      activityId: activity[0]!.entry.id,
+    })?.relatedConversationIds).toEqual(['conv-123']);
 
     expect(published).toContainEqual({
       type: 'deferred-resume.tick.completed',

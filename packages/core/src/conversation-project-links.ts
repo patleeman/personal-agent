@@ -1,13 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { validateProjectId } from './projects.js';
+import { getStateRoot } from './runtime/paths.js';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 const CONVERSATION_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]*$/;
 
 export interface ResolveConversationLinkOptions {
-  repoRoot?: string;
   profile: string;
+  stateRoot?: string;
 }
 
 export interface ResolveConversationLinkPathOptions extends ResolveConversationLinkOptions {
@@ -20,8 +21,8 @@ export interface ConversationProjectLinkDocument {
   relatedProjectIds: string[];
 }
 
-function getRepoRoot(repoRoot?: string): string {
-  return resolve(repoRoot ?? process.env.PERSONAL_AGENT_REPO_ROOT ?? process.cwd());
+function getConversationLinkStateRoot(stateRoot?: string): string {
+  return resolve(stateRoot ?? getStateRoot());
 }
 
 function validateProfileName(profile: string): void {
@@ -42,7 +43,13 @@ export function validateConversationId(conversationId: string): void {
 
 export function resolveProfileConversationLinksDir(options: ResolveConversationLinkOptions): string {
   validateProfileName(options.profile);
-  return join(getRepoRoot(options.repoRoot), 'profiles', options.profile, 'agent', 'conversations');
+  return join(
+    getConversationLinkStateRoot(options.stateRoot),
+    'pi-agent',
+    'state',
+    'conversation-project-links',
+    options.profile,
+  );
 }
 
 export function resolveConversationLinkPath(options: ResolveConversationLinkPathOptions): string {
@@ -98,7 +105,7 @@ export function getConversationProjectLink(options: ResolveConversationLinkPathO
 }
 
 export function writeConversationProjectLink(options: {
-  repoRoot?: string;
+  stateRoot?: string;
   profile: string;
   document: ConversationProjectLinkDocument;
 }): string {
@@ -106,7 +113,7 @@ export function writeConversationProjectLink(options: {
   validateConversationId(options.document.conversationId);
 
   const path = resolveConversationLinkPath({
-    repoRoot: options.repoRoot,
+    stateRoot: options.stateRoot,
     profile: options.profile,
     conversationId: options.document.conversationId,
   });
@@ -117,13 +124,13 @@ export function writeConversationProjectLink(options: {
     relatedProjectIds: normalizeRelatedProjectIds(options.document.relatedProjectIds),
   };
 
-  mkdirSync(resolveProfileConversationLinksDir({ repoRoot: options.repoRoot, profile: options.profile }), { recursive: true });
+  mkdirSync(resolveProfileConversationLinksDir({ stateRoot: options.stateRoot, profile: options.profile }), { recursive: true });
   writeFileSync(path, JSON.stringify(normalized, null, 2) + '\n');
   return path;
 }
 
 export function setConversationProjectLinks(options: {
-  repoRoot?: string;
+  stateRoot?: string;
   profile: string;
   conversationId: string;
   relatedProjectIds: string[];
@@ -136,7 +143,7 @@ export function setConversationProjectLinks(options: {
   };
 
   writeConversationProjectLink({
-    repoRoot: options.repoRoot,
+    stateRoot: options.stateRoot,
     profile: options.profile,
     document,
   });
@@ -145,7 +152,7 @@ export function setConversationProjectLinks(options: {
 }
 
 export function addConversationProjectLink(options: {
-  repoRoot?: string;
+  stateRoot?: string;
   profile: string;
   conversationId: string;
   projectId: string;
@@ -153,7 +160,7 @@ export function addConversationProjectLink(options: {
 }): ConversationProjectLinkDocument {
   const existing = getConversationProjectLink(options);
   return setConversationProjectLinks({
-    repoRoot: options.repoRoot,
+    stateRoot: options.stateRoot,
     profile: options.profile,
     conversationId: options.conversationId,
     relatedProjectIds: [
@@ -165,7 +172,7 @@ export function addConversationProjectLink(options: {
 }
 
 export function removeConversationProjectLink(options: {
-  repoRoot?: string;
+  stateRoot?: string;
   profile: string;
   conversationId: string;
   projectId: string;
@@ -174,7 +181,7 @@ export function removeConversationProjectLink(options: {
   validateProjectId(options.projectId);
   const existing = getConversationProjectLink(options);
   return setConversationProjectLinks({
-    repoRoot: options.repoRoot,
+    stateRoot: options.stateRoot,
     profile: options.profile,
     conversationId: options.conversationId,
     relatedProjectIds: (existing?.relatedProjectIds ?? []).filter((id) => id !== options.projectId),

@@ -4,7 +4,7 @@ The web UI is the easiest way to work with `personal-agent` day to day.
 
 It gives you one place to see:
 
-- inbox activity
+- inbox attention
 - conversations
 - projects
 - scheduled tasks
@@ -42,20 +42,23 @@ Use the UI when you want:
 
 ### Inbox
 
-The Inbox page shows activity items for the active profile.
+The Inbox page shows:
+
+- standalone inbox activity
+- archived conversations that need attention
 
 Typical examples:
 
 - scheduled task output
 - deferred resume activity
 - background failures
-- other asynchronous summaries
+- conversations resurfaced by linked background work
 
 You can:
 
 - filter unread vs all
 - mark everything read
-- open individual items
+- open individual items or conversations
 
 See [Inbox and Activity](./inbox.md).
 
@@ -81,7 +84,7 @@ Projects are durable work trackers.
 
 From the Projects page you can:
 
-- create a project from a short description
+- create a project from a short title plus a longer description
 - inspect current status, blockers, milestones, and tasks
 - edit the canonical `PROJECT.yaml`
 - link project state to active conversations

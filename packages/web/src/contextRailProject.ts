@@ -60,7 +60,7 @@ export function pickCurrentMilestone(plan: ProjectPlan): ProjectMilestone | unde
   return plan.milestones[0];
 }
 
-export function summarizeProjectPreview(project: Pick<ProjectRecord, 'summary' | 'currentFocus' | 'blockers'>): string {
+export function summarizeProjectPreview(project: Pick<ProjectRecord, 'summary' | 'currentFocus' | 'blockers' | 'description'>): string {
   const currentFocus = project.currentFocus?.trim();
   if (currentFocus) {
     return currentFocus;
@@ -69,6 +69,11 @@ export function summarizeProjectPreview(project: Pick<ProjectRecord, 'summary' |
   const summary = project.summary.trim();
   if (summary.length > 0) {
     return summary;
+  }
+
+  const description = project.description.trim();
+  if (description.length > 0) {
+    return description;
   }
 
   if (hasMeaningfulBlockers(project.blockers)) {

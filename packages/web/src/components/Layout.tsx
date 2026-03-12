@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { ContextRail } from './ContextRail';
 import { Sidebar } from './Sidebar';
 import { clampPanelWidth, getRailLayoutPrefs, getRailMaxWidth } from '../layoutSizing';
+import { SIDEBAR_WIDTH_STORAGE_KEY } from '../localSettings';
 
 // ── Resize hook ───────────────────────────────────────────────────────────────
 
@@ -136,7 +137,7 @@ function useViewportWidth() {
 export function Layout() {
   const location = useLocation();
   const viewportWidth = useViewportWidth();
-  const sidebar = useResize({ initial: 224, min: 160, max: 320, storageKey: 'pa:sidebar-width', side: 'left'  });
+  const sidebar = useResize({ initial: 224, min: 160, max: 320, storageKey: SIDEBAR_WIDTH_STORAGE_KEY, side: 'left'  });
   const railPrefs = getRailLayoutPrefs(location.pathname);
   const railMinWidth = 160;
   const railMaxWidth = getRailMaxWidth({

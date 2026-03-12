@@ -22,6 +22,13 @@
 - Keep non-markdown automation state outside memory (for example `agent/state/...`).
 - Keep reusable cross-project workflows in `skills/`; keep durable behavior/preferences in `AGENTS.md`.
 
+## Conversation locality boundary
+
+- Conversations and session ids are local runtime state, not portable profile state.
+- Do not add repo-managed files or portable metadata keyed by conversation id. This includes things like `profiles/<profile>/agent/conversations/`, repo-managed frontmatter fields such as `relatedConversationIds`, or any other portable schema that persists conversation ids.
+- If a portable artifact needs to relate to interactive work, use stable portable identifiers (for example project ids, task ids, artifact paths, timestamps) and keep any conversation↔artifact mapping under local state in `~/.local/state/personal-agent/**`.
+- Treat conversation identity as machine-local/private context that must not leak into versioned repo resources just because `.gitignore` would hide new files.
+
 ##  Development 
 
 - For personal-agent web UI work, prefer server-pushed updates (SSE + POST) over client polling when the backend can publish change events.

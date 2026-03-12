@@ -1,8 +1,13 @@
-import { chmodSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
-import { createProjectActivityEntry, writeProfileActivityEntry } from '@personal-agent/core';
+import {
+  createProjectActivityEntry,
+  getActivityConversationLink,
+  setActivityConversationLinks,
+  writeProfileActivityEntry,
+} from '@personal-agent/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runCli } from './index.js';
 
@@ -35,6 +40,20 @@ function createTestRepo(): string {
   writeFile(join(repo, 'profiles/datadog/agent/AGENTS.md'), '# Datadog\n');
 
   return repo;
+}
+
+function writeSessionFile(stateRoot: string, relativePath: string, lines: unknown[]): string {
+  const filePath = join(stateRoot, 'pi-agent', 'sessions', relativePath);
+  writeFile(filePath, lines.map((line) => JSON.stringify(line)).join('\n') + '\n');
+  return filePath;
+}
+
+function activityPath(stateRoot: string, profile: string, activityId: string): string {
+  return join(stateRoot, 'pi-agent', 'state', 'inbox', profile, 'activities', `${activityId}.md`);
+}
+
+function activityReadStatePath(stateRoot: string, profile: string): string {
+  return join(stateRoot, 'pi-agent', 'state', 'inbox', profile, 'read-state.json');
 }
 
 function createFakePiBinary(argsLogPath: string): string {
@@ -70,6 +89,7 @@ beforeEach(() => {
     PERSONAL_AGENT_DISABLE_DAEMON_EVENTS: '1',
     PERSONAL_AGENT_NO_DAEMON_PROMPT: '1',
     PERSONAL_AGENT_CONFIG_FILE: configPath,
+    PERSONAL_AGENT_STATE_ROOT: createTempDir('personal-agent-cli-state-'),
     PI_SESSION_DIR: createTempDir('pi-session-')
   };
 });
@@ -342,8 +362,252 @@ describe('CLI command flows', () => {
     const output = logs.join('\n');
     expect(output).toContain('"id": "daily-report"');
     expect(output).toContain('"kind": "scheduled-task"');
+    expect(output).toContain('"read": false');
 
     logSpy.mockRestore();
+  });
+
+  it('creates inbox items from the CLI', async () => {
+    const repo = createTestRepo();
+    const configDir = createTempDir('personal-agent-cli-config-');
+    const configPath = join(configDir, 'config.json');
+
+    writeFileSync(configPath, JSON.stringify({ defaultProfile: 'datadog' }));
+
+    process.env.PERSONAL_AGENT_REPO_ROOT = repo;
+    process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
+      logs.push(String(message ?? ''));
+    });
+
+    expect(await runCli([
+      'inbox',
+      'create',
+      'Daily report ready.',
+      '--id',
+      'daily-report',
+      '--kind',
+      'note',
+      '--details',
+      'Saved the report artifact.',
+      '--project',
+      'reporting',
+      '--conversation',
+      'conv-123',
+      '--json',
+    ])).toBe(0);
+
+    const output = logs.join('\n');
+    expect(output).toContain('"id": "daily-report"');
+    expect(output).toContain('"summary": "Daily report ready."');
+    expect(output).toContain('"read": false');
+
+    const createdActivityPath = activityPath(process.env.PERSONAL_AGENT_STATE_ROOT!, 'datadog', 'daily-report');
+    expect(existsSync(createdActivityPath)).toBe(true);
+
+    const activityMarkdown = readFileSync(createdActivityPath, 'utf-8');
+    expect(activityMarkdown).toContain('Daily report ready.');
+    expect(activityMarkdown).toContain('Saved the report artifact.');
+    expect(activityMarkdown).toContain('relatedProjectIds: reporting');
+    expect(activityMarkdown).not.toContain('relatedConversationIds');
+
+    expect(getActivityConversationLink({
+      stateRoot: process.env.PERSONAL_AGENT_STATE_ROOT,
+      profile: 'datadog',
+      activityId: 'daily-report',
+    })).toEqual({
+      activityId: 'daily-report',
+      updatedAt: expect.any(String),
+      relatedConversationIds: ['conv-123'],
+    });
+
+    logSpy.mockRestore();
+  });
+
+  it('marks inbox items read and unread from the CLI', async () => {
+    const repo = createTestRepo();
+    const configDir = createTempDir('personal-agent-cli-config-');
+    const configPath = join(configDir, 'config.json');
+
+    writeFileSync(configPath, JSON.stringify({ defaultProfile: 'datadog' }));
+
+    writeProfileActivityEntry({
+      repoRoot: repo,
+      profile: 'datadog',
+      entry: createProjectActivityEntry({
+        id: 'daily-report',
+        createdAt: '2026-03-10T14:00:00.000Z',
+        profile: 'datadog',
+        kind: 'scheduled-task',
+        summary: 'Daily report completed.',
+      }),
+    });
+
+    process.env.PERSONAL_AGENT_REPO_ROOT = repo;
+    process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
+
+    expect(await runCli(['inbox', 'read', 'daily-report'])).toBe(0);
+    expect(readFileSync(activityReadStatePath(process.env.PERSONAL_AGENT_STATE_ROOT!, 'datadog'), 'utf-8'))
+      .toBe('["daily-report"]');
+
+    let logs: string[] = [];
+    let logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
+      logs.push(String(message ?? ''));
+    });
+
+    expect(await runCli(['inbox', 'list', '--unread', '--json'])).toBe(0);
+    expect(logs.join('\n')).toContain('"filteredCount": 0');
+    logSpy.mockRestore();
+
+    expect(await runCli(['inbox', 'unread', 'daily-report'])).toBe(0);
+    expect(readFileSync(activityReadStatePath(process.env.PERSONAL_AGENT_STATE_ROOT!, 'datadog'), 'utf-8'))
+      .toBe('[]');
+
+    logs = [];
+    logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
+      logs.push(String(message ?? ''));
+    });
+
+    expect(await runCli(['inbox', 'show', 'daily-report', '--json'])).toBe(0);
+    expect(logs.join('\n')).toContain('"read": false');
+    logSpy.mockRestore();
+  });
+
+  it('surfaces conversation-linked activity as a conversation inbox item', async () => {
+    const repo = createTestRepo();
+    const stateRoot = createTempDir('personal-agent-cli-state-');
+    const configDir = createTempDir('personal-agent-cli-config-');
+    const configPath = join(configDir, 'config.json');
+
+    writeFileSync(configPath, JSON.stringify({ defaultProfile: 'datadog' }));
+    writeSessionFile(stateRoot, '--Users-patrick-project/2026-03-12T12-00-00-000Z_conv-123.jsonl', [
+      { type: 'session', id: 'conv-123', timestamp: '2026-03-12T12:00:00.000Z', cwd: '/Users/patrick/project' },
+      { type: 'message', timestamp: '2026-03-12T12:01:00.000Z', message: { role: 'user', content: [{ type: 'text', text: 'Review the nightly run' }] } },
+    ]);
+
+    writeProfileActivityEntry({
+      stateRoot,
+      repoRoot: repo,
+      profile: 'datadog',
+      entry: createProjectActivityEntry({
+        id: 'nightly-run',
+        createdAt: '2026-03-12T12:05:00.000Z',
+        profile: 'datadog',
+        kind: 'scheduled-task',
+        summary: 'Nightly run finished.',
+      }),
+    });
+    setActivityConversationLinks({
+      stateRoot,
+      profile: 'datadog',
+      activityId: 'nightly-run',
+      relatedConversationIds: ['conv-123'],
+      updatedAt: '2026-03-12T12:05:00.000Z',
+    });
+
+    process.env.PERSONAL_AGENT_REPO_ROOT = repo;
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
+      logs.push(String(message ?? ''));
+    });
+
+    expect(await runCli(['inbox', 'list', '--json'])).toBe(0);
+
+    const output = logs.join('\n');
+    expect(output).toContain('"kind": "conversation"');
+    expect(output).toContain('"key": "conversation:conv-123"');
+    expect(output).not.toContain('"key": "activity:nightly-run"');
+
+    logSpy.mockRestore();
+  });
+
+  it('marks conversation inbox items read and unread from the CLI', async () => {
+    const repo = createTestRepo();
+    const stateRoot = createTempDir('personal-agent-cli-state-');
+    const configDir = createTempDir('personal-agent-cli-config-');
+    const configPath = join(configDir, 'config.json');
+
+    writeFileSync(configPath, JSON.stringify({ defaultProfile: 'datadog' }));
+    writeSessionFile(stateRoot, '--Users-patrick-project/2026-03-12T12-00-00-000Z_conv-123.jsonl', [
+      { type: 'session', id: 'conv-123', timestamp: '2026-03-12T12:00:00.000Z', cwd: '/Users/patrick/project' },
+      { type: 'message', timestamp: '2026-03-12T12:01:00.000Z', message: { role: 'user', content: [{ type: 'text', text: 'Review the nightly run' }] } },
+    ]);
+
+    process.env.PERSONAL_AGENT_REPO_ROOT = repo;
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
+
+    expect(await runCli(['inbox', 'unread', 'conversation:conv-123'])).toBe(0);
+
+    let logs: string[] = [];
+    let logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
+      logs.push(String(message ?? ''));
+    });
+
+    expect(await runCli(['inbox', 'list', '--conversations', '--json'])).toBe(0);
+    expect(logs.join('\n')).toContain('"key": "conversation:conv-123"');
+    logSpy.mockRestore();
+
+    expect(await runCli(['inbox', 'read', 'conversation:conv-123'])).toBe(0);
+
+    logs = [];
+    logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
+      logs.push(String(message ?? ''));
+    });
+
+    expect(await runCli(['inbox', 'list', '--conversations', '--json'])).toBe(0);
+    expect(logs.join('\n')).toContain('"filteredCount": 0');
+    logSpy.mockRestore();
+  });
+
+  it('deletes inbox items from the CLI', async () => {
+    const repo = createTestRepo();
+    const configDir = createTempDir('personal-agent-cli-config-');
+    const configPath = join(configDir, 'config.json');
+
+    writeFileSync(configPath, JSON.stringify({ defaultProfile: 'datadog' }));
+
+    writeProfileActivityEntry({
+      repoRoot: repo,
+      profile: 'datadog',
+      entry: createProjectActivityEntry({
+        id: 'daily-report',
+        createdAt: '2026-03-10T14:00:00.000Z',
+        profile: 'datadog',
+        kind: 'scheduled-task',
+        summary: 'Daily report completed.',
+      }),
+    });
+    writeFileSync(
+      activityReadStatePath(process.env.PERSONAL_AGENT_STATE_ROOT!, 'datadog'),
+      JSON.stringify(['daily-report']),
+    );
+    setActivityConversationLinks({
+      stateRoot: process.env.PERSONAL_AGENT_STATE_ROOT,
+      profile: 'datadog',
+      activityId: 'daily-report',
+      relatedConversationIds: ['conv-123'],
+      updatedAt: '2026-03-10T14:00:00.000Z',
+    });
+
+    process.env.PERSONAL_AGENT_REPO_ROOT = repo;
+    process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
+
+    expect(await runCli(['inbox', 'delete', 'daily-report'])).toBe(0);
+
+    expect(existsSync(activityPath(process.env.PERSONAL_AGENT_STATE_ROOT!, 'datadog', 'daily-report'))).toBe(false);
+    expect(readFileSync(activityReadStatePath(process.env.PERSONAL_AGENT_STATE_ROOT!, 'datadog'), 'utf-8'))
+      .toBe('[]');
+    expect(getActivityConversationLink({
+      stateRoot: process.env.PERSONAL_AGENT_STATE_ROOT,
+      profile: 'datadog',
+      activityId: 'daily-report',
+    })).toBeNull();
   });
 
   it('routes gateway commands through the CLI registry', async () => {

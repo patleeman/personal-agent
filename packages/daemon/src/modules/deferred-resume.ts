@@ -6,6 +6,7 @@ import {
   loadDeferredResumeState,
   readSessionConversationId,
   saveDeferredResumeState,
+  setActivityConversationLinks,
   writeProfileActivityEntry,
   type DeferredResumeRecord,
 } from '@personal-agent/core';
@@ -83,21 +84,24 @@ function writeDeferredResumeFiredActivity(input: {
   entry: DeferredResumeRecord;
   repoRoot: string;
   profile: string;
+  stateRoot: string;
 }): void {
+  const activityId = `deferred-resume-fired-${sanitizeActivityIdSegment(input.entry.id)}`;
   const conversationId = readSessionConversationId(input.entry.sessionFile);
   const relatedProjectIds = conversationId
     ? (getConversationProjectLink({
-        repoRoot: input.repoRoot,
+        stateRoot: input.stateRoot,
         profile: input.profile,
         conversationId,
       })?.relatedProjectIds ?? [])
     : [];
 
   writeProfileActivityEntry({
+    stateRoot: input.stateRoot,
     repoRoot: input.repoRoot,
     profile: input.profile,
     entry: createProjectActivityEntry({
-      id: `deferred-resume-fired-${sanitizeActivityIdSegment(input.entry.id)}`,
+      id: activityId,
       createdAt: input.entry.readyAt ?? input.entry.dueAt,
       profile: input.profile,
       kind: 'deferred-resume',
@@ -108,10 +112,17 @@ function writeDeferredResumeFiredActivity(input: {
         ...(input.entry.readyAt ? [`Ready at: ${input.entry.readyAt}`] : []),
         `Prompt: ${input.entry.prompt}`,
       ].join('\n'),
-      relatedConversationIds: conversationId ? [conversationId] : undefined,
       relatedProjectIds: relatedProjectIds.length > 0 ? relatedProjectIds : undefined,
       notificationState: 'none',
     }),
+  });
+
+  setActivityConversationLinks({
+    stateRoot: input.stateRoot,
+    profile: input.profile,
+    activityId,
+    relatedConversationIds: conversationId ? [conversationId] : [],
+    updatedAt: input.entry.readyAt ?? input.entry.dueAt,
   });
 }
 
@@ -169,6 +180,7 @@ export function createDeferredResumeModule(
                 entry,
                 repoRoot: profileContext.repoRoot,
                 profile: profileContext.profile,
+                stateRoot: context.paths.root,
               });
             }
           }

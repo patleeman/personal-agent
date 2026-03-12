@@ -1,0 +1,65 @@
+id: make-agent-runs-durable-with-daemon-managed-conversation-workers
+createdAt: 2026-03-12T12:27:20.618Z
+updatedAt: 2026-03-12T13:12:24.386Z
+title: Durable conversation workers
+description: Make all active agent runs durable by moving live conversations out of the UI server and into daemon-managed conversation workers that web and gateway clients can attach to.
+repoRoot: /Users/patrick/workingdir/personal-agent
+summary: The daemon will supervise one durable conversation worker per active session so agent runs survive UI restarts; the refined plan now locks in a sessionFile-keyed single-owner model, snapshot-first reconnects, and a web-first migration path before gateway adoption.
+status: in_progress
+blockers: []
+currentFocus: Extract shared live-conversation types and start the daemon conversations supervisor/worker implementation for the web migration.
+recentProgress:
+  - Wrote a daemon conversation runtime design artifact covering the supervisor/worker model, single-owner rules, snapshot-first reconnects, and bounded event replay.
+  - Decided to migrate the web live-session routes first while shaping the daemon API to support a later gateway controller migration.
+plan:
+  currentMilestoneId: execute-work
+  milestones:
+    - id: refine-plan
+      title: Design the durable conversation runtime
+      status: completed
+      summary: Define the daemon supervisor, per-session worker model, IPC protocol, snapshot and event replay behavior, single-owner guarantees, and migration boundaries.
+    - id: execute-work
+      title: Implement daemon-managed conversation workers
+      status: in_progress
+      summary: Add the daemon conversations module and worker process, then route web live-session APIs through the durable runtime.
+    - id: verify-result
+      title: Validate restart resilience and multi-client attach
+      status: pending
+      summary: Verify that UI restarts do not stop runs, reconnects receive a correct snapshot, and duplicate attaches reuse the same live owner.
+  tasks:
+    - id: define-daemon-conversation-api
+      status: completed
+      title: Define the daemon conversation control API and runtime state model
+      milestoneId: refine-plan
+    - id: design-worker-snapshot-and-event-replay
+      status: completed
+      title: Design worker snapshot, event sequencing, and reconnect semantics
+      milestoneId: refine-plan
+    - id: decide-scope-for-gateway-migration
+      status: completed
+      title: Decide whether gateway migration lands in the first implementation phase or a follow-up phase
+      milestoneId: refine-plan
+    - id: build-daemon-conversations-module
+      status: pending
+      title: Build a daemon conversations module that supervises durable live runtimes
+      milestoneId: execute-work
+    - id: build-conversation-worker-process
+      status: pending
+      title: Build a per-session conversation worker process that owns the live AgentSession
+      milestoneId: execute-work
+    - id: proxy-web-live-session-routes-through-daemon
+      status: pending
+      title: Proxy web live-session creation, prompting, abort, and event streaming through the daemon runtime
+      milestoneId: execute-work
+    - id: migrate-gateway-to-shared-runtime
+      status: pending
+      title: Migrate gateway conversation control to the shared durable runtime
+      milestoneId: execute-work
+    - id: add-ui-restart-reattach-tests
+      status: pending
+      title: Add tests covering UI restart, reconnect, and snapshot rebuild behavior
+      milestoneId: verify-result
+    - id: add-worker-crash-and-single-owner-tests
+      status: pending
+      title: Add tests covering worker crashes, duplicate attach requests, and single-owner session guarantees
+      milestoneId: verify-result

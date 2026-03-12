@@ -134,16 +134,17 @@ See [Scheduled Tasks](./scheduled-tasks.md).
 
 ### `pa inbox [list|show|create|read|unread|delete]`
 
-Inspect and manage inbox activity entries.
+Inspect and manage surfaced inbox items.
 
 Examples:
 
 ```bash
 pa inbox list
-pa inbox list --unread
-pa inbox show <id>
+pa inbox list --conversations
+pa inbox show activity:nightly-review
+pa inbox show conversation:conv-123
 pa inbox create "Nightly review finished" --kind note
-pa inbox read <id>
+pa inbox read conversation:conv-123
 ```
 
 See [Inbox and Activity](./inbox.md).

@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { createProjectScaffold, resolveProjectPaths } from '@personal-agent/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { addProjectMilestone, createProjectRecord, createProjectTaskRecord, deleteProjectMilestone, deleteProjectRecord, deleteProjectTaskRecord, moveProjectMilestone, moveProjectTaskRecord, readProjectDetailFromProject, readProjectSource, saveProjectSource, sortProjectTasks, updateProjectMilestone, updateProjectRecord, updateProjectTaskRecord, } from './projects.js';
@@ -40,7 +40,8 @@ describe('readProjectDetailFromProject', () => {
             repoRoot,
             profile: 'datadog',
             projectId: 'web-ui',
-            objective: 'Ship the project UI',
+            title: 'Project UI',
+            description: 'Ship the project UI',
             now: new Date('2026-03-11T01:00:00.000Z'),
         });
         createProjectTaskRecord({
@@ -67,6 +68,7 @@ describe('readProjectDetailFromProject', () => {
             projectId: 'web-ui',
         });
         expect(detail.project.id).toBe('web-ui');
+        expect(detail.project.title).toBe('Project UI');
         expect(detail.project.description).toBe('Ship the project UI');
         expect(detail.project.plan.milestones).toHaveLength(3);
         expect(detail.project.plan.tasks).toHaveLength(2);
@@ -88,34 +90,70 @@ describe('project editing helpers', () => {
             repoRoot,
             profile: 'datadog',
             projectId: 'artifact-model',
+            title: 'Artifact model',
             description: 'Build the artifact model',
+            projectRepoRoot: '../workspace/artifact-model',
             summary: 'The storage model is taking shape.',
             status: 'in_progress',
             currentFocus: 'Define PROJECT.yaml.',
             blockers: ['Need to settle task shape'],
             recentProgress: ['Created the scaffold'],
         });
+        expect(detail.project.title).toBe('Artifact model');
         expect(detail.project.description).toBe('Build the artifact model');
+        expect(detail.project.repoRoot).toBe(resolve(repoRoot, '../workspace/artifact-model'));
         expect(detail.project.summary).toBe('The storage model is taking shape.');
         expect(detail.project.status).toBe('in_progress');
         expect(detail.project.currentFocus).toBe('Define PROJECT.yaml.');
         expect(detail.project.blockers).toEqual(['Need to settle task shape']);
         expect(detail.project.recentProgress).toEqual(['Created the scaffold']);
     });
-    it('auto-generates a project id from the description when omitted', () => {
+    it('auto-generates a project id from the title when omitted', () => {
         const repoRoot = createTempRepo();
         const first = createProjectRecord({
             repoRoot,
             profile: 'datadog',
+            title: 'Artifact model',
             description: 'Build the artifact model',
         });
         const second = createProjectRecord({
             repoRoot,
             profile: 'datadog',
+            title: 'Artifact model',
             description: 'Build the artifact model',
         });
-        expect(first.project.id).toBe('build-the-artifact-model');
-        expect(second.project.id).toBe('build-the-artifact-model-2');
+        expect(first.project.id).toBe('artifact-model');
+        expect(second.project.id).toBe('artifact-model-2');
+    });
+    it('keeps long auto-generated project ids compact', () => {
+        const repoRoot = createTempRepo();
+        const detail = createProjectRecord({
+            repoRoot,
+            profile: 'datadog',
+            title: 'Make the web UI cwd agnostic by default and add durable referenced project state',
+            description: 'Make the web UI cwd agnostic by default and add durable referenced project state',
+        });
+        expect(detail.project.id).toBe('make-the-web-ui-cwd-agnostic');
+        expect(detail.project.id.length).toBeLessThanOrEqual(36);
+    });
+    it('keeps duplicate suffixes inside the compact auto-generated id limit', () => {
+        const repoRoot = createTempRepo();
+        const title = 'Make the web UI cwd agnostic by default and add durable referenced project state';
+        const first = createProjectRecord({
+            repoRoot,
+            profile: 'datadog',
+            title,
+            description: title,
+        });
+        const second = createProjectRecord({
+            repoRoot,
+            profile: 'datadog',
+            title,
+            description: title,
+        });
+        expect(first.project.id).toBe('make-the-web-ui-cwd-agnostic');
+        expect(second.project.id).toBe('make-the-web-ui-cwd-agnostic-2');
+        expect(second.project.id.length).toBeLessThanOrEqual(36);
     });
     it('updates project fields and current milestone', () => {
         const repoRoot = createTempRepo();
@@ -123,22 +161,49 @@ describe('project editing helpers', () => {
             repoRoot,
             profile: 'datadog',
             projectId: 'artifact-model',
-            objective: 'Build the artifact model',
+            title: 'Artifact model',
+            description: 'Build the artifact model',
         });
         const detail = updateProjectRecord({
             repoRoot,
             profile: 'datadog',
             projectId: 'artifact-model',
+            title: 'Durable artifact model',
             description: 'Build the durable artifact model',
             summary: 'PROJECT.yaml is now canonical.',
             currentMilestoneId: 'execute-work',
             blockers: [],
             recentProgress: ['Migrated the project schema'],
         });
+        expect(detail.project.title).toBe('Durable artifact model');
         expect(detail.project.description).toBe('Build the durable artifact model');
         expect(detail.project.summary).toBe('PROJECT.yaml is now canonical.');
         expect(detail.project.plan.currentMilestoneId).toBe('execute-work');
         expect(detail.project.recentProgress).toEqual(['Migrated the project schema']);
+    });
+    it('updates and clears the project repo root', () => {
+        const repoRoot = createTempRepo();
+        createProjectScaffold({
+            repoRoot,
+            profile: 'datadog',
+            projectId: 'artifact-model',
+            title: 'Build the artifact model',
+            description: 'Build the artifact model',
+        });
+        let detail = updateProjectRecord({
+            repoRoot,
+            profile: 'datadog',
+            projectId: 'artifact-model',
+            projectRepoRoot: '../workspace/artifact-model',
+        });
+        expect(detail.project.repoRoot).toBe(resolve(repoRoot, '../workspace/artifact-model'));
+        detail = updateProjectRecord({
+            repoRoot,
+            profile: 'datadog',
+            projectId: 'artifact-model',
+            projectRepoRoot: '',
+        });
+        expect(detail.project.repoRoot).toBeUndefined();
     });
     it('adds and updates milestones', () => {
         const repoRoot = createTempRepo();
@@ -146,7 +211,8 @@ describe('project editing helpers', () => {
             repoRoot,
             profile: 'datadog',
             projectId: 'web-ui',
-            objective: 'Ship the web UI',
+            title: 'Ship the web UI',
+            description: 'Ship the web UI',
         });
         addProjectMilestone({
             repoRoot,
@@ -181,7 +247,8 @@ describe('project editing helpers', () => {
             repoRoot,
             profile: 'datadog',
             projectId: 'web-ui',
-            objective: 'Ship the web UI',
+            title: 'Ship the web UI',
+            description: 'Ship the web UI',
         });
         addProjectMilestone({
             repoRoot,
@@ -225,7 +292,8 @@ describe('project editing helpers', () => {
             repoRoot,
             profile: 'datadog',
             projectId: 'web-ui',
-            objective: 'Ship the web UI',
+            title: 'Ship the web UI',
+            description: 'Ship the web UI',
         });
         addProjectMilestone({
             repoRoot,
@@ -257,7 +325,8 @@ describe('project editing helpers', () => {
             repoRoot,
             profile: 'datadog',
             projectId: 'web-ui',
-            objective: 'Ship the web UI',
+            title: 'Ship the web UI',
+            description: 'Ship the web UI',
         });
         createProjectTaskRecord({
             repoRoot,
@@ -308,7 +377,8 @@ describe('project editing helpers', () => {
             repoRoot,
             profile: 'datadog',
             projectId: 'web-ui',
-            objective: 'Ship the web UI',
+            title: 'Ship the web UI',
+            description: 'Ship the web UI',
         });
         createProjectTaskRecord({
             repoRoot,
@@ -334,7 +404,8 @@ describe('project editing helpers', () => {
             repoRoot,
             profile: 'datadog',
             projectId: 'web-ui',
-            objective: 'Ship the web UI',
+            title: 'Ship the web UI',
+            description: 'Ship the web UI',
         });
         const projectSource = readProjectSource({ repoRoot, profile: 'datadog', projectId: 'web-ui' });
         expect(projectSource.path).toContain('PROJECT.yaml');

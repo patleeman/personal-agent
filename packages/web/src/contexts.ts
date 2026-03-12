@@ -11,7 +11,7 @@ import type {
 } from './types';
 
 // ── Live title overrides ──────────────────────────────────────────────────────
-// ConversationPage pushes stream.title here; Sidebar reads it to update tabs/shelf.
+// ConversationPage pushes stream.title here; Sidebar reads it to update tabs/archive.
 
 export interface LiveTitlesContextValue {
   titles: Map<string, string>;

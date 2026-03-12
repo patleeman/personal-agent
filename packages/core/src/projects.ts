@@ -1,7 +1,9 @@
 import { existsSync, mkdirSync, readdirSync, statSync } from 'fs';
+import { homedir } from 'os';
 import { join, resolve } from 'path';
 import {
   createInitialProject,
+  readProject,
   writeProject,
 } from './project-artifacts.js';
 
@@ -33,7 +35,8 @@ export interface ResolveProjectTaskPathOptions extends ResolveProjectPathsOption
 }
 
 export interface CreateProjectScaffoldOptions extends ResolveProjectPathsOptions {
-  objective: string;
+  title: string;
+  description: string;
   overwrite?: boolean;
   now?: Date;
 }
@@ -45,6 +48,66 @@ export interface CreateProjectScaffoldResult {
 
 function getRepoRoot(repoRoot?: string): string {
   return resolve(repoRoot ?? process.env.PERSONAL_AGENT_REPO_ROOT ?? process.cwd());
+}
+
+function expandHome(pathValue: string): string {
+  if (pathValue === '~') {
+    return homedir();
+  }
+
+  if (pathValue.startsWith('~/')) {
+    return join(homedir(), pathValue.slice(2));
+  }
+
+  return pathValue;
+}
+
+export interface ResolveProjectRepoRootOptions {
+  repoRoot?: string;
+  projectRepoRoot?: string;
+}
+
+export function resolveProjectRepoRoot(options: ResolveProjectRepoRootOptions): string | undefined {
+  const projectRepoRoot = options.projectRepoRoot?.trim();
+  if (!projectRepoRoot) {
+    return undefined;
+  }
+
+  return resolve(getRepoRoot(options.repoRoot), expandHome(projectRepoRoot));
+}
+
+export interface ListResolvedProjectRepoRootsOptions extends ResolveProjectOptions {
+  projectIds: string[];
+}
+
+export function listResolvedProjectRepoRoots(options: ListResolvedProjectRepoRootsOptions): string[] {
+  const resolvedRepoRoots: string[] = [];
+  const seen = new Set<string>();
+
+  for (const projectId of options.projectIds) {
+    try {
+      const project = readProject(resolveProjectPaths({
+        repoRoot: options.repoRoot,
+        profile: options.profile,
+        projectId,
+      }).projectFile);
+      const projectRepoRoot = resolveProjectRepoRoot({
+        repoRoot: options.repoRoot,
+        projectRepoRoot: project.repoRoot,
+      });
+
+      if (!projectRepoRoot || seen.has(projectRepoRoot)) {
+        continue;
+      }
+
+      seen.add(projectRepoRoot);
+      resolvedRepoRoots.push(projectRepoRoot);
+    } catch {
+      // Ignore missing or invalid referenced projects when deriving cwd.
+    }
+  }
+
+  return resolvedRepoRoots;
 }
 
 function validateProfileName(profile: string): void {
@@ -140,10 +203,15 @@ function assertProjectCanBeCreated(paths: ProjectPaths, overwrite: boolean): voi
 export function createProjectScaffold(
   options: CreateProjectScaffoldOptions,
 ): CreateProjectScaffoldResult {
-  const objective = options.objective.trim();
+  const title = options.title.trim();
+  const description = options.description.trim();
 
-  if (objective.length === 0) {
-    throw new Error('Project objective must not be empty.');
+  if (title.length === 0) {
+    throw new Error('Project title must not be empty.');
+  }
+
+  if (description.length === 0) {
+    throw new Error('Project description must not be empty.');
   }
 
   const paths = resolveProjectPaths(options);
@@ -161,7 +229,8 @@ export function createProjectScaffold(
     paths.projectFile,
     createInitialProject({
       id: options.projectId,
-      description: objective,
+      title,
+      description,
       createdAt: timestamp,
       updatedAt: timestamp,
     }),

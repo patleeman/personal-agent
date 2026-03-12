@@ -1,5 +1,14 @@
 export const RESIZE_HANDLE_WIDTH = 5;
 
+export const RAIL_WIDTH_STORAGE_KEYS = {
+  projects: 'pa:rail-width:projects',
+  scheduled: 'pa:rail-width:scheduled',
+  conversations: 'pa:rail-width:conversations',
+  inbox: 'pa:rail-width:inbox',
+  memory: 'pa:rail-width:memory',
+  default: 'pa:rail-width:default',
+} as const;
+
 export interface RailLayoutPrefs {
   storageKey: string;
   initialWidth: number;
@@ -19,34 +28,34 @@ export function getRailLayoutPrefs(pathname: string): RailLayoutPrefs {
   switch (section) {
     case 'projects':
       return {
-        storageKey: 'pa:rail-width:projects',
+        storageKey: RAIL_WIDTH_STORAGE_KEYS.projects,
         initialWidth: 560,
       };
     case 'scheduled':
     case 'automations':
     case 'tasks':
       return {
-        storageKey: 'pa:rail-width:scheduled',
+        storageKey: RAIL_WIDTH_STORAGE_KEYS.scheduled,
         initialWidth: 380,
       };
     case 'conversations':
       return {
-        storageKey: 'pa:rail-width:conversations',
+        storageKey: RAIL_WIDTH_STORAGE_KEYS.conversations,
         initialWidth: 380,
       };
     case 'inbox':
       return {
-        storageKey: 'pa:rail-width:inbox',
+        storageKey: RAIL_WIDTH_STORAGE_KEYS.inbox,
         initialWidth: 380,
       };
     case 'memory':
       return {
-        storageKey: 'pa:rail-width:memory',
+        storageKey: RAIL_WIDTH_STORAGE_KEYS.memory,
         initialWidth: 380,
       };
     default:
       return {
-        storageKey: 'pa:rail-width:default',
+        storageKey: RAIL_WIDTH_STORAGE_KEYS.default,
         initialWidth: 380,
       };
   }

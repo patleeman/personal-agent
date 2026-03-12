@@ -22,7 +22,6 @@ Common examples:
 - `profiles/<profile>/agent/memory/*.md`
 - `profiles/<profile>/agent/tasks/*.task.md`
 - `profiles/<profile>/agent/projects/<projectId>/PROJECT.yaml`
-- `profiles/<profile>/agent/activity/*.md`
 - shared skills, extensions, prompts, themes, and settings
 
 Use repo-managed state for things that should survive across machines and sessions.
@@ -37,6 +36,7 @@ Common examples:
 - `~/.local/state/personal-agent/pi-agent/sessions/**`
 - `~/.local/state/personal-agent/daemon/**`
 - `~/.local/state/personal-agent/gateway/**`
+- inbox activity and read-state under `~/.local/state/personal-agent/pi-agent/state/inbox/**`
 - conversation-local link state such as conversation ↔ referenced project bindings
 
 Use local runtime state for:

@@ -17,6 +17,12 @@ export * from './runtime/index.js';
 // Activity exports
 export * from './activity.js';
 
+// Activity ↔ conversation link exports
+export * from './activity-conversation-links.js';
+
+// Conversation attention exports
+export * from './conversation-attention.js';
+
 // Deferred resume state exports
 export * from './deferred-resume.js';
 
@@ -25,6 +31,9 @@ export * from './conversation-project-links.js';
 
 // Project artifact exports
 export * from './project-artifacts.js';
+
+// Session metadata exports
+export * from './session-meta.js';
 
 // Project exports
 export * from './projects.js';

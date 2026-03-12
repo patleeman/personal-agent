@@ -286,7 +286,7 @@ export function ConversationTree({ messages, currentIndex = 0, onJump, onClose, 
                 {onFork && entry.type === 'user' && (
                   <button
                     onClick={e => { e.stopPropagation(); onFork(entry.index); onClose(); }}
-                    title="Fork from here in a new tab"
+                    title="Fork into a new conversation from here"
                     className="shrink-0 text-[11px] text-dim/50 hover:text-accent opacity-0 group-hover:opacity-100 transition-all px-1"
                   >
                     ⑂

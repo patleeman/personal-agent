@@ -3,6 +3,7 @@ import { homedir } from 'os';
 import { join, resolve } from 'path';
 import {
   createProjectActivityEntry,
+  setActivityConversationLinks,
   writeProfileActivityEntry,
 } from '@personal-agent/core';
 import type { TasksModuleConfig } from '../config.js';
@@ -343,7 +344,7 @@ export function createTasksModule(
   const publishTaskOutputNotifications = (
     task: ParsedTaskDefinition,
     status: TaskRunOutcomeStatus,
-    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean },
+    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string } },
     details: {
       finishedAt: string;
       outputText?: string;
@@ -390,7 +391,7 @@ export function createTasksModule(
   const writeTaskActivity = (
     task: ParsedTaskDefinition,
     status: TaskRunOutcomeStatus,
-    context: { logger: { info: (message: string) => void; warn: (message: string) => void } },
+    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; paths: { root: string } },
     details: {
       startedAt?: string;
       finishedAt: string;
@@ -413,12 +414,13 @@ export function createTasksModule(
         status,
       ].join('-');
 
-      // Find Pi sessions created during this task run for cross-linking
+      // Find Pi sessions created during this task run for local attention linking.
       const relatedConversationIds = details.startedAt
         ? findRelatedSessionIds(details.startedAt, details.finishedAt)
         : [];
 
       writeProfileActivityEntry({
+        stateRoot: context.paths.root,
         repoRoot,
         profile: task.profile,
         entry: createProjectActivityEntry({
@@ -428,9 +430,16 @@ export function createTasksModule(
           kind: 'scheduled-task',
           summary: toTaskActivitySummary(task.id, status),
           details: toTaskActivityDetails(details),
-          relatedConversationIds: relatedConversationIds.length > 0 ? relatedConversationIds : undefined,
           notificationState: shouldQueueTaskNotification(task, status) ? 'queued' : 'none',
         }),
+      });
+
+      setActivityConversationLinks({
+        stateRoot: context.paths.root,
+        profile: task.profile,
+        activityId,
+        relatedConversationIds,
+        updatedAt: details.finishedAt,
       });
     } catch (error) {
       context.logger.warn(`failed to write task activity id=${task.id}: ${(error as Error).message}`);
@@ -440,7 +449,7 @@ export function createTasksModule(
   const executeTaskRun = async (
     task: ParsedTaskDefinition,
     record: TaskRuntimeState,
-    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean },
+    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string } },
     controller: AbortController,
   ): Promise<void> => {
     let finalResult: TaskRunResult | undefined;
@@ -564,7 +573,7 @@ export function createTasksModule(
   const startTaskRun = (
     task: ParsedTaskDefinition,
     record: TaskRuntimeState,
-    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean },
+    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string } },
   ): void => {
     const controller = new AbortController();
 
@@ -664,6 +673,7 @@ export function createTasksModule(
     context: {
       logger: { info: (message: string) => void; warn: (message: string) => void };
       publish: (type: string, payload?: Record<string, unknown>) => boolean;
+      paths: { root: string };
     },
   ): Promise<void> => {
     if (tickInProgress || stopping) {

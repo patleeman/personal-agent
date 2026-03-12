@@ -43,6 +43,8 @@ export function ProjectOverviewPanel({
   const blockers = record.blockers.filter((blocker) => blocker.trim().length > 0);
   const isBlocked = hasMeaningfulBlockers(record.blockers);
   const currentFocus = record.currentFocus?.trim();
+  const description = record.description.trim();
+  const projectRepoRoot = record.repoRoot?.trim();
   const recentProgress = record.recentProgress.filter((item) => item.trim().length > 0);
 
   const { done, total, pct } = getPlanProgress(record.plan.milestones);
@@ -67,7 +69,7 @@ export function ProjectOverviewPanel({
   const visibleTasks = project.tasks.slice(0, 5);
   const hiddenTasks = Math.max(0, project.tasks.length - visibleTasks.length);
 
-  const showOverview = record.summary.trim().length > 0 || !!currentFocus || blockers.length > 0 || recentProgress.length > 0;
+  const showOverview = record.summary.trim().length > 0 || !!projectRepoRoot || !!currentFocus || blockers.length > 0 || recentProgress.length > 0;
   const showTasksSection = project.taskCount > 0;
 
   return (
@@ -75,10 +77,13 @@ export function ProjectOverviewPanel({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <Pill tone="muted" mono>{record.id}</Pill>
+            <Pill tone="muted" mono className="max-w-full truncate" title={record.id}>{record.id}</Pill>
             <span className="ui-card-meta">updated {timeAgo(record.updatedAt)}</span>
           </div>
-          <p className="ui-card-title">{record.description}</p>
+          <div className="space-y-1.5">
+            <p className="ui-card-title">{record.title}</p>
+            {description.length > 0 && <p className="ui-card-body">{description}</p>}
+          </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Link to={`/projects/${record.id}`} className="ui-action-button text-accent hover:text-accent/80">
@@ -109,22 +114,29 @@ export function ProjectOverviewPanel({
         <div className="rounded-xl border border-border-subtle bg-base/70 px-3.5 py-3.5 space-y-3">
           <p className="ui-section-label">Overview</p>
 
-          {record.summary.trim().length > 0 && (
+          {projectRepoRoot && (
             <div>
+              <p className="ui-card-meta mb-1.5">Repo root</p>
+              <p className="ui-card-body font-mono break-all">{projectRepoRoot}</p>
+            </div>
+          )}
+
+          {record.summary.trim().length > 0 && (
+            <div className={projectRepoRoot ? 'border-t border-border-subtle pt-3' : ''}>
               <p className="ui-card-meta mb-1.5">Summary</p>
               <p className="ui-card-body">{record.summary}</p>
             </div>
           )}
 
           {currentFocus && (
-            <div className={record.summary.trim().length > 0 ? 'border-t border-border-subtle pt-3' : ''}>
+            <div className={(projectRepoRoot || record.summary.trim().length > 0) ? 'border-t border-border-subtle pt-3' : ''}>
               <p className="ui-card-meta mb-1.5">Current focus</p>
               <p className="ui-card-body">{currentFocus}</p>
             </div>
           )}
 
           {blockers.length > 0 && (
-            <div className={(record.summary.trim().length > 0 || currentFocus) ? 'border-t border-border-subtle pt-3' : ''}>
+            <div className={(projectRepoRoot || record.summary.trim().length > 0 || currentFocus) ? 'border-t border-border-subtle pt-3' : ''}>
               <p className="ui-card-meta mb-1.5">Blocked by</p>
               <ul className="space-y-1.5">
                 {blockers.map((blocker) => (
@@ -135,7 +147,7 @@ export function ProjectOverviewPanel({
           )}
 
           {recentProgress.length > 0 && (
-            <div className={(record.summary.trim().length > 0 || currentFocus || blockers.length > 0) ? 'border-t border-border-subtle pt-3' : ''}>
+            <div className={(projectRepoRoot || record.summary.trim().length > 0 || currentFocus || blockers.length > 0) ? 'border-t border-border-subtle pt-3' : ''}>
               <p className="ui-card-meta mb-2">Recent progress</p>
               <ul className="space-y-1.5">
                 {recentProgress.slice(0, 4).map((item) => (

@@ -1,0 +1,222 @@
+import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
+import { join } from 'path';
+import { getStateRoot } from './runtime/paths.js';
+
+export interface StoredSessionMeta {
+  id: string;
+  file: string;
+  timestamp: string;
+  cwd: string;
+  cwdSlug: string;
+  model: string;
+  title: string;
+  messageCount: number;
+  lastActivityAt: string;
+}
+
+interface RawSessionRecord {
+  type: 'session';
+  id: string;
+  timestamp: string;
+  cwd: string;
+}
+
+interface RawModelChange {
+  type: 'model_change';
+  modelId?: string;
+}
+
+interface RawContentBlock {
+  type: 'text' | 'image';
+  text?: string;
+}
+
+interface RawMessage {
+  type: 'message';
+  timestamp: string;
+  message: {
+    role: 'user' | 'assistant' | 'toolResult';
+    content: string | RawContentBlock[];
+  };
+}
+
+type RawLine = RawSessionRecord | RawModelChange | RawMessage | { type: string };
+
+function resolveDefaultSessionsDir(): string {
+  return join(getStateRoot(), 'pi-agent', 'sessions');
+}
+
+function parseJsonLine(rawLine: string): RawLine | null {
+  try {
+    return JSON.parse(rawLine) as RawLine;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeContent(content: unknown): RawContentBlock[] {
+  if (Array.isArray(content)) {
+    return content as RawContentBlock[];
+  }
+
+  if (typeof content === 'string' && content.length > 0) {
+    return [{ type: 'text', text: content }];
+  }
+
+  return [];
+}
+
+function extractUserTitle(content: unknown): string | null {
+  const blocks = normalizeContent(content);
+  const text = blocks
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text ?? '')
+    .join('\n')
+    .trim();
+
+  if (text.length > 0) {
+    return text.slice(0, 80).replace(/\n/g, ' ').trim();
+  }
+
+  const imageCount = blocks.filter((block) => block.type === 'image').length;
+  if (imageCount > 0) {
+    return imageCount === 1 ? '(image attachment)' : `(${imageCount} image attachments)`;
+  }
+
+  return null;
+}
+
+function slugToCwd(slug: string): string {
+  return slug
+    .replace(/^--/, '')
+    .replace(/--$/, '')
+    .replace(/-/g, '/');
+}
+
+function normalizeIsoTimestamp(timestamp: string | undefined, fallback: string): string {
+  if (timestamp && Number.isFinite(Date.parse(timestamp))) {
+    return new Date(Date.parse(timestamp)).toISOString();
+  }
+
+  return fallback;
+}
+
+function listSessionFiles(sessionsDir: string): Array<{ filePath: string; cwdSlug: string }> {
+  if (!existsSync(sessionsDir)) {
+    return [];
+  }
+
+  const files: Array<{ filePath: string; cwdSlug: string }> = [];
+
+  for (const entryName of readdirSync(sessionsDir)) {
+    const entryPath = join(sessionsDir, entryName);
+
+    try {
+      const stats = statSync(entryPath);
+      if (stats.isFile()) {
+        if (entryName.endsWith('.jsonl')) {
+          files.push({ filePath: entryPath, cwdSlug: '' });
+        }
+        continue;
+      }
+
+      if (!stats.isDirectory()) {
+        continue;
+      }
+
+      for (const fileName of readdirSync(entryPath)) {
+        if (!fileName.endsWith('.jsonl')) {
+          continue;
+        }
+
+        files.push({ filePath: join(entryPath, fileName), cwdSlug: entryName });
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return files;
+}
+
+function readSessionMetaFromFile(filePath: string, cwdSlug: string): StoredSessionMeta | null {
+  try {
+    const raw = readFileSync(filePath, 'utf-8');
+    let sessionRecord: RawSessionRecord | null = null;
+    let model = 'unknown';
+    let title: string | null = null;
+    let messageCount = 0;
+    let lastMessageTimestamp: string | undefined;
+
+    for (const rawLine of raw.split('\n')) {
+      if (!rawLine.trim()) {
+        continue;
+      }
+
+      const line = parseJsonLine(rawLine);
+      if (!line) {
+        continue;
+      }
+
+      if (line.type === 'session') {
+        sessionRecord = line as RawSessionRecord;
+        continue;
+      }
+
+      if (line.type === 'model_change' && model === 'unknown') {
+        model = (line as RawModelChange).modelId ?? 'unknown';
+        continue;
+      }
+
+      if (line.type !== 'message') {
+        continue;
+      }
+
+      const message = line as RawMessage;
+      messageCount += 1;
+      lastMessageTimestamp = message.timestamp;
+
+      if (title === null && message.message.role === 'user') {
+        title = extractUserTitle(message.message.content);
+      }
+    }
+
+    if (!sessionRecord) {
+      return null;
+    }
+
+    const fallbackTimestamp = normalizeIsoTimestamp(sessionRecord.timestamp, new Date(statSync(filePath).mtimeMs).toISOString());
+
+    return {
+      id: sessionRecord.id,
+      file: filePath,
+      timestamp: fallbackTimestamp,
+      cwd: sessionRecord.cwd ?? slugToCwd(cwdSlug),
+      cwdSlug,
+      model,
+      title: title ?? 'New Conversation',
+      messageCount,
+      lastActivityAt: normalizeIsoTimestamp(lastMessageTimestamp, fallbackTimestamp),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function listStoredSessions(options: { sessionsDir?: string } = {}): StoredSessionMeta[] {
+  const sessionsDir = options.sessionsDir ?? resolveDefaultSessionsDir();
+  const metas = listSessionFiles(sessionsDir)
+    .map(({ filePath, cwdSlug }) => readSessionMetaFromFile(filePath, cwdSlug))
+    .filter((meta): meta is StoredSessionMeta => meta !== null);
+
+  metas.sort((left, right) => {
+    const timestampCompare = right.lastActivityAt.localeCompare(left.lastActivityAt);
+    if (timestampCompare !== 0) {
+      return timestampCompare;
+    }
+
+    return right.id.localeCompare(left.id);
+  });
+
+  return metas;
+}

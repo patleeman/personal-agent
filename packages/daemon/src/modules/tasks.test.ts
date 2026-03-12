@@ -299,9 +299,9 @@ Write daily report
     currentTime = new Date('2026-03-02T10:00:10.000Z');
     await module.handleEvent(createTimerEvent(), context);
 
-    await waitForCondition(() => listProfileActivityEntries({ repoRoot, profile: 'datadog' }).length === 1);
+    await waitForCondition(() => listProfileActivityEntries({ stateRoot, profile: 'datadog' }).length === 1);
 
-    const entries = listProfileActivityEntries({ repoRoot, profile: 'datadog' });
+    const entries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
     expect(entries).toHaveLength(1);
     expect(entries[0]?.entry).toMatchObject({
       kind: 'scheduled-task',

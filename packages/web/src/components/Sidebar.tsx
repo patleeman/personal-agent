@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { useConversations } from '../hooks/useConversations';
-import { useApi } from '../hooks';
-import { useAppData } from '../contexts';
+import { ArchivedConversationsModal } from './ArchivedConversationsModal';
 import { api } from '../api';
-import type { ProfileState, SessionMeta } from '../types';
-import { collectAttentionConversationIds, collectConversationAttentionIds } from '../sessionIndicators';
-import { useTheme } from '../theme';
+import { useConversations } from '../hooks/useConversations';
+import { useAppData } from '../contexts';
+import type { SessionMeta } from '../types';
 import { timeAgo } from '../utils';
 
 // ── Icons ──────────────────────────────────────────────────────────────────
@@ -22,11 +20,14 @@ function Ico({ d, size = 16 }: { d: string; size?: number }) {
 
 const PATH = {
   inbox:    'M2.25 13.5h3.86a2.25 2.25 0 0 1 2.012 1.244l.256.512a2.25 2.25 0 0 0 2.013 1.244h3.218a2.25 2.25 0 0 0 2.013-1.244l.256-.512a2.25 2.25 0 0 1 2.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 0 0-2.15-1.588H6.911a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.661Z',
+  archive:  'M20.25 7.5v10.125c0 1.243-1.007 2.25-2.25 2.25H6c-1.243 0-2.25-1.007-2.25-2.25V7.5m16.5 0-2.394-2.992A2.25 2.25 0 0 0 16.099 3.75H7.901a2.25 2.25 0 0 0-1.757.758L3.75 7.5m16.5 0H3.75m5.25 4.5h6',
+  gateway:  'M7.5 7.5 3.75 12l3.75 4.5m9-9 3.75 4.5-3.75 4.5M20.25 12H3.75',
+  daemon:   'M6 4.5h12A1.5 1.5 0 0 1 19.5 6v12a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V6A1.5 1.5 0 0 1 6 4.5Zm0 3.75h12M6 12h12M6 15.75h12',
   projects: 'M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z',
   tasks:    'M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
   memory:      'M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25',
+  settings:    'M10.5 6h3m-1.5-3v6m4.348-2.826 2.121 2.121m-12.728 0 2.121-2.121m8.486 8.486 2.121 2.121m-12.728 0 2.121-2.121M6 10.5H3m18 0h-3m-5.25 7.5v3m0-18v3',
   close:       'M6 18 18 6M6 6l12 12',
-  chevron:     'M19.5 8.25l-7.5 7.5-7.5-7.5',
 };
 
 // ── Top nav item ───────────────────────────────────────────────────────────
@@ -55,41 +56,47 @@ function TopNavItem({ to, icon, label, badge }: { to: string; icon: string; labe
   );
 }
 
+function TopActionButton({
+  icon,
+  label,
+  badge,
+  isActive = false,
+  onClick,
+}: {
+  icon: string;
+  label: string;
+  badge?: number | string | null;
+  isActive?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-haspopup="dialog"
+      aria-expanded={isActive}
+      className={[
+        'ui-sidebar-nav-item w-full',
+        isActive && 'ui-sidebar-nav-item-active',
+      ].filter(Boolean).join(' ')}
+    >
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"
+        className="shrink-0 opacity-70">
+        <path d={icon} />
+      </svg>
+      <span className="flex-1 text-left truncate">{label}</span>
+      {badge != null && (
+        <span className="ui-sidebar-nav-badge">{badge}</span>
+      )}
+    </button>
+  );
+}
+
 function cwdLabel(cwd: string, maxLen = 24): string {
   const parts = cwd.split('/').filter(Boolean);
   const label = parts[parts.length - 1] ?? cwd;
   return label.length > maxLen ? label.slice(0, maxLen - 1) + '…' : label;
-}
-
-const SEEN_MESSAGE_COUNT_KEY = 'pa:conversation-seen-message-counts';
-
-function loadSeenMessageCounts(): Record<string, number> {
-  try {
-    const raw = localStorage.getItem(SEEN_MESSAGE_COUNT_KEY);
-    if (!raw) {
-      return {};
-    }
-
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const counts: Record<string, number> = {};
-    for (const [sessionId, value] of Object.entries(parsed)) {
-      if (typeof value === 'number' && Number.isFinite(value)) {
-        counts[sessionId] = value;
-      }
-    }
-
-    return counts;
-  } catch {
-    return {};
-  }
-}
-
-function saveSeenMessageCounts(counts: Record<string, number>): void {
-  try {
-    localStorage.setItem(SEEN_MESSAGE_COUNT_KEY, JSON.stringify(counts));
-  } catch {
-    // Ignore storage write failures.
-  }
 }
 
 function getActiveConversationId(pathname: string): string | null {
@@ -184,38 +191,6 @@ function OpenTab({
   );
 }
 
-// ── Shelf row ──────────────────────────────────────────────────────────────
-
-function ShelfRow({
-  session,
-  needsAttention,
-  onOpen,
-}: {
-  session: SessionMeta;
-  needsAttention?: boolean;
-  onOpen: () => void;
-}) {
-  return (
-    <button
-      onClick={onOpen}
-      className="ui-sidebar-shelf-row"
-      style={{ width: 'calc(100% - 8px)' }}
-    >
-      <span className="w-1.5 h-1.5 rounded-full bg-border-default/40 shrink-0 mt-px" />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start gap-2">
-          <p className="text-[12px] leading-snug truncate flex-1 min-w-0">{session.title}</p>
-          <ConversationStatusIndicators isRunning={session.isRunning} needsAttention={needsAttention} />
-        </div>
-        <p className="text-[10px] text-dim/60 mt-0.5 truncate">
-          {timeAgo(session.timestamp)}
-          <span className="ml-1.5">· {cwdLabel(session.cwd)}</span>
-        </p>
-      </div>
-    </button>
-  );
-}
-
 function SectionHeader({ label, count }: { label: string; count?: number | string }) {
   return (
     <div className="flex items-center gap-2 px-4 pt-2 pb-1">
@@ -225,73 +200,12 @@ function SectionHeader({ label, count }: { label: string; count?: number | strin
   );
 }
 
-function SidebarFooter({
-  profileState,
-  switchingProfile,
-  profileError,
-  theme,
-  onToggleTheme,
-  onProfileChange,
-}: {
-  profileState?: ProfileState;
-  switchingProfile: boolean;
-  profileError: string | null;
-  theme: 'light' | 'dark';
-  onToggleTheme: () => void;
-  onProfileChange: (profile: string) => void;
-}) {
-  const nextTheme = theme === 'light' ? 'dark' : 'light';
-  const profileHint = switchingProfile
-    ? 'Switching profile and reloading…'
-    : 'Changes inbox, projects, memory, and new live sessions.';
-  const rowClass = [
-    'w-full flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-secondary transition-colors',
-    'hover:bg-elevated/60 hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/30',
-  ].join(' ');
-
+function SidebarFooter() {
   return (
-    <div className="border-t border-border-subtle px-2 py-2 shrink-0">
-      <div className="space-y-1">
-        <button
-          type="button"
-          onClick={onToggleTheme}
-          className={rowClass}
-          title={`Switch to ${nextTheme} theme`}
-          aria-label={`Switch to ${nextTheme} theme`}
-        >
-          <span className="flex-1 text-[13px] font-medium">Theme</span>
-          <span className="text-[11px] text-dim capitalize">{theme}</span>
-        </button>
-
-        {profileState && profileState.profiles.length > 0 && (
-          <div className="relative" title={profileHint}>
-            <div className={rowClass}>
-              <span className="flex-1 text-[13px] font-medium">Profile</span>
-              <span className="max-w-[7rem] truncate text-[11px] text-dim">{profileState.currentProfile}</span>
-              <span className="pointer-events-none shrink-0 text-dim/70">
-                <Ico d={PATH.chevron} size={11} />
-              </span>
-            </div>
-
-            <select
-              value={profileState.currentProfile}
-              onChange={(event) => { onProfileChange(event.target.value); }}
-              disabled={switchingProfile}
-              aria-label="Active profile"
-              className="absolute inset-0 z-10 h-full w-full cursor-pointer appearance-none opacity-0 disabled:cursor-not-allowed"
-            >
-              {profileState.profiles.map((profile) => (
-                <option key={profile} value={profile}>{profile}</option>
-              ))}
-            </select>
-          </div>
-        )}
-      </div>
-
-      {switchingProfile && (
-        <p className="px-3 pt-1 text-[10px] text-dim">Switching profile and reloading…</p>
-      )}
-      {profileError && <p className="px-3 pt-1 text-[10px] text-danger">{profileError}</p>}
+    <div className="border-t border-border-subtle px-2 py-2 shrink-0 space-y-0.5">
+      <TopNavItem to="/gateway" icon={PATH.gateway} label="Gateway" />
+      <TopNavItem to="/daemon" icon={PATH.daemon} label="Daemon" />
+      <TopNavItem to="/settings" icon={PATH.settings} label="Settings" />
     </div>
   );
 }
@@ -301,64 +215,26 @@ function SidebarFooter({
 export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { theme, toggle: toggleTheme } = useTheme();
   const { activity } = useAppData();
-  const { tabs, shelf, openSession, closeSession, loading, refetch } = useConversations();
-  const { data: profileState } = useApi(api.profiles);
-  const [shelfOpen, setShelfOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [switchingProfile, setSwitchingProfile] = useState(false);
-  const [profileError, setProfileError] = useState<string | null>(null);
-  const [seenMessageCounts, setSeenMessageCounts] = useState<Record<string, number>>(loadSeenMessageCounts);
-  const [seenCountsReady, setSeenCountsReady] = useState(false);
-  const inboxCount = activity?.unreadCount ?? null;
-  const allSessions = useMemo(() => [...tabs, ...shelf], [tabs, shelf]);
+  const { tabs, archivedSessions, openSession, closeSession, loading } = useConversations();
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const allSessions = useMemo(() => [...tabs, ...archivedSessions], [archivedSessions, tabs]);
   const activeConversationId = useMemo(() => getActiveConversationId(location.pathname), [location.pathname]);
-  const unreadConversationIds = useMemo(
-    () => collectAttentionConversationIds(activity?.entries ?? []),
-    [activity],
+  const attentionIds = useMemo(
+    () => new Set(allSessions.filter((session) => session.needsAttention).map((session) => session.id)),
+    [allSessions],
   );
-  const attentionIds = useMemo(() => {
-    if (!seenCountsReady) {
-      return unreadConversationIds;
-    }
-
-    return collectConversationAttentionIds({
-      sessions: allSessions,
-      unreadConversationIds,
-      seenMessageCounts,
-      activeConversationId,
-    });
-  }, [activeConversationId, allSessions, seenCountsReady, seenMessageCounts, unreadConversationIds]);
-
-  useEffect(() => {
-    if (loading || seenCountsReady) {
-      return;
-    }
-
-    setSeenMessageCounts((prev) => {
-      let changed = false;
-      const next = { ...prev };
-
-      for (const session of allSessions) {
-        if (typeof next[session.id] === 'number') {
-          continue;
-        }
-
-        next[session.id] = session.messageCount;
-        changed = true;
+  const standaloneUnreadCount = useMemo(() => {
+    const knownConversationIds = new Set(allSessions.map((session) => session.id));
+    return (activity?.entries ?? []).filter((entry) => {
+      if (entry.read) {
+        return false;
       }
 
-      if (changed) {
-        saveSeenMessageCounts(next);
-        return next;
-      }
-
-      return prev;
-    });
-
-    setSeenCountsReady(true);
-  }, [allSessions, loading, seenCountsReady]);
+      return !(entry.relatedConversationIds ?? []).some((conversationId) => knownConversationIds.has(conversationId));
+    }).length;
+  }, [activity?.entries, allSessions]);
+  const inboxCount = standaloneUnreadCount + archivedSessions.filter((session) => session.needsAttention).length;
 
   useEffect(() => {
     if (!activeConversationId) {
@@ -366,26 +242,18 @@ export function Sidebar() {
     }
 
     const activeSession = allSessions.find((session) => session.id === activeConversationId);
-    if (!activeSession) {
+    if (!activeSession || !activeSession.needsAttention) {
       return;
     }
 
-    setSeenMessageCounts((prev) => {
-      if (prev[activeSession.id] === activeSession.messageCount) {
-        return prev;
-      }
-
-      const next = {
-        ...prev,
-        [activeSession.id]: activeSession.messageCount,
-      };
-      saveSeenMessageCounts(next);
-      return next;
+    void api.markConversationAttentionRead(activeSession.id).catch(() => {
+      // Ignore optimistic attention-clear failures; SSE or manual refresh can recover.
     });
   }, [activeConversationId, allSessions]);
 
-  function handleShelfClick(session: SessionMeta) {
+  function handleRestoreArchivedConversation(session: SessionMeta) {
     openSession(session.id);
+    setArchiveOpen(false);
     navigate(`/conversations/${session.id}`);
   }
 
@@ -407,45 +275,8 @@ export function Sidebar() {
     navigate('/inbox');
   }
 
-  async function handleNewConversation() {
-    if (creating) return;
-
-    const draftPath = '/conversations/new';
-    navigate(draftPath);
-    setCreating(true);
-
-    try {
-      const data = await api.createLiveSession();
-      openSession(data.id);
-
-      if (window.location.pathname === draftPath) {
-        navigate(`/conversations/${data.id}`, { replace: true });
-      }
-
-      // Refetch after a brief delay so the new session file appears in the shelf
-      setTimeout(() => void refetch(), 1500);
-    } catch (err) {
-      console.error('Failed to create session:', err);
-      if (window.location.pathname === draftPath) {
-        navigate('/inbox', { replace: true });
-      }
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  async function handleProfileChange(profile: string) {
-    if (!profileState || profile === profileState.currentProfile || switchingProfile) return;
-    setProfileError(null);
-    setSwitchingProfile(true);
-    try {
-      await api.setCurrentProfile(profile);
-      window.location.reload();
-    } catch (err) {
-      console.error('Failed to switch profile:', err);
-      setProfileError('Could not switch profile.');
-      setSwitchingProfile(false);
-    }
+  function handleNewConversation() {
+    navigate('/conversations/new');
   }
 
   return (
@@ -460,20 +291,22 @@ export function Sidebar() {
       <div className="px-1 pb-2">
         <button
           onClick={handleNewConversation}
-          disabled={creating}
-          className="ui-sidebar-nav-item disabled:opacity-40"
+          className="ui-sidebar-nav-item"
           style={{ width: 'calc(100% - 8px)' }}
         >
-          {creating
-            ? <span className="w-4 h-4 border-[1.5px] border-current border-t-transparent rounded-full animate-spin shrink-0 opacity-70" />
-            : <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70"><path d="M12 5v14M5 12h14"/></svg>
-          }
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70"><path d="M12 5v14M5 12h14"/></svg>
           New chat
         </button>
       </div>
 
       <div className="pb-1 space-y-0.5">
         <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={inboxCount} />
+        <TopActionButton
+          icon={PATH.archive}
+          label="Archived"
+          isActive={archiveOpen}
+          onClick={() => setArchiveOpen(true)}
+        />
         <TopNavItem to="/scheduled" icon={PATH.tasks} label="Scheduled" />
         <TopNavItem to="/projects" icon={PATH.projects} label="Projects" />
         <TopNavItem to="/memory" icon={PATH.memory} label="Memory" />
@@ -500,49 +333,23 @@ export function Sidebar() {
         ))}
       </div>
 
-      {/* ── Shelf ── */}
-      <div className="border-t border-border-subtle shrink-0">
-        <button
-          onClick={() => setShelfOpen(v => !v)}
-          className="w-full flex items-center gap-2 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-dim hover:text-secondary transition-colors"
-        >
-          <span
-            className="transition-transform duration-150 shrink-0"
-            style={{ display: 'inline-block', transform: shelfOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }}
-          >
-            <Ico d={PATH.chevron} size={11} />
-          </span>
-          <span className="flex-1 text-left">Recent conversations</span>
-          <span className="text-[10px] tabular-nums opacity-60">
-            {loading ? '…' : shelf.length}
-          </span>
-        </button>
+      <SidebarFooter />
 
-        {shelfOpen && (
-          <div className="pb-2 max-h-72 overflow-y-auto space-y-0.5">
-            {shelf.map(session => (
-              <ShelfRow
-                key={session.id}
-                session={session}
-                needsAttention={attentionIds.has(session.id)}
-                onOpen={() => handleShelfClick(session)}
-              />
-            ))}
-            {shelf.length === 0 && (
-              <p className="px-4 py-2 text-[11px] text-dim">All conversations are already open.</p>
-            )}
-          </div>
-        )}
-      </div>
-
-      <SidebarFooter
-        profileState={profileState ?? undefined}
-        switchingProfile={switchingProfile}
-        profileError={profileError}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-        onProfileChange={(profile) => { void handleProfileChange(profile); }}
-      />
+      {archiveOpen && (
+        <ArchivedConversationsModal
+          sessions={archivedSessions}
+          loading={loading}
+          attentionIds={attentionIds}
+          onRestore={(sessionId) => {
+            const session = archivedSessions.find((item) => item.id === sessionId);
+            if (!session) {
+              return;
+            }
+            handleRestoreArchivedConversation(session);
+          }}
+          onClose={() => setArchiveOpen(false)}
+        />
+      )}
     </aside>
   );
 }

@@ -1,7 +1,8 @@
-import { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
+import { useReloadState } from '../reloadState';
 import {
   buildCapabilityCards,
   buildIdentitySummary,
@@ -21,6 +22,7 @@ import {
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60';
 const ACTION_BUTTON_CLASS = 'inline-flex items-center rounded-lg border border-border-subtle bg-base px-3 py-1.5 text-[12px] font-medium text-primary transition-colors hover:bg-surface';
+const MEMORY_SEARCH_STORAGE_KEY = 'pa:reload:memory:search';
 
 function MemoryRow({
   title,
@@ -130,7 +132,11 @@ export function MemoryPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const selectedPath = new URLSearchParams(location.search).get('item') ?? null;
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useReloadState<string>({
+    storageKey: MEMORY_SEARCH_STORAGE_KEY,
+    initialValue: '',
+    shouldPersist: (value) => value.length > 0,
+  });
 
   function updateSearch(updates: { item?: string | null }) {
     const next = new URLSearchParams(location.search);

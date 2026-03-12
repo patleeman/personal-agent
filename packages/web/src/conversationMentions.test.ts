@@ -8,6 +8,7 @@ describe('conversationMentions', () => {
         id: 'web-ui',
         createdAt: '',
         updatedAt: '',
+        title: 'Web UI shell',
         description: 'Build the web UI shell.',
         summary: 'Inbox-first web shell.',
         status: 'active',

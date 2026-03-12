@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'child_process';
-import { existsSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -9,11 +9,25 @@ import { createInterface } from 'readline';
 import { Command, CommanderError } from 'commander';
 import {
   bootstrapStateOrThrow,
+  clearActivityConversationLinks,
+  createProjectActivityEntry,
+  ensureConversationAttentionBaselines,
+  getActivityConversationLink,
   listProfileActivityEntries,
+  listStoredSessions,
+  loadProfileActivityReadState,
+  markConversationAttentionRead,
+  markConversationAttentionUnread,
   preparePiAgentDir,
+  resolveActivityEntryPath,
   resolveProfileActivityDir,
   resolveStatePaths,
+  saveProfileActivityReadState,
+  setActivityConversationLinks,
+  summarizeConversationAttention,
+  validateActivityId,
   validateStatePathsOutsideRepo,
+  writeProfileActivityEntry,
 } from '@personal-agent/core';
 import {
   buildPiResourceArgs,
@@ -2357,16 +2371,193 @@ Commands:
   throw new Error(`Unknown tasks subcommand: ${subcommand}`);
 }
 
+type InboxReadFilter = 'all' | 'read' | 'unread';
+type InboxItemKindFilter = 'all' | 'activity' | 'conversation';
+type InboxNotificationState = 'none' | 'queued' | 'sent' | 'failed';
+
+type InboxActivityEntry = ReturnType<typeof listProfileActivityEntries>[number]['entry'] & {
+  relatedConversationIds?: string[];
+};
+
+type InboxActivityStateEntry = {
+  path: string;
+  entry: InboxActivityEntry;
+  read: boolean;
+};
+
+type InboxConversationStateEntry = ReturnType<typeof listStoredSessions>[number] & {
+  needsAttention: boolean;
+  attentionUpdatedAt: string;
+  attentionUnreadMessageCount: number;
+  attentionUnreadActivityCount: number;
+  attentionActivityIds: string[];
+};
+
+type InboxSurfaceEntry =
+  | {
+      kind: 'activity';
+      key: string;
+      id: string;
+      sortAt: string;
+      read: boolean;
+      path: string;
+      entry: InboxActivityEntry;
+    }
+  | {
+      kind: 'conversation';
+      key: string;
+      id: string;
+      sortAt: string;
+      read: false;
+      session: InboxConversationStateEntry;
+    };
+
+type InboxSelector = {
+  kind: 'activity' | 'conversation' | 'auto';
+  id: string;
+  raw: string;
+};
+
 function inboxListUsageText(): string {
-  return 'Usage: pa inbox [list] [--json] [--limit <count>]';
+  return 'Usage: pa inbox [list] [--json] [--limit <count>] [--all|--read|--unread] [--activities|--conversations]';
+}
+
+function inboxCreateUsageText(): string {
+  return 'Usage: pa inbox create <summary> [--details <text>] [--kind <kind>] [--id <id>] [--project <id>]... [--conversation <id>]... [--notify <none|queued|sent|failed>] [--created-at <iso>] [--json]';
+}
+
+function inboxReadUsageText(subcommand: 'read' | 'unread'): string {
+  return `Usage: pa inbox ${subcommand} <selector>... [--all] [--json]`;
+}
+
+function inboxDeleteUsageText(): string {
+  return 'Usage: pa inbox delete <activity-selector>... [--json]';
+}
+
+function readRequiredOptionValue(args: string[], index: number, usageText: string): string {
+  const nextValue = args[index + 1];
+  if (!nextValue) {
+    throw new Error(usageText);
+  }
+
+  return nextValue;
+}
+
+function normalizeIsoTimestamp(value: string, usageText: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(usageText);
+  }
+
+  return parsed.toISOString();
+}
+
+function parseInboxNotificationState(value: string): InboxNotificationState {
+  const normalized = value.trim();
+
+  if (normalized === 'none' || normalized === 'queued' || normalized === 'sent' || normalized === 'failed') {
+    return normalized;
+  }
+
+  throw new Error(inboxCreateUsageText());
+}
+
+function sanitizeInboxActivityIdSegment(value: string): string {
+  const sanitized = value
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+
+  return sanitized.length > 0 ? sanitized : 'item';
+}
+
+function buildDefaultInboxActivityId(kind: string, summary: string, createdAt: string): string {
+  const kindSegment = sanitizeInboxActivityIdSegment(kind);
+  const createdAtSegment = sanitizeInboxActivityIdSegment(createdAt.replace(/[.:]/g, '-'));
+  const summarySegment = sanitizeInboxActivityIdSegment(summary).slice(0, 48);
+  return [kindSegment, createdAtSegment, summarySegment || 'item'].join('-');
+}
+
+function resolveUniqueInboxActivityId(repoRoot: string, profile: string, desiredId: string): string {
+  if (!existsSync(resolveActivityEntryPath({ repoRoot, profile, activityId: desiredId }))) {
+    return desiredId;
+  }
+
+  for (let suffix = 2; suffix <= 999; suffix += 1) {
+    const candidate = `${desiredId}-${suffix}`;
+    if (!existsSync(resolveActivityEntryPath({ repoRoot, profile, activityId: candidate }))) {
+      return candidate;
+    }
+  }
+
+  throw new Error(`Unable to allocate a unique inbox id based on: ${desiredId}`);
+}
+
+function attachActivityConversationLinks(profile: string, entry: ReturnType<typeof listProfileActivityEntries>[number]['entry']): InboxActivityEntry {
+  const relatedConversationIds = getActivityConversationLink({
+    profile,
+    activityId: entry.id,
+  })?.relatedConversationIds;
+
+  if (!relatedConversationIds || relatedConversationIds.length === 0) {
+    return entry;
+  }
+
+  return {
+    ...entry,
+    relatedConversationIds,
+  };
+}
+
+function buildConversationAttentionReason(session: InboxConversationStateEntry): string {
+  const parts: string[] = [];
+
+  if (session.attentionUnreadActivityCount > 0) {
+    parts.push(`${session.attentionUnreadActivityCount} linked update${session.attentionUnreadActivityCount === 1 ? '' : 's'}`);
+  }
+
+  if (session.attentionUnreadMessageCount > 0) {
+    parts.push(`${session.attentionUnreadMessageCount} new message${session.attentionUnreadMessageCount === 1 ? '' : 's'}`);
+  }
+
+  return parts.join(', ') || 'needs attention';
+}
+
+function parseInboxSelector(value: string): InboxSelector {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new Error('Inbox selector must not be empty.');
+  }
+
+  if (trimmed.startsWith('activity:')) {
+    const id = trimmed.slice('activity:'.length);
+    validateActivityId(id);
+    return { kind: 'activity', id, raw: trimmed };
+  }
+
+  if (trimmed.startsWith('conversation:')) {
+    const id = trimmed.slice('conversation:'.length);
+    return { kind: 'conversation', id, raw: trimmed };
+  }
+
+  return {
+    kind: 'auto',
+    id: trimmed,
+    raw: trimmed,
+  };
 }
 
 function parseInboxListOptions(args: string[]): {
   jsonMode: boolean;
   limit: number;
+  readFilter: InboxReadFilter;
+  itemKindFilter: InboxItemKindFilter;
 } {
   let jsonMode = false;
   let limit = 20;
+  let readFilter: InboxReadFilter = 'all';
+  let itemKindFilter: InboxItemKindFilter = 'all';
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] as string;
@@ -2376,13 +2567,33 @@ function parseInboxListOptions(args: string[]): {
       continue;
     }
 
-    if (arg === '--limit') {
-      const nextValue = args[index + 1];
-      if (!nextValue) {
-        throw new Error(inboxListUsageText());
-      }
+    if (arg === '--all') {
+      readFilter = 'all';
+      continue;
+    }
 
-      const parsed = Number.parseInt(nextValue, 10);
+    if (arg === '--read') {
+      readFilter = 'read';
+      continue;
+    }
+
+    if (arg === '--unread') {
+      readFilter = 'unread';
+      continue;
+    }
+
+    if (arg === '--activities') {
+      itemKindFilter = 'activity';
+      continue;
+    }
+
+    if (arg === '--conversations') {
+      itemKindFilter = 'conversation';
+      continue;
+    }
+
+    if (arg === '--limit') {
+      const parsed = Number.parseInt(readRequiredOptionValue(args, index, inboxListUsageText()), 10);
       if (!Number.isFinite(parsed) || parsed <= 0) {
         throw new Error(inboxListUsageText());
       }
@@ -2409,24 +2620,339 @@ function parseInboxListOptions(args: string[]): {
   return {
     jsonMode,
     limit,
+    readFilter,
+    itemKindFilter,
   };
 }
 
-function loadInboxEntries(): {
+function parseInboxCreateOptions(args: string[]): {
+  jsonMode: boolean;
+  id?: string;
+  kind: string;
+  summary: string;
+  details?: string;
+  relatedProjectIds?: string[];
+  relatedConversationIds?: string[];
+  notificationState?: InboxNotificationState;
+  createdAt: string;
+} {
+  let jsonMode = false;
+  let id: string | undefined;
+  let kind = 'note';
+  let summary: string | undefined;
+  let details: string | undefined;
+  const relatedProjectIds: string[] = [];
+  const relatedConversationIds: string[] = [];
+  let notificationState: InboxNotificationState | undefined;
+  let createdAt = new Date().toISOString();
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] as string;
+
+    if (arg === '--json') {
+      jsonMode = true;
+      continue;
+    }
+
+    if (arg === '--id') {
+      id = readRequiredOptionValue(args, index, inboxCreateUsageText());
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--id=')) {
+      id = arg.slice('--id='.length);
+      continue;
+    }
+
+    if (arg === '--kind') {
+      kind = readRequiredOptionValue(args, index, inboxCreateUsageText());
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--kind=')) {
+      kind = arg.slice('--kind='.length);
+      continue;
+    }
+
+    if (arg === '--details') {
+      details = readRequiredOptionValue(args, index, inboxCreateUsageText());
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--details=')) {
+      details = arg.slice('--details='.length);
+      continue;
+    }
+
+    if (arg === '--project') {
+      relatedProjectIds.push(readRequiredOptionValue(args, index, inboxCreateUsageText()));
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--project=')) {
+      relatedProjectIds.push(arg.slice('--project='.length));
+      continue;
+    }
+
+    if (arg === '--conversation') {
+      relatedConversationIds.push(readRequiredOptionValue(args, index, inboxCreateUsageText()));
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--conversation=')) {
+      relatedConversationIds.push(arg.slice('--conversation='.length));
+      continue;
+    }
+
+    if (arg === '--notify') {
+      notificationState = parseInboxNotificationState(readRequiredOptionValue(args, index, inboxCreateUsageText()));
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--notify=')) {
+      notificationState = parseInboxNotificationState(arg.slice('--notify='.length));
+      continue;
+    }
+
+    if (arg === '--created-at') {
+      createdAt = normalizeIsoTimestamp(readRequiredOptionValue(args, index, inboxCreateUsageText()), inboxCreateUsageText());
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--created-at=')) {
+      createdAt = normalizeIsoTimestamp(arg.slice('--created-at='.length), inboxCreateUsageText());
+      continue;
+    }
+
+    if (arg.startsWith('--')) {
+      throw new Error(inboxCreateUsageText());
+    }
+
+    if (summary) {
+      throw new Error(inboxCreateUsageText());
+    }
+
+    summary = arg;
+  }
+
+  if (!summary) {
+    throw new Error(inboxCreateUsageText());
+  }
+
+  if (id) {
+    validateActivityId(id);
+  }
+
+  return {
+    jsonMode,
+    id,
+    kind: kind.trim(),
+    summary: summary.trim(),
+    details: details?.trim(),
+    relatedProjectIds: relatedProjectIds.length > 0 ? relatedProjectIds : undefined,
+    relatedConversationIds: relatedConversationIds.length > 0 ? relatedConversationIds : undefined,
+    notificationState,
+    createdAt,
+  };
+}
+
+function parseInboxReadToggleOptions(args: string[], subcommand: 'read' | 'unread'): {
+  jsonMode: boolean;
+  markAll: boolean;
+  selectors: InboxSelector[];
+} {
+  let jsonMode = false;
+  let markAll = false;
+  const selectors: InboxSelector[] = [];
+
+  for (const arg of args) {
+    if (arg === '--json') {
+      jsonMode = true;
+      continue;
+    }
+
+    if (arg === '--all') {
+      markAll = true;
+      continue;
+    }
+
+    if (arg.startsWith('--')) {
+      throw new Error(inboxReadUsageText(subcommand));
+    }
+
+    selectors.push(parseInboxSelector(arg));
+  }
+
+  if ((markAll && selectors.length > 0) || (!markAll && selectors.length === 0)) {
+    throw new Error(inboxReadUsageText(subcommand));
+  }
+
+  return {
+    jsonMode,
+    markAll,
+    selectors,
+  };
+}
+
+function parseInboxDeleteOptions(args: string[]): {
+  jsonMode: boolean;
+  selectors: InboxSelector[];
+} {
+  let jsonMode = false;
+  const selectors: InboxSelector[] = [];
+
+  for (const arg of args) {
+    if (arg === '--json') {
+      jsonMode = true;
+      continue;
+    }
+
+    if (arg.startsWith('--')) {
+      throw new Error(inboxDeleteUsageText());
+    }
+
+    selectors.push(parseInboxSelector(arg));
+  }
+
+  if (selectors.length === 0) {
+    throw new Error(inboxDeleteUsageText());
+  }
+
+  return {
+    jsonMode,
+    selectors,
+  };
+}
+
+function loadInboxState(): {
+  repoRoot: string;
   profile: string;
   activityDir: string;
-  entries: ReturnType<typeof listProfileActivityEntries>;
+  readState: Set<string>;
+  sessions: ReturnType<typeof listStoredSessions>;
+  activityEntries: InboxActivityStateEntry[];
+  standaloneActivityEntries: InboxActivityStateEntry[];
+  conversationEntries: InboxConversationStateEntry[];
+  surfaceEntries: InboxSurfaceEntry[];
 } {
   const profile = resolveProfileName();
   const repoRoot = getRepoRoot();
   const activityDir = resolveProfileActivityDir({ repoRoot, profile });
-  const entries = listProfileActivityEntries({ repoRoot, profile });
+  const readState = loadProfileActivityReadState({ repoRoot, profile });
+  const activityEntries = listProfileActivityEntries({ repoRoot, profile })
+    .map(({ path, entry }) => ({
+      path,
+      entry: attachActivityConversationLinks(profile, entry),
+      read: readState.has(entry.id),
+    }));
+
+  const sessions = listStoredSessions();
+  ensureConversationAttentionBaselines({
+    profile,
+    conversations: sessions.map((session) => ({
+      conversationId: session.id,
+      messageCount: session.messageCount,
+    })),
+  });
+
+  const conversationSummaries = summarizeConversationAttention({
+    profile,
+    conversations: sessions.map((session) => ({
+      conversationId: session.id,
+      messageCount: session.messageCount,
+      lastActivityAt: session.lastActivityAt,
+    })),
+    unreadActivityEntries: activityEntries
+      .filter(({ read, entry }) => !read && entry.relatedConversationIds && entry.relatedConversationIds.length > 0)
+      .map(({ entry }) => ({
+        id: entry.id,
+        createdAt: entry.createdAt,
+        relatedConversationIds: entry.relatedConversationIds ?? [],
+      })),
+  });
+
+  const summaryByConversationId = new Map(conversationSummaries.map((summary) => [summary.conversationId, summary]));
+  const knownConversationIds = new Set(sessions.map((session) => session.id));
+  const standaloneActivityEntries = activityEntries.filter(({ entry }) => {
+    return !(entry.relatedConversationIds ?? []).some((conversationId) => knownConversationIds.has(conversationId));
+  });
+  const conversationEntries = sessions.flatMap((session) => {
+    const summary = summaryByConversationId.get(session.id);
+    if (!summary?.needsAttention) {
+      return [];
+    }
+
+    return [{
+      ...session,
+      needsAttention: true,
+      attentionUpdatedAt: summary.attentionUpdatedAt,
+      attentionUnreadMessageCount: summary.unreadMessageCount,
+      attentionUnreadActivityCount: summary.unreadActivityCount,
+      attentionActivityIds: summary.unreadActivityIds,
+    } satisfies InboxConversationStateEntry];
+  });
+  const surfaceEntries: InboxSurfaceEntry[] = [
+    ...standaloneActivityEntries.map(({ path, entry, read }) => ({
+      kind: 'activity' as const,
+      key: `activity:${entry.id}`,
+      id: entry.id,
+      sortAt: entry.createdAt,
+      read,
+      path,
+      entry,
+    })),
+    ...conversationEntries.map((session) => ({
+      kind: 'conversation' as const,
+      key: `conversation:${session.id}`,
+      id: session.id,
+      sortAt: session.attentionUpdatedAt,
+      read: false as const,
+      session,
+    })),
+  ].sort((left, right) => {
+    const sortCompare = right.sortAt.localeCompare(left.sortAt);
+    if (sortCompare !== 0) {
+      return sortCompare;
+    }
+
+    return left.key.localeCompare(right.key);
+  });
 
   return {
+    repoRoot,
     profile,
     activityDir,
-    entries,
+    readState,
+    sessions,
+    activityEntries,
+    standaloneActivityEntries,
+    conversationEntries,
+    surfaceEntries,
   };
+}
+
+function resolveInboxActivityEntry(state: ReturnType<typeof loadInboxState>, selector: InboxSelector): InboxActivityStateEntry | null {
+  if (selector.kind === 'conversation') {
+    return null;
+  }
+
+  const matches = state.activityEntries.filter(({ entry }) => entry.id === selector.id);
+  if (matches.length === 0) {
+    return null;
+  }
+
+  if (selector.kind === 'auto' && state.conversationEntries.some((entry) => entry.id === selector.id)) {
+    throw new Error(`Ambiguous inbox selector: ${selector.raw}. Use activity:${selector.id} or conversation:${selector.id}.`);
+  }
+
+  return matches[0] ?? null;
 }
 
 async function inboxCommand(args: string[]): Promise<number> {
@@ -2436,19 +2962,64 @@ async function inboxCommand(args: string[]): Promise<number> {
 
   if (effectiveSubcommand === 'list') {
     const listArgs = !subcommand || subcommand.startsWith('--') ? args : rest;
-    const { jsonMode, limit } = parseInboxListOptions(listArgs);
-    const { profile, activityDir, entries } = loadInboxEntries();
-    const limitedEntries = entries.slice(0, limit);
+    const { jsonMode, limit, readFilter, itemKindFilter } = parseInboxListOptions(listArgs);
+    const { profile, activityDir, standaloneActivityEntries, conversationEntries, surfaceEntries } = loadInboxState();
+    const filteredEntries = surfaceEntries.filter((entry) => {
+      if (itemKindFilter !== 'all' && entry.kind !== itemKindFilter) {
+        return false;
+      }
+
+      if (readFilter === 'read') {
+        return entry.kind === 'activity' && entry.read;
+      }
+
+      if (readFilter === 'unread') {
+        return !entry.read;
+      }
+
+      return true;
+    });
+    const limitedEntries = filteredEntries.slice(0, limit);
 
     const payload = {
       profile,
       activityDir,
-      count: entries.length,
+      count: surfaceEntries.length,
+      filteredCount: filteredEntries.length,
       limit,
-      entries: limitedEntries.map(({ path, entry }) => ({
-        path,
-        ...entry,
-      })),
+      filter: readFilter,
+      itemKindFilter,
+      counts: {
+        activities: standaloneActivityEntries.length,
+        conversations: conversationEntries.length,
+        unread: surfaceEntries.filter((entry) => !entry.read).length,
+      },
+      entries: limitedEntries.map((entry) => {
+        if (entry.kind === 'activity') {
+          return {
+            ...entry.entry,
+            key: entry.key,
+            path: entry.path,
+            read: entry.read,
+          };
+        }
+
+        return {
+          kind: entry.kind,
+          key: entry.key,
+          id: entry.session.id,
+          title: entry.session.title,
+          sessionFile: entry.session.file,
+          cwd: entry.session.cwd,
+          lastActivityAt: entry.session.lastActivityAt,
+          attentionUpdatedAt: entry.session.attentionUpdatedAt,
+          read: false,
+          unreadMessageCount: entry.session.attentionUnreadMessageCount,
+          unreadActivityCount: entry.session.attentionUnreadActivityCount,
+          attentionActivityIds: entry.session.attentionActivityIds,
+          summary: buildConversationAttentionReason(entry.session),
+        };
+      }),
     };
 
     if (jsonMode) {
@@ -2459,27 +3030,41 @@ async function inboxCommand(args: string[]): Promise<number> {
     console.log(section('Inbox'));
     console.log(keyValue('Profile', profile));
     console.log(keyValue('Activity directory', activityDir));
-    console.log(keyValue('Showing', `${limitedEntries.length} of ${entries.length}`));
+    console.log(keyValue('Filter', readFilter));
+    console.log(keyValue('Kinds', itemKindFilter));
+    console.log(keyValue('Showing', `${limitedEntries.length} of ${filteredEntries.length}${filteredEntries.length === surfaceEntries.length ? '' : ` (${surfaceEntries.length} total)`}`));
 
     if (limitedEntries.length === 0) {
-      console.log(dim('No activity yet.'));
+      console.log(dim('No inbox items.'));
       return 0;
     }
 
-    for (const { entry } of limitedEntries) {
+    for (const entry of limitedEntries) {
       console.log('');
-      console.log(bullet(`${entry.id}: ${entry.summary}`));
-      console.log(keyValue('Kind', entry.kind, 4));
-      console.log(keyValue('Created', new Date(entry.createdAt).toLocaleString(), 4));
-      console.log(keyValue('Notification', entry.notificationState ?? 'none', 4));
+      if (entry.kind === 'activity') {
+        console.log(bullet(`activity:${entry.entry.id}: ${entry.entry.summary}`));
+        console.log(keyValue('Kind', entry.entry.kind, 4));
+        console.log(keyValue('Created', new Date(entry.entry.createdAt).toLocaleString(), 4));
+        console.log(keyValue('Read', entry.read ? 'yes' : 'no', 4));
+        console.log(keyValue('Notification', entry.entry.notificationState ?? 'none', 4));
 
-      if (entry.relatedProjectIds && entry.relatedProjectIds.length > 0) {
-        console.log(keyValue('Projects', entry.relatedProjectIds.join(', '), 4));
+        if (entry.entry.relatedProjectIds && entry.entry.relatedProjectIds.length > 0) {
+          console.log(keyValue('Projects', entry.entry.relatedProjectIds.join(', '), 4));
+        }
+
+        if (entry.entry.relatedConversationIds && entry.entry.relatedConversationIds.length > 0) {
+          console.log(keyValue('Conversations', entry.entry.relatedConversationIds.join(', '), 4));
+        }
+
+        continue;
       }
 
-      if (entry.relatedConversationIds && entry.relatedConversationIds.length > 0) {
-        console.log(keyValue('Conversations', entry.relatedConversationIds.join(', '), 4));
-      }
+      console.log(bullet(`conversation:${entry.session.id}: ${entry.session.title}`));
+      console.log(keyValue('Reason', buildConversationAttentionReason(entry.session), 4));
+      console.log(keyValue('Updated', new Date(entry.session.attentionUpdatedAt).toLocaleString(), 4));
+      console.log(keyValue('Last activity', new Date(entry.session.lastActivityAt).toLocaleString(), 4));
+      console.log(keyValue('Messages', String(entry.session.messageCount), 4));
+      console.log(keyValue('Cwd', entry.session.cwd, 4));
     }
 
     return 0;
@@ -2491,22 +3076,92 @@ async function inboxCommand(args: string[]): Promise<number> {
     const unknownOptions = rest.filter((arg) => arg.startsWith('--') && arg !== '--json');
 
     if (unknownOptions.length > 0 || nonJsonArgs.length !== 1) {
-      throw new Error('Usage: pa inbox show <id> [--json]');
+      throw new Error('Usage: pa inbox show <selector> [--json]');
     }
 
-    const inboxId = nonJsonArgs[0] as string;
-    const { profile, activityDir, entries } = loadInboxEntries();
-    const match = entries.find(({ entry }) => entry.id === inboxId);
+    const selector = parseInboxSelector(nonJsonArgs[0] as string);
+    const state = loadInboxState();
 
-    if (!match) {
-      throw new Error(`No inbox activity found with id: ${inboxId}`);
+    const activityMatch = resolveInboxActivityEntry(state, selector);
+    const conversationMatch = (selector.kind === 'activity')
+      ? null
+      : state.conversationEntries.find((entry) => entry.id === selector.id) ?? null;
+
+    if (!activityMatch && !conversationMatch) {
+      throw new Error(`No inbox item found for selector: ${selector.raw}`);
     }
 
+    if (activityMatch && conversationMatch) {
+      throw new Error(`Ambiguous inbox selector: ${selector.raw}. Use activity:${selector.id} or conversation:${selector.id}.`);
+    }
+
+    if (activityMatch) {
+      const payload = {
+        profile: state.profile,
+        activityDir: state.activityDir,
+        path: activityMatch.path,
+        entry: {
+          ...activityMatch.entry,
+          read: activityMatch.read,
+        },
+      };
+
+      if (jsonMode) {
+        console.log(JSON.stringify(payload, null, 2));
+        return 0;
+      }
+
+      console.log(section(`Inbox activity: ${activityMatch.entry.id}`));
+      console.log(keyValue('Profile', state.profile));
+      console.log(keyValue('Activity directory', state.activityDir));
+      console.log(keyValue('Path', activityMatch.path));
+      console.log(keyValue('Kind', activityMatch.entry.kind));
+      console.log(keyValue('Created', new Date(activityMatch.entry.createdAt).toLocaleString()));
+      console.log(keyValue('Read', activityMatch.read ? 'yes' : 'no'));
+      console.log(keyValue('Notification', activityMatch.entry.notificationState ?? 'none'));
+
+      if (activityMatch.entry.relatedProjectIds && activityMatch.entry.relatedProjectIds.length > 0) {
+        console.log(keyValue('Projects', activityMatch.entry.relatedProjectIds.join(', ')));
+      }
+
+      if (activityMatch.entry.relatedConversationIds && activityMatch.entry.relatedConversationIds.length > 0) {
+        console.log(keyValue('Conversations', activityMatch.entry.relatedConversationIds.join(', ')));
+      }
+
+      console.log('');
+      console.log(section('Summary'));
+      console.log(activityMatch.entry.summary);
+
+      if (activityMatch.entry.details) {
+        console.log('');
+        console.log(section('Details'));
+        console.log(activityMatch.entry.details);
+      }
+
+      return 0;
+    }
+
+    const conversation = conversationMatch as InboxConversationStateEntry;
     const payload = {
-      profile,
-      activityDir,
-      path: match.path,
-      entry: match.entry,
+      profile: state.profile,
+      entry: {
+        kind: 'conversation' as const,
+        key: `conversation:${conversation.id}`,
+        id: conversation.id,
+        title: conversation.title,
+        read: false,
+        sessionFile: conversation.file,
+        cwd: conversation.cwd,
+        model: conversation.model,
+        messageCount: conversation.messageCount,
+        startedAt: conversation.timestamp,
+        lastActivityAt: conversation.lastActivityAt,
+        attentionUpdatedAt: conversation.attentionUpdatedAt,
+        unreadMessageCount: conversation.attentionUnreadMessageCount,
+        unreadActivityCount: conversation.attentionUnreadActivityCount,
+        attentionActivityIds: conversation.attentionActivityIds,
+        summary: buildConversationAttentionReason(conversation),
+      },
     };
 
     if (jsonMode) {
@@ -2514,32 +3169,251 @@ async function inboxCommand(args: string[]): Promise<number> {
       return 0;
     }
 
-    console.log(section(`Inbox item: ${match.entry.id}`));
-    console.log(keyValue('Profile', profile));
-    console.log(keyValue('Activity directory', activityDir));
-    console.log(keyValue('Path', match.path));
-    console.log(keyValue('Kind', match.entry.kind));
-    console.log(keyValue('Created', new Date(match.entry.createdAt).toLocaleString()));
-    console.log(keyValue('Notification', match.entry.notificationState ?? 'none'));
+    console.log(section(`Inbox conversation: ${conversation.id}`));
+    console.log(keyValue('Profile', state.profile));
+    console.log(keyValue('Title', conversation.title));
+    console.log(keyValue('Session file', conversation.file));
+    console.log(keyValue('Cwd', conversation.cwd));
+    console.log(keyValue('Model', conversation.model));
+    console.log(keyValue('Started', new Date(conversation.timestamp).toLocaleString()));
+    console.log(keyValue('Last activity', new Date(conversation.lastActivityAt).toLocaleString()));
+    console.log(keyValue('Attention updated', new Date(conversation.attentionUpdatedAt).toLocaleString()));
+    console.log(keyValue('Unread messages', String(conversation.attentionUnreadMessageCount)));
+    console.log(keyValue('Linked updates', String(conversation.attentionUnreadActivityCount)));
 
-    if (match.entry.relatedProjectIds && match.entry.relatedProjectIds.length > 0) {
-      console.log(keyValue('Projects', match.entry.relatedProjectIds.join(', ')));
-    }
-
-    if (match.entry.relatedConversationIds && match.entry.relatedConversationIds.length > 0) {
-      console.log(keyValue('Conversations', match.entry.relatedConversationIds.join(', ')));
+    if (conversation.attentionActivityIds.length > 0) {
+      console.log(keyValue('Activity ids', conversation.attentionActivityIds.join(', ')));
     }
 
     console.log('');
     console.log(section('Summary'));
-    console.log(match.entry.summary);
+    console.log(buildConversationAttentionReason(conversation));
 
-    if (match.entry.details) {
-      console.log('');
-      console.log(section('Details'));
-      console.log(match.entry.details);
+    return 0;
+  }
+
+  if (effectiveSubcommand === 'create') {
+    const { jsonMode, id, kind, summary, details, relatedProjectIds, relatedConversationIds, notificationState, createdAt } = parseInboxCreateOptions(rest);
+    const { repoRoot, profile, activityDir, readState } = loadInboxState();
+    const desiredId = id ?? buildDefaultInboxActivityId(kind, summary, createdAt);
+    const finalId = id ? desiredId : resolveUniqueInboxActivityId(repoRoot, profile, desiredId);
+
+    if (id && existsSync(resolveActivityEntryPath({ repoRoot, profile, activityId: finalId }))) {
+      throw new Error(`An inbox activity item already exists with id: ${finalId}`);
     }
 
+    const entry = createProjectActivityEntry({
+      id: finalId,
+      createdAt,
+      profile,
+      kind,
+      summary,
+      details,
+      relatedProjectIds,
+      notificationState,
+    });
+
+    const path = writeProfileActivityEntry({
+      repoRoot,
+      profile,
+      entry,
+    });
+
+    const activityConversationLink = setActivityConversationLinks({
+      profile,
+      activityId: finalId,
+      relatedConversationIds: relatedConversationIds ?? [],
+      updatedAt: createdAt,
+    });
+
+    if (readState.has(finalId)) {
+      readState.delete(finalId);
+      saveProfileActivityReadState({ repoRoot, profile, ids: readState });
+    }
+
+    const payload = {
+      profile,
+      activityDir,
+      path,
+      entry: {
+        ...entry,
+        ...(activityConversationLink ? { relatedConversationIds: activityConversationLink.relatedConversationIds } : {}),
+        read: false,
+      },
+    };
+
+    if (jsonMode) {
+      console.log(JSON.stringify(payload, null, 2));
+      return 0;
+    }
+
+    console.log(section(`Created inbox activity: ${entry.id}`));
+    console.log(keyValue('Profile', profile));
+    console.log(keyValue('Path', path));
+    console.log(keyValue('Kind', entry.kind));
+    console.log(keyValue('Created', new Date(entry.createdAt).toLocaleString()));
+    console.log(keyValue('Read', 'no'));
+
+    console.log('');
+    console.log(section('Summary'));
+    console.log(entry.summary);
+
+    if (entry.details) {
+      console.log('');
+      console.log(section('Details'));
+      console.log(entry.details);
+    }
+
+    return 0;
+  }
+
+  if (effectiveSubcommand === 'read' || effectiveSubcommand === 'unread') {
+    const { jsonMode, markAll, selectors } = parseInboxReadToggleOptions(rest, effectiveSubcommand);
+    const read = effectiveSubcommand === 'read';
+    const state = loadInboxState();
+    const activityIds = new Set<string>();
+    const conversationIds = new Set<string>();
+
+    if (markAll) {
+      for (const entry of state.surfaceEntries) {
+        if (entry.kind === 'activity') {
+          activityIds.add(entry.id);
+        } else {
+          conversationIds.add(entry.id);
+        }
+      }
+    } else {
+      for (const selector of selectors) {
+        const activityMatch = resolveInboxActivityEntry(state, selector);
+        const conversationSession = selector.kind === 'activity'
+          ? null
+          : state.sessions.find((entry) => entry.id === selector.id) ?? null;
+        const conversationMatch = selector.kind === 'activity'
+          ? null
+          : state.conversationEntries.find((entry) => entry.id === selector.id) ?? null;
+
+        if (!activityMatch && !conversationSession) {
+          throw new Error(`No inbox item found for selector: ${selector.raw}`);
+        }
+
+        if (activityMatch && conversationSession) {
+          throw new Error(`Ambiguous inbox selector: ${selector.raw}. Use activity:${selector.id} or conversation:${selector.id}.`);
+        }
+
+        if (activityMatch) {
+          activityIds.add(activityMatch.entry.id);
+        } else {
+          const resolvedConversation = conversationMatch ?? conversationSession;
+          if (resolvedConversation) {
+            conversationIds.add(resolvedConversation.id);
+          }
+        }
+      }
+    }
+
+    for (const id of activityIds) {
+      if (read) {
+        state.readState.add(id);
+      } else {
+        state.readState.delete(id);
+      }
+    }
+
+    if (activityIds.size > 0) {
+      saveProfileActivityReadState({ repoRoot: state.repoRoot, profile: state.profile, ids: state.readState });
+    }
+
+    for (const conversationId of conversationIds) {
+      const session = state.conversationEntries.find((entry) => entry.id === conversationId)
+        ?? state.sessions.find((entry) => entry.id === conversationId);
+      if (!session) {
+        throw new Error(`No inbox conversation found with id: ${conversationId}`);
+      }
+
+      if (read) {
+        markConversationAttentionRead({
+          profile: state.profile,
+          conversationId,
+          messageCount: session.messageCount,
+        });
+      } else {
+        markConversationAttentionUnread({
+          profile: state.profile,
+          conversationId,
+          messageCount: session.messageCount,
+        });
+      }
+    }
+
+    const payload = {
+      ok: true,
+      profile: state.profile,
+      read,
+      updated: {
+        activities: [...activityIds].map((id) => `activity:${id}`),
+        conversations: [...conversationIds].map((id) => `conversation:${id}`),
+      },
+    };
+
+    if (jsonMode) {
+      console.log(JSON.stringify(payload, null, 2));
+      return 0;
+    }
+
+    const totalUpdated = activityIds.size + conversationIds.size;
+    if (totalUpdated === 0) {
+      console.log(dim(`No inbox items to mark as ${read ? 'read' : 'unread'}.`));
+      return 0;
+    }
+
+    console.log(success(`Marked ${totalUpdated} inbox item${totalUpdated === 1 ? '' : 's'} as ${read ? 'read' : 'unread'}.`));
+    return 0;
+  }
+
+  if (effectiveSubcommand === 'delete' || effectiveSubcommand === 'rm') {
+    const { jsonMode, selectors } = parseInboxDeleteOptions(rest);
+    const state = loadInboxState();
+    const requested = selectors.map((selector) => {
+      const match = resolveInboxActivityEntry(state, selector);
+      if (!match) {
+        if (selector.kind === 'conversation' || state.conversationEntries.some((entry) => entry.id === selector.id)) {
+          throw new Error(`Inbox conversations cannot be deleted. Mark them read instead: ${selector.raw}`);
+        }
+
+        throw new Error(`No inbox activity found for selector: ${selector.raw}`);
+      }
+
+      return match;
+    });
+
+    const deleted = [...new Map(requested.map((entry) => [entry.entry.id, entry])).values()].map(({ path, entry }) => ({
+      id: entry.id,
+      path,
+    }));
+
+    for (const item of deleted) {
+      rmSync(item.path, { force: true });
+      clearActivityConversationLinks({ profile: state.profile, activityId: item.id });
+      state.readState.delete(item.id);
+    }
+
+    saveProfileActivityReadState({ repoRoot: state.repoRoot, profile: state.profile, ids: state.readState });
+
+    const payload = {
+      ok: true,
+      profile: state.profile,
+      deleted,
+    };
+
+    if (jsonMode) {
+      console.log(JSON.stringify(payload, null, 2));
+      return 0;
+    }
+
+    console.log(success(`Deleted ${deleted.length} inbox activity item${deleted.length === 1 ? '' : 's'}.`));
+    for (const item of deleted) {
+      console.log(keyValue(item.id, item.path, 2));
+    }
     return 0;
   }
 
@@ -2667,8 +3541,8 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     },
     {
       name: 'inbox',
-      usage: 'inbox [list|show] [args...]',
-      description: 'Inspect activity/inbox items for the active profile',
+      usage: 'inbox [list|show|create|read|unread|delete] [args...]',
+      description: 'Inspect and manage activity/inbox items for the active profile',
       run: inboxCommand,
     },
     {

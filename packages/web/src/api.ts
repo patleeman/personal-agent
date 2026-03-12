@@ -1,4 +1,4 @@
-import type { ActivityEntry, AppStatus, ConversationProjectLinks, LiveSessionContext, LiveSessionMeta, MemoryData, ProfileState, ProjectDetail, ProjectRecord, PromptImageInput, ScheduledTaskSummary, SessionContextUsage, SessionMeta } from './types';
+import type { ActivityEntry, AgentThemeState, AppStatus, ConversationProjectLinks, DaemonState, GatewayState, LiveSessionContext, LiveSessionMeta, MemoryData, ModelState, ProfileState, ProjectDetail, ProjectRecord, PromptImageInput, ScheduledTaskSummary, SessionContextUsage, SessionMeta, ThemeMode } from './types';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch('/api' + path);
@@ -35,13 +35,27 @@ async function del<T>(path: string): Promise<T> {
 export const api = {
   // ── Core ──────────────────────────────────────────────────────────────────
   status:       () => get<AppStatus>('/status'),
+  gateway:      () => get<GatewayState>('/gateway'),
+  restartGateway: () => post<GatewayState>('/gateway/restart'),
+  installGatewayService: () => post<GatewayState>('/gateway/service/install'),
+  startGatewayService: () => post<GatewayState>('/gateway/service/start'),
+  stopGatewayService: () => post<GatewayState>('/gateway/service/stop'),
+  uninstallGatewayService: () => post<GatewayState>('/gateway/service/uninstall'),
+  daemon:       () => get<DaemonState>('/daemon'),
+  installDaemonService: () => post<DaemonState>('/daemon/service/install'),
+  startDaemonService: () => post<DaemonState>('/daemon/service/start'),
+  restartDaemonService: () => post<DaemonState>('/daemon/service/restart'),
+  stopDaemonService: () => post<DaemonState>('/daemon/service/stop'),
+  uninstallDaemonService: () => post<DaemonState>('/daemon/service/uninstall'),
   activity:     () => get<ActivityEntry[]>('/activity'),
   activityById: (id: string) => get<ActivityEntry>(`/activity/${encodeURIComponent(id)}`),
   sessions:     () => get<SessionMeta[]>('/sessions'),
   projects:     () => get<ProjectRecord[]>('/projects'),
   projectById:  (id: string) => get<ProjectDetail>(`/projects/${encodeURIComponent(id)}`),
   createProject: (input: {
+    title: string;
     description: string;
+    repoRoot?: string | null;
     summary?: string;
     status?: string;
     currentFocus?: string | null;
@@ -49,7 +63,9 @@ export const api = {
     recentProgress?: string[];
   }) => post<ProjectDetail>('/projects', input),
   updateProject: (id: string, patchBody: {
+    title?: string;
     description?: string;
+    repoRoot?: string | null;
     summary?: string;
     status?: string;
     currentFocus?: string | null;
@@ -95,7 +111,16 @@ export const api = {
   setCurrentProfile: (profile: string) => patch<{ ok: boolean; currentProfile: string }>('/profiles/current', { profile }),
 
   // ── Models ────────────────────────────────────────────────────────────────
+  models: () => get<ModelState>('/models'),
   setModel: (model: string) => patch<{ ok: boolean }>('/models/current', { model }),
+  updateModelPreferences: (input: { model?: string; thinkingLevel?: string }) =>
+    patch<{ ok: boolean }>('/models/current', input),
+  agentTheme: () => get<AgentThemeState>('/agent-theme'),
+  updateAgentTheme: (input: { themeMode?: ThemeMode; themeDark?: string; themeLight?: string }) =>
+    patch<{ ok: boolean }>('/agent-theme', input),
+  openConversationTabs: () => get<{ sessionIds: string[] }>('/web-ui/open-conversations'),
+  setOpenConversationTabs: (sessionIds: string[]) =>
+    patch<{ ok: boolean; sessionIds: string[] }>('/web-ui/open-conversations', { sessionIds }),
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
   tasks: () => get<ScheduledTaskSummary[]>('/tasks'),
@@ -119,6 +144,8 @@ export const api = {
   activityCount: () => get<{ count: number }>('/activity/count'),
   markActivityRead: (id: string, read = true) =>
     patch<{ ok: boolean }>(`/activity/${encodeURIComponent(id)}`, { read }),
+  markConversationAttentionRead: (id: string, read = true) =>
+    patch<{ ok: boolean }>(`/conversations/${encodeURIComponent(id)}/attention`, { read }),
 
   // ── Live sessions ─────────────────────────────────────────────────────────
   liveSessions: () => get<LiveSessionMeta[]>('/live-sessions'),
@@ -134,8 +161,8 @@ export const api = {
       return r.json() as Promise<ConversationProjectLinks>;
     }),
 
-  createLiveSession: (cwd?: string) =>
-    post<{ id: string; sessionFile: string }>('/live-sessions', { cwd }),
+  createLiveSession: (cwd?: string, referencedProjectIds?: string[], text?: string) =>
+    post<{ id: string; sessionFile: string }>('/live-sessions', { cwd, referencedProjectIds, text }),
 
   resumeSession: (sessionFile: string) =>
     post<{ id: string }>('/live-sessions/resume', { sessionFile }),

@@ -655,13 +655,32 @@ function getSystemdGatewayServiceStatus(provider: GatewayProvider): GatewayServi
   };
 }
 
-function restartLaunchdService(label: string, manifestPath: string): void {
+function startLaunchdService(label: string, manifestPath: string): void {
   const domain = getLaunchdDomain();
   const serviceTarget = `${domain}/${label}`;
 
-  runCommand('launchctl', ['bootout', domain, manifestPath], { allowNonZero: true });
   runCommand('launchctl', ['bootstrap', domain, manifestPath]);
   runCommand('launchctl', ['kickstart', '-k', serviceTarget], { allowNonZero: true });
+}
+
+function stopLaunchdService(manifestPath: string): void {
+  const domain = getLaunchdDomain();
+
+  runCommand('launchctl', ['bootout', domain, manifestPath], { allowNonZero: true });
+}
+
+function restartLaunchdService(label: string, manifestPath: string): void {
+  stopLaunchdService(manifestPath);
+  startLaunchdService(label, manifestPath);
+}
+
+function startSystemdService(unitName: string): void {
+  runCommand('systemctl', ['--user', 'daemon-reload']);
+  runCommand('systemctl', ['--user', 'start', unitName]);
+}
+
+function stopSystemdService(unitName: string): void {
+  runCommand('systemctl', ['--user', 'stop', unitName]);
 }
 
 function restartSystemdService(unitName: string): void {
@@ -689,6 +708,48 @@ function restartLaunchdDaemonService(): void {
 function restartSystemdDaemonService(): void {
   const unitName = getSystemdDaemonUnitName();
   restartSystemdService(unitName);
+}
+
+function startLaunchdGatewayService(provider: GatewayProvider): void {
+  const label = getLaunchdLabel(provider);
+  const manifestPath = getLaunchdPlistPath(label);
+  startLaunchdService(label, manifestPath);
+}
+
+function stopLaunchdGatewayService(provider: GatewayProvider): void {
+  const manifestPath = getLaunchdPlistPath(getLaunchdLabel(provider));
+  stopLaunchdService(manifestPath);
+}
+
+function startSystemdGatewayService(provider: GatewayProvider): void {
+  const unitName = getSystemdUnitName(provider);
+  startSystemdService(unitName);
+}
+
+function stopSystemdGatewayService(provider: GatewayProvider): void {
+  const unitName = getSystemdUnitName(provider);
+  stopSystemdService(unitName);
+}
+
+function startLaunchdDaemonService(): void {
+  const label = getLaunchdDaemonLabel();
+  const manifestPath = getLaunchdPlistPath(label);
+  startLaunchdService(label, manifestPath);
+}
+
+function stopLaunchdDaemonService(): void {
+  const manifestPath = getLaunchdPlistPath(getLaunchdDaemonLabel());
+  stopLaunchdService(manifestPath);
+}
+
+function startSystemdDaemonService(): void {
+  const unitName = getSystemdDaemonUnitName();
+  startSystemdService(unitName);
+}
+
+function stopSystemdDaemonService(): void {
+  const unitName = getSystemdDaemonUnitName();
+  stopSystemdService(unitName);
 }
 
 export function installManagedDaemonService(): ManagedDaemonServiceInfo {
@@ -721,6 +782,48 @@ export function getManagedDaemonServiceStatus(): ManagedDaemonServiceStatus {
   return getSystemdDaemonServiceStatus();
 }
 
+export function startManagedDaemonService(): ManagedDaemonServiceStatus {
+  const status = getManagedDaemonServiceStatus();
+
+  if (!status.installed) {
+    throw new Error('Managed daemon service is not installed. Run `pa daemon service install` first.');
+  }
+
+  if (status.running) {
+    return status;
+  }
+
+  const platform = resolveServicePlatform();
+  if (platform === 'launchd') {
+    startLaunchdDaemonService();
+  } else {
+    startSystemdDaemonService();
+  }
+
+  return getManagedDaemonServiceStatus();
+}
+
+export function stopManagedDaemonService(): ManagedDaemonServiceStatus {
+  const status = getManagedDaemonServiceStatus();
+
+  if (!status.installed) {
+    throw new Error('Managed daemon service is not installed. Run `pa daemon service install` first.');
+  }
+
+  if (!status.running) {
+    return status;
+  }
+
+  const platform = resolveServicePlatform();
+  if (platform === 'launchd') {
+    stopLaunchdDaemonService();
+  } else {
+    stopSystemdDaemonService();
+  }
+
+  return getManagedDaemonServiceStatus();
+}
+
 export function installGatewayService(provider: GatewayProvider): GatewayServiceInfo {
   const platform = resolveServicePlatform();
 
@@ -749,6 +852,46 @@ export function getGatewayServiceStatus(provider: GatewayProvider): GatewayServi
   }
 
   return getSystemdGatewayServiceStatus(provider);
+}
+
+export function startGatewayService(provider: GatewayProvider): GatewayServiceStatus {
+  const status = getGatewayServiceStatus(provider);
+
+  if (!status.installed) {
+    throw new Error(`Gateway service for ${provider} is not installed. Run \`pa gateway service install ${provider}\` first.`);
+  }
+
+  if (status.running) {
+    return status;
+  }
+
+  if (status.platform === 'launchd') {
+    startLaunchdGatewayService(provider);
+  } else {
+    startSystemdGatewayService(provider);
+  }
+
+  return getGatewayServiceStatus(provider);
+}
+
+export function stopGatewayService(provider: GatewayProvider): GatewayServiceStatus {
+  const status = getGatewayServiceStatus(provider);
+
+  if (!status.installed) {
+    throw new Error(`Gateway service for ${provider} is not installed. Run \`pa gateway service install ${provider}\` first.`);
+  }
+
+  if (!status.running) {
+    return status;
+  }
+
+  if (status.platform === 'launchd') {
+    stopLaunchdGatewayService(provider);
+  } else {
+    stopSystemdGatewayService(provider);
+  }
+
+  return getGatewayServiceStatus(provider);
 }
 
 export function restartGatewayService(provider: GatewayProvider): GatewayServiceStatus {

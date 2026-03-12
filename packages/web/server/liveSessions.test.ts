@@ -1,8 +1,8 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ensureSessionFileExists, getLiveSessions, patchSessionManagerPersistence, registry, subscribe, type SseEvent } from './liveSessions.js';
+import { ensureSessionFileExists, getLiveSessions, patchSessionManagerPersistence, registry, resolvePersistentSessionDir, subscribe, toSse, type SseEvent } from './liveSessions.js';
 
 const tempDirs: string[] = [];
 
@@ -78,7 +78,8 @@ describe('live session subscriptions', () => {
     });
     expect(events[1]).toEqual({ type: 'title_update', title: 'How do I fix this?' });
     expect(events[2]).toEqual({ type: 'context_usage', usage: null });
-    expect(events[3]).toEqual({ type: 'agent_start' });
+    expect(events[3]).toEqual({ type: 'queue_state', steering: [], followUp: [] });
+    expect(events[4]).toEqual({ type: 'agent_start' });
   });
 
   it('includes the current live title in live session snapshots', () => {
@@ -115,6 +116,46 @@ describe('live session subscriptions', () => {
         isStreaming: false,
       },
     ]);
+  });
+});
+
+describe('event translation', () => {
+  it('surfaces user messages from message_start events immediately', () => {
+    expect(toSse({
+      type: 'message_start',
+      message: {
+        role: 'user',
+        content: [{ type: 'text', text: 'Show this prompt right away.' }],
+        timestamp: 1,
+      },
+    } as any)).toEqual({
+      type: 'user_message',
+      block: {
+        type: 'user',
+        id: 'live-user',
+        ts: new Date(1).toISOString(),
+        text: 'Show this prompt right away.',
+      },
+    });
+  });
+
+  it('ignores user message_end events to avoid duplicate rows', () => {
+    expect(toSse({
+      type: 'message_end',
+      message: {
+        role: 'user',
+        content: [{ type: 'text', text: 'Show this prompt right away.' }],
+        timestamp: 1,
+      },
+    } as any)).toBeNull();
+  });
+});
+
+describe('session directory resolution', () => {
+  it('stores web-created sessions under cwd-specific subdirectories', () => {
+    expect(resolvePersistentSessionDir('/Users/patrick/workingdir/personal-agent')).toBe(
+      join(homedir(), '.local/state/personal-agent/pi-agent', 'sessions', '--Users-patrick-workingdir-personal-agent--'),
+    );
   });
 });
 

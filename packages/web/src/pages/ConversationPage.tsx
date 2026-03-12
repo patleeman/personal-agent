@@ -4,7 +4,7 @@ import { ChatView } from '../components/chat/ChatView';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import { ConversationTree } from '../components/ConversationTree';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, MessageBlock, PromptImageInput } from '../types';
+import type { ContextUsageSegment, MessageBlock, ModelInfo, PromptImageInput } from '../types';
 import { useApi } from '../hooks';
 import { useSessionDetail } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
@@ -19,24 +19,30 @@ import { emitProjectsChanged } from '../projectEvents';
 import { parseProjectSlashCommand, type ProjectSlashCommand } from '../projectSlashCommand';
 import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../slashMenu';
 import { buildMentionItems, filterMentionItems, resolveMentionItems, type MentionItem } from '../conversationMentions';
-import { buildConversationHref, resolveForkEntryForMessage } from '../forking';
+import { buildConversationComposerStorageKey, persistForkPromptDraft, resolveForkEntryForMessage } from '../forking';
+import {
+  clearPendingConversationPrompt,
+  persistPendingConversationPrompt,
+  readPendingConversationPrompt,
+  type PendingConversationPrompt,
+} from '../pendingConversationPrompt';
+import { useReloadState } from '../reloadState';
+import { ensureConversationTabOpen } from '../sessionTabs';
 
 // ── Model picker ──────────────────────────────────────────────────────────────
-
-interface ModelInfo { id: string; provider: string; name: string; context: number; }
 
 function useModels() {
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [currentModel, setCurrent] = useState<string>('');
   const [currentThinkingLevel, setCurrentThinkingLevel] = useState<string>('');
   useEffect(() => {
-    fetch('/api/models')
-      .then(r => r.json())
-      .then((d: { currentModel: string; currentThinkingLevel?: string; models: ModelInfo[] }) => {
-        setModels(d.models);
-        setCurrent(d.currentModel);
-        setCurrentThinkingLevel(d.currentThinkingLevel ?? '');
-      }).catch(() => {});
+    api.models()
+      .then((data) => {
+        setModels(data.models);
+        setCurrent(data.currentModel);
+        setCurrentThinkingLevel(data.currentThinkingLevel ?? '');
+      })
+      .catch(() => {});
   }, []);
   return { models, currentModel, currentThinkingLevel, setCurrent };
 }
@@ -298,6 +304,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const id = draft ? undefined : routeId;
   const navigate = useNavigate();
 
+  useEffect(() => {
+    if (draft || !id) {
+      return;
+    }
+
+    ensureConversationTabOpen(id);
+  }, [draft, id]);
+
   // ── Live session detection ─────────────────────────────────────────────────
   // Always attempt SSE connection — useSessionStream handles 404 gracefully.
   // We use a confirmed-live flag only for lightweight session-state labeling.
@@ -308,7 +322,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   // Confirm live status via API (for session-state labeling, not for stream)
   useEffect(() => {
-    if (!id) { setConfirmedLive(false); return; }
+    if (!id) {
+      setConfirmedLive(false);
+      return;
+    }
+
+    setConfirmedLive(null);
     api.liveSession(id)
       .then(r => setConfirmedLive(r.live))
       .catch(() => setConfirmedLive(false));
@@ -319,10 +338,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   // ── Existing session data (read-only JSONL) ───────────────────────────────
   const { detail: sessionDetail, loading: sessionLoading } = useSessionDetail(id);
+  const visibleSessionDetail = sessionDetail?.meta.id === id ? sessionDetail : null;
 
   // Historical messages from the JSONL snapshot (doesn't update after load)
-  const baseMessages: MessageBlock[] = sessionDetail
-    ? sessionDetail.blocks.map(displayBlockToMessageBlock)
+  const baseMessages: MessageBlock[] = visibleSessionDetail
+    ? visibleSessionDetail.blocks.map(displayBlockToMessageBlock)
     : [];
 
   // Live sessions hydrate from the SSE snapshot; until that arrives, fall back to JSONL + live deltas.
@@ -330,7 +350,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     ? stream.hasSnapshot
       ? stream.blocks
       : [...baseMessages, ...stream.blocks]
-    : sessionDetail
+    : visibleSessionDetail
       ? baseMessages
       : undefined;
 
@@ -343,8 +363,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   const title = draft
     ? NEW_CONVERSATION_TITLE
-    : getConversationDisplayTitle(titleOverride, stream.title, sessionDetail?.meta.title);
-  const model = sessionDetail?.meta.model;
+    : getConversationDisplayTitle(titleOverride, stream.title, visibleSessionDetail?.meta.title);
+  const model = visibleSessionDetail?.meta.model;
 
   // Model
   const { models, currentModel, currentThinkingLevel, setCurrent } = useModels();
@@ -360,22 +380,32 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       } satisfies TokenCounts;
     }
 
-    if (!sessionDetail) return undefined;
+    if (!visibleSessionDetail) return undefined;
 
-    const historicalUsage = sessionDetail.contextUsage;
+    const historicalUsage = visibleSessionDetail.contextUsage;
     const modelInfo = models.find(m => m.id === (historicalUsage?.modelId || currentModel || model));
     return {
       total: historicalUsage?.tokens ?? null,
       contextWindow: modelInfo?.context ?? 128_000,
       segments: historicalUsage?.segments,
     } satisfies TokenCounts;
-  }, [isLiveSession, stream.contextUsage, sessionDetail, models, currentModel, model]);
+  }, [isLiveSession, stream.contextUsage, visibleSessionDetail, models, currentModel, model]);
   const [notice, setNotice] = useState<{ tone: 'accent' | 'danger'; text: string } | null>(null);
   const [modelIdx, setModelIdx] = useState(0);
   const noticeTimeoutRef = useRef<number | null>(null);
+  const composerDraftStorageKey = !draft && id
+    ? buildConversationComposerStorageKey(id)
+    : null;
+  const [pendingInitialPrompt, setPendingInitialPrompt] = useState<PendingConversationPrompt | null>(null);
+  const pendingInitialPromptSessionIdRef = useRef<string | null>(null);
+  const pinnedInitialPromptScrollSessionIdRef = useRef<string | null>(null);
 
   // Input state
-  const [input, setInput] = useState('');
+  const [input, setInput] = useReloadState<string>({
+    storageKey: composerDraftStorageKey,
+    initialValue: '',
+    shouldPersist: (value) => value.length > 0,
+  });
   const [slashIdx, setSlashIdx] = useState(0);
   const [mentionIdx, setMentionIdx] = useState(0);
   const [attachments, setAttachments] = useState<File[]>([]);
@@ -395,9 +425,32 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setMentionIdx(0);
   }, [draft]);
 
-  // Pending steer/followup queue — cleared when the agent finishes its run
-  type PendingMsg = { id: string; text: string; type: 'steer' | 'followUp' };
-  const [pendingQueue, setPendingQueue] = useState<PendingMsg[]>([]);
+  useEffect(() => {
+    if (draft || !id) {
+      setPendingInitialPrompt(null);
+      pendingInitialPromptSessionIdRef.current = null;
+      pinnedInitialPromptScrollSessionIdRef.current = null;
+      return;
+    }
+
+    setPendingInitialPrompt(readPendingConversationPrompt(id));
+    pendingInitialPromptSessionIdRef.current = null;
+    pinnedInitialPromptScrollSessionIdRef.current = null;
+  }, [draft, id]);
+
+  // Pending steer/followup queue as reported by the live session.
+  const pendingQueue = useMemo(() => ([
+    ...stream.pendingQueue.steering.map((text, index) => ({
+      id: `steer-${index}`,
+      text: text.trim() || '(queued attachment)',
+      type: 'steer' as const,
+    })),
+    ...stream.pendingQueue.followUp.map((text, index) => ({
+      id: `followup-${index}`,
+      text: text.trim() || '(queued attachment)',
+      type: 'followUp' as const,
+    })),
+  ]), [stream.pendingQueue.followUp, stream.pendingQueue.steering]);
   const prevStreamingRef = useRef(false);
   const { data: memoryData } = useApi(api.memory);
   const { data: profileState } = useApi(api.profiles);
@@ -440,6 +493,21 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const referencedProjectIds = conversationProjects?.relatedProjectIds ?? [];
   const draftMentionItems = useMemo(() => resolveMentionItems(input, mentionItems)
     .filter((item) => item.kind !== 'project' || !referencedProjectIds.includes(item.label)), [input, mentionItems, referencedProjectIds]);
+  const draftReferencedProjectIds = useMemo(() => {
+    const ids: string[] = [];
+    const seen = new Set<string>();
+
+    for (const item of draftMentionItems) {
+      if (item.kind !== 'project' || seen.has(item.label)) {
+        continue;
+      }
+
+      seen.add(item.label);
+      ids.push(item.label);
+    }
+
+    return ids;
+  }, [draftMentionItems]);
 
   // Auto-resize textarea
   const resize = useCallback(() => {
@@ -487,19 +555,35 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return () => el.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
 
-  // Scroll to bottom when navigating to a new session.
-  // useLayoutEffect fires synchronously after DOM commit so scrollHeight is accurate.
-  // The flag is reset on id change so each new session gets one initial scroll.
-  const shouldScrollToBottomRef = useRef(true);
-  useEffect(() => {
-    shouldScrollToBottomRef.current = true;
-  }, [id]);
+  // Scroll to the newest message once per conversation after its content loads.
+  // We key this by session id so fork/navigation lands at the bottom even if the
+  // previous conversation briefly remains rendered during route transition.
+  const initialScrollSessionIdRef = useRef<string | null>(null);
   useLayoutEffect(() => {
-    if (!shouldScrollToBottomRef.current) return;
-    if (!realMessages?.length || !scrollRef.current) return;
-    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    shouldScrollToBottomRef.current = false;
-  });
+    if (!id || !realMessages?.length || !scrollRef.current) {
+      return;
+    }
+
+    if (initialScrollSessionIdRef.current === id) {
+      return;
+    }
+
+    const el = scrollRef.current;
+    const scrollToBottom = () => {
+      el.scrollTop = el.scrollHeight;
+      setAtBottom(true);
+    };
+
+    scrollToBottom();
+    const animationFrame = window.requestAnimationFrame(scrollToBottom);
+    const timeoutId = window.setTimeout(scrollToBottom, 50);
+    initialScrollSessionIdRef.current = id;
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.clearTimeout(timeoutId);
+    };
+  }, [id, realMessages]);
 
   // Esc+Esc → open tree
   useEffect(() => {
@@ -525,17 +609,41 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }, [stream.blocks, stream.isStreaming, atBottom]);
 
+  // Forked/new conversations with a queued initial prompt should stay pinned to
+  // the newest message until that first turn finishes, even if the initial load
+  // briefly leaves the scroll position at the top.
+  useLayoutEffect(() => {
+    if (!id || pinnedInitialPromptScrollSessionIdRef.current !== id || !scrollRef.current) {
+      return;
+    }
+
+    const el = scrollRef.current;
+    const scrollToBottom = () => {
+      el.scrollTop = el.scrollHeight;
+      setAtBottom(true);
+    };
+
+    scrollToBottom();
+    const animationFrame = window.requestAnimationFrame(scrollToBottom);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+    };
+  }, [id, realMessages, stream.isStreaming]);
+
   // Focus input on navigation
   useEffect(() => { textareaRef.current?.focus(); }, [id]);
 
-  // Clear pending queue and refresh referenced projects when the agent finishes its run
+  // Refresh referenced projects when the agent finishes its run.
   useEffect(() => {
     if (prevStreamingRef.current && !stream.isStreaming) {
-      setPendingQueue([]);
+      if (pinnedInitialPromptScrollSessionIdRef.current === id) {
+        pinnedInitialPromptScrollSessionIdRef.current = null;
+      }
       void refetchConversationProjects({ resetLoading: false });
     }
     prevStreamingRef.current = stream.isStreaming;
-  }, [stream.isStreaming, refetchConversationProjects]);
+  }, [id, stream.isStreaming, refetchConversationProjects]);
 
   // Jump to message by index
   const jumpToMessage = useCallback((index: number) => {
@@ -554,20 +662,40 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }, durationMs);
   }, []);
 
-  const forkMessageIntoNewTab = useCallback(async (messageIndex: number) => {
+  useEffect(() => {
+    if (draft || !id || !pendingInitialPrompt || !stream.hasSnapshot) {
+      return;
+    }
+
+    if (pendingInitialPromptSessionIdRef.current === id) {
+      return;
+    }
+
+    pendingInitialPromptSessionIdRef.current = id;
+    pinnedInitialPromptScrollSessionIdRef.current = id;
+
+    void stream.send(
+      pendingInitialPrompt.text,
+      pendingInitialPrompt.behavior,
+      pendingInitialPrompt.images,
+    ).then(async () => {
+      clearPendingConversationPrompt(id);
+      pendingInitialPromptSessionIdRef.current = null;
+      setPendingInitialPrompt(null);
+      await refetchConversationProjects({ resetLoading: false });
+      emitConversationProjectsChanged(id);
+    }).catch((error) => {
+      pendingInitialPromptSessionIdRef.current = null;
+      pinnedInitialPromptScrollSessionIdRef.current = null;
+      persistForkPromptDraft(id, pendingInitialPrompt.text);
+      console.error('Initial prompt failed:', error);
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    });
+  }, [draft, id, pendingInitialPrompt, stream.hasSnapshot, stream.send, refetchConversationProjects, showNotice]);
+
+  const forkConversationFromMessage = useCallback(async (messageIndex: number) => {
     if (!id || !isLiveSession || !realMessages) {
       return;
-    }
-
-    const forkTab = window.open('about:blank', '_blank');
-    if (!forkTab) {
-      showNotice('danger', 'Allow pop-ups to open forked conversations in a new tab.');
-      return;
-    }
-
-    if (forkTab.document.body) {
-      forkTab.document.title = 'Forking conversation…';
-      forkTab.document.body.innerHTML = '<p style="font-family: system-ui; padding: 24px; color: #444;">Forking conversation…</p>';
     }
 
     try {
@@ -578,15 +706,18 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       }
 
       const { newSessionId } = await api.forkSession(id, entry.entryId, { preserveSource: true });
-      forkTab.location.href = buildConversationHref(newSessionId, window.location.href);
-      forkTab.focus();
+      // Pi forks before the selected user turn, so queue that prompt into the
+      // new session to make the branch behave like “fork from here”.
+      persistPendingConversationPrompt(newSessionId, {
+        text: entry.text,
+        images: [],
+      });
+      ensureConversationTabOpen(newSessionId);
+      navigate(`/conversations/${newSessionId}`);
     } catch (error) {
-      if (!forkTab.closed) {
-        forkTab.close();
-      }
       showNotice('danger', `Fork failed: ${(error as Error).message}`);
     }
-  }, [id, isLiveSession, realMessages, showNotice]);
+  }, [id, isLiveSession, navigate, realMessages, showNotice]);
 
   function selectModel(modelId: string) {
     setCurrent(modelId);
@@ -608,8 +739,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     if (!id) return;
     if (stream.isStreaming) await stream.abort();
     await api.destroySession(id).catch(() => {});
-    const cwd = sessionDetail?.meta.cwd ?? undefined;
+    const cwd = visibleSessionDetail?.meta.cwd ?? undefined;
     const { id: newId } = await api.createLiveSession(cwd);
+    ensureConversationTabOpen(newId);
     navigate(`/conversations/${newId}`);
   }
 
@@ -637,10 +769,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }
 
   function openFilePicker() {
-    if (draft) {
-      return;
-    }
-
     fileInputRef.current?.click();
   }
 
@@ -669,6 +797,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     try {
       if (command.action === 'new') {
         const detail = await api.createProject({
+          title: command.description,
           description: command.description,
         });
         const createdProjectId = detail.project.id;
@@ -714,10 +843,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }
 
   async function submitComposer(behavior?: 'steer' | 'followUp') {
-    if (draft) {
-      return;
-    }
-
     const text = input.trim();
     const pendingAttachments = attachments;
     if (!text && pendingAttachments.length === 0) return;
@@ -736,22 +861,71 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     try {
       const promptImages = await buildPromptImages(pendingAttachments);
+      let textToSend = text;
       setInput('');
       setAttachments([]);
 
       if (promptImages.length === 0) {
-        if (text === '/clear')           { await handleClear(); return; }
-        if (text === '/image')           { openFilePicker(); return; }
-        if (text.startsWith('/run '))    { await handleRun(text.slice(5)); return; }
-        if (text.startsWith('/search ')) { sendToAgent(`Search the web for: ${text.slice(8)}`); return; }
-        if (text === '/summarize')       { sendToAgent('Summarize our conversation so far concisely.'); return; }
-        if (text === '/think')           { sendToAgent('Think step-by-step about our conversation so far and share your reasoning.'); return; }
-        if (text.startsWith('/think '))  { sendToAgent(`Think step-by-step about: ${text.slice(7)}`); return; }
+        if (text === '/clear') {
+          if (draft) {
+            return;
+          }
+
+          await handleClear();
+          return;
+        }
+        if (text === '/image') { openFilePicker(); return; }
+        if (text.startsWith('/run ')) {
+          if (draft) {
+            textToSend = `Run this shell command and show me the output:\n\`\`\`\n${text.slice(5)}\n\`\`\``;
+          } else {
+            await handleRun(text.slice(5));
+            return;
+          }
+        }
+        if (text.startsWith('/search ')) {
+          if (draft) {
+            textToSend = `Search the web for: ${text.slice(8)}`;
+          } else {
+            sendToAgent(`Search the web for: ${text.slice(8)}`);
+            return;
+          }
+        }
+        if (text === '/summarize') {
+          if (draft) {
+            textToSend = 'Summarize our conversation so far concisely.';
+          } else {
+            sendToAgent('Summarize our conversation so far concisely.');
+            return;
+          }
+        }
+        if (text === '/think') {
+          if (draft) {
+            textToSend = 'Think step-by-step about our conversation so far and share your reasoning.';
+          } else {
+            sendToAgent('Think step-by-step about our conversation so far and share your reasoning.');
+            return;
+          }
+        }
+        if (text.startsWith('/think ')) {
+          if (draft) {
+            textToSend = `Think step-by-step about: ${text.slice(7)}`;
+          } else {
+            sendToAgent(`Think step-by-step about: ${text.slice(7)}`);
+            return;
+          }
+        }
         if (text === '/fork' && id && isLiveSession) {
           try {
             const entries = await api.forkEntries(id);
             if (entries.length === 0) { sendToAgent('(No forkable messages yet)'); return; }
-            const { newSessionId } = await api.forkSession(id, entries[entries.length - 1].entryId);
+            const entry = entries[entries.length - 1];
+            const { newSessionId } = await api.forkSession(id, entry.entryId, { preserveSource: true });
+            persistPendingConversationPrompt(newSessionId, {
+              text: entry.text,
+              images: [],
+            });
+            ensureConversationTabOpen(newSessionId);
             navigate(`/conversations/${newSessionId}`);
           } catch (err) {
             console.error('Fork failed:', err);
@@ -761,14 +935,25 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       }
 
       const queuedBehavior = behavior ?? (isLiveSession && stream.isStreaming ? 'steer' : undefined);
-      const queueLabel = text || (promptImages.length === 1 ? '1 image attached' : `${promptImages.length} images attached`);
+
+      if (!id && !visibleSessionDetail) {
+        try {
+          const { id: newId } = await api.createLiveSession(undefined, draftReferencedProjectIds);
+          persistPendingConversationPrompt(newId, {
+            text: textToSend,
+            behavior: queuedBehavior,
+            images: promptImages,
+          });
+          ensureConversationTabOpen(newId);
+          navigate(`/conversations/${newId}`, { replace: true });
+        } catch (error) {
+          showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+        }
+        return;
+      }
 
       if (isLiveSession) {
-        if (queuedBehavior === 'steer' || queuedBehavior === 'followUp') {
-          const pid = `${Date.now()}-${Math.random()}`;
-          setPendingQueue((q) => [...q, { id: pid, text: queueLabel, type: queuedBehavior }]);
-        }
-        await stream.send(text, queuedBehavior, promptImages);
+        await stream.send(textToSend, queuedBehavior, promptImages);
         if (id) {
           await refetchConversationProjects({ resetLoading: false });
           emitConversationProjectsChanged(id);
@@ -776,12 +961,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         setTimeout(() => {
           if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }, 50);
-      } else if (sessionDetail) {
+      } else if (visibleSessionDetail) {
         try {
-          await api.resumeSession(sessionDetail.meta.file);
+          await api.resumeSession(visibleSessionDetail.meta.file);
           setConfirmedLive(true);
           setTimeout(() => {
-            void stream.send(text, queuedBehavior, promptImages)
+            void stream.send(textToSend, queuedBehavior, promptImages)
               .then(async () => {
                 if (!id) {
                   return;
@@ -804,10 +989,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }
 
   function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
-    if (draft) {
-      return;
-    }
-
     const files = Array.from(e.clipboardData.files).filter((file) => file.type.startsWith('image/'));
     if (files.length === 0) return;
     e.preventDefault();
@@ -871,21 +1052,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   // Drag-and-drop
   function handleDragOver(e: React.DragEvent) {
     e.preventDefault();
-
-    if (draft) {
-      return;
-    }
-
     setDragOver(true);
   }
   function handleDragLeave() { setDragOver(false); }
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     setDragOver(false);
-
-    if (draft) {
-      return;
-    }
 
     const files = Array.from(e.dataTransfer.files);
     if (files.length) addImageAttachments(files);
@@ -894,7 +1066,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setAttachments(prev => prev.filter((_, j) => j !== i));
   }
 
-  const composerHasContent = !draft && (input.trim().length > 0 || attachments.length > 0);
+  const composerHasContent = input.trim().length > 0 || attachments.length > 0;
 
   return (
     <div className="flex flex-col h-full">
@@ -903,7 +1075,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         actions={(
           <div className="flex shrink-0 items-center gap-2.5 text-[10px] font-medium leading-none">
             {draft ? (
-              <span className="text-dim">creating session…</span>
+              <span className="text-dim">draft</span>
             ) : (
               <>
                 {stream.isStreaming && (
@@ -936,16 +1108,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             <ChatView
               messages={realMessages}
               isStreaming={stream.isStreaming}
-              onForkMessage={isLiveSession && id && !stream.isStreaming ? forkMessageIntoNewTab : undefined}
+              onForkMessage={isLiveSession && id && !stream.isStreaming ? forkConversationFromMessage : undefined}
             />
           ) : sessionLoading ? (
             <LoadingState label="Loading session…" className="justify-center h-full" />
           ) : (
             <EmptyState
               className="h-full flex flex-col justify-center px-8"
-              icon={draft ? (
-                <div className="mx-auto h-10 w-10 rounded-full border-2 border-accent/25 border-t-accent animate-spin" />
-              ) : (
+              icon={(
                 <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center mx-auto">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-accent">
                     <path d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 0 1-.825-.242m9.345-8.334a2.126 2.126 0 0 0-.476-.095 48.64 48.64 0 0 0-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0 0 11.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" />
@@ -954,7 +1124,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               )}
               title={NEW_CONVERSATION_TITLE}
               body={draft
-                ? 'Creating a Pi session…'
+                ? 'Start typing to create a conversation. Referenced projects with repo roots can set the initial working directory.'
                 : 'Start a Pi session to populate this conversation.'}
             />
           )}
@@ -987,16 +1157,44 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           {showSlash   && <SlashMenu items={slashItems} idx={slashIdx} onSelect={(item) => {
             const c = item.displayCmd.trim();
             if (c === '/tree')       { setInput(''); setShowTree(true); return; }
-            if (c === '/clear')      { setInput(''); void handleClear(); return; }
+            if (c === '/clear')      { setInput(''); setAttachments([]); if (!draft) { void handleClear(); } return; }
             if (c === '/image')      { setInput(''); openFilePicker(); return; }
-            if (c === '/summarize')  { setInput(''); sendToAgent('Summarize our conversation so far concisely.'); return; }
-            if (c === '/think')      { setInput(''); sendToAgent('Think step-by-step about our conversation so far and share your reasoning.'); return; }
+            if (c === '/summarize')  {
+              if (draft) {
+                setInput('/summarize');
+                setSlashIdx(0);
+                textareaRef.current?.focus();
+              } else {
+                setInput('');
+                sendToAgent('Summarize our conversation so far concisely.');
+              }
+              return;
+            }
+            if (c === '/think')      {
+              if (draft) {
+                setInput('/think');
+                setSlashIdx(0);
+                textareaRef.current?.focus();
+              } else {
+                setInput('');
+                sendToAgent('Think step-by-step about our conversation so far and share your reasoning.');
+              }
+              return;
+            }
             if (c === '/fork' && id && isLiveSession) {
               setInput('');
               void api.forkEntries(id).then(entries => {
-                if (entries.length === 0) return;
-                return api.forkSession(id, entries[entries.length - 1].entryId)
-                  .then(({ newSessionId }) => navigate(`/conversations/${newSessionId}`));
+                const entry = entries[entries.length - 1];
+                if (!entry) return;
+                return api.forkSession(id, entry.entryId, { preserveSource: true })
+                  .then(({ newSessionId }) => {
+                    persistPendingConversationPrompt(newSessionId, {
+                      text: entry.text,
+                      images: [],
+                    });
+                    ensureConversationTabOpen(newSessionId);
+                    navigate(`/conversations/${newSessionId}`);
+                  });
               }).catch(console.error);
               return;
             }
@@ -1043,8 +1241,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-3 pt-3 pb-2.5">
                 <span className="ui-section-label">Referenced projects</span>
                 {referencedProjectIds.map((projectId) => (
-                  <span key={projectId} className="inline-flex items-center gap-1.5 rounded-full bg-accent/10 px-2 py-1 text-[11px] text-accent">
-                    <span className="font-mono">@{projectId}</span>
+                  <span key={projectId} className="inline-flex max-w-[18rem] items-center gap-1.5 rounded-full bg-accent/10 px-2 py-1 text-[11px] text-accent" title={`@${projectId}`}>
+                    <span className="truncate font-mono">@{projectId}</span>
                     <button
                       type="button"
                       onClick={() => { void removeReferencedProject(projectId); }}
@@ -1086,14 +1284,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                       {msg.type === 'steer' ? '⤵ steer' : '↷ followup'}
                     </Pill>
                     <span className="flex-1 text-[11px] text-secondary truncate">{msg.text}</span>
-                    <IconButton
-                      onClick={() => setPendingQueue(q => q.filter(m => m.id !== msg.id))}
-                      title="Remove queued message"
-                      aria-label="Remove queued message"
-                      compact
-                    >
-                      ×
-                    </IconButton>
                   </div>
                 ))}
               </div>
@@ -1116,10 +1306,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
               <IconButton
                 className="shrink-0 mb-0.5"
-                title={draft ? 'Creating conversation' : 'Attach image'}
-                aria-label={draft ? 'Creating conversation' : 'Attach image'}
+                title="Attach image"
+                aria-label="Attach image"
                 onClick={openFilePicker}
-                disabled={draft}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
@@ -1133,11 +1322,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
                 rows={1}
-                disabled={draft}
-                className="flex-1 bg-transparent text-sm text-primary placeholder:text-dim outline-none resize-none leading-relaxed disabled:cursor-wait disabled:text-dim"
-                placeholder={draft
-                  ? 'Creating conversation…'
-                  : 'Message… (/ for commands, @ to reference projects, tasks, knowledge, skills, and profiles)'}
+                className="flex-1 bg-transparent text-sm text-primary placeholder:text-dim outline-none resize-none leading-relaxed"
+                placeholder="Message… (/ for commands, @ to reference projects, tasks, knowledge, skills, and profiles)"
                 style={{ minHeight: '24px', maxHeight: '160px' }}
               />
 
@@ -1170,7 +1356,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           onJump={jumpToMessage}
           onClose={() => setShowTree(false)}
           onFork={isLiveSession && id && !stream.isStreaming ? (blockIdx) => {
-            void forkMessageIntoNewTab(blockIdx);
+            void forkConversationFromMessage(blockIdx);
           } : undefined}
         />
       )}

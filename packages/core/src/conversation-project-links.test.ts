@@ -19,23 +19,23 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-function createTempRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'personal-agent-conversation-links-'));
+function createTempDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
   tempDirs.push(dir);
   return dir;
 }
 
 describe('conversation link paths', () => {
-  it('resolves the profile-scoped conversations directory', () => {
-    const repo = createTempRepo();
-    expect(resolveProfileConversationLinksDir({ repoRoot: repo, profile: 'assistant' }))
-      .toBe(join(repo, 'profiles', 'assistant', 'agent', 'conversations'));
+  it('resolves the profile-scoped conversations directory under local runtime state', () => {
+    const stateRoot = createTempDir('personal-agent-conversation-links-state-');
+    expect(resolveProfileConversationLinksDir({ stateRoot, profile: 'assistant' }))
+      .toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-project-links', 'assistant'));
   });
 
-  it('resolves a conversation link path', () => {
-    const repo = createTempRepo();
-    expect(resolveConversationLinkPath({ repoRoot: repo, profile: 'assistant', conversationId: 'conv-123' }))
-      .toBe(join(repo, 'profiles', 'assistant', 'agent', 'conversations', 'conv-123.json'));
+  it('resolves a conversation link path under local runtime state', () => {
+    const stateRoot = createTempDir('personal-agent-conversation-links-state-');
+    expect(resolveConversationLinkPath({ stateRoot, profile: 'assistant', conversationId: 'conv-123' }))
+      .toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-project-links', 'assistant', 'conv-123.json'));
   });
 
   it('rejects invalid conversation ids', () => {
@@ -45,10 +45,10 @@ describe('conversation link paths', () => {
 
 describe('conversation project links', () => {
   it('writes and reads a conversation project link document', () => {
-    const repo = createTempRepo();
+    const stateRoot = createTempDir('personal-agent-conversation-links-state-');
 
     setConversationProjectLinks({
-      repoRoot: repo,
+      stateRoot,
       profile: 'assistant',
       conversationId: 'conv-123',
       relatedProjectIds: ['web-ui', 'artifact-model'],
@@ -56,7 +56,7 @@ describe('conversation project links', () => {
     });
 
     const stored = getConversationProjectLink({
-      repoRoot: repo,
+      stateRoot,
       profile: 'assistant',
       conversationId: 'conv-123',
     });
@@ -69,15 +69,15 @@ describe('conversation project links', () => {
   });
 
   it('adds links idempotently and keeps the file on disk', () => {
-    const repo = createTempRepo();
+    const stateRoot = createTempDir('personal-agent-conversation-links-state-');
 
-    addConversationProjectLink({ repoRoot: repo, profile: 'assistant', conversationId: 'conv-123', projectId: 'web-ui', updatedAt: '2026-03-10T20:00:00.000Z' });
-    addConversationProjectLink({ repoRoot: repo, profile: 'assistant', conversationId: 'conv-123', projectId: 'web-ui', updatedAt: '2026-03-10T20:01:00.000Z' });
-    addConversationProjectLink({ repoRoot: repo, profile: 'assistant', conversationId: 'conv-123', projectId: 'artifact-model', updatedAt: '2026-03-10T20:02:00.000Z' });
+    addConversationProjectLink({ stateRoot, profile: 'assistant', conversationId: 'conv-123', projectId: 'web-ui', updatedAt: '2026-03-10T20:00:00.000Z' });
+    addConversationProjectLink({ stateRoot, profile: 'assistant', conversationId: 'conv-123', projectId: 'web-ui', updatedAt: '2026-03-10T20:01:00.000Z' });
+    addConversationProjectLink({ stateRoot, profile: 'assistant', conversationId: 'conv-123', projectId: 'artifact-model', updatedAt: '2026-03-10T20:02:00.000Z' });
 
-    const path = resolveConversationLinkPath({ repoRoot: repo, profile: 'assistant', conversationId: 'conv-123' });
+    const path = resolveConversationLinkPath({ stateRoot, profile: 'assistant', conversationId: 'conv-123' });
     expect(existsSync(path)).toBe(true);
-    expect(getConversationProjectLink({ repoRoot: repo, profile: 'assistant', conversationId: 'conv-123' }))
+    expect(getConversationProjectLink({ stateRoot, profile: 'assistant', conversationId: 'conv-123' }))
       .toEqual({
         conversationId: 'conv-123',
         updatedAt: '2026-03-10T20:02:00.000Z',
@@ -86,10 +86,10 @@ describe('conversation project links', () => {
   });
 
   it('removes a project link and leaves an empty durable record when none remain', () => {
-    const repo = createTempRepo();
+    const stateRoot = createTempDir('personal-agent-conversation-links-state-');
 
     setConversationProjectLinks({
-      repoRoot: repo,
+      stateRoot,
       profile: 'assistant',
       conversationId: 'conv-123',
       relatedProjectIds: ['web-ui'],
@@ -97,7 +97,7 @@ describe('conversation project links', () => {
     });
 
     const updated = removeConversationProjectLink({
-      repoRoot: repo,
+      stateRoot,
       profile: 'assistant',
       conversationId: 'conv-123',
       projectId: 'web-ui',
@@ -109,7 +109,7 @@ describe('conversation project links', () => {
       updatedAt: '2026-03-10T20:05:00.000Z',
       relatedProjectIds: [],
     });
-    expect(getConversationProjectLink({ repoRoot: repo, profile: 'assistant', conversationId: 'conv-123' }))
+    expect(getConversationProjectLink({ stateRoot, profile: 'assistant', conversationId: 'conv-123' }))
       .toEqual(updated);
   });
 });

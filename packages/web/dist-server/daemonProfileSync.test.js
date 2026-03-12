@@ -1,0 +1,153 @@
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, expect, it, vi, afterEach } from 'vitest';
+import { classifyRepoManagedTaskDir, normalizeDaemonTaskDirOverride, syncDaemonTaskScopeToProfile, } from './daemonProfileSync.js';
+const tempDirs = [];
+afterEach(async () => {
+    await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+});
+function createTempDir() {
+    const dir = mkdtempSync(join(tmpdir(), 'pa-web-daemon-profile-sync-'));
+    tempDirs.push(dir);
+    return dir;
+}
+function createDaemonStatus(taskDir) {
+    return {
+        running: true,
+        pid: 123,
+        startedAt: '2026-03-12T11:00:00.000Z',
+        socketPath: '/tmp/personal-agentd.sock',
+        queue: {
+            maxDepth: 1000,
+            currentDepth: 0,
+            droppedEvents: 0,
+            processedEvents: 0,
+        },
+        modules: [
+            {
+                name: 'tasks',
+                enabled: true,
+                subscriptions: ['timer.tasks.tick'],
+                handledEvents: 0,
+                detail: {
+                    taskDir,
+                },
+            },
+        ],
+    };
+}
+describe('daemonProfileSync', () => {
+    it('classifies repo-managed task directories', () => {
+        const repoRoot = '/repo';
+        expect(classifyRepoManagedTaskDir(undefined, repoRoot)).toBe('missing');
+        expect(classifyRepoManagedTaskDir('/repo/profiles', repoRoot)).toBe('profiles-root');
+        expect(classifyRepoManagedTaskDir('/repo/profiles/datadog/agent/tasks', repoRoot)).toBe('profile-task-dir');
+        expect(classifyRepoManagedTaskDir('/repo/custom/tasks', repoRoot)).toBe('other');
+    });
+    it('removes a repo-managed taskDir override and preserves other daemon settings', () => {
+        const dir = createTempDir();
+        const configFile = join(dir, 'daemon.json');
+        writeFileSync(configFile, JSON.stringify({
+            logLevel: 'debug',
+            modules: {
+                tasks: {
+                    taskDir: '/repo/profiles',
+                    runTasksInTmux: true,
+                },
+            },
+        }, null, 2));
+        const result = normalizeDaemonTaskDirOverride({
+            repoRoot: '/repo',
+            daemonConfigFile: configFile,
+        });
+        expect(result).toEqual({ changed: true });
+        expect(JSON.parse(readFileSync(configFile, 'utf-8'))).toEqual({
+            logLevel: 'debug',
+            modules: {
+                tasks: {
+                    runTasksInTmux: true,
+                },
+            },
+        });
+    });
+    it('preserves custom taskDir overrides outside the repo profiles tree', () => {
+        const dir = createTempDir();
+        const configFile = join(dir, 'daemon.json');
+        writeFileSync(configFile, JSON.stringify({
+            modules: {
+                tasks: {
+                    taskDir: '/custom/tasks',
+                },
+            },
+        }, null, 2));
+        const result = normalizeDaemonTaskDirOverride({
+            repoRoot: '/repo',
+            daemonConfigFile: configFile,
+        });
+        expect(result).toEqual({ changed: false });
+        expect(JSON.parse(readFileSync(configFile, 'utf-8'))).toEqual({
+            modules: {
+                tasks: {
+                    taskDir: '/custom/tasks',
+                },
+            },
+        });
+    });
+    it('restarts the daemon when the running task scope does not match the active profile', async () => {
+        const dir = createTempDir();
+        const configFile = join(dir, 'daemon.json');
+        writeFileSync(configFile, JSON.stringify({
+            modules: {
+                tasks: {
+                    taskDir: '/repo/profiles',
+                },
+            },
+        }, null, 2));
+        const stopDaemonGracefully = vi.fn(async () => { });
+        const startDaemonDetached = vi.fn(async () => { });
+        const result = await syncDaemonTaskScopeToProfile({
+            profile: 'datadog',
+            repoRoot: '/repo',
+            daemonConfigFile: configFile,
+        }, {
+            pingDaemon: vi.fn(async () => true),
+            getDaemonStatus: vi.fn(async () => createDaemonStatus('/repo/profiles')),
+            stopDaemonGracefully,
+            startDaemonDetached,
+        });
+        expect(result).toMatchObject({
+            configUpdated: true,
+            daemonWasRunning: true,
+            daemonRestarted: true,
+            desiredTaskDir: '/repo/profiles/datadog/agent/tasks',
+            runningTaskDir: '/repo/profiles',
+        });
+        expect(stopDaemonGracefully).toHaveBeenCalledTimes(1);
+        expect(startDaemonDetached).toHaveBeenCalledTimes(1);
+        expect(JSON.parse(readFileSync(configFile, 'utf-8'))).toEqual({});
+    });
+    it('does not restart the daemon when it already matches the active profile', async () => {
+        const stopDaemonGracefully = vi.fn(async () => { });
+        const startDaemonDetached = vi.fn(async () => { });
+        const result = await syncDaemonTaskScopeToProfile({
+            profile: 'datadog',
+            repoRoot: '/repo',
+        }, {
+            pingDaemon: vi.fn(async () => true),
+            getDaemonStatus: vi.fn(async () => createDaemonStatus('/repo/profiles/datadog/agent/tasks')),
+            stopDaemonGracefully,
+            startDaemonDetached,
+        });
+        expect(result).toMatchObject({
+            configUpdated: false,
+            daemonWasRunning: true,
+            daemonRestarted: false,
+            desiredTaskDir: '/repo/profiles/datadog/agent/tasks',
+            runningTaskDir: '/repo/profiles/datadog/agent/tasks',
+        });
+        expect(stopDaemonGracefully).not.toHaveBeenCalled();
+        expect(startDaemonDetached).not.toHaveBeenCalled();
+    });
+});

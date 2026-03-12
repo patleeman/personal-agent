@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
+import type { StorageLike } from './reloadState';
 import type { MessageBlock } from './types';
-import { buildConversationHref, resolveForkEntryForMessage } from './forking';
+import { buildConversationComposerStorageKey, persistForkPromptDraft, resolveForkEntryForMessage } from './forking';
+
+function createStorage(): StorageLike & { getItem(key: string): string | null } {
+  const data = new Map<string, string>();
+  return {
+    getItem: (key) => data.get(key) ?? null,
+    setItem: (key, value) => { data.set(key, value); },
+    removeItem: (key) => { data.delete(key); },
+  };
+}
 
 describe('resolveForkEntryForMessage', () => {
   it('maps an assistant reply to the preceding user turn fork entry', () => {
@@ -41,8 +51,28 @@ describe('resolveForkEntryForMessage', () => {
   });
 });
 
-describe('buildConversationHref', () => {
-  it('builds an absolute conversation URL from the current page', () => {
-    expect(buildConversationHref('fork-123', 'http://localhost:5173/inbox')).toBe('http://localhost:5173/conversations/fork-123');
+describe('buildConversationComposerStorageKey', () => {
+  it('uses the conversation composer reload-state key', () => {
+    expect(buildConversationComposerStorageKey('fork-123')).toBe('pa:reload:conversation:fork-123:composer');
+  });
+});
+
+describe('persistForkPromptDraft', () => {
+  it('stores the forked prompt for the destination conversation', () => {
+    const storage = createStorage();
+
+    persistForkPromptDraft('fork-123', 'Fork from this prompt', storage);
+
+    expect(storage.getItem(buildConversationComposerStorageKey('fork-123'))).toBe(JSON.stringify('Fork from this prompt'));
+  });
+
+  it('clears the stored draft when the prompt is empty', () => {
+    const storage = createStorage();
+    const key = buildConversationComposerStorageKey('fork-123');
+
+    storage.setItem(key, JSON.stringify('Existing draft'));
+    persistForkPromptDraft('fork-123', '', storage);
+
+    expect(storage.getItem(key)).toBeNull();
   });
 });

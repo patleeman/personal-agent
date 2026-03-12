@@ -4,9 +4,12 @@ import { api } from './api';
 import { TasksPage } from './pages/TasksPage';
 import { Layout } from './components/Layout';
 import { ConversationPage } from './pages/ConversationPage';
+import { GatewayPage } from './pages/GatewayPage';
+import { DaemonPage } from './pages/DaemonPage';
 import { InboxPage } from './pages/InboxPage';
 import { MemoryPage } from './pages/MemoryPage';
 import { ProjectsPage } from './pages/ProjectsPage';
+import { SettingsPage } from './pages/SettingsPage';
 import {
   AppDataContext,
   AppEventsContext,
@@ -14,6 +17,7 @@ import {
   LiveTitlesContext,
   SseConnectionContext,
 } from './contexts';
+import { ThemeProvider } from './theme';
 import { applyLiveSessionState, buildSyntheticLiveSessionMeta } from './sessionIndicators';
 import type {
   ActivitySnapshot,
@@ -168,26 +172,31 @@ export function App() {
       <SseConnectionContext.Provider value={{ status: sseStatus }}>
         <AppDataContext.Provider value={{ activity, projects, sessions, tasks, setActivity, setProjects, setSessions, setTasks }}>
           <LiveTitlesContext.Provider value={{ titles: titleMap, setTitle }}>
-            <BrowserRouter>
-              <Routes>
-                <Route path="/" element={<Layout />}>
-                  <Route index element={<Navigate to="/inbox" replace />} />
-                  <Route path="conversations/new" element={<ConversationPage draft />} />
-                  <Route path="conversations/:id" element={<ConversationPage />} />
-                  <Route path="inbox" element={<InboxPage />} />
-                  <Route path="inbox/:id" element={<InboxPage />} />
-                  <Route path="projects" element={<ProjectsPage />} />
-                  <Route path="projects/:id" element={<ProjectsPage />} />
-                  <Route path="scheduled" element={<TasksPage />} />
-                  <Route path="scheduled/:id" element={<TasksPage />} />
-                  <Route path="automations" element={<LegacyTaskRoutesRedirect />} />
-                  <Route path="automations/:id" element={<LegacyTaskRoutesRedirect />} />
-                  <Route path="tasks" element={<LegacyTaskRoutesRedirect />} />
-                  <Route path="tasks/:id" element={<LegacyTaskRoutesRedirect />} />
-                  <Route path="memory" element={<MemoryPage />} />
-                </Route>
-              </Routes>
-            </BrowserRouter>
+            <ThemeProvider>
+              <BrowserRouter>
+                <Routes>
+                  <Route path="/" element={<Layout />}>
+                    <Route index element={<Navigate to="/inbox" replace />} />
+                    <Route path="conversations/new" element={<ConversationPage draft />} />
+                    <Route path="conversations/:id" element={<ConversationPage />} />
+                    <Route path="inbox" element={<InboxPage />} />
+                    <Route path="inbox/:id" element={<InboxPage />} />
+                    <Route path="gateway" element={<GatewayPage />} />
+                    <Route path="daemon" element={<DaemonPage />} />
+                    <Route path="projects" element={<ProjectsPage />} />
+                    <Route path="projects/:id" element={<ProjectsPage />} />
+                    <Route path="scheduled" element={<TasksPage />} />
+                    <Route path="scheduled/:id" element={<TasksPage />} />
+                    <Route path="automations" element={<LegacyTaskRoutesRedirect />} />
+                    <Route path="automations/:id" element={<LegacyTaskRoutesRedirect />} />
+                    <Route path="tasks" element={<LegacyTaskRoutesRedirect />} />
+                    <Route path="tasks/:id" element={<LegacyTaskRoutesRedirect />} />
+                    <Route path="memory" element={<MemoryPage />} />
+                    <Route path="settings" element={<SettingsPage />} />
+                  </Route>
+                </Routes>
+              </BrowserRouter>
+            </ThemeProvider>
           </LiveTitlesContext.Provider>
         </AppDataContext.Provider>
       </SseConnectionContext.Provider>

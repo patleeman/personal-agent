@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { resolveProfileActivityDir, resolveProfileProjectsDir } from '@personal-agent/core';
+import { resolveActivityReadStatePath, resolveConversationAttentionStatePath, resolveProfileActivityConversationLinksDir, resolveProfileActivityDir, resolveProfileProjectsDir, } from '@personal-agent/core';
 const DEFAULT_INTERVAL_MS = 2_000;
 const listeners = new Set();
 let monitorHandle;
@@ -35,14 +35,17 @@ function readPathSnapshot(path) {
     return parts.join('|');
 }
 function createTopicSignatures(options, profile) {
-    const activityDir = resolveProfileActivityDir({ repoRoot: options.repoRoot, profile });
+    const activityDir = resolveProfileActivityDir({ profile });
+    const activityConversationLinksDir = resolveProfileActivityConversationLinksDir({ profile });
     const projectsDir = resolveProfileProjectsDir({ repoRoot: options.repoRoot, profile });
     const tasksDir = join(options.repoRoot, 'profiles', profile, 'agent', 'tasks');
-    const readStateFile = join(options.repoRoot, 'profiles', profile, 'agent', 'activity', '.read-state.json');
+    const readStateFile = resolveActivityReadStatePath({ profile });
+    const conversationAttentionStateFile = resolveConversationAttentionStatePath({ profile });
+    const activitySignature = `activity:${readPathSnapshot(activityDir)}|links:${readPathSnapshot(activityConversationLinksDir)}|read:${readPathSnapshot(readStateFile)}`;
     return {
-        activity: `activity:${readPathSnapshot(activityDir)}|read:${readPathSnapshot(readStateFile)}`,
+        activity: activitySignature,
         projects: `projects:${readPathSnapshot(projectsDir)}`,
-        sessions: `sessions:${readPathSnapshot(options.sessionsDir)}`,
+        sessions: `sessions:${readPathSnapshot(options.sessionsDir)}|attention:${readPathSnapshot(conversationAttentionStateFile)}|${activitySignature}`,
         tasks: `tasks:${readPathSnapshot(tasksDir)}|state:${readPathSnapshot(options.taskStateFile)}`,
     };
 }

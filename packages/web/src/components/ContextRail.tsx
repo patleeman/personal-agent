@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { useReloadState } from '../reloadState';
 import {
   pickAttachProjectId,
   pickFocusedProjectId,
@@ -13,7 +14,7 @@ import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
 import { CONVERSATION_PROJECTS_CHANGED_EVENT, emitConversationProjectsChanged } from '../conversationProjectEvents';
 import { ProjectDetailPanel } from './ProjectDetailPanel';
 import { ProjectOverviewPanel } from './ProjectOverviewPanel';
-import { ErrorState, LoadingState, Pill, SurfacePanel } from './ui';
+import { ErrorState, IconButton, LoadingState, Pill, SurfacePanel } from './ui';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -75,6 +76,8 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const [error, setError] = useState(false);
   const [linkBusy, setLinkBusy] = useState(false);
   const [focusedLoading, setFocusedLoading] = useState(false);
+  const [openCwdBusy, setOpenCwdBusy] = useState(false);
+  const [openCwdError, setOpenCwdError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     let cancelled = false;
@@ -114,6 +117,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const relatedProjectIds = data?.relatedProjectIds ?? [];
   const availableProjects = allProjects.filter((project) => !relatedProjectIds.includes(project.id));
   const availableProjectIds = availableProjects.map((project) => project.id);
+  const selectedAttachProject = availableProjects.find((project) => project.id === attachProjectId) ?? null;
 
   useEffect(() => {
     const nextFocusedProjectId = pickFocusedProjectId(relatedProjectIds, focusedProjectId);
@@ -178,29 +182,77 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     }
   }
 
+  async function openCwdInVscode() {
+    if (!data || openCwdBusy) return;
+
+    setOpenCwdBusy(true);
+    setOpenCwdError(null);
+    try {
+      const result = await api.run('code --reuse-window . || open -a "Visual Studio Code" .', data.cwd);
+      if (result.exitCode !== 0) {
+        throw new Error(result.output.trim() || 'Unable to open VS Code.');
+      }
+    } catch {
+      setOpenCwdError('Could not open VS Code.');
+    } finally {
+      setOpenCwdBusy(false);
+    }
+  }
+
   if (loading) return <div className="px-4 py-4 text-[12px] text-dim animate-pulse">Loading…</div>;
   if (error) return <div className="px-4 py-4 text-[12px] text-dim/60">Unable to load context.</div>;
   if (!data) return null;
 
   const dirParts = data.cwd.replace(/^\//, '').split('/');
   const cwdShort = dirParts.length > 3 ? '…/' + dirParts.slice(-3).join('/') : data.cwd;
+  const gitChangeLabel = data.git
+    ? `${data.git.changeCount} ${data.git.changeCount === 1 ? 'change' : 'changes'}`
+    : null;
 
   return (
     <div className="space-y-5 px-4 py-4">
       <Section title="Working Directory">
-        <SurfacePanel muted className="px-3 py-3 space-y-2">
-          <p className="ui-card-body break-all" title={data.cwd}>{cwdShort}</p>
-          {data.branch && (
-            <div className="flex items-center gap-2">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-teal shrink-0">
-                <line x1="6" y1="3" x2="6" y2="15" />
-                <circle cx="18" cy="6" r="3" />
-                <circle cx="6" cy="18" r="3" />
-                <path d="M18 9a9 9 0 0 1-9 9" />
+        <SurfacePanel muted className="px-3 py-3 space-y-2.5">
+          <div className="flex items-start gap-2">
+            <p className="ui-card-body break-all min-w-0 flex-1" title={data.cwd}>{cwdShort}</p>
+            <IconButton
+              compact
+              onClick={() => { void openCwdInVscode(); }}
+              disabled={openCwdBusy}
+              title={openCwdBusy ? 'Opening VS Code…' : 'Open current working directory in VS Code'}
+              aria-label="Open current working directory in VS Code"
+              className="shrink-0 mt-0.5"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14.25 4.5h5.25v5.25" />
+                <path d="M19.5 4.5 10.5 13.5" />
+                <path d="M19.5 13.5v4.125A1.875 1.875 0 0 1 17.625 19.5H6.375A1.875 1.875 0 0 1 4.5 17.625V6.375A1.875 1.875 0 0 1 6.375 4.5H10.5" />
               </svg>
-              <Pill tone="teal" mono>{data.branch}</Pill>
+            </IconButton>
+          </div>
+          {(data.branch || data.git) && (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-secondary">
+              {data.branch && (
+                <div className="flex items-center gap-2">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-teal shrink-0">
+                    <line x1="6" y1="3" x2="6" y2="15" />
+                    <circle cx="18" cy="6" r="3" />
+                    <circle cx="6" cy="18" r="3" />
+                    <path d="M18 9a9 9 0 0 1-9 9" />
+                  </svg>
+                  <Pill tone="teal" mono>{data.branch}</Pill>
+                </div>
+              )}
+              {data.git && (
+                <span className="font-mono text-dim">
+                  {gitChangeLabel}{' '}
+                  <span className="text-success">+{data.git.linesAdded}</span>{' '}
+                  <span className="text-danger">-{data.git.linesDeleted}</span>
+                </span>
+              )}
             </div>
           )}
+          {openCwdError && <p className="text-[11px] text-danger/80">{openCwdError}</p>}
         </SurfacePanel>
       </Section>
 
@@ -214,7 +266,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
                   <button
                     key={projectId}
                     onClick={() => setFocusedProjectId(projectId)}
-                    className={isFocused ? 'ui-pill ui-pill-accent font-mono' : 'ui-pill ui-pill-muted font-mono hover:text-primary'}
+                    className={isFocused ? 'ui-pill ui-pill-accent font-mono max-w-full truncate' : 'ui-pill ui-pill-muted font-mono hover:text-primary max-w-full truncate'}
                     title={`Focus referenced project ${projectId}`}
                   >
                     {projectId}
@@ -228,7 +280,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
           {!focusedLoading && focusedProject && (
             <LinkedProjectOverviewPanel
               project={focusedProject}
-              onRemove={() => { void removeLinkedProject(focusedProject.id); }}
+              onRemove={() => { void removeLinkedProject(focusedProject.project.id); }}
               removeDisabled={linkBusy}
             />
           )}
@@ -240,11 +292,12 @@ function LiveSessionContextPanel({ id }: { id: string }) {
                 <select
                   value={attachProjectId}
                   onChange={(event) => setAttachProjectId(event.target.value)}
-                  className="flex-1 bg-base border border-border-subtle rounded-lg px-2.5 py-2 text-[12px] text-secondary focus:outline-none focus:border-accent/60"
+                  className="flex-1 truncate bg-base border border-border-subtle rounded-lg px-2.5 py-2 text-[12px] text-secondary focus:outline-none focus:border-accent/60"
                   aria-label="Reference project"
+                  title={selectedAttachProject ? `${selectedAttachProject.title} (${selectedAttachProject.id})${selectedAttachProject.description ? ` — ${selectedAttachProject.description}` : ''}` : ''}
                 >
                   {availableProjects.map((project) => (
-                    <option key={project.id} value={project.id}>{project.id}</option>
+                    <option key={project.id} value={project.id}>{project.title}</option>
                   ))}
                 </select>
                 <button
@@ -504,17 +557,30 @@ function ProjectDetailContext({ id }: { id: string }) {
 function MemoryFileContext({ path }: { path: string }) {
   const fetcher = useCallback(() => api.memoryFile(path), [path]);
   const { data, loading, error, refetch } = useApi(fetcher, path);
-  const [editing,  setEditing]  = useState(false);
-  const [draft,    setDraft]    = useState('');
+  const editingStorageKey = `pa:reload:memory-file:${path}:editing`;
+  const draftStorageKey = `pa:reload:memory-file:${path}:draft`;
+  const [editing, setEditing] = useReloadState<boolean>({
+    storageKey: editingStorageKey,
+    initialValue: false,
+    shouldPersist: (value) => value,
+  });
+  const [draft, setDraft] = useReloadState<string>({
+    storageKey: draftStorageKey,
+    initialValue: '',
+    shouldPersist: (value) => editing && value !== (data?.content ?? ''),
+  });
   const [saving,   setSaving]   = useState(false);
   const [saveErr,  setSaveErr]  = useState<string | null>(null);
   const [savedOk,  setSavedOk]  = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    if (data?.content !== undefined) setDraft(data.content);
-    setEditing(false);
-  }, [data?.content]);
+    if (data?.content === undefined || editing) {
+      return;
+    }
+
+    setDraft(data.content);
+  }, [data?.content, editing, setDraft]);
 
   useEffect(() => {
     if (editing && textareaRef.current) {
@@ -560,7 +626,14 @@ function MemoryFileContext({ path }: { path: string }) {
               {saving ? 'Saving…' : 'Save'}
             </button>
             {savedOk && <span className="text-[12px] text-success">✓ Saved</span>}
-            <button onClick={() => setEditing(false)} disabled={saving} className="text-[12px] text-secondary hover:text-primary transition-colors disabled:opacity-40">
+            <button
+              onClick={() => {
+                setDraft(data?.content ?? '');
+                setEditing(false);
+              }}
+              disabled={saving}
+              className="text-[12px] text-secondary hover:text-primary transition-colors disabled:opacity-40"
+            >
               Cancel
             </button>
           </div>
@@ -571,7 +644,10 @@ function MemoryFileContext({ path }: { path: string }) {
             {data?.content}
           </pre>
           <button
-            onClick={() => { setDraft(data?.content ?? ''); setEditing(true); }}
+            onClick={() => {
+              setDraft(data?.content ?? '');
+              setEditing(true);
+            }}
             className="absolute top-0 right-0 opacity-0 group-hover/content:opacity-100 transition-opacity text-[10px] text-secondary hover:text-primary"
           >
             Edit

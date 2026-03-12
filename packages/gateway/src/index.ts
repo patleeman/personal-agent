@@ -73,13 +73,28 @@ import {
 
 export {
   SUPPORTED_GATEWAY_PROVIDERS,
+  getGatewayServiceStatus,
   getManagedDaemonServiceStatus,
+  installGatewayService,
   installManagedDaemonService,
   restartGatewayService,
   restartGatewayServiceIfInstalled,
   restartManagedDaemonServiceIfInstalled,
+  startGatewayService,
+  startManagedDaemonService,
+  stopGatewayService,
+  stopManagedDaemonService,
+  uninstallGatewayService,
   uninstallManagedDaemonService,
+  type GatewayServiceStatus,
 } from './service.js';
+export {
+  getGatewayConfigFilePath,
+  readGatewayConfig,
+  writeGatewayConfig,
+  type GatewayStoredConfig,
+  type TelegramStoredConfig,
+} from './config.js';
 export { parseAllowlist } from './allowlist.js';
 export { parseGatewayCliArgs } from './cli-helpers.js';
 

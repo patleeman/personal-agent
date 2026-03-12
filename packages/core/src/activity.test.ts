@@ -1,12 +1,16 @@
-import { mkdtempSync } from 'fs';
+import { mkdtempSync, readFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   listProfileActivityEntries,
+  loadProfileActivityReadState,
   resolveActivityEntryPath,
+  resolveActivityReadStatePath,
   resolveProfileActivityDir,
+  resolveProfileActivityStateDir,
+  saveProfileActivityReadState,
   validateActivityId,
   writeProfileActivityEntry,
 } from './activity.js';
@@ -18,23 +22,29 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-function createTempRepo(): string {
+function createTempStateRoot(): string {
   const dir = mkdtempSync(join(tmpdir(), 'personal-agent-activity-'));
   tempDirs.push(dir);
   return dir;
 }
 
 describe('activity paths', () => {
+  it('resolves the profile-scoped activity state directory', () => {
+    const stateRoot = createTempStateRoot();
+    expect(resolveProfileActivityStateDir({ stateRoot, profile: 'datadog' }))
+      .toBe(join(stateRoot, 'pi-agent', 'state', 'inbox', 'datadog'));
+  });
+
   it('resolves the profile-scoped activity directory', () => {
-    const repo = createTempRepo();
-    expect(resolveProfileActivityDir({ repoRoot: repo, profile: 'datadog' }))
-      .toBe(join(repo, 'profiles', 'datadog', 'agent', 'activity'));
+    const stateRoot = createTempStateRoot();
+    expect(resolveProfileActivityDir({ stateRoot, profile: 'datadog' }))
+      .toBe(join(stateRoot, 'pi-agent', 'state', 'inbox', 'datadog', 'activities'));
   });
 
   it('resolves a profile activity entry path', () => {
-    const repo = createTempRepo();
-    expect(resolveActivityEntryPath({ repoRoot: repo, profile: 'datadog', activityId: 'daily-report' }))
-      .toBe(join(repo, 'profiles', 'datadog', 'agent', 'activity', 'daily-report.md'));
+    const stateRoot = createTempStateRoot();
+    expect(resolveActivityEntryPath({ stateRoot, profile: 'datadog', activityId: 'daily-report' }))
+      .toBe(join(stateRoot, 'pi-agent', 'state', 'inbox', 'datadog', 'activities', 'daily-report.md'));
   });
 
   it('rejects invalid activity ids', () => {
@@ -42,12 +52,38 @@ describe('activity paths', () => {
   });
 });
 
+describe('activity read state', () => {
+  it('resolves the activity read-state path', () => {
+    const stateRoot = createTempStateRoot();
+    expect(resolveActivityReadStatePath({ stateRoot, profile: 'datadog' }))
+      .toBe(join(stateRoot, 'pi-agent', 'state', 'inbox', 'datadog', 'read-state.json'));
+  });
+
+  it('loads an empty read state when the file is missing', () => {
+    const stateRoot = createTempStateRoot();
+    expect(loadProfileActivityReadState({ stateRoot, profile: 'datadog' })).toEqual(new Set());
+  });
+
+  it('saves and reloads normalized read ids', () => {
+    const stateRoot = createTempStateRoot();
+    const path = saveProfileActivityReadState({
+      stateRoot,
+      profile: 'datadog',
+      ids: [' newer ', '', 'older', 'newer'],
+    });
+
+    expect(path).toBe(join(stateRoot, 'pi-agent', 'state', 'inbox', 'datadog', 'read-state.json'));
+    expect(readFileSync(path, 'utf-8')).toBe('["newer","older"]');
+    expect(loadProfileActivityReadState({ stateRoot, profile: 'datadog' })).toEqual(new Set(['newer', 'older']));
+  });
+});
+
 describe('activity storage', () => {
   it('writes and lists activity entries newest-first', () => {
-    const repo = createTempRepo();
+    const stateRoot = createTempStateRoot();
 
     const olderPath = writeProfileActivityEntry({
-      repoRoot: repo,
+      stateRoot,
       profile: 'datadog',
       entry: createProjectActivityEntry({
         id: 'older',
@@ -59,7 +95,7 @@ describe('activity storage', () => {
     });
 
     const newerPath = writeProfileActivityEntry({
-      repoRoot: repo,
+      stateRoot,
       profile: 'datadog',
       entry: createProjectActivityEntry({
         id: 'newer',
@@ -70,7 +106,7 @@ describe('activity storage', () => {
       }),
     });
 
-    const entries = listProfileActivityEntries({ repoRoot: repo, profile: 'datadog' });
+    const entries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
 
     expect(entries.map((entry) => entry.entry.id)).toEqual(['newer', 'older']);
     expect(entries[0]?.path).toBe(newerPath);
@@ -78,7 +114,7 @@ describe('activity storage', () => {
   });
 
   it('returns an empty list when there is no activity dir', () => {
-    const repo = createTempRepo();
-    expect(listProfileActivityEntries({ repoRoot: repo, profile: 'datadog' })).toEqual([]);
+    const stateRoot = createTempStateRoot();
+    expect(listProfileActivityEntries({ stateRoot, profile: 'datadog' })).toEqual([]);
   });
 });

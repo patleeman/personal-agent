@@ -21,17 +21,24 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-function registerProjectTool(repoRoot: string) {
-  let registeredTool: any;
+function registerProjectTool(repoRoot: string, stateRoot: string) {
+  let registeredTool:
+    | { execute: (...args: unknown[]) => Promise<{ isError?: boolean; content: Array<{ text?: string }> }> }
+    | undefined;
 
   createProjectAgentExtension({
     repoRoot,
+    stateRoot,
     getCurrentProfile: () => 'datadog',
   })({
     registerTool: (tool: unknown) => {
-      registeredTool = tool;
+      registeredTool = tool as { execute: (...args: unknown[]) => Promise<{ isError?: boolean; content: Array<{ text?: string }> }> };
     },
   } as never);
+
+  if (!registeredTool) {
+    throw new Error('Project tool was not registered.');
+  }
 
   return registeredTool;
 }
@@ -59,13 +66,16 @@ function createToolContext(conversationId = 'conv-123') {
 describe('project agent extension', () => {
   it('creates and references a project in the current conversation', async () => {
     const repoRoot = createTempRepo();
-    const projectTool = registerProjectTool(repoRoot);
+    const stateRoot = join(repoRoot, '.state');
+    const projectTool = registerProjectTool(repoRoot, stateRoot);
 
     const result = await projectTool.execute(
       'tool-1',
       {
         action: 'create',
+        title: 'Web UI shell',
         description: 'Build the web UI shell.',
+        repoRoot: '~/workingdir/personal-agent',
       },
       undefined,
       undefined,
@@ -73,25 +83,31 @@ describe('project agent extension', () => {
     );
 
     expect(result.isError).not.toBe(true);
-    expect(result.content[0]?.text).toContain('Created and referenced @build-the-web-ui-shell');
+    expect(result.content[0]?.text).toContain('Created and referenced @web-ui-shell');
+    expect(result.content[0]?.text).toContain('Title: Web UI shell');
+    expect(result.content[0]?.text).toContain('Repo root:');
 
-    const detail = readProjectDetailFromProject({ repoRoot, profile: 'datadog', projectId: 'build-the-web-ui-shell' });
+    const detail = readProjectDetailFromProject({ repoRoot, profile: 'datadog', projectId: 'web-ui-shell' });
+    expect(detail.project.title).toBe('Web UI shell');
     expect(detail.project.description).toBe('Build the web UI shell.');
+    expect(detail.project.repoRoot).toContain('workingdir/personal-agent');
 
-    const link = getConversationProjectLink({ repoRoot, profile: 'datadog', conversationId: 'conv-123' });
-    expect(link?.relatedProjectIds).toEqual(['build-the-web-ui-shell']);
+    const link = getConversationProjectLink({ stateRoot, profile: 'datadog', conversationId: 'conv-123' });
+    expect(link?.relatedProjectIds).toEqual(['web-ui-shell']);
   });
 
   it('adds milestones and tasks to an existing project', async () => {
     const repoRoot = createTempRepo();
-    const projectTool = registerProjectTool(repoRoot);
+    const stateRoot = join(repoRoot, '.state');
+    const projectTool = registerProjectTool(repoRoot, stateRoot);
     const ctx = createToolContext();
-    const createdProjectId = 'build-the-artifact-model';
+    const createdProjectId = 'artifact-model';
 
     await projectTool.execute(
       'tool-1',
       {
         action: 'create',
+        title: 'Artifact model',
         description: 'Build the artifact model.',
         referenceInConversation: false,
       },

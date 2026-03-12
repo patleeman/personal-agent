@@ -58,7 +58,9 @@ export interface ProjectRecord {
   id: string;
   createdAt: string;
   updatedAt: string;
+  title: string;
   description: string;
+  repoRoot?: string;
   summary: string;
   status: string;
   blockers: string[];
@@ -96,6 +98,116 @@ export interface ScheduledTaskSummary {
   lastAttemptCount?: number;
 }
 
+export interface GatewayServiceSummary {
+  provider: 'telegram';
+  platform: string;
+  identifier: string;
+  manifestPath: string;
+  installed: boolean;
+  running: boolean;
+  logFile?: string;
+  error?: string;
+  daemonService?: {
+    identifier: string;
+    manifestPath: string;
+    installed: boolean;
+    running: boolean;
+    logFile?: string;
+  };
+}
+
+export interface GatewayAccessSummary {
+  tokenConfigured: boolean;
+  allowlistChatIds: string[];
+  allowedUserIds: string[];
+  blockedUserIds: string[];
+  workingDirectory?: string;
+  maxPendingPerChat?: number;
+  toolActivityStream?: boolean;
+  clearRecentMessagesOnNew?: boolean;
+}
+
+export interface GatewayWorkTopicSummary {
+  sourceConversationId: string;
+  workConversationId: string;
+  topicName: string;
+  updatedAt: string;
+}
+
+export interface GatewayConversationSummary {
+  conversationId: string;
+  label: string;
+  chatId: string;
+  messageThreadId?: number;
+  sessionFile: string;
+  sessionMissing: boolean;
+  sessionOverride: boolean;
+  title: string;
+  messageCount: number;
+  model: string;
+  cwd: string;
+  lastActivityAt: string;
+  bindingUpdatedAt?: string;
+  workTopic?: GatewayWorkTopicSummary;
+  sourceWorkTopic?: GatewayWorkTopicSummary;
+}
+
+export interface GatewayPendingMessageSummary {
+  id: string;
+  storedAt: string;
+  conversationId: string;
+  chatId: string;
+  messageThreadId?: number;
+  senderLabel?: string;
+  preview: string;
+  hasMedia: boolean;
+}
+
+export interface GatewayLogTail {
+  path?: string;
+  lines: string[];
+}
+
+export interface GatewayState {
+  provider: 'telegram';
+  currentProfile: string;
+  configuredProfile: string;
+  warnings: string[];
+  service: GatewayServiceSummary;
+  access: GatewayAccessSummary;
+  conversations: GatewayConversationSummary[];
+  pendingMessages: GatewayPendingMessageSummary[];
+  gatewayLog: GatewayLogTail;
+  daemonLog?: GatewayLogTail;
+}
+
+export interface DaemonServiceSummary {
+  platform: string;
+  identifier: string;
+  manifestPath: string;
+  installed: boolean;
+  running: boolean;
+  logFile?: string;
+  error?: string;
+}
+
+export interface DaemonRuntimeSummary {
+  running: boolean;
+  socketPath: string;
+  pid?: number;
+  startedAt?: string;
+  moduleCount: number;
+  queueDepth?: number;
+  maxQueueDepth?: number;
+}
+
+export interface DaemonState {
+  warnings: string[];
+  service: DaemonServiceSummary;
+  runtime: DaemonRuntimeSummary;
+  log: GatewayLogTail;
+}
+
 // ── Sessions ──────────────────────────────────────────────────────────────────
 
 export interface SessionMeta {
@@ -108,6 +220,12 @@ export interface SessionMeta {
   title: string;
   messageCount: number;
   isRunning?: boolean;
+  lastActivityAt?: string;
+  needsAttention?: boolean;
+  attentionUpdatedAt?: string;
+  attentionUnreadMessageCount?: number;
+  attentionUnreadActivityCount?: number;
+  attentionActivityIds?: string[];
 }
 
 export type DisplayBlock =
@@ -153,9 +271,16 @@ export type AppEvent =
 
 // ── Live session ──────────────────────────────────────────────────────────────
 
+export interface GitWorkingTreeSummary {
+  changeCount: number;
+  linesAdded: number;
+  linesDeleted: number;
+}
+
 export interface LiveSessionContext {
   cwd: string;
   branch: string | null;
+  git: GitWorkingTreeSummary | null;
   userMessages: Array<{ id: string; ts: string; text: string; imageCount: number }>;
   relatedProjectIds: string[];
 }
@@ -180,6 +305,8 @@ export type SseEvent =
   | { type: 'agent_start' }
   | { type: 'agent_end' }
   | { type: 'turn_end' }
+  | { type: 'user_message';    block: Extract<DisplayBlock, { type: 'user' }> }
+  | { type: 'queue_state';     steering: string[]; followUp: string[] }
   | { type: 'text_delta';      delta: string }
   | { type: 'thinking_delta';  delta: string }
   | { type: 'tool_start';      toolCallId: string; toolName: string; args: Record<string, string> }
@@ -235,6 +362,29 @@ export interface AppStatus {
   repoRoot: string;
   activityCount: number;
   projectCount: number;
+}
+
+export interface ModelInfo {
+  id: string;
+  provider: string;
+  name: string;
+  context: number;
+}
+
+export interface ModelState {
+  currentModel: string;
+  currentThinkingLevel: string;
+  models: ModelInfo[];
+}
+
+export type ThemeMode = 'system' | 'light' | 'dark';
+
+export interface AgentThemeState {
+  currentTheme: string;
+  themeMode: ThemeMode;
+  themeDark: string;
+  themeLight: string;
+  themes: string[];
 }
 
 export interface ProfileState {

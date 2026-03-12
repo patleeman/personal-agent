@@ -23,6 +23,11 @@ import { estimateContextUsageSegments } from './sessionContextUsage.js';
 const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
 const SESSIONS_DIR = join(AGENT_DIR, 'sessions');
 
+export function resolvePersistentSessionDir(cwd: string): string {
+  const safePath = `--${cwd.replace(/^[/\\]/, '').replace(/[/\\:]/g, '-')}--`;
+  return join(SESSIONS_DIR, safePath);
+}
+
 // ── SSE event types sent to clients ──────────────────────────────────────────
 
 export interface LiveContextUsageSegment {
@@ -44,6 +49,8 @@ export type SseEvent =
   | { type: 'agent_start' }
   | { type: 'agent_end' }
   | { type: 'turn_end' }
+  | { type: 'user_message';    block: Extract<DisplayBlock, { type: 'user' }> }
+  | { type: 'queue_state';     steering: string[]; followUp: string[] }
   | { type: 'text_delta';      delta: string }
   | { type: 'thinking_delta';  delta: string }
   | { type: 'tool_start';      toolCallId: string; toolName: string; args: unknown }
@@ -70,6 +77,7 @@ interface LiveEntry {
   title: string;
   sentTitle: boolean;
   lastContextUsageJson: string | null;
+  lastQueueStateJson: string | null;
   contextUsageTimer?: ReturnType<typeof setTimeout>;
 }
 
@@ -232,6 +240,35 @@ function readContextUsagePayload(session: AgentSession): LiveContextUsage | null
   }
 }
 
+function readQueueState(session: AgentSession): { steering: string[]; followUp: string[] } {
+  const steer = typeof session.getSteeringMessages === 'function'
+    ? session.getSteeringMessages()
+    : [];
+  const followUp = typeof session.getFollowUpMessages === 'function'
+    ? session.getFollowUpMessages()
+    : [];
+
+  return {
+    steering: [...steer],
+    followUp: [...followUp],
+  };
+}
+
+function buildUserMessageBlock(message: { content?: unknown; timestamp?: string | number }): Extract<DisplayBlock, { type: 'user' }> | null {
+  const [block] = buildDisplayBlocksFromEntries([
+    {
+      id: 'live-user',
+      timestamp: message.timestamp ?? Date.now(),
+      message: {
+        role: 'user',
+        content: message.content,
+      },
+    },
+  ]);
+
+  return block?.type === 'user' ? block : null;
+}
+
 function buildLiveSnapshotBlocks(session: AgentSession): DisplayBlock[] {
   const state = session.state;
   const messages = state.messages.slice();
@@ -276,6 +313,17 @@ function broadcastContextUsage(entry: LiveEntry, force = false): void {
   broadcast(entry, { type: 'context_usage', usage });
 }
 
+function broadcastQueueState(entry: LiveEntry, force = false): void {
+  const queueState = readQueueState(entry.session);
+  const nextJson = JSON.stringify(queueState);
+  if (!force && entry.lastQueueStateJson === nextJson) {
+    return;
+  }
+
+  entry.lastQueueStateJson = nextJson;
+  broadcast(entry, { type: 'queue_state', ...queueState });
+}
+
 function scheduleContextUsage(entry: LiveEntry, delayMs = 400): void {
   if (entry.contextUsageTimer) {
     return;
@@ -307,6 +355,7 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
     title: '',
     sentTitle: false,
     lastContextUsageJson: null,
+    lastQueueStateJson: null,
   };
   registry.set(id, entry);
   invalidateAppTopics('sessions');
@@ -324,6 +373,10 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
 
     if (event.type === 'agent_start' || event.type === 'message_update' || event.type === 'tool_execution_start' || event.type === 'tool_execution_update' || event.type === 'tool_execution_end') {
       scheduleContextUsage(entry);
+    }
+
+    if (event.type === 'message_start' && event.message.role === 'user') {
+      broadcastQueueState(entry);
     }
 
     // Emit stats after agent_end
@@ -351,11 +404,24 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
   return entry;
 }
 
-function toSse(event: AgentSessionEvent): SseEvent | null {
+export function toSse(event: AgentSessionEvent): SseEvent | null {
   switch (event.type) {
     case 'agent_start': return { type: 'agent_start' };
     case 'agent_end':   return { type: 'agent_end' };
     case 'turn_end':    return { type: 'turn_end' };
+
+    case 'message_start': {
+      if (event.message.role !== 'user') {
+        return null;
+      }
+
+      const block = buildUserMessageBlock(event.message);
+      return block ? { type: 'user_message', block } : null;
+    }
+
+    case 'message_end': {
+      return null;
+    }
 
     case 'message_update': {
       const e = event.assistantMessageEvent;
@@ -462,7 +528,7 @@ export async function createSession(
     authStorage:   auth,
     modelRegistry: makeRegistry(auth),
     resourceLoader,
-    sessionManager: SessionManager.create(cwd, SESSIONS_DIR),
+    sessionManager: SessionManager.create(cwd, resolvePersistentSessionDir(cwd)),
   });
 
   patchSessionManagerPersistence(session.sessionManager);
@@ -483,25 +549,23 @@ export async function resumeSession(
     if (e.session.sessionFile === sessionFile) return { id };
   }
 
-  const auth   = makeAuth();
-  // Derive cwd from sessions dir parent — best effort
-  const cwd    = SESSIONS_DIR;
+  const auth = makeAuth();
+  const sessionManager = SessionManager.open(sessionFile);
+  const cwd = sessionManager.getCwd();
   const resourceLoader = await makeLoader(cwd, options.extensionFactories);
   const { session } = await createAgentSession({
     cwd,
-    agentDir:       AGENT_DIR,
-    authStorage:    auth,
-    modelRegistry:  makeRegistry(auth),
+    agentDir: AGENT_DIR,
+    authStorage: auth,
+    modelRegistry: makeRegistry(auth),
     resourceLoader,
-    sessionManager: SessionManager.open(sessionFile),
+    sessionManager,
   });
 
   patchSessionManagerPersistence(session.sessionManager);
 
-  // Derive cwd from the session file directory name (best-effort)
-  const derivedCwd = sessionFile.replace(/[/\\][^/\\]+$/, '') ?? process.cwd();
   const id = session.sessionId;
-  wireSession(id, session, derivedCwd);
+  wireSession(id, session, cwd);
   return { id };
 }
 
@@ -520,6 +584,7 @@ export function subscribe(
     listener({ type: 'title_update', title });
   }
   listener({ type: 'context_usage', usage: readContextUsagePayload(entry.session) });
+  listener({ type: 'queue_state', ...readQueueState(entry.session) });
   if (entry.session.isStreaming) {
     listener({ type: 'agent_start' });
   }
@@ -561,18 +626,30 @@ export async function promptSession(
   const { session } = entry;
   const hasImages = Boolean(images && images.length > 0);
 
+  const runPrompt = async (allowImages: boolean): Promise<void> => {
+    if (behavior === 'steer') {
+      await (allowImages && hasImages ? session.steer(text, images) : session.steer(text));
+      broadcastQueueState(entry, true);
+      return;
+    }
+
+    if (behavior === 'followUp') {
+      await (allowImages && hasImages ? session.followUp(text, images) : session.followUp(text));
+      broadcastQueueState(entry, true);
+      return;
+    }
+
+    await (allowImages && hasImages ? session.prompt(text, { images }) : session.prompt(text));
+  };
+
   try {
-    if (behavior === 'steer')     return hasImages ? session.steer(text, images) : session.steer(text);
-    if (behavior === 'followUp')  return hasImages ? session.followUp(text, images) : session.followUp(text);
-    return hasImages ? session.prompt(text, { images }) : session.prompt(text);
+    await runPrompt(true);
   } catch (error) {
     if (!hasImages || !isLikelyUnsupportedImageInputError(error)) {
       throw error;
     }
 
-    if (behavior === 'steer')     return session.steer(text);
-    if (behavior === 'followUp')  return session.followUp(text);
-    return session.prompt(text);
+    await runPrompt(false);
   }
 }
 

@@ -28,6 +28,7 @@ This `PROJECT.yaml` file is the canonical durable project record.
 A project can store:
 
 - `id`
+- `title`
 - `description`
 - `summary`
 - `status`
@@ -45,6 +46,7 @@ A project can store:
 id: improve-web-ui
 createdAt: 2026-03-12T12:00:00.000Z
 updatedAt: 2026-03-12T14:15:00.000Z
+title: Improve web UI docs
 description: Improve the personal-agent web UI docs and navigation.
 repoRoot: /Users/patrick/workingdir/personal-agent
 summary: Reorganizing docs into a single user-facing set.
@@ -118,7 +120,7 @@ See [Scheduled Tasks](./scheduled-tasks.md).
 
 Use the Projects page to:
 
-- create a project from a short description
+- create a project from a short title plus a longer description
 - inspect milestones and tasks
 - edit project metadata
 - open the canonical `PROJECT.yaml`

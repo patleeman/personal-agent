@@ -354,6 +354,38 @@ function persistSessionIndex() {
         // Ignore persistence failures; the in-memory cache still helps.
     }
 }
+function resolveSessionFileCwdSlug(filePath) {
+    const sessionsDir = resolveSessionsDir();
+    return dirname(filePath) === sessionsDir ? '' : basename(dirname(filePath));
+}
+function listSessionFiles(sessionsDir) {
+    const files = [];
+    for (const entryName of readdirSync(sessionsDir)) {
+        const entryPath = join(sessionsDir, entryName);
+        try {
+            const stats = statSync(entryPath);
+            if (stats.isFile()) {
+                if (entryName.endsWith('.jsonl')) {
+                    files.push({ filePath: entryPath, cwdSlug: '' });
+                }
+                continue;
+            }
+            if (!stats.isDirectory()) {
+                continue;
+            }
+            for (const fileName of readdirSync(entryPath)) {
+                if (!fileName.endsWith('.jsonl')) {
+                    continue;
+                }
+                files.push({ filePath: join(entryPath, fileName), cwdSlug: entryName });
+            }
+        }
+        catch {
+            continue;
+        }
+    }
+    return files;
+}
 function readCachedSessionMeta(filePath, cwdSlug) {
     const signature = getFileSignature(filePath);
     if (!signature) {
@@ -384,25 +416,14 @@ function scanSessionMetas() {
     const metas = [];
     const seenFiles = new Set();
     const nextSessionFileById = new Map();
-    for (const cwdSlug of readdirSync(sessionsDir)) {
-        const dirPath = join(sessionsDir, cwdSlug);
-        let files;
-        try {
-            files = readdirSync(dirPath).filter((fileName) => fileName.endsWith('.jsonl'));
-        }
-        catch {
+    for (const { filePath, cwdSlug } of listSessionFiles(sessionsDir)) {
+        seenFiles.add(filePath);
+        const meta = readCachedSessionMeta(filePath, cwdSlug);
+        if (!meta) {
             continue;
         }
-        for (const fileName of files) {
-            const filePath = join(dirPath, fileName);
-            seenFiles.add(filePath);
-            const meta = readCachedSessionMeta(filePath, cwdSlug);
-            if (!meta) {
-                continue;
-            }
-            metas.push(meta);
-            nextSessionFileById.set(meta.id, filePath);
-        }
+        metas.push(meta);
+        nextSessionFileById.set(meta.id, filePath);
     }
     for (const filePath of sessionMetaCache.keys()) {
         if (!seenFiles.has(filePath)) {
@@ -418,7 +439,7 @@ function resolveSessionMeta(sessionId) {
     ensurePersistentIndexLoaded();
     const cachedFilePath = sessionFileById.get(sessionId);
     if (cachedFilePath) {
-        const cachedMeta = readCachedSessionMeta(cachedFilePath, basename(dirname(cachedFilePath)));
+        const cachedMeta = readCachedSessionMeta(cachedFilePath, resolveSessionFileCwdSlug(cachedFilePath));
         if (cachedMeta?.id === sessionId) {
             return cachedMeta;
         }
@@ -435,6 +456,9 @@ export function clearSessionCaches() {
 // ── Public API ─────────────────────────────────────────────────────────────────
 export function listSessions() {
     return scanSessionMetas();
+}
+export function readSessionMetaByFile(filePath) {
+    return readCachedSessionMeta(filePath, resolveSessionFileCwdSlug(filePath));
 }
 export function readSessionBlocks(sessionId) {
     const meta = resolveSessionMeta(sessionId);

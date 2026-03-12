@@ -43,7 +43,7 @@ These docs intentionally focus on product behavior and daily use. They are not p
 | If you need to… | Use | Durable home |
 | --- | --- | --- |
 | Work interactively with the agent right now | conversation / live session | local runtime session state |
-| Notice something that happened asynchronously later | inbox/activity | `profiles/<profile>/agent/activity/*.md` |
+| Notice something that happened asynchronously later | inbox/activity | local runtime inbox state under `~/.local/state/personal-agent/pi-agent/state/inbox/**` |
 | Track long-running work, milestones, blockers, and next steps | project | `profiles/<profile>/agent/projects/<projectId>/PROJECT.yaml` |
 | Store durable behavior, knowledge, or reusable workflows | profiles, AGENTS, memory docs, skills | `profiles/**/agent/**` |
 | Run automation on a schedule | scheduled task + daemon | `profiles/<profile>/agent/tasks/*.task.md` + local daemon state |

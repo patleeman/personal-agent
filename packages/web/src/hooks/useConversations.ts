@@ -1,31 +1,25 @@
 /**
  * Arc-style tab model:
- *   - openIds  (localStorage) = sessions promoted to visible tabs
- *   - shelf    = all other sessions, shown collapsed
+ *   - openIds           (localStorage) = sessions promoted to visible tabs
+ *   - archivedSessions  = all other sessions, restored on demand
  *
- * Clicking a shelf item calls openSession() → adds to openIds → tab appears.
- * × on an open tab calls closeSession() → removed from openIds → back to shelf.
+ * Restoring an archived conversation calls openSession() → adds to openIds → tab appears.
+ * × on an open tab calls closeSession() → removed from openIds → back to the archive.
  */
-import { useCallback, useContext, useState } from 'react';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import { api } from '../api';
 import { LiveTitlesContext, useAppData, useSseConnection } from '../contexts';
 import { NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversationTitle';
 import { applyLiveSessionState, buildSyntheticLiveSessionMeta } from '../sessionIndicators';
+import {
+  closeConversationTab,
+  OPEN_SESSIONS_CHANGED_EVENT,
+  openConversationTab,
+  readOpenSessionIds,
+  replaceOpenConversationTabs,
+  syncOpenConversationTabsToServer,
+} from '../sessionTabs';
 import type { SessionMeta } from '../types';
-
-const OPEN_KEY = 'pa:open-session-ids';
-
-function loadOpen(): Set<string> {
-  try {
-    const raw = localStorage.getItem(OPEN_KEY);
-    if (raw) return new Set(JSON.parse(raw) as string[]);
-  } catch { /* ignore */ }
-  return new Set();
-}
-
-function saveOpen(ids: Set<string>) {
-  try { localStorage.setItem(OPEN_KEY, JSON.stringify([...ids])); } catch { /* ignore */ }
-}
 
 async function fetchSessionsSnapshot(): Promise<SessionMeta[]> {
   const [jsonl, live] = await Promise.all([api.sessions(), api.liveSessions()]);
@@ -38,10 +32,49 @@ async function fetchSessionsSnapshot(): Promise<SessionMeta[]> {
 }
 
 export function useConversations() {
-  const [openIds, setOpenIds] = useState<Set<string>>(loadOpen);
+  const [openIds, setOpenIds] = useState<Set<string>>(readOpenSessionIds);
   const { titles: liveTitles } = useContext(LiveTitlesContext);
   const { sessions, setSessions } = useAppData();
   const { status: sseStatus } = useSseConnection();
+
+  useEffect(() => {
+    function handleOpenSessionsChanged() {
+      setOpenIds(readOpenSessionIds());
+    }
+
+    window.addEventListener(OPEN_SESSIONS_CHANGED_EVENT, handleOpenSessionsChanged);
+    return () => window.removeEventListener(OPEN_SESSIONS_CHANGED_EVENT, handleOpenSessionsChanged);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const localOpenIds = readOpenSessionIds();
+
+    if (localOpenIds.size > 0) {
+      syncOpenConversationTabsToServer(localOpenIds);
+      return;
+    }
+
+    void api.openConversationTabs()
+      .then(({ sessionIds }) => {
+        if (cancelled || sessionIds.length === 0) {
+          return;
+        }
+
+        if (readOpenSessionIds().size > 0) {
+          return;
+        }
+
+        setOpenIds(replaceOpenConversationTabs(sessionIds));
+      })
+      .catch(() => {
+        // Ignore bootstrap failures and keep the browser-local fallback.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const refetch = useCallback(async () => {
     const next = await fetchSessionsSnapshot();
@@ -50,21 +83,11 @@ export function useConversations() {
   }, [setSessions]);
 
   const openSession = useCallback((id: string) => {
-    setOpenIds((prev) => {
-      const next = new Set(prev);
-      next.add(id);
-      saveOpen(next);
-      return next;
-    });
+    setOpenIds(openConversationTab(id));
   }, []);
 
   const closeSession = useCallback((id: string) => {
-    setOpenIds((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      saveOpen(next);
-      return next;
-    });
+    setOpenIds(closeConversationTab(id));
   }, []);
 
   const withTitles = (sessions ?? []).map((session) => {
@@ -75,8 +98,8 @@ export function useConversations() {
     return title === session.title ? session : { ...session, title };
   });
   const tabs = withTitles.filter((session) => openIds.has(session.id));
-  const shelf = withTitles.filter((session) => !openIds.has(session.id));
+  const archivedSessions = withTitles.filter((session) => !openIds.has(session.id));
   const loading = sessions === null && (sseStatus === 'connecting' || sseStatus === 'reconnecting');
 
-  return { tabs, shelf, openSession, closeSession, loading, refetch };
+  return { tabs, archivedSessions, openSession, closeSession, loading, refetch };
 }

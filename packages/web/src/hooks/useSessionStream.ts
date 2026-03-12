@@ -16,6 +16,7 @@ export interface StreamState {
   tokens: { input: number; output: number; total: number } | null;
   cost: number | null;
   contextUsage: SessionContextUsage | null;
+  pendingQueue: { steering: string[]; followUp: string[] };
 }
 
 export const INITIAL_STREAM_STATE: StreamState = {
@@ -27,6 +28,7 @@ export const INITIAL_STREAM_STATE: StreamState = {
   tokens: null,
   cost: null,
   contextUsage: null,
+  pendingQueue: { steering: [], followUp: [] },
 };
 
 export function selectVisibleStreamState(
@@ -46,25 +48,29 @@ export function useSessionStream(sessionId: string | null) {
 
   const send = useCallback(async (text: string, behavior?: 'steer' | 'followUp', images?: PromptImageInput[]) => {
     if (!sessionId) return;
-    const ts = new Date().toISOString();
-    const userBlock: MessageBlock = {
-      type: 'user',
-      id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      text,
-      ts,
-      ...(images && images.length > 0
-        ? {
-            images: images.map((image) => ({
-              alt: image.name ?? 'Attached image',
-              src: image.previewUrl,
-              mimeType: image.mimeType,
-              caption: image.name,
-            })),
-          }
-        : {}),
-    };
-    blocksRef.current = [...blocksRef.current, userBlock];
-    setState(s => ({ ...s, blocks: blocksRef.current }));
+
+    if (!behavior) {
+      const ts = new Date().toISOString();
+      const userBlock: MessageBlock = {
+        type: 'user',
+        id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        text,
+        ts,
+        ...(images && images.length > 0
+          ? {
+              images: images.map((image) => ({
+                alt: image.name ?? 'Attached image',
+                src: image.previewUrl,
+                mimeType: image.mimeType,
+                caption: image.name,
+              })),
+            }
+          : {}),
+      };
+      blocksRef.current = [...blocksRef.current, userBlock];
+      setState((s) => ({ ...s, blocks: blocksRef.current }));
+    }
+
     await api.promptSession(sessionId, text, behavior, images);
   }, [sessionId]);
 
@@ -151,6 +157,25 @@ function applyEvent(
       blocksRef.current = blocks;
       return { ...prev, blocks, isStreaming: false };
     }
+
+    case 'user_message': {
+      const nextBlock = displayBlockToMessageBlock(event.block);
+      const last = blocks[blocks.length - 1];
+      const lastImageCount = last?.type === 'user' ? last.images?.length ?? 0 : -1;
+      const nextImageCount = nextBlock.type === 'user' ? nextBlock.images?.length ?? 0 : -1;
+
+      if (last?.type === 'user' && last.text === nextBlock.text && lastImageCount === nextImageCount) {
+        blocks[blocks.length - 1] = nextBlock;
+      } else {
+        blocks.push(nextBlock);
+      }
+
+      blocksRef.current = blocks;
+      return { ...prev, blocks };
+    }
+
+    case 'queue_state':
+      return { ...prev, pendingQueue: { steering: [...event.steering], followUp: [...event.followUp] } };
 
     case 'text_delta': {
       const last = blocks[blocks.length - 1];

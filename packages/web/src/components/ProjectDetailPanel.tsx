@@ -30,7 +30,9 @@ interface DetailSectionProps {
 }
 
 interface ProjectFormState {
+  title: string;
   description: string;
+  repoRoot: string;
   summary: string;
   status: string;
   currentFocus: string;
@@ -109,7 +111,9 @@ function detailSection({ id, title, meta, actions, children }: DetailSectionProp
 
 function projectFormFromDetail(project: ProjectDetail): ProjectFormState {
   return {
+    title: project.project.title,
     description: project.project.description,
+    repoRoot: project.project.repoRoot ?? '',
     summary: project.project.summary,
     status: project.project.status,
     currentFocus: project.project.currentFocus ?? '',
@@ -242,7 +246,9 @@ export function ProjectDetailPanel({
 
     try {
       await api.updateProject(record.id, {
+        title: projectForm.title,
         description: projectForm.description,
+        repoRoot: projectForm.repoRoot.trim() || null,
         summary: projectForm.summary,
         status: projectForm.status,
         currentFocus: projectForm.currentFocus.trim() || null,
@@ -619,8 +625,11 @@ export function ProjectDetailPanel({
 
         <div className="space-y-3">
           <h2 className="max-w-4xl text-[26px] leading-[1.2] font-semibold tracking-tight text-primary">
-            {record.description}
+            {record.title}
           </h2>
+          <p className="max-w-4xl text-[15px] leading-relaxed text-secondary">
+            {record.description}
+          </p>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Pill tone={hasMeaningfulBlockers(record.blockers) ? 'warning' : 'teal'}>
               {formatProjectStatus(record.status)}
@@ -671,11 +680,30 @@ export function ProjectDetailPanel({
         {editingProject ? (
           <form onSubmit={handleProjectSave} className="max-w-4xl space-y-6 border-t border-border-subtle pt-6">
             <div className="space-y-1.5">
+              <label className="ui-card-meta">Title</label>
+              <input
+                value={projectForm.title}
+                onChange={(event) => setProjectForm((current) => ({ ...current, title: event.target.value }))}
+                className={INPUT_CLASS}
+              />
+            </div>
+
+            <div className="space-y-1.5">
               <label className="ui-card-meta">Description</label>
               <textarea
                 value={projectForm.description}
                 onChange={(event) => setProjectForm((current) => ({ ...current, description: event.target.value }))}
                 className={TEXTAREA_CLASS}
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="ui-card-meta">Repo root</label>
+              <input
+                value={projectForm.repoRoot}
+                onChange={(event) => setProjectForm((current) => ({ ...current, repoRoot: event.target.value }))}
+                className={INPUT_CLASS}
+                placeholder="Optional. Absolute path or a path relative to the personal-agent repo."
               />
             </div>
 
@@ -745,6 +773,13 @@ export function ProjectDetailPanel({
         ) : (
           <div className="space-y-6 max-w-4xl">
             <p className="ui-card-body">{record.summary}</p>
+
+            {record.repoRoot && (
+              <div className="space-y-1.5">
+                <p className="ui-card-meta">Repo root</p>
+                <p className="ui-card-body font-mono break-all">{record.repoRoot}</p>
+              </div>
+            )}
 
             {record.currentFocus && (
               <div className="space-y-1.5">

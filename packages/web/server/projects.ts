@@ -1,5 +1,4 @@
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import {
   createProjectScaffold,
   createProjectTask,
@@ -8,6 +7,7 @@ import {
   parseProject,
   readProject,
   resolveProjectPaths,
+  resolveProjectRepoRoot,
   writeProject,
   type ProjectDocument,
   type ProjectMilestoneDocument,
@@ -25,7 +25,9 @@ export interface CreateProjectRecordInput {
   repoRoot?: string;
   profile: string;
   projectId?: string;
+  title: string;
   description: string;
+  projectRepoRoot?: string | null;
   summary?: string;
   status?: string;
   currentFocus?: string | null;
@@ -37,7 +39,9 @@ export interface UpdateProjectRecordInput {
   repoRoot?: string;
   profile: string;
   projectId: string;
+  title?: string;
   description?: string;
+  projectRepoRoot?: string | null;
   summary?: string;
   status?: string;
   currentFocus?: string | null;
@@ -173,6 +177,18 @@ function readStringList(values: string[] | undefined, label: string): string[] {
     .map((value, index) => readRequiredString(value, `${label}[${index}]`));
 }
 
+function normalizeProjectRepoRoot(projectRepoRoot: string | null | undefined, appRepoRoot?: string): string | undefined {
+  const normalized = readOptionalString(projectRepoRoot);
+  if (!normalized) {
+    return undefined;
+  }
+
+  return resolveProjectRepoRoot({
+    repoRoot: appRepoRoot,
+    projectRepoRoot: normalized,
+  });
+}
+
 function assertMilestoneExists(project: ProjectDocument, milestoneId: string | undefined): void {
   if (!milestoneId) {
     return;
@@ -213,6 +229,9 @@ function moveArrayItem<T>(items: T[], index: number, direction: 'up' | 'down'): 
   return output;
 }
 
+const MAX_AUTO_GENERATED_ID_LENGTH = 36;
+const MAX_AUTO_GENERATED_ID_SEGMENTS = 6;
+
 function slugifyIdentifier(value: string): string {
   return value
     .trim()
@@ -222,20 +241,53 @@ function slugifyIdentifier(value: string): string {
     .replace(/-{2,}/g, '-');
 }
 
+function trimTrailingHyphens(value: string): string {
+  return value.replace(/-+$/g, '');
+}
+
+function buildGeneratedIdBase(title: string, fallbackBase: 'project' | 'milestone' | 'task'): string {
+  const slug = slugifyIdentifier(title);
+  if (!slug) {
+    return fallbackBase;
+  }
+
+  const segments = slug.split('-').filter((segment) => segment.length > 0).slice(0, MAX_AUTO_GENERATED_ID_SEGMENTS);
+  let base = '';
+
+  for (const segment of segments) {
+    const next = base.length > 0 ? `${base}-${segment}` : segment;
+    if (next.length > MAX_AUTO_GENERATED_ID_LENGTH) {
+      break;
+    }
+    base = next;
+  }
+
+  if (base.length > 0) {
+    return base;
+  }
+
+  return trimTrailingHyphens(slug.slice(0, MAX_AUTO_GENERATED_ID_LENGTH)) || fallbackBase;
+}
+
 function generateUniqueId(title: string, existingIds: string[], fallbackBase: 'project' | 'milestone' | 'task'): string {
-  const base = slugifyIdentifier(title) || fallbackBase;
+  const base = buildGeneratedIdBase(title, fallbackBase);
   const used = new Set(existingIds);
 
   if (!used.has(base)) {
     return base;
   }
 
-  let index = 2;
-  while (used.has(`${base}-${index}`)) {
-    index += 1;
+  for (let index = 2; index < Number.MAX_SAFE_INTEGER; index += 1) {
+    const suffix = `-${index}`;
+    const trimmedBase = trimTrailingHyphens(base.slice(0, MAX_AUTO_GENERATED_ID_LENGTH - suffix.length)) || fallbackBase;
+    const candidate = `${trimmedBase}${suffix}`;
+
+    if (!used.has(candidate)) {
+      return candidate;
+    }
   }
 
-  return `${base}-${index}`;
+  throw new Error(`Unable to generate a unique ${fallbackBase} id.`);
 }
 
 export function sortProjectTasks(tasks: ProjectTaskDocument[]): ProjectTaskDocument[] {
@@ -260,21 +312,25 @@ export function readProjectDetailFromProject(options: {
 }
 
 export function createProjectRecord(input: CreateProjectRecordInput): ProjectDetail {
+  const title = readRequiredString(input.title, 'Project title');
   const description = readRequiredString(input.description, 'Project description');
   const projectId = readOptionalString(input.projectId)
-    ?? generateUniqueId(description, listProjectIds({ repoRoot: input.repoRoot, profile: input.profile }), 'project');
+    ?? generateUniqueId(title, listProjectIds({ repoRoot: input.repoRoot, profile: input.profile }), 'project');
 
   createProjectScaffold({
     repoRoot: input.repoRoot,
     profile: input.profile,
     projectId,
-    objective: description,
+    title,
+    description,
   });
 
   const { paths, project } = readProjectRecord({ ...input, projectId });
   const updatedProject: ProjectDocument = {
     ...project,
+    title,
     description,
+    repoRoot: normalizeProjectRepoRoot(input.projectRepoRoot, input.repoRoot),
     summary: readOptionalString(input.summary) ?? project.summary,
     status: readOptionalString(input.status) ?? project.status,
     currentFocus: readOptionalString(input.currentFocus) ?? project.currentFocus,
@@ -292,7 +348,9 @@ export function updateProjectRecord(input: UpdateProjectRecordInput): ProjectDet
 
   const updatedProject: ProjectDocument = {
     ...project,
+    ...(input.title !== undefined ? { title: readRequiredString(input.title, 'Project title') } : {}),
     ...(input.description !== undefined ? { description: readRequiredString(input.description, 'Project description') } : {}),
+    ...(input.projectRepoRoot !== undefined ? { repoRoot: normalizeProjectRepoRoot(input.projectRepoRoot, input.repoRoot) } : {}),
     ...(input.summary !== undefined ? { summary: readRequiredString(input.summary, 'Project summary') } : {}),
     ...(input.status !== undefined ? { status: readRequiredString(input.status, 'Project status') } : {}),
     ...(input.currentFocus !== undefined ? { currentFocus: readOptionalString(input.currentFocus) } : {}),

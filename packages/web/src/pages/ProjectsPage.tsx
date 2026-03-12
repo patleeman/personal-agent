@@ -5,11 +5,17 @@ import { formatProjectStatus, hasMeaningfulBlockers, summarizeProjectPreview } f
 import { useApi } from '../hooks';
 import { useAppData } from '../contexts';
 import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
+import { useReloadState } from '../reloadState';
 import { timeAgo } from '../utils';
 import { EmptyState, ErrorState, ListLinkRow, LoadingState, PageHeader, PageHeading, ToolbarButton } from '../components/ui';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60';
 const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[104px] resize-y leading-relaxed`;
+const CREATE_PROJECT_OPEN_STORAGE_KEY = 'pa:reload:projects:create-open';
+const CREATE_PROJECT_TITLE_STORAGE_KEY = 'pa:reload:projects:create-title';
+const CREATE_PROJECT_DESCRIPTION_STORAGE_KEY = 'pa:reload:projects:create-description';
+const CREATE_PROJECT_REPO_ROOT_STORAGE_KEY = 'pa:reload:projects:create-repo-root';
+const CREATE_PROJECT_SUMMARY_STORAGE_KEY = 'pa:reload:projects:create-summary';
 
 function CreateProjectPanel({
   onCreated,
@@ -18,10 +24,36 @@ function CreateProjectPanel({
   onCreated: (projectId: string) => void;
   onCancel: () => void;
 }) {
-  const [description, setDescription] = useState('');
-  const [summary, setSummary] = useState('');
+  const [title, setTitle, clearTitle] = useReloadState<string>({
+    storageKey: CREATE_PROJECT_TITLE_STORAGE_KEY,
+    initialValue: '',
+    shouldPersist: (value) => value.length > 0,
+  });
+  const [description, setDescription, clearDescription] = useReloadState<string>({
+    storageKey: CREATE_PROJECT_DESCRIPTION_STORAGE_KEY,
+    initialValue: '',
+    shouldPersist: (value) => value.length > 0,
+  });
+  const [repoRoot, setRepoRoot, clearRepoRoot] = useReloadState<string>({
+    storageKey: CREATE_PROJECT_REPO_ROOT_STORAGE_KEY,
+    initialValue: '',
+    shouldPersist: (value) => value.length > 0,
+  });
+  const [summary, setSummary, clearSummary] = useReloadState<string>({
+    storageKey: CREATE_PROJECT_SUMMARY_STORAGE_KEY,
+    initialValue: '',
+    shouldPersist: (value) => value.length > 0,
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function handleCancel() {
+    clearTitle();
+    clearDescription();
+    clearRepoRoot();
+    clearSummary();
+    onCancel();
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -30,9 +62,15 @@ function CreateProjectPanel({
 
     try {
       const detail = await api.createProject({
+        title,
         description,
+        repoRoot: repoRoot.trim() || undefined,
         summary: summary.trim() || undefined,
       });
+      clearTitle();
+      clearDescription();
+      clearRepoRoot();
+      clearSummary();
       emitProjectsChanged();
       onCreated(detail.project.id);
     } catch (submitError) {
@@ -46,11 +84,22 @@ function CreateProjectPanel({
       <div className="space-y-1">
         <h2 className="text-[15px] font-medium text-primary">New project</h2>
         <p className="ui-card-meta max-w-2xl">
-          Create a project from a short description. The ID is auto-generated, and you can fill in the rest after creation.
+          Create a project from a short title and a longer description. The ID is auto-generated from the title.
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="max-w-3xl space-y-5">
+        <div className="space-y-1.5">
+          <label className="ui-card-meta" htmlFor="project-title">Title</label>
+          <input
+            id="project-title"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            className={INPUT_CLASS}
+            placeholder="Short project title"
+          />
+        </div>
+
         <div className="space-y-1.5">
           <label className="ui-card-meta" htmlFor="project-description">Description</label>
           <textarea
@@ -59,6 +108,17 @@ function CreateProjectPanel({
             onChange={(event) => setDescription(event.target.value)}
             className={TEXTAREA_CLASS}
             placeholder="Describe the project at a high level."
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="ui-card-meta" htmlFor="project-repo-root">Repo root</label>
+          <input
+            id="project-repo-root"
+            value={repoRoot}
+            onChange={(event) => setRepoRoot(event.target.value)}
+            className={INPUT_CLASS}
+            placeholder="Optional. Absolute path or a path relative to the personal-agent repo."
           />
         </div>
 
@@ -77,7 +137,7 @@ function CreateProjectPanel({
 
         <div className="flex items-center gap-3">
           <ToolbarButton type="submit" disabled={saving}>{saving ? 'Creating…' : 'Create project'}</ToolbarButton>
-          <button type="button" onClick={onCancel} className="text-[13px] text-secondary hover:text-primary transition-colors">
+          <button type="button" onClick={handleCancel} className="text-[13px] text-secondary hover:text-primary transition-colors">
             Cancel
           </button>
         </div>
@@ -89,7 +149,12 @@ function CreateProjectPanel({
 export function ProjectsPage() {
   const navigate = useNavigate();
   const { id: selectedId } = useParams<{ id?: string }>();
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  const createFormStorageKey = selectedId ? null : CREATE_PROJECT_OPEN_STORAGE_KEY;
+  const [showCreateForm, setShowCreateForm] = useReloadState<boolean>({
+    storageKey: createFormStorageKey,
+    initialValue: false,
+    shouldPersist: (value) => value,
+  });
   const { data, loading, error, refetch } = useApi(api.projects);
   const { projects: projectSnapshot, setProjects } = useAppData();
 
@@ -113,12 +178,6 @@ export function ProjectsPage() {
     window.addEventListener(PROJECTS_CHANGED_EVENT, handleProjectsChanged);
     return () => window.removeEventListener(PROJECTS_CHANGED_EVENT, handleProjectsChanged);
   }, [refreshProjects]);
-
-  useEffect(() => {
-    if (selectedId) {
-      setShowCreateForm(false);
-    }
-  }, [selectedId]);
 
   function openCreateForm() {
     navigate('/projects');
@@ -199,12 +258,12 @@ export function ProjectsPage() {
                       selected={isSelected}
                       leading={<span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${dotClass}`} />}
                     >
-                      <p className="ui-card-title">{project.description}</p>
+                      <p className="ui-card-title">{project.title}</p>
                       <p className="ui-row-summary">{preview}</p>
                       <div className="flex items-center gap-1.5 flex-wrap ui-card-meta">
                         <span>{status}</span>
                         <span className="opacity-40">·</span>
-                        <span className="font-mono">{project.id}</span>
+                        <span className="max-w-[18rem] truncate font-mono" title={project.id}>{project.id}</span>
                         <span className="opacity-40">·</span>
                         <span>{timeAgo(project.updatedAt)}</span>
                         {isBlocked && blockers[0] && (

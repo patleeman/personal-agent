@@ -1,22 +1,31 @@
 import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join, normalize, relative } from 'node:path';
+import { basename, dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { listSessions, readSessionBlocks } from './sessions.js';
 import { invalidateAppTopics, startAppEventMonitor, subscribeAppEvents } from './appEvents.js';
-import { readSavedModelPreferences } from './modelPreferences.js';
+import { resolveConversationCwd, resolveRequestedCwd } from './conversationCwd.js';
+import { readGitStatusSummary } from './gitStatus.js';
+import { installGatewayAndReadState, readGatewayState, restartGatewayAndReadState, startGatewayAndReadState, stopGatewayAndReadState, uninstallGatewayAndReadState, } from './gateway.js';
+import { installDaemonServiceAndReadState, readDaemonState, restartDaemonServiceAndReadState, startDaemonServiceAndReadState, stopDaemonServiceAndReadState, uninstallDaemonServiceAndReadState, } from './daemon.js';
+import { readSavedModelPreferences, writeSavedModelPreferences } from './modelPreferences.js';
+import { readSavedThemePreferences, writeSavedThemePreferences } from './themePreferences.js';
+import { readSavedWebUiPreferences, writeSavedWebUiPreferences } from './webUiPreferences.js';
 import { getProfileConfigFilePath, readSavedProfilePreferences, resolveActiveProfile, writeSavedProfilePreferences, } from './profilePreferences.js';
+import { syncDaemonTaskScopeToProfile } from './daemonProfileSync.js';
+import { readScheduledTaskFileMetadata, taskBelongsToProfile, } from './scheduledTasks.js';
 import { createProjectAgentExtension } from './projectAgentExtension.js';
 import { createSession, resumeSession, getLiveSessions, getSessionStats, getSessionContextUsage, getAvailableModels, isLive, subscribe, promptSession, queuePromptContext, compactSession, reloadSessionResources, exportSessionHtml, renameSession, abortSession, destroySession, forkSession, registry as liveRegistry, } from './liveSessions.js';
 import { buildReferencedMemoryDocsContext, buildReferencedProfilesContext, buildReferencedSkillsContext, buildReferencedTasksContext, pickPromptReferencesInOrder, resolvePromptReferences, } from './promptReferences.js';
-import { addConversationProjectLink, getConversationProjectLink, listProfileActivityEntries, listProjectIds, readProject, removeConversationProjectLink, resolveProjectPaths, setConversationProjectLinks, } from '@personal-agent/core';
+import { addConversationProjectLink, ensureConversationAttentionBaselines, getActivityConversationLink, getConversationProjectLink, listProfileActivityEntries, listProjectIds, loadProfileActivityReadState, markConversationAttentionRead, markConversationAttentionUnread, readProject, removeConversationProjectLink, resolveProjectPaths, saveProfileActivityReadState, setConversationProjectLinks, summarizeConversationAttention, } from '@personal-agent/core';
 import { listProfiles, materializeProfileToAgentDir, resolveResourceProfile, } from '@personal-agent/resources';
 import { addProjectMilestone, createProjectRecord, createProjectTaskRecord, deleteProjectMilestone, deleteProjectRecord, deleteProjectTaskRecord, moveProjectMilestone, moveProjectTaskRecord, readProjectDetailFromProject, readProjectSource, saveProjectSource, updateProjectMilestone, updateProjectRecord, updateProjectTaskRecord, } from './projects.js';
 const PORT = parseInt(process.env.PA_WEB_PORT ?? '3741', 10);
 const DEFAULT_REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? DEFAULT_REPO_ROOT;
+const DEFAULT_WEB_CWD = process.cwd();
 const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
 const SESSIONS_DIR = join(AGENT_DIR, 'sessions');
 const TASK_STATE_FILE = join(homedir(), '.local/state/personal-agent/daemon/task-state.json');
@@ -33,23 +42,40 @@ let currentProfile = resolveActiveProfile({
     savedProfile: readSavedProfilePreferences(PROFILE_CONFIG_FILE).defaultProfile,
     availableProfiles: listAvailableProfiles(),
 });
+async function syncDaemonTaskScopeForProfile(profile) {
+    try {
+        await syncDaemonTaskScopeToProfile({
+            profile,
+            repoRoot: REPO_ROOT,
+        });
+    }
+    catch (error) {
+        console.warn(`[web] failed to sync daemon task scope for ${profile}: ${error.message}`);
+    }
+}
 try {
     materializeWebProfile(currentProfile);
 }
 catch (error) {
     console.warn(`[web] failed to materialize initial profile ${currentProfile}: ${error.message}`);
 }
+void syncDaemonTaskScopeForProfile(currentProfile);
 function getCurrentProfile() {
     return currentProfile;
 }
-function setCurrentProfile(profile) {
+async function setCurrentProfile(profile) {
     const availableProfiles = listAvailableProfiles();
     if (!availableProfiles.includes(profile)) {
         throw new Error(`Unknown profile: ${profile}`);
     }
+    if (profile === currentProfile) {
+        return currentProfile;
+    }
     materializeWebProfile(profile);
     currentProfile = profile;
     writeSavedProfilePreferences(profile, PROFILE_CONFIG_FILE);
+    await syncDaemonTaskScopeForProfile(profile);
+    invalidateAppTopics('activity', 'projects', 'tasks');
     return currentProfile;
 }
 function buildLiveSessionExtensionFactories() {
@@ -62,22 +88,12 @@ function buildLiveSessionExtensionFactories() {
 }
 // ── Activity read-state ───────────────────────────────────────────────────────
 // Stored as a simple JSON set alongside activity files.
-function resolveReadStateFile(profile = getCurrentProfile()) {
-    return join(REPO_ROOT, `profiles/${profile}/agent/activity/.read-state.json`);
-}
 function loadReadState(profile = getCurrentProfile()) {
-    try {
-        return new Set(JSON.parse(readFileSync(resolveReadStateFile(profile), 'utf-8')));
-    }
-    catch {
-        return new Set();
-    }
+    return loadProfileActivityReadState({ repoRoot: REPO_ROOT, profile });
 }
 function saveReadState(ids, profile = getCurrentProfile()) {
     try {
-        const readStateFile = resolveReadStateFile(profile);
-        mkdirSync(dirname(readStateFile), { recursive: true });
-        writeFileSync(readStateFile, JSON.stringify([...ids]));
+        saveProfileActivityReadState({ repoRoot: REPO_ROOT, profile, ids });
     }
     catch { /* ignore */ }
 }
@@ -95,11 +111,27 @@ function summarizeUserMessageContent(content) {
     const imageCount = blocks.filter((block) => block.type === 'image').length;
     return { text, imageCount };
 }
+function attachActivityConversationLinks(profile, entry) {
+    const relatedConversationIds = getActivityConversationLink({
+        profile,
+        activityId: entry.id,
+    })?.relatedConversationIds;
+    if (!relatedConversationIds || relatedConversationIds.length === 0) {
+        return entry;
+    }
+    return {
+        ...entry,
+        relatedConversationIds,
+    };
+}
 function listActivityForCurrentProfile() {
     const profile = getCurrentProfile();
     const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile });
     const read = loadReadState(profile);
-    return entries.map(({ entry }) => ({ ...entry, read: read.has(entry.id) }));
+    return entries.map(({ entry }) => ({
+        ...attachActivityConversationLinks(profile, entry),
+        read: read.has(entry.id),
+    }));
 }
 function getActivitySnapshotForCurrentProfile() {
     const entries = listActivityForCurrentProfile();
@@ -108,37 +140,93 @@ function getActivitySnapshotForCurrentProfile() {
         unreadCount: entries.filter((entry) => !entry.read).length,
     };
 }
-function listTasksForCurrentProfile() {
-    const stateFile = TASK_STATE_FILE;
-    let taskState = {};
-    if (existsSync(stateFile)) {
-        taskState = JSON.parse(readFileSync(stateFile, 'utf-8'));
+function loadTaskStateEntries() {
+    if (!existsSync(TASK_STATE_FILE)) {
+        return [];
     }
-    const tasks = taskState.tasks ?? {};
-    return Object.values(tasks).map((value) => {
-        const task = value;
-        let enabled = true;
-        let cron;
-        let prompt = '';
-        let model;
+    const taskState = JSON.parse(readFileSync(TASK_STATE_FILE, 'utf-8'));
+    return Object.values(taskState.tasks ?? {});
+}
+function findCurrentProfileTaskEntry(taskId) {
+    const currentProfile = getCurrentProfile();
+    return loadTaskStateEntries().find((task) => task.id === taskId && taskBelongsToProfile(task, currentProfile));
+}
+function listTasksForCurrentProfile() {
+    const currentProfile = getCurrentProfile();
+    return loadTaskStateEntries()
+        .filter((task) => taskBelongsToProfile(task, currentProfile))
+        .map((task) => {
         try {
-            const md = readFileSync(task.filePath, 'utf-8');
-            const fmMatch = md.match(/^---\n([\s\S]*?)\n---/);
-            if (fmMatch) {
-                const fm = fmMatch[1];
-                if (/enabled:\s*false/.test(fm))
-                    enabled = false;
-                cron = fm.match(/cron:\s*"?([^"\n]+)"?/)?.[1]?.trim();
-                model = fm.match(/model:\s*"?([^"\n]+)"?/)?.[1]?.trim();
-            }
-            prompt = md.replace(/^---[\s\S]*?---\n?/, '').trim().split('\n')[0].slice(0, 120);
+            const metadata = readScheduledTaskFileMetadata(task.filePath);
+            return {
+                ...task,
+                enabled: metadata.enabled,
+                cron: metadata.cron,
+                prompt: metadata.prompt,
+                model: metadata.model,
+            };
         }
-        catch { /* ignore */ }
-        return { ...task, enabled, cron, prompt, model };
+        catch {
+            return {
+                ...task,
+                enabled: true,
+                prompt: '',
+            };
+        }
+    });
+}
+function getSessionLastActivityAt(sessionFile, fallback) {
+    try {
+        return new Date(statSync(sessionFile).mtimeMs).toISOString();
+    }
+    catch {
+        return fallback;
+    }
+}
+function listUnreadConversationActivityEntries(profile = getCurrentProfile()) {
+    return listActivityForCurrentProfile()
+        .filter((entry) => !entry.read && entry.relatedConversationIds && entry.relatedConversationIds.length > 0)
+        .map((entry) => ({
+        id: entry.id,
+        createdAt: entry.createdAt,
+        relatedConversationIds: entry.relatedConversationIds ?? [],
+    }));
+}
+function decorateSessionsWithAttention(profile, sessions) {
+    ensureConversationAttentionBaselines({
+        profile,
+        conversations: sessions.map((session) => ({
+            conversationId: session.id,
+            messageCount: session.messageCount,
+        })),
+    });
+    const summaries = summarizeConversationAttention({
+        profile,
+        conversations: sessions.map((session) => ({
+            conversationId: session.id,
+            messageCount: session.messageCount,
+            lastActivityAt: getSessionLastActivityAt(session.file, session.timestamp),
+        })),
+        unreadActivityEntries: listUnreadConversationActivityEntries(profile),
+    });
+    const summaryByConversationId = new Map(summaries.map((summary) => [summary.conversationId, summary]));
+    return sessions.map((session) => {
+        const summary = summaryByConversationId.get(session.id);
+        const lastActivityAt = getSessionLastActivityAt(session.file, session.timestamp);
+        return {
+            ...session,
+            lastActivityAt,
+            needsAttention: summary?.needsAttention ?? false,
+            attentionUpdatedAt: summary?.attentionUpdatedAt,
+            attentionUnreadMessageCount: summary?.unreadMessageCount ?? 0,
+            attentionUnreadActivityCount: summary?.unreadActivityCount ?? 0,
+            attentionActivityIds: summary?.unreadActivityIds ?? [],
+        };
     });
 }
 function listConversationSessionsSnapshot() {
-    const jsonl = listSessions();
+    const profile = getCurrentProfile();
+    const jsonl = decorateSessionsWithAttention(profile, listSessions());
     const live = getLiveSessions();
     const liveById = new Map(live.map((entry) => [entry.id, entry]));
     const jsonlIds = new Set(jsonl.map((session) => session.id));
@@ -154,6 +242,11 @@ function listConversationSessionsSnapshot() {
         title: entry.title || 'New Conversation',
         messageCount: 0,
         isRunning: entry.isStreaming,
+        lastActivityAt: new Date().toISOString(),
+        needsAttention: false,
+        attentionUnreadMessageCount: 0,
+        attentionUnreadActivityCount: 0,
+        attentionActivityIds: [],
     }));
     return [
         ...syntheticLive,
@@ -235,14 +328,14 @@ app.get('/api/profiles', (_req, res) => {
         res.status(500).json({ error: String(err) });
     }
 });
-app.patch('/api/profiles/current', (req, res) => {
+app.patch('/api/profiles/current', async (req, res) => {
     try {
         const { profile } = req.body;
         if (!profile) {
             res.status(400).json({ error: 'profile required' });
             return;
         }
-        res.json({ ok: true, currentProfile: setCurrentProfile(profile) });
+        res.json({ ok: true, currentProfile: await setCurrentProfile(profile) });
     }
     catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -262,6 +355,104 @@ app.get('/api/status', (_req, res) => {
             activityCount: activities.length,
             projectCount: projectIds.length,
         });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+// ── Gateway ──────────────────────────────────────────────────────────────────
+app.get('/api/gateway', (_req, res) => {
+    try {
+        res.json(readGatewayState(getCurrentProfile()));
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/gateway/restart', (_req, res) => {
+    try {
+        res.json(restartGatewayAndReadState(getCurrentProfile()));
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/gateway/service/install', (_req, res) => {
+    try {
+        res.json(installGatewayAndReadState(getCurrentProfile()));
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/gateway/service/start', (_req, res) => {
+    try {
+        res.json(startGatewayAndReadState(getCurrentProfile()));
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/gateway/service/stop', (_req, res) => {
+    try {
+        res.json(stopGatewayAndReadState(getCurrentProfile()));
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/gateway/service/uninstall', (_req, res) => {
+    try {
+        res.json(uninstallGatewayAndReadState(getCurrentProfile()));
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+// ── Daemon ───────────────────────────────────────────────────────────────────
+app.get('/api/daemon', async (_req, res) => {
+    try {
+        res.json(await readDaemonState());
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/daemon/service/install', async (_req, res) => {
+    try {
+        res.json(await installDaemonServiceAndReadState());
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/daemon/service/start', async (_req, res) => {
+    try {
+        res.json(await startDaemonServiceAndReadState());
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/daemon/service/restart', async (_req, res) => {
+    try {
+        res.json(await restartDaemonServiceAndReadState());
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/daemon/service/stop', async (_req, res) => {
+    try {
+        res.json(await stopDaemonServiceAndReadState());
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/daemon/service/uninstall', async (_req, res) => {
+    try {
+        res.json(await uninstallDaemonServiceAndReadState());
     }
     catch (err) {
         res.status(500).json({ error: String(err) });
@@ -294,7 +485,7 @@ app.get('/api/activity/:id', (req, res) => {
             return;
         }
         const read = loadReadState(profile);
-        res.json({ ...match.entry, read: read.has(match.entry.id) });
+        res.json({ ...attachActivityConversationLinks(profile, match.entry), read: read.has(match.entry.id) });
     }
     catch (err) {
         res.status(500).json({ error: String(err) });
@@ -334,22 +525,41 @@ const BUILT_IN_MODELS = [
     { id: 'gemini-3.1-pro-high', provider: 'google', name: 'Gemini 3.1 Pro High', context: 1_000_000 },
 ];
 const SETTINGS_FILE = join(homedir(), '.local/state/personal-agent/pi-agent/settings.json');
+function listAvailableModelDefinitions() {
+    let models = BUILT_IN_MODELS;
+    try {
+        const live = getAvailableModels();
+        if (live.length > 0) {
+            models = live;
+        }
+    }
+    catch {
+        // Fall back to the built-in list when the registry is unavailable.
+    }
+    return models;
+}
+function listAvailableThemeIds() {
+    try {
+        const profile = resolveResourceProfile(getCurrentProfile(), { repoRoot: REPO_ROOT });
+        const ids = profile.themeEntries
+            .map((entry) => basename(entry, '.json').trim())
+            .filter((entry) => entry.length > 0);
+        return [...new Set(ids)].sort((left, right) => left.localeCompare(right));
+    }
+    catch {
+        return [];
+    }
+}
 app.get('/api/models', (_req, res) => {
     try {
         const saved = readSavedModelPreferences(SETTINGS_FILE);
-        let currentModel = saved.currentModel;
-        const currentThinkingLevel = saved.currentThinkingLevel;
-        // Live model list from SDK registry (available = have auth configured)
-        let models = BUILT_IN_MODELS;
-        try {
-            const live = getAvailableModels();
-            if (live.length > 0)
-                models = live;
-        }
-        catch { /* fall back to built-in list */ }
-        if (!currentModel && models.length > 0)
-            currentModel = models[0].id;
-        res.json({ currentModel, currentThinkingLevel, models });
+        const models = listAvailableModelDefinitions();
+        const currentModel = saved.currentModel || models[0]?.id || '';
+        res.json({
+            currentModel,
+            currentThinkingLevel: saved.currentThinkingLevel,
+            models,
+        });
     }
     catch (err) {
         res.status(500).json({ error: String(err) });
@@ -357,18 +567,62 @@ app.get('/api/models', (_req, res) => {
 });
 app.patch('/api/models/current', (req, res) => {
     try {
-        const { model } = req.body;
-        if (!model) {
-            res.status(400).json({ error: 'model required' });
+        const { model, thinkingLevel } = req.body;
+        if (typeof model !== 'string' && typeof thinkingLevel !== 'string') {
+            res.status(400).json({ error: 'model or thinkingLevel required' });
             return;
         }
-        let settings = {};
-        if (existsSync(SETTINGS_FILE)) {
-            settings = JSON.parse(readFileSync(SETTINGS_FILE, 'utf-8'));
-        }
-        settings.defaultModel = model;
-        writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2) + '\n');
+        writeSavedModelPreferences({ model, thinkingLevel }, SETTINGS_FILE, listAvailableModelDefinitions());
         res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.get('/api/agent-theme', (_req, res) => {
+    try {
+        const saved = readSavedThemePreferences(SETTINGS_FILE);
+        res.json({
+            ...saved,
+            themes: listAvailableThemeIds(),
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.patch('/api/agent-theme', (req, res) => {
+    try {
+        const { themeMode, themeDark, themeLight } = req.body;
+        if (themeMode === undefined && themeDark === undefined && themeLight === undefined) {
+            res.status(400).json({ error: 'themeMode, themeDark, or themeLight required' });
+            return;
+        }
+        writeSavedThemePreferences({ themeMode, themeDark, themeLight }, SETTINGS_FILE);
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.get('/api/web-ui/open-conversations', (_req, res) => {
+    try {
+        const saved = readSavedWebUiPreferences(SETTINGS_FILE);
+        res.json({ sessionIds: saved.openConversationIds });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.patch('/api/web-ui/open-conversations', (req, res) => {
+    try {
+        const { sessionIds } = req.body;
+        if (!Array.isArray(sessionIds)) {
+            res.status(400).json({ error: 'sessionIds array required' });
+            return;
+        }
+        const saved = writeSavedWebUiPreferences({ openConversationIds: sessionIds }, SETTINGS_FILE);
+        res.json({ ok: true, sessionIds: saved.openConversationIds });
     }
     catch (err) {
         res.status(500).json({ error: String(err) });
@@ -386,13 +640,7 @@ app.get('/api/tasks', (_req, res) => {
 app.patch('/api/tasks/:id', (req, res) => {
     try {
         const { enabled } = req.body;
-        const stateFile = TASK_STATE_FILE;
-        if (!existsSync(stateFile)) {
-            res.status(404).json({ error: 'No task state' });
-            return;
-        }
-        const state = JSON.parse(readFileSync(stateFile, 'utf-8'));
-        const entry = Object.values(state.tasks ?? {}).find(t => t.id === req.params.id);
+        const entry = findCurrentProfileTaskEntry(req.params.id);
         if (!entry) {
             res.status(404).json({ error: 'Task not found' });
             return;
@@ -402,7 +650,6 @@ app.patch('/api/tasks/:id', (req, res) => {
             content = content.replace(/enabled:\s*(true|false)/, `enabled: ${enabled}`);
         }
         else {
-            // Inject into frontmatter after opening ---
             content = content.replace(/^---\n/, `---\nenabled: ${enabled}\n`);
         }
         writeFileSync(entry.filePath, content, 'utf-8');
@@ -415,13 +662,7 @@ app.patch('/api/tasks/:id', (req, res) => {
 });
 app.get('/api/tasks/:id/log', (req, res) => {
     try {
-        const stateFile = TASK_STATE_FILE;
-        if (!existsSync(stateFile)) {
-            res.status(404).json({ error: 'No task state' });
-            return;
-        }
-        const state = JSON.parse(readFileSync(stateFile, 'utf-8'));
-        const entry = Object.values(state.tasks ?? {}).find(t => t.id === req.params.id);
+        const entry = findCurrentProfileTaskEntry(req.params.id);
         if (!entry?.lastLogPath || !existsSync(entry.lastLogPath)) {
             res.status(404).json({ error: 'No log available' });
             return;
@@ -435,34 +676,19 @@ app.get('/api/tasks/:id/log', (req, res) => {
 });
 app.get('/api/tasks/:id', (req, res) => {
     try {
-        const stateFile = TASK_STATE_FILE;
-        if (!existsSync(stateFile)) {
-            res.status(404).json({ error: 'No task state' });
-            return;
-        }
-        const state = JSON.parse(readFileSync(stateFile, 'utf-8'));
-        const entry = Object.values(state.tasks ?? {}).find((t) => t.id === req.params.id);
+        const entry = findCurrentProfileTaskEntry(req.params.id);
         if (!entry) {
             res.status(404).json({ error: 'Task not found' });
             return;
         }
-        let fileContent = '';
-        let enabled = true;
-        let cron;
-        let model;
-        try {
-            fileContent = readFileSync(entry.filePath, 'utf-8');
-            const fmMatch = fileContent.match(/^---\n([\s\S]*?)\n---/);
-            if (fmMatch) {
-                const fm = fmMatch[1];
-                if (/enabled:\s*false/.test(fm))
-                    enabled = false;
-                cron = fm.match(/cron:\s*"?([^"\n]+)"?/)?.[1]?.trim();
-                model = fm.match(/model:\s*"?([^"\n]+)"?/)?.[1]?.trim();
-            }
-        }
-        catch { /* ignore */ }
-        res.json({ ...entry, enabled, cron, model, fileContent });
+        const metadata = readScheduledTaskFileMetadata(entry.filePath);
+        res.json({
+            ...entry,
+            enabled: metadata.enabled,
+            cron: metadata.cron,
+            model: metadata.model,
+            fileContent: metadata.fileContent,
+        });
     }
     catch (err) {
         res.status(500).json({ error: String(err) });
@@ -471,29 +697,22 @@ app.get('/api/tasks/:id', (req, res) => {
 /** Run a task immediately — creates a live session with the task's prompt */
 app.post('/api/tasks/:id/run', async (req, res) => {
     try {
-        const stateFile = TASK_STATE_FILE;
-        if (!existsSync(stateFile)) {
-            res.status(404).json({ error: 'No task state' });
-            return;
-        }
-        const state = JSON.parse(readFileSync(stateFile, 'utf-8'));
-        const entry = Object.values(state.tasks ?? {}).find((t) => t.id === req.params.id);
+        const entry = findCurrentProfileTaskEntry(req.params.id);
         if (!entry) {
             res.status(404).json({ error: 'Task not found' });
             return;
         }
-        // Parse prompt from file (body after frontmatter)
-        const fileContent = readFileSync(entry.filePath, 'utf-8');
-        const afterFm = fileContent.replace(/^---\n[\s\S]*?\n---\n?/, '').trim();
-        if (!afterFm) {
+        const metadata = readScheduledTaskFileMetadata(entry.filePath);
+        const fileContent = metadata.fileContent;
+        const afterFrontmatter = fileContent.replace(/^---\n[\s\S]*?\n---\n?/, '').trim();
+        if (!afterFrontmatter) {
             res.status(400).json({ error: 'Task has no prompt body' });
             return;
         }
-        const { id: sessionId } = await createSession(REPO_ROOT, {
+        const { id: sessionId } = await createSession(resolveRequestedCwd(metadata.cwd, DEFAULT_WEB_CWD) ?? DEFAULT_WEB_CWD, {
             extensionFactories: buildLiveSessionExtensionFactories(),
         });
-        // Send prompt asynchronously — don't block the response
-        void promptSession(sessionId, afterFm);
+        void promptSession(sessionId, afterFrontmatter);
         res.json({ ok: true, sessionId });
     }
     catch (err) {
@@ -503,7 +722,7 @@ app.post('/api/tasks/:id/run', async (req, res) => {
 // ── Sessions (read-only JSONL) ────────────────────────────────────────────────
 app.get('/api/sessions', (_req, res) => {
     try {
-        res.json(listSessions());
+        res.json(decorateSessionsWithAttention(getCurrentProfile(), listSessions()));
     }
     catch (err) {
         res.status(500).json({ error: String(err) });
@@ -530,7 +749,27 @@ app.get('/api/live-sessions', (_req, res) => {
 /** Create a new live session */
 app.post('/api/live-sessions', async (req, res) => {
     try {
-        const cwd = req.body.cwd ?? REPO_ROOT;
+        const body = req.body;
+        const profile = getCurrentProfile();
+        const inferredReferencedProjectIds = body.text
+            ? resolvePromptReferences({
+                text: body.text,
+                availableProjectIds: listProjectIds({ repoRoot: REPO_ROOT, profile }),
+                tasks: [],
+                memoryDocs: [],
+                skills: [],
+                profiles: [],
+            }).projectIds
+            : [];
+        const cwd = resolveConversationCwd({
+            repoRoot: REPO_ROOT,
+            profile,
+            explicitCwd: body.cwd,
+            defaultCwd: DEFAULT_WEB_CWD,
+            referencedProjectIds: body.referencedProjectIds && body.referencedProjectIds.length > 0
+                ? body.referencedProjectIds
+                : inferredReferencedProjectIds,
+        });
         const result = await createSession(cwd, {
             extensionFactories: buildLiveSessionExtensionFactories(),
         });
@@ -595,7 +834,6 @@ function syncConversationProjectReferences(conversationId, mentionedProjectIds) 
     const availableProjectIds = listProjectIds({ repoRoot: REPO_ROOT, profile });
     const availableProjectIdSet = new Set(availableProjectIds);
     const existingProjectIds = (getConversationProjectLink({
-        repoRoot: REPO_ROOT,
         profile,
         conversationId,
     })?.relatedProjectIds ?? []).filter((projectId) => availableProjectIdSet.has(projectId));
@@ -604,7 +842,6 @@ function syncConversationProjectReferences(conversationId, mentionedProjectIds) 
         && existingProjectIds.every((projectId, index) => projectId === relatedProjectIds[index]);
     if (!existingMatches) {
         setConversationProjectLinks({
-            repoRoot: REPO_ROOT,
             profile,
             conversationId,
             relatedProjectIds,
@@ -620,7 +857,17 @@ function buildReferencedProjectsContext(projectIds) {
             profile,
             projectId,
         });
-        return `- @${projectId}: ${relative(REPO_ROOT, paths.projectFile)}`;
+        const lineParts = [`- @${projectId}: ${relative(REPO_ROOT, paths.projectFile)}`];
+        try {
+            const project = readProject(paths.projectFile);
+            if (project.repoRoot) {
+                lineParts.push(`  repoRoot: ${project.repoRoot}`);
+            }
+        }
+        catch {
+            // Ignore malformed project metadata in the lightweight reference summary.
+        }
+        return lineParts.join('\n');
     });
     return [
         'Referenced projects for this conversation:',
@@ -757,13 +1004,7 @@ app.get('/api/live-sessions/:id/context', (req, res) => {
         res.status(404).json({ error: 'Session not found' });
         return;
     }
-    // Git branch
-    let branch = null;
-    try {
-        branch = execSync('git branch --show-current', { cwd, stdio: ['ignore', 'pipe', 'ignore'], timeout: 3000 })
-            .toString().trim() || null;
-    }
-    catch { /* not a git repo */ }
+    const gitSummary = readGitStatusSummary(cwd);
     // User messages: prefer live in-memory messages (most up-to-date), fall back to JSONL
     let userMessages = [];
     if (liveEntry) {
@@ -787,17 +1028,27 @@ app.get('/api/live-sessions/:id/context', (req, res) => {
         }));
     }
     const relatedProjectIds = getConversationProjectLink({
-        repoRoot: REPO_ROOT,
         profile: getCurrentProfile(),
         conversationId: id,
     })?.relatedProjectIds ?? [];
-    res.json({ cwd, branch, userMessages, relatedProjectIds });
+    res.json({
+        cwd,
+        branch: gitSummary?.branch ?? null,
+        git: gitSummary
+            ? {
+                changeCount: gitSummary.changeCount,
+                linesAdded: gitSummary.linesAdded,
+                linesDeleted: gitSummary.linesDeleted,
+            }
+            : null,
+        userMessages,
+        relatedProjectIds,
+    });
 });
 app.get('/api/conversations/:id/projects', (req, res) => {
     try {
         const profile = getCurrentProfile();
         const relatedProjectIds = getConversationProjectLink({
-            repoRoot: REPO_ROOT,
             profile,
             conversationId: req.params.id,
         })?.relatedProjectIds ?? [];
@@ -816,7 +1067,6 @@ app.post('/api/conversations/:id/projects', (req, res) => {
             return;
         }
         const document = addConversationProjectLink({
-            repoRoot: REPO_ROOT,
             profile,
             conversationId: req.params.id,
             projectId,
@@ -831,12 +1081,42 @@ app.delete('/api/conversations/:id/projects/:projectId', (req, res) => {
     try {
         const profile = getCurrentProfile();
         const document = removeConversationProjectLink({
-            repoRoot: REPO_ROOT,
             profile,
             conversationId: req.params.id,
             projectId: req.params.projectId,
         });
         res.json({ conversationId: req.params.id, relatedProjectIds: document.relatedProjectIds });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.patch('/api/conversations/:id/attention', (req, res) => {
+    try {
+        const profile = getCurrentProfile();
+        const { id } = req.params;
+        const { read } = req.body;
+        const session = listConversationSessionsSnapshot().find((entry) => entry.id === id);
+        if (!session) {
+            res.status(404).json({ error: 'Conversation not found' });
+            return;
+        }
+        if (read === false) {
+            markConversationAttentionUnread({
+                profile,
+                conversationId: id,
+                messageCount: session.messageCount,
+            });
+        }
+        else {
+            markConversationAttentionRead({
+                profile,
+                conversationId: id,
+                messageCount: session.messageCount,
+            });
+        }
+        invalidateAppTopics('sessions');
+        res.json({ ok: true });
     }
     catch (err) {
         res.status(500).json({ error: String(err) });
@@ -942,7 +1222,9 @@ app.post('/api/projects', (req, res) => {
         res.status(201).json(createProjectRecord({
             repoRoot: REPO_ROOT,
             profile: getCurrentProfile(),
+            title: body.title ?? '',
             description: body.description ?? '',
+            projectRepoRoot: body.repoRoot,
             summary: body.summary,
             status: body.status,
             currentFocus: body.currentFocus,
@@ -961,7 +1243,9 @@ app.patch('/api/projects/:id', (req, res) => {
             repoRoot: REPO_ROOT,
             profile: getCurrentProfile(),
             projectId: req.params.id,
+            title: body.title,
             description: body.description,
+            projectRepoRoot: body.repoRoot,
             summary: body.summary,
             status: body.status,
             currentFocus: body.currentFocus,
@@ -1144,11 +1428,12 @@ app.post('/api/run', (req, res) => {
             res.status(400).json({ error: 'command required' });
             return;
         }
+        const resolvedRunCwd = resolveRequestedCwd(runCwd, DEFAULT_WEB_CWD) ?? DEFAULT_WEB_CWD;
         let output = '';
         let exitCode = 0;
         try {
             output = execSync(command, {
-                cwd: runCwd ?? REPO_ROOT,
+                cwd: resolvedRunCwd,
                 timeout: 30_000,
                 encoding: 'utf-8',
                 stdio: ['pipe', 'pipe', 'pipe'],
@@ -1458,6 +1743,7 @@ app.listen(PORT, () => {
     console.log(`  → http://localhost:${PORT}\n`);
     console.log(`  profile : ${getCurrentProfile()}`);
     console.log(`  repo    : ${REPO_ROOT}`);
+    console.log(`  cwd     : ${DEFAULT_WEB_CWD}`);
     console.log(`  dist    : ${DIST_DIR}`);
     console.log();
 });

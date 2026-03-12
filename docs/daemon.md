@@ -132,7 +132,7 @@ Installing the gateway managed service also provisions the daemon.
 
 ### Inbox
 
-Scheduled task and deferred-resume events can create durable inbox activity.
+Scheduled task and deferred-resume events can create durable local inbox activity.
 
 ## Configuration
 

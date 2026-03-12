@@ -6,9 +6,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   createProjectScaffold,
   listProjectIds,
+  listResolvedProjectRepoRoots,
   projectExists,
   resolveProfileProjectsDir,
   resolveProjectPaths,
+  resolveProjectRepoRoot,
   resolveProjectTaskPath,
   validateTaskId,
   validateProjectId,
@@ -91,6 +93,52 @@ describe('resolveProjectPaths', () => {
   });
 });
 
+describe('resolveProjectRepoRoot', () => {
+  it('normalizes relative and home-prefixed project repo roots', () => {
+    const repo = createTempRepo();
+
+    expect(resolveProjectRepoRoot({ repoRoot: repo, projectRepoRoot: '../workspace' })).toBe(join(repo, '..', 'workspace'));
+    expect(resolveProjectRepoRoot({ repoRoot: repo, projectRepoRoot: '~/workspace' })).toContain('workspace');
+    expect(resolveProjectRepoRoot({ repoRoot: repo, projectRepoRoot: '   ' })).toBeUndefined();
+  });
+});
+
+describe('listResolvedProjectRepoRoots', () => {
+  it('collects unique repo roots from referenced projects', () => {
+    const repo = createTempRepo();
+
+    const first = createProjectScaffold({
+      repoRoot: repo,
+      profile: 'datadog',
+      projectId: 'alpha',
+      title: 'Alpha objective',
+      description: 'Alpha objective',
+    });
+    const second = createProjectScaffold({
+      repoRoot: repo,
+      profile: 'datadog',
+      projectId: 'beta',
+      title: 'Beta objective',
+      description: 'Beta objective',
+    });
+
+    writeFileSync(first.paths.projectFile, readFileSync(first.paths.projectFile, 'utf-8').replace(
+      'summary: Project created. Refine the plan before executing the work.',
+      'repoRoot: ../workspace/alpha\nsummary: Project created. Refine the plan before executing the work.',
+    ));
+    writeFileSync(second.paths.projectFile, readFileSync(second.paths.projectFile, 'utf-8').replace(
+      'summary: Project created. Refine the plan before executing the work.',
+      'repoRoot: ../workspace/alpha\nsummary: Project created. Refine the plan before executing the work.',
+    ));
+
+    expect(listResolvedProjectRepoRoots({
+      repoRoot: repo,
+      profile: 'datadog',
+      projectIds: ['alpha', 'beta'],
+    })).toEqual([join(repo, '..', 'workspace', 'alpha')]);
+  });
+});
+
 describe('createProjectScaffold', () => {
   it('creates the initial project files and directories', () => {
     const repo = createTempRepo();
@@ -98,7 +146,8 @@ describe('createProjectScaffold', () => {
       repoRoot: repo,
       profile: 'datadog',
       projectId: 'artifact-model',
-      objective: 'Create a durable artifact model for ongoing work.',
+      title: 'Artifact model',
+      description: 'Create a durable artifact model for ongoing work.',
       now: new Date('2026-03-10T12:00:00.000Z'),
     });
 
@@ -112,20 +161,21 @@ describe('createProjectScaffold', () => {
 
     const projectFile = readFileSync(result.paths.projectFile, 'utf-8');
     expect(projectFile).toContain('id: artifact-model');
+    expect(projectFile).toContain('title: Artifact model');
     expect(projectFile).toContain('description: Create a durable artifact model for ongoing work.');
     expect(projectFile).toContain('currentMilestoneId: refine-plan');
-    expect(projectFile).toContain('title: Verify the result');
   });
 
-  it('rejects empty objectives', () => {
+  it('rejects empty titles', () => {
     const repo = createTempRepo();
 
     expect(() => createProjectScaffold({
       repoRoot: repo,
       profile: 'datadog',
       projectId: 'artifact-model',
-      objective: '   ',
-    })).toThrow('Project objective must not be empty');
+      title: '   ',
+      description: 'Non-empty description',
+    })).toThrow('Project title must not be empty');
   });
 
   it('rejects duplicate creation by default', () => {
@@ -135,14 +185,16 @@ describe('createProjectScaffold', () => {
       repoRoot: repo,
       profile: 'datadog',
       projectId: 'artifact-model',
-      objective: 'Initial objective',
+      title: 'Initial objective',
+      description: 'Initial objective',
     });
 
     expect(() => createProjectScaffold({
       repoRoot: repo,
       profile: 'datadog',
       projectId: 'artifact-model',
-      objective: 'Updated objective',
+      title: 'Updated objective',
+      description: 'Updated objective',
     })).toThrow('Project already exists');
   });
 
@@ -152,7 +204,8 @@ describe('createProjectScaffold', () => {
       repoRoot: repo,
       profile: 'datadog',
       projectId: 'artifact-model',
-      objective: 'Initial objective',
+      title: 'Initial objective',
+      description: 'Initial objective',
       now: new Date('2026-03-10T12:00:00.000Z'),
     });
 
@@ -160,7 +213,8 @@ describe('createProjectScaffold', () => {
       repoRoot: repo,
       profile: 'datadog',
       projectId: 'artifact-model',
-      objective: 'Updated objective',
+      title: 'Updated objective',
+      description: 'Updated objective',
       overwrite: true,
       now: new Date('2026-03-10T13:00:00.000Z'),
     });
@@ -181,13 +235,15 @@ describe('listProjectIds', () => {
       repoRoot: repo,
       profile: 'datadog',
       projectId: 'zebra',
-      objective: 'Zebra objective',
+      title: 'Zebra objective',
+      description: 'Zebra objective',
     });
     createProjectScaffold({
       repoRoot: repo,
       profile: 'datadog',
       projectId: 'alpha',
-      objective: 'Alpha objective',
+      title: 'Alpha objective',
+      description: 'Alpha objective',
     });
 
     writeFileSync(join(projectsDir, 'README.md'), '# not a project\n');
@@ -204,7 +260,8 @@ describe('projectExists', () => {
       repoRoot: repo,
       profile: 'datadog',
       projectId: 'artifact-model',
-      objective: 'Objective',
+      title: 'Objective',
+      description: 'Objective',
     });
 
     expect(projectExists({ repoRoot: repo, profile: 'datadog', projectId: 'artifact-model' })).toBe(true);

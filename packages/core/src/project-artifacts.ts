@@ -4,6 +4,8 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 const FRONTMATTER_DELIMITER = '---';
 
+type FlexibleString = string & Record<never, never>;
+
 export type ProjectStatus = 'created' | 'in_progress' | 'blocked' | 'completed' | 'cancelled';
 export type ProjectMilestoneStatus = 'pending' | 'in_progress' | 'blocked' | 'completed' | 'cancelled';
 export type ProjectTaskStatus = 'pending' | 'in_progress' | 'blocked' | 'completed' | 'cancelled';
@@ -11,13 +13,13 @@ export type ProjectTaskStatus = 'pending' | 'in_progress' | 'blocked' | 'complet
 export interface ProjectMilestoneDocument {
   id: string;
   title: string;
-  status: ProjectMilestoneStatus | (string & {});
+  status: ProjectMilestoneStatus | FlexibleString;
   summary?: string;
 }
 
 export interface ProjectTaskDocument {
   id: string;
-  status: ProjectTaskStatus | (string & {});
+  status: ProjectTaskStatus | FlexibleString;
   title: string;
   milestoneId: string;
 }
@@ -32,9 +34,11 @@ export interface ProjectDocument {
   id: string;
   createdAt: string;
   updatedAt: string;
+  title: string;
   description: string;
+  repoRoot?: string;
   summary: string;
-  status: ProjectStatus | (string & {});
+  status: ProjectStatus | FlexibleString;
   blockers: string[];
   currentFocus?: string;
   recentProgress: string[];
@@ -56,11 +60,10 @@ export interface ProjectActivityEntryDocument {
   id: string;
   createdAt: string;
   profile: string;
-  kind: ProjectActivityKind | (string & {});
+  kind: ProjectActivityKind | FlexibleString;
   summary: string;
   details?: string;
   relatedProjectIds?: string[];
-  relatedConversationIds?: string[];
   notificationState?: ProjectActivityNotificationState;
 }
 
@@ -286,11 +289,15 @@ function formatProjectPlan(plan: ProjectPlanDocument): Record<string, unknown> {
 
 export function createInitialProject(input: {
   id: string;
+  title: string;
   description: string;
+  repoRoot?: string;
   createdAt: string;
   updatedAt?: string;
 }): ProjectDocument {
+  const title = assertNonEmptyText(input.title, 'Project title');
   const description = assertNonEmptyText(input.description, 'Project description');
+  const repoRoot = normalizeOptionalText(input.repoRoot, 'Project repoRoot');
   const createdAt = assertNonEmptyText(input.createdAt, 'Project createdAt');
   const updatedAt = assertNonEmptyText(input.updatedAt ?? input.createdAt, 'Project updatedAt');
 
@@ -298,7 +305,9 @@ export function createInitialProject(input: {
     id: assertNonEmptyText(input.id, 'Project id'),
     createdAt,
     updatedAt,
+    title,
     description,
+    ...(repoRoot ? { repoRoot } : {}),
     summary: 'Project created. Refine the plan before executing the work.',
     status: 'created',
     blockers: [],
@@ -325,7 +334,11 @@ export function formatProject(document: ProjectDocument): string {
     id: assertNonEmptyText(document.id, 'Project id'),
     createdAt: assertNonEmptyText(document.createdAt, 'Project createdAt'),
     updatedAt: assertNonEmptyText(document.updatedAt, 'Project updatedAt'),
+    title: assertNonEmptyText(document.title, 'Project title'),
     description: assertNonEmptyText(document.description, 'Project description'),
+    ...(normalizeOptionalText(document.repoRoot, 'Project repoRoot')
+      ? { repoRoot: normalizeOptionalText(document.repoRoot, 'Project repoRoot') }
+      : {}),
     summary: assertNonEmptyText(document.summary, 'Project summary'),
     status: assertNonEmptyText(document.status, 'Project status'),
     blockers,
@@ -370,7 +383,9 @@ export function parseProject(yaml: string): ProjectDocument {
     id: readRequiredYamlString(object, 'id', 'Project'),
     createdAt: readRequiredYamlString(object, 'createdAt', 'Project'),
     updatedAt: readRequiredYamlString(object, 'updatedAt', 'Project'),
+    title: readRequiredYamlString(object, 'title', 'Project'),
     description: readRequiredYamlString(object, 'description', 'Project'),
+    repoRoot: readOptionalYamlString(object, 'repoRoot', 'Project'),
     summary: readRequiredYamlString(object, 'summary', 'Project'),
     status: readRequiredYamlString(object, 'status', 'Project'),
     blockers: readOptionalYamlStringArray(object, 'blockers', 'Project') ?? [],
@@ -574,7 +589,6 @@ export function createProjectActivityEntry(input: {
   summary: string;
   details?: string;
   relatedProjectIds?: string[];
-  relatedConversationIds?: string[];
   notificationState?: ProjectActivityNotificationState;
 }): ProjectActivityEntryDocument {
   return {
@@ -585,7 +599,6 @@ export function createProjectActivityEntry(input: {
     summary: assertNonEmptyText(input.summary, 'Activity summary'),
     details: input.details ? assertNonEmptyText(input.details, 'Activity details') : undefined,
     relatedProjectIds: input.relatedProjectIds?.map((value) => assertNonEmptyText(value, 'Related project id')),
-    relatedConversationIds: input.relatedConversationIds?.map((value) => assertNonEmptyText(value, 'Related conversation id')),
     notificationState: input.notificationState ?? 'none',
   };
 }
@@ -602,11 +615,6 @@ export function formatProjectActivityEntry(document: ProjectActivityEntryDocumen
   const relatedProjectIds = formatOptionalListAttribute(document.relatedProjectIds);
   if (relatedProjectIds) {
     frontmatterAttributes.relatedProjectIds = relatedProjectIds;
-  }
-
-  const relatedConversationIds = formatOptionalListAttribute(document.relatedConversationIds);
-  if (relatedConversationIds) {
-    frontmatterAttributes.relatedConversationIds = relatedConversationIds;
   }
 
   const frontmatter = formatFrontmatter(frontmatterAttributes);
@@ -630,7 +638,6 @@ export function parseProjectActivityEntry(markdown: string): ProjectActivityEntr
     summary: readRequiredSection(sections, 'Summary', 'Activity'),
     details: sections.Details ? assertNonEmptyText(sections.Details, 'Activity section Details') : undefined,
     relatedProjectIds: parseOptionalListAttribute(attributes, 'relatedProjectIds'),
-    relatedConversationIds: parseOptionalListAttribute(attributes, 'relatedConversationIds'),
     notificationState: (attributes.notificationState as ProjectActivityNotificationState | undefined) ?? 'none',
   };
 }

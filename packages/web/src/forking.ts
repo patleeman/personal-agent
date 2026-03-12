@@ -1,3 +1,4 @@
+import { getSessionStorage, type StorageLike } from './reloadState';
 import type { MessageBlock } from './types';
 
 export interface ForkableMessageEntry {
@@ -25,6 +26,30 @@ export function resolveForkEntryForMessage(
   return entries[userMessageCount - 1] ?? entries[entries.length - 1] ?? null;
 }
 
-export function buildConversationHref(sessionId: string, currentHref: string): string {
-  return new URL(`/conversations/${sessionId}`, currentHref).toString();
+export function buildConversationComposerStorageKey(sessionId: string): string {
+  return `pa:reload:conversation:${sessionId}:composer`;
 }
+
+export function persistForkPromptDraft(
+  sessionId: string,
+  prompt: string,
+  storage: StorageLike | null = getSessionStorage(),
+): void {
+  if (!sessionId || !storage) {
+    return;
+  }
+
+  const key = buildConversationComposerStorageKey(sessionId);
+
+  try {
+    if (prompt.length === 0) {
+      storage.removeItem(key);
+      return;
+    }
+
+    storage.setItem(key, JSON.stringify(prompt));
+  } catch {
+    // Ignore storage failures.
+  }
+}
+

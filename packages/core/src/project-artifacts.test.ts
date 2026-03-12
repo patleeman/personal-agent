@@ -40,6 +40,7 @@ describe('project artifacts', () => {
   it('creates the default project document', () => {
     const project = createInitialProject({
       id: 'artifact-model',
+      title: 'Durable artifact model',
       description: 'Create a durable artifact model.',
       createdAt: '2026-03-10T12:00:00.000Z',
     });
@@ -48,6 +49,7 @@ describe('project artifacts', () => {
       id: 'artifact-model',
       createdAt: '2026-03-10T12:00:00.000Z',
       updatedAt: '2026-03-10T12:00:00.000Z',
+      title: 'Durable artifact model',
       description: 'Create a durable artifact model.',
       summary: 'Project created. Refine the plan before executing the work.',
       status: 'created',
@@ -71,7 +73,9 @@ describe('project artifacts', () => {
       id: 'artifact-model',
       createdAt: '2026-03-10T12:00:00.000Z',
       updatedAt: '2026-03-10T13:00:00.000Z',
+      title: 'Durable artifact model',
       description: 'Create a durable artifact model.',
+      repoRoot: '/Users/patrick/workingdir/personal-agent',
       summary: 'Core storage is in place and the CLI surface is next.',
       status: 'in_progress',
       blockers: ['Need to settle the activity entry shape'],
@@ -91,7 +95,9 @@ describe('project artifacts', () => {
     };
 
     const yaml = formatProject(document);
+    expect(yaml).toContain('title: Durable artifact model');
     expect(yaml).toContain('description: Create a durable artifact model.');
+    expect(yaml).toContain('repoRoot: /Users/patrick/workingdir/personal-agent');
     expect(yaml).toContain('currentMilestoneId: cli-inbox');
 
     expect(parseProject(yaml)).toEqual(document);
@@ -101,6 +107,7 @@ describe('project artifacts', () => {
     const yaml = `id: artifact-model
 createdAt: 2026-03-10T12:00:00.000Z
 updatedAt: 2026-03-10T12:00:00.000Z
+title: Durable artifact model
 description: Create a durable artifact model.
 summary: Project created.
 status: created
@@ -115,6 +122,7 @@ recentProgress: []
     const yaml = `id: artifact-model
 createdAt: 2026-03-10T12:00:00.000Z
 updatedAt: 2026-03-10T12:00:00.000Z
+title: Durable artifact model
 description: Create a durable artifact model.
 summary: Project created.
 status: created
@@ -137,6 +145,7 @@ plan:
     const path = join(dir, 'PROJECT.yaml');
     const document = createInitialProject({
       id: 'artifact-model',
+      title: 'Durable artifact model',
       description: 'Create a durable artifact model.',
       createdAt: '2026-03-10T12:00:00.000Z',
     });
@@ -171,7 +180,6 @@ describe('project activity artifacts', () => {
       summary: 'Daily report completed.',
       details: 'Wrote the daily report artifact and refreshed the executive summary.',
       relatedProjectIds: ['artifact-model', 'daily-review'],
-      relatedConversationIds: ['conv-123'],
       notificationState: 'queued',
     };
 
@@ -180,6 +188,41 @@ describe('project activity artifacts', () => {
     expect(markdown).toContain('relatedProjectIds: artifact-model, daily-review');
 
     expect(parseProjectActivityEntry(markdown)).toEqual(document);
+  });
+
+  it('ignores legacy relatedConversationIds frontmatter when parsing activity markdown', () => {
+    const markdown = [
+      '---',
+      'id: daily-report',
+      'createdAt: 2026-03-10T14:00:00.000Z',
+      'profile: datadog',
+      'kind: scheduled-task',
+      'notificationState: queued',
+      'relatedProjectIds: artifact-model, daily-review',
+      'relatedConversationIds: conv-123',
+      '---',
+      '# Activity',
+      '',
+      '## Summary',
+      '',
+      'Daily report completed.',
+      '',
+      '## Details',
+      '',
+      'Wrote the daily report artifact and refreshed the executive summary.',
+      '',
+    ].join('\n');
+
+    expect(parseProjectActivityEntry(markdown)).toEqual({
+      id: 'daily-report',
+      createdAt: '2026-03-10T14:00:00.000Z',
+      profile: 'datadog',
+      kind: 'scheduled-task',
+      summary: 'Daily report completed.',
+      details: 'Wrote the daily report artifact and refreshed the executive summary.',
+      relatedProjectIds: ['artifact-model', 'daily-review'],
+      notificationState: 'queued',
+    });
   });
 
   it('writes and reads activity files', () => {

@@ -90,13 +90,14 @@ export function Pill({
   mono = false,
   children,
   className,
+  ...props
 }: {
   tone?: PillTone;
   mono?: boolean;
   children: ReactNode;
   className?: string;
-}) {
-  return <span className={cx('ui-pill', pillToneClass(tone), mono && 'font-mono', className)}>{children}</span>;
+} & HTMLAttributes<HTMLSpanElement>) {
+  return <span className={cx('ui-pill', pillToneClass(tone), mono && 'font-mono', className)} {...props}>{children}</span>;
 }
 
 export function Keycap({ children, className }: { children: ReactNode; className?: string }) {

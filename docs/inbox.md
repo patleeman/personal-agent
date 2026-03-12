@@ -254,17 +254,17 @@ Conversations cannot be deleted via `pa inbox`; mark them read instead.
 
 ### Activity items
 
-Repo-managed activity items live at:
+Standalone activity items live in local runtime state at:
 
-- `profiles/<profile>/agent/activity/<activity-id>.md`
+- `~/.local/state/personal-agent/pi-agent/state/inbox/<profile>/activities/<activity-id>.md`
 
-These are the durable records used for standalone inbox activity.
+These are the durable local records used for standalone inbox activity.
 
 ### Activity read-state
 
-Repo-managed activity read-state lives at:
+Activity read-state lives in local runtime state at:
 
-- `profiles/<profile>/agent/activity/.read-state.json`
+- `~/.local/state/personal-agent/pi-agent/state/inbox/<profile>/read-state.json`
 
 ### Activity → conversation links
 
