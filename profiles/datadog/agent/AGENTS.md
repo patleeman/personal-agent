@@ -18,7 +18,6 @@
 - User: Patrick Lee
 - Occupation: software developer specializing in AI
 - Work email: `patrickc.lee@datadoghq.com`
-- Uses Zotero for research papers and related research topics.
 
 ## Memory Use
 
