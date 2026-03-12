@@ -16,12 +16,6 @@
 - Use `~/agent-workspace` only for scratch/test work; otherwise operate in the real repo/path Patrick names.
 - For Unraid-related software projects, prefer local-first development and validation before deployment.
 
-## UI Design Bans
-
-- For personal-agent web UI work, BANNED: nested bordered containers/cards (`boxes inside boxes`). Do not stack inset panels, card-within-card layouts, or form wrappers inside larger bordered boxes unless there is a truly unavoidable reason.
-- For personal-agent web UI work, BANNED: overusing pills/chips as a default UI treatment. Use pills only when they are semantically justified (for example compact status or tags), not as a repeated decorative pattern.
-- Prefer flatter layouts with spacing, typography, and alignment creating hierarchy instead of extra borders and pill chrome.
-
 ## Durable User Context
 
 - User: Patrick Lee
@@ -29,7 +23,7 @@
 - Occupation: software developer specializing in AI
 - Personal emails: `me@patricklee.nyc` (primary), `patleeman@gmail.com` (secondary)
 - Uses Zotero for research papers and related research topics.
-- Primary notes vault: `~/Library/CloudStorage/Dropbox/Notes` (search active folders first, then `!Archive`).
+- Primary notes vault: `~/Library/CloudStorage/Dropbox/Notes`.
 
 ## Durable Preferences
 
