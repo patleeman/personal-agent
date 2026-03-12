@@ -48,5 +48,5 @@ Durable UX preferences repeatedly expressed for the personal-agent web interface
 
 ## Visual style
 
-- Apply the AGENTS-level UI bans consistently: no nested bordered boxes and no decorative overuse of pills/chips.
+- Avoid nested bordered boxes and decorative overuse of pills/chips.
 - Prefer flatter hierarchy created by spacing, typography, and alignment.
