@@ -4,21 +4,25 @@ import { ChatView } from '../components/chat/ChatView';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import { ConversationTree } from '../components/ConversationTree';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, MessageBlock, ModelInfo, PromptImageInput } from '../types';
+import type { ContextUsageSegment, DeferredResumeSummary, MessageBlock, ModelInfo, PromptImageInput } from '../types';
 import { useApi } from '../hooks';
 import { useSessionDetail } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../api';
+import { appendComposerHistory, readComposerHistory } from '../composerHistory';
 import { formatContextShareLabel, formatContextUsageLabel, formatContextWindowLabel, formatLiveSessionLabel, formatThinkingLevelLabel, getContextUsagePercent } from '../conversationHeader';
+import { isConversationScrolledToBottom, shouldShowScrollToBottomControl } from '../conversationScroll';
 import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE } from '../conversationTitle';
 import { emitConversationProjectsChanged, CONVERSATION_PROJECTS_CHANGED_EVENT } from '../conversationProjectEvents';
 import { displayBlockToMessageBlock } from '../messageBlocks';
-import { useAppData, useLiveTitles } from '../contexts';
+import { useAppData, useAppEvents, useLiveTitles } from '../contexts';
 import { filterModelPickerItems } from '../modelPicker';
 import { emitProjectsChanged } from '../projectEvents';
+import { parseDeferredResumeSlashCommand } from '../deferredResumeSlashCommand';
 import { parseProjectSlashCommand, type ProjectSlashCommand } from '../projectSlashCommand';
 import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../slashMenu';
 import { buildMentionItems, filterMentionItems, resolveMentionItems, type MentionItem } from '../conversationMentions';
+import { buildDeferredResumeIndicatorText, compareDeferredResumes, describeDeferredResumeStatus } from '../deferredResumeIndicator';
 import { buildConversationComposerStorageKey, persistForkPromptDraft, resolveForkEntryForMessage } from '../forking';
 import {
   clearPendingConversationPrompt,
@@ -297,6 +301,24 @@ async function buildPromptImages(files: File[]): Promise<PromptImageInput[]> {
   return images;
 }
 
+function formatDeferredResumeWhen(resume: DeferredResumeSummary): string {
+  const target = resume.status === 'ready'
+    ? resume.readyAt ?? resume.dueAt
+    : resume.dueAt;
+  const date = new Date(target);
+  if (Number.isNaN(date.getTime())) {
+    return target;
+  }
+
+  return date.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+
 // ── ConversationPage ──────────────────────────────────────────────────────────
 
 export function ConversationPage({ draft = false }: { draft?: boolean }) {
@@ -353,6 +375,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     : visibleSessionDetail
       ? baseMessages
       : undefined;
+  const messageCount = realMessages?.length ?? 0;
 
   const { setTitle: pushTitle } = useLiveTitles();
   useEffect(() => {
@@ -412,6 +435,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [dragOver, setDragOver] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [showTree, setShowTree] = useState(false);
+  const composerHistoryScopeId = draft ? null : id ?? null;
+  const [composerHistory, setComposerHistory] = useState<string[]>(() => readComposerHistory(composerHistoryScopeId));
+  const [composerHistoryIndex, setComposerHistoryIndex] = useState<number | null>(null);
+  const composerHistoryDraftRef = useRef('');
 
   useEffect(() => {
     if (!draft) {
@@ -424,6 +451,25 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setSlashIdx(0);
     setMentionIdx(0);
   }, [draft]);
+
+  useEffect(() => {
+    setComposerHistory(readComposerHistory(composerHistoryScopeId));
+    setComposerHistoryIndex(null);
+    composerHistoryDraftRef.current = '';
+  }, [composerHistoryScopeId]);
+
+  useEffect(() => {
+    if (composerHistoryIndex === null) {
+      return;
+    }
+
+    if (input === composerHistory[composerHistoryIndex]) {
+      return;
+    }
+
+    setComposerHistoryIndex(null);
+    composerHistoryDraftRef.current = '';
+  }, [composerHistory, composerHistoryIndex, input]);
 
   useEffect(() => {
     if (draft || !id) {
@@ -454,6 +500,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const prevStreamingRef = useRef(false);
   const { data: memoryData } = useApi(api.memory);
   const { data: profileState } = useApi(api.profiles);
+  const { versions } = useAppEvents();
   const { projects, tasks, setProjects } = useAppData();
   const conversationProjectsFetcher = useCallback(async () => {
     if (!id) {
@@ -467,6 +514,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     refetch: refetchConversationProjects,
   } = useApi(conversationProjectsFetcher, id ?? 'no-conversation');
   const [conversationProjectsBusy, setConversationProjectsBusy] = useState(false);
+  const [deferredResumes, setDeferredResumes] = useState<DeferredResumeSummary[]>([]);
+  const [deferredResumesBusy, setDeferredResumesBusy] = useState(false);
+  const [showDeferredResumeDetails, setShowDeferredResumeDetails] = useState(false);
+  const [deferredResumeNowMs, setDeferredResumeNowMs] = useState(() => Date.now());
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -491,6 +542,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     profiles: profileState?.profiles ?? [],
   }), [projects, tasks, memoryData, profileState]);
   const referencedProjectIds = conversationProjects?.relatedProjectIds ?? [];
+  const orderedDeferredResumes = useMemo(
+    () => [...deferredResumes].sort(compareDeferredResumes),
+    [deferredResumes],
+  );
+  const hasReadyDeferredResumes = orderedDeferredResumes.some((resume) => resume.status === 'ready');
+  const deferredResumeIndicatorText = useMemo(
+    () => buildDeferredResumeIndicatorText(orderedDeferredResumes, deferredResumeNowMs),
+    [orderedDeferredResumes, deferredResumeNowMs],
+  );
   const draftMentionItems = useMemo(() => resolveMentionItems(input, mentionItems)
     .filter((item) => item.kind !== 'project' || !referencedProjectIds.includes(item.label)), [input, mentionItems, referencedProjectIds]);
   const draftReferencedProjectIds = useMemo(() => {
@@ -509,6 +569,41 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return ids;
   }, [draftMentionItems]);
 
+  const refetchDeferredResumes = useCallback(async () => {
+    if (!id) {
+      setDeferredResumes([]);
+      return [] as DeferredResumeSummary[];
+    }
+
+    const data = await api.deferredResumes(id);
+    setDeferredResumes(data.resumes);
+    return data.resumes;
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) {
+      setDeferredResumes([]);
+      return;
+    }
+
+    void refetchDeferredResumes().catch(() => {});
+  }, [id, refetchDeferredResumes, versions.sessions]);
+
+  useEffect(() => {
+    if (deferredResumes.length === 0) {
+      setShowDeferredResumeDetails(false);
+      return;
+    }
+
+    const intervalHandle = window.setInterval(() => {
+      setDeferredResumeNowMs(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(intervalHandle);
+    };
+  }, [deferredResumes.length]);
+
   // Auto-resize textarea
   const resize = useCallback(() => {
     const el = textareaRef.current;
@@ -516,6 +611,66 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, []);
+
+  const rememberComposerInput = useCallback((value: string, scopeId: string | null = composerHistoryScopeId) => {
+    const nextHistory = appendComposerHistory(scopeId, value);
+    setComposerHistory(nextHistory);
+    setComposerHistoryIndex(null);
+    composerHistoryDraftRef.current = '';
+  }, [composerHistoryScopeId]);
+
+  const moveComposerCaretToEnd = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) {
+        return;
+      }
+
+      const end = el.value.length;
+      el.focus();
+      el.setSelectionRange(end, end);
+      resize();
+    });
+  }, [resize]);
+
+  const navigateComposerHistory = useCallback((direction: 'older' | 'newer') => {
+    if (composerHistory.length === 0) {
+      return false;
+    }
+
+    if (direction === 'older') {
+      const nextIndex = composerHistoryIndex === null
+        ? composerHistory.length - 1
+        : Math.max(0, composerHistoryIndex - 1);
+
+      if (composerHistoryIndex === null) {
+        composerHistoryDraftRef.current = input;
+      }
+
+      setComposerHistoryIndex(nextIndex);
+      setInput(composerHistory[nextIndex]);
+      moveComposerCaretToEnd();
+      return true;
+    }
+
+    if (composerHistoryIndex === null) {
+      return false;
+    }
+
+    if (composerHistoryIndex >= composerHistory.length - 1) {
+      setComposerHistoryIndex(null);
+      setInput(composerHistoryDraftRef.current);
+      composerHistoryDraftRef.current = '';
+      moveComposerCaretToEnd();
+      return true;
+    }
+
+    const nextIndex = composerHistoryIndex + 1;
+    setComposerHistoryIndex(nextIndex);
+    setInput(composerHistory[nextIndex]);
+    moveComposerCaretToEnd();
+    return true;
+  }, [composerHistory, composerHistoryIndex, input, moveComposerCaretToEnd, setInput]);
 
   useEffect(() => { resize(); }, [input, resize]);
 
@@ -545,7 +700,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 40);
+    setAtBottom(isConversationScrolledToBottom({
+      scrollHeight: el.scrollHeight,
+      scrollTop: el.scrollTop,
+      clientHeight: el.clientHeight,
+    }));
   }, []);
 
   useEffect(() => {
@@ -554,6 +713,25 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     el.addEventListener('scroll', handleScroll);
     return () => el.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
+
+  useLayoutEffect(() => {
+    if (!messageCount) {
+      setAtBottom(true);
+      return;
+    }
+
+    const el = scrollRef.current;
+    if (!el) {
+      setAtBottom(true);
+      return;
+    }
+
+    setAtBottom(isConversationScrolledToBottom({
+      scrollHeight: el.scrollHeight,
+      scrollTop: el.scrollTop,
+      clientHeight: el.clientHeight,
+    }));
+  }, [id, messageCount]);
 
   // Scroll to the newest message once per conversation after its content loads.
   // We key this by session id so fork/navigation lands at the bottom even if the
@@ -585,19 +763,36 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     };
   }, [id, realMessages]);
 
-  // Esc+Esc → open tree
+  // Esc aborts an active run. Esc+Esc still opens the tree when idle.
   useEffect(() => {
     let lastEsc = 0;
     function handler(e: KeyboardEvent) {
-      if (e.key !== 'Escape') return;
-      if (showTree) return; // let tree handle its own Esc
+      if (e.key !== 'Escape') {
+        return;
+      }
+
+      if (e.defaultPrevented || showTree) {
+        return; // let focused controls / tree handle their own Escape
+      }
+
+      if (stream.isStreaming) {
+        e.preventDefault();
+        lastEsc = 0;
+        void stream.abort();
+        return;
+      }
+
       const now = Date.now();
-      if (now - lastEsc < 500) { setShowTree(true); lastEsc = 0; }
-      else lastEsc = now;
+      if (now - lastEsc < 500) {
+        setShowTree(true);
+        lastEsc = 0;
+      } else {
+        lastEsc = now;
+      }
     }
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [showTree]);
+  }, [showTree, stream]);
 
   // Auto-scroll when streaming changes the current tail block.
   // Text deltas usually mutate the last streamed block in place, so keying on
@@ -778,6 +973,69 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     emitProjectsChanged();
   }
 
+  async function scheduleDeferredResume(delay: string, prompt?: string) {
+    if (!id || draft) {
+      showNotice('danger', 'Deferred resume requires an existing conversation.', 4000);
+      return;
+    }
+
+    setDeferredResumesBusy(true);
+    try {
+      const result = await api.scheduleDeferredResume(id, { delay, prompt });
+      setDeferredResumes(result.resumes);
+      setInput('');
+      showNotice('accent', `Deferred resume scheduled for ${describeDeferredResumeStatus(result.resume)}.`);
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    } finally {
+      setDeferredResumesBusy(false);
+    }
+  }
+
+  async function cancelDeferredResume(resumeId: string) {
+    if (!id) {
+      return;
+    }
+
+    setDeferredResumesBusy(true);
+    try {
+      const result = await api.cancelDeferredResume(id, resumeId);
+      setDeferredResumes(result.resumes);
+      showNotice('accent', 'Deferred resume cancelled.');
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    } finally {
+      setDeferredResumesBusy(false);
+    }
+  }
+
+  async function continueDeferredResumesNow() {
+    if (!id) {
+      return;
+    }
+
+    if (isLiveSession) {
+      await refetchDeferredResumes().catch(() => {});
+      return;
+    }
+
+    if (!visibleSessionDetail) {
+      showNotice('danger', 'Open the saved conversation before continuing deferred work.', 4000);
+      return;
+    }
+
+    try {
+      await api.resumeSession(visibleSessionDetail.meta.file);
+      setConfirmedLive(true);
+      showNotice('accent', 'Resuming deferred work…');
+      setTimeout(() => {
+        void refetchDeferredResumes().catch(() => {});
+      }, 200);
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    }
+  }
+
   async function removeReferencedProject(projectId: string) {
     if (!id || conversationProjectsBusy) {
       return;
@@ -843,7 +1101,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }
 
   async function submitComposer(behavior?: 'steer' | 'followUp') {
-    const text = input.trim();
+    const inputSnapshot = input;
+    const text = inputSnapshot.trim();
     const pendingAttachments = attachments;
     if (!text && pendingAttachments.length === 0) return;
 
@@ -853,7 +1112,22 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         if (projectSlash.kind === 'invalid') {
           showNotice('danger', projectSlash.message, 4000);
         } else {
+          rememberComposerInput(inputSnapshot);
           await handleProjectSlashCommand(projectSlash.command);
+        }
+        return;
+      }
+
+      const deferredResumeSlash = parseDeferredResumeSlashCommand(text);
+      if (deferredResumeSlash) {
+        if (deferredResumeSlash.kind === 'invalid') {
+          showNotice('danger', deferredResumeSlash.message, 4000);
+        } else {
+          rememberComposerInput(inputSnapshot);
+          await scheduleDeferredResume(
+            deferredResumeSlash.command.delay,
+            deferredResumeSlash.command.prompt,
+          );
         }
         return;
       }
@@ -879,6 +1153,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           if (draft) {
             textToSend = `Run this shell command and show me the output:\n\`\`\`\n${text.slice(5)}\n\`\`\``;
           } else {
+            rememberComposerInput(inputSnapshot);
             await handleRun(text.slice(5));
             return;
           }
@@ -887,6 +1162,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           if (draft) {
             textToSend = `Search the web for: ${text.slice(8)}`;
           } else {
+            rememberComposerInput(inputSnapshot);
             sendToAgent(`Search the web for: ${text.slice(8)}`);
             return;
           }
@@ -895,6 +1171,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           if (draft) {
             textToSend = 'Summarize our conversation so far concisely.';
           } else {
+            rememberComposerInput(inputSnapshot);
             sendToAgent('Summarize our conversation so far concisely.');
             return;
           }
@@ -903,6 +1180,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           if (draft) {
             textToSend = 'Think step-by-step about our conversation so far and share your reasoning.';
           } else {
+            rememberComposerInput(inputSnapshot);
             sendToAgent('Think step-by-step about our conversation so far and share your reasoning.');
             return;
           }
@@ -911,12 +1189,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           if (draft) {
             textToSend = `Think step-by-step about: ${text.slice(7)}`;
           } else {
+            rememberComposerInput(inputSnapshot);
             sendToAgent(`Think step-by-step about: ${text.slice(7)}`);
             return;
           }
         }
         if (text === '/fork' && id && isLiveSession) {
           try {
+            rememberComposerInput(inputSnapshot);
             const entries = await api.forkEntries(id);
             if (entries.length === 0) { sendToAgent('(No forkable messages yet)'); return; }
             const entry = entries[entries.length - 1];
@@ -937,8 +1217,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       const queuedBehavior = behavior ?? (isLiveSession && stream.isStreaming ? 'steer' : undefined);
 
       if (!id && !visibleSessionDetail) {
+        rememberComposerInput(inputSnapshot);
         try {
           const { id: newId } = await api.createLiveSession(undefined, draftReferencedProjectIds);
+          rememberComposerInput(inputSnapshot, newId);
           persistPendingConversationPrompt(newId, {
             text: textToSend,
             behavior: queuedBehavior,
@@ -953,6 +1235,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       }
 
       if (isLiveSession) {
+        rememberComposerInput(inputSnapshot);
         await stream.send(textToSend, queuedBehavior, promptImages);
         if (id) {
           await refetchConversationProjects({ resetLoading: false });
@@ -963,6 +1246,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         }, 50);
       } else if (visibleSessionDetail) {
         try {
+          rememberComposerInput(inputSnapshot);
           await api.resumeSession(visibleSessionDetail.meta.file);
           setConfirmedLive(true);
           setTimeout(() => {
@@ -995,8 +1279,31 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     addImageAttachments(files);
   }
 
+  function canNavigateComposerHistory(textarea: HTMLTextAreaElement, key: 'ArrowUp' | 'ArrowDown'): boolean {
+    if (textarea.selectionStart !== textarea.selectionEnd) {
+      return false;
+    }
+
+    const caret = textarea.selectionStart;
+    return key === 'ArrowUp'
+      ? !textarea.value.slice(0, caret).includes('\n')
+      : !textarea.value.slice(caret).includes('\n');
+  }
+
   // Keyboard handling
   async function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'c' && !e.nativeEvent.isComposing) {
+      if (input.trim().length > 0) {
+        rememberComposerInput(input);
+      }
+      if (input.length > 0 || attachments.length > 0) {
+        e.preventDefault();
+        setInput('');
+        setAttachments([]);
+      }
+      return;
+    }
+
     if (showModelPicker) {
       if (e.key === 'Escape')    { e.preventDefault(); setInput(''); return; }
       if (modelItems.length === 0) {
@@ -1037,6 +1344,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         return;
       }
     }
+
+    if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      if (canNavigateComposerHistory(e.currentTarget, e.key) && navigateComposerHistory(e.key === 'ArrowUp' ? 'older' : 'newer')) {
+        e.preventDefault();
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && e.altKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       await submitComposer('followUp');
@@ -1067,6 +1382,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }
 
   const composerHasContent = input.trim().length > 0 || attachments.length > 0;
+  const showScrollToBottomControl = shouldShowScrollToBottomControl(messageCount, atBottom);
 
   return (
     <div className="flex flex-col h-full">
@@ -1128,7 +1444,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 : 'Start a Pi session to populate this conversation.'}
             />
           )}
-          {!atBottom && (
+          {showScrollToBottomControl && (
             <button
               onClick={() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })}
               className="sticky bottom-4 left-1/2 -translate-x-1/2 ui-pill ui-pill-muted shadow-md"
@@ -1153,6 +1469,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
+        {notice && (
+          <div className="mb-2 text-center">
+            <Pill tone={notice.tone}>{notice.text}</Pill>
+          </div>
+        )}
+
         <div className="relative">
           {showSlash   && <SlashMenu items={slashItems} idx={slashIdx} onSelect={(item) => {
             const c = item.displayCmd.trim();
@@ -1289,6 +1611,75 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               </div>
             )}
 
+            {/* Deferred resume indicator */}
+            {!draft && orderedDeferredResumes.length > 0 && (
+              <>
+                <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-3 py-2 text-[11px]">
+                  <div className="min-w-0 flex items-center gap-2">
+                    <span className={cx(
+                      'shrink-0',
+                      hasReadyDeferredResumes ? 'text-warning' : 'text-dim',
+                    )}>
+                      ⏰
+                    </span>
+                    <span className="shrink-0 text-secondary">Deferred</span>
+                    <span className="truncate text-dim">{deferredResumeIndicatorText}</span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3 text-[11px]">
+                    {hasReadyDeferredResumes && !isLiveSession && (
+                      <button
+                        type="button"
+                        onClick={() => { void continueDeferredResumesNow(); }}
+                        className="text-accent transition-colors hover:text-accent/80"
+                      >
+                        continue now
+                      </button>
+                    )}
+                    {deferredResumesBusy && <span className="text-dim">updating…</span>}
+                    <button
+                      type="button"
+                      onClick={() => { setShowDeferredResumeDetails((open) => !open); }}
+                      className="text-dim transition-colors hover:text-primary"
+                    >
+                      {showDeferredResumeDetails ? 'hide' : 'details'}
+                    </button>
+                  </div>
+                </div>
+
+                {showDeferredResumeDetails && (
+                  <div className="flex flex-col gap-2 border-b border-border-subtle px-3 pt-2.5 pb-2.5">
+                    {orderedDeferredResumes.map((resume) => (
+                      <div key={resume.id} className="flex items-start gap-3 text-[12px]">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span className={cx(
+                              'shrink-0 font-medium',
+                              resume.status === 'ready' ? 'text-warning' : 'text-secondary',
+                            )}>
+                              {describeDeferredResumeStatus(resume, deferredResumeNowMs)}
+                            </span>
+                            <span className="truncate text-primary">{resume.prompt}</span>
+                          </div>
+                          <div className="mt-0.5 text-[11px] text-dim">
+                            {resume.status === 'ready' ? 'Ready' : 'Due'} {formatDeferredResumeWhen(resume)}
+                            {resume.attempts > 0 ? ` · retries ${resume.attempts}` : ''}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => { void cancelDeferredResume(resume.id); }}
+                          className="shrink-0 text-[11px] text-dim transition-colors hover:text-danger disabled:opacity-40"
+                          disabled={deferredResumesBusy}
+                        >
+                          cancel
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
             {/* Textarea */}
             <div className="flex items-end gap-2 px-3 py-2.5">
               <input
@@ -1324,6 +1715,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 rows={1}
                 className="flex-1 bg-transparent text-sm text-primary placeholder:text-dim outline-none resize-none leading-relaxed"
                 placeholder="Message… (/ for commands, @ to reference projects, tasks, knowledge, skills, and profiles)"
+                title="Ctrl+C clears the composer. ↑/↓ recalls recent prompts."
                 style={{ minHeight: '24px', maxHeight: '160px' }}
               />
 
@@ -1341,13 +1733,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           </div>
         </div>
       </div>
-
-      {/* Inline notice */}
-      {notice && (
-        <div className="mx-4 mb-1 text-center">
-          <Pill tone={notice.tone}>{notice.text}</Pill>
-        </div>
-      )}
 
       {/* Session tree overlay */}
       {showTree && realMessages && (

@@ -1,8 +1,8 @@
-import type { ActivityEntry, AgentThemeState, AppStatus, ConversationProjectLinks, DaemonState, GatewayState, LiveSessionContext, LiveSessionMeta, MemoryData, ModelState, ProfileState, ProjectDetail, ProjectRecord, PromptImageInput, ScheduledTaskSummary, SessionContextUsage, SessionMeta, ThemeMode } from './types';
+import type { ActivityEntry, AppStatus, ConversationCwdChangeResult, ConversationProjectLinks, DaemonState, DeferredResumeSummary, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, ModelState, ProfileState, ProjectDetail, ProjectRecord, PromptImageInput, ScheduledTaskSummary, SessionContextUsage, SessionMeta, ToolsState, WebUiState } from './types';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch('/api' + path);
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok) throw new Error(await readApiError(res));
   return res.json() as Promise<T>;
 }
 
@@ -12,7 +12,7 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
     headers: { 'Content-Type': 'application/json' },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok) throw new Error(await readApiError(res));
   return res.json() as Promise<T>;
 }
 
@@ -22,14 +22,27 @@ async function patch<T>(path: string, body?: unknown): Promise<T> {
     headers: { 'Content-Type': 'application/json' },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok) throw new Error(await readApiError(res));
   return res.json() as Promise<T>;
 }
 
 async function del<T>(path: string): Promise<T> {
   const res = await fetch('/api' + path, { method: 'DELETE' });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok) throw new Error(await readApiError(res));
   return res.json() as Promise<T>;
+}
+
+async function readApiError(res: Response): Promise<string> {
+  try {
+    const data = await res.json() as { error?: string };
+    if (typeof data.error === 'string' && data.error.trim().length > 0) {
+      return data.error;
+    }
+  } catch {
+    // Ignore non-JSON error bodies.
+  }
+
+  return `${res.status} ${res.statusText}`;
 }
 
 export const api = {
@@ -47,6 +60,12 @@ export const api = {
   restartDaemonService: () => post<DaemonState>('/daemon/service/restart'),
   stopDaemonService: () => post<DaemonState>('/daemon/service/stop'),
   uninstallDaemonService: () => post<DaemonState>('/daemon/service/uninstall'),
+  webUiState:   () => get<WebUiState>('/web-ui/state'),
+  installWebUiService: () => post<WebUiState>('/web-ui/service/install'),
+  startWebUiService: () => post<WebUiState>('/web-ui/service/start'),
+  restartWebUiService: () => post<WebUiState>('/web-ui/service/restart'),
+  stopWebUiService: () => post<WebUiState>('/web-ui/service/stop'),
+  uninstallWebUiService: () => post<WebUiState>('/web-ui/service/uninstall'),
   activity:     () => get<ActivityEntry[]>('/activity'),
   activityById: (id: string) => get<ActivityEntry>(`/activity/${encodeURIComponent(id)}`),
   sessions:     () => get<SessionMeta[]>('/sessions'),
@@ -112,12 +131,12 @@ export const api = {
 
   // ── Models ────────────────────────────────────────────────────────────────
   models: () => get<ModelState>('/models'),
+  tools: () => get<ToolsState>('/tools'),
+  mcpCliServer: (server: string) => get<McpCliServerDetail>(`/tools/mcp/servers/${encodeURIComponent(server)}`),
+  mcpCliTool: (server: string, tool: string) => get<McpCliToolDetail>(`/tools/mcp/servers/${encodeURIComponent(server)}/tools/${encodeURIComponent(tool)}`),
   setModel: (model: string) => patch<{ ok: boolean }>('/models/current', { model }),
   updateModelPreferences: (input: { model?: string; thinkingLevel?: string }) =>
     patch<{ ok: boolean }>('/models/current', input),
-  agentTheme: () => get<AgentThemeState>('/agent-theme'),
-  updateAgentTheme: (input: { themeMode?: ThemeMode; themeDark?: string; themeLight?: string }) =>
-    patch<{ ok: boolean }>('/agent-theme', input),
   openConversationTabs: () => get<{ sessionIds: string[] }>('/web-ui/open-conversations'),
   setOpenConversationTabs: (sessionIds: string[]) =>
     patch<{ ok: boolean; sessionIds: string[] }>('/web-ui/open-conversations', { sessionIds }),
@@ -153,12 +172,45 @@ export const api = {
   liveSessionContext: (id: string) => get<LiveSessionContext>(`/live-sessions/${id}/context`),
   liveSessionContextUsage: (id: string) => get<SessionContextUsage>(`/live-sessions/${encodeURIComponent(id)}/context-usage`),
   conversationProjects: (id: string) => get<ConversationProjectLinks>(`/conversations/${encodeURIComponent(id)}/projects`),
+  deferredResumes: (id: string) => get<{ conversationId: string; resumes: DeferredResumeSummary[] }>(`/conversations/${encodeURIComponent(id)}/deferred-resumes`),
+  scheduleDeferredResume: (id: string, input: { delay: string; prompt?: string }) =>
+    fetch(`/api/conversations/${encodeURIComponent(id)}/deferred-resumes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    }).then(async (res) => {
+      if (!res.ok) {
+        throw new Error(await readApiError(res));
+      }
+
+      return res.json() as Promise<{ conversationId: string; resume: DeferredResumeSummary; resumes: DeferredResumeSummary[] }>;
+    }),
+  cancelDeferredResume: (id: string, resumeId: string) =>
+    fetch(`/api/conversations/${encodeURIComponent(id)}/deferred-resumes/${encodeURIComponent(resumeId)}`, { method: 'DELETE' }).then(async (res) => {
+      if (!res.ok) {
+        throw new Error(await readApiError(res));
+      }
+
+      return res.json() as Promise<{ conversationId: string; cancelledId: string; resumes: DeferredResumeSummary[] }>;
+    }),
   addConversationProject: (id: string, projectId: string) =>
     post<ConversationProjectLinks>(`/conversations/${encodeURIComponent(id)}/projects`, { projectId }),
   removeConversationProject: (id: string, projectId: string) =>
     fetch(`/api/conversations/${encodeURIComponent(id)}/projects/${encodeURIComponent(projectId)}`, { method: 'DELETE' }).then(r => {
       if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
       return r.json() as Promise<ConversationProjectLinks>;
+    }),
+  changeConversationCwd: (id: string, cwd: string) =>
+    fetch(`/api/conversations/${encodeURIComponent(id)}/cwd`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cwd }),
+    }).then(async (res) => {
+      if (!res.ok) {
+        throw new Error(await readApiError(res));
+      }
+
+      return res.json() as Promise<ConversationCwdChangeResult>;
     }),
 
   createLiveSession: (cwd?: string, referencedProjectIds?: string[], text?: string) =>

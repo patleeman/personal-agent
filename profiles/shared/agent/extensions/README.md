@@ -14,14 +14,8 @@ So each extension here uses either a top-level `*.ts` entrypoint or an `index.ts
 
 ```text
 extensions/
-├── at-autocomplete-performance/
-│   └── index.ts
-├── deferred-resume/
-│   └── index.ts
 ├── exit-alias.ts
 ├── memory/
-│   └── index.ts
-├── tmux-manager/
 │   └── index.ts
 ├── tmux-orchestration-prompt/
 │   └── index.ts

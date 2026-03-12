@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { getStateRoot } from './runtime/paths.js';
 
-export const DEFERRED_RESUME_STATE_FILE_NAME = 'tui-deferred-resumes-state.json';
+export const DEFERRED_RESUME_STATE_FILE_NAME = 'deferred-resumes-state.json';
 
 export type DeferredResumeStatus = 'scheduled' | 'ready';
 
@@ -58,6 +58,32 @@ function normalizeIsoTimestamp(value: string): string | undefined {
 
 function normalizeStatus(value: unknown): DeferredResumeStatus {
   return value === 'ready' ? 'ready' : 'scheduled';
+}
+
+export function parseDeferredResumeDelayMs(raw: string): number | undefined {
+  const match = raw.trim().match(/^(\d+)(s|m|h|d)$/i);
+  if (!match) {
+    return undefined;
+  }
+
+  const value = Number(match[1]);
+  const unit = (match[2] ?? '').toLowerCase();
+  if (!Number.isFinite(value) || value <= 0) {
+    return undefined;
+  }
+
+  switch (unit) {
+    case 's':
+      return value * 1_000;
+    case 'm':
+      return value * 60_000;
+    case 'h':
+      return value * 60 * 60_000;
+    case 'd':
+      return value * 24 * 60 * 60_000;
+    default:
+      return undefined;
+  }
 }
 
 function compareDeferredResumeRecords(left: DeferredResumeRecord, right: DeferredResumeRecord): number {

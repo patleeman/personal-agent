@@ -9,6 +9,7 @@ import {
   getDueScheduledSessionDeferredResumeEntries,
   getReadySessionDeferredResumeEntries,
   loadDeferredResumeState,
+  parseDeferredResumeDelayMs,
   readSessionConversationId,
   removeDeferredResume,
   retryDeferredResume,
@@ -29,6 +30,14 @@ function createTempDir(prefix: string): string {
 }
 
 describe('deferred resume state', () => {
+  it('parses supported deferred resume delay strings', () => {
+    expect(parseDeferredResumeDelayMs('30s')).toBe(30_000);
+    expect(parseDeferredResumeDelayMs('10m')).toBe(600_000);
+    expect(parseDeferredResumeDelayMs('2h')).toBe(7_200_000);
+    expect(parseDeferredResumeDelayMs('1d')).toBe(86_400_000);
+    expect(parseDeferredResumeDelayMs('later')).toBeUndefined();
+  });
+
   it('loads legacy entries without explicit status as scheduled', () => {
     const dir = createTempDir('deferred-resume-state-');
     const stateFile = join(dir, 'state.json');

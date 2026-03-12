@@ -23,6 +23,7 @@ export const BASE_SLASH_COMMANDS = [
   { cmd: '/compact', icon: '≡', desc: 'Manually compact the session context' },
   { cmd: '/reload', icon: '↻', desc: 'Reload extensions, skills, prompts, and themes' },
   { cmd: '/project', icon: '◫', desc: 'Create or reference a project for this conversation' },
+  { cmd: '/resume', icon: '⏰', desc: 'Schedule this conversation to continue later' },
 ] as const;
 
 export interface ParsedSlashInput {

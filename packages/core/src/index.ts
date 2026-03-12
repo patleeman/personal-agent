@@ -37,3 +37,6 @@ export * from './session-meta.js';
 
 // Project exports
 export * from './projects.js';
+
+// MCP CLI integration exports
+export * from './mcp-cli.js';

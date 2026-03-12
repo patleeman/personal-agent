@@ -3,10 +3,12 @@ import { join } from 'node:path';
 import {
   resolveActivityReadStatePath,
   resolveConversationAttentionStatePath,
+  resolveDeferredResumeStateFile,
   resolveProfileActivityConversationLinksDir,
   resolveProfileActivityDir,
   resolveProfileProjectsDir,
 } from '@personal-agent/core';
+import { logWarn } from './logging.js';
 
 export type AppEventTopic = 'activity' | 'projects' | 'sessions' | 'tasks';
 
@@ -76,13 +78,14 @@ function createTopicSignatures(options: AppEventMonitorOptions, profile: string)
   const tasksDir = join(options.repoRoot, 'profiles', profile, 'agent', 'tasks');
   const readStateFile = resolveActivityReadStatePath({ profile });
   const conversationAttentionStateFile = resolveConversationAttentionStatePath({ profile });
+  const deferredResumeStateFile = resolveDeferredResumeStateFile();
 
   const activitySignature = `activity:${readPathSnapshot(activityDir)}|links:${readPathSnapshot(activityConversationLinksDir)}|read:${readPathSnapshot(readStateFile)}`;
 
   return {
     activity: activitySignature,
     projects: `projects:${readPathSnapshot(projectsDir)}`,
-    sessions: `sessions:${readPathSnapshot(options.sessionsDir)}|attention:${readPathSnapshot(conversationAttentionStateFile)}|${activitySignature}`,
+    sessions: `sessions:${readPathSnapshot(options.sessionsDir)}|attention:${readPathSnapshot(conversationAttentionStateFile)}|deferred:${readPathSnapshot(deferredResumeStateFile)}|${activitySignature}`,
     tasks: `tasks:${readPathSnapshot(tasksDir)}|state:${readPathSnapshot(options.taskStateFile)}`,
   };
 }
@@ -152,7 +155,9 @@ export function startAppEventMonitor(options: AppEventMonitorOptions): void {
     try {
       tick();
     } catch (error) {
-      console.warn(`[web] app event monitor failed: ${(error as Error).message}`);
+      logWarn('app event monitor failed', {
+        message: (error as Error).message,
+      });
     }
   }, intervalMs);
 }

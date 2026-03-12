@@ -49,12 +49,10 @@ Most of the time, you use them indirectly rather than thinking about their sourc
 
 Examples of user-visible extension behavior in this repo:
 
-- **memory** — keeps AGENTS, skills, and memory rules visible to the agent and exposes memory browsing
-- **deferred-resume** — lets work wake up later and surface back through durable state
+- **memory** — keeps AGENTS, skills, and memory rules visible to the agent
 - **web-tools** — gives the agent web search/fetch capability
-- **tmux-manager** — supports agent-owned tmux sessions and related workflows
 - **tmux-orchestration-prompt** — gives the agent better policy for tmux-based long-running work
-- **fast `@` completion** — improves large-repo prompt reference behavior in the UI/TUI
+- **project agent extension** — lets web UI conversations create and update durable project state directly
 
 ## What to edit when you want to change behavior
 

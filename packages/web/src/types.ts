@@ -208,6 +208,44 @@ export interface DaemonState {
   log: GatewayLogTail;
 }
 
+export interface WebUiReleaseSummary {
+  slot: 'blue' | 'green';
+  slotDir: string;
+  distDir: string;
+  serverDir: string;
+  serverEntryFile: string;
+  sourceRepoRoot: string;
+  builtAt: string;
+  revision?: string;
+}
+
+export interface WebUiDeploymentSummary {
+  stablePort: number;
+  activeSlot?: 'blue' | 'green';
+  activeRelease?: WebUiReleaseSummary;
+  inactiveRelease?: WebUiReleaseSummary;
+}
+
+export interface WebUiServiceSummary {
+  platform: string;
+  identifier: string;
+  manifestPath: string;
+  installed: boolean;
+  running: boolean;
+  logFile?: string;
+  error?: string;
+  repoRoot: string;
+  port: number;
+  url: string;
+  deployment?: WebUiDeploymentSummary;
+}
+
+export interface WebUiState {
+  warnings: string[];
+  service: WebUiServiceSummary;
+  log: GatewayLogTail;
+}
+
 // ── Sessions ──────────────────────────────────────────────────────────────────
 
 export interface SessionMeta {
@@ -288,6 +326,24 @@ export interface LiveSessionContext {
 export interface ConversationProjectLinks {
   conversationId: string;
   relatedProjectIds: string[];
+}
+
+export interface DeferredResumeSummary {
+  id: string;
+  sessionFile: string;
+  prompt: string;
+  dueAt: string;
+  createdAt: string;
+  attempts: number;
+  status: 'scheduled' | 'ready';
+  readyAt?: string;
+}
+
+export interface ConversationCwdChangeResult {
+  id: string;
+  sessionFile: string;
+  cwd: string;
+  changed: boolean;
 }
 
 export interface LiveSessionMeta {
@@ -377,17 +433,88 @@ export interface ModelState {
   models: ModelInfo[];
 }
 
-export type ThemeMode = 'system' | 'light' | 'dark';
-
-export interface AgentThemeState {
-  currentTheme: string;
-  themeMode: ThemeMode;
-  themeDark: string;
-  themeLight: string;
-  themes: string[];
-}
-
 export interface ProfileState {
   currentProfile: string;
   profiles: string[];
+}
+
+export interface ToolParameterSchema {
+  type?: string;
+  description?: string;
+  properties?: Record<string, ToolParameterSchema>;
+  required?: string[];
+  items?: ToolParameterSchema;
+  anyOf?: ToolParameterSchema[];
+  oneOf?: ToolParameterSchema[];
+  const?: unknown;
+  enum?: unknown[];
+  [key: string]: unknown;
+}
+
+export interface AgentToolInfo {
+  name: string;
+  description: string;
+  parameters: ToolParameterSchema;
+  active: boolean;
+}
+
+export interface McpCliBinaryState {
+  available: boolean;
+  command: string;
+  path?: string;
+  version?: string;
+  error?: string;
+}
+
+export interface McpCliServerConfig {
+  name: string;
+  command?: string;
+  args: string[];
+  cwd?: string;
+  url?: string;
+  env?: Record<string, string>;
+  raw: Record<string, unknown>;
+}
+
+export interface McpCliState {
+  binary: McpCliBinaryState;
+  configPath: string;
+  configExists: boolean;
+  searchedPaths: string[];
+  servers: McpCliServerConfig[];
+}
+
+export interface McpCliServerToolSummary {
+  name: string;
+}
+
+export interface McpCliServerDetail {
+  server?: string;
+  transport?: string;
+  commandLine?: string;
+  toolCount?: number;
+  tools: McpCliServerToolSummary[];
+  rawOutput: string;
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}
+
+export interface McpCliToolDetail {
+  server?: string;
+  tool?: string;
+  description?: string;
+  schema?: ToolParameterSchema;
+  rawOutput: string;
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}
+
+export interface ToolsState {
+  profile: string;
+  cwd: string;
+  activeTools: string[];
+  tools: AgentToolInfo[];
+  mcpCli: McpCliState;
 }

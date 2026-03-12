@@ -59,4 +59,9 @@ describe('buildSlashMenuItems', () => {
     const items = buildSlashMenuItems('/pro', SKILLS);
     expect(items.some((item) => item.displayCmd === '/project')).toBe(true);
   });
+
+  it('includes the deferred resume slash command in the command menu', () => {
+    const items = buildSlashMenuItems('/res', SKILLS);
+    expect(items.some((item) => item.displayCmd === '/resume')).toBe(true);
+  });
 });

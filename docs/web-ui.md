@@ -15,10 +15,20 @@ It gives you one place to see:
 
 ## Start the UI
 
+Foreground mode:
+
 ```bash
 pa ui
 pa ui --open
 pa ui --port 4000
+```
+
+Managed service mode for day-to-day use:
+
+```bash
+pa ui service install
+pa ui service status
+pa ui service restart
 ```
 
 Default address:
@@ -26,6 +36,29 @@ Default address:
 - `http://localhost:3741`
 
 The web app uses the current active profile.
+
+The managed service is the recommended way to run the UI when you want it to be your main interface.
+It survives terminal closes, restarts automatically, and can be restarted by `pa update`.
+When installed, updates use blue/green staging: the next release is built into the inactive slot, health-checked on a candidate port, then swapped in.
+
+The UI also has a dedicated **Web UI** page for:
+
+- managed service status
+- active vs inactive blue/green release info
+- recent web UI logs
+
+## Logs
+
+Inspect recent managed web UI logs with:
+
+```bash
+pa ui logs
+pa ui logs --tail 120
+```
+
+Default log location:
+
+- `~/.local/state/personal-agent/web/logs/web.log`
 
 ## What the UI is for
 
@@ -159,7 +192,6 @@ Settings lets you change:
 - active profile
 - default model
 - default thinking level
-- Pi light/dark theme mapping
 - saved UI state
 
 Switching the active profile affects:
@@ -205,6 +237,7 @@ Common ones include:
 - `/project new <title>` — create a project quickly using the same text for both title and description
 - `/project reference <id>` — reference a project in this conversation
 - `/project unreference <id>` — stop referencing a project
+- `/resume <delay> [prompt]` — schedule this conversation to continue later (`/defer` also works)
 - `/fork` — fork a conversation branch
 - `/compact` — compact context
 - `/reload` — reload profile resources
