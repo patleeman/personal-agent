@@ -6,6 +6,7 @@ import {
   resolveDeferredResumeStateFile,
   resolveProfileActivityConversationLinksDir,
   resolveProfileActivityDir,
+  resolveProfileConversationArtifactsDir,
   resolveProfileProjectsDir,
 } from '@personal-agent/core';
 import { logWarn } from './logging.js';
@@ -75,6 +76,7 @@ function createTopicSignatures(options: AppEventMonitorOptions, profile: string)
   const activityDir = resolveProfileActivityDir({ profile });
   const activityConversationLinksDir = resolveProfileActivityConversationLinksDir({ profile });
   const projectsDir = resolveProfileProjectsDir({ repoRoot: options.repoRoot, profile });
+  const conversationArtifactsDir = resolveProfileConversationArtifactsDir({ profile });
   const tasksDir = join(options.repoRoot, 'profiles', profile, 'agent', 'tasks');
   const readStateFile = resolveActivityReadStatePath({ profile });
   const conversationAttentionStateFile = resolveConversationAttentionStatePath({ profile });
@@ -85,7 +87,7 @@ function createTopicSignatures(options: AppEventMonitorOptions, profile: string)
   return {
     activity: activitySignature,
     projects: `projects:${readPathSnapshot(projectsDir)}`,
-    sessions: `sessions:${readPathSnapshot(options.sessionsDir)}|attention:${readPathSnapshot(conversationAttentionStateFile)}|deferred:${readPathSnapshot(deferredResumeStateFile)}|${activitySignature}`,
+    sessions: `sessions:${readPathSnapshot(options.sessionsDir)}|artifacts:${readPathSnapshot(conversationArtifactsDir)}|attention:${readPathSnapshot(conversationAttentionStateFile)}|deferred:${readPathSnapshot(deferredResumeStateFile)}|${activitySignature}`,
     tasks: `tasks:${readPathSnapshot(tasksDir)}|state:${readPathSnapshot(options.taskStateFile)}`,
   };
 }

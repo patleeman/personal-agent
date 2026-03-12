@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ALL_ARCHIVE_WORKSPACES_VALUE, buildArchiveWorkspaceOptions, filterArchiveSessions } from '../archiveSessions';
 import type { SessionMeta } from '../types';
 import { formatDate, timeAgo } from '../utils';
+import { ConversationStatusText } from './ConversationStatusText';
 import { IconButton, Keycap, Pill } from './ui';
 
 interface Props {
@@ -10,35 +11,6 @@ interface Props {
   attentionIds?: Set<string>;
   onRestore: (sessionId: string) => void;
   onClose: () => void;
-}
-
-function ConversationIndicators({
-  isRunning,
-  needsAttention,
-}: {
-  isRunning?: boolean;
-  needsAttention?: boolean;
-}) {
-  if (!isRunning && !needsAttention) {
-    return null;
-  }
-
-  return (
-    <span className="flex items-center gap-1.5 shrink-0 self-start mt-0.5" aria-hidden="true">
-      {isRunning && (
-        <span
-          className="w-2 h-2 rounded-full bg-accent animate-pulse"
-          title="Running"
-        />
-      )}
-      {needsAttention && (
-        <span
-          className="w-2 h-2 rounded-full bg-warning ring-1 ring-warning/25"
-          title="Needs attention"
-        />
-      )}
-    </span>
-  );
 }
 
 export function ArchivedConversationsModal({
@@ -270,14 +242,21 @@ export function ArchivedConversationsModal({
                 </span>
 
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-start gap-2">
-                    <p className="text-[13px] text-primary leading-snug truncate flex-1 min-w-0">{session.title}</p>
-                    <ConversationIndicators isRunning={session.isRunning} needsAttention={needsAttention} />
-                  </div>
+                  <p className="text-[13px] text-primary leading-snug truncate">{session.title}</p>
                   <div className="mt-0.5 flex items-center gap-2 text-[11px] text-dim/70 min-w-0">
                     <span className="shrink-0">{timeAgo(session.timestamp)}</span>
                     <span className="shrink-0 text-dim/40">·</span>
                     <span className="truncate font-mono" title={session.cwd}>{session.cwd}</span>
+                    {(session.isRunning || needsAttention) && (
+                      <>
+                        <span className="shrink-0 text-dim/40">·</span>
+                        <ConversationStatusText
+                          isRunning={session.isRunning}
+                          needsAttention={needsAttention}
+                          className="shrink-0"
+                        />
+                      </>
+                    )}
                   </div>
                 </div>
 

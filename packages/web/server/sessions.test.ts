@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, un
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { clearSessionCaches, listSessions, readSessionBlocks } from './sessions.js';
+import { buildDisplayBlocksFromEntries, clearSessionCaches, listSessions, readSessionBlocks } from './sessions.js';
 
 const originalEnv = process.env;
 const tempDirs: string[] = [];
@@ -320,5 +320,50 @@ describe('sessions', () => {
     expect(listSessions()).toEqual([]);
     expect(readSessionBlocks('session-3')).toBeNull();
     expect(readFileSync(indexFile, 'utf-8')).toContain('"entries":[]');
+  });
+
+  it('preserves tool result details on parsed tool blocks', () => {
+    const blocks = buildDisplayBlocksFromEntries([
+      {
+        id: 'assistant-1',
+        timestamp: '2026-03-12T16:00:00.000Z',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'toolCall', id: 'tool-1', name: 'artifact', arguments: { action: 'save', title: 'Counter demo', kind: 'html' } }],
+        },
+      },
+      {
+        id: 'tool-result-1',
+        timestamp: '2026-03-12T16:00:01.000Z',
+        message: {
+          role: 'toolResult',
+          toolCallId: 'tool-1',
+          toolName: 'artifact',
+          content: [{ type: 'text', text: 'Saved artifact counter-demo [html] "Counter demo".' }],
+          details: {
+            action: 'save',
+            conversationId: 'conv-123',
+            artifactId: 'counter-demo',
+            title: 'Counter demo',
+            kind: 'html',
+            revision: 1,
+            openRequested: true,
+          },
+        },
+      },
+    ]);
+
+    expect(blocks).toEqual([
+      expect.objectContaining({
+        type: 'tool_use',
+        tool: 'artifact',
+        output: 'Saved artifact counter-demo [html] "Counter demo".',
+        details: expect.objectContaining({
+          artifactId: 'counter-demo',
+          revision: 1,
+          openRequested: true,
+        }),
+      }),
+    ]);
   });
 });

@@ -2,7 +2,8 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { ContextRail } from './ContextRail';
 import { Sidebar } from './Sidebar';
-import { clampPanelWidth, getRailLayoutPrefs, getRailMaxWidth } from '../layoutSizing';
+import { getConversationArtifactIdFromSearch } from '../conversationArtifacts';
+import { clampPanelWidth, getArtifactRailTargetWidth, getRailLayoutPrefs, getRailMaxWidth } from '../layoutSizing';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../localSettings';
 
 // ── Resize hook ───────────────────────────────────────────────────────────────
@@ -153,6 +154,18 @@ export function Layout() {
     storageKey: railPrefs.storageKey,
     side: 'right',
   });
+  const isConversationArtifactOpen = location.pathname.startsWith('/conversations/')
+    && getConversationArtifactIdFromSearch(location.search) !== null;
+  const artifactRailTargetWidth = isConversationArtifactOpen
+    ? clampPanelWidth(
+        getArtifactRailTargetWidth({ viewportWidth, sidebarWidth: sidebar.width }),
+        railMinWidth,
+        railMaxWidth,
+      )
+    : null;
+  const railWidth = artifactRailTargetWidth === null
+    ? rail.width
+    : Math.max(rail.width, artifactRailTargetWidth);
 
   return (
     <div className="flex h-screen overflow-hidden bg-base text-primary select-none">
@@ -170,7 +183,7 @@ export function Layout() {
 
       <>
         <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
-        <div style={{ width: rail.width }} className="flex-shrink-0 flex flex-col overflow-hidden">
+        <div style={{ width: railWidth }} className="flex-shrink-0 flex flex-col overflow-hidden">
           <ContextRail />
         </div>
       </>

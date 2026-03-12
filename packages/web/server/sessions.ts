@@ -70,6 +70,7 @@ interface RawMessage {
     content: RawMessageContent;
     toolCallId?: string;
     toolName?: string;
+    details?: unknown;
   };
 }
 
@@ -105,7 +106,7 @@ export type DisplayBlock =
   | { type: 'user';     id: string; ts: string; text: string; images?: DisplayImage[] }
   | { type: 'text';     id: string; ts: string; text: string }
   | { type: 'thinking'; id: string; ts: string; text: string }
-  | { type: 'tool_use'; id: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; toolCallId: string }
+  | { type: 'tool_use'; id: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; toolCallId: string; details?: unknown }
   | { type: 'image';    id: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string }
   | { type: 'error';    id: string; ts: string; tool?: string; message: string };
 
@@ -176,6 +177,7 @@ export interface DisplayMessageEntryLike {
     content: unknown;
     toolCallId?: string;
     toolName?: string;
+    details?: unknown;
   };
 }
 
@@ -227,7 +229,7 @@ export function buildDisplayBlocksFromEntries(messages: DisplayMessageEntryLike[
   const toolCallIndex = new Map<string, number>();
 
   for (const [messageIndex, msg] of messages.entries()) {
-    const { role, content, toolCallId, toolName } = msg.message;
+    const { role, content, toolCallId, toolName, details } = msg.message;
     const ts = normalizeTimestamp(msg.timestamp);
     const contentBlocks = normalizeContent(content);
     const baseId = msg.id || `msg-${messageIndex}`;
@@ -287,7 +289,7 @@ export function buildDisplayBlocksFromEntries(messages: DisplayMessageEntryLike[
         const startMs = new Date(existing.ts).getTime();
         const endMs = new Date(ts).getTime();
         const duration = endMs > startMs ? endMs - startMs : undefined;
-        blocks[idx] = { ...existing, output: resultText, durationMs: duration };
+        blocks[idx] = { ...existing, output: resultText, durationMs: duration, details };
       }
 
       const resultImages = contentBlocks

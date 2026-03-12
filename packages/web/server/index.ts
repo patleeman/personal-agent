@@ -49,6 +49,7 @@ import {
   type TaskRuntimeEntry,
 } from './scheduledTasks.js';
 import { createProjectAgentExtension } from './projectAgentExtension.js';
+import { createArtifactAgentExtension } from './artifactAgentExtension.js';
 import { createDeferredResumeAgentExtension } from './deferredResumeAgentExtension.js';
 import {
   createSession,
@@ -83,10 +84,13 @@ import {
 import {
   activateDueDeferredResumes,
   addConversationProjectLink,
+  deleteConversationArtifact,
   ensureConversationAttentionBaselines,
   getActivityConversationLink,
+  getConversationArtifact,
   getConversationProjectLink,
   getReadySessionDeferredResumeEntries,
+  listConversationArtifacts,
   cleanMcpCliStderr,
   inspectMcpCliBinary,
   inspectMcpCliServer,
@@ -221,6 +225,9 @@ function buildLiveSessionExtensionFactories() {
   return [
     createProjectAgentExtension({
       repoRoot: REPO_ROOT,
+      getCurrentProfile,
+    }),
+    createArtifactAgentExtension({
       getCurrentProfile,
     }),
     createDeferredResumeAgentExtension(),
@@ -1752,6 +1759,73 @@ app.post('/api/conversations/:id/cwd', async (req, res) => {
     }
 
     res.json({ id: result.id, sessionFile: result.sessionFile, cwd: nextCwd, changed: true });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.get('/api/conversations/:id/artifacts', (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const artifacts = listConversationArtifacts({
+      profile,
+      conversationId: req.params.id,
+    });
+
+    res.json({ conversationId: req.params.id, artifacts });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.get('/api/conversations/:id/artifacts/:artifactId', (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const artifact = getConversationArtifact({
+      profile,
+      conversationId: req.params.id,
+      artifactId: req.params.artifactId,
+    });
+
+    if (!artifact) {
+      res.status(404).json({ error: 'Artifact not found' });
+      return;
+    }
+
+    res.json({ conversationId: req.params.id, artifact });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.delete('/api/conversations/:id/artifacts/:artifactId', (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const deleted = deleteConversationArtifact({
+      profile,
+      conversationId: req.params.id,
+      artifactId: req.params.artifactId,
+    });
+
+    invalidateAppTopics('sessions');
+    res.json({
+      conversationId: req.params.id,
+      deleted,
+      artifactId: req.params.artifactId,
+      artifacts: listConversationArtifacts({ profile, conversationId: req.params.id }),
+    });
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),

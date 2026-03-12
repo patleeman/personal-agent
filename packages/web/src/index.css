@@ -254,6 +254,134 @@
   .ui-detail-value {
     @apply text-[12px] text-secondary leading-relaxed min-w-0;
   }
+
+  .ui-markdown {
+    @apply text-sm leading-relaxed text-primary;
+  }
+
+  .ui-markdown h1 {
+    @apply mt-1 mb-3 text-[18px] font-semibold tracking-tight text-primary;
+  }
+
+  .ui-markdown h2 {
+    @apply mt-5 mb-2 text-[15px] font-semibold text-primary;
+  }
+
+  .ui-markdown h3 {
+    @apply mt-4 mb-2 text-[14px] font-semibold text-primary;
+  }
+
+  .ui-markdown h4,
+  .ui-markdown h5,
+  .ui-markdown h6 {
+    @apply mt-3 mb-1.5 text-[13px] font-semibold text-primary;
+  }
+
+  .ui-markdown p {
+    @apply my-2 text-sm leading-relaxed text-primary;
+  }
+
+  .ui-markdown ul,
+  .ui-markdown ol {
+    @apply my-2 space-y-1 pl-5;
+  }
+
+  .ui-markdown ul {
+    list-style: disc;
+  }
+
+  .ui-markdown ul ul {
+    list-style: circle;
+  }
+
+  .ui-markdown ul ul ul {
+    list-style: square;
+  }
+
+  .ui-markdown ol {
+    list-style: decimal;
+  }
+
+  .ui-markdown li {
+    @apply text-sm leading-relaxed text-primary;
+  }
+
+  .ui-markdown li > p {
+    @apply my-0;
+  }
+
+  .ui-markdown blockquote {
+    @apply my-3 border-l-2 border-border-default pl-4 text-secondary;
+  }
+
+  .ui-markdown hr {
+    @apply my-4 border-0 border-t border-border-subtle;
+  }
+
+  .ui-markdown pre {
+    @apply my-3 overflow-x-auto rounded-xl bg-elevated px-3 py-2.5;
+  }
+
+  .ui-markdown pre code {
+    @apply block bg-transparent p-0 text-[12px] leading-relaxed text-secondary;
+  }
+
+  .ui-markdown :not(pre) > code {
+    @apply rounded bg-elevated px-1 py-0.5 font-mono text-[0.82em] text-accent;
+  }
+
+  .ui-markdown table {
+    @apply w-full border-collapse text-left;
+  }
+
+  .ui-markdown thead tr {
+    @apply border-b border-border-default;
+  }
+
+  .ui-markdown tbody tr {
+    @apply border-b border-border-subtle last:border-b-0;
+  }
+
+  .ui-markdown th {
+    @apply px-2 py-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-dim;
+  }
+
+  .ui-markdown td {
+    @apply px-2 py-1.5 align-top text-sm leading-relaxed text-primary;
+  }
+
+  .ui-markdown a {
+    @apply text-accent underline decoration-accent/40 underline-offset-2;
+  }
+
+  .ui-markdown img {
+    @apply my-3 max-w-full rounded-xl border border-border-subtle;
+  }
+
+  .ui-markdown .contains-task-list,
+  .ui-markdown .task-list-item {
+    list-style: none;
+  }
+
+  .ui-markdown .contains-task-list {
+    @apply pl-0;
+  }
+
+  .ui-markdown .task-list-item input {
+    @apply mr-2;
+  }
+
+  .ui-markdown .footnotes {
+    @apply mt-4 border-t border-border-subtle pt-3;
+  }
+
+  .ui-markdown sup {
+    @apply text-[10px];
+  }
+
+  .ui-markdown-mention {
+    @apply inline-flex items-center rounded-full bg-accent/10 px-1.5 py-0.5 font-mono text-[0.82em] text-accent;
+  }
 }
 
 /* ─── Light theme (default) ───────────────────────────────────────────────── */

@@ -1,10 +1,11 @@
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { listProfileActivityEntries } from '@personal-agent/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DaemonConfig } from '../config.js';
+import { loadDurableRunManifest, loadDurableRunStatus, resolveDurableRunPaths, resolveDurableRunsRoot } from '../runs/store.js';
 import type { DaemonEvent, DaemonPaths, EventPayload } from '../types.js';
 import type { DaemonModuleContext } from './types.js';
 import { createTasksModule } from './tasks.js';
@@ -195,6 +196,74 @@ describe('tasks module scheduling', () => {
     await module.stop?.(context);
   });
 
+  it('writes durable run records for scheduled task executions', async () => {
+    const taskDir = createTempDir('tasks-module-definitions-');
+    const stateRoot = createTempDir('tasks-module-state-');
+    const taskPath = join(taskDir, 'nightly.task.md');
+
+    writeFileSync(taskPath, `---\nid: nightly\nat: "2026-03-02T10:00:05.000Z"\nprofile: datadog\n---\nRun nightly update\n`);
+
+    let currentTime = new Date('2026-03-02T10:00:00.000Z');
+
+    const runTask = vi.fn(async (request: TaskRunRequest) => {
+      const logPath = join(request.runsRoot, `${request.task.id}-attempt-${request.attempt}.log`);
+      mkdirSync(request.runsRoot, { recursive: true });
+      writeFileSync(logPath, 'nightly output\n');
+      return createRunResult(request, true, currentTime.toISOString(), undefined, 'nightly output');
+    });
+
+    const module = createTasksModule(
+      {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
+      {
+        now: () => currentTime,
+        runTask,
+      },
+    );
+
+    const { context } = createContext(taskDir, stateRoot);
+
+    await module.start(context);
+
+    currentTime = new Date('2026-03-02T10:00:10.000Z');
+    await module.handleEvent(createTimerEvent(), context);
+
+    await waitForCondition(() => {
+      const status = module.getStatus?.() as { totalRuns?: number };
+      return (status.totalRuns ?? 0) === 1;
+    });
+
+    const runsRoot = resolveDurableRunsRoot(stateRoot);
+    const runIds = readdirSync(runsRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+
+    expect(runIds).toHaveLength(1);
+
+    const runPaths = resolveDurableRunPaths(runsRoot, runIds[0] as string);
+    expect(loadDurableRunManifest(runPaths.manifestPath)).toMatchObject({
+      kind: 'scheduled-task',
+      resumePolicy: 'rerun',
+      source: {
+        type: 'scheduled-task',
+        id: 'nightly',
+      },
+    });
+    expect(loadDurableRunStatus(runPaths.statusPath)).toMatchObject({
+      status: 'completed',
+      activeAttempt: 1,
+    });
+    expect(readFileSync(runPaths.outputLogPath, 'utf-8')).toContain('nightly output');
+
+    await module.stop?.(context);
+  });
+
   it('passes daemon execution mode from module defaults with per-task overrides', async () => {
     const taskDir = createTempDir('tasks-module-definitions-');
     const stateRoot = createTempDir('tasks-module-state-');
@@ -310,6 +379,119 @@ Write daily report
       notificationState: 'none',
     });
     expect(entries[0]?.entry.details).toContain('Daily report generated successfully.');
+
+    await module.stop?.(context);
+  });
+
+  it('creates inbox activity when a one-time task is missed while the daemon was offline', async () => {
+    const repoRoot = createTempDir('tasks-module-repo-');
+    const taskDir = join(repoRoot, 'profiles', 'datadog', 'agent', 'tasks');
+    mkdirSync(taskDir, { recursive: true });
+    const stateRoot = createTempDir('tasks-module-state-');
+    const taskPath = join(taskDir, 'daily-report.task.md');
+
+    writeFileSync(taskPath, `---
+id: daily-report
+at: "2026-03-02T10:00:00.000Z"
+profile: datadog
+---
+Write daily report
+`);
+
+    const currentTime = new Date('2026-03-02T10:30:00.000Z');
+    const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(request, true, currentTime.toISOString()));
+
+    const module = createTasksModule(
+      {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
+      {
+        now: () => currentTime,
+        runTask,
+      },
+    );
+
+    const { context } = createContext(taskDir, stateRoot);
+
+    await module.start(context);
+
+    expect(runTask).not.toHaveBeenCalled();
+    await waitForCondition(() => listProfileActivityEntries({ stateRoot, profile: 'datadog' }).length === 1);
+
+    const entries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.entry.summary).toBe('Scheduled task daily-report was missed while the daemon was offline.');
+    expect(entries[0]?.entry.details).toContain('Missed run:\n2026-03-02T10:00:00.000Z');
+    expect(entries[0]?.entry.details).toContain('Next step:\nRun the task manually if it is still needed.');
+
+    await module.stop?.(context);
+  });
+
+  it('creates one inbox activity when cron runs are missed while the daemon is offline', async () => {
+    const repoRoot = createTempDir('tasks-module-repo-');
+    const taskDir = join(repoRoot, 'profiles', 'datadog', 'agent', 'tasks');
+    mkdirSync(taskDir, { recursive: true });
+    const stateRoot = createTempDir('tasks-module-state-');
+    const taskPath = join(taskDir, 'hourly.task.md');
+
+    writeFileSync(taskPath, `---
+id: hourly
+cron: "0 * * * *"
+profile: datadog
+---
+Run hourly task
+`);
+
+    writeFileSync(join(stateRoot, 'task-state.json'), JSON.stringify({
+      version: 1,
+      lastEvaluatedAt: '2026-03-02T09:59:30.000Z',
+      tasks: {},
+    }, null, 2));
+
+    let currentTime = new Date('2026-03-02T11:05:00.000Z');
+    const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(request, true, currentTime.toISOString()));
+
+    const module = createTasksModule(
+      {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
+      {
+        now: () => currentTime,
+        runTask,
+      },
+    );
+
+    const { context } = createContext(taskDir, stateRoot);
+
+    await module.start(context);
+
+    expect(runTask).not.toHaveBeenCalled();
+    await waitForCondition(() => listProfileActivityEntries({ stateRoot, profile: 'datadog' }).length === 1);
+
+    const entries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.entry.summary).toBe('Scheduled task hourly missed 2 runs while the daemon was offline.');
+    expect(entries[0]?.entry.details).toContain('First: 2026-03-02T10:00:00.000Z');
+    expect(entries[0]?.entry.details).toContain('Last: 2026-03-02T11:00:00.000Z');
+
+    currentTime = new Date('2026-03-02T11:05:30.000Z');
+    await module.handleEvent(createTimerEvent(), context);
+
+    expect(listProfileActivityEntries({ stateRoot, profile: 'datadog' })).toHaveLength(1);
+    const persistedState = JSON.parse(readFileSync(join(stateRoot, 'task-state.json'), 'utf-8')) as {
+      lastEvaluatedAt?: string;
+    };
+    expect(persistedState.lastEvaluatedAt).toBe('2026-03-02T11:05:30.000Z');
 
     await module.stop?.(context);
   });

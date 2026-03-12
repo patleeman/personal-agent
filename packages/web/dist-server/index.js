@@ -10,18 +10,23 @@ import { resolveConversationCwd, resolveRequestedCwd } from './conversationCwd.j
 import { readGitStatusSummary } from './gitStatus.js';
 import { installGatewayAndReadState, readGatewayState, restartGatewayAndReadState, startGatewayAndReadState, stopGatewayAndReadState, uninstallGatewayAndReadState, } from './gateway.js';
 import { installDaemonServiceAndReadState, readDaemonState, restartDaemonServiceAndReadState, startDaemonServiceAndReadState, stopDaemonServiceAndReadState, uninstallDaemonServiceAndReadState, } from './daemon.js';
+import { installWebUiServiceAndReadState, readWebUiState, restartWebUiServiceAndReadState, startWebUiServiceAndReadState, stopWebUiServiceAndReadState, uninstallWebUiServiceAndReadState, } from './webUi.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from './modelPreferences.js';
+import { logError, logInfo, logWarn, installProcessLogging, webRequestLoggingMiddleware } from './logging.js';
 import { readSavedThemePreferences, writeSavedThemePreferences } from './themePreferences.js';
 import { readSavedWebUiPreferences, writeSavedWebUiPreferences } from './webUiPreferences.js';
 import { getProfileConfigFilePath, readSavedProfilePreferences, resolveActiveProfile, writeSavedProfilePreferences, } from './profilePreferences.js';
 import { syncDaemonTaskScopeToProfile } from './daemonProfileSync.js';
 import { readScheduledTaskFileMetadata, taskBelongsToProfile, } from './scheduledTasks.js';
 import { createProjectAgentExtension } from './projectAgentExtension.js';
-import { createSession, resumeSession, getLiveSessions, getSessionStats, getSessionContextUsage, getAvailableModels, isLive, subscribe, promptSession, queuePromptContext, compactSession, reloadSessionResources, exportSessionHtml, renameSession, abortSession, destroySession, forkSession, registry as liveRegistry, } from './liveSessions.js';
+import { createArtifactAgentExtension } from './artifactAgentExtension.js';
+import { createDeferredResumeAgentExtension } from './deferredResumeAgentExtension.js';
+import { createSession, createSessionFromExisting, resumeSession, getLiveSessions, getSessionStats, getSessionContextUsage, getAvailableModels, inspectAvailableTools, isLive, subscribe, promptSession, queuePromptContext, compactSession, reloadSessionResources, exportSessionHtml, renameSession, abortSession, destroySession, forkSession, registry as liveRegistry, } from './liveSessions.js';
 import { buildReferencedMemoryDocsContext, buildReferencedProfilesContext, buildReferencedSkillsContext, buildReferencedTasksContext, pickPromptReferencesInOrder, resolvePromptReferences, } from './promptReferences.js';
-import { addConversationProjectLink, ensureConversationAttentionBaselines, getActivityConversationLink, getConversationProjectLink, listProfileActivityEntries, listProjectIds, loadProfileActivityReadState, markConversationAttentionRead, markConversationAttentionUnread, readProject, removeConversationProjectLink, resolveProjectPaths, saveProfileActivityReadState, setConversationProjectLinks, summarizeConversationAttention, } from '@personal-agent/core';
+import { activateDueDeferredResumes, addConversationProjectLink, deleteConversationArtifact, ensureConversationAttentionBaselines, getActivityConversationLink, getConversationArtifact, getConversationProjectLink, getReadySessionDeferredResumeEntries, listConversationArtifacts, cleanMcpCliStderr, inspectMcpCliBinary, inspectMcpCliServer, inspectMcpCliTool, listProfileActivityEntries, listProjectIds, loadDeferredResumeState, loadProfileActivityReadState, markConversationAttentionRead, markConversationAttentionUnread, readMcpCliConfig, readProject, removeConversationProjectLink, removeDeferredResume, resolveProjectPaths, retryDeferredResume, saveDeferredResumeState, saveProfileActivityReadState, setConversationProjectLinks, summarizeConversationAttention, } from '@personal-agent/core';
 import { listProfiles, materializeProfileToAgentDir, resolveResourceProfile, } from '@personal-agent/resources';
 import { addProjectMilestone, createProjectRecord, createProjectTaskRecord, deleteProjectMilestone, deleteProjectRecord, deleteProjectTaskRecord, moveProjectMilestone, moveProjectTaskRecord, readProjectDetailFromProject, readProjectSource, saveProjectSource, updateProjectMilestone, updateProjectRecord, updateProjectTaskRecord, } from './projects.js';
+import { cancelDeferredResumeForSessionFile, listDeferredResumesForSessionFile, scheduleDeferredResumeForSessionFile, } from './deferredResumes.js';
 const PORT = parseInt(process.env.PA_WEB_PORT ?? '3741', 10);
 const DEFAULT_REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? DEFAULT_REPO_ROOT;
@@ -30,10 +35,19 @@ const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
 const SESSIONS_DIR = join(AGENT_DIR, 'sessions');
 const TASK_STATE_FILE = join(homedir(), '.local/state/personal-agent/daemon/task-state.json');
 const PROFILE_CONFIG_FILE = getProfileConfigFilePath();
+const DEFERRED_RESUME_POLL_MS = 3_000;
+const DEFERRED_RESUME_RETRY_DELAY_MS = 30_000;
+installProcessLogging();
 function listAvailableProfiles() {
     return listProfiles({ repoRoot: REPO_ROOT });
 }
+function applyProfileEnvironment(profile) {
+    process.env.PERSONAL_AGENT_ACTIVE_PROFILE = profile;
+    process.env.PERSONAL_AGENT_PROFILE = profile;
+    process.env.PERSONAL_AGENT_REPO_ROOT = REPO_ROOT;
+}
 function materializeWebProfile(profile) {
+    applyProfileEnvironment(profile);
     const resolved = resolveResourceProfile(profile, { repoRoot: REPO_ROOT });
     materializeProfileToAgentDir(resolved, AGENT_DIR);
 }
@@ -50,14 +64,20 @@ async function syncDaemonTaskScopeForProfile(profile) {
         });
     }
     catch (error) {
-        console.warn(`[web] failed to sync daemon task scope for ${profile}: ${error.message}`);
+        logWarn('failed to sync daemon task scope', {
+            profile,
+            message: error.message,
+        });
     }
 }
 try {
     materializeWebProfile(currentProfile);
 }
 catch (error) {
-    console.warn(`[web] failed to materialize initial profile ${currentProfile}: ${error.message}`);
+    logWarn('failed to materialize initial profile', {
+        profile: currentProfile,
+        message: error.message,
+    });
 }
 void syncDaemonTaskScopeForProfile(currentProfile);
 function getCurrentProfile() {
@@ -84,7 +104,20 @@ function buildLiveSessionExtensionFactories() {
             repoRoot: REPO_ROOT,
             getCurrentProfile,
         }),
+        createArtifactAgentExtension({
+            getCurrentProfile,
+        }),
+        createDeferredResumeAgentExtension(),
     ];
+}
+function buildLiveSessionResourceOptions() {
+    const resolved = resolveResourceProfile(getCurrentProfile(), { repoRoot: REPO_ROOT });
+    return {
+        additionalExtensionPaths: resolved.extensionEntries,
+        additionalSkillPaths: resolved.skillDirs,
+        additionalPromptTemplatePaths: resolved.promptEntries,
+        additionalThemePaths: resolved.themeEntries,
+    };
 }
 // ── Activity read-state ───────────────────────────────────────────────────────
 // Stored as a simple JSON set alongside activity files.
@@ -260,6 +293,73 @@ function listConversationSessionsSnapshot() {
         }),
     ];
 }
+function resolveConversationSessionFile(conversationId) {
+    return listConversationSessionsSnapshot().find((session) => session.id === conversationId)?.file;
+}
+var processingDeferredResumes = false;
+async function flushLiveDeferredResumes() {
+    if (processingDeferredResumes) {
+        return;
+    }
+    const liveSessions = getLiveSessions().filter((session) => session.sessionFile);
+    if (liveSessions.length === 0) {
+        return;
+    }
+    processingDeferredResumes = true;
+    try {
+        const state = loadDeferredResumeState();
+        const now = new Date();
+        let mutated = false;
+        for (const session of liveSessions) {
+            const activated = activateDueDeferredResumes(state, {
+                at: now,
+                sessionFile: session.sessionFile,
+            });
+            if (activated.length > 0) {
+                mutated = true;
+            }
+            const readyEntries = getReadySessionDeferredResumeEntries(state, session.sessionFile);
+            for (const readyEntry of readyEntries) {
+                const liveEntry = liveRegistry.get(session.id);
+                if (!liveEntry) {
+                    break;
+                }
+                try {
+                    await promptSession(session.id, readyEntry.prompt, liveEntry.session.isStreaming ? 'followUp' : undefined);
+                    removeDeferredResume(state, readyEntry.id);
+                    mutated = true;
+                }
+                catch (error) {
+                    retryDeferredResume(state, {
+                        id: readyEntry.id,
+                        dueAt: new Date(Date.now() + DEFERRED_RESUME_RETRY_DELAY_MS).toISOString(),
+                    });
+                    mutated = true;
+                    logWarn(`Deferred resume delivery failed for ${session.id}: ${error.message}`);
+                    break;
+                }
+            }
+        }
+        if (mutated) {
+            saveDeferredResumeState(state);
+            invalidateAppTopics('sessions');
+        }
+    }
+    finally {
+        processingDeferredResumes = false;
+    }
+}
+function startDeferredResumeLoop() {
+    void flushLiveDeferredResumes().catch((error) => {
+        logWarn(`Deferred resume loop failed: ${error.message}`);
+    });
+    setInterval(() => {
+        void flushLiveDeferredResumes().catch((error) => {
+            logWarn(`Deferred resume loop failed: ${error.message}`);
+        });
+    }, DEFERRED_RESUME_POLL_MS);
+}
+startDeferredResumeLoop();
 function buildSnapshotEvents(topics) {
     const uniqueTopics = [...new Set(topics)];
     return uniqueTopics.map((topic) => {
@@ -283,6 +383,7 @@ const DIST_DIR = process.env.PA_WEB_DIST ??
     join(dirname(fileURLToPath(import.meta.url)), '../dist');
 const app = express();
 app.use(express.json({ limit: '25mb' }));
+app.use(webRequestLoggingMiddleware);
 startAppEventMonitor({
     repoRoot: REPO_ROOT,
     sessionsDir: SESSIONS_DIR,
@@ -325,6 +426,10 @@ app.get('/api/profiles', (_req, res) => {
         });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -357,6 +462,10 @@ app.get('/api/status', (_req, res) => {
         });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -366,6 +475,10 @@ app.get('/api/gateway', (_req, res) => {
         res.json(readGatewayState(getCurrentProfile()));
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -374,6 +487,10 @@ app.post('/api/gateway/restart', (_req, res) => {
         res.json(restartGatewayAndReadState(getCurrentProfile()));
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -382,6 +499,10 @@ app.post('/api/gateway/service/install', (_req, res) => {
         res.json(installGatewayAndReadState(getCurrentProfile()));
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -390,6 +511,10 @@ app.post('/api/gateway/service/start', (_req, res) => {
         res.json(startGatewayAndReadState(getCurrentProfile()));
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -398,6 +523,10 @@ app.post('/api/gateway/service/stop', (_req, res) => {
         res.json(stopGatewayAndReadState(getCurrentProfile()));
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -406,6 +535,10 @@ app.post('/api/gateway/service/uninstall', (_req, res) => {
         res.json(uninstallGatewayAndReadState(getCurrentProfile()));
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -415,6 +548,10 @@ app.get('/api/daemon', async (_req, res) => {
         res.json(await readDaemonState());
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -423,6 +560,10 @@ app.post('/api/daemon/service/install', async (_req, res) => {
         res.json(await installDaemonServiceAndReadState());
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -431,6 +572,10 @@ app.post('/api/daemon/service/start', async (_req, res) => {
         res.json(await startDaemonServiceAndReadState());
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -439,6 +584,10 @@ app.post('/api/daemon/service/restart', async (_req, res) => {
         res.json(await restartDaemonServiceAndReadState());
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -447,6 +596,10 @@ app.post('/api/daemon/service/stop', async (_req, res) => {
         res.json(await stopDaemonServiceAndReadState());
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -455,6 +608,83 @@ app.post('/api/daemon/service/uninstall', async (_req, res) => {
         res.json(await uninstallDaemonServiceAndReadState());
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+// ── Web UI ───────────────────────────────────────────────────────────────────
+app.get('/api/web-ui/state', (_req, res) => {
+    try {
+        res.json(readWebUiState());
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/web-ui/service/install', (_req, res) => {
+    try {
+        res.json(installWebUiServiceAndReadState());
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/web-ui/service/start', (_req, res) => {
+    try {
+        res.json(startWebUiServiceAndReadState());
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/web-ui/service/restart', (_req, res) => {
+    try {
+        res.json(restartWebUiServiceAndReadState());
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/web-ui/service/stop', (_req, res) => {
+    try {
+        res.json(stopWebUiServiceAndReadState());
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/web-ui/service/uninstall', (_req, res) => {
+    try {
+        res.json(uninstallWebUiServiceAndReadState());
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -464,6 +694,10 @@ app.get('/api/activity', (_req, res) => {
         res.json(listActivityForCurrentProfile());
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -488,6 +722,10 @@ app.get('/api/activity/:id', (req, res) => {
         res.json({ ...attachActivityConversationLinks(profile, match.entry), read: read.has(match.entry.id) });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -507,6 +745,10 @@ app.patch('/api/activity/:id', (req, res) => {
         res.json({ ok: true });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -562,6 +804,10 @@ app.get('/api/models', (_req, res) => {
         });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -576,6 +822,114 @@ app.patch('/api/models/current', (req, res) => {
         res.json({ ok: true });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.get('/api/tools', async (_req, res) => {
+    try {
+        const profile = getCurrentProfile();
+        const details = await inspectAvailableTools(REPO_ROOT, {
+            ...buildLiveSessionResourceOptions(),
+            extensionFactories: buildLiveSessionExtensionFactories(),
+        });
+        const mcpCliBinary = inspectMcpCliBinary({ cwd: REPO_ROOT });
+        const mcpCliConfig = readMcpCliConfig({ cwd: REPO_ROOT });
+        res.json({
+            profile,
+            ...details,
+            mcpCli: {
+                binary: mcpCliBinary,
+                configPath: mcpCliConfig.path,
+                configExists: mcpCliConfig.exists,
+                searchedPaths: mcpCliConfig.searchedPaths,
+                servers: mcpCliConfig.servers,
+            },
+        });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.get('/api/tools/mcp/servers/:server', (_req, res) => {
+    try {
+        const server = _req.params.server;
+        if (!server) {
+            res.status(400).json({ error: 'server required' });
+            return;
+        }
+        const config = readMcpCliConfig({ cwd: REPO_ROOT });
+        const result = inspectMcpCliServer(server, {
+            cwd: REPO_ROOT,
+            configPath: config.path,
+        });
+        if (result.exitCode !== 0) {
+            res.status(500).json({
+                error: result.error ?? (cleanMcpCliStderr(result.stderr) || result.stdout || `mcp-cli exited with code ${result.exitCode}`),
+                stdout: result.stdout,
+                stderr: cleanMcpCliStderr(result.stderr),
+                exitCode: result.exitCode,
+            });
+            return;
+        }
+        res.json({
+            server,
+            stdout: result.stdout,
+            stderr: cleanMcpCliStderr(result.stderr),
+            exitCode: result.exitCode,
+            ...result.info,
+        });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.get('/api/tools/mcp/servers/:server/tools/:tool', (_req, res) => {
+    try {
+        const { server, tool } = _req.params;
+        if (!server || !tool) {
+            res.status(400).json({ error: 'server and tool required' });
+            return;
+        }
+        const config = readMcpCliConfig({ cwd: REPO_ROOT });
+        const result = inspectMcpCliTool(server, tool, {
+            cwd: REPO_ROOT,
+            configPath: config.path,
+        });
+        if (result.exitCode !== 0) {
+            res.status(500).json({
+                error: result.error ?? (cleanMcpCliStderr(result.stderr) || result.stdout || `mcp-cli exited with code ${result.exitCode}`),
+                stdout: result.stdout,
+                stderr: cleanMcpCliStderr(result.stderr),
+                exitCode: result.exitCode,
+            });
+            return;
+        }
+        res.json({
+            server,
+            tool,
+            stdout: result.stdout,
+            stderr: cleanMcpCliStderr(result.stderr),
+            exitCode: result.exitCode,
+            ...result.info,
+        });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -588,6 +942,10 @@ app.get('/api/agent-theme', (_req, res) => {
         });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -602,6 +960,10 @@ app.patch('/api/agent-theme', (req, res) => {
         res.json({ ok: true });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -611,6 +973,10 @@ app.get('/api/web-ui/open-conversations', (_req, res) => {
         res.json({ sessionIds: saved.openConversationIds });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -625,6 +991,10 @@ app.patch('/api/web-ui/open-conversations', (req, res) => {
         res.json({ ok: true, sessionIds: saved.openConversationIds });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -634,6 +1004,10 @@ app.get('/api/tasks', (_req, res) => {
         res.json(listTasksForCurrentProfile());
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -657,6 +1031,10 @@ app.patch('/api/tasks/:id', (req, res) => {
         res.json({ ok: true });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -671,6 +1049,10 @@ app.get('/api/tasks/:id/log', (req, res) => {
         res.json({ log, path: entry.lastLogPath });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -691,6 +1073,10 @@ app.get('/api/tasks/:id', (req, res) => {
         });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -710,12 +1096,17 @@ app.post('/api/tasks/:id/run', async (req, res) => {
             return;
         }
         const { id: sessionId } = await createSession(resolveRequestedCwd(metadata.cwd, DEFAULT_WEB_CWD) ?? DEFAULT_WEB_CWD, {
+            ...buildLiveSessionResourceOptions(),
             extensionFactories: buildLiveSessionExtensionFactories(),
         });
         void promptSession(sessionId, afterFrontmatter);
         res.json({ ok: true, sessionId });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -725,6 +1116,10 @@ app.get('/api/sessions', (_req, res) => {
         res.json(decorateSessionsWithAttention(getCurrentProfile(), listSessions()));
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -738,6 +1133,10 @@ app.get('/api/sessions/:id', (req, res) => {
         res.json(result);
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -771,11 +1170,16 @@ app.post('/api/live-sessions', async (req, res) => {
                 : inferredReferencedProjectIds,
         });
         const result = await createSession(cwd, {
+            ...buildLiveSessionResourceOptions(),
             extensionFactories: buildLiveSessionExtensionFactories(),
         });
         res.json(result);
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -788,11 +1192,17 @@ app.post('/api/live-sessions/resume', async (req, res) => {
             return;
         }
         const result = await resumeSession(sessionFile, {
+            ...buildLiveSessionResourceOptions(),
             extensionFactories: buildLiveSessionExtensionFactories(),
         });
+        await flushLiveDeferredResumes();
         res.json(result);
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -860,6 +1270,8 @@ function buildReferencedProjectsContext(projectIds) {
         const lineParts = [`- @${projectId}: ${relative(REPO_ROOT, paths.projectFile)}`];
         try {
             const project = readProject(paths.projectFile);
+            lineParts.push(`  title: ${project.title}`);
+            lineParts.push(`  description: ${project.description}`);
             if (project.repoRoot) {
                 lineParts.push(`  repoRoot: ${project.repoRoot}`);
             }
@@ -921,8 +1333,12 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
             type: 'image',
             data: image.data,
             mimeType: image.mimeType,
-        }))).catch(err => {
-            console.error(`[live] prompt error for ${id}:`, err);
+        }))).catch((err) => {
+            logError('live prompt error', {
+                sessionId: id,
+                message: err instanceof Error ? err.message : String(err),
+                stack: err instanceof Error ? err.stack : undefined,
+            });
         });
         res.json({
             ok: true,
@@ -934,6 +1350,10 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
         });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -944,6 +1364,10 @@ app.post('/api/live-sessions/:id/compact', async (req, res) => {
         res.json({ ok: true, result });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -953,6 +1377,10 @@ app.post('/api/live-sessions/:id/reload', async (req, res) => {
         res.json({ ok: true });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -963,6 +1391,10 @@ app.post('/api/live-sessions/:id/export', async (req, res) => {
         res.json({ ok: true, path });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -978,6 +1410,10 @@ app.patch('/api/live-sessions/:id/name', async (req, res) => {
         res.json({ ok: true, name: nextName });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -988,6 +1424,10 @@ app.post('/api/live-sessions/:id/abort', async (req, res) => {
         res.json({ ok: true });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -1045,6 +1485,131 @@ app.get('/api/live-sessions/:id/context', (req, res) => {
         relatedProjectIds,
     });
 });
+app.post('/api/conversations/:id/cwd', async (req, res) => {
+    try {
+        const { cwd: requestedCwd } = req.body;
+        const conversationId = req.params.id;
+        const liveEntry = liveRegistry.get(conversationId);
+        const sessionDetail = readSessionBlocks(conversationId);
+        const currentCwd = liveEntry?.cwd ?? sessionDetail?.meta.cwd;
+        const sourceSessionFile = liveEntry?.session.sessionFile ?? sessionDetail?.meta.file;
+        if (!currentCwd || !sourceSessionFile) {
+            res.status(404).json({ error: 'Conversation not found.' });
+            return;
+        }
+        if (liveEntry?.session.isStreaming) {
+            res.status(409).json({ error: 'Stop the current response before changing the working directory.' });
+            return;
+        }
+        const nextCwd = resolveRequestedCwd(requestedCwd, currentCwd);
+        if (!nextCwd) {
+            res.status(400).json({ error: 'cwd required' });
+            return;
+        }
+        if (!existsSync(nextCwd)) {
+            res.status(400).json({ error: `Directory does not exist: ${nextCwd}` });
+            return;
+        }
+        if (!statSync(nextCwd).isDirectory()) {
+            res.status(400).json({ error: `Not a directory: ${nextCwd}` });
+            return;
+        }
+        if (nextCwd === currentCwd) {
+            res.json({ id: conversationId, sessionFile: sourceSessionFile, cwd: currentCwd, changed: false });
+            return;
+        }
+        const result = await createSessionFromExisting(sourceSessionFile, nextCwd, {
+            ...buildLiveSessionResourceOptions(),
+            extensionFactories: buildLiveSessionExtensionFactories(),
+        });
+        const profile = getCurrentProfile();
+        const relatedProjectIds = getConversationProjectLink({
+            profile,
+            conversationId,
+        })?.relatedProjectIds ?? [];
+        if (relatedProjectIds.length > 0) {
+            setConversationProjectLinks({
+                profile,
+                conversationId: result.id,
+                relatedProjectIds,
+            });
+        }
+        if (liveEntry) {
+            destroySession(conversationId);
+        }
+        res.json({ id: result.id, sessionFile: result.sessionFile, cwd: nextCwd, changed: true });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.get('/api/conversations/:id/artifacts', (req, res) => {
+    try {
+        const profile = getCurrentProfile();
+        const artifacts = listConversationArtifacts({
+            profile,
+            conversationId: req.params.id,
+        });
+        res.json({ conversationId: req.params.id, artifacts });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.get('/api/conversations/:id/artifacts/:artifactId', (req, res) => {
+    try {
+        const profile = getCurrentProfile();
+        const artifact = getConversationArtifact({
+            profile,
+            conversationId: req.params.id,
+            artifactId: req.params.artifactId,
+        });
+        if (!artifact) {
+            res.status(404).json({ error: 'Artifact not found' });
+            return;
+        }
+        res.json({ conversationId: req.params.id, artifact });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.delete('/api/conversations/:id/artifacts/:artifactId', (req, res) => {
+    try {
+        const profile = getCurrentProfile();
+        const deleted = deleteConversationArtifact({
+            profile,
+            conversationId: req.params.id,
+            artifactId: req.params.artifactId,
+        });
+        invalidateAppTopics('sessions');
+        res.json({
+            conversationId: req.params.id,
+            deleted,
+            artifactId: req.params.artifactId,
+            artifacts: listConversationArtifacts({ profile, conversationId: req.params.id }),
+        });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
 app.get('/api/conversations/:id/projects', (req, res) => {
     try {
         const profile = getCurrentProfile();
@@ -1055,6 +1620,10 @@ app.get('/api/conversations/:id/projects', (req, res) => {
         res.json({ conversationId: req.params.id, relatedProjectIds });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -1074,6 +1643,10 @@ app.post('/api/conversations/:id/projects', (req, res) => {
         res.json({ conversationId: req.params.id, relatedProjectIds: document.relatedProjectIds });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -1088,7 +1661,81 @@ app.delete('/api/conversations/:id/projects/:projectId', (req, res) => {
         res.json({ conversationId: req.params.id, relatedProjectIds: document.relatedProjectIds });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
+    }
+});
+app.get('/api/conversations/:id/deferred-resumes', (req, res) => {
+    try {
+        const sessionFile = resolveConversationSessionFile(req.params.id);
+        if (!sessionFile) {
+            res.status(404).json({ error: 'Conversation not found' });
+            return;
+        }
+        res.json({
+            conversationId: req.params.id,
+            resumes: listDeferredResumesForSessionFile(sessionFile),
+        });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/conversations/:id/deferred-resumes', (req, res) => {
+    try {
+        const sessionFile = resolveConversationSessionFile(req.params.id);
+        if (!sessionFile) {
+            res.status(404).json({ error: 'Conversation not found' });
+            return;
+        }
+        const { delay, prompt } = req.body;
+        if (!delay || delay.trim().length === 0) {
+            res.status(400).json({ error: 'delay is required' });
+            return;
+        }
+        const resumeRecord = scheduleDeferredResumeForSessionFile({
+            sessionFile,
+            delay,
+            prompt,
+        });
+        invalidateAppTopics('sessions');
+        res.json({
+            conversationId: req.params.id,
+            resume: resumeRecord,
+            resumes: listDeferredResumesForSessionFile(sessionFile),
+        });
+    }
+    catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+});
+app.delete('/api/conversations/:id/deferred-resumes/:resumeId', (req, res) => {
+    try {
+        const sessionFile = resolveConversationSessionFile(req.params.id);
+        if (!sessionFile) {
+            res.status(404).json({ error: 'Conversation not found' });
+            return;
+        }
+        cancelDeferredResumeForSessionFile({
+            sessionFile,
+            id: req.params.resumeId,
+        });
+        invalidateAppTopics('sessions');
+        res.json({
+            conversationId: req.params.id,
+            cancelledId: req.params.resumeId,
+            resumes: listDeferredResumesForSessionFile(sessionFile),
+        });
+    }
+    catch (err) {
+        res.status(400).json({ error: err.message });
     }
 });
 app.patch('/api/conversations/:id/attention', (req, res) => {
@@ -1119,6 +1766,10 @@ app.patch('/api/conversations/:id/attention', (req, res) => {
         res.json({ ok: true });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -1132,6 +1783,10 @@ app.get('/api/live-sessions/:id/fork-entries', (req, res) => {
         res.json(liveEntry.session.getUserMessagesForForking());
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -1144,10 +1799,15 @@ app.post('/api/live-sessions/:id/fork', async (req, res) => {
         }
         res.json(await forkSession(req.params.id, entryId, {
             preserveSource,
+            ...buildLiveSessionResourceOptions(),
             extensionFactories: buildLiveSessionExtensionFactories(),
         }));
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -1201,6 +1861,10 @@ app.get('/api/projects', (_req, res) => {
         res.json(listProjectsForCurrentProfile());
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -1447,6 +2111,10 @@ app.post('/api/run', (req, res) => {
         res.json({ output: output.slice(0, 50_000), exitCode });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -1679,6 +2347,10 @@ app.get('/api/memory', (_req, res) => {
         res.json({ profile, agentsMd, skills, memoryDocs });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -1701,6 +2373,10 @@ app.get('/api/memory/file', (req, res) => {
         res.json({ content, path: filePath });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -1719,6 +2395,10 @@ app.post('/api/memory/file', (req, res) => {
         res.json({ ok: true });
     }
     catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
         res.status(500).json({ error: String(err) });
     }
 });
@@ -1739,11 +2419,11 @@ else {
     });
 }
 app.listen(PORT, () => {
-    console.log(`\n  personal-agent web UI`);
-    console.log(`  → http://localhost:${PORT}\n`);
-    console.log(`  profile : ${getCurrentProfile()}`);
-    console.log(`  repo    : ${REPO_ROOT}`);
-    console.log(`  cwd     : ${DEFAULT_WEB_CWD}`);
-    console.log(`  dist    : ${DIST_DIR}`);
-    console.log();
+    logInfo('web ui started', {
+        url: `http://localhost:${PORT}`,
+        profile: getCurrentProfile(),
+        repoRoot: REPO_ROOT,
+        cwd: DEFAULT_WEB_CWD,
+        dist: DIST_DIR,
+    });
 });

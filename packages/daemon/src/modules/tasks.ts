@@ -1,16 +1,28 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'fs';
+import { randomUUID } from 'crypto';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
-import { join, resolve } from 'path';
+import { dirname, join, resolve } from 'path';
 import {
   createProjectActivityEntry,
   setActivityConversationLinks,
   writeProfileActivityEntry,
 } from '@personal-agent/core';
 import type { TasksModuleConfig } from '../config.js';
+import {
+  appendDurableRunEvent,
+  createDurableRunManifest,
+  createInitialDurableRunStatus,
+  resolveDurableRunPaths,
+  resolveDurableRunsRoot,
+  saveDurableRunCheckpoint,
+  saveDurableRunManifest,
+  saveDurableRunStatus,
+} from '../runs/store.js';
 import type { DaemonModule } from './types.js';
 import {
   cronMatches,
   parseTaskDefinition,
+  type ParsedCronExpression,
   type ParsedTaskDefinition,
   type ParsedTaskOutput,
   type ParsedTaskOutputTarget,
@@ -26,6 +38,14 @@ import { runTaskInIsolatedPi, type TaskRunRequest, type TaskRunResult } from './
 
 const TASK_FILE_SUFFIX = '.task.md';
 const GATEWAY_NOTIFICATION_MAX_MESSAGE_CHARS = 12_000;
+const MISSED_RUN_EXAMPLE_LIMIT = 5;
+
+interface MissedTaskRunSummary {
+  count: number;
+  firstScheduledAt: string;
+  lastScheduledAt: string;
+  exampleScheduledAt: string[];
+}
 
 type TaskRunOutcomeStatus = 'success' | 'failed';
 
@@ -177,10 +197,142 @@ function sanitizeActivityIdSegment(value: string): string {
   return sanitized.length > 0 ? sanitized : 'activity';
 }
 
+function toRunIdTimestamp(value: string): string {
+  return value.replace(/[:.]/g, '-');
+}
+
+function createScheduledTaskRunId(taskId: string, startedAt: string): string {
+  return [
+    'task',
+    sanitizeActivityIdSegment(taskId),
+    toRunIdTimestamp(startedAt),
+    randomUUID().slice(0, 8),
+  ].join('-');
+}
+
+function writeJsonFile(path: string, value: unknown): void {
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+  writeFileSync(path, JSON.stringify(value, null, 2));
+}
+
+function copyTaskRunLogToDurableOutput(logPath: string | undefined, outputLogPath: string): void {
+  if (!logPath || !existsSync(logPath)) {
+    return;
+  }
+
+  const text = readFileSync(logPath, 'utf-8');
+  writeFileSync(outputLogPath, text);
+}
+
 function toMinuteKey(at: Date): string {
   const rounded = new Date(at);
   rounded.setSeconds(0, 0);
   return rounded.toISOString();
+}
+
+function toMinuteStart(at: Date): Date {
+  const rounded = new Date(at);
+  rounded.setSeconds(0, 0);
+  return rounded;
+}
+
+function toNextMinuteStart(after: Date): Date {
+  const next = toMinuteStart(after);
+  next.setMinutes(next.getMinutes() + 1);
+  return next;
+}
+
+function formatTaskSchedule(task: ParsedTaskDefinition): string {
+  if (task.schedule.type === 'cron') {
+    return `cron ${task.schedule.expression}`;
+  }
+
+  return `at ${task.schedule.at}`;
+}
+
+function summarizeMissedCronRuns(
+  expression: ParsedCronExpression,
+  evaluatedAt: Date,
+  currentTime: Date,
+): MissedTaskRunSummary | undefined {
+  const firstCandidate = toNextMinuteStart(evaluatedAt);
+  const currentMinuteStart = toMinuteStart(currentTime);
+
+  if (firstCandidate.getTime() >= currentMinuteStart.getTime()) {
+    return undefined;
+  }
+
+  let count = 0;
+  let firstScheduledAt: string | undefined;
+  let lastScheduledAt: string | undefined;
+  const exampleScheduledAt: string[] = [];
+
+  for (let cursor = firstCandidate; cursor.getTime() < currentMinuteStart.getTime(); cursor = new Date(cursor.getTime() + 60_000)) {
+    if (!cronMatches(expression, cursor)) {
+      continue;
+    }
+
+    const scheduledAt = cursor.toISOString();
+    count += 1;
+    firstScheduledAt ??= scheduledAt;
+    lastScheduledAt = scheduledAt;
+
+    if (exampleScheduledAt.length < MISSED_RUN_EXAMPLE_LIMIT) {
+      exampleScheduledAt.push(scheduledAt);
+    }
+  }
+
+  if (!firstScheduledAt || !lastScheduledAt || count === 0) {
+    return undefined;
+  }
+
+  return {
+    count,
+    firstScheduledAt,
+    lastScheduledAt,
+    exampleScheduledAt,
+  };
+}
+
+function toMissedTaskActivitySummary(taskId: string, missedRunCount: number): string {
+  if (missedRunCount === 1) {
+    return `Scheduled task ${taskId} was missed while the daemon was offline.`;
+  }
+
+  return `Scheduled task ${taskId} missed ${missedRunCount} runs while the daemon was offline.`;
+}
+
+function toMissedTaskActivityDetails(input: {
+  task: ParsedTaskDefinition;
+  missedRuns: MissedTaskRunSummary;
+}): string {
+  const sections = [
+    'Reason:\nDaemon was not running during the scheduled task window.',
+    `Schedule:\n${formatTaskSchedule(input.task)}`,
+    `Task file:\n${input.task.filePath}`,
+  ];
+
+  if (input.missedRuns.count === 1) {
+    sections.push(`Missed run:\n${input.missedRuns.firstScheduledAt}`);
+  } else {
+    const exampleLines = input.missedRuns.exampleScheduledAt.map((scheduledAt) => `- ${scheduledAt}`);
+    const remainingCount = input.missedRuns.count - input.missedRuns.exampleScheduledAt.length;
+    if (remainingCount > 0) {
+      exampleLines.push(`- … ${remainingCount} more`);
+    }
+
+    sections.push([
+      'Missed runs:',
+      `Count: ${input.missedRuns.count}`,
+      `First: ${input.missedRuns.firstScheduledAt}`,
+      `Last: ${input.missedRuns.lastScheduledAt}`,
+      ...(exampleLines.length > 0 ? ['', 'Examples:', ...exampleLines] : []),
+    ].join('\n'));
+  }
+
+  sections.push('Next step:\nRun the task manually if it is still needed.');
+
+  return sections.join('\n\n');
 }
 
 function collectTaskFiles(rootDir: string): string[] {
@@ -324,6 +476,7 @@ export function createTasksModule(
   let tickInProgress = false;
   let stateFile = '';
   let runsRoot = '';
+  let durableRunsRoot = '';
   let moduleStartedAtMs = 0;
   let taskState = createEmptyTaskState();
 
@@ -388,6 +541,48 @@ export function createTasksModule(
     }
   };
 
+  const writeScheduledTaskActivityEntry = (
+    task: ParsedTaskDefinition,
+    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; paths: { root: string } },
+    activity: {
+      activityId: string;
+      createdAt: string;
+      summary: string;
+      details?: string;
+      notificationState?: 'none' | 'queued' | 'sent' | 'failed';
+      relatedConversationIds?: string[];
+    },
+  ): void => {
+    const repoRoot = inferRepoRootFromTaskFile(task.filePath, task.profile);
+    if (!repoRoot) {
+      context.logger.warn(`unable to infer repo root for task activity id=${task.id} file=${task.filePath}`);
+      return;
+    }
+
+    writeProfileActivityEntry({
+      stateRoot: context.paths.root,
+      repoRoot,
+      profile: task.profile,
+      entry: createProjectActivityEntry({
+        id: activity.activityId,
+        createdAt: activity.createdAt,
+        profile: task.profile,
+        kind: 'scheduled-task',
+        summary: activity.summary,
+        details: activity.details,
+        notificationState: activity.notificationState,
+      }),
+    });
+
+    setActivityConversationLinks({
+      stateRoot: context.paths.root,
+      profile: task.profile,
+      activityId: activity.activityId,
+      relatedConversationIds: activity.relatedConversationIds ?? [],
+      updatedAt: activity.createdAt,
+    });
+  };
+
   const writeTaskActivity = (
     task: ParsedTaskDefinition,
     status: TaskRunOutcomeStatus,
@@ -401,12 +596,6 @@ export function createTasksModule(
     },
   ): void => {
     try {
-      const repoRoot = inferRepoRootFromTaskFile(task.filePath, task.profile);
-      if (!repoRoot) {
-        context.logger.warn(`unable to infer repo root for task activity id=${task.id} file=${task.filePath}`);
-        return;
-      }
-
       const activityId = [
         'task',
         sanitizeActivityIdSegment(task.id),
@@ -419,31 +608,114 @@ export function createTasksModule(
         ? findRelatedSessionIds(details.startedAt, details.finishedAt)
         : [];
 
-      writeProfileActivityEntry({
-        stateRoot: context.paths.root,
-        repoRoot,
-        profile: task.profile,
-        entry: createProjectActivityEntry({
-          id: activityId,
-          createdAt: details.finishedAt,
-          profile: task.profile,
-          kind: 'scheduled-task',
-          summary: toTaskActivitySummary(task.id, status),
-          details: toTaskActivityDetails(details),
-          notificationState: shouldQueueTaskNotification(task, status) ? 'queued' : 'none',
-        }),
-      });
-
-      setActivityConversationLinks({
-        stateRoot: context.paths.root,
-        profile: task.profile,
+      writeScheduledTaskActivityEntry(task, context, {
         activityId,
+        createdAt: details.finishedAt,
+        summary: toTaskActivitySummary(task.id, status),
+        details: toTaskActivityDetails(details),
+        notificationState: shouldQueueTaskNotification(task, status) ? 'queued' : 'none',
         relatedConversationIds,
-        updatedAt: details.finishedAt,
       });
     } catch (error) {
       context.logger.warn(`failed to write task activity id=${task.id}: ${(error as Error).message}`);
     }
+  };
+
+  const writeMissedTaskActivity = (
+    task: ParsedTaskDefinition,
+    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; paths: { root: string } },
+    details: {
+      detectedAt: string;
+      missedRuns: MissedTaskRunSummary;
+    },
+  ): void => {
+    try {
+      const activityId = [
+        'task',
+        sanitizeActivityIdSegment(task.id),
+        'missed',
+        sanitizeActivityIdSegment(details.detectedAt.replace(/[.:]/g, '-')),
+      ].join('-');
+
+      writeScheduledTaskActivityEntry(task, context, {
+        activityId,
+        createdAt: details.detectedAt,
+        summary: toMissedTaskActivitySummary(task.id, details.missedRuns.count),
+        details: toMissedTaskActivityDetails({ task, missedRuns: details.missedRuns }),
+      });
+    } catch (error) {
+      context.logger.warn(`failed to write missed task activity id=${task.id}: ${(error as Error).message}`);
+    }
+  };
+
+  const createDurableTaskRunRecord = async (
+    task: ParsedTaskDefinition,
+    record: TaskRuntimeState,
+    startedAt: string,
+  ): Promise<{ runId: string; runPaths: ReturnType<typeof resolveDurableRunPaths>; attemptsRoot: string }> => {
+    const runId = createScheduledTaskRunId(task.id, startedAt);
+    const runPaths = resolveDurableRunPaths(durableRunsRoot, runId);
+    const attemptsRoot = join(runPaths.root, 'attempts');
+
+    mkdirSync(runPaths.root, { recursive: true, mode: 0o700 });
+    mkdirSync(attemptsRoot, { recursive: true, mode: 0o700 });
+
+    saveDurableRunManifest(runPaths.manifestPath, createDurableRunManifest({
+      id: runId,
+      kind: 'scheduled-task',
+      resumePolicy: 'rerun',
+      createdAt: startedAt,
+      spec: {
+        taskId: task.id,
+        filePath: task.filePath,
+        profile: task.profile,
+        scheduleType: task.schedule.type,
+        schedule: formatTaskSchedule(task),
+        cwd: task.cwd,
+        modelRef: task.modelRef,
+      },
+      source: {
+        type: 'scheduled-task',
+        id: task.id,
+        filePath: task.filePath,
+      },
+    }));
+
+    saveDurableRunStatus(runPaths.statusPath, createInitialDurableRunStatus({
+      runId,
+      status: 'running',
+      createdAt: startedAt,
+      updatedAt: startedAt,
+      activeAttempt: 0,
+      startedAt,
+    }));
+
+    saveDurableRunCheckpoint(runPaths.checkpointPath, {
+      version: 1,
+      runId,
+      updatedAt: startedAt,
+      step: 'scheduled',
+      payload: {
+        taskId: task.id,
+        filePath: task.filePath,
+      },
+    });
+
+    await appendDurableRunEvent(runPaths.eventsPath, {
+      version: 1,
+      runId,
+      timestamp: startedAt,
+      type: 'run.created',
+      payload: {
+        kind: 'scheduled-task',
+        taskId: task.id,
+        schedule: formatTaskSchedule(task),
+      },
+    });
+
+    record.activeRunId = runId;
+    record.lastRunId = runId;
+    return { runId, runPaths, attemptsRoot };
   };
 
   const executeTaskRun = async (
@@ -452,6 +724,8 @@ export function createTasksModule(
     context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string } },
     controller: AbortController,
   ): Promise<void> => {
+    const startedAt = record.runningStartedAt ?? now().toISOString();
+    const durableRun = await createDurableTaskRunRecord(task, record, startedAt);
     let finalResult: TaskRunResult | undefined;
 
     for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
@@ -459,13 +733,33 @@ export function createTasksModule(
         break;
       }
 
+      saveDurableRunStatus(durableRun.runPaths.statusPath, createInitialDurableRunStatus({
+        runId: durableRun.runId,
+        status: 'running',
+        createdAt: startedAt,
+        updatedAt: now().toISOString(),
+        activeAttempt: attempt,
+        startedAt,
+      }));
+
+      await appendDurableRunEvent(durableRun.runPaths.eventsPath, {
+        version: 1,
+        runId: durableRun.runId,
+        timestamp: now().toISOString(),
+        type: 'run.attempt.started',
+        attempt,
+        payload: {
+          taskId: task.id,
+        },
+      });
+
       const result = await runTask({
         task: {
           ...task,
           timeoutSeconds: task.timeoutSeconds > 0 ? task.timeoutSeconds : defaultTimeoutSeconds,
         },
         attempt,
-        runsRoot,
+        runsRoot: durableRun.attemptsRoot,
         signal: controller.signal,
         runInTmux: task.runInTmux ?? runTasksInTmuxByDefault,
       });
@@ -473,6 +767,38 @@ export function createTasksModule(
       finalResult = result;
       record.lastLogPath = result.logPath;
       record.lastAttemptCount = attempt;
+
+      saveDurableRunCheckpoint(durableRun.runPaths.checkpointPath, {
+        version: 1,
+        runId: durableRun.runId,
+        updatedAt: result.endedAt,
+        step: result.success ? 'completed' : (result.cancelled ? 'interrupted' : 'attempt-failed'),
+        payload: {
+          attempt,
+          success: result.success,
+          cancelled: result.cancelled,
+          error: result.error,
+          logPath: result.logPath,
+        },
+      });
+
+      await appendDurableRunEvent(durableRun.runPaths.eventsPath, {
+        version: 1,
+        runId: durableRun.runId,
+        timestamp: result.endedAt,
+        type: result.success
+          ? 'run.attempt.completed'
+          : (result.cancelled ? 'run.interrupted' : 'run.attempt.failed'),
+        attempt,
+        payload: {
+          taskId: task.id,
+          logPath: result.logPath,
+          error: result.error,
+          timedOut: result.timedOut,
+          cancelled: result.cancelled,
+          exitCode: result.exitCode,
+        },
+      });
 
       if (result.success || result.cancelled) {
         break;
@@ -491,7 +817,25 @@ export function createTasksModule(
     state.lastRunAt = finishedAt;
     state.totalRuns += 1;
 
+    if (finalResult?.logPath) {
+      copyTaskRunLogToDurableOutput(finalResult.logPath, durableRun.runPaths.outputLogPath);
+    }
+
+    writeJsonFile(durableRun.runPaths.resultPath, {
+      taskId: task.id,
+      runId: durableRun.runId,
+      startedAt,
+      finishedAt,
+      attemptCount: record.lastAttemptCount ?? 0,
+      success: finalResult?.success ?? false,
+      cancelled: finalResult?.cancelled ?? false,
+      error: finalResult?.error,
+      logPath: finalResult?.logPath,
+      outputText: finalResult?.outputText,
+    });
+
     if (finalResult?.success) {
+      record.activeRunId = undefined;
       record.lastStatus = 'success';
       record.lastSuccessAt = finishedAt;
       record.lastError = undefined;
@@ -503,13 +847,34 @@ export function createTasksModule(
         record.oneTimeCompletedAt = finishedAt;
       }
 
+      saveDurableRunStatus(durableRun.runPaths.statusPath, createInitialDurableRunStatus({
+        runId: durableRun.runId,
+        status: 'completed',
+        createdAt: startedAt,
+        updatedAt: finishedAt,
+        activeAttempt: record.lastAttemptCount ?? 0,
+        startedAt,
+      }));
+
+      await appendDurableRunEvent(durableRun.runPaths.eventsPath, {
+        version: 1,
+        runId: durableRun.runId,
+        timestamp: finishedAt,
+        type: 'run.completed',
+        payload: {
+          taskId: task.id,
+          logPath: finalResult.logPath,
+        },
+      });
+
       context.publish('tasks.run.completed', {
         taskId: task.id,
         filePath: task.filePath,
         completedAt: finishedAt,
         logPath: finalResult.logPath,
+        runId: durableRun.runId,
       });
-      context.logger.info(`task completed id=${task.id} log=${finalResult.logPath}`);
+      context.logger.info(`task completed id=${task.id} run=${durableRun.runId} log=${finalResult.logPath}`);
 
       writeTaskActivity(task, 'success', context, {
         startedAt: finalResult.startedAt,
@@ -528,11 +893,17 @@ export function createTasksModule(
       record.lastError = finalResult.error ?? 'Task run cancelled';
       state.skippedRuns += 1;
 
-      if (task.schedule.type === 'at') {
-        record.oneTimeResolvedAt = finishedAt;
-        record.oneTimeResolvedStatus = 'skipped';
-      }
+      saveDurableRunStatus(durableRun.runPaths.statusPath, createInitialDurableRunStatus({
+        runId: durableRun.runId,
+        status: 'interrupted',
+        createdAt: startedAt,
+        updatedAt: finishedAt,
+        activeAttempt: record.lastAttemptCount ?? 0,
+        startedAt,
+        lastError: record.lastError,
+      }));
     } else {
+      record.activeRunId = undefined;
       record.lastStatus = 'failed';
       record.lastFailureAt = finishedAt;
       record.lastError = finalResult?.error ?? 'Task run failed';
@@ -543,14 +914,37 @@ export function createTasksModule(
         record.oneTimeResolvedStatus = 'failed';
       }
 
+      saveDurableRunStatus(durableRun.runPaths.statusPath, createInitialDurableRunStatus({
+        runId: durableRun.runId,
+        status: 'failed',
+        createdAt: startedAt,
+        updatedAt: finishedAt,
+        activeAttempt: record.lastAttemptCount ?? 0,
+        startedAt,
+        lastError: record.lastError,
+      }));
+
+      await appendDurableRunEvent(durableRun.runPaths.eventsPath, {
+        version: 1,
+        runId: durableRun.runId,
+        timestamp: finishedAt,
+        type: 'run.failed',
+        payload: {
+          taskId: task.id,
+          error: record.lastError,
+          logPath: finalResult?.logPath,
+        },
+      });
+
       context.publish('tasks.run.failed', {
         taskId: task.id,
         filePath: task.filePath,
         failedAt: finishedAt,
         error: record.lastError,
         logPath: finalResult?.logPath,
+        runId: durableRun.runId,
       });
-      context.logger.warn(`task failed id=${task.id} error=${record.lastError}`);
+      context.logger.warn(`task failed id=${task.id} run=${durableRun.runId} error=${record.lastError}`);
 
       writeTaskActivity(task, 'failed', context, {
         startedAt: finalResult?.startedAt,
@@ -716,6 +1110,12 @@ export function createTasksModule(
 
       reconcileDeletedTaskState(activeTaskKeys);
 
+      const lastEvaluatedAtMs = taskState.lastEvaluatedAt
+        ? Date.parse(taskState.lastEvaluatedAt)
+        : Number.NaN;
+      const lastEvaluatedAt = Number.isFinite(lastEvaluatedAtMs)
+        ? new Date(lastEvaluatedAtMs)
+        : undefined;
       const minuteKey = toMinuteKey(tickTime);
 
       for (const task of parsedTasks) {
@@ -731,6 +1131,18 @@ export function createTasksModule(
           }
 
           if (task.schedule.atMs < moduleStartedAtMs) {
+            if (!lastEvaluatedAt || task.schedule.atMs > lastEvaluatedAt.getTime()) {
+              writeMissedTaskActivity(task, context, {
+                detectedAt: nowIso,
+                missedRuns: {
+                  count: 1,
+                  firstScheduledAt: new Date(task.schedule.atMs).toISOString(),
+                  lastScheduledAt: new Date(task.schedule.atMs).toISOString(),
+                  exampleScheduledAt: [new Date(task.schedule.atMs).toISOString()],
+                },
+              });
+            }
+
             record.lastStatus = 'skipped';
             record.lastRunAt = nowIso;
             record.lastError = 'Task skipped because daemon was offline at scheduled time';
@@ -758,6 +1170,16 @@ export function createTasksModule(
           continue;
         }
 
+        if (lastEvaluatedAt) {
+          const missedRuns = summarizeMissedCronRuns(task.schedule.parsed, lastEvaluatedAt, tickTime);
+          if (missedRuns) {
+            writeMissedTaskActivity(task, context, {
+              detectedAt: nowIso,
+              missedRuns,
+            });
+          }
+        }
+
         if (!cronMatches(task.schedule.parsed, tickTime)) {
           continue;
         }
@@ -781,6 +1203,7 @@ export function createTasksModule(
 
       reapResolvedOneTimeTasks(nowMs, context);
 
+      taskState.lastEvaluatedAt = nowIso;
       state.runningTasks = activeRuns.size;
       persistState(context.logger);
 
@@ -815,9 +1238,11 @@ export function createTasksModule(
       moduleStartedAtMs = now().getTime();
       stateFile = join(context.paths.root, 'task-state.json');
       runsRoot = join(context.paths.root, 'task-runs');
+      durableRunsRoot = resolveDurableRunsRoot(context.paths.root);
 
       mkdirSync(taskDir, { recursive: true, mode: 0o700 });
       mkdirSync(runsRoot, { recursive: true, mode: 0o700 });
+      mkdirSync(durableRunsRoot, { recursive: true, mode: 0o700 });
 
       taskState = loadTaskState(stateFile, context.logger);
       state.runningTasks = 0;
@@ -852,6 +1277,7 @@ export function createTasksModule(
         taskDir,
         stateFile,
         runsRoot,
+        durableRunsRoot,
         knownTasks: state.knownTasks,
         parseErrors: state.parseErrors,
         runningTasks: state.runningTasks,

@@ -1,0 +1,72 @@
+\\documentclass[11pt]{article}
+\\usepackage[margin=1in]{geometry}
+\\usepackage[T1]{fontenc}
+\\usepackage[utf8]{inputenc}
+\\usepackage{hyperref}
+\\usepackage{xcolor}
+\\usepackage{listings}
+\\usepackage{longtable}
+\\usepackage{array}
+\\usepackage{titlesec}
+
+\\definecolor{codebg}{RGB}{247,247,247}
+\\definecolor{codeframe}{RGB}{224,224,224}
+\\definecolor{codecomment}{RGB}{106,115,125}
+\\definecolor{codekeyword}{RGB}{130,67,220}
+\\definecolor{codestring}{RGB}{3,102,214}
+
+\\lstdefinestyle{codeblock}{
+  basicstyle=\\ttfamily\\small,
+  backgroundcolor=\\color{codebg},
+  frame=single,
+  rulecolor=\\color{codeframe},
+  breaklines=true,
+  showstringspaces=false,
+  commentstyle=\\color{codecomment},
+  keywordstyle=\\color{codekeyword},
+  stringstyle=\\color{codestring},
+  columns=fullflexible,
+  keepspaces=true
+}
+
+\\title{Codebase Walkthrough}
+\\author{}
+\\date{}
+
+\\begin{document}
+\\maketitle
+\\tableofcontents
+
+\\section{Scope}
+Describe exactly what this document covers.
+State whether it is whole-repo, subsystem, or diff-based.
+
+\\section{Executive Summary}
+Summarize the system or change in 1--3 paragraphs.
+
+\\section{Architecture Overview}
+Explain the major moving parts in reader-first order.
+
+\\section{Main Flow}
+Walk through the main runtime or behavioral path.
+
+\\section{Key Modules}
+For each important module, explain why it exists before showing code.
+
+\\subsection{Example excerpt: \\texttt{path/to/file.ts}}
+\\lstset{style=codeblock, language=Java}
+\\begin{lstlisting}
+// Replace with an exact, in-scope excerpt.
+function example() {
+  return true;
+}
+\\end{lstlisting}
+
+\\section{Risks, Tradeoffs, and Follow-Ups}
+Capture important caveats, design tradeoffs, and next steps.
+
+\\appendix
+\\section{Additional Excerpts}
+Place supporting excerpts here when they are useful but not central.
+
+\\end{document}

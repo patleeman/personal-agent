@@ -2,6 +2,8 @@ import { OPEN_SESSION_IDS_STORAGE_KEY } from './localSettings';
 
 export const OPEN_SESSIONS_CHANGED_EVENT = 'pa:open-sessions-changed';
 
+export type OpenConversationDropPosition = 'before' | 'after';
+
 function normalizeSessionId(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -23,18 +25,12 @@ function normalizeSessionIds(values: Iterable<unknown>): string[] {
   return ids;
 }
 
-function sameSessionIds(left: Set<string>, right: Set<string>): boolean {
-  if (left.size !== right.size) {
+function sameSessionIds(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) {
     return false;
   }
 
-  for (const id of left) {
-    if (!right.has(id)) {
-      return false;
-    }
-  }
-
-  return true;
+  return left.every((id, index) => id === right[index]);
 }
 
 function persistOpenSessionIdsToServer(sessionIds: string[]): void {
@@ -55,23 +51,23 @@ export function syncOpenConversationTabsToServer(ids: Iterable<unknown>): void {
   persistOpenSessionIdsToServer(normalizeSessionIds(ids));
 }
 
-export function readOpenSessionIds(): Set<string> {
+export function readOpenSessionIds(): string[] {
   try {
     const raw = localStorage.getItem(OPEN_SESSION_IDS_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as unknown;
       if (Array.isArray(parsed)) {
-        return new Set(normalizeSessionIds(parsed));
+        return normalizeSessionIds(parsed);
       }
     }
   } catch {
     // Ignore malformed storage.
   }
 
-  return new Set<string>();
+  return [];
 }
 
-function writeOpenSessionIds(ids: Set<string>): void {
+function writeOpenSessionIds(ids: Iterable<unknown>): string[] {
   const normalizedIds = normalizeSessionIds(ids);
 
   try {
@@ -84,43 +80,70 @@ function writeOpenSessionIds(ids: Set<string>): void {
   window.dispatchEvent(new CustomEvent(OPEN_SESSIONS_CHANGED_EVENT, {
     detail: { ids: normalizedIds },
   }));
+
+  return normalizedIds;
 }
 
-export function replaceOpenConversationTabs(sessionIds: Iterable<unknown>): Set<string> {
-  const next = new Set(normalizeSessionIds(sessionIds));
+export function replaceOpenConversationTabs(sessionIds: Iterable<unknown>): string[] {
+  const next = normalizeSessionIds(sessionIds);
   const current = readOpenSessionIds();
   if (sameSessionIds(current, next)) {
     return current;
   }
 
-  writeOpenSessionIds(next);
-  return next;
+  return writeOpenSessionIds(next);
 }
 
-export function ensureConversationTabOpen(sessionId: string | null | undefined): Set<string> {
+export function ensureConversationTabOpen(sessionId: string | null | undefined): string[] {
   const normalizedSessionId = normalizeSessionId(sessionId);
   const next = readOpenSessionIds();
-  if (!normalizedSessionId || next.has(normalizedSessionId)) {
+  if (!normalizedSessionId || next.includes(normalizedSessionId)) {
     return next;
   }
 
-  next.add(normalizedSessionId);
-  writeOpenSessionIds(next);
-  return next;
+  return writeOpenSessionIds([...next, normalizedSessionId]);
 }
 
-export function openConversationTab(sessionId: string): Set<string> {
+export function openConversationTab(sessionId: string): string[] {
   return ensureConversationTabOpen(sessionId);
 }
 
-export function closeConversationTab(sessionId: string): Set<string> {
+export function closeConversationTab(sessionId: string): string[] {
   const normalizedSessionId = normalizeSessionId(sessionId);
-  const next = readOpenSessionIds();
-  if (!normalizedSessionId || !next.has(normalizedSessionId)) {
-    return next;
+  const current = readOpenSessionIds();
+  const next = current.filter((id) => id !== normalizedSessionId);
+  if (next.length === current.length) {
+    return current;
   }
 
-  next.delete(normalizedSessionId);
-  writeOpenSessionIds(next);
-  return next;
+  return writeOpenSessionIds(next);
+}
+
+export function reorderOpenSessionIds(
+  sessionIds: readonly string[],
+  draggedSessionId: string,
+  targetSessionId: string,
+  position: OpenConversationDropPosition,
+): string[] {
+  const normalizedSessionIds = normalizeSessionIds(sessionIds);
+  const draggedId = normalizeSessionId(draggedSessionId);
+  const targetId = normalizeSessionId(targetSessionId);
+
+  if (!draggedId || !targetId || draggedId === targetId) {
+    return normalizedSessionIds;
+  }
+
+  if (!normalizedSessionIds.includes(draggedId) || !normalizedSessionIds.includes(targetId)) {
+    return normalizedSessionIds;
+  }
+
+  const reordered = normalizedSessionIds.filter((id) => id !== draggedId);
+  const targetIndex = reordered.indexOf(targetId);
+  if (targetIndex === -1) {
+    return normalizedSessionIds;
+  }
+
+  const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+  reordered.splice(insertIndex, 0, draggedId);
+  return reordered;
 }

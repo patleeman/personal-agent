@@ -68,6 +68,8 @@ describe('tasks-store', () => {
           scheduleType: 'at',
           running: true,
           runningStartedAt: '2026-03-01T00:00:00.000Z',
+          activeRunId: 'run-active',
+          lastRunId: 'run-last',
           lastStatus: 'success',
           lastRunAt: '2026-03-01T00:00:00.000Z',
           lastAttemptCount: 2,
@@ -101,6 +103,8 @@ describe('tasks-store', () => {
       scheduleType: 'at',
       running: false,
       runningStartedAt: undefined,
+      activeRunId: 'run-active',
+      lastRunId: 'run-last',
       lastStatus: 'success',
       lastAttemptCount: 2,
       oneTimeResolvedStatus: 'failed',
@@ -116,6 +120,23 @@ describe('tasks-store', () => {
       lastError: undefined,
       lastAttemptCount: undefined,
       oneTimeResolvedStatus: undefined,
+    });
+  });
+
+  it('loads and normalizes the last evaluated timestamp', () => {
+    const dir = createTempDir('tasks-store-last-evaluated-');
+    const path = join(dir, 'task-state.json');
+
+    writeFileSync(path, JSON.stringify({
+      version: 1,
+      lastEvaluatedAt: '2026-03-02T10:00:00Z',
+      tasks: {},
+    }, null, 2));
+
+    expect(loadTaskState(path)).toEqual({
+      version: 1,
+      lastEvaluatedAt: '2026-03-02T10:00:00.000Z',
+      tasks: {},
     });
   });
 

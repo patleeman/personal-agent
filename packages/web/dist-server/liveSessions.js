@@ -175,6 +175,7 @@ function buildLiveSnapshotBlocks(session) {
             content: message.content,
             toolCallId: message.toolCallId,
             toolName: message.toolName,
+            details: message.details,
         },
     })));
 }
@@ -361,6 +362,7 @@ export function toSse(event) {
                 isError: event.isError,
                 durationMs: Date.now() - start,
                 output: outputText,
+                details: result?.details,
             };
         }
         default:

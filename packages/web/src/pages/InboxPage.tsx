@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAppData, useSseConnection } from '../contexts';
 import { useConversations } from '../hooks/useConversations';
+import { sessionNeedsAttention } from '../sessionIndicators';
 import { kindMeta, timeAgo } from '../utils';
 import { EmptyState, ErrorState, ListLinkRow, LoadingState, PageHeader, PageHeading, ToolbarButton } from '../components/ui';
 import type { ActivityEntry, SessionMeta } from '../types';
@@ -56,7 +57,7 @@ export function InboxPage() {
   }, [activity?.entries, archivedSessions, tabs]);
 
   const attentionConversations = useMemo(
-    () => archivedSessions.filter((session) => session.needsAttention),
+    () => archivedSessions.filter((session) => sessionNeedsAttention(session)),
     [archivedSessions],
   );
 
@@ -216,7 +217,6 @@ export function InboxPage() {
                     to={`/conversations/${item.session.id}`}
                     onClick={() => openSession(item.session.id)}
                     leading={<span className="mt-1.5 w-2 h-2 rounded-full shrink-0 transition-all bg-warning" />}
-                    trailing={<span className="shrink-0 self-center w-1.5 h-1.5 rounded-full bg-accent" />}
                   >
                     <p className="ui-row-title">{item.session.title}</p>
                     <p className="ui-row-meta">

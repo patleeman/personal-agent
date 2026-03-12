@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampPanelWidth, getRailLayoutPrefs, getRailMaxWidth } from './layoutSizing.js';
+import { clampPanelWidth, getArtifactRailTargetWidth, getRailLayoutPrefs, getRailMaxWidth } from './layoutSizing.js';
 
 describe('layout sizing helpers', () => {
   it('clamps panel width to the provided bounds', () => {
@@ -24,6 +24,13 @@ describe('layout sizing helpers', () => {
       storageKey: 'pa:rail-width:scheduled',
       initialWidth: 380,
     });
+  });
+
+  it('computes the 50% artifact rail target from the main viewport width', () => {
+    expect(getArtifactRailTargetWidth({
+      viewportWidth: 1600,
+      sidebarWidth: 224,
+    })).toBe(683);
   });
 
   it('lets the rail expand until the main pane reaches its minimum width', () => {

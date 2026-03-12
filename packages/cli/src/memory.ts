@@ -426,13 +426,14 @@ TODO: add details.
 `;
 }
 
-export async function memoryCommand(args: string[]): Promise<number> {
-  const [subcommand, ...rest] = args;
+function isMemoryHelpToken(value: string | undefined): boolean {
+  return value === 'help' || value === '--help' || value === '-h';
+}
 
-  if (!subcommand) {
-    console.log(section('Memory commands'));
-    console.log('');
-    console.log(`Usage: pa memory [list|find|show|new|lint]
+function printMemoryHelp(): void {
+  console.log(section('Memory commands'));
+  console.log('');
+  console.log(`Usage: pa memory [list|find|show|new|lint|help]
 
 Commands:
   list [--profile <name>] [--json]
@@ -445,9 +446,26 @@ Commands:
                            Create a new memory doc template with YAML frontmatter
   lint [--profile <name>] [--json]
                            Validate memory doc frontmatter and duplicate ids
+  help                     Show memory help
 `);
 
-    console.log(keyValue('Default profile', resolveProfileName()));
+  console.log(keyValue('Default profile', resolveProfileName()));
+}
+
+export async function memoryCommand(args: string[]): Promise<number> {
+  const [subcommand, ...rest] = args;
+
+  if (!subcommand) {
+    printMemoryHelp();
+    return 0;
+  }
+
+  if (isMemoryHelpToken(subcommand)) {
+    if (rest.length > 0) {
+      throw new Error(memoryUsageText());
+    }
+
+    printMemoryHelp();
     return 0;
   }
 

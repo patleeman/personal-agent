@@ -1,9 +1,10 @@
+import { Fragment, createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { MessageBlock } from '../../types';
 import {
-  getRenderedMarkdownIndentPx,
   getStreamingStatusLabel,
-  parseMarkdownLikeLine,
+  renderText,
   resolveDisclosureOpen,
   shouldAutoOpenConversationBlock,
   toggleDisclosurePreference,
@@ -63,26 +64,47 @@ describe('chat view streaming disclosure', () => {
     expect(resolveDisclosureOpen(false, 'open')).toBe(true);
   });
 
-  it('parses nested list indentation from leading whitespace', () => {
-    expect(parseMarkdownLikeLine('  - child item')).toEqual({
-      kind: 'bullet',
-      leadingWhitespace: 2,
-      content: 'child item',
-      marker: '•',
-    });
+  it('renders rich markdown structures in assistant messages', () => {
+    const html = renderToStaticMarkup(createElement(Fragment, null, renderText([
+      '# Preview title',
+      '',
+      'Paragraph with **bold**, `inline code`, and a [link](https://example.com).',
+      '',
+      '- Bullet one',
+      '  - Nested bullet',
+      '',
+      '> Quoted note',
+      '',
+      '| A | B |',
+      '| --- | --- |',
+      '| 1 | 2 |',
+      '',
+      '```ts',
+      'const value = 1;',
+      '```',
+    ].join('\n'))));
 
-    expect(parseMarkdownLikeLine('    2. nested numbered item')).toEqual({
-      kind: 'numbered',
-      leadingWhitespace: 4,
-      content: 'nested numbered item',
-      marker: '2.',
-    });
+    expect(html).toContain('<h1');
+    expect(html).toContain('<ul');
+    expect(html).toContain('<blockquote');
+    expect(html).toContain('<table');
+    expect(html).toContain('<pre');
+    expect(html).toContain('href="https://example.com"');
   });
 
-  it('maps nested list indentation to left padding', () => {
-    expect(getRenderedMarkdownIndentPx(0)).toBe(0);
-    expect(getRenderedMarkdownIndentPx(2)).toBe(16);
-    expect(getRenderedMarkdownIndentPx(4)).toBe(32);
-    expect(getRenderedMarkdownIndentPx(40)).toBe(96);
+  it('renders project mentions as pills inside markdown text', () => {
+    const html = renderToStaticMarkup(createElement(Fragment, null, renderText('Check @web-ui before touching @projects.')));
+
+    expect(html).toContain('@web-ui');
+    expect(html).toContain('@projects');
+    expect(html).toContain('ui-markdown-mention');
+  });
+
+  it('preserves inline code content without stringifying React nodes', () => {
+    const html = renderToStaticMarkup(createElement(Fragment, null, renderText('Use `artifact` in `packages/web/src/pages/ConversationPage.tsx` before pinging @web-ui.')));
+
+    expect(html).toContain('artifact');
+    expect(html).toContain('packages/web/src/pages/ConversationPage.tsx');
+    expect(html).not.toContain('[object Object]');
   });
 });

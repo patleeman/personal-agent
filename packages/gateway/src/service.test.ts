@@ -45,13 +45,17 @@ vi.mock('./config.js', () => ({
 import {
   getGatewayServiceStatus,
   getManagedDaemonServiceStatus,
+  getWebUiServiceStatus,
   installGatewayService,
   installManagedDaemonService,
+  installWebUiService,
   restartGatewayService,
   restartGatewayServiceIfInstalled,
   restartManagedDaemonServiceIfInstalled,
+  restartWebUiServiceIfInstalled,
   uninstallGatewayService,
   uninstallManagedDaemonService,
+  uninstallWebUiService,
 } from './service.js';
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
@@ -81,6 +85,7 @@ beforeEach(() => {
   existingPaths.clear();
   existingPaths.add(resolve(process.cwd(), 'packages', 'gateway', 'dist', 'index.js'));
   existingPaths.add(resolve(process.cwd(), 'packages', 'daemon', 'dist', 'index.js'));
+  existingPaths.add(resolve(process.cwd(), 'packages', 'web', 'dist-server', 'index.js'));
 
   mocks.existsSync.mockImplementation((path: string) => existingPaths.has(String(path)));
   mocks.writeFileSync.mockImplementation((path: string, _content: string) => {
@@ -156,6 +161,76 @@ describe('gateway service management', () => {
     const executed = mocks.spawnSync.mock.calls.map((call) => `${call[0]} ${(call[1] as string[]).join(' ')}`);
     expect(executed).toContain('launchctl bootstrap gui/501 /Users/tester/Library/LaunchAgents/io.personal-agent.daemon.plist');
     expect(executed).toContain('launchctl bootstrap gui/501 /Users/tester/Library/LaunchAgents/io.personal-agent.gateway.telegram.plist');
+  });
+
+  it('installs launchd web ui service with repo root and port environment', () => {
+    setPlatform('darwin');
+
+    const info = installWebUiService({ repoRoot: '/repo/personal-agent', port: 4011 });
+
+    expect(info).toMatchObject({
+      platform: 'launchd',
+      identifier: 'io.personal-agent.web-ui',
+      manifestPath: '/Users/tester/Library/LaunchAgents/io.personal-agent.web-ui.plist',
+      logFile: '/state-root/web/logs/web.log',
+      repoRoot: '/repo/personal-agent',
+      port: 4011,
+      url: 'http://localhost:4011',
+    });
+
+    const manifestWrite = mocks.writeFileSync.mock.calls.find((call) => String(call[0]).includes('web-ui.plist'));
+    expect(manifestWrite).toBeDefined();
+    const manifestContent = String(manifestWrite?.[1] ?? '');
+    expect(manifestContent).toContain('PERSONAL_AGENT_REPO_ROOT');
+    expect(manifestContent).toContain('/repo/personal-agent');
+    expect(manifestContent).toContain('PA_WEB_PORT');
+    expect(manifestContent).toContain('4011');
+    expect(manifestContent).toContain('packages/web/dist');
+  });
+
+  it('reports and restarts launchd web ui service when installed', () => {
+    setPlatform('darwin');
+
+    const manifestPath = '/Users/tester/Library/LaunchAgents/io.personal-agent.web-ui.plist';
+    setInstalled(manifestPath, true);
+
+    mocks.spawnSync
+      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
+      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
+      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
+      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' });
+
+    const status = getWebUiServiceStatus({ repoRoot: '/repo/personal-agent', port: 3741 });
+    expect(status).toMatchObject({ installed: true, running: true, url: 'http://localhost:3741' });
+
+    const restarted = restartWebUiServiceIfInstalled({ repoRoot: '/repo/personal-agent', port: 3741 });
+    expect(restarted).toMatchObject({ installed: true, running: true, url: 'http://localhost:3741' });
+
+    const commands = mocks.spawnSync.mock.calls.map((call) => `${call[0]} ${(call[1] as string[]).join(' ')}`);
+    expect(commands.some((line) => line.includes('launchctl kickstart -k gui/501/io.personal-agent.web-ui'))).toBe(true);
+  });
+
+  it('installs and uninstalls systemd web ui service units on linux', () => {
+    setPlatform('linux');
+
+    const installed = installWebUiService({ repoRoot: '/repo/personal-agent', port: 4455 });
+    expect(installed).toMatchObject({
+      platform: 'systemd',
+      identifier: 'personal-agent-web-ui.service',
+      manifestPath: '/Users/tester/.config/systemd/user/personal-agent-web-ui.service',
+      repoRoot: '/repo/personal-agent',
+      port: 4455,
+      url: 'http://localhost:4455',
+    });
+
+    const manifestWrite = mocks.writeFileSync.mock.calls.find((call) => String(call[0]).includes('personal-agent-web-ui.service'));
+    expect(String(manifestWrite?.[1] ?? '')).toContain('Environment=PA_WEB_PORT="4455"');
+
+    const removed = uninstallWebUiService({ repoRoot: '/repo/personal-agent', port: 4455 });
+    expect(removed).toMatchObject({
+      platform: 'systemd',
+      identifier: 'personal-agent-web-ui.service',
+    });
   });
 
   it('validates provider configuration before install', () => {

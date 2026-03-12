@@ -200,7 +200,7 @@ function applyEvent(
     }
 
     case 'tool_start': {
-      const args = (event.args ?? {}) as Record<string, string>;
+      const args = (event.args ?? {}) as Record<string, unknown>;
       blocks.push({
         type: 'tool_use',
         tool: event.toolName,
@@ -241,6 +241,7 @@ function applyEvent(
           output:     event.output,   // replace partial with final
           status:     event.isError ? 'error' : 'ok',
           durationMs: event.durationMs,
+          details:    event.details,
         };
       }
       blocksRef.current = blocks;

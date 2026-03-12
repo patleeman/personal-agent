@@ -61,6 +61,23 @@ export function getRailLayoutPrefs(pathname: string): RailLayoutPrefs {
   }
 }
 
+export function getMainViewportWidth(input: {
+  viewportWidth: number;
+  sidebarWidth: number;
+  resizeHandleWidth?: number;
+}): number {
+  const resizeHandleWidth = input.resizeHandleWidth ?? RESIZE_HANDLE_WIDTH;
+  return Math.max(0, input.viewportWidth - input.sidebarWidth - (resizeHandleWidth * 2));
+}
+
+export function getArtifactRailTargetWidth(input: {
+  viewportWidth: number;
+  sidebarWidth: number;
+  resizeHandleWidth?: number;
+}): number {
+  return Math.floor(getMainViewportWidth(input) / 2);
+}
+
 export function getRailMaxWidth(input: {
   viewportWidth: number;
   sidebarWidth: number;
@@ -68,9 +85,8 @@ export function getRailMaxWidth(input: {
   mainMinWidth?: number;
   resizeHandleWidth?: number;
 }): number {
-  const resizeHandleWidth = input.resizeHandleWidth ?? RESIZE_HANDLE_WIDTH;
   const mainMinWidth = input.mainMinWidth ?? 320;
-  const mainViewportWidth = input.viewportWidth - input.sidebarWidth - (resizeHandleWidth * 2);
+  const mainViewportWidth = getMainViewportWidth(input);
   const remainingWidthAfterMainMinimum = mainViewportWidth - mainMinWidth;
 
   return Math.max(input.railMinWidth, remainingWidthAfterMainMinimum);

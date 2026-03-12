@@ -21,6 +21,10 @@ describe('parseCommand', () => {
       command: 'tasks',
       args: ['list'],
     });
+    expect(parseCommand(['runs', 'list'])).toEqual({
+      command: 'runs',
+      args: ['list'],
+    });
     expect(parseCommand(['tmux', 'list'])).toEqual({
       command: 'tmux',
       args: ['list'],

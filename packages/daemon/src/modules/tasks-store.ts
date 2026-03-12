@@ -9,6 +9,8 @@ export interface TaskRuntimeState {
   scheduleType: 'cron' | 'at';
   running: boolean;
   runningStartedAt?: string;
+  activeRunId?: string;
+  lastRunId?: string;
   lastStatus?: TaskRunStatus;
   lastRunAt?: string;
   lastSuccessAt?: string;
@@ -24,6 +26,7 @@ export interface TaskRuntimeState {
 
 export interface TaskStateFile {
   version: 1;
+  lastEvaluatedAt?: string;
   tasks: Record<string, TaskRuntimeState>;
 }
 
@@ -33,6 +36,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function toString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function toTimestampString(value: unknown): string | undefined {
+  const raw = toString(value);
+  if (!raw) {
+    return undefined;
+  }
+
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined;
 }
 
 function toBoolean(value: unknown): boolean | undefined {
@@ -81,6 +94,8 @@ function parseTaskRecord(_key: string, value: unknown): TaskRuntimeState | undef
     scheduleType: toScheduleType(value.scheduleType),
     running: toBoolean(value.running) ?? false,
     runningStartedAt: toString(value.runningStartedAt),
+    activeRunId: toString(value.activeRunId),
+    lastRunId: toString(value.lastRunId),
     lastStatus: toTaskRunStatus(value.lastStatus),
     lastRunAt: toString(value.lastRunAt),
     lastSuccessAt: toString(value.lastSuccessAt),
@@ -136,6 +151,7 @@ export function loadTaskState(
 
     return {
       version: 1,
+      lastEvaluatedAt: toTimestampString(parsed.lastEvaluatedAt),
       tasks,
     };
   } catch (error) {

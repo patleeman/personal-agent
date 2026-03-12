@@ -16,6 +16,7 @@ export function displayBlockToMessageBlock(block: DisplayBlock): MessageBlock {
         input: block.input,
         output: block.output,
         durationMs: block.durationMs,
+        details: block.details,
         ts: block.ts,
         _toolCallId: block.toolCallId,
       };

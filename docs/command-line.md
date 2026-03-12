@@ -151,7 +151,7 @@ See [Inbox and Activity](./inbox.md).
 
 ### `pa ui [--open] [--port <port>]`
 
-Start the web UI.
+Start the web UI in the foreground.
 
 Examples:
 
@@ -159,6 +159,15 @@ Examples:
 pa ui
 pa ui --open
 pa ui --port 4000
+```
+
+Useful related commands:
+
+```bash
+pa ui logs --tail 120
+pa ui service install --port 3741
+pa ui service status
+pa ui service restart
 ```
 
 See [Web UI Guide](./web-ui.md).
@@ -193,11 +202,12 @@ See [Gateway Guide](./gateway.md).
 
 ### `pa restart`
 
-Restart the daemon and any installed gateway services.
+Restart the daemon, managed web UI service, and any installed gateway services.
 
 ### `pa update [--repo-only]`
 
 Pull latest changes, refresh dependencies, rebuild packages, and restart background services.
+If the managed web UI service is installed, `pa update` stages the next web UI release into the inactive blue/green slot, health-checks it on a candidate port, then swaps the service to the new slot.
 
 ## Common workflows
 

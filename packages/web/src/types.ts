@@ -14,11 +14,41 @@ export interface PromptImageInput {
   previewUrl?: string;
 }
 
+export type ConversationArtifactKind = 'html' | 'mermaid' | 'latex';
+
+export interface ConversationArtifactSummary {
+  id: string;
+  conversationId: string;
+  title: string;
+  kind: ConversationArtifactKind;
+  createdAt: string;
+  updatedAt: string;
+  revision: number;
+}
+
+export interface ConversationArtifactRecord extends ConversationArtifactSummary {
+  content: string;
+}
+
+export interface ConversationArtifactToolDetails {
+  action: 'save' | 'get' | 'list' | 'delete';
+  conversationId: string;
+  artifactId?: string;
+  title?: string;
+  kind?: ConversationArtifactKind;
+  revision?: number;
+  updatedAt?: string;
+  openRequested?: boolean;
+  artifactCount?: number;
+  artifactIds?: string[];
+  deleted?: boolean;
+}
+
 export type MessageBlock =
   | { type: 'user';      id?: string; ts: string; text: string; images?: MessageImage[] }
   | { type: 'text';      id?: string; ts: string; text: string; streaming?: boolean }
   | { type: 'thinking';  id?: string; ts: string; text: string }
-  | { type: 'tool_use';  id?: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; running?: boolean; status?: 'running' | 'ok' | 'error'; error?: boolean; _toolCallId?: string }
+  | { type: 'tool_use';  id?: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; running?: boolean; status?: 'running' | 'ok' | 'error'; error?: boolean; _toolCallId?: string; details?: unknown }
   | { type: 'subagent';  id?: string; ts: string; name: string; prompt: string; status: 'running' | 'complete' | 'failed'; summary?: string }
   | { type: 'image';     id?: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string }
   | { type: 'error';     id?: string; ts: string; tool?: string; message: string };
@@ -270,7 +300,7 @@ export type DisplayBlock =
   | { type: 'user';     id: string; ts: string; text: string; images?: MessageImage[] }
   | { type: 'text';     id: string; ts: string; text: string }
   | { type: 'thinking'; id: string; ts: string; text: string }
-  | { type: 'tool_use'; id: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; toolCallId: string }
+  | { type: 'tool_use'; id: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; toolCallId: string; details?: unknown }
   | { type: 'image';    id: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string }
   | { type: 'error';    id: string; ts: string; tool?: string; message: string };
 
@@ -365,9 +395,9 @@ export type SseEvent =
   | { type: 'queue_state';     steering: string[]; followUp: string[] }
   | { type: 'text_delta';      delta: string }
   | { type: 'thinking_delta';  delta: string }
-  | { type: 'tool_start';      toolCallId: string; toolName: string; args: Record<string, string> }
+  | { type: 'tool_start';      toolCallId: string; toolName: string; args: Record<string, unknown> }
   | { type: 'tool_update';     toolCallId: string; partialResult: unknown }
-  | { type: 'tool_end';        toolCallId: string; toolName: string; isError: boolean; durationMs: number; output: string }
+  | { type: 'tool_end';        toolCallId: string; toolName: string; isError: boolean; durationMs: number; output: string; details?: unknown }
   | { type: 'title_update';    title: string }
   | { type: 'context_usage';   usage: SessionContextUsage | null }
   | { type: 'stats_update';    tokens: { input: number; output: number; total: number }; cost: number }

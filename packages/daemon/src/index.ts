@@ -12,10 +12,43 @@ export {
   pingDaemon,
   stopDaemon,
   pullGatewayNotifications,
+  listDurableRuns,
+  getDurableRun,
   emitDaemonEvent,
   emitDaemonEventNonFatal,
 } from './client.js';
 export { startDaemonDetached, stopDaemonGracefully, daemonStatusJson, readDaemonPid } from './manage.js';
+export {
+  resolveDurableRunsRoot,
+  resolveDurableRunPaths,
+  createDurableRunManifest,
+  createInitialDurableRunStatus,
+  saveDurableRunManifest,
+  saveDurableRunStatus,
+  saveDurableRunCheckpoint,
+  appendDurableRunEvent,
+  loadDurableRunManifest,
+  loadDurableRunStatus,
+  loadDurableRunCheckpoint,
+  readDurableRunEvents,
+  listDurableRunIds,
+  scanDurableRun,
+  scanDurableRunsForRecovery,
+  summarizeScannedDurableRuns,
+} from './runs/store.js';
+export type {
+  DurableRunKind,
+  DurableRunStatus,
+  DurableRunResumePolicy,
+  DurableRunRecoveryAction,
+  DurableRunManifest,
+  DurableRunStatusFile,
+  DurableRunCheckpointFile,
+  DurableRunEvent,
+  DurableRunPaths,
+  ScannedDurableRun,
+  ScannedDurableRunsSummary,
+} from './runs/store.js';
 export { parseTaskDefinition } from './modules/tasks-parser.js';
 export type { ParsedTaskDefinition } from './modules/tasks-parser.js';
 export type {
@@ -25,6 +58,8 @@ export type {
   DaemonModuleStatus,
   GatewayNotification,
   GatewayNotificationProvider,
+  ListDurableRunsResult,
+  GetDurableRunResult,
 } from './types.js';
 
 export async function runDaemonCli(argv: string[] = process.argv.slice(2)): Promise<number> {

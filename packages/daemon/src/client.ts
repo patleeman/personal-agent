@@ -9,6 +9,8 @@ import type {
   DaemonStatus,
   GatewayNotification,
   GatewayNotificationProvider,
+  ListDurableRunsResult,
+  GetDurableRunResult,
 } from './types.js';
 
 interface RequestEnvelope {
@@ -164,6 +166,27 @@ export async function pullGatewayNotifications(
   );
 
   return result.notifications;
+}
+
+export async function listDurableRuns(config?: DaemonConfig): Promise<ListDurableRunsResult> {
+  return sendRequest<ListDurableRunsResult>(
+    {
+      id: `req_${randomUUID()}`,
+      type: 'runs.list',
+    },
+    config,
+  );
+}
+
+export async function getDurableRun(runId: string, config?: DaemonConfig): Promise<GetDurableRunResult> {
+  return sendRequest<GetDurableRunResult>(
+    {
+      id: `req_${randomUUID()}`,
+      type: 'runs.get',
+      runId,
+    },
+    config,
+  );
 }
 
 export async function emitDaemonEvent(input: DaemonEventInput, config?: DaemonConfig): Promise<boolean> {

@@ -1,3 +1,5 @@
+import type { ScannedDurableRun, ScannedDurableRunsSummary } from './runs/store.js';
+
 export type EventPayload = Record<string, unknown>;
 
 export interface DaemonEvent {
@@ -81,5 +83,16 @@ export interface GatewayNotification {
 
 export interface PullGatewayNotificationsResult {
   notifications: GatewayNotification[];
+}
+
+export interface ListDurableRunsResult {
+  scannedAt: string;
+  runs: ScannedDurableRun[];
+  summary: ScannedDurableRunsSummary;
+}
+
+export interface GetDurableRunResult {
+  scannedAt: string;
+  run: ScannedDurableRun;
 }
 

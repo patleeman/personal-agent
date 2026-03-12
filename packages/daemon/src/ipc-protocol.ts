@@ -4,6 +4,8 @@ import type {
   EmitResult,
   GatewayNotificationProvider,
   PullGatewayNotificationsResult,
+  ListDurableRunsResult,
+  GetDurableRunResult,
 } from './types.js';
 
 export interface EmitRequest {
@@ -34,12 +36,25 @@ export interface PullGatewayNotificationsRequest {
   limit?: number;
 }
 
+export interface ListDurableRunsRequest {
+  id: string;
+  type: 'runs.list';
+}
+
+export interface GetDurableRunRequest {
+  id: string;
+  type: 'runs.get';
+  runId: string;
+}
+
 export type DaemonRequest =
   | EmitRequest
   | StatusRequest
   | StopRequest
   | PingRequest
-  | PullGatewayNotificationsRequest;
+  | PullGatewayNotificationsRequest
+  | ListDurableRunsRequest
+  | GetDurableRunRequest;
 
 export interface DaemonSuccessResponse {
   id: string;
@@ -49,7 +64,9 @@ export interface DaemonSuccessResponse {
     | DaemonStatus
     | { stopping: boolean }
     | { pong: true }
-    | PullGatewayNotificationsResult;
+    | PullGatewayNotificationsResult
+    | ListDurableRunsResult
+    | GetDurableRunResult;
 }
 
 export interface DaemonErrorResponse {
@@ -84,6 +101,14 @@ function readOptionalLimit(value: unknown): number | undefined {
   return value;
 }
 
+function readRequiredString(value: unknown, label: string): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(`${label} must be a non-empty string`);
+  }
+
+  return value.trim();
+}
+
 export function parseRequest(raw: string): DaemonRequest {
   const parsed = JSON.parse(raw) as unknown;
 
@@ -113,6 +138,21 @@ export function parseRequest(raw: string): DaemonRequest {
       type: 'notifications.pull',
       gateway: parsed.gateway,
       limit: readOptionalLimit(parsed.limit),
+    };
+  }
+
+  if (parsed.type === 'runs.list') {
+    return {
+      id: parsed.id,
+      type: 'runs.list',
+    };
+  }
+
+  if (parsed.type === 'runs.get') {
+    return {
+      id: parsed.id,
+      type: 'runs.get',
+      runId: readRequiredString(parsed.runId, 'runs.get runId'),
     };
   }
 

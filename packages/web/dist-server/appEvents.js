@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { resolveActivityReadStatePath, resolveConversationAttentionStatePath, resolveProfileActivityConversationLinksDir, resolveProfileActivityDir, resolveProfileProjectsDir, } from '@personal-agent/core';
+import { resolveActivityReadStatePath, resolveConversationAttentionStatePath, resolveDeferredResumeStateFile, resolveProfileActivityConversationLinksDir, resolveProfileActivityDir, resolveProfileConversationArtifactsDir, resolveProfileProjectsDir, } from '@personal-agent/core';
+import { logWarn } from './logging.js';
 const DEFAULT_INTERVAL_MS = 2_000;
 const listeners = new Set();
 let monitorHandle;
@@ -38,14 +39,16 @@ function createTopicSignatures(options, profile) {
     const activityDir = resolveProfileActivityDir({ profile });
     const activityConversationLinksDir = resolveProfileActivityConversationLinksDir({ profile });
     const projectsDir = resolveProfileProjectsDir({ repoRoot: options.repoRoot, profile });
+    const conversationArtifactsDir = resolveProfileConversationArtifactsDir({ profile });
     const tasksDir = join(options.repoRoot, 'profiles', profile, 'agent', 'tasks');
     const readStateFile = resolveActivityReadStatePath({ profile });
     const conversationAttentionStateFile = resolveConversationAttentionStatePath({ profile });
+    const deferredResumeStateFile = resolveDeferredResumeStateFile();
     const activitySignature = `activity:${readPathSnapshot(activityDir)}|links:${readPathSnapshot(activityConversationLinksDir)}|read:${readPathSnapshot(readStateFile)}`;
     return {
         activity: activitySignature,
         projects: `projects:${readPathSnapshot(projectsDir)}`,
-        sessions: `sessions:${readPathSnapshot(options.sessionsDir)}|attention:${readPathSnapshot(conversationAttentionStateFile)}|${activitySignature}`,
+        sessions: `sessions:${readPathSnapshot(options.sessionsDir)}|artifacts:${readPathSnapshot(conversationArtifactsDir)}|attention:${readPathSnapshot(conversationAttentionStateFile)}|deferred:${readPathSnapshot(deferredResumeStateFile)}|${activitySignature}`,
         tasks: `tasks:${readPathSnapshot(tasksDir)}|state:${readPathSnapshot(options.taskStateFile)}`,
     };
 }
@@ -103,7 +106,9 @@ export function startAppEventMonitor(options) {
             tick();
         }
         catch (error) {
-            console.warn(`[web] app event monitor failed: ${error.message}`);
+            logWarn('app event monitor failed', {
+                message: error.message,
+            });
         }
     }, intervalMs);
 }

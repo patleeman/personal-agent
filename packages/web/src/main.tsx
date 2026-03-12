@@ -1,6 +1,7 @@
 import '@fontsource-variable/dm-sans';
 import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/500.css';
+import 'katex/dist/katex.min.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';

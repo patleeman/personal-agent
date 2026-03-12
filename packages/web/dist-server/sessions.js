@@ -99,7 +99,7 @@ export function buildDisplayBlocksFromEntries(messages) {
     const blocks = [];
     const toolCallIndex = new Map();
     for (const [messageIndex, msg] of messages.entries()) {
-        const { role, content, toolCallId, toolName } = msg.message;
+        const { role, content, toolCallId, toolName, details } = msg.message;
         const ts = normalizeTimestamp(msg.timestamp);
         const contentBlocks = normalizeContent(content);
         const baseId = msg.id || `msg-${messageIndex}`;
@@ -154,7 +154,7 @@ export function buildDisplayBlocksFromEntries(messages) {
                 const startMs = new Date(existing.ts).getTime();
                 const endMs = new Date(ts).getTime();
                 const duration = endMs > startMs ? endMs - startMs : undefined;
-                blocks[idx] = { ...existing, output: resultText, durationMs: duration };
+                blocks[idx] = { ...existing, output: resultText, durationMs: duration, details };
             }
             const resultImages = contentBlocks
                 .filter((block) => block.type === 'image')

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import { spawnSync } from 'child_process';
-import { existsSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'fs';
+import { spawn, spawnSync } from 'child_process';
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
-import { join, resolve } from 'path';
+import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { createInterface } from 'readline';
 import { Command, CommanderError } from 'commander';
@@ -54,18 +54,34 @@ import {
 } from '@personal-agent/daemon';
 import {
   SUPPORTED_GATEWAY_PROVIDERS,
+  activateWebUiSlot,
+  getInactiveWebUiSlot,
   getManagedDaemonServiceStatus,
+  getWebUiDeploymentSummary,
+  getWebUiServiceStatus,
+  getWebUiSlotHealthPort,
   installManagedDaemonService,
+  installWebUiService,
   registerGatewayCliCommands,
   restartGatewayServiceIfInstalled,
   restartManagedDaemonServiceIfInstalled,
+  restartWebUiService,
+  restartWebUiServiceIfInstalled,
+  stageWebUiRelease,
+  startWebUiService,
+  stopWebUiService,
   uninstallManagedDaemonService,
+  uninstallWebUiService,
   type RegisteredCliCommand,
+  type WebUiReleaseSummary,
+  type WebUiServiceOptions,
+  type WebUiServiceStatus,
 } from '@personal-agent/gateway';
 import { hasOption } from './args.js';
 import { readTailLines } from './file-utils.js';
 import { memoryCommand } from './memory.js';
 import { readConfig, setDefaultProfile } from './config.js';
+import { runsCommand } from './runs-command.js';
 import { tmuxCommand } from './tmux-command.js';
 import {
   accent,
@@ -116,6 +132,61 @@ function parseGlobalFlags(argv: string[]): ParsedGlobalFlags {
 }
 
 const PI_PACKAGE_NAME = '@mariozechner/pi-coding-agent';
+const DEFAULT_WEB_UI_PORT = 3741;
+
+interface WebUiConfig {
+  port: number;
+}
+
+function getWebUiConfigFilePath(): string {
+  const explicit = process.env.PERSONAL_AGENT_WEB_CONFIG_FILE;
+  if (explicit && explicit.trim().length > 0) {
+    return resolve(explicit);
+  }
+
+  return join(homedir(), '.config', 'personal-agent', 'web.json');
+}
+
+function normalizeWebUiPort(value: unknown, fallback = DEFAULT_WEB_UI_PORT): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  const parsed = Math.floor(value);
+  return parsed > 0 && parsed <= 65535 ? parsed : fallback;
+}
+
+function readWebUiConfig(): WebUiConfig {
+  const filePath = getWebUiConfigFilePath();
+  if (!existsSync(filePath)) {
+    return { port: DEFAULT_WEB_UI_PORT };
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(filePath, 'utf-8')) as { port?: unknown };
+    return {
+      port: normalizeWebUiPort(parsed.port),
+    };
+  } catch {
+    return { port: DEFAULT_WEB_UI_PORT };
+  }
+}
+
+function writeWebUiConfig(config: WebUiConfig): void {
+  const filePath = getWebUiConfigFilePath();
+  mkdirSync(dirname(filePath), { recursive: true });
+  writeFileSync(filePath, `${JSON.stringify({ port: normalizeWebUiPort(config.port) }, null, 2)}\n`);
+}
+
+function getWebUiServiceOptions(overrides: WebUiServiceOptions = {}): Required<WebUiServiceOptions> {
+  const repoRoot = overrides.repoRoot ?? getRepoRoot();
+  const port = overrides.port ?? readWebUiConfig().port;
+  return { repoRoot, port };
+}
+
+function resolveWebUiLogFile(): string {
+  return join(resolveStatePaths().root, 'web', 'logs', 'web.log');
+}
 
 interface PiCommandInvocation {
   command: string;
@@ -931,19 +1002,30 @@ async function runCommand(args: string[]): Promise<number> {
   return runPi(parsed.profileName, parsed.piArgs);
 }
 
-async function profileCommand(args: string[]): Promise<number> {
-  const [subcommand, value] = args;
-
-  if (!subcommand) {
-    console.log(section('Profile commands'));
-    console.log('');
-    console.log(`Usage: pa profile [list|show|use]
+function printProfileHelp(): void {
+  console.log(section('Profile commands'));
+  console.log('');
+  console.log(`Usage: pa profile [list|show|use|help]
 
 Commands:
   list           List available profiles
   show [name]    Show profile details
   use <name>     Set default profile
+  help           Show profile help
 `);
+}
+
+async function profileCommand(args: string[]): Promise<number> {
+  const [subcommand, value] = args;
+
+  if (!subcommand) {
+    printProfileHelp();
+    return 0;
+  }
+
+  if (isCliHelpToken(subcommand)) {
+    ensureNoExtraCommandArgs(args.slice(1), 'pa profile help');
+    printProfileHelp();
     return 0;
   }
 
@@ -1259,7 +1341,7 @@ async function daemonCommand(args: string[]): Promise<number> {
     return 0;
   }
 
-  if (subcommand === 'help' || subcommand === '--help' || subcommand === '-h') {
+  if (isCliHelpToken(subcommand)) {
     ensureNoExtraCommandArgs(rest, 'pa daemon help');
     printDaemonHelp();
     return 0;
@@ -1268,7 +1350,7 @@ async function daemonCommand(args: string[]): Promise<number> {
   if (subcommand === 'service') {
     const [rawAction, ...serviceArgs] = rest;
 
-    if (!rawAction || rawAction === 'help' || rawAction === '--help' || rawAction === '-h') {
+    if (!rawAction || isCliHelpToken(rawAction)) {
       ensureNoExtraCommandArgs(serviceArgs, 'pa daemon service help');
       printDaemonServiceHelp();
       return 0;
@@ -1351,6 +1433,10 @@ function ensureNoExtraCommandArgs(args: string[], usage: string): void {
   if (args.length > 0) {
     throw new Error(`Usage: ${usage}`);
   }
+}
+
+function isCliHelpToken(value: string | undefined): boolean {
+  return value === 'help' || value === '--help' || value === '-h';
 }
 
 interface UpdateOptions {
@@ -1489,9 +1575,14 @@ interface RestartSummary {
   restartedGatewayServices: string[];
   skippedGatewayServices: string[];
   daemonStatus: string;
+  webUiStatus: string;
 }
 
-async function restartBackgroundServices(): Promise<RestartSummary> {
+async function restartBackgroundServices(options: {
+  webUiStrategy?: 'restart' | 'blue-green';
+  repoRoot?: string;
+  webUiPort?: number;
+} = {}): Promise<RestartSummary> {
   const daemonSpinner = spinner('Restarting personal-agentd');
   daemonSpinner.start();
 
@@ -1506,6 +1597,7 @@ async function restartBackgroundServices(): Promise<RestartSummary> {
 
   let serviceManagerAvailable = true;
   let daemonStatus = 'restarted (mode: detached; managed service not installed)';
+  let webUiStatus = 'not installed';
 
   try {
     const managedDaemonService = restartManagedDaemonServiceIfInstalled();
@@ -1517,9 +1609,53 @@ async function restartBackgroundServices(): Promise<RestartSummary> {
     if (isMissingServiceManagerError(error)) {
       serviceManagerAvailable = false;
       daemonStatus = 'restarted (mode: detached; service manager unavailable)';
+      webUiStatus = 'skipped (service manager unavailable)';
     } else {
       throw new Error(`Unable to reconcile managed daemon service: ${(error as Error).message}`);
     }
+  }
+
+  if (serviceManagerAvailable) {
+    const webUiOptions = getWebUiServiceOptions({
+      repoRoot: options.repoRoot,
+      port: options.webUiPort,
+    });
+    const useBlueGreen = options.webUiStrategy === 'blue-green';
+    const webUiSpinner = spinner(useBlueGreen ? 'Deploying managed web UI (blue/green)' : 'Restarting managed web UI service');
+    webUiSpinner.start();
+
+    try {
+      if (useBlueGreen) {
+        const currentStatus = getWebUiServiceStatus(webUiOptions);
+        if (!currentStatus.installed) {
+          webUiSpinner.succeed('Managed web UI service not installed (skipped)');
+        } else {
+          const swapSummary = await deployManagedWebUiBlueGreen(webUiOptions.repoRoot, webUiOptions.port);
+          webUiSpinner.succeed(`Deployed managed web UI (${swapSummary})`);
+          webUiStatus = `blue/green ${swapSummary}`;
+        }
+      } else {
+        const status = restartWebUiServiceIfInstalled(webUiOptions);
+
+        if (status) {
+          await waitForWebUiHealthy(status.port);
+          webUiSpinner.succeed(`Restarted managed web UI service (${status.url})`);
+          webUiStatus = `restarted (${status.identifier} @ ${status.url})`;
+        } else {
+          webUiSpinner.succeed('Managed web UI service not installed (skipped)');
+        }
+      }
+    } catch (error) {
+      if (isMissingServiceManagerError(error)) {
+        webUiSpinner.succeed('Service manager not available (skipped)');
+        webUiStatus = 'skipped (service manager unavailable)';
+      } else {
+        webUiSpinner.fail(useBlueGreen ? 'Failed to deploy managed web UI' : 'Failed to restart managed web UI service');
+        throw new Error(`Failed to ${useBlueGreen ? 'deploy' : 'restart'} managed web UI service: ${(error as Error).message}`);
+      }
+    }
+  } else {
+    console.log(`  ${warning('Web UI service manager not found; skipping managed web UI restart')}`);
   }
 
   const restartedGatewayServices: string[] = [];
@@ -1565,6 +1701,7 @@ async function restartBackgroundServices(): Promise<RestartSummary> {
     restartedGatewayServices,
     skippedGatewayServices,
     daemonStatus,
+    webUiStatus,
   };
 }
 
@@ -1576,6 +1713,7 @@ async function restartCommand(args: string[]): Promise<number> {
   console.log('');
   console.log(section('Restart summary'));
   console.log(keyValue('daemon', summary.daemonStatus));
+  console.log(keyValue('web ui', summary.webUiStatus));
   console.log(keyValue('gateway services restarted', summary.restartedGatewayServices.length > 0 ? summary.restartedGatewayServices.join(', ') : 'none'));
   console.log(keyValue('gateway services skipped', summary.skippedGatewayServices.length > 0 ? summary.skippedGatewayServices.join(', ') : 'none'));
 
@@ -1644,7 +1782,11 @@ async function updateCommand(args: string[]): Promise<number> {
     console.log(dim(buildOutput));
   }
 
-  const summary = await restartBackgroundServices();
+  const summary = await restartBackgroundServices({
+    webUiStrategy: 'blue-green',
+    repoRoot,
+    webUiPort: getWebUiServiceOptions({ repoRoot }).port,
+  });
 
   console.log('');
   console.log(section('Update summary'));
@@ -1652,6 +1794,7 @@ async function updateCommand(args: string[]): Promise<number> {
   console.log(keyValue('pi package', options.repoOnly ? 'skipped (--repo-only)' : (piUpdated ? `repo-local (${piVersion})` : 'unknown')));
   console.log(keyValue('build', 'repo packages rebuilt'));
   console.log(keyValue('daemon', summary.daemonStatus));
+  console.log(keyValue('web ui', summary.webUiStatus));
   console.log(keyValue('gateway services restarted', summary.restartedGatewayServices.length > 0 ? summary.restartedGatewayServices.join(', ') : 'none'));
   console.log(keyValue('gateway services skipped', summary.skippedGatewayServices.length > 0 ? summary.skippedGatewayServices.join(', ') : 'none'));
 
@@ -2042,13 +2185,10 @@ function parseTaskListOptions(args: string[]): {
   };
 }
 
-async function tasksCommand(args: string[]): Promise<number> {
-  const [subcommand, ...rest] = args;
-
-  if (!subcommand) {
-    console.log(section('Tasks commands'));
-    console.log('');
-    console.log(`Usage: pa tasks [list|show|validate|logs]
+function printTasksHelp(): void {
+  console.log(section('Tasks commands'));
+  console.log('');
+  console.log(`Usage: pa tasks [list|show|validate|logs|help]
 
 Commands:
   list [--json] [--status <all|running|active|completed|disabled|pending|error>]
@@ -2056,10 +2196,24 @@ Commands:
   show <id> [--json]       Show one task definition and runtime state
   validate [--all|file]    Validate task file frontmatter and prompt body
   logs <id> [--tail <n>]   Show latest task run log (default: 80 lines)
+  help                     Show tasks help
 `);
 
-    const config = loadDaemonConfig();
-    console.log(keyValue('Task directory', config.modules.tasks.taskDir));
+  const config = loadDaemonConfig();
+  console.log(keyValue('Task directory', config.modules.tasks.taskDir));
+}
+
+async function tasksCommand(args: string[]): Promise<number> {
+  const [subcommand, ...rest] = args;
+
+  if (!subcommand) {
+    printTasksHelp();
+    return 0;
+  }
+
+  if (isCliHelpToken(subcommand)) {
+    ensureNoExtraCommandArgs(rest, 'pa tasks help');
+    printTasksHelp();
     return 0;
   }
 
@@ -2955,8 +3109,36 @@ function resolveInboxActivityEntry(state: ReturnType<typeof loadInboxState>, sel
   return matches[0] ?? null;
 }
 
+function printInboxHelp(): void {
+  console.log(section('Inbox commands'));
+  console.log('');
+  console.log(`Usage: pa inbox [list|show|create|read|unread|delete|help] [args...]
+
+Commands:
+  list [--json] [--limit <count>] [--all|--read|--unread] [--activities|--conversations]
+                           List inbox items (default when no subcommand is provided)
+  show <selector> [--json] Show one inbox activity or conversation attention item
+  create <summary> [options]
+                           Create a standalone inbox activity entry
+  read <selector>... [--all] [--json]
+                           Mark inbox items as read
+  unread <selector>... [--all] [--json]
+                           Mark inbox items as unread
+  delete <activity-selector>... [--json]
+                           Delete inbox activity entries
+  help                     Show inbox help
+`);
+}
+
 async function inboxCommand(args: string[]): Promise<number> {
   const [subcommand, ...rest] = args;
+
+  if (isCliHelpToken(subcommand)) {
+    ensureNoExtraCommandArgs(rest, 'pa inbox help');
+    printInboxHelp();
+    return 0;
+  }
+
   const treatAsList = !subcommand || subcommand === 'list' || subcommand.startsWith('--');
   const effectiveSubcommand = treatAsList ? 'list' : subcommand;
 
@@ -3420,20 +3602,346 @@ async function inboxCommand(args: string[]): Promise<number> {
   throw new Error(`Unknown inbox subcommand: ${effectiveSubcommand}`);
 }
 
-async function uiCommand(args: string[]): Promise<number> {
-  const port = (() => {
-    const idx = args.indexOf('--port');
-    if (idx !== -1 && args[idx + 1]) {
-      return parseInt(args[idx + 1] as string, 10);
+function parseNumericOption(
+  args: string[],
+  optionName: string,
+  fallback: number,
+  usage: string,
+): { value: number; rest: string[] } {
+  const rest: string[] = [];
+  let value = fallback;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+
+    if (arg !== optionName) {
+      rest.push(arg);
+      continue;
     }
-    return 3741;
-  })();
 
-  const openBrowser = hasOption(args, '--open');
+    const rawValue = args[index + 1];
+    if (!rawValue) {
+      throw new Error(`Usage: ${usage}`);
+    }
+
+    const parsed = Number.parseInt(rawValue, 10);
+    if (!Number.isInteger(parsed) || parsed <= 0 || parsed > 65535) {
+      throw new Error(`Usage: ${usage}`);
+    }
+
+    value = parsed;
+    index += 1;
+  }
+
+  return { value, rest };
+}
+
+function openWebUiInBrowser(url: string): void {
+  const command = process.platform === 'darwin'
+    ? 'open'
+    : process.platform === 'linux'
+      ? 'xdg-open'
+      : undefined;
+
+  if (!command) {
+    return;
+  }
+
+  spawnSync(command, [url], { stdio: 'ignore' });
+}
+
+async function waitForWebUiHealthy(port: number, timeoutMs = 30_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let lastError = 'timed out';
+
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/api/status`, {
+        signal: AbortSignal.timeout(2_000),
+      });
+
+      if (response.ok) {
+        return;
+      }
+
+      lastError = `HTTP ${response.status}`;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 500));
+  }
+
+  throw new Error(`Web UI health check failed on http://localhost:${port}: ${lastError}`);
+}
+
+interface WebUiCandidateHandle {
+  child: ReturnType<typeof spawn>;
+  release: WebUiReleaseSummary;
+  port: number;
+  logFile: string;
+}
+
+function resolveWebUiCandidateLogFile(slot: WebUiReleaseSummary['slot']): string {
+  return join(resolveStatePaths().root, 'web', 'logs', `candidate-${slot}.log`);
+}
+
+function startWebUiCandidateProcess(release: WebUiReleaseSummary, port: number): WebUiCandidateHandle {
+  const logFile = resolveWebUiCandidateLogFile(release.slot);
+  mkdirSync(dirname(logFile), { recursive: true });
+  writeFileSync(logFile, '');
+
+  const child = spawn(process.execPath, [release.serverEntryFile], {
+    cwd: release.sourceRepoRoot,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: {
+      ...process.env,
+      PA_WEB_PORT: String(port),
+      PA_WEB_DIST: release.distDir,
+      PERSONAL_AGENT_REPO_ROOT: release.sourceRepoRoot,
+      PERSONAL_AGENT_WEB_SLOT: release.slot,
+    },
+  });
+
+  child.stdout?.on('data', (chunk) => {
+    writeFileSync(logFile, String(chunk), { flag: 'a' });
+  });
+  child.stderr?.on('data', (chunk) => {
+    writeFileSync(logFile, String(chunk), { flag: 'a' });
+  });
+
+  return {
+    child,
+    release,
+    port,
+    logFile,
+  };
+}
+
+async function stopWebUiCandidateProcess(handle: WebUiCandidateHandle): Promise<void> {
+  if (handle.child.exitCode !== null || handle.child.killed) {
+    return;
+  }
+
+  handle.child.kill('SIGTERM');
+
+  await Promise.race([
+    new Promise<void>((resolvePromise) => {
+      handle.child.once('exit', () => resolvePromise());
+      handle.child.once('close', () => resolvePromise());
+    }),
+    new Promise<void>((resolvePromise) => setTimeout(resolvePromise, 2_000)),
+  ]);
+
+  if (handle.child.exitCode === null && !handle.child.killed) {
+    handle.child.kill('SIGKILL');
+  }
+}
+
+async function validateWebUiReleaseCandidate(release: WebUiReleaseSummary, stablePort: number): Promise<{ port: number; logFile: string }> {
+  const port = getWebUiSlotHealthPort(stablePort, release.slot);
+  const handle = startWebUiCandidateProcess(release, port);
+
+  try {
+    await Promise.race([
+      waitForWebUiHealthy(port, 30_000),
+      new Promise<never>((_, reject) => {
+        handle.child.once('exit', (code, signal) => {
+          reject(new Error(`Candidate web UI exited before becoming healthy (code=${code ?? 'null'} signal=${signal ?? 'none'})`));
+        });
+      }),
+    ]);
+
+    return {
+      port,
+      logFile: handle.logFile,
+    };
+  } catch (error) {
+    const tail = existsSync(handle.logFile) ? readTailLines(handle.logFile, 40) : '';
+    const suffix = tail.trim().length > 0 ? `\n\nCandidate log tail (${handle.logFile}):\n${tail}` : '';
+    throw new Error(`${error instanceof Error ? error.message : String(error)}${suffix}`);
+  } finally {
+    await stopWebUiCandidateProcess(handle);
+  }
+}
+
+async function deployManagedWebUiBlueGreen(repoRoot: string, port: number): Promise<string> {
+  const deployment = getWebUiDeploymentSummary({ stablePort: port });
+  const nextSlot = getInactiveWebUiSlot(deployment.activeSlot);
+  const release = stageWebUiRelease({ repoRoot, slot: nextSlot, stablePort: port });
+
+  await validateWebUiReleaseCandidate(release, port);
+  activateWebUiSlot({ slot: nextSlot, stablePort: port });
+  installWebUiService({ repoRoot, port });
+  await waitForWebUiHealthy(port, 30_000);
+
+  const nextDeployment = getWebUiDeploymentSummary({ stablePort: port });
+  return `swapped ${deployment.activeSlot ?? 'none'} → ${nextSlot}${nextDeployment.activeRelease?.revision ? ` (${nextDeployment.activeRelease.revision})` : ''}`;
+}
+
+function printWebUiHelp(): void {
+  console.log(section('Web UI'));
+  console.log('');
+  console.log('Commands:');
+  console.log('  pa ui help                                    Show web UI help');
+  console.log('  pa ui [--open] [--port <port>]                Start the web UI in the foreground');
+  console.log('  pa ui logs [--tail <count>]                   Show recent managed web UI logs');
+  console.log('  pa ui service help                            Show web UI service help');
+  console.log('  pa ui service install [--port <port>]         Install and start managed web UI service');
+  console.log('  pa ui service status [--port <port>]          Show managed web UI service status');
+  console.log('  pa ui service start [--port <port>]           Start managed web UI service');
+  console.log('  pa ui service stop [--port <port>]            Stop managed web UI service');
+  console.log('  pa ui service restart [--port <port>]         Restart managed web UI service');
+  console.log('  pa ui service uninstall [--port <port>]       Stop and remove managed web UI service');
+  console.log('');
+  console.log(`  ${formatNextStep('pa ui service install')}`);
+}
+
+function printWebUiServiceHelp(): void {
+  console.log(section('Web UI service'));
+  console.log('');
+  console.log('Commands:');
+  console.log('  pa ui service help                            Show web UI service help');
+  console.log('  pa ui service install [--port <port>]         Install and start managed web UI service');
+  console.log('  pa ui service status [--port <port>]          Show managed web UI service status');
+  console.log('  pa ui service start [--port <port>]           Start managed web UI service');
+  console.log('  pa ui service stop [--port <port>]            Stop managed web UI service');
+  console.log('  pa ui service restart [--port <port>]         Restart managed web UI service');
+  console.log('  pa ui service uninstall [--port <port>]       Stop and remove managed web UI service');
+  console.log('');
+  console.log('Updates use blue/green staging automatically when the managed web UI service is installed.');
+  console.log('');
+  console.log(keyValue('Supported platforms', 'macOS launchd, Linux systemd --user'));
+  console.log(keyValue('Config file', getWebUiConfigFilePath()));
+  console.log(keyValue('Default port', String(readWebUiConfig().port)));
+  console.log(keyValue('Log file', resolveWebUiLogFile()));
+  console.log('');
+  console.log(`  ${formatNextStep('pa ui service install')}`);
+}
+
+function printWebUiServiceStatus(status: WebUiServiceStatus): void {
+  console.log(section('Web UI service'));
+  console.log('');
+  console.log(keyValue('Service', status.identifier));
+  console.log(keyValue('Manifest', status.manifestPath));
+  console.log(keyValue('Installed', status.installed ? 'yes' : 'no'));
+  console.log(keyValue('Running', status.running ? 'yes' : 'no'));
+  console.log(keyValue('Repo', status.repoRoot));
+  console.log(keyValue('Port', String(status.port)));
+  console.log(keyValue('URL', status.url));
+
+  if (status.deployment?.activeSlot) {
+    console.log(keyValue('Active slot', status.deployment.activeSlot));
+  }
+  if (status.deployment?.activeRelease?.revision) {
+    console.log(keyValue('Active release', status.deployment.activeRelease.revision));
+  }
+  if (status.deployment?.inactiveRelease?.revision || status.deployment?.inactiveRelease?.slot) {
+    console.log(keyValue('Inactive slot', [
+      status.deployment.inactiveRelease?.slot,
+      status.deployment.inactiveRelease?.revision,
+    ].filter(Boolean).join(' · ')));
+  }
+
+  if (status.logFile) {
+    console.log(keyValue('Log file', status.logFile));
+  }
+
+  if (!status.installed) {
+    console.log('');
+    console.log(`  ${formatNextStep('pa ui service install')}`);
+  }
+}
+
+function showWebUiLogs(args: string[]): void {
+  const parsed = parseNumericOption(args, '--tail', 80, 'pa ui logs [--tail <count>]');
+  ensureNoExtraCommandArgs(parsed.rest, 'pa ui logs [--tail <count>]');
+
+  const logFile = resolveWebUiLogFile();
+
+  console.log('');
+  console.log(section('Web UI logs'));
+  console.log(keyValue('Log file', logFile));
+
+  if (!existsSync(logFile)) {
+    console.log(dim('No web UI log file found yet. Install and run the managed service with `pa ui service install` or start the UI and inspect stdout directly.'));
+    return;
+  }
+
+  const tail = readTailLines(logFile, parsed.value);
+  if (tail.trim().length === 0) {
+    console.log(dim('Log file is empty.'));
+    return;
+  }
+
+  console.log('');
+  console.log(tail);
+}
+
+async function runWebUiServiceAction(action: string, args: string[]): Promise<void> {
+  const parsed = parseNumericOption(args, '--port', readWebUiConfig().port, `pa ui service ${action} [--port <port>]`);
+  ensureNoExtraCommandArgs(parsed.rest, `pa ui service ${action} [--port <port>]`);
+
+  const options = getWebUiServiceOptions({ port: parsed.value });
+
+  if (action === 'install') {
+    writeWebUiConfig({ port: options.port ?? DEFAULT_WEB_UI_PORT });
+    const service = installWebUiService(options);
+    await waitForWebUiHealthy(service.port);
+
+    console.log(success('Installed managed web UI service'));
+    console.log(keyValue('Service', service.identifier));
+    console.log(keyValue('Manifest', service.manifestPath));
+    console.log(keyValue('URL', service.url));
+    if (service.logFile) {
+      console.log(keyValue('Log file', service.logFile));
+    }
+    console.log(`  ${formatNextStep('pa ui service status')}`);
+    return;
+  }
+
+  if (action === 'status') {
+    printWebUiServiceStatus(getWebUiServiceStatus(options));
+    return;
+  }
+
+  if (action === 'start') {
+    const service = startWebUiService(options);
+    await waitForWebUiHealthy(service.port);
+    console.log(success(`Started managed web UI service on ${service.url}`));
+    return;
+  }
+
+  if (action === 'stop') {
+    const service = stopWebUiService(options);
+    console.log(success(`Stopped managed web UI service (${service.identifier})`));
+    return;
+  }
+
+  if (action === 'restart') {
+    const service = restartWebUiService(options);
+    await waitForWebUiHealthy(service.port);
+    console.log(success(`Restarted managed web UI service on ${service.url}`));
+    return;
+  }
+
+  const removed = uninstallWebUiService(options);
+  console.log(success('Removed managed web UI service'));
+  console.log(keyValue('Service', removed.identifier));
+  console.log(keyValue('Manifest', removed.manifestPath));
+  if (removed.logFile) {
+    console.log(keyValue('Log file', removed.logFile));
+  }
+  console.log(`  ${formatNextStep('pa ui service install')}`);
+}
+
+async function startForegroundWebUi(args: string[]): Promise<number> {
+  const portParse = parseNumericOption(args, '--port', readWebUiConfig().port, 'pa ui [--open] [--port <port>]');
+  const openBrowser = hasOption(portParse.rest, '--open');
+  const remainingArgs = portParse.rest.filter((arg) => arg !== '--open');
+  ensureNoExtraCommandArgs(remainingArgs, 'pa ui [--open] [--port <port>]');
+
   const repoRoot = getRepoRoot();
-  const config = readConfig();
-  const profile = config.defaultProfile;
-
   const serverPath = join(repoRoot, 'packages', 'web', 'dist-server', 'index.js');
   const distPath = join(repoRoot, 'packages', 'web', 'dist');
 
@@ -3443,26 +3951,65 @@ async function uiCommand(args: string[]): Promise<number> {
     return 1;
   }
 
+  const url = `http://localhost:${portParse.value}`;
+
   if (openBrowser) {
     setTimeout(() => {
-      spawnSync('open', [`http://localhost:${port}`], { stdio: 'inherit' });
+      openWebUiInBrowser(url);
     }, 1200);
   }
 
-  console.log(success(`Starting web UI on http://localhost:${port}`));
+  console.log(success(`Starting web UI on ${url}`));
 
   const result = spawnSync(process.execPath, [serverPath], {
     stdio: 'inherit',
     env: {
       ...process.env,
-      PA_WEB_PORT: String(port),
+      PA_WEB_PORT: String(portParse.value),
       PA_WEB_DIST: distPath,
       PERSONAL_AGENT_REPO_ROOT: repoRoot,
-      PERSONAL_AGENT_ACTIVE_PROFILE: profile,
     },
   });
 
   return result.status ?? 0;
+}
+
+async function uiCommand(args: string[]): Promise<number> {
+  const [subcommand, ...rest] = args;
+
+  if (!subcommand) {
+    return startForegroundWebUi(args);
+  }
+
+  if (isCliHelpToken(subcommand)) {
+    ensureNoExtraCommandArgs(rest, 'pa ui help');
+    printWebUiHelp();
+    return 0;
+  }
+
+  if (subcommand === 'logs') {
+    showWebUiLogs(rest);
+    return 0;
+  }
+
+  if (subcommand === 'service') {
+    const [action, ...serviceArgs] = rest;
+
+    if (!action || isCliHelpToken(action)) {
+      ensureNoExtraCommandArgs(serviceArgs, 'pa ui service help');
+      printWebUiServiceHelp();
+      return 0;
+    }
+
+    if (!['install', 'status', 'start', 'stop', 'restart', 'uninstall'].includes(action)) {
+      throw new Error(`Unknown ui service subcommand: ${action}`);
+    }
+
+    await runWebUiServiceAction(action, serviceArgs);
+    return 0;
+  }
+
+  return startForegroundWebUi(args);
 }
 
 type CommandHandler = (args: string[]) => Promise<number>;
@@ -3472,6 +4019,7 @@ interface CliCommandDefinition {
   description: string;
   usage?: string;
   helpText?: string;
+  disableBuiltInHelp?: boolean;
   run: CommandHandler;
 }
 
@@ -3498,8 +4046,9 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     },
     {
       name: 'profile',
-      usage: 'profile [args...]',
+      usage: 'profile [list|show|use|help] [args...]',
       description: 'Manage profile settings',
+      disableBuiltInHelp: true,
       run: profileCommand,
     },
     {
@@ -3517,7 +4066,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     {
       name: 'restart',
       usage: 'restart [args...]',
-      description: 'Restart daemon and managed gateway services',
+      description: 'Restart daemon, managed web UI, and managed gateway services',
       run: restartCommand,
     },
     {
@@ -3531,36 +4080,49 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       usage: 'daemon [status|start|stop|restart|logs|service|help] [args...]',
       description: 'Manage personal-agent daemon',
       helpText: DAEMON_HELP_TEXT,
+      disableBuiltInHelp: true,
       run: daemonCommand,
     },
     {
       name: 'tasks',
-      usage: 'tasks [list|show|validate|logs] [args...]',
+      usage: 'tasks [list|show|validate|logs|help] [args...]',
       description: 'Inspect and validate scheduled daemon tasks',
+      disableBuiltInHelp: true,
       run: tasksCommand,
     },
     {
       name: 'inbox',
-      usage: 'inbox [list|show|create|read|unread|delete] [args...]',
+      usage: 'inbox [list|show|create|read|unread|delete|help] [args...]',
       description: 'Inspect and manage activity/inbox items for the active profile',
+      disableBuiltInHelp: true,
       run: inboxCommand,
     },
     {
       name: 'ui',
-      usage: 'ui [args...]',
-      description: 'Start the personal agent web UI',
+      usage: 'ui [logs|service|help] [args...]',
+      description: 'Start and manage the personal agent web UI',
+      disableBuiltInHelp: true,
       run: uiCommand,
     },
     {
       name: 'memory',
-      usage: 'memory [list|find|show|new|lint] [args...]',
+      usage: 'memory [list|find|show|new|lint|help] [args...]',
       description: 'Inspect profile memory docs',
+      disableBuiltInHelp: true,
       run: memoryCommand,
+    },
+    {
+      name: 'runs',
+      usage: 'runs [list|show|logs|help] [args...]',
+      description: 'Inspect durable background runs',
+      disableBuiltInHelp: true,
+      run: runsCommand,
     },
     {
       name: 'tmux',
       usage: 'tmux [list|inspect|logs|stop|send|run|clean|help] [args...]',
       description: 'Manage agent-owned tmux sessions',
+      disableBuiltInHelp: true,
       run: tmuxCommand,
     },
 
@@ -3575,6 +4137,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       name: command.name,
       usage: normalizeCommandUsage(command),
       description: command.description,
+      disableBuiltInHelp: command.name === 'gateway',
       run: command.run,
     });
   });
@@ -3661,6 +4224,8 @@ Examples:
   pa memory show runpod
   pa memory new quick-note --title "Quick Note" --summary "What this doc tracks." --tags notes
   pa memory lint
+  pa runs list
+  pa runs show <id>
   pa tmux list
   pa tmux inspect <session>
   pa tmux clean --dry-run
@@ -3685,6 +4250,10 @@ Examples:
         const args = normalizeActionArgs(actionArgs);
         setExitCode(await definition.run(args));
       });
+
+    if (definition.disableBuiltInHelp) {
+      command.helpOption(false);
+    }
 
     if (definition.helpText) {
       command.addHelpText('after', definition.helpText);
@@ -3723,7 +4292,7 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
     return exitCode;
   } catch (error) {
     if (error instanceof CommanderError) {
-      if (error.code === 'commander.helpDisplayed') {
+      if (error.code === 'commander.helpDisplayed' || error.code === 'commander.help') {
         return 0;
       }
 

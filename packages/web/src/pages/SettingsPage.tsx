@@ -4,8 +4,8 @@ import { api } from '../api';
 import { useApi } from '../hooks';
 import { resetStoredConversationUiState, resetStoredLayoutPreferences } from '../localSettings';
 import { type Theme, useTheme } from '../theme';
+import type { ModelState } from '../types';
 import { PageHeader, PageHeading, SectionLabel, ToolbarButton, cx } from '../components/ui';
-import type { ThemeMode } from '../types';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50';
 const ACTION_BUTTON_CLASS = 'inline-flex items-center rounded-lg border border-border-subtle bg-base px-3 py-1.5 text-[12px] font-medium text-primary transition-colors hover:bg-surface disabled:opacity-50';
@@ -58,18 +58,10 @@ export function SettingsPage() {
     error: statusError,
     refetch: refetchStatus,
   } = useApi(api.status);
-  const {
-    data: agentThemeState,
-    loading: agentThemeLoading,
-    error: agentThemeLoadError,
-    refetch: refetchAgentTheme,
-  } = useApi(api.agentTheme);
   const [switchingProfile, setSwitchingProfile] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [savingPreference, setSavingPreference] = useState<'model' | 'thinking' | null>(null);
   const [modelError, setModelError] = useState<string | null>(null);
-  const [savingAgentTheme, setSavingAgentTheme] = useState<'mode' | 'dark' | 'light' | null>(null);
-  const [agentThemeError, setAgentThemeError] = useState<string | null>(null);
   const [resetting, setResetting] = useState<'layout' | 'conversation' | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
 
@@ -77,11 +69,10 @@ export function SettingsPage() {
     `theme ${theme}`,
     profileState ? `profile ${profileState.currentProfile}` : null,
     modelState?.currentModel ? `model ${modelState.currentModel}` : null,
-    agentThemeState?.themeMode ? `pi theme ${agentThemeState.themeMode}` : null,
   ].filter(Boolean).join(' · ');
 
   const groupedModels = useMemo(() => {
-    const groups = new Map<string, typeof modelState.models>();
+    const groups = new Map<string, ModelState['models']>();
 
     for (const model of modelState?.models ?? []) {
       const current = groups.get(model.provider) ?? [];
@@ -143,44 +134,11 @@ export function SettingsPage() {
     }
   }
 
-  async function handleAgentThemeChange(
-    input: { themeMode?: ThemeMode; themeDark?: string; themeLight?: string },
-    field: 'mode' | 'dark' | 'light',
-  ) {
-    if (!agentThemeState || savingAgentTheme !== null) {
-      return;
-    }
-
-    if (field === 'mode' && input.themeMode === agentThemeState.themeMode) {
-      return;
-    }
-
-    if (field === 'dark' && input.themeDark === agentThemeState.themeDark) {
-      return;
-    }
-
-    if (field === 'light' && input.themeLight === agentThemeState.themeLight) {
-      return;
-    }
-
-    setAgentThemeError(null);
-    setSavingAgentTheme(field);
-
-    try {
-      await api.updateAgentTheme(input);
-      await refetchAgentTheme({ resetLoading: false });
-    } catch (error) {
-      setAgentThemeError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setSavingAgentTheme(null);
-    }
-  }
-
   async function handleReset(kind: 'layout' | 'conversation') {
     const confirmed = window.confirm(
       kind === 'layout'
         ? 'Reset the saved sidebar and context-rail widths back to defaults?'
-        : 'Clear the saved open-conversation state and unread attention cache?'
+        : 'Clear the saved open-conversation state, unread attention cache, and composer history?'
     );
     if (!confirmed) {
       return;
@@ -210,7 +168,6 @@ export function SettingsPage() {
         void Promise.all([
           refetchProfiles({ resetLoading: false }),
           refetchModels({ resetLoading: false }),
-          refetchAgentTheme({ resetLoading: false }),
           refetchStatus({ resetLoading: false }),
         ]);
       }}>↻ Refresh</ToolbarButton>}>
@@ -238,103 +195,6 @@ export function SettingsPage() {
                 <ThemeButton value="dark" current={theme} onSelect={setTheme} />
               </div>
               <span className="ui-card-meta capitalize">Current theme: {theme}</span>
-            </div>
-          </section>
-
-          <section className="space-y-5 border-t border-border-subtle pt-6">
-            <SectionLabel label="Pi runtime appearance" />
-
-            <div className="grid gap-8 lg:grid-cols-2">
-              <div className="space-y-3 min-w-0">
-                <div className="space-y-1">
-                  <h2 className="text-[15px] font-medium text-primary">Theme mode</h2>
-                  <p className="ui-card-meta max-w-xl">
-                    Controls how the Pi runtime chooses between the configured light and dark themes.
-                  </p>
-                </div>
-
-                {agentThemeLoading && !agentThemeState ? (
-                  <p className="ui-card-meta">Loading Pi theme settings…</p>
-                ) : agentThemeLoadError && !agentThemeState ? (
-                  <p className="text-[12px] text-danger">Failed to load Pi theme settings: {agentThemeLoadError}</p>
-                ) : agentThemeState ? (
-                  <>
-                    <label className="ui-card-meta" htmlFor="settings-agent-theme-mode">Theme mode</label>
-                    <select
-                      id="settings-agent-theme-mode"
-                      value={agentThemeState.themeMode}
-                      onChange={(event) => {
-                        void handleAgentThemeChange({ themeMode: event.target.value as ThemeMode }, 'mode');
-                      }}
-                      disabled={savingAgentTheme !== null}
-                      className={INPUT_CLASS}
-                    >
-                      <option value="system">System</option>
-                      <option value="light">Light</option>
-                      <option value="dark">Dark</option>
-                    </select>
-                    <p className="ui-card-meta">
-                      {savingAgentTheme === 'mode'
-                        ? 'Saving theme mode…'
-                        : `Current mode: ${agentThemeState.themeMode}${agentThemeState.currentTheme ? ` · resolved theme ${agentThemeState.currentTheme}` : ''}`}
-                    </p>
-                  </>
-                ) : null}
-              </div>
-
-              <div className="space-y-3 min-w-0">
-                <div className="space-y-1">
-                  <h2 className="text-[15px] font-medium text-primary">Light / dark theme mapping</h2>
-                  <p className="ui-card-meta max-w-xl">
-                    Picks which Pi theme to use for light mode and dark mode.
-                  </p>
-                </div>
-
-                {agentThemeState ? (
-                  <>
-                    <label className="ui-card-meta" htmlFor="settings-agent-theme-dark">Dark theme</label>
-                    <select
-                      id="settings-agent-theme-dark"
-                      value={agentThemeState.themeDark}
-                      onChange={(event) => {
-                        void handleAgentThemeChange({ themeDark: event.target.value }, 'dark');
-                      }}
-                      disabled={savingAgentTheme !== null || agentThemeState.themes.length === 0}
-                      className={INPUT_CLASS}
-                    >
-                      <option value="">Unset</option>
-                      {agentThemeState.themes.map((themeId) => (
-                        <option key={themeId} value={themeId}>{themeId}</option>
-                      ))}
-                    </select>
-
-                    <label className="ui-card-meta pt-1" htmlFor="settings-agent-theme-light">Light theme</label>
-                    <select
-                      id="settings-agent-theme-light"
-                      value={agentThemeState.themeLight}
-                      onChange={(event) => {
-                        void handleAgentThemeChange({ themeLight: event.target.value }, 'light');
-                      }}
-                      disabled={savingAgentTheme !== null || agentThemeState.themes.length === 0}
-                      className={INPUT_CLASS}
-                    >
-                      <option value="">Unset</option>
-                      {agentThemeState.themes.map((themeId) => (
-                        <option key={themeId} value={themeId}>{themeId}</option>
-                      ))}
-                    </select>
-                    <p className="ui-card-meta">
-                      {savingAgentTheme === 'dark'
-                        ? 'Saving dark theme…'
-                        : savingAgentTheme === 'light'
-                          ? 'Saving light theme…'
-                          : `Dark: ${agentThemeState.themeDark || 'unset'} · Light: ${agentThemeState.themeLight || 'unset'}`}
-                    </p>
-                  </>
-                ) : null}
-
-                {agentThemeError && <p className="text-[12px] text-danger">{agentThemeError}</p>}
-              </div>
             </div>
           </section>
 
@@ -478,7 +338,7 @@ export function SettingsPage() {
               <div className="space-y-2 min-w-0">
                 <h3 className="text-[13px] font-medium text-primary">Conversation UI state</h3>
                 <p className="ui-card-meta">
-                  Clears stored open-tab state and seen message counts in this browser, plus the durable open-tab snapshot stored by the web UI, then reloads the page.
+                  Clears stored open-tab state, seen message counts, and composer history in this browser, plus the durable open-tab snapshot stored by the web UI, then reloads the page.
                 </p>
                 <button
                   type="button"

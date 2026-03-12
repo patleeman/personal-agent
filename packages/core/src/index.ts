@@ -29,6 +29,9 @@ export * from './deferred-resume.js';
 // Conversation ↔ project link exports
 export * from './conversation-project-links.js';
 
+// Conversation artifact exports
+export * from './conversation-artifacts.js';
+
 // Project artifact exports
 export * from './project-artifacts.js';
 

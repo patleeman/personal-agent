@@ -1,0 +1,118 @@
+import { mkdtempSync } from 'fs';
+import { rm } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { runCli } from './index.js';
+
+const originalEnv = process.env;
+const tempDirs: string[] = [];
+
+function createTempDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  tempDirs.push(dir);
+  return dir;
+}
+
+function captureLogs(): string[] {
+  const logs: string[] = [];
+  vi.spyOn(console, 'log').mockImplementation((...parts: unknown[]) => {
+    logs.push(parts.map((part) => String(part ?? '')).join(' '));
+  });
+  return logs;
+}
+
+beforeEach(() => {
+  process.env = {
+    ...originalEnv,
+    PERSONAL_AGENT_CONFIG_FILE: join(createTempDir('pa-config-'), 'config.json'),
+    PERSONAL_AGENT_DAEMON_CONFIG: join(createTempDir('pa-daemon-config-'), 'daemon.json'),
+    PERSONAL_AGENT_STATE_ROOT: createTempDir('pa-state-'),
+    PERSONAL_AGENT_DISABLE_DAEMON_EVENTS: '1',
+    PI_SESSION_DIR: createTempDir('pi-session-'),
+  };
+});
+
+afterEach(async () => {
+  process.env = originalEnv;
+  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  vi.restoreAllMocks();
+});
+
+describe('subcommand help discoverability', () => {
+  it.each([
+    {
+      argv: ['profile', '--help'],
+      expected: ['Profile commands', 'Usage: pa profile [list|show|use|help]', 'list'],
+    },
+    {
+      argv: ['tasks', '--help'],
+      expected: ['Tasks commands', 'Usage: pa tasks [list|show|validate|logs|help]', 'validate [--all|file]'],
+    },
+    {
+      argv: ['memory', '--help'],
+      expected: ['Memory commands', 'Usage: pa memory [list|find|show|new|lint|help]', 'new <id> --title <title>'],
+    },
+    {
+      argv: ['inbox', '--help'],
+      expected: ['Inbox commands', 'Usage: pa inbox [list|show|create|read|unread|delete|help] [args...]', 'create <summary> [options]'],
+    },
+    {
+      argv: ['runs', '--help'],
+      expected: ['Runs commands', 'Usage: pa runs [list|show|logs|help] [args...]', 'show <id> [--json]'],
+    },
+    {
+      argv: ['tmux', '--help'],
+      expected: ['Tmux commands', 'Usage: pa tmux [list|inspect|logs|stop|send|run|clean|help] [args...]', 'run <task-slug>'],
+    },
+    {
+      argv: ['daemon', '--help'],
+      expected: ['Daemon', 'pa daemon status [--json]', 'pa daemon service [install|status|uninstall|help]'],
+    },
+    {
+      argv: ['daemon', 'service', '--help'],
+      expected: ['Daemon service', 'pa daemon service install', 'Supported platforms'],
+    },
+    {
+      argv: ['gateway', '--help'],
+      expected: ['Gateway commands', 'pa gateway help', 'pa gateway telegram [setup|start|help]'],
+    },
+    {
+      argv: ['gateway', 'service', '--help'],
+      expected: ['Gateway service', 'pa gateway service install [provider]', 'Supported platforms'],
+    },
+    {
+      argv: ['gateway', 'telegram', '--help'],
+      expected: ['Gateway · Telegram', 'pa gateway telegram setup', 'pa gateway service install telegram'],
+    },
+  ])('shows useful help for $argv', async ({ argv, expected }) => {
+    const logs = captureLogs();
+
+    const exitCode = await runCli(argv);
+
+    expect(exitCode).toBe(0);
+    const output = logs.join('\n');
+    for (const snippet of expected) {
+      expect(output).toContain(snippet);
+    }
+  });
+
+  it('treats `pa help ui` as success without printing a CLI error', async () => {
+    let stdout = '';
+    const errors: string[] = [];
+
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk: unknown) => {
+      stdout += String(chunk);
+      return true;
+    });
+    vi.spyOn(console, 'error').mockImplementation((...parts: unknown[]) => {
+      errors.push(parts.map((part) => String(part ?? '')).join(' '));
+    });
+
+    const exitCode = await runCli(['help', 'ui']);
+
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain('Usage: pa ui');
+    expect(errors).toEqual([]);
+  });
+});

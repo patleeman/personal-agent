@@ -3,7 +3,7 @@
  * Tests IPC request/response flows including malformed requests
  */
 
-import { mkdtempSync, writeFileSync, existsSync, readFileSync } from 'fs';
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -13,8 +13,10 @@ import { randomUUID } from 'crypto';
 import { PersonalAgentDaemon } from './server.js';
 import type { DaemonConfig } from './config.js';
 import { resolveDaemonPaths } from './paths.js';
+import { createDurableRunManifest, createInitialDurableRunStatus, resolveDurableRunsRoot, resolveDurableRunPaths, saveDurableRunManifest, saveDurableRunStatus } from './runs/store.js';
 
 const tempDirs: string[] = [];
+const originalEnv = { ...process.env };
 
 function createTempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
@@ -89,11 +91,16 @@ describe('daemon IPC integration', () => {
 
   beforeEach(async () => {
     const tempDir = createTempDir('daemon-test-');
+    process.env = {
+      ...originalEnv,
+      PERSONAL_AGENT_STATE_ROOT: join(tempDir, 'state'),
+    };
     socketPath = join(tempDir, 'test.sock');
     config = createTestConfig(socketPath);
   });
 
   afterEach(async () => {
+    process.env = { ...originalEnv };
     if (daemon) {
       await daemon.stop();
       daemon = null;
@@ -132,6 +139,103 @@ describe('daemon IPC integration', () => {
     expect(response.result).toHaveProperty('startedAt');
     expect(response.result).toHaveProperty('queue');
     expect(response.result).toHaveProperty('modules');
+  });
+
+  it('lists durable runs with recovery metadata', async () => {
+    const daemonPaths = resolveDaemonPaths(config.ipc.socketPath);
+    const runsRoot = resolveDurableRunsRoot(daemonPaths.root);
+    const runPaths = resolveDurableRunPaths(runsRoot, 'run-continue');
+    mkdirSync(runPaths.root, { recursive: true, mode: 0o700 });
+    saveDurableRunManifest(runPaths.manifestPath, createDurableRunManifest({
+      id: 'run-continue',
+      kind: 'conversation',
+      resumePolicy: 'continue',
+      createdAt: '2026-03-12T18:00:00Z',
+    }));
+    saveDurableRunStatus(runPaths.statusPath, createInitialDurableRunStatus({
+      runId: 'run-continue',
+      status: 'running',
+      createdAt: '2026-03-12T18:00:00Z',
+      activeAttempt: 2,
+    }));
+
+    daemon = new PersonalAgentDaemon(config);
+    await daemon.start();
+
+    const response = await sendRequest(socketPath, {
+      id: `req_${randomUUID()}`,
+      type: 'runs.list',
+    });
+
+    expect(response.ok).toBe(true);
+    expect(response.result).toMatchObject({
+      scannedAt: expect.any(String),
+      summary: {
+        total: 1,
+        recoveryActions: {
+          resume: 1,
+        },
+      },
+      runs: [
+        expect.objectContaining({
+          runId: 'run-continue',
+          recoveryAction: 'resume',
+          problems: [],
+        }),
+      ],
+    });
+  });
+
+  it('returns one durable run by id', async () => {
+    const daemonPaths = resolveDaemonPaths(config.ipc.socketPath);
+    const runsRoot = resolveDurableRunsRoot(daemonPaths.root);
+    const runPaths = resolveDurableRunPaths(runsRoot, 'run-rerun');
+    mkdirSync(runPaths.root, { recursive: true, mode: 0o700 });
+    saveDurableRunManifest(runPaths.manifestPath, createDurableRunManifest({
+      id: 'run-rerun',
+      kind: 'scheduled-task',
+      resumePolicy: 'rerun',
+      createdAt: '2026-03-12T18:00:00Z',
+    }));
+    saveDurableRunStatus(runPaths.statusPath, createInitialDurableRunStatus({
+      runId: 'run-rerun',
+      status: 'interrupted',
+      createdAt: '2026-03-12T18:00:00Z',
+      activeAttempt: 1,
+    }));
+
+    daemon = new PersonalAgentDaemon(config);
+    await daemon.start();
+
+    const response = await sendRequest(socketPath, {
+      id: `req_${randomUUID()}`,
+      type: 'runs.get',
+      runId: 'run-rerun',
+    });
+
+    expect(response.ok).toBe(true);
+    expect(response.result).toMatchObject({
+      scannedAt: expect.any(String),
+      run: expect.objectContaining({
+        runId: 'run-rerun',
+        recoveryAction: 'rerun',
+        problems: [],
+      }),
+    });
+  });
+
+  it('returns an error when a durable run is missing', async () => {
+    daemon = new PersonalAgentDaemon(config);
+    await daemon.start();
+
+    const response = await sendRequest(socketPath, {
+      id: `req_${randomUUID()}`,
+      type: 'runs.get',
+      runId: 'missing-run',
+    });
+
+    expect(response.ok).toBe(false);
+    expect(response.error).toContain('Run not found: missing-run');
   });
 
   it('responds to emit request with valid event', async () => {

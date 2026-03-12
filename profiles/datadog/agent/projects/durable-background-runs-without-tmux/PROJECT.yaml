@@ -1,0 +1,82 @@
+id: durable-background-runs-without-tmux
+createdAt: 2026-03-12T18:43:58.967Z
+updatedAt: 2026-03-12T19:19:14.366Z
+title: Durable background runs without tmux
+description: Replace tmux-based local background orchestration with a daemon-backed durable runs engine. Background work should survive restarts by resuming or rerunning from durable checkpoints and run state, not by keeping processes alive. V1 explicitly excludes mid-token continuation, mid-command shell continuation, and exactly-once tool execution.
+repoRoot: /Users/patrickc.lee/personal/personal-agent
+summary: Build a durable runs substrate in the daemon, move scheduled/background work onto it, adopt the same recovery model for live conversations, and remove tmux as a first-class local orchestration feature.
+status: in_progress
+blockers: []
+currentFocus: Finish durable scheduled-task execution and recovery wiring, then move the web task-run path onto the daemon-backed runs surface.
+recentProgress:
+  - Added a first `pa runs` CLI surface for listing, inspecting, and tailing durable run records from daemon state.
+  - Updated scheduled task execution to create durable run manifests/status/checkpoints/events/output/result artifacts for each task run.
+  - Extended task runtime state to track durable run ids so restart recovery wiring can build on persisted task↔run linkage.
+plan:
+  currentMilestoneId: execute-work
+  milestones:
+    - id: refine-plan
+      title: Refine the plan
+      status: completed
+      summary: Defined the durable runs model, resume policies, IPC direction, conversation recovery model, and the staged tmux migration path.
+    - id: execute-work
+      title: Execute the work
+      status: in_progress
+      summary: Implement the daemon runs substrate, route scheduled/background work through it, migrate conversation recovery onto the same model, and remove tmux-first product surfaces.
+    - id: verify-result
+      title: Verify the result
+      status: pending
+      summary: Verify restart recovery for runs and conversations, durable notifications/logs, and cleanup of local tmux orchestration paths.
+  tasks:
+    - id: define-the-durable-run-state-model
+      status: completed
+      title: Define the durable run state model, checkpoint files, and resume policies
+      milestoneId: refine-plan
+    - id: design-the-daemon-runs-ipc-surface
+      status: completed
+      title: Design the daemon runs IPC surface and recovery flow
+      milestoneId: refine-plan
+    - id: revise-conversation-durability
+      status: completed
+      title: Revise conversation durability design around restart recovery instead of live child-process ownership
+      milestoneId: refine-plan
+    - id: plan-the-tmux-surface-migration-and
+      status: completed
+      title: Plan the tmux surface migration and cleanup path across CLI, gateway, web, docs, and skills
+      milestoneId: refine-plan
+    - id: implement-the-durable-runs-store
+      status: in_progress
+      title: Implement the durable runs store, journal, checkpoints, and recovery scanner
+      milestoneId: execute-work
+    - id: add-runs-ipc-endpoints-and-a
+      status: completed
+      title: Add runs IPC endpoints and a first CLI surface for inspectable background runs
+      milestoneId: execute-work
+    - id: route-scheduled-task-execution
+      status: in_progress
+      title: Route scheduled task execution through the durable runs engine
+      milestoneId: execute-work
+    - id: move-web-task-triggered-background
+      status: pending
+      title: Move web task-triggered background execution onto the daemon
+      milestoneId: execute-work
+    - id: migrate-live-conversations-to-the
+      status: pending
+      title: Migrate live conversations to the restart-recoverable runtime model
+      milestoneId: execute-work
+    - id: remove-tmux-first-local
+      status: pending
+      title: Remove tmux-first local orchestration surfaces after replacement paths are ready
+      milestoneId: execute-work
+    - id: add-restart-recovery-tests-for
+      status: pending
+      title: Add restart-recovery tests for durable runs and scheduled task execution
+      milestoneId: verify-result
+    - id: add-restart-recovery-tests-for-live
+      status: pending
+      title: Add restart-recovery tests for live conversations and snapshot rebuild
+      milestoneId: verify-result
+    - id: verify-tmux-cleanup-and-replacement
+      status: pending
+      title: Verify tmux cleanup and replacement surface parity across CLI, web, gateway, and docs
+      milestoneId: verify-result

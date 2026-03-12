@@ -1,11 +1,17 @@
 import { createServer, type Server, type Socket } from 'net';
-import { existsSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { EventBus } from './event-bus.js';
 import { createDaemonEvent, isDaemonEvent } from './events.js';
 import { parseRequest, serializeResponse, type DaemonRequest } from './ipc-protocol.js';
 import { loadDaemonConfig, type DaemonConfig, type LogLevel } from './config.js';
 import { createBuiltinModules, type DaemonModule, type DaemonModuleContext } from './modules/index.js';
 import { ensureDaemonDirectories, resolveDaemonPaths } from './paths.js';
+import {
+  resolveDurableRunsRoot,
+  scanDurableRun,
+  scanDurableRunsForRecovery,
+  summarizeScannedDurableRuns,
+} from './runs/store.js';
 import type {
   DaemonModuleStatus,
   DaemonPaths,
@@ -13,6 +19,8 @@ import type {
   EventPayload,
   GatewayNotification,
   GatewayNotificationProvider,
+  GetDurableRunResult,
+  ListDurableRunsResult,
 } from './types.js';
 
 interface ModuleRuntime {
@@ -119,6 +127,7 @@ function parseGatewayNotification(event: { id: string; source: string; timestamp
 export class PersonalAgentDaemon {
   private readonly config: DaemonConfig;
   private readonly paths: DaemonPaths;
+  private readonly runsRoot: string;
   private readonly bus: EventBus;
   private readonly startedAt: string;
   private readonly pid: number;
@@ -132,6 +141,7 @@ export class PersonalAgentDaemon {
   constructor(config: DaemonConfig = loadDaemonConfig()) {
     this.config = config;
     this.paths = resolveDaemonPaths(config.ipc.socketPath);
+    this.runsRoot = resolveDurableRunsRoot(this.paths.root);
     this.startedAt = new Date().toISOString();
     this.pid = process.pid;
 
@@ -175,8 +185,11 @@ export class PersonalAgentDaemon {
 
   async start(): Promise<void> {
     ensureDaemonDirectories(this.paths);
+    mkdirSync(this.runsRoot, { recursive: true, mode: 0o700 });
     this.prepareSocket();
     writeFileSync(this.paths.pidFile, String(this.pid));
+
+    this.logDurableRunRecoverySummary('startup');
 
     for (const moduleRuntime of this.modules) {
       await moduleRuntime.module.start(this.createModuleContext(moduleRuntime.module.name));
@@ -372,6 +385,34 @@ export class PersonalAgentDaemon {
       return;
     }
 
+    if (request.type === 'runs.list') {
+      socket.write(serializeResponse({
+        id: request.id,
+        ok: true,
+        result: this.listDurableRuns(),
+      }));
+      return;
+    }
+
+    if (request.type === 'runs.get') {
+      const result = this.getDurableRun(request.runId);
+      if (!result) {
+        socket.write(serializeResponse({
+          id: request.id,
+          ok: false,
+          error: `Run not found: ${request.runId}`,
+        }));
+        return;
+      }
+
+      socket.write(serializeResponse({
+        id: request.id,
+        ok: true,
+        result,
+      }));
+      return;
+    }
+
     if (request.type === 'stop') {
       socket.write(serializeResponse({ id: request.id, ok: true, result: { stopping: true } }));
       setTimeout(() => {
@@ -398,6 +439,51 @@ export class PersonalAgentDaemon {
 
       this.log('debug', `event accepted=${accepted} type=${request.event.type} source=${request.event.source}`);
     }
+  }
+
+  private listDurableRuns(): ListDurableRunsResult {
+    const scannedAt = new Date().toISOString();
+    const runs = scanDurableRunsForRecovery(this.runsRoot);
+
+    return {
+      scannedAt,
+      runs,
+      summary: summarizeScannedDurableRuns(runs),
+    };
+  }
+
+  private getDurableRun(runId: string): GetDurableRunResult | undefined {
+    const run = scanDurableRun(this.runsRoot, runId);
+    if (!run) {
+      return undefined;
+    }
+
+    return {
+      scannedAt: new Date().toISOString(),
+      run,
+    };
+  }
+
+  private logDurableRunRecoverySummary(reason: string): void {
+    const runs = scanDurableRunsForRecovery(this.runsRoot);
+    const summary = summarizeScannedDurableRuns(runs);
+
+    if (summary.total === 0) {
+      this.log('debug', `durable run scan reason=${reason} total=0`);
+      return;
+    }
+
+    this.log(
+      'info',
+      [
+        `durable run scan reason=${reason}`,
+        `total=${summary.total}`,
+        `resume=${summary.recoveryActions.resume}`,
+        `rerun=${summary.recoveryActions.rerun}`,
+        `attention=${summary.recoveryActions.attention}`,
+        `invalid=${summary.recoveryActions.invalid}`,
+      ].join(' '),
+    );
   }
 
   private pullGatewayNotifications(gateway: GatewayNotificationProvider, limit?: number): GatewayNotification[] {

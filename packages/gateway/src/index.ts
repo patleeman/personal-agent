@@ -75,18 +75,28 @@ export {
   SUPPORTED_GATEWAY_PROVIDERS,
   getGatewayServiceStatus,
   getManagedDaemonServiceStatus,
+  getWebUiServiceStatus,
   installGatewayService,
   installManagedDaemonService,
+  installWebUiService,
   restartGatewayService,
   restartGatewayServiceIfInstalled,
   restartManagedDaemonServiceIfInstalled,
+  restartWebUiService,
+  restartWebUiServiceIfInstalled,
   startGatewayService,
   startManagedDaemonService,
+  startWebUiService,
   stopGatewayService,
   stopManagedDaemonService,
+  stopWebUiService,
   uninstallGatewayService,
   uninstallManagedDaemonService,
+  uninstallWebUiService,
   type GatewayServiceStatus,
+  type WebUiServiceInfo,
+  type WebUiServiceOptions,
+  type WebUiServiceStatus,
 } from './service.js';
 export {
   getGatewayConfigFilePath,
@@ -97,6 +107,17 @@ export {
 } from './config.js';
 export { parseAllowlist } from './allowlist.js';
 export { parseGatewayCliArgs } from './cli-helpers.js';
+export {
+  activateWebUiSlot,
+  ensureActiveWebUiRelease,
+  getInactiveWebUiSlot,
+  getWebUiDeploymentSummary,
+  getWebUiSlotHealthPort,
+  stageWebUiRelease,
+  type WebUiDeploymentSummary,
+  type WebUiReleaseSummary,
+  type WebUiSlotName,
+} from './web-ui-deploy.js';
 
 // Logging types for chat flow
 export interface ChatLogEntry {

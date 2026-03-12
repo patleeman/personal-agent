@@ -4,6 +4,7 @@ import {
   closeConversationTab,
   ensureConversationTabOpen,
   readOpenSessionIds,
+  reorderOpenSessionIds,
   replaceOpenConversationTabs,
 } from './sessionTabs';
 
@@ -76,6 +77,33 @@ describe('sessionTabs', () => {
     expect([...replaceOpenConversationTabs([' session-2 ', 'session-1', 'session-2'])]).toEqual(['session-2', 'session-1']);
     expect([...readOpenSessionIds()]).toEqual(['session-2', 'session-1']);
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats reordering as a meaningful tab update', () => {
+    replaceOpenConversationTabs(['session-1', 'session-2', 'session-3']);
+    dispatchEvent.mockReset();
+
+    expect([...replaceOpenConversationTabs(['session-3', 'session-1', 'session-2'])]).toEqual(['session-3', 'session-1', 'session-2']);
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
+    expect([...readOpenSessionIds()]).toEqual(['session-3', 'session-1', 'session-2']);
+  });
+
+  it('reorders session ids around a drop target', () => {
+    expect(reorderOpenSessionIds(['session-1', 'session-2', 'session-3'], 'session-3', 'session-1', 'before')).toEqual([
+      'session-3',
+      'session-1',
+      'session-2',
+    ]);
+    expect(reorderOpenSessionIds(['session-1', 'session-2', 'session-3'], 'session-1', 'session-2', 'after')).toEqual([
+      'session-2',
+      'session-1',
+      'session-3',
+    ]);
+    expect(reorderOpenSessionIds(['session-1', 'session-2', 'session-3'], 'session-2', 'session-2', 'before')).toEqual([
+      'session-1',
+      'session-2',
+      'session-3',
+    ]);
   });
 
   it('only dispatches changes when a tab actually closes', () => {

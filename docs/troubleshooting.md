@@ -259,6 +259,7 @@ Useful log locations:
 
 - daemon: `~/.local/state/personal-agent/daemon/logs/daemon.log`
 - gateway: `~/.local/state/personal-agent/gateway/logs/telegram.log`
+- web UI: `~/.local/state/personal-agent/web/logs/web.log`
 
 ## Still stuck?
 

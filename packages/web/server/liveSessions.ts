@@ -60,7 +60,7 @@ export type SseEvent =
   | { type: 'thinking_delta';  delta: string }
   | { type: 'tool_start';      toolCallId: string; toolName: string; args: unknown }
   | { type: 'tool_update';     toolCallId: string; partialResult: unknown }
-  | { type: 'tool_end';        toolCallId: string; toolName: string; isError: boolean; durationMs: number; output: string }
+  | { type: 'tool_end';        toolCallId: string; toolName: string; isError: boolean; durationMs: number; output: string; details?: unknown }
   | { type: 'title_update';    title: string }
   | { type: 'context_usage';   usage: LiveContextUsage | null }
   | { type: 'stats_update';    tokens: { input: number; output: number; total: number }; cost: number }
@@ -296,6 +296,7 @@ function buildLiveSnapshotBlocks(session: AgentSession): DisplayBlock[] {
       content: (message as { content?: unknown }).content,
       toolCallId: (message as { toolCallId?: string }).toolCallId,
       toolName: (message as { toolName?: string }).toolName,
+      details: (message as { details?: unknown }).details,
     },
   })));
 }
@@ -507,7 +508,7 @@ export function toSse(event: AgentSessionEvent): SseEvent | null {
       const start = toolTimings.get(event.toolCallId) ?? Date.now();
       toolTimings.delete(event.toolCallId);
       // Extract final text output from result
-      const result = event.result as { content?: Array<{ type: string; text?: string }> } | undefined;
+      const result = event.result as { content?: Array<{ type: string; text?: string }>; details?: unknown } | undefined;
       const outputText = result?.content
         ?.filter(c => c.type === 'text')
         .map(c => c.text ?? '')
@@ -520,6 +521,7 @@ export function toSse(event: AgentSessionEvent): SseEvent | null {
         isError:    event.isError,
         durationMs: Date.now() - start,
         output:     outputText,
+        details:    result?.details,
       };
     }
 

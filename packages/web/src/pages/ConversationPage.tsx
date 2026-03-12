@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import { ChatView } from '../components/chat/ChatView';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import { ConversationTree } from '../components/ConversationTree';
@@ -10,6 +10,7 @@ import { useSessionDetail } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../api';
 import { appendComposerHistory, readComposerHistory } from '../composerHistory';
+import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversationArtifacts';
 import { formatContextShareLabel, formatContextUsageLabel, formatContextWindowLabel, formatLiveSessionLabel, formatThinkingLevelLabel, getContextUsagePercent } from '../conversationHeader';
 import { isConversationScrolledToBottom, shouldShowScrollToBottomControl } from '../conversationScroll';
 import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE } from '../conversationTitle';
@@ -324,7 +325,20 @@ function formatDeferredResumeWhen(resume: DeferredResumeSummary): string {
 export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const { id: routeId } = useParams<{ id?: string }>();
   const id = draft ? undefined : routeId;
+  const location = useLocation();
   const navigate = useNavigate();
+  const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
+
+  const openArtifact = useCallback((artifactId: string) => {
+    if (selectedArtifactId === artifactId) {
+      return;
+    }
+
+    navigate({
+      pathname: location.pathname,
+      search: setConversationArtifactIdInSearch(location.search, artifactId),
+    });
+  }, [location.pathname, location.search, navigate, selectedArtifactId]);
 
   useEffect(() => {
     if (draft || !id) {
@@ -376,6 +390,59 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       ? baseMessages
       : undefined;
   const messageCount = realMessages?.length ?? 0;
+  const artifactAutoOpenSeededRef = useRef(false);
+  const processedArtifactAutoOpenIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    artifactAutoOpenSeededRef.current = false;
+    processedArtifactAutoOpenIdsRef.current = new Set();
+  }, [id]);
+
+  useEffect(() => {
+    if (!realMessages) {
+      return;
+    }
+
+    if (!artifactAutoOpenSeededRef.current) {
+      const completedArtifactIds = new Set<string>();
+      for (const [index, block] of realMessages.entries()) {
+        if (block.type !== 'tool_use') {
+          continue;
+        }
+
+        const artifact = readArtifactPresentation(block);
+        const blockKey = block._toolCallId ?? block.id ?? `artifact-${index}`;
+        if (artifact && block.status !== 'running' && !block.running) {
+          completedArtifactIds.add(blockKey);
+        }
+      }
+
+      processedArtifactAutoOpenIdsRef.current = completedArtifactIds;
+      artifactAutoOpenSeededRef.current = true;
+      return;
+    }
+
+    for (let index = realMessages.length - 1; index >= 0; index -= 1) {
+      const block = realMessages[index];
+      if (block?.type !== 'tool_use') {
+        continue;
+      }
+
+      const artifact = readArtifactPresentation(block);
+      if (!artifact || !artifact.openRequested || block.status === 'running' || block.running) {
+        continue;
+      }
+
+      const blockKey = block._toolCallId ?? block.id ?? `artifact-${index}`;
+      if (processedArtifactAutoOpenIdsRef.current.has(blockKey)) {
+        continue;
+      }
+
+      processedArtifactAutoOpenIdsRef.current.add(blockKey);
+      openArtifact(artifact.artifactId);
+      break;
+    }
+  }, [openArtifact, realMessages]);
 
   const { setTitle: pushTitle } = useLiveTitles();
   useEffect(() => {
@@ -1425,6 +1492,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               messages={realMessages}
               isStreaming={stream.isStreaming}
               onForkMessage={isLiveSession && id && !stream.isStreaming ? forkConversationFromMessage : undefined}
+              onOpenArtifact={openArtifact}
+              activeArtifactId={selectedArtifactId}
             />
           ) : sessionLoading ? (
             <LoadingState label="Loading session…" className="justify-center h-full" />

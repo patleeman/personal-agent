@@ -289,15 +289,27 @@ function parseTmuxRunOptions(args: string[]): TmuxRunOptions {
   };
 }
 
+function isTmuxHelpToken(value: string | undefined): boolean {
+  return value === 'help' || value === '--help' || value === '-h';
+}
+
+function printTmuxHelp(): void {
+  console.log(section('Tmux commands'));
+  console.log('');
+  console.log(`Usage: pa tmux [list|inspect|logs|stop|send|run|clean|help] [args...]\n\nCommands:\n  list [--json]                    List agent-managed tmux sessions\n  inspect <session> [--json]       Show details for one managed tmux session\n  logs <session> [--tail <count>]  Show session logs (or pane output fallback)\n  stop <session>                   Stop one managed tmux session\n  send <session> <command>         Send command to session (tmux send-keys + Enter)\n  run <task-slug> [--cwd <path>] [--notify-on-complete] [--notify-context <value>] [--] <command...>\n                                   Start a managed tmux session\n  clean [--dry-run] [--json]       Remove stale managed tmux logs for completed sessions\n  help                             Show tmux help\n`);
+}
+
 export async function tmuxCommand(args: string[]): Promise<number> {
   const [subcommandRaw, ...rest] = args;
   const subcommand = subcommandRaw ?? 'list';
   const runner = createSpawnSyncTmuxRunner();
 
-  if (subcommand === 'help') {
-    console.log(section('Tmux commands'));
-    console.log('');
-    console.log(`Usage: pa tmux [list|inspect|logs|stop|send|run|clean|help] [args...]\n\nCommands:\n  list [--json]                    List agent-managed tmux sessions\n  inspect <session> [--json]       Show details for one managed tmux session\n  logs <session> [--tail <count>]  Show session logs (or pane output fallback)\n  stop <session>                   Stop one managed tmux session\n  send <session> <command>         Send command to session (tmux send-keys + Enter)\n  run <task-slug> [--cwd <path>] [--notify-on-complete] [--notify-context <value>] [--] <command...>\n                                   Start a managed tmux session\n  clean [--dry-run] [--json]       Remove stale managed tmux logs for completed sessions\n`);
+  if (isTmuxHelpToken(subcommand)) {
+    if (rest.length > 0) {
+      throw new Error(tmuxUsageText());
+    }
+
+    printTmuxHelp();
     return 0;
   }
 

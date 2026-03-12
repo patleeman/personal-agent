@@ -1,165 +1,188 @@
-import { useState } from 'react';
+import React, { Children, Fragment, cloneElement, isValidElement, useState, type ReactElement, type ReactNode } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
+import remarkGfm from 'remark-gfm';
+import { readArtifactPresentation } from '../../conversationArtifacts';
 import type { MessageBlock } from '../../types';
 import { timeAgo } from '../../utils';
 import { Pill, SurfacePanel, cx } from '../ui';
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────
 
+const MARKDOWN_REMARK_PLUGINS = [remarkGfm, remarkBreaks];
+
+function MentionPill({ text }: { text: string }) {
+  return <span className="ui-markdown-mention">{text}</span>;
+}
+
 function InlineText({ text }: { text: string }) {
   const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
   return (
     <>
-      {parts.map((p, i) => {
-        if (p.startsWith('**') && p.endsWith('**'))
-          return <strong key={i} className="font-semibold text-primary">{p.slice(2, -2)}</strong>;
-        if (p.startsWith('`') && p.endsWith('`'))
-          return <code key={i} className="font-mono text-[0.82em] bg-elevated px-1 py-0.5 rounded text-accent">{p.slice(1, -1)}</code>;
-        return <span key={i}>{p}</span>;
+      {parts.map((part, index) => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          return <strong key={index} className="font-semibold text-primary">{part.slice(2, -2)}</strong>;
+        }
+
+        if (part.startsWith('`') && part.endsWith('`')) {
+          return <code key={index} className="font-mono text-[0.82em] bg-elevated px-1 py-0.5 rounded text-accent">{part.slice(1, -1)}</code>;
+        }
+
+        return <Fragment key={index}>{part}</Fragment>;
       })}
     </>
   );
+}
+
+function renderMentionFragments(text: string): ReactNode[] {
+  return text.split(/(@[\w-]+)/g).map((part, index) => {
+    if (/^@[\w-]+$/.test(part)) {
+      return <MentionPill key={`${part}-${index}`} text={part} />;
+    }
+
+    return <Fragment key={`${index}-${part}`}>{part}</Fragment>;
+  });
+}
+
+function getMarkdownTagName(node: ReactNode): string | null {
+  if (!isValidElement(node)) {
+    return null;
+  }
+
+  const props = node.props as { node?: { tagName?: string } };
+  if (typeof props.node?.tagName === 'string') {
+    return props.node.tagName;
+  }
+
+  return typeof node.type === 'string' ? node.type : null;
+}
+
+function extractTextContent(children: ReactNode): string {
+  let text = '';
+
+  Children.forEach(children, child => {
+    if (typeof child === 'string' || typeof child === 'number' || typeof child === 'bigint') {
+      text += String(child);
+      return;
+    }
+
+    if (!isValidElement(child)) {
+      return;
+    }
+
+    const props = child.props as { children?: ReactNode };
+    if (props.children !== undefined) {
+      text += extractTextContent(props.children);
+    }
+  });
+
+  return text;
+}
+
+function renderChildrenWithMentions(children: ReactNode): ReactNode {
+  return Children.map(children, (child, index) => {
+    if (typeof child === 'string') {
+      return <Fragment key={index}>{renderMentionFragments(child)}</Fragment>;
+    }
+
+    if (typeof child === 'number' || typeof child === 'bigint') {
+      return child;
+    }
+
+    if (!isValidElement(child)) {
+      return child;
+    }
+
+    const tagName = getMarkdownTagName(child);
+    if (tagName && ['a', 'code', 'pre'].includes(tagName)) {
+      return child;
+    }
+
+    const props = child.props as { children?: ReactNode };
+    if (props.children === undefined) {
+      return child;
+    }
+
+    return cloneElement(child as ReactElement<{ children?: ReactNode }>, undefined, renderChildrenWithMentions(props.children));
+  });
 }
 
 function MentionText({ text }: { text: string }) {
-  // Render @project-id as amber pill
   const parts = text.split(/(@[\w-]+)/g);
   return (
     <>
-      {parts.map((p, i) => {
-        if (/^@[\w-]+$/.test(p))
-          return <span key={i} className="font-mono text-[0.82em] bg-accent/12 text-accent px-1.5 py-0.5 rounded-full">{p}</span>;
-        return <InlineText key={i} text={p} />;
+      {parts.map((part, index) => {
+        if (/^@[\w-]+$/.test(part)) {
+          return <MentionPill key={`${part}-${index}`} text={part} />;
+        }
+
+        return <InlineText key={`${index}-${part}`} text={part} />;
       })}
     </>
   );
 }
 
-type ParsedMarkdownLikeLine = {
-  kind: 'empty' | 'h2' | 'h3' | 'bullet' | 'numbered' | 'paragraph';
-  leadingWhitespace: number;
-  content: string;
-  marker?: string;
-};
-
-function countLeadingWhitespace(line: string): number {
-  let count = 0;
-
-  for (const char of line) {
-    if (char === ' ') {
-      count += 1;
-      continue;
-    }
-
-    if (char === '\t') {
-      count += 2;
-      continue;
-    }
-
-    break;
-  }
-
-  return count;
-}
-
-export function getRenderedMarkdownIndentPx(leadingWhitespace: number): number {
-  return Math.min(Math.max(leadingWhitespace, 0) * 8, 96);
-}
-
-export function parseMarkdownLikeLine(line: string): ParsedMarkdownLikeLine {
-  const leadingWhitespace = countLeadingWhitespace(line);
-  const trimmed = line.trimStart();
-
-  if (trimmed.length === 0) {
-    return {
-      kind: 'empty',
-      leadingWhitespace,
-      content: '',
-    };
-  }
-
-  if (trimmed.startsWith('## ')) {
-    return {
-      kind: 'h2',
-      leadingWhitespace,
-      content: trimmed.slice(3),
-    };
-  }
-
-  if (trimmed.startsWith('### ')) {
-    return {
-      kind: 'h3',
-      leadingWhitespace,
-      content: trimmed.slice(4),
-    };
-  }
-
-  if (trimmed.startsWith('**') && trimmed.endsWith('**')) {
-    return {
-      kind: 'h3',
-      leadingWhitespace,
-      content: trimmed,
-    };
-  }
-
-  const bulletMatch = trimmed.match(/^[-*]\s+(.*)$/);
-  if (bulletMatch) {
-    return {
-      kind: 'bullet',
-      leadingWhitespace,
-      content: bulletMatch[1] ?? '',
-      marker: '•',
-    };
-  }
-
-  const numberedMatch = trimmed.match(/^(\d+)\.\s+(.*)$/);
-  if (numberedMatch) {
-    return {
-      kind: 'numbered',
-      leadingWhitespace,
-      content: numberedMatch[2] ?? '',
-      marker: `${numberedMatch[1]}.`,
-    };
-  }
-
-  return {
-    kind: 'paragraph',
-    leadingWhitespace,
-    content: trimmed,
-  };
-}
-
 export function renderText(text: string) {
-  return text.split('\n').map((line, i) => {
-    const parsed = parseMarkdownLikeLine(line);
-    const indentPx = getRenderedMarkdownIndentPx(parsed.leadingWhitespace);
-    const indentStyle = indentPx > 0 ? { paddingLeft: `${indentPx}px` } : undefined;
+  return (
+    <div className="ui-markdown">
+      <ReactMarkdown
+        remarkPlugins={MARKDOWN_REMARK_PLUGINS}
+        components={{
+          h1: ({ children }) => <h1>{renderChildrenWithMentions(children)}</h1>,
+          h2: ({ children }) => <h2>{renderChildrenWithMentions(children)}</h2>,
+          h3: ({ children }) => <h3>{renderChildrenWithMentions(children)}</h3>,
+          h4: ({ children }) => <h4>{renderChildrenWithMentions(children)}</h4>,
+          h5: ({ children }) => <h5>{renderChildrenWithMentions(children)}</h5>,
+          h6: ({ children }) => <h6>{renderChildrenWithMentions(children)}</h6>,
+          p: ({ children }) => <p>{renderChildrenWithMentions(children)}</p>,
+          li: ({ children }) => <li>{renderChildrenWithMentions(children)}</li>,
+          th: ({ children, style }) => <th style={style}>{renderChildrenWithMentions(children)}</th>,
+          td: ({ children, style }) => <td style={style}>{renderChildrenWithMentions(children)}</td>,
+          a: ({ href, children, title }) => {
+            const isExternal = typeof href === 'string' && !href.startsWith('#');
+            return (
+              <a
+                href={href}
+                title={title}
+                target={isExternal ? '_blank' : undefined}
+                rel={isExternal ? 'noreferrer' : undefined}
+              >
+                {children}
+              </a>
+            );
+          },
+          table: ({ children }) => (
+            <div className="my-3 overflow-x-auto">
+              <table>{children}</table>
+            </div>
+          ),
+          pre: ({ children }) => <pre>{children}</pre>,
+          code: ({ className, children }) => {
+            const content = extractTextContent(children).replace(/\n$/, '');
+            const isBlock = content.includes('\n') || Boolean(className?.includes('language-'));
 
-    switch (parsed.kind) {
-      case 'empty':
-        return <div key={i} className="h-2" />;
-      case 'h2':
-        return <h2 key={i} className="text-sm font-semibold text-primary mt-3 mb-1">{parsed.content}</h2>;
-      case 'h3':
-        return <p key={i} className="text-sm leading-relaxed font-semibold text-primary mt-2"><MentionText text={parsed.content} /></p>;
-      case 'bullet':
-        return (
-          <div key={i} className="flex gap-2 items-start" style={indentStyle}>
-            <span className="text-dim mt-0.5 shrink-0 select-none">{parsed.marker}</span>
-            <p className="text-sm leading-relaxed"><MentionText text={parsed.content} /></p>
-          </div>
-        );
-      case 'numbered':
-        return (
-          <div key={i} className="flex gap-2 items-start" style={indentStyle}>
-            <span className="text-dim mt-0.5 shrink-0 font-mono text-xs">{parsed.marker}</span>
-            <p className="text-sm leading-relaxed"><MentionText text={parsed.content} /></p>
-          </div>
-        );
-      case 'paragraph':
-      default:
-        return <p key={i} className="text-sm leading-relaxed" style={indentStyle}><MentionText text={parsed.content} /></p>;
-    }
-  });
+            if (!isBlock) {
+              return <code className="font-mono text-[0.82em] bg-elevated px-1 py-0.5 rounded text-accent">{content}</code>;
+            }
+
+            return <code className={className}>{content}</code>;
+          },
+          img: ({ src, alt, title }) => src
+            ? <img src={src} alt={alt ?? ''} title={title} loading="lazy" />
+            : <span className="text-dim">{alt ?? 'image'}</span>,
+          input: ({ type, checked }) => {
+            if (type === 'checkbox') {
+              return <input type="checkbox" checked={Boolean(checked)} disabled readOnly className="mr-2 translate-y-[1px] accent-[rgb(var(--color-accent))]" />;
+            }
+
+            return <input type={type} checked={checked} readOnly disabled />;
+          },
+        }}
+      >
+        {text}
+      </ReactMarkdown>
+    </div>
+  );
 }
 
 // ── Copy button ───────────────────────────────────────────────────────────────
@@ -193,6 +216,7 @@ const TOOL_META: Record<string, { icon: string; label: string; color: string; to
   web_search:  { icon: '⌕',  label: 'web_search',      color: 'text-success border-success/25 bg-success/5',   tone: 'success' },
   web_fetch:   { icon: '⌕',  label: 'web_fetch',       color: 'text-success border-success/25 bg-success/5',   tone: 'success' },
   screenshot:  { icon: '⊡',  label: 'screenshot',      color: 'text-secondary border-border-default bg-elevated', tone: 'muted' },
+  artifact:    { icon: '◫',  label: 'artifact',        color: 'text-accent border-accent/25 bg-accent/5',      tone: 'accent' },
   deferred_resume: { icon: '⏰', label: 'deferred_resume', color: 'text-warning border-warning/25 bg-warning/5', tone: 'warning' },
 };
 function toolMeta(t: string) {
@@ -258,10 +282,95 @@ export function getStreamingStatusLabel(messages: MessageBlock[], isStreaming: b
 
 // ── ToolBlock ─────────────────────────────────────────────────────────────────
 
-function ToolBlock({ block, autoOpen }: { block: Extract<MessageBlock, { type: 'tool_use' }>; autoOpen: boolean }) {
+function ArtifactToolBlock({
+  block,
+  artifact,
+  onOpenArtifact,
+  activeArtifactId,
+}: {
+  block: Extract<MessageBlock, { type: 'tool_use' }>;
+  artifact: NonNullable<ReturnType<typeof readArtifactPresentation>>;
+  onOpenArtifact?: (artifactId: string) => void;
+  activeArtifactId?: string | null;
+}) {
+  const isRunning = block.status === 'running' || !!block.running;
+  const isError = block.status === 'error' || !!block.error;
+  const isActive = activeArtifactId === artifact.artifactId;
+  const actionLabel = isActive ? 'opened' : 'open artifact';
+
+  return (
+    <SurfacePanel
+      muted
+      className={cx(
+        'px-3.5 py-3 text-[12px] transition-colors',
+        isError && 'border-danger/30 bg-danger/5',
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <div className="ui-chat-avatar mt-0.5">
+          <span className="ui-chat-avatar-mark">◫</span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="truncate text-[13px] font-medium text-primary">{artifact.title}</span>
+            <Pill tone={isError ? 'danger' : 'accent'} mono>{artifact.kind}</Pill>
+            {artifact.revision !== undefined && <span className="text-[10px] text-dim">rev {artifact.revision}</span>}
+          </div>
+          <p className="mt-1 break-all font-mono text-[11px] text-secondary">{artifact.artifactId}</p>
+          {block.output && !isError && (
+            <p className="mt-2 text-[12px] leading-relaxed text-secondary">{block.output}</p>
+          )}
+          {isError && block.output && (
+            <p className="mt-2 text-[12px] leading-relaxed text-danger/85">{block.output}</p>
+          )}
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px]">
+            {isRunning ? (
+              <span className="inline-flex items-center gap-1.5 text-dim">
+                <span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin" />
+                saving artifact…
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onOpenArtifact?.(artifact.artifactId)}
+                disabled={!onOpenArtifact}
+                className={cx(
+                  'text-accent transition-colors hover:text-accent/80 disabled:cursor-default disabled:text-dim',
+                  isActive && 'text-dim hover:text-dim',
+                )}
+              >
+                {actionLabel}
+              </button>
+            )}
+            {artifact.updatedAt && <span className="text-dim">updated {timeAgo(artifact.updatedAt)}</span>}
+          </div>
+        </div>
+      </div>
+    </SurfacePanel>
+  );
+}
+
+function ToolBlock({ block, autoOpen, onOpenArtifact, activeArtifactId }: {
+  block: Extract<MessageBlock, { type: 'tool_use' }>;
+  autoOpen: boolean;
+  onOpenArtifact?: (artifactId: string) => void;
+  activeArtifactId?: string | null;
+}) {
   const [preference, setPreference] = useState<DisclosurePreference>('auto');
   const open = resolveDisclosureOpen(autoOpen, preference);
   const meta = toolMeta(block.tool);
+  const artifact = readArtifactPresentation(block);
+
+  if (artifact) {
+    return (
+      <ArtifactToolBlock
+        block={block}
+        artifact={artifact}
+        onOpenArtifact={onOpenArtifact}
+        activeArtifactId={activeArtifactId}
+      />
+    );
+  }
 
   // Normalise tool state across streamed and persisted entries.
   const isRunning = block.status === 'running' || !!block.running;
@@ -613,10 +722,14 @@ export function ChatView({
   messages,
   isStreaming = false,
   onForkMessage,
+  onOpenArtifact,
+  activeArtifactId,
 }: {
   messages: MessageBlock[];
   isStreaming?: boolean;
   onForkMessage?: (messageIndex: number) => Promise<void> | void;
+  onOpenArtifact?: (artifactId: string) => void;
+  activeArtifactId?: string | null;
 }) {
   const streamingStatusLabel = getStreamingStatusLabel(messages, isStreaming);
   const lastBlock = messages[messages.length - 1];
@@ -643,7 +756,7 @@ export function ChatView({
             case 'thinking':
               return <ThinkingBlock key={i} block={block} autoOpen={autoOpen} />;
             case 'tool_use':
-              return <ToolBlock key={i} block={block} autoOpen={autoOpen} />;
+              return <ToolBlock key={i} block={block} autoOpen={autoOpen} onOpenArtifact={onOpenArtifact} activeArtifactId={activeArtifactId} />;
             case 'subagent':
               return <SubagentBlock key={i} block={block} />;
             case 'image':

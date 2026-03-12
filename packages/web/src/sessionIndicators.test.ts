@@ -4,6 +4,7 @@ import {
   buildSyntheticLiveSessionMeta,
   collectAttentionConversationIds,
   collectConversationAttentionIds,
+  sessionNeedsAttention,
 } from './sessionIndicators';
 
 describe('sessionIndicators', () => {
@@ -138,5 +139,11 @@ describe('sessionIndicators', () => {
       },
       activeConversationId: 'conv-3',
     })).toEqual(new Set(['conv-1', 'conv-activity']));
+  });
+
+  it('suppresses attention while a conversation is still running', () => {
+    expect(sessionNeedsAttention({ needsAttention: true, isRunning: true })).toBe(false);
+    expect(sessionNeedsAttention({ needsAttention: true, isRunning: false })).toBe(true);
+    expect(sessionNeedsAttention({ needsAttention: false, isRunning: false })).toBe(false);
   });
 });

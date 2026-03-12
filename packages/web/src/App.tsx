@@ -7,9 +7,11 @@ import { ConversationPage } from './pages/ConversationPage';
 import { GatewayPage } from './pages/GatewayPage';
 import { DaemonPage } from './pages/DaemonPage';
 import { InboxPage } from './pages/InboxPage';
+import { WebUiPage } from './pages/WebUiPage';
 import { MemoryPage } from './pages/MemoryPage';
 import { ProjectsPage } from './pages/ProjectsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { ToolsPage } from './pages/ToolsPage';
 import {
   AppDataContext,
   AppEventsContext,
@@ -183,6 +185,7 @@ export function App() {
                     <Route path="inbox/:id" element={<InboxPage />} />
                     <Route path="gateway" element={<GatewayPage />} />
                     <Route path="daemon" element={<DaemonPage />} />
+                    <Route path="web-ui" element={<WebUiPage />} />
                     <Route path="projects" element={<ProjectsPage />} />
                     <Route path="projects/:id" element={<ProjectsPage />} />
                     <Route path="scheduled" element={<TasksPage />} />
@@ -192,6 +195,7 @@ export function App() {
                     <Route path="tasks" element={<LegacyTaskRoutesRedirect />} />
                     <Route path="tasks/:id" element={<LegacyTaskRoutesRedirect />} />
                     <Route path="memory" element={<MemoryPage />} />
+                    <Route path="tools" element={<ToolsPage />} />
                     <Route path="settings" element={<SettingsPage />} />
                   </Route>
                 </Routes>

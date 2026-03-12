@@ -98,12 +98,13 @@ pa tui -p "hello"           # Launch with initial prompt
 pa tui -- --model kimi-coding/k2p5    # Pass args to pi
 pa doctor                   # Validate setup
 pa doctor --json            # Machine-readable status
-pa restart                  # Restart daemon + managed gateways
+pa restart                  # Restart daemon + managed web UI + managed gateways
 pa update                   # Pull git changes + refresh repo dependencies + sync pi to latest + rebuild packages + restart services
 pa update --repo-only       # Pull git changes + skip dependency refresh + rebuild packages + restart services
 ```
 
 > `pa update` runs `npm install`, syncs `@mariozechner/pi-coding-agent@latest` in repo root + gateway workspace, verifies repo-local Pi, and runs `npm run build`.
+> If the managed web UI service is installed, `pa update` also stages and health-checks the inactive blue/green web UI slot before swapping the service to it.
 
 ### Profile management
 

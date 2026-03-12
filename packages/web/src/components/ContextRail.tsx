@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { getConversationArtifactIdFromSearch } from '../conversationArtifacts';
 import { useReloadState } from '../reloadState';
 import {
   pickAttachProjectId,
@@ -12,6 +13,8 @@ import type { ActivityEntry, LiveSessionContext, ProjectDetail, ProjectRecord } 
 import { formatDate, kindMeta, timeAgo } from '../utils';
 import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
 import { CONVERSATION_PROJECTS_CHANGED_EVENT, emitConversationProjectsChanged } from '../conversationProjectEvents';
+import { closeConversationTab, ensureConversationTabOpen } from '../sessionTabs';
+import { ConversationArtifactPanel } from './ConversationArtifactPanel';
 import { ProjectDetailPanel } from './ProjectDetailPanel';
 import { ProjectOverviewPanel } from './ProjectOverviewPanel';
 import { ErrorState, IconButton, LoadingState, Pill, SurfacePanel } from './ui';
@@ -67,6 +70,7 @@ function LinkedProjectOverviewPanel({
 }
 
 function LiveSessionContextPanel({ id }: { id: string }) {
+  const navigate = useNavigate();
   const [data, setData] = useState<LiveSessionContext | null>(null);
   const [allProjects, setAllProjects] = useState<ProjectRecord[]>([]);
   const [focusedProjectId, setFocusedProjectId] = useState('');
@@ -78,6 +82,10 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const [focusedLoading, setFocusedLoading] = useState(false);
   const [openCwdBusy, setOpenCwdBusy] = useState(false);
   const [openCwdError, setOpenCwdError] = useState<string | null>(null);
+  const [changingCwd, setChangingCwd] = useState(false);
+  const [requestedCwd, setRequestedCwd] = useState('');
+  const [changeCwdBusy, setChangeCwdBusy] = useState(false);
+  const [changeCwdError, setChangeCwdError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     let cancelled = false;
@@ -99,6 +107,20 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   }, [id]);
 
   useEffect(() => load(), [load]);
+
+  useEffect(() => {
+    setChangingCwd(false);
+    setRequestedCwd('');
+    setChangeCwdBusy(false);
+    setChangeCwdError(null);
+    setOpenCwdError(null);
+  }, [id]);
+
+  useEffect(() => {
+    if (!changingCwd) {
+      setRequestedCwd(data?.cwd ?? '');
+    }
+  }, [data?.cwd, changingCwd]);
 
   useEffect(() => {
     function handleConversationProjectsChanged(event: Event) {
@@ -199,6 +221,58 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     }
   }
 
+  function startChangingCwd() {
+    if (!data || changeCwdBusy) {
+      return;
+    }
+
+    setRequestedCwd(data.cwd);
+    setOpenCwdError(null);
+    setChangeCwdError(null);
+    setChangingCwd(true);
+  }
+
+  function cancelChangingCwd() {
+    setRequestedCwd(data?.cwd ?? '');
+    setChangeCwdError(null);
+    setChangingCwd(false);
+  }
+
+  async function submitCwdChange() {
+    if (!data || changeCwdBusy) {
+      return;
+    }
+
+    if (!requestedCwd.trim()) {
+      setChangeCwdError('Enter a directory path.');
+      return;
+    }
+
+    setChangeCwdBusy(true);
+    setOpenCwdError(null);
+    setChangeCwdError(null);
+
+    try {
+      const result = await api.changeConversationCwd(id, requestedCwd);
+      setChangingCwd(false);
+      setRequestedCwd(result.cwd);
+
+      if (!result.changed || result.id === id) {
+        load();
+        return;
+      }
+
+      ensureConversationTabOpen(result.id);
+      closeConversationTab(id);
+      emitConversationProjectsChanged(result.id);
+      navigate(`/conversations/${result.id}`);
+    } catch (error) {
+      setChangeCwdError(error instanceof Error ? error.message : 'Could not change the working directory.');
+    } finally {
+      setChangeCwdBusy(false);
+    }
+  }
+
   if (loading) return <div className="px-4 py-4 text-[12px] text-dim animate-pulse">Loading…</div>;
   if (error) return <div className="px-4 py-4 text-[12px] text-dim/60">Unable to load context.</div>;
   if (!data) return null;
@@ -215,21 +289,83 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         <SurfacePanel muted className="px-3 py-3 space-y-2.5">
           <div className="flex items-start gap-2">
             <p className="ui-card-body break-all min-w-0 flex-1" title={data.cwd}>{cwdShort}</p>
-            <IconButton
-              compact
-              onClick={() => { void openCwdInVscode(); }}
-              disabled={openCwdBusy}
-              title={openCwdBusy ? 'Opening VS Code…' : 'Open current working directory in VS Code'}
-              aria-label="Open current working directory in VS Code"
-              className="shrink-0 mt-0.5"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M14.25 4.5h5.25v5.25" />
-                <path d="M19.5 4.5 10.5 13.5" />
-                <path d="M19.5 13.5v4.125A1.875 1.875 0 0 1 17.625 19.5H6.375A1.875 1.875 0 0 1 4.5 17.625V6.375A1.875 1.875 0 0 1 6.375 4.5H10.5" />
-              </svg>
-            </IconButton>
+            <div className="flex items-center gap-1 shrink-0 mt-0.5">
+              <button
+                type="button"
+                onClick={startChangingCwd}
+                disabled={changingCwd || changeCwdBusy}
+                className="ui-toolbar-button text-accent whitespace-nowrap"
+                title="Change this conversation's working directory"
+              >
+                Change
+              </button>
+              <IconButton
+                compact
+                onClick={() => { void openCwdInVscode(); }}
+                disabled={openCwdBusy}
+                title={openCwdBusy ? 'Opening VS Code…' : 'Open current working directory in VS Code'}
+                aria-label="Open current working directory in VS Code"
+                className="shrink-0"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14.25 4.5h5.25v5.25" />
+                  <path d="M19.5 4.5 10.5 13.5" />
+                  <path d="M19.5 13.5v4.125A1.875 1.875 0 0 1 17.625 19.5H6.375A1.875 1.875 0 0 1 4.5 17.625V6.375A1.875 1.875 0 0 1 6.375 4.5H10.5" />
+                </svg>
+              </IconButton>
+            </div>
           </div>
+          {changingCwd && (
+            <form
+              className="space-y-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void submitCwdChange();
+              }}
+            >
+              <input
+                autoFocus
+                value={requestedCwd}
+                onChange={(event) => {
+                  setRequestedCwd(event.target.value);
+                  if (changeCwdError) {
+                    setChangeCwdError(null);
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    cancelChangingCwd();
+                  }
+                }}
+                placeholder={data.cwd}
+                spellCheck={false}
+                disabled={changeCwdBusy}
+                aria-label="Conversation working directory"
+                className="w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] font-mono text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50"
+              />
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] text-dim">Absolute, ~, or relative to the current directory.</p>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={cancelChangingCwd}
+                    disabled={changeCwdBusy}
+                    className="ui-toolbar-button"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={changeCwdBusy}
+                    className="ui-toolbar-button text-accent"
+                  >
+                    {changeCwdBusy ? 'Switching…' : 'Switch'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
           {(data.branch || data.git) && (
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-secondary">
               {data.branch && (
@@ -252,7 +388,9 @@ function LiveSessionContextPanel({ id }: { id: string }) {
               )}
             </div>
           )}
-          {openCwdError && <p className="text-[11px] text-danger/80">{openCwdError}</p>}
+          {(openCwdError || changeCwdError) && (
+            <p className="text-[11px] text-danger/80">{changeCwdError ?? openCwdError}</p>
+          )}
         </SurfacePanel>
       </Section>
 
@@ -720,9 +858,16 @@ export function ContextRail() {
   const parts = location.pathname.split('/').filter(Boolean);
   const section = parts[0];
   const id = parts[1];
+  const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
   const scheduledSection = section === 'scheduled' || section === 'automations' || section === 'tasks';
 
   // Conversations
+  if (section === 'conversations' && id && selectedArtifactId) return (
+    <div className="flex-1 overflow-hidden flex flex-col">
+      <RailHeader label="Artifact" sub={selectedArtifactId} />
+      <ConversationArtifactPanel conversationId={id} artifactId={selectedArtifactId} />
+    </div>
+  );
   if (section === 'conversations' && id) return (
     <div className="flex-1 overflow-y-auto flex flex-col">
       <RailHeader label="Session" />
