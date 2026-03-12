@@ -62,11 +62,12 @@ List names first with `--list-calendars`, then query exact strings.
 
 ## 5) Time window handling
 
-For morning-report style agenda:
+Pick the second window based on the caller's need:
 - Window A: `now -> today 23:59:59`
-- Window B: `tomorrow 00:00:00 -> tomorrow 12:00:00`
+- Window B for a compact agenda view: `tomorrow 00:00:00 -> tomorrow 12:00:00`
+- Window B for the standard morning report: `tomorrow 00:00:00 -> tomorrow 23:59:59`
 
-Use narrow windows to reduce noise and latency.
+Use narrow windows to reduce noise and latency, but do not truncate tomorrow when the caller explicitly wants the full next day.
 
 ## 6) Keep per-calendar timeouts
 
@@ -74,7 +75,7 @@ One calendar/account can stall.
 
 ### Fix
 
-Run per calendar with timeout; report partial results with `Unavailable: <calendar>: <reason>`.
+Run per calendar with timeout, warm up Calendar.app once on timeout, then retry that calendar once before giving up. Report partial results with `Unavailable: <calendar>: <reason>`.
 
 ## 7) Ignore noisy system calendars by default
 

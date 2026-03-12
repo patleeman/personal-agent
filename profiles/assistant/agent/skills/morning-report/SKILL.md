@@ -25,11 +25,14 @@ Unless Patrick asks otherwise, format the report as:
 
 ## ━━ ✅ REMINDERS ━━
 - **Today:** ...
+- **Tomorrow:** ...    # optional, only when notable
 - **Important next:** ...    # optional, only when notable
 ```
 
-Keep total output tight (target about 120 words unless critical items justify slightly more).
-Do not add a closing line like `Morning report complete.`
+- Keep it tight and high-signal.
+- Target about 120 words unless critical items justify slightly more.
+- Do not add `Morning report complete.` unless the caller explicitly asks for it.
+- Render one calendar event or reminder per line; do not collapse multiple items into semicolon-separated summaries.
 
 ## Weather
 
@@ -37,7 +40,7 @@ Do not add a closing line like `Morning report complete.`
 - First try `wttr.in` with a hard timeout (for example `curl --max-time 15 ...`).
 - If `wttr.in` times out or returns unusable output, fall back to Open-Meteo for White Plains (`latitude=41.033`, `longitude=-73.7629`, `timezone=America/New_York`).
 - The weather block should be one sentence that covers:
-  - current temperature and feels-like / wind chill when useful
+  - current temperature, condition, and feels-like / wind chill when useful
   - today's high/low
   - precipitation outlook or the single most practical weather note
 - Mention the weather source only when a fallback was required or weather is unavailable.
@@ -45,35 +48,39 @@ Do not add a closing line like `Morning report complete.`
 ## Calendar
 
 - Prefer local calendar reads. Load and use `apple-calendar-local`.
-- For the default morning report, use only Apple Calendar / local Calendar.app data. Do not use Fastmail/CalDAV.
+- For the standard morning report, use only Apple Calendar / local Calendar.app data. Do not use Fastmail/CalDAV unless Patrick explicitly asks for Fastmail or local reads are not appropriate.
 - Default calendars:
   - `Patrick Lee`
   - `patrickc.lee@datadoghq.com`
   - `Sanitation`
-- Query calendars independently with bounded calls so one slow calendar does not block the rest.
+- Query calendars independently with bounded AppleScript timeouts (~20–25s) so one slow calendar does not block the rest.
+- Use two narrow windows:
+  - `now -> end of today`
+  - `start of tomorrow -> end of tomorrow`
+- Keep the `Tomorrow` output concise; prioritize the earliest or most relevant tomorrow items.
+- Add `Upcoming` only when there are clearly notable later-week items worth calling out.
 - If a calendar query times out, warm up Calendar.app (`osascript -e 'tell application "Calendar" to launch'`) and retry that calendar once before reporting it unavailable.
-- Scope the report to:
-  - events from now through end of today
-  - tomorrow-morning events before 12:00 PM, if present
-  - later-week items only when they are clearly notable enough for a short `Upcoming` line
-- If calendar access is unavailable or times out, report it as `Unavailable: <exact reason>`.
+- If calendar access is unavailable or times out, report it as `Unavailable: <exact reason>` and keep partial results from other calendars.
 
 ## Reminders
 
-- Read Apple Reminders via `osascript` with bounded timeouts.
+- Read Apple Reminders via `osascript` with bounded timeouts (~25–30s).
 - Focus on:
   - overdue reminders
   - reminders due today
-  - only truly important upcoming reminders in the next 7 days
+  - reminders due tomorrow
+  - only important upcoming reminders in the next 7 days
 - If the first Reminders query times out, warm up Reminders.app (`osascript -e 'tell application "Reminders" to launch'`) and retry once before reporting it unavailable.
-- Keep the reminders section compact: usually no more than about 5 `Today` items and 3 `Important next` items.
+- Include due date/time when present.
+- Keep the reminders section compact: usually no more than about 5 `Today` items, 3 `Tomorrow` items, and 3 `Important next` items.
 - If Reminders access fails or times out, report it as `Unavailable: <exact reason>`.
 
 ## Runtime rules
 
 - Gather fresh data at runtime.
-- Bound network and `op`-related calls; fail fast instead of hanging.
+- Bound network and `op` / 1Password-related calls; fail fast instead of hanging.
 - Use `America/New_York` for all times.
 - Do not guess missing calendar, reminder, or weather data.
 - Prefer concise, actionable bullets over long prose.
-- Avoid source notes or duplicate explanation blocks unless something is unavailable or a fallback was required.
+- Avoid duplicate explanation blocks or source notes unless something is unavailable or a fallback was required.
+- Keep the report concise (roughly 120 words when possible, unless the day genuinely requires more detail).

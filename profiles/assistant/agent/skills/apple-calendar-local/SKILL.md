@@ -47,6 +47,7 @@ Common usage:
 
 - Query each calendar independently; do not let one slow account block the whole result.
 - Keep per-calendar AppleScript calls timeout-bounded (~20–25s).
+- Choose the tomorrow window based on the caller: a compact agenda can stop at noon, while the standard morning report should pull all of tomorrow.
 - Deduplicate exact duplicate rows from Calendar.app.
 - Apply a second overlap filter in Python to suppress stale recurring-master rows.
 - Treat all-day events as valid agenda events.
