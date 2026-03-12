@@ -69,6 +69,29 @@ function summarizeUserMessageContent(content) {
     const imageCount = blocks.filter((block) => block.type === 'image').length;
     return { text, imageCount };
 }
+function formatConversationTitle(text, imageCount) {
+    return text.trim().replace(/\n/g, ' ').slice(0, 80)
+        || (imageCount === 1 ? '(image attachment)' : imageCount > 1 ? `(${imageCount} image attachments)` : '');
+}
+function getSessionMessages(session) {
+    const stateMessages = session.state?.messages;
+    if (Array.isArray(stateMessages)) {
+        return stateMessages;
+    }
+    const agentMessages = session.agent?.state?.messages;
+    return Array.isArray(agentMessages) ? agentMessages : [];
+}
+function resolveEntryTitle(entry) {
+    if (entry.title.trim()) {
+        return entry.title;
+    }
+    const firstUser = getSessionMessages(entry.session).find((message) => message.role === 'user');
+    if (!firstUser) {
+        return '';
+    }
+    const { text, imageCount } = summarizeUserMessageContent(firstUser.content);
+    return formatConversationTitle(text, imageCount);
+}
 function isLikelyUnsupportedImageInputError(error) {
     const message = error instanceof Error ? error.message : String(error);
     const normalized = message.toLowerCase();
@@ -111,9 +134,7 @@ function buildLiveSnapshotBlocks(session) {
     }
     return buildDisplayBlocksFromEntries(messages.map((message, index) => ({
         id: `live-${index}`,
-        timestamp: typeof message.timestamp !== 'undefined'
-            ? message.timestamp
-            : index,
+        timestamp: message.timestamp ?? index,
         message: {
             role: message.role ?? 'unknown',
             content: message.content,
@@ -123,11 +144,13 @@ function buildLiveSnapshotBlocks(session) {
     })));
 }
 function broadcastTitle(entry) {
-    if (!entry.title) {
+    const title = resolveEntryTitle(entry);
+    if (!title) {
         return;
     }
-    broadcast(entry, { type: 'title_update', title: entry.title });
-    publishAppEvent({ type: 'live_title', sessionId: entry.sessionId, title: entry.title });
+    entry.title = title;
+    broadcast(entry, { type: 'title_update', title });
+    publishAppEvent({ type: 'live_title', sessionId: entry.sessionId, title });
     invalidateAppTopics('sessions');
 }
 function broadcastContextUsage(entry, force = false) {
@@ -171,12 +194,9 @@ function wireSession(id, session, cwd) {
     session.subscribe((event) => {
         // Extract title from first user message
         if (!entry.sentTitle && event.type === 'turn_end') {
-            const msgs = session.agent.state.messages;
-            const firstUser = msgs.find(m => m.role === 'user');
-            if (firstUser) {
-                const { text, imageCount } = summarizeUserMessageContent(firstUser.content);
-                entry.title = text.trim().replace(/\n/g, ' ').slice(0, 80)
-                    || (imageCount === 1 ? '(image attachment)' : imageCount > 1 ? `(${imageCount} image attachments)` : '(untitled)');
+            const title = resolveEntryTitle(entry);
+            if (title) {
+                entry.title = title;
                 entry.sentTitle = true;
                 broadcastTitle(entry);
             }
@@ -256,11 +276,12 @@ export function isLive(sessionId) {
     return registry.has(sessionId);
 }
 export function getLiveSessions() {
-    return Array.from(registry.entries()).map(([id, e]) => ({
+    return Array.from(registry.entries()).map(([id, entry]) => ({
         id,
-        cwd: e.cwd,
-        sessionFile: e.session.sessionFile ?? '',
-        isStreaming: e.session.isStreaming,
+        cwd: entry.cwd,
+        sessionFile: entry.session.sessionFile ?? '',
+        title: resolveEntryTitle(entry),
+        isStreaming: entry.session.isStreaming,
     }));
 }
 export function getAvailableModels() {
@@ -350,8 +371,9 @@ export function subscribe(sessionId, listener) {
         return null;
     entry.listeners.add(listener);
     listener({ type: 'snapshot', blocks: buildLiveSnapshotBlocks(entry.session) });
-    if (entry.sentTitle && entry.title) {
-        listener({ type: 'title_update', title: entry.title });
+    const title = resolveEntryTitle(entry);
+    if (title) {
+        listener({ type: 'title_update', title });
     }
     listener({ type: 'context_usage', usage: readContextUsagePayload(entry.session) });
     if (entry.session.isStreaming) {

@@ -1,17 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useConversations } from '../hooks/useConversations';
 import { useApi } from '../hooks';
 import { useAppData } from '../contexts';
 import { api } from '../api';
 import type { ProfileState, SessionMeta } from '../types';
+import { collectAttentionConversationIds, collectConversationAttentionIds } from '../sessionIndicators';
 import { useTheme } from '../theme';
 import { timeAgo } from '../utils';
-
-function useInboxCount() {
-  const { activity } = useAppData();
-  return activity?.unreadCount ?? null;
-}
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 
@@ -65,9 +61,86 @@ function cwdLabel(cwd: string, maxLen = 24): string {
   return label.length > maxLen ? label.slice(0, maxLen - 1) + '…' : label;
 }
 
+const SEEN_MESSAGE_COUNT_KEY = 'pa:conversation-seen-message-counts';
+
+function loadSeenMessageCounts(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(SEEN_MESSAGE_COUNT_KEY);
+    if (!raw) {
+      return {};
+    }
+
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const counts: Record<string, number> = {};
+    for (const [sessionId, value] of Object.entries(parsed)) {
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        counts[sessionId] = value;
+      }
+    }
+
+    return counts;
+  } catch {
+    return {};
+  }
+}
+
+function saveSeenMessageCounts(counts: Record<string, number>): void {
+  try {
+    localStorage.setItem(SEEN_MESSAGE_COUNT_KEY, JSON.stringify(counts));
+  } catch {
+    // Ignore storage write failures.
+  }
+}
+
+function getActiveConversationId(pathname: string): string | null {
+  const match = pathname.match(/^\/conversations\/([^/]+)$/);
+  if (!match || match[1] === 'new') {
+    return null;
+  }
+
+  return decodeURIComponent(match[1]);
+}
+
+function ConversationStatusIndicators({
+  isRunning,
+  needsAttention,
+}: {
+  isRunning?: boolean;
+  needsAttention?: boolean;
+}) {
+  if (!isRunning && !needsAttention) {
+    return null;
+  }
+
+  return (
+    <span className="flex items-center gap-1.5 shrink-0 self-start mt-0.5" aria-hidden="true">
+      {isRunning && (
+        <span
+          className="w-2 h-2 rounded-full bg-accent animate-pulse"
+          title="Running"
+        />
+      )}
+      {needsAttention && (
+        <span
+          className="w-2 h-2 rounded-full bg-warning ring-1 ring-warning/25"
+          title="Needs attention"
+        />
+      )}
+    </span>
+  );
+}
+
 // ── Open tab ───────────────────────────────────────────────────────────────
 
-function OpenTab({ session, onClose }: { session: SessionMeta; onClose: () => void }) {
+function OpenTab({
+  session,
+  needsAttention,
+  onClose,
+}: {
+  session: SessionMeta;
+  needsAttention?: boolean;
+  onClose: () => void;
+}) {
   const [hovered, setHovered] = useState(false);
   const location = useLocation();
   const isActive = location.pathname === `/conversations/${session.id}`;
@@ -88,7 +161,10 @@ function OpenTab({ session, onClose }: { session: SessionMeta; onClose: () => vo
       ].join(' ')} />
 
       <div className="flex-1 min-w-0">
-        <p className="ui-row-title truncate">{session.title}</p>
+        <div className="flex items-start gap-2">
+          <p className="ui-row-title truncate flex-1 min-w-0">{session.title}</p>
+          <ConversationStatusIndicators isRunning={session.isRunning} needsAttention={needsAttention} />
+        </div>
         <p className="ui-sidebar-session-meta">
           {timeAgo(session.timestamp)}
           <span className="ml-1.5 opacity-55">· {cwdLabel(session.cwd)}</span>
@@ -110,7 +186,15 @@ function OpenTab({ session, onClose }: { session: SessionMeta; onClose: () => vo
 
 // ── Shelf row ──────────────────────────────────────────────────────────────
 
-function ShelfRow({ session, onOpen }: { session: SessionMeta; onOpen: () => void }) {
+function ShelfRow({
+  session,
+  needsAttention,
+  onOpen,
+}: {
+  session: SessionMeta;
+  needsAttention?: boolean;
+  onOpen: () => void;
+}) {
   return (
     <button
       onClick={onOpen}
@@ -119,7 +203,10 @@ function ShelfRow({ session, onOpen }: { session: SessionMeta; onOpen: () => voi
     >
       <span className="w-1.5 h-1.5 rounded-full bg-border-default/40 shrink-0 mt-px" />
       <div className="flex-1 min-w-0">
-        <p className="text-[12px] leading-snug truncate">{session.title}</p>
+        <div className="flex items-start gap-2">
+          <p className="text-[12px] leading-snug truncate flex-1 min-w-0">{session.title}</p>
+          <ConversationStatusIndicators isRunning={session.isRunning} needsAttention={needsAttention} />
+        </div>
         <p className="text-[10px] text-dim/60 mt-0.5 truncate">
           {timeAgo(session.timestamp)}
           <span className="ml-1.5">· {cwdLabel(session.cwd)}</span>
@@ -215,13 +302,87 @@ export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { theme, toggle: toggleTheme } = useTheme();
+  const { activity } = useAppData();
   const { tabs, shelf, openSession, closeSession, loading, refetch } = useConversations();
   const { data: profileState } = useApi(api.profiles);
   const [shelfOpen, setShelfOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [switchingProfile, setSwitchingProfile] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
-  const inboxCount = useInboxCount();
+  const [seenMessageCounts, setSeenMessageCounts] = useState<Record<string, number>>(loadSeenMessageCounts);
+  const [seenCountsReady, setSeenCountsReady] = useState(false);
+  const inboxCount = activity?.unreadCount ?? null;
+  const allSessions = useMemo(() => [...tabs, ...shelf], [tabs, shelf]);
+  const activeConversationId = useMemo(() => getActiveConversationId(location.pathname), [location.pathname]);
+  const unreadConversationIds = useMemo(
+    () => collectAttentionConversationIds(activity?.entries ?? []),
+    [activity],
+  );
+  const attentionIds = useMemo(() => {
+    if (!seenCountsReady) {
+      return unreadConversationIds;
+    }
+
+    return collectConversationAttentionIds({
+      sessions: allSessions,
+      unreadConversationIds,
+      seenMessageCounts,
+      activeConversationId,
+    });
+  }, [activeConversationId, allSessions, seenCountsReady, seenMessageCounts, unreadConversationIds]);
+
+  useEffect(() => {
+    if (loading || seenCountsReady) {
+      return;
+    }
+
+    setSeenMessageCounts((prev) => {
+      let changed = false;
+      const next = { ...prev };
+
+      for (const session of allSessions) {
+        if (typeof next[session.id] === 'number') {
+          continue;
+        }
+
+        next[session.id] = session.messageCount;
+        changed = true;
+      }
+
+      if (changed) {
+        saveSeenMessageCounts(next);
+        return next;
+      }
+
+      return prev;
+    });
+
+    setSeenCountsReady(true);
+  }, [allSessions, loading, seenCountsReady]);
+
+  useEffect(() => {
+    if (!activeConversationId) {
+      return;
+    }
+
+    const activeSession = allSessions.find((session) => session.id === activeConversationId);
+    if (!activeSession) {
+      return;
+    }
+
+    setSeenMessageCounts((prev) => {
+      if (prev[activeSession.id] === activeSession.messageCount) {
+        return prev;
+      }
+
+      const next = {
+        ...prev,
+        [activeSession.id]: activeSession.messageCount,
+      };
+      saveSeenMessageCounts(next);
+      return next;
+    });
+  }, [activeConversationId, allSessions]);
 
   function handleShelfClick(session: SessionMeta) {
     openSession(session.id);
@@ -333,6 +494,7 @@ export function Sidebar() {
           <OpenTab
             key={session.id}
             session={session}
+            needsAttention={attentionIds.has(session.id)}
             onClose={() => handleCloseTab(session.id)}
           />
         ))}
@@ -362,6 +524,7 @@ export function Sidebar() {
               <ShelfRow
                 key={session.id}
                 session={session}
+                needsAttention={attentionIds.has(session.id)}
                 onOpen={() => handleShelfClick(session)}
               />
             ))}

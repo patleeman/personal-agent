@@ -3,7 +3,12 @@ import type { MessageBlock } from '../../types';
 import {
   applyConversationRailFisheye,
   buildConversationRailSnippet,
+  getConversationRailMaxScrollTop,
+  getConversationRailScrollTopFromThumb,
+  getConversationRailTrackTravel,
   getConversationRailTurns,
+  getConversationRailViewportTop,
+  isConversationRailThumbHit,
   pickNearestConversationRailMarker,
 } from './conversationRail.js';
 
@@ -93,5 +98,36 @@ describe('conversation rail fisheye', () => {
     ], 110)).toEqual({ index: 7, baseY: 96, displayY: 105 });
 
     expect(pickNearestConversationRailMarker([], 50)).toBeNull();
+  });
+});
+
+describe('conversation rail viewport math', () => {
+  const metrics = {
+    clientHeight: 400,
+    contentHeight: 1000,
+    trackHeight: 368,
+    viewportHeightPx: 147.2,
+  };
+
+  it('maps scroll range to thumb travel like a scrollbar', () => {
+    expect(getConversationRailMaxScrollTop(metrics)).toBe(600);
+    expect(getConversationRailTrackTravel(metrics)).toBeCloseTo(220.8);
+    expect(getConversationRailViewportTop(metrics, 0)).toBe(0);
+    expect(getConversationRailViewportTop(metrics, 300)).toBeCloseTo(110.4);
+    expect(getConversationRailViewportTop(metrics, 600)).toBeCloseTo(220.8);
+  });
+
+  it('maps dragged thumb position back to scrollTop', () => {
+    expect(getConversationRailScrollTopFromThumb({
+      metrics,
+      pointerY: 147.2,
+      dragOffsetPx: 36.8,
+    })).toBeCloseTo(300);
+  });
+
+  it('detects hits inside the viewport thumb', () => {
+    expect(isConversationRailThumbHit(90, 80, 40)).toBe(true);
+    expect(isConversationRailThumbHit(79, 80, 40)).toBe(false);
+    expect(isConversationRailThumbHit(121, 80, 40)).toBe(false);
   });
 });

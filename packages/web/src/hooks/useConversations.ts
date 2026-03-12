@@ -10,6 +10,7 @@ import { useCallback, useContext, useState } from 'react';
 import { api } from '../api';
 import { LiveTitlesContext, useAppData, useSseConnection } from '../contexts';
 import { NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversationTitle';
+import { applyLiveSessionState, buildSyntheticLiveSessionMeta } from '../sessionIndicators';
 import type { SessionMeta } from '../types';
 
 const OPEN_KEY = 'pa:open-session-ids';
@@ -31,18 +32,9 @@ async function fetchSessionsSnapshot(): Promise<SessionMeta[]> {
   const jsonlIds = new Set(jsonl.map((session) => session.id));
   const syntheticLive: SessionMeta[] = live
     .filter((entry) => !jsonlIds.has(entry.id))
-    .map((entry) => ({
-      id: entry.id,
-      file: entry.sessionFile,
-      timestamp: new Date().toISOString(),
-      cwd: entry.cwd,
-      cwdSlug: entry.cwd.replace(/\//g, '-'),
-      model: '',
-      title: NEW_CONVERSATION_TITLE,
-      messageCount: 0,
-    }));
+    .map((entry) => buildSyntheticLiveSessionMeta(entry));
 
-  return [...syntheticLive, ...jsonl];
+  return [...syntheticLive, ...applyLiveSessionState(jsonl, live)];
 }
 
 export function useConversations() {

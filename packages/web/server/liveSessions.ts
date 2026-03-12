@@ -97,7 +97,7 @@ interface PersistableSessionManager {
 const SESSION_MANAGER_PERSISTENCE_PATCH = Symbol('pa.session-manager-persistence-patch');
 
 export function patchSessionManagerPersistence(sessionManager: SessionManager): void {
-  const manager = sessionManager as SessionManager & PersistableSessionManager & {
+  const manager = sessionManager as unknown as PersistableSessionManager & {
     [SESSION_MANAGER_PERSISTENCE_PATCH]?: boolean;
   };
 
@@ -128,7 +128,7 @@ export function patchSessionManagerPersistence(sessionManager: SessionManager): 
 }
 
 export function ensureSessionFileExists(sessionManager: SessionManager): void {
-  const manager = sessionManager as SessionManager & PersistableSessionManager;
+  const manager = sessionManager as unknown as PersistableSessionManager;
   if (!manager.persist || !manager.sessionFile || typeof manager._rewriteFile !== 'function') {
     return;
   }
@@ -156,6 +156,42 @@ function summarizeUserMessageContent(content: unknown): { text: string; imageCou
   const imageCount = blocks.filter((block) => block.type === 'image').length;
 
   return { text, imageCount };
+}
+
+function formatConversationTitle(text: string, imageCount: number): string {
+  return text.trim().replace(/\n/g, ' ').slice(0, 80)
+    || (imageCount === 1 ? '(image attachment)' : imageCount > 1 ? `(${imageCount} image attachments)` : '');
+}
+
+function getSessionMessages(session: AgentSession): Array<{ role?: string; content?: unknown }> {
+  const stateMessages = (session as AgentSession & {
+    state?: { messages?: Array<{ role?: string; content?: unknown }> };
+    agent?: { state?: { messages?: Array<{ role?: string; content?: unknown }> } };
+  }).state?.messages;
+
+  if (Array.isArray(stateMessages)) {
+    return stateMessages;
+  }
+
+  const agentMessages = (session as AgentSession & {
+    agent?: { state?: { messages?: Array<{ role?: string; content?: unknown }> } };
+  }).agent?.state?.messages;
+
+  return Array.isArray(agentMessages) ? agentMessages : [];
+}
+
+function resolveEntryTitle(entry: LiveEntry): string {
+  if (entry.title.trim()) {
+    return entry.title;
+  }
+
+  const firstUser = getSessionMessages(entry.session).find((message) => message.role === 'user');
+  if (!firstUser) {
+    return '';
+  }
+
+  const { text, imageCount } = summarizeUserMessageContent(firstUser.content);
+  return formatConversationTitle(text, imageCount);
 }
 
 function isLikelyUnsupportedImageInputError(error: unknown): boolean {
@@ -207,9 +243,7 @@ function buildLiveSnapshotBlocks(session: AgentSession): DisplayBlock[] {
 
   return buildDisplayBlocksFromEntries(messages.map((message, index) => ({
     id: `live-${index}`,
-    timestamp: typeof (message as { timestamp?: string | number }).timestamp !== 'undefined'
-      ? (message as { timestamp?: string | number }).timestamp
-      : index,
+    timestamp: (message as { timestamp?: string | number }).timestamp ?? index,
     message: {
       role: (message as { role?: string }).role ?? 'unknown',
       content: (message as { content?: unknown }).content,
@@ -220,12 +254,14 @@ function buildLiveSnapshotBlocks(session: AgentSession): DisplayBlock[] {
 }
 
 function broadcastTitle(entry: LiveEntry): void {
-  if (!entry.title) {
+  const title = resolveEntryTitle(entry);
+  if (!title) {
     return;
   }
 
-  broadcast(entry, { type: 'title_update', title: entry.title });
-  publishAppEvent({ type: 'live_title', sessionId: entry.sessionId, title: entry.title });
+  entry.title = title;
+  broadcast(entry, { type: 'title_update', title });
+  publishAppEvent({ type: 'live_title', sessionId: entry.sessionId, title });
   invalidateAppTopics('sessions');
 }
 
@@ -278,12 +314,9 @@ function wireSession(id: string, session: AgentSession, cwd: string) {
   session.subscribe((event: AgentSessionEvent) => {
     // Extract title from first user message
     if (!entry.sentTitle && event.type === 'turn_end') {
-      const msgs = session.agent.state.messages;
-      const firstUser = msgs.find(m => m.role === 'user');
-      if (firstUser) {
-        const { text, imageCount } = summarizeUserMessageContent(firstUser.content);
-        entry.title = text.trim().replace(/\n/g, ' ').slice(0, 80)
-          || (imageCount === 1 ? '(image attachment)' : imageCount > 1 ? `(${imageCount} image attachments)` : '(untitled)');
+      const title = resolveEntryTitle(entry);
+      if (title) {
+        entry.title = title;
         entry.sentTitle = true;
         broadcastTitle(entry);
       }
@@ -374,11 +407,12 @@ export function isLive(sessionId: string): boolean {
 }
 
 export function getLiveSessions() {
-  return Array.from(registry.entries()).map(([id, e]) => ({
+  return Array.from(registry.entries()).map(([id, entry]) => ({
     id,
-    cwd:         e.cwd,
-    sessionFile: e.session.sessionFile ?? '',
-    isStreaming: e.session.isStreaming,
+    cwd: entry.cwd,
+    sessionFile: entry.session.sessionFile ?? '',
+    title: resolveEntryTitle(entry),
+    isStreaming: entry.session.isStreaming,
   }));
 }
 
@@ -481,8 +515,9 @@ export function subscribe(
   entry.listeners.add(listener);
 
   listener({ type: 'snapshot', blocks: buildLiveSnapshotBlocks(entry.session) });
-  if (entry.sentTitle && entry.title) {
-    listener({ type: 'title_update', title: entry.title });
+  const title = resolveEntryTitle(entry);
+  if (title) {
+    listener({ type: 'title_update', title });
   }
   listener({ type: 'context_usage', usage: readContextUsagePayload(entry.session) });
   if (entry.session.isStreaming) {

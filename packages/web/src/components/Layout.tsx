@@ -2,7 +2,6 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { ContextRail } from './ContextRail';
 import { Sidebar } from './Sidebar';
-import { IconButton } from './ui';
 import { clampPanelWidth, getRailLayoutPrefs, getRailMaxWidth } from '../layoutSizing';
 
 // ── Resize hook ───────────────────────────────────────────────────────────────
@@ -154,18 +153,6 @@ export function Layout() {
     side: 'right',
   });
 
-  const [railCollapsed, setRailCollapsed] = useState(() => {
-    try { return localStorage.getItem('pa:rail-collapsed') === 'true'; } catch { return false; }
-  });
-
-  function toggleRail() {
-    setRailCollapsed(v => {
-      const next = !v;
-      try { localStorage.setItem('pa:rail-collapsed', String(next)); } catch { /* ignore */ }
-      return next;
-    });
-  }
-
   return (
     <div className="flex h-screen overflow-hidden bg-base text-primary select-none">
       {/* Left sidebar */}
@@ -180,28 +167,12 @@ export function Layout() {
         <Outlet />
       </main>
 
-      {railCollapsed ? (
-        /* Collapsed strip — click to expand */
-        <div className="flex-shrink-0 w-8 border-l border-border-subtle flex flex-col items-center pt-3 bg-surface">
-          <IconButton
-            onClick={toggleRail}
-            title="Show context panel"
-            aria-label="Show context panel"
-            compact
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-          </IconButton>
+      <>
+        <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
+        <div style={{ width: rail.width }} className="flex-shrink-0 flex flex-col overflow-hidden">
+          <ContextRail />
         </div>
-      ) : (
-        <>
-          <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
-          <div style={{ width: rail.width }} className="flex-shrink-0 flex flex-col overflow-hidden">
-            <ContextRail onCollapse={toggleRail} />
-          </div>
-        </>
-      )}
+      </>
     </div>
   );
 }

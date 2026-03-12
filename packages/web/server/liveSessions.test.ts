@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ensureSessionFileExists, patchSessionManagerPersistence, registry, subscribe, type SseEvent } from './liveSessions.js';
+import { ensureSessionFileExists, getLiveSessions, patchSessionManagerPersistence, registry, subscribe, type SseEvent } from './liveSessions.js';
 
 const tempDirs: string[] = [];
 
@@ -76,8 +76,45 @@ describe('live session subscriptions', () => {
         },
       ],
     });
-    expect(events[1]).toEqual({ type: 'context_usage', usage: null });
-    expect(events[2]).toEqual({ type: 'agent_start' });
+    expect(events[1]).toEqual({ type: 'title_update', title: 'How do I fix this?' });
+    expect(events[2]).toEqual({ type: 'context_usage', usage: null });
+    expect(events[3]).toEqual({ type: 'agent_start' });
+  });
+
+  it('includes the current live title in live session snapshots', () => {
+    registry.set('session-2', {
+      sessionId: 'session-2',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: '',
+      sentTitle: false,
+      lastContextUsageJson: null,
+      session: {
+        sessionFile: '/tmp/workspace/session-2.jsonl',
+        state: {
+          messages: [
+            {
+              role: 'user',
+              content: [{ type: 'text', text: 'Keep this sidebar title fresh' }],
+              timestamp: 1,
+            },
+          ],
+          streamMessage: null,
+        },
+        getContextUsage: () => null,
+        isStreaming: false,
+      },
+    } as any);
+
+    expect(getLiveSessions()).toEqual([
+      {
+        id: 'session-2',
+        cwd: '/tmp/workspace',
+        sessionFile: '/tmp/workspace/session-2.jsonl',
+        title: 'Keep this sidebar title fresh',
+        isStreaming: false,
+      },
+    ]);
   });
 });
 
@@ -127,9 +164,9 @@ describe('session file persistence', () => {
       _rewriteFile() {
         writeFileSync(sessionFile, `${entries.map((entry) => JSON.stringify(entry)).join('\n')}\n`);
       },
-    };
+    } as any;
 
-    patchSessionManagerPersistence(manager as any);
+    patchSessionManagerPersistence(manager);
     manager._persist?.(entries[1]);
 
     expect(manager.flushed).toBe(true);

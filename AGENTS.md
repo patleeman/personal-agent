@@ -21,3 +21,13 @@
 - Use `pa memory list/find/show/new/lint` for discovery, creation, and validation.
 - Keep non-markdown automation state outside memory (for example `agent/state/...`).
 - Keep reusable cross-project workflows in `skills/`; keep durable behavior/preferences in `AGENTS.md`.
+
+##  Development 
+
+- For personal-agent web UI work, prefer server-pushed updates (SSE + POST) over client polling when the backend can publish change events.
+
+## UI Design Bans
+
+- For personal-agent web UI work, BANNED: nested bordered containers/cards (`boxes inside boxes`). Do not stack inset panels, card-within-card layouts, or form wrappers inside larger bordered boxes unless there is a truly unavoidable reason.
+- For personal-agent web UI work, BANNED: overusing pills/chips as a default UI treatment. Use pills only when they are semantically justified (for example compact status or tags), not as a repeated decorative pattern.
+- Prefer flatter layouts with spacing, typography, and alignment creating hierarchy instead of extra borders and pill chrome.

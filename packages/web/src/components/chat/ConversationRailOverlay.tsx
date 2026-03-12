@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent, RefObject } from 'react';
 import type { MessageBlock } from '../../types';
 import { cx } from '../ui';
 import {
   applyConversationRailFisheye,
+  getConversationRailScrollTopFromThumb,
   getConversationRailTurns,
+  getConversationRailViewportTop,
+  isConversationRailThumbHit,
   pickNearestConversationRailMarker,
 } from './conversationRail.js';
 
@@ -48,6 +51,9 @@ export function ConversationRail({ messages, scrollContainerRef, onJumpToMessage
   const [viewport, setViewport] = useState({ scrollTop: 0, scrollHeight: 1, clientHeight: 1 });
   const [hovered, setHovered] = useState(false);
   const [pointerY, setPointerY] = useState<number | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const railRef = useRef<HTMLDivElement | null>(null);
+  const dragOffsetRef = useRef(0);
 
   const syncViewport = useCallback(() => {
     const scrollEl = scrollContainerRef.current;
@@ -184,7 +190,12 @@ export function ConversationRail({ messages, scrollContainerRef, onJumpToMessage
 
   const viewportHeightPx = Math.max(18, (viewport.clientHeight / contentHeight) * trackHeight);
   const viewportTopPx = clamp(
-    (viewport.scrollTop / contentHeight) * trackHeight,
+    getConversationRailViewportTop({
+      clientHeight: viewport.clientHeight,
+      contentHeight,
+      trackHeight,
+      viewportHeightPx,
+    }, viewport.scrollTop),
     0,
     Math.max(0, trackHeight - viewportHeightPx),
   );
@@ -193,24 +204,90 @@ export function ConversationRail({ messages, scrollContainerRef, onJumpToMessage
     ? clamp(TRACK_INSET + activeMarker.displayY, TRACK_INSET + PREVIEW_HALF_HEIGHT, viewport.clientHeight - TRACK_INSET - PREVIEW_HALF_HEIGHT)
     : 0;
 
+  const getLocalPointerY = useCallback((clientY: number): number | null => {
+    const railEl = railRef.current;
+    if (!railEl) {
+      return null;
+    }
+
+    const rect = railEl.getBoundingClientRect();
+    return clamp(clientY - rect.top - TRACK_INSET, 0, trackHeight);
+  }, [trackHeight]);
+
+  const scrollToPointer = useCallback((localY: number, dragOffsetPx: number) => {
+    const scrollEl = scrollContainerRef.current;
+    if (!scrollEl) {
+      return;
+    }
+
+    scrollEl.scrollTop = getConversationRailScrollTopFromThumb({
+      metrics: {
+        clientHeight: viewport.clientHeight,
+        contentHeight,
+        trackHeight,
+        viewportHeightPx,
+      },
+      pointerY: localY,
+      dragOffsetPx,
+    });
+  }, [contentHeight, scrollContainerRef, trackHeight, viewport.clientHeight, viewportHeightPx]);
+
   function handlePointerMove(event: ReactMouseEvent<HTMLDivElement>) {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const localY = clamp(event.clientY - rect.top - TRACK_INSET, 0, trackHeight);
+    const localY = getLocalPointerY(event.clientY);
+    if (localY === null) {
+      return;
+    }
+
     setPointerY(localY);
+    if (dragging) {
+      scrollToPointer(localY, dragOffsetRef.current);
+    }
   }
 
   function handlePointerLeave() {
+    if (dragging) {
+      return;
+    }
+
     setHovered(false);
     setPointerY(null);
   }
 
-  function jumpToActiveMarker() {
-    if (!activeMarker) {
+  function jumpToPointer(localY: number) {
+    const marker = pickNearestConversationRailMarker(projectedMarkers, localY);
+    if (!marker) {
       return;
     }
 
-    onJumpToMessage(activeMarker.index);
+    onJumpToMessage(marker.index);
   }
+
+  useEffect(() => {
+    if (!dragging) {
+      return;
+    }
+
+    function handleWindowMouseMove(event: MouseEvent) {
+      const localY = getLocalPointerY(event.clientY);
+      if (localY === null) {
+        return;
+      }
+
+      setPointerY(localY);
+      scrollToPointer(localY, dragOffsetRef.current);
+    }
+
+    function handleWindowMouseUp() {
+      setDragging(false);
+    }
+
+    window.addEventListener('mousemove', handleWindowMouseMove);
+    window.addEventListener('mouseup', handleWindowMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove);
+      window.removeEventListener('mouseup', handleWindowMouseUp);
+    };
+  }, [dragging, getLocalPointerY, scrollToPointer]);
 
   if (projectedMarkers.length === 0) {
     return null;
@@ -238,9 +315,11 @@ export function ConversationRail({ messages, scrollContainerRef, onJumpToMessage
       )}
 
       <div
+        ref={railRef}
         className={cx(
           'pointer-events-auto relative ml-auto h-full transition-opacity duration-150 ease-out',
           hovered ? 'opacity-100' : 'opacity-82',
+          dragging ? 'cursor-grabbing' : 'cursor-default',
         )}
         style={{ width: RAIL_SLOT_WIDTH }}
         onMouseEnter={() => setHovered(true)}
@@ -248,7 +327,21 @@ export function ConversationRail({ messages, scrollContainerRef, onJumpToMessage
         onMouseLeave={handlePointerLeave}
         onMouseDown={(event) => {
           event.preventDefault();
-          jumpToActiveMarker();
+          const localY = getLocalPointerY(event.clientY);
+          if (localY === null) {
+            return;
+          }
+
+          setHovered(true);
+          setPointerY(localY);
+
+          if (isConversationRailThumbHit(localY, viewportTopPx, viewportHeightPx)) {
+            dragOffsetRef.current = localY - viewportTopPx;
+            setDragging(true);
+            return;
+          }
+
+          jumpToPointer(localY);
         }}
         aria-label="Conversation rail"
       >
@@ -262,7 +355,10 @@ export function ConversationRail({ messages, scrollContainerRef, onJumpToMessage
           />
 
           <div
-            className="absolute rounded-full border border-border-subtle/60 bg-elevated/40 shadow-sm transition-all duration-150"
+            className={cx(
+              'absolute rounded-full border border-border-subtle/60 bg-elevated/40 shadow-sm transition-all duration-150',
+              dragging ? 'cursor-grabbing' : 'cursor-grab',
+            )}
             style={{
               left: `calc(100% - ${TRACK_RIGHT_INSET}px)`,
               transform: 'translateX(-50%)',

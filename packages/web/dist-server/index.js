@@ -140,6 +140,7 @@ function listTasksForCurrentProfile() {
 function listConversationSessionsSnapshot() {
     const jsonl = listSessions();
     const live = getLiveSessions();
+    const liveById = new Map(live.map((entry) => [entry.id, entry]));
     const jsonlIds = new Set(jsonl.map((session) => session.id));
     const syntheticLive = live
         .filter((entry) => !jsonlIds.has(entry.id))
@@ -150,10 +151,21 @@ function listConversationSessionsSnapshot() {
         cwd: entry.cwd,
         cwdSlug: entry.cwd.replace(/\//g, '-'),
         model: '',
-        title: 'New Conversation',
+        title: entry.title || 'New Conversation',
         messageCount: 0,
+        isRunning: entry.isStreaming,
     }));
-    return [...syntheticLive, ...jsonl];
+    return [
+        ...syntheticLive,
+        ...jsonl.map((session) => {
+            const liveEntry = liveById.get(session.id);
+            return {
+                ...session,
+                title: liveEntry?.title || session.title,
+                isRunning: Boolean(liveEntry?.isStreaming),
+            };
+        }),
+    ];
 }
 function buildSnapshotEvents(topics) {
     const uniqueTopics = [...new Set(topics)];

@@ -81,6 +81,7 @@ export interface SessionMeta {
   model: string;
   title: string;         // first user message (truncated)
   messageCount: number;
+  isRunning?: boolean;
 }
 
 export interface SessionDetail {

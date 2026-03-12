@@ -13,6 +13,13 @@ export interface ConversationRailProjectedMarker {
   displayY: number;
 }
 
+export interface ConversationRailViewportMetrics {
+  clientHeight: number;
+  contentHeight: number;
+  trackHeight: number;
+  viewportHeightPx: number;
+}
+
 const DEFAULT_SNIPPET_LIMIT = 96;
 
 const XML_TAG_RE = /<\/?[A-Za-z_][\w:.-]*(?:\s+[^<>]*?)?\/?\s*>/g;
@@ -196,4 +203,45 @@ export function pickNearestConversationRailMarker(
   }
 
   return best;
+}
+
+export function getConversationRailTrackTravel(metrics: ConversationRailViewportMetrics): number {
+  return Math.max(0, metrics.trackHeight - metrics.viewportHeightPx);
+}
+
+export function getConversationRailMaxScrollTop(metrics: ConversationRailViewportMetrics): number {
+  return Math.max(0, metrics.contentHeight - metrics.clientHeight);
+}
+
+export function getConversationRailViewportTop(metrics: ConversationRailViewportMetrics, scrollTop: number): number {
+  const trackTravel = getConversationRailTrackTravel(metrics);
+  const maxScrollTop = getConversationRailMaxScrollTop(metrics);
+  if (trackTravel === 0 || maxScrollTop === 0) {
+    return 0;
+  }
+
+  return (scrollTop / maxScrollTop) * trackTravel;
+}
+
+export function getConversationRailScrollTopFromThumb(input: {
+  metrics: ConversationRailViewportMetrics;
+  pointerY: number;
+  dragOffsetPx: number;
+}): number {
+  const trackTravel = getConversationRailTrackTravel(input.metrics);
+  const maxScrollTop = getConversationRailMaxScrollTop(input.metrics);
+  if (trackTravel === 0 || maxScrollTop === 0) {
+    return 0;
+  }
+
+  const thumbTop = Math.min(
+    trackTravel,
+    Math.max(0, input.pointerY - input.dragOffsetPx),
+  );
+
+  return (thumbTop / trackTravel) * maxScrollTop;
+}
+
+export function isConversationRailThumbHit(pointerY: number, viewportTopPx: number, viewportHeightPx: number): boolean {
+  return pointerY >= viewportTopPx && pointerY <= (viewportTopPx + viewportHeightPx);
 }

@@ -107,6 +107,7 @@ export interface SessionMeta {
   model: string;
   title: string;
   messageCount: number;
+  isRunning?: boolean;
 }
 
 export type DisplayBlock =
@@ -168,6 +169,7 @@ export interface LiveSessionMeta {
   id:          string;
   cwd:         string;
   sessionFile: string;
+  title?:      string;
   isStreaming: boolean;
 }
 

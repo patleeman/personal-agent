@@ -13,7 +13,7 @@ import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
 import { CONVERSATION_PROJECTS_CHANGED_EVENT, emitConversationProjectsChanged } from '../conversationProjectEvents';
 import { ProjectDetailPanel } from './ProjectDetailPanel';
 import { ProjectOverviewPanel } from './ProjectOverviewPanel';
-import { ErrorState, IconButton, LoadingState, Pill, SurfacePanel } from './ui';
+import { ErrorState, LoadingState, Pill, SurfacePanel } from './ui';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -34,24 +34,13 @@ function EmptyPrompt({ text }: { text: string }) {
   );
 }
 
-function CollapseBtn({ onCollapse }: { onCollapse: () => void }) {
+function RailHeader({ label, sub }: { label: string; sub?: string }) {
   return (
-    <IconButton onClick={onCollapse} title="Hide context panel" aria-label="Hide context panel" compact>
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M9 18l6-6-6-6" />
-      </svg>
-    </IconButton>
-  );
-}
-
-function RailHeader({ label, sub, onCollapse }: { label: string; sub?: string; onCollapse?: () => void }) {
-  return (
-    <div className="px-4 pt-4 pb-3 border-b border-border-subtle flex items-start justify-between gap-2 shrink-0">
+    <div className="px-4 pt-4 pb-3 border-b border-border-subtle shrink-0">
       <div className="min-w-0">
         <p className="ui-section-label">{label}</p>
         {sub && <p className="text-[12px] text-secondary mt-0.5 font-mono truncate">{sub}</p>}
       </div>
-      {onCollapse && <CollapseBtn onCollapse={onCollapse} />}
     </div>
   );
 }
@@ -650,7 +639,7 @@ function MemoryOverviewContext() {
 
 // ── Root ──────────────────────────────────────────────────────────────────────
 
-export function ContextRail({ onCollapse }: { onCollapse?: () => void }) {
+export function ContextRail() {
   const location = useLocation();
   const parts = location.pathname.split('/').filter(Boolean);
   const section = parts[0];
@@ -660,7 +649,7 @@ export function ContextRail({ onCollapse }: { onCollapse?: () => void }) {
   // Conversations
   if (section === 'conversations' && id) return (
     <div className="flex-1 overflow-y-auto flex flex-col">
-      <RailHeader label="Session" onCollapse={onCollapse} />
+      <RailHeader label="Session" />
       <LiveSessionContextPanel id={id} />
     </div>
   );
@@ -668,13 +657,13 @@ export function ContextRail({ onCollapse }: { onCollapse?: () => void }) {
   // Scheduled tasks
   if (scheduledSection && id) return (
     <div className="flex-1 overflow-y-auto flex flex-col">
-      <RailHeader label="Scheduled task" sub={id} onCollapse={onCollapse} />
+      <RailHeader label="Scheduled task" sub={id} />
       <TaskContext id={id} />
     </div>
   );
   if (scheduledSection) return (
     <div className="flex-1 flex flex-col">
-      <RailHeader label="Scheduled" onCollapse={onCollapse} />
+      <RailHeader label="Scheduled" />
       <EmptyPrompt text="Select a scheduled task to see its prompt and schedule." />
     </div>
   );
@@ -682,7 +671,7 @@ export function ContextRail({ onCollapse }: { onCollapse?: () => void }) {
   // Inbox
   if (section === 'inbox' && id) return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <RailHeader label="Inbox" sub={id} onCollapse={onCollapse} />
+      <RailHeader label="Inbox" sub={id} />
       <div className="flex-1 overflow-y-auto">
         <InboxItemContext id={id} />
       </div>
@@ -690,7 +679,7 @@ export function ContextRail({ onCollapse }: { onCollapse?: () => void }) {
   );
   if (section === 'inbox') return (
     <div className="flex-1 flex flex-col">
-      <RailHeader label="Inbox" onCollapse={onCollapse} />
+      <RailHeader label="Inbox" />
       <EmptyPrompt text="Select an item to see details." />
     </div>
   );
@@ -698,7 +687,7 @@ export function ContextRail({ onCollapse }: { onCollapse?: () => void }) {
   // Projects
   if (section === 'projects' && id) return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <RailHeader label="Project" onCollapse={onCollapse} />
+      <RailHeader label="Project" />
       <div className="flex-1 overflow-y-auto">
         <ProjectDetailContext id={id} />
       </div>
@@ -706,7 +695,7 @@ export function ContextRail({ onCollapse }: { onCollapse?: () => void }) {
   );
   if (section === 'projects') return (
     <div className="flex-1 flex flex-col">
-      <RailHeader label="Project" onCollapse={onCollapse} />
+      <RailHeader label="Project" />
       <EmptyPrompt text="Select a project to inspect and edit it." />
     </div>
   );
@@ -718,7 +707,7 @@ export function ContextRail({ onCollapse }: { onCollapse?: () => void }) {
       const fileName = itemPath.split('/').pop() ?? itemPath;
       return (
         <div className="flex-1 flex flex-col overflow-hidden">
-          <RailHeader label="Memory" sub={fileName} onCollapse={onCollapse} />
+          <RailHeader label="Memory" sub={fileName} />
           <div className="flex-1 overflow-y-auto">
             <MemoryFileContext path={itemPath} />
           </div>
@@ -727,7 +716,7 @@ export function ContextRail({ onCollapse }: { onCollapse?: () => void }) {
     }
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        <RailHeader label="Memory" onCollapse={onCollapse} />
+        <RailHeader label="Memory" />
         <div className="flex-1 overflow-y-auto">
           <MemoryOverviewContext />
         </div>
