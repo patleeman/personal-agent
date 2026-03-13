@@ -17,7 +17,6 @@ export interface TasksModuleConfig {
   maxRetries: number;
   reapAfterDays: number;
   defaultTimeoutSeconds: number;
-  runTasksInTmux?: boolean;
 }
 
 export interface DaemonConfig {
@@ -196,7 +195,6 @@ export function getDefaultDaemonConfig(): DaemonConfig {
         maxRetries: 3,
         reapAfterDays: 7,
         defaultTimeoutSeconds: 1800,
-        runTasksInTmux: false,
       },
     },
   };

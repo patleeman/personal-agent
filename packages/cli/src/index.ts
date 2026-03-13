@@ -82,7 +82,6 @@ import { readTailLines } from './file-utils.js';
 import { memoryCommand } from './memory.js';
 import { readConfig, setDefaultProfile } from './config.js';
 import { runsCommand } from './runs-command.js';
-import { tmuxCommand } from './tmux-command.js';
 import {
   accent,
   bullet,
@@ -4113,17 +4112,10 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     },
     {
       name: 'runs',
-      usage: 'runs [list|show|logs|help] [args...]',
-      description: 'Inspect durable background runs',
+      usage: 'runs [list|show|logs|start|cancel|help] [args...]',
+      description: 'Inspect and manage durable background runs',
       disableBuiltInHelp: true,
       run: runsCommand,
-    },
-    {
-      name: 'tmux',
-      usage: 'tmux [list|inspect|logs|stop|send|run|clean|help] [args...]',
-      description: 'Manage agent-owned tmux sessions',
-      disableBuiltInHelp: true,
-      run: tmuxCommand,
     },
 
   ];
@@ -4226,10 +4218,8 @@ Examples:
   pa memory lint
   pa runs list
   pa runs show <id>
-  pa tmux list
-  pa tmux inspect <session>
-  pa tmux clean --dry-run
-  pa tmux run code-review -- pa -p "review this diff"
+  pa runs start code-review -- pa -p "review this diff"
+  pa runs cancel <id>
 
 `,
     )

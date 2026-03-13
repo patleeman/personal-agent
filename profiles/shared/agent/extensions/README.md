@@ -17,7 +17,7 @@ extensions/
 ├── exit-alias.ts
 ├── memory/
 │   └── index.ts
-├── tmux-orchestration-prompt/
+├── daemon-run-orchestration-prompt/
 │   └── index.ts
 ├── web-tools/
 │   └── index.ts

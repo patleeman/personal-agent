@@ -39,7 +39,6 @@ These commands are handled by `personal-agent` itself:
 - `pa inbox ...`
 - `pa ui ...`
 - `pa memory ...`
-- `pa tmux ...`
 - `pa gateway ...`
 - `pa restart`
 - `pa update`
@@ -188,9 +187,9 @@ pa memory lint
 
 See [Profiles, Memory, and Skills](./profiles-memory-skills.md).
 
-### `pa runs [list|show|logs|help]`
+### `pa runs [list|show|logs|start|cancel|help]`
 
-Inspect durable daemon-backed background runs.
+Inspect and manage durable daemon-backed background runs.
 
 Examples:
 
@@ -198,15 +197,11 @@ Examples:
 pa runs list
 pa runs show <id>
 pa runs logs <id> --tail 120
+pa runs start code-review -- pa -p "review this diff"
+pa runs cancel <id>
 ```
 
-Use this as the main inspection surface for durable background work.
-
-### `pa tmux [list|inspect|logs|stop|send|run|clean|help]`
-
-Manage agent-owned tmux sessions.
-
-This is still available for legacy/manual tmux workflows, but durable daemon-backed work should prefer `pa runs`.
+Use this as the main control surface for detached local background work.
 
 ### `pa gateway ...`
 
@@ -272,7 +267,7 @@ pa tasks list --json
 pa tasks show <id> --json
 pa memory list --json
 pa inbox list --json
-pa tmux list --json
+pa runs list --json
 ```
 
 ## Plain output

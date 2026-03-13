@@ -1,5 +1,6 @@
 import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
 import {
+  cancelDurableRun as cancelDurableRunFromDaemon,
   getDurableRun as getDurableRunFromDaemon,
   listDurableRuns as listDurableRunsFromDaemon,
   pingDaemon,
@@ -8,6 +9,7 @@ import {
   scanDurableRun,
   scanDurableRunsForRecovery,
   summarizeScannedDurableRuns,
+  type CancelDurableRunResult,
   type GetDurableRunResult,
   type ListDurableRunsResult,
 } from '@personal-agent/daemon';
@@ -128,4 +130,8 @@ export async function getDurableRunLog(runId: string, tail = 120): Promise<{ pat
     path: result.run.paths.outputLogPath,
     log: readTailText(result.run.paths.outputLogPath, tail),
   };
+}
+
+export async function cancelDurableRun(runId: string): Promise<CancelDurableRunResult> {
+  return cancelDurableRunFromDaemon(runId);
 }

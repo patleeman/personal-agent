@@ -147,7 +147,7 @@ This makes it useful for both quick chats and long-running remote workflows.
 ### Background and orchestration
 
 - `/tasks [status]`
-- `/tmux ...`
+- `/run ...`
 - `/fork [topic name]`
 - `/room ...`
 
@@ -157,9 +157,9 @@ This makes it useful for both quick chats and long-running remote workflows.
 
 Use `/resume` when you want to switch this chat to an existing saved conversation immediately.
 
-### `/tmux run ...`
+### `/run ...`
 
-Use `/tmux run` when you want to launch a detached shell job.
+Use `/run` when you want to launch or inspect a detached daemon-backed background run.
 
 Good examples:
 
@@ -168,6 +168,16 @@ Good examples:
 - long test runs
 - scrapers
 
+Examples:
+
+```text
+/run code-review -- pa -p "review this diff"
+/run list
+/run show <id>
+/run logs <id> tail=120
+/run cancel <id>
+```
+
 ### Scheduled tasks (`*.task.md`)
 
 Use scheduled tasks when you want daemon-managed automation on a calendar or one-time schedule, even if nobody is chatting.
@@ -175,7 +185,7 @@ Use scheduled tasks when you want daemon-managed automation on a calendar or one
 Quick rule:
 
 - switch this chat to another session now → `/resume`
-- launch a long detached shell job → `/tmux run`
+- launch a long detached shell job → `/run`
 - run automation on a schedule → scheduled task
 
 ## Relationship to the daemon

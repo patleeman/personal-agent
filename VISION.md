@@ -20,7 +20,7 @@ Today, `personal-agent` is a personal application layer over Pi with:
 - a daemon for background work and scheduled tasks
 - Telegram gateway support
 - deferred resume
-- extensions, memory policy, and tmux tooling
+- extensions, memory policy, and background-run tooling
 
 ## Product thesis
 
@@ -222,13 +222,13 @@ So deferred resume belongs to conversation continuity more than to task executio
 
 ### 11. The daemon should be the primary background execution substrate
 
-Background execution should primarily live in the daemon, not in tmux.
+Background execution should primarily live in the daemon, not in a shell multiplexer.
 
 Current direction:
 
 - scheduled tasks, deferred resumes, and future autonomous/background execution should be daemon-centered
-- tmux may remain useful as optional tooling for interactive debugging, inspection, or manual workflows
-- tmux should not be a core dependency of the product model for autonomy
+- shell multiplexers may remain useful as optional tooling for interactive debugging, inspection, or manual workflows
+- shell multiplexers should not be a core dependency of the product model for autonomy
 - the durable record of background execution should come from daemon-managed artifacts, activity, and logs
 
 ### 12. Scheduled tasks are the main autonomy primitive
@@ -443,7 +443,7 @@ It also reviews, deduplicates, reorganizes, and refines stored memory so continu
 - **Git-backed durable resources** with clear separation between committed resources and machine-local execution state
 - **Portable by construction** — durable identity, memory, and work artifacts should move cleanly across machines
 - **Multi-surface continuity** — the same agent should work coherently across TUI, Telegram, and background automation
-- **Daemon-first background execution** — autonomous/background work should primarily be managed by the daemon, not depend on tmux as core infrastructure
+- **Daemon-first background execution** — autonomous/background work should primarily be managed by the daemon, not depend on shell multiplexers as core infrastructure
 - **Conversation continuity primitives** — deferred resume should make it easy to pause and re-enter the same conversational context later
 - **Activity before notification** — autonomous work should have a durable surfacing layer even when no conversation is active
 - **Inbox-first attention model** — the UI should bubble what needs attention instead of forcing Patrick to hunt across threads and artifacts
@@ -639,7 +639,7 @@ Potential non-goals and boundaries:
 - By default, autonomous work should update artifacts and create activity/inbox entries without necessarily sending notifications.
 - Sending scheduled-task output to Telegram should be an option layered on top of the default artifact + activity behavior.
 - The system likely needs a first-class activity or inbox stream so autonomous work can surface even when no active TUI conversation exists.
-- The daemon should become the primary substrate for background/autonomous execution; tmux should be optional tooling rather than core product infrastructure.
+- The daemon should become the primary substrate for background/autonomous execution; shell multiplexers should be optional tooling rather than core product infrastructure.
 - The default TUI shell should likely be inbox-first: left sidebar for inbox/conversations, center conversation panel, right context/artifact panel.
 - Conversations needing attention should bubble to the top of the inbox/sidebar, including when scheduled or autonomous work triggers new activity.
 - This revision expanded the vision beyond active work to cover interaction surfaces, conversation continuity, autonomy/output routing, and the default UI shell.

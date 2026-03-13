@@ -1,4 +1,4 @@
-import type { ActivityEntry, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationCwdChangeResult, ConversationProjectLinks, DaemonState, DeferredResumeSummary, DurableRunDetailResult, DurableRunListResult, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, ModelState, ProfileState, ProjectDetail, ProjectRecord, PromptImageInput, ScheduledTaskSummary, SessionContextUsage, SessionMeta, ToolsState, WebUiState } from './types';
+import type { ActivityEntry, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationCwdChangeResult, ConversationProjectLinks, DaemonState, DeferredResumeSummary, DurableRunDetailResult, DurableRunListResult, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, ModelState, ProfileState, ProjectDetail, ProjectRecord, PromptImageInput, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionMeta, ToolsState, WebUiState } from './types';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch('/api' + path);
@@ -143,6 +143,8 @@ export const api = {
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
   tasks: () => get<ScheduledTaskSummary[]>('/tasks'),
+  taskDetail: (id: string) =>
+    get<ScheduledTaskDetail>(`/tasks/${encodeURIComponent(id)}`),
   setTaskEnabled: (id: string, enabled: boolean) =>
     patch<{ ok: boolean }>(`/tasks/${encodeURIComponent(id)}`, { enabled }),
   taskLog: (id: string) =>
@@ -153,6 +155,7 @@ export const api = {
   durableRun: (id: string) => get<DurableRunDetailResult>(`/runs/${encodeURIComponent(id)}`),
   durableRunLog: (id: string, tail?: number) =>
     get<{ log: string; path: string }>(`/runs/${encodeURIComponent(id)}/log${tail ? `?tail=${encodeURIComponent(String(tail))}` : ''}`),
+  cancelDurableRun: (id: string) => post<{ cancelled: boolean; runId: string }>(`/runs/${encodeURIComponent(id)}/cancel`),
 
   // ── Shell run ─────────────────────────────────────────────────────────────
   run: (command: string, cwd?: string) =>

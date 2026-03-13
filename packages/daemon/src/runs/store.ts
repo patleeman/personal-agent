@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { appendFile } from 'fs/promises';
 import { dirname, join } from 'path';
 
-export type DurableRunKind = 'scheduled-task' | 'conversation' | 'workflow' | 'raw-shell';
+export type DurableRunKind = 'scheduled-task' | 'conversation' | 'workflow' | 'raw-shell' | 'background-run';
 export type DurableRunStatus = 'queued' | 'running' | 'recovering' | 'waiting' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
 export type DurableRunResumePolicy = 'rerun' | 'continue' | 'manual';
 export type DurableRunRecoveryAction = 'none' | 'resume' | 'rerun' | 'attention' | 'invalid';
@@ -105,7 +105,13 @@ function toPositiveInteger(value: unknown): number | undefined {
 }
 
 function toRunKind(value: unknown): DurableRunKind | undefined {
-  if (value === 'scheduled-task' || value === 'conversation' || value === 'workflow' || value === 'raw-shell') {
+  if (
+    value === 'scheduled-task'
+    || value === 'conversation'
+    || value === 'workflow'
+    || value === 'raw-shell'
+    || value === 'background-run'
+  ) {
     return value;
   }
 
@@ -331,6 +337,7 @@ export function createInitialDurableRunStatus(input: {
   updatedAt?: string;
   activeAttempt?: number;
   startedAt?: string;
+  completedAt?: string;
   checkpointKey?: string;
   lastError?: string;
 }): DurableRunStatusFile {
@@ -344,6 +351,7 @@ export function createInitialDurableRunStatus(input: {
     updatedAt: new Date(input.updatedAt ?? createdAt).toISOString(),
     activeAttempt: input.activeAttempt ?? 0,
     startedAt: input.startedAt ? new Date(input.startedAt).toISOString() : undefined,
+    completedAt: input.completedAt ? new Date(input.completedAt).toISOString() : undefined,
     checkpointKey: input.checkpointKey,
     lastError: input.lastError,
   };

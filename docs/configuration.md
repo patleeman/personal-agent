@@ -48,8 +48,7 @@ Example:
       "taskDir": "/path/to/personal-agent/profiles/assistant/agent/tasks",
       "tickIntervalSeconds": 30,
       "maxRetries": 3,
-      "defaultTimeoutSeconds": 1800,
-      "runTasksInTmux": false
+      "defaultTimeoutSeconds": 1800
     }
   }
 }

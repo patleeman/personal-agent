@@ -21,7 +21,7 @@ Good fits:
 Do not confuse scheduled tasks with:
 
 - **project tasks** in `PROJECT.yaml` — those are planning/checklist items
-- **tmux runs** — those are long-running shell jobs launched on demand
+- **durable background runs** — those are detached jobs launched on demand with `pa runs start`
 
 ## Where task files live
 
@@ -46,7 +46,6 @@ profile: "assistant"
 model: "openai-codex/gpt-5.4"
 cwd: "~/agent-workspace"
 timeoutSeconds: 1800
-runInTmux: true
 output:
   when: success
   targets:
@@ -80,7 +79,6 @@ A task must define exactly one of:
 | `model` | no | full model ref, or combined with `provider` |
 | `cwd` | no | working directory for the run |
 | `timeoutSeconds` | no | per-run timeout |
-| `runInTmux` | no | run this task in tmux |
 | `output` | no | optional gateway delivery routing |
 
 \* Exactly one of `cron` or `at` is required.
@@ -138,16 +136,11 @@ Important behavior to understand:
 
 One-time tasks resolve once and do not run again.
 
-## Tmux mode
+## Execution model
 
-Tasks normally run as direct daemon-managed subprocesses.
+Tasks run as direct daemon-managed subprocesses.
 
-You can opt into tmux:
-
-- per task: `runInTmux: true`
-- globally in daemon config: `modules.tasks.runTasksInTmux: true`
-
-Use tmux mode when you want task runs to live in managed tmux sessions.
+Each execution still writes a durable run record, log, and final result under the daemon state root.
 
 ## Managing tasks from the web UI
 

@@ -25,10 +25,6 @@ describe('parseCommand', () => {
       command: 'runs',
       args: ['list'],
     });
-    expect(parseCommand(['tmux', 'list'])).toEqual({
-      command: 'tmux',
-      args: ['list'],
-    });
   });
 
   it('treats unknown first token as tui args passthrough', () => {

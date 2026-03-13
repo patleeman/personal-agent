@@ -7,6 +7,9 @@ import type {
   ListDurableRunsResult,
   GetDurableRunResult,
   StartScheduledTaskRunResult,
+  StartBackgroundRunRequestInput,
+  StartBackgroundRunResult,
+  CancelDurableRunResult,
   SyncWebLiveConversationRunResult,
   SyncWebLiveConversationRunRequestInput,
   ListRecoverableWebLiveConversationRunsResult,
@@ -57,6 +60,18 @@ export interface StartScheduledTaskRunRequest {
   filePath: string;
 }
 
+export interface StartBackgroundRunRequest {
+  id: string;
+  type: 'runs.startBackground';
+  input: StartBackgroundRunRequestInput;
+}
+
+export interface CancelDurableRunRequest {
+  id: string;
+  type: 'runs.cancel';
+  runId: string;
+}
+
 export interface SyncWebLiveConversationRunRequest {
   id: string;
   type: 'conversations.sync';
@@ -77,6 +92,8 @@ export type DaemonRequest =
   | ListDurableRunsRequest
   | GetDurableRunRequest
   | StartScheduledTaskRunRequest
+  | StartBackgroundRunRequest
+  | CancelDurableRunRequest
   | SyncWebLiveConversationRunRequest
   | ListRecoverableWebLiveConversationRunsRequest;
 
@@ -92,6 +109,8 @@ export interface DaemonSuccessResponse {
     | ListDurableRunsResult
     | GetDurableRunResult
     | StartScheduledTaskRunResult
+    | StartBackgroundRunResult
+    | CancelDurableRunResult
     | SyncWebLiveConversationRunResult
     | ListRecoverableWebLiveConversationRunsResult;
 }
@@ -128,6 +147,18 @@ function readOptionalLimit(value: unknown): number | undefined {
   return value;
 }
 
+function readOptionalPositiveInteger(value: unknown, label: string): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isInteger(value) || value <= 0) {
+    throw new Error(`${label} must be a positive integer`);
+  }
+
+  return value;
+}
+
 function readRequiredString(value: unknown, label: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw new Error(`${label} must be a non-empty string`);
@@ -138,6 +169,74 @@ function readRequiredString(value: unknown, label: string): string {
 
 function readOptionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function readBackgroundRunNotification(value: unknown): StartBackgroundRunRequestInput['notification'] {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    throw new Error('runs.startBackground notification must be an object when provided');
+  }
+
+  const gateway = readRequiredString(value.gateway, 'runs.startBackground notification.gateway');
+  if (gateway !== 'telegram') {
+    throw new Error('runs.startBackground notification.gateway must be telegram');
+  }
+
+  const destinationId = readRequiredString(value.destinationId, 'runs.startBackground notification.destinationId');
+  const mode = readRequiredString(value.mode, 'runs.startBackground notification.mode');
+  if (mode !== 'none' && mode !== 'message' && mode !== 'resume') {
+    throw new Error('runs.startBackground notification.mode must be none, message, or resume');
+  }
+
+  const messageThreadId = readOptionalPositiveInteger(
+    value.messageThreadId,
+    'runs.startBackground notification.messageThreadId',
+  );
+  const resumeConversationId = readOptionalString(value.resumeConversationId);
+
+  return {
+    gateway: 'telegram',
+    destinationId,
+    ...(messageThreadId !== undefined ? { messageThreadId } : {}),
+    mode,
+    ...(resumeConversationId ? { resumeConversationId } : {}),
+  };
+}
+
+function readBackgroundRunInput(value: unknown): StartBackgroundRunRequestInput {
+  if (!isRecord(value)) {
+    throw new Error('runs.startBackground input must be an object');
+  }
+
+  const rawArgv = value.argv;
+  if (rawArgv !== undefined && !Array.isArray(rawArgv)) {
+    throw new Error('runs.startBackground argv must be an array when provided');
+  }
+
+  const argv = Array.isArray(rawArgv)
+    ? rawArgv.map((entry, index) => readRequiredString(entry, `runs.startBackground argv[${index}]`))
+    : undefined;
+  const shellCommand = readOptionalString(value.shellCommand);
+  const notification = readBackgroundRunNotification(value.notification);
+
+  return {
+    taskSlug: readRequiredString(value.taskSlug, 'runs.startBackground taskSlug'),
+    cwd: readRequiredString(value.cwd, 'runs.startBackground cwd'),
+    ...(argv ? { argv } : {}),
+    ...(shellCommand ? { shellCommand } : {}),
+    ...(isRecord(value.source)
+      ? {
+          source: {
+            type: readRequiredString(value.source.type, 'runs.startBackground source.type'),
+            ...(readOptionalString(value.source.id) ? { id: readOptionalString(value.source.id) } : {}),
+          },
+        }
+      : {}),
+    ...(notification ? { notification } : {}),
+  };
 }
 
 function readConversationRunState(value: unknown): SyncWebLiveConversationRunRequestInput['state'] {
@@ -223,6 +322,22 @@ export function parseRequest(raw: string): DaemonRequest {
       id: parsed.id,
       type: 'runs.startTask',
       filePath: readRequiredString(parsed.filePath, 'runs.startTask filePath'),
+    };
+  }
+
+  if (parsed.type === 'runs.startBackground') {
+    return {
+      id: parsed.id,
+      type: 'runs.startBackground',
+      input: readBackgroundRunInput(parsed.input),
+    };
+  }
+
+  if (parsed.type === 'runs.cancel') {
+    return {
+      id: parsed.id,
+      type: 'runs.cancel',
+      runId: readRequiredString(parsed.runId, 'runs.cancel runId'),
     };
   }
 

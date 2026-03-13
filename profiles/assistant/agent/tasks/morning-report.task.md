@@ -6,7 +6,6 @@ profile: "assistant"
 model: "openai-codex/gpt-5.4"
 cwd: "~/workingdir"
 timeoutSeconds: 1200
-runInTmux: false
 output:
   when: always
   targets:

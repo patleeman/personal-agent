@@ -13,7 +13,7 @@ import { randomUUID } from 'crypto';
 import { PersonalAgentDaemon } from './server.js';
 import type { DaemonConfig } from './config.js';
 import { resolveDaemonPaths } from './paths.js';
-import { createDurableRunManifest, createInitialDurableRunStatus, resolveDurableRunsRoot, resolveDurableRunPaths, saveDurableRunManifest, saveDurableRunStatus } from './runs/store.js';
+import { createDurableRunManifest, createInitialDurableRunStatus, resolveDurableRunsRoot, resolveDurableRunPaths, saveDurableRunManifest, saveDurableRunStatus, scanDurableRun } from './runs/store.js';
 
 const tempDirs: string[] = [];
 const originalEnv = { ...process.env };
@@ -82,6 +82,18 @@ async function sendRequest(socketPath: string, request: unknown): Promise<Respon
 
     socket.on('error', reject);
   });
+}
+
+async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void> {
+  const startedAt = Date.now();
+
+  while (!predicate()) {
+    if (Date.now() - startedAt > timeoutMs) {
+      throw new Error('Timed out waiting for condition');
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
 }
 
 describe('daemon IPC integration', () => {
@@ -240,6 +252,81 @@ describe('daemon IPC integration', () => {
       runId: expect.any(String),
       reason: 'task run was not started',
     });
+  });
+
+  it('starts a durable background run and persists output', async () => {
+    daemon = new PersonalAgentDaemon(config);
+    await daemon.start();
+
+    const response = await sendRequest(socketPath, {
+      id: `req_${randomUUID()}`,
+      type: 'runs.startBackground',
+      input: {
+        taskSlug: 'echo-test',
+        cwd: createTempDir('bg-run-cwd-'),
+        argv: [process.execPath, '-e', "console.log('hello from durable run')"],
+        source: {
+          type: 'test',
+          id: 'echo-test',
+        },
+      },
+    });
+
+    expect(response.ok).toBe(true);
+    expect(response.result).toMatchObject({
+      accepted: true,
+      runId: expect.stringContaining('run-echo-test-'),
+      logPath: expect.any(String),
+    });
+
+    const runId = (response.result as { runId: string }).runId;
+    const runsRoot = resolveDurableRunsRoot(resolveDaemonPaths(config.ipc.socketPath).root);
+
+    await waitFor(() => scanDurableRun(runsRoot, runId)?.status?.status === 'completed');
+
+    const run = scanDurableRun(runsRoot, runId);
+    expect(run?.manifest?.kind).toBe('background-run');
+    expect(run?.status?.status).toBe('completed');
+    expect(readFileSync(run?.paths.outputLogPath as string, 'utf-8')).toContain('hello from durable run');
+    expect(existsSync(run?.paths.resultPath as string)).toBe(true);
+  });
+
+  it('cancels a durable background run', async () => {
+    daemon = new PersonalAgentDaemon(config);
+    await daemon.start();
+
+    const response = await sendRequest(socketPath, {
+      id: `req_${randomUUID()}`,
+      type: 'runs.startBackground',
+      input: {
+        taskSlug: 'sleep-test',
+        cwd: createTempDir('bg-run-sleep-cwd-'),
+        argv: [process.execPath, '-e', 'setTimeout(() => {}, 10_000)'],
+        source: {
+          type: 'test',
+          id: 'sleep-test',
+        },
+      },
+    });
+
+    expect(response.ok).toBe(true);
+    const runId = (response.result as { runId: string }).runId;
+
+    const cancelResponse = await sendRequest(socketPath, {
+      id: `req_${randomUUID()}`,
+      type: 'runs.cancel',
+      runId,
+    });
+
+    expect(cancelResponse.ok).toBe(true);
+    expect(cancelResponse.result).toMatchObject({
+      cancelled: true,
+      runId,
+    });
+
+    const runsRoot = resolveDurableRunsRoot(resolveDaemonPaths(config.ipc.socketPath).root);
+    await waitFor(() => scanDurableRun(runsRoot, runId)?.status?.status === 'cancelled');
+    expect(scanDurableRun(runsRoot, runId)?.status?.status).toBe('cancelled');
   });
 
   it('syncs and lists recoverable web live conversation runs', async () => {

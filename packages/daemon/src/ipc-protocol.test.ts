@@ -90,6 +90,50 @@ describe('parseRequest', () => {
     }))).toThrow('runs.startTask filePath must be a non-empty string');
   });
 
+  it('parses runs.startBackground request', () => {
+    const parsed = parseRequest(JSON.stringify({
+      id: 'req_7b',
+      type: 'runs.startBackground',
+      input: {
+        taskSlug: 'code-review',
+        cwd: '/tmp/work',
+        argv: ['pa', '-p', 'hello'],
+        source: {
+          type: 'cli',
+          id: 'code-review',
+        },
+      },
+    }));
+
+    expect(parsed).toEqual({
+      id: 'req_7b',
+      type: 'runs.startBackground',
+      input: {
+        taskSlug: 'code-review',
+        cwd: '/tmp/work',
+        argv: ['pa', '-p', 'hello'],
+        source: {
+          type: 'cli',
+          id: 'code-review',
+        },
+      },
+    });
+  });
+
+  it('parses runs.cancel request', () => {
+    const parsed = parseRequest(JSON.stringify({
+      id: 'req_7c',
+      type: 'runs.cancel',
+      runId: 'run-code-review-2026-03-12',
+    }));
+
+    expect(parsed).toEqual({
+      id: 'req_7c',
+      type: 'runs.cancel',
+      runId: 'run-code-review-2026-03-12',
+    });
+  });
+
   it('parses conversations.sync request', () => {
     const parsed = parseRequest(JSON.stringify({
       id: 'req_8',

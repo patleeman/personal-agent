@@ -1,6 +1,6 @@
 ---
 name: subagent-code-review
-description: Run a code-review subagent via `pa tmux run` and report its findings.
+description: Run a code-review subagent via `pa runs start` and report its findings.
 allowed-tools: Bash(pa:*), Bash(mktemp:*), Bash(cat:*)
 ---
 
@@ -16,11 +16,10 @@ Use a subagent for code review. Do not perform the detailed review yourself.
    - Security issues
    - Error handling gaps
    - Missing tests/regression risks
-3. Launch the reviewer with `pa tmux run code-review -- pa -p ...`.
-4. Confirm startup with `pa tmux list` and report kickoff status.
-5. Monitor via `pa tmux logs <session>` and report findings by severity with file paths and fixes.
-6. Stop the session with `pa tmux stop <session>` when done unless the user asks to keep it.
-7. Periodically clean stale logs using `pa tmux clean`.
+3. Launch the reviewer with `pa runs start code-review -- pa -p ...`.
+4. Confirm startup with `pa runs list` and report kickoff status.
+5. Monitor via `pa runs logs <run-id>` and report findings by severity with file paths and fixes.
+6. Cancel the run with `pa runs cancel <run-id>` if it should stop early.
 
 ## Command pattern
 
@@ -42,26 +41,24 @@ Return:
 - residual risks
 EOF
 
-pa tmux run code-review -- pa -p "$(cat "$prompt_file")"
-pa tmux list
+pa runs start code-review -- pa -p "$(cat "$prompt_file")"
+pa runs list
 ```
 
 ### With model override
 
 ```bash
-pa tmux run code-review -- pa --provider <provider> --model <model> -p "$(cat "$prompt_file")"
-pa tmux list
+pa runs start code-review -- pa --provider <provider> --model <model> -p "$(cat "$prompt_file")"
+pa runs list
 ```
 
 ### Monitoring and cleanup
 
 ```bash
-pa tmux logs <session> --tail 120
+pa runs logs <run-id> --tail 120
 
-# after completion
-pa tmux stop <session>
-pa tmux clean --dry-run
-pa tmux clean
+# stop early if needed
+pa runs cancel <run-id>
 ```
 
 Report the subagent's findings.

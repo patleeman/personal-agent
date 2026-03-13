@@ -12,6 +12,9 @@ import type {
   ListDurableRunsResult,
   GetDurableRunResult,
   StartScheduledTaskRunResult,
+  StartBackgroundRunRequestInput,
+  StartBackgroundRunResult,
+  CancelDurableRunResult,
   SyncWebLiveConversationRunRequestInput,
   SyncWebLiveConversationRunResult,
   ListRecoverableWebLiveConversationRunsResult,
@@ -199,6 +202,31 @@ export async function startScheduledTaskRun(filePath: string, config?: DaemonCon
       id: `req_${randomUUID()}`,
       type: 'runs.startTask',
       filePath,
+    },
+    config,
+  );
+}
+
+export async function startBackgroundRun(
+  input: StartBackgroundRunRequestInput,
+  config?: DaemonConfig,
+): Promise<StartBackgroundRunResult> {
+  return sendRequest<StartBackgroundRunResult>(
+    {
+      id: `req_${randomUUID()}`,
+      type: 'runs.startBackground',
+      input,
+    },
+    config,
+  );
+}
+
+export async function cancelDurableRun(runId: string, config?: DaemonConfig): Promise<CancelDurableRunResult> {
+  return sendRequest<CancelDurableRunResult>(
+    {
+      id: `req_${randomUUID()}`,
+      type: 'runs.cancel',
+      runId,
     },
     config,
   );

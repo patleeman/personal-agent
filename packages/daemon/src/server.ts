@@ -1,5 +1,6 @@
+import { spawn, type ChildProcess } from 'child_process';
 import { createServer, type Server, type Socket } from 'net';
-import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { createWriteStream, existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { EventBus } from './event-bus.js';
 import { createDaemonEvent, isDaemonEvent } from './events.js';
 import { parseRequest, serializeResponse, type DaemonRequest } from './ipc-protocol.js';
@@ -7,6 +8,14 @@ import { loadDaemonConfig, type DaemonConfig, type LogLevel } from './config.js'
 import { createBuiltinModules, type DaemonModule, type DaemonModuleContext } from './modules/index.js';
 import { ensureDaemonDirectories, resolveDaemonPaths } from './paths.js';
 import {
+  createBackgroundRunRecord,
+  finalizeBackgroundRun,
+  markBackgroundRunInterrupted,
+  markBackgroundRunStarted,
+  type StartBackgroundRunInput,
+} from './runs/background-runs.js';
+import {
+  resolveDurableRunPaths,
   resolveDurableRunsRoot,
   scanDurableRun,
   scanDurableRunsForRecovery,
@@ -26,6 +35,8 @@ import type {
   GetDurableRunResult,
   ListDurableRunsResult,
   StartScheduledTaskRunResult,
+  StartBackgroundRunResult,
+  CancelDurableRunResult,
   SyncWebLiveConversationRunResult,
   ListRecoverableWebLiveConversationRunsResult,
   SyncWebLiveConversationRunRequestInput,
@@ -34,6 +45,18 @@ import type {
 interface ModuleRuntime {
   module: DaemonModule;
   status: DaemonModuleStatus;
+}
+
+interface ActiveBackgroundRunHandle {
+  runId: string;
+  taskSlug: string;
+  cwd: string;
+  startedAt: string;
+  child: ChildProcess;
+  cancelling: boolean;
+  cancelReason?: string;
+  settled: boolean;
+  forceKillTimer?: NodeJS.Timeout;
 }
 
 const LEVELS: Record<LogLevel, number> = {
@@ -141,6 +164,7 @@ export class PersonalAgentDaemon {
   private readonly pid: number;
   private readonly modules: ModuleRuntime[];
   private readonly pendingGatewayNotifications: GatewayNotification[] = [];
+  private readonly activeBackgroundRuns = new Map<string, ActiveBackgroundRunHandle>();
 
   private server?: Server;
   private timerHandles: NodeJS.Timeout[] = [];
@@ -197,6 +221,7 @@ export class PersonalAgentDaemon {
     this.prepareSocket();
     writeFileSync(this.paths.pidFile, String(this.pid));
 
+    await this.recoverInterruptedBackgroundRuns();
     this.logDurableRunRecoverySummary('startup');
 
     for (const moduleRuntime of this.modules) {
@@ -232,6 +257,7 @@ export class PersonalAgentDaemon {
     }
     this.timerHandles = [];
 
+    await Promise.all([...this.activeBackgroundRuns.keys()].map((runId) => this.cancelBackgroundRun(runId, 'Daemon stopping')));
     await this.bus.waitForIdle();
 
     for (const moduleRuntime of this.modules) {
@@ -430,6 +456,24 @@ export class PersonalAgentDaemon {
       return;
     }
 
+    if (request.type === 'runs.startBackground') {
+      socket.write(serializeResponse({
+        id: request.id,
+        ok: true,
+        result: await this.startBackgroundRun(request.input),
+      }));
+      return;
+    }
+
+    if (request.type === 'runs.cancel') {
+      socket.write(serializeResponse({
+        id: request.id,
+        ok: true,
+        result: await this.cancelBackgroundRun(request.runId),
+      }));
+      return;
+    }
+
     if (request.type === 'conversations.sync') {
       socket.write(serializeResponse({
         id: request.id,
@@ -533,6 +577,212 @@ export class PersonalAgentDaemon {
       accepted: true,
       runId,
     };
+  }
+
+  private async startBackgroundRun(input: StartBackgroundRunInput): Promise<StartBackgroundRunResult> {
+    const record = await createBackgroundRunRecord(this.runsRoot, input);
+    const startedAt = new Date().toISOString();
+    const outputStream = createWriteStream(record.paths.outputLogPath, { flags: 'a', encoding: 'utf-8' });
+
+    const child = input.argv
+      ? spawn(input.argv[0] as string, input.argv.slice(1), {
+          cwd: input.cwd,
+          env: process.env,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        })
+      : spawn('sh', ['-lc', input.shellCommand as string], {
+          cwd: input.cwd,
+          env: process.env,
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+
+    child.stdout.on('data', (chunk: Buffer | string) => {
+      outputStream.write(chunk.toString());
+    });
+    child.stderr.on('data', (chunk: Buffer | string) => {
+      outputStream.write(chunk.toString());
+    });
+
+    const startState = await new Promise<{ started: true } | { started: false; error: string }>((resolve) => {
+      let settled = false;
+
+      child.once('spawn', () => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        resolve({ started: true });
+      });
+
+      child.once('error', (error) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        resolve({ started: false, error: error.message });
+      });
+    });
+
+    if (!startState.started) {
+      outputStream.end();
+      await finalizeBackgroundRun({
+        runId: record.runId,
+        runPaths: record.paths,
+        taskSlug: input.taskSlug,
+        cwd: input.cwd,
+        startedAt,
+        endedAt: new Date().toISOString(),
+        exitCode: 1,
+        signal: null,
+        cancelled: false,
+        error: startState.error,
+      });
+      return {
+        accepted: false,
+        runId: record.runId,
+        logPath: record.paths.outputLogPath,
+        reason: startState.error,
+      };
+    }
+
+    const handle: ActiveBackgroundRunHandle = {
+      runId: record.runId,
+      taskSlug: input.taskSlug,
+      cwd: input.cwd,
+      startedAt,
+      child,
+      cancelling: false,
+      settled: false,
+    };
+    this.activeBackgroundRuns.set(record.runId, handle);
+
+    await markBackgroundRunStarted({
+      runId: record.runId,
+      runPaths: record.paths,
+      startedAt,
+      pid: child.pid ?? -1,
+      taskSlug: input.taskSlug,
+      cwd: input.cwd,
+    });
+
+    child.once('exit', (code, signal) => {
+      handle.settled = true;
+      if (handle.forceKillTimer) {
+        clearTimeout(handle.forceKillTimer);
+      }
+      this.activeBackgroundRuns.delete(record.runId);
+
+      const endedAt = new Date().toISOString();
+      void finalizeBackgroundRun({
+        runId: record.runId,
+        runPaths: record.paths,
+        taskSlug: input.taskSlug,
+        cwd: input.cwd,
+        startedAt,
+        endedAt,
+        exitCode: typeof code === 'number' ? code : 1,
+        signal,
+        cancelled: handle.cancelling,
+        error: handle.cancelling
+          ? (handle.cancelReason ?? 'Cancelled by user')
+          : (typeof code === 'number' && code === 0 ? undefined : `Command exited with code ${String(code ?? signal ?? 1)}`),
+      }).finally(() => {
+        outputStream.end();
+      });
+    });
+
+    this.log('info', `background run started id=${record.runId} pid=${String(child.pid ?? 'n/a')} cwd=${input.cwd}`);
+    return {
+      accepted: true,
+      runId: record.runId,
+      logPath: record.paths.outputLogPath,
+    };
+  }
+
+  private async cancelBackgroundRun(runId: string, reason = 'Cancelled by user'): Promise<CancelDurableRunResult> {
+    const active = this.activeBackgroundRuns.get(runId);
+    if (active) {
+      active.cancelling = true;
+      active.cancelReason = reason;
+      if (!active.child.killed) {
+        active.child.kill('SIGTERM');
+      }
+      active.forceKillTimer = setTimeout(() => {
+        if (!active.settled) {
+          active.child.kill('SIGKILL');
+        }
+      }, 5000);
+      active.forceKillTimer.unref();
+
+      this.log('info', `background run cancelling id=${runId}`);
+      return {
+        cancelled: true,
+        runId,
+      };
+    }
+
+    const run = scanDurableRun(this.runsRoot, runId);
+    if (!run) {
+      return {
+        cancelled: false,
+        runId,
+        reason: 'run not found',
+      };
+    }
+
+    if (run.manifest?.kind !== 'background-run') {
+      return {
+        cancelled: false,
+        runId,
+        reason: 'only daemon background runs can be cancelled',
+      };
+    }
+
+    const status = run.status?.status;
+    if (status === 'completed' || status === 'failed' || status === 'cancelled') {
+      return {
+        cancelled: false,
+        runId,
+        reason: `run is already ${status}`,
+      };
+    }
+
+    await finalizeBackgroundRun({
+      runId,
+      runPaths: run.paths,
+      taskSlug: typeof run.manifest?.spec.taskSlug === 'string' ? run.manifest.spec.taskSlug : (run.manifest?.source?.id ?? runId),
+      cwd: typeof run.manifest?.spec.cwd === 'string' ? run.manifest.spec.cwd : process.cwd(),
+      startedAt: run.status?.startedAt ?? run.manifest?.createdAt ?? new Date().toISOString(),
+      endedAt: new Date().toISOString(),
+      exitCode: 1,
+      signal: null,
+      cancelled: true,
+      error: reason,
+    });
+
+    this.log('info', `background run cancelled from durable state id=${runId}`);
+    return {
+      cancelled: true,
+      runId,
+    };
+  }
+
+  private async recoverInterruptedBackgroundRuns(): Promise<void> {
+    const runs = scanDurableRunsForRecovery(this.runsRoot);
+
+    await Promise.all(runs.map(async (run) => {
+      if (run.manifest?.kind !== 'background-run') {
+        return;
+      }
+
+      await markBackgroundRunInterrupted({
+        runId: run.runId,
+        runPaths: resolveDurableRunPaths(this.runsRoot, run.runId),
+        reason: 'Daemon restarted before background run completion.',
+      });
+    }));
   }
 
   private async syncWebLiveConversationRun(

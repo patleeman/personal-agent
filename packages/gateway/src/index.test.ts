@@ -1189,11 +1189,11 @@ describe('queued telegram message handler', () => {
     expect(sendMessage).toHaveBeenCalledWith(1, 'Pending room authorization requests:\n- room-a');
   });
 
-  it('routes /tmux commands to the tmux handler', async () => {
+  it('routes /run commands to the runs handler', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
     const runPrompt = vi.fn(async () => 'ignored');
-    const handleTmuxCommand = vi.fn(async () => 'Managed tmux sessions:\n- session-a');
+    const handleRunCommand = vi.fn(async () => 'Durable runs:\n- run-a');
 
     const handler = createQueuedTelegramMessageHandler({
       allowlist: new Set(['1']),
@@ -1203,27 +1203,27 @@ describe('queued telegram message handler', () => {
       workingDirectory: '/tmp/work',
       sendMessage,
       sendChatAction,
-      handleTmuxCommand,
+      handleRunCommand,
       createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
-    handler.handleMessage({ chat: { id: 1 }, text: '/tmux list' });
+    handler.handleMessage({ chat: { id: 1 }, text: '/run list' });
     await handler.waitForIdle('1');
 
-    expect(handleTmuxCommand).toHaveBeenCalledWith({
+    expect(handleRunCommand).toHaveBeenCalledWith({
       args: 'list',
     });
     expect(runPrompt).not.toHaveBeenCalled();
     expect(sendChatAction).not.toHaveBeenCalled();
-    expect(sendMessage).toHaveBeenCalledWith(1, 'Managed tmux sessions:\n- session-a');
+    expect(sendMessage).toHaveBeenCalledWith(1, 'Durable runs:\n- run-a');
   });
 
-  it('routes /tmux run commands through the run-orchestration handler', async () => {
+  it('routes /run start commands through the run-orchestration handler', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
     const runPrompt = vi.fn(async () => 'ignored');
-    const handleTmuxRunRequest = vi.fn(async () => 'Started tmux session session-a');
-    const handleTmuxCommand = vi.fn(async () => 'fallback');
+    const handleRunRequest = vi.fn(async () => 'Started durable run run-a');
+    const handleRunCommand = vi.fn(async () => 'fallback');
 
     const handler = createQueuedTelegramMessageHandler({
       allowlist: new Set(['1']),
@@ -1233,22 +1233,22 @@ describe('queued telegram message handler', () => {
       workingDirectory: '/tmp/work',
       sendMessage,
       sendChatAction,
-      handleTmuxCommand,
-      handleTmuxRunRequest,
+      handleRunCommand,
+      handleRunRequest,
       createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({
       chat: { id: 1, type: 'supergroup', title: 'Workroom' },
       message_thread_id: 99,
-      text: '/tmux run lint fork=auto notify=resume group=auto topic=auto -- npm test',
+      text: '/run lint fork=auto notify=resume group=auto topic=auto -- npm test',
     });
     await handler.waitForIdle('1');
 
-    expect(handleTmuxRunRequest).toHaveBeenCalledTimes(1);
-    expect(handleTmuxCommand).not.toHaveBeenCalled();
+    expect(handleRunRequest).toHaveBeenCalledTimes(1);
+    expect(handleRunCommand).not.toHaveBeenCalled();
 
-    expect(handleTmuxRunRequest).toHaveBeenCalledWith(expect.objectContaining({
+    expect(handleRunRequest).toHaveBeenCalledWith(expect.objectContaining({
       sourceConversationId: '1::thread:99',
       sourceChatId: 1,
       sourceMessageThreadId: 99,
@@ -1262,15 +1262,15 @@ describe('queued telegram message handler', () => {
       },
     }));
 
-    expect(sendMessage).toHaveBeenCalledWith(1, 'Started tmux session session-a', { message_thread_id: 99 });
+    expect(sendMessage).toHaveBeenCalledWith(1, 'Started durable run run-a', { message_thread_id: 99 });
   });
 
-  it('returns /tmux run usage errors for invalid enhanced run options', async () => {
+  it('returns /run usage errors for invalid enhanced run options', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
     const runPrompt = vi.fn(async () => 'ignored');
-    const handleTmuxRunRequest = vi.fn(async () => 'should not run');
-    const handleTmuxCommand = vi.fn(async () => 'fallback');
+    const handleRunRequest = vi.fn(async () => 'should not run');
+    const handleRunCommand = vi.fn(async () => 'fallback');
 
     const handler = createQueuedTelegramMessageHandler({
       allowlist: new Set(['1']),
@@ -1280,23 +1280,23 @@ describe('queued telegram message handler', () => {
       workingDirectory: '/tmp/work',
       sendMessage,
       sendChatAction,
-      handleTmuxCommand,
-      handleTmuxRunRequest,
+      handleRunCommand,
+      handleRunRequest,
       createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
     handler.handleMessage({
       chat: { id: 1 },
-      text: '/tmux run lint notify=unknown -- npm test',
+      text: '/run lint notify=unknown -- npm test',
     });
     await handler.waitForIdle('1');
 
-    expect(handleTmuxRunRequest).not.toHaveBeenCalled();
-    expect(handleTmuxCommand).not.toHaveBeenCalled();
+    expect(handleRunRequest).not.toHaveBeenCalled();
+    expect(handleRunCommand).not.toHaveBeenCalled();
     expect(sendMessage).toHaveBeenCalledWith(1, expect.stringContaining('Invalid notify mode: unknown'));
   });
 
-  it('includes /chatid, /tasks, /room, /tmux, /model, /models, /stop, /cancel, /compact, /fork, /clear, and /resume in default /commands output', async () => {
+  it('includes /chatid, /tasks, /room, /run, /model, /models, /stop, /cancel, /compact, /fork, /clear, and /resume in default /commands output', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
     const runPrompt = vi.fn(async () => 'ignored');
@@ -1324,7 +1324,7 @@ describe('queued telegram message handler', () => {
     expect(output).toContain('/chatid -');
     expect(output).toContain('/tasks -');
     expect(output).toContain('/room -');
-    expect(output).toContain('/tmux -');
+    expect(output).toContain('/run -');
     expect(output).toContain('/model -');
     expect(output).toContain('/models -');
     expect(output).toContain('/stop -');

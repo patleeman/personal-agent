@@ -75,7 +75,7 @@ import {
 } from './liveSessions.js';
 import { recoverDurableLiveConversations } from './conversationRecovery.js';
 import { syncWebLiveConversationRun } from './conversationRuns.js';
-import { getDurableRun, getDurableRunLog, listDurableRuns } from './durableRuns.js';
+import { cancelDurableRun, getDurableRun, getDurableRunLog, listDurableRuns } from './durableRuns.js';
 import {
   buildReferencedMemoryDocsContext,
   buildReferencedProfilesContext,
@@ -1454,6 +1454,24 @@ app.get('/api/runs/:id/log', async (req, res) => {
     const result = await getDurableRunLog(req.params.id, tail);
     if (!result) {
       res.status(404).json({ error: 'Run not found' });
+      return;
+    }
+
+    res.json(result);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/runs/:id/cancel', async (req, res) => {
+  try {
+    const result = await cancelDurableRun(req.params.id);
+    if (!result.cancelled) {
+      res.status(409).json({ error: result.reason ?? 'Could not cancel run.' });
       return;
     }
 

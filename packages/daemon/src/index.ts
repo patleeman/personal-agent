@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { resolve } from 'path';
 import { runDaemonProcess } from './server.js';
 
+export { PersonalAgentDaemon } from './server.js';
 export { createDaemonEvent, isDaemonEvent, DAEMON_EVENT_VERSION } from './events.js';
 export { loadDaemonConfig, getDefaultDaemonConfig, getDaemonConfigFilePath, type DaemonConfig } from './config.js';
 export { resolveDaemonPaths } from './paths.js';
@@ -15,6 +16,8 @@ export {
   listDurableRuns,
   getDurableRun,
   startScheduledTaskRun,
+  startBackgroundRun,
+  cancelDurableRun,
   syncWebLiveConversationRunState,
   listRecoverableWebLiveConversationRunsFromDaemon,
   emitDaemonEvent,
@@ -47,6 +50,17 @@ export {
   completeDeferredResumeConversationRun,
   cancelDeferredResumeConversationRun,
 } from './runs/deferred-resume-conversations.js';
+export {
+  createBackgroundRunId,
+  createBackgroundRunRecord,
+  markBackgroundRunStarted,
+  finalizeBackgroundRun,
+  markBackgroundRunInterrupted,
+  type BackgroundRunNotificationMode,
+  type BackgroundRunNotificationSpec,
+  type StartBackgroundRunInput,
+  type StartBackgroundRunRecord,
+} from './runs/background-runs.js';
 export {
   createWebLiveConversationRunId,
   saveWebLiveConversationRunState,
@@ -85,6 +99,9 @@ export type {
   ListDurableRunsResult,
   GetDurableRunResult,
   StartScheduledTaskRunResult,
+  StartBackgroundRunRequestInput,
+  StartBackgroundRunResult,
+  CancelDurableRunResult,
   SyncWebLiveConversationRunRequestInput,
   SyncWebLiveConversationRunResult,
   ListRecoverableWebLiveConversationRunsResult,

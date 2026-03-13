@@ -46,7 +46,6 @@ function createTestConfig(socketPath: string, taskDir: string): DaemonConfig {
         maxRetries: 1,
         reapAfterDays: 7,
         defaultTimeoutSeconds: 1800,
-        runTasksInTmux: false,
       },
     },
   };

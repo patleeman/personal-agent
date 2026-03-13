@@ -62,14 +62,14 @@ import {
 } from './cli-helpers.js';
 import { setGatewayExtensionRuntimeContext } from './extensions/runtime-context.js';
 import {
-  buildTelegramTmuxRunCliArgs,
-  parseTelegramTmuxRunRequest,
-  parseTmuxRunCliOutput,
-  runGatewayTmuxCli,
-  runTelegramTmuxCommand,
-  type TelegramTmuxNotifyMode,
-  type TelegramTmuxRunRequest,
-} from './telegram-tmux.js';
+  buildTelegramRunCliArgs,
+  parseTelegramRunRequest,
+  parseRunCliOutput,
+  runGatewayRunCli,
+  runTelegramRunCommand,
+  type TelegramRunNotifyMode,
+  type TelegramRunRequest,
+} from './telegram-runs.js';
 
 export {
   SUPPORTED_GATEWAY_PROVIDERS,
@@ -517,12 +517,12 @@ type HandleTelegramRoomAdminCommandFn = (input: {
   args: string;
 }) => Promise<string>;
 
-type HandleTelegramTmuxCommandFn = (input: {
+type HandleTelegramRunCommandFn = (input: {
   args: string;
 }) => Promise<string>;
 
-type HandleTelegramTmuxRunRequestFn = (input: {
-  run: TelegramTmuxRunRequest;
+type HandleTelegramRunRequestFn = (input: {
+  run: TelegramRunRequest;
   sourceConversationId: string;
   sourceChatId: number;
   sourceMessageThreadId: number | undefined;
@@ -571,8 +571,8 @@ export interface CreateTelegramMessageHandlerOptions {
   durableInboxDir?: string;
   listScheduledTasks?: ListScheduledTasksFn;
   handleRoomAdminCommand?: HandleTelegramRoomAdminCommandFn;
-  handleTmuxCommand?: HandleTelegramTmuxCommandFn;
-  handleTmuxRunRequest?: HandleTelegramTmuxRunRequestFn;
+  handleRunCommand?: HandleTelegramRunCommandFn;
+  handleRunRequest?: HandleTelegramRunRequestFn;
   createForumTopic?: CreateTelegramForumTopicFn;
   skillSlashCommandMap?: Map<string, string>;
   setWorkTopicBinding?: (input: SetTelegramWorkTopicBindingInput) => void;
@@ -807,7 +807,7 @@ const DEFAULT_TELEGRAM_COMMANDS: TelegramCommandDefinition[] = [
   { command: 'chatid', description: 'Show current chat ID (and topic ID)' },
   { command: 'tasks', description: 'List scheduled tasks (usage: /tasks [status])' },
   { command: 'room', description: 'Manage room approvals (usage: /room help)' },
-  { command: 'tmux', description: 'Manage agent tmux sessions (usage: /tmux help)' },
+  { command: 'run', description: 'Start and inspect durable background runs (usage: /run help)' },
   { command: 'commands', description: 'List available commands' },
   { command: 'skills', description: 'List available skills' },
   { command: 'help', description: 'Show command help' },
@@ -4367,14 +4367,14 @@ function writeTelegramWorkTopicBindings(filePath: string, bindings: Map<string, 
   writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf-8');
 }
 
-function readTmuxExitCodeFromLog(logPath: string | undefined): number | undefined {
+function readRunExitCodeFromLog(logPath: string | undefined): number | undefined {
   if (!logPath) {
     return undefined;
   }
 
   try {
     const text = readFileSync(logPath, 'utf-8');
-    const matches = [...text.matchAll(/__PA_TMUX_EXIT_CODE=(\d+)/g)];
+    const matches = [...text.matchAll(/__PA_RUN_EXIT_CODE=(\d+)/g)];
     const last = matches[matches.length - 1];
     if (!last || !last[1]) {
       return undefined;
@@ -4387,7 +4387,7 @@ function readTmuxExitCodeFromLog(logPath: string | undefined): number | undefine
   }
 }
 
-function readTmuxLogTail(logPath: string | undefined, lineCount = 40): string {
+function readRunLogTail(logPath: string | undefined, lineCount = 40): string {
   if (!logPath) {
     return '';
   }
@@ -6180,17 +6180,17 @@ model=${model}`,
     return completedMessageProcessingResult();
   }
 
-  if (command === '/tmux') {
-    const parsedTmuxRun = parseTelegramTmuxRunRequest(commandArgs);
-    if (parsedTmuxRun.kind === 'invalid') {
+  if (command === '/run') {
+    const parsedRunRequest = parseTelegramRunRequest(commandArgs);
+    if (parsedRunRequest.kind === 'invalid') {
       await sendLongText(
         (chunk) => sendFormattedMessageToConversation(chunk),
-        parsedTmuxRun.message,
+        parsedRunRequest.message,
       );
       return completedMessageProcessingResult();
     }
 
-    if (parsedTmuxRun.kind === 'run' && options.handleTmuxRunRequest) {
+    if (parsedRunRequest.kind === 'run' && options.handleRunRequest) {
       try {
         const getController = async (): Promise<GatewayConversationController> => getOrCreateConversationController(
           controllers,
@@ -6199,8 +6199,8 @@ model=${model}`,
           options.createConversationController,
         );
 
-        const tmuxOutput = await options.handleTmuxRunRequest({
-          run: parsedTmuxRun.value,
+        const runOutput = await options.handleRunRequest({
+          run: parsedRunRequest.value,
           sourceConversationId: conversationId,
           sourceChatId: message.chat.id,
           sourceMessageThreadId: messageThreadId,
@@ -6236,31 +6236,31 @@ model=${model}`,
 
         await sendLongText(
           (chunk) => sendFormattedMessageToConversation(chunk),
-          tmuxOutput,
+          runOutput,
         );
       } catch (error) {
-        await sendMessageToConversation(`Unable to process /tmux command: ${(error as Error).message}`);
+        await sendMessageToConversation(`Unable to process /run command: ${(error as Error).message}`);
       }
 
       return completedMessageProcessingResult();
     }
 
-    if (!options.handleTmuxCommand) {
-      await sendMessageToConversation('tmux commands are not available in this gateway instance.');
+    if (!options.handleRunCommand) {
+      await sendMessageToConversation('run commands are not available in this gateway instance.');
       return completedMessageProcessingResult();
     }
 
     try {
-      const tmuxOutput = await options.handleTmuxCommand({
+      const runOutput = await options.handleRunCommand({
         args: commandArgs,
       });
 
       await sendLongText(
         (chunk) => sendFormattedMessageToConversation(chunk),
-        tmuxOutput,
+        runOutput,
       );
     } catch (error) {
-      await sendMessageToConversation(`Unable to process /tmux command: ${(error as Error).message}`);
+      await sendMessageToConversation(`Unable to process /run command: ${(error as Error).message}`);
     }
 
     return completedMessageProcessingResult();
@@ -7381,7 +7381,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     return `Unknown /room subcommand: ${subcommand}. Use /room help.`;
   };
 
-  interface TelegramTmuxRunGroupSession {
+  interface TelegramRunGroupSession {
     sessionName: string;
     taskSlug: string;
     commandText: string;
@@ -7392,7 +7392,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     exitCode?: number;
   }
 
-  interface TelegramTmuxRunGroup {
+  interface TelegramRunGroup {
     id: string;
     sourceConversationId: string;
     sourceChatId: number;
@@ -7401,24 +7401,24 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     targetChatId: number;
     targetMessageThreadId?: number;
     targetTopicName?: string;
-    notifyMode: TelegramTmuxNotifyMode;
+    notifyMode: TelegramRunNotifyMode;
     status: 'running' | 'completed';
-    sessions: TelegramTmuxRunGroupSession[];
+    sessions: TelegramRunGroupSession[];
     dashboardMessageId?: number;
     createdAt: string;
     updatedAt: string;
     resumeTriggered?: boolean;
   }
 
-  interface TelegramTmuxSessionWatch {
+  interface TelegramRunWatch {
     sessionName: string;
     groupId: string;
     logPath?: string;
   }
 
-  const tmuxRunGroups = new Map<string, TelegramTmuxRunGroup>();
-  const tmuxSessionWatches = new Map<string, TelegramTmuxSessionWatch>();
-  let tmuxWatchPollInFlight = false;
+  const runGroups = new Map<string, TelegramRunGroup>();
+  const runWatches = new Map<string, TelegramRunWatch>();
+  let runWatchPollInFlight = false;
   let syntheticInternalMessageId = Date.now();
   const telegramHandlerRef: { current?: QueuedTelegramMessageHandler } = {};
 
@@ -7473,10 +7473,10 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
   };
 
   const pickMoreVerboseNotifyMode = (
-    left: TelegramTmuxNotifyMode,
-    right: TelegramTmuxNotifyMode,
-  ): TelegramTmuxNotifyMode => {
-    const rank = (mode: TelegramTmuxNotifyMode): number => {
+    left: TelegramRunNotifyMode,
+    right: TelegramRunNotifyMode,
+  ): TelegramRunNotifyMode => {
+    const rank = (mode: TelegramRunNotifyMode): number => {
       if (mode === 'resume') {
         return 3;
       }
@@ -7542,14 +7542,14 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     return `work-${task}-${timestamp}`;
   };
 
-  const formatTmuxRunGroupDashboard = (group: TelegramTmuxRunGroup): string => {
-    const lines = [`🧵 tmux run group: ${group.id}`, `status=${group.status}`, `notify=${group.notifyMode}`];
+  const formatRunGroupDashboard = (group: TelegramRunGroup): string => {
+    const lines = [`🧵 run group: ${group.id}`, `status=${group.status}`, `notify=${group.notifyMode}`];
 
     if (group.targetMessageThreadId !== undefined) {
       lines.push(`threadId=${group.targetMessageThreadId}`);
     }
 
-    lines.push('', 'Sessions:');
+    lines.push('', 'Runs:');
 
     for (const session of group.sessions) {
       const icon = session.status === 'running'
@@ -7571,19 +7571,19 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     return lines.join('\n');
   };
 
-  const formatTmuxRunGroupCompletion = (group: TelegramTmuxRunGroup): string => {
+  const formatRunGroupCompletion = (group: TelegramRunGroup): string => {
     const succeeded = group.sessions.filter((session) => session.status === 'success').length;
     const failed = group.sessions.filter((session) => session.status === 'failed').length;
     const unknown = group.sessions.filter((session) => session.status === 'unknown').length;
 
     const lines = [
-      `tmux run group completed: ${group.id}`,
+      `run group completed: ${group.id}`,
       `success=${succeeded} failed=${failed} unknown=${unknown}`,
     ];
 
     const failedSessions = group.sessions.filter((session) => session.status === 'failed');
     if (failedSessions.length > 0) {
-      lines.push('', 'Failed sessions:');
+      lines.push('', 'Failed runs:');
       for (const session of failedSessions) {
         lines.push(`- ${session.sessionName}${typeof session.exitCode === 'number' ? ` (exit=${session.exitCode})` : ''}`);
       }
@@ -7592,8 +7592,8 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     return lines.join('\n');
   };
 
-  const updateTmuxRunGroupDashboard = async (group: TelegramTmuxRunGroup): Promise<void> => {
-    const text = formatTmuxRunGroupDashboard(group);
+  const updateRunGroupDashboard = async (group: TelegramRunGroup): Promise<void> => {
+    const text = formatRunGroupDashboard(group);
 
     if (group.dashboardMessageId !== undefined) {
       await updateTelegramMessageInConversation(group.targetChatId, group.dashboardMessageId, text);
@@ -7613,11 +7613,11 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     }
   };
 
-  const summarizeRunGroupForFollowUp = (group: TelegramTmuxRunGroup): string => {
+  const summarizeRunGroupForFollowUp = (group: TelegramRunGroup): string => {
     const lines = [
-      `tmux run group ${group.id} completed. Continue from this point.`,
+      `run group ${group.id} completed. Continue from this point.`,
       '',
-      'Session results:',
+      'Run results:',
     ];
 
     for (const session of group.sessions) {
@@ -7626,7 +7626,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
         summary.push(`exit=${session.exitCode}`);
       }
 
-      const tail = readTmuxLogTail(session.logPath, 12);
+      const tail = readRunLogTail(session.logPath, 12);
       if (tail.length > 0) {
         summary.push(`tail=${tail}`);
       }
@@ -7638,11 +7638,11 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     return lines.join('\n');
   };
 
-  const dispatchInternalFollowUp = (group: TelegramTmuxRunGroup): boolean =>
+  const dispatchInternalFollowUp = (group: TelegramRunGroup): boolean =>
     dispatchSyntheticTelegramFollowUp(group.targetConversationId, summarizeRunGroupForFollowUp(group));
 
-  const finalizeTmuxSessionWatch = async (watch: TelegramTmuxSessionWatch): Promise<void> => {
-    const group = tmuxRunGroups.get(watch.groupId);
+  const finalizeRunWatch = async (watch: TelegramRunWatch): Promise<void> => {
+    const group = runGroups.get(watch.groupId);
     if (!group) {
       return;
     }
@@ -7652,7 +7652,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
       return;
     }
 
-    const exitCode = readTmuxExitCodeFromLog(watch.logPath ?? session.logPath);
+    const exitCode = readRunExitCodeFromLog(watch.logPath ?? session.logPath);
     session.exitCode = exitCode;
     session.completedAt = new Date().toISOString();
     session.status = exitCode === undefined
@@ -7663,7 +7663,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
     group.updatedAt = new Date().toISOString();
 
-    await updateTmuxRunGroupDashboard(group);
+    await updateRunGroupDashboard(group);
 
     const hasRunningSessions = group.sessions.some((entry) => entry.status === 'running');
     if (hasRunningSessions) {
@@ -7673,7 +7673,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     group.status = 'completed';
     group.updatedAt = new Date().toISOString();
 
-    const completionSummary = formatTmuxRunGroupCompletion(group);
+    const completionSummary = formatRunGroupCompletion(group);
 
     if (group.notifyMode !== 'none') {
       await sendTelegramMessageToConversation(
@@ -7689,7 +7689,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
         await sendTelegramMessageToConversation(
           group.sourceChatId,
           group.sourceMessageThreadId,
-          `tmux run group ${group.id} finished in thread ${String(group.targetMessageThreadId ?? 'n/a')}.`,
+          `run group ${group.id} finished in thread ${String(group.targetMessageThreadId ?? 'n/a')}.`,
         );
       }
     }
@@ -7707,54 +7707,70 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
       }
     }
 
-    tmuxRunGroups.delete(group.id);
+    runGroups.delete(group.id);
   };
 
-  const pollTmuxSessionWatches = async (): Promise<void> => {
-    if (tmuxWatchPollInFlight || tmuxSessionWatches.size === 0) {
+  const pollRunWatches = async (): Promise<void> => {
+    if (runWatchPollInFlight || runWatches.size === 0) {
       return;
     }
 
-    tmuxWatchPollInFlight = true;
+    runWatchPollInFlight = true;
 
     try {
-      for (const [sessionName, watch] of [...tmuxSessionWatches.entries()]) {
-        const inspect = runGatewayTmuxCli(
-          ['inspect', sessionName, '--json'],
+      for (const [sessionName, watch] of [...runWatches.entries()]) {
+        const inspect = runGatewayRunCli(
+          ['show', sessionName, '--json'],
           effectiveConfig.workingDirectory,
         );
 
-        if (inspect.ok) {
+        if (!inspect.ok) {
+          const normalizedOutput = inspect.output.toLowerCase();
+          if (normalizedOutput.includes('run not found')) {
+            runWatches.delete(sessionName);
+            await finalizeRunWatch(watch);
+          }
           continue;
         }
 
-        const normalizedOutput = inspect.output.toLowerCase();
-        if (!normalizedOutput.includes('no managed tmux session found')) {
+        try {
+          const parsed = JSON.parse(inspect.output) as {
+            run?: {
+              status?: {
+                status?: string;
+              };
+            };
+          };
+          const status = parsed.run?.status?.status;
+          if (status !== 'completed' && status !== 'failed' && status !== 'cancelled') {
+            continue;
+          }
+
+          runWatches.delete(sessionName);
+          await finalizeRunWatch(watch);
+        } catch {
           continue;
         }
-
-        tmuxSessionWatches.delete(sessionName);
-        await finalizeTmuxSessionWatch(watch);
       }
     } finally {
-      tmuxWatchPollInFlight = false;
+      runWatchPollInFlight = false;
     }
   };
 
-  const tmuxWatchPollHandle = setInterval(() => {
-    void pollTmuxSessionWatches().catch((error) => {
-      console.warn(gatewayWarning(`Failed to poll tmux watch sessions: ${(error as Error).message}`));
+  const runWatchPollHandle = setInterval(() => {
+    void pollRunWatches().catch((error) => {
+      console.warn(gatewayWarning(`Failed to poll background runs: ${(error as Error).message}`));
     });
   }, 5000);
-  tmuxWatchPollHandle.unref();
+  runWatchPollHandle.unref();
 
-  const handleTmuxCommand: HandleTelegramTmuxCommandFn = async ({ args }) =>
-    runTelegramTmuxCommand({
+  const handleRunCommand: HandleTelegramRunCommandFn = async ({ args }) =>
+    runTelegramRunCommand({
       args,
       workingDirectory: effectiveConfig.workingDirectory,
     });
 
-  const handleTmuxRunRequest: HandleTelegramTmuxRunRequestFn = async (input) => {
+  const handleRunRequest: HandleTelegramRunRequestFn = async (input) => {
     const sourceConversationId = input.sourceConversationId;
     const sourceChatIdToken = String(input.sourceChatId);
     const sourceSessionFile = input.resolveConversationSessionFile({
@@ -7843,7 +7859,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
         const selectedForkEntry = sortedForkableMessages[0];
 
         if (!selectedForkEntry) {
-          throw new Error('No user message is available to fork from yet. Send a prompt first, then retry /tmux run.');
+          throw new Error('No user message is available to fork from yet. Send a prompt first, then retry /run.');
         }
 
         const forkResult = await input.forkConversation(selectedForkEntry.entryId);
@@ -7888,7 +7904,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
           'Selected message:',
           trimForkMessagePreview(selectedForkEntry.text, 400),
           '',
-          'This topic is now the work thread for tmux jobs started with fork=auto.',
+          'This topic is now the work thread for background runs started with fork=auto.',
         ];
 
         await sendTelegramMessageToConversation(
@@ -7901,8 +7917,8 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
     const resolvedGroupToken = sanitizeRunGroupToken(input.run.group);
     const existingGroup = resolvedGroupToken !== 'auto'
-      ? tmuxRunGroups.get(resolvedGroupToken)
-      : [...tmuxRunGroups.values()].find((group) =>
+      ? runGroups.get(resolvedGroupToken)
+      : [...runGroups.values()].find((group) =>
         group.status === 'running'
         && group.sourceConversationId === sourceConversationId
         && group.targetConversationId === targetConversationId
@@ -7929,20 +7945,20 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
     group.notifyMode = pickMoreVerboseNotifyMode(group.notifyMode, input.run.notifyMode);
     group.updatedAt = new Date().toISOString();
-    tmuxRunGroups.set(group.id, group);
+    runGroups.set(group.id, group);
 
-    const tmuxRunArgs = buildTelegramTmuxRunCliArgs(input.run);
-    const tmuxResult = runGatewayTmuxCli(tmuxRunArgs, effectiveConfig.workingDirectory);
-    if (!tmuxResult.ok) {
-      throw new Error(tmuxResult.output);
+    const runCliArgs = buildTelegramRunCliArgs(input.run);
+    const runResult = runGatewayRunCli(runCliArgs, effectiveConfig.workingDirectory);
+    if (!runResult.ok) {
+      throw new Error(runResult.output);
     }
 
-    const parsedRunOutput = parseTmuxRunCliOutput(tmuxResult.output);
-    if (!parsedRunOutput.sessionName) {
-      throw new Error(`Unable to parse tmux session name from output:\n${tmuxResult.output}`);
+    const parsedRunOutput = parseRunCliOutput(runResult.output);
+    if (!parsedRunOutput.runId) {
+      throw new Error(`Unable to parse durable run id from output:\n${runResult.output}`);
     }
 
-    const sessionName = parsedRunOutput.sessionName;
+    const sessionName = parsedRunOutput.runId;
     const sessionLogPath = parsedRunOutput.logPath;
 
     group.sessions.push({
@@ -7956,21 +7972,21 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
     group.updatedAt = new Date().toISOString();
 
-    tmuxSessionWatches.set(sessionName, {
+    runWatches.set(sessionName, {
       sessionName,
       groupId: group.id,
       logPath: sessionLogPath,
     });
 
-    await updateTmuxRunGroupDashboard(group);
-    void pollTmuxSessionWatches();
+    await updateRunGroupDashboard(group);
+    void pollRunWatches();
 
     if (group.targetConversationId !== sourceConversationId) {
       await sendTelegramMessageToConversation(
         group.targetChatId,
         group.targetMessageThreadId,
         [
-          `Started tmux session ${sessionName}.`,
+          `Started durable run ${sessionName}.`,
           `group=${group.id}`,
           `task=${input.run.taskSlug}`,
           `notify=${input.run.notifyMode}`,
@@ -7980,7 +7996,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     }
 
     const sourceReplyLines = [
-      `Started tmux session ${sessionName}.`,
+      `Started durable run ${sessionName}.`,
       `group=${group.id}`,
       `notify=${input.run.notifyMode}`,
     ];
@@ -8070,8 +8086,8 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     resolveScheduledReplyContext: ({ chatId, replyMessageId }) =>
       resolveScheduledReplyContext(chatId, replyMessageId),
     handleRoomAdminCommand,
-    handleTmuxCommand,
-    handleTmuxRunRequest,
+    handleRunCommand,
+    handleRunRequest,
     createForumTopic: typeof (bot as { createForumTopic?: unknown }).createForumTopic === 'function'
       ? async ({ chatId, name }) => {
         const topicResult = await withTelegramRetry(

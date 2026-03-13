@@ -146,7 +146,6 @@ Use it to control:
 - retry behavior
 - tick interval
 - default timeout
-- tmux execution defaults
 - socket path and queue settings
 
 See [Configuration](./configuration.md).

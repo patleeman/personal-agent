@@ -51,7 +51,7 @@ Examples of user-visible extension behavior in this repo:
 
 - **memory** — keeps AGENTS, skills, and memory rules visible to the agent
 - **web-tools** — gives the agent web search/fetch capability
-- **tmux-orchestration-prompt** — gives the agent better policy for tmux-based long-running work
+- **daemon-run orchestration prompt** — gives the agent better policy for daemon-backed durable background work
 - **project agent extension** — lets web UI conversations create and update durable project state directly
 
 ## What to edit when you want to change behavior

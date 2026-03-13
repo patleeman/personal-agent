@@ -1,9 +1,13 @@
 import { existsSync } from 'fs';
 import {
+  cancelDurableRun,
+  pingDaemon,
   resolveDaemonPaths,
   resolveDurableRunsRoot,
   scanDurableRun,
   scanDurableRunsForRecovery,
+  startBackgroundRun,
+  startDaemonDetached,
   summarizeScannedDurableRuns,
   type DurableRunStatus,
 } from '@personal-agent/daemon';
@@ -11,7 +15,7 @@ import { readTailLines } from './file-utils.js';
 import { bullet, dim, keyValue, section, statusChip } from './ui.js';
 
 function runsUsageText(): string {
-  return 'Usage: pa runs [list|show|logs|help] [args...]';
+  return 'Usage: pa runs [list|show|logs|start|cancel|help] [args...]';
 }
 
 function runsListUsageText(): string {
@@ -24,6 +28,14 @@ function runsShowUsageText(): string {
 
 function runsLogsUsageText(): string {
   return 'Usage: pa runs logs <id> [--tail <count>]';
+}
+
+function runsStartUsageText(): string {
+  return 'Usage: pa runs start <task-slug> [--cwd <path>] [--] <command...>';
+}
+
+function runsCancelUsageText(): string {
+  return 'Usage: pa runs cancel <id>';
 }
 
 function parseTailCount(raw: string): number {
@@ -67,16 +79,37 @@ function formatRunStatus(status: DurableRunStatus | undefined): string {
   return statusChip('error');
 }
 
+async function ensureDaemonAvailable(): Promise<void> {
+  if (await pingDaemon()) {
+    return;
+  }
+
+  await startDaemonDetached();
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (await pingDaemon()) {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+
+  throw new Error('Daemon did not become available. Start it with: pa daemon start');
+}
+
 function printRunsHelp(): void {
   console.log(section('Runs commands'));
   console.log('');
-  console.log(`Usage: pa runs [list|show|logs|help] [args...]
+  console.log(`Usage: pa runs [list|show|logs|start|cancel|help] [args...]
 
 Commands:
-  list [--json]            List durable daemon-backed runs with recovery status
-  show <id> [--json]       Show one durable run record and recovery metadata
-  logs <id> [--tail <n>]   Show run output log (default: 80 lines)
-  help                     Show runs help
+  list [--json]                   List durable daemon-backed runs with recovery status
+  show <id> [--json]              Show one durable run record and recovery metadata
+  logs <id> [--tail <n>]          Show run output log (default: 80 lines)
+  start <task-slug> [--cwd <path>] [--] <command...>
+                                  Start a durable background run
+  cancel <id>                     Cancel one durable background run
+  help                            Show runs help
 `);
   console.log(keyValue('Runs root', toRunsRoot()));
 }
@@ -276,6 +309,85 @@ export async function runsCommand(args: string[]): Promise<number> {
     console.log(keyValue('Source', source));
     console.log('');
     console.log(output.length > 0 ? output : dim('(empty output)'));
+    return 0;
+  }
+
+  if (subcommand === 'start') {
+    let cwd = process.cwd();
+    const positional: string[] = [];
+    const commandIndex = rest.indexOf('--');
+    const head = commandIndex === -1 ? rest : rest.slice(0, commandIndex);
+    let commandArgs = commandIndex === -1 ? [] : rest.slice(commandIndex + 1);
+
+    for (let index = 0; index < head.length; index += 1) {
+      const arg = head[index] as string;
+
+      if (arg === '--cwd') {
+        const value = head[index + 1];
+        if (!value) {
+          throw new Error(runsStartUsageText());
+        }
+
+        cwd = value;
+        index += 1;
+        continue;
+      }
+
+      if (arg.startsWith('--')) {
+        throw new Error(runsStartUsageText());
+      }
+
+      positional.push(arg);
+    }
+
+    if (commandArgs.length === 0 && positional.length > 1) {
+      commandArgs = positional.slice(1);
+      positional.splice(1);
+    }
+
+    if (positional.length !== 1 || commandArgs.length === 0) {
+      throw new Error(runsStartUsageText());
+    }
+
+    await ensureDaemonAvailable();
+    const result = await startBackgroundRun({
+      taskSlug: positional[0] as string,
+      cwd,
+      argv: commandArgs,
+      source: {
+        type: 'cli',
+        id: positional[0] as string,
+      },
+    });
+
+    if (!result.accepted) {
+      throw new Error(result.reason ?? `Failed to start run ${result.runId}`);
+    }
+
+    console.log(section('Durable run started'));
+    console.log(keyValue('Run', result.runId));
+    if (result.logPath) {
+      console.log(keyValue('Log', result.logPath));
+    }
+    console.log(keyValue('Inspect', `pa runs show ${result.runId}`));
+    return 0;
+  }
+
+  if (subcommand === 'cancel') {
+    const positional = rest.filter((arg) => !arg.startsWith('--'));
+    const unknownOptions = rest.filter((arg) => arg.startsWith('--'));
+    if (positional.length !== 1 || unknownOptions.length > 0) {
+      throw new Error(runsCancelUsageText());
+    }
+
+    await ensureDaemonAvailable();
+    const result = await cancelDurableRun(positional[0] as string);
+    if (!result.cancelled) {
+      throw new Error(result.reason ?? `Could not cancel run ${positional[0] as string}`);
+    }
+
+    console.log(section('Durable run cancelled'));
+    console.log(keyValue('Run', result.runId));
     return 0;
   }
 

@@ -15,8 +15,8 @@ updated: 2026-03-12
 
 ## Current interface direction
 
-- Keep `pa tui` as one Pi TUI instance per terminal tab; do not assume a tmux-managed pane/workbench UI.
-- Use tmux for background orchestration, not as the main user-facing window manager.
+- Keep `pa tui` as one Pi TUI instance per terminal tab; do not assume a pane-managed workbench UI.
+- Use daemon-backed durable runs for background orchestration, not a terminal multiplexer.
 - Keep richer workbench-style UX experimentation in the web UI, not in a more complex Pi TUI shell.
 
 ## Web conversation UX constraints

@@ -141,15 +141,14 @@ pa tasks validate ~/.config/personal-agent/tasks/example.task.md
 pa tasks logs <id> --tail 120
 ```
 
-### Agent-managed tmux sessions
+### Durable background runs
 
 ```bash
-pa tmux list
-pa tmux inspect <session>
-pa tmux logs <session> --tail 120
-pa tmux stop <session>
-pa tmux clean --dry-run
-pa tmux run code-review -- pa -p "review this diff"
+pa runs start code-review -- pa -p "review this diff"
+pa runs list
+pa runs show <id>
+pa runs logs <id> --tail 120
+pa runs cancel <id>
 ```
 
 ### Gateway (Telegram)
@@ -200,8 +199,7 @@ Built-in extensions in this repo:
 - `at-autocomplete-performance` - Faster `@` path completion in large repos
 - `deferred-resume` - Resume this same TUI session later after a delay
 - `web-tools` - Web search/integration
-- `tmux-manager` - `/tmux` command + footer status for agent-managed tmux sessions only
-- `tmux-orchestration-prompt` - System-prompt policy for tmux-based background orchestration and status reporting
+- `daemon-run-orchestration-prompt` - System-prompt policy for daemon-backed background orchestration and status reporting
 
 See `docs/skills-and-capabilities.md` for a user-facing overview of skills and runtime capabilities.
 

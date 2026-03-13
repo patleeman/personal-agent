@@ -60,7 +60,6 @@ export interface ParsedTaskDefinition {
   modelRef?: string;
   cwd?: string;
   timeoutSeconds: number;
-  runInTmux?: boolean;
   output?: ParsedTaskOutput;
 }
 
@@ -243,31 +242,6 @@ function readTimeoutSeconds(attributes: Record<string, unknown>, defaultTimeoutS
   }
 
   throw new Error('Frontmatter key timeoutSeconds must be a positive integer');
-}
-
-function readOptionalBoolean(attributes: Record<string, unknown>, key: string): boolean | undefined {
-  const raw = getAttribute(attributes, key);
-
-  if (raw === undefined || raw === null || raw === '') {
-    return undefined;
-  }
-
-  if (typeof raw === 'boolean') {
-    return raw;
-  }
-
-  if (typeof raw === 'string') {
-    const normalized = raw.trim().toLowerCase();
-    if (normalized === 'true') {
-      return true;
-    }
-
-    if (normalized === 'false') {
-      return false;
-    }
-  }
-
-  throw new Error(`Frontmatter key ${key} must be a boolean`);
 }
 
 function parseOutputWhen(value: unknown): TaskOutputWhen {
@@ -635,7 +609,6 @@ export function parseTaskDefinition(options: ParseTaskDefinitionOptions): Parsed
     modelRef,
     cwd,
     timeoutSeconds: readTimeoutSeconds(section.attributes, options.defaultTimeoutSeconds),
-    runInTmux: readOptionalBoolean(section.attributes, 'runInTmux'),
     output: readOutput(section.attributes),
   };
 }

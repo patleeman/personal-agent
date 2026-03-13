@@ -1,17 +1,12 @@
 import { spawn } from 'child_process';
 import {
-  closeSync,
   createWriteStream,
   existsSync,
   mkdirSync,
-  openSync,
-  readFileSync,
-  readSync,
-  rmSync,
   statSync,
   type WriteStream,
 } from 'fs';
-import { basename, join } from 'path';
+import { join } from 'path';
 import {
   bootstrapStateOrThrow,
   preparePiAgentDir,
@@ -27,19 +22,13 @@ import {
 import type { ParsedTaskDefinition } from './tasks-parser.js';
 
 const GRACEFUL_SHUTDOWN_MS = 5000;
-const TMUX_POLL_INTERVAL_MS = 250;
 const MAX_CAPTURED_OUTPUT_CHARS = 16_000;
-const PA_TMUX_MANAGED_OPTION = '@pa_agent_session';
-const PA_TMUX_TASK_OPTION = '@pa_agent_task';
-const PA_TMUX_LOG_OPTION = '@pa_agent_log';
-const PA_TMUX_COMMAND_OPTION = '@pa_agent_cmd';
 
 export interface TaskRunRequest {
   task: ParsedTaskDefinition;
   attempt: number;
   runsRoot: string;
   signal?: AbortSignal;
-  runInTmux?: boolean;
 }
 
 export interface TaskRunResult {
@@ -55,19 +44,11 @@ export interface TaskRunResult {
   outputText?: string;
 }
 
-interface CommandResult {
-  exitCode: number;
-  signal: NodeJS.Signals | null;
-  stdout: string;
-  stderr: string;
-}
-
 interface PreparedTaskRunCommand {
   command: string;
   args: string[];
   cwd: string;
   env: NodeJS.ProcessEnv;
-  envOverrides: Record<string, string>;
 }
 
 interface RunnerExecutionContext {
@@ -89,36 +70,6 @@ function sanitizePathSegment(value: string): string {
   return sanitized.length > 0 ? sanitized : 'task';
 }
 
-function sanitizeTmuxNamePart(value: string, fallback: string): string {
-  const normalized = value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+/, '')
-    .replace(/-+$/, '')
-    .slice(0, 32);
-
-  return normalized.length > 0 ? normalized : fallback;
-}
-
-function formatTmuxSessionTimestamp(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const seconds = String(date.getSeconds()).padStart(2, '0');
-
-  return `${year}${month}${day}-${hours}${minutes}${seconds}`;
-}
-
-function createManagedTmuxSessionName(cwd: string, taskId: string, startedAt: string): string {
-  const workspace = sanitizeTmuxNamePart(basename(cwd), 'workspace');
-  const task = sanitizeTmuxNamePart(taskId, 'task');
-  const timestamp = formatTmuxSessionTimestamp(new Date(startedAt));
-
-  return `${workspace}-${task}-${timestamp}`;
-}
-
 function toTimestampKey(timestamp: string): string {
   return timestamp.replace(/[:.]/g, '-');
 }
@@ -131,12 +82,6 @@ function closeStream(stream: WriteStream): Promise<void> {
 
 function writeLine(stream: WriteStream, message: string): void {
   stream.write(`${message}\n`);
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 }
 
 function toTaskRunArgs(task: ParsedTaskDefinition, resolvedProfile: ResolvedResourceProfile): string[] {
@@ -204,201 +149,6 @@ function formatCapturedOutput(raw: string, truncated: boolean): string | undefin
   }
 
   return `${trimmed}\n\n[output truncated]`;
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
-function formatShellCommand(args: string[]): string {
-  if (args.length === 0) {
-    throw new Error('Command cannot be empty.');
-  }
-
-  return args.map((arg) => shellQuote(arg)).join(' ');
-}
-
-function normalizeOutput(value: string): string {
-  return value.replace(/\r\n/g, '\n').trim();
-}
-
-function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error;
-}
-
-function isTmuxMissingSessionOutput(detail: string): boolean {
-  const normalized = detail.toLowerCase();
-
-  return normalized.includes("can't find session")
-    || normalized.includes('no server running')
-    || normalized.includes('failed to connect to server')
-    || normalized.includes('error connecting to');
-}
-
-async function runCommand(
-  command: string,
-  args: string[],
-  options: {
-    cwd?: string;
-    env?: NodeJS.ProcessEnv;
-  } = {},
-): Promise<CommandResult> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd: options.cwd,
-      env: options.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-
-    let stdout = '';
-    let stderr = '';
-    let settled = false;
-
-    child.stdout?.on('data', (chunk: Buffer | string) => {
-      stdout += chunk.toString();
-    });
-
-    child.stderr?.on('data', (chunk: Buffer | string) => {
-      stderr += chunk.toString();
-    });
-
-    child.on('error', (error) => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      reject(error);
-    });
-
-    child.on('close', (code, signal) => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      resolve({
-        exitCode: code ?? 1,
-        signal,
-        stdout,
-        stderr,
-      });
-    });
-  });
-}
-
-async function runTmuxCommand(
-  args: string[],
-  options: {
-    allowMissingSession?: boolean;
-  } = {},
-): Promise<void> {
-  try {
-    const result = await runCommand('tmux', args);
-
-    if (result.exitCode === 0) {
-      return;
-    }
-
-    const detail = normalizeOutput(result.stderr || result.stdout) || `exit code ${String(result.exitCode)}`;
-
-    if (options.allowMissingSession && isTmuxMissingSessionOutput(detail)) {
-      return;
-    }
-
-    throw new Error(`tmux ${args.join(' ')} failed: ${detail}`);
-  } catch (error) {
-    if (isErrnoException(error) && error.code === 'ENOENT') {
-      throw new Error('tmux is not installed or not available on PATH.');
-    }
-
-    throw error;
-  }
-}
-
-async function setTmuxSessionOption(
-  sessionName: string,
-  option: string,
-  value: string,
-): Promise<void> {
-  await runTmuxCommand(['set-option', '-t', sessionName, option, value], {
-    allowMissingSession: true,
-  });
-}
-
-async function tagManagedTmuxSession(
-  sessionName: string,
-  metadata: {
-    taskId: string;
-    logPath: string;
-    sourceCommand: string;
-  },
-): Promise<void> {
-  await setTmuxSessionOption(sessionName, PA_TMUX_MANAGED_OPTION, '1');
-  await setTmuxSessionOption(sessionName, PA_TMUX_TASK_OPTION, metadata.taskId);
-  await setTmuxSessionOption(sessionName, PA_TMUX_LOG_OPTION, metadata.logPath);
-  await setTmuxSessionOption(sessionName, PA_TMUX_COMMAND_OPTION, metadata.sourceCommand);
-}
-
-function toTmuxShellCommand(input: {
-  command: string;
-  args: string[];
-  envOverrides: Record<string, string>;
-  outputPath: string;
-  exitCodePath: string;
-}): string {
-  const envPairs = Object.entries(input.envOverrides)
-    .filter(([, value]) => typeof value === 'string' && value.length > 0)
-    .map(([key, value]) => `${key}=${shellQuote(value)}`);
-
-  const command = formatShellCommand([input.command, ...input.args]);
-  const runCommand = envPairs.length > 0
-    ? `env ${envPairs.join(' ')} ${command}`
-    : command;
-
-  return `${runCommand} > ${shellQuote(input.outputPath)} 2>&1; printf '%s' $? > ${shellQuote(input.exitCodePath)}`;
-}
-
-function appendOutputFileToLogAndCapture(
-  outputPath: string,
-  stream: WriteStream,
-  captureOutput: (chunk: string) => void,
-): void {
-  if (!existsSync(outputPath)) {
-    return;
-  }
-
-  const descriptor = openSync(outputPath, 'r');
-  const buffer = Buffer.allocUnsafe(64 * 1024);
-
-  try {
-    for (;;) {
-      const bytesRead = readSync(descriptor, buffer, 0, buffer.length, null);
-      if (bytesRead <= 0) {
-        break;
-      }
-
-      const chunk = buffer.subarray(0, bytesRead).toString();
-      stream.write(chunk);
-      captureOutput(chunk);
-    }
-  } finally {
-    closeSync(descriptor);
-  }
-}
-
-function readExitCode(exitCodePath: string): number | undefined {
-  if (!existsSync(exitCodePath)) {
-    return undefined;
-  }
-
-  const raw = readFileSync(exitCodePath, 'utf-8').trim();
-  if (!/^[-+]?\d+$/.test(raw)) {
-    return undefined;
-  }
-
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 async function runTaskWithDirectSpawn(context: RunnerExecutionContext): Promise<TaskRunResult> {
@@ -511,116 +261,6 @@ async function runTaskWithDirectSpawn(context: RunnerExecutionContext): Promise<
   });
 }
 
-async function runTaskInManagedTmux(context: RunnerExecutionContext): Promise<TaskRunResult> {
-  const sessionName = createManagedTmuxSessionName(
-    context.prepared.cwd,
-    context.request.task.id,
-    context.startedAt,
-  );
-
-  const outputPath = `${context.logPath}.output`;
-  const exitCodePath = `${context.logPath}.exit-code`;
-
-  rmSync(outputPath, { force: true });
-  rmSync(exitCodePath, { force: true });
-
-  const tmuxShellCommand = toTmuxShellCommand({
-    command: context.prepared.command,
-    args: context.prepared.args,
-    envOverrides: context.prepared.envOverrides,
-    outputPath,
-    exitCodePath,
-  });
-
-  writeLine(context.stream, `# tmuxSession=${sessionName}`);
-
-  await runTmuxCommand([
-    'new-session',
-    '-d',
-    '-s',
-    sessionName,
-    '-c',
-    context.prepared.cwd,
-    tmuxShellCommand,
-  ]);
-
-  try {
-    await tagManagedTmuxSession(sessionName, {
-      taskId: context.request.task.id,
-      logPath: context.logPath,
-      sourceCommand: formatShellCommand([context.prepared.command, ...context.prepared.args]),
-    });
-  } catch (error) {
-    writeLine(context.stream, `# warning=failed to tag tmux session: ${(error as Error).message}`);
-  }
-
-  let timedOut = false;
-  let cancelled = false;
-
-  const timeoutMs = Math.max(1, Math.floor(context.request.task.timeoutSeconds * 1000));
-  const deadline = Date.now() + timeoutMs;
-
-  while (!existsSync(exitCodePath)) {
-    if (context.request.signal?.aborted) {
-      cancelled = true;
-      writeLine(context.stream, '\n# cancelled by daemon shutdown');
-      break;
-    }
-
-    if (Date.now() >= deadline) {
-      timedOut = true;
-      writeLine(context.stream, `\n# timeout after ${context.request.task.timeoutSeconds}s`);
-      break;
-    }
-
-    await delay(TMUX_POLL_INTERVAL_MS);
-  }
-
-  if (timedOut || cancelled) {
-    await runTmuxCommand(['kill-session', '-t', sessionName], {
-      allowMissingSession: true,
-    });
-
-    await delay(TMUX_POLL_INTERVAL_MS);
-  }
-
-  appendOutputFileToLogAndCapture(outputPath, context.stream, context.captureOutput);
-
-  const recordedExitCode = readExitCode(exitCodePath);
-  const exitCode = timedOut || cancelled ? 1 : (recordedExitCode ?? 1);
-  const endedAt = new Date().toISOString();
-  const success = exitCode === 0 && !timedOut && !cancelled;
-
-  let error: string | undefined;
-  if (timedOut) {
-    error = `Task timed out after ${context.request.task.timeoutSeconds}s`;
-  } else if (cancelled) {
-    error = 'Task run cancelled';
-  } else if (exitCode !== 0) {
-    error = `pi exited with code ${exitCode}`;
-  }
-
-  await runTmuxCommand(['kill-session', '-t', sessionName], {
-    allowMissingSession: true,
-  });
-
-  rmSync(outputPath, { force: true });
-  rmSync(exitCodePath, { force: true });
-
-  return {
-    success,
-    startedAt: context.startedAt,
-    endedAt,
-    exitCode,
-    signal: null,
-    timedOut,
-    cancelled,
-    logPath: context.logPath,
-    error,
-    outputText: context.getCapturedOutput(),
-  };
-}
-
 export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<TaskRunResult> {
   const startedAt = new Date().toISOString();
   const logDir = join(request.runsRoot, sanitizePathSegment(request.task.id));
@@ -635,7 +275,6 @@ export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<Task
   writeLine(stream, `# profile=${request.task.profile}`);
   writeLine(stream, `# attempt=${request.attempt}`);
   writeLine(stream, `# startedAt=${startedAt}`);
-  writeLine(stream, `# runInTmux=${request.runInTmux ? 'true' : 'false'}`);
 
   let capturedOutput = '';
   let outputTruncated = false;
@@ -700,14 +339,13 @@ export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<Task
         ...process.env,
         ...envOverrides,
       },
-      envOverrides,
     };
 
     writeLine(stream, `# command=pi (profile resources)${request.task.modelRef ? ` --model ${request.task.modelRef}` : ''} -p <task prompt>`);
-    writeLine(stream, `# mode=${request.runInTmux ? 'tmux' : 'subprocess'}`);
+    writeLine(stream, '# mode=subprocess');
     writeLine(stream, '');
 
-    const executionContext: RunnerExecutionContext = {
+    result = await runTaskWithDirectSpawn({
       request,
       startedAt,
       logPath,
@@ -715,11 +353,7 @@ export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<Task
       prepared,
       captureOutput,
       getCapturedOutput,
-    };
-
-    result = request.runInTmux
-      ? await runTaskInManagedTmux(executionContext)
-      : await runTaskWithDirectSpawn(executionContext);
+    });
 
     writeLine(stream, '');
     writeLine(stream, `# endedAt=${result.endedAt}`);

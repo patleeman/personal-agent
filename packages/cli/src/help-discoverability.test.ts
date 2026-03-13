@@ -59,11 +59,7 @@ describe('subcommand help discoverability', () => {
     },
     {
       argv: ['runs', '--help'],
-      expected: ['Runs commands', 'Usage: pa runs [list|show|logs|help] [args...]', 'show <id> [--json]'],
-    },
-    {
-      argv: ['tmux', '--help'],
-      expected: ['Tmux commands', 'Usage: pa tmux [list|inspect|logs|stop|send|run|clean|help] [args...]', 'run <task-slug>'],
+      expected: ['Runs commands', 'Usage: pa runs [list|show|logs|start|cancel|help] [args...]', 'start <task-slug> [--cwd <path>] [--] <command...>'],
     },
     {
       argv: ['daemon', '--help'],

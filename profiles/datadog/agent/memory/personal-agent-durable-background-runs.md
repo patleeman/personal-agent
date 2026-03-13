@@ -1,7 +1,7 @@
 ---
 id: personal-agent-durable-background-runs
 title: "Personal-agent durable background runs"
-summary: "Canonical product direction for replacing tmux-backed local background work with daemon-backed durable runs and restart recovery."
+summary: "Canonical product direction for daemon-backed local background work and restart recovery."
 type: "project"
 status: "active"
 tags:
@@ -9,7 +9,6 @@ tags:
   - "background-runs"
   - "daemon"
   - "restart-recovery"
-  - "tmux"
 updated: 2026-03-12
 ---
 
@@ -19,8 +18,8 @@ High-signal product guidance for local background execution and restart recovery
 
 ## Core direction
 
-- Replace tmux as the first-class local orchestration path with daemon-backed durable runs.
-- Scheduled or detached background work should be inspectable through durable run state, logs, and results rather than tmux session management.
+- Use daemon-backed durable runs as the first-class local orchestration path.
+- Scheduled or detached background work should be inspectable through durable run state, logs, and results rather than ad-hoc terminal session management.
 - Web-triggered background work and live conversations should converge on the same restart-recoverable model over time.
 
 ## Restart recovery contract

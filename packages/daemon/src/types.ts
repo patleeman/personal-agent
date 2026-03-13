@@ -1,4 +1,5 @@
 import type { ScannedDurableRun, ScannedDurableRunsSummary } from './runs/store.js';
+import type { BackgroundRunNotificationSpec } from './runs/background-runs.js';
 import type { RecoverableWebLiveConversationRun, WebLiveConversationPendingOperation, WebLiveConversationRunState } from './runs/web-live-conversations.js';
 
 export type EventPayload = Record<string, unknown>;
@@ -99,6 +100,31 @@ export interface GetDurableRunResult {
 
 export interface StartScheduledTaskRunResult {
   accepted: boolean;
+  runId: string;
+  reason?: string;
+}
+
+export interface StartBackgroundRunRequestInput {
+  taskSlug: string;
+  cwd: string;
+  argv?: string[];
+  shellCommand?: string;
+  source?: {
+    type: string;
+    id?: string;
+  };
+  notification?: BackgroundRunNotificationSpec;
+}
+
+export interface StartBackgroundRunResult {
+  accepted: boolean;
+  runId: string;
+  logPath?: string;
+  reason?: string;
+}
+
+export interface CancelDurableRunResult {
+  cancelled: boolean;
   runId: string;
   reason?: string;
 }
