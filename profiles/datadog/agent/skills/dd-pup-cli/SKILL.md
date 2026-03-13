@@ -232,7 +232,7 @@ Always include direct links when referencing entities:
 2. **Include timestamps** — When things happened (UTC)
 3. **Include quantities** — Actual numbers, not "some" or "several"
 4. **Run queries in parallel** — Gather monitors + logs + metrics simultaneously
-5. **Try naming variations** — `ai-gateway`, `aigateway`, `ai_gateway` in parallel
+5. **When names are ambiguous, try common variants** — For example, kebab-case, snake_case, and concatenated forms in parallel
 6. **Scope to user's team** — When user says "my services", use their team context
 7. **Use `--output table`** — For human-readable summaries shown to user
 8. **Prefer read-only commands** — Only use mutating `pup` actions when the user explicitly asks for changes
