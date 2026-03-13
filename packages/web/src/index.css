@@ -322,6 +322,18 @@
     @apply my-3 overflow-x-auto rounded-xl bg-elevated px-3 py-2.5;
   }
 
+  .ui-markdown-code-block {
+    @apply relative my-3;
+  }
+
+  .ui-markdown-code-block pre {
+    @apply my-0 pr-20;
+  }
+
+  .ui-markdown-code-copy {
+    @apply absolute right-3 top-3 z-20 inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border border-border-subtle bg-surface/95 p-0 text-[15px] leading-none text-secondary shadow-sm backdrop-blur pointer-events-auto select-none hover:bg-surface hover:text-primary;
+  }
+
   .ui-markdown pre code {
     @apply block bg-transparent p-0 text-[12px] leading-relaxed text-secondary;
   }

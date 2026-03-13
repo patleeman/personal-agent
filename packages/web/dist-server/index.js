@@ -22,9 +22,13 @@ import { createProjectAgentExtension } from './projectAgentExtension.js';
 import { createArtifactAgentExtension } from './artifactAgentExtension.js';
 import { createDeferredResumeAgentExtension } from './deferredResumeAgentExtension.js';
 import { createSession, createSessionFromExisting, resumeSession, getLiveSessions, getSessionStats, getSessionContextUsage, getAvailableModels, inspectAvailableTools, isLive, subscribe, promptSession, queuePromptContext, compactSession, reloadSessionResources, exportSessionHtml, renameSession, abortSession, destroySession, forkSession, registry as liveRegistry, } from './liveSessions.js';
+import { recoverDurableLiveConversations } from './conversationRecovery.js';
+import { syncWebLiveConversationRun } from './conversationRuns.js';
+import { getDurableRun, getDurableRunLog, listDurableRuns } from './durableRuns.js';
 import { buildReferencedMemoryDocsContext, buildReferencedProfilesContext, buildReferencedSkillsContext, buildReferencedTasksContext, pickPromptReferencesInOrder, resolvePromptReferences, } from './promptReferences.js';
 import { activateDueDeferredResumes, addConversationProjectLink, deleteConversationArtifact, ensureConversationAttentionBaselines, getActivityConversationLink, getConversationArtifact, getConversationProjectLink, getReadySessionDeferredResumeEntries, listConversationArtifacts, cleanMcpCliStderr, inspectMcpCliBinary, inspectMcpCliServer, inspectMcpCliTool, listProfileActivityEntries, listProjectIds, loadDeferredResumeState, loadProfileActivityReadState, markConversationAttentionRead, markConversationAttentionUnread, readMcpCliConfig, readProject, removeConversationProjectLink, removeDeferredResume, resolveProjectPaths, retryDeferredResume, saveDeferredResumeState, saveProfileActivityReadState, setConversationProjectLinks, summarizeConversationAttention, } from '@personal-agent/core';
 import { listProfiles, materializeProfileToAgentDir, resolveResourceProfile, } from '@personal-agent/resources';
+import { completeDeferredResumeConversationRun, loadDaemonConfig, markDeferredResumeConversationRunReady, markDeferredResumeConversationRunRetryScheduled, resolveDaemonPaths, startScheduledTaskRun, } from '@personal-agent/daemon';
 import { addProjectMilestone, createProjectRecord, createProjectTaskRecord, deleteProjectMilestone, deleteProjectRecord, deleteProjectTaskRecord, moveProjectMilestone, moveProjectTaskRecord, readProjectDetailFromProject, readProjectSource, saveProjectSource, updateProjectMilestone, updateProjectRecord, updateProjectTaskRecord, } from './projects.js';
 import { cancelDeferredResumeForSessionFile, listDeferredResumesForSessionFile, scheduleDeferredResumeForSessionFile, } from './deferredResumes.js';
 const PORT = parseInt(process.env.PA_WEB_PORT ?? '3741', 10);
@@ -37,6 +41,9 @@ const TASK_STATE_FILE = join(homedir(), '.local/state/personal-agent/daemon/task
 const PROFILE_CONFIG_FILE = getProfileConfigFilePath();
 const DEFERRED_RESUME_POLL_MS = 3_000;
 const DEFERRED_RESUME_RETRY_DELAY_MS = 30_000;
+function resolveDaemonRoot() {
+    return resolveDaemonPaths(loadDaemonConfig().ipc.socketPath).root;
+}
 installProcessLogging();
 function listAvailableProfiles() {
     return listProfiles({ repoRoot: REPO_ROOT });
@@ -301,12 +308,15 @@ async function flushLiveDeferredResumes() {
     if (processingDeferredResumes) {
         return;
     }
-    const liveSessions = getLiveSessions().filter((session) => session.sessionFile);
-    if (liveSessions.length === 0) {
-        return;
-    }
     processingDeferredResumes = true;
     try {
+        // Deferred resumes should only inject prompts into conversations that are already live.
+        // Dormant conversations stay dormant until the user explicitly reopens them, at which
+        // point the normal resume route calls this same flush path again.
+        const liveSessions = getLiveSessions().filter((session) => session.sessionFile);
+        if (liveSessions.length === 0) {
+            return;
+        }
         const state = loadDeferredResumeState();
         const now = new Date();
         let mutated = false;
@@ -317,6 +327,19 @@ async function flushLiveDeferredResumes() {
             });
             if (activated.length > 0) {
                 mutated = true;
+                const daemonRoot = resolveDaemonRoot();
+                for (const entry of activated) {
+                    await markDeferredResumeConversationRunReady({
+                        daemonRoot,
+                        deferredResumeId: entry.id,
+                        sessionFile: entry.sessionFile,
+                        prompt: entry.prompt,
+                        dueAt: entry.dueAt,
+                        createdAt: entry.createdAt,
+                        readyAt: entry.readyAt ?? now.toISOString(),
+                        conversationId: session.id,
+                    });
+                }
             }
             const readyEntries = getReadySessionDeferredResumeEntries(state, session.sessionFile);
             for (const readyEntry of readyEntries) {
@@ -325,14 +348,66 @@ async function flushLiveDeferredResumes() {
                     break;
                 }
                 try {
+                    if (liveEntry.session.sessionFile) {
+                        await syncWebLiveConversationRun({
+                            conversationId: session.id,
+                            sessionFile: liveEntry.session.sessionFile,
+                            cwd: liveEntry.cwd,
+                            title: liveEntry.title,
+                            profile: getCurrentProfile(),
+                            state: 'running',
+                            pendingOperation: {
+                                type: 'prompt',
+                                text: readyEntry.prompt,
+                                ...(liveEntry.session.isStreaming ? { behavior: 'followUp' } : {}),
+                                enqueuedAt: new Date().toISOString(),
+                            },
+                        });
+                    }
                     await promptSession(session.id, readyEntry.prompt, liveEntry.session.isStreaming ? 'followUp' : undefined);
                     removeDeferredResume(state, readyEntry.id);
+                    await completeDeferredResumeConversationRun({
+                        daemonRoot: resolveDaemonRoot(),
+                        deferredResumeId: readyEntry.id,
+                        sessionFile: readyEntry.sessionFile,
+                        prompt: readyEntry.prompt,
+                        dueAt: readyEntry.dueAt,
+                        createdAt: readyEntry.createdAt,
+                        readyAt: readyEntry.readyAt,
+                        completedAt: new Date().toISOString(),
+                        conversationId: session.id,
+                        cwd: liveEntry.cwd,
+                    });
                     mutated = true;
                 }
                 catch (error) {
+                    if (liveEntry.session.sessionFile) {
+                        await syncWebLiveConversationRun({
+                            conversationId: session.id,
+                            sessionFile: liveEntry.session.sessionFile,
+                            cwd: liveEntry.cwd,
+                            title: liveEntry.title,
+                            profile: getCurrentProfile(),
+                            state: 'failed',
+                            lastError: error.message,
+                        });
+                    }
+                    const retryDueAt = new Date(Date.now() + DEFERRED_RESUME_RETRY_DELAY_MS).toISOString();
                     retryDeferredResume(state, {
                         id: readyEntry.id,
-                        dueAt: new Date(Date.now() + DEFERRED_RESUME_RETRY_DELAY_MS).toISOString(),
+                        dueAt: retryDueAt,
+                    });
+                    await markDeferredResumeConversationRunRetryScheduled({
+                        daemonRoot: resolveDaemonRoot(),
+                        deferredResumeId: readyEntry.id,
+                        sessionFile: readyEntry.sessionFile,
+                        prompt: readyEntry.prompt,
+                        dueAt: retryDueAt,
+                        createdAt: readyEntry.createdAt,
+                        retryAt: retryDueAt,
+                        conversationId: session.id,
+                        cwd: liveEntry.cwd,
+                        lastError: error.message,
                     });
                     mutated = true;
                     logWarn(`Deferred resume delivery failed for ${session.id}: ${error.message}`);
@@ -359,7 +434,31 @@ function startDeferredResumeLoop() {
         });
     }, DEFERRED_RESUME_POLL_MS);
 }
+function startConversationRecovery() {
+    void recoverDurableLiveConversations({
+        isLive,
+        resumeSession,
+        queuePromptContext,
+        promptSession,
+        loaderOptions: {
+            ...buildLiveSessionResourceOptions(),
+            extensionFactories: buildLiveSessionExtensionFactories(),
+        },
+        logger: {
+            info: (message) => logInfo(message),
+            warn: (message) => logWarn(message),
+        },
+    }).then(async (result) => {
+        if (result.recovered.length > 0) {
+            logInfo(`Recovered ${String(result.recovered.length)} live conversation runs from durable state.`);
+            await flushLiveDeferredResumes();
+        }
+    }).catch((error) => {
+        logWarn(`Conversation recovery failed: ${error.message}`);
+    });
+}
 startDeferredResumeLoop();
+startConversationRecovery();
 function buildSnapshotEvents(topics) {
     const uniqueTopics = [...new Set(topics)];
     return uniqueTopics.map((topic) => {
@@ -1080,7 +1179,7 @@ app.get('/api/tasks/:id', (req, res) => {
         res.status(500).json({ error: String(err) });
     }
 });
-/** Run a task immediately — creates a live session with the task's prompt */
+/** Run a task immediately — queues a daemon-backed durable run */
 app.post('/api/tasks/:id/run', async (req, res) => {
     try {
         const entry = findCurrentProfileTaskEntry(req.params.id);
@@ -1095,12 +1194,63 @@ app.post('/api/tasks/:id/run', async (req, res) => {
             res.status(400).json({ error: 'Task has no prompt body' });
             return;
         }
-        const { id: sessionId } = await createSession(resolveRequestedCwd(metadata.cwd, DEFAULT_WEB_CWD) ?? DEFAULT_WEB_CWD, {
-            ...buildLiveSessionResourceOptions(),
-            extensionFactories: buildLiveSessionExtensionFactories(),
+        const result = await startScheduledTaskRun(entry.filePath);
+        if (!result.accepted) {
+            res.status(503).json({ error: result.reason ?? 'Could not start the task run.' });
+            return;
+        }
+        res.json({ ok: true, accepted: result.accepted, runId: result.runId });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
         });
-        void promptSession(sessionId, afterFrontmatter);
-        res.json({ ok: true, sessionId });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.get('/api/runs', async (_req, res) => {
+    try {
+        const result = await listDurableRuns();
+        res.json(result);
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.get('/api/runs/:id', async (req, res) => {
+    try {
+        const result = await getDurableRun(req.params.id);
+        if (!result) {
+            res.status(404).json({ error: 'Run not found' });
+            return;
+        }
+        res.json(result);
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.get('/api/runs/:id/log', async (req, res) => {
+    try {
+        const tailRaw = typeof req.query.tail === 'string' ? Number.parseInt(req.query.tail, 10) : undefined;
+        const tail = Number.isFinite(tailRaw) && tailRaw > 0
+            ? Math.min(1000, tailRaw)
+            : 120;
+        const result = await getDurableRunLog(req.params.id, tail);
+        if (!result) {
+            res.status(404).json({ error: 'Run not found' });
+            return;
+        }
+        res.json(result);
     }
     catch (err) {
         logError('request handler error', {
@@ -1328,12 +1478,59 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
         if (queuedContextBlocks.length > 0) {
             await queuePromptContext(id, 'referenced_context', queuedContextBlocks.join('\n\n'));
         }
+        const liveEntry = liveRegistry.get(id);
+        if (liveEntry?.session.sessionFile) {
+            await syncWebLiveConversationRun({
+                conversationId: id,
+                sessionFile: liveEntry.session.sessionFile,
+                cwd: liveEntry.cwd,
+                title: liveEntry.title,
+                profile: currentProfile,
+                state: 'running',
+                pendingOperation: {
+                    type: 'prompt',
+                    text,
+                    ...(behavior ? { behavior } : {}),
+                    ...(images && images.length > 0
+                        ? {
+                            images: images.map((image) => ({
+                                type: 'image',
+                                data: image.data,
+                                mimeType: image.mimeType,
+                                ...(image.name ? { name: image.name } : {}),
+                            })),
+                        }
+                        : {}),
+                    ...(queuedContextBlocks.length > 0
+                        ? {
+                            contextMessages: [{
+                                    customType: 'referenced_context',
+                                    content: queuedContextBlocks.join('\n\n'),
+                                }],
+                        }
+                        : {}),
+                    enqueuedAt: new Date().toISOString(),
+                },
+            });
+        }
         // Don't await — streaming response goes over SSE
         promptSession(id, text, behavior, images?.map((image) => ({
             type: 'image',
             data: image.data,
             mimeType: image.mimeType,
-        }))).catch((err) => {
+            ...(image.name ? { name: image.name } : {}),
+        }))).catch(async (err) => {
+            if (liveEntry?.session.sessionFile) {
+                await syncWebLiveConversationRun({
+                    conversationId: id,
+                    sessionFile: liveEntry.session.sessionFile,
+                    cwd: liveEntry.cwd,
+                    title: liveEntry.title,
+                    profile: currentProfile,
+                    state: 'failed',
+                    lastError: err instanceof Error ? err.message : String(err),
+                });
+            }
             logError('live prompt error', {
                 sessionId: id,
                 message: err instanceof Error ? err.message : String(err),
@@ -1688,7 +1885,7 @@ app.get('/api/conversations/:id/deferred-resumes', (req, res) => {
         res.status(500).json({ error: String(err) });
     }
 });
-app.post('/api/conversations/:id/deferred-resumes', (req, res) => {
+app.post('/api/conversations/:id/deferred-resumes', async (req, res) => {
     try {
         const sessionFile = resolveConversationSessionFile(req.params.id);
         if (!sessionFile) {
@@ -1700,7 +1897,7 @@ app.post('/api/conversations/:id/deferred-resumes', (req, res) => {
             res.status(400).json({ error: 'delay is required' });
             return;
         }
-        const resumeRecord = scheduleDeferredResumeForSessionFile({
+        const resumeRecord = await scheduleDeferredResumeForSessionFile({
             sessionFile,
             delay,
             prompt,
@@ -1716,14 +1913,14 @@ app.post('/api/conversations/:id/deferred-resumes', (req, res) => {
         res.status(400).json({ error: err.message });
     }
 });
-app.delete('/api/conversations/:id/deferred-resumes/:resumeId', (req, res) => {
+app.delete('/api/conversations/:id/deferred-resumes/:resumeId', async (req, res) => {
     try {
         const sessionFile = resolveConversationSessionFile(req.params.id);
         if (!sessionFile) {
             res.status(404).json({ error: 'Conversation not found' });
             return;
         }
-        cancelDeferredResumeForSessionFile({
+        await cancelDeferredResumeForSessionFile({
             sessionFile,
             id: req.params.resumeId,
         });

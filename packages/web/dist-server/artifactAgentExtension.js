@@ -8,7 +8,7 @@ const ArtifactToolParams = Type.Object({
     artifactId: Type.Optional(Type.String({ description: 'Stable artifact id. Reuse this when updating an existing artifact.' })),
     kind: Type.Optional(Type.Union(ARTIFACT_KIND_VALUES.map((value) => Type.Literal(value)))),
     title: Type.Optional(Type.String({ description: 'Artifact title shown in the chat stub and artifact panel.' })),
-    content: Type.Optional(Type.String({ description: 'Artifact source content. HTML should be self-contained. Mermaid and LaTeX should be raw source.' })),
+    content: Type.Optional(Type.String({ description: 'Artifact source content. HTML should be self-contained. Mermaid should be raw source. LaTeX should be raw source, including full LaTeX documents when needed.' })),
     open: Type.Optional(Type.Boolean({ description: 'Whether the artifact panel should open after saving. Defaults to true.' })),
 });
 function readRequiredString(value, label) {
@@ -54,7 +54,7 @@ export function createArtifactAgentExtension(options) {
             promptSnippet: 'Create or update rendered HTML, Mermaid, and LaTeX artifacts for the artifact panel.',
             promptGuidelines: [
                 'Use this tool when the user asks for a rendered artifact in the web UI rather than a plain chat response.',
-                'Use kind=html for self-contained interactive artifacts, kind=mermaid for diagrams, and kind=latex for math.',
+                'Use kind=html for self-contained interactive artifacts, kind=mermaid for diagrams, and kind=latex for raw LaTeX source, including full document-style reports when appropriate.',
                 'Reuse the same artifactId when iterating on an existing artifact so the chat stub and artifact panel stay linked.',
                 'Keep HTML self-contained; do not rely on external network resources unless the user explicitly asks for that tradeoff.',
             ],

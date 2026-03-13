@@ -3,6 +3,7 @@ export const RESIZE_HANDLE_WIDTH = 5;
 export const RAIL_WIDTH_STORAGE_KEYS = {
   projects: 'pa:rail-width:projects',
   scheduled: 'pa:rail-width:scheduled',
+  runs: 'pa:rail-width:runs',
   conversations: 'pa:rail-width:conversations',
   inbox: 'pa:rail-width:inbox',
   memory: 'pa:rail-width:memory',
@@ -37,6 +38,11 @@ export function getRailLayoutPrefs(pathname: string): RailLayoutPrefs {
       return {
         storageKey: RAIL_WIDTH_STORAGE_KEYS.scheduled,
         initialWidth: 380,
+      };
+    case 'runs':
+      return {
+        storageKey: RAIL_WIDTH_STORAGE_KEYS.runs,
+        initialWidth: 420,
       };
     case 'conversations':
       return {

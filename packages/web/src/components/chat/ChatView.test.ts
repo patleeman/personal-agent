@@ -4,9 +4,11 @@ import { describe, expect, it } from 'vitest';
 import type { MessageBlock } from '../../types';
 import {
   getStreamingStatusLabel,
+  normalizeConversationViewMode,
   renderText,
   resolveDisclosureOpen,
   shouldAutoOpenConversationBlock,
+  shouldAutoOpenTraceCluster,
   toggleDisclosurePreference,
 } from './ChatView.js';
 
@@ -64,6 +66,20 @@ describe('chat view streaming disclosure', () => {
     expect(resolveDisclosureOpen(false, 'open')).toBe(true);
   });
 
+  it('auto-opens the internal-work cluster while live or when a running step remains', () => {
+    expect(shouldAutoOpenTraceCluster(true, false)).toBe(true);
+    expect(shouldAutoOpenTraceCluster(false, true)).toBe(true);
+    expect(shouldAutoOpenTraceCluster(false, false)).toBe(false);
+  });
+
+  it('normalizes conversation view mode values', () => {
+    expect(normalizeConversationViewMode('transcript')).toBe('transcript');
+    expect(normalizeConversationViewMode('hybrid')).toBe('hybrid');
+    expect(normalizeConversationViewMode('raw')).toBe('raw');
+    expect(normalizeConversationViewMode('unknown')).toBe('hybrid');
+    expect(normalizeConversationViewMode(null)).toBe('hybrid');
+  });
+
   it('renders rich markdown structures in assistant messages', () => {
     const html = renderToStaticMarkup(createElement(Fragment, null, renderText([
       '# Preview title',
@@ -90,6 +106,8 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('<table');
     expect(html).toContain('<pre');
     expect(html).toContain('href="https://example.com"');
+    expect(html).toContain('Copy code block');
+    expect(html.match(/ui-markdown-code-copy/g)).toHaveLength(1);
   });
 
   it('renders project mentions as pills inside markdown text', () => {

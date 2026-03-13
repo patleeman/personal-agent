@@ -33,7 +33,7 @@ export function createDeferredResumeAgentExtension(): (pi: ExtensionAPI) => void
             throw new Error('Deferred resume requires a persisted session file.');
           }
 
-          const resume = scheduleDeferredResumeForSessionFile({
+          const resume = await scheduleDeferredResumeForSessionFile({
             sessionFile,
             delay: params.delay,
             prompt: params.prompt,

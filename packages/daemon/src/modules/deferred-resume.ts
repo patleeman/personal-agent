@@ -10,6 +10,7 @@ import {
   writeProfileActivityEntry,
   type DeferredResumeRecord,
 } from '@personal-agent/core';
+import { markDeferredResumeConversationRunReady } from '../runs/deferred-resume-conversations.js';
 import type { DaemonModule } from './types.js';
 
 const DEFERRED_RESUME_TICK_MS = 10_000;
@@ -154,8 +155,26 @@ export function createDeferredResumeModule(
         intervalMs: DEFERRED_RESUME_TICK_MS,
       },
     ],
-    async start() {
+    async start(context) {
       updateCounts();
+
+      const profileContext = resolveProfileContext(context.config.modules.tasks.taskDir);
+      const deferredState = loadDeferredResumeState();
+      const readyEntries = Object.values(deferredState.resumes).filter((entry) => entry.status === 'ready');
+
+      for (const entry of readyEntries) {
+        await markDeferredResumeConversationRunReady({
+          daemonRoot: context.paths.root,
+          deferredResumeId: entry.id,
+          sessionFile: entry.sessionFile,
+          prompt: entry.prompt,
+          dueAt: entry.dueAt,
+          createdAt: entry.createdAt,
+          readyAt: entry.readyAt ?? now().toISOString(),
+          profile: profileContext.profile,
+          conversationId: readSessionConversationId(entry.sessionFile),
+        });
+      }
     },
     async handleEvent(event, context) {
       if (event.type !== 'timer.deferred-resume.tick') {
@@ -172,17 +191,30 @@ export function createDeferredResumeModule(
           saveDeferredResumeState(deferredState);
 
           const profileContext = resolveProfileContext(context.config.modules.tasks.taskDir);
-          if (!profileContext.repoRoot) {
-            context.logger.warn(`unable to infer repo root for deferred resume activity from ${context.config.modules.tasks.taskDir}`);
-          } else {
-            for (const entry of activated) {
-              writeDeferredResumeFiredActivity({
-                entry,
-                repoRoot: profileContext.repoRoot,
-                profile: profileContext.profile,
-                stateRoot: context.paths.root,
-              });
+          for (const entry of activated) {
+            await markDeferredResumeConversationRunReady({
+              daemonRoot: context.paths.root,
+              deferredResumeId: entry.id,
+              sessionFile: entry.sessionFile,
+              prompt: entry.prompt,
+              dueAt: entry.dueAt,
+              createdAt: entry.createdAt,
+              readyAt: entry.readyAt ?? state.lastTickAt ?? now().toISOString(),
+              profile: profileContext.profile,
+              conversationId: readSessionConversationId(entry.sessionFile),
+            });
+
+            if (!profileContext.repoRoot) {
+              context.logger.warn(`unable to infer repo root for deferred resume activity from ${context.config.modules.tasks.taskDir}`);
+              continue;
             }
+
+            writeDeferredResumeFiredActivity({
+              entry,
+              repoRoot: profileContext.repoRoot,
+              profile: profileContext.profile,
+              stateRoot: context.paths.root,
+            });
           }
 
           state.activatedResumes += activated.length;

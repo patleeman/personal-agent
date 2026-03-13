@@ -128,6 +128,83 @@ export interface ScheduledTaskSummary {
   lastAttemptCount?: number;
 }
 
+export interface DurableRunSource {
+  type: string;
+  id?: string;
+  filePath?: string;
+}
+
+export interface DurableRunManifest {
+  version: number;
+  id: string;
+  kind: string;
+  resumePolicy: string;
+  createdAt: string;
+  spec: Record<string, unknown>;
+  source?: DurableRunSource;
+}
+
+export interface DurableRunStatusRecord {
+  version: number;
+  runId: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  activeAttempt: number;
+  startedAt?: string;
+  completedAt?: string;
+  checkpointKey?: string;
+  lastError?: string;
+}
+
+export interface DurableRunCheckpoint {
+  version: number;
+  runId: string;
+  updatedAt: string;
+  step?: string;
+  cursor?: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface DurableRunPaths {
+  root: string;
+  manifestPath: string;
+  statusPath: string;
+  checkpointPath: string;
+  eventsPath: string;
+  outputLogPath: string;
+  resultPath: string;
+}
+
+export interface DurableRunRecord {
+  runId: string;
+  paths: DurableRunPaths;
+  manifest?: DurableRunManifest;
+  status?: DurableRunStatusRecord;
+  checkpoint?: DurableRunCheckpoint;
+  problems: string[];
+  recoveryAction: string;
+}
+
+export interface DurableRunsSummary {
+  total: number;
+  recoveryActions: Record<string, number>;
+  statuses: Record<string, number>;
+}
+
+export interface DurableRunListResult {
+  scannedAt: string;
+  runsRoot: string;
+  summary: DurableRunsSummary;
+  runs: DurableRunRecord[];
+}
+
+export interface DurableRunDetailResult {
+  scannedAt: string;
+  runsRoot: string;
+  run: DurableRunRecord;
+}
+
 export interface GatewayServiceSummary {
   provider: 'telegram';
   platform: string;

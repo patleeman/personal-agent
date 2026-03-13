@@ -188,11 +188,25 @@ pa memory lint
 
 See [Profiles, Memory, and Skills](./profiles-memory-skills.md).
 
+### `pa runs [list|show|logs|help]`
+
+Inspect durable daemon-backed background runs.
+
+Examples:
+
+```bash
+pa runs list
+pa runs show <id>
+pa runs logs <id> --tail 120
+```
+
+Use this as the main inspection surface for durable background work.
+
 ### `pa tmux [list|inspect|logs|stop|send|run|clean|help]`
 
 Manage agent-owned tmux sessions.
 
-This is useful for long-running shell jobs the agent owns.
+This is still available for legacy/manual tmux workflows, but durable daemon-backed work should prefer `pa runs`.
 
 ### `pa gateway ...`
 
@@ -223,6 +237,7 @@ pa -p "Summarize the latest inbox items"
 pa ui --open
 pa daemon status
 pa tasks list
+pa runs list
 pa inbox list --unread
 ```
 

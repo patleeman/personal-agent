@@ -1,4 +1,4 @@
-import type { ActivityEntry, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationCwdChangeResult, ConversationProjectLinks, DaemonState, DeferredResumeSummary, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, ModelState, ProfileState, ProjectDetail, ProjectRecord, PromptImageInput, ScheduledTaskSummary, SessionContextUsage, SessionMeta, ToolsState, WebUiState } from './types';
+import type { ActivityEntry, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationCwdChangeResult, ConversationProjectLinks, DaemonState, DeferredResumeSummary, DurableRunDetailResult, DurableRunListResult, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, ModelState, ProfileState, ProjectDetail, ProjectRecord, PromptImageInput, ScheduledTaskSummary, SessionContextUsage, SessionMeta, ToolsState, WebUiState } from './types';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch('/api' + path);
@@ -148,7 +148,11 @@ export const api = {
   taskLog: (id: string) =>
     get<{ log: string; path: string }>(`/tasks/${encodeURIComponent(id)}/log`),
   runTaskNow: (id: string) =>
-    post<{ ok: boolean; sessionId: string }>(`/tasks/${encodeURIComponent(id)}/run`),
+    post<{ ok: boolean; accepted: boolean; runId: string }>(`/tasks/${encodeURIComponent(id)}/run`),
+  runs: () => get<DurableRunListResult>('/runs'),
+  durableRun: (id: string) => get<DurableRunDetailResult>(`/runs/${encodeURIComponent(id)}`),
+  durableRunLog: (id: string, tail?: number) =>
+    get<{ log: string; path: string }>(`/runs/${encodeURIComponent(id)}/log${tail ? `?tail=${encodeURIComponent(String(tail))}` : ''}`),
 
   // ── Shell run ─────────────────────────────────────────────────────────────
   run: (command: string, cwd?: string) =>

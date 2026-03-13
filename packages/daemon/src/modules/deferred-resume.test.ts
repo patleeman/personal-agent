@@ -13,6 +13,8 @@ import {
 } from '@personal-agent/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DaemonConfig } from '../config.js';
+import { createDeferredResumeConversationRunId } from '../runs/deferred-resume-conversations.js';
+import { resolveDurableRunsRoot, scanDurableRun } from '../runs/store.js';
 import type { DaemonEvent, DaemonPaths, EventPayload } from '../types.js';
 import type { DaemonModuleContext } from './types.js';
 import { createDeferredResumeModule } from './deferred-resume.js';
@@ -170,6 +172,25 @@ describe('deferred resume daemon module', () => {
       profile: 'assistant',
       activityId: activity[0]!.entry.id,
     })?.relatedConversationIds).toEqual(['conv-123']);
+
+    expect(scanDurableRun(resolveDurableRunsRoot(stateRoot), createDeferredResumeConversationRunId('resume-123'))).toMatchObject({
+      runId: createDeferredResumeConversationRunId('resume-123'),
+      recoveryAction: 'resume',
+      manifest: expect.objectContaining({
+        kind: 'conversation',
+        source: expect.objectContaining({
+          type: 'deferred-resume',
+          id: 'resume-123',
+          filePath: sessionFile,
+        }),
+      }),
+      status: expect.objectContaining({
+        status: 'waiting',
+      }),
+      checkpoint: expect.objectContaining({
+        step: 'deferred-resume.ready',
+      }),
+    });
 
     expect(published).toContainEqual({
       type: 'deferred-resume.tick.completed',

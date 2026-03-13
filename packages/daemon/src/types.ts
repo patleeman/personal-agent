@@ -1,4 +1,5 @@
 import type { ScannedDurableRun, ScannedDurableRunsSummary } from './runs/store.js';
+import type { RecoverableWebLiveConversationRun, WebLiveConversationPendingOperation, WebLiveConversationRunState } from './runs/web-live-conversations.js';
 
 export type EventPayload = Record<string, unknown>;
 
@@ -94,5 +95,31 @@ export interface ListDurableRunsResult {
 export interface GetDurableRunResult {
   scannedAt: string;
   run: ScannedDurableRun;
+}
+
+export interface StartScheduledTaskRunResult {
+  accepted: boolean;
+  runId: string;
+  reason?: string;
+}
+
+export interface SyncWebLiveConversationRunRequestInput {
+  conversationId: string;
+  sessionFile: string;
+  cwd: string;
+  title?: string;
+  profile?: string;
+  state: WebLiveConversationRunState;
+  updatedAt?: string;
+  lastError?: string;
+  pendingOperation?: WebLiveConversationPendingOperation | null;
+}
+
+export interface SyncWebLiveConversationRunResult {
+  runId: string;
+}
+
+export interface ListRecoverableWebLiveConversationRunsResult {
+  runs: RecoverableWebLiveConversationRun[];
 }
 

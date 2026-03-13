@@ -224,6 +224,74 @@ describe('daemon IPC integration', () => {
     });
   });
 
+  it('returns a not-started result when no tasks module handles runs.startTask', async () => {
+    daemon = new PersonalAgentDaemon(config);
+    await daemon.start();
+
+    const response = await sendRequest(socketPath, {
+      id: `req_${randomUUID()}`,
+      type: 'runs.startTask',
+      filePath: '/tmp/run-now.task.md',
+    });
+
+    expect(response.ok).toBe(true);
+    expect(response.result).toMatchObject({
+      accepted: false,
+      runId: expect.any(String),
+      reason: 'task run was not started',
+    });
+  });
+
+  it('syncs and lists recoverable web live conversation runs', async () => {
+    daemon = new PersonalAgentDaemon(config);
+    await daemon.start();
+
+    const syncResponse = await sendRequest(socketPath, {
+      id: `req_${randomUUID()}`,
+      type: 'conversations.sync',
+      input: {
+        conversationId: 'conv-123',
+        sessionFile: '/tmp/conv-123.jsonl',
+        cwd: '/tmp/workspace',
+        profile: 'datadog',
+        title: 'Recover this conversation',
+        state: 'interrupted',
+        pendingOperation: {
+          type: 'prompt',
+          text: 'keep going',
+          enqueuedAt: '2026-03-12T17:00:00.000Z',
+        },
+      },
+    });
+
+    expect(syncResponse.ok).toBe(true);
+    expect(syncResponse.result).toMatchObject({
+      runId: 'conversation-live-conv-123',
+    });
+
+    const recoverableResponse = await sendRequest(socketPath, {
+      id: `req_${randomUUID()}`,
+      type: 'conversations.recoverable',
+    });
+
+    expect(recoverableResponse.ok).toBe(true);
+    expect(recoverableResponse.result).toMatchObject({
+      runs: [
+        expect.objectContaining({
+          runId: 'conversation-live-conv-123',
+          conversationId: 'conv-123',
+          sessionFile: '/tmp/conv-123.jsonl',
+          cwd: '/tmp/workspace',
+          state: 'interrupted',
+          pendingOperation: expect.objectContaining({
+            type: 'prompt',
+            text: 'keep going',
+          }),
+        }),
+      ],
+    });
+  });
+
   it('returns an error when a durable run is missing', async () => {
     daemon = new PersonalAgentDaemon(config);
     await daemon.start();

@@ -7,6 +7,7 @@ import { ConversationPage } from './pages/ConversationPage';
 import { GatewayPage } from './pages/GatewayPage';
 import { DaemonPage } from './pages/DaemonPage';
 import { InboxPage } from './pages/InboxPage';
+import { RunsPage } from './pages/RunsPage';
 import { WebUiPage } from './pages/WebUiPage';
 import { MemoryPage } from './pages/MemoryPage';
 import { ProjectsPage } from './pages/ProjectsPage';
@@ -188,6 +189,8 @@ export function App() {
                     <Route path="web-ui" element={<WebUiPage />} />
                     <Route path="projects" element={<ProjectsPage />} />
                     <Route path="projects/:id" element={<ProjectsPage />} />
+                    <Route path="runs" element={<RunsPage />} />
+                    <Route path="runs/:id" element={<RunsPage />} />
                     <Route path="scheduled" element={<TasksPage />} />
                     <Route path="scheduled/:id" element={<TasksPage />} />
                     <Route path="automations" element={<LegacyTaskRoutesRedirect />} />

@@ -9,6 +9,7 @@ import { homedir } from 'node:os';
 import { AuthStorage, DefaultResourceLoader, ModelRegistry, SessionManager, createAgentSession, } from '@mariozechner/pi-coding-agent';
 import { invalidateAppTopics, publishAppEvent } from './appEvents.js';
 import { generateConversationTitle, hasAssistantTitleSourceMessage, } from './conversationAutoTitle.js';
+import { syncWebLiveConversationRun } from './conversationRuns.js';
 import { buildDisplayBlocksFromEntries } from './sessions.js';
 import { estimateContextUsageSegments } from './sessionContextUsage.js';
 const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
@@ -198,6 +199,36 @@ function applySessionTitle(entry, title) {
     entry.title = normalizedTitle;
     broadcastTitle(entry);
 }
+function resolveLiveSessionProfile() {
+    const profile = process.env.PERSONAL_AGENT_ACTIVE_PROFILE ?? process.env.PERSONAL_AGENT_PROFILE;
+    const normalized = profile?.trim();
+    return normalized && normalized.length > 0 ? normalized : undefined;
+}
+async function syncDurableConversationRun(entry, state, input = {}) {
+    const sessionFile = entry.session.sessionFile?.trim();
+    if (!sessionFile) {
+        return;
+    }
+    if (!input.force && entry.lastDurableRunState === state && !input.lastError) {
+        return;
+    }
+    try {
+        await syncWebLiveConversationRun({
+            conversationId: entry.sessionId,
+            sessionFile,
+            cwd: entry.cwd,
+            title: resolveEntryTitle(entry),
+            profile: resolveLiveSessionProfile(),
+            state,
+            lastError: input.lastError,
+        });
+        entry.lastDurableRunState = state;
+    }
+    catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[${new Date().toISOString()}] [web] [error] conversation durable run sync failed sessionId=${entry.sessionId} state=${state} message=${message}`);
+    }
+}
 function maybeAutoTitleConversation(entry) {
     if (entry.autoTitleRequested) {
         return;
@@ -285,12 +316,20 @@ function wireSession(id, session, cwd, options = {}) {
     };
     registry.set(id, entry);
     invalidateAppTopics('sessions');
+    void syncDurableConversationRun(entry, session.isStreaming ? 'running' : 'waiting', { force: true });
     session.subscribe((event) => {
         if (event.type === 'turn_end') {
             maybeAutoTitleConversation(entry);
+            void syncDurableConversationRun(entry, 'waiting');
         }
         if (event.type === 'agent_start' || event.type === 'message_update' || event.type === 'tool_execution_start' || event.type === 'tool_execution_update' || event.type === 'tool_execution_end') {
             scheduleContextUsage(entry);
+        }
+        if (event.type === 'agent_start') {
+            void syncDurableConversationRun(entry, 'running');
+        }
+        if (event.type === 'agent_end') {
+            void syncDurableConversationRun(entry, 'waiting');
         }
         if (event.type === 'message_start' && event.message.role === 'user') {
             broadcastQueueState(entry);
@@ -614,6 +653,9 @@ export function renameSession(sessionId, name) {
         throw new Error(`Session ${sessionId} is not live`);
     entry.autoTitleRequested = true;
     applySessionTitle(entry, name);
+    void syncDurableConversationRun(entry, entry.lastDurableRunState ?? (entry.session.isStreaming ? 'running' : 'waiting'), {
+        force: true,
+    });
 }
 /** Abort the current agent run. */
 export async function abortSession(sessionId) {
@@ -640,8 +682,10 @@ export async function forkSession(sessionId, entryId, options = {}) {
         // Re-register under the new ID
         registry.delete(sessionId);
         entry.sessionId = newId;
+        entry.lastDurableRunState = undefined;
         registry.set(newId, entry);
         invalidateAppTopics('sessions');
+        void syncDurableConversationRun(entry, entry.session.isStreaming ? 'running' : 'waiting', { force: true });
         return { newSessionId: newId, sessionFile: newFile };
     }
     const sourceSessionFile = entry.session.sessionFile;
@@ -682,6 +726,10 @@ export function destroySession(sessionId) {
     if (!entry)
         return;
     clearContextUsageTimer(entry);
+    void syncDurableConversationRun(entry, entry.session.isStreaming ? 'interrupted' : 'waiting', {
+        force: true,
+        ...(entry.session.isStreaming ? { lastError: 'Live session disposed while a response was active.' } : {}),
+    });
     entry.session.dispose();
     registry.delete(sessionId);
     invalidateAppTopics('sessions');

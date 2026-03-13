@@ -1,17 +1,17 @@
 id: durable-background-runs-without-tmux
 createdAt: 2026-03-12T18:43:58.967Z
-updatedAt: 2026-03-12T19:19:14.366Z
+updatedAt: 2026-03-12T22:53:32.503Z
 title: Durable background runs without tmux
 description: Replace tmux-based local background orchestration with a daemon-backed durable runs engine. Background work should survive restarts by resuming or rerunning from durable checkpoints and run state, not by keeping processes alive. V1 explicitly excludes mid-token continuation, mid-command shell continuation, and exactly-once tool execution.
 repoRoot: /Users/patrickc.lee/personal/personal-agent
 summary: Build a durable runs substrate in the daemon, move scheduled/background work onto it, adopt the same recovery model for live conversations, and remove tmux as a first-class local orchestration feature.
 status: in_progress
 blockers: []
-currentFocus: Finish durable scheduled-task execution and recovery wiring, then move the web task-run path onto the daemon-backed runs surface.
+currentFocus: Finish replacing tmux-first user-facing surfaces with durable-run inspection and recovery UX, then turn to the remaining live-conversation migration gaps.
 recentProgress:
-  - Added a first `pa runs` CLI surface for listing, inspecting, and tailing durable run records from daemon state.
-  - Updated scheduled task execution to create durable run manifests/status/checkpoints/events/output/result artifacts for each task run.
-  - Extended task runtime state to track durable run ids so restart recovery wiring can build on persisted task↔run linkage.
+  - Added a web Runs page with `/runs` and `/runs/:id` routes, sidebar navigation, durable-run detail/log inspection, and task-run-now navigation into the new run detail flow.
+  - Extended web client types/API wiring for durable runs and added a dedicated rail width preference for the new runs route.
+  - Updated CLI/docs positioning so `pa runs` is documented as the main inspection surface for durable background work while tmux remains legacy/manual for now.
 plan:
   currentMilestoneId: execute-work
   milestones:
@@ -53,15 +53,15 @@ plan:
       title: Add runs IPC endpoints and a first CLI surface for inspectable background runs
       milestoneId: execute-work
     - id: route-scheduled-task-execution
-      status: in_progress
+      status: completed
       title: Route scheduled task execution through the durable runs engine
       milestoneId: execute-work
     - id: move-web-task-triggered-background
-      status: pending
+      status: completed
       title: Move web task-triggered background execution onto the daemon
       milestoneId: execute-work
     - id: migrate-live-conversations-to-the
-      status: pending
+      status: in_progress
       title: Migrate live conversations to the restart-recoverable runtime model
       milestoneId: execute-work
     - id: remove-tmux-first-local
@@ -69,11 +69,11 @@ plan:
       title: Remove tmux-first local orchestration surfaces after replacement paths are ready
       milestoneId: execute-work
     - id: add-restart-recovery-tests-for
-      status: pending
+      status: completed
       title: Add restart-recovery tests for durable runs and scheduled task execution
       milestoneId: verify-result
     - id: add-restart-recovery-tests-for-live
-      status: pending
+      status: in_progress
       title: Add restart-recovery tests for live conversations and snapshot rebuild
       milestoneId: verify-result
     - id: verify-tmux-cleanup-and-replacement

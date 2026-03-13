@@ -1,10 +1,13 @@
-import React, { Children, Fragment, cloneElement, isValidElement, useState, type ReactElement, type ReactNode } from 'react';
+import React, { Children, cloneElement, isValidElement, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { readArtifactPresentation } from '../../conversationArtifacts';
+import { useReloadState, type StorageLike } from '../../reloadState';
 import type { MessageBlock } from '../../types';
 import { timeAgo } from '../../utils';
+import { buildConversationRailSnippet } from './conversationRail.js';
+import { buildChatRenderItems, getLatestUserMessage, type TraceClusterSummary, type TraceClusterSummaryCategory, type TraceConversationBlock } from './transcriptItems.js';
 import { Pill, SurfacePanel, cx } from '../ui';
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────
@@ -28,7 +31,7 @@ function InlineText({ text }: { text: string }) {
           return <code key={index} className="font-mono text-[0.82em] bg-elevated px-1 py-0.5 rounded text-accent">{part.slice(1, -1)}</code>;
         }
 
-        return <Fragment key={index}>{part}</Fragment>;
+        return <React.Fragment key={index}>{part}</React.Fragment>;
       })}
     </>
   );
@@ -40,7 +43,7 @@ function renderMentionFragments(text: string): ReactNode[] {
       return <MentionPill key={`${part}-${index}`} text={part} />;
     }
 
-    return <Fragment key={`${index}-${part}`}>{part}</Fragment>;
+    return <React.Fragment key={`${index}-${part}`}>{part}</React.Fragment>;
   });
 }
 
@@ -79,10 +82,51 @@ function extractTextContent(children: ReactNode): string {
   return text;
 }
 
+function findMarkdownCodeElement(node: ReactNode): ReactElement<{ className?: string; children?: ReactNode }> | null {
+  if (!isValidElement(node)) {
+    return null;
+  }
+
+  if (getMarkdownTagName(node) === 'code') {
+    return node as ReactElement<{ className?: string; children?: ReactNode }>;
+  }
+
+  const props = node.props as { children?: ReactNode };
+  if (props.children === undefined) {
+    return null;
+  }
+
+  for (const child of Children.toArray(props.children)) {
+    const codeElement = findMarkdownCodeElement(child);
+    if (codeElement) {
+      return codeElement;
+    }
+  }
+
+  return null;
+}
+
+function extractMarkdownCodeBlock(children: ReactNode): { className?: string; content: string } {
+  for (const child of Children.toArray(children)) {
+    const codeElement = findMarkdownCodeElement(child);
+    if (!codeElement) {
+      continue;
+    }
+
+    const props = codeElement.props as { className?: string; children?: ReactNode };
+    return {
+      className: props.className,
+      content: extractTextContent(props.children).replace(/\n$/, ''),
+    };
+  }
+
+  return { content: extractTextContent(children).replace(/\n$/, '') };
+}
+
 function renderChildrenWithMentions(children: ReactNode): ReactNode {
   return Children.map(children, (child, index) => {
     if (typeof child === 'string') {
-      return <Fragment key={index}>{renderMentionFragments(child)}</Fragment>;
+      return <React.Fragment key={index}>{renderMentionFragments(child)}</React.Fragment>;
     }
 
     if (typeof child === 'number' || typeof child === 'bigint') {
@@ -122,6 +166,25 @@ function MentionText({ text }: { text: string }) {
   );
 }
 
+function MarkdownCodeBlock({ children }: { children: ReactNode }) {
+  const { className, content } = extractMarkdownCodeBlock(children);
+
+  return (
+    <div className="ui-markdown-code-block">
+      <CopyBtn
+        text={content}
+        className="ui-markdown-code-copy"
+        label="⎘"
+        copiedLabel="✓"
+        title="Copy code block"
+      />
+      <pre>
+        <code className={className}>{content}</code>
+      </pre>
+    </div>
+  );
+}
+
 export function renderText(text: string) {
   return (
     <div className="ui-markdown">
@@ -156,7 +219,7 @@ export function renderText(text: string) {
               <table>{children}</table>
             </div>
           ),
-          pre: ({ children }) => <pre>{children}</pre>,
+          pre: ({ children }) => <MarkdownCodeBlock>{children}</MarkdownCodeBlock>,
           code: ({ className, children }) => {
             const content = extractTextContent(children).replace(/\n$/, '');
             const isBlock = content.includes('\n') || Boolean(className?.includes('language-'));
@@ -187,21 +250,55 @@ export function renderText(text: string) {
 
 // ── Copy button ───────────────────────────────────────────────────────────────
 
-function CopyBtn({ text, small }: { text: string; small?: boolean }) {
-  const [copied, setCopied] = useState(false);
-  function copy() {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  if (typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') {
+    return false;
   }
+
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function CopyBtn({
+  text,
+  small,
+  label,
+  copiedLabel,
+  title,
+  className,
+}: {
+  text: string;
+  small?: boolean;
+  label?: string;
+  copiedLabel?: string;
+  title?: string;
+  className?: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    const didCopy = await copyTextToClipboard(text);
+    if (!didCopy) {
+      return;
+    }
+
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
   return (
     <button
-      onClick={copy}
-      className={cx('ui-action-button', small ? 'text-[10px]' : 'text-[11px]')}
-      title="Copy"
+      type="button"
+      onClick={() => { void copy(); }}
+      className={cx('ui-action-button', small ? 'text-[10px]' : 'text-[11px]', className)}
+      title={title ?? 'Copy'}
+      aria-label={title ?? 'Copy'}
     >
-      {copied ? '✓' : '⎘'}
+      {copied ? (copiedLabel ?? '✓') : (label ?? '⎘')}
     </button>
   );
 }
@@ -224,6 +321,33 @@ function toolMeta(t: string) {
 }
 
 type DisclosurePreference = 'auto' | 'open' | 'closed';
+export type ConversationViewMode = 'transcript' | 'hybrid' | 'raw';
+
+const CHAT_VIEW_MODE_STORAGE_KEY = 'pa:chat-view-mode';
+
+function getChatViewStorage(storage?: StorageLike | null): StorageLike | null {
+  if (storage !== undefined) {
+    return storage;
+  }
+
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+export function normalizeConversationViewMode(value: unknown): ConversationViewMode {
+  if (value === 'transcript' || value === 'hybrid' || value === 'raw') {
+    return value;
+  }
+
+  return 'hybrid';
+}
 
 export function resolveDisclosureOpen(autoOpen: boolean, preference: DisclosurePreference): boolean {
   if (preference === 'open') return true;
@@ -233,6 +357,10 @@ export function resolveDisclosureOpen(autoOpen: boolean, preference: DisclosureP
 
 export function toggleDisclosurePreference(autoOpen: boolean, preference: DisclosurePreference): DisclosurePreference {
   return resolveDisclosureOpen(autoOpen, preference) ? 'closed' : 'open';
+}
+
+export function shouldAutoOpenTraceCluster(live: boolean, hasRunning: boolean): boolean {
+  return live || hasRunning;
 }
 
 export function shouldAutoOpenConversationBlock(
@@ -508,6 +636,116 @@ function SubagentBlock({ block }: { block: Extract<MessageBlock, { type: 'subage
   );
 }
 
+function traceSummaryTone(category: TraceClusterSummaryCategory) {
+  switch (category.kind) {
+    case 'thinking':
+      return 'muted';
+    case 'subagent':
+      return 'steel';
+    case 'error':
+      return 'danger';
+    case 'tool':
+      return toolMeta(category.tool ?? category.label).tone;
+  }
+}
+
+function TraceClusterBlock({
+  blocks,
+  summary,
+  live,
+  onOpenArtifact,
+  activeArtifactId,
+}: {
+  blocks: TraceConversationBlock[];
+  summary: TraceClusterSummary;
+  live: boolean;
+  onOpenArtifact?: (artifactId: string) => void;
+  activeArtifactId?: string | null;
+}) {
+  const [preference, setPreference] = useState<DisclosurePreference>('auto');
+  const expandedCategories = summary.categories.slice(0, 3);
+  const remainingCategoryCount = Math.max(0, summary.categories.length - expandedCategories.length);
+  const durationLabel = summary.durationMs && summary.durationMs > 0
+    ? `${(summary.durationMs / 1000).toFixed(1)}s`
+    : null;
+  const isActive = live || summary.hasRunning;
+  const title = isActive ? 'Working' : 'Internal work';
+  const autoOpen = shouldAutoOpenTraceCluster(live, summary.hasRunning);
+  const open = resolveDisclosureOpen(autoOpen, preference);
+
+  return (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={() => setPreference((current) => toggleDisclosurePreference(autoOpen, current))}
+        aria-expanded={open}
+        className={cx(
+          'w-full rounded-xl border px-3 py-2.5 text-left transition-colors',
+          summary.hasError
+            ? 'border-danger/30 bg-danger/5 hover:bg-danger/10'
+            : 'border-border-subtle bg-elevated/60 hover:bg-elevated',
+        )}
+      >
+        <div className="flex items-center gap-2 text-[12px]">
+          {isActive ? (
+            <span className="h-4 w-4 shrink-0 rounded-full border-[1.5px] border-current border-t-transparent animate-spin text-accent" />
+          ) : (
+            <span className={cx('w-4 shrink-0 text-center text-[11px] select-none', summary.hasError ? 'text-danger' : 'text-dim')}>⋯</span>
+          )}
+          <span className="font-medium text-primary">{title}</span>
+          <span className="text-secondary">· {summary.stepCount} step{summary.stepCount === 1 ? '' : 's'}</span>
+          <span className="flex-1" />
+          {isActive && <span className="text-[10px] uppercase tracking-[0.14em] text-accent/80">live</span>}
+          {durationLabel && !isActive && <span className="text-[11px] text-dim">{durationLabel}</span>}
+          <span className="text-[10px] text-dim">{open ? '▲ hide' : '▼ show'}</span>
+        </div>
+        {summary.categories.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {expandedCategories.map((category) => (
+              <Pill key={category.key} tone={traceSummaryTone(category)} mono={category.kind === 'tool'}>
+                {category.label}{category.count > 1 ? ` ×${category.count}` : ''}
+              </Pill>
+            ))}
+            {remainingCategoryCount > 0 && <span className="text-[11px] text-dim">+{remainingCategoryCount} more</span>}
+          </div>
+        )}
+      </button>
+
+      {open && (
+        <div className="ml-3 space-y-2 border-l border-border-subtle pl-3">
+          {blocks.map((block, index) => {
+            const autoOpen = shouldAutoOpenConversationBlock(block, index, blocks.length, live);
+
+            switch (block.type) {
+              case 'thinking':
+                return <ThinkingBlock key={`thinking-${index}`} block={block} autoOpen={autoOpen} />;
+              case 'tool_use':
+                return <ToolBlock key={`tool-${index}`} block={block} autoOpen={autoOpen} onOpenArtifact={onOpenArtifact} activeArtifactId={activeArtifactId} />;
+              case 'subagent':
+                return <SubagentBlock key={`subagent-${index}`} block={block} />;
+              case 'error':
+                return <ErrorBlock key={`error-${index}`} block={block} />;
+              default:
+                return null;
+            }
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReplyingToChip({ text }: { text: string }) {
+  return (
+    <div className="sticky top-3 z-10">
+      <div className="mx-auto max-w-[72ch] rounded-full border border-accent/20 bg-base/90 px-3 py-1.5 text-[11px] text-secondary shadow-sm backdrop-blur-sm">
+        <span className="uppercase tracking-[0.14em] text-dim/80">Replying to</span>
+        <span className="ml-2 text-primary">“{text}”</span>
+      </div>
+    </div>
+  );
+}
+
 // ── ImageBlock ────────────────────────────────────────────────────────────────
 
 function ImagePreview({
@@ -716,6 +954,39 @@ function StreamingIndicator({ label }: { label: string }) {
   );
 }
 
+function ViewModeToggle({
+  value,
+  onChange,
+}: {
+  value: ConversationViewMode;
+  onChange: (value: ConversationViewMode) => void;
+}) {
+  const options: Array<{ value: ConversationViewMode; label: string }> = [
+    { value: 'transcript', label: 'Transcript' },
+    { value: 'hybrid', label: 'Hybrid' },
+    { value: 'raw', label: 'Raw trace' },
+  ];
+
+  return (
+    <div className="flex items-center gap-2 self-end">
+      <span className="text-[10px] uppercase tracking-[0.14em] text-dim">view</span>
+      <div className="ui-segmented-control">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+            className={cx('ui-segmented-button', value === option.value && 'ui-segmented-button-active')}
+            aria-pressed={value === option.value}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── ChatView ──────────────────────────────────────────────────────────────────
 
 export function ChatView({
@@ -731,53 +1002,101 @@ export function ChatView({
   onOpenArtifact?: (artifactId: string) => void;
   activeArtifactId?: string | null;
 }) {
+  const [viewMode, setViewMode] = useReloadState<ConversationViewMode>({
+    storageKey: CHAT_VIEW_MODE_STORAGE_KEY,
+    initialValue: 'hybrid',
+    storage: getChatViewStorage(),
+    serialize: (value) => value,
+    deserialize: (raw) => normalizeConversationViewMode(raw),
+  });
+  const renderItems = useMemo(() => buildChatRenderItems(messages), [messages]);
   const streamingStatusLabel = getStreamingStatusLabel(messages, isStreaming);
   const lastBlock = messages[messages.length - 1];
-  const showStreamingIndicator = !!streamingStatusLabel && lastBlock?.type !== 'text';
+  const latestUserMessage = useMemo(() => getLatestUserMessage(messages), [messages]);
+  const latestUserSnippet = isStreaming && latestUserMessage
+    ? buildConversationRailSnippet(latestUserMessage, 120)
+    : null;
+  const showStreamingIndicator = !!streamingStatusLabel && (!lastBlock || lastBlock.type === 'user');
+
+  function renderMessageBlock(block: MessageBlock, index: number) {
+    const markerKind = block.type === 'user'
+      ? 'user'
+      : block.type === 'text'
+        ? 'assistant'
+        : undefined;
+    const autoOpen = shouldAutoOpenConversationBlock(block, index, messages.length, isStreaming);
+    const showStreamingCursor = isStreaming && block.type === 'text' && index === messages.length - 1;
+
+    const el = (() => {
+      switch (block.type) {
+        case 'user':
+          return <UserMessage block={block} />;
+        case 'text':
+          return <AssistantMessage block={block} showCursor={showStreamingCursor} onFork={onForkMessage ? () => onForkMessage(index) : undefined} />;
+        case 'thinking':
+          return <ThinkingBlock block={block} autoOpen={autoOpen} />;
+        case 'tool_use':
+          return <ToolBlock block={block} autoOpen={autoOpen} onOpenArtifact={onOpenArtifact} activeArtifactId={activeArtifactId} />;
+        case 'subagent':
+          return <SubagentBlock block={block} />;
+        case 'image':
+          return <ImageBlock block={block} />;
+        case 'error':
+          return <ErrorBlock block={block} />;
+        default:
+          return null;
+      }
+    })();
+
+    return el ? (
+      <div
+        key={index}
+        id={`msg-${index}`}
+        data-message-index={index}
+        data-conversation-rail-kind={markerKind}
+      >
+        {el}
+      </div>
+    ) : null;
+  }
 
   return (
     <>
       <style>{`@keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
       <div className="space-y-4 px-6 py-5">
-        {messages.map((block, i) => {
-          const markerKind = block.type === 'user'
-            ? 'user'
-            : block.type === 'text'
-              ? 'assistant'
-              : undefined;
-          const autoOpen = shouldAutoOpenConversationBlock(block, i, messages.length, isStreaming);
-          const showStreamingCursor = isStreaming && block.type === 'text' && i === messages.length - 1;
+        <div className="flex justify-end">
+          <ViewModeToggle value={viewMode} onChange={setViewMode} />
+        </div>
+        {latestUserSnippet && <ReplyingToChip text={latestUserSnippet} />}
+        {viewMode === 'raw'
+          ? messages.map((block, index) => renderMessageBlock(block, index))
+          : renderItems.map((item, itemIndex) => {
+              if (item.type === 'trace_cluster') {
+                const live = isStreaming && itemIndex === renderItems.length - 1;
+                if (viewMode === 'transcript' && !live) {
+                  return item.blocks.map((_, offset) => (
+                    <span key={`anchor-${item.startIndex + offset}`} id={`msg-${item.startIndex + offset}`} className="block h-0 overflow-hidden" aria-hidden />
+                  ));
+                }
 
-          const el = (() => { switch (block.type) {
-            case 'user':
-              return <UserMessage key={i} block={block} />;
-            case 'text':
-              return <AssistantMessage key={i} block={block} showCursor={showStreamingCursor} onFork={onForkMessage ? () => onForkMessage(i) : undefined} />;
-            case 'thinking':
-              return <ThinkingBlock key={i} block={block} autoOpen={autoOpen} />;
-            case 'tool_use':
-              return <ToolBlock key={i} block={block} autoOpen={autoOpen} onOpenArtifact={onOpenArtifact} activeArtifactId={activeArtifactId} />;
-            case 'subagent':
-              return <SubagentBlock key={i} block={block} />;
-            case 'image':
-              return <ImageBlock key={i} block={block} />;
-            case 'error':
-              return <ErrorBlock key={i} block={block} />;
-            default:
-              return null;
-          }})();
+                return (
+                  <div key={`trace-${item.startIndex}-${item.endIndex}`}>
+                    {item.blocks.map((_, offset) => (
+                      <span key={`anchor-${item.startIndex + offset}`} id={`msg-${item.startIndex + offset}`} className="block h-0 overflow-hidden" aria-hidden />
+                    ))}
+                    <TraceClusterBlock
+                      blocks={item.blocks}
+                      summary={item.summary}
+                      live={live}
+                      onOpenArtifact={onOpenArtifact}
+                      activeArtifactId={activeArtifactId}
+                    />
+                  </div>
+                );
+              }
 
-          return el ? (
-            <div
-              key={i}
-              id={`msg-${i}`}
-              data-message-index={i}
-              data-conversation-rail-kind={markerKind}
-            >
-              {el}
-            </div>
-          ) : null;
-        })}
+              return renderMessageBlock(item.block, item.index);
+            })}
         {showStreamingIndicator && <StreamingIndicator label={streamingStatusLabel ?? 'Working…'} />}
       </div>
     </>

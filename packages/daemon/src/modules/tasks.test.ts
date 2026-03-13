@@ -5,7 +5,16 @@ import { join } from 'path';
 import { listProfileActivityEntries } from '@personal-agent/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DaemonConfig } from '../config.js';
-import { loadDurableRunManifest, loadDurableRunStatus, resolveDurableRunPaths, resolveDurableRunsRoot } from '../runs/store.js';
+import {
+  createDurableRunManifest,
+  createInitialDurableRunStatus,
+  loadDurableRunManifest,
+  loadDurableRunStatus,
+  resolveDurableRunPaths,
+  resolveDurableRunsRoot,
+  saveDurableRunManifest,
+  saveDurableRunStatus,
+} from '../runs/store.js';
 import type { DaemonEvent, DaemonPaths, EventPayload } from '../types.js';
 import type { DaemonModuleContext } from './types.js';
 import { createTasksModule } from './tasks.js';
@@ -28,6 +37,20 @@ function createTimerEvent(): DaemonEvent {
     timestamp: new Date().toISOString(),
     payload: {
       timer: 'tasks-tick',
+    },
+  };
+}
+
+function createRequestedTaskRunEvent(filePath: string, runId?: string): DaemonEvent {
+  return {
+    id: `evt_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+    version: 1,
+    type: 'tasks.run.requested',
+    source: 'test',
+    timestamp: new Date().toISOString(),
+    payload: {
+      filePath,
+      ...(runId ? { runId } : {}),
     },
   };
 }
@@ -264,6 +287,121 @@ describe('tasks module scheduling', () => {
     await module.stop?.(context);
   });
 
+  it('starts requested task runs with the provided durable run id', async () => {
+    const taskDir = createTempDir('tasks-module-definitions-');
+    const stateRoot = createTempDir('tasks-module-state-');
+    const taskPath = join(taskDir, 'run-now.task.md');
+    const requestedRunId = 'task-run-now-requested';
+
+    writeFileSync(taskPath, `---\nid: run-now\nat: "2026-03-03T10:00:00.000Z"\nprofile: datadog\n---\nRun immediately when requested\n`);
+
+    const currentTime = new Date('2026-03-02T10:00:00.000Z');
+    const runTask = vi.fn(async (request: TaskRunRequest) => {
+      const logPath = join(request.runsRoot, `${request.task.id}-attempt-${request.attempt}.log`);
+      mkdirSync(request.runsRoot, { recursive: true });
+      writeFileSync(logPath, 'requested run output\n');
+      return createRunResult(request, true, currentTime.toISOString(), undefined, 'requested run output');
+    });
+
+    const module = createTasksModule(
+      {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
+      {
+        now: () => currentTime,
+        runTask,
+      },
+    );
+
+    const { context } = createContext(taskDir, stateRoot);
+
+    await module.start(context);
+    await module.handleEvent(createRequestedTaskRunEvent(taskPath, requestedRunId), context);
+
+    await waitForCondition(() => {
+      const status = module.getStatus?.() as { totalRuns?: number };
+      return (status.totalRuns ?? 0) === 1;
+    });
+
+    expect(runTask).toHaveBeenCalledTimes(1);
+
+    const runPaths = resolveDurableRunPaths(resolveDurableRunsRoot(stateRoot), requestedRunId);
+    expect(loadDurableRunManifest(runPaths.manifestPath)).toMatchObject({
+      id: requestedRunId,
+      source: {
+        type: 'scheduled-task',
+        id: 'run-now',
+        filePath: taskPath,
+      },
+    });
+    expect(loadDurableRunStatus(runPaths.statusPath)).toMatchObject({
+      runId: requestedRunId,
+      status: 'completed',
+    });
+
+    await module.stop?.(context);
+  });
+
+  it('ignores requested task runs while a prior requested run is still active', async () => {
+    const taskDir = createTempDir('tasks-module-definitions-');
+    const stateRoot = createTempDir('tasks-module-state-');
+    const taskPath = join(taskDir, 'run-now.task.md');
+    const firstRunId = 'task-run-now-first';
+    const secondRunId = 'task-run-now-second';
+
+    writeFileSync(taskPath, `---\nid: run-now\nat: "2026-03-03T10:00:00.000Z"\nprofile: datadog\n---\nRun immediately when requested\n`);
+
+    const currentTime = new Date('2026-03-02T10:00:00.000Z');
+    let releaseRun: (() => void) | undefined;
+    const runTask = vi.fn(async (request: TaskRunRequest) => {
+      await new Promise<void>((resolve) => {
+        releaseRun = resolve;
+      });
+      return createRunResult(request, true, currentTime.toISOString(), undefined, 'requested run output');
+    });
+
+    const module = createTasksModule(
+      {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
+      {
+        now: () => currentTime,
+        runTask,
+      },
+    );
+
+    const { context } = createContext(taskDir, stateRoot);
+
+    await module.start(context);
+    await module.handleEvent(createRequestedTaskRunEvent(taskPath, firstRunId), context);
+    await waitForCondition(() => runTask.mock.calls.length === 1);
+
+    await module.handleEvent(createRequestedTaskRunEvent(taskPath, secondRunId), context);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    expect(runTask).toHaveBeenCalledTimes(1);
+    expect(existsSync(resolveDurableRunPaths(resolveDurableRunsRoot(stateRoot), secondRunId).manifestPath)).toBe(false);
+
+    releaseRun?.();
+
+    await waitForCondition(() => {
+      const status = module.getStatus?.() as { runningTasks?: number; totalRuns?: number };
+      return (status.runningTasks ?? 0) === 0 && (status.totalRuns ?? 0) === 1;
+    });
+
+    await module.stop?.(context);
+  });
+
   it('passes daemon execution mode from module defaults with per-task overrides', async () => {
     const taskDir = createTempDir('tasks-module-definitions-');
     const stateRoot = createTempDir('tasks-module-state-');
@@ -379,6 +517,105 @@ Write daily report
       notificationState: 'none',
     });
     expect(entries[0]?.entry.details).toContain('Daily report generated successfully.');
+
+    await module.stop?.(context);
+  });
+
+  it('recovers interrupted one-time task runs on startup instead of marking them missed', async () => {
+    const repoRoot = createTempDir('tasks-module-repo-');
+    const taskDir = join(repoRoot, 'profiles', 'datadog', 'agent', 'tasks');
+    mkdirSync(taskDir, { recursive: true });
+    const stateRoot = createTempDir('tasks-module-state-');
+    const taskPath = join(taskDir, 'recover-me.task.md');
+    const priorRunId = 'task-recover-me-prior';
+
+    writeFileSync(taskPath, `---
+id: recover-me
+at: "2026-03-02T10:00:00.000Z"
+profile: datadog
+---
+Recover me after restart
+`);
+
+    const runsRoot = resolveDurableRunsRoot(stateRoot);
+    const priorRunPaths = resolveDurableRunPaths(runsRoot, priorRunId);
+    saveDurableRunManifest(priorRunPaths.manifestPath, createDurableRunManifest({
+      id: priorRunId,
+      kind: 'scheduled-task',
+      resumePolicy: 'rerun',
+      createdAt: '2026-03-02T10:00:00.000Z',
+      source: {
+        type: 'scheduled-task',
+        id: 'recover-me',
+        filePath: taskPath,
+      },
+    }));
+    saveDurableRunStatus(priorRunPaths.statusPath, createInitialDurableRunStatus({
+      runId: priorRunId,
+      status: 'running',
+      createdAt: '2026-03-02T10:00:00.000Z',
+      updatedAt: '2026-03-02T10:05:00.000Z',
+      activeAttempt: 1,
+      startedAt: '2026-03-02T10:00:00.000Z',
+    }));
+
+    writeFileSync(join(stateRoot, 'task-state.json'), JSON.stringify({
+      version: 1,
+      tasks: {
+        [taskPath]: {
+          id: 'recover-me',
+          filePath: taskPath,
+          scheduleType: 'at',
+          running: true,
+          runningStartedAt: '2026-03-02T10:00:00.000Z',
+          activeRunId: priorRunId,
+          lastRunId: priorRunId,
+          lastStatus: 'running',
+        },
+      },
+    }, null, 2));
+
+    const currentTime = new Date('2026-03-02T10:30:00.000Z');
+    const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(
+      request,
+      true,
+      currentTime.toISOString(),
+      undefined,
+      'Recovered successfully.',
+    ));
+
+    const module = createTasksModule(
+      {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
+      {
+        now: () => currentTime,
+        runTask,
+      },
+    );
+
+    const { context } = createContext(taskDir, stateRoot);
+
+    await module.start(context);
+
+    await waitForCondition(() => {
+      const status = module.getStatus?.() as { totalRuns?: number };
+      return (status.totalRuns ?? 0) === 1;
+    });
+
+    expect(runTask).toHaveBeenCalledTimes(1);
+
+    const persistedState = JSON.parse(readFileSync(join(stateRoot, 'task-state.json'), 'utf-8')) as {
+      tasks: Record<string, { activeRunId?: string; lastRunId?: string; oneTimeResolvedStatus?: string }>;
+    };
+    expect(persistedState.tasks[taskPath]?.activeRunId).toBeUndefined();
+    expect(persistedState.tasks[taskPath]?.lastRunId).not.toBe(priorRunId);
+    expect(persistedState.tasks[taskPath]?.oneTimeResolvedStatus).toBe('success');
 
     await module.stop?.(context);
   });

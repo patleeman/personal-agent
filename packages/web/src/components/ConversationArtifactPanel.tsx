@@ -5,6 +5,7 @@ import { api } from '../api';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversationArtifacts';
 import { useAppEvents } from '../contexts';
 import { useApi } from '../hooks';
+import { getLatexArtifactDisplayMode, looksLikeFullLatexDocument, normalizeLatexMathSource } from '../latexArtifacts';
 import type { ConversationArtifactRecord } from '../types';
 import { formatDate } from '../utils';
 import { ErrorState, LoadingState, Pill, cx } from './ui';
@@ -97,31 +98,43 @@ function MermaidArtifactViewer({ artifact }: { artifact: ConversationArtifactRec
   );
 }
 
-function normalizeLatexSource(content: string): string {
-  const trimmed = content.trim();
-  if (trimmed.startsWith('$$') && trimmed.endsWith('$$') && trimmed.length >= 4) {
-    return trimmed.slice(2, -2).trim();
-  }
-  if (trimmed.startsWith('\\[') && trimmed.endsWith('\\]') && trimmed.length >= 4) {
-    return trimmed.slice(2, -2).trim();
-  }
-  if (trimmed.startsWith('$') && trimmed.endsWith('$') && trimmed.length >= 2) {
-    return trimmed.slice(1, -1).trim();
-  }
-  return trimmed;
-}
-
 function LatexArtifactViewer({ artifact }: { artifact: ConversationArtifactRecord }) {
-  const html = useMemo(() => katex.renderToString(normalizeLatexSource(artifact.content), {
-    displayMode: true,
-    throwOnError: false,
-    strict: 'ignore',
-    trust: false,
-  }), [artifact.content]);
+  const displayMode = useMemo(() => getLatexArtifactDisplayMode(artifact.content), [artifact.content]);
+  const isFullDocument = useMemo(() => looksLikeFullLatexDocument(artifact.content), [artifact.content]);
+  const mathPreviewHtml = useMemo(() => {
+    if (displayMode !== 'math-preview-and-source') {
+      return null;
+    }
+
+    return katex.renderToString(normalizeLatexMathSource(artifact.content), {
+      displayMode: true,
+      throwOnError: false,
+      strict: 'ignore',
+      trust: false,
+    });
+  }, [artifact.content, displayMode]);
 
   return (
-    <div className="flex h-full items-start justify-center overflow-auto px-5 py-8">
-      <div className="max-w-full rounded-xl bg-white px-6 py-5 text-black shadow-sm" dangerouslySetInnerHTML={{ __html: html }} />
+    <div className="flex h-full min-h-0 flex-col overflow-auto px-5 py-5">
+      {mathPreviewHtml && (
+        <div className="mb-4 rounded-xl border border-border-subtle bg-white px-6 py-5 text-black shadow-sm">
+          <p className="ui-section-label text-[11px] uppercase tracking-[0.14em] text-slate-500">Math preview</p>
+          <div className="mt-3" dangerouslySetInnerHTML={{ __html: mathPreviewHtml }} />
+        </div>
+      )}
+
+      <div className="mb-3 min-w-0">
+        <p className="ui-section-label">LaTeX source</p>
+        <p className="mt-1 text-[12px] leading-relaxed text-secondary">
+          {isFullDocument
+            ? 'Full LaTeX documents are shown as raw source in the artifact panel so the entire file remains visible and copyable.'
+            : mathPreviewHtml
+              ? 'This snippet includes a math preview above, with the raw LaTeX source shown below.'
+              : 'Raw LaTeX source is shown directly in the artifact panel.'}
+        </p>
+      </div>
+
+      <pre className="min-h-0 overflow-auto rounded-xl border border-border-subtle bg-elevated px-4 py-4 font-mono text-[11px] leading-relaxed text-primary">{artifact.content}</pre>
     </div>
   );
 }
@@ -240,11 +253,13 @@ export function ConversationArtifactPanel({
 
         <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px]">
           <button type="button" onClick={() => { void copySource(); }} className="ui-toolbar-button px-0 py-0 text-[11px]">
-            {copied ? 'copied' : 'copy source'}
+            {copied ? 'copied' : artifact.kind === 'latex' ? 'copy latex' : 'copy source'}
           </button>
-          <button type="button" onClick={() => setShowSource((current) => !current)} className="ui-toolbar-button px-0 py-0 text-[11px]">
-            {showSource ? 'hide source' : 'show source'}
-          </button>
+          {artifact.kind !== 'latex' && (
+            <button type="button" onClick={() => setShowSource((current) => !current)} className="ui-toolbar-button px-0 py-0 text-[11px]">
+              {showSource ? 'hide source' : 'show source'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -280,7 +295,7 @@ export function ConversationArtifactPanel({
         <ArtifactViewer artifact={artifact} />
       </div>
 
-      {showSource && (
+      {showSource && artifact.kind !== 'latex' && (
         <div className="max-h-[32%] overflow-auto border-t border-border-subtle px-4 py-3">
           <p className="ui-section-label">Source</p>
           <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-secondary">

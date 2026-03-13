@@ -14,6 +14,9 @@ export {
   pullGatewayNotifications,
   listDurableRuns,
   getDurableRun,
+  startScheduledTaskRun,
+  syncWebLiveConversationRunState,
+  listRecoverableWebLiveConversationRunsFromDaemon,
   emitDaemonEvent,
   emitDaemonEventNonFatal,
 } from './client.js';
@@ -36,6 +39,27 @@ export {
   scanDurableRunsForRecovery,
   summarizeScannedDurableRuns,
 } from './runs/store.js';
+export {
+  createDeferredResumeConversationRunId,
+  scheduleDeferredResumeConversationRun,
+  markDeferredResumeConversationRunReady,
+  markDeferredResumeConversationRunRetryScheduled,
+  completeDeferredResumeConversationRun,
+  cancelDeferredResumeConversationRun,
+} from './runs/deferred-resume-conversations.js';
+export {
+  createWebLiveConversationRunId,
+  saveWebLiveConversationRunState,
+  listRecoverableWebLiveConversationRuns,
+  parsePendingOperation,
+} from './runs/web-live-conversations.js';
+export type {
+  RecoverableWebLiveConversationRun,
+  WebLiveConversationPendingOperation,
+  WebLiveConversationPreludeMessage,
+  WebLiveConversationPromptImage,
+  WebLiveConversationRunState,
+} from './runs/web-live-conversations.js';
 export type {
   DurableRunKind,
   DurableRunStatus,
@@ -60,6 +84,10 @@ export type {
   GatewayNotificationProvider,
   ListDurableRunsResult,
   GetDurableRunResult,
+  StartScheduledTaskRunResult,
+  SyncWebLiveConversationRunRequestInput,
+  SyncWebLiveConversationRunResult,
+  ListRecoverableWebLiveConversationRunsResult,
 } from './types.js';
 
 export async function runDaemonCli(argv: string[] = process.argv.slice(2)): Promise<number> {

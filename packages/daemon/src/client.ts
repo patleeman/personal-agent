@@ -11,6 +11,10 @@ import type {
   GatewayNotificationProvider,
   ListDurableRunsResult,
   GetDurableRunResult,
+  StartScheduledTaskRunResult,
+  SyncWebLiveConversationRunRequestInput,
+  SyncWebLiveConversationRunResult,
+  ListRecoverableWebLiveConversationRunsResult,
 } from './types.js';
 
 interface RequestEnvelope {
@@ -184,6 +188,43 @@ export async function getDurableRun(runId: string, config?: DaemonConfig): Promi
       id: `req_${randomUUID()}`,
       type: 'runs.get',
       runId,
+    },
+    config,
+  );
+}
+
+export async function startScheduledTaskRun(filePath: string, config?: DaemonConfig): Promise<StartScheduledTaskRunResult> {
+  return sendRequest<StartScheduledTaskRunResult>(
+    {
+      id: `req_${randomUUID()}`,
+      type: 'runs.startTask',
+      filePath,
+    },
+    config,
+  );
+}
+
+export async function syncWebLiveConversationRunState(
+  input: SyncWebLiveConversationRunRequestInput,
+  config?: DaemonConfig,
+): Promise<SyncWebLiveConversationRunResult> {
+  return sendRequest<SyncWebLiveConversationRunResult>(
+    {
+      id: `req_${randomUUID()}`,
+      type: 'conversations.sync',
+      input,
+    },
+    config,
+  );
+}
+
+export async function listRecoverableWebLiveConversationRunsFromDaemon(
+  config?: DaemonConfig,
+): Promise<ListRecoverableWebLiveConversationRunsResult> {
+  return sendRequest<ListRecoverableWebLiveConversationRunsResult>(
+    {
+      id: `req_${randomUUID()}`,
+      type: 'conversations.recoverable',
     },
     config,
   );

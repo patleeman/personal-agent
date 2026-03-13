@@ -17,6 +17,7 @@ import {
   saveDurableRunCheckpoint,
   saveDurableRunManifest,
   saveDurableRunStatus,
+  scanDurableRun,
 } from '../runs/store.js';
 import type { DaemonModule } from './types.js';
 import {
@@ -652,8 +653,9 @@ export function createTasksModule(
     task: ParsedTaskDefinition,
     record: TaskRuntimeState,
     startedAt: string,
+    runIdOverride?: string,
   ): Promise<{ runId: string; runPaths: ReturnType<typeof resolveDurableRunPaths>; attemptsRoot: string }> => {
-    const runId = createScheduledTaskRunId(task.id, startedAt);
+    const runId = runIdOverride ?? createScheduledTaskRunId(task.id, startedAt);
     const runPaths = resolveDurableRunPaths(durableRunsRoot, runId);
     const attemptsRoot = join(runPaths.root, 'attempts');
 
@@ -723,9 +725,10 @@ export function createTasksModule(
     record: TaskRuntimeState,
     context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string } },
     controller: AbortController,
+    options: { runIdOverride?: string } = {},
   ): Promise<void> => {
     const startedAt = record.runningStartedAt ?? now().toISOString();
-    const durableRun = await createDurableTaskRunRecord(task, record, startedAt);
+    const durableRun = await createDurableTaskRunRecord(task, record, startedAt, options.runIdOverride);
     let finalResult: TaskRunResult | undefined;
 
     for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
@@ -968,6 +971,7 @@ export function createTasksModule(
     task: ParsedTaskDefinition,
     record: TaskRuntimeState,
     context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string } },
+    options: { runIdOverride?: string } = {},
   ): void => {
     const controller = new AbortController();
 
@@ -976,7 +980,7 @@ export function createTasksModule(
     record.lastStatus = 'running';
     record.lastError = undefined;
 
-    const runPromise = executeTaskRun(task, record, context, controller)
+    const runPromise = executeTaskRun(task, record, context, controller, options)
       .catch((error) => {
         const message = (error as Error).message;
         record.running = false;
@@ -1002,6 +1006,43 @@ export function createTasksModule(
     state.runningTasks = activeRuns.size;
   };
 
+  const handleRequestedTaskRun = async (
+    payload: Record<string, unknown>,
+    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string } },
+  ): Promise<void> => {
+    const filePath = typeof payload.filePath === 'string' && payload.filePath.trim().length > 0
+      ? resolve(payload.filePath)
+      : undefined;
+    const runIdOverride = typeof payload.runId === 'string' && payload.runId.trim().length > 0
+      ? payload.runId.trim()
+      : undefined;
+
+    if (!filePath) {
+      context.logger.warn('ignoring requested task run without filePath');
+      return;
+    }
+
+    try {
+      const task = parseTaskDefinition({
+        filePath,
+        rawContent: readFileSync(filePath, 'utf-8'),
+        defaultTimeoutSeconds,
+      });
+      const record = ensureTaskRecord(taskState, task);
+
+      if (activeRuns.has(task.key)) {
+        context.logger.warn(`ignoring requested task run while active run exists id=${task.id}`);
+        return;
+      }
+
+      context.logger.info(`starting requested task run id=${task.id}${runIdOverride ? ` run=${runIdOverride}` : ''}`);
+      startTaskRun(task, record, context, { runIdOverride });
+      persistState(context.logger);
+    } catch (error) {
+      context.logger.warn(`failed to start requested task run file=${filePath}: ${(error as Error).message}`);
+    }
+  };
+
   const reconcileDeletedTaskState = (activeTaskKeys: Set<string>): void => {
     for (const key of Object.keys(taskState.tasks)) {
       if (activeTaskKeys.has(key)) {
@@ -1013,6 +1054,64 @@ export function createTasksModule(
       }
 
       delete taskState.tasks[key];
+    }
+  };
+
+  const recoverInterruptedTaskRuns = async (
+    context: {
+      logger: { info: (message: string) => void; warn: (message: string) => void };
+      publish: (type: string, payload?: Record<string, unknown>) => boolean;
+      paths: { root: string };
+    },
+  ): Promise<void> => {
+    const recoveryTime = now();
+    const recoveryIso = recoveryTime.toISOString();
+    const files = collectTaskFiles(taskDir);
+
+    for (const filePath of files) {
+      let task: ParsedTaskDefinition;
+
+      try {
+        task = parseTaskDefinition({
+          filePath,
+          rawContent: readFileSync(filePath, 'utf-8'),
+          defaultTimeoutSeconds,
+        });
+      } catch {
+        continue;
+      }
+
+      const record = ensureTaskRecord(taskState, task);
+      if (!task.enabled || !record.activeRunId || activeRuns.has(task.key)) {
+        continue;
+      }
+
+      if (task.schedule.type === 'at' && record.oneTimeResolvedAt) {
+        continue;
+      }
+
+      const scannedRun = scanDurableRun(durableRunsRoot, record.activeRunId);
+      const shouldRecover = Boolean(
+        scannedRun && (scannedRun.recoveryAction === 'rerun' || scannedRun.recoveryAction === 'resume'),
+      );
+
+      if (!shouldRecover) {
+        continue;
+      }
+
+      if (task.schedule.type === 'cron' && cronMatches(task.schedule.parsed, recoveryTime)) {
+        record.lastScheduledMinute = toMinuteKey(recoveryTime);
+      }
+
+      record.lastError = `Recovering interrupted run ${record.activeRunId}`;
+      record.lastStatus = 'running';
+      record.running = true;
+      record.runningStartedAt = recoveryIso;
+
+      context.logger.info(
+        `recovering task id=${task.id} priorRun=${record.activeRunId} action=${scannedRun?.recoveryAction ?? 'unknown'}`,
+      );
+      startTaskRun(task, record, context);
     }
   };
 
@@ -1157,12 +1256,6 @@ export function createTasksModule(
           }
 
           if (activeRuns.has(task.key)) {
-            record.lastStatus = 'skipped';
-            record.lastRunAt = nowIso;
-            record.lastError = 'Task skipped because a previous run is still active';
-            record.oneTimeResolvedAt = nowIso;
-            record.oneTimeResolvedStatus = 'skipped';
-            state.skippedRuns += 1;
             continue;
           }
 
@@ -1225,7 +1318,7 @@ export function createTasksModule(
   return {
     name: 'tasks',
     enabled: config.enabled,
-    subscriptions: ['timer.tasks.tick'],
+    subscriptions: ['timer.tasks.tick', 'tasks.run.requested'],
     timers: [
       {
         name: 'tasks-tick',
@@ -1247,10 +1340,17 @@ export function createTasksModule(
       taskState = loadTaskState(stateFile, context.logger);
       state.runningTasks = 0;
 
+      await recoverInterruptedTaskRuns(context);
+      persistState(context.logger);
       await runTick(context);
     },
 
     async handleEvent(event, context): Promise<void> {
+      if (event.type === 'tasks.run.requested') {
+        await handleRequestedTaskRun(event.payload, context);
+        return;
+      }
+
       if (event.type !== 'timer.tasks.tick') {
         return;
       }

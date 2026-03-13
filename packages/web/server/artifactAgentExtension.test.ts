@@ -150,4 +150,35 @@ describe('artifact agent extension', () => {
     expect(deleted.content[0]?.text).toContain('Deleted artifact diagram.');
     expect(listConversationArtifacts({ stateRoot, profile: 'datadog', conversationId: 'conv-123' })).toEqual([]);
   });
+
+  it('preserves full latex documents as raw artifact source', async () => {
+    const repoRoot = createTempRepo();
+    const stateRoot = join(repoRoot, '.state');
+    const artifactTool = registerArtifactTool(stateRoot);
+    const ctx = createToolContext();
+    const latexDocument = String.raw`\documentclass{article}
+\begin{document}
+\section{Overview}
+Hello world.
+\end{document}`;
+
+    await artifactTool.execute('tool-1', {
+      action: 'save',
+      artifactId: 'report',
+      kind: 'latex',
+      title: 'Walkthrough report',
+      content: latexDocument,
+    }, undefined, undefined, ctx);
+
+    expect(getConversationArtifact({
+      stateRoot,
+      profile: 'datadog',
+      conversationId: 'conv-123',
+      artifactId: 'report',
+    })).toMatchObject({
+      kind: 'latex',
+      title: 'Walkthrough report',
+      content: latexDocument,
+    });
+  });
 });

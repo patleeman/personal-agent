@@ -20,6 +20,11 @@ describe('layout sizing helpers', () => {
       initialWidth: 380,
     });
 
+    expect(getRailLayoutPrefs('/runs/task-123')).toEqual({
+      storageKey: 'pa:rail-width:runs',
+      initialWidth: 420,
+    });
+
     expect(getRailLayoutPrefs('/tasks/daily-review')).toEqual({
       storageKey: 'pa:rail-width:scheduled',
       initialWidth: 380,

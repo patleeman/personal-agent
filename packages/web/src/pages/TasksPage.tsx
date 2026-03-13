@@ -43,9 +43,9 @@ function cronHuman(cron: string): string {
 }
 
 function TaskRow({ task, isSelected, onRefetch }: { task: ScheduledTaskSummary; isSelected: boolean; onRefetch: () => void }) {
+  const navigate = useNavigate();
   const [toggling, setToggling] = useState(false);
   const [running, setRunning] = useState(false);
-  const navigate = useNavigate();
   const { text, cls } = statusText(task);
 
   async function handleToggle(event: React.MouseEvent) {
@@ -71,8 +71,10 @@ function TaskRow({ task, isSelected, onRefetch }: { task: ScheduledTaskSummary; 
 
     setRunning(true);
     try {
-      const { sessionId } = await api.runTaskNow(task.id);
-      navigate(`/conversations/${sessionId}`);
+      const result = await api.runTaskNow(task.id);
+      onRefetch();
+      setRunning(false);
+      navigate(`/runs/${encodeURIComponent(result.runId)}`);
     } catch (error) {
       console.error(error);
       setRunning(false);

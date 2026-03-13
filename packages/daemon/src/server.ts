@@ -12,6 +12,10 @@ import {
   scanDurableRunsForRecovery,
   summarizeScannedDurableRuns,
 } from './runs/store.js';
+import {
+  listRecoverableWebLiveConversationRuns,
+  saveWebLiveConversationRunState,
+} from './runs/web-live-conversations.js';
 import type {
   DaemonModuleStatus,
   DaemonPaths,
@@ -21,6 +25,10 @@ import type {
   GatewayNotificationProvider,
   GetDurableRunResult,
   ListDurableRunsResult,
+  StartScheduledTaskRunResult,
+  SyncWebLiveConversationRunResult,
+  ListRecoverableWebLiveConversationRunsResult,
+  SyncWebLiveConversationRunRequestInput,
 } from './types.js';
 
 interface ModuleRuntime {
@@ -413,6 +421,33 @@ export class PersonalAgentDaemon {
       return;
     }
 
+    if (request.type === 'runs.startTask') {
+      socket.write(serializeResponse({
+        id: request.id,
+        ok: true,
+        result: await this.startScheduledTaskRun(request.filePath),
+      }));
+      return;
+    }
+
+    if (request.type === 'conversations.sync') {
+      socket.write(serializeResponse({
+        id: request.id,
+        ok: true,
+        result: await this.syncWebLiveConversationRun(request.input),
+      }));
+      return;
+    }
+
+    if (request.type === 'conversations.recoverable') {
+      socket.write(serializeResponse({
+        id: request.id,
+        ok: true,
+        result: this.listRecoverableWebLiveConversationRuns(),
+      }));
+      return;
+    }
+
     if (request.type === 'stop') {
       socket.write(serializeResponse({ id: request.id, ok: true, result: { stopping: true } }));
       setTimeout(() => {
@@ -461,6 +496,54 @@ export class PersonalAgentDaemon {
     return {
       scannedAt: new Date().toISOString(),
       run,
+    };
+  }
+
+  private async startScheduledTaskRun(filePath: string): Promise<StartScheduledTaskRunResult> {
+    const runId = `task-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+    const accepted = this.bus.publish(createDaemonEvent({
+      type: 'tasks.run.requested',
+      source: 'daemon:ipc',
+      payload: {
+        filePath,
+        runId,
+        requestedAt: new Date().toISOString(),
+      },
+    }));
+
+    if (!accepted) {
+      return {
+        accepted: false,
+        runId,
+        reason: 'event queue is full',
+      };
+    }
+
+    await this.bus.waitForIdle();
+
+    if (!scanDurableRun(this.runsRoot, runId)) {
+      return {
+        accepted: false,
+        runId,
+        reason: 'task run was not started',
+      };
+    }
+
+    return {
+      accepted: true,
+      runId,
+    };
+  }
+
+  private async syncWebLiveConversationRun(
+    input: SyncWebLiveConversationRunRequestInput,
+  ): Promise<SyncWebLiveConversationRunResult> {
+    return saveWebLiveConversationRunState(input);
+  }
+
+  private listRecoverableWebLiveConversationRuns(): ListRecoverableWebLiveConversationRunsResult {
+    return {
+      runs: listRecoverableWebLiveConversationRuns(),
     };
   }
 

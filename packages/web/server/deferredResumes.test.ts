@@ -29,11 +29,11 @@ afterEach(async () => {
 });
 
 describe('deferredResumes', () => {
-  it('schedules and lists deferred resumes for a session file', () => {
+  it('schedules and lists deferred resumes for a session file', async () => {
     const stateRoot = createTempDir('pa-web-deferred-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
-    const scheduled = scheduleDeferredResumeForSessionFile({
+    const scheduled = await scheduleDeferredResumeForSessionFile({
       sessionFile: '/tmp/sessions/conv-123.jsonl',
       delay: '10m',
       prompt: 'check the logs and continue',
@@ -53,11 +53,11 @@ describe('deferredResumes', () => {
     ]);
   });
 
-  it('uses the default prompt when one is not provided', () => {
+  it('uses the default prompt when one is not provided', async () => {
     const stateRoot = createTempDir('pa-web-deferred-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
-    const scheduled = scheduleDeferredResumeForSessionFile({
+    const scheduled = await scheduleDeferredResumeForSessionFile({
       sessionFile: '/tmp/sessions/conv-123.jsonl',
       delay: '30s',
       now: new Date('2026-03-12T13:00:00.000Z'),
@@ -66,22 +66,22 @@ describe('deferredResumes', () => {
     expect(scheduled.prompt).toBe(DEFAULT_DEFERRED_RESUME_PROMPT);
   });
 
-  it('cancels only entries that belong to the requested session file', () => {
+  it('cancels only entries that belong to the requested session file', async () => {
     const stateRoot = createTempDir('pa-web-deferred-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
-    const keep = scheduleDeferredResumeForSessionFile({
+    const keep = await scheduleDeferredResumeForSessionFile({
       sessionFile: '/tmp/sessions/other.jsonl',
       delay: '30s',
       now: new Date('2026-03-12T13:00:00.000Z'),
     });
-    const remove = scheduleDeferredResumeForSessionFile({
+    const remove = await scheduleDeferredResumeForSessionFile({
       sessionFile: '/tmp/sessions/current.jsonl',
       delay: '30s',
       now: new Date('2026-03-12T13:00:01.000Z'),
     });
 
-    const cancelled = cancelDeferredResumeForSessionFile({
+    const cancelled = await cancelDeferredResumeForSessionFile({
       sessionFile: '/tmp/sessions/current.jsonl',
       id: remove.id,
     });
@@ -93,13 +93,13 @@ describe('deferredResumes', () => {
     ]);
   });
 
-  it('rejects invalid delays', () => {
+  it('rejects invalid delays', async () => {
     const stateRoot = createTempDir('pa-web-deferred-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
-    expect(() => scheduleDeferredResumeForSessionFile({
+    await expect(scheduleDeferredResumeForSessionFile({
       sessionFile: '/tmp/sessions/current.jsonl',
       delay: 'later',
-    })).toThrow('Invalid delay. Use forms like 30s, 10m, 2h, or 1d.');
+    })).rejects.toThrow('Invalid delay. Use forms like 30s, 10m, 2h, or 1d.');
   });
 });

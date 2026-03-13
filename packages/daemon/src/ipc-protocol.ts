@@ -6,6 +6,10 @@ import type {
   PullGatewayNotificationsResult,
   ListDurableRunsResult,
   GetDurableRunResult,
+  StartScheduledTaskRunResult,
+  SyncWebLiveConversationRunResult,
+  SyncWebLiveConversationRunRequestInput,
+  ListRecoverableWebLiveConversationRunsResult,
 } from './types.js';
 
 export interface EmitRequest {
@@ -47,6 +51,23 @@ export interface GetDurableRunRequest {
   runId: string;
 }
 
+export interface StartScheduledTaskRunRequest {
+  id: string;
+  type: 'runs.startTask';
+  filePath: string;
+}
+
+export interface SyncWebLiveConversationRunRequest {
+  id: string;
+  type: 'conversations.sync';
+  input: SyncWebLiveConversationRunRequestInput;
+}
+
+export interface ListRecoverableWebLiveConversationRunsRequest {
+  id: string;
+  type: 'conversations.recoverable';
+}
+
 export type DaemonRequest =
   | EmitRequest
   | StatusRequest
@@ -54,7 +75,10 @@ export type DaemonRequest =
   | PingRequest
   | PullGatewayNotificationsRequest
   | ListDurableRunsRequest
-  | GetDurableRunRequest;
+  | GetDurableRunRequest
+  | StartScheduledTaskRunRequest
+  | SyncWebLiveConversationRunRequest
+  | ListRecoverableWebLiveConversationRunsRequest;
 
 export interface DaemonSuccessResponse {
   id: string;
@@ -66,7 +90,10 @@ export interface DaemonSuccessResponse {
     | { pong: true }
     | PullGatewayNotificationsResult
     | ListDurableRunsResult
-    | GetDurableRunResult;
+    | GetDurableRunResult
+    | StartScheduledTaskRunResult
+    | SyncWebLiveConversationRunResult
+    | ListRecoverableWebLiveConversationRunsResult;
 }
 
 export interface DaemonErrorResponse {
@@ -107,6 +134,41 @@ function readRequiredString(value: unknown, label: string): string {
   }
 
   return value.trim();
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function readConversationRunState(value: unknown): SyncWebLiveConversationRunRequestInput['state'] {
+  if (value === 'waiting' || value === 'running' || value === 'interrupted' || value === 'failed') {
+    return value;
+  }
+
+  throw new Error('conversations.sync state must be waiting, running, interrupted, or failed');
+}
+
+function readConversationRunInput(value: unknown): SyncWebLiveConversationRunRequestInput {
+  if (!isRecord(value)) {
+    throw new Error('conversations.sync input must be an object');
+  }
+
+  const pendingOperation = value.pendingOperation;
+  if (pendingOperation !== undefined && pendingOperation !== null && !isRecord(pendingOperation)) {
+    throw new Error('conversations.sync pendingOperation must be an object when provided');
+  }
+
+  return {
+    conversationId: readRequiredString(value.conversationId, 'conversations.sync conversationId'),
+    sessionFile: readRequiredString(value.sessionFile, 'conversations.sync sessionFile'),
+    cwd: readRequiredString(value.cwd, 'conversations.sync cwd'),
+    state: readConversationRunState(value.state),
+    title: readOptionalString(value.title),
+    profile: readOptionalString(value.profile),
+    updatedAt: readOptionalString(value.updatedAt),
+    lastError: readOptionalString(value.lastError),
+    ...(pendingOperation !== undefined ? { pendingOperation: pendingOperation as SyncWebLiveConversationRunRequestInput['pendingOperation'] } : {}),
+  };
 }
 
 export function parseRequest(raw: string): DaemonRequest {
@@ -153,6 +215,29 @@ export function parseRequest(raw: string): DaemonRequest {
       id: parsed.id,
       type: 'runs.get',
       runId: readRequiredString(parsed.runId, 'runs.get runId'),
+    };
+  }
+
+  if (parsed.type === 'runs.startTask') {
+    return {
+      id: parsed.id,
+      type: 'runs.startTask',
+      filePath: readRequiredString(parsed.filePath, 'runs.startTask filePath'),
+    };
+  }
+
+  if (parsed.type === 'conversations.sync') {
+    return {
+      id: parsed.id,
+      type: 'conversations.sync',
+      input: readConversationRunInput(parsed.input),
+    };
+  }
+
+  if (parsed.type === 'conversations.recoverable') {
+    return {
+      id: parsed.id,
+      type: 'conversations.recoverable',
     };
   }
 

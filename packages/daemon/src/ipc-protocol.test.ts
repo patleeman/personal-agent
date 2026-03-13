@@ -68,6 +68,74 @@ describe('parseRequest', () => {
     }))).toThrow('runs.get runId must be a non-empty string');
   });
 
+  it('parses runs.startTask request', () => {
+    const parsed = parseRequest(JSON.stringify({
+      id: 'req_6',
+      type: 'runs.startTask',
+      filePath: '/tmp/task.task.md',
+    }));
+
+    expect(parsed).toEqual({
+      id: 'req_6',
+      type: 'runs.startTask',
+      filePath: '/tmp/task.task.md',
+    });
+  });
+
+  it('rejects runs.startTask request without filePath', () => {
+    expect(() => parseRequest(JSON.stringify({
+      id: 'req_7',
+      type: 'runs.startTask',
+      filePath: '',
+    }))).toThrow('runs.startTask filePath must be a non-empty string');
+  });
+
+  it('parses conversations.sync request', () => {
+    const parsed = parseRequest(JSON.stringify({
+      id: 'req_8',
+      type: 'conversations.sync',
+      input: {
+        conversationId: 'conv-123',
+        sessionFile: '/tmp/conv-123.jsonl',
+        cwd: '/tmp',
+        state: 'running',
+        pendingOperation: {
+          type: 'prompt',
+          text: 'continue',
+          enqueuedAt: '2026-03-12T17:00:00.000Z',
+        },
+      },
+    }));
+
+    expect(parsed).toEqual({
+      id: 'req_8',
+      type: 'conversations.sync',
+      input: {
+        conversationId: 'conv-123',
+        sessionFile: '/tmp/conv-123.jsonl',
+        cwd: '/tmp',
+        state: 'running',
+        pendingOperation: {
+          type: 'prompt',
+          text: 'continue',
+          enqueuedAt: '2026-03-12T17:00:00.000Z',
+        },
+      },
+    });
+  });
+
+  it('parses conversations.recoverable request', () => {
+    const parsed = parseRequest(JSON.stringify({
+      id: 'req_9',
+      type: 'conversations.recoverable',
+    }));
+
+    expect(parsed).toEqual({
+      id: 'req_9',
+      type: 'conversations.recoverable',
+    });
+  });
+
   it('rejects invalid envelope', () => {
     expect(() => parseRequest(JSON.stringify({ nope: true }))).toThrow('Invalid request envelope');
   });
