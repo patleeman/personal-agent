@@ -1,5 +1,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { CommandPalette } from './CommandPalette';
 import { ContextRail } from './ContextRail';
 import { Sidebar } from './Sidebar';
 import { getConversationArtifactIdFromSearch } from '../conversationArtifacts';
@@ -168,25 +169,29 @@ export function Layout() {
     : Math.max(rail.width, artifactRailTargetWidth);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-base text-primary select-none">
-      {/* Left sidebar */}
-      <div style={{ width: sidebar.width }} className="flex-shrink-0 flex flex-col overflow-hidden bg-surface border-r border-border-subtle">
-        <Sidebar />
+    <>
+      <div className="flex h-screen overflow-hidden bg-base text-primary select-none">
+        {/* Left sidebar */}
+        <div style={{ width: sidebar.width }} className="flex-shrink-0 flex flex-col overflow-hidden bg-surface border-r border-border-subtle">
+          <Sidebar />
+        </div>
+
+        <ResizeHandle onMouseDown={sidebar.onMouseDown} />
+
+        {/* Center */}
+        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden select-text">
+          <Outlet />
+        </main>
+
+        <>
+          <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
+          <div style={{ width: railWidth }} className="flex-shrink-0 flex flex-col overflow-hidden">
+            <ContextRail />
+          </div>
+        </>
       </div>
 
-      <ResizeHandle onMouseDown={sidebar.onMouseDown} />
-
-      {/* Center */}
-      <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden select-text">
-        <Outlet />
-      </main>
-
-      <>
-        <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
-        <div style={{ width: railWidth }} className="flex-shrink-0 flex flex-col overflow-hidden">
-          <ContextRail />
-        </div>
-      </>
-    </div>
+      <CommandPalette />
+    </>
   );
 }
