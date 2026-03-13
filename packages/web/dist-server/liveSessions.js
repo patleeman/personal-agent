@@ -10,7 +10,7 @@ import { AuthStorage, DefaultResourceLoader, ModelRegistry, SessionManager, crea
 import { invalidateAppTopics, publishAppEvent } from './appEvents.js';
 import { generateConversationTitle, hasAssistantTitleSourceMessage, } from './conversationAutoTitle.js';
 import { syncWebLiveConversationRun } from './conversationRuns.js';
-import { buildDisplayBlocksFromEntries } from './sessions.js';
+import { buildDisplayBlocksFromEntries, getAssistantErrorDisplayMessage } from './sessions.js';
 import { estimateContextUsageSegments } from './sessionContextUsage.js';
 const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
 const SETTINGS_FILE = join(AGENT_DIR, 'settings.json');
@@ -177,6 +177,8 @@ function buildLiveSnapshotBlocks(session) {
             toolCallId: message.toolCallId,
             toolName: message.toolName,
             details: message.details,
+            stopReason: message.stopReason,
+            errorMessage: message.errorMessage,
         },
     })));
 }
@@ -369,7 +371,11 @@ export function toSse(event) {
             return block ? { type: 'user_message', block } : null;
         }
         case 'message_end': {
-            return null;
+            if (event.message.role !== 'assistant') {
+                return null;
+            }
+            const errorMessage = getAssistantErrorDisplayMessage(event.message);
+            return errorMessage ? { type: 'error', message: errorMessage } : null;
         }
         case 'message_update': {
             const e = event.assistantMessageEvent;

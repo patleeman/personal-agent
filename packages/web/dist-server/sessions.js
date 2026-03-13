@@ -95,6 +95,15 @@ function extractUserContent(content) {
     }));
     return { text, images };
 }
+export function getAssistantErrorDisplayMessage(message) {
+    if (message.stopReason !== 'error') {
+        return null;
+    }
+    const errorMessage = message.errorMessage?.trim();
+    return errorMessage && errorMessage.length > 0
+        ? errorMessage
+        : 'The model returned an error before completing its response.';
+}
 export function buildDisplayBlocksFromEntries(messages) {
     const blocks = [];
     const toolCallIndex = new Map();
@@ -102,6 +111,7 @@ export function buildDisplayBlocksFromEntries(messages) {
         const { role, content, toolCallId, toolName, details } = msg.message;
         const ts = normalizeTimestamp(msg.timestamp);
         const contentBlocks = normalizeContent(content);
+        const errorMessage = getAssistantErrorDisplayMessage(msg.message);
         const baseId = msg.id || `msg-${messageIndex}`;
         if (role === 'user') {
             const { text, images } = extractUserContent(content);
@@ -139,6 +149,14 @@ export function buildDisplayBlocksFromEntries(messages) {
                         toolCallId: block.id,
                     });
                 }
+            }
+            if (errorMessage) {
+                blocks.push({
+                    type: 'error',
+                    id: `${baseId}-e${blocks.length}`,
+                    ts,
+                    message: errorMessage,
+                });
             }
             continue;
         }

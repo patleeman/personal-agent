@@ -1,13 +1,12 @@
 import React, { Children, cloneElement, isValidElement, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { parseSkillBlock, type ParsedSkillBlock } from '../../skillBlock';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { readArtifactPresentation } from '../../conversationArtifacts';
-import { useReloadState, type StorageLike } from '../../reloadState';
 import type { MessageBlock } from '../../types';
 import { timeAgo } from '../../utils';
-import { buildConversationRailSnippet } from './conversationRail.js';
-import { buildChatRenderItems, getLatestUserMessage, type TraceClusterSummary, type TraceClusterSummaryCategory, type TraceConversationBlock } from './transcriptItems.js';
+import { buildChatRenderItems, type TraceClusterSummary, type TraceClusterSummaryCategory, type TraceConversationBlock } from './transcriptItems.js';
 import { Pill, SurfacePanel, cx } from '../ui';
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────
@@ -185,7 +184,7 @@ function MarkdownCodeBlock({ children }: { children: ReactNode }) {
   );
 }
 
-export function renderText(text: string) {
+function renderMarkdownText(text: string) {
   return (
     <div className="ui-markdown">
       <ReactMarkdown
@@ -246,6 +245,59 @@ export function renderText(text: string) {
       </ReactMarkdown>
     </div>
   );
+}
+
+function parseSkillContentSections(content: string): { relativeTo: string | null; body: string } {
+  const match = content.match(/^References are relative to (.+?)\.\n\n([\s\S]*)$/);
+  if (!match) {
+    return { relativeTo: null, body: content.trim() };
+  }
+
+  return {
+    relativeTo: match[1] ?? null,
+    body: (match[2] ?? '').trim(),
+  };
+}
+
+function SkillInvocationCard({
+  skillBlock,
+  className,
+}: {
+  skillBlock: ParsedSkillBlock;
+  className?: string;
+}) {
+  const { relativeTo, body } = parseSkillContentSections(skillBlock.content);
+
+  return (
+    <details className={cx('ui-skill-invocation', className)}>
+      <summary className="ui-skill-invocation-summary">
+        <span className="ui-skill-invocation-label">skill</span>
+        <span className="ui-skill-invocation-name">{skillBlock.name}</span>
+      </summary>
+      <div className="ui-skill-invocation-body">
+        {relativeTo && <p className="ui-skill-invocation-meta">References resolve relative to {relativeTo}</p>}
+        {renderMarkdownText(`**${skillBlock.name}**\n\n${body}`)}
+      </div>
+    </details>
+  );
+}
+
+function renderSkillAwareText(text: string) {
+  const skillBlock = parseSkillBlock(text);
+  if (!skillBlock) {
+    return renderMarkdownText(text);
+  }
+
+  return (
+    <div className="space-y-3">
+      <SkillInvocationCard skillBlock={skillBlock} />
+      {skillBlock.userMessage && renderMarkdownText(skillBlock.userMessage)}
+    </div>
+  );
+}
+
+export function renderText(text: string) {
+  return renderSkillAwareText(text);
 }
 
 // ── Copy button ───────────────────────────────────────────────────────────────
@@ -321,31 +373,9 @@ function toolMeta(t: string) {
 }
 
 type DisclosurePreference = 'auto' | 'open' | 'closed';
-export type ConversationViewMode = 'transcript' | 'hybrid' | 'raw';
+export type ConversationViewMode = 'hybrid';
 
-const CHAT_VIEW_MODE_STORAGE_KEY = 'pa:chat-view-mode';
-
-function getChatViewStorage(storage?: StorageLike | null): StorageLike | null {
-  if (storage !== undefined) {
-    return storage;
-  }
-
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
-
-export function normalizeConversationViewMode(value: unknown): ConversationViewMode {
-  if (value === 'transcript' || value === 'hybrid' || value === 'raw') {
-    return value;
-  }
-
+export function normalizeConversationViewMode(_value: unknown): ConversationViewMode {
   return 'hybrid';
 }
 
@@ -735,17 +765,6 @@ function TraceClusterBlock({
   );
 }
 
-function ReplyingToChip({ text }: { text: string }) {
-  return (
-    <div className="sticky top-3 z-10">
-      <div className="mx-auto max-w-[72ch] rounded-full border border-accent/20 bg-base/90 px-3 py-1.5 text-[11px] text-secondary shadow-sm backdrop-blur-sm">
-        <span className="uppercase tracking-[0.14em] text-dim/80">Replying to</span>
-        <span className="ml-2 text-primary">“{text}”</span>
-      </div>
-    </div>
-  );
-}
-
 // ── ImageBlock ────────────────────────────────────────────────────────────────
 
 function ImagePreview({
@@ -870,6 +889,7 @@ function UserMessage({ block }: { block: Extract<MessageBlock, { type: 'user' }>
     ? `[${imageCount} image attachment${imageCount === 1 ? '' : 's'}]`
     : '');
   const hasText = block.text.trim().length > 0;
+  const skillBlock = hasText ? parseSkillBlock(block.text) : null;
 
   return (
     <div className="group flex flex-col items-end gap-1.5">
@@ -891,11 +911,18 @@ function UserMessage({ block }: { block: Extract<MessageBlock, { type: 'user' }>
               ))}
             </div>
           )}
-          {hasText && (
+          {skillBlock ? (
+            <div className="space-y-2 px-1.5 pb-0.5">
+              <SkillInvocationCard skillBlock={skillBlock} className="ui-skill-invocation-user" />
+              {skillBlock.userMessage && (
+                <p className="text-sm leading-relaxed text-primary whitespace-pre-wrap"><MentionText text={skillBlock.userMessage} /></p>
+              )}
+            </div>
+          ) : hasText ? (
             <div className="px-1.5 pb-0.5">
               <p className="text-sm leading-relaxed text-primary whitespace-pre-wrap"><MentionText text={block.text} /></p>
             </div>
-          )}
+          ) : null}
         </div>
         <p className="ui-message-meta mt-1 text-right pr-1">{timeAgo(block.ts)}</p>
       </div>
@@ -954,39 +981,6 @@ function StreamingIndicator({ label }: { label: string }) {
   );
 }
 
-function ViewModeToggle({
-  value,
-  onChange,
-}: {
-  value: ConversationViewMode;
-  onChange: (value: ConversationViewMode) => void;
-}) {
-  const options: Array<{ value: ConversationViewMode; label: string }> = [
-    { value: 'transcript', label: 'Transcript' },
-    { value: 'hybrid', label: 'Hybrid' },
-    { value: 'raw', label: 'Raw trace' },
-  ];
-
-  return (
-    <div className="flex items-center gap-2 self-end">
-      <span className="text-[10px] uppercase tracking-[0.14em] text-dim">view</span>
-      <div className="ui-segmented-control">
-        {options.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            onClick={() => onChange(option.value)}
-            className={cx('ui-segmented-button', value === option.value && 'ui-segmented-button-active')}
-            aria-pressed={value === option.value}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ── ChatView ──────────────────────────────────────────────────────────────────
 
 export function ChatView({
@@ -1002,20 +996,9 @@ export function ChatView({
   onOpenArtifact?: (artifactId: string) => void;
   activeArtifactId?: string | null;
 }) {
-  const [viewMode, setViewMode] = useReloadState<ConversationViewMode>({
-    storageKey: CHAT_VIEW_MODE_STORAGE_KEY,
-    initialValue: 'hybrid',
-    storage: getChatViewStorage(),
-    serialize: (value) => value,
-    deserialize: (raw) => normalizeConversationViewMode(raw),
-  });
   const renderItems = useMemo(() => buildChatRenderItems(messages), [messages]);
   const streamingStatusLabel = getStreamingStatusLabel(messages, isStreaming);
   const lastBlock = messages[messages.length - 1];
-  const latestUserMessage = useMemo(() => getLatestUserMessage(messages), [messages]);
-  const latestUserSnippet = isStreaming && latestUserMessage
-    ? buildConversationRailSnippet(latestUserMessage, 120)
-    : null;
   const showStreamingIndicator = !!streamingStatusLabel && (!lastBlock || lastBlock.type === 'user');
 
   function renderMessageBlock(block: MessageBlock, index: number) {
@@ -1064,39 +1047,28 @@ export function ChatView({
     <>
       <style>{`@keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
       <div className="space-y-4 px-6 py-5">
-        <div className="flex justify-end">
-          <ViewModeToggle value={viewMode} onChange={setViewMode} />
-        </div>
-        {latestUserSnippet && <ReplyingToChip text={latestUserSnippet} />}
-        {viewMode === 'raw'
-          ? messages.map((block, index) => renderMessageBlock(block, index))
-          : renderItems.map((item, itemIndex) => {
-              if (item.type === 'trace_cluster') {
-                const live = isStreaming && itemIndex === renderItems.length - 1;
-                if (viewMode === 'transcript' && !live) {
-                  return item.blocks.map((_, offset) => (
-                    <span key={`anchor-${item.startIndex + offset}`} id={`msg-${item.startIndex + offset}`} className="block h-0 overflow-hidden" aria-hidden />
-                  ));
-                }
+        {renderItems.map((item, itemIndex) => {
+          if (item.type === 'trace_cluster') {
+            const live = isStreaming && itemIndex === renderItems.length - 1;
 
-                return (
-                  <div key={`trace-${item.startIndex}-${item.endIndex}`}>
-                    {item.blocks.map((_, offset) => (
-                      <span key={`anchor-${item.startIndex + offset}`} id={`msg-${item.startIndex + offset}`} className="block h-0 overflow-hidden" aria-hidden />
-                    ))}
-                    <TraceClusterBlock
-                      blocks={item.blocks}
-                      summary={item.summary}
-                      live={live}
-                      onOpenArtifact={onOpenArtifact}
-                      activeArtifactId={activeArtifactId}
-                    />
-                  </div>
-                );
-              }
+            return (
+              <div key={`trace-${item.startIndex}-${item.endIndex}`}>
+                {item.blocks.map((_, offset) => (
+                  <span key={`anchor-${item.startIndex + offset}`} id={`msg-${item.startIndex + offset}`} className="block h-0 overflow-hidden" aria-hidden />
+                ))}
+                <TraceClusterBlock
+                  blocks={item.blocks}
+                  summary={item.summary}
+                  live={live}
+                  onOpenArtifact={onOpenArtifact}
+                  activeArtifactId={activeArtifactId}
+                />
+              </div>
+            );
+          }
 
-              return renderMessageBlock(item.block, item.index);
-            })}
+          return renderMessageBlock(item.block, item.index);
+        })}
         {showStreamingIndicator && <StreamingIndicator label={streamingStatusLabel ?? 'Working…'} />}
       </div>
     </>

@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { MessageBlock } from '../../types';
 import {
+  ChatView,
   getStreamingStatusLabel,
   normalizeConversationViewMode,
   renderText,
@@ -72,10 +73,10 @@ describe('chat view streaming disclosure', () => {
     expect(shouldAutoOpenTraceCluster(false, false)).toBe(false);
   });
 
-  it('normalizes conversation view mode values', () => {
-    expect(normalizeConversationViewMode('transcript')).toBe('transcript');
+  it('forces the conversation view mode to hybrid', () => {
+    expect(normalizeConversationViewMode('transcript')).toBe('hybrid');
     expect(normalizeConversationViewMode('hybrid')).toBe('hybrid');
-    expect(normalizeConversationViewMode('raw')).toBe('raw');
+    expect(normalizeConversationViewMode('raw')).toBe('hybrid');
     expect(normalizeConversationViewMode('unknown')).toBe('hybrid');
     expect(normalizeConversationViewMode(null)).toBe('hybrid');
   });
@@ -116,6 +117,29 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('@web-ui');
     expect(html).toContain('@projects');
     expect(html).toContain('ui-markdown-mention');
+  });
+
+  it('renders skill invocations as disclosure cards instead of raw wrapper markup', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'user',
+        ts: '2026-03-11T18:00:00.000Z',
+        text: [
+          '<skill name="workflow-checkpoint" location="/repo/profiles/shared/agent/skills/workflow-checkpoint/SKILL.md">',
+          'References are relative to /repo/profiles/shared/agent/skills/workflow-checkpoint.',
+          '',
+          '# Checkpoint',
+          '',
+          'Create a focused commit for the agent\'s current work.',
+          '</skill>',
+        ].join('\n'),
+      }],
+    }));
+
+    expect(html).toContain('workflow-checkpoint');
+    expect(html).toContain('References resolve relative to /repo/profiles/shared/agent/skills/workflow-checkpoint');
+    expect(html).not.toContain('&lt;skill name=');
+    expect(html).not.toContain('location=&quot;/repo/profiles/shared/agent/skills/workflow-checkpoint/SKILL.md&quot;');
   });
 
   it('preserves inline code content without stringifying React nodes', () => {

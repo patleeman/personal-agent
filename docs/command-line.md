@@ -209,9 +209,10 @@ Manage the Telegram gateway.
 
 See [Gateway Guide](./gateway.md).
 
-### `pa restart`
+### `pa restart [--rebuild]`
 
 Restart the daemon, managed web UI service, and any installed gateway services.
+Use `--rebuild` to rebuild repo packages first and blue/green redeploy the managed web UI, similar to the restart phase of `pa update` without pulling git changes.
 
 ### `pa update [--repo-only]`
 

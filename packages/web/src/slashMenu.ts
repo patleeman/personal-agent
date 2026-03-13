@@ -105,7 +105,7 @@ export function fuzzyScore(query: string, candidate: string): number | null {
   return score;
 }
 
-function getSkillFilterQuery(query: string): string | null {
+function getExplicitSkillFilterQuery(query: string): string | null {
   const normalized = normalizeSlashQuery(query).trim();
 
   if (normalized.startsWith('skill:')) {
@@ -122,6 +122,32 @@ function getSkillFilterQuery(query: string): string | null {
 
   if (normalized.length >= 3 && fuzzyScore(normalized, 'skill') !== null) {
     return '';
+  }
+
+  return null;
+}
+
+function scoreSkill(query: string, skill: MemorySkillItem, slashQuery: string, explicitSkillQuery: boolean): number | null {
+  if (query.length === 0) {
+    return 0;
+  }
+
+  const nameScore = fuzzyScore(query, skill.name);
+  const descScore = fuzzyScore(query, skill.description);
+
+  if (explicitSkillQuery) {
+    return nameScore ?? (descScore !== null ? Math.max(1, Math.floor(descScore / 3)) : null);
+  }
+
+  const slashCommandScore = fuzzyScore(slashQuery, `skill:${skill.name}`);
+  const bestNameOrCommandScore = Math.max(nameScore ?? 0, slashCommandScore ?? 0);
+
+  if (bestNameOrCommandScore > 0) {
+    return bestNameOrCommandScore;
+  }
+
+  if (descScore !== null) {
+    return Math.max(1, Math.floor(descScore / 3));
   }
 
   return null;
@@ -146,20 +172,15 @@ export function buildSlashMenuItems(query: string, skills: MemorySkillItem[]): S
       kind: 'command',
     }));
 
-  const skillQuery = getSkillFilterQuery(query);
+  const explicitSkillQuery = getExplicitSkillFilterQuery(query);
+  const skillQuery = explicitSkillQuery ?? (normalized.length > 0 ? normalized : null);
   const skillItems: SlashMenuItem[] = skillQuery === null
     ? []
     : [...skills]
-      .map((skill) => {
-        if (skillQuery.length === 0) {
-          return { skill, score: 0 };
-        }
-
-        const nameScore = fuzzyScore(skillQuery, skill.name);
-        const descScore = fuzzyScore(skillQuery, skill.description);
-        const score = nameScore ?? (descScore !== null ? Math.max(1, Math.floor(descScore / 3)) : null);
-        return { skill, score };
-      })
+      .map((skill) => ({
+        skill,
+        score: scoreSkill(skillQuery, skill, normalized, explicitSkillQuery !== null),
+      }))
       .filter((entry) => entry.score !== null)
       .sort((left, right) => (right.score ?? 0) - (left.score ?? 0) || left.skill.name.localeCompare(right.skill.name))
       .map(({ skill }) => ({

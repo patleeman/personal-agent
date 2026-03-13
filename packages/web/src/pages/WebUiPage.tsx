@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { useApi } from '../hooks';
 import type { GatewayLogTail, WebUiReleaseSummary } from '../types';
@@ -33,6 +33,14 @@ function serviceStatusText(input: {
   if (input.running) return 'running';
   if (input.installed) return 'stopped';
   return 'not installed';
+}
+
+function releaseKey(release: WebUiReleaseSummary | undefined): string {
+  if (!release) {
+    return 'none';
+  }
+
+  return [release.slot, release.revision ?? '', release.builtAt].join(':');
 }
 
 function StatBlock({
@@ -111,11 +119,65 @@ function LogTailBlock({ label, log }: { label: string; log: GatewayLogTail | und
 
 export function WebUiPage() {
   const { data, loading, error, refetch } = useApi(api.webUiState);
-  const [serviceAction, setServiceAction] = useState<'install' | 'start' | 'restart' | 'stop' | 'uninstall' | null>(null);
+  const [serviceAction, setServiceAction] = useState<'install' | 'start' | 'stop' | 'uninstall' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [applicationRestarting, setApplicationRestarting] = useState(false);
+  const [applicationRestartMessage, setApplicationRestartMessage] = useState<string | null>(null);
+  const [applicationRestartError, setApplicationRestartError] = useState<string | null>(null);
+  const restartMonitorRef = useRef<number | null>(null);
 
-  async function handleServiceAction(action: 'install' | 'start' | 'restart' | 'stop' | 'uninstall') {
-    if (serviceAction || !data) return;
+  function clearApplicationRestartMonitor() {
+    if (restartMonitorRef.current !== null) {
+      window.clearTimeout(restartMonitorRef.current);
+      restartMonitorRef.current = null;
+    }
+  }
+
+  function startApplicationRestartMonitor(previousReleaseKey: string) {
+    clearApplicationRestartMonitor();
+
+    let sawFailure = false;
+    let attempts = 0;
+
+    const poll = async () => {
+      attempts += 1;
+
+      try {
+        const next = await api.webUiState();
+        const nextReleaseKey = releaseKey(next.service.deployment?.activeRelease);
+
+        if (sawFailure || nextReleaseKey !== previousReleaseKey) {
+          clearApplicationRestartMonitor();
+          window.location.reload();
+          return;
+        }
+      } catch {
+        sawFailure = true;
+      }
+
+      if (attempts >= 120) {
+        clearApplicationRestartMonitor();
+        setApplicationRestarting(false);
+        setApplicationRestartMessage('Restart is taking longer than expected. Refresh in a moment to check the new build.');
+        return;
+      }
+
+      restartMonitorRef.current = window.setTimeout(() => {
+        void poll();
+      }, 2500);
+    };
+
+    restartMonitorRef.current = window.setTimeout(() => {
+      void poll();
+    }, 2500);
+  }
+
+  useEffect(() => () => {
+    clearApplicationRestartMonitor();
+  }, []);
+
+  async function handleServiceAction(action: 'install' | 'start' | 'stop' | 'uninstall') {
+    if (serviceAction || applicationRestarting || !data) return;
 
     setServiceAction(action);
     setActionError(null);
@@ -124,8 +186,6 @@ export function WebUiPage() {
         await api.installWebUiService();
       } else if (action === 'start') {
         await api.startWebUiService();
-      } else if (action === 'restart') {
-        await api.restartWebUiService();
       } else if (action === 'stop') {
         await api.stopWebUiService();
       } else {
@@ -136,6 +196,33 @@ export function WebUiPage() {
       setActionError(serviceError instanceof Error ? serviceError.message : String(serviceError));
     } finally {
       setServiceAction(null);
+    }
+  }
+
+  async function handleApplicationRestart() {
+    if (applicationRestarting || serviceAction || !data?.service.installed) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Rebuild repo packages, restart daemon and installed gateway services, and blue/green redeploy the managed web UI? This matches the restart phase of `pa update` without pulling git changes.'
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setApplicationRestartError(null);
+    setApplicationRestartMessage(null);
+    setApplicationRestarting(true);
+
+    try {
+      const previousReleaseKey = releaseKey(data.service.deployment?.activeRelease);
+      const result = await api.restartApplication();
+      setApplicationRestartMessage(`${result.message} This page will reload when the new release is live.`);
+      startApplicationRestartMonitor(previousReleaseKey);
+    } catch (restartError) {
+      setApplicationRestarting(false);
+      setApplicationRestartError(restartError instanceof Error ? restartError.message : String(restartError));
     }
   }
 
@@ -169,7 +256,7 @@ export function WebUiPage() {
               onClick={() => {
                 void handleServiceAction(data?.service.installed ? 'uninstall' : 'install');
               }}
-              disabled={!data || serviceAction !== null}
+              disabled={!data || serviceAction !== null || applicationRestarting}
             >
               {serviceAction === 'uninstall' ? 'Uninstalling…' : installButtonLabel}
             </ToolbarButton>
@@ -178,15 +265,15 @@ export function WebUiPage() {
                 if (!data?.service.installed) return;
                 void handleServiceAction(data.service.running ? 'stop' : 'start');
               }}
-              disabled={!data?.service.installed || serviceAction !== null}
+              disabled={!data?.service.installed || serviceAction !== null || applicationRestarting}
             >
               {serviceToggleLabel}
             </ToolbarButton>
             <ToolbarButton
-              onClick={() => { void handleServiceAction('restart'); }}
-              disabled={serviceAction !== null || !data?.service.installed || !data.service.running}
+              onClick={() => { void handleApplicationRestart(); }}
+              disabled={serviceAction !== null || applicationRestarting || !data?.service.installed}
             >
-              {serviceAction === 'restart' ? 'Restarting…' : 'Restart service'}
+              {applicationRestarting ? 'Restart requested…' : 'Restart service'}
             </ToolbarButton>
             <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); }} disabled={serviceAction !== null}>↻ Refresh</ToolbarButton>
           </>
@@ -234,6 +321,26 @@ export function WebUiPage() {
                   value={activeRelease?.revision ?? (activeRelease ? activeRelease.slot : '—')}
                   meta={activeRelease ? `built ${timeAgo(activeRelease.builtAt)}` : 'No staged release'}
                 />
+              </div>
+            </section>
+
+            <section className="space-y-4 border-t border-border-subtle pt-6">
+              <SectionLabel label="Restart service" />
+              <div className="space-y-2 max-w-3xl">
+                <p className="ui-card-meta">
+                  The restart action above rebuilds repo packages, restarts the daemon and installed gateway services,
+                  and blue/green redeploys the managed web UI. This matches the restart phase of <code>pa update</code>
+                  without pulling git changes.
+                </p>
+                {!data.service.installed && (
+                  <p className="text-[12px] text-warning">Requires the managed web UI service.</p>
+                )}
+                {applicationRestartMessage && (
+                  <p className="text-[12px] text-secondary">{applicationRestartMessage}</p>
+                )}
+                {applicationRestartError && (
+                  <p className="text-[12px] text-danger">{applicationRestartError}</p>
+                )}
               </div>
             </section>
 

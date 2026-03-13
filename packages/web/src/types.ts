@@ -128,6 +128,17 @@ export interface ScheduledTaskSummary {
   lastAttemptCount?: number;
 }
 
+export interface ScheduledTaskDetail {
+  id: string;
+  running: boolean;
+  enabled: boolean;
+  cron?: string;
+  model?: string;
+  lastStatus?: string;
+  lastRunAt?: string;
+  fileContent: string;
+}
+
 export interface DurableRunSource {
   type: string;
   id?: string;
@@ -525,6 +536,13 @@ export interface AppStatus {
   repoRoot: string;
   activityCount: number;
   projectCount: number;
+}
+
+export interface ApplicationRestartRequestResult {
+  accepted: true;
+  message: string;
+  requestedAt: string;
+  logFile: string;
 }
 
 export interface ModelInfo {

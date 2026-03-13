@@ -1,5 +1,5 @@
 import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
-import { getDurableRun as getDurableRunFromDaemon, listDurableRuns as listDurableRunsFromDaemon, pingDaemon, resolveDaemonPaths, resolveDurableRunsRoot, scanDurableRun, scanDurableRunsForRecovery, summarizeScannedDurableRuns, } from '@personal-agent/daemon';
+import { cancelDurableRun as cancelDurableRunFromDaemon, getDurableRun as getDurableRunFromDaemon, listDurableRuns as listDurableRunsFromDaemon, pingDaemon, resolveDaemonPaths, resolveDurableRunsRoot, scanDurableRun, scanDurableRunsForRecovery, summarizeScannedDurableRuns, } from '@personal-agent/daemon';
 function isDaemonUnavailable(error) {
     if (!(error instanceof Error)) {
         return false;
@@ -104,4 +104,7 @@ export async function getDurableRunLog(runId, tail = 120) {
         path: result.run.paths.outputLogPath,
         log: readTailText(result.run.paths.outputLogPath, tail),
     };
+}
+export async function cancelDurableRun(runId) {
+    return cancelDurableRunFromDaemon(runId);
 }

@@ -4,8 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createWebLiveConversationRunId, listRecoverableWebLiveConversationRuns, syncWebLiveConversationRun, } from './conversationRuns.js';
-import { resolveDurableRunPaths, resolveDurableRunsRoot, scanDurableRun } from '@personal-agent/daemon';
-import { PersonalAgentDaemon } from '../../daemon/src/server.js';
+import { PersonalAgentDaemon, resolveDurableRunPaths, resolveDurableRunsRoot, scanDurableRun, } from '@personal-agent/daemon';
 const tempDirs = [];
 const originalEnv = process.env;
 function createTempDir(prefix) {

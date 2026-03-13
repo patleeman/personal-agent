@@ -45,6 +45,7 @@ The UI also has a dedicated **Web UI** page for:
 
 - managed service status
 - active vs inactive blue/green release info
+- rebuild + restart controls for the full application
 - recent web UI logs
 
 ## Logs

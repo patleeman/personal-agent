@@ -22,7 +22,7 @@ import {
   hasAssistantTitleSourceMessage,
 } from './conversationAutoTitle.js';
 import { syncWebLiveConversationRun, type WebLiveConversationRunState } from './conversationRuns.js';
-import { buildDisplayBlocksFromEntries, type DisplayBlock } from './sessions.js';
+import { buildDisplayBlocksFromEntries, getAssistantErrorDisplayMessage, type DisplayBlock } from './sessions.js';
 import { estimateContextUsageSegments } from './sessionContextUsage.js';
 
 const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
@@ -299,6 +299,8 @@ function buildLiveSnapshotBlocks(session: AgentSession): DisplayBlock[] {
       toolCallId: (message as { toolCallId?: string }).toolCallId,
       toolName: (message as { toolName?: string }).toolName,
       details: (message as { details?: unknown }).details,
+      stopReason: (message as { stopReason?: string }).stopReason,
+      errorMessage: (message as { errorMessage?: string }).errorMessage,
     },
   })));
 }
@@ -536,7 +538,12 @@ export function toSse(event: AgentSessionEvent): SseEvent | null {
     }
 
     case 'message_end': {
-      return null;
+      if (event.message.role !== 'assistant') {
+        return null;
+      }
+
+      const errorMessage = getAssistantErrorDisplayMessage(event.message);
+      return errorMessage ? { type: 'error', message: errorMessage } : null;
     }
 
     case 'message_update': {

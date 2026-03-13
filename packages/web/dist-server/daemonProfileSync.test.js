@@ -54,7 +54,7 @@ describe('daemonProfileSync', () => {
             modules: {
                 tasks: {
                     taskDir: '/repo/profiles',
-                    runTasksInTmux: true,
+                    maxRetries: 5,
                 },
             },
         }, null, 2));
@@ -67,7 +67,7 @@ describe('daemonProfileSync', () => {
             logLevel: 'debug',
             modules: {
                 tasks: {
-                    runTasksInTmux: true,
+                    maxRetries: 5,
                 },
             },
         });

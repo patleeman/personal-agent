@@ -49,15 +49,30 @@ describe('buildSlashMenuItems', () => {
     expect(items[0]?.displayCmd).toBe('/skill:best-practices-react');
   });
 
+  it('fuzzy-finds skills without requiring the /skill: prefix', () => {
+    const items = buildSlashMenuItems('/bpr', SKILLS);
+    expect(items[0]?.displayCmd).toBe('/skill:best-practices-react');
+  });
+
   it('does not flood the default slash menu with every skill when only / is typed', () => {
     const items = buildSlashMenuItems('/', SKILLS);
     expect(items.some((item) => item.kind === 'skill')).toBe(false);
     expect(items.some((item) => item.displayCmd === '/model')).toBe(true);
   });
 
-  it('includes the project slash command in the command menu', () => {
-    const items = buildSlashMenuItems('/pro', SKILLS);
+  it('includes matching skills alongside slash commands', () => {
+    const items = buildSlashMenuItems('/pro', [
+      ...SKILLS,
+      {
+        source: 'shared',
+        name: 'project-planning',
+        description: 'Structure milestones, scope, and delivery plans for a project.',
+        path: '/tmp/project/SKILL.md',
+      },
+    ]);
+
     expect(items.some((item) => item.displayCmd === '/project')).toBe(true);
+    expect(items.some((item) => item.displayCmd === '/skill:project-planning')).toBe(true);
   });
 
   it('includes the deferred resume slash command in the command menu', () => {

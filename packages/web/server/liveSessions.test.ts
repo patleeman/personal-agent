@@ -237,6 +237,22 @@ describe('event translation', () => {
       },
     } as any)).toBeNull();
   });
+
+  it('surfaces assistant error messages from message_end events', () => {
+    expect(toSse({
+      type: 'message_end',
+      message: {
+        role: 'assistant',
+        content: [],
+        stopReason: 'error',
+        errorMessage: 'Codex error: upstream overloaded',
+        timestamp: 1,
+      },
+    } as any)).toEqual({
+      type: 'error',
+      message: 'Codex error: upstream overloaded',
+    });
+  });
 });
 
 describe('session directory resolution', () => {

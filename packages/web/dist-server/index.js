@@ -11,6 +11,7 @@ import { readGitStatusSummary } from './gitStatus.js';
 import { installGatewayAndReadState, readGatewayState, restartGatewayAndReadState, startGatewayAndReadState, stopGatewayAndReadState, uninstallGatewayAndReadState, } from './gateway.js';
 import { installDaemonServiceAndReadState, readDaemonState, restartDaemonServiceAndReadState, startDaemonServiceAndReadState, stopDaemonServiceAndReadState, uninstallDaemonServiceAndReadState, } from './daemon.js';
 import { installWebUiServiceAndReadState, readWebUiState, restartWebUiServiceAndReadState, startWebUiServiceAndReadState, stopWebUiServiceAndReadState, uninstallWebUiServiceAndReadState, } from './webUi.js';
+import { requestApplicationRestart } from './applicationRestart.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from './modelPreferences.js';
 import { logError, logInfo, logWarn, installProcessLogging, webRequestLoggingMiddleware } from './logging.js';
 import { readSavedThemePreferences, writeSavedThemePreferences } from './themePreferences.js';
@@ -24,7 +25,7 @@ import { createDeferredResumeAgentExtension } from './deferredResumeAgentExtensi
 import { createSession, createSessionFromExisting, resumeSession, getLiveSessions, getSessionStats, getSessionContextUsage, getAvailableModels, inspectAvailableTools, isLive, subscribe, promptSession, queuePromptContext, compactSession, reloadSessionResources, exportSessionHtml, renameSession, abortSession, destroySession, forkSession, registry as liveRegistry, } from './liveSessions.js';
 import { recoverDurableLiveConversations } from './conversationRecovery.js';
 import { syncWebLiveConversationRun } from './conversationRuns.js';
-import { getDurableRun, getDurableRunLog, listDurableRuns } from './durableRuns.js';
+import { cancelDurableRun, getDurableRun, getDurableRunLog, listDurableRuns } from './durableRuns.js';
 import { buildReferencedMemoryDocsContext, buildReferencedProfilesContext, buildReferencedSkillsContext, buildReferencedTasksContext, pickPromptReferencesInOrder, resolvePromptReferences, } from './promptReferences.js';
 import { activateDueDeferredResumes, addConversationProjectLink, deleteConversationArtifact, ensureConversationAttentionBaselines, getActivityConversationLink, getConversationArtifact, getConversationProjectLink, getReadySessionDeferredResumeEntries, listConversationArtifacts, cleanMcpCliStderr, inspectMcpCliBinary, inspectMcpCliServer, inspectMcpCliTool, listProfileActivityEntries, listProjectIds, loadDeferredResumeState, loadProfileActivityReadState, markConversationAttentionRead, markConversationAttentionUnread, readMcpCliConfig, readProject, removeConversationProjectLink, removeDeferredResume, resolveProjectPaths, retryDeferredResume, saveDeferredResumeState, saveProfileActivityReadState, setConversationProjectLinks, summarizeConversationAttention, } from '@personal-agent/core';
 import { listProfiles, materializeProfileToAgentDir, resolveResourceProfile, } from '@personal-agent/resources';
@@ -566,6 +567,20 @@ app.get('/api/status', (_req, res) => {
             stack: err instanceof Error ? err.stack : undefined,
         });
         res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/application/restart', (_req, res) => {
+    try {
+        res.status(202).json(requestApplicationRestart({ repoRoot: REPO_ROOT }));
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        const status = message.startsWith('Application restart already in progress')
+            ? 409
+            : message.startsWith('Managed web UI service is not installed')
+                ? 400
+                : 500;
+        res.status(status).json({ error: message });
     }
 });
 // ── Gateway ──────────────────────────────────────────────────────────────────
@@ -1248,6 +1263,23 @@ app.get('/api/runs/:id/log', async (req, res) => {
         const result = await getDurableRunLog(req.params.id, tail);
         if (!result) {
             res.status(404).json({ error: 'Run not found' });
+            return;
+        }
+        res.json(result);
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/runs/:id/cancel', async (req, res) => {
+    try {
+        const result = await cancelDurableRun(req.params.id);
+        if (!result.cancelled) {
+            res.status(409).json({ error: result.reason ?? 'Could not cancel run.' });
             return;
         }
         res.json(result);

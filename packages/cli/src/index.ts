@@ -1438,6 +1438,23 @@ function isCliHelpToken(value: string | undefined): boolean {
   return value === 'help' || value === '--help' || value === '-h';
 }
 
+interface RestartOptions {
+  rebuild: boolean;
+}
+
+function parseRestartOptions(args: string[]): RestartOptions {
+  const allowed = new Set(['--rebuild']);
+  const invalidArgs = args.filter((arg) => !allowed.has(arg));
+
+  if (invalidArgs.length > 0) {
+    throw new Error('Usage: pa restart [--rebuild]');
+  }
+
+  return {
+    rebuild: hasOption(args, '--rebuild'),
+  };
+}
+
 interface UpdateOptions {
   repoOnly: boolean;
 }
@@ -1705,12 +1722,43 @@ async function restartBackgroundServices(options: {
 }
 
 async function restartCommand(args: string[]): Promise<number> {
-  ensureNoExtraCommandArgs(args, 'pa restart');
+  const options = parseRestartOptions(args);
 
-  const summary = await restartBackgroundServices();
+  let buildStatus = 'skipped';
+  let summary: RestartSummary;
+
+  if (options.rebuild) {
+    const repoRoot = getRepoRoot();
+    const buildSpinner = spinner('Rebuilding personal-agent packages');
+    buildSpinner.start();
+
+    let buildOutput = '';
+
+    try {
+      buildOutput = rebuildRepoPackages(repoRoot);
+      buildSpinner.succeed('Rebuilt personal-agent packages');
+      buildStatus = 'repo packages rebuilt';
+    } catch (error) {
+      buildSpinner.fail('Unable to rebuild personal-agent packages');
+      throw error;
+    }
+
+    if (buildOutput.length > 0) {
+      console.log(dim(buildOutput));
+    }
+
+    summary = await restartBackgroundServices({
+      webUiStrategy: 'blue-green',
+      repoRoot,
+      webUiPort: getWebUiServiceOptions({ repoRoot }).port,
+    });
+  } else {
+    summary = await restartBackgroundServices();
+  }
 
   console.log('');
   console.log(section('Restart summary'));
+  console.log(keyValue('build', buildStatus));
   console.log(keyValue('daemon', summary.daemonStatus));
   console.log(keyValue('web ui', summary.webUiStatus));
   console.log(keyValue('gateway services restarted', summary.restartedGatewayServices.length > 0 ? summary.restartedGatewayServices.join(', ') : 'none'));
@@ -4064,8 +4112,8 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     },
     {
       name: 'restart',
-      usage: 'restart [args...]',
-      description: 'Restart daemon, managed web UI, and managed gateway services',
+      usage: 'restart [--rebuild]',
+      description: 'Restart daemon, managed web UI, and managed gateway services (use --rebuild to rebuild packages and blue/green redeploy the web UI)',
       run: restartCommand,
     },
     {

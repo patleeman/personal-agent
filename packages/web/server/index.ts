@@ -32,6 +32,7 @@ import {
   stopWebUiServiceAndReadState,
   uninstallWebUiServiceAndReadState,
 } from './webUi.js';
+import { requestApplicationRestart } from './applicationRestart.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from './modelPreferences.js';
 import { logError, logInfo, logWarn, installProcessLogging, webRequestLoggingMiddleware } from './logging.js';
 import { readSavedThemePreferences, writeSavedThemePreferences, type ThemeMode } from './themePreferences.js';
@@ -758,6 +759,20 @@ app.get('/api/status', (_req, res) => {
       stack: err instanceof Error ? err.stack : undefined,
     });
     res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/application/restart', (_req, res) => {
+  try {
+    res.status(202).json(requestApplicationRestart({ repoRoot: REPO_ROOT }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.startsWith('Application restart already in progress')
+      ? 409
+      : message.startsWith('Managed web UI service is not installed')
+        ? 400
+        : 500;
+    res.status(status).json({ error: message });
   }
 });
 

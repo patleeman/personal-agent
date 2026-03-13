@@ -9,7 +9,8 @@ import {
 } from '../contextRailProject';
 import { useApi } from '../hooks';
 import { buildCapabilityCards, buildIdentitySummary, buildKnowledgeSections, buildMemoryPageSummary } from '../memoryOverview';
-import type { ActivityEntry, LiveSessionContext, ProjectDetail, ProjectRecord } from '../types';
+import { getScheduledTaskBody, isScheduledTaskDetail } from '../scheduledTaskDetail';
+import type { ActivityEntry, LiveSessionContext, ProjectDetail, ProjectRecord, ScheduledTaskDetail } from '../types';
 import { formatDate, kindMeta, timeAgo } from '../utils';
 import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
 import { CONVERSATION_PROJECTS_CHANGED_EVENT, emitConversationProjectsChanged } from '../conversationProjectEvents';
@@ -460,13 +461,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
 
 // ── Task detail ───────────────────────────────────────────────────────────────
 
-interface TaskDetail {
-  id: string; running: boolean; enabled: boolean;
-  cron?: string; model?: string;
-  lastStatus?: string; lastRunAt?: string;
-  fileContent: string;
-}
-
 function cronHuman(cron: string): string {
   const parts = cron.trim().split(/\s+/);
   if (parts.length !== 5) return cron;
@@ -478,21 +472,52 @@ function cronHuman(cron: string): string {
 }
 
 function TaskContext({ id }: { id: string }) {
-  const [task, setTask] = useState<TaskDetail | null>(null);
+  const [task, setTask] = useState<ScheduledTaskDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     setLoading(true);
-    fetch(`/api/tasks/${id}`)
-      .then(r => r.json())
-      .then((d: TaskDetail) => { setTask(d); setLoading(false); })
-      .catch(() => setLoading(false));
+    setError(null);
+    setTask(null);
+
+    api.taskDetail(id)
+      .then((detail) => {
+        if (cancelled) {
+          return;
+        }
+
+        if (!isScheduledTaskDetail(detail)) {
+          throw new Error('Task details are unavailable.');
+        }
+
+        setTask(detail);
+      })
+      .catch((nextError) => {
+        if (cancelled) {
+          return;
+        }
+
+        setError(nextError instanceof Error ? nextError.message : 'Could not load task details.');
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
-  if (loading) return <div className="px-4 py-4 text-[12px] text-dim animate-pulse">Loading…</div>;
-  if (!task)   return <div className="px-4 py-4 text-[12px] text-dim">Task not found.</div>;
+  if (loading) return <LoadingState label="Loading task…" className="px-4 py-4" />;
+  if (error) return <ErrorState message={error} className="px-4 py-4" />;
+  if (!task) return <div className="px-4 py-4 text-[12px] text-dim">Task not found.</div>;
 
-  const body = task.fileContent.replace(/^---[\s\S]*?---\n?/, '').trim();
+  const body = getScheduledTaskBody(task.fileContent);
   const lines = body.split('\n');
   const statusCls = task.running ? 'text-accent' : task.lastStatus === 'success' ? 'text-success' : task.lastStatus === 'failure' ? 'text-danger' : 'text-dim';
   const statusText = task.running ? 'running' : task.lastStatus ?? 'never run';

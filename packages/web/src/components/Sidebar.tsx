@@ -55,10 +55,23 @@ function hasOverlayOpen(): boolean {
 
 // ── Top nav item ───────────────────────────────────────────────────────────
 
-function TopNavItem({ to, icon, label, badge }: { to: string; icon: string; label: string; badge?: number | null }) {
+function TopNavItem({
+  to,
+  icon,
+  label,
+  badge,
+  title,
+}: {
+  to: string;
+  icon: string;
+  label: string;
+  badge?: number | null;
+  title?: string;
+}) {
   return (
     <NavLink
       to={to}
+      title={title}
       className={({ isActive }) => [
         'ui-sidebar-nav-item',
         isActive && 'ui-sidebar-nav-item-active',
@@ -261,6 +274,12 @@ function SidebarFooter() {
       <TopNavItem to="/gateway" icon={PATH.gateway} label="Gateway" />
       <TopNavItem to="/daemon" icon={PATH.daemon} label="Daemon" />
       <TopNavItem to="/web-ui" icon={PATH.web} label="Web UI" />
+      <TopNavItem
+        to="/runs"
+        icon={PATH.runs}
+        label="Executions"
+        title="Daemon-backed executions: scheduled task runs, deferred resumes, and recoverable conversation runs."
+      />
       <TopNavItem to="/memory" icon={PATH.memory} label="Memory" />
       <TopNavItem to="/tools" icon={PATH.tools} label="Tools" />
       <TopNavItem to="/settings" icon={PATH.settings} label="Settings" />
@@ -487,7 +506,6 @@ export function Sidebar() {
           onClick={() => setArchiveOpen(true)}
         />
         <TopNavItem to="/scheduled" icon={PATH.tasks} label="Scheduled" />
-        <TopNavItem to="/runs" icon={PATH.runs} label="Runs" />
         <TopNavItem to="/projects" icon={PATH.projects} label="Projects" />
       </div>
 

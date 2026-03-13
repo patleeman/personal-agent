@@ -1,4 +1,4 @@
-import type { ActivityEntry, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationCwdChangeResult, ConversationProjectLinks, DaemonState, DeferredResumeSummary, DurableRunDetailResult, DurableRunListResult, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, ModelState, ProfileState, ProjectDetail, ProjectRecord, PromptImageInput, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionMeta, ToolsState, WebUiState } from './types';
+import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationCwdChangeResult, ConversationProjectLinks, DaemonState, DeferredResumeSummary, DurableRunDetailResult, DurableRunListResult, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, ModelState, ProfileState, ProjectDetail, ProjectRecord, PromptImageInput, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionMeta, ToolsState, WebUiState } from './types';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch('/api' + path);
@@ -61,6 +61,7 @@ export const api = {
   stopDaemonService: () => post<DaemonState>('/daemon/service/stop'),
   uninstallDaemonService: () => post<DaemonState>('/daemon/service/uninstall'),
   webUiState:   () => get<WebUiState>('/web-ui/state'),
+  restartApplication: () => post<ApplicationRestartRequestResult>('/application/restart'),
   installWebUiService: () => post<WebUiState>('/web-ui/service/install'),
   startWebUiService: () => post<WebUiState>('/web-ui/service/start'),
   restartWebUiService: () => post<WebUiState>('/web-ui/service/restart'),

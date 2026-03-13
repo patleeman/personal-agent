@@ -8,8 +8,13 @@ import {
   listRecoverableWebLiveConversationRuns,
   syncWebLiveConversationRun,
 } from './conversationRuns.js';
-import { resolveDurableRunPaths, resolveDurableRunsRoot, scanDurableRun, type DaemonConfig } from '@personal-agent/daemon';
-import { PersonalAgentDaemon } from '../../daemon/src/server.js';
+import {
+  PersonalAgentDaemon,
+  resolveDurableRunPaths,
+  resolveDurableRunsRoot,
+  scanDurableRun,
+  type DaemonConfig,
+} from '@personal-agent/daemon';
 
 const tempDirs: string[] = [];
 const originalEnv = process.env;

@@ -307,4 +307,32 @@ describe('sessions', () => {
             }),
         ]);
     });
+    it('surfaces assistant error messages as error blocks', () => {
+        const blocks = buildDisplayBlocksFromEntries([
+            {
+                id: 'assistant-error',
+                timestamp: '2026-03-12T16:05:00.000Z',
+                message: {
+                    role: 'assistant',
+                    content: [{ type: 'thinking', thinking: 'Checking the provider response…' }],
+                    stopReason: 'error',
+                    errorMessage: 'Codex error: upstream overloaded',
+                },
+            },
+        ]);
+        expect(blocks).toEqual([
+            {
+                type: 'thinking',
+                id: 'assistant-error-t0',
+                ts: '2026-03-12T16:05:00.000Z',
+                text: 'Checking the provider response…',
+            },
+            {
+                type: 'error',
+                id: 'assistant-error-e1',
+                ts: '2026-03-12T16:05:00.000Z',
+                message: 'Codex error: upstream overloaded',
+            },
+        ]);
+    });
 });

@@ -394,6 +394,43 @@
   .ui-markdown-mention {
     @apply inline-flex items-center rounded-full bg-accent/10 px-1.5 py-0.5 font-mono text-[0.82em] text-accent;
   }
+
+  .ui-skill-invocation {
+    @apply rounded-xl bg-elevated/80 px-3 py-2;
+  }
+
+  .ui-skill-invocation summary {
+    @apply flex cursor-pointer list-none items-center gap-2 text-sm leading-relaxed text-primary;
+  }
+
+  .ui-skill-invocation summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .ui-skill-invocation-summary::before {
+    content: '▸';
+    @apply text-[10px] text-dim transition-transform;
+  }
+
+  .ui-skill-invocation[open] .ui-skill-invocation-summary::before {
+    content: '▾';
+  }
+
+  .ui-skill-invocation-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.14em] text-dim;
+  }
+
+  .ui-skill-invocation-name {
+    @apply font-mono text-[13px] text-primary;
+  }
+
+  .ui-skill-invocation-body {
+    @apply mt-3 space-y-3 border-t border-border-subtle pt-3;
+  }
+
+  .ui-skill-invocation-meta {
+    @apply m-0 text-[12px] text-secondary;
+  }
 }
 
 /* ─── Light theme (default) ───────────────────────────────────────────────── */

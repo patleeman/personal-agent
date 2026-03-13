@@ -10,12 +10,31 @@ vi.mock('@personal-agent/gateway', async () => {
     ...actual,
     restartManagedDaemonServiceIfInstalled: vi.fn(() => undefined),
     restartGatewayServiceIfInstalled: vi.fn(() => undefined),
+    restartWebUiServiceIfInstalled: vi.fn(() => undefined),
     getManagedDaemonServiceStatus: vi.fn(() => ({
       identifier: 'mock-daemon',
       manifestPath: '/tmp/mock-daemon',
       installed: false,
       running: false,
     })),
+    getWebUiServiceStatus: vi.fn(() => ({
+      identifier: 'mock-web-ui',
+      manifestPath: '/tmp/mock-web-ui',
+      installed: false,
+      running: false,
+      platform: 'launchctl',
+      port: 3741,
+      url: 'http://127.0.0.1:3741',
+    })),
+  };
+});
+
+vi.mock('@personal-agent/daemon', async () => {
+  const actual = await vi.importActual<typeof import('@personal-agent/daemon')>('@personal-agent/daemon');
+  return {
+    ...actual,
+    startDaemonDetached: vi.fn(async () => undefined),
+    stopDaemonGracefully: vi.fn(async () => undefined),
   };
 });
 
