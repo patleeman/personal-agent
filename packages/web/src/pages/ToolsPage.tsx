@@ -4,7 +4,14 @@ import { ChatView } from '../components/chat/ChatView';
 import { PageHeader, PageHeading, SectionLabel, ToolbarButton, cx } from '../components/ui';
 import { AGENT_OUTPUT_PREVIEW_BLOCKS, AGENT_OUTPUT_PREVIEW_MARKDOWN, AGENT_OUTPUT_PREVIEW_MARKDOWN_PATH } from '../fixtures/agentOutputPreview';
 import { useApi } from '../hooks';
-import type { AgentToolInfo, McpCliServerDetail, McpCliToolDetail, ToolParameterSchema } from '../types';
+import type {
+  AgentToolInfo,
+  CliBinaryState,
+  DependentCliToolState,
+  McpCliServerDetail,
+  McpCliToolDetail,
+  ToolParameterSchema,
+} from '../types';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50';
 const ACTION_BUTTON_CLASS = 'inline-flex items-center rounded-lg border border-border-subtle bg-base px-3 py-1.5 text-[12px] font-medium text-primary transition-colors hover:bg-surface disabled:opacity-50';
@@ -142,6 +149,12 @@ function toolMatchesQuery(tool: AgentToolInfo, query: string): boolean {
   return haystacks.some((value) => value.toLowerCase().includes(normalizedQuery));
 }
 
+function summarizeCliBinary(binary: CliBinaryState): string {
+  return binary.available
+    ? `Installed${binary.version ? ` · ${binary.version}` : ''}`
+    : `Unavailable${binary.error ? ` · ${binary.error}` : ''}`;
+}
+
 export function ToolsPage() {
   const {
     data: toolsState,
@@ -159,6 +172,7 @@ export function ToolsPage() {
   const pageMeta = toolsState
     ? `${toolsState.tools.length} tools · ${toolsState.activeTools.length} active by default · profile ${toolsState.profile}`
     : 'Inspect available tools, schemas, and CLI integrations.';
+  const dependentCliTools = toolsState?.dependentCliTools ?? [];
   const mcpCli = toolsState?.mcpCli ?? {
     binary: {
       available: false,
@@ -420,20 +434,49 @@ export function ToolsPage() {
             <SectionLabel label="CLI integrations" />
 
             <div className="space-y-1">
-              <h2 className="text-[15px] font-medium text-primary">mcp-cli</h2>
+              <h2 className="text-[15px] font-medium text-primary">Dependent CLI tools</h2>
               <p className="ui-card-meta max-w-3xl">
-                Browse configured MCP servers from your local mcp-cli config. This is an inspection surface only — the agent can use these via the bash tool by running mcp-cli directly. Inspecting a server or tool may trigger OAuth in the browser on first use.
+                Some runtime features depend on host-installed CLIs. Check availability here when tools rely on local binaries such as 1Password secret resolution.
               </p>
             </div>
 
             {!toolsState ? null : (
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <p className="ui-card-meta">
-                    {mcpCli.binary.available
-                      ? `Installed${mcpCli.binary.version ? ` · ${mcpCli.binary.version}` : ''}`
-                      : `Unavailable${mcpCli.binary.error ? ` · ${mcpCli.binary.error}` : ''}`}
+              <div className="space-y-6">
+                {dependentCliTools.length === 0 ? (
+                  <p className="ui-card-meta">No dependent CLI tools are declared for this workspace.</p>
+                ) : (
+                  <div>
+                    {dependentCliTools.map((tool: DependentCliToolState, index) => (
+                      <div key={tool.id} className={cx('space-y-2 py-4', index > 0 && 'border-t border-border-subtle')}>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <h3 className="text-[14px] font-medium text-primary">{tool.name}</h3>
+                          <span className="font-mono text-[12px] text-primary">{tool.binary.command}</span>
+                          <span className="ui-card-meta">{summarizeCliBinary(tool.binary)}</span>
+                        </div>
+                        <p className="max-w-4xl text-[13px] leading-relaxed text-primary/90">{tool.description}</p>
+                        {tool.binary.path && (
+                          <p className="break-all font-mono text-[12px] leading-relaxed text-primary">{tool.binary.path}</p>
+                        )}
+                        {tool.configuredBy && (
+                          <p className="ui-card-meta">Command override: {tool.configuredBy}</p>
+                        )}
+                        {tool.usedBy.length > 0 && (
+                          <p className="ui-card-meta">Used by {tool.usedBy.join(' · ')}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="space-y-1 border-t border-border-subtle pt-6">
+                  <h2 className="text-[15px] font-medium text-primary">mcp-cli</h2>
+                  <p className="ui-card-meta max-w-3xl">
+                    Browse configured MCP servers from your local mcp-cli config. This is an inspection surface only — the agent can use these via the bash tool by running mcp-cli directly. Inspecting a server or tool may trigger OAuth in the browser on first use.
                   </p>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="ui-card-meta">{summarizeCliBinary(mcpCli.binary)}</p>
                   {mcpCli.binary.path && (
                     <p className="break-all font-mono text-[12px] leading-relaxed text-primary">{mcpCli.binary.path}</p>
                   )}

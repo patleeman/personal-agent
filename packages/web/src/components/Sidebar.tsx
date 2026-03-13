@@ -8,6 +8,7 @@ import { useAppData } from '../contexts';
 import { sessionNeedsAttention } from '../sessionIndicators';
 import { reorderOpenSessionIds, type OpenConversationDropPosition } from '../sessionTabs';
 import type { SessionMeta } from '../types';
+import { buildDraftConversationSessionMeta, clearDraftConversationComposer, DRAFT_CONVERSATION_ID, DRAFT_CONVERSATION_ROUTE, readDraftConversationComposer, shouldShowDraftConversationTab } from '../draftConversation';
 import { timeAgo } from '../utils';
 
 // ── Icons ──────────────────────────────────────────────────────────────────
@@ -271,8 +272,10 @@ function SectionHeader({
 function SidebarFooter() {
   return (
     <div className="border-t border-border-subtle px-2 py-2 shrink-0 space-y-0.5">
-      <TopNavItem to="/gateway" icon={PATH.gateway} label="Gateway" />
+      <TopNavItem to="/memory" icon={PATH.memory} label="Memory" />
+      <TopNavItem to="/tools" icon={PATH.tools} label="Tools" />
       <TopNavItem to="/daemon" icon={PATH.daemon} label="Daemon" />
+      <TopNavItem to="/gateway" icon={PATH.gateway} label="Gateway" />
       <TopNavItem to="/web-ui" icon={PATH.web} label="Web UI" />
       <TopNavItem
         to="/runs"
@@ -280,8 +283,6 @@ function SidebarFooter() {
         label="Executions"
         title="Daemon-backed executions: scheduled task runs, deferred resumes, and recoverable conversation runs."
       />
-      <TopNavItem to="/memory" icon={PATH.memory} label="Memory" />
-      <TopNavItem to="/tools" icon={PATH.tools} label="Tools" />
       <TopNavItem to="/settings" icon={PATH.settings} label="Settings" />
     </div>
   );
@@ -319,6 +320,22 @@ export function Sidebar() {
   const inboxCount = standaloneUnreadCount + archivedSessions.filter((session) => sessionNeedsAttention(session)).length;
   const tabIds = useMemo(() => tabs.map((session) => session.id), [tabs]);
   const canReorderTabs = tabs.length > 1;
+  const [draftComposer, setDraftComposer] = useState(() => readDraftConversationComposer());
+  const draftTab = useMemo(() => {
+    if (!shouldShowDraftConversationTab(location.pathname, draftComposer)) {
+      return null;
+    }
+
+    return buildDraftConversationSessionMeta();
+  }, [draftComposer, location.pathname]);
+  const visibleTabs = useMemo(
+    () => draftTab ? [...tabs, draftTab] : tabs,
+    [draftTab, tabs],
+  );
+
+  useEffect(() => {
+    setDraftComposer(readDraftConversationComposer());
+  }, [location.pathname]);
 
   useEffect(() => {
     if (!activeConversationId) {
@@ -392,6 +409,27 @@ export function Sidebar() {
     openSession(session.id);
     setArchiveOpen(false);
     navigate(`/conversations/${session.id}`);
+  }
+
+  function handleCloseDraftTab() {
+    clearDraftConversationComposer();
+    setDraftComposer('');
+
+    if (draggingSessionId === DRAFT_CONVERSATION_ID) {
+      clearDragState();
+    }
+
+    if (location.pathname !== DRAFT_CONVERSATION_ROUTE) {
+      return;
+    }
+
+    const nextTab = tabs[0];
+    if (nextTab) {
+      navigate(`/conversations/${nextTab.id}`);
+      return;
+    }
+
+    navigate('/inbox');
   }
 
   function handleCloseTab(sessionId: string) {
@@ -513,19 +551,20 @@ export function Sidebar() {
 
       <SectionHeader
         label="Open conversations"
-        count={loading ? '…' : tabs.length}
+        count={loading ? '…' : visibleTabs.length}
         title={`Navigate between open conversations with ${SIDEBAR_PREVIOUS_CHAT_HOTKEY} and ${SIDEBAR_NEXT_CHAT_HOTKEY}`}
       />
 
       {/* ── Open tabs ── */}
       <div className="flex-1 overflow-y-auto py-1 space-y-0.5 min-h-0">
-        {!loading && tabs.length === 0 && (
+        {!loading && visibleTabs.length === 0 && (
           <p className="px-4 py-2 text-[12px] text-dim">
             No open conversations yet.
           </p>
         )}
-        {tabs.map((session) => {
-          const dropPosition = dropTarget?.sessionId === session.id && draggingSessionId !== session.id
+        {visibleTabs.map((session) => {
+          const isDraftTab = session.id === DRAFT_CONVERSATION_ID;
+          const dropPosition = !isDraftTab && dropTarget?.sessionId === session.id && draggingSessionId !== session.id
             ? dropTarget.position
             : null;
 
@@ -533,15 +572,15 @@ export function Sidebar() {
             <OpenTab
               key={session.id}
               session={session}
-              needsAttention={attentionIds.has(session.id)}
-              canReorder={canReorderTabs}
-              isDragging={draggingSessionId === session.id}
+              needsAttention={!isDraftTab && attentionIds.has(session.id)}
+              canReorder={!isDraftTab && canReorderTabs}
+              isDragging={!isDraftTab && draggingSessionId === session.id}
               dropPosition={dropPosition}
-              onClose={() => handleCloseTab(session.id)}
-              onDragStart={(event) => handleTabDragStart(session.id, event)}
-              onDragOver={(event) => handleTabDragOver(session.id, event)}
-              onDrop={(event) => handleTabDrop(session.id, event)}
-              onDragEnd={() => clearDragState()}
+              onClose={() => isDraftTab ? handleCloseDraftTab() : handleCloseTab(session.id)}
+              onDragStart={isDraftTab ? undefined : (event) => handleTabDragStart(session.id, event)}
+              onDragOver={isDraftTab ? undefined : (event) => handleTabDragOver(session.id, event)}
+              onDrop={isDraftTab ? undefined : (event) => handleTabDrop(session.id, event)}
+              onDragEnd={isDraftTab ? undefined : () => clearDragState()}
             />
           );
         })}

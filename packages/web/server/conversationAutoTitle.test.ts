@@ -37,8 +37,26 @@ describe('readConversationAutoTitleSettings', () => {
   it('returns the default titling settings when the settings file is missing', () => {
     expect(readConversationAutoTitleSettings(join(createTempDir('pa-conversation-title-'), 'settings.json'))).toEqual({
       enabled: true,
-      provider: 'openai',
-      model: 'gpt-5-mini',
+      provider: 'openai-codex',
+      model: 'gpt-5.1-codex-mini',
+      reasoning: 'minimal',
+      maxMessages: 8,
+      maxTitleLength: 80,
+    });
+  });
+
+  it('falls back to the saved runtime model defaults when no title model is configured', () => {
+    const dir = createTempDir('pa-conversation-title-');
+    const file = join(dir, 'settings.json');
+    writeFileSync(file, JSON.stringify({
+      defaultProvider: 'openai-codex',
+      defaultModel: 'gpt-5.4',
+    }));
+
+    expect(readConversationAutoTitleSettings(file)).toEqual({
+      enabled: true,
+      provider: 'openai-codex',
+      model: 'gpt-5.4',
       reasoning: 'minimal',
       maxMessages: 8,
       maxTitleLength: 80,

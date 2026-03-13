@@ -1,4 +1,4 @@
-import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationCwdChangeResult, ConversationProjectLinks, DaemonState, DeferredResumeSummary, DurableRunDetailResult, DurableRunListResult, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, ModelState, ProfileState, ProjectDetail, ProjectRecord, PromptImageInput, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionMeta, ToolsState, WebUiState } from './types';
+import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationCwdChangeResult, ConversationProjectLinks, ConversationTitleSettingsState, DaemonState, DeferredResumeSummary, DurableRunDetailResult, DurableRunListResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, ModelState, ProfileState, ProjectDetail, ProjectRecord, PromptImageInput, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionMeta, ToolsState, WebUiState } from './types';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch('/api' + path);
@@ -49,6 +49,7 @@ export const api = {
   // ── Core ──────────────────────────────────────────────────────────────────
   status:       () => get<AppStatus>('/status'),
   gateway:      () => get<GatewayState>('/gateway'),
+  saveGatewayConfig: (input: GatewayConfigUpdateInput) => post<GatewayState>('/gateway/config', input),
   restartGateway: () => post<GatewayState>('/gateway/restart'),
   installGatewayService: () => post<GatewayState>('/gateway/service/install'),
   startGatewayService: () => post<GatewayState>('/gateway/service/start'),
@@ -138,6 +139,9 @@ export const api = {
   setModel: (model: string) => patch<{ ok: boolean }>('/models/current', { model }),
   updateModelPreferences: (input: { model?: string; thinkingLevel?: string }) =>
     patch<{ ok: boolean }>('/models/current', input),
+  conversationTitleSettings: () => get<ConversationTitleSettingsState>('/conversation-titles/settings'),
+  updateConversationTitleSettings: (input: { enabled?: boolean; model?: string | null }) =>
+    patch<ConversationTitleSettingsState>('/conversation-titles/settings', input),
   openConversationTabs: () => get<{ sessionIds: string[] }>('/web-ui/open-conversations'),
   setOpenConversationTabs: (sessionIds: string[]) =>
     patch<{ ok: boolean; sessionIds: string[] }>('/web-ui/open-conversations', { sessionIds }),

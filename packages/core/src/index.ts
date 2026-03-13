@@ -41,5 +41,8 @@ export * from './session-meta.js';
 // Project exports
 export * from './projects.js';
 
+// CLI binary inspection exports
+export * from './cli-binary.js';
+
 // MCP CLI integration exports
 export * from './mcp-cli.js';

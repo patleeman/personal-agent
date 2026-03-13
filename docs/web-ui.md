@@ -150,7 +150,11 @@ It surfaces:
 - access settings
 - recent logs
 
-You can also install, start, stop, restart, or uninstall the managed gateway service from the UI.
+You can also:
+
+- edit saved Telegram gateway settings from the UI
+- store the bot token as either a plain value or an `op://...` 1Password reference
+- install, start, stop, restart, or uninstall the managed gateway service
 
 See [Gateway Guide](./gateway.md).
 
@@ -193,6 +197,7 @@ Settings lets you change:
 - active profile
 - default model
 - default thinking level
+- conversation auto-title behavior and title model
 - saved UI state
 
 Switching the active profile affects:

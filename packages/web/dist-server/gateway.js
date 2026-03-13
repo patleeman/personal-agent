@@ -1,7 +1,8 @@
 import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, statSync, } from 'node:fs';
 import { join } from 'node:path';
 import { resolveStatePaths } from '@personal-agent/core';
-import { getGatewayServiceStatus, installGatewayService, readGatewayConfig, restartGatewayService, startGatewayService, stopGatewayService, uninstallGatewayService, } from '@personal-agent/gateway';
+import { getGatewayServiceStatus, installGatewayService, readGatewayConfig, restartGatewayService, startGatewayService, stopGatewayService, uninstallGatewayService, writeGatewayConfig, } from '@personal-agent/gateway';
+import { buildGatewayStoredConfig, listGatewayEnvOverrideKeys, readGatewayConfigFilePath, summarizeGatewayToken, } from './gatewayConfig.js';
 import { readSessionMetaByFile } from './sessions.js';
 function normalizeTelegramMessageThreadId(value) {
     if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -461,12 +462,19 @@ export function readGatewayState(currentProfile) {
         .sort((left, right) => right.lastActivityAt.localeCompare(left.lastActivityAt));
     const pendingMessages = loadTelegramPendingMessages(telegramPendingDir);
     const warnings = [];
-    const tokenConfigured = typeof telegram.token === 'string' && telegram.token.trim().length > 0;
-    if (!tokenConfigured) {
-        warnings.push('Telegram bot token is not configured. Run `pa gateway telegram setup` to finish setup.');
+    const configFilePath = readGatewayConfigFilePath();
+    const envOverrideKeys = listGatewayEnvOverrideKeys();
+    const tokenSummary = summarizeGatewayToken(telegram.token);
+    const effectiveTokenConfigured = tokenSummary.configured || envOverrideKeys.includes('TELEGRAM_BOT_TOKEN');
+    const effectiveProfile = process.env.PERSONAL_AGENT_PROFILE?.trim() || configuredProfile;
+    if (envOverrideKeys.length > 0) {
+        warnings.push(`Gateway environment overrides are active: ${envOverrideKeys.join(', ')}. They take precedence over saved web UI settings.`);
     }
-    if (currentProfile !== configuredProfile) {
-        warnings.push(`Web profile is ${currentProfile}, but the gateway is configured for ${configuredProfile}.`);
+    if (!effectiveTokenConfigured) {
+        warnings.push('Telegram bot token is not configured. Save it below or run `pa gateway telegram setup`.');
+    }
+    if (currentProfile !== effectiveProfile) {
+        warnings.push(`Web profile is ${currentProfile}, but the gateway will use ${effectiveProfile}.`);
     }
     if (service.error) {
         warnings.push(`Could not inspect gateway service status: ${service.error}`);
@@ -484,10 +492,14 @@ export function readGatewayState(currentProfile) {
         provider: 'telegram',
         currentProfile,
         configuredProfile,
+        configFilePath,
+        envOverrideKeys,
         warnings,
         service,
         access: {
-            tokenConfigured,
+            tokenConfigured: tokenSummary.configured,
+            tokenSource: tokenSummary.source,
+            tokenPreview: tokenSummary.preview,
             allowlistChatIds: telegram.allowlist ?? [],
             allowedUserIds: telegram.allowedUserIds ?? [],
             blockedUserIds: telegram.blockedUserIds ?? [],
@@ -509,6 +521,11 @@ export function readGatewayState(currentProfile) {
             }
             : undefined,
     };
+}
+export function saveGatewayConfigAndReadState(currentProfile, input) {
+    const updated = buildGatewayStoredConfig(readGatewayConfig(), input);
+    writeGatewayConfig(updated);
+    return readGatewayState(currentProfile);
 }
 export function installGatewayAndReadState(currentProfile) {
     installGatewayService('telegram');

@@ -234,8 +234,12 @@ export interface GatewayServiceSummary {
   };
 }
 
+export type GatewayTokenSource = 'missing' | 'plain' | 'one-password';
+
 export interface GatewayAccessSummary {
   tokenConfigured: boolean;
+  tokenSource: GatewayTokenSource;
+  tokenPreview?: string;
   allowlistChatIds: string[];
   allowedUserIds: string[];
   blockedUserIds: string[];
@@ -290,6 +294,8 @@ export interface GatewayState {
   provider: 'telegram';
   currentProfile: string;
   configuredProfile: string;
+  configFilePath: string;
+  envOverrideKeys: string[];
   warnings: string[];
   service: GatewayServiceSummary;
   access: GatewayAccessSummary;
@@ -297,6 +303,19 @@ export interface GatewayState {
   pendingMessages: GatewayPendingMessageSummary[];
   gatewayLog: GatewayLogTail;
   daemonLog?: GatewayLogTail;
+}
+
+export interface GatewayConfigUpdateInput {
+  profile: string;
+  token?: string;
+  clearToken?: boolean;
+  allowlistChatIds: string[];
+  allowedUserIds: string[];
+  blockedUserIds: string[];
+  workingDirectory?: string | null;
+  maxPendingPerChat?: number | null;
+  toolActivityStream: boolean;
+  clearRecentMessagesOnNew: boolean;
 }
 
 export interface DaemonServiceSummary {
@@ -558,6 +577,12 @@ export interface ModelState {
   models: ModelInfo[];
 }
 
+export interface ConversationTitleSettingsState {
+  enabled: boolean;
+  currentModel: string;
+  effectiveModel: string;
+}
+
 export interface ProfileState {
   currentProfile: string;
   profiles: string[];
@@ -583,13 +608,24 @@ export interface AgentToolInfo {
   active: boolean;
 }
 
-export interface McpCliBinaryState {
+export interface CliBinaryState {
   available: boolean;
   command: string;
   path?: string;
   version?: string;
   error?: string;
 }
+
+export interface DependentCliToolState {
+  id: string;
+  name: string;
+  description: string;
+  configuredBy?: string;
+  usedBy: string[];
+  binary: CliBinaryState;
+}
+
+export type McpCliBinaryState = CliBinaryState;
 
 export interface McpCliServerConfig {
   name: string;
@@ -641,5 +677,6 @@ export interface ToolsState {
   cwd: string;
   activeTools: string[];
   tools: AgentToolInfo[];
+  dependentCliTools: DependentCliToolState[];
   mcpCli: McpCliState;
 }

@@ -12,10 +12,12 @@ import {
   installGatewayAndReadState,
   readGatewayState,
   restartGatewayAndReadState,
+  saveGatewayConfigAndReadState,
   startGatewayAndReadState,
   stopGatewayAndReadState,
   uninstallGatewayAndReadState,
 } from './gateway.js';
+import { parseGatewayConfigUpdateInput } from './gatewayConfig.js';
 import {
   installDaemonServiceAndReadState,
   readDaemonState,
@@ -34,6 +36,7 @@ import {
 } from './webUi.js';
 import { requestApplicationRestart } from './applicationRestart.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from './modelPreferences.js';
+import { readSavedConversationTitlePreferences, writeSavedConversationTitlePreferences } from './conversationTitlePreferences.js';
 import { logError, logInfo, logWarn, installProcessLogging, webRequestLoggingMiddleware } from './logging.js';
 import { readSavedThemePreferences, writeSavedThemePreferences, type ThemeMode } from './themePreferences.js';
 import { readSavedWebUiPreferences, writeSavedWebUiPreferences } from './webUiPreferences.js';
@@ -96,7 +99,7 @@ import {
   getReadySessionDeferredResumeEntries,
   listConversationArtifacts,
   cleanMcpCliStderr,
-  inspectMcpCliBinary,
+  inspectCliBinary,
   inspectMcpCliServer,
   inspectMcpCliTool,
   listProfileActivityEntries,
@@ -790,6 +793,28 @@ app.get('/api/gateway', (_req, res) => {
   }
 });
 
+app.post('/api/gateway/config', (req, res) => {
+  try {
+    const input = parseGatewayConfigUpdateInput(req.body);
+    if (!listAvailableProfiles().includes(input.profile)) {
+      res.status(400).json({ error: `Unknown profile: ${input.profile}` });
+      return;
+    }
+
+    res.json(saveGatewayConfigAndReadState(getCurrentProfile(), input));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.startsWith('Unknown profile:') || message.includes('must be') || message.endsWith('is required')
+      ? 400
+      : 500;
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(status).json({ error: message });
+  }
+});
+
 app.post('/api/gateway/restart', (_req, res) => {
   try {
     res.json(restartGatewayAndReadState(getCurrentProfile()));
@@ -1067,6 +1092,7 @@ const BUILT_IN_MODELS = [
   // OpenAI / Codex
   { id: 'gpt-5.4',            provider: 'openai-codex', name: 'GPT-5.4',             context: 128_000 },
   { id: 'gpt-5.2',            provider: 'openai-codex', name: 'GPT-5.2',             context: 128_000 },
+  { id: 'gpt-5.1-codex-mini', provider: 'openai-codex', name: 'GPT-5.1 Codex Mini',  context: 128_000 },
   { id: 'gpt-4o',             provider: 'openai',       name: 'GPT-4o',              context: 128_000 },
   // Google
   { id: 'gemini-2.5-pro',     provider: 'google',       name: 'Gemini 2.5 Pro',      context: 1_000_000 },
@@ -1141,6 +1167,36 @@ app.patch('/api/models/current', (req, res) => {
   }
 });
 
+app.get('/api/conversation-titles/settings', (_req, res) => {
+  try {
+    res.json(readSavedConversationTitlePreferences(SETTINGS_FILE));
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.patch('/api/conversation-titles/settings', (req, res) => {
+  try {
+    const { enabled, model } = req.body as { enabled?: boolean; model?: string | null };
+    if (typeof enabled !== 'boolean' && typeof model !== 'string' && model !== null) {
+      res.status(400).json({ error: 'enabled or model required' });
+      return;
+    }
+
+    res.json(writeSavedConversationTitlePreferences({ enabled, model }, SETTINGS_FILE));
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 app.get('/api/tools', async (_req, res) => {
   try {
     const profile = getCurrentProfile();
@@ -1148,12 +1204,24 @@ app.get('/api/tools', async (_req, res) => {
       ...buildLiveSessionResourceOptions(),
       extensionFactories: buildLiveSessionExtensionFactories(),
     });
-    const mcpCliBinary = inspectMcpCliBinary({ cwd: REPO_ROOT });
+    const mcpCliBinary = inspectCliBinary({ command: 'mcp-cli', cwd: REPO_ROOT });
     const mcpCliConfig = readMcpCliConfig({ cwd: REPO_ROOT });
+    const onePasswordCommand = process.env.PERSONAL_AGENT_OP_BIN?.trim() || 'op';
+    const dependentCliTools = [
+      {
+        id: '1password-cli',
+        name: '1Password CLI',
+        description: 'Resolves op:// secret references used by personal-agent features and extensions.',
+        configuredBy: 'PERSONAL_AGENT_OP_BIN',
+        usedBy: ['op:// secret references', 'web-tools extension', 'gateway secret resolution'],
+        binary: inspectCliBinary({ command: onePasswordCommand, cwd: REPO_ROOT }),
+      },
+    ];
 
     res.json({
       profile,
       ...details,
+      dependentCliTools,
       mcpCli: {
         binary: mcpCliBinary,
         configPath: mcpCliConfig.path,

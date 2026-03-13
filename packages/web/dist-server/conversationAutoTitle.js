@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { completeSimple } from '@mariozechner/pi-ai';
-const DEFAULT_PROVIDER = 'openai';
-const DEFAULT_MODEL = 'gpt-5-mini';
+const DEFAULT_PROVIDER = 'openai-codex';
+const DEFAULT_MODEL = 'gpt-5.1-codex-mini';
 const DEFAULT_REASONING = 'minimal';
 const DEFAULT_MAX_MESSAGES = 8;
 const DEFAULT_MAX_TITLE_LENGTH = 80;
@@ -49,9 +49,16 @@ function readConversationTitleSettingsObject(settings) {
     const webUi = readWebUiSettings(settings);
     return isRecord(webUi.conversationTitles) ? { ...webUi.conversationTitles } : {};
 }
+function readDefaultModelSettings(settings) {
+    return {
+        provider: readNonEmptyString(settings.defaultProvider),
+        model: readNonEmptyString(settings.defaultModel),
+    };
+}
 export function readConversationAutoTitleSettings(settingsFile) {
     const settings = readSettingsObject(settingsFile);
     const conversationTitles = readConversationTitleSettingsObject(settings);
+    const defaultModelSettings = readDefaultModelSettings(settings);
     const configuredModel = readNonEmptyString(conversationTitles.model);
     const slashMatches = configuredModel.match(/\//g) ?? [];
     const slashIndex = configuredModel.indexOf('/');
@@ -61,8 +68,8 @@ export function readConversationAutoTitleSettings(settingsFile) {
     const modelId = providerFromModel ? configuredModel.slice(slashIndex + 1) : configuredModel;
     return {
         enabled: readBoolean(conversationTitles.enabled, true),
-        provider: readNonEmptyString(conversationTitles.provider) || providerFromModel || DEFAULT_PROVIDER,
-        model: modelId || DEFAULT_MODEL,
+        provider: readNonEmptyString(conversationTitles.provider) || providerFromModel || defaultModelSettings.provider || DEFAULT_PROVIDER,
+        model: modelId || defaultModelSettings.model || DEFAULT_MODEL,
         reasoning: normalizeThinkingLevel(conversationTitles.reasoning),
         maxMessages: readPositiveInteger(conversationTitles.maxMessages, DEFAULT_MAX_MESSAGES),
         maxTitleLength: readPositiveInteger(conversationTitles.maxTitleLength, DEFAULT_MAX_TITLE_LENGTH),

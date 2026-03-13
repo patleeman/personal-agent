@@ -71,6 +71,8 @@ Use it for:
 - allowed user ids
 - gateway cwd and queue limits
 
+You can write this file either with `pa gateway setup telegram` or from the web UI Gateway page. The web UI also supports saving `op://...` 1Password references for supported gateway values.
+
 See [Gateway Guide](./gateway.md).
 
 ## Profile resource configuration
@@ -161,9 +163,9 @@ If you store secrets as `op://...` references:
 - `PERSONAL_AGENT_OP_READ_TIMEOUT_MS`
 - `OP_SERVICE_ACCOUNT_TOKEN` if using a 1Password service account
 
-## Model and theme defaults
+## Model, theme, and web UI defaults
 
-The agent's default model, thinking level, and theme mapping usually belong in profile `settings.json`.
+The agent's default model, thinking level, theme mapping, and some web UI behavior usually belong in profile `settings.json`.
 
 Example:
 
@@ -174,13 +176,21 @@ Example:
   "defaultThinkingLevel": "xhigh",
   "themeDark": "cobalt2",
   "themeLight": "cobalt2-light",
-  "themeMode": "system"
+  "themeMode": "system",
+  "webUi": {
+    "conversationTitles": {
+      "enabled": true,
+      "model": "openai-codex/gpt-5.1-codex-mini"
+    }
+  }
 }
 ```
 
 These defaults are used when a run does not explicitly override them.
 
-You can also adjust model and theme settings from the web UI Settings page.
+`webUi.conversationTitles.model` is optional. If omitted, conversation auto-titles fall back to the saved runtime default model.
+
+You can also adjust model, theme, and conversation title settings from the web UI Settings page.
 
 ## Recommended approach
 

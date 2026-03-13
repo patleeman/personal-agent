@@ -75,7 +75,7 @@ Optional:
 - `PERSONAL_AGENT_TELEGRAM_TOOL_ACTIVITY_STREAM`
 - `PERSONAL_AGENT_TELEGRAM_CLEAR_RECENT_MESSAGES_ON_NEW`
 
-If you use `op://...` values, make sure the 1Password CLI is installed and authenticated.
+If you use `op://...` values, make sure the 1Password CLI is installed and authenticated. The web UI Gateway page can save these references into `gateway.json` for the Telegram bot token and supported Telegram list fields.
 
 ## Access control
 
@@ -221,7 +221,12 @@ The web UI has a Gateway page that shows:
 - access lists
 - recent logs
 
-It can also open a gateway-backed conversation into the normal web conversation view.
+It can also:
+
+- edit the saved gateway profile and Telegram access settings
+- save the Telegram bot token directly in `gateway.json`
+- save `op://...` 1Password references for the bot token and supported Telegram list settings
+- open a gateway-backed conversation into the normal web conversation view
 
 See [Web UI Guide](./web-ui.md).
 

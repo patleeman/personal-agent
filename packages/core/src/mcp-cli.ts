@@ -2,14 +2,9 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
+import { inspectCliBinary, type CliBinaryState } from './cli-binary.js';
 
-export interface McpCliBinaryState {
-  available: boolean;
-  command: string;
-  path?: string;
-  version?: string;
-  error?: string;
-}
+export type McpCliBinaryState = CliBinaryState;
 
 export interface McpCliServerConfig {
   name: string;
@@ -197,46 +192,11 @@ export function inspectMcpCliBinary(options: {
   cwd?: string;
   timeoutMs?: number;
 } = {}): McpCliBinaryState {
-  const command = options.command?.trim() || 'mcp-cli';
-  const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
-  const timeoutMs = options.timeoutMs ?? 5_000;
-  const versionResult = spawnSync(command, ['--version'], {
-    cwd,
-    encoding: 'utf-8',
-    timeout: timeoutMs,
+  return inspectCliBinary({
+    command: options.command?.trim() || 'mcp-cli',
+    cwd: options.cwd,
+    timeoutMs: options.timeoutMs,
   });
-
-  if (versionResult.error || versionResult.status !== 0) {
-    return {
-      available: false,
-      command,
-      error: versionResult.error?.message
-        ?? (versionResult.stderr.trim()
-          || versionResult.stdout.trim()
-          || `Command exited with code ${versionResult.status ?? -1}`),
-    };
-  }
-
-  let resolvedPath: string | undefined;
-  if (command.includes('/')) {
-    resolvedPath = command;
-  } else {
-    const whichResult = spawnSync('which', [command], {
-      cwd,
-      encoding: 'utf-8',
-      timeout: timeoutMs,
-    });
-    if (whichResult.status === 0) {
-      resolvedPath = whichResult.stdout.trim() || undefined;
-    }
-  }
-
-  return {
-    available: true,
-    command,
-    path: resolvedPath,
-    version: versionResult.stdout.trim(),
-  };
 }
 
 export function cleanMcpCliStderr(stderr: string): string {

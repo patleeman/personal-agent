@@ -25,12 +25,14 @@ import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../sla
 import { buildMentionItems, filterMentionItems, resolveMentionItems, type MentionItem } from '../conversationMentions';
 import { buildDeferredResumeIndicatorText, compareDeferredResumes, describeDeferredResumeStatus } from '../deferredResumeIndicator';
 import { buildConversationComposerStorageKey, persistForkPromptDraft, resolveForkEntryForMessage } from '../forking';
+import { buildDraftConversationComposerStorageKey, persistDraftConversationComposer } from '../draftConversation';
 import {
   clearPendingConversationPrompt,
   persistPendingConversationPrompt,
   readPendingConversationPrompt,
   type PendingConversationPrompt,
 } from '../pendingConversationPrompt';
+import { resolveConversationComposerSubmitState } from '../conversationComposerSubmit';
 import { useReloadState } from '../reloadState';
 import { ensureConversationTabOpen } from '../sessionTabs';
 
@@ -483,22 +485,32 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [notice, setNotice] = useState<{ tone: 'accent' | 'danger'; text: string } | null>(null);
   const [modelIdx, setModelIdx] = useState(0);
   const noticeTimeoutRef = useRef<number | null>(null);
-  const composerDraftStorageKey = !draft && id
-    ? buildConversationComposerStorageKey(id)
-    : null;
+  const composerDraftStorageKey = draft
+    ? buildDraftConversationComposerStorageKey()
+    : id
+      ? buildConversationComposerStorageKey(id)
+      : null;
   const [pendingInitialPrompt, setPendingInitialPrompt] = useState<PendingConversationPrompt | null>(null);
   const pendingInitialPromptSessionIdRef = useRef<string | null>(null);
   const pinnedInitialPromptScrollSessionIdRef = useRef<string | null>(null);
 
   // Input state
-  const [input, setInput] = useReloadState<string>({
+  const [input, setInputState] = useReloadState<string>({
     storageKey: composerDraftStorageKey,
     initialValue: '',
     shouldPersist: (value) => value.length > 0,
   });
+  const setInput = useCallback((next: string) => {
+    if (draft) {
+      persistDraftConversationComposer(next);
+    }
+
+    setInputState(next);
+  }, [draft, setInputState]);
   const [slashIdx, setSlashIdx] = useState(0);
   const [mentionIdx, setMentionIdx] = useState(0);
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [composerAltHeld, setComposerAltHeld] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const [showTree, setShowTree] = useState(false);
@@ -512,12 +524,31 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    setInput('');
     setAttachments([]);
     setDragOver(false);
     setSlashIdx(0);
     setMentionIdx(0);
   }, [draft]);
+
+  useEffect(() => {
+    function handleModifierChange(event: KeyboardEvent) {
+      setComposerAltHeld(event.altKey);
+    }
+
+    function resetModifierState() {
+      setComposerAltHeld(false);
+    }
+
+    window.addEventListener('keydown', handleModifierChange);
+    window.addEventListener('keyup', handleModifierChange);
+    window.addEventListener('blur', resetModifierState);
+
+    return () => {
+      window.removeEventListener('keydown', handleModifierChange);
+      window.removeEventListener('keyup', handleModifierChange);
+      window.removeEventListener('blur', resetModifierState);
+    };
+  }, []);
 
   useEffect(() => {
     setComposerHistory(readComposerHistory(composerHistoryScopeId));
@@ -1449,6 +1480,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }
 
   const composerHasContent = input.trim().length > 0 || attachments.length > 0;
+  const composerSubmit = resolveConversationComposerSubmitState(stream.isStreaming, composerAltHeld);
   const showScrollToBottomControl = shouldShowScrollToBottomControl(messageCount, atBottom);
 
   return (
@@ -1784,17 +1816,23 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 rows={1}
                 className="flex-1 bg-transparent text-sm text-primary placeholder:text-dim outline-none resize-none leading-relaxed"
                 placeholder="Message… (/ for commands, @ to reference projects, tasks, knowledge, skills, and profiles)"
-                title="Ctrl+C clears the composer. ↑/↓ recalls recent prompts."
+                title="Ctrl+C clears the composer. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts."
                 style={{ minHeight: '24px', maxHeight: '160px' }}
               />
 
               {composerHasContent && (
                 <div className="shrink-0 mb-0.5">
                   <button
-                    onClick={() => { void submitComposer(); }}
+                    onClick={(event) => {
+                      const behavior = resolveConversationComposerSubmitState(
+                        stream.isStreaming,
+                        composerAltHeld || event.altKey,
+                      ).behavior;
+                      void submitComposer(behavior);
+                    }}
                     className="ui-pill ui-pill-solid-accent"
                   >
-                    {stream.isStreaming ? 'Steer' : 'Send'}
+                    {composerSubmit.label}
                   </button>
                 </div>
               )}

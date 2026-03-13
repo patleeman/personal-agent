@@ -9,6 +9,7 @@ import { PageHeader, PageHeading, SectionLabel, ToolbarButton, cx } from '../com
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50';
 const ACTION_BUTTON_CLASS = 'inline-flex items-center rounded-lg border border-border-subtle bg-base px-3 py-1.5 text-[12px] font-medium text-primary transition-colors hover:bg-surface disabled:opacity-50';
+const CHECKBOX_CLASS = 'h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none';
 const THINKING_LEVEL_OPTIONS = [
   { value: '', label: 'Unset' },
   { value: 'off', label: 'Off' },
@@ -17,6 +18,41 @@ const THINKING_LEVEL_OPTIONS = [
   { value: 'high', label: 'High' },
   { value: 'xhigh', label: 'Extra high' },
 ] as const;
+
+type ModelOption = ModelState['models'][number];
+
+function splitModelRef(modelRef: string): { provider: string; model: string } {
+  const slashIndex = modelRef.indexOf('/');
+  if (slashIndex <= 0 || slashIndex >= modelRef.length - 1) {
+    return { provider: '', model: modelRef };
+  }
+
+  return {
+    provider: modelRef.slice(0, slashIndex),
+    model: modelRef.slice(slashIndex + 1),
+  };
+}
+
+function findModelByRef(models: ModelOption[], modelRef: string): ModelOption | null {
+  if (!modelRef) {
+    return null;
+  }
+
+  const { provider, model } = splitModelRef(modelRef);
+  if (provider) {
+    return models.find((candidate) => candidate.provider === provider && candidate.id === model) ?? null;
+  }
+
+  return models.find((candidate) => candidate.id === modelRef) ?? null;
+}
+
+function formatModelSummary(model: ModelOption | null, fallback: string): string {
+  if (!model) {
+    return fallback;
+  }
+
+  return `${model.id} · ${model.provider} · ${formatContextWindowLabel(model.context)} ctx`;
+}
 
 function ThemeButton({
   value,
@@ -54,6 +90,12 @@ export function SettingsPage() {
     refetch: refetchModels,
   } = useApi(api.models);
   const {
+    data: conversationTitleState,
+    loading: conversationTitleLoading,
+    error: conversationTitleError,
+    refetch: refetchConversationTitleSettings,
+  } = useApi(api.conversationTitleSettings);
+  const {
     data: status,
     error: statusError,
     refetch: refetchStatus,
@@ -62,6 +104,8 @@ export function SettingsPage() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [savingPreference, setSavingPreference] = useState<'model' | 'thinking' | null>(null);
   const [modelError, setModelError] = useState<string | null>(null);
+  const [savingConversationTitle, setSavingConversationTitle] = useState<'enabled' | 'model' | null>(null);
+  const [conversationTitleSaveError, setConversationTitleSaveError] = useState<string | null>(null);
   const [resetting, setResetting] = useState<'layout' | 'conversation' | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
 
@@ -90,6 +134,16 @@ export function SettingsPage() {
 
     return modelState.models.find((model) => model.id === modelState.currentModel) ?? null;
   }, [modelState]);
+
+  const selectedConversationTitleModel = useMemo(
+    () => findModelByRef(modelState?.models ?? [], conversationTitleState?.currentModel ?? ''),
+    [conversationTitleState?.currentModel, modelState?.models],
+  );
+
+  const effectiveConversationTitleModel = useMemo(
+    () => findModelByRef(modelState?.models ?? [], conversationTitleState?.effectiveModel ?? ''),
+    [conversationTitleState?.effectiveModel, modelState?.models],
+  );
 
   async function handleProfileChange(nextProfile: string) {
     if (!profileState || nextProfile === profileState.currentProfile || switchingProfile) {
@@ -127,10 +181,40 @@ export function SettingsPage() {
     try {
       await api.updateModelPreferences(input);
       await refetchModels({ resetLoading: false });
+      await refetchConversationTitleSettings({ resetLoading: false });
     } catch (error) {
       setModelError(error instanceof Error ? error.message : String(error));
     } finally {
       setSavingPreference(null);
+    }
+  }
+
+  async function handleConversationTitleSettingChange(
+    input: { enabled?: boolean; model?: string | null },
+    field: 'enabled' | 'model',
+  ) {
+    if (!conversationTitleState || savingConversationTitle !== null) {
+      return;
+    }
+
+    if (field === 'enabled' && input.enabled === conversationTitleState.enabled) {
+      return;
+    }
+
+    if (field === 'model' && (input.model ?? '') === conversationTitleState.currentModel) {
+      return;
+    }
+
+    setConversationTitleSaveError(null);
+    setSavingConversationTitle(field);
+
+    try {
+      await api.updateConversationTitleSettings(input);
+      await refetchConversationTitleSettings({ resetLoading: false });
+    } catch (error) {
+      setConversationTitleSaveError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSavingConversationTitle(null);
     }
   }
 
@@ -168,6 +252,7 @@ export function SettingsPage() {
         void Promise.all([
           refetchProfiles({ resetLoading: false }),
           refetchModels({ resetLoading: false }),
+          refetchConversationTitleSettings({ resetLoading: false }),
           refetchStatus({ resetLoading: false }),
         ]);
       }}>↻ Refresh</ToolbarButton>}>
@@ -201,7 +286,7 @@ export function SettingsPage() {
           <section className="space-y-5 border-t border-border-subtle pt-6">
             <SectionLabel label="Agent defaults" />
 
-            <div className="grid gap-8 lg:grid-cols-2">
+            <div className="grid gap-8 lg:grid-cols-2 xl:grid-cols-3">
               <div className="space-y-3 min-w-0">
                 <div className="space-y-1">
                   <h2 className="text-[15px] font-medium text-primary">Profile</h2>
@@ -276,9 +361,7 @@ export function SettingsPage() {
                     <p className="ui-card-meta">
                       {savingPreference === 'model'
                         ? 'Saving default model…'
-                        : selectedModel
-                          ? `${selectedModel.id} · ${selectedModel.provider} · ${formatContextWindowLabel(selectedModel.context)} ctx`
-                          : 'No model selected.'}
+                        : formatModelSummary(selectedModel, 'No model selected.')}
                     </p>
 
                     <label className="ui-card-meta pt-1" htmlFor="settings-thinking">Thinking level</label>
@@ -304,6 +387,77 @@ export function SettingsPage() {
                 ) : null}
 
                 {modelError && <p className="text-[12px] text-danger">{modelError}</p>}
+              </div>
+
+              <div className="space-y-3 min-w-0">
+                <div className="space-y-1">
+                  <h2 className="text-[15px] font-medium text-primary">Conversation titles</h2>
+                  <p className="ui-card-meta max-w-xl">
+                    Auto-renames chats after the first assistant reply. Use the runtime default model or pin a dedicated title model.
+                  </p>
+                </div>
+
+                {(conversationTitleLoading && !conversationTitleState) || (modelsLoading && !modelState) ? (
+                  <p className="ui-card-meta">Loading conversation title settings…</p>
+                ) : (!conversationTitleState && conversationTitleError) ? (
+                  <p className="text-[12px] text-danger">Failed to load conversation title settings: {conversationTitleError}</p>
+                ) : (!modelState && modelsError) ? (
+                  <p className="text-[12px] text-danger">Failed to load models: {modelsError}</p>
+                ) : conversationTitleState && modelState ? (
+                  <>
+                    <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="settings-conversation-titles-enabled">
+                      <input
+                        id="settings-conversation-titles-enabled"
+                        type="checkbox"
+                        checked={conversationTitleState.enabled}
+                        onChange={(event) => {
+                          void handleConversationTitleSettingChange({ enabled: event.target.checked }, 'enabled');
+                        }}
+                        disabled={savingConversationTitle !== null}
+                        className={CHECKBOX_CLASS}
+                      />
+                      <span>Generate titles automatically</span>
+                    </label>
+                    <p className="ui-card-meta">
+                      {savingConversationTitle === 'enabled'
+                        ? 'Saving auto-title setting…'
+                        : conversationTitleState.enabled
+                          ? 'Enabled after the first assistant reply.'
+                          : 'Disabled. New conversations keep the fallback title until renamed manually.'}
+                    </p>
+
+                    <label className="ui-card-meta pt-1" htmlFor="settings-conversation-title-model">Title model</label>
+                    <select
+                      id="settings-conversation-title-model"
+                      value={conversationTitleState.currentModel}
+                      onChange={(event) => {
+                        void handleConversationTitleSettingChange({ model: event.target.value || '' }, 'model');
+                      }}
+                      disabled={savingConversationTitle !== null || modelState.models.length === 0}
+                      className={INPUT_CLASS}
+                    >
+                      <option value="">Use default runtime model ({conversationTitleState.effectiveModel})</option>
+                      {groupedModels.map(([provider, models]) => (
+                        <optgroup key={provider} label={provider}>
+                          {models.map((model) => (
+                            <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>
+                              {model.name} · {formatContextWindowLabel(model.context)} ctx
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                    <p className="ui-card-meta">
+                      {savingConversationTitle === 'model'
+                        ? 'Saving title model…'
+                        : conversationTitleState.currentModel
+                          ? `Pinned title model: ${formatModelSummary(selectedConversationTitleModel, conversationTitleState.currentModel)}`
+                          : `Using runtime default: ${formatModelSummary(effectiveConversationTitleModel, conversationTitleState.effectiveModel)}`}
+                    </p>
+                  </>
+                ) : null}
+
+                {conversationTitleSaveError && <p className="text-[12px] text-danger">{conversationTitleSaveError}</p>}
               </div>
             </div>
           </section>
