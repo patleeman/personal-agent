@@ -1533,7 +1533,8 @@ function runNpmCommand(repoRoot: string, args: string[], failurePrefix: string):
   const stderr = result.stderr?.trim() ?? '';
 
   if (statusCode !== 0) {
-    const detail = stderr || stdout || `exit code ${statusCode}`;
+    const outputs = [stdout, stderr].filter((line) => line.length > 0);
+    const detail = outputs.length > 0 ? outputs.join('\n') : `exit code ${statusCode}`;
     throw new Error(`${failurePrefix} in ${repoRoot}: ${detail}`);
   }
 

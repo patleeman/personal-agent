@@ -25,7 +25,7 @@ function buildInternalActivityId(prefix, createdAt, summary) {
 function buildDetails(lines) {
     const filtered = lines
         .map((line) => (typeof line === 'string' ? line.trim() : undefined))
-        .filter((line) => Boolean(line) && line.length > 0);
+        .filter((line) => typeof line === 'string' && line.length > 0);
     return filtered.length > 0 ? filtered.join('\n') : undefined;
 }
 function isIssueState(state) {

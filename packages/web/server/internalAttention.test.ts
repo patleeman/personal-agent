@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { DaemonStateSnapshot } from './daemon.js';
+import type { GatewayStateSnapshot } from './gateway.js';
 import {
   clearMonitoredServiceAttentionSuppression,
   createServiceAttentionMonitor,
@@ -10,7 +12,7 @@ function createDaemonState(input: {
   running?: boolean;
   warnings?: string[];
   error?: string;
-}) {
+}): DaemonStateSnapshot {
   const running = input.running ?? true;
 
   return {
@@ -40,7 +42,7 @@ function createGatewayState(input: {
   running?: boolean;
   warnings?: string[];
   error?: string;
-}) {
+}): GatewayStateSnapshot {
   return {
     provider: 'telegram',
     currentProfile: 'datadog',
@@ -59,7 +61,7 @@ function createGatewayState(input: {
     },
     access: {
       tokenConfigured: true,
-      tokenSource: 'saved',
+      tokenSource: 'plain',
       allowlistChatIds: [],
       allowedUserIds: [],
       blockedUserIds: [],

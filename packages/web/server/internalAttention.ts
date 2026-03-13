@@ -76,7 +76,7 @@ function buildInternalActivityId(prefix: string, createdAt: string, summary: str
 function buildDetails(lines: Array<string | undefined>): string | undefined {
   const filtered = lines
     .map((line) => (typeof line === 'string' ? line.trim() : undefined))
-    .filter((line): line is string => Boolean(line) && line.length > 0);
+    .filter((line): line is string => typeof line === 'string' && line.length > 0);
 
   return filtered.length > 0 ? filtered.join('\n') : undefined;
 }

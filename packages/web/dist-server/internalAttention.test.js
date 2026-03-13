@@ -42,7 +42,7 @@ function createGatewayState(input) {
         },
         access: {
             tokenConfigured: true,
-            tokenSource: 'saved',
+            tokenSource: 'plain',
             allowlistChatIds: [],
             allowedUserIds: [],
             blockedUserIds: [],
