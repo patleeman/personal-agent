@@ -1,7 +1,7 @@
 ---
 id: personal-agent-project-state-model
 title: "Personal-agent project state model"
-summary: "Canonical boundaries for milestones, project tasks, and scheduled tasks in personal-agent."
+summary: "Canonical boundaries for projects, conversations, planning, and project resources in personal-agent."
 type: "project"
 status: "active"
 tags:
@@ -9,30 +9,39 @@ tags:
   - "projects"
   - "data-model"
   - "planning"
-updated: 2026-03-12
+updated: 2026-03-13
 ---
 
 # Personal-agent project state model
 
-High-signal notes for how personal-agent project planning should be represented.
+High-signal notes for how a personal-agent project should act as a durable hub across conversations, planning, and project resources.
 
-## Canonical boundaries
+## Project as durable hub
+
+- A **project** is a durable hub for a body of work across conversations, not just a prefilled planning document.
+- The project surface should make linked conversations easy to inspect so the user can follow the same work across different chats and background activity.
+- Keep project metadata/planning, generated briefs, notes, attachments, and artifacts as related but distinct durable resources.
+
+## Canonical durable files
+
+- Treat `profiles/<profile>/agent/projects/<projectId>/PROJECT.yaml` as the canonical structured project file.
+- A project's durable plan lives under `plan` in `PROJECT.yaml`.
+- Keep notes, attachments, and artifacts as separate project resources rather than overloading `PROJECT.yaml` with large free-form blobs.
+- A project brief should be a regenerable artifact, not the only durable description of the project.
+
+## Planning boundaries
 
 - Keep **scheduled tasks** separate from project planning. Scheduled tasks are automation jobs in `profiles/<profile>/agent/tasks/*.task.md`.
 - Keep **project tasks** inside the project plan. They represent execution work for a specific project, not daemon automation.
-- Treat `profiles/<profile>/agent/projects/<projectId>/PROJECT.yaml` as the canonical project-planning file.
-
-## Preferred plan shape
-
-- A project's durable plan lives under `plan` in `PROJECT.yaml`.
-- Milestones and lightweight project tasks should live together in that plan model so the UI and data model describe the same object.
-- `currentMilestoneId` should point at the actively driven milestone.
+- Milestones are optional. New projects should start with an empty plan rather than default milestone scaffolding.
+- Milestones and lightweight project tasks should live together in the same plan model so the UI and data model describe the same object.
+- `currentMilestoneId` is optional and should only point at an actively driven milestone when one exists.
 
 ## Project task expectations
 
-- Default to a lightweight task shape: auto-generated `id`, `title`, `status`, and `milestoneId`.
+- Default to a lightweight task shape: auto-generated `id`, `title`, `status`, and optional `milestoneId`.
 - Do not bloat routine project tasks with extra fields such as per-task acceptance criteria, plans, or notes unless there is a clear need.
-- In the UI, tasks should normally appear within their milestone; only genuinely unassigned tasks should sit outside milestone sections.
+- In the UI, tasks should normally appear within their milestone; genuinely unassigned tasks may sit outside milestone sections.
 
 ## Project identifier expectations
 
@@ -43,10 +52,12 @@ High-signal notes for how personal-agent project planning should be represented.
 
 - Projects may store an optional durable `repoRoot` in `PROJECT.yaml` when work should default to a specific repository root.
 - New conversations without an explicit cwd should inherit from a single referenced project `repoRoot` when one is available.
-- The current conversation's cwd should be editable in the UI; it should not be permanently locked to startup defaults.
+- The current conversation's cwd should be editable in the UI, including before the first user message is sent.
+- When choosing a cwd in the UI, prefer a folder picker as the primary flow with manual path entry as a fallback.
 - When no explicit or project-derived cwd exists, default to the current process cwd rather than assuming the web app repo root.
 
 ## UX implications
 
-- Milestone state transitions should be easy to do inline.
 - The project UI should not force users to think about multiple competing task models for the same project work.
+- The project detail surface should make linked conversations, notes, files, and generated artifacts easy to navigate from one place.
+- Milestone state transitions should be easy to do inline.

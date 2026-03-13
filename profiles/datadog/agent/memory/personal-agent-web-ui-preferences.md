@@ -1,7 +1,7 @@
 ---
 id: personal-agent-web-ui-preferences
 title: "Personal-agent web UI preferences"
-summary: "Durable UX preferences for the personal-agent web interface, especially layout clarity and memory presentation."
+summary: "Durable UX preferences for the personal-agent web interface, especially layout clarity and conversation/project workflows."
 type: "project"
 status: "active"
 tags:
@@ -9,7 +9,7 @@ tags:
   - "web-ui"
   - "ux"
   - "product"
-updated: 2026-03-12
+updated: 2026-03-13
 ---
 
 # Personal-agent web UI preferences
@@ -23,20 +23,25 @@ Durable UX preferences repeatedly expressed for the personal-agent web interface
 - The right rail should be genuinely resizable, with route-aware sizing so different surfaces can remember different useful widths.
 - If the right rail is important to the workflow, keep it visible and resizable rather than hiding it behind extra collapse/re-open chrome.
 - The sidebar should feel more like **open tabs plus recent history** than one undifferentiated list.
+- Top-level app identity chrome should reflect the active profile rather than a hardcoded product label.
 
 ## Conversation and project surfaces
 
 - Keep active or open conversations visually distinct from recent conversation history.
+- Support pinned conversations as a distinct shelf above ordinary open tabs, with direct drag/drop pinning.
 - Use the right rail for high-value project detail and editing instead of pushing low-value summary chrome into the main pane.
 - Favor fast, direct controls for common actions instead of burying state changes behind extra navigation.
 - Preserve primary conversation drafts across reloads.
+- Allow setting or changing conversation cwd before the first user message; prefer a native folder picker as the primary flow and manual path entry as a fallback.
 - Make archived-conversation restore and conversation forking first-class in-app flows rather than tiny popovers or new browser tabs.
 - Open conversation tabs should be directly reorderable in the UI instead of fixed to creation order.
+- Conversation titles should be durable user-facing labels: manual rename should be first-class, and sidebar/open-tab labels should stay attached to the conversation title rather than drift to the latest prompt text.
 - Prefer human-readable labels in the UI. Fresh chats should render as `New Conversation`, raw ids should stay secondary, and open conversation titles/status should keep updating live without click-to-refresh.
 - Prefer conversation titles that summarize the session from the first assistant response rather than copying the raw first user prompt when that makes the list easier to scan.
 - Keep running state and needs-attention state separate. A running conversation does not automatically need attention; attention should surface when there is unseen output or the agent has stopped and now needs review.
-- When a turn contains many tool calls or thinking blocks, collapse that internal activity into a single turn-level disclosure so the triggering user message and the assistant's visible answer stay in view together.
-- Prefer conversation-centric turn rendering over a raw event-log feel; internal activity should stay inspectable on demand without dominating the main transcript.
+- Prefer conversation-centric turn rendering over a raw event-log feel; when a turn contains many tool calls or thinking blocks, collapse that internal activity into a turn-level disclosure so the triggering user message and the assistant's visible answer stay in view together.
+- Expose common runtime defaults such as model and thinking level directly in the UI rather than only through slash commands.
+- Queued follow-ups in the web UI should be restorable back into the composer so they remain editable draft material.
 - Prefer explicit labels over multiple ambiguous status dots when distinguishing states such as `running` and `needs review`.
 
 ## Keyboard workflow
