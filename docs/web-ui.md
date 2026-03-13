@@ -114,14 +114,19 @@ A new draft conversation becomes a live session when you send the first prompt.
 
 ### Projects
 
-Projects are durable work trackers.
+Projects are durable cross-conversation work hubs.
 
 From the Projects page you can:
 
 - create a project from a short title plus a longer description
-- inspect current status, blockers, milestones, and tasks
+- inspect current status, blockers, optional milestones, and tasks
 - edit the canonical `PROJECT.yaml`
-- link project state to active conversations
+- edit or regenerate `BRIEF.md`
+- append project notes
+- upload attachments and project artifacts
+- see linked conversations for the project
+- start a new conversation directly from the project
+- view a combined project timeline
 
 See [Projects](./projects.md).
 

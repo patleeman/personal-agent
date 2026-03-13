@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 
 export interface SavedWebUiPreferences {
   openConversationIds: string[];
+  pinnedConversationIds: string[];
 }
 
 function readNonEmptyString(value: unknown): string {
@@ -26,7 +27,7 @@ function readSettingsObject(settingsFile: string): Record<string, unknown> {
   }
 }
 
-function normalizeOpenConversationIds(value: unknown): string[] {
+function normalizeConversationIds(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -47,6 +48,19 @@ function normalizeOpenConversationIds(value: unknown): string[] {
   return ids;
 }
 
+function normalizeSavedWebUiPreferences(input: {
+  openConversationIds?: unknown;
+  pinnedConversationIds?: unknown;
+}): SavedWebUiPreferences {
+  const pinnedConversationIds = normalizeConversationIds(input.pinnedConversationIds);
+  const pinnedIdSet = new Set(pinnedConversationIds);
+
+  return {
+    openConversationIds: normalizeConversationIds(input.openConversationIds).filter((id) => !pinnedIdSet.has(id)),
+    pinnedConversationIds,
+  };
+}
+
 function readWebUiSettings(settings: Record<string, unknown>): Record<string, unknown> {
   return isRecord(settings.webUi) ? { ...settings.webUi } : {};
 }
@@ -55,25 +69,38 @@ export function readSavedWebUiPreferences(settingsFile: string): SavedWebUiPrefe
   const settings = readSettingsObject(settingsFile);
   const webUi = readWebUiSettings(settings);
 
-  return {
-    openConversationIds: normalizeOpenConversationIds(webUi.openConversationIds),
-  };
+  return normalizeSavedWebUiPreferences({
+    openConversationIds: webUi.openConversationIds,
+    pinnedConversationIds: webUi.pinnedConversationIds,
+  });
 }
 
 export function writeSavedWebUiPreferences(
-  input: { openConversationIds?: string[] | null },
+  input: { openConversationIds?: string[] | null; pinnedConversationIds?: string[] | null },
   settingsFile: string,
 ): SavedWebUiPreferences {
   const settings = readSettingsObject(settingsFile);
   const webUi = readWebUiSettings(settings);
+  const current = normalizeSavedWebUiPreferences({
+    openConversationIds: webUi.openConversationIds,
+    pinnedConversationIds: webUi.pinnedConversationIds,
+  });
 
-  if (input.openConversationIds !== undefined) {
-    const normalizedIds = normalizeOpenConversationIds(input.openConversationIds ?? []);
-    if (normalizedIds.length > 0) {
-      webUi.openConversationIds = normalizedIds;
-    } else {
-      delete webUi.openConversationIds;
-    }
+  const next = normalizeSavedWebUiPreferences({
+    openConversationIds: input.openConversationIds !== undefined ? (input.openConversationIds ?? []) : current.openConversationIds,
+    pinnedConversationIds: input.pinnedConversationIds !== undefined ? (input.pinnedConversationIds ?? []) : current.pinnedConversationIds,
+  });
+
+  if (next.openConversationIds.length > 0) {
+    webUi.openConversationIds = next.openConversationIds;
+  } else {
+    delete webUi.openConversationIds;
+  }
+
+  if (next.pinnedConversationIds.length > 0) {
+    webUi.pinnedConversationIds = next.pinnedConversationIds;
+  } else {
+    delete webUi.pinnedConversationIds;
   }
 
   if (Object.keys(webUi).length > 0) {

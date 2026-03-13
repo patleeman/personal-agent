@@ -1,4 +1,4 @@
-import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationCwdChangeResult, ConversationProjectLinks, ConversationTitleSettingsState, DaemonState, DeferredResumeSummary, DurableRunDetailResult, DurableRunListResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, ModelState, ProfileState, ProjectDetail, ProjectRecord, PromptImageInput, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionMeta, ToolsState, WebUiState } from './types';
+import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationCheckpointSummary, ConversationCwdChangeResult, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DeferredResumeSummary, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, ModelState, ProfileState, ProjectDetail, ProjectRecord, PromptImageInput, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, ToolsState, WebUiState } from './types';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch('/api' + path);
@@ -66,11 +66,15 @@ export const api = {
   installWebUiService: () => post<WebUiState>('/web-ui/service/install'),
   startWebUiService: () => post<WebUiState>('/web-ui/service/start'),
   restartWebUiService: () => post<WebUiState>('/web-ui/service/restart'),
+  rollbackWebUiService: (input?: { reason?: string }) => post<WebUiState>('/web-ui/service/rollback', input),
+  markBadWebUiRelease: (input?: { slot?: 'blue' | 'green'; reason?: string }) => post<WebUiState>('/web-ui/service/mark-bad', input),
   stopWebUiService: () => post<WebUiState>('/web-ui/service/stop'),
   uninstallWebUiService: () => post<WebUiState>('/web-ui/service/uninstall'),
   activity:     () => get<ActivityEntry[]>('/activity'),
   activityById: (id: string) => get<ActivityEntry>(`/activity/${encodeURIComponent(id)}`),
   sessions:     () => get<SessionMeta[]>('/sessions'),
+  sessionDetail: (id: string) => get<SessionDetail>(`/sessions/${encodeURIComponent(id)}`),
+  sessionTree: (id: string) => get<ConversationTreeSnapshot>(`/sessions/${encodeURIComponent(id)}/tree`),
   projects:     () => get<ProjectRecord[]>('/projects'),
   projectById:  (id: string) => get<ProjectDetail>(`/projects/${encodeURIComponent(id)}`),
   createProject: (input: {
@@ -128,6 +132,23 @@ export const api = {
     post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}/move`, { direction }),
   projectSource: (id: string) => get<{ path: string; content: string }>(`/projects/${encodeURIComponent(id)}/source`),
   saveProjectSource: (id: string, content: string) => post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/source`, { content }),
+  saveProjectBrief: (id: string, content: string) => post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/brief`, { content }),
+  regenerateProjectBrief: (id: string) => post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/brief/regenerate`, {}),
+  createProjectNote: (id: string, input: { title: string; kind: string; body?: string }) => post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/notes`, input),
+  updateProjectNote: (id: string, noteId: string, input: { title?: string; kind?: string; body?: string }) =>
+    patch<ProjectDetail>(`/projects/${encodeURIComponent(id)}/notes/${encodeURIComponent(noteId)}`, input),
+  deleteProjectNote: (id: string, noteId: string) =>
+    del<ProjectDetail>(`/projects/${encodeURIComponent(id)}/notes/${encodeURIComponent(noteId)}`),
+  uploadProjectFile: (id: string, input: {
+    kind: 'attachment' | 'artifact';
+    name: string;
+    mimeType?: string;
+    title?: string;
+    description?: string;
+    data: string;
+  }) => post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/files`, input),
+  deleteProjectFile: (id: string, kind: 'attachment' | 'artifact', fileId: string) =>
+    del<ProjectDetail>(`/projects/${encodeURIComponent(id)}/files/${kind}/${encodeURIComponent(fileId)}`),
   profiles:     () => get<ProfileState>('/profiles'),
   setCurrentProfile: (profile: string) => patch<{ ok: boolean; currentProfile: string }>('/profiles/current', { profile }),
 
@@ -142,9 +163,9 @@ export const api = {
   conversationTitleSettings: () => get<ConversationTitleSettingsState>('/conversation-titles/settings'),
   updateConversationTitleSettings: (input: { enabled?: boolean; model?: string | null }) =>
     patch<ConversationTitleSettingsState>('/conversation-titles/settings', input),
-  openConversationTabs: () => get<{ sessionIds: string[] }>('/web-ui/open-conversations'),
-  setOpenConversationTabs: (sessionIds: string[]) =>
-    patch<{ ok: boolean; sessionIds: string[] }>('/web-ui/open-conversations', { sessionIds }),
+  openConversationTabs: () => get<{ sessionIds: string[]; pinnedSessionIds: string[] }>('/web-ui/open-conversations'),
+  setOpenConversationTabs: (sessionIds: string[], pinnedSessionIds: string[] = []) =>
+    patch<{ ok: boolean; sessionIds: string[]; pinnedSessionIds: string[] }>('/web-ui/open-conversations', { sessionIds, pinnedSessionIds }),
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
   tasks: () => get<ScheduledTaskSummary[]>('/tasks'),
@@ -163,6 +184,8 @@ export const api = {
   cancelDurableRun: (id: string) => post<{ cancelled: boolean; runId: string }>(`/runs/${encodeURIComponent(id)}/cancel`),
 
   // ── Shell run ─────────────────────────────────────────────────────────────
+  pickFolder: (cwd?: string) =>
+    post<FolderPickerResult>('/folder-picker', { cwd }),
   run: (command: string, cwd?: string) =>
     post<{ output: string; exitCode: number }>('/run', { command, cwd }),
 
@@ -215,6 +238,24 @@ export const api = {
 
       return res.json() as Promise<{ conversationId: string; cancelledId: string; resumes: DeferredResumeSummary[] }>;
     }),
+  conversationCheckpoints: (id: string) =>
+    get<{ conversationId: string; checkpoints: ConversationCheckpointSummary[] }>(`/conversations/${encodeURIComponent(id)}/checkpoints`),
+  checkpoints: () => get<{ checkpoints: ConversationCheckpointSummary[] }>('/checkpoints'),
+  createConversationCheckpoint: (
+    id: string,
+    input: { title?: string; note?: string; summary?: string; anchorMessageId?: string },
+  ) =>
+    post<{ conversationId: string; checkpoint: ConversationCheckpointSummary }>(`/conversations/${encodeURIComponent(id)}/checkpoints`, input),
+  startCheckpoint: (checkpointId: string, input?: { cwd?: string }) =>
+    post<{ checkpointId: string; id: string; sessionFile: string; cwd: string }>(`/checkpoints/${encodeURIComponent(checkpointId)}/start`, input ?? {}),
+  deleteCheckpoint: (checkpointId: string) =>
+    fetch(`/api/checkpoints/${encodeURIComponent(checkpointId)}`, { method: 'DELETE' }).then(async (res) => {
+      if (!res.ok) {
+        throw new Error(await readApiError(res));
+      }
+
+      return res.json() as Promise<{ ok: true; checkpointId: string; deleted: true }>;
+    }),
   addConversationProject: (id: string, projectId: string) =>
     post<ConversationProjectLinks>(`/conversations/${encodeURIComponent(id)}/projects`, { projectId }),
   removeConversationProject: (id: string, projectId: string) =>
@@ -234,6 +275,16 @@ export const api = {
 
       return res.json() as Promise<ConversationCwdChangeResult>;
     }),
+  renameConversation: (id: string, name: string) =>
+    patch<{ ok: boolean; title: string }>(`/conversations/${encodeURIComponent(id)}/title`, { name }),
+  recoverConversation: (id: string) =>
+    post<{
+      conversationId: string;
+      live: boolean;
+      recovered: boolean;
+      replayedPendingOperation: boolean;
+      usedFallbackPrompt: boolean;
+    }>(`/conversations/${encodeURIComponent(id)}/recover`),
 
   createLiveSession: (cwd?: string, referencedProjectIds?: string[], text?: string) =>
     post<{ id: string; sessionFile: string }>('/live-sessions', { cwd, referencedProjectIds, text }),
@@ -252,6 +303,8 @@ export const api = {
         ...(image.name ? { name: image.name } : {}),
       })),
     }),
+  restoreQueuedMessage: (id: string, input: { behavior: 'steer' | 'followUp'; index: number }) =>
+    post<{ ok: boolean; text: string; images: PromptImageInput[] }>(`/live-sessions/${id}/dequeue`, input),
   compactSession: (id: string, customInstructions?: string) =>
     post<{ ok: boolean; result: unknown }>(`/live-sessions/${id}/compact`, { customInstructions }),
   reloadSession: (id: string) =>
@@ -269,6 +322,8 @@ export const api = {
 
   forkEntries: (id: string) =>
     get<{ entryId: string; text: string }[]>(`/live-sessions/${id}/fork-entries`),
+  branchSession: (id: string, entryId: string) =>
+    post<{ newSessionId: string; sessionFile: string }>(`/live-sessions/${id}/branch`, { entryId }),
   forkSession: (id: string, entryId: string, options?: { preserveSource?: boolean }) =>
     post<{ newSessionId: string; sessionFile: string }>(`/live-sessions/${id}/fork`, {
       entryId,

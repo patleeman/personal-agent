@@ -141,6 +141,32 @@ describe('resources profile loader', () => {
     ]);
   });
 
+  it('includes repo-provided internal skills alongside profile skills', () => {
+    const repo = createTempRepo();
+
+    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'profiles/shared/agent/skills/shared-skill/SKILL.md'), '# Shared Skill\n');
+    writeFile(join(repo, 'skills/pa-project-hub/SKILL.md'), '# Internal Skill\n');
+
+    const resolved = resolveResourceProfile('shared', { repoRoot: repo });
+
+    expect(resolved.skillDirs).toEqual([
+      join(repo, 'profiles/shared/agent/skills'),
+      join(repo, 'skills'),
+    ]);
+
+    const args = buildPiResourceArgs(resolved);
+    const skillArgs = args
+      .map((value, index) => ({ value, index }))
+      .filter((entry) => entry.value === '--skill')
+      .map((entry) => args[entry.index + 1]);
+
+    expect(skillArgs).toEqual([
+      join(repo, 'profiles/shared/agent/skills'),
+      join(repo, 'skills'),
+    ]);
+  });
+
   it('merges json files in layer order', () => {
     const repo = createTempRepo();
     const fileA = join(repo, 'a.json');

@@ -1,8 +1,15 @@
-import { OPEN_SESSION_IDS_STORAGE_KEY } from './localSettings';
+import { OPEN_SESSION_IDS_STORAGE_KEY, PINNED_SESSION_IDS_STORAGE_KEY } from './localSettings';
 
-export const OPEN_SESSIONS_CHANGED_EVENT = 'pa:open-sessions-changed';
+export const CONVERSATION_LAYOUT_CHANGED_EVENT = 'pa:conversation-layout-changed';
+export const OPEN_SESSIONS_CHANGED_EVENT = CONVERSATION_LAYOUT_CHANGED_EVENT;
 
 export type OpenConversationDropPosition = 'before' | 'after';
+export type ConversationShelf = 'open' | 'pinned';
+
+export interface ConversationLayout {
+  sessionIds: string[];
+  pinnedSessionIds: string[];
+}
 
 function normalizeSessionId(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -25,6 +32,17 @@ function normalizeSessionIds(values: Iterable<unknown>): string[] {
   return ids;
 }
 
+function normalizeConversationLayout(input: ConversationLayout): ConversationLayout {
+  const pinnedSessionIds = normalizeSessionIds(input.pinnedSessionIds);
+  const pinnedIdSet = new Set(pinnedSessionIds);
+  const sessionIds = normalizeSessionIds(input.sessionIds).filter((id) => !pinnedIdSet.has(id));
+
+  return {
+    sessionIds,
+    pinnedSessionIds,
+  };
+}
+
 function sameSessionIds(left: readonly string[], right: readonly string[]): boolean {
   if (left.length !== right.length) {
     return false;
@@ -33,7 +51,12 @@ function sameSessionIds(left: readonly string[], right: readonly string[]): bool
   return left.every((id, index) => id === right[index]);
 }
 
-function persistOpenSessionIdsToServer(sessionIds: string[]): void {
+function sameConversationLayout(left: ConversationLayout, right: ConversationLayout): boolean {
+  return sameSessionIds(left.sessionIds, right.sessionIds)
+    && sameSessionIds(left.pinnedSessionIds, right.pinnedSessionIds);
+}
+
+function persistConversationLayoutToServer(layout: ConversationLayout): void {
   if (typeof fetch !== 'function') {
     return;
   }
@@ -41,19 +64,25 @@ function persistOpenSessionIdsToServer(sessionIds: string[]): void {
   void fetch('/api/web-ui/open-conversations', {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionIds }),
+    body: JSON.stringify(layout),
   }).catch(() => {
     // Ignore best-effort sync failures.
   });
 }
 
-export function syncOpenConversationTabsToServer(ids: Iterable<unknown>): void {
-  persistOpenSessionIdsToServer(normalizeSessionIds(ids));
+export function syncOpenConversationTabsToServer(
+  sessionIds: Iterable<unknown>,
+  pinnedSessionIds: Iterable<unknown> = readPinnedSessionIds(),
+): void {
+  persistConversationLayoutToServer(normalizeConversationLayout({
+    sessionIds: normalizeSessionIds(sessionIds),
+    pinnedSessionIds: normalizeSessionIds(pinnedSessionIds),
+  }));
 }
 
-export function readOpenSessionIds(): string[] {
+function readStoredSessionIds(storageKey: string): string[] {
   try {
-    const raw = localStorage.getItem(OPEN_SESSION_IDS_STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey);
     if (raw) {
       const parsed = JSON.parse(raw) as unknown;
       if (Array.isArray(parsed)) {
@@ -67,41 +96,81 @@ export function readOpenSessionIds(): string[] {
   return [];
 }
 
-function writeOpenSessionIds(ids: Iterable<unknown>): string[] {
-  const normalizedIds = normalizeSessionIds(ids);
+export function readConversationLayout(): ConversationLayout {
+  return normalizeConversationLayout({
+    sessionIds: readStoredSessionIds(OPEN_SESSION_IDS_STORAGE_KEY),
+    pinnedSessionIds: readStoredSessionIds(PINNED_SESSION_IDS_STORAGE_KEY),
+  });
+}
 
+export function readOpenSessionIds(): string[] {
+  return readConversationLayout().sessionIds;
+}
+
+export function readPinnedSessionIds(): string[] {
+  return readConversationLayout().pinnedSessionIds;
+}
+
+function writeStoredSessionIds(storageKey: string, sessionIds: readonly string[]): void {
   try {
-    localStorage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(normalizedIds));
+    if (sessionIds.length > 0) {
+      localStorage.setItem(storageKey, JSON.stringify(sessionIds));
+    } else {
+      localStorage.removeItem(storageKey);
+    }
   } catch {
     // Ignore storage write failures.
   }
-
-  persistOpenSessionIdsToServer(normalizedIds);
-  window.dispatchEvent(new CustomEvent(OPEN_SESSIONS_CHANGED_EVENT, {
-    detail: { ids: normalizedIds },
-  }));
-
-  return normalizedIds;
 }
 
-export function replaceOpenConversationTabs(sessionIds: Iterable<unknown>): string[] {
-  const next = normalizeSessionIds(sessionIds);
-  const current = readOpenSessionIds();
-  if (sameSessionIds(current, next)) {
+function writeConversationLayout(layout: ConversationLayout): ConversationLayout {
+  const normalizedLayout = normalizeConversationLayout(layout);
+
+  writeStoredSessionIds(OPEN_SESSION_IDS_STORAGE_KEY, normalizedLayout.sessionIds);
+  writeStoredSessionIds(PINNED_SESSION_IDS_STORAGE_KEY, normalizedLayout.pinnedSessionIds);
+  persistConversationLayoutToServer(normalizedLayout);
+  window.dispatchEvent(new CustomEvent(CONVERSATION_LAYOUT_CHANGED_EVENT, {
+    detail: normalizedLayout,
+  }));
+
+  return normalizedLayout;
+}
+
+export function replaceConversationLayout(layout: ConversationLayout): ConversationLayout {
+  const next = normalizeConversationLayout(layout);
+  const current = readConversationLayout();
+  if (sameConversationLayout(current, next)) {
     return current;
   }
 
-  return writeOpenSessionIds(next);
+  return writeConversationLayout(next);
+}
+
+export function replaceOpenConversationTabs(sessionIds: Iterable<unknown>): string[] {
+  return replaceConversationLayout({
+    sessionIds: normalizeSessionIds(sessionIds),
+    pinnedSessionIds: readPinnedSessionIds(),
+  }).sessionIds;
+}
+
+export function replacePinnedConversationTabs(pinnedSessionIds: Iterable<unknown>): string[] {
+  return replaceConversationLayout({
+    sessionIds: readOpenSessionIds(),
+    pinnedSessionIds: normalizeSessionIds(pinnedSessionIds),
+  }).pinnedSessionIds;
 }
 
 export function ensureConversationTabOpen(sessionId: string | null | undefined): string[] {
   const normalizedSessionId = normalizeSessionId(sessionId);
-  const next = readOpenSessionIds();
-  if (!normalizedSessionId || next.includes(normalizedSessionId)) {
-    return next;
+  const layout = readConversationLayout();
+  if (!normalizedSessionId || layout.pinnedSessionIds.includes(normalizedSessionId) || layout.sessionIds.includes(normalizedSessionId)) {
+    return layout.sessionIds;
   }
 
-  return writeOpenSessionIds([...next, normalizedSessionId]);
+  return writeConversationLayout({
+    ...layout,
+    sessionIds: [...layout.sessionIds, normalizedSessionId],
+  }).sessionIds;
 }
 
 export function openConversationTab(sessionId: string): string[] {
@@ -110,13 +179,42 @@ export function openConversationTab(sessionId: string): string[] {
 
 export function closeConversationTab(sessionId: string): string[] {
   const normalizedSessionId = normalizeSessionId(sessionId);
-  const current = readOpenSessionIds();
-  const next = current.filter((id) => id !== normalizedSessionId);
-  if (next.length === current.length) {
+  const current = readConversationLayout();
+  const nextSessionIds = current.sessionIds.filter((id) => id !== normalizedSessionId);
+  if (nextSessionIds.length === current.sessionIds.length) {
+    return current.sessionIds;
+  }
+
+  return writeConversationLayout({
+    sessionIds: nextSessionIds,
+    pinnedSessionIds: current.pinnedSessionIds,
+  }).sessionIds;
+}
+
+export function pinConversationTab(sessionId: string): ConversationLayout {
+  return moveConversationTab(sessionId, 'pinned');
+}
+
+export function unpinConversationTab(
+  sessionId: string,
+  options: { open?: boolean } = {},
+): ConversationLayout {
+  const normalizedSessionId = normalizeSessionId(sessionId);
+  const current = readConversationLayout();
+  const nextPinnedSessionIds = current.pinnedSessionIds.filter((id) => id !== normalizedSessionId);
+
+  if (nextPinnedSessionIds.length === current.pinnedSessionIds.length) {
     return current;
   }
 
-  return writeOpenSessionIds(next);
+  const nextSessionIds = options.open === false || current.sessionIds.includes(normalizedSessionId)
+    ? current.sessionIds
+    : [...current.sessionIds, normalizedSessionId];
+
+  return replaceConversationLayout({
+    sessionIds: nextSessionIds,
+    pinnedSessionIds: nextPinnedSessionIds,
+  });
 }
 
 export function reorderOpenSessionIds(
@@ -146,4 +244,63 @@ export function reorderOpenSessionIds(
   const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
   reordered.splice(insertIndex, 0, draggedId);
   return reordered;
+}
+
+export function moveConversationToSection(
+  layout: ConversationLayout,
+  draggedSessionId: string,
+  targetSection: ConversationShelf,
+  targetSessionId?: string | null,
+  position: OpenConversationDropPosition = 'after',
+): ConversationLayout {
+  const normalizedLayout = normalizeConversationLayout(layout);
+  const draggedId = normalizeSessionId(draggedSessionId);
+
+  if (!draggedId) {
+    return normalizedLayout;
+  }
+
+  const nextSessionIds = normalizedLayout.sessionIds.filter((id) => id !== draggedId);
+  const nextPinnedSessionIds = normalizedLayout.pinnedSessionIds.filter((id) => id !== draggedId);
+  const targetIds = targetSection === 'open' ? nextSessionIds : nextPinnedSessionIds;
+  const normalizedTargetId = normalizeSessionId(targetSessionId);
+
+  if (!normalizedTargetId) {
+    targetIds.push(draggedId);
+    return normalizeConversationLayout({
+      sessionIds: nextSessionIds,
+      pinnedSessionIds: nextPinnedSessionIds,
+    });
+  }
+
+  const targetIndex = targetIds.indexOf(normalizedTargetId);
+  if (targetIndex === -1) {
+    targetIds.push(draggedId);
+    return normalizeConversationLayout({
+      sessionIds: nextSessionIds,
+      pinnedSessionIds: nextPinnedSessionIds,
+    });
+  }
+
+  const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
+  targetIds.splice(insertIndex, 0, draggedId);
+  return normalizeConversationLayout({
+    sessionIds: nextSessionIds,
+    pinnedSessionIds: nextPinnedSessionIds,
+  });
+}
+
+export function moveConversationTab(
+  sessionId: string,
+  targetSection: ConversationShelf,
+  targetSessionId?: string | null,
+  position: OpenConversationDropPosition = 'after',
+): ConversationLayout {
+  const current = readConversationLayout();
+  const next = moveConversationToSection(current, sessionId, targetSection, targetSessionId, position);
+  if (sameConversationLayout(current, next)) {
+    return current;
+  }
+
+  return writeConversationLayout(next);
 }

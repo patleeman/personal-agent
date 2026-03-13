@@ -4,6 +4,7 @@ import { parseSkillBlock, type ParsedSkillBlock } from '../../skillBlock';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { readArtifactPresentation } from '../../conversationArtifacts';
+import { extractDurableRunIdsFromBlock } from '../../conversationRuns';
 import type { MessageBlock } from '../../types';
 import { timeAgo } from '../../utils';
 import { buildChatRenderItems, type TraceClusterSummary, type TraceClusterSummaryCategory, type TraceConversationBlock } from './transcriptItems.js';
@@ -508,16 +509,19 @@ function ArtifactToolBlock({
   );
 }
 
-function ToolBlock({ block, autoOpen, onOpenArtifact, activeArtifactId }: {
+function ToolBlock({ block, autoOpen, onOpenArtifact, activeArtifactId, onOpenRun, activeRunId }: {
   block: Extract<MessageBlock, { type: 'tool_use' }>;
   autoOpen: boolean;
   onOpenArtifact?: (artifactId: string) => void;
   activeArtifactId?: string | null;
+  onOpenRun?: (runId: string) => void;
+  activeRunId?: string | null;
 }) {
   const [preference, setPreference] = useState<DisclosurePreference>('auto');
   const open = resolveDisclosureOpen(autoOpen, preference);
   const meta = toolMeta(block.tool);
   const artifact = readArtifactPresentation(block);
+  const runIds = useMemo(() => extractDurableRunIdsFromBlock(block), [block]);
 
   if (artifact) {
     return (
@@ -572,6 +576,31 @@ function ToolBlock({ block, autoOpen, onOpenArtifact, activeArtifactId }: {
           </>
         )}
       </button>
+
+      {runIds.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-inherit bg-black/5 px-3 py-2 text-[11px]">
+          <span className="uppercase tracking-[0.14em] opacity-40">runs</span>
+          {runIds.map((runId) => {
+            const isActiveRun = activeRunId === runId;
+            return (
+              <button
+                key={runId}
+                type="button"
+                onClick={() => { onOpenRun?.(runId); }}
+                disabled={!onOpenRun}
+                className={cx(
+                  'font-mono transition-colors',
+                  isActiveRun ? 'text-primary' : 'text-accent hover:text-accent/80',
+                  !onOpenRun && 'cursor-default text-dim',
+                )}
+                title={runId}
+              >
+                {isActiveRun ? 'opened' : 'inspect'} {runId}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {open && (
         <div className="border-t border-inherit">
@@ -685,12 +714,24 @@ function TraceClusterBlock({
   live,
   onOpenArtifact,
   activeArtifactId,
+  onOpenRun,
+  activeRunId,
+  onResume,
+  resumeBusy,
+  resumeTitle,
+  resumeLabel,
 }: {
   blocks: TraceConversationBlock[];
   summary: TraceClusterSummary;
   live: boolean;
   onOpenArtifact?: (artifactId: string) => void;
   activeArtifactId?: string | null;
+  onOpenRun?: (runId: string) => void;
+  activeRunId?: string | null;
+  onResume?: () => Promise<void> | void;
+  resumeBusy?: boolean;
+  resumeTitle?: string | null;
+  resumeLabel?: string;
 }) {
   const [preference, setPreference] = useState<DisclosurePreference>('auto');
   const expandedCategories = summary.categories.slice(0, 3);
@@ -702,44 +743,48 @@ function TraceClusterBlock({
   const title = isActive ? 'Working' : 'Internal work';
   const autoOpen = shouldAutoOpenTraceCluster(live, summary.hasRunning);
   const open = resolveDisclosureOpen(autoOpen, preference);
+  const panelClassName = cx(
+    'flex-1 rounded-xl border px-3 py-2.5 text-left transition-colors',
+    summary.hasError
+      ? 'border-danger/30 bg-danger/5 hover:bg-danger/10'
+      : 'border-border-subtle bg-elevated/60 hover:bg-elevated',
+  );
 
   return (
     <div className="space-y-2">
-      <button
-        type="button"
-        onClick={() => setPreference((current) => toggleDisclosurePreference(autoOpen, current))}
-        aria-expanded={open}
-        className={cx(
-          'w-full rounded-xl border px-3 py-2.5 text-left transition-colors',
-          summary.hasError
-            ? 'border-danger/30 bg-danger/5 hover:bg-danger/10'
-            : 'border-border-subtle bg-elevated/60 hover:bg-elevated',
-        )}
-      >
-        <div className="flex items-center gap-2 text-[12px]">
-          {isActive ? (
-            <span className="h-4 w-4 shrink-0 rounded-full border-[1.5px] border-current border-t-transparent animate-spin text-accent" />
-          ) : (
-            <span className={cx('w-4 shrink-0 text-center text-[11px] select-none', summary.hasError ? 'text-danger' : 'text-dim')}>⋯</span>
-          )}
-          <span className="font-medium text-primary">{title}</span>
-          <span className="text-secondary">· {summary.stepCount} step{summary.stepCount === 1 ? '' : 's'}</span>
-          <span className="flex-1" />
-          {isActive && <span className="text-[10px] uppercase tracking-[0.14em] text-accent/80">live</span>}
-          {durationLabel && !isActive && <span className="text-[11px] text-dim">{durationLabel}</span>}
-          <span className="text-[10px] text-dim">{open ? '▲ hide' : '▼ show'}</span>
-        </div>
-        {summary.categories.length > 0 && (
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            {expandedCategories.map((category) => (
-              <Pill key={category.key} tone={traceSummaryTone(category)} mono={category.kind === 'tool'}>
-                {category.label}{category.count > 1 ? ` ×${category.count}` : ''}
-              </Pill>
-            ))}
-            {remainingCategoryCount > 0 && <span className="text-[11px] text-dim">+{remainingCategoryCount} more</span>}
+      <div className="flex items-start gap-2">
+        <button
+          type="button"
+          onClick={() => setPreference((current) => toggleDisclosurePreference(autoOpen, current))}
+          aria-expanded={open}
+          className={panelClassName}
+        >
+          <div className="flex items-center gap-2 text-[12px]">
+            {isActive ? (
+              <span className="h-4 w-4 shrink-0 rounded-full border-[1.5px] border-current border-t-transparent animate-spin text-accent" />
+            ) : (
+              <span className={cx('w-4 shrink-0 text-center text-[11px] select-none', summary.hasError ? 'text-danger' : 'text-dim')}>⋯</span>
+            )}
+            <span className="font-medium text-primary">{title}</span>
+            <span className="text-secondary">· {summary.stepCount} step{summary.stepCount === 1 ? '' : 's'}</span>
+            <span className="flex-1" />
+            {isActive && <span className="text-[10px] uppercase tracking-[0.14em] text-accent/80">live</span>}
+            {durationLabel && !isActive && <span className="text-[11px] text-dim">{durationLabel}</span>}
+            <span className="text-[10px] text-dim">{open ? '▲ hide' : '▼ show'}</span>
           </div>
-        )}
-      </button>
+          {summary.categories.length > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {expandedCategories.map((category) => (
+                <Pill key={category.key} tone={traceSummaryTone(category)} mono={category.kind === 'tool'}>
+                  {category.label}{category.count > 1 ? ` ×${category.count}` : ''}
+                </Pill>
+              ))}
+              {remainingCategoryCount > 0 && <span className="text-[11px] text-dim">+{remainingCategoryCount} more</span>}
+            </div>
+          )}
+        </button>
+        <ResumeConversationAction onResume={onResume} busy={resumeBusy} title={resumeTitle} label={resumeLabel} />
+      </div>
 
       {open && (
         <div className="ml-3 space-y-2 border-l border-border-subtle pl-3">
@@ -750,7 +795,17 @@ function TraceClusterBlock({
               case 'thinking':
                 return <ThinkingBlock key={`thinking-${index}`} block={block} autoOpen={autoOpen} />;
               case 'tool_use':
-                return <ToolBlock key={`tool-${index}`} block={block} autoOpen={autoOpen} onOpenArtifact={onOpenArtifact} activeArtifactId={activeArtifactId} />;
+                return (
+                  <ToolBlock
+                    key={`tool-${index}`}
+                    block={block}
+                    autoOpen={autoOpen}
+                    onOpenArtifact={onOpenArtifact}
+                    activeArtifactId={activeArtifactId}
+                    onOpenRun={onOpenRun}
+                    activeRunId={activeRunId}
+                  />
+                );
               case 'subagent':
                 return <SubagentBlock key={`subagent-${index}`} block={block} />;
               case 'error':
@@ -819,9 +874,49 @@ function ImageBlock({ block }: { block: Extract<MessageBlock, { type: 'image' }>
   return <ImagePreview alt={block.alt} src={block.src} caption={block.caption} width={block.width} height={block.height} maxHeight={320} />;
 }
 
+function ResumeConversationAction({
+  onResume,
+  busy = false,
+  title,
+  label = 'resume',
+}: {
+  onResume?: () => Promise<void> | void;
+  busy?: boolean;
+  title?: string | null;
+  label?: string;
+}) {
+  if (!onResume) {
+    return null;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => { void onResume(); }}
+      disabled={busy}
+      title={title ?? 'Resume this conversation'}
+      className="shrink-0 text-[11px] font-medium text-accent transition-colors hover:text-accent/80 disabled:cursor-default disabled:text-dim"
+    >
+      {busy ? 'opening…' : label}
+    </button>
+  );
+}
+
 // ── ErrorBlock ────────────────────────────────────────────────────────────────
 
-function ErrorBlock({ block }: { block: Extract<MessageBlock, { type: 'error' }> }) {
+function ErrorBlock({
+  block,
+  onResume,
+  resumeBusy,
+  resumeTitle,
+  resumeLabel,
+}: {
+  block: Extract<MessageBlock, { type: 'error' }>;
+  onResume?: () => Promise<void> | void;
+  resumeBusy?: boolean;
+  resumeTitle?: string | null;
+  resumeLabel?: string;
+}) {
   return (
     <SurfacePanel className="border-danger/30 bg-danger/5 px-3 py-2.5 text-[12px] font-mono flex gap-2 items-start">
       <span className="text-danger font-bold shrink-0 mt-0.5 select-none">✕</span>
@@ -829,6 +924,7 @@ function ErrorBlock({ block }: { block: Extract<MessageBlock, { type: 'error' }>
         {block.tool && <span className="text-danger/70 font-semibold">{block.tool} · </span>}
         <span className="text-danger/85 leading-relaxed">{block.message}</span>
       </div>
+      <ResumeConversationAction onResume={onResume} busy={resumeBusy} title={resumeTitle} />
     </SurfacePanel>
   );
 }
@@ -839,12 +935,15 @@ function MsgActions({
   text,
   isUser,
   onFork,
+  onCheckpoint,
 }: {
   text: string;
   isUser?: boolean;
   onFork?: () => Promise<void> | void;
+  onCheckpoint?: () => Promise<void> | void;
 }) {
   const [isForking, setIsForking] = useState(false);
+  const [isSavingCheckpoint, setIsSavingCheckpoint] = useState(false);
 
   async function handleFork() {
     if (!onFork || isForking) {
@@ -859,9 +958,32 @@ function MsgActions({
     }
   }
 
+  async function handleCheckpoint() {
+    if (!onCheckpoint || isSavingCheckpoint) {
+      return;
+    }
+
+    try {
+      setIsSavingCheckpoint(true);
+      await onCheckpoint();
+    } finally {
+      setIsSavingCheckpoint(false);
+    }
+  }
+
   return (
     <div className={`flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${isUser ? 'justify-start' : 'justify-end'}`}>
       <CopyBtn text={text} small />
+      {onCheckpoint && (
+        <button
+          onClick={() => { void handleCheckpoint(); }}
+          className={cx('ui-action-button', isSavingCheckpoint && 'text-accent')}
+          title="Save checkpoint at this message"
+          disabled={isSavingCheckpoint}
+        >
+          {isSavingCheckpoint ? '⟡ saving…' : '⟡ checkpoint'}
+        </button>
+      )}
       {!isUser && onFork && (
         <button
           onClick={() => { void handleFork(); }}
@@ -872,18 +994,19 @@ function MsgActions({
           {isForking ? '⑂ forking…' : '⑂ fork'}
         </button>
       )}
-      {isUser && (
-        <button className="ui-action-button" title="Rewind to here">
-          ↩ rewind
-        </button>
-      )}
     </div>
   );
 }
 
 // ── UserMessage ───────────────────────────────────────────────────────────────
 
-function UserMessage({ block }: { block: Extract<MessageBlock, { type: 'user' }> }) {
+function UserMessage({
+  block,
+  onCheckpoint,
+}: {
+  block: Extract<MessageBlock, { type: 'user' }>;
+  onCheckpoint?: () => Promise<void> | void;
+}) {
   const imageCount = block.images?.length ?? 0;
   const actionText = block.text || (imageCount > 0
     ? `[${imageCount} image attachment${imageCount === 1 ? '' : 's'}]`
@@ -893,7 +1016,7 @@ function UserMessage({ block }: { block: Extract<MessageBlock, { type: 'user' }>
 
   return (
     <div className="group flex flex-col items-end gap-1.5">
-      <MsgActions text={actionText} isUser />
+      <MsgActions text={actionText} isUser onCheckpoint={onCheckpoint} />
       <div className="max-w-[86%]">
         <div className="ui-message-card-user space-y-2">
           {block.images && block.images.length > 0 && (
@@ -935,10 +1058,12 @@ function UserMessage({ block }: { block: Extract<MessageBlock, { type: 'user' }>
 function AssistantMessage({
   block,
   onFork,
+  onCheckpoint,
   showCursor = false,
 }: {
   block: Extract<MessageBlock, { type: 'text' }>;
   onFork?: () => Promise<void> | void;
+  onCheckpoint?: () => Promise<void> | void;
   showCursor?: boolean;
 }) {
   const shouldShowCursor = showCursor || !!block.streaming;
@@ -960,9 +1085,54 @@ function AssistantMessage({
         </div>
         <div className="flex items-center gap-2 pt-0.5">
           <p className="ui-message-meta">{timeAgo(block.ts)}</p>
-          <MsgActions text={block.text} onFork={onFork} />
+          <MsgActions text={block.text} onCheckpoint={onCheckpoint} onFork={onFork} />
         </div>
       </div>
+    </div>
+  );
+}
+
+function SummaryMessage({
+  block,
+}: {
+  block: Extract<MessageBlock, { type: 'summary' }>;
+}) {
+  const isCompaction = block.kind === 'compaction';
+  const label = isCompaction ? 'Context compacted' : 'Branch summary';
+  const detail = isCompaction
+    ? 'Older turns were summarized to keep the active context window focused.'
+    : 'Context from another branch was summarized while preserving the current path.';
+  const accentClass = isCompaction
+    ? 'border-warning/25 bg-warning/5'
+    : 'border-teal/20 bg-teal/5';
+  const markerClass = isCompaction
+    ? 'border-warning/25 bg-warning/10 text-warning'
+    : 'border-teal/25 bg-teal/10 text-teal';
+  const labelClass = isCompaction ? 'text-warning' : 'text-teal';
+
+  return (
+    <div className="group">
+      <SurfacePanel muted className={cx('px-3.5 py-3.5', accentClass)} data-summary-kind={block.kind}>
+        <div className="flex items-start gap-3">
+          <div className={cx('mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-[11px] font-semibold', markerClass)}>
+            <span aria-hidden="true">{isCompaction ? '≋' : '⑂'}</span>
+          </div>
+          <div className="min-w-0 flex-1 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className={cx('text-[10px] font-semibold uppercase tracking-[0.18em]', labelClass)}>{label}</p>
+              <span className="flex-1" />
+              <p className="ui-message-meta">{timeAgo(block.ts)}</p>
+            </div>
+            <p className="text-[12px] leading-relaxed text-secondary">{detail}</p>
+            <div className="text-primary">
+              {renderText(block.text)}
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-0.5">
+              <MsgActions text={`${block.title}\n\n${block.text}`} />
+            </div>
+          </div>
+        </div>
+      </SurfacePanel>
     </div>
   );
 }
@@ -987,21 +1157,35 @@ export function ChatView({
   messages,
   isStreaming = false,
   onForkMessage,
+  onCheckpointMessage,
   onOpenArtifact,
   activeArtifactId,
+  onOpenRun,
+  activeRunId,
+  onResumeConversation,
+  resumeConversationBusy = false,
+  resumeConversationTitle,
+  resumeConversationLabel = 'resume',
 }: {
   messages: MessageBlock[];
   isStreaming?: boolean;
   onForkMessage?: (messageIndex: number) => Promise<void> | void;
+  onCheckpointMessage?: (block: MessageBlock, messageIndex: number) => Promise<void> | void;
   onOpenArtifact?: (artifactId: string) => void;
   activeArtifactId?: string | null;
+  onOpenRun?: (runId: string) => void;
+  activeRunId?: string | null;
+  onResumeConversation?: () => Promise<void> | void;
+  resumeConversationBusy?: boolean;
+  resumeConversationTitle?: string | null;
+  resumeConversationLabel?: string;
 }) {
   const renderItems = useMemo(() => buildChatRenderItems(messages), [messages]);
   const streamingStatusLabel = getStreamingStatusLabel(messages, isStreaming);
   const lastBlock = messages[messages.length - 1];
   const showStreamingIndicator = !!streamingStatusLabel && (!lastBlock || lastBlock.type === 'user');
 
-  function renderMessageBlock(block: MessageBlock, index: number) {
+  function renderMessageBlock(block: MessageBlock, index: number, isTailItem: boolean) {
     const markerKind = block.type === 'user'
       ? 'user'
       : block.type === 'text'
@@ -1013,19 +1197,45 @@ export function ChatView({
     const el = (() => {
       switch (block.type) {
         case 'user':
-          return <UserMessage block={block} />;
+          return <UserMessage block={block} onCheckpoint={onCheckpointMessage ? () => onCheckpointMessage(block, index) : undefined} />;
         case 'text':
-          return <AssistantMessage block={block} showCursor={showStreamingCursor} onFork={onForkMessage ? () => onForkMessage(index) : undefined} />;
+          return (
+            <AssistantMessage
+              block={block}
+              showCursor={showStreamingCursor}
+              onCheckpoint={onCheckpointMessage ? () => onCheckpointMessage(block, index) : undefined}
+              onFork={onForkMessage ? () => onForkMessage(index) : undefined}
+            />
+          );
+        case 'summary':
+          return <SummaryMessage block={block} />;
         case 'thinking':
           return <ThinkingBlock block={block} autoOpen={autoOpen} />;
         case 'tool_use':
-          return <ToolBlock block={block} autoOpen={autoOpen} onOpenArtifact={onOpenArtifact} activeArtifactId={activeArtifactId} />;
+          return (
+            <ToolBlock
+              block={block}
+              autoOpen={autoOpen}
+              onOpenArtifact={onOpenArtifact}
+              activeArtifactId={activeArtifactId}
+              onOpenRun={onOpenRun}
+              activeRunId={activeRunId}
+            />
+          );
         case 'subagent':
           return <SubagentBlock block={block} />;
         case 'image':
           return <ImageBlock block={block} />;
         case 'error':
-          return <ErrorBlock block={block} />;
+          return (
+            <ErrorBlock
+              block={block}
+              onResume={isTailItem ? onResumeConversation : undefined}
+              resumeBusy={resumeConversationBusy}
+              resumeTitle={resumeConversationTitle}
+              resumeLabel={resumeConversationLabel}
+            />
+          );
         default:
           return null;
       }
@@ -1046,10 +1256,12 @@ export function ChatView({
   return (
     <>
       <style>{`@keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
-      <div className="space-y-4 px-6 py-5">
+      <div className="space-y-4 pl-6 pr-10 py-5">
         {renderItems.map((item, itemIndex) => {
+          const isTailItem = itemIndex === renderItems.length - 1;
+
           if (item.type === 'trace_cluster') {
-            const live = isStreaming && itemIndex === renderItems.length - 1;
+            const live = isStreaming && isTailItem;
 
             return (
               <div key={`trace-${item.startIndex}-${item.endIndex}`}>
@@ -1062,12 +1274,18 @@ export function ChatView({
                   live={live}
                   onOpenArtifact={onOpenArtifact}
                   activeArtifactId={activeArtifactId}
+                  onOpenRun={onOpenRun}
+                  activeRunId={activeRunId}
+                  onResume={isTailItem ? onResumeConversation : undefined}
+                  resumeBusy={resumeConversationBusy}
+                  resumeTitle={resumeConversationTitle}
+                  resumeLabel={resumeConversationLabel}
                 />
               </div>
             );
           }
 
-          return renderMessageBlock(item.block, item.index);
+          return renderMessageBlock(item.block, item.index, isTailItem);
         })}
         {showStreamingIndicator && <StreamingIndicator label={streamingStatusLabel ?? 'Working…'} />}
       </div>

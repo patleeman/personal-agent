@@ -242,7 +242,7 @@ function buildDaemonServiceEnvironment(): Record<string, string> {
 
 function buildWebUiServiceEnvironment(
   options: Required<WebUiServiceOptions>,
-  release: { distDir: string; slot: string },
+  release: { distDir: string; slot: string; revision?: string },
 ): Record<string, string> {
   const environment: Record<string, string> = {
     PERSONAL_AGENT_REPO_ROOT: resolve(options.repoRoot),
@@ -250,6 +250,10 @@ function buildWebUiServiceEnvironment(
     PA_WEB_DIST: release.distDir,
     PERSONAL_AGENT_WEB_SLOT: release.slot,
   };
+
+  if (release.revision) {
+    environment.PERSONAL_AGENT_WEB_REVISION = release.revision;
+  }
 
   const passthroughKeys = [
     'PATH',

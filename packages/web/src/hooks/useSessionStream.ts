@@ -41,6 +41,7 @@ export function selectVisibleStreamState(
 
 export function useSessionStream(sessionId: string | null) {
   const [state, setState] = useState<StreamState>(INITIAL_STREAM_STATE);
+  const [connectVersion, setConnectVersion] = useState(0);
   // Mutable refs to avoid stale closures in the SSE handler
   const blocksRef = useRef<MessageBlock[]>([]);
   const streamingRef = useRef(false);
@@ -77,6 +78,14 @@ export function useSessionStream(sessionId: string | null) {
   const abort = useCallback(async () => {
     if (!sessionId) return;
     await api.abortSession(sessionId);
+  }, [sessionId]);
+
+  const reconnect = useCallback(() => {
+    if (!sessionId) {
+      return;
+    }
+
+    setConnectVersion((current) => current + 1);
   }, [sessionId]);
 
   useEffect(() => {
@@ -122,11 +131,11 @@ export function useSessionStream(sessionId: string | null) {
       closed = true;
       es?.close();
     };
-  }, [sessionId]);
+  }, [connectVersion, sessionId]);
 
   const visibleState = selectVisibleStreamState(state, stateSessionIdRef.current, sessionId);
 
-  return { ...visibleState, send, abort };
+  return { ...visibleState, send, abort, reconnect };
 }
 
 // ── Event → block reducer ─────────────────────────────────────────────────────

@@ -316,6 +316,26 @@ The fact that something is not currently visible in the web UI is **not by itsel
 
 The real question is whether the event is already sufficiently surfaced somewhere you are likely to see.
 
+### Internal system event defaults
+
+These defaults are intentionally conservative.
+
+| Event | Default durable surfacing | Default interrupting notification |
+| --- | --- | --- |
+| Application restart complete | unread inbox activity | none |
+| Application restart failed | unread inbox activity | maybe |
+| Web UI rollback or mark-bad | unread inbox activity | maybe |
+| Daemon auto-restarted to match the active profile | unread inbox activity | none |
+| Daemon became unhealthy or later recovered | unread inbox activity | usually none |
+| Gateway became unhealthy or later recovered | unread inbox activity | usually none |
+| Ordinary manual service actions or config saves | none beyond the initiating surface | none |
+
+Practical rule:
+
+- **write unread inbox activity for async or out-of-band internal events**
+- **reserve interrupting notifications for high-signal failures or disruptive background events**
+- **do not notify just because something happened somewhere in the system**
+
 ---
 
 ## Decision table

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { StorageLike } from './reloadState';
 import type { MessageBlock } from './types';
-import { buildConversationComposerStorageKey, persistForkPromptDraft, resolveForkEntryForMessage } from './forking';
+import { buildConversationComposerStorageKey, persistForkPromptDraft, resolveForkEntryForMessage, resolveSessionEntryIdFromBlockId } from './forking';
 
 function createStorage(): StorageLike & { getItem(key: string): string | null } {
   const data = new Map<string, string>();
@@ -48,6 +48,18 @@ describe('resolveForkEntryForMessage', () => {
     expect(resolveForkEntryForMessage(messages, 1, [
       { entryId: 'entry-1', text: 'Prompt' },
     ])).toBeNull();
+  });
+});
+
+describe('resolveSessionEntryIdFromBlockId', () => {
+  it('strips rendered block suffixes back to the source session entry id', () => {
+    expect(resolveSessionEntryIdFromBlockId('entry-123-x4')).toBe('entry-123');
+    expect(resolveSessionEntryIdFromBlockId('entry-123-t4')).toBe('entry-123');
+    expect(resolveSessionEntryIdFromBlockId('entry-123-e4')).toBe('entry-123');
+  });
+
+  it('returns the input unchanged when it is already a session entry id', () => {
+    expect(resolveSessionEntryIdFromBlockId('entry-123')).toBe('entry-123');
   });
 });
 

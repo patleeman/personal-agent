@@ -80,7 +80,7 @@ See [Inbox and Activity](./inbox.md).
 
 ### Project
 
-A project is the durable home for long-running work.
+A project is the durable home for long-running work across conversations.
 
 Use it for:
 
@@ -88,8 +88,12 @@ Use it for:
 - status
 - blockers
 - recent progress
-- milestones
+- a canonical project brief
+- optional milestones
 - execution tasks
+- appended notes
+- attachments and project artifacts
+- linked conversations shown by the UI
 
 If the work should still make sense next week, it probably belongs in a project.
 
@@ -159,7 +163,7 @@ See [Daemon and Background Automation](./daemon.md).
 | Need | Best fit | Why |
 | --- | --- | --- |
 | Work with the agent right now | conversation | best place for active interaction |
-| Track a real piece of ongoing work | project | durable plan, milestones, blockers, status |
+| Track a real piece of ongoing work | project | durable plan, brief, notes, files, blockers, status, and linked conversations |
 | Save something the agent should know later | memory doc / skill / AGENTS | reusable durable knowledge |
 | Notice async outcomes later | inbox/activity | attention surface, not a transcript |
 | Run something on a schedule | scheduled task | unattended automation |

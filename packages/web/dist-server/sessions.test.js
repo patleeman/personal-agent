@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, un
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { buildDisplayBlocksFromEntries, clearSessionCaches, listSessions, readSessionBlocks } from './sessions.js';
+import { buildDisplayBlocksFromEntries, clearSessionCaches, listSessions, readSessionBlocks, readSessionTree, renameStoredSession } from './sessions.js';
 const originalEnv = process.env;
 const tempDirs = [];
 function createTempSessionsDir() {
@@ -112,6 +112,44 @@ describe('sessions', () => {
             messageCount: 2,
         }));
         expect(readSessionBlocks('session-named')?.meta.title).toBe('Generated conversation title');
+    });
+    it('renames a stored conversation by appending session metadata', () => {
+        const sessionsDir = createTempSessionsDir();
+        configureSessionEnv(sessionsDir);
+        const filePath = writeSessionFile({
+            sessionsDir,
+            sessionId: 'session-rename',
+            title: 'Fallback first prompt',
+            assistantTexts: ['Generated answer'],
+        });
+        expect(renameStoredSession('session-rename', '  Better manual title  ')).toEqual(expect.objectContaining({
+            id: 'session-rename',
+            title: 'Better manual title',
+        }));
+        expect(listSessions()[0]).toEqual(expect.objectContaining({
+            id: 'session-rename',
+            title: 'Better manual title',
+            messageCount: 2,
+        }));
+        expect(readSessionBlocks('session-rename')?.meta.title).toBe('Better manual title');
+        expect(readFileSync(filePath, 'utf-8')).toContain('"name":"Better manual title"');
+    });
+    it('lets the latest manual rename win over earlier session names', () => {
+        const sessionsDir = createTempSessionsDir();
+        configureSessionEnv(sessionsDir);
+        writeSessionFile({
+            sessionsDir,
+            sessionId: 'session-renamed-twice',
+            title: 'Fallback first prompt',
+            assistantTexts: ['Generated answer'],
+            sessionName: 'Original generated title',
+        });
+        renameStoredSession('session-renamed-twice', 'Updated manual title');
+        expect(listSessions()[0]).toEqual(expect.objectContaining({
+            id: 'session-renamed-twice',
+            title: 'Updated manual title',
+        }));
+        expect(readSessionBlocks('session-renamed-twice')?.meta.title).toBe('Updated manual title');
     });
     it('writes a persistent session index and reuses it after cache clear', () => {
         const sessionsDir = createTempSessionsDir();
@@ -248,6 +286,249 @@ describe('sessions', () => {
         expect(detail?.blocks.filter((block) => block.type === 'text').map((block) => block.text)).toEqual([
             'Old reply',
             'Newest reply',
+        ]);
+    });
+    it('shows the latest compaction summary and only the kept transcript tail', () => {
+        const sessionsDir = createTempSessionsDir();
+        configureSessionEnv(sessionsDir);
+        const dir = join(sessionsDir, '--tmp-project--');
+        mkdirSync(dir, { recursive: true });
+        const filePath = join(dir, '2026-03-11T12-00-00-000Z_session-compact.jsonl');
+        writeFileSync(filePath, [
+            JSON.stringify({ type: 'session', version: 3, id: 'session-compact', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
+            JSON.stringify({ type: 'model_change', id: 'session-compact-model', parentId: null, timestamp: '2026-03-11T12:00:00.000Z', modelId: 'test-model' }),
+            JSON.stringify({
+                type: 'message',
+                id: 'session-compact-user-1',
+                parentId: null,
+                timestamp: '2026-03-11T12:00:00.000Z',
+                message: { role: 'user', content: 'Before compaction' },
+            }),
+            JSON.stringify({
+                type: 'message',
+                id: 'session-compact-assistant-1',
+                parentId: 'session-compact-user-1',
+                timestamp: '2026-03-11T12:00:01.000Z',
+                message: { role: 'assistant', content: [{ type: 'text', text: 'Older reply' }] },
+            }),
+            JSON.stringify({
+                type: 'message',
+                id: 'session-compact-user-2',
+                parentId: 'session-compact-assistant-1',
+                timestamp: '2026-03-11T12:00:02.000Z',
+                message: { role: 'user', content: 'Keep this prompt' },
+            }),
+            JSON.stringify({
+                type: 'message',
+                id: 'session-compact-assistant-2',
+                parentId: 'session-compact-user-2',
+                timestamp: '2026-03-11T12:00:03.000Z',
+                message: { role: 'assistant', content: [{ type: 'text', text: 'Keep this reply' }] },
+            }),
+            JSON.stringify({
+                type: 'compaction',
+                id: 'session-compact-compaction-1',
+                parentId: 'session-compact-assistant-2',
+                timestamp: '2026-03-11T12:00:04.000Z',
+                summary: '## Goal\nKeep only the latest summary.\n\n## Progress\n- Preserved the recent turn.',
+                firstKeptEntryId: 'session-compact-user-2',
+                tokensBefore: 1234,
+            }),
+            JSON.stringify({
+                type: 'message',
+                id: 'session-compact-user-3',
+                parentId: 'session-compact-compaction-1',
+                timestamp: '2026-03-11T12:00:05.000Z',
+                message: { role: 'user', content: 'Continue after compaction' },
+            }),
+            JSON.stringify({
+                type: 'message',
+                id: 'session-compact-assistant-3',
+                parentId: 'session-compact-user-3',
+                timestamp: '2026-03-11T12:00:06.000Z',
+                message: { role: 'assistant', content: [{ type: 'text', text: 'Newest reply' }] },
+            }),
+        ].join('\n') + '\n');
+        const detail = readSessionBlocks('session-compact');
+        expect(detail?.blocks).toEqual([
+            {
+                type: 'user',
+                id: 'session-compact-user-1',
+                ts: '2026-03-11T12:00:00.000Z',
+                text: 'Before compaction',
+            },
+            {
+                type: 'text',
+                id: 'session-compact-assistant-1-x1',
+                ts: '2026-03-11T12:00:01.000Z',
+                text: 'Older reply',
+            },
+            {
+                type: 'user',
+                id: 'session-compact-user-2',
+                ts: '2026-03-11T12:00:02.000Z',
+                text: 'Keep this prompt',
+            },
+            {
+                type: 'text',
+                id: 'session-compact-assistant-2-x3',
+                ts: '2026-03-11T12:00:03.000Z',
+                text: 'Keep this reply',
+            },
+            {
+                type: 'summary',
+                id: 'session-compact-compaction-1',
+                ts: '2026-03-11T12:00:04.000Z',
+                kind: 'compaction',
+                title: 'Compaction summary',
+                text: '## Goal\nKeep only the latest summary.\n\n## Progress\n- Preserved the recent turn.',
+            },
+            {
+                type: 'user',
+                id: 'session-compact-user-3',
+                ts: '2026-03-11T12:00:05.000Z',
+                text: 'Continue after compaction',
+            },
+            {
+                type: 'text',
+                id: 'session-compact-assistant-3-x6',
+                ts: '2026-03-11T12:00:06.000Z',
+                text: 'Newest reply',
+            },
+        ]);
+    });
+    it('builds a tree snapshot that includes inactive branches with no jump target', () => {
+        const sessionsDir = createTempSessionsDir();
+        configureSessionEnv(sessionsDir);
+        const dir = join(sessionsDir, '--tmp-project--');
+        mkdirSync(dir, { recursive: true });
+        const filePath = join(dir, '2026-03-11T12-30-00-000Z_session-tree.jsonl');
+        writeFileSync(filePath, [
+            JSON.stringify({ type: 'session', version: 3, id: 'session-tree', timestamp: '2026-03-11T12:30:00.000Z', cwd: '/tmp/project' }),
+            JSON.stringify({ type: 'model_change', id: 'session-tree-model', parentId: null, timestamp: '2026-03-11T12:30:00.000Z', modelId: 'test-model' }),
+            JSON.stringify({
+                type: 'message',
+                id: 'tree-user-1',
+                parentId: null,
+                timestamp: '2026-03-11T12:30:00.000Z',
+                message: { role: 'user', content: 'Start here' },
+            }),
+            JSON.stringify({
+                type: 'message',
+                id: 'tree-assistant-1',
+                parentId: 'tree-user-1',
+                timestamp: '2026-03-11T12:30:01.000Z',
+                message: { role: 'assistant', content: [{ type: 'text', text: 'Choose a direction' }] },
+            }),
+            JSON.stringify({
+                type: 'message',
+                id: 'tree-user-branch-a',
+                parentId: 'tree-assistant-1',
+                timestamp: '2026-03-11T12:30:02.000Z',
+                message: { role: 'user', content: 'Take branch A' },
+            }),
+            JSON.stringify({
+                type: 'message',
+                id: 'tree-assistant-branch-a',
+                parentId: 'tree-user-branch-a',
+                timestamp: '2026-03-11T12:30:03.000Z',
+                message: { role: 'assistant', content: [{ type: 'text', text: 'Branch A answer' }] },
+            }),
+            JSON.stringify({
+                type: 'message',
+                id: 'tree-user-branch-b',
+                parentId: 'tree-assistant-1',
+                timestamp: '2026-03-11T12:30:04.000Z',
+                message: { role: 'user', content: 'Take branch B' },
+            }),
+            JSON.stringify({
+                type: 'message',
+                id: 'tree-assistant-branch-b',
+                parentId: 'tree-user-branch-b',
+                timestamp: '2026-03-11T12:30:05.000Z',
+                message: { role: 'assistant', content: [{ type: 'text', text: 'Branch B answer' }] },
+            }),
+        ].join('\n') + '\n');
+        const detail = readSessionBlocks('session-tree');
+        expect(detail?.blocks.map((block) => block.id)).toEqual([
+            'tree-user-1',
+            'tree-assistant-1-x1',
+            'tree-user-branch-b',
+            'tree-assistant-branch-b-x3',
+        ]);
+        const tree = readSessionTree('session-tree');
+        expect(tree?.leafId).toBe('tree-assistant-branch-b');
+        expect(tree?.roots).toEqual([
+            {
+                id: 'tree-user-1',
+                kind: 'user',
+                label: 'user',
+                preview: 'Start here',
+                ts: '2026-03-11T12:30:00.000Z',
+                blockIndex: 0,
+                active: false,
+                onActivePath: true,
+                children: [
+                    {
+                        id: 'tree-assistant-1',
+                        kind: 'assistant',
+                        label: 'asst',
+                        preview: 'Choose a direction',
+                        ts: '2026-03-11T12:30:01.000Z',
+                        blockIndex: 1,
+                        active: false,
+                        onActivePath: true,
+                        children: [
+                            {
+                                id: 'tree-user-branch-a',
+                                kind: 'user',
+                                label: 'user',
+                                preview: 'Take branch A',
+                                ts: '2026-03-11T12:30:02.000Z',
+                                blockIndex: null,
+                                active: false,
+                                onActivePath: false,
+                                children: [
+                                    {
+                                        id: 'tree-assistant-branch-a',
+                                        kind: 'assistant',
+                                        label: 'asst',
+                                        preview: 'Branch A answer',
+                                        ts: '2026-03-11T12:30:03.000Z',
+                                        blockIndex: null,
+                                        active: false,
+                                        onActivePath: false,
+                                        children: [],
+                                    },
+                                ],
+                            },
+                            {
+                                id: 'tree-user-branch-b',
+                                kind: 'user',
+                                label: 'user',
+                                preview: 'Take branch B',
+                                ts: '2026-03-11T12:30:04.000Z',
+                                blockIndex: 2,
+                                active: false,
+                                onActivePath: true,
+                                children: [
+                                    {
+                                        id: 'tree-assistant-branch-b',
+                                        kind: 'assistant',
+                                        label: 'asst',
+                                        preview: 'Branch B answer',
+                                        ts: '2026-03-11T12:30:05.000Z',
+                                        blockIndex: 3,
+                                        active: true,
+                                        onActivePath: true,
+                                        children: [],
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
         ]);
     });
     it('removes deleted session files from the cache and persistent index', () => {

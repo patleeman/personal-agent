@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { useApi } from '../hooks';
-import type { GatewayLogTail, WebUiReleaseSummary } from '../types';
+import type { GatewayLogTail, WebUiBadReleaseSummary, WebUiReleaseSummary } from '../types';
 import { timeAgo } from '../utils';
 import { ErrorState, LoadingState, PageHeader, PageHeading, SectionLabel, ToolbarButton } from '../components/ui';
 
@@ -66,10 +66,12 @@ function StatBlock({
 function ReleaseBlock({
   label,
   release,
+  badRelease,
   emptyLabel,
 }: {
   label: string;
   release?: WebUiReleaseSummary;
+  badRelease?: WebUiBadReleaseSummary;
   emptyLabel: string;
 }) {
   return (
@@ -86,6 +88,11 @@ function ReleaseBlock({
             <p className="ui-card-meta">
               built {timeAgo(release.builtAt)} · source {shortPath(release.sourceRepoRoot, 72)}
             </p>
+            {badRelease && (
+              <p className="text-[12px] text-danger">
+                Marked bad {timeAgo(badRelease.markedBadAt)}{badRelease.reason ? ` · ${badRelease.reason}` : ''}
+              </p>
+            )}
           </>
         )}
       </div>
@@ -97,6 +104,28 @@ function ReleaseBlock({
           <p className="break-all"><span className="text-dim">server:</span> {shortPath(release.serverEntryFile)}</p>
         </div>
       )}
+    </div>
+  );
+}
+
+function BadReleaseHistory({ releases }: { releases: WebUiBadReleaseSummary[] }) {
+  if (releases.length === 0) {
+    return <p className="ui-card-meta">No web UI releases are marked bad.</p>;
+  }
+
+  return (
+    <div className="space-y-2 text-[12px] text-secondary">
+      {releases.map((release) => (
+        <div key={[release.sourceRepoRoot, release.revision, release.markedBadAt].join(':')} className="min-w-0">
+          <p className="text-[13px] font-medium text-primary">
+            {release.revision}{release.slot ? ` · ${release.slot}` : ''}
+          </p>
+          <p className="ui-card-meta break-words">
+            marked {timeAgo(release.markedBadAt)} · source {shortPath(release.sourceRepoRoot, 72)}
+          </p>
+          {release.reason && <p className="text-danger break-words">{release.reason}</p>}
+        </div>
+      ))}
     </div>
   );
 }
@@ -120,7 +149,9 @@ function LogTailBlock({ label, log }: { label: string; log: GatewayLogTail | und
 export function WebUiPage() {
   const { data, loading, error, refetch } = useApi(api.webUiState);
   const [serviceAction, setServiceAction] = useState<'install' | 'start' | 'stop' | 'uninstall' | null>(null);
+  const [deploymentAction, setDeploymentAction] = useState<'rollback' | 'mark-bad' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [deploymentMessage, setDeploymentMessage] = useState<string | null>(null);
   const [applicationRestarting, setApplicationRestarting] = useState(false);
   const [applicationRestartMessage, setApplicationRestartMessage] = useState<string | null>(null);
   const [applicationRestartError, setApplicationRestartError] = useState<string | null>(null);
@@ -176,11 +207,14 @@ export function WebUiPage() {
     clearApplicationRestartMonitor();
   }, []);
 
+  const busy = serviceAction !== null || deploymentAction !== null || applicationRestarting;
+
   async function handleServiceAction(action: 'install' | 'start' | 'stop' | 'uninstall') {
-    if (serviceAction || applicationRestarting || !data) return;
+    if (busy || !data) return;
 
     setServiceAction(action);
     setActionError(null);
+    setDeploymentMessage(null);
     try {
       if (action === 'install') {
         await api.installWebUiService();
@@ -200,12 +234,12 @@ export function WebUiPage() {
   }
 
   async function handleApplicationRestart() {
-    if (applicationRestarting || serviceAction || !data?.service.installed) {
+    if (busy || !data?.service.installed) {
       return;
     }
 
     const confirmed = window.confirm(
-      'Rebuild repo packages, restart daemon and installed gateway services, and blue/green redeploy the managed web UI? This matches the restart phase of `pa update` without pulling git changes.'
+      'Rebuild repo packages, restart daemon and installed gateway services, and blue/green redeploy the managed web UI? This matches the restart phase of `pa update` without pulling git changes, and an inbox item will appear when cutover is complete.'
     );
     if (!confirmed) {
       return;
@@ -218,11 +252,65 @@ export function WebUiPage() {
     try {
       const previousReleaseKey = releaseKey(data.service.deployment?.activeRelease);
       const result = await api.restartApplication();
-      setApplicationRestartMessage(`${result.message} This page will reload when the new release is live.`);
+      setApplicationRestartMessage(`${result.message} This page will reload when the new release is live, and Inbox will get an unread completion item after blue/green cutover.`);
       startApplicationRestartMonitor(previousReleaseKey);
     } catch (restartError) {
       setApplicationRestarting(false);
       setApplicationRestartError(restartError instanceof Error ? restartError.message : String(restartError));
+    }
+  }
+
+  async function handleRollback() {
+    if (busy || !data?.service.installed || !data.service.deployment?.inactiveRelease) {
+      return;
+    }
+
+    const target = data.service.deployment.inactiveRelease;
+    const confirmed = window.confirm(
+      `Roll back the managed web UI to ${target.slot}${target.revision ? ` (${target.revision})` : ''}? The current active release will be marked bad.`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setDeploymentAction('rollback');
+    setActionError(null);
+    setDeploymentMessage(null);
+    try {
+      await api.rollbackWebUiService();
+      await refetch({ resetLoading: false });
+      setDeploymentMessage(`Rolled back to ${target.slot}${target.revision ? ` (${target.revision})` : ''}.`);
+    } catch (deploymentError) {
+      setActionError(deploymentError instanceof Error ? deploymentError.message : String(deploymentError));
+    } finally {
+      setDeploymentAction(null);
+    }
+  }
+
+  async function handleMarkBad() {
+    if (busy || !data?.service.deployment?.activeRelease) {
+      return;
+    }
+
+    const target = data.service.deployment.activeRelease;
+    const confirmed = window.confirm(
+      `Mark the active web UI release ${target.revision ?? target.slot} as bad? Future blue/green deploys of this exact revision will be blocked until a different revision is built.`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setDeploymentAction('mark-bad');
+    setActionError(null);
+    setDeploymentMessage(null);
+    try {
+      await api.markBadWebUiRelease();
+      await refetch({ resetLoading: false });
+      setDeploymentMessage(`Marked ${target.revision ?? target.slot} as bad.`);
+    } catch (deploymentError) {
+      setActionError(deploymentError instanceof Error ? deploymentError.message : String(deploymentError));
+    } finally {
+      setDeploymentAction(null);
     }
   }
 
@@ -234,6 +322,9 @@ export function WebUiPage() {
   const deployment = data?.service.deployment;
   const activeRelease = deployment?.activeRelease;
   const inactiveRelease = deployment?.inactiveRelease;
+  const activeReleaseBad = deployment?.activeReleaseBad;
+  const inactiveReleaseBad = deployment?.inactiveReleaseBad;
+  const badReleases = deployment?.badReleases ?? [];
   const installButtonLabel = serviceAction === 'install'
     ? 'Installing…'
     : data?.service.installed
@@ -256,7 +347,7 @@ export function WebUiPage() {
               onClick={() => {
                 void handleServiceAction(data?.service.installed ? 'uninstall' : 'install');
               }}
-              disabled={!data || serviceAction !== null || applicationRestarting}
+              disabled={!data || busy}
             >
               {serviceAction === 'uninstall' ? 'Uninstalling…' : installButtonLabel}
             </ToolbarButton>
@@ -265,17 +356,17 @@ export function WebUiPage() {
                 if (!data?.service.installed) return;
                 void handleServiceAction(data.service.running ? 'stop' : 'start');
               }}
-              disabled={!data?.service.installed || serviceAction !== null || applicationRestarting}
+              disabled={!data?.service.installed || busy}
             >
               {serviceToggleLabel}
             </ToolbarButton>
             <ToolbarButton
               onClick={() => { void handleApplicationRestart(); }}
-              disabled={serviceAction !== null || applicationRestarting || !data?.service.installed}
+              disabled={busy || !data?.service.installed}
             >
               {applicationRestarting ? 'Restart requested…' : 'Restart service'}
             </ToolbarButton>
-            <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); }} disabled={serviceAction !== null}>↻ Refresh</ToolbarButton>
+            <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); }} disabled={busy}>↻ Refresh</ToolbarButton>
           </>
         )}
       >
@@ -297,11 +388,12 @@ export function WebUiPage() {
 
         {data && (
           <div className="space-y-8">
-            {(data.warnings.length > 0 || actionError) && (
+            {(data.warnings.length > 0 || actionError || deploymentMessage) && (
               <div className="space-y-1">
                 {data.warnings.map((warning) => (
                   <p key={warning} className="text-[12px] text-warning">{warning}</p>
                 ))}
+                {deploymentMessage && <p className="text-[12px] text-secondary">{deploymentMessage}</p>}
                 {actionError && <p className="text-[12px] text-danger">{actionError}</p>}
               </div>
             )}
@@ -330,7 +422,7 @@ export function WebUiPage() {
                 <p className="ui-card-meta">
                   The restart action above rebuilds repo packages, restarts the daemon and installed gateway services,
                   and blue/green redeploys the managed web UI. This matches the restart phase of <code>pa update</code>
-                  without pulling git changes.
+                  without pulling git changes. When the new slot is live, the active profile gets an unread Inbox item.
                 </p>
                 {!data.service.installed && (
                   <p className="text-[12px] text-warning">Requires the managed web UI service.</p>
@@ -345,19 +437,53 @@ export function WebUiPage() {
             </section>
 
             <section className="space-y-4 border-t border-border-subtle pt-6">
+              <SectionLabel label="Recovery" />
+              <div className="space-y-3 max-w-3xl">
+                <p className="ui-card-meta">
+                  If the latest deployment is unhealthy, roll back traffic to the inactive staged slot. You can also
+                  mark the current revision as bad so the next blue/green deploy refuses to restage the same git revision.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <ToolbarButton
+                    onClick={() => { void handleRollback(); }}
+                    disabled={busy || !data.service.installed || !inactiveRelease}
+                  >
+                    {deploymentAction === 'rollback' ? 'Rolling back…' : 'Rollback to inactive slot'}
+                  </ToolbarButton>
+                  <ToolbarButton
+                    onClick={() => { void handleMarkBad(); }}
+                    disabled={busy || !activeRelease}
+                  >
+                    {deploymentAction === 'mark-bad' ? 'Marking bad…' : 'Mark active release bad'}
+                  </ToolbarButton>
+                </div>
+                {!inactiveRelease && (
+                  <p className="text-[12px] text-warning">Rollback requires an inactive staged release.</p>
+                )}
+              </div>
+            </section>
+
+            <section className="space-y-4 border-t border-border-subtle pt-6">
               <SectionLabel label="Blue / green releases" />
               <div className="grid gap-x-10 gap-y-6 xl:grid-cols-2">
                 <ReleaseBlock
                   label="Active release"
                   release={activeRelease}
+                  badRelease={activeReleaseBad}
                   emptyLabel="No active release staged yet."
                 />
                 <ReleaseBlock
                   label="Inactive release"
                   release={inactiveRelease}
+                  badRelease={inactiveReleaseBad}
                   emptyLabel="The inactive slot is empty. The next update will stage it."
                 />
               </div>
+            </section>
+
+            <section className="space-y-4 border-t border-border-subtle pt-6">
+              <SectionLabel label="Bad release history" />
+              <BadReleaseHistory releases={badReleases} />
             </section>
 
             <section className="space-y-4 border-t border-border-subtle pt-6">

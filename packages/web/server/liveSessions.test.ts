@@ -2,12 +2,25 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ensureSessionFileExists, getLiveSessions, patchSessionManagerPersistence, registry, renameSession, resolvePersistentSessionDir, subscribe, toSse, type SseEvent } from './liveSessions.js';
+import {
+  ensureSessionFileExists,
+  getLiveSessions,
+  patchSessionManagerPersistence,
+  registry,
+  renameSession,
+  resolvePersistentSessionDir,
+  restoreQueuedMessage,
+  subscribe,
+  toSse,
+  type SseEvent,
+} from './liveSessions.js';
+import { clearSessionCaches } from './sessions.js';
 
 const tempDirs: string[] = [];
 
 afterEach(() => {
   registry.clear();
+  clearSessionCaches();
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -19,7 +32,7 @@ describe('live session subscriptions', () => {
       sessionId: 'session-1',
       cwd: '/tmp/workspace',
       listeners: new Set(),
-      title: '',
+      title: 'How do I fix this?',
       autoTitleRequested: false,
       lastContextUsageJson: null,
       session: {
@@ -82,12 +95,283 @@ describe('live session subscriptions', () => {
     expect(events[4]).toEqual({ type: 'agent_start' });
   });
 
+  it('merges persisted history into truncated live snapshots', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
+    tempDirs.push(dir);
+    const sessionFile = join(dir, 'session-merged.jsonl');
+    writeFileSync(sessionFile, [
+      JSON.stringify({ type: 'session', id: 'session-merged', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
+      JSON.stringify({
+        type: 'message',
+        id: 'user-1',
+        parentId: null,
+        timestamp: '2026-03-13T18:00:01.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'First prompt' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-1',
+        parentId: 'user-1',
+        timestamp: '2026-03-13T18:00:02.000Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'user-2',
+        parentId: 'assistant-1',
+        timestamp: '2026-03-13T18:00:03.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Second prompt' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-2',
+        parentId: 'user-2',
+        timestamp: '2026-03-13T18:00:04.000Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Second answer' }] },
+      }),
+      '',
+    ].join('\n'));
+
+    registry.set('session-merged', {
+      sessionId: 'session-merged',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Merged transcript',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        sessionFile,
+        state: {
+          messages: [
+            {
+              role: 'user',
+              content: [{ type: 'text', text: 'Second prompt' }],
+              timestamp: '2026-03-13T18:00:03.000Z',
+            },
+            {
+              role: 'assistant',
+              content: [{ type: 'text', text: 'Second answer' }],
+              timestamp: '2026-03-13T18:00:04.000Z',
+            },
+          ],
+          streamMessage: {
+            role: 'assistant',
+            content: [{ type: 'thinking', thinking: 'Planning the next step' }],
+            timestamp: '2026-03-13T18:00:05.000Z',
+          },
+        },
+        getContextUsage: () => null,
+        isStreaming: true,
+      },
+    } as any);
+
+    const events: SseEvent[] = [];
+    subscribe('session-merged', (event) => {
+      events.push(event);
+    });
+
+    expect(events[0]).toEqual({
+      type: 'snapshot',
+      blocks: [
+        {
+          type: 'user',
+          id: expect.any(String),
+          ts: '2026-03-13T18:00:01.000Z',
+          text: 'First prompt',
+        },
+        {
+          type: 'text',
+          id: expect.any(String),
+          ts: '2026-03-13T18:00:02.000Z',
+          text: 'First answer',
+        },
+        {
+          type: 'user',
+          id: expect.any(String),
+          ts: '2026-03-13T18:00:03.000Z',
+          text: 'Second prompt',
+        },
+        {
+          type: 'text',
+          id: expect.any(String),
+          ts: '2026-03-13T18:00:04.000Z',
+          text: 'Second answer',
+        },
+        {
+          type: 'thinking',
+          id: 'live-2-t2',
+          ts: '2026-03-13T18:00:05.000Z',
+          text: 'Planning the next step',
+        },
+      ],
+    });
+  });
+
+  it('includes compaction summaries in the live snapshot', () => {
+    registry.set('session-summary', {
+      sessionId: 'session-summary',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Compacted conversation',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: {
+          messages: [
+            {
+              role: 'compactionSummary',
+              summary: '## Goal\nKeep the compacted context visible.',
+              timestamp: 1,
+            },
+            {
+              role: 'user',
+              content: [{ type: 'text', text: 'Continue from the summary' }],
+              timestamp: 2,
+            },
+          ],
+          streamMessage: null,
+        },
+        getContextUsage: () => null,
+        isStreaming: false,
+      },
+    } as any);
+
+    const events: SseEvent[] = [];
+    subscribe('session-summary', (event) => {
+      events.push(event);
+    });
+
+    expect(events[0]).toEqual({
+      type: 'snapshot',
+      blocks: [
+        {
+          type: 'summary',
+          id: 'live-0',
+          ts: new Date(1).toISOString(),
+          kind: 'compaction',
+          title: 'Compaction summary',
+          text: '## Goal\nKeep the compacted context visible.',
+        },
+        {
+          type: 'user',
+          id: 'live-1',
+          ts: new Date(2).toISOString(),
+          text: 'Continue from the summary',
+        },
+      ],
+    });
+  });
+
+  it('uses the persisted transcript for idle live sessions', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
+    tempDirs.push(dir);
+    const sessionFile = join(dir, 'session-idle.jsonl');
+    writeFileSync(sessionFile, [
+      JSON.stringify({ type: 'session', id: 'session-idle', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
+      JSON.stringify({
+        type: 'message',
+        id: 'user-1',
+        parentId: null,
+        timestamp: '2026-03-13T18:00:01.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'First prompt' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-1',
+        parentId: 'user-1',
+        timestamp: '2026-03-13T18:00:02.000Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'user-2',
+        parentId: 'assistant-1',
+        timestamp: '2026-03-13T18:00:03.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Second prompt' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-2',
+        parentId: 'user-2',
+        timestamp: '2026-03-13T18:00:04.000Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Second answer' }] },
+      }),
+      '',
+    ].join('\n'));
+
+    registry.set('session-idle', {
+      sessionId: 'session-idle',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Keep this sidebar title fresh',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      session: {
+        sessionFile,
+        state: {
+          messages: [
+            {
+              role: 'user',
+              content: [{ type: 'text', text: 'Second prompt' }],
+              timestamp: '2026-03-13T18:00:03.000Z',
+            },
+            {
+              role: 'assistant',
+              content: [{ type: 'text', text: 'Second answer' }],
+              timestamp: '2026-03-13T18:00:04.000Z',
+            },
+          ],
+          streamMessage: null,
+        },
+        getContextUsage: () => null,
+        isStreaming: false,
+      },
+    } as any);
+
+    const events: SseEvent[] = [];
+    subscribe('session-idle', (event) => {
+      events.push(event);
+    });
+
+    expect(events[0]).toEqual({
+      type: 'snapshot',
+      blocks: [
+        {
+          type: 'user',
+          id: expect.any(String),
+          ts: '2026-03-13T18:00:01.000Z',
+          text: 'First prompt',
+        },
+        {
+          type: 'text',
+          id: expect.any(String),
+          ts: '2026-03-13T18:00:02.000Z',
+          text: 'First answer',
+        },
+        {
+          type: 'user',
+          id: expect.any(String),
+          ts: '2026-03-13T18:00:03.000Z',
+          text: 'Second prompt',
+        },
+        {
+          type: 'text',
+          id: expect.any(String),
+          ts: '2026-03-13T18:00:04.000Z',
+          text: 'Second answer',
+        },
+      ],
+    });
+  });
+
   it('includes the current live title in live session snapshots', () => {
     registry.set('session-2', {
       sessionId: 'session-2',
       cwd: '/tmp/workspace',
       listeners: new Set(),
-      title: '',
+      title: 'Keep this sidebar title fresh',
       autoTitleRequested: false,
       lastContextUsageJson: null,
       session: {
@@ -158,6 +442,50 @@ describe('live session subscriptions', () => {
     expect(events[1]).toEqual({ type: 'title_update', title: 'Generated title' });
   });
 
+  it('keeps the sticky conversation title even if in-memory messages shift later', () => {
+    registry.set('session-sticky', {
+      sessionId: 'session-sticky',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Original conversation title',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        sessionFile: '/tmp/workspace/session-sticky.jsonl',
+        state: {
+          messages: [
+            {
+              role: 'assistant',
+              content: [{ type: 'text', text: 'Compaction summary' }],
+              timestamp: 1,
+            },
+            {
+              role: 'user',
+              content: [{ type: 'text', text: 'Most recent prompt after compaction' }],
+              timestamp: 2,
+            },
+          ],
+          streamMessage: null,
+        },
+        getContextUsage: () => null,
+        isStreaming: false,
+      },
+    } as any);
+
+    expect(getLiveSessions()[0]).toEqual(expect.objectContaining({
+      id: 'session-sticky',
+      title: 'Original conversation title',
+    }));
+
+    const events: SseEvent[] = [];
+    subscribe('session-sticky', (event) => {
+      events.push(event);
+    });
+
+    expect(events[1]).toEqual({ type: 'title_update', title: 'Original conversation title' });
+  });
+
   it('broadcasts manual renames immediately', () => {
     const session = {
       sessionFile: '/tmp/workspace/session-rename.jsonl',
@@ -204,6 +532,71 @@ describe('live session subscriptions', () => {
       title: 'Better generated title',
     }));
     expect(events).toContainEqual({ type: 'title_update', title: 'Better generated title' });
+  });
+});
+
+describe('queued prompt restore', () => {
+  it('restores a queued prompt back to the composer payload without disturbing other queued items', () => {
+    const steeringMessages = ['first queued prompt', 'second queued prompt'];
+    const steeringQueue = [
+      { role: 'custom', content: 'hidden steer context' },
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'first queued prompt' }],
+      },
+      { role: 'custom', content: 'more hidden steer context' },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'second queued prompt' },
+          { type: 'image', data: 'b64-image', mimeType: 'image/png' },
+        ],
+      },
+    ];
+
+    registry.set('session-queue-restore', {
+      sessionId: 'session-queue-restore',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Restore queued prompt',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamMessage: null },
+        getContextUsage: () => null,
+        isStreaming: true,
+        getSteeringMessages: () => steeringMessages,
+        getFollowUpMessages: () => [],
+        agent: {
+          steeringQueue,
+          followUpQueue: [],
+        },
+      },
+    } as any);
+
+    const events: SseEvent[] = [];
+    subscribe('session-queue-restore', (event) => {
+      events.push(event);
+    });
+    events.length = 0;
+
+    const restored = restoreQueuedMessage('session-queue-restore', 'steer', 1);
+
+    expect(restored).toEqual({
+      text: 'second queued prompt',
+      images: [{ type: 'image', data: 'b64-image', mimeType: 'image/png' }],
+    });
+    expect(steeringMessages).toEqual(['first queued prompt']);
+    expect(steeringQueue).toEqual([
+      { role: 'custom', content: 'hidden steer context' },
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'first queued prompt' }],
+      },
+      { role: 'custom', content: 'more hidden steer context' },
+    ]);
+    expect(events).toContainEqual({ type: 'queue_state', steering: ['first queued prompt'], followUp: [] });
   });
 });
 

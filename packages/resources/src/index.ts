@@ -131,6 +131,11 @@ function collectLayerDirs(layers: ProfileLayer[], relativePath: string): string[
   return dedupe(dirs);
 }
 
+function collectRepoInternalSkillDirs(repoRoot: string): string[] {
+  const internalSkillsDir = existingDir(join(repoRoot, 'skills'));
+  return internalSkillsDir ? [internalSkillsDir] : [];
+}
+
 function collectLayerFiles(layers: ProfileLayer[], relativePath: string): string[] {
   const files = layers
     .map((layer) => existingFile(join(layer.agentDir, relativePath)))
@@ -276,7 +281,10 @@ export function resolveResourceProfile(
     .find((file): file is string => file !== undefined);
 
   const extensionDirs = collectLayerDirs(layers, 'extensions');
-  const skillDirs = collectLayerDirs(layers, 'skills');
+  const skillDirs = dedupe([
+    ...collectLayerDirs(layers, 'skills'),
+    ...collectRepoInternalSkillDirs(repoRoot),
+  ]);
   const promptDirs = collectLayerDirs(layers, 'prompts');
   const themeDirs = collectLayerDirs(layers, 'themes');
 

@@ -12,9 +12,10 @@
  *   assistant    → content: [{type:'thinking', thinking}, {type:'toolCall', id, name, arguments}, {type:'text', text}]
  *   toolResult   → toolCallId, toolName, content: [{type:'text', text}|{type:'image', data, mimeType}]
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
+import { SessionManager, } from '@mariozechner/pi-coding-agent';
 import { readSessionContextUsageFromFile } from './sessionContextUsage.js';
 export const DEFAULT_SESSIONS_DIR = join(homedir(), '.local/state/personal-agent/pi-agent/sessions');
 export const SESSIONS_DIR = DEFAULT_SESSIONS_DIR;
@@ -39,20 +40,6 @@ function parseJsonLine(rawLine) {
     catch {
         return null;
     }
-}
-function parseJsonl(filePath) {
-    const raw = readFileSync(filePath, 'utf-8');
-    const lines = [];
-    for (const rawLine of raw.split('\n')) {
-        if (!rawLine.trim()) {
-            continue;
-        }
-        const line = parseJsonLine(rawLine);
-        if (line) {
-            lines.push(line);
-        }
-    }
-    return lines;
 }
 function normalizeContent(content) {
     if (Array.isArray(content))
@@ -104,18 +91,161 @@ export function getAssistantErrorDisplayMessage(message) {
         ? errorMessage
         : 'The model returned an error before completing its response.';
 }
-export function buildDisplayBlocksFromEntries(messages) {
+function summarizeTreeText(text, maxLength = 120) {
+    const normalized = text.replace(/\s+/g, ' ').trim();
+    if (!normalized) {
+        return '';
+    }
+    return normalized.length > maxLength
+        ? `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`
+        : normalized;
+}
+function summarizeToolCallArguments(argumentsValue) {
+    if (!argumentsValue) {
+        return '';
+    }
+    const command = typeof argumentsValue.command === 'string' ? argumentsValue.command.trim() : '';
+    if (command) {
+        return summarizeTreeText(command, 100);
+    }
+    const path = typeof argumentsValue.path === 'string' ? argumentsValue.path.trim() : '';
+    if (path) {
+        return summarizeTreeText(path, 100);
+    }
+    const url = typeof argumentsValue.url === 'string' ? argumentsValue.url.trim() : '';
+    if (url) {
+        return summarizeTreeText(url, 100);
+    }
+    return summarizeTreeText(JSON.stringify(argumentsValue), 100);
+}
+function describeConversationTreeMessage(entry) {
+    if (entry.type === 'compaction') {
+        return {
+            id: entry.id,
+            kind: 'summary',
+            label: 'compact',
+            preview: summarizeTreeText(entry.summary, 110) || 'Compaction summary',
+            ts: normalizeTimestamp(entry.timestamp),
+        };
+    }
+    if (entry.type === 'branch_summary') {
+        return {
+            id: entry.id,
+            kind: 'summary',
+            label: 'branch',
+            preview: summarizeTreeText(entry.summary, 110) || 'Branch summary',
+            ts: normalizeTimestamp(entry.timestamp),
+        };
+    }
+    if (entry.type !== 'message') {
+        return null;
+    }
+    if (entry.message.role === 'user') {
+        const { text, images } = extractUserContent(entry.message.content);
+        const attachmentPreview = images.length > 0
+            ? images.length === 1
+                ? '1 image attachment'
+                : `${images.length} image attachments`
+            : '';
+        const preview = summarizeTreeText(text, 120);
+        return {
+            id: entry.id,
+            kind: 'user',
+            label: 'user',
+            preview: preview
+                ? attachmentPreview ? `${preview} · ${attachmentPreview}` : preview
+                : attachmentPreview || '(empty message)',
+            ts: normalizeTimestamp(entry.timestamp),
+        };
+    }
+    if (entry.message.role === 'assistant') {
+        const contentBlocks = normalizeContent(entry.message.content);
+        const textBlock = contentBlocks.find((block) => block.type === 'text' && block.text?.trim());
+        if (textBlock?.text) {
+            return {
+                id: entry.id,
+                kind: 'assistant',
+                label: 'asst',
+                preview: summarizeTreeText(textBlock.text, 120) || '(assistant message)',
+                ts: normalizeTimestamp(entry.timestamp),
+            };
+        }
+        const toolBlock = contentBlocks.find((block) => block.type === 'toolCall');
+        if (toolBlock) {
+            return {
+                id: entry.id,
+                kind: 'tool',
+                label: toolBlock.name?.trim() || 'tool',
+                preview: summarizeToolCallArguments(toolBlock.arguments) || '(tool call)',
+                ts: normalizeTimestamp(entry.timestamp),
+            };
+        }
+        const thinkingBlock = contentBlocks.find((block) => block.type === 'thinking' && block.thinking?.trim());
+        if (thinkingBlock?.thinking) {
+            return {
+                id: entry.id,
+                kind: 'thinking',
+                label: 'think',
+                preview: summarizeTreeText(thinkingBlock.thinking, 110) || '(thinking)',
+                ts: normalizeTimestamp(entry.timestamp),
+            };
+        }
+        const errorMessage = getAssistantErrorDisplayMessage(entry.message);
+        if (errorMessage) {
+            return {
+                id: entry.id,
+                kind: 'error',
+                label: 'error',
+                preview: summarizeTreeText(errorMessage, 110) || 'Assistant error',
+                ts: normalizeTimestamp(entry.timestamp),
+            };
+        }
+        return {
+            id: entry.id,
+            kind: 'assistant',
+            label: 'asst',
+            preview: '(assistant message)',
+            ts: normalizeTimestamp(entry.timestamp),
+        };
+    }
+    return null;
+}
+function buildDisplayBlocksInternal(messages, entryAnchorIndexById) {
     const blocks = [];
     const toolCallIndex = new Map();
     for (const [messageIndex, msg] of messages.entries()) {
-        const { role, content, toolCallId, toolName, details } = msg.message;
+        const { role, content, toolCallId, toolName, details, summary } = msg.message;
         const ts = normalizeTimestamp(msg.timestamp);
         const contentBlocks = normalizeContent(content);
         const errorMessage = getAssistantErrorDisplayMessage(msg.message);
         const baseId = msg.id || `msg-${messageIndex}`;
+        let anchorRecorded = false;
+        const recordAnchor = () => {
+            if (!entryAnchorIndexById || anchorRecorded) {
+                return;
+            }
+            entryAnchorIndexById.set(baseId, blocks.length);
+            anchorRecorded = true;
+        };
+        if (role === 'compactionSummary' || role === 'branchSummary') {
+            const normalizedSummary = summary?.trim();
+            if (normalizedSummary) {
+                recordAnchor();
+                blocks.push({
+                    type: 'summary',
+                    id: baseId,
+                    ts,
+                    kind: role === 'compactionSummary' ? 'compaction' : 'branch',
+                    title: role === 'compactionSummary' ? 'Compaction summary' : 'Branch summary',
+                    text: normalizedSummary,
+                });
+            }
+            continue;
+        }
         if (role === 'user') {
             const { text, images } = extractUserContent(content);
             if (text || images.length > 0) {
+                recordAnchor();
                 blocks.push({
                     type: 'user',
                     id: baseId,
@@ -129,14 +259,17 @@ export function buildDisplayBlocksFromEntries(messages) {
         if (role === 'assistant') {
             for (const block of contentBlocks) {
                 if (block.type === 'thinking' && block.thinking?.trim()) {
+                    recordAnchor();
                     blocks.push({ type: 'thinking', id: `${baseId}-t${blocks.length}`, ts, text: block.thinking });
                     continue;
                 }
                 if (block.type === 'text' && block.text?.trim()) {
+                    recordAnchor();
                     blocks.push({ type: 'text', id: `${baseId}-x${blocks.length}`, ts, text: block.text });
                     continue;
                 }
                 if (block.type === 'toolCall' && block.id) {
+                    recordAnchor();
                     const idx = blocks.length;
                     toolCallIndex.set(block.id, idx);
                     blocks.push({
@@ -151,6 +284,7 @@ export function buildDisplayBlocksFromEntries(messages) {
                 }
             }
             if (errorMessage) {
+                recordAnchor();
                 blocks.push({
                     type: 'error',
                     id: `${baseId}-e${blocks.length}`,
@@ -190,6 +324,14 @@ export function buildDisplayBlocksFromEntries(messages) {
     }
     return blocks;
 }
+export function buildDisplayBlocksFromEntries(messages) {
+    return buildDisplayBlocksInternal(messages);
+}
+function buildDisplayBlocksWithEntryAnchors(messages) {
+    const entryAnchorIndexById = new Map();
+    const blocks = buildDisplayBlocksInternal(messages, entryAnchorIndexById);
+    return { blocks, entryAnchorIndexById };
+}
 function extractTitleFromMessage(message) {
     if (message.role !== 'user') {
         return null;
@@ -209,6 +351,13 @@ function normalizeSessionName(name) {
     }
     const normalized = name.replace(/\s+/g, ' ').trim();
     return normalized.length > 0 ? normalized : null;
+}
+function buildSessionInfoRecord(name) {
+    return JSON.stringify({
+        type: 'session_info',
+        timestamp: new Date().toISOString(),
+        name,
+    });
 }
 function slugToCwd(slug) {
     // slug: --Users-patrickc.lee-personal-personal-agent-- → /Users/patrickc.lee/personal/personal-agent
@@ -485,6 +634,80 @@ export function clearSessionCaches() {
     loadedPersistentIndexKey = null;
     persistedIndexJson = null;
 }
+function buildDisplayMessageEntriesFromSessionEntries(entries) {
+    const displayEntries = [];
+    for (const entry of entries) {
+        if (entry.type === 'message') {
+            displayEntries.push({
+                id: entry.id,
+                timestamp: entry.timestamp,
+                message: entry.message,
+            });
+            continue;
+        }
+        if (entry.type === 'compaction') {
+            displayEntries.push({
+                id: entry.id,
+                timestamp: entry.timestamp,
+                message: {
+                    role: 'compactionSummary',
+                    summary: entry.summary,
+                    tokensBefore: entry.tokensBefore,
+                },
+            });
+            continue;
+        }
+        if (entry.type === 'branch_summary') {
+            displayEntries.push({
+                id: entry.id,
+                timestamp: entry.timestamp,
+                message: {
+                    role: 'branchSummary',
+                    summary: entry.summary,
+                    fromId: entry.fromId,
+                },
+            });
+        }
+    }
+    return displayEntries;
+}
+function buildConversationTreeNodes(nodes, context) {
+    const visibleNodes = [];
+    for (const node of nodes) {
+        const children = buildConversationTreeNodes(node.children, context);
+        const described = describeConversationTreeMessage(node.entry);
+        if (!described) {
+            visibleNodes.push(...children);
+            continue;
+        }
+        visibleNodes.push({
+            ...described,
+            blockIndex: context.activePathIds.has(node.entry.id)
+                ? context.entryAnchorIndexById.get(node.entry.id) ?? null
+                : null,
+            active: context.leafId === node.entry.id,
+            onActivePath: context.activePathIds.has(node.entry.id),
+            children,
+        });
+    }
+    return visibleNodes;
+}
+function buildConversationTreeSnapshotFromFile(filePath) {
+    const manager = SessionManager.open(filePath);
+    const branchEntries = manager.getBranch();
+    const leafId = manager.getLeafId();
+    const displayEntries = buildDisplayMessageEntriesFromSessionEntries(branchEntries);
+    const { entryAnchorIndexById } = buildDisplayBlocksWithEntryAnchors(displayEntries);
+    const activePathIds = new Set(branchEntries.map((entry) => entry.id));
+    return {
+        leafId,
+        roots: buildConversationTreeNodes(manager.getTree(), {
+            leafId,
+            activePathIds,
+            entryAnchorIndexById,
+        }),
+    };
+}
 // ── Public API ─────────────────────────────────────────────────────────────────
 export function listSessions() {
     return scanSessionMetas();
@@ -492,15 +715,47 @@ export function listSessions() {
 export function readSessionMetaByFile(filePath) {
     return readCachedSessionMeta(filePath, resolveSessionFileCwdSlug(filePath));
 }
-export function readSessionBlocks(sessionId) {
+export function renameStoredSession(sessionId, name) {
+    const normalizedName = normalizeSessionName(name);
+    if (!normalizedName) {
+        throw new Error('Conversation title must not be empty.');
+    }
     const meta = resolveSessionMeta(sessionId);
+    if (!meta) {
+        throw new Error(`Conversation ${sessionId} not found.`);
+    }
+    appendFileSync(meta.file, `${buildSessionInfoRecord(normalizedName)}\n`);
+    const updatedMeta = readCachedSessionMeta(meta.file, resolveSessionFileCwdSlug(meta.file));
+    if (!updatedMeta) {
+        throw new Error(`Conversation ${sessionId} could not be reloaded after renaming.`);
+    }
+    persistSessionIndex();
+    return updatedMeta;
+}
+export function readSessionBlocksByFile(filePath) {
+    const meta = readCachedSessionMeta(filePath, resolveSessionFileCwdSlug(filePath));
     if (!meta)
         return null;
-    const lines = parseJsonl(meta.file);
-    const messages = lines.filter(l => l.type === 'message');
+    const manager = SessionManager.open(meta.file);
+    const entries = buildDisplayMessageEntriesFromSessionEntries(manager.getBranch());
     return {
         meta,
-        blocks: buildDisplayBlocksFromEntries(messages),
+        blocks: buildDisplayBlocksFromEntries(entries),
         contextUsage: readSessionContextUsageFromFile(meta.file),
     };
+}
+export function readSessionBlocks(sessionId) {
+    const meta = resolveSessionMeta(sessionId);
+    return meta ? readSessionBlocksByFile(meta.file) : null;
+}
+export function readSessionTreeByFile(filePath) {
+    const meta = readCachedSessionMeta(filePath, resolveSessionFileCwdSlug(filePath));
+    if (!meta) {
+        return null;
+    }
+    return buildConversationTreeSnapshotFromFile(meta.file);
+}
+export function readSessionTree(sessionId) {
+    const meta = resolveSessionMeta(sessionId);
+    return meta ? readSessionTreeByFile(meta.file) : null;
 }

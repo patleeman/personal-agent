@@ -47,6 +47,7 @@ export interface ConversationArtifactToolDetails {
 export type MessageBlock =
   | { type: 'user';      id?: string; ts: string; text: string; images?: MessageImage[] }
   | { type: 'text';      id?: string; ts: string; text: string; streaming?: boolean }
+  | { type: 'summary';   id?: string; ts: string; kind: 'compaction' | 'branch'; title: string; text: string }
   | { type: 'thinking';  id?: string; ts: string; text: string }
   | { type: 'tool_use';  id?: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; running?: boolean; status?: 'running' | 'ok' | 'error'; error?: boolean; _toolCallId?: string; details?: unknown }
   | { type: 'subagent';  id?: string; ts: string; name: string; prompt: string; status: 'running' | 'complete' | 'failed'; summary?: string }
@@ -103,14 +104,72 @@ export interface ProjectTask {
   id: string;
   status: string;
   title: string;
-  milestoneId: string;
+  milestoneId?: string;
+}
+
+export interface ProjectBrief {
+  path: string;
+  content: string;
+  updatedAt: string;
+}
+
+export interface ProjectNote {
+  id: string;
+  path: string;
+  title: string;
+  kind: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectFile {
+  id: string;
+  kind: 'attachment' | 'artifact';
+  path: string;
+  title: string;
+  description?: string;
+  originalName: string;
+  mimeType?: string;
+  sizeBytes: number;
+  createdAt: string;
+  updatedAt: string;
+  downloadPath: string;
+}
+
+export interface ProjectLinkedConversation {
+  conversationId: string;
+  title: string;
+  file?: string;
+  cwd?: string;
+  lastActivityAt?: string;
+  isRunning: boolean;
+  needsAttention: boolean;
+  snippet?: string;
+}
+
+export interface ProjectTimelineEntry {
+  id: string;
+  kind: 'brief' | 'note' | 'attachment' | 'artifact' | 'conversation' | 'activity';
+  createdAt: string;
+  title: string;
+  description?: string;
+  href?: string;
 }
 
 export interface ProjectDetail {
   project: ProjectRecord;
   taskCount: number;
+  noteCount: number;
+  attachmentCount: number;
   artifactCount: number;
   tasks: ProjectTask[];
+  brief: ProjectBrief | null;
+  notes: ProjectNote[];
+  attachments: ProjectFile[];
+  artifacts: ProjectFile[];
+  linkedConversations: ProjectLinkedConversation[];
+  timeline: ProjectTimelineEntry[];
 }
 
 export interface ScheduledTaskSummary {
@@ -356,11 +415,22 @@ export interface WebUiReleaseSummary {
   revision?: string;
 }
 
+export interface WebUiBadReleaseSummary {
+  sourceRepoRoot: string;
+  revision: string;
+  markedBadAt: string;
+  slot?: 'blue' | 'green';
+  reason?: string;
+}
+
 export interface WebUiDeploymentSummary {
   stablePort: number;
   activeSlot?: 'blue' | 'green';
   activeRelease?: WebUiReleaseSummary;
   inactiveRelease?: WebUiReleaseSummary;
+  activeReleaseBad?: WebUiBadReleaseSummary;
+  inactiveReleaseBad?: WebUiBadReleaseSummary;
+  badReleases: WebUiBadReleaseSummary[];
 }
 
 export interface WebUiServiceSummary {
@@ -406,6 +476,7 @@ export interface SessionMeta {
 export type DisplayBlock =
   | { type: 'user';     id: string; ts: string; text: string; images?: MessageImage[] }
   | { type: 'text';     id: string; ts: string; text: string }
+  | { type: 'summary';  id: string; ts: string; kind: 'compaction' | 'branch'; title: string; text: string }
   | { type: 'thinking'; id: string; ts: string; text: string }
   | { type: 'tool_use'; id: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; toolCallId: string; details?: unknown }
   | { type: 'image';    id: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string }
@@ -431,6 +502,23 @@ export interface SessionDetail {
   meta: SessionMeta;
   blocks: DisplayBlock[];
   contextUsage: SessionContextUsage | null;
+}
+
+export interface ConversationTreeNode {
+  id: string;
+  kind: 'user' | 'assistant' | 'thinking' | 'tool' | 'summary' | 'error' | 'custom';
+  label: string;
+  preview: string;
+  ts: string;
+  blockIndex: number | null;
+  active: boolean;
+  onActivePath: boolean;
+  children: ConversationTreeNode[];
+}
+
+export interface ConversationTreeSnapshot {
+  leafId: string | null;
+  roots: ConversationTreeNode[];
 }
 
 export type AppEventTopic = 'activity' | 'projects' | 'sessions' | 'tasks';
@@ -476,11 +564,51 @@ export interface DeferredResumeSummary {
   readyAt?: string;
 }
 
+export interface ConversationCheckpointSource {
+  conversationId: string;
+  conversationTitle?: string;
+  cwd?: string;
+  relatedProjectIds: string[];
+}
+
+export interface ConversationCheckpointAnchor {
+  messageId: string;
+  role: string;
+  timestamp: string;
+  preview: string;
+}
+
+export interface ConversationCheckpointSnapshot {
+  file: string;
+  messageCount: number;
+  lineCount: number;
+  bytes: number;
+}
+
+export interface ConversationCheckpointSummary {
+  version: 1;
+  id: string;
+  title: string;
+  note?: string;
+  summary?: string;
+  createdAt: string;
+  updatedAt: string;
+  source: ConversationCheckpointSource;
+  anchor: ConversationCheckpointAnchor;
+  snapshot: ConversationCheckpointSnapshot;
+  snapshotMissing?: boolean;
+}
+
 export interface ConversationCwdChangeResult {
   id: string;
   sessionFile: string;
   cwd: string;
   changed: boolean;
+}
+
+export interface FolderPickerResult {
+  path: string | null;
+  cancelled: boolean;
 }
 
 export interface LiveSessionMeta {
@@ -555,6 +683,8 @@ export interface AppStatus {
   repoRoot: string;
   activityCount: number;
   projectCount: number;
+  webUiSlot?: string;
+  webUiRevision?: string;
 }
 
 export interface ApplicationRestartRequestResult {

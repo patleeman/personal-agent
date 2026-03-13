@@ -1,185 +1,465 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { MessageBlock } from '../types';
+import type { ConversationTreeNode as TreeNode } from '../types';
 import { IconButton, Keycap, Pill, cx } from './ui';
 
-// ── Filters ────────────────────────────────────────────────────────────────────
-
 const FILTERS = [
-  { key: 'all',   label: 'All',      hint: '^A', test: (_: string) => true },
-  { key: 'user',  label: 'User',     hint: '^U', test: (l: string) => l === 'user' },
-  { key: 'asst',  label: 'Asst',     hint: '^L', test: (l: string) => l === 'asst' || l === 'think' },
-  { key: 'tools', label: 'Tools',    hint: '^T', test: (l: string) => !['user','asst','think','error','subagent','image'].includes(l) },
-  { key: 'error', label: 'Errors',   hint: '^E', test: (l: string) => l === 'error' },
+  { key: 'all', label: 'All', hint: '^A', test: (_label: string) => true },
+  { key: 'user', label: 'User', hint: '^U', test: (label: string) => label === 'user' },
+  { key: 'asst', label: 'Asst', hint: '^L', test: (label: string) => label === 'asst' || label === 'think' || label === 'compact' || label === 'branch' },
+  { key: 'tools', label: 'Tools', hint: '^T', test: (label: string) => !['user', 'asst', 'think', 'compact', 'branch', 'error'].includes(label) },
+  { key: 'error', label: 'Errors', hint: '^E', test: (label: string) => label === 'error' },
 ] as const;
 
 type FilterKey = (typeof FILTERS)[number]['key'];
 
-// ── Entry builder ──────────────────────────────────────────────────────────────
-
-interface TreeEntry {
-  index: number;
-  type: MessageBlock['type'];
-  label: string;
-  preview: string;
-  color: string;
-  ts: string;
-  duration?: number;
+interface GutterInfo {
+  position: number;
+  show: boolean;
 }
 
-function buildEntries(messages: MessageBlock[]): TreeEntry[] {
-  return messages.map((b, i) => {
-    switch (b.type) {
-      case 'user': {
-        const imageCount = b.images?.length ?? 0;
-        const textPreview = b.text.replace(/\n/g, ' ').slice(0, 120);
-        const attachmentPreview = imageCount > 0
-          ? `${imageCount} image attachment${imageCount === 1 ? '' : 's'}`
-          : '';
-        return {
-          index: i,
-          type: 'user',
-          label: 'user',
-          color: 'text-accent',
-          preview: textPreview
-            ? `${textPreview}${attachmentPreview ? ` · ${attachmentPreview}` : ''}`
-            : attachmentPreview || '(empty message)',
-          ts: b.ts,
-        };
-      }
-      case 'text':
-        return { index: i, type: 'text', label: 'asst',  color: 'text-primary',
-          preview: b.text.replace(/\n/g, ' ').slice(0, 120), ts: b.ts };
-      case 'thinking':
-        return { index: i, type: 'thinking', label: 'think', color: 'text-steel/80',
-          preview: b.text.replace(/\n/g, ' ').slice(0, 110), ts: b.ts };
-      case 'tool_use': {
-        const inp = b.input as Record<string, string>;
-        const preview = inp.command ?? inp.path ?? inp.url ?? JSON.stringify(b.input).slice(0, 100);
-        const colorMap: Record<string, string> = {
-          bash: 'text-steel', read: 'text-teal', write: 'text-accent',
-          edit: 'text-accent', web_fetch: 'text-success', web_search: 'text-success',
-        };
-        return { index: i, type: 'tool_use', label: b.tool,  color: colorMap[b.tool] ?? 'text-secondary',
-          preview, ts: b.ts, duration: b.durationMs };
-      }
-      case 'subagent':
-        return { index: i, type: 'subagent', label: 'subagent', color: 'text-warning',
-          preview: b.name + ': ' + b.prompt.slice(0, 80), ts: b.ts };
-      case 'image':
-        return { index: i, type: 'image', label: 'image', color: 'text-teal',
-          preview: b.alt || `${b.width}×${b.height}`, ts: b.ts };
-      case 'error':
-        return { index: i, type: 'error', label: 'error', color: 'text-danger',
-          preview: b.message.slice(0, 100), ts: b.ts };
-      default:
-        return { index: i, type: b.type, label: '?', color: 'text-dim', preview: '', ts: '' };
+interface FlatTreeEntry extends TreeNode {
+  parentId: string | null;
+  indent: number;
+  showConnector: boolean;
+  isLast: boolean;
+  gutters: GutterInfo[];
+  isVirtualRootChild: boolean;
+  selectable: boolean;
+}
+
+interface VisibleTreeLayout {
+  entries: FlatTreeEntry[];
+  multipleRoots: boolean;
+}
+
+function colorClass(entry: FlatTreeEntry): string {
+  if (entry.kind === 'user') {
+    return 'text-accent';
+  }
+
+  if (entry.kind === 'summary') {
+    return 'text-warning';
+  }
+
+  if (entry.kind === 'thinking') {
+    return 'text-steel/80';
+  }
+
+  if (entry.kind === 'tool') {
+    const toolColors: Record<string, string> = {
+      bash: 'text-steel',
+      read: 'text-teal',
+      write: 'text-accent',
+      edit: 'text-accent',
+      web_fetch: 'text-success',
+      web_search: 'text-success',
+    };
+    return toolColors[entry.label] ?? 'text-secondary';
+  }
+
+  if (entry.kind === 'error') {
+    return 'text-danger';
+  }
+
+  return 'text-primary';
+}
+
+function collectContainsActive(node: TreeNode, result: Map<string, boolean>): boolean {
+  const childHasActive = node.children.some((child) => collectContainsActive(child, result));
+  const containsActive = node.onActivePath || childHasActive;
+  result.set(node.id, containsActive);
+  return containsActive;
+}
+
+function prioritizeActiveNodes(nodes: TreeNode[], containsActive: Map<string, boolean>): TreeNode[] {
+  const active: TreeNode[] = [];
+  const inactive: TreeNode[] = [];
+
+  for (const node of nodes) {
+    if (containsActive.get(node.id)) {
+      active.push(node);
+    } else {
+      inactive.push(node);
     }
+  }
+
+  return [...active, ...inactive];
+}
+
+function flattenTreeNodes(roots: TreeNode[]): FlatTreeEntry[] {
+  const containsActive = new Map<string, boolean>();
+  for (const root of roots) {
+    collectContainsActive(root, containsActive);
+  }
+
+  const multipleRoots = roots.length > 1;
+  const entries: FlatTreeEntry[] = [];
+
+  function walk(
+    node: TreeNode,
+    parentId: string | null,
+    options: {
+      indent: number;
+      justBranched: boolean;
+      showConnector: boolean;
+      isLast: boolean;
+      gutters: GutterInfo[];
+      isVirtualRootChild: boolean;
+    },
+  ) {
+    entries.push({
+      ...node,
+      parentId,
+      indent: options.indent,
+      showConnector: options.showConnector,
+      isLast: options.isLast,
+      gutters: options.gutters,
+      isVirtualRootChild: options.isVirtualRootChild,
+      selectable: typeof node.blockIndex === 'number',
+    });
+
+    const orderedChildren = prioritizeActiveNodes(node.children, containsActive);
+    const multipleChildren = orderedChildren.length > 1;
+    const childIndent = multipleChildren
+      ? options.indent + 1
+      : options.justBranched && options.indent > 0
+        ? options.indent + 1
+        : options.indent;
+
+    const connectorDisplayed = options.showConnector && !options.isVirtualRootChild;
+    const currentDisplayIndent = multipleRoots ? Math.max(0, options.indent - 1) : options.indent;
+    const connectorPosition = Math.max(0, currentDisplayIndent - 1);
+    const childGutters = connectorDisplayed
+      ? [...options.gutters, { position: connectorPosition, show: !options.isLast }]
+      : options.gutters;
+
+    orderedChildren.forEach((child, index) => {
+      walk(child, node.id, {
+        indent: childIndent,
+        justBranched: multipleChildren,
+        showConnector: multipleChildren,
+        isLast: index === orderedChildren.length - 1,
+        gutters: childGutters,
+        isVirtualRootChild: false,
+      });
+    });
+  }
+
+  const orderedRoots = prioritizeActiveNodes(roots, containsActive);
+  orderedRoots.forEach((root, index) => {
+    walk(root, null, {
+      indent: multipleRoots ? 1 : 0,
+      justBranched: multipleRoots,
+      showConnector: multipleRoots,
+      isLast: index === orderedRoots.length - 1,
+      gutters: [],
+      isVirtualRootChild: multipleRoots,
+    });
   });
+
+  return entries;
 }
 
-function fmtDuration(ms?: number) {
-  if (!ms) return '';
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
+function recalculateVisibleLayout(allEntries: FlatTreeEntry[], filteredEntries: FlatTreeEntry[]): VisibleTreeLayout {
+  if (filteredEntries.length === 0) {
+    return { entries: [], multipleRoots: false };
+  }
+
+  const nextEntries = filteredEntries.map((entry) => ({
+    ...entry,
+    gutters: [...entry.gutters],
+  }));
+
+  const visibleIds = new Set(nextEntries.map((entry) => entry.id));
+  const byId = new Map(allEntries.map((entry) => [entry.id, entry] satisfies [string, FlatTreeEntry]));
+
+  const findVisibleAncestor = (entryId: string): string | null => {
+    let currentId = byId.get(entryId)?.parentId ?? null;
+    while (currentId !== null) {
+      if (visibleIds.has(currentId)) {
+        return currentId;
+      }
+      currentId = byId.get(currentId)?.parentId ?? null;
+    }
+    return null;
+  };
+
+  const visibleParent = new Map<string, string | null>();
+  const visibleChildren = new Map<string | null, string[]>([[null, []]]);
+
+  for (const entry of nextEntries) {
+    const parentId = findVisibleAncestor(entry.id);
+    visibleParent.set(entry.id, parentId);
+
+    const siblings = visibleChildren.get(parentId) ?? [];
+    siblings.push(entry.id);
+    visibleChildren.set(parentId, siblings);
+  }
+
+  const visibleRoots = visibleChildren.get(null) ?? [];
+  const multipleRoots = visibleRoots.length > 1;
+  const visibleById = new Map(nextEntries.map((entry) => [entry.id, entry] satisfies [string, FlatTreeEntry]));
+
+  function walk(
+    entryId: string,
+    options: {
+      indent: number;
+      justBranched: boolean;
+      showConnector: boolean;
+      isLast: boolean;
+      gutters: GutterInfo[];
+      isVirtualRootChild: boolean;
+    },
+  ) {
+    const entry = visibleById.get(entryId);
+    if (!entry) {
+      return;
+    }
+
+    entry.parentId = visibleParent.get(entryId) ?? null;
+    entry.indent = options.indent;
+    entry.showConnector = options.showConnector;
+    entry.isLast = options.isLast;
+    entry.gutters = options.gutters;
+    entry.isVirtualRootChild = options.isVirtualRootChild;
+
+    const children = visibleChildren.get(entryId) ?? [];
+    const multipleChildren = children.length > 1;
+    const childIndent = multipleChildren
+      ? options.indent + 1
+      : options.justBranched && options.indent > 0
+        ? options.indent + 1
+        : options.indent;
+
+    const connectorDisplayed = options.showConnector && !options.isVirtualRootChild;
+    const currentDisplayIndent = multipleRoots ? Math.max(0, options.indent - 1) : options.indent;
+    const connectorPosition = Math.max(0, currentDisplayIndent - 1);
+    const childGutters = connectorDisplayed
+      ? [...options.gutters, { position: connectorPosition, show: !options.isLast }]
+      : options.gutters;
+
+    children.forEach((childId, index) => {
+      walk(childId, {
+        indent: childIndent,
+        justBranched: multipleChildren,
+        showConnector: multipleChildren,
+        isLast: index === children.length - 1,
+        gutters: childGutters,
+        isVirtualRootChild: false,
+      });
+    });
+  }
+
+  visibleRoots.forEach((entryId, index) => {
+    walk(entryId, {
+      indent: multipleRoots ? 1 : 0,
+      justBranched: multipleRoots,
+      showConnector: multipleRoots,
+      isLast: index === visibleRoots.length - 1,
+      gutters: [],
+      isVirtualRootChild: multipleRoots,
+    });
+  });
+
+  return { entries: nextEntries, multipleRoots };
 }
 
-// ── Component ──────────────────────────────────────────────────────────────────
+function buildPrefix(entry: FlatTreeEntry, multipleRoots: boolean): string {
+  const displayIndent = multipleRoots ? Math.max(0, entry.indent - 1) : entry.indent;
+  const connector = entry.showConnector && !entry.isVirtualRootChild;
+  const connectorPosition = connector ? displayIndent - 1 : -1;
+  const totalChars = displayIndent * 3;
+  const chars: string[] = [];
+
+  for (let index = 0; index < totalChars; index += 1) {
+    const level = Math.floor(index / 3);
+    const posInLevel = index % 3;
+    const gutter = entry.gutters.find((item) => item.position === level);
+
+    if (gutter) {
+      chars.push(posInLevel === 0 ? (gutter.show ? '│' : ' ') : ' ');
+      continue;
+    }
+
+    if (connector && level === connectorPosition) {
+      if (posInLevel === 0) {
+        chars.push(entry.isLast ? '└' : '├');
+      } else if (posInLevel === 1) {
+        chars.push('─');
+      } else {
+        chars.push(' ');
+      }
+      continue;
+    }
+
+    chars.push(' ');
+  }
+
+  return chars.join('');
+}
 
 interface Props {
-  messages:      MessageBlock[];
-  currentIndex?: number;
-  onJump:        (index: number) => void;
-  onClose:       () => void;
-  /** If provided, user-message rows show a ⑂ fork button */
-  onFork?:       (blockIndex: number) => void;
+  tree: TreeNode[];
+  loading?: boolean;
+  onJump: (index: number) => void;
+  onClose: () => void;
+  onFork?: (blockIndex: number) => void;
 }
 
-export function ConversationTree({ messages, currentIndex = 0, onJump, onClose, onFork }: Props) {
-  const [query,     setQuery]     = useState('');
+export function ConversationTree({ tree, loading = false, onJump, onClose, onFork }: Props) {
+  const [query, setQuery] = useState('');
   const [filterIdx, setFilterIdx] = useState(0);
-  const [cursor,    setCursor]    = useState(currentIndex);
+  const [cursor, setCursor] = useState(0);
 
-  const listRef  = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const activeFilter = FILTERS[filterIdx];
+  const allEntries = useMemo(() => flattenTreeNodes(tree), [tree]);
+  const layout = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    const filteredEntries = allEntries.filter((entry) => {
+      if (!activeFilter.test(entry.label)) {
+        return false;
+      }
 
-  const all = useMemo(() => buildEntries(messages), [messages]);
+      if (!normalizedQuery) {
+        return true;
+      }
 
-  const filtered = useMemo(() => {
-    let entries = all.filter(e => activeFilter.test(e.label));
-    if (query) {
-      const q = query.toLowerCase();
-      entries = entries.filter(e => e.label.includes(q) || e.preview.toLowerCase().includes(q));
+      return entry.label.includes(normalizedQuery) || entry.preview.toLowerCase().includes(normalizedQuery);
+    });
+
+    return recalculateVisibleLayout(allEntries, filteredEntries);
+  }, [activeFilter, allEntries, query]);
+  const filtered = layout.entries;
+
+  useEffect(() => {
+    const activeIndex = filtered.findIndex((entry) => entry.active);
+    const fallbackIndex = activeIndex >= 0 ? activeIndex : filtered.findIndex((entry) => entry.selectable);
+    if (fallbackIndex >= 0) {
+      setCursor(fallbackIndex);
+      return;
     }
-    return entries;
-  }, [all, activeFilter, query]);
 
-  // Clamp cursor when filter changes
-  useEffect(() => { setCursor(c => Math.min(c, Math.max(0, filtered.length - 1))); }, [filtered.length]);
+    setCursor(0);
+  }, [filtered]);
 
-  // Focus on mount
-  useEffect(() => { inputRef.current?.focus(); }, []);
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
-  // Scroll cursor row into view
   useEffect(() => {
     listRef.current?.querySelector(`[data-idx="${cursor}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [cursor]);
 
-  // Keyboard
+  const handleSelect = (entry: FlatTreeEntry | undefined) => {
+    if (entry?.blockIndex == null) {
+      return;
+    }
+
+    onJump(entry.blockIndex);
+    onClose();
+  };
+
   useEffect(() => {
-    function handler(e: KeyboardEvent) {
-      const tag = (e.target as HTMLElement).tagName;
+    function handler(event: KeyboardEvent) {
+      const tag = (event.target as HTMLElement).tagName;
 
-      if (e.key === 'Escape')   { e.preventDefault(); onClose(); return; }
-      if (e.key === 'Enter')    { e.preventDefault(); const en = filtered[cursor]; if (en) { onJump(en.index); onClose(); } return; }
-      if (e.key === 'ArrowDown')  { e.preventDefault(); setCursor(c => Math.min(c + 1,  filtered.length - 1)); return; }
-      if (e.key === 'ArrowUp')    { e.preventDefault(); setCursor(c => Math.max(c - 1,  0)); return; }
-      if (e.key === 'PageDown')   { e.preventDefault(); setCursor(c => Math.min(c + 15, filtered.length - 1)); return; }
-      if (e.key === 'PageUp')     { e.preventDefault(); setCursor(c => Math.max(c - 15, 0)); return; }
-      if (e.key === 'Home')       { e.preventDefault(); setCursor(0); return; }
-      if (e.key === 'End')        { e.preventDefault(); setCursor(filtered.length - 1); return; }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
 
-      // Tab cycles filters (prevent default to avoid focus jump)
-      if (e.key === 'Tab' && tag !== 'BUTTON') {
-        e.preventDefault();
-        setFilterIdx(i => e.shiftKey ? (i - 1 + FILTERS.length) % FILTERS.length : (i + 1) % FILTERS.length);
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        handleSelect(filtered[cursor]);
+        return;
+      }
+
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setCursor((current) => Math.min(current + 1, Math.max(filtered.length - 1, 0)));
+        return;
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setCursor((current) => Math.max(current - 1, 0));
+        return;
+      }
+
+      if (event.key === 'PageDown') {
+        event.preventDefault();
+        setCursor((current) => Math.min(current + 15, Math.max(filtered.length - 1, 0)));
+        return;
+      }
+
+      if (event.key === 'PageUp') {
+        event.preventDefault();
+        setCursor((current) => Math.max(current - 15, 0));
+        return;
+      }
+
+      if (event.key === 'Home') {
+        event.preventDefault();
         setCursor(0);
         return;
       }
 
-      // Ctrl shortcuts matching Pi's ^A ^U ^L ^T ^E
-      if (e.ctrlKey) {
+      if (event.key === 'End') {
+        event.preventDefault();
+        setCursor(Math.max(filtered.length - 1, 0));
+        return;
+      }
+
+      if (event.key === 'Tab' && tag !== 'BUTTON') {
+        event.preventDefault();
+        setFilterIdx((current) => event.shiftKey
+          ? (current - 1 + FILTERS.length) % FILTERS.length
+          : (current + 1) % FILTERS.length);
+        setCursor(0);
+        return;
+      }
+
+      if (event.ctrlKey) {
         const shortcutMap: Record<string, number> = { a: 0, u: 1, l: 2, t: 3, e: 4 };
-        const fi = shortcutMap[e.key.toLowerCase()];
-        if (fi !== undefined) { e.preventDefault(); setFilterIdx(fi); setCursor(0); }
+        const nextFilter = shortcutMap[event.key.toLowerCase()];
+        if (nextFilter !== undefined) {
+          event.preventDefault();
+          setFilterIdx(nextFilter);
+          setCursor(0);
+        }
       }
     }
+
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [cursor, filtered, onJump, onClose]);
+  }, [cursor, filtered, onClose]);
 
-  // Count per filter for badges
   const counts = useMemo(() => {
     const result: Record<FilterKey, number> = { all: 0, user: 0, asst: 0, tools: 0, error: 0 };
-    for (const f of FILTERS) {
-      result[f.key as FilterKey] = all.filter(e => f.test(e.label)).length;
+    for (const filter of FILTERS) {
+      result[filter.key as FilterKey] = allEntries.filter((entry) => filter.test(entry.label)).length;
     }
     return result;
-  }, [all]);
+  }, [allEntries]);
+
+  const footerLabel = filtered.length > 0 ? `${cursor + 1} / ${filtered.length}` : '0 / 0';
 
   return (
     <div
       className="ui-overlay-backdrop"
       style={{ background: 'rgb(0 0 0 / 0.55)', backdropFilter: 'blur(2px)' }}
-      onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}
+      onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
     >
-      <div className="ui-dialog-shell" style={{ maxWidth: '900px', maxHeight: 'calc(100vh - 6rem)' }}>
+      <div className="ui-dialog-shell" style={{ maxWidth: '980px', maxHeight: 'calc(100vh - 6rem)' }}>
         <div className="px-4 pt-3 pb-0 border-b border-border-subtle">
           <div className="flex items-center justify-between mb-2.5 gap-3">
             <div>
               <p className="ui-section-label text-[11px]">Session Tree</p>
-              <p className="text-[12px] text-secondary mt-1">Jump through the conversation without losing context.</p>
+              <p className="text-[12px] text-secondary mt-1">Browse the active branch without the staircase indentation.</p>
             </div>
             <div className="flex items-center gap-2 text-[10px] text-dim/70 font-mono">
               <Keycap>↑↓</Keycap>
@@ -188,48 +468,50 @@ export function ConversationTree({ messages, currentIndex = 0, onJump, onClose, 
               <span>filter</span>
               <Keycap>↵</Keycap>
               <span>jump</span>
-              <Pill tone="muted" mono className="tabular-nums">{filtered.length}/{all.length}</Pill>
+              <Pill tone="muted" mono className="tabular-nums">{filtered.length}/{allEntries.length}</Pill>
               <IconButton onClick={onClose} title="Close tree" aria-label="Close tree" compact>
                 ✕
               </IconButton>
             </div>
           </div>
 
-          {/* Search */}
           <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-elevated border border-border-subtle mb-2.5">
             <span className="text-dim text-[12px]">⌕</span>
             <input
               ref={inputRef}
               value={query}
-              onChange={e => { setQuery(e.target.value); setCursor(0); }}
+              onChange={(event) => { setQuery(event.target.value); setCursor(0); }}
               placeholder="Type to search…"
               className="flex-1 bg-transparent text-[13px] text-primary placeholder:text-dim outline-none font-mono"
             />
             {query && (
-              <button onClick={() => { setQuery(''); setCursor(0); inputRef.current?.focus(); }}
-                className="text-dim hover:text-secondary text-[11px]">✕</button>
+              <button
+                onClick={() => { setQuery(''); setCursor(0); inputRef.current?.focus(); }}
+                className="text-dim hover:text-secondary text-[11px]"
+              >
+                ✕
+              </button>
             )}
           </div>
 
-          {/* Filter tabs */}
           <div className="ui-segmented-control inline-flex mb-3">
-            {FILTERS.map((f, i) => {
-              const active = i === filterIdx;
-              const count  = counts[f.key as FilterKey];
+            {FILTERS.map((filter, index) => {
+              const active = index === filterIdx;
+              const count = counts[filter.key as FilterKey];
               return (
                 <button
-                  key={f.key}
-                  onClick={() => { setFilterIdx(i); setCursor(0); inputRef.current?.focus(); }}
+                  key={filter.key}
+                  onClick={() => { setFilterIdx(index); setCursor(0); inputRef.current?.focus(); }}
                   className={cx('ui-segmented-button', active && 'ui-segmented-button-active', 'flex items-center gap-1.5')}
                 >
-                  <span>{f.label}</span>
+                  <span>{filter.label}</span>
                   {count > 0 && (
                     <span className={`tabular-nums text-[10px] ${active ? 'text-accent' : 'text-dim/50'}`}>
                       {count}
                     </span>
                   )}
                   <span className={`font-mono text-[9px] ml-0.5 ${active ? 'text-dim' : 'text-dim/30'}`}>
-                    {f.hint}
+                    {filter.hint}
                   </span>
                 </button>
               );
@@ -237,55 +519,56 @@ export function ConversationTree({ messages, currentIndex = 0, onJump, onClose, 
           </div>
         </div>
 
-        {/* ── List ── */}
         <div ref={listRef} className="overflow-y-auto flex-1 py-1">
-          {filtered.length === 0 && (
+          {loading && (
+            <p className="px-6 py-8 text-[12px] text-dim text-center font-mono">Loading conversation tree…</p>
+          )}
+
+          {!loading && filtered.length === 0 && (
             <p className="px-6 py-8 text-[12px] text-dim text-center font-mono">
-              {query ? `No matches for "${query}"` : 'No messages in this filter'}
+              {query ? `No matches for "${query}"` : allEntries.length === 0 ? 'No conversation history yet' : 'No entries in this filter'}
             </p>
           )}
-          {filtered.map((entry, vi) => {
-            const isCursor  = vi === cursor;
-            const isCurrent = entry.index === currentIndex;
+
+          {!loading && filtered.map((entry, visibleIndex) => {
+            const isCursor = visibleIndex === cursor;
+            const isSelectable = entry.selectable;
+            const prefix = buildPrefix(entry, layout.multipleRoots);
             return (
               <button
-                key={entry.index}
-                data-idx={vi}
-                onClick={() => { onJump(entry.index); onClose(); }}
-                className={[
+                key={entry.id}
+                data-idx={visibleIndex}
+                onClick={() => handleSelect(entry)}
+                className={cx(
                   'group w-full flex items-baseline gap-3 px-5 py-1.5 text-left font-mono transition-colors',
                   isCursor ? 'bg-elevated' : 'hover:bg-elevated/40',
-                ].join(' ')}
+                  !isSelectable && 'opacity-60',
+                )}
+                title={entry.preview}
               >
-                {/* Current pointer */}
-                <span className={`text-[11px] shrink-0 w-2 ${isCurrent ? 'text-accent' : 'text-border-default/50'}`}>
-                  {isCurrent ? '▶' : '·'}
+                <span className={`text-[11px] shrink-0 w-2 ${entry.active ? 'text-accent' : entry.onActivePath ? 'text-teal' : 'text-border-default/50'}`}>
+                  {entry.active ? '▶' : entry.onActivePath ? '•' : '○'}
                 </span>
 
-                {/* Index */}
-                <span className="text-[10px] text-dim/40 shrink-0 w-7 text-right tabular-nums select-none">
-                  {entry.index + 1}
+                <span className="shrink-0 min-w-0 text-[11px] text-dim/30 whitespace-pre">
+                  {prefix || ' '}
                 </span>
 
-                {/* Label */}
-                <span className={`text-[11px] font-semibold shrink-0 w-16 ${entry.color}`}>
+                <span className={`text-[11px] font-semibold shrink-0 w-16 ${colorClass(entry)}`}>
                   {entry.label}
                 </span>
 
-                {/* Preview */}
-                <span className="text-[12px] text-secondary flex-1 truncate">
+                <span className={cx('text-[12px] flex-1 truncate', entry.onActivePath ? 'text-secondary' : 'text-dim/70')}>
                   {entry.preview}
                 </span>
 
-                {/* Duration */}
-                {entry.duration != null && (
-                  <span className="text-[10px] text-dim/60 shrink-0 tabular-nums">{fmtDuration(entry.duration)}</span>
-                )}
-
-                {/* Fork button — only for user messages when onFork provided */}
-                {onFork && entry.type === 'user' && (
+                {onFork && entry.label === 'user' && entry.onActivePath && entry.blockIndex != null && (
                   <button
-                    onClick={e => { e.stopPropagation(); onFork(entry.index); onClose(); }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onFork(entry.blockIndex);
+                      onClose();
+                    }}
                     title="Fork into a new conversation from here"
                     className="shrink-0 text-[11px] text-dim/50 hover:text-accent opacity-0 group-hover:opacity-100 transition-all px-1"
                   >
@@ -297,10 +580,9 @@ export function ConversationTree({ messages, currentIndex = 0, onJump, onClose, 
           })}
         </div>
 
-        {/* ── Footer ── */}
         <div className="px-5 py-2.5 border-t border-border-subtle flex items-center justify-between text-[10px] text-dim/60 font-mono gap-3">
-          <Pill tone="muted" mono>{filtered.length > 0 ? `${cursor + 1} / ${filtered.length}` : '0 / 0'}</Pill>
-          <span>Tab / Shift+Tab cycle filters · click or ↵ to jump · esc to close</span>
+          <Pill tone="muted" mono>{footerLabel}</Pill>
+          <span>Only branch points deepen indentation; inactive forks stay visible but dimmer.</span>
         </div>
       </div>
     </div>

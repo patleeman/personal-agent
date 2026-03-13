@@ -31,7 +31,8 @@ interface ProjectedConversationRailMarker extends MeasuredConversationRailMarker
 }
 
 const TRACK_INSET = 16;
-const RAIL_SLOT_WIDTH = 66;
+// Keep the rail hit-area narrow so it behaves like a scrollbar/rail, not a click-blocking overlay.
+const RAIL_SLOT_WIDTH = 40;
 const RAIL_REST_WIDTH = 20;
 const RAIL_HOVER_WIDTH = 34;
 const TRACK_RIGHT_INSET = 6;

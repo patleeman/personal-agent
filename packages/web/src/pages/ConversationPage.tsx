@@ -1,21 +1,25 @@
-import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, type RefObject } from 'react';
 import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import { ChatView } from '../components/chat/ChatView';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import { ConversationTree } from '../components/ConversationTree';
+import { ConversationCheckpointsModal } from '../components/ConversationCheckpointsModal';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, DeferredResumeSummary, MessageBlock, ModelInfo, PromptImageInput } from '../types';
+import type { ContextUsageSegment, ConversationCheckpointSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, MessageBlock, ModelInfo, PromptImageInput } from '../types';
 import { useApi } from '../hooks';
 import { useSessionDetail } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../api';
 import { appendComposerHistory, readComposerHistory } from '../composerHistory';
 import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversationArtifacts';
+import { createConversationLiveRunId, getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversationRuns';
+import { setConversationCheckpointsOpenInSearch, shouldOpenConversationCheckpointsFromSearch } from '../conversationCheckpoints';
 import { formatContextShareLabel, formatContextUsageLabel, formatContextWindowLabel, formatLiveSessionLabel, formatThinkingLevelLabel, getContextUsagePercent } from '../conversationHeader';
 import { isConversationScrolledToBottom, shouldShowScrollToBottomControl } from '../conversationScroll';
 import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE } from '../conversationTitle';
 import { emitConversationProjectsChanged, CONVERSATION_PROJECTS_CHANGED_EVENT } from '../conversationProjectEvents';
 import { displayBlockToMessageBlock } from '../messageBlocks';
+import { THINKING_LEVEL_OPTIONS, groupModelsByProvider } from '../modelPreferences';
 import { useAppData, useAppEvents, useLiveTitles } from '../contexts';
 import { filterModelPickerItems } from '../modelPicker';
 import { emitProjectsChanged } from '../projectEvents';
@@ -24,14 +28,20 @@ import { parseProjectSlashCommand, type ProjectSlashCommand } from '../projectSl
 import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../slashMenu';
 import { buildMentionItems, filterMentionItems, resolveMentionItems, type MentionItem } from '../conversationMentions';
 import { buildDeferredResumeIndicatorText, compareDeferredResumes, describeDeferredResumeStatus } from '../deferredResumeIndicator';
-import { buildConversationComposerStorageKey, persistForkPromptDraft, resolveForkEntryForMessage } from '../forking';
-import { buildDraftConversationComposerStorageKey, persistDraftConversationComposer } from '../draftConversation';
+import { buildConversationComposerStorageKey, persistForkPromptDraft, resolveForkEntryForMessage, resolveSessionEntryIdFromBlockId } from '../forking';
+import {
+  buildDraftConversationComposerStorageKey,
+  clearDraftConversationCwd,
+  persistDraftConversationComposer,
+  readDraftConversationCwd,
+} from '../draftConversation';
 import {
   clearPendingConversationPrompt,
   persistPendingConversationPrompt,
   readPendingConversationPrompt,
   type PendingConversationPrompt,
 } from '../pendingConversationPrompt';
+import { getConversationResumeState } from '../conversationResume';
 import { resolveConversationComposerSubmitState } from '../conversationComposerSubmit';
 import { useReloadState } from '../reloadState';
 import { ensureConversationTabOpen } from '../sessionTabs';
@@ -40,18 +50,26 @@ import { ensureConversationTabOpen } from '../sessionTabs';
 
 function useModels() {
   const [models, setModels] = useState<ModelInfo[]>([]);
-  const [currentModel, setCurrent] = useState<string>('');
+  const [currentModel, setCurrentModel] = useState<string>('');
   const [currentThinkingLevel, setCurrentThinkingLevel] = useState<string>('');
+
   useEffect(() => {
     api.models()
       .then((data) => {
         setModels(data.models);
-        setCurrent(data.currentModel);
+        setCurrentModel(data.currentModel);
         setCurrentThinkingLevel(data.currentThinkingLevel ?? '');
       })
       .catch(() => {});
   }, []);
-  return { models, currentModel, currentThinkingLevel, setCurrent };
+
+  return {
+    models,
+    currentModel,
+    currentThinkingLevel,
+    setCurrentModel,
+    setCurrentThinkingLevel,
+  };
 }
 
 function ModelPicker({ models, currentModel, query, idx, onSelect, onClose }:
@@ -99,6 +117,107 @@ function ModelPicker({ models, currentModel, query, idx, onSelect, onClose }:
   );
 }
 
+const HEADER_PREFERENCE_SELECT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary outline-none transition-colors focus:border-accent/60 disabled:opacity-50';
+
+function HeaderPreferencesMenu({
+  models,
+  currentModel,
+  currentThinkingLevel,
+  savingPreference,
+  modelSelectRef,
+  thinkingSelectRef,
+  onSelectModel,
+  onSelectThinkingLevel,
+  onClose,
+}: {
+  models: ModelInfo[];
+  currentModel: string;
+  currentThinkingLevel: string;
+  savingPreference: 'model' | 'thinking' | null;
+  modelSelectRef: RefObject<HTMLSelectElement>;
+  thinkingSelectRef: RefObject<HTMLSelectElement>;
+  onSelectModel: (modelId: string) => void;
+  onSelectThinkingLevel: (thinkingLevel: string) => void;
+  onClose: () => void;
+}) {
+  const groupedModels = useMemo(() => groupModelsByProvider(models), [models]);
+  const selectedModel = models.find((candidate) => candidate.id === currentModel) ?? null;
+
+  return (
+    <div role="dialog" aria-label="Runtime defaults" className="absolute left-0 top-full z-20 mt-2 w-[min(32rem,calc(100vw-3rem))] rounded-xl border border-border-default bg-surface shadow-xl">
+      <div className="flex items-start justify-between gap-3 border-b border-border-subtle px-3 py-2.5">
+        <div>
+          <p className="ui-section-label">Runtime defaults</p>
+          <p className="mt-1 text-[12px] text-secondary">
+            Change the saved model and thinking defaults without using slash commands.
+          </p>
+        </div>
+        <IconButton onClick={onClose} title="Close runtime defaults" aria-label="Close runtime defaults" compact>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 6 6 18M6 6l12 12" />
+          </svg>
+        </IconButton>
+      </div>
+
+      <div className="grid gap-4 p-3 sm:grid-cols-[minmax(0,1fr)_11rem]">
+        <div className="space-y-1.5 min-w-0">
+          <label className="ui-section-label" htmlFor="conversation-model-preference">Model</label>
+          <select
+            ref={modelSelectRef}
+            id="conversation-model-preference"
+            value={currentModel}
+            onChange={(event) => { onSelectModel(event.target.value); }}
+            disabled={savingPreference !== null || models.length === 0}
+            className={HEADER_PREFERENCE_SELECT_CLASS}
+          >
+            {groupedModels.map(([provider, providerModels]) => (
+              <optgroup key={provider} label={provider}>
+                {providerModels.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name} · {formatContextWindowLabel(model.context)} ctx
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          <p className="text-[11px] text-dim">
+            {savingPreference === 'model'
+              ? 'Saving default model…'
+              : selectedModel
+                ? `${selectedModel.name} · ${selectedModel.provider} · ${formatContextWindowLabel(selectedModel.context)} ctx`
+                : 'No model selected.'}
+          </p>
+        </div>
+
+        <div className="space-y-1.5 min-w-0">
+          <label className="ui-section-label" htmlFor="conversation-thinking-preference">Thinking</label>
+          <select
+            ref={thinkingSelectRef}
+            id="conversation-thinking-preference"
+            value={currentThinkingLevel}
+            onChange={(event) => { onSelectThinkingLevel(event.target.value); }}
+            disabled={savingPreference !== null}
+            className={HEADER_PREFERENCE_SELECT_CLASS}
+          >
+            {THINKING_LEVEL_OPTIONS.map((option) => (
+              <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+          <p className="text-[11px] text-dim">
+            {savingPreference === 'thinking'
+              ? 'Saving thinking level…'
+              : `Current thinking level: ${formatThinkingLevelLabel(currentThinkingLevel)}`}
+          </p>
+        </div>
+      </div>
+
+      <div className="border-t border-border-subtle px-3 py-2 text-[11px] text-dim">
+        Applies to new conversations and other runs that use the saved runtime defaults.
+      </div>
+    </div>
+  );
+}
+
 // ── Slash commands ────────────────────────────────────────────────────────────
 
 // ── Context bar ───────────────────────────────────────────────────────────────
@@ -113,6 +232,8 @@ interface ContextBarProps {
   model?: string;
   thinkingLevel?: string;
   tokens?: TokenCounts;
+  activePreference?: 'model' | 'thinking' | null;
+  onOpenPreferences?: (preference: 'model' | 'thinking') => void;
 }
 
 const CONTEXT_SEGMENT_STYLES: Record<ContextUsageSegment['key'], string> = {
@@ -124,7 +245,13 @@ const CONTEXT_SEGMENT_STYLES: Record<ContextUsageSegment['key'], string> = {
   other: 'bg-border-default/80',
 };
 
-function ContextBar({ model, thinkingLevel, tokens }: ContextBarProps) {
+function ContextBar({
+  model,
+  thinkingLevel,
+  tokens,
+  activePreference = null,
+  onOpenPreferences,
+}: ContextBarProps) {
   const win = tokens?.contextWindow ?? 200_000;
   const segments = (tokens?.segments ?? [])
     .filter((segment) => segment.tokens > 0)
@@ -147,13 +274,51 @@ function ContextBar({ model, thinkingLevel, tokens }: ContextBarProps) {
         {model && (
           <span className="inline-flex min-w-0 items-baseline gap-1.5">
             <span className="uppercase tracking-[0.14em] text-dim/65">model</span>
-            <span className="truncate font-mono text-dim">{model}</span>
+            {onOpenPreferences ? (
+              <button
+                type="button"
+                onClick={() => onOpenPreferences('model')}
+                aria-haspopup="dialog"
+                aria-expanded={activePreference === 'model'}
+                title="Change the default model"
+                className={cx(
+                  'group -mx-1 inline-flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5 transition-colors hover:bg-surface/80 hover:text-primary',
+                  activePreference === 'model' ? 'bg-surface text-primary' : 'text-dim',
+                )}
+              >
+                <span className="truncate font-mono">{model}</span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70">
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </button>
+            ) : (
+              <span className="truncate font-mono text-dim">{model}</span>
+            )}
           </span>
         )}
         {model && <span className="h-3.5 w-px shrink-0 bg-border-subtle/70" aria-hidden="true" />}
         <span className="inline-flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
           <span className="uppercase tracking-[0.14em] text-dim/65">thinking</span>
-          <span className="font-mono text-primary">{thinkingLabel}</span>
+          {onOpenPreferences ? (
+            <button
+              type="button"
+              onClick={() => onOpenPreferences('thinking')}
+              aria-haspopup="dialog"
+              aria-expanded={activePreference === 'thinking'}
+              title="Change the default thinking level"
+              className={cx(
+                'group -mx-1 inline-flex items-center gap-1 rounded-md px-1 py-0.5 transition-colors hover:bg-surface/80 hover:text-primary',
+                activePreference === 'thinking' ? 'bg-surface text-primary' : 'text-primary',
+              )}
+            >
+              <span className="font-mono">{thinkingLabel}</span>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+          ) : (
+            <span className="font-mono text-primary">{thinkingLabel}</span>
+          )}
         </span>
         <span className="h-3.5 w-px shrink-0 bg-border-subtle/70" aria-hidden="true" />
         <span className="inline-flex min-w-0 items-center gap-1.5 whitespace-nowrap overflow-hidden">
@@ -289,6 +454,39 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+function fileExtensionForMimeType(mimeType: string): string {
+  const normalized = mimeType.trim().toLowerCase();
+  if (normalized === 'image/jpeg') {
+    return 'jpg';
+  }
+
+  const [, subtype] = normalized.split('/');
+  return subtype || 'png';
+}
+
+function base64ToFile(data: string, mimeType: string, name: string): File {
+  const decoded = window.atob(data);
+  const bytes = new Uint8Array(decoded.length);
+
+  for (let index = 0; index < decoded.length; index += 1) {
+    bytes[index] = decoded.charCodeAt(index);
+  }
+
+  return new File([bytes], name, { type: mimeType });
+}
+
+function restoreQueuedImageFiles(
+  images: PromptImageInput[],
+  behavior: 'steer' | 'followUp',
+  queueIndex: number,
+): File[] {
+  return images.map((image, imageIndex) => {
+    const extension = fileExtensionForMimeType(image.mimeType);
+    const name = image.name?.trim() || `queued-${behavior}-${queueIndex + 1}-${imageIndex + 1}.${extension}`;
+    return base64ToFile(image.data, image.mimeType, name);
+  });
+}
+
 async function buildPromptImages(files: File[]): Promise<PromptImageInput[]> {
   const imageFiles = files.filter((file) => file.type.startsWith('image/'));
   const images = await Promise.all(imageFiles.map(async (file) => {
@@ -321,6 +519,33 @@ function formatDeferredResumeWhen(resume: DeferredResumeSummary): string {
   });
 }
 
+function buildCheckpointTitleFromBlock(block: MessageBlock): string {
+  const fallback = 'Conversation checkpoint';
+
+  if (block.type === 'tool_use') {
+    return `After ${block.tool}`;
+  }
+
+  if (block.type === 'image') {
+    return block.alt?.trim() ? `After ${block.alt.trim()}` : fallback;
+  }
+
+  const text = (
+    block.type === 'user'
+    || block.type === 'text'
+    || block.type === 'thinking'
+    || block.type === 'error'
+  )
+    ? block.text
+    : '';
+
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return fallback;
+  }
+
+  return normalized.length > 80 ? `${normalized.slice(0, 79).trimEnd()}…` : normalized;
+}
 
 // ── ConversationPage ──────────────────────────────────────────────────────────
 
@@ -330,17 +555,47 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const location = useLocation();
   const navigate = useNavigate();
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
+  const selectedRunId = getConversationRunIdFromSearch(location.search);
+  const checkpointsOpenRequested = shouldOpenConversationCheckpointsFromSearch(location.search);
 
   const openArtifact = useCallback((artifactId: string) => {
     if (selectedArtifactId === artifactId) {
       return;
     }
 
+    const nextSearch = setConversationRunIdInSearch(
+      setConversationArtifactIdInSearch(location.search, artifactId),
+      null,
+    );
+
     navigate({
       pathname: location.pathname,
-      search: setConversationArtifactIdInSearch(location.search, artifactId),
+      search: nextSearch,
     });
   }, [location.pathname, location.search, navigate, selectedArtifactId]);
+
+  const openRun = useCallback((runId: string) => {
+    if (selectedRunId === runId) {
+      return;
+    }
+
+    const nextSearch = setConversationRunIdInSearch(
+      setConversationArtifactIdInSearch(location.search, null),
+      runId,
+    );
+
+    navigate({
+      pathname: location.pathname,
+      search: nextSearch,
+    });
+  }, [location.pathname, location.search, navigate, selectedRunId]);
+
+  const setCheckpointsOpen = useCallback((open: boolean) => {
+    navigate({
+      pathname: location.pathname,
+      search: setConversationCheckpointsOpenInSearch(location.search, open),
+    });
+  }, [location.pathname, location.search, navigate]);
 
   useEffect(() => {
     if (draft || !id) {
@@ -393,6 +648,46 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       : undefined;
   const messageCount = realMessages?.length ?? 0;
   const artifactAutoOpenSeededRef = useRef(false);
+  const [showTree, setShowTree] = useState(false);
+  const [treeSnapshot, setTreeSnapshot] = useState<ConversationTreeSnapshot | null>(null);
+  const [treeLoading, setTreeLoading] = useState(false);
+
+  useEffect(() => {
+    if (!showTree || !id) {
+      if (!showTree) {
+        setTreeLoading(false);
+      }
+      setTreeSnapshot(null);
+      return;
+    }
+
+    let cancelled = false;
+    setTreeSnapshot(null);
+    setTreeLoading(true);
+
+    api.sessionTree(id)
+      .then((snapshot) => {
+        if (cancelled) {
+          return;
+        }
+        setTreeSnapshot(snapshot);
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+        setTreeSnapshot(null);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setTreeLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, messageCount, showTree]);
   const processedArtifactAutoOpenIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -451,7 +746,26 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     if (id && stream.title) pushTitle(id, stream.title);
   }, [id, stream.title, pushTitle]);
 
-  const titleOverride = null;
+  const [titleOverride, setTitleOverride] = useState<string | null>(null);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
+  const [titleSaving, setTitleSaving] = useState(false);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setTitleOverride(null);
+    setIsEditingTitle(false);
+    setTitleDraft('');
+    setTitleSaving(false);
+    setHeaderPreference(null);
+    setSavingPreference(null);
+    setNotice(null);
+
+    if (noticeTimeoutRef.current !== null) {
+      window.clearTimeout(noticeTimeoutRef.current);
+      noticeTimeoutRef.current = null;
+    }
+  }, [id]);
 
   const title = draft
     ? NEW_CONVERSATION_TITLE
@@ -459,7 +773,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const model = visibleSessionDetail?.meta.model;
 
   // Model
-  const { models, currentModel, currentThinkingLevel, setCurrent } = useModels();
+  const {
+    models,
+    currentModel,
+    currentThinkingLevel,
+    setCurrentModel,
+    setCurrentThinkingLevel,
+  } = useModels();
 
   // Current context usage (compaction-aware)
   const sessionTokens = useMemo(() => {
@@ -483,8 +803,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } satisfies TokenCounts;
   }, [isLiveSession, stream.contextUsage, visibleSessionDetail, models, currentModel, model]);
   const [notice, setNotice] = useState<{ tone: 'accent' | 'danger'; text: string } | null>(null);
+  const [headerPreference, setHeaderPreference] = useState<'model' | 'thinking' | null>(null);
+  const [savingPreference, setSavingPreference] = useState<'model' | 'thinking' | null>(null);
   const [modelIdx, setModelIdx] = useState(0);
   const noticeTimeoutRef = useRef<number | null>(null);
+  const headerPreferenceRef = useRef<HTMLDivElement>(null);
+  const headerModelSelectRef = useRef<HTMLSelectElement>(null);
+  const headerThinkingSelectRef = useRef<HTMLSelectElement>(null);
   const composerDraftStorageKey = draft
     ? buildDraftConversationComposerStorageKey()
     : id
@@ -513,7 +838,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [composerAltHeld, setComposerAltHeld] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
-  const [showTree, setShowTree] = useState(false);
   const composerHistoryScopeId = draft ? null : id ?? null;
   const [composerHistory, setComposerHistory] = useState<string[]>(() => readComposerHistory(composerHistoryScopeId));
   const [composerHistoryIndex, setComposerHistoryIndex] = useState<number | null>(null);
@@ -588,18 +912,23 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       id: `steer-${index}`,
       text: text.trim() || '(queued attachment)',
       type: 'steer' as const,
+      queueIndex: index,
     })),
     ...stream.pendingQueue.followUp.map((text, index) => ({
       id: `followup-${index}`,
       text: text.trim() || '(queued attachment)',
       type: 'followUp' as const,
+      queueIndex: index,
     })),
   ]), [stream.pendingQueue.followUp, stream.pendingQueue.steering]);
   const prevStreamingRef = useRef(false);
   const { data: memoryData } = useApi(api.memory);
   const { data: profileState } = useApi(api.profiles);
   const { versions } = useAppEvents();
-  const { projects, tasks, setProjects } = useAppData();
+  const { projects, tasks, sessions, setProjects, setSessions } = useAppData();
+  const conversationRunId = useMemo(() => (id ? createConversationLiveRunId(id) : null), [id]);
+  const [conversationRun, setConversationRun] = useState<DurableRunRecord | null>(null);
+  const [resumeConversationBusy, setResumeConversationBusy] = useState(false);
   const conversationProjectsFetcher = useCallback(async () => {
     if (!id) {
       return { conversationId: '', relatedProjectIds: [] };
@@ -616,6 +945,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [deferredResumesBusy, setDeferredResumesBusy] = useState(false);
   const [showDeferredResumeDetails, setShowDeferredResumeDetails] = useState(false);
   const [deferredResumeNowMs, setDeferredResumeNowMs] = useState(() => Date.now());
+  const [checkpointScope, setCheckpointScope] = useState<'conversation' | 'all'>('conversation');
+  const [checkpoints, setCheckpoints] = useState<ConversationCheckpointSummary[]>([]);
+  const [checkpointsLoading, setCheckpointsLoading] = useState(false);
+  const [checkpointActionId, setCheckpointActionId] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -649,6 +982,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     () => buildDeferredResumeIndicatorText(orderedDeferredResumes, deferredResumeNowMs),
     [orderedDeferredResumes, deferredResumeNowMs],
   );
+  const lastConversationMessage = realMessages?.[realMessages.length - 1] ?? null;
+  const conversationResumeState = useMemo(() => getConversationResumeState({
+    run: conversationRun,
+    isLiveSession,
+    lastMessage: lastConversationMessage,
+  }), [conversationRun, isLiveSession, lastConversationMessage]);
   const draftMentionItems = useMemo(() => resolveMentionItems(input, mentionItems)
     .filter((item) => item.kind !== 'project' || !referencedProjectIds.includes(item.label)), [input, mentionItems, referencedProjectIds]);
   const draftReferencedProjectIds = useMemo(() => {
@@ -667,6 +1006,30 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return ids;
   }, [draftMentionItems]);
 
+  useEffect(() => {
+    if (!conversationRunId || draft) {
+      setConversationRun(null);
+      return;
+    }
+
+    let cancelled = false;
+    api.durableRun(conversationRunId)
+      .then((data) => {
+        if (!cancelled) {
+          setConversationRun(data.run);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setConversationRun(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationRunId, draft, versions.sessions]);
+
   const refetchDeferredResumes = useCallback(async () => {
     if (!id) {
       setDeferredResumes([]);
@@ -677,6 +1040,23 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setDeferredResumes(data.resumes);
     return data.resumes;
   }, [id]);
+
+  const refetchCheckpoints = useCallback(async (scope = checkpointScope) => {
+    if (scope === 'conversation') {
+      if (!id) {
+        setCheckpoints([]);
+        return [] as ConversationCheckpointSummary[];
+      }
+
+      const data = await api.conversationCheckpoints(id);
+      setCheckpoints(data.checkpoints);
+      return data.checkpoints;
+    }
+
+    const data = await api.checkpoints();
+    setCheckpoints(data.checkpoints);
+    return data.checkpoints;
+  }, [checkpointScope, id]);
 
   useEffect(() => {
     if (!id) {
@@ -701,6 +1081,35 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       window.clearInterval(intervalHandle);
     };
   }, [deferredResumes.length]);
+
+  useEffect(() => {
+    if ((draft || !id) && checkpointsOpenRequested) {
+      setCheckpointsOpen(false);
+    }
+
+    if (draft) {
+      setCheckpoints([]);
+      return;
+    }
+
+    setCheckpointScope('conversation');
+    setCheckpoints([]);
+  }, [checkpointsOpenRequested, draft, id, setCheckpointsOpen]);
+
+  useEffect(() => {
+    if (!checkpointsOpenRequested) {
+      return;
+    }
+
+    setCheckpointsLoading(true);
+    void refetchCheckpoints()
+      .catch(() => {
+        // Errors are surfaced through explicit actions and notices.
+      })
+      .finally(() => {
+        setCheckpointsLoading(false);
+      });
+  }, [checkpointsOpenRequested, refetchCheckpoints]);
 
   // Auto-resize textarea
   const resize = useCallback(() => {
@@ -774,6 +1183,41 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   useEffect(() => { setSlashIdx(0); }, [slashQuery]);
   useEffect(() => { setModelIdx(0); }, [modelQuery]);
+
+  useEffect(() => {
+    if (!headerPreference) {
+      return;
+    }
+
+    const focusTarget = headerPreference === 'model'
+      ? headerModelSelectRef.current
+      : headerThinkingSelectRef.current;
+    focusTarget?.focus();
+
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (!headerPreferenceRef.current?.contains(target)) {
+        setHeaderPreference(null);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setHeaderPreference(null);
+      }
+    }
+
+    window.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [headerPreference]);
 
   useEffect(() => {
     function handleConversationProjectsChanged(event: Event) {
@@ -956,6 +1400,71 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, []);
 
   useEffect(() => {
+    if (!isEditingTitle) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    });
+  }, [isEditingTitle]);
+
+  useEffect(() => {
+    if (isEditingTitle) {
+      return;
+    }
+
+    setTitleDraft(title);
+  }, [title, isEditingTitle]);
+
+  const beginTitleEdit = useCallback(() => {
+    if (draft || !id || titleSaving) {
+      return;
+    }
+
+    setTitleDraft(title === NEW_CONVERSATION_TITLE ? '' : title);
+    setIsEditingTitle(true);
+  }, [draft, id, title, titleSaving]);
+
+  const cancelTitleEdit = useCallback(() => {
+    setIsEditingTitle(false);
+    setTitleDraft(title);
+  }, [title]);
+
+  const saveTitleEdit = useCallback(async () => {
+    if (draft || !id) {
+      return;
+    }
+
+    const nextTitle = titleDraft.trim();
+    if (!nextTitle) {
+      showNotice('danger', 'Conversation title is required.');
+      return;
+    }
+
+    setTitleSaving(true);
+    try {
+      const result = await api.renameConversation(id, nextTitle);
+      setTitleOverride(result.title);
+      if (isLiveSession) {
+        pushTitle(id, result.title);
+      }
+      if (sessions) {
+        setSessions(sessions.map((session) => (
+          session.id === id ? { ...session, title: result.title } : session
+        )));
+      }
+      setIsEditingTitle(false);
+      showNotice('accent', 'Conversation renamed.');
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    } finally {
+      setTitleSaving(false);
+    }
+  }, [draft, id, isLiveSession, pushTitle, sessions, setSessions, showNotice, titleDraft]);
+
+  useEffect(() => {
     if (draft || !id || !pendingInitialPrompt || !stream.hasSnapshot) {
       return;
     }
@@ -986,45 +1495,112 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     });
   }, [draft, id, pendingInitialPrompt, stream.hasSnapshot, stream.send, refetchConversationProjects, showNotice]);
 
+  const ensureConversationIsLiveForFork = useCallback(async () => {
+    if (!id) {
+      throw new Error('Conversation unavailable.');
+    }
+
+    if (isLiveSession) {
+      return id;
+    }
+
+    const sessionFile = visibleSessionDetail?.meta.file
+      ?? sessions?.find((session) => session.id === id)?.file;
+
+    if (!sessionFile) {
+      throw new Error('This conversation cannot be forked because its session file is unavailable.');
+    }
+
+    const resumed = await api.resumeSession(sessionFile);
+    setConfirmedLive(true);
+    stream.reconnect();
+    return resumed.id;
+  }, [id, isLiveSession, sessions, stream, visibleSessionDetail]);
+
   const forkConversationFromMessage = useCallback(async (messageIndex: number) => {
-    if (!id || !isLiveSession || !realMessages) {
+    if (!id || !realMessages) {
       return;
     }
 
     try {
-      const entries = await api.forkEntries(id);
+      const liveConversationId = await ensureConversationIsLiveForFork();
+      const clickedBlock = realMessages[messageIndex];
+
+      if (clickedBlock?.type === 'text') {
+        const entryId = resolveSessionEntryIdFromBlockId(clickedBlock.id);
+        if (!entryId) {
+          throw new Error('Unable to resolve the selected assistant message for branching.');
+        }
+
+        const { newSessionId } = await api.branchSession(liveConversationId, entryId);
+        ensureConversationTabOpen(newSessionId);
+        navigate(`/conversations/${newSessionId}`);
+        return;
+      }
+
+      const entries = await api.forkEntries(liveConversationId);
       const entry = resolveForkEntryForMessage(realMessages, messageIndex, entries);
       if (!entry) {
         throw new Error('No forkable message found for that point in the conversation.');
       }
 
-      const { newSessionId } = await api.forkSession(id, entry.entryId, { preserveSource: true });
-      // Pi forks before the selected user turn, so queue that prompt into the
-      // new session to make the branch behave like “fork from here”.
-      persistPendingConversationPrompt(newSessionId, {
-        text: entry.text,
-        images: [],
-      });
+      const { newSessionId } = await api.forkSession(liveConversationId, entry.entryId, { preserveSource: true });
+      // Pi forks before the selected user turn, so prefill that prompt in the
+      // destination composer and let the user edit or resend it manually.
+      persistForkPromptDraft(newSessionId, entry.text);
       ensureConversationTabOpen(newSessionId);
       navigate(`/conversations/${newSessionId}`);
     } catch (error) {
       showNotice('danger', `Fork failed: ${(error as Error).message}`);
     }
-  }, [id, isLiveSession, navigate, realMessages, showNotice]);
+  }, [ensureConversationIsLiveForFork, id, navigate, realMessages, showNotice]);
 
-  function selectModel(modelId: string) {
-    setCurrent(modelId);
-    setInput('');
-    setModelIdx(0);
+  function openHeaderPreference(preference: 'model' | 'thinking') {
+    setHeaderPreference((current) => current === preference ? null : preference);
+  }
 
-    const selectedModel = models.find((candidate) => candidate.id === modelId);
-    if (selectedModel) {
-      showNotice('accent', `Switched to ${selectedModel.name}`);
+  async function saveModelPreference(modelId: string) {
+    if (!modelId || modelId === currentModel || savingPreference !== null) {
+      return;
     }
 
+    setSavingPreference('model');
+    try {
+      await api.updateModelPreferences({ model: modelId });
+      setCurrentModel(modelId);
+      const selectedModel = models.find((candidate) => candidate.id === modelId);
+      if (selectedModel) {
+        showNotice('accent', `Default model set to ${selectedModel.name}`);
+      }
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    } finally {
+      setSavingPreference(null);
+    }
+  }
+
+  async function saveThinkingLevelPreference(thinkingLevel: string) {
+    if (thinkingLevel === currentThinkingLevel || savingPreference !== null) {
+      return;
+    }
+
+    setSavingPreference('thinking');
+    try {
+      await api.updateModelPreferences({ thinkingLevel });
+      setCurrentThinkingLevel(thinkingLevel);
+      showNotice('accent', `Thinking level set to ${formatThinkingLevelLabel(thinkingLevel)}.`);
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    } finally {
+      setSavingPreference(null);
+    }
+  }
+
+  function selectModel(modelId: string) {
+    setInput('');
+    setModelIdx(0);
     textareaRef.current?.focus();
-    // Persist to settings.json
-    api.setModel(modelId).catch(console.error);
+    void saveModelPreference(modelId);
   }
 
   // /clear — destroy current session, create new one in same cwd
@@ -1125,6 +1701,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     try {
       await api.resumeSession(visibleSessionDetail.meta.file);
       setConfirmedLive(true);
+      stream.reconnect();
       showNotice('accent', 'Resuming deferred work…');
       setTimeout(() => {
         void refetchDeferredResumes().catch(() => {});
@@ -1132,6 +1709,98 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     }
+  }
+
+  async function resumeConversation() {
+    if (!id || draft || resumeConversationBusy) {
+      return;
+    }
+
+    setResumeConversationBusy(true);
+    try {
+      const result = await api.recoverConversation(id);
+      if (result.conversationId && result.conversationId !== id) {
+        ensureConversationTabOpen(result.conversationId);
+        navigate(`/conversations/${result.conversationId}`);
+        return;
+      }
+
+      setConfirmedLive(true);
+      stream.reconnect();
+      showNotice(
+        'accent',
+        result.replayedPendingOperation
+          ? 'Resuming interrupted turn…'
+          : 'Conversation reopened. Send a follow-up to continue.',
+      );
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    } finally {
+      setResumeConversationBusy(false);
+    }
+  }
+
+  async function saveCheckpointFromMessage(block: MessageBlock, messageIndex: number) {
+    if (draft || !id) {
+      showNotice('danger', 'Checkpoints require an existing conversation.', 4000);
+      return;
+    }
+
+    const anchorMessageId = block.id?.trim();
+    if (!anchorMessageId) {
+      showNotice('danger', 'Unable to resolve checkpoint anchor for this message.', 4000);
+      return;
+    }
+
+    try {
+      await api.createConversationCheckpoint(id, {
+        title: buildCheckpointTitleFromBlock(block),
+        anchorMessageId,
+      });
+      showNotice('accent', `Checkpoint saved at message ${messageIndex + 1}.`);
+      if (checkpointsOpenRequested) {
+        await refetchCheckpoints();
+      }
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    }
+  }
+
+  async function startCheckpointConversation(checkpointId: string) {
+    setCheckpointActionId(checkpointId);
+    try {
+      const result = await api.startCheckpoint(checkpointId);
+      ensureConversationTabOpen(result.id);
+      navigate(`/conversations/${result.id}`);
+      showNotice('accent', 'Started a new conversation from checkpoint.');
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    } finally {
+      setCheckpointActionId(null);
+    }
+  }
+
+  async function deleteCheckpointById(checkpointId: string) {
+    const checkpoint = checkpoints.find((entry) => entry.id === checkpointId);
+    const confirmed = window.confirm(`Delete checkpoint "${checkpoint?.title ?? checkpointId}"?`);
+    if (!confirmed) {
+      return;
+    }
+
+    setCheckpointActionId(checkpointId);
+    try {
+      await api.deleteCheckpoint(checkpointId);
+      setCheckpoints((current) => current.filter((entry) => entry.id !== checkpointId));
+      showNotice('accent', 'Checkpoint deleted.');
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    } finally {
+      setCheckpointActionId(null);
+    }
+  }
+
+  function updateCheckpointScope(scope: 'conversation' | 'all') {
+    setCheckpointScope(scope);
   }
 
   async function removeReferencedProject(projectId: string) {
@@ -1292,17 +1961,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             return;
           }
         }
-        if (text === '/fork' && id && isLiveSession) {
+        if (text === '/fork' && id) {
           try {
             rememberComposerInput(inputSnapshot);
-            const entries = await api.forkEntries(id);
+            const liveConversationId = await ensureConversationIsLiveForFork();
+            const entries = await api.forkEntries(liveConversationId);
             if (entries.length === 0) { sendToAgent('(No forkable messages yet)'); return; }
             const entry = entries[entries.length - 1];
-            const { newSessionId } = await api.forkSession(id, entry.entryId, { preserveSource: true });
-            persistPendingConversationPrompt(newSessionId, {
-              text: entry.text,
-              images: [],
-            });
+            const { newSessionId } = await api.forkSession(liveConversationId, entry.entryId, { preserveSource: true });
+            persistForkPromptDraft(newSessionId, entry.text);
             ensureConversationTabOpen(newSessionId);
             navigate(`/conversations/${newSessionId}`);
           } catch (err) {
@@ -1317,13 +1984,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       if (!id && !visibleSessionDetail) {
         rememberComposerInput(inputSnapshot);
         try {
-          const { id: newId } = await api.createLiveSession(undefined, draftReferencedProjectIds);
+          const draftCwd = readDraftConversationCwd().trim() || undefined;
+          const { id: newId } = await api.createLiveSession(draftCwd, draftReferencedProjectIds);
           rememberComposerInput(inputSnapshot, newId);
           persistPendingConversationPrompt(newId, {
             text: textToSend,
             behavior: queuedBehavior,
             images: promptImages,
           });
+          clearDraftConversationCwd();
           ensureConversationTabOpen(newId);
           navigate(`/conversations/${newId}`, { replace: true });
         } catch (error) {
@@ -1347,6 +2016,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           rememberComposerInput(inputSnapshot);
           await api.resumeSession(visibleSessionDetail.meta.file);
           setConfirmedLive(true);
+          stream.reconnect();
           setTimeout(() => {
             void stream.send(textToSend, queuedBehavior, promptImages)
               .then(async () => {
@@ -1367,6 +2037,43 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       }
     } catch (err) {
       console.error('Failed to prepare attachments:', err);
+    }
+  }
+
+  async function restoreQueuedPromptToComposer(behavior: 'steer' | 'followUp', queueIndex: number) {
+    if (!id || !isLiveSession) {
+      showNotice('danger', 'Queued prompts can only be restored from a live session.', 4000);
+      return;
+    }
+
+    try {
+      const restored = await api.restoreQueuedMessage(id, { behavior, index: queueIndex });
+      const restoredText = restored.text;
+      const restoredFiles = restoreQueuedImageFiles(restored.images, behavior, queueIndex);
+      const hasRestoredText = restoredText.trim().length > 0;
+
+      if (!hasRestoredText && restoredFiles.length === 0) {
+        showNotice('danger', 'Queued prompt had nothing to restore.', 4000);
+        return;
+      }
+
+      if (hasRestoredText) {
+        const currentInput = textareaRef.current?.value ?? input;
+        setInput([restoredText, currentInput].filter((value) => value.trim().length > 0).join('\n\n'));
+      }
+      if (restoredFiles.length > 0) {
+        setAttachments((current) => [...restoredFiles, ...current]);
+      }
+
+      moveComposerCaretToEnd();
+
+      const restoredParts = [
+        hasRestoredText ? 'text' : null,
+        restoredFiles.length > 0 ? `${restoredFiles.length} image${restoredFiles.length === 1 ? '' : 's'}` : null,
+      ].filter((value): value is string => Boolean(value));
+      showNotice('accent', `Restored queued ${restoredParts.join(' + ')} to the composer.`);
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     }
   }
 
@@ -1504,6 +2211,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     </button>
                   </>
                 )}
+                {!stream.isStreaming && conversationResumeState.canResume && (
+                  <button
+                    type="button"
+                    onClick={() => { void resumeConversation(); }}
+                    disabled={resumeConversationBusy}
+                    title={conversationResumeState.title ?? 'Resume this conversation'}
+                    className="text-accent transition-colors hover:text-accent/80 disabled:cursor-default disabled:text-dim"
+                  >
+                    {resumeConversationBusy ? 'opening…' : (conversationResumeState.actionLabel ?? 'resume')}
+                  </button>
+                )}
                 {isLiveSession && <span className="text-accent">{formatLiveSessionLabel(isLiveSession)}</span>}
               </>
             )}
@@ -1511,8 +2229,69 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         )}
       >
         <div className="flex-1 min-w-0">
-          <h1 className="ui-page-title truncate">{title}</h1>
-          <ContextBar model={currentModel || model} thinkingLevel={currentThinkingLevel} tokens={sessionTokens} />
+          {isEditingTitle && !draft ? (
+            <form
+              className="flex min-w-0 items-center gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void saveTitleEdit();
+              }}
+            >
+              <input
+                ref={titleInputRef}
+                value={titleDraft}
+                onChange={(event) => setTitleDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    cancelTitleEdit();
+                  }
+                }}
+                placeholder="Name this conversation"
+                className="min-w-0 flex-1 rounded-lg border border-border-default bg-surface px-3 py-1.5 text-[15px] font-medium text-primary outline-none transition-colors focus:border-accent/60"
+                disabled={titleSaving}
+              />
+              <button type="submit" className="ui-toolbar-button text-primary" disabled={titleSaving}>
+                {titleSaving ? 'Saving…' : 'Save'}
+              </button>
+              <button type="button" className="ui-toolbar-button" onClick={cancelTitleEdit} disabled={titleSaving}>
+                Cancel
+              </button>
+            </form>
+          ) : (
+            <div className="flex min-w-0 items-center gap-2">
+              <h1 className="ui-page-title truncate" onDoubleClick={!draft ? beginTitleEdit : undefined}>{title}</h1>
+              {!draft && id && (
+                <IconButton onClick={beginTitleEdit} title="Rename conversation" aria-label="Rename conversation" compact>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 21h3.75L17.81 9.94l-3.75-3.75L3 17.25V21Zm14.06-13.06 1.69-1.69a1.5 1.5 0 0 0 0-2.12l-.88-.88a1.5 1.5 0 0 0-2.12 0l-1.69 1.69" />
+                  </svg>
+                </IconButton>
+              )}
+            </div>
+          )}
+          <div ref={headerPreferenceRef} className="relative">
+            <ContextBar
+              model={currentModel || model}
+              thinkingLevel={currentThinkingLevel}
+              tokens={sessionTokens}
+              activePreference={headerPreference}
+              onOpenPreferences={openHeaderPreference}
+            />
+            {headerPreference && (
+              <HeaderPreferencesMenu
+                models={models}
+                currentModel={currentModel}
+                currentThinkingLevel={currentThinkingLevel}
+                savingPreference={savingPreference}
+                modelSelectRef={headerModelSelectRef}
+                thinkingSelectRef={headerThinkingSelectRef}
+                onSelectModel={(modelId) => { void saveModelPreference(modelId); }}
+                onSelectThinkingLevel={(thinkingLevel) => { void saveThinkingLevelPreference(thinkingLevel); }}
+                onClose={() => { setHeaderPreference(null); }}
+              />
+            )}
+          </div>
         </div>
       </PageHeader>
 
@@ -1523,9 +2302,16 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             <ChatView
               messages={realMessages}
               isStreaming={stream.isStreaming}
-              onForkMessage={isLiveSession && id && !stream.isStreaming ? forkConversationFromMessage : undefined}
+              onCheckpointMessage={id && !stream.isStreaming ? saveCheckpointFromMessage : undefined}
+              onForkMessage={id && !stream.isStreaming && Boolean(realMessages) ? forkConversationFromMessage : undefined}
               onOpenArtifact={openArtifact}
               activeArtifactId={selectedArtifactId}
+              onOpenRun={openRun}
+              activeRunId={selectedRunId}
+              onResumeConversation={conversationResumeState.canResume ? resumeConversation : undefined}
+              resumeConversationBusy={resumeConversationBusy}
+              resumeConversationTitle={conversationResumeState.title}
+              resumeConversationLabel={conversationResumeState.actionLabel ?? 'resume'}
             />
           ) : sessionLoading ? (
             <LoadingState label="Loading session…" className="justify-center h-full" />
@@ -1541,7 +2327,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               )}
               title={NEW_CONVERSATION_TITLE}
               body={draft
-                ? 'Start typing to create a conversation. Referenced projects with repo roots can set the initial working directory.'
+                ? 'Start typing to create a conversation. You can set its initial working directory in the right rail, or let a single referenced project repo root pick it automatically.'
                 : 'Start a Pi session to populate this conversation.'}
             />
           )}
@@ -1604,21 +2390,21 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               }
               return;
             }
-            if (c === '/fork' && id && isLiveSession) {
+            if (c === '/fork' && id) {
               setInput('');
-              void api.forkEntries(id).then(entries => {
-                const entry = entries[entries.length - 1];
-                if (!entry) return;
-                return api.forkSession(id, entry.entryId, { preserveSource: true })
-                  .then(({ newSessionId }) => {
-                    persistPendingConversationPrompt(newSessionId, {
-                      text: entry.text,
-                      images: [],
+              void ensureConversationIsLiveForFork()
+                .then((liveConversationId) => api.forkEntries(liveConversationId).then((entries) => ({ liveConversationId, entries })))
+                .then(({ liveConversationId, entries }) => {
+                  const entry = entries[entries.length - 1];
+                  if (!entry) return;
+                  return api.forkSession(liveConversationId, entry.entryId, { preserveSource: true })
+                    .then(({ newSessionId }) => {
+                      persistForkPromptDraft(newSessionId, entry.text);
+                      ensureConversationTabOpen(newSessionId);
+                      navigate(`/conversations/${newSessionId}`);
                     });
-                    ensureConversationTabOpen(newSessionId);
-                    navigate(`/conversations/${newSessionId}`);
-                  });
-              }).catch(console.error);
+                })
+                .catch(console.error);
               return;
             }
             setInput(item.insertText); setSlashIdx(0); textareaRef.current?.focus();
@@ -1707,6 +2493,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                       {msg.type === 'steer' ? '⤵ steer' : '↷ followup'}
                     </Pill>
                     <span className="flex-1 text-[11px] text-secondary truncate">{msg.text}</span>
+                    <button
+                      type="button"
+                      onClick={() => { void restoreQueuedPromptToComposer(msg.type, msg.queueIndex); }}
+                      className="shrink-0 text-[11px] text-dim transition-colors hover:text-primary"
+                      title="Restore this queued prompt to the composer"
+                      aria-label="Restore queued prompt to the composer"
+                    >
+                      restore
+                    </button>
                   </div>
                 ))}
               </div>
@@ -1841,13 +2636,28 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         </div>
       </div>
 
+      {checkpointsOpenRequested && id && (
+        <ConversationCheckpointsModal
+          conversationId={id}
+          checkpoints={checkpoints}
+          loading={checkpointsLoading}
+          scope={checkpointScope}
+          busyCheckpointId={checkpointActionId}
+          onScopeChange={updateCheckpointScope}
+          onStart={startCheckpointConversation}
+          onDelete={deleteCheckpointById}
+          onClose={() => setCheckpointsOpen(false)}
+        />
+      )}
+
       {/* Session tree overlay */}
-      {showTree && realMessages && (
+      {showTree && (
         <ConversationTree
-          messages={realMessages}
+          tree={treeSnapshot?.roots ?? []}
+          loading={treeLoading}
           onJump={jumpToMessage}
           onClose={() => setShowTree(false)}
-          onFork={isLiveSession && id && !stream.isStreaming ? (blockIdx) => {
+          onFork={id && !stream.isStreaming && Boolean(realMessages) ? (blockIdx) => {
             void forkConversationFromMessage(blockIdx);
           } : undefined}
         />

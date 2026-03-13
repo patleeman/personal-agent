@@ -3,9 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   spawnSync: vi.fn(),
+  cpSync: vi.fn(),
   existsSync: vi.fn(),
   mkdirSync: vi.fn(),
+  readFileSync: vi.fn(),
   rmSync: vi.fn(),
+  symlinkSync: vi.fn(),
   writeFileSync: vi.fn(),
   homedir: vi.fn(),
   getStateRoot: vi.fn(),
@@ -19,9 +22,12 @@ vi.mock('child_process', () => ({
 }));
 
 vi.mock('fs', () => ({
+  cpSync: mocks.cpSync,
   existsSync: mocks.existsSync,
   mkdirSync: mocks.mkdirSync,
+  readFileSync: mocks.readFileSync,
   rmSync: mocks.rmSync,
+  symlinkSync: mocks.symlinkSync,
   writeFileSync: mocks.writeFileSync,
 }));
 
@@ -63,6 +69,7 @@ const originalGetuid = process.getuid;
 const originalEnv = process.env;
 
 const existingPaths = new Set<string>();
+const fileContents = new Map<string, string>();
 
 function setPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', {
@@ -83,16 +90,58 @@ beforeEach(() => {
   vi.clearAllMocks();
 
   existingPaths.clear();
+  fileContents.clear();
+
   existingPaths.add(resolve(process.cwd(), 'packages', 'gateway', 'dist', 'index.js'));
   existingPaths.add(resolve(process.cwd(), 'packages', 'daemon', 'dist', 'index.js'));
+  existingPaths.add(resolve(process.cwd(), 'packages', 'web', 'dist'));
+  existingPaths.add(resolve(process.cwd(), 'packages', 'web', 'dist-server'));
   existingPaths.add(resolve(process.cwd(), 'packages', 'web', 'dist-server', 'index.js'));
+  existingPaths.add(resolve(process.cwd(), 'node_modules'));
+
+  existingPaths.add('/repo/personal-agent/packages/web/dist');
+  existingPaths.add('/repo/personal-agent/packages/web/dist-server');
+  existingPaths.add('/repo/personal-agent/packages/web/dist-server/index.js');
+  existingPaths.add('/repo/personal-agent/node_modules');
 
   mocks.existsSync.mockImplementation((path: string) => existingPaths.has(String(path)));
-  mocks.writeFileSync.mockImplementation((path: string, _content: string) => {
+  mocks.readFileSync.mockImplementation((path: string) => fileContents.get(String(path)) ?? '');
+  mocks.writeFileSync.mockImplementation((path: string, content: string) => {
+    const normalizedPath = String(path);
+    existingPaths.add(normalizedPath);
+    fileContents.set(normalizedPath, String(content));
+  });
+  mocks.cpSync.mockImplementation((source: string, destination: string) => {
+    const normalizedSource = String(source);
+    const normalizedDestination = String(destination);
+    const snapshot = [...existingPaths];
+    existingPaths.add(normalizedDestination);
+    for (const entry of snapshot) {
+      if (entry === normalizedSource || entry.startsWith(`${normalizedSource}/`)) {
+        const copiedPath = entry.replace(normalizedSource, normalizedDestination);
+        existingPaths.add(copiedPath);
+        const content = fileContents.get(entry);
+        if (typeof content === 'string') {
+          fileContents.set(copiedPath, content);
+        }
+      }
+    }
+  });
+  mocks.symlinkSync.mockImplementation((_target: string, path: string) => {
     existingPaths.add(String(path));
   });
   mocks.rmSync.mockImplementation((path: string) => {
-    existingPaths.delete(String(path));
+    const normalizedPath = String(path);
+    for (const entry of [...existingPaths]) {
+      if (entry === normalizedPath || entry.startsWith(`${normalizedPath}/`)) {
+        existingPaths.delete(entry);
+      }
+    }
+    for (const entry of [...fileContents.keys()]) {
+      if (entry === normalizedPath || entry.startsWith(`${normalizedPath}/`)) {
+        fileContents.delete(entry);
+      }
+    }
   });
 
   mocks.homedir.mockReturnValue('/Users/tester');
@@ -185,7 +234,10 @@ describe('gateway service management', () => {
     expect(manifestContent).toContain('/repo/personal-agent');
     expect(manifestContent).toContain('PA_WEB_PORT');
     expect(manifestContent).toContain('4011');
-    expect(manifestContent).toContain('packages/web/dist');
+    expect(manifestContent).toContain('PA_WEB_DIST');
+    expect(manifestContent).toContain('/state-root/web/slots/blue/dist');
+    expect(manifestContent).toContain('PERSONAL_AGENT_WEB_SLOT');
+    expect(manifestContent).toContain('blue');
   });
 
   it('reports and restarts launchd web ui service when installed', () => {

@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import {
   createProjectScaffold,
   createProjectTask,
@@ -13,12 +13,48 @@ import {
   type ProjectMilestoneDocument,
   type ProjectTaskDocument,
 } from '@personal-agent/core';
+import {
+  listProjectFiles,
+  listProjectNotes,
+  readProjectBrief,
+  type ProjectBriefRecord,
+  type ProjectFileRecord,
+  type ProjectNoteRecord,
+} from './projectResources.js';
+
+export interface ProjectLinkedConversation {
+  conversationId: string;
+  title: string;
+  file?: string;
+  cwd?: string;
+  lastActivityAt?: string;
+  isRunning: boolean;
+  needsAttention: boolean;
+  snippet?: string;
+}
+
+export interface ProjectTimelineEntry {
+  id: string;
+  kind: 'brief' | 'note' | 'attachment' | 'artifact' | 'conversation' | 'activity';
+  createdAt: string;
+  title: string;
+  description?: string;
+  href?: string;
+}
 
 export interface ProjectDetail {
   project: ProjectDocument;
   taskCount: number;
+  noteCount: number;
+  attachmentCount: number;
   artifactCount: number;
   tasks: ProjectTaskDocument[];
+  brief: ProjectBriefRecord | null;
+  notes: ProjectNoteRecord[];
+  attachments: ProjectFileRecord[];
+  artifacts: ProjectFileRecord[];
+  linkedConversations: ProjectLinkedConversation[];
+  timeline: ProjectTimelineEntry[];
 }
 
 export interface CreateProjectRecordInput {
@@ -138,16 +174,6 @@ export interface SaveProjectSourceInput {
   profile: string;
   projectId: string;
   content: string;
-}
-
-function listFiles(dir: string, extension?: string): string[] {
-  if (!existsSync(dir)) {
-    return [];
-  }
-
-  return readdirSync(dir)
-    .filter((name) => extension ? name.endsWith(extension) : true)
-    .sort((left, right) => left.localeCompare(right));
 }
 
 function nowIso(): string {
@@ -299,15 +325,25 @@ export function readProjectDetailFromProject(options: {
   profile: string;
   projectId: string;
 }): ProjectDetail {
-  const paths = resolveProjectPaths(options);
-  const project = readProject(paths.projectFile);
+  const project = readProject(resolveProjectPaths(options).projectFile);
   const tasks = sortProjectTasks(project.plan.tasks ?? []);
+  const notes = listProjectNotes(options);
+  const attachments = listProjectFiles({ ...options, kind: 'attachment' });
+  const artifacts = listProjectFiles({ ...options, kind: 'artifact' });
 
   return {
     project,
     taskCount: tasks.length,
-    artifactCount: listFiles(paths.artifactsDir).length,
+    noteCount: notes.length,
+    attachmentCount: attachments.length,
+    artifactCount: artifacts.length,
     tasks,
+    brief: readProjectBrief(options),
+    notes,
+    attachments,
+    artifacts,
+    linkedConversations: [],
+    timeline: [],
   };
 }
 
@@ -446,11 +482,9 @@ export function updateProjectMilestone(input: UpdateProjectMilestoneInput): Proj
 
 export function createProjectTaskRecord(input: CreateProjectTaskRecordInput): ProjectDetail {
   const { paths, project } = readProjectRecord(input);
-  const milestoneId = readOptionalString(input.milestoneId) ?? project.plan.currentMilestoneId;
-
-  if (!milestoneId) {
-    throw new Error(`Task milestoneId must not be empty.`);
-  }
+  const milestoneId = input.milestoneId !== undefined
+    ? readOptionalString(input.milestoneId)
+    : readOptionalString(project.plan.currentMilestoneId);
 
   assertMilestoneExists(project, milestoneId);
 
@@ -498,18 +532,18 @@ export function updateProjectTaskRecord(input: UpdateProjectTaskRecordInput): Pr
     ? readOptionalString(input.milestoneId)
     : existingTask.milestoneId;
 
-  if (!milestoneId) {
-    throw new Error('Task milestoneId must not be empty.');
-  }
-
   assertMilestoneExists(project, milestoneId);
 
   const updatedTask: ProjectTaskDocument = {
     ...existingTask,
     ...(input.title !== undefined ? { title: readRequiredString(input.title, 'Task title') } : {}),
     ...(input.status !== undefined ? { status: readRequiredString(input.status, 'Task status') } : {}),
-    milestoneId,
+    ...(milestoneId ? { milestoneId } : {}),
   };
+
+  if (!milestoneId) {
+    delete updatedTask.milestoneId;
+  }
 
   const nextTasks = [...project.plan.tasks];
   nextTasks[taskIndex] = updatedTask;
@@ -534,14 +568,19 @@ export function deleteProjectMilestone(input: DeleteProjectMilestoneInput): Proj
     throw new Error(`Milestone not found in project ${project.id}: ${input.milestoneId}`);
   }
 
-  if ((project.plan.tasks ?? []).some((task) => task.milestoneId === input.milestoneId)) {
-    throw new Error(`Cannot delete milestone ${input.milestoneId} while it still has tasks. Move or delete the tasks first.`);
-  }
-
   const nextMilestones = project.plan.milestones.filter((milestone) => milestone.id !== input.milestoneId);
   const nextCurrentMilestoneId = project.plan.currentMilestoneId === input.milestoneId
     ? nextMilestones[0]?.id
     : project.plan.currentMilestoneId;
+  const nextTasks = (project.plan.tasks ?? []).map((task) => {
+    if (task.milestoneId !== input.milestoneId) {
+      return task;
+    }
+
+    const updatedTask = { ...task };
+    delete updatedTask.milestoneId;
+    return updatedTask;
+  });
 
   writeProject(paths.projectFile, {
     ...project,
@@ -550,6 +589,7 @@ export function deleteProjectMilestone(input: DeleteProjectMilestoneInput): Proj
       ...project.plan,
       currentMilestoneId: nextCurrentMilestoneId,
       milestones: nextMilestones,
+      tasks: nextTasks,
     },
   });
 

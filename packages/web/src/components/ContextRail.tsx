@@ -1,17 +1,35 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { getConversationArtifactIdFromSearch } from '../conversationArtifacts';
+import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversationArtifacts';
+import {
+  collectConversationRunMentions,
+  createConversationLiveRunId,
+  getConversationRunIdFromSearch,
+  setConversationRunIdInSearch,
+} from '../conversationRuns';
+import {
+  buildDraftConversationCwdStorageKey,
+  DRAFT_CONVERSATION_ID,
+} from '../draftConversation';
 import { useReloadState } from '../reloadState';
+import {
+  getRunConnections,
+  getRunHeadline,
+  getRunTimeline,
+  type RunPresentationLookups,
+} from '../runPresentation';
 import {
   pickAttachProjectId,
   pickFocusedProjectId,
 } from '../contextRailProject';
 import { useApi } from '../hooks';
+import { displayBlockToMessageBlock } from '../messageBlocks';
 import { buildCapabilityCards, buildIdentitySummary, buildKnowledgeSections, buildMemoryPageSummary } from '../memoryOverview';
 import { getScheduledTaskBody, isScheduledTaskDetail } from '../scheduledTaskDetail';
-import type { ActivityEntry, LiveSessionContext, ProjectDetail, ProjectRecord, ScheduledTaskDetail } from '../types';
+import type { ActivityEntry, DurableRunDetailResult, DurableRunRecord, LiveSessionContext, ProjectDetail, ProjectRecord, ScheduledTaskDetail } from '../types';
 import { formatDate, kindMeta, timeAgo } from '../utils';
+import { useAppData, useAppEvents } from '../contexts';
 import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
 import { CONVERSATION_PROJECTS_CHANGED_EVENT, emitConversationProjectsChanged } from '../conversationProjectEvents';
 import { closeConversationTab, ensureConversationTabOpen } from '../sessionTabs';
@@ -50,6 +68,264 @@ function RailHeader({ label, sub }: { label: string; sub?: string }) {
   );
 }
 
+function runStatusText(detail: DurableRunDetailResult['run']): { text: string; cls: string } {
+  const status = detail.status?.status;
+
+  if (status === 'running') return { text: 'running', cls: 'text-accent' };
+  if (status === 'recovering') return { text: 'recovering', cls: 'text-warning' };
+  if (status === 'completed') return { text: 'completed', cls: 'text-success' };
+  if (status === 'cancelled') return { text: 'cancelled', cls: 'text-dim' };
+  if (status === 'failed' || status === 'interrupted') return { text: status, cls: 'text-danger' };
+  if (status === 'queued' || status === 'waiting') return { text: status, cls: 'text-dim' };
+  return { text: status ?? 'unknown', cls: 'text-dim' };
+}
+
+function formatRecoveryAction(action: string): string {
+  switch (action) {
+    case 'none': return 'stable';
+    case 'resume': return 'resume';
+    case 'rerun': return 'rerun';
+    case 'attention': return 'needs attention';
+    case 'invalid': return 'invalid';
+    default: return action;
+  }
+}
+
+function canCancelRun(detail: DurableRunDetailResult['run']): boolean {
+  return detail.manifest?.kind === 'background-run' && (
+    detail.status?.status === 'queued'
+    || detail.status?.status === 'waiting'
+    || detail.status?.status === 'running'
+    || detail.status?.status === 'recovering'
+  );
+}
+
+function isRefreshingRun(detail: DurableRunDetailResult['run'] | null | undefined): boolean {
+  const status = detail?.status?.status;
+  return status === 'queued' || status === 'waiting' || status === 'running' || status === 'recovering';
+}
+
+function ConversationRunContextPanel({ conversationId, runId }: { conversationId: string; runId: string }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { tasks, sessions } = useAppData();
+  const [detail, setDetail] = useState<DurableRunDetailResult | null>(null);
+  const [log, setLog] = useState<{ path: string; log: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const lookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
+
+  const closeRun = useCallback(() => {
+    navigate({
+      pathname: location.pathname,
+      search: setConversationRunIdInSearch(location.search, null),
+    });
+  }, [location.pathname, location.search, navigate]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [nextDetail, nextLog] = await Promise.all([
+        api.durableRun(runId),
+        api.durableRunLog(runId, 120),
+      ]);
+      setDetail(nextDetail);
+      setLog(nextLog);
+      setError(null);
+    } catch (nextError) {
+      setDetail(null);
+      setLog(null);
+      setError(nextError instanceof Error ? nextError.message : 'Could not load execution.');
+    } finally {
+      setLoading(false);
+    }
+  }, [runId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    if (!isRefreshingRun(detail?.run ?? null)) {
+      return;
+    }
+
+    const handle = window.setInterval(() => {
+      void load();
+    }, 2000);
+
+    return () => {
+      window.clearInterval(handle);
+    };
+  }, [detail?.run, load]);
+
+  async function handleCancel() {
+    if (!detail || cancelling || !canCancelRun(detail.run)) {
+      return;
+    }
+
+    setCancelling(true);
+    try {
+      await api.cancelDurableRun(detail.run.runId);
+      await load();
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Could not cancel execution.');
+    } finally {
+      setCancelling(false);
+    }
+  }
+
+  if (loading && !detail) {
+    return <LoadingState label="Loading execution…" className="px-4 py-4" />;
+  }
+
+  if (error && !detail) {
+    return <ErrorState message={error} className="px-4 py-4" />;
+  }
+
+  if (!detail) {
+    return <div className="px-4 py-4 text-[12px] text-dim">Execution not found.</div>;
+  }
+
+  const run = detail.run;
+  const status = runStatusText(run);
+  const headline = getRunHeadline(run, lookups);
+  const connections = getRunConnections(run, lookups);
+  const timeline = getRunTimeline(run);
+  const showRecovery = run.recoveryAction !== 'none';
+  const cancelable = canCancelRun(run);
+  const closeSearch = setConversationRunIdInSearch(location.search, null);
+
+  return (
+    <div className="space-y-4 px-4 py-4 overflow-y-auto">
+      <div className="flex items-center justify-between gap-2">
+        <button type="button" onClick={closeRun} className="ui-toolbar-button">
+          ← Session
+        </button>
+        <div className="flex items-center gap-1.5">
+          <button type="button" onClick={() => { void load(); }} className="ui-toolbar-button">
+            ↻ Refresh
+          </button>
+          <Link to={`/runs/${encodeURIComponent(runId)}`} className="ui-toolbar-button text-accent" title="Open on the executions page">
+            Full page
+          </Link>
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <p className="ui-card-title break-words">{headline.title}</p>
+        <p className="ui-card-meta flex flex-wrap items-center gap-1.5">
+          <span className={status.cls}>{status.text}</span>
+          <span className="opacity-40">·</span>
+          <span>{headline.summary}</span>
+          {showRecovery && (
+            <>
+              <span className="opacity-40">·</span>
+              <span>{formatRecoveryAction(run.recoveryAction)}</span>
+            </>
+          )}
+        </p>
+        <p className="text-[11px] font-mono text-dim break-all">{run.runId}</p>
+      </div>
+
+      {cancelable && (
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-border-subtle bg-surface px-3 py-2.5">
+          <p className="text-[12px] text-secondary">This background execution can still be cancelled.</p>
+          <button type="button" onClick={() => { void handleCancel(); }} disabled={cancelling} className="ui-toolbar-button text-danger">
+            {cancelling ? 'Cancelling…' : 'Cancel'}
+          </button>
+        </div>
+      )}
+
+      {connections.length > 0 && (
+        <div className="border-t border-border-subtle pt-3">
+          <p className="ui-section-label mb-2">Connected to</p>
+          <div className="space-y-2">
+            {connections.map((connection) => (
+              <div key={connection.key} className="space-y-0.5">
+                <p className="text-[11px] uppercase tracking-[0.12em] text-dim">{connection.label}</p>
+                {connection.to ? (
+                  <Link to={connection.to + (connection.label.startsWith('Conversation') ? closeSearch : '')} className="text-[13px] text-accent hover:underline break-all">
+                    {connection.value}
+                  </Link>
+                ) : (
+                  <p className="text-[13px] text-primary break-all">{connection.value}</p>
+                )}
+                {connection.detail && <p className="text-[12px] text-secondary break-words">{connection.detail}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {timeline.length > 0 && (
+        <div className="border-t border-border-subtle pt-3">
+          <p className="ui-section-label mb-2">Timeline</p>
+          <div className="space-y-2">
+            {timeline.map((item) => (
+              <div key={item.label} className="flex items-baseline justify-between gap-3 text-[12px]">
+                <span className="text-dim uppercase tracking-[0.12em]">{item.label}</span>
+                <span className="text-primary text-right">{formatDate(item.at)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="border-t border-border-subtle pt-3 grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1">
+          <p className="ui-section-label">Execution state</p>
+          <p className="text-[13px] text-primary">{run.manifest?.kind ?? 'unknown kind'}</p>
+          {run.manifest?.resumePolicy && <p className="text-[12px] text-secondary">resume policy {run.manifest.resumePolicy}</p>}
+          {run.manifest?.source?.type && <p className="text-[12px] text-secondary">source {run.manifest.source.type}</p>}
+        </div>
+
+        <div className="space-y-1">
+          <p className="ui-section-label">Attempts</p>
+          <p className="text-[13px] text-primary">{run.status?.activeAttempt ?? 0}</p>
+          {run.checkpoint?.step && <p className="text-[12px] text-secondary">checkpoint {run.checkpoint.step}</p>}
+          {run.checkpoint?.cursor && <p className="text-[12px] text-secondary">cursor {run.checkpoint.cursor}</p>}
+        </div>
+      </div>
+
+      {(run.status?.lastError || run.problems.length > 0) && (
+        <div className="border-t border-border-subtle pt-3 space-y-3">
+          {run.status?.lastError && (
+            <div className="space-y-1">
+              <p className="ui-section-label">Last error</p>
+              <p className="text-[12px] text-danger whitespace-pre-wrap break-words">{run.status.lastError}</p>
+            </div>
+          )}
+          {run.problems.length > 0 && (
+            <div className="space-y-1">
+              <p className="ui-section-label">Problems</p>
+              <div className="space-y-1 text-[12px] text-danger">
+                {run.problems.map((problem) => (
+                  <p key={problem}>• {problem}</p>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="border-t border-border-subtle pt-3 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <p className="ui-section-label">Output log</p>
+          {log?.path && <p className="text-[10px] font-mono text-dim truncate">{log.path.split('/').slice(-2).join('/')}</p>}
+        </div>
+        <pre className="max-h-80 overflow-y-auto rounded-lg bg-elevated px-3 py-2.5 text-[11px] leading-relaxed text-secondary whitespace-pre-wrap break-all">
+          {log?.log || '(empty)'}
+        </pre>
+      </div>
+
+      {error && <ErrorState message={error} />}
+      {conversationId && <p className="text-[10px] text-dim">Opened from conversation {conversationId}.</p>}
+    </div>
+  );
+}
+
 // ── Live session context ──────────────────────────────────────────────────────
 
 function LinkedProjectOverviewPanel({
@@ -70,17 +346,238 @@ function LinkedProjectOverviewPanel({
   );
 }
 
+function DraftConversationContextPanel() {
+  const [draftCwd, setDraftCwd, clearDraftCwd] = useReloadState<string>({
+    storageKey: buildDraftConversationCwdStorageKey(),
+    initialValue: '',
+    shouldPersist: (value) => value.trim().length > 0,
+  });
+  const [changingCwd, setChangingCwd] = useState(false);
+  const [requestedCwd, setRequestedCwd] = useState(draftCwd);
+  const [pickCwdBusy, setPickCwdBusy] = useState(false);
+  const [openCwdBusy, setOpenCwdBusy] = useState(false);
+  const [openCwdError, setOpenCwdError] = useState<string | null>(null);
+  const [changeCwdError, setChangeCwdError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!changingCwd) {
+      setRequestedCwd(draftCwd);
+    }
+  }, [draftCwd, changingCwd]);
+
+  const hasExplicitCwd = draftCwd.trim().length > 0;
+
+  async function pickDraftCwd() {
+    if (pickCwdBusy) {
+      return;
+    }
+
+    setPickCwdBusy(true);
+    setOpenCwdError(null);
+    setChangeCwdError(null);
+    try {
+      const result = await api.pickFolder(draftCwd || undefined);
+      if (result.cancelled || !result.path) {
+        return;
+      }
+
+      setDraftCwd(result.path);
+      setRequestedCwd(result.path);
+      setChangingCwd(false);
+    } catch (error) {
+      setChangeCwdError(error instanceof Error ? error.message : 'Could not choose a folder.');
+    } finally {
+      setPickCwdBusy(false);
+    }
+  }
+
+  async function openCwdInVscode() {
+    if (!hasExplicitCwd || openCwdBusy) {
+      return;
+    }
+
+    setOpenCwdBusy(true);
+    setOpenCwdError(null);
+    try {
+      const result = await api.run('code --reuse-window . || open -a "Visual Studio Code" .', draftCwd);
+      if (result.exitCode !== 0) {
+        throw new Error(result.output.trim() || 'Unable to open VS Code.');
+      }
+    } catch {
+      setOpenCwdError('Could not open VS Code.');
+    } finally {
+      setOpenCwdBusy(false);
+    }
+  }
+
+  function startChangingCwd() {
+    setRequestedCwd(draftCwd);
+    setOpenCwdError(null);
+    setChangeCwdError(null);
+    setChangingCwd(true);
+  }
+
+  function cancelChangingCwd() {
+    setRequestedCwd(draftCwd);
+    setChangeCwdError(null);
+    setChangingCwd(false);
+  }
+
+  function saveDraftCwd() {
+    const nextCwd = requestedCwd.trim();
+    setDraftCwd(nextCwd);
+    setRequestedCwd(nextCwd);
+    setChangeCwdError(null);
+    setChangingCwd(false);
+  }
+
+  function clearExplicitCwd() {
+    clearDraftCwd();
+    setRequestedCwd('');
+    setOpenCwdError(null);
+    setChangeCwdError(null);
+    setChangingCwd(false);
+  }
+
+  return (
+    <div className="space-y-5 px-4 py-4">
+      <Section title="Working Directory">
+        <SurfacePanel muted className="px-3 py-3 space-y-2.5">
+          <div className="flex items-start gap-2">
+            {hasExplicitCwd ? (
+              <p className="ui-card-body break-all min-w-0 flex-1" title={draftCwd}>{draftCwd}</p>
+            ) : (
+              <p className="text-[12px] text-dim min-w-0 flex-1">No explicit working directory set yet.</p>
+            )}
+            <div className="flex items-center gap-1 shrink-0 mt-0.5">
+              {hasExplicitCwd && !changingCwd && (
+                <button
+                  type="button"
+                  onClick={clearExplicitCwd}
+                  className="ui-toolbar-button"
+                  title="Clear the draft working directory"
+                >
+                  Clear
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => { void pickDraftCwd(); }}
+                disabled={pickCwdBusy}
+                className="ui-toolbar-button text-accent whitespace-nowrap"
+                title="Choose the initial working directory for this draft conversation"
+              >
+                {pickCwdBusy ? 'Choosing…' : 'Choose folder…'}
+              </button>
+              <button
+                type="button"
+                onClick={startChangingCwd}
+                disabled={pickCwdBusy}
+                className="ui-toolbar-button whitespace-nowrap"
+                title="Enter the working directory manually"
+              >
+                Manual
+              </button>
+              <IconButton
+                compact
+                onClick={() => { void openCwdInVscode(); }}
+                disabled={!hasExplicitCwd || openCwdBusy || pickCwdBusy}
+                title={openCwdBusy ? 'Opening VS Code…' : 'Open the draft working directory in VS Code'}
+                aria-label="Open the draft working directory in VS Code"
+                className="shrink-0"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14.25 4.5h5.25v5.25" />
+                  <path d="M19.5 4.5 10.5 13.5" />
+                  <path d="M19.5 13.5v4.125A1.875 1.875 0 0 1 17.625 19.5H6.375A1.875 1.875 0 0 1 4.5 17.625V6.375A1.875 1.875 0 0 1 6.375 4.5H10.5" />
+                </svg>
+              </IconButton>
+            </div>
+          </div>
+          {changingCwd && (
+            <form
+              className="space-y-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                saveDraftCwd();
+              }}
+            >
+              <input
+                autoFocus
+                value={requestedCwd}
+                onChange={(event) => {
+                  setRequestedCwd(event.target.value);
+                  if (changeCwdError) {
+                    setChangeCwdError(null);
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    cancelChangingCwd();
+                  }
+                }}
+                placeholder="~/workingdir/project"
+                spellCheck={false}
+                disabled={pickCwdBusy}
+                aria-label="Draft conversation working directory"
+                className="w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] font-mono text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50"
+              />
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] text-dim">Use the folder picker above for the default flow, or enter an absolute, ~, or relative path here.</p>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={cancelChangingCwd}
+                    disabled={pickCwdBusy}
+                    className="ui-toolbar-button"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={pickCwdBusy}
+                    className="ui-toolbar-button text-accent"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
+          <p className="text-[11px] text-dim">
+            {hasExplicitCwd
+              ? 'This path will be used when the draft becomes a live conversation.'
+              : 'Use the folder picker as the default flow. Manual entry still works, and leaving the field blank lets a single referenced project repo root or the default process cwd choose for you.'}
+          </p>
+          {(openCwdError || changeCwdError) && (
+            <p className="text-[11px] text-danger/80">{changeCwdError ?? openCwdError}</p>
+          )}
+        </SurfacePanel>
+      </Section>
+    </div>
+  );
+}
+
 function LiveSessionContextPanel({ id }: { id: string }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { versions } = useAppEvents();
+  const { tasks, sessions } = useAppData();
   const [data, setData] = useState<LiveSessionContext | null>(null);
   const [allProjects, setAllProjects] = useState<ProjectRecord[]>([]);
   const [focusedProjectId, setFocusedProjectId] = useState('');
   const [attachProjectId, setAttachProjectId] = useState('');
   const [focusedProject, setFocusedProject] = useState<ProjectDetail | null>(null);
+  const [detectedRunMentions, setDetectedRunMentions] = useState<ReturnType<typeof collectConversationRunMentions>>([]);
+  const [runRecordsById, setRunRecordsById] = useState<Map<string, DurableRunRecord>>(new Map());
+  const [runsLoading, setRunsLoading] = useState(true);
+  const [runsError, setRunsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [linkBusy, setLinkBusy] = useState(false);
   const [focusedLoading, setFocusedLoading] = useState(false);
+  const [pickCwdBusy, setPickCwdBusy] = useState(false);
   const [openCwdBusy, setOpenCwdBusy] = useState(false);
   const [openCwdError, setOpenCwdError] = useState<string | null>(null);
   const [changingCwd, setChangingCwd] = useState(false);
@@ -107,11 +604,52 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     return () => { cancelled = true; };
   }, [id]);
 
+  const loadRuns = useCallback(async () => {
+    setRunsLoading(true);
+    try {
+      const result = await api.runs();
+      setRunRecordsById(new Map(result.runs.map((run) => [run.runId, run] as const)));
+      setRunsError(null);
+    } catch (nextError) {
+      setRunsError(nextError instanceof Error ? nextError.message : 'Could not load run metadata.');
+    } finally {
+      setRunsLoading(false);
+    }
+  }, []);
+
+  const runLookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
+
   useEffect(() => load(), [load]);
+  useEffect(() => {
+    void loadRuns();
+  }, [id, loadRuns, versions.sessions, versions.tasks]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    api.sessionDetail(id)
+      .then((detail) => {
+        if (cancelled) {
+          return;
+        }
+
+        setDetectedRunMentions(collectConversationRunMentions(detail.blocks.map(displayBlockToMessageBlock)));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDetectedRunMentions([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, versions.sessions]);
 
   useEffect(() => {
     setChangingCwd(false);
     setRequestedCwd('');
+    setPickCwdBusy(false);
     setChangeCwdBusy(false);
     setChangeCwdError(null);
     setOpenCwdError(null);
@@ -141,6 +679,83 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const availableProjects = allProjects.filter((project) => !relatedProjectIds.includes(project.id));
   const availableProjectIds = availableProjects.map((project) => project.id);
   const selectedAttachProject = availableProjects.find((project) => project.id === attachProjectId) ?? null;
+  const selectedRunId = getConversationRunIdFromSearch(location.search);
+  const currentConversationRunId = createConversationLiveRunId(id);
+  const visibleRunMentions = useMemo(() => {
+    const next: Array<{
+      runId: string;
+      label: string;
+      meta: string;
+      selected: boolean;
+      kind: 'conversation' | 'mentioned';
+    }> = [];
+    const seen = new Set<string>();
+
+    const push = (runId: string, label: string, meta: string, kind: 'conversation' | 'mentioned') => {
+      if (seen.has(runId)) {
+        return;
+      }
+
+      seen.add(runId);
+      next.push({
+        runId,
+        label,
+        meta,
+        selected: selectedRunId === runId,
+        kind,
+      });
+    };
+
+    push(currentConversationRunId, 'Conversation execution', 'Tracks this conversation state and recovery metadata.', 'conversation');
+
+    for (const mention of detectedRunMentions) {
+      const mentionMeta = mention.mentionCount > 1
+        ? `Mentioned ${mention.mentionCount} times · last seen ${timeAgo(mention.lastSeenAt)}`
+        : `Mentioned ${timeAgo(mention.lastSeenAt)}`;
+      push(mention.runId, mention.runId, mentionMeta, 'mentioned');
+    }
+
+    return next;
+  }, [currentConversationRunId, detectedRunMentions, selectedRunId]);
+
+  const visibleRunCards = useMemo(() => {
+    return visibleRunMentions.map((mention) => {
+      const record = runRecordsById.get(mention.runId);
+      const headline = record ? getRunHeadline(record, runLookups) : null;
+      const connections = record ? getRunConnections(record, runLookups) : [];
+      const primaryConnection = connections.find((connection) => connection.label !== 'Source file');
+      const status = record ? runStatusText(record) : { text: 'unresolved', cls: 'text-dim' };
+      const activityAt = record?.status?.completedAt
+        ?? record?.status?.updatedAt
+        ?? record?.status?.startedAt
+        ?? record?.manifest?.createdAt;
+
+      return {
+        mention,
+        record,
+        headline,
+        primaryConnection,
+        status,
+        activityAt,
+      };
+    });
+  }, [runLookups, runRecordsById, visibleRunMentions]);
+
+  const shouldPollRuns = visibleRunCards.some(({ record }) => !record || isRefreshingRun(record));
+
+  useEffect(() => {
+    if (!shouldPollRuns) {
+      return;
+    }
+
+    const handle = window.setInterval(() => {
+      void loadRuns();
+    }, 3000);
+
+    return () => {
+      window.clearInterval(handle);
+    };
+  }, [loadRuns, shouldPollRuns]);
 
   useEffect(() => {
     const nextFocusedProjectId = pickFocusedProjectId(relatedProjectIds, focusedProjectId);
@@ -205,6 +820,40 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     }
   }
 
+  function openRun(runId: string) {
+    navigate({
+      pathname: location.pathname,
+      search: setConversationRunIdInSearch(
+        setConversationArtifactIdInSearch(location.search, null),
+        runId,
+      ),
+    });
+  }
+
+  async function pickAndSubmitCwd() {
+    if (!data || pickCwdBusy || changeCwdBusy) {
+      return;
+    }
+
+    setPickCwdBusy(true);
+    setOpenCwdError(null);
+    setChangeCwdError(null);
+    try {
+      const result = await api.pickFolder(data.cwd);
+      if (result.cancelled || !result.path) {
+        return;
+      }
+
+      setRequestedCwd(result.path);
+      setChangingCwd(false);
+      await submitCwdChange(result.path);
+    } catch (error) {
+      setChangeCwdError(error instanceof Error ? error.message : 'Could not choose a folder.');
+    } finally {
+      setPickCwdBusy(false);
+    }
+  }
+
   async function openCwdInVscode() {
     if (!data || openCwdBusy) return;
 
@@ -223,7 +872,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   }
 
   function startChangingCwd() {
-    if (!data || changeCwdBusy) {
+    if (!data || changeCwdBusy || pickCwdBusy) {
       return;
     }
 
@@ -239,12 +888,13 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     setChangingCwd(false);
   }
 
-  async function submitCwdChange() {
+  async function submitCwdChange(nextCwdOverride?: string) {
     if (!data || changeCwdBusy) {
       return;
     }
 
-    if (!requestedCwd.trim()) {
+    const nextCwd = (nextCwdOverride ?? requestedCwd).trim();
+    if (!nextCwd) {
       setChangeCwdError('Enter a directory path.');
       return;
     }
@@ -254,7 +904,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     setChangeCwdError(null);
 
     try {
-      const result = await api.changeConversationCwd(id, requestedCwd);
+      const result = await api.changeConversationCwd(id, nextCwd);
       setChangingCwd(false);
       setRequestedCwd(result.cwd);
 
@@ -293,17 +943,26 @@ function LiveSessionContextPanel({ id }: { id: string }) {
             <div className="flex items-center gap-1 shrink-0 mt-0.5">
               <button
                 type="button"
-                onClick={startChangingCwd}
-                disabled={changingCwd || changeCwdBusy}
+                onClick={() => { void pickAndSubmitCwd(); }}
+                disabled={pickCwdBusy || changeCwdBusy}
                 className="ui-toolbar-button text-accent whitespace-nowrap"
-                title="Change this conversation's working directory"
+                title="Choose a new working directory for this conversation"
               >
-                Change
+                {pickCwdBusy ? 'Choosing…' : 'Choose folder…'}
+              </button>
+              <button
+                type="button"
+                onClick={startChangingCwd}
+                disabled={changingCwd || changeCwdBusy || pickCwdBusy}
+                className="ui-toolbar-button whitespace-nowrap"
+                title="Enter the working directory manually"
+              >
+                Manual
               </button>
               <IconButton
                 compact
                 onClick={() => { void openCwdInVscode(); }}
-                disabled={openCwdBusy}
+                disabled={openCwdBusy || pickCwdBusy || changeCwdBusy}
                 title={openCwdBusy ? 'Opening VS Code…' : 'Open current working directory in VS Code'}
                 aria-label="Open current working directory in VS Code"
                 className="shrink-0"
@@ -341,24 +1000,24 @@ function LiveSessionContextPanel({ id }: { id: string }) {
                 }}
                 placeholder={data.cwd}
                 spellCheck={false}
-                disabled={changeCwdBusy}
+                disabled={changeCwdBusy || pickCwdBusy}
                 aria-label="Conversation working directory"
                 className="w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] font-mono text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50"
               />
               <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] text-dim">Absolute, ~, or relative to the current directory.</p>
+                <p className="text-[11px] text-dim">Use the folder picker above for the default flow, or enter an absolute, ~, or relative path here.</p>
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
                     onClick={cancelChangingCwd}
-                    disabled={changeCwdBusy}
+                    disabled={changeCwdBusy || pickCwdBusy}
                     className="ui-toolbar-button"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    disabled={changeCwdBusy}
+                    disabled={changeCwdBusy || pickCwdBusy}
                     className="ui-toolbar-button text-accent"
                   >
                     {changeCwdBusy ? 'Switching…' : 'Switch'}
@@ -393,6 +1052,75 @@ function LiveSessionContextPanel({ id }: { id: string }) {
             <p className="text-[11px] text-danger/80">{changeCwdError ?? openCwdError}</p>
           )}
         </SurfacePanel>
+      </Section>
+
+      <Section title="Runs">
+        <div className="space-y-2.5">
+          {runsLoading && visibleRunCards.every(({ record }) => !record) && (
+            <p className="text-[11px] text-dim animate-pulse">Refreshing run metadata…</p>
+          )}
+          {runsError && (
+            <p className="text-[11px] text-danger/80">{runsError}</p>
+          )}
+          {visibleRunCards.map(({ mention, record, headline, primaryConnection, status, activityAt }) => {
+            const isSelected = mention.selected;
+            const title = headline?.title ?? mention.label;
+            const summary = headline?.summary ?? mention.meta;
+            const issueCount = record?.problems.length ?? 0;
+            const showRecovery = record && record.recoveryAction !== 'none';
+            const timeLabel = activityAt ? timeAgo(activityAt) : null;
+
+            return (
+              <button
+                key={mention.runId}
+                type="button"
+                onClick={() => openRun(mention.runId)}
+                className={isSelected ? 'w-full rounded-lg border border-accent/30 bg-accent/10 px-3 py-2.5 text-left transition-colors' : 'w-full rounded-lg border border-border-subtle bg-surface px-3 py-2.5 text-left transition-colors hover:border-accent/25 hover:bg-elevated/70'}
+                title={mention.runId}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <p className="truncate text-[12px] font-medium text-primary">{title}</p>
+                      {mention.kind === 'conversation' && (
+                        <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-dim">session</span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-[11px] text-secondary break-words">{summary}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px]">
+                      <span className={status.cls}>{status.text}</span>
+                      {timeLabel && (
+                        <>
+                          <span className="opacity-35">·</span>
+                          <span className="text-dim">{timeLabel}</span>
+                        </>
+                      )}
+                      {showRecovery && record && (
+                        <>
+                          <span className="opacity-35">·</span>
+                          <span className="text-warning">{formatRecoveryAction(record.recoveryAction)}</span>
+                        </>
+                      )}
+                      {issueCount > 0 && (
+                        <>
+                          <span className="opacity-35">·</span>
+                          <span className="text-danger">{issueCount} issue{issueCount === 1 ? '' : 's'}</span>
+                        </>
+                      )}
+                    </div>
+                    {primaryConnection?.detail && (
+                      <p className="mt-1 text-[11px] text-dim break-words">{primaryConnection.detail}</p>
+                    )}
+                    <p className="mt-1 break-all font-mono text-[10px] text-dim">{mention.runId}</p>
+                  </div>
+                  <span className={isSelected ? 'shrink-0 text-[10px] uppercase tracking-[0.14em] text-accent' : 'shrink-0 text-[10px] uppercase tracking-[0.14em] text-dim'}>
+                    {isSelected ? 'open' : 'inspect'}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </Section>
 
       <Section title="Referenced projects">
@@ -884,6 +1612,7 @@ export function ContextRail() {
   const section = parts[0];
   const id = parts[1];
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
+  const selectedRunId = getConversationRunIdFromSearch(location.search);
   const scheduledSection = section === 'scheduled' || section === 'automations' || section === 'tasks';
 
   // Conversations
@@ -891,6 +1620,18 @@ export function ContextRail() {
     <div className="flex-1 overflow-hidden flex flex-col">
       <RailHeader label="Artifact" sub={selectedArtifactId} />
       <ConversationArtifactPanel conversationId={id} artifactId={selectedArtifactId} />
+    </div>
+  );
+  if (section === 'conversations' && id === DRAFT_CONVERSATION_ID) return (
+    <div className="flex-1 overflow-y-auto flex flex-col">
+      <RailHeader label="Draft" />
+      <DraftConversationContextPanel />
+    </div>
+  );
+  if (section === 'conversations' && id && selectedRunId) return (
+    <div className="flex-1 overflow-hidden flex flex-col">
+      <RailHeader label="Execution" sub={selectedRunId} />
+      <ConversationRunContextPanel conversationId={id} runId={selectedRunId} />
     </div>
   );
   if (section === 'conversations' && id) return (

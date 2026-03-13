@@ -781,7 +781,8 @@ Send reminder
 
     await waitForCondition(() => {
       const status = module.getStatus?.() as { totalRuns?: number };
-      return (status.totalRuns ?? 0) === 1;
+      const notifications = published.filter((event) => event.type === 'gateway.notification');
+      return (status.totalRuns ?? 0) === 1 && notifications.length === 1;
     });
 
     const notifications = published.filter((event) => event.type === 'gateway.notification');
@@ -852,7 +853,8 @@ This run should fail
 
     await waitForCondition(() => {
       const status = module.getStatus?.() as { totalRuns?: number };
-      return (status.totalRuns ?? 0) === 1;
+      const notifications = published.filter((event) => event.type === 'gateway.notification');
+      return (status.totalRuns ?? 0) === 1 && notifications.length === 1;
     });
 
     const notifications = published.filter((event) => event.type === 'gateway.notification');

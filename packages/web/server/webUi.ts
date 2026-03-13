@@ -6,12 +6,17 @@ import {
   statSync,
 } from 'node:fs';
 import {
+  findBadWebUiRelease,
   getWebUiServiceStatus,
   installWebUiService,
+  listBadWebUiReleases,
+  markWebUiReleaseBad,
   restartWebUiService,
+  rollbackWebUiDeployment,
   startWebUiService,
   stopWebUiService,
   uninstallWebUiService,
+  type WebUiBadReleaseSummary,
   type WebUiDeploymentSummary,
 } from '@personal-agent/gateway';
 
@@ -47,6 +52,9 @@ interface WebUiServiceSummary {
     activeSlot?: 'blue' | 'green';
     activeRelease?: WebUiReleaseSummary;
     inactiveRelease?: WebUiReleaseSummary;
+    activeReleaseBad?: WebUiBadReleaseSummary;
+    inactiveReleaseBad?: WebUiBadReleaseSummary;
+    badReleases: WebUiBadReleaseSummary[];
   };
 }
 
@@ -101,6 +109,9 @@ function toDeploymentSummary(summary: WebUiDeploymentSummary | undefined): WebUi
     activeSlot: summary.activeSlot,
     activeRelease: summary.activeRelease,
     inactiveRelease: summary.inactiveRelease,
+    activeReleaseBad: findBadWebUiRelease({ release: summary.activeRelease, stablePort: summary.stablePort }),
+    inactiveReleaseBad: findBadWebUiRelease({ release: summary.inactiveRelease, stablePort: summary.stablePort }),
+    badReleases: listBadWebUiReleases({ stablePort: summary.stablePort }),
   };
 }
 
@@ -150,6 +161,12 @@ export function readWebUiState(): WebUiStateSnapshot {
     warnings.push('No active blue/green web UI release is staged yet. Reinstall the web UI service to materialize one.');
   }
 
+  if (service.deployment?.activeReleaseBad) {
+    warnings.push(
+      `Active web UI release ${service.deployment.activeReleaseBad.revision} is marked bad.${service.deployment.activeReleaseBad.reason ? ` Reason: ${service.deployment.activeReleaseBad.reason}` : ''}`,
+    );
+  }
+
   return {
     warnings,
     service,
@@ -172,6 +189,30 @@ export function startWebUiServiceAndReadState(): WebUiStateSnapshot {
 
 export function restartWebUiServiceAndReadState(): WebUiStateSnapshot {
   restartWebUiService({ repoRoot: WEB_REPO_ROOT });
+  return readWebUiState();
+}
+
+export function rollbackWebUiServiceAndReadState(input: { reason?: string } = {}): WebUiStateSnapshot {
+  const service = getWebUiServiceStatus({ repoRoot: WEB_REPO_ROOT });
+  if (!service.installed) {
+    throw new Error('Managed web UI service is not installed. Install it before rolling back.');
+  }
+
+  rollbackWebUiDeployment({
+    stablePort: service.port,
+    reason: input.reason,
+  });
+  installWebUiService({ repoRoot: WEB_REPO_ROOT, port: service.port });
+  return readWebUiState();
+}
+
+export function markBadWebUiReleaseAndReadState(input: { slot?: 'blue' | 'green'; reason?: string } = {}): WebUiStateSnapshot {
+  const service = getWebUiServiceStatus({ repoRoot: WEB_REPO_ROOT });
+  markWebUiReleaseBad({
+    slot: input.slot,
+    stablePort: service.port,
+    reason: input.reason,
+  });
   return readWebUiState();
 }
 

@@ -1,10 +1,12 @@
 /**
  * Arc-style tab model:
- *   - openIds           (localStorage) = sessions promoted to visible tabs
+ *   - pinnedIds         (localStorage + settings) = conversations always visible above open tabs
+ *   - openIds           (localStorage + settings) = active workspace tabs below the pinned shelf
  *   - archivedSessions  = all other sessions, restored on demand
  *
  * Restoring an archived conversation calls openSession() → adds to openIds → tab appears.
  * × on an open tab calls closeSession() → removed from openIds → back to the archive.
+ * Pinning removes a conversation from openIds and keeps it in the pinned shelf instead.
  */
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
@@ -13,11 +15,21 @@ import { NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversat
 import { applyLiveSessionState, buildSyntheticLiveSessionMeta } from '../sessionIndicators';
 import {
   closeConversationTab,
+  moveConversationTab,
   OPEN_SESSIONS_CHANGED_EVENT,
   openConversationTab,
+  pinConversationTab,
+  readConversationLayout,
   readOpenSessionIds,
+  readPinnedSessionIds,
+  replaceConversationLayout,
   replaceOpenConversationTabs,
+  replacePinnedConversationTabs,
   syncOpenConversationTabsToServer,
+  type ConversationLayout,
+  type ConversationShelf,
+  type OpenConversationDropPosition,
+  unpinConversationTab,
 } from '../sessionTabs';
 import type { SessionMeta } from '../types';
 
@@ -31,41 +43,53 @@ async function fetchSessionsSnapshot(): Promise<SessionMeta[]> {
   return [...syntheticLive, ...applyLiveSessionState(jsonl, live)];
 }
 
+function applyLayoutState(layout: ConversationLayout, setters: {
+  setOpenIds: (ids: string[]) => void;
+  setPinnedIds: (ids: string[]) => void;
+}) {
+  setters.setOpenIds(layout.sessionIds);
+  setters.setPinnedIds(layout.pinnedSessionIds);
+}
+
 export function useConversations() {
-  const [openIds, setOpenIds] = useState<string[]>(readOpenSessionIds);
+  const [openIds, setOpenIds] = useState(() => readOpenSessionIds());
+  const [pinnedIds, setPinnedIds] = useState(() => readPinnedSessionIds());
   const { titles: liveTitles } = useContext(LiveTitlesContext);
   const { sessions, setSessions } = useAppData();
   const { status: sseStatus } = useSseConnection();
 
   useEffect(() => {
-    function handleOpenSessionsChanged() {
-      setOpenIds(readOpenSessionIds());
+    function handleConversationLayoutChanged() {
+      const layout = readConversationLayout();
+      applyLayoutState(layout, { setOpenIds, setPinnedIds });
     }
 
-    window.addEventListener(OPEN_SESSIONS_CHANGED_EVENT, handleOpenSessionsChanged);
-    return () => window.removeEventListener(OPEN_SESSIONS_CHANGED_EVENT, handleOpenSessionsChanged);
+    window.addEventListener(OPEN_SESSIONS_CHANGED_EVENT, handleConversationLayoutChanged);
+    return () => window.removeEventListener(OPEN_SESSIONS_CHANGED_EVENT, handleConversationLayoutChanged);
   }, []);
 
   useEffect(() => {
     let cancelled = false;
-    const localOpenIds = readOpenSessionIds();
+    const localLayout = readConversationLayout();
 
-    if (localOpenIds.length > 0) {
-      syncOpenConversationTabsToServer(localOpenIds);
+    if (localLayout.sessionIds.length > 0 || localLayout.pinnedSessionIds.length > 0) {
+      syncOpenConversationTabsToServer(localLayout.sessionIds, localLayout.pinnedSessionIds);
       return;
     }
 
     void api.openConversationTabs()
-      .then(({ sessionIds }) => {
-        if (cancelled || sessionIds.length === 0) {
+      .then(({ sessionIds, pinnedSessionIds }) => {
+        if (cancelled || (sessionIds.length === 0 && pinnedSessionIds.length === 0)) {
           return;
         }
 
-        if (readOpenSessionIds().length > 0) {
+        const currentLayout = readConversationLayout();
+        if (currentLayout.sessionIds.length > 0 || currentLayout.pinnedSessionIds.length > 0) {
           return;
         }
 
-        setOpenIds(replaceOpenConversationTabs(sessionIds));
+        const nextLayout = replaceConversationLayout({ sessionIds, pinnedSessionIds });
+        applyLayoutState(nextLayout, { setOpenIds, setPinnedIds });
       })
       .catch(() => {
         // Ignore bootstrap failures and keep the browser-local fallback.
@@ -84,14 +108,42 @@ export function useConversations() {
 
   const openSession = useCallback((id: string) => {
     setOpenIds(openConversationTab(id));
+    setPinnedIds(readPinnedSessionIds());
   }, []);
 
   const closeSession = useCallback((id: string) => {
     setOpenIds(closeConversationTab(id));
+    setPinnedIds(readPinnedSessionIds());
+  }, []);
+
+  const pinSession = useCallback((id: string) => {
+    const nextLayout = pinConversationTab(id);
+    applyLayoutState(nextLayout, { setOpenIds, setPinnedIds });
+  }, []);
+
+  const unpinSession = useCallback((id: string, options: { open?: boolean } = {}) => {
+    const nextLayout = unpinConversationTab(id, options);
+    applyLayoutState(nextLayout, { setOpenIds, setPinnedIds });
   }, []);
 
   const reorderSessions = useCallback((ids: string[]) => {
     setOpenIds(replaceOpenConversationTabs(ids));
+    setPinnedIds(readPinnedSessionIds());
+  }, []);
+
+  const reorderPinnedSessions = useCallback((ids: string[]) => {
+    setPinnedIds(replacePinnedConversationTabs(ids));
+    setOpenIds(readOpenSessionIds());
+  }, []);
+
+  const moveSession = useCallback((
+    sessionId: string,
+    targetSection: ConversationShelf,
+    targetSessionId?: string | null,
+    position?: OpenConversationDropPosition,
+  ) => {
+    const nextLayout = moveConversationTab(sessionId, targetSection, targetSessionId, position);
+    applyLayoutState(nextLayout, { setOpenIds, setPinnedIds });
   }, []);
 
   const withTitles = (sessions ?? []).map((session) => {
@@ -102,9 +154,16 @@ export function useConversations() {
     return title === session.title ? session : { ...session, title };
   });
   const openIdSet = useMemo(() => new Set(openIds), [openIds]);
+  const pinnedIdSet = useMemo(() => new Set(pinnedIds), [pinnedIds]);
   const sessionsById = useMemo(
     () => new Map(withTitles.map((session) => [session.id, session] satisfies [string, SessionMeta])),
     [withTitles],
+  );
+  const pinnedSessions = useMemo(
+    () => pinnedIds
+      .map((id) => sessionsById.get(id))
+      .filter((session): session is SessionMeta => Boolean(session)),
+    [pinnedIds, sessionsById],
   );
   const tabs = useMemo(
     () => openIds
@@ -113,10 +172,25 @@ export function useConversations() {
     [openIds, sessionsById],
   );
   const archivedSessions = useMemo(
-    () => withTitles.filter((session) => !openIdSet.has(session.id)),
-    [openIdSet, withTitles],
+    () => withTitles.filter((session) => !openIdSet.has(session.id) && !pinnedIdSet.has(session.id)),
+    [openIdSet, pinnedIdSet, withTitles],
   );
   const loading = sessions === null && (sseStatus === 'connecting' || sseStatus === 'reconnecting');
 
-  return { tabs, archivedSessions, openSession, closeSession, reorderSessions, loading, refetch };
+  return {
+    pinnedIds,
+    openIds,
+    pinnedSessions,
+    tabs,
+    archivedSessions,
+    openSession,
+    closeSession,
+    pinSession,
+    unpinSession,
+    reorderSessions,
+    reorderPinnedSessions,
+    moveSession,
+    loading,
+    refetch,
+  };
 }

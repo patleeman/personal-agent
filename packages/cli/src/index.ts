@@ -55,6 +55,7 @@ import {
 import {
   SUPPORTED_GATEWAY_PROVIDERS,
   activateWebUiSlot,
+  findBadWebUiRelease,
   getInactiveWebUiSlot,
   getManagedDaemonServiceStatus,
   getWebUiDeploymentSummary,
@@ -62,11 +63,14 @@ import {
   getWebUiSlotHealthPort,
   installManagedDaemonService,
   installWebUiService,
+  listBadWebUiReleases,
+  markWebUiReleaseBad,
   registerGatewayCliCommands,
   restartGatewayServiceIfInstalled,
   restartManagedDaemonServiceIfInstalled,
   restartWebUiService,
   restartWebUiServiceIfInstalled,
+  rollbackWebUiDeployment,
   stageWebUiRelease,
   startWebUiService,
   stopWebUiService,
@@ -81,7 +85,14 @@ import { hasOption } from './args.js';
 import { readTailLines } from './file-utils.js';
 import { memoryCommand } from './memory.js';
 import { readConfig, setDefaultProfile } from './config.js';
+import {
+  writeRestartCompletionInboxEntry,
+  writeRestartFailureInboxEntry,
+  writeWebUiMarkedBadInboxEntry,
+  writeWebUiRollbackInboxEntry,
+} from './restartNotifications.js';
 import { runsCommand } from './runs-command.js';
+import { waitForWebUiHealthy } from './web-ui-health.js';
 import {
   accent,
   bullet,
@@ -361,6 +372,11 @@ function ensureExtensionDependencies(profile: ReturnType<typeof resolveResourceP
 function resolveProfileName(): string {
   const config = readConfig();
   return config.defaultProfile;
+}
+
+function resolveActivityProfileName(): string {
+  const explicit = process.env.PERSONAL_AGENT_ACTIVE_PROFILE?.trim() || process.env.PERSONAL_AGENT_PROFILE?.trim();
+  return explicit && explicit.length > 0 ? explicit : resolveProfileName();
 }
 
 function applyDefaultModelArgs(args: string[], settings: Record<string, unknown>): string[] {
@@ -1723,48 +1739,95 @@ async function restartBackgroundServices(options: {
 
 async function restartCommand(args: string[]): Promise<number> {
   const options = parseRestartOptions(args);
+  const repoRoot = options.rebuild ? getRepoRoot() : undefined;
+  let currentPhase = options.rebuild ? 'rebuild packages' : 'restart background services';
 
-  let buildStatus = 'skipped';
-  let summary: RestartSummary;
+  try {
+    let buildStatus = 'skipped';
+    let summary: RestartSummary;
 
-  if (options.rebuild) {
-    const repoRoot = getRepoRoot();
-    const buildSpinner = spinner('Rebuilding personal-agent packages');
-    buildSpinner.start();
+    if (options.rebuild) {
+      const buildSpinner = spinner('Rebuilding personal-agent packages');
+      buildSpinner.start();
 
-    let buildOutput = '';
+      let buildOutput = '';
 
-    try {
-      buildOutput = rebuildRepoPackages(repoRoot);
-      buildSpinner.succeed('Rebuilt personal-agent packages');
-      buildStatus = 'repo packages rebuilt';
-    } catch (error) {
-      buildSpinner.fail('Unable to rebuild personal-agent packages');
-      throw error;
+      try {
+        buildOutput = rebuildRepoPackages(repoRoot as string);
+        buildSpinner.succeed('Rebuilt personal-agent packages');
+        buildStatus = 'repo packages rebuilt';
+      } catch (error) {
+        buildSpinner.fail('Unable to rebuild personal-agent packages');
+        throw error;
+      }
+
+      if (buildOutput.length > 0) {
+        console.log(dim(buildOutput));
+      }
+
+      currentPhase = 'restart background services';
+      summary = await restartBackgroundServices({
+        webUiStrategy: 'blue-green',
+        repoRoot: repoRoot as string,
+        webUiPort: getWebUiServiceOptions({ repoRoot: repoRoot as string }).port,
+      });
+    } else {
+      summary = await restartBackgroundServices();
     }
 
-    if (buildOutput.length > 0) {
-      console.log(dim(buildOutput));
+    console.log('');
+    console.log(section('Restart summary'));
+    console.log(keyValue('build', buildStatus));
+    console.log(keyValue('daemon', summary.daemonStatus));
+    console.log(keyValue('web ui', summary.webUiStatus));
+    console.log(keyValue('gateway services restarted', summary.restartedGatewayServices.length > 0 ? summary.restartedGatewayServices.join(', ') : 'none'));
+    console.log(keyValue('gateway services skipped', summary.skippedGatewayServices.length > 0 ? summary.skippedGatewayServices.join(', ') : 'none'));
+
+    if (
+      process.env.PERSONAL_AGENT_RESTART_NOTIFY_INBOX === '1'
+      && summary.webUiStatus.startsWith('blue/green')
+    ) {
+      const profile = process.env.PERSONAL_AGENT_RESTART_NOTIFY_PROFILE?.trim();
+
+      if (profile) {
+        try {
+          writeRestartCompletionInboxEntry({
+            profile,
+            repoRoot,
+            requestedAt: process.env.PERSONAL_AGENT_RESTART_REQUESTED_AT,
+            daemonStatus: summary.daemonStatus,
+            webUiStatus: summary.webUiStatus,
+            restartedGatewayServices: summary.restartedGatewayServices,
+            skippedGatewayServices: summary.skippedGatewayServices,
+          });
+        } catch (error) {
+          console.log(`  ${warning(`Unable to write restart completion inbox entry: ${(error as Error).message}`)}`);
+        }
+      }
     }
 
-    summary = await restartBackgroundServices({
-      webUiStrategy: 'blue-green',
-      repoRoot,
-      webUiPort: getWebUiServiceOptions({ repoRoot }).port,
-    });
-  } else {
-    summary = await restartBackgroundServices();
+    return 0;
+  } catch (error) {
+    if (process.env.PERSONAL_AGENT_RESTART_NOTIFY_INBOX === '1') {
+      const profile = process.env.PERSONAL_AGENT_RESTART_NOTIFY_PROFILE?.trim();
+
+      if (profile) {
+        try {
+          writeRestartFailureInboxEntry({
+            profile,
+            repoRoot,
+            requestedAt: process.env.PERSONAL_AGENT_RESTART_REQUESTED_AT,
+            phase: currentPhase,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        } catch (writeError) {
+          console.log(`  ${warning(`Unable to write restart failure inbox entry: ${(writeError as Error).message}`)}`);
+        }
+      }
+    }
+
+    throw error;
   }
-
-  console.log('');
-  console.log(section('Restart summary'));
-  console.log(keyValue('build', buildStatus));
-  console.log(keyValue('daemon', summary.daemonStatus));
-  console.log(keyValue('web ui', summary.webUiStatus));
-  console.log(keyValue('gateway services restarted', summary.restartedGatewayServices.length > 0 ? summary.restartedGatewayServices.join(', ') : 'none'));
-  console.log(keyValue('gateway services skipped', summary.skippedGatewayServices.length > 0 ? summary.skippedGatewayServices.join(', ') : 'none'));
-
-  return 0;
 }
 
 async function updateCommand(args: string[]): Promise<number> {
@@ -3683,6 +3746,34 @@ function parseNumericOption(
   return { value, rest };
 }
 
+function parseStringOption(
+  args: string[],
+  optionName: string,
+  usage: string,
+): { value: string | undefined; rest: string[] } {
+  const rest: string[] = [];
+  let value: string | undefined;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+
+    if (arg !== optionName) {
+      rest.push(arg);
+      continue;
+    }
+
+    const rawValue = args[index + 1];
+    if (!rawValue || rawValue.startsWith('--')) {
+      throw new Error(`Usage: ${usage}`);
+    }
+
+    value = rawValue;
+    index += 1;
+  }
+
+  return { value, rest };
+}
+
 function openWebUiInBrowser(url: string): void {
   const command = process.platform === 'darwin'
     ? 'open'
@@ -3695,31 +3786,6 @@ function openWebUiInBrowser(url: string): void {
   }
 
   spawnSync(command, [url], { stdio: 'ignore' });
-}
-
-async function waitForWebUiHealthy(port: number, timeoutMs = 30_000): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  let lastError = 'timed out';
-
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(`http://127.0.0.1:${port}/api/status`, {
-        signal: AbortSignal.timeout(2_000),
-      });
-
-      if (response.ok) {
-        return;
-      }
-
-      lastError = `HTTP ${response.status}`;
-    } catch (error) {
-      lastError = error instanceof Error ? error.message : String(error);
-    }
-
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 500));
-  }
-
-  throw new Error(`Web UI health check failed on http://localhost:${port}: ${lastError}`);
 }
 
 interface WebUiCandidateHandle {
@@ -3747,6 +3813,7 @@ function startWebUiCandidateProcess(release: WebUiReleaseSummary, port: number):
       PA_WEB_DIST: release.distDir,
       PERSONAL_AGENT_REPO_ROOT: release.sourceRepoRoot,
       PERSONAL_AGENT_WEB_SLOT: release.slot,
+      ...(release.revision ? { PERSONAL_AGENT_WEB_REVISION: release.revision } : {}),
     },
   });
 
@@ -3791,7 +3858,10 @@ async function validateWebUiReleaseCandidate(release: WebUiReleaseSummary, stabl
 
   try {
     await Promise.race([
-      waitForWebUiHealthy(port, 30_000),
+      waitForWebUiHealthy(port, 30_000, {
+        slot: release.slot,
+        revision: release.revision,
+      }),
       new Promise<never>((_, reject) => {
         handle.child.once('exit', (code, signal) => {
           reject(new Error(`Candidate web UI exited before becoming healthy (code=${code ?? 'null'} signal=${signal ?? 'none'})`));
@@ -3820,7 +3890,10 @@ async function deployManagedWebUiBlueGreen(repoRoot: string, port: number): Prom
   await validateWebUiReleaseCandidate(release, port);
   activateWebUiSlot({ slot: nextSlot, stablePort: port });
   installWebUiService({ repoRoot, port });
-  await waitForWebUiHealthy(port, 30_000);
+  await waitForWebUiHealthy(port, 30_000, {
+    slot: release.slot,
+    revision: release.revision,
+  });
 
   const nextDeployment = getWebUiDeploymentSummary({ stablePort: port });
   return `swapped ${deployment.activeSlot ?? 'none'} → ${nextSlot}${nextDeployment.activeRelease?.revision ? ` (${nextDeployment.activeRelease.revision})` : ''}`;
@@ -3839,6 +3912,8 @@ function printWebUiHelp(): void {
   console.log('  pa ui service start [--port <port>]           Start managed web UI service');
   console.log('  pa ui service stop [--port <port>]            Stop managed web UI service');
   console.log('  pa ui service restart [--port <port>]         Restart managed web UI service');
+  console.log('  pa ui service rollback [--port <port>]        Roll back to the inactive staged web UI slot');
+  console.log('  pa ui service mark-bad [--port <port>]        Mark the active staged web UI release as bad');
   console.log('  pa ui service uninstall [--port <port>]       Stop and remove managed web UI service');
   console.log('');
   console.log(`  ${formatNextStep('pa ui service install')}`);
@@ -3854,6 +3929,8 @@ function printWebUiServiceHelp(): void {
   console.log('  pa ui service start [--port <port>]           Start managed web UI service');
   console.log('  pa ui service stop [--port <port>]            Stop managed web UI service');
   console.log('  pa ui service restart [--port <port>]         Restart managed web UI service');
+  console.log('  pa ui service rollback [--port <port>]        Roll back to the inactive staged web UI slot');
+  console.log('  pa ui service mark-bad [--port <port>]        Mark the active staged web UI release as bad');
   console.log('  pa ui service uninstall [--port <port>]       Stop and remove managed web UI service');
   console.log('');
   console.log('Updates use blue/green staging automatically when the managed web UI service is installed.');
@@ -3888,6 +3965,22 @@ function printWebUiServiceStatus(status: WebUiServiceStatus): void {
       status.deployment.inactiveRelease?.slot,
       status.deployment.inactiveRelease?.revision,
     ].filter(Boolean).join(' · ')));
+  }
+
+  const activeBadRelease = findBadWebUiRelease({
+    release: status.deployment?.activeRelease,
+    stablePort: status.port,
+  });
+  if (activeBadRelease) {
+    console.log(keyValue('Active release bad', [
+      activeBadRelease.revision,
+      activeBadRelease.reason,
+    ].filter(Boolean).join(' · ')));
+  }
+
+  const badReleaseCount = listBadWebUiReleases({ stablePort: status.port }).length;
+  if (badReleaseCount > 0) {
+    console.log(keyValue('Bad releases', String(badReleaseCount)));
   }
 
   if (status.logFile) {
@@ -3926,10 +4019,36 @@ function showWebUiLogs(args: string[]): void {
 }
 
 async function runWebUiServiceAction(action: string, args: string[]): Promise<void> {
-  const parsed = parseNumericOption(args, '--port', readWebUiConfig().port, `pa ui service ${action} [--port <port>]`);
-  ensureNoExtraCommandArgs(parsed.rest, `pa ui service ${action} [--port <port>]`);
+  const usage = action === 'rollback'
+    ? 'pa ui service rollback [--port <port>] [--reason <text>]'
+    : action === 'mark-bad'
+      ? 'pa ui service mark-bad [--port <port>] [--slot <blue|green>] [--reason <text>]'
+      : `pa ui service ${action} [--port <port>]`;
+  const parsedPort = parseNumericOption(args, '--port', readWebUiConfig().port, usage);
+  let rest = parsedPort.rest;
+  let reason: string | undefined;
+  let slot: 'blue' | 'green' | undefined;
 
-  const options = getWebUiServiceOptions({ port: parsed.value });
+  if (action === 'rollback' || action === 'mark-bad') {
+    const parsedReason = parseStringOption(rest, '--reason', usage);
+    reason = parsedReason.value;
+    rest = parsedReason.rest;
+  }
+
+  if (action === 'mark-bad') {
+    const parsedSlot = parseStringOption(rest, '--slot', usage);
+    if (parsedSlot.value) {
+      if (parsedSlot.value !== 'blue' && parsedSlot.value !== 'green') {
+        throw new Error(`Usage: ${usage}`);
+      }
+      slot = parsedSlot.value;
+    }
+    rest = parsedSlot.rest;
+  }
+
+  ensureNoExtraCommandArgs(rest, usage);
+
+  const options = getWebUiServiceOptions({ port: parsedPort.value });
 
   if (action === 'install') {
     writeWebUiConfig({ port: options.port ?? DEFAULT_WEB_UI_PORT });
@@ -3969,6 +4088,78 @@ async function runWebUiServiceAction(action: string, args: string[]): Promise<vo
     const service = restartWebUiService(options);
     await waitForWebUiHealthy(service.port);
     console.log(success(`Restarted managed web UI service on ${service.url}`));
+    return;
+  }
+
+  if (action === 'rollback') {
+    const status = getWebUiServiceStatus(options);
+    if (!status.installed) {
+      throw new Error('Managed web UI service is not installed. Run `pa ui service install` first.');
+    }
+
+    const result = rollbackWebUiDeployment({
+      stablePort: options.port,
+      reason,
+    });
+    const service = installWebUiService(options);
+    await waitForWebUiHealthy(service.port, 30_000, {
+      slot: result.restoredRelease.slot,
+      revision: result.restoredRelease.revision,
+    });
+
+    console.log(success(`Rolled back managed web UI to ${result.restoredRelease.slot}${result.restoredRelease.revision ? ` (${result.restoredRelease.revision})` : ''}`));
+    console.log(keyValue('Rolled back from', `${result.rolledBackFrom.slot}${result.rolledBackFrom.revision ? ` · ${result.rolledBackFrom.revision}` : ''}`));
+    console.log(keyValue('Restored release', `${result.restoredRelease.slot}${result.restoredRelease.revision ? ` · ${result.restoredRelease.revision}` : ''}`));
+    if (result.markedBad) {
+      console.log(keyValue('Marked bad', `${result.markedBad.revision}${result.markedBad.reason ? ` · ${result.markedBad.reason}` : ''}`));
+    }
+
+    try {
+      writeWebUiRollbackInboxEntry({
+        profile: resolveActivityProfileName(),
+        repoRoot: status.repoRoot,
+        rolledBackFromSlot: result.rolledBackFrom.slot,
+        rolledBackFromRevision: result.rolledBackFrom.revision,
+        restoredSlot: result.restoredRelease.slot,
+        restoredRevision: result.restoredRelease.revision,
+        reason,
+        markedBadRevision: result.markedBad?.revision,
+        markedBadReason: result.markedBad?.reason,
+      });
+    } catch (error) {
+      console.log(`  ${warning(`Unable to write web UI rollback inbox entry: ${(error as Error).message}`)}`);
+    }
+    return;
+  }
+
+  if (action === 'mark-bad') {
+    const status = getWebUiServiceStatus(options);
+    const marked = markWebUiReleaseBad({
+      slot,
+      stablePort: options.port,
+      reason,
+    });
+
+    console.log(success(`Marked web UI release ${marked.revision} as bad`));
+    if (marked.slot) {
+      console.log(keyValue('Slot', marked.slot));
+    }
+    console.log(keyValue('Revision', marked.revision));
+    if (marked.reason) {
+      console.log(keyValue('Reason', marked.reason));
+    }
+
+    try {
+      writeWebUiMarkedBadInboxEntry({
+        profile: resolveActivityProfileName(),
+        repoRoot: status.repoRoot,
+        slot: marked.slot,
+        revision: marked.revision,
+        reason: marked.reason,
+      });
+    } catch (error) {
+      console.log(`  ${warning(`Unable to write web UI mark-bad inbox entry: ${(error as Error).message}`)}`);
+    }
     return;
   }
 
@@ -4048,7 +4239,7 @@ async function uiCommand(args: string[]): Promise<number> {
       return 0;
     }
 
-    if (!['install', 'status', 'start', 'stop', 'restart', 'uninstall'].includes(action)) {
+    if (!['install', 'status', 'start', 'stop', 'restart', 'rollback', 'mark-bad', 'uninstall'].includes(action)) {
       throw new Error(`Unknown ui service subcommand: ${action}`);
     }
 

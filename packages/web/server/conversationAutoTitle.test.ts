@@ -190,10 +190,44 @@ describe('generateConversationTitle', () => {
       expect.objectContaining({
         apiKey: 'test-key',
         reasoning: 'minimal',
-        temperature: 0.2,
         maxTokens: 32,
         cacheRetention: 'none',
       }),
     );
+  });
+
+  it('throws when the title model returns an error response', async () => {
+    completeSimpleMock.mockResolvedValue({
+      content: [],
+      stopReason: 'error',
+      errorMessage: 'Unsupported parameter: temperature',
+    });
+
+    const model = {
+      id: 'gpt-5-mini',
+      provider: 'openai',
+      api: 'openai-responses',
+    } as any;
+    const modelRegistry = {
+      getAvailable: () => [model],
+      getApiKey: vi.fn().mockResolvedValue('test-key'),
+    };
+
+    await expect(generateConversationTitle({
+      messages: [
+        { role: 'user', content: [{ type: 'text', text: 'Make conversation names easier to scan.' }] },
+        { role: 'assistant', content: [{ type: 'text', text: 'I can generate a better title after the first reply.' }] },
+      ],
+      modelRegistry,
+      settings: {
+        enabled: true,
+        provider: 'openai',
+        model: 'gpt-5-mini',
+        reasoning: 'minimal',
+        maxMessages: 8,
+        maxTitleLength: 80,
+      },
+      now: 123,
+    })).rejects.toThrow('Unsupported parameter: temperature');
   });
 });

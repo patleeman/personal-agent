@@ -4,35 +4,40 @@ import { homedir } from 'node:os';
 import { basename, dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
-import { listSessions, readSessionBlocks } from './sessions.js';
+import { listSessions, readSessionBlocks, readSessionTree, renameStoredSession } from './sessions.js';
 import { invalidateAppTopics, startAppEventMonitor, subscribeAppEvents } from './appEvents.js';
 import { resolveConversationCwd, resolveRequestedCwd } from './conversationCwd.js';
+import { pickFolder } from './folderPicker.js';
 import { readGitStatusSummary } from './gitStatus.js';
 import { installGatewayAndReadState, readGatewayState, restartGatewayAndReadState, saveGatewayConfigAndReadState, startGatewayAndReadState, stopGatewayAndReadState, uninstallGatewayAndReadState, } from './gateway.js';
 import { parseGatewayConfigUpdateInput } from './gatewayConfig.js';
 import { installDaemonServiceAndReadState, readDaemonState, restartDaemonServiceAndReadState, startDaemonServiceAndReadState, stopDaemonServiceAndReadState, uninstallDaemonServiceAndReadState, } from './daemon.js';
-import { installWebUiServiceAndReadState, readWebUiState, restartWebUiServiceAndReadState, startWebUiServiceAndReadState, stopWebUiServiceAndReadState, uninstallWebUiServiceAndReadState, } from './webUi.js';
+import { installWebUiServiceAndReadState, markBadWebUiReleaseAndReadState, readWebUiState, restartWebUiServiceAndReadState, rollbackWebUiServiceAndReadState, startWebUiServiceAndReadState, stopWebUiServiceAndReadState, uninstallWebUiServiceAndReadState, } from './webUi.js';
 import { requestApplicationRestart } from './applicationRestart.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from './modelPreferences.js';
 import { readSavedConversationTitlePreferences, writeSavedConversationTitlePreferences } from './conversationTitlePreferences.js';
 import { logError, logInfo, logWarn, installProcessLogging, webRequestLoggingMiddleware } from './logging.js';
+import { createServiceAttentionMonitor, suppressMonitoredServiceAttention, writeInternalAttentionEntry, } from './internalAttention.js';
 import { readSavedThemePreferences, writeSavedThemePreferences } from './themePreferences.js';
 import { readSavedWebUiPreferences, writeSavedWebUiPreferences } from './webUiPreferences.js';
+import { DEFAULT_RUNTIME_SETTINGS_FILE, persistSettingsWrite } from './settingsPersistence.js';
 import { getProfileConfigFilePath, readSavedProfilePreferences, resolveActiveProfile, writeSavedProfilePreferences, } from './profilePreferences.js';
 import { syncDaemonTaskScopeToProfile } from './daemonProfileSync.js';
 import { readScheduledTaskFileMetadata, taskBelongsToProfile, } from './scheduledTasks.js';
 import { createProjectAgentExtension } from './projectAgentExtension.js';
 import { createArtifactAgentExtension } from './artifactAgentExtension.js';
 import { createDeferredResumeAgentExtension } from './deferredResumeAgentExtension.js';
-import { createSession, createSessionFromExisting, resumeSession, getLiveSessions, getSessionStats, getSessionContextUsage, getAvailableModels, inspectAvailableTools, isLive, subscribe, promptSession, queuePromptContext, compactSession, reloadSessionResources, exportSessionHtml, renameSession, abortSession, destroySession, forkSession, registry as liveRegistry, } from './liveSessions.js';
+import { createSession, createSessionFromExisting, resumeSession, getLiveSessions, getSessionStats, getSessionContextUsage, getAvailableModels, inspectAvailableTools, isLive, subscribe, promptSession, restoreQueuedMessage, queuePromptContext, compactSession, reloadSessionResources, exportSessionHtml, renameSession, abortSession, destroySession, branchSession, forkSession, registry as liveRegistry, } from './liveSessions.js';
 import { recoverDurableLiveConversations } from './conversationRecovery.js';
-import { syncWebLiveConversationRun } from './conversationRuns.js';
+import { createWebLiveConversationRunId, syncWebLiveConversationRun } from './conversationRuns.js';
 import { cancelDurableRun, getDurableRun, getDurableRunLog, listDurableRuns } from './durableRuns.js';
 import { buildReferencedMemoryDocsContext, buildReferencedProfilesContext, buildReferencedSkillsContext, buildReferencedTasksContext, pickPromptReferencesInOrder, resolvePromptReferences, } from './promptReferences.js';
-import { activateDueDeferredResumes, addConversationProjectLink, deleteConversationArtifact, ensureConversationAttentionBaselines, getActivityConversationLink, getConversationArtifact, getConversationProjectLink, getReadySessionDeferredResumeEntries, listConversationArtifacts, cleanMcpCliStderr, inspectCliBinary, inspectMcpCliServer, inspectMcpCliTool, listProfileActivityEntries, listProjectIds, loadDeferredResumeState, loadProfileActivityReadState, markConversationAttentionRead, markConversationAttentionUnread, readMcpCliConfig, readProject, removeConversationProjectLink, removeDeferredResume, resolveProjectPaths, retryDeferredResume, saveDeferredResumeState, saveProfileActivityReadState, setConversationProjectLinks, summarizeConversationAttention, } from '@personal-agent/core';
+import { activateDueDeferredResumes, addConversationProjectLink, deleteConversationArtifact, ensureConversationAttentionBaselines, getActivityConversationLink, getConversationArtifact, getConversationProjectLink, getReadySessionDeferredResumeEntries, listConversationProjectLinks, listConversationArtifacts, listConversationCheckpoints, getConversationCheckpoint, saveConversationCheckpoint, deleteConversationCheckpoint, resolveConversationCheckpointSnapshotFile, cleanMcpCliStderr, inspectCliBinary, inspectMcpCliServer, inspectMcpCliTool, listProfileActivityEntries, listProjectIds, loadDeferredResumeState, loadProfileActivityReadState, markConversationAttentionRead, markConversationAttentionUnread, readMcpCliConfig, readProject, removeConversationProjectLink, removeDeferredResume, resolveProjectPaths, retryDeferredResume, saveDeferredResumeState, saveProfileActivityReadState, setConversationProjectLinks, summarizeConversationAttention, } from '@personal-agent/core';
 import { listProfiles, materializeProfileToAgentDir, resolveResourceProfile, } from '@personal-agent/resources';
-import { completeDeferredResumeConversationRun, loadDaemonConfig, markDeferredResumeConversationRunReady, markDeferredResumeConversationRunRetryScheduled, resolveDaemonPaths, startScheduledTaskRun, } from '@personal-agent/daemon';
+import { completeDeferredResumeConversationRun, loadDaemonConfig, markDeferredResumeConversationRunReady, markDeferredResumeConversationRunRetryScheduled, parsePendingOperation, resolveDaemonPaths, startScheduledTaskRun, } from '@personal-agent/daemon';
 import { addProjectMilestone, createProjectRecord, createProjectTaskRecord, deleteProjectMilestone, deleteProjectRecord, deleteProjectTaskRecord, moveProjectMilestone, moveProjectTaskRecord, readProjectDetailFromProject, readProjectSource, saveProjectSource, updateProjectMilestone, updateProjectRecord, updateProjectTaskRecord, } from './projects.js';
+import { createProjectNoteRecord, deleteProjectFileRecord, deleteProjectNoteRecord, readProjectFileDownload, saveProjectBrief, updateProjectNoteRecord, uploadProjectFile, } from './projectResources.js';
+import { generateProjectBrief } from './projectBriefs.js';
 import { cancelDeferredResumeForSessionFile, listDeferredResumesForSessionFile, scheduleDeferredResumeForSessionFile, } from './deferredResumes.js';
 const PORT = parseInt(process.env.PA_WEB_PORT ?? '3741', 10);
 const DEFAULT_REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
@@ -68,10 +73,33 @@ let currentProfile = resolveActiveProfile({
 });
 async function syncDaemonTaskScopeForProfile(profile) {
     try {
-        await syncDaemonTaskScopeToProfile({
+        const result = await syncDaemonTaskScopeToProfile({
             profile,
             repoRoot: REPO_ROOT,
         });
+        if (result.daemonRestarted) {
+            try {
+                writeInternalAttentionEntry({
+                    repoRoot: REPO_ROOT,
+                    profile,
+                    kind: 'service',
+                    summary: 'Daemon restarted for the active profile.',
+                    details: [
+                        `Profile: ${profile}`,
+                        `Running task dir: ${result.runningTaskDir ?? 'unknown'}`,
+                        `Desired task dir: ${result.desiredTaskDir}`,
+                        'The web UI restarted the daemon so scheduled work matches the active profile task scope.',
+                    ].join('\n'),
+                    idPrefix: 'daemon-profile-sync',
+                });
+            }
+            catch (error) {
+                logWarn('failed to write daemon profile sync activity', {
+                    profile,
+                    message: error.message,
+                });
+            }
+        }
     }
     catch (error) {
         logWarn('failed to sync daemon task scope', {
@@ -306,6 +334,276 @@ function listConversationSessionsSnapshot() {
 function resolveConversationSessionFile(conversationId) {
     return listConversationSessionsSnapshot().find((session) => session.id === conversationId)?.file;
 }
+function parseSessionJsonLines(sessionFile) {
+    const raw = readFileSync(sessionFile, 'utf-8');
+    return raw
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+        .flatMap((line) => {
+        try {
+            const value = JSON.parse(line);
+            return [{ raw: line, value }];
+        }
+        catch {
+            return [];
+        }
+    });
+}
+function parseSessionMessageLine(value) {
+    if (value.type !== 'message') {
+        return null;
+    }
+    const id = typeof value.id === 'string' ? value.id.trim() : '';
+    const timestamp = typeof value.timestamp === 'string' ? value.timestamp.trim() : '';
+    const message = value.message && typeof value.message === 'object'
+        ? value.message
+        : null;
+    if (!id || !timestamp || !message) {
+        return null;
+    }
+    const role = typeof message.role === 'string' ? message.role.trim() : '';
+    if (!role) {
+        return null;
+    }
+    return {
+        id,
+        timestamp,
+        role,
+        content: message.content,
+    };
+}
+function normalizeMessageContentBlocks(content) {
+    if (Array.isArray(content)) {
+        return content
+            .filter((part) => Boolean(part) && typeof part === 'object')
+            .map((part) => ({
+            type: typeof part.type === 'string' ? part.type : undefined,
+            text: typeof part.text === 'string' ? part.text : undefined,
+        }));
+    }
+    if (typeof content === 'string') {
+        return [{ type: 'text', text: content }];
+    }
+    return [];
+}
+function buildCheckpointAnchorPreview(content) {
+    const blocks = normalizeMessageContentBlocks(content);
+    const text = blocks
+        .filter((block) => block.type === 'text')
+        .map((block) => block.text ?? '')
+        .join('\n')
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (text.length > 0) {
+        return text.length > 120 ? `${text.slice(0, 119).trimEnd()}…` : text;
+    }
+    const imageCount = blocks.filter((block) => block.type === 'image').length;
+    if (imageCount > 0) {
+        return imageCount === 1 ? '(image attachment)' : `(${imageCount} image attachments)`;
+    }
+    return 'Checkpoint anchor';
+}
+function resolveAnchorMessageId(messageIds, requestedAnchorMessageId) {
+    if (messageIds.length === 0) {
+        return undefined;
+    }
+    const idSet = new Set(messageIds);
+    if (!requestedAnchorMessageId || requestedAnchorMessageId.trim().length === 0) {
+        return messageIds[messageIds.length - 1];
+    }
+    const initialCandidate = requestedAnchorMessageId.trim();
+    if (idSet.has(initialCandidate)) {
+        return initialCandidate;
+    }
+    let candidate = initialCandidate;
+    const seen = new Set();
+    while (!seen.has(candidate)) {
+        seen.add(candidate);
+        const trimmedCandidate = candidate.match(/^(.*)-[txcei]\d+$/)?.[1]?.trim();
+        if (!trimmedCandidate) {
+            break;
+        }
+        if (idSet.has(trimmedCandidate)) {
+            return trimmedCandidate;
+        }
+        candidate = trimmedCandidate;
+    }
+    return undefined;
+}
+function defaultCheckpointTitleFromAnchor(anchorPreview, anchorTimestamp) {
+    const normalizedPreview = anchorPreview.trim();
+    if (normalizedPreview.length > 0 && normalizedPreview !== 'Checkpoint anchor') {
+        return normalizedPreview.length > 80 ? `${normalizedPreview.slice(0, 79).trimEnd()}…` : normalizedPreview;
+    }
+    const date = new Date(Date.parse(anchorTimestamp));
+    if (Number.isFinite(date.getTime())) {
+        return `Checkpoint ${date.toISOString().slice(0, 16).replace('T', ' ')}`;
+    }
+    return 'Checkpoint';
+}
+function buildCheckpointSnapshotFromSessionFile(sessionFile, requestedAnchorMessageId) {
+    const lines = parseSessionJsonLines(sessionFile);
+    const messageEntries = lines
+        .map((line, lineIndex) => {
+        const message = parseSessionMessageLine(line.value);
+        if (!message) {
+            return null;
+        }
+        return {
+            lineIndex,
+            message,
+        };
+    })
+        .filter((entry) => entry !== null);
+    if (messageEntries.length === 0) {
+        throw new Error('Cannot create a checkpoint from an empty conversation. Send at least one prompt first.');
+    }
+    const anchorMessageId = resolveAnchorMessageId(messageEntries.map((entry) => entry.message.id), requestedAnchorMessageId);
+    if (!anchorMessageId) {
+        throw new Error('Unable to resolve checkpoint anchor message.');
+    }
+    const anchorEntry = messageEntries.find((entry) => entry.message.id === anchorMessageId);
+    if (!anchorEntry) {
+        throw new Error(`Checkpoint anchor message ${anchorMessageId} not found.`);
+    }
+    const snapshotLines = lines.slice(0, anchorEntry.lineIndex + 1);
+    const snapshotMessageCount = snapshotLines
+        .map((line) => parseSessionMessageLine(line.value))
+        .filter((line) => line !== null)
+        .length;
+    return {
+        snapshotContent: `${snapshotLines.map((line) => line.raw).join('\n')}\n`,
+        snapshotLineCount: snapshotLines.length,
+        snapshotMessageCount,
+        anchor: {
+            messageId: anchorEntry.message.id,
+            role: anchorEntry.message.role,
+            timestamp: anchorEntry.message.timestamp,
+            preview: buildCheckpointAnchorPreview(anchorEntry.message.content),
+        },
+    };
+}
+function summarizeProjectConversationSnippet(conversationId) {
+    const detail = readSessionBlocks(conversationId);
+    const blocks = detail?.blocks ?? [];
+    for (let index = blocks.length - 1; index >= 0; index -= 1) {
+        const block = blocks[index];
+        if (!block) {
+            continue;
+        }
+        if ((block.type === 'user' || block.type === 'text' || block.type === 'thinking' || block.type === 'error') && 'text' in block) {
+            const text = block.text.replace(/\s+/g, ' ').trim();
+            if (text.length > 0) {
+                return text.length > 180 ? `${text.slice(0, 179).trimEnd()}…` : text;
+            }
+        }
+    }
+    return undefined;
+}
+function listLinkedProjectConversations(projectId) {
+    const profile = getCurrentProfile();
+    const sessionById = new Map(listConversationSessionsSnapshot().map((session) => [session.id, session]));
+    return listConversationProjectLinks({ profile })
+        .filter((document) => document.relatedProjectIds.includes(projectId))
+        .map((document) => {
+        const session = sessionById.get(document.conversationId);
+        return {
+            conversationId: document.conversationId,
+            title: session?.title ?? document.conversationId,
+            file: session?.file,
+            cwd: session?.cwd,
+            lastActivityAt: session?.lastActivityAt ?? session?.timestamp ?? document.updatedAt,
+            isRunning: Boolean(session?.isRunning),
+            needsAttention: Boolean(session?.needsAttention),
+            snippet: summarizeProjectConversationSnippet(document.conversationId),
+        };
+    })
+        .sort((left, right) => (right.lastActivityAt ?? '').localeCompare(left.lastActivityAt ?? ''));
+}
+function buildProjectTimeline(detail) {
+    const activityEntries = listActivityForCurrentProfile()
+        .filter((entry) => (entry.relatedProjectIds ?? []).includes(detail.project.id));
+    const timeline = [];
+    if (detail.brief) {
+        timeline.push({
+            id: `brief:${detail.project.id}`,
+            kind: 'brief',
+            createdAt: detail.brief.updatedAt,
+            title: 'Project brief updated',
+            description: detail.brief.content.split('\n').find((line) => line.trim().length > 0)?.trim(),
+            href: '#project-brief',
+        });
+    }
+    for (const note of detail.notes) {
+        timeline.push({
+            id: `note:${note.id}`,
+            kind: 'note',
+            createdAt: note.updatedAt,
+            title: note.title,
+            description: note.body.replace(/\s+/g, ' ').trim() || undefined,
+            href: `#project-note-${note.id}`,
+        });
+    }
+    for (const file of detail.attachments) {
+        timeline.push({
+            id: `attachment:${file.id}`,
+            kind: 'attachment',
+            createdAt: file.updatedAt,
+            title: file.title,
+            description: file.description ?? file.originalName,
+            href: file.downloadPath,
+        });
+    }
+    for (const file of detail.artifacts) {
+        timeline.push({
+            id: `artifact:${file.id}`,
+            kind: 'artifact',
+            createdAt: file.updatedAt,
+            title: file.title,
+            description: file.description ?? file.originalName,
+            href: file.downloadPath,
+        });
+    }
+    for (const conversation of detail.linkedConversations) {
+        timeline.push({
+            id: `conversation:${conversation.conversationId}`,
+            kind: 'conversation',
+            createdAt: conversation.lastActivityAt ?? '',
+            title: conversation.title,
+            description: conversation.snippet,
+            href: `/conversations/${encodeURIComponent(conversation.conversationId)}`,
+        });
+    }
+    for (const activity of activityEntries) {
+        timeline.push({
+            id: `activity:${activity.id}`,
+            kind: 'activity',
+            createdAt: activity.createdAt,
+            title: activity.summary,
+            description: activity.details,
+            href: '/inbox',
+        });
+    }
+    return timeline
+        .filter((entry) => entry.createdAt.length > 0)
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+function readProjectDetailForCurrentProfile(projectId) {
+    const detail = readProjectDetailFromProject({
+        repoRoot: REPO_ROOT,
+        profile: getCurrentProfile(),
+        projectId,
+    });
+    const linkedConversations = listLinkedProjectConversations(projectId);
+    const enriched = {
+        ...detail,
+        linkedConversations,
+        timeline: [],
+    };
+    enriched.timeline = buildProjectTimeline(enriched);
+    return enriched;
+}
 var processingDeferredResumes = false;
 async function flushLiveDeferredResumes() {
     if (processingDeferredResumes) {
@@ -492,6 +790,15 @@ startAppEventMonitor({
     taskStateFile: TASK_STATE_FILE,
     getCurrentProfile,
 });
+createServiceAttentionMonitor({
+    repoRoot: REPO_ROOT,
+    getCurrentProfile,
+    readDaemonState,
+    readGatewayState,
+    logger: {
+        warn: (message, fields) => logWarn(message, fields),
+    },
+}).start();
 app.get('/api/events', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -561,6 +868,8 @@ app.get('/api/status', (_req, res) => {
             repoRoot: REPO_ROOT,
             activityCount: activities.length,
             projectCount: projectIds.length,
+            webUiSlot: process.env.PERSONAL_AGENT_WEB_SLOT,
+            webUiRevision: process.env.PERSONAL_AGENT_WEB_REVISION,
         });
     }
     catch (err) {
@@ -573,7 +882,7 @@ app.get('/api/status', (_req, res) => {
 });
 app.post('/api/application/restart', (_req, res) => {
     try {
-        res.status(202).json(requestApplicationRestart({ repoRoot: REPO_ROOT }));
+        res.status(202).json(requestApplicationRestart({ repoRoot: REPO_ROOT, profile: getCurrentProfile() }));
     }
     catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -605,6 +914,7 @@ app.post('/api/gateway/config', (req, res) => {
             res.status(400).json({ error: `Unknown profile: ${input.profile}` });
             return;
         }
+        suppressMonitoredServiceAttention('gateway');
         res.json(saveGatewayConfigAndReadState(getCurrentProfile(), input));
     }
     catch (err) {
@@ -621,6 +931,7 @@ app.post('/api/gateway/config', (req, res) => {
 });
 app.post('/api/gateway/restart', (_req, res) => {
     try {
+        suppressMonitoredServiceAttention('gateway');
         res.json(restartGatewayAndReadState(getCurrentProfile()));
     }
     catch (err) {
@@ -633,6 +944,7 @@ app.post('/api/gateway/restart', (_req, res) => {
 });
 app.post('/api/gateway/service/install', (_req, res) => {
     try {
+        suppressMonitoredServiceAttention('gateway');
         res.json(installGatewayAndReadState(getCurrentProfile()));
     }
     catch (err) {
@@ -645,6 +957,7 @@ app.post('/api/gateway/service/install', (_req, res) => {
 });
 app.post('/api/gateway/service/start', (_req, res) => {
     try {
+        suppressMonitoredServiceAttention('gateway');
         res.json(startGatewayAndReadState(getCurrentProfile()));
     }
     catch (err) {
@@ -657,6 +970,7 @@ app.post('/api/gateway/service/start', (_req, res) => {
 });
 app.post('/api/gateway/service/stop', (_req, res) => {
     try {
+        suppressMonitoredServiceAttention('gateway');
         res.json(stopGatewayAndReadState(getCurrentProfile()));
     }
     catch (err) {
@@ -669,6 +983,7 @@ app.post('/api/gateway/service/stop', (_req, res) => {
 });
 app.post('/api/gateway/service/uninstall', (_req, res) => {
     try {
+        suppressMonitoredServiceAttention('gateway');
         res.json(uninstallGatewayAndReadState(getCurrentProfile()));
     }
     catch (err) {
@@ -694,6 +1009,7 @@ app.get('/api/daemon', async (_req, res) => {
 });
 app.post('/api/daemon/service/install', async (_req, res) => {
     try {
+        suppressMonitoredServiceAttention('daemon');
         res.json(await installDaemonServiceAndReadState());
     }
     catch (err) {
@@ -706,6 +1022,7 @@ app.post('/api/daemon/service/install', async (_req, res) => {
 });
 app.post('/api/daemon/service/start', async (_req, res) => {
     try {
+        suppressMonitoredServiceAttention('daemon');
         res.json(await startDaemonServiceAndReadState());
     }
     catch (err) {
@@ -718,6 +1035,7 @@ app.post('/api/daemon/service/start', async (_req, res) => {
 });
 app.post('/api/daemon/service/restart', async (_req, res) => {
     try {
+        suppressMonitoredServiceAttention('daemon');
         res.json(await restartDaemonServiceAndReadState());
     }
     catch (err) {
@@ -730,6 +1048,7 @@ app.post('/api/daemon/service/restart', async (_req, res) => {
 });
 app.post('/api/daemon/service/stop', async (_req, res) => {
     try {
+        suppressMonitoredServiceAttention('daemon');
         res.json(await stopDaemonServiceAndReadState());
     }
     catch (err) {
@@ -742,6 +1061,7 @@ app.post('/api/daemon/service/stop', async (_req, res) => {
 });
 app.post('/api/daemon/service/uninstall', async (_req, res) => {
     try {
+        suppressMonitoredServiceAttention('daemon');
         res.json(await uninstallDaemonServiceAndReadState());
     }
     catch (err) {
@@ -792,6 +1112,77 @@ app.post('/api/web-ui/service/start', (_req, res) => {
 app.post('/api/web-ui/service/restart', (_req, res) => {
     try {
         res.json(restartWebUiServiceAndReadState());
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/web-ui/service/rollback', (req, res) => {
+    try {
+        const reason = typeof req.body?.reason === 'string' ? req.body.reason : undefined;
+        const snapshot = rollbackWebUiServiceAndReadState({ reason });
+        try {
+            writeInternalAttentionEntry({
+                repoRoot: REPO_ROOT,
+                profile: getCurrentProfile(),
+                kind: 'deployment',
+                summary: 'Web UI rollback complete.',
+                details: [
+                    `Completed: ${new Date().toISOString()}`,
+                    snapshot.service.deployment?.activeSlot ? `Active slot: ${snapshot.service.deployment.activeSlot}` : undefined,
+                    snapshot.service.deployment?.activeRelease?.revision ? `Active release: ${snapshot.service.deployment.activeRelease.revision}` : undefined,
+                    reason ? `Reason: ${reason}` : undefined,
+                ].filter((line) => typeof line === 'string').join('\n'),
+                idPrefix: 'web-ui-rollback',
+            });
+        }
+        catch (activityError) {
+            logWarn('failed to write web ui rollback activity', {
+                message: activityError instanceof Error ? activityError.message : String(activityError),
+            });
+        }
+        res.json(snapshot);
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/web-ui/service/mark-bad', (req, res) => {
+    try {
+        const slot = req.body?.slot === 'blue' || req.body?.slot === 'green'
+            ? req.body.slot
+            : undefined;
+        const reason = typeof req.body?.reason === 'string' ? req.body.reason : undefined;
+        const snapshot = markBadWebUiReleaseAndReadState({ slot, reason });
+        try {
+            writeInternalAttentionEntry({
+                repoRoot: REPO_ROOT,
+                profile: getCurrentProfile(),
+                kind: 'deployment',
+                summary: 'Web UI release marked bad.',
+                details: [
+                    `Completed: ${new Date().toISOString()}`,
+                    slot ? `Slot: ${slot}` : undefined,
+                    snapshot.service.deployment?.activeRelease?.revision ? `Active release: ${snapshot.service.deployment.activeRelease.revision}` : undefined,
+                    reason ? `Reason: ${reason}` : undefined,
+                ].filter((line) => typeof line === 'string').join('\n'),
+                idPrefix: 'web-ui-mark-bad',
+            });
+        }
+        catch (activityError) {
+            logWarn('failed to write web ui mark-bad activity', {
+                message: activityError instanceof Error ? activityError.message : String(activityError),
+            });
+        }
+        res.json(snapshot);
     }
     catch (err) {
         logError('request handler error', {
@@ -904,7 +1295,7 @@ const BUILT_IN_MODELS = [
     { id: 'gemini-2.5-pro', provider: 'google', name: 'Gemini 2.5 Pro', context: 1_000_000 },
     { id: 'gemini-3.1-pro-high', provider: 'google', name: 'Gemini 3.1 Pro High', context: 1_000_000 },
 ];
-const SETTINGS_FILE = join(homedir(), '.local/state/personal-agent/pi-agent/settings.json');
+const SETTINGS_FILE = DEFAULT_RUNTIME_SETTINGS_FILE;
 function listAvailableModelDefinitions() {
     let models = BUILT_IN_MODELS;
     try {
@@ -956,7 +1347,12 @@ app.patch('/api/models/current', (req, res) => {
             res.status(400).json({ error: 'model or thinkingLevel required' });
             return;
         }
-        writeSavedModelPreferences({ model, thinkingLevel }, SETTINGS_FILE, listAvailableModelDefinitions());
+        const availableModels = listAvailableModelDefinitions();
+        persistSettingsWrite((settingsFile) => {
+            writeSavedModelPreferences({ model, thinkingLevel }, settingsFile, availableModels);
+        }, {
+            runtimeSettingsFile: SETTINGS_FILE,
+        });
         res.json({ ok: true });
     }
     catch (err) {
@@ -986,7 +1382,8 @@ app.patch('/api/conversation-titles/settings', (req, res) => {
             res.status(400).json({ error: 'enabled or model required' });
             return;
         }
-        res.json(writeSavedConversationTitlePreferences({ enabled, model }, SETTINGS_FILE));
+        const saved = persistSettingsWrite((settingsFile) => writeSavedConversationTitlePreferences({ enabled, model }, settingsFile), { runtimeSettingsFile: SETTINGS_FILE });
+        res.json(saved);
     }
     catch (err) {
         logError('request handler error', {
@@ -1135,7 +1532,11 @@ app.patch('/api/agent-theme', (req, res) => {
             res.status(400).json({ error: 'themeMode, themeDark, or themeLight required' });
             return;
         }
-        writeSavedThemePreferences({ themeMode, themeDark, themeLight }, SETTINGS_FILE);
+        persistSettingsWrite((settingsFile) => {
+            writeSavedThemePreferences({ themeMode, themeDark, themeLight }, settingsFile);
+        }, {
+            runtimeSettingsFile: SETTINGS_FILE,
+        });
         res.json({ ok: true });
     }
     catch (err) {
@@ -1149,7 +1550,10 @@ app.patch('/api/agent-theme', (req, res) => {
 app.get('/api/web-ui/open-conversations', (_req, res) => {
     try {
         const saved = readSavedWebUiPreferences(SETTINGS_FILE);
-        res.json({ sessionIds: saved.openConversationIds });
+        res.json({
+            sessionIds: saved.openConversationIds,
+            pinnedSessionIds: saved.pinnedConversationIds,
+        });
     }
     catch (err) {
         logError('request handler error', {
@@ -1161,13 +1565,28 @@ app.get('/api/web-ui/open-conversations', (_req, res) => {
 });
 app.patch('/api/web-ui/open-conversations', (req, res) => {
     try {
-        const { sessionIds } = req.body;
-        if (!Array.isArray(sessionIds)) {
-            res.status(400).json({ error: 'sessionIds array required' });
+        const { sessionIds, pinnedSessionIds } = req.body;
+        if (sessionIds !== undefined && !Array.isArray(sessionIds)) {
+            res.status(400).json({ error: 'sessionIds must be an array when provided' });
             return;
         }
-        const saved = writeSavedWebUiPreferences({ openConversationIds: sessionIds }, SETTINGS_FILE);
-        res.json({ ok: true, sessionIds: saved.openConversationIds });
+        if (pinnedSessionIds !== undefined && !Array.isArray(pinnedSessionIds)) {
+            res.status(400).json({ error: 'pinnedSessionIds must be an array when provided' });
+            return;
+        }
+        if (sessionIds === undefined && pinnedSessionIds === undefined) {
+            res.status(400).json({ error: 'sessionIds or pinnedSessionIds required' });
+            return;
+        }
+        const saved = persistSettingsWrite((settingsFile) => writeSavedWebUiPreferences({
+            openConversationIds: sessionIds,
+            pinnedConversationIds: pinnedSessionIds,
+        }, settingsFile), { runtimeSettingsFile: SETTINGS_FILE });
+        res.json({
+            ok: true,
+            sessionIds: saved.openConversationIds,
+            pinnedSessionIds: saved.pinnedConversationIds,
+        });
     }
     catch (err) {
         logError('request handler error', {
@@ -1387,6 +1806,207 @@ app.get('/api/sessions/:id', (req, res) => {
         res.status(500).json({ error: String(err) });
     }
 });
+app.get('/api/sessions/:id/tree', (req, res) => {
+    try {
+        const result = readSessionTree(req.params.id);
+        if (!result) {
+            res.status(404).json({ error: 'Session not found' });
+            return;
+        }
+        res.json(result);
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+// ── Conversation checkpoints ─────────────────────────────────────────────────
+app.get('/api/checkpoints', (_req, res) => {
+    try {
+        const profile = getCurrentProfile();
+        res.json({
+            checkpoints: listConversationCheckpoints({ profile }),
+        });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/checkpoints/:checkpointId/start', async (req, res) => {
+    try {
+        const profile = getCurrentProfile();
+        const checkpoint = getConversationCheckpoint({
+            profile,
+            checkpointId: req.params.checkpointId,
+        });
+        if (!checkpoint) {
+            res.status(404).json({ error: 'Checkpoint not found.' });
+            return;
+        }
+        const snapshotFile = resolveConversationCheckpointSnapshotFile({
+            profile,
+            checkpoint,
+        });
+        if (!existsSync(snapshotFile)) {
+            res.status(409).json({ error: 'Checkpoint snapshot is missing. Delete and recreate this checkpoint.' });
+            return;
+        }
+        const { cwd: requestedCwd } = req.body;
+        const sourceCwd = checkpoint.source.cwd || DEFAULT_WEB_CWD;
+        let nextCwd = resolveRequestedCwd(requestedCwd, sourceCwd);
+        if (!nextCwd && !requestedCwd) {
+            nextCwd = DEFAULT_WEB_CWD;
+        }
+        if (!nextCwd) {
+            res.status(400).json({ error: 'cwd required' });
+            return;
+        }
+        if ((!existsSync(nextCwd) || !statSync(nextCwd).isDirectory()) && !requestedCwd && nextCwd !== DEFAULT_WEB_CWD) {
+            nextCwd = DEFAULT_WEB_CWD;
+        }
+        if (!existsSync(nextCwd)) {
+            res.status(400).json({ error: `Directory does not exist: ${nextCwd}` });
+            return;
+        }
+        if (!statSync(nextCwd).isDirectory()) {
+            res.status(400).json({ error: `Not a directory: ${nextCwd}` });
+            return;
+        }
+        const result = await createSessionFromExisting(snapshotFile, nextCwd, {
+            ...buildLiveSessionResourceOptions(),
+            extensionFactories: buildLiveSessionExtensionFactories(),
+        });
+        const availableProjectIds = new Set(listProjectIds({ repoRoot: REPO_ROOT, profile }));
+        const relatedProjectIds = checkpoint.source.relatedProjectIds.filter((projectId) => availableProjectIds.has(projectId));
+        if (relatedProjectIds.length > 0) {
+            setConversationProjectLinks({
+                profile,
+                conversationId: result.id,
+                relatedProjectIds,
+            });
+            invalidateAppTopics('projects', 'sessions');
+        }
+        res.json({
+            checkpointId: checkpoint.id,
+            id: result.id,
+            sessionFile: result.sessionFile,
+            cwd: nextCwd,
+        });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        logError('request handler error', {
+            message,
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: message });
+    }
+});
+app.delete('/api/checkpoints/:checkpointId', (req, res) => {
+    try {
+        const profile = getCurrentProfile();
+        const deleted = deleteConversationCheckpoint({
+            profile,
+            checkpointId: req.params.checkpointId,
+        });
+        if (!deleted) {
+            res.status(404).json({ error: 'Checkpoint not found.' });
+            return;
+        }
+        invalidateAppTopics('sessions');
+        res.json({ ok: true, checkpointId: req.params.checkpointId, deleted: true });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        const status = message.includes('Invalid checkpoint id') ? 400 : 500;
+        logError('request handler error', {
+            message,
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(status).json({ error: message });
+    }
+});
+app.get('/api/conversations/:id/checkpoints', (req, res) => {
+    try {
+        const profile = getCurrentProfile();
+        res.json({
+            conversationId: req.params.id,
+            checkpoints: listConversationCheckpoints({
+                profile,
+                conversationId: req.params.id,
+            }),
+        });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        const status = message.includes('Invalid conversation id') ? 400 : 500;
+        logError('request handler error', {
+            message,
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(status).json({ error: message });
+    }
+});
+app.post('/api/conversations/:id/checkpoints', (req, res) => {
+    try {
+        const profile = getCurrentProfile();
+        const conversationId = req.params.id;
+        if (liveRegistry.get(conversationId)?.session.isStreaming) {
+            res.status(409).json({ error: 'Stop the current response before saving a checkpoint.' });
+            return;
+        }
+        const sessionFile = resolveConversationSessionFile(conversationId);
+        if (!sessionFile || !existsSync(sessionFile)) {
+            res.status(404).json({ error: 'Conversation not found.' });
+            return;
+        }
+        const { title, note, summary, anchorMessageId, } = req.body;
+        const snapshot = buildCheckpointSnapshotFromSessionFile(sessionFile, anchorMessageId);
+        const sourceSession = listConversationSessionsSnapshot().find((session) => session.id === conversationId);
+        const relatedProjectIds = getConversationProjectLink({
+            profile,
+            conversationId,
+        })?.relatedProjectIds ?? [];
+        const checkpoint = saveConversationCheckpoint({
+            profile,
+            title: title?.trim() || defaultCheckpointTitleFromAnchor(snapshot.anchor.preview, snapshot.anchor.timestamp),
+            note,
+            summary,
+            source: {
+                conversationId,
+                conversationTitle: sourceSession?.title,
+                cwd: sourceSession?.cwd,
+                relatedProjectIds,
+            },
+            anchor: snapshot.anchor,
+            snapshotContent: snapshot.snapshotContent,
+            snapshotMessageCount: snapshot.snapshotMessageCount,
+            snapshotLineCount: snapshot.snapshotLineCount,
+        });
+        invalidateAppTopics('sessions');
+        res.json({ conversationId, checkpoint });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        const status = message.includes('not found')
+            ? 404
+            : message.includes('Invalid') || message.includes('required') || message.includes('Unable to resolve') || message.includes('empty conversation')
+                ? 400
+                : 500;
+        logError('request handler error', {
+            message,
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(status).json({ error: message });
+    }
+});
 // ── Live sessions (Pi SDK) ────────────────────────────────────────────────────
 /** List all in-process live sessions */
 app.get('/api/live-sessions', (_req, res) => {
@@ -1407,19 +2027,28 @@ app.post('/api/live-sessions', async (req, res) => {
                 profiles: [],
             }).projectIds
             : [];
+        const referencedProjectIds = body.referencedProjectIds && body.referencedProjectIds.length > 0
+            ? body.referencedProjectIds
+            : inferredReferencedProjectIds;
         const cwd = resolveConversationCwd({
             repoRoot: REPO_ROOT,
             profile,
             explicitCwd: body.cwd,
             defaultCwd: DEFAULT_WEB_CWD,
-            referencedProjectIds: body.referencedProjectIds && body.referencedProjectIds.length > 0
-                ? body.referencedProjectIds
-                : inferredReferencedProjectIds,
+            referencedProjectIds,
         });
         const result = await createSession(cwd, {
             ...buildLiveSessionResourceOptions(),
             extensionFactories: buildLiveSessionExtensionFactories(),
         });
+        if (referencedProjectIds.length > 0) {
+            setConversationProjectLinks({
+                profile,
+                conversationId: result.id,
+                relatedProjectIds: referencedProjectIds,
+            });
+            invalidateAppTopics('projects', 'sessions');
+        }
         res.json(result);
     }
     catch (err) {
@@ -1444,6 +2073,116 @@ app.post('/api/live-sessions/resume', async (req, res) => {
         });
         await flushLiveDeferredResumes();
         res.json(result);
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/conversations/:id/recover', async (req, res) => {
+    try {
+        const conversationId = req.params.id;
+        if (!conversationId) {
+            res.status(400).json({ error: 'conversation id required' });
+            return;
+        }
+        if (isLive(conversationId)) {
+            res.json({
+                conversationId,
+                live: true,
+                recovered: false,
+                replayedPendingOperation: false,
+                usedFallbackPrompt: false,
+            });
+            return;
+        }
+        const runDetail = await getDurableRun(createWebLiveConversationRunId(conversationId));
+        const payload = runDetail?.run.checkpoint?.payload;
+        const checkpointPayload = payload && typeof payload === 'object' && !Array.isArray(payload)
+            ? payload
+            : {};
+        const readCheckpointString = (key) => {
+            const value = checkpointPayload[key];
+            return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+        };
+        const pendingOperation = parsePendingOperation(checkpointPayload.pendingOperation);
+        const sessionDetail = readSessionBlocks(conversationId);
+        const sessionFile = sessionDetail?.meta.file
+            ?? readCheckpointString('sessionFile')
+            ?? runDetail?.run.manifest?.source?.filePath?.trim();
+        if (!sessionFile || !existsSync(sessionFile)) {
+            res.status(404).json({ error: 'Conversation not found.' });
+            return;
+        }
+        const currentProfile = getCurrentProfile();
+        const manifestSpec = runDetail?.run.manifest?.spec;
+        const manifestCwd = typeof manifestSpec?.cwd === 'string' && manifestSpec.cwd.trim().length > 0
+            ? manifestSpec.cwd.trim()
+            : undefined;
+        const resumed = await resumeSession(sessionFile, {
+            ...buildLiveSessionResourceOptions(),
+            extensionFactories: buildLiveSessionExtensionFactories(),
+        });
+        await flushLiveDeferredResumes();
+        const resumedEntry = liveRegistry.get(resumed.id);
+        const effectiveCwd = resumedEntry?.cwd
+            ?? sessionDetail?.meta.cwd
+            ?? readCheckpointString('cwd')
+            ?? manifestCwd;
+        const effectiveTitle = sessionDetail?.meta.title ?? readCheckpointString('title');
+        const effectiveProfile = readCheckpointString('profile') ?? currentProfile;
+        if (!effectiveCwd) {
+            res.status(500).json({ error: 'Could not determine the conversation working directory.' });
+            return;
+        }
+        if (!pendingOperation) {
+            res.json({
+                conversationId: resumed.id,
+                live: true,
+                recovered: true,
+                replayedPendingOperation: false,
+                usedFallbackPrompt: false,
+            });
+            return;
+        }
+        await syncWebLiveConversationRun({
+            conversationId: resumed.id,
+            sessionFile,
+            cwd: effectiveCwd,
+            title: effectiveTitle,
+            profile: effectiveProfile,
+            state: 'running',
+            pendingOperation,
+        });
+        for (const message of pendingOperation.contextMessages ?? []) {
+            await queuePromptContext(resumed.id, message.customType, message.content);
+        }
+        promptSession(resumed.id, pendingOperation.text, pendingOperation.behavior, pendingOperation.images).catch(async (error) => {
+            await syncWebLiveConversationRun({
+                conversationId: resumed.id,
+                sessionFile,
+                cwd: effectiveCwd,
+                title: effectiveTitle,
+                profile: effectiveProfile,
+                state: 'failed',
+                lastError: error instanceof Error ? error.message : String(error),
+            });
+            logError('conversation recovery error', {
+                sessionId: resumed.id,
+                message: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+            });
+        });
+        res.json({
+            conversationId: resumed.id,
+            live: true,
+            recovered: true,
+            replayedPendingOperation: true,
+            usedFallbackPrompt: false,
+        });
     }
     catch (err) {
         logError('request handler error', {
@@ -1503,6 +2242,7 @@ function syncConversationProjectReferences(conversationId, mentionedProjectIds) 
             conversationId,
             relatedProjectIds,
         });
+        invalidateAppTopics('projects', 'sessions');
     }
     return relatedProjectIds;
 }
@@ -1516,11 +2256,31 @@ function buildReferencedProjectsContext(projectIds) {
         });
         const lineParts = [`- @${projectId}: ${relative(REPO_ROOT, paths.projectFile)}`];
         try {
-            const project = readProject(paths.projectFile);
-            lineParts.push(`  title: ${project.title}`);
-            lineParts.push(`  description: ${project.description}`);
-            if (project.repoRoot) {
-                lineParts.push(`  repoRoot: ${project.repoRoot}`);
+            const detail = readProjectDetailFromProject({
+                repoRoot: REPO_ROOT,
+                profile,
+                projectId,
+            });
+            lineParts.push(`  title: ${detail.project.title}`);
+            lineParts.push(`  description: ${detail.project.description}`);
+            lineParts.push(`  summary: ${detail.project.summary}`);
+            if (detail.project.currentFocus) {
+                lineParts.push(`  currentFocus: ${detail.project.currentFocus}`);
+            }
+            if (detail.project.repoRoot) {
+                lineParts.push(`  repoRoot: ${detail.project.repoRoot}`);
+            }
+            if (detail.brief) {
+                lineParts.push(`  brief: ${relative(REPO_ROOT, detail.brief.path)}`);
+            }
+            if (detail.noteCount > 0) {
+                lineParts.push(`  notesDir: ${relative(REPO_ROOT, paths.notesDir)} (${detail.noteCount} notes)`);
+            }
+            if (detail.attachmentCount > 0) {
+                lineParts.push(`  attachmentsDir: ${relative(REPO_ROOT, paths.attachmentsDir)} (${detail.attachmentCount} files)`);
+            }
+            if (detail.artifactCount > 0) {
+                lineParts.push(`  artifactsDir: ${relative(REPO_ROOT, paths.artifactsDir)} (${detail.artifactCount} files)`);
             }
         }
         catch {
@@ -1531,7 +2291,7 @@ function buildReferencedProjectsContext(projectIds) {
     return [
         'Referenced projects for this conversation:',
         ...lines,
-        'These are durable project files. Read and update them when the user asks you to track or change project state.',
+        'Projects are durable cross-conversation hubs. Read the project brief and notes when you need continuity, load the pa-project-hub skill before making durable project file edits, and use the project tool only for conversation reference changes.',
     ].join('\n');
 }
 /** Send a prompt to a live session */
@@ -1642,6 +2402,28 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
             referencedSkillNames: promptReferences.skillNames,
             referencedProfileIds: promptReferences.profileIds,
         });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/live-sessions/:id/dequeue', (req, res) => {
+    try {
+        const { behavior, index } = req.body;
+        if (behavior !== 'steer' && behavior !== 'followUp') {
+            res.status(400).json({ error: 'behavior must be "steer" or "followUp"' });
+            return;
+        }
+        if (!Number.isInteger(index) || index < 0) {
+            res.status(400).json({ error: 'index must be a non-negative integer' });
+            return;
+        }
+        const restored = restoreQueuedMessage(req.params.id, behavior, index);
+        res.json({ ok: true, ...restored });
     }
     catch (err) {
         logError('request handler error', {
@@ -1779,6 +2561,38 @@ app.get('/api/live-sessions/:id/context', (req, res) => {
         relatedProjectIds,
     });
 });
+app.patch('/api/conversations/:id/title', (req, res) => {
+    try {
+        const { name } = req.body;
+        const nextName = name?.trim();
+        if (!nextName) {
+            res.status(400).json({ error: 'name required' });
+            return;
+        }
+        const conversationId = req.params.id;
+        if (isLive(conversationId)) {
+            renameSession(conversationId, nextName);
+            res.json({ ok: true, title: nextName });
+            return;
+        }
+        const renamed = renameStoredSession(conversationId, nextName);
+        invalidateAppTopics('sessions');
+        res.json({ ok: true, title: renamed.title });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        const status = message.includes('not found')
+            ? 404
+            : message.includes('must not be empty') || message.endsWith('required')
+                ? 400
+                : 500;
+        logError('request handler error', {
+            message,
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(status).json({ error: message });
+    }
+});
 app.post('/api/conversations/:id/cwd', async (req, res) => {
     try {
         const { cwd: requestedCwd } = req.body;
@@ -1827,6 +2641,7 @@ app.post('/api/conversations/:id/cwd', async (req, res) => {
                 conversationId: result.id,
                 relatedProjectIds,
             });
+            invalidateAppTopics('projects', 'sessions');
         }
         if (liveEntry) {
             destroySession(conversationId);
@@ -1934,6 +2749,7 @@ app.post('/api/conversations/:id/projects', (req, res) => {
             conversationId: req.params.id,
             projectId,
         });
+        invalidateAppTopics('projects', 'sessions');
         res.json({ conversationId: req.params.id, relatedProjectIds: document.relatedProjectIds });
     }
     catch (err) {
@@ -1952,6 +2768,7 @@ app.delete('/api/conversations/:id/projects/:projectId', (req, res) => {
             conversationId: req.params.id,
             projectId: req.params.projectId,
         });
+        invalidateAppTopics('projects', 'sessions');
         res.json({ conversationId: req.params.id, relatedProjectIds: document.relatedProjectIds });
     }
     catch (err) {
@@ -2084,6 +2901,26 @@ app.get('/api/live-sessions/:id/fork-entries', (req, res) => {
         res.status(500).json({ error: String(err) });
     }
 });
+app.post('/api/live-sessions/:id/branch', async (req, res) => {
+    try {
+        const { entryId } = req.body;
+        if (!entryId) {
+            res.status(400).json({ error: 'entryId required' });
+            return;
+        }
+        res.json(await branchSession(req.params.id, entryId, {
+            ...buildLiveSessionResourceOptions(),
+            extensionFactories: buildLiveSessionExtensionFactories(),
+        }));
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
 app.post('/api/live-sessions/:id/fork', async (req, res) => {
     try {
         const { entryId, preserveSource } = req.body;
@@ -2164,11 +3001,7 @@ app.get('/api/projects', (_req, res) => {
 });
 app.get('/api/projects/:id', (req, res) => {
     try {
-        res.json(readProjectDetailFromProject({
-            repoRoot: REPO_ROOT,
-            profile: getCurrentProfile(),
-            projectId: req.params.id,
-        }));
+        res.json(readProjectDetailForCurrentProfile(req.params.id));
     }
     catch {
         res.status(404).json({ error: 'Project not found' });
@@ -2177,7 +3010,7 @@ app.get('/api/projects/:id', (req, res) => {
 app.post('/api/projects', (req, res) => {
     try {
         const body = req.body;
-        res.status(201).json(createProjectRecord({
+        const detail = createProjectRecord({
             repoRoot: REPO_ROOT,
             profile: getCurrentProfile(),
             title: body.title ?? '',
@@ -2188,7 +3021,9 @@ app.post('/api/projects', (req, res) => {
             currentFocus: body.currentFocus,
             blockers: body.blockers,
             recentProgress: body.recentProgress,
-        }));
+        });
+        invalidateAppTopics('projects');
+        res.status(201).json(readProjectDetailForCurrentProfile(detail.project.id));
     }
     catch (error) {
         res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
@@ -2197,7 +3032,7 @@ app.post('/api/projects', (req, res) => {
 app.patch('/api/projects/:id', (req, res) => {
     try {
         const body = req.body;
-        res.json(updateProjectRecord({
+        updateProjectRecord({
             repoRoot: REPO_ROOT,
             profile: getCurrentProfile(),
             projectId: req.params.id,
@@ -2210,7 +3045,9 @@ app.patch('/api/projects/:id', (req, res) => {
             currentMilestoneId: body.currentMilestoneId,
             blockers: body.blockers,
             recentProgress: body.recentProgress,
-        }));
+        });
+        invalidateAppTopics('projects');
+        res.json(readProjectDetailForCurrentProfile(req.params.id));
     }
     catch (error) {
         res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
@@ -2218,11 +3055,160 @@ app.patch('/api/projects/:id', (req, res) => {
 });
 app.delete('/api/projects/:id', (req, res) => {
     try {
-        res.json(deleteProjectRecord({
+        const result = deleteProjectRecord({
             repoRoot: REPO_ROOT,
             profile: getCurrentProfile(),
             projectId: req.params.id,
-        }));
+        });
+        invalidateAppTopics('projects');
+        res.json(result);
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+});
+app.post('/api/projects/:id/brief', (req, res) => {
+    try {
+        const body = req.body;
+        saveProjectBrief({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+            content: body.content ?? '',
+        });
+        invalidateAppTopics('projects');
+        res.json(readProjectDetailForCurrentProfile(req.params.id));
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+});
+app.post('/api/projects/:id/brief/regenerate', async (req, res) => {
+    try {
+        const detail = readProjectDetailForCurrentProfile(req.params.id);
+        const brief = await generateProjectBrief({
+            detail,
+            linkedConversations: detail.linkedConversations,
+            activityEntries: listActivityForCurrentProfile().filter((entry) => (entry.relatedProjectIds ?? []).includes(req.params.id)),
+            settingsFile: SETTINGS_FILE,
+            authFile: join(AGENT_DIR, 'auth.json'),
+        });
+        saveProjectBrief({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+            content: brief,
+        });
+        invalidateAppTopics('projects');
+        res.json(readProjectDetailForCurrentProfile(req.params.id));
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+});
+app.post('/api/projects/:id/notes', (req, res) => {
+    try {
+        const body = req.body;
+        createProjectNoteRecord({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+            title: body.title ?? '',
+            kind: body.kind ?? 'note',
+            body: body.body,
+        });
+        invalidateAppTopics('projects');
+        res.status(201).json(readProjectDetailForCurrentProfile(req.params.id));
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+});
+app.patch('/api/projects/:id/notes/:noteId', (req, res) => {
+    try {
+        const body = req.body;
+        updateProjectNoteRecord({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+            noteId: req.params.noteId,
+            title: body.title,
+            kind: body.kind,
+            body: body.body,
+        });
+        invalidateAppTopics('projects');
+        res.json(readProjectDetailForCurrentProfile(req.params.id));
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+});
+app.delete('/api/projects/:id/notes/:noteId', (req, res) => {
+    try {
+        deleteProjectNoteRecord({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+            noteId: req.params.noteId,
+        });
+        invalidateAppTopics('projects');
+        res.json(readProjectDetailForCurrentProfile(req.params.id));
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+});
+app.post('/api/projects/:id/files', (req, res) => {
+    try {
+        const body = req.body;
+        uploadProjectFile({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+            kind: body.kind ?? 'attachment',
+            name: body.name ?? '',
+            mimeType: body.mimeType,
+            title: body.title,
+            description: body.description,
+            data: body.data ?? '',
+        });
+        invalidateAppTopics('projects');
+        res.status(201).json(readProjectDetailForCurrentProfile(req.params.id));
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+});
+app.get('/api/projects/:id/files/:kind/:fileId/download', (req, res) => {
+    try {
+        const download = readProjectFileDownload({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+            kind: req.params.kind === 'artifact' ? 'artifact' : 'attachment',
+            fileId: req.params.fileId,
+        });
+        if (download.file.mimeType) {
+            res.type(download.file.mimeType);
+        }
+        res.setHeader('Content-Disposition', `attachment; filename="${download.file.originalName.replace(/"/g, '')}"`);
+        res.sendFile(download.filePath);
+    }
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+    }
+});
+app.delete('/api/projects/:id/files/:kind/:fileId', (req, res) => {
+    try {
+        deleteProjectFileRecord({
+            repoRoot: REPO_ROOT,
+            profile: getCurrentProfile(),
+            projectId: req.params.id,
+            kind: req.params.kind === 'artifact' ? 'artifact' : 'attachment',
+            fileId: req.params.fileId,
+        });
+        invalidateAppTopics('projects');
+        res.json(readProjectDetailForCurrentProfile(req.params.id));
     }
     catch (error) {
         res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
@@ -2231,7 +3217,7 @@ app.delete('/api/projects/:id', (req, res) => {
 app.post('/api/projects/:id/milestones', (req, res) => {
     try {
         const body = req.body;
-        res.status(201).json(addProjectMilestone({
+        addProjectMilestone({
             repoRoot: REPO_ROOT,
             profile: getCurrentProfile(),
             projectId: req.params.id,
@@ -2239,7 +3225,9 @@ app.post('/api/projects/:id/milestones', (req, res) => {
             status: body.status ?? '',
             summary: body.summary,
             makeCurrent: body.makeCurrent,
-        }));
+        });
+        invalidateAppTopics('projects');
+        res.status(201).json(readProjectDetailForCurrentProfile(req.params.id));
     }
     catch (error) {
         res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
@@ -2248,7 +3236,7 @@ app.post('/api/projects/:id/milestones', (req, res) => {
 app.patch('/api/projects/:id/milestones/:milestoneId', (req, res) => {
     try {
         const body = req.body;
-        res.json(updateProjectMilestone({
+        updateProjectMilestone({
             repoRoot: REPO_ROOT,
             profile: getCurrentProfile(),
             projectId: req.params.id,
@@ -2257,7 +3245,9 @@ app.patch('/api/projects/:id/milestones/:milestoneId', (req, res) => {
             status: body.status,
             summary: body.summary,
             makeCurrent: body.makeCurrent,
-        }));
+        });
+        invalidateAppTopics('projects');
+        res.json(readProjectDetailForCurrentProfile(req.params.id));
     }
     catch (error) {
         res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
@@ -2266,14 +3256,16 @@ app.patch('/api/projects/:id/milestones/:milestoneId', (req, res) => {
 app.post('/api/projects/:id/tasks', (req, res) => {
     try {
         const body = req.body;
-        res.status(201).json(createProjectTaskRecord({
+        createProjectTaskRecord({
             repoRoot: REPO_ROOT,
             profile: getCurrentProfile(),
             projectId: req.params.id,
             title: body.title ?? '',
             status: body.status ?? '',
             milestoneId: body.milestoneId,
-        }));
+        });
+        invalidateAppTopics('projects');
+        res.status(201).json(readProjectDetailForCurrentProfile(req.params.id));
     }
     catch (error) {
         res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
@@ -2282,7 +3274,7 @@ app.post('/api/projects/:id/tasks', (req, res) => {
 app.patch('/api/projects/:id/tasks/:taskId', (req, res) => {
     try {
         const body = req.body;
-        res.json(updateProjectTaskRecord({
+        updateProjectTaskRecord({
             repoRoot: REPO_ROOT,
             profile: getCurrentProfile(),
             projectId: req.params.id,
@@ -2290,7 +3282,9 @@ app.patch('/api/projects/:id/tasks/:taskId', (req, res) => {
             title: body.title,
             status: body.status,
             milestoneId: body.milestoneId,
-        }));
+        });
+        invalidateAppTopics('projects');
+        res.json(readProjectDetailForCurrentProfile(req.params.id));
     }
     catch (error) {
         res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
@@ -2298,12 +3292,14 @@ app.patch('/api/projects/:id/tasks/:taskId', (req, res) => {
 });
 app.delete('/api/projects/:id/milestones/:milestoneId', (req, res) => {
     try {
-        res.json(deleteProjectMilestone({
+        deleteProjectMilestone({
             repoRoot: REPO_ROOT,
             profile: getCurrentProfile(),
             projectId: req.params.id,
             milestoneId: req.params.milestoneId,
-        }));
+        });
+        invalidateAppTopics('projects');
+        res.json(readProjectDetailForCurrentProfile(req.params.id));
     }
     catch (error) {
         res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
@@ -2312,13 +3308,15 @@ app.delete('/api/projects/:id/milestones/:milestoneId', (req, res) => {
 app.post('/api/projects/:id/milestones/:milestoneId/move', (req, res) => {
     try {
         const body = req.body;
-        res.json(moveProjectMilestone({
+        moveProjectMilestone({
             repoRoot: REPO_ROOT,
             profile: getCurrentProfile(),
             projectId: req.params.id,
             milestoneId: req.params.milestoneId,
             direction: body.direction ?? 'up',
-        }));
+        });
+        invalidateAppTopics('projects');
+        res.json(readProjectDetailForCurrentProfile(req.params.id));
     }
     catch (error) {
         res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
@@ -2326,12 +3324,14 @@ app.post('/api/projects/:id/milestones/:milestoneId/move', (req, res) => {
 });
 app.delete('/api/projects/:id/tasks/:taskId', (req, res) => {
     try {
-        res.json(deleteProjectTaskRecord({
+        deleteProjectTaskRecord({
             repoRoot: REPO_ROOT,
             profile: getCurrentProfile(),
             projectId: req.params.id,
             taskId: req.params.taskId,
-        }));
+        });
+        invalidateAppTopics('projects');
+        res.json(readProjectDetailForCurrentProfile(req.params.id));
     }
     catch (error) {
         res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
@@ -2340,13 +3340,15 @@ app.delete('/api/projects/:id/tasks/:taskId', (req, res) => {
 app.post('/api/projects/:id/tasks/:taskId/move', (req, res) => {
     try {
         const body = req.body;
-        res.json(moveProjectTaskRecord({
+        moveProjectTaskRecord({
             repoRoot: REPO_ROOT,
             profile: getCurrentProfile(),
             projectId: req.params.id,
             taskId: req.params.taskId,
             direction: body.direction ?? 'up',
-        }));
+        });
+        invalidateAppTopics('projects');
+        res.json(readProjectDetailForCurrentProfile(req.params.id));
     }
     catch (error) {
         res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
@@ -2367,18 +3369,37 @@ app.get('/api/projects/:id/source', (req, res) => {
 app.post('/api/projects/:id/source', (req, res) => {
     try {
         const body = req.body;
-        res.json(saveProjectSource({
+        saveProjectSource({
             repoRoot: REPO_ROOT,
             profile: getCurrentProfile(),
             projectId: req.params.id,
             content: body.content ?? '',
-        }));
+        });
+        invalidateAppTopics('projects');
+        res.json(readProjectDetailForCurrentProfile(req.params.id));
     }
     catch (error) {
         res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
     }
 });
 // ── Shell run ─────────────────────────────────────────────────────────────────
+app.post('/api/folder-picker', (req, res) => {
+    try {
+        const { cwd } = req.body;
+        const result = pickFolder({
+            initialDirectory: resolveRequestedCwd(cwd, DEFAULT_WEB_CWD) ?? DEFAULT_WEB_CWD,
+            prompt: 'Choose working directory',
+        });
+        res.json(result);
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+    }
+});
 app.post('/api/run', (req, res) => {
     try {
         const { command, cwd: runCwd } = req.body;

@@ -3,12 +3,24 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ArchivedConversationsModal } from './ArchivedConversationsModal';
 import { ConversationStatusText } from './ConversationStatusText';
 import { api } from '../api';
+import { useApi } from '../hooks';
 import { useConversations } from '../hooks/useConversations';
 import { useAppData } from '../contexts';
 import { sessionNeedsAttention } from '../sessionIndicators';
-import { reorderOpenSessionIds, type OpenConversationDropPosition } from '../sessionTabs';
+import type { ConversationShelf, OpenConversationDropPosition } from '../sessionTabs';
 import type { SessionMeta } from '../types';
-import { buildDraftConversationSessionMeta, clearDraftConversationComposer, DRAFT_CONVERSATION_ID, DRAFT_CONVERSATION_ROUTE, readDraftConversationComposer, shouldShowDraftConversationTab } from '../draftConversation';
+import {
+  buildDraftConversationSessionMeta,
+  clearDraftConversationComposer,
+  clearDraftConversationCwd,
+  DRAFT_CONVERSATION_ID,
+  DRAFT_CONVERSATION_ROUTE,
+  readDraftConversationComposer,
+  readDraftConversationCwd,
+  shouldShowDraftConversationTab,
+} from '../draftConversation';
+import { getSidebarBrandLabel } from '../sidebarBrand';
+import { setConversationCheckpointsOpenInSearch, shouldOpenConversationCheckpointsFromSearch } from '../conversationCheckpoints';
 import { timeAgo } from '../utils';
 
 // ── Icons ──────────────────────────────────────────────────────────────────
@@ -24,6 +36,7 @@ function Ico({ d, size = 16 }: { d: string; size?: number }) {
 
 const PATH = {
   inbox:    'M2.25 13.5h3.86a2.25 2.25 0 0 1 2.012 1.244l.256.512a2.25 2.25 0 0 0 2.013 1.244h3.218a2.25 2.25 0 0 0 2.013-1.244l.256-.512a2.25 2.25 0 0 1 2.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 0 0-2.15-1.588H6.911a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.661Z',
+  checkpoints: 'M12 3.75l2.32 4.701 5.18.753-3.75 3.655.885 5.161L12 15.75l-4.635 2.27.885-5.161-3.75-3.655 5.18-.753L12 3.75Z',
   archive:  'M20.25 7.5v10.125c0 1.243-1.007 2.25-2.25 2.25H6c-1.243 0-2.25-1.007-2.25-2.25V7.5m16.5 0-2.394-2.992A2.25 2.25 0 0 0 16.099 3.75H7.901a2.25 2.25 0 0 0-1.757.758L3.75 7.5m16.5 0H3.75m5.25 4.5h6',
   gateway:  'M7.5 7.5 3.75 12l3.75 4.5m9-9 3.75 4.5-3.75 4.5M20.25 12H3.75',
   daemon:   'M6 4.5h12A1.5 1.5 0 0 1 19.5 6v12a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V6A1.5 1.5 0 0 1 6 4.5Zm0 3.75h12M6 12h12M6 15.75h12',
@@ -36,6 +49,8 @@ const PATH = {
   settings:    'M10.5 6h3m-1.5-3v6m4.348-2.826 2.121 2.121m-12.728 0 2.121-2.121m8.486 8.486 2.121 2.121m-12.728 0 2.121-2.121M6 10.5H3m18 0h-3m-5.25 7.5v3m0-18v3',
   close:       'M6 18 18 6M6 6l12 12',
   grip:        'M9 7.5h.01M9 12h.01M9 16.5h.01M15 7.5h.01M15 12h.01M15 16.5h.01',
+  pin:         'M12 17.25v4.5m0-4.5-4.243-4.243a1.5 1.5 0 0 1-.44-1.06V5.25L6.287 4.22A.75.75 0 0 1 6.818 3h10.364a.75.75 0 0 1 .53 1.28l-1.03 1.03v6.697a1.5 1.5 0 0 1-.44 1.06L12 17.25Z',
+  unpin:       'M12 4.5v10.5m0 0-3-3m3 3 3-3M5.25 19.5h13.5',
 };
 
 const SIDEBAR_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
@@ -145,15 +160,15 @@ function getActiveConversationId(pathname: string): string | null {
   return decodeURIComponent(match[1]);
 }
 
-// ── Open tab ───────────────────────────────────────────────────────────────
+// ── Conversation shelf rows ───────────────────────────────────────────────
 
 function OpenTab({
   session,
   needsAttention,
-  canReorder,
+  canDrag,
   isDragging,
   dropPosition,
-  onClose,
+  actions = [],
   onDragStart,
   onDragOver,
   onDrop,
@@ -161,10 +176,15 @@ function OpenTab({
 }: {
   session: SessionMeta;
   needsAttention?: boolean;
-  canReorder: boolean;
+  canDrag: boolean;
   isDragging?: boolean;
   dropPosition?: OpenConversationDropPosition | null;
-  onClose: () => void;
+  actions?: Array<{
+    key: string;
+    title: string;
+    icon: string;
+    onClick: () => void;
+  }>;
   onDragStart?: (event: DragEvent<HTMLDivElement>) => void;
   onDragOver?: (event: DragEvent<HTMLDivElement>) => void;
   onDrop?: (event: DragEvent<HTMLDivElement>) => void;
@@ -177,11 +197,11 @@ function OpenTab({
   return (
     <div
       className="relative"
-      draggable={canReorder}
-      onDragStart={canReorder ? onDragStart : undefined}
-      onDragOver={canReorder ? onDragOver : undefined}
-      onDrop={canReorder ? onDrop : undefined}
-      onDragEnd={canReorder ? onDragEnd : undefined}
+      draggable={canDrag}
+      onDragStart={canDrag ? onDragStart : undefined}
+      onDragOver={canDrag ? onDragOver : undefined}
+      onDrop={canDrag ? onDrop : undefined}
+      onDragEnd={canDrag ? onDragEnd : undefined}
     >
       {dropPosition && (
         <span
@@ -199,11 +219,11 @@ function OpenTab({
         className={[
           'ui-sidebar-session-row select-none',
           isActive && 'ui-sidebar-session-row-active',
-          canReorder && (isDragging ? 'cursor-grabbing opacity-60' : 'cursor-grab'),
+          canDrag && (isDragging ? 'cursor-grabbing opacity-60' : 'cursor-grab'),
         ].filter(Boolean).join(' ')}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        title={canReorder ? 'Drag to reorder' : undefined}
+        title={canDrag ? 'Drag to move' : undefined}
       >
         <span
           aria-hidden="true"
@@ -232,16 +252,21 @@ function OpenTab({
           </p>
         </div>
 
-        <div className="shrink-0 mt-0.5 min-w-[16px] flex items-center justify-center">
-          {hovered ? (
+        <div className="shrink-0 mt-0.5 min-w-[34px] flex items-center justify-end gap-0.5">
+          {hovered && actions.length > 0 ? actions.map((action) => (
             <button
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClose(); }}
+              key={action.key}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                action.onClick();
+              }}
               className="ui-icon-button ui-icon-button-compact"
-              title="Close tab"
+              title={action.title}
             >
-              <Ico d={PATH.close} size={10} />
+              <Ico d={action.icon} size={10} />
             </button>
-          ) : canReorder ? (
+          )) : canDrag ? (
             <span className="text-dim/45" aria-hidden="true">
               <Ico d={PATH.grip} size={12} />
             </span>
@@ -265,6 +290,31 @@ function SectionHeader({
     <div className="flex items-center gap-2 px-4 pt-2 pb-1" title={title}>
       <span className="ui-section-label">{label}</span>
       {count != null && <span className="ui-section-count ml-auto">{count}</span>}
+    </div>
+  );
+}
+
+function ShelfDropZone({
+  label,
+  active,
+  onDragOver,
+  onDrop,
+}: {
+  label: string;
+  active?: boolean;
+  onDragOver: (event: DragEvent<HTMLDivElement>) => void;
+  onDrop: (event: DragEvent<HTMLDivElement>) => void;
+}) {
+  return (
+    <div
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      className={[
+        'mx-3 rounded-lg border border-dashed px-3 py-2 text-[11px] text-dim transition-colors',
+        active ? 'border-accent/60 bg-accent/8 text-accent' : 'border-border-subtle bg-elevated/35',
+      ].join(' ')}
+    >
+      {label}
     </div>
   );
 }
@@ -294,15 +344,29 @@ export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { activity } = useAppData();
-  const { tabs, archivedSessions, openSession, closeSession, reorderSessions, loading } = useConversations();
+  const { data: status } = useApi(api.status);
+  const {
+    pinnedSessions,
+    tabs,
+    archivedSessions,
+    openSession,
+    closeSession,
+    pinSession,
+    unpinSession,
+    moveSession,
+    loading,
+  } = useConversations();
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [draggingSessionId, setDraggingSessionId] = useState<string | null>(null);
+  const [draggingSection, setDraggingSection] = useState<ConversationShelf | null>(null);
   const [dropTarget, setDropTarget] = useState<{
-    sessionId: string;
+    section: ConversationShelf;
+    sessionId: string | null;
     position: OpenConversationDropPosition;
   } | null>(null);
-  const allSessions = useMemo(() => [...tabs, ...archivedSessions], [archivedSessions, tabs]);
+  const allSessions = useMemo(() => [...pinnedSessions, ...tabs, ...archivedSessions], [archivedSessions, pinnedSessions, tabs]);
   const activeConversationId = useMemo(() => getActiveConversationId(location.pathname), [location.pathname]);
+  const checkpointsOpen = activeConversationId !== null && shouldOpenConversationCheckpointsFromSearch(location.search);
   const attentionIds = useMemo(
     () => new Set(allSessions.filter((session) => sessionNeedsAttention(session)).map((session) => session.id)),
     [allSessions],
@@ -318,16 +382,15 @@ export function Sidebar() {
     }).length;
   }, [activity?.entries, allSessions]);
   const inboxCount = standaloneUnreadCount + archivedSessions.filter((session) => sessionNeedsAttention(session)).length;
-  const tabIds = useMemo(() => tabs.map((session) => session.id), [tabs]);
-  const canReorderTabs = tabs.length > 1;
   const [draftComposer, setDraftComposer] = useState(() => readDraftConversationComposer());
+  const [draftCwd, setDraftCwd] = useState(() => readDraftConversationCwd());
   const draftTab = useMemo(() => {
-    if (!shouldShowDraftConversationTab(location.pathname, draftComposer)) {
+    if (!shouldShowDraftConversationTab(location.pathname, draftComposer, draftCwd)) {
       return null;
     }
 
-    return buildDraftConversationSessionMeta();
-  }, [draftComposer, location.pathname]);
+    return buildDraftConversationSessionMeta(undefined, draftCwd);
+  }, [draftComposer, draftCwd, location.pathname]);
   const visibleTabs = useMemo(
     () => draftTab ? [...tabs, draftTab] : tabs,
     [draftTab, tabs],
@@ -335,6 +398,7 @@ export function Sidebar() {
 
   useEffect(() => {
     setDraftComposer(readDraftConversationComposer());
+    setDraftCwd(readDraftConversationCwd());
   }, [location.pathname]);
 
   useEffect(() => {
@@ -354,6 +418,7 @@ export function Sidebar() {
 
   function clearDragState() {
     setDraggingSessionId(null);
+    setDraggingSection(null);
     setDropTarget(null);
   }
 
@@ -362,47 +427,74 @@ export function Sidebar() {
     return event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after';
   }
 
-  function handleTabDragStart(sessionId: string, event: DragEvent<HTMLDivElement>) {
+  function handleTabDragStart(section: ConversationShelf, sessionId: string, event: DragEvent<HTMLDivElement>) {
     setDraggingSessionId(sessionId);
+    setDraggingSection(section);
     setDropTarget(null);
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', sessionId);
   }
 
-  function handleTabDragOver(sessionId: string, event: DragEvent<HTMLDivElement>) {
-    const draggedSessionId = draggingSessionId ?? event.dataTransfer.getData('text/plain');
-    if (!draggedSessionId) {
+  function handleTabDragOver(section: ConversationShelf, sessionId: string, event: DragEvent<HTMLDivElement>) {
+    const draggedId = draggingSessionId ?? event.dataTransfer.getData('text/plain');
+    if (!draggedId) {
       return;
     }
 
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
 
-    if (draggedSessionId === sessionId) {
+    if (draggedId === sessionId && draggingSection === section) {
       setDropTarget(null);
       return;
     }
 
     const position = getDropPosition(event);
     setDropTarget((current) => (
-      current?.sessionId === sessionId && current.position === position
+      current?.section === section && current.sessionId === sessionId && current.position === position
         ? current
-        : { sessionId, position }
+        : { section, sessionId, position }
     ));
   }
 
-  function handleTabDrop(sessionId: string, event: DragEvent<HTMLDivElement>) {
+  function handleEmptyShelfDragOver(section: ConversationShelf, event: DragEvent<HTMLDivElement>) {
+    const draggedId = draggingSessionId ?? event.dataTransfer.getData('text/plain');
+    if (!draggedId) {
+      return;
+    }
+
     event.preventDefault();
-    const draggedSessionId = draggingSessionId ?? event.dataTransfer.getData('text/plain');
-    if (!draggedSessionId || draggedSessionId === sessionId) {
+    event.dataTransfer.dropEffect = 'move';
+    setDropTarget((current) => (
+      current?.section === section && current.sessionId === null
+        ? current
+        : { section, sessionId: null, position: 'after' }
+    ));
+  }
+
+  function handleConversationDrop(targetSection: ConversationShelf, targetSessionId: string | null, position: OpenConversationDropPosition) {
+    if (!draggingSessionId) {
       clearDragState();
       return;
     }
 
-    const position = getDropPosition(event);
-    const nextOrder = reorderOpenSessionIds(tabIds, draggedSessionId, sessionId, position);
-    reorderSessions(nextOrder);
+    if (targetSessionId === draggingSessionId && draggingSection === targetSection) {
+      clearDragState();
+      return;
+    }
+
+    moveSession(draggingSessionId, targetSection, targetSessionId, position);
     clearDragState();
+  }
+
+  function handleTabDrop(section: ConversationShelf, sessionId: string, event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    handleConversationDrop(section, sessionId, getDropPosition(event));
+  }
+
+  function handleEmptyShelfDrop(section: ConversationShelf, event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    handleConversationDrop(section, null, 'after');
   }
 
   function handleRestoreArchivedConversation(session: SessionMeta) {
@@ -413,7 +505,9 @@ export function Sidebar() {
 
   function handleCloseDraftTab() {
     clearDraftConversationComposer();
+    clearDraftConversationCwd();
     setDraftComposer('');
+    setDraftCwd('');
 
     if (draggingSessionId === DRAFT_CONVERSATION_ID) {
       clearDragState();
@@ -423,9 +517,9 @@ export function Sidebar() {
       return;
     }
 
-    const nextTab = tabs[0];
-    if (nextTab) {
-      navigate(`/conversations/${nextTab.id}`);
+    const nextConversation = tabs[0] ?? pinnedSessions[0];
+    if (nextConversation) {
+      navigate(`/conversations/${nextConversation.id}`);
       return;
     }
 
@@ -445,18 +539,49 @@ export function Sidebar() {
     }
 
     const remainingTabs = tabs.filter((session) => session.id !== sessionId);
-    const nextTab = remainingTabs[0];
-    if (nextTab) {
-      navigate(`/conversations/${nextTab.id}`);
+    const nextConversation = remainingTabs[0] ?? pinnedSessions[0];
+    if (nextConversation) {
+      navigate(`/conversations/${nextConversation.id}`);
       return;
     }
 
     navigate('/inbox');
   }
 
+  function handlePinConversation(sessionId: string) {
+    pinSession(sessionId);
+    if (draggingSessionId === sessionId) {
+      clearDragState();
+    }
+  }
+
+  function handleUnpinConversation(sessionId: string) {
+    unpinSession(sessionId, { open: true });
+    if (draggingSessionId === sessionId) {
+      clearDragState();
+    }
+  }
+
   const handleNewConversation = useCallback(() => {
     navigate('/conversations/new');
   }, [navigate]);
+
+  const handleOpenCheckpoints = useCallback(() => {
+    const targetConversationId = activeConversationId ?? tabs[0]?.id ?? pinnedSessions[0]?.id;
+
+    if (!targetConversationId) {
+      navigate('/conversations/new');
+      return;
+    }
+
+    const targetPath = `/conversations/${targetConversationId}`;
+    const baseSearch = location.pathname === targetPath ? location.search : '';
+
+    navigate({
+      pathname: targetPath,
+      search: setConversationCheckpointsOpenInSearch(baseSearch, true),
+    });
+  }, [activeConversationId, location.pathname, location.search, navigate, pinnedSessions, tabs]);
 
   const navigateOpenConversation = useCallback((direction: -1 | 1) => {
     if (tabs.length === 0) {
@@ -514,13 +639,16 @@ export function Sidebar() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleNewConversation, navigateOpenConversation]);
 
+  const pinnedDropTargetActive = dropTarget?.section === 'pinned' && dropTarget.sessionId === null;
+  const openDropTargetActive = dropTarget?.section === 'open' && dropTarget.sessionId === null;
+
   return (
     <aside className="flex-1 flex flex-col overflow-hidden">
       <div className="flex items-center gap-2 px-4 pt-4 pb-3">
         <div className="ui-brand-mark">
           <span className="ui-brand-mark-text">pa</span>
         </div>
-        <span className="text-[13px] font-semibold text-primary truncate flex-1">personal agent</span>
+        <span className="text-[13px] font-semibold text-primary truncate flex-1">{getSidebarBrandLabel(status?.profile)}</span>
       </div>
 
       <div className="px-1 pb-2">
@@ -538,6 +666,12 @@ export function Sidebar() {
       <div className="pb-1 space-y-0.5">
         <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={inboxCount} />
         <TopActionButton
+          icon={PATH.checkpoints}
+          label="Checkpoints"
+          isActive={checkpointsOpen}
+          onClick={handleOpenCheckpoints}
+        />
+        <TopActionButton
           icon={PATH.archive}
           label="Archived"
           isActive={archiveOpen}
@@ -549,41 +683,108 @@ export function Sidebar() {
 
       <div className="mx-3 border-t border-border-subtle my-2" />
 
-      <SectionHeader
-        label="Open conversations"
-        count={loading ? '…' : visibleTabs.length}
-        title={`Navigate between open conversations with ${SIDEBAR_PREVIOUS_CHAT_HOTKEY} and ${SIDEBAR_NEXT_CHAT_HOTKEY}`}
-      />
-
-      {/* ── Open tabs ── */}
-      <div className="flex-1 overflow-y-auto py-1 space-y-0.5 min-h-0">
-        {!loading && visibleTabs.length === 0 && (
-          <p className="px-4 py-2 text-[12px] text-dim">
-            No open conversations yet.
-          </p>
-        )}
-        {visibleTabs.map((session) => {
-          const isDraftTab = session.id === DRAFT_CONVERSATION_ID;
-          const dropPosition = !isDraftTab && dropTarget?.sessionId === session.id && draggingSessionId !== session.id
-            ? dropTarget.position
-            : null;
-
-          return (
-            <OpenTab
-              key={session.id}
-              session={session}
-              needsAttention={!isDraftTab && attentionIds.has(session.id)}
-              canReorder={!isDraftTab && canReorderTabs}
-              isDragging={!isDraftTab && draggingSessionId === session.id}
-              dropPosition={dropPosition}
-              onClose={() => isDraftTab ? handleCloseDraftTab() : handleCloseTab(session.id)}
-              onDragStart={isDraftTab ? undefined : (event) => handleTabDragStart(session.id, event)}
-              onDragOver={isDraftTab ? undefined : (event) => handleTabDragOver(session.id, event)}
-              onDrop={isDraftTab ? undefined : (event) => handleTabDrop(session.id, event)}
-              onDragEnd={isDraftTab ? undefined : () => clearDragState()}
+      <div className="flex-1 overflow-y-auto min-h-0 pb-2">
+        <SectionHeader
+          label="Pinned"
+          count={loading ? '…' : pinnedSessions.length}
+          title="Pinned conversations stay visible above your open tabs. Drag tabs here to pin them."
+        />
+        <div className="py-1 space-y-0.5">
+          {!loading && pinnedSessions.length === 0 && (
+            <ShelfDropZone
+              label={draggingSection === 'open'
+                ? 'Drop a conversation here to pin it.'
+                : 'Drag conversations here to pin them.'}
+              active={pinnedDropTargetActive}
+              onDragOver={(event) => handleEmptyShelfDragOver('pinned', event)}
+              onDrop={(event) => handleEmptyShelfDrop('pinned', event)}
             />
-          );
-        })}
+          )}
+          {pinnedSessions.map((session) => {
+            const dropPosition = dropTarget?.section === 'pinned' && dropTarget.sessionId === session.id && draggingSessionId !== session.id
+              ? dropTarget.position
+              : null;
+
+            return (
+              <OpenTab
+                key={session.id}
+                session={session}
+                needsAttention={attentionIds.has(session.id)}
+                canDrag
+                isDragging={draggingSessionId === session.id}
+                dropPosition={dropPosition}
+                actions={[{
+                  key: 'unpin',
+                  title: 'Move to open conversations',
+                  icon: PATH.unpin,
+                  onClick: () => handleUnpinConversation(session.id),
+                }]}
+                onDragStart={(event) => handleTabDragStart('pinned', session.id, event)}
+                onDragOver={(event) => handleTabDragOver('pinned', session.id, event)}
+                onDrop={(event) => handleTabDrop('pinned', session.id, event)}
+                onDragEnd={() => clearDragState()}
+              />
+            );
+          })}
+        </div>
+
+        <SectionHeader
+          label="Open conversations"
+          count={loading ? '…' : visibleTabs.length}
+          title={`Navigate between open conversations with ${SIDEBAR_PREVIOUS_CHAT_HOTKEY} and ${SIDEBAR_NEXT_CHAT_HOTKEY}`}
+        />
+        <div className="py-1 space-y-0.5 min-h-0">
+          {!loading && tabs.length === 0 && draggingSection === 'pinned' && (
+            <ShelfDropZone
+              label="Drop here to move back into open conversations."
+              active={openDropTargetActive}
+              onDragOver={(event) => handleEmptyShelfDragOver('open', event)}
+              onDrop={(event) => handleEmptyShelfDrop('open', event)}
+            />
+          )}
+          {!loading && visibleTabs.length === 0 && draggingSection !== 'pinned' && (
+            <p className="px-4 py-2 text-[12px] text-dim">
+              No open conversations yet.
+            </p>
+          )}
+          {visibleTabs.map((session) => {
+            const isDraftTab = session.id === DRAFT_CONVERSATION_ID;
+            const dropPosition = !isDraftTab && dropTarget?.section === 'open' && dropTarget.sessionId === session.id && draggingSessionId !== session.id
+              ? dropTarget.position
+              : null;
+
+            return (
+              <OpenTab
+                key={session.id}
+                session={session}
+                needsAttention={!isDraftTab && attentionIds.has(session.id)}
+                canDrag={!isDraftTab}
+                isDragging={!isDraftTab && draggingSessionId === session.id}
+                dropPosition={dropPosition}
+                actions={isDraftTab ? [{
+                  key: 'close',
+                  title: 'Close draft',
+                  icon: PATH.close,
+                  onClick: handleCloseDraftTab,
+                }] : [{
+                  key: 'pin',
+                  title: 'Pin conversation',
+                  icon: PATH.pin,
+                  onClick: () => handlePinConversation(session.id),
+                }, {
+                  key: 'close',
+                  title: 'Close tab',
+                  icon: PATH.close,
+                  onClick: () => handleCloseTab(session.id),
+                }]}
+                onDragStart={isDraftTab ? undefined : (event) => handleTabDragStart('open', session.id, event)}
+                onDragOver={isDraftTab ? undefined : (event) => handleTabDragOver('open', session.id, event)}
+                onDrop={isDraftTab ? undefined : (event) => handleTabDrop('open', session.id, event)}
+                onDragEnd={isDraftTab ? undefined : () => clearDragState()}
+              />
+            );
+          })}
+        </div>
       </div>
 
       <SidebarFooter />

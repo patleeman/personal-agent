@@ -1,11 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { OPEN_SESSION_IDS_STORAGE_KEY } from './localSettings';
+import { OPEN_SESSION_IDS_STORAGE_KEY, PINNED_SESSION_IDS_STORAGE_KEY } from './localSettings';
 import {
   closeConversationTab,
   ensureConversationTabOpen,
+  moveConversationToSection,
+  pinConversationTab,
+  readConversationLayout,
   readOpenSessionIds,
+  readPinnedSessionIds,
   reorderOpenSessionIds,
+  replaceConversationLayout,
   replaceOpenConversationTabs,
+  replacePinnedConversationTabs,
+  unpinConversationTab,
 } from './sessionTabs';
 
 interface MockStorage {
@@ -58,10 +65,16 @@ describe('sessionTabs', () => {
     vi.unstubAllGlobals();
   });
 
-  it('sanitizes stored open session ids', () => {
-    localStorage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify([' session-1 ', '', null, 'session-2', 42]));
+  it('sanitizes stored open and pinned session ids', () => {
+    localStorage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify([' session-1 ', '', null, 'session-2', 'session-3']));
+    localStorage.setItem(PINNED_SESSION_IDS_STORAGE_KEY, JSON.stringify(['session-2', ' session-4 ', 'session-2']));
 
-    expect([...readOpenSessionIds()]).toEqual(['session-1', 'session-2']);
+    expect(readConversationLayout()).toEqual({
+      sessionIds: ['session-1', 'session-3'],
+      pinnedSessionIds: ['session-2', 'session-4'],
+    });
+    expect(readOpenSessionIds()).toEqual(['session-1', 'session-3']);
+    expect(readPinnedSessionIds()).toEqual(['session-2', 'session-4']);
   });
 
   it('opens a conversation tab once even when asked repeatedly', () => {
@@ -73,9 +86,27 @@ describe('sessionTabs', () => {
     expect([...readOpenSessionIds()]).toEqual(['session-1']);
   });
 
-  it('replaces the local tab set from a durable snapshot', () => {
+  it('does not reopen a conversation that is already pinned', () => {
+    replaceConversationLayout({ sessionIds: ['session-1'], pinnedSessionIds: ['session-2'] });
+    dispatchEvent.mockReset();
+
+    expect(ensureConversationTabOpen('session-2')).toEqual(['session-1']);
+    expect(dispatchEvent).not.toHaveBeenCalled();
+    expect(readConversationLayout()).toEqual({
+      sessionIds: ['session-1'],
+      pinnedSessionIds: ['session-2'],
+    });
+  });
+
+  it('replaces the local open tab set from a durable snapshot', () => {
     expect([...replaceOpenConversationTabs([' session-2 ', 'session-1', 'session-2'])]).toEqual(['session-2', 'session-1']);
     expect([...readOpenSessionIds()]).toEqual(['session-2', 'session-1']);
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('replaces the local pinned conversation set', () => {
+    expect([...replacePinnedConversationTabs([' session-2 ', 'session-1', 'session-2'])]).toEqual(['session-2', 'session-1']);
+    expect([...readPinnedSessionIds()]).toEqual(['session-2', 'session-1']);
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
   });
 
@@ -104,6 +135,46 @@ describe('sessionTabs', () => {
       'session-2',
       'session-3',
     ]);
+  });
+
+  it('moves conversations between the open and pinned shelves', () => {
+    expect(moveConversationToSection({
+      sessionIds: ['session-1', 'session-2'],
+      pinnedSessionIds: ['session-3'],
+    }, 'session-2', 'pinned', 'session-3', 'before')).toEqual({
+      sessionIds: ['session-1'],
+      pinnedSessionIds: ['session-2', 'session-3'],
+    });
+
+    expect(moveConversationToSection({
+      sessionIds: ['session-1'],
+      pinnedSessionIds: ['session-2', 'session-3'],
+    }, 'session-2', 'open', 'session-1', 'after')).toEqual({
+      sessionIds: ['session-1', 'session-2'],
+      pinnedSessionIds: ['session-3'],
+    });
+  });
+
+  it('pins a conversation by removing it from open tabs', () => {
+    replaceConversationLayout({ sessionIds: ['session-1', 'session-2'], pinnedSessionIds: [] });
+    dispatchEvent.mockReset();
+
+    expect(pinConversationTab('session-2')).toEqual({
+      sessionIds: ['session-1'],
+      pinnedSessionIds: ['session-2'],
+    });
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('unpins a conversation back into open tabs by default', () => {
+    replaceConversationLayout({ sessionIds: ['session-1'], pinnedSessionIds: ['session-2'] });
+    dispatchEvent.mockReset();
+
+    expect(unpinConversationTab('session-2')).toEqual({
+      sessionIds: ['session-1', 'session-2'],
+      pinnedSessionIds: [],
+    });
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
   });
 
   it('only dispatches changes when a tab actually closes', () => {

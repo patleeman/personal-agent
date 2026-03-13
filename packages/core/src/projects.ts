@@ -22,7 +22,10 @@ export interface ProjectPaths {
   projectsDir: string;
   projectDir: string;
   projectFile: string;
+  briefFile: string;
   tasksDir: string;
+  notesDir: string;
+  attachmentsDir: string;
   artifactsDir: string;
 }
 
@@ -161,7 +164,10 @@ export function resolveProjectPaths(options: ResolveProjectPathsOptions): Projec
     projectsDir,
     projectDir,
     projectFile: join(projectDir, 'PROJECT.yaml'),
+    briefFile: join(projectDir, 'BRIEF.md'),
     tasksDir: join(projectDir, 'tasks'),
+    notesDir: join(projectDir, 'notes'),
+    attachmentsDir: join(projectDir, 'attachments'),
     artifactsDir: join(projectDir, 'artifacts'),
   };
 }
@@ -223,6 +229,8 @@ export function createProjectScaffold(
 
   mkdirSync(paths.projectDir, { recursive: true });
   mkdirSync(paths.tasksDir, { recursive: true });
+  mkdirSync(paths.notesDir, { recursive: true });
+  mkdirSync(paths.attachmentsDir, { recursive: true });
   mkdirSync(paths.artifactsDir, { recursive: true });
 
   writeProject(

@@ -51,18 +51,13 @@ describe('project artifacts', () => {
       updatedAt: '2026-03-10T12:00:00.000Z',
       title: 'Durable artifact model',
       description: 'Create a durable artifact model.',
-      summary: 'Project created. Refine the plan before executing the work.',
+      summary: 'Project created. Capture the brief, notes, and next steps as the work takes shape.',
       status: 'created',
       blockers: [],
-      currentFocus: 'Refine the project plan.',
+      currentFocus: 'Capture the goal and first next step.',
       recentProgress: [],
       plan: {
-        currentMilestoneId: 'refine-plan',
-        milestones: [
-          { id: 'refine-plan', title: 'Refine the plan', status: 'in_progress' },
-          { id: 'execute-work', title: 'Execute the work', status: 'pending' },
-          { id: 'verify-result', title: 'Verify the result', status: 'pending' },
-        ],
+        milestones: [],
         tasks: [],
       },
     });

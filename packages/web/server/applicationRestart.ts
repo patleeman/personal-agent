@@ -18,6 +18,7 @@ interface ApplicationRestartLock {
   pid?: number;
   requestedAt?: string;
   repoRoot?: string;
+  profile?: string;
   port?: number;
   command?: string[];
 }
@@ -92,8 +93,14 @@ function ensureApplicationRestartNotRunning(lockFile: string): void {
 
 export function requestApplicationRestart(input: {
   repoRoot: string;
+  profile: string;
 }): ApplicationRestartRequestResult {
   const repoRoot = resolve(input.repoRoot);
+  const profile = input.profile.trim();
+  if (profile.length === 0) {
+    throw new Error('Application restart requires a profile.');
+  }
+
   const webUiStatus = getWebUiServiceStatus({ repoRoot });
 
   if (!webUiStatus.installed) {
@@ -117,7 +124,7 @@ export function requestApplicationRestart(input: {
   const requestedAt = new Date().toISOString();
   const command = [process.execPath, cliEntryFile, 'restart', '--rebuild'];
 
-  writeFileSync(lockFile, `${JSON.stringify({ requestedAt, repoRoot, port: webUiStatus.port, command }, null, 2)}\n`, {
+  writeFileSync(lockFile, `${JSON.stringify({ requestedAt, repoRoot, profile, port: webUiStatus.port, command }, null, 2)}\n`, {
     flag: 'wx',
   });
 
@@ -132,6 +139,9 @@ export function requestApplicationRestart(input: {
       env: {
         ...process.env,
         PERSONAL_AGENT_REPO_ROOT: repoRoot,
+        PERSONAL_AGENT_RESTART_NOTIFY_INBOX: '1',
+        PERSONAL_AGENT_RESTART_NOTIFY_PROFILE: profile,
+        PERSONAL_AGENT_RESTART_REQUESTED_AT: requestedAt,
       },
     });
 
@@ -145,6 +155,7 @@ export function requestApplicationRestart(input: {
       pid: child.pid,
       requestedAt,
       repoRoot,
+      profile,
       port: webUiStatus.port,
       command,
     }, null, 2)}\n`);

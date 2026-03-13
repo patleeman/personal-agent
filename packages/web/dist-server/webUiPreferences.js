@@ -18,7 +18,7 @@ function readSettingsObject(settingsFile) {
         return {};
     }
 }
-function normalizeOpenConversationIds(value) {
+function normalizeConversationIds(value) {
     if (!Array.isArray(value)) {
         return [];
     }
@@ -34,27 +34,47 @@ function normalizeOpenConversationIds(value) {
     }
     return ids;
 }
+function normalizeSavedWebUiPreferences(input) {
+    const pinnedConversationIds = normalizeConversationIds(input.pinnedConversationIds);
+    const pinnedIdSet = new Set(pinnedConversationIds);
+    return {
+        openConversationIds: normalizeConversationIds(input.openConversationIds).filter((id) => !pinnedIdSet.has(id)),
+        pinnedConversationIds,
+    };
+}
 function readWebUiSettings(settings) {
     return isRecord(settings.webUi) ? { ...settings.webUi } : {};
 }
 export function readSavedWebUiPreferences(settingsFile) {
     const settings = readSettingsObject(settingsFile);
     const webUi = readWebUiSettings(settings);
-    return {
-        openConversationIds: normalizeOpenConversationIds(webUi.openConversationIds),
-    };
+    return normalizeSavedWebUiPreferences({
+        openConversationIds: webUi.openConversationIds,
+        pinnedConversationIds: webUi.pinnedConversationIds,
+    });
 }
 export function writeSavedWebUiPreferences(input, settingsFile) {
     const settings = readSettingsObject(settingsFile);
     const webUi = readWebUiSettings(settings);
-    if (input.openConversationIds !== undefined) {
-        const normalizedIds = normalizeOpenConversationIds(input.openConversationIds ?? []);
-        if (normalizedIds.length > 0) {
-            webUi.openConversationIds = normalizedIds;
-        }
-        else {
-            delete webUi.openConversationIds;
-        }
+    const current = normalizeSavedWebUiPreferences({
+        openConversationIds: webUi.openConversationIds,
+        pinnedConversationIds: webUi.pinnedConversationIds,
+    });
+    const next = normalizeSavedWebUiPreferences({
+        openConversationIds: input.openConversationIds !== undefined ? (input.openConversationIds ?? []) : current.openConversationIds,
+        pinnedConversationIds: input.pinnedConversationIds !== undefined ? (input.pinnedConversationIds ?? []) : current.pinnedConversationIds,
+    });
+    if (next.openConversationIds.length > 0) {
+        webUi.openConversationIds = next.openConversationIds;
+    }
+    else {
+        delete webUi.openConversationIds;
+    }
+    if (next.pinnedConversationIds.length > 0) {
+        webUi.pinnedConversationIds = next.pinnedConversationIds;
+    }
+    else {
+        delete webUi.pinnedConversationIds;
     }
     if (Object.keys(webUi).length > 0) {
         settings.webUi = webUi;

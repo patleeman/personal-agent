@@ -8,6 +8,8 @@ export function displayBlockToMessageBlock(block: DisplayBlock): MessageBlock {
       return { type: 'text', id: block.id, text: block.text, ts: block.ts };
     case 'thinking':
       return { type: 'thinking', id: block.id, text: block.text, ts: block.ts };
+    case 'summary':
+      return { type: 'summary', id: block.id, kind: block.kind, title: block.title, text: block.text, ts: block.ts };
     case 'tool_use':
       return {
         type: 'tool_use',

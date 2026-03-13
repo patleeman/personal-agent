@@ -76,7 +76,10 @@ describe('resolveProjectPaths', () => {
 
     expect(paths.projectDir).toBe(join(repo, 'profiles', 'datadog', 'agent', 'projects', 'artifact-model'));
     expect(paths.projectFile).toBe(join(paths.projectDir, 'PROJECT.yaml'));
+    expect(paths.briefFile).toBe(join(paths.projectDir, 'BRIEF.md'));
     expect(paths.tasksDir).toBe(join(paths.projectDir, 'tasks'));
+    expect(paths.notesDir).toBe(join(paths.projectDir, 'notes'));
+    expect(paths.attachmentsDir).toBe(join(paths.projectDir, 'attachments'));
     expect(paths.artifactsDir).toBe(join(paths.projectDir, 'artifacts'));
   });
 
@@ -123,12 +126,12 @@ describe('listResolvedProjectRepoRoots', () => {
     });
 
     writeFileSync(first.paths.projectFile, readFileSync(first.paths.projectFile, 'utf-8').replace(
-      'summary: Project created. Refine the plan before executing the work.',
-      'repoRoot: ../workspace/alpha\nsummary: Project created. Refine the plan before executing the work.',
+      'summary: Project created. Capture the brief, notes, and next steps as the work takes shape.',
+      'repoRoot: ../workspace/alpha\nsummary: Project created. Capture the brief, notes, and next steps as the work takes shape.',
     ));
     writeFileSync(second.paths.projectFile, readFileSync(second.paths.projectFile, 'utf-8').replace(
-      'summary: Project created. Refine the plan before executing the work.',
-      'repoRoot: ../workspace/alpha\nsummary: Project created. Refine the plan before executing the work.',
+      'summary: Project created. Capture the brief, notes, and next steps as the work takes shape.',
+      'repoRoot: ../workspace/alpha\nsummary: Project created. Capture the brief, notes, and next steps as the work takes shape.',
     ));
 
     expect(listResolvedProjectRepoRoots({
@@ -157,13 +160,15 @@ describe('createProjectScaffold', () => {
 
     expect(existsSync(result.paths.projectDir)).toBe(true);
     expect(existsSync(result.paths.tasksDir)).toBe(true);
+    expect(existsSync(result.paths.notesDir)).toBe(true);
+    expect(existsSync(result.paths.attachmentsDir)).toBe(true);
     expect(existsSync(result.paths.artifactsDir)).toBe(true);
 
     const projectFile = readFileSync(result.paths.projectFile, 'utf-8');
     expect(projectFile).toContain('id: artifact-model');
     expect(projectFile).toContain('title: Artifact model');
     expect(projectFile).toContain('description: Create a durable artifact model for ongoing work.');
-    expect(projectFile).toContain('currentMilestoneId: refine-plan');
+    expect(projectFile).toContain('milestones: []');
   });
 
   it('rejects empty titles', () => {

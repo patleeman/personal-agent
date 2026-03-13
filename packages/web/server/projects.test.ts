@@ -56,7 +56,7 @@ describe('sortProjectTasks', () => {
 });
 
 describe('readProjectDetailFromProject', () => {
-  it('returns the project document and tasks from PROJECT.yaml storage', () => {
+  it('returns the project document, notes, files, and tasks from project storage', () => {
     const repoRoot = createTempRepo();
 
     createProjectScaffold({
@@ -68,6 +68,24 @@ describe('readProjectDetailFromProject', () => {
       now: new Date('2026-03-11T01:00:00.000Z'),
     });
 
+    addProjectMilestone({
+      repoRoot,
+      profile: 'datadog',
+      projectId: 'web-ui',
+      id: 'planning',
+      title: 'Planning',
+      status: 'completed',
+    });
+    addProjectMilestone({
+      repoRoot,
+      profile: 'datadog',
+      projectId: 'web-ui',
+      id: 'execution',
+      title: 'Execution',
+      status: 'in_progress',
+      makeCurrent: true,
+    });
+
     createProjectTaskRecord({
       repoRoot,
       profile: 'datadog',
@@ -75,7 +93,7 @@ describe('readProjectDetailFromProject', () => {
       taskId: 'completed-task',
       status: 'completed',
       title: 'Polish the list page',
-      milestoneId: 'refine-plan',
+      milestoneId: 'planning',
     });
 
     createProjectTaskRecord({
@@ -85,7 +103,7 @@ describe('readProjectDetailFromProject', () => {
       taskId: 'in-progress-task',
       status: 'in_progress',
       title: 'Build the project detail card',
-      milestoneId: 'execute-work',
+      milestoneId: 'execution',
     });
 
     const detail = readProjectDetailFromProject({
@@ -97,16 +115,18 @@ describe('readProjectDetailFromProject', () => {
     expect(detail.project.id).toBe('web-ui');
     expect(detail.project.title).toBe('Project UI');
     expect(detail.project.description).toBe('Ship the project UI');
-    expect(detail.project.plan.milestones).toHaveLength(3);
+    expect(detail.project.plan.milestones).toHaveLength(2);
     expect(detail.project.plan.tasks).toHaveLength(2);
     expect(detail.taskCount).toBe(2);
+    expect(detail.noteCount).toBe(0);
+    expect(detail.attachmentCount).toBe(0);
     expect(detail.artifactCount).toBe(0);
     expect(detail.tasks.map((task) => task.id)).toEqual(['completed-task', 'in-progress-task']);
     expect(detail.tasks[1]).toEqual({
       id: 'in-progress-task',
       status: 'in_progress',
       title: 'Build the project detail card',
-      milestoneId: 'execute-work',
+      milestoneId: 'execution',
     });
   });
 });
@@ -206,6 +226,15 @@ describe('project editing helpers', () => {
       projectId: 'artifact-model',
       title: 'Artifact model',
       description: 'Build the artifact model',
+    });
+
+    addProjectMilestone({
+      repoRoot,
+      profile: 'datadog',
+      projectId: 'artifact-model',
+      id: 'execute-work',
+      title: 'Execute the work',
+      status: 'pending',
     });
 
     const detail = updateProjectRecord({
@@ -365,20 +394,36 @@ describe('project editing helpers', () => {
       repoRoot,
       profile: 'datadog',
       projectId: 'web-ui',
+      id: 'planning',
+      title: 'Planning',
+      status: 'completed',
+    });
+    addProjectMilestone({
+      repoRoot,
+      profile: 'datadog',
+      projectId: 'web-ui',
       id: 'editing',
       title: 'Add editing flows',
       status: 'in_progress',
+    });
+    addProjectMilestone({
+      repoRoot,
+      profile: 'datadog',
+      projectId: 'web-ui',
+      id: 'ship',
+      title: 'Ship it',
+      status: 'pending',
     });
 
     let detail = moveProjectMilestone({
       repoRoot,
       profile: 'datadog',
       projectId: 'web-ui',
-      milestoneId: 'editing',
+      milestoneId: 'ship',
       direction: 'up',
     });
 
-    expect(detail.project.plan.milestones[2]?.id).toBe('editing');
+    expect(detail.project.plan.milestones[1]?.id).toBe('ship');
 
     detail = deleteProjectMilestone({
       repoRoot,
@@ -401,6 +446,15 @@ describe('project editing helpers', () => {
       description: 'Ship the web UI',
     });
 
+    addProjectMilestone({
+      repoRoot,
+      profile: 'datadog',
+      projectId: 'web-ui',
+      id: 'work',
+      title: 'Work',
+      status: 'in_progress',
+    });
+
     createProjectTaskRecord({
       repoRoot,
       profile: 'datadog',
@@ -408,7 +462,7 @@ describe('project editing helpers', () => {
       taskId: 'task-a',
       title: 'Task A',
       status: 'pending',
-      milestoneId: 'refine-plan',
+      milestoneId: 'work',
     });
     createProjectTaskRecord({
       repoRoot,
@@ -417,7 +471,7 @@ describe('project editing helpers', () => {
       taskId: 'task-b',
       title: 'Task B',
       status: 'pending',
-      milestoneId: 'refine-plan',
+      milestoneId: 'work',
     });
     createProjectTaskRecord({
       repoRoot,
@@ -426,7 +480,7 @@ describe('project editing helpers', () => {
       taskId: 'task-c',
       title: 'Task C',
       status: 'pending',
-      milestoneId: 'refine-plan',
+      milestoneId: 'work',
     });
 
     let detail = moveProjectTaskRecord({

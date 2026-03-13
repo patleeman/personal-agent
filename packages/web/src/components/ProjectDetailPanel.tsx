@@ -1,4 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
+import remarkGfm from 'remark-gfm';
 import { api } from '../api';
 import {
   formatProjectStatus,
@@ -6,7 +10,7 @@ import {
   hasMeaningfulBlockers,
   pickCurrentMilestone,
 } from '../contextRailProject';
-import type { ProjectDetail, ProjectMilestone, ProjectTask } from '../types';
+import type { ProjectDetail, ProjectFile, ProjectLinkedConversation, ProjectMilestone, ProjectNote, ProjectTask } from '../types';
 import { timeAgo } from '../utils';
 import { EmptyState, Pill, SectionLabel, ToolbarButton, cx, type PillTone } from './ui';
 
@@ -20,6 +24,8 @@ const PROJECT_STATUSES = ['created', 'in_progress', 'blocked', 'completed', 'can
 const MILESTONE_STATUSES = ['pending', 'in_progress', 'blocked', 'completed', 'cancelled'];
 const MILESTONE_QUICK_STATUSES = ['pending', 'in_progress', 'blocked', 'completed'];
 const TASK_STATUSES = ['pending', 'in_progress', 'blocked', 'completed', 'cancelled'];
+const PROJECT_NOTE_KINDS = ['note', 'decision', 'question', 'meeting', 'checkpoint'];
+const UNASSIGNED_TASK_KEY = '__unassigned__';
 
 interface DetailSectionProps {
   id: string;
@@ -51,6 +57,19 @@ interface TaskFormState {
   title: string;
   status: string;
   milestoneId: string;
+}
+
+interface NoteFormState {
+  title: string;
+  kind: string;
+  body: string;
+}
+
+interface FileUploadState {
+  kind: 'attachment' | 'artifact';
+  title: string;
+  description: string;
+  file: File | null;
 }
 
 function toneForStatus(status: string): PillTone {
@@ -152,8 +171,45 @@ function taskFormFromTask(task: ProjectTask): TaskFormState {
   return {
     title: task.title,
     status: task.status,
-    milestoneId: task.milestoneId,
+    milestoneId: task.milestoneId ?? '',
   };
+}
+
+function emptyNoteForm(): NoteFormState {
+  return {
+    title: '',
+    kind: 'note',
+    body: '',
+  };
+}
+
+function noteFormFromNote(note: ProjectNote): NoteFormState {
+  return {
+    title: note.title,
+    kind: note.kind,
+    body: note.body,
+  };
+}
+
+function emptyFileUploadState(): FileUploadState {
+  return {
+    kind: 'attachment',
+    title: '',
+    description: '',
+    file: null,
+  };
+}
+
+function formatBytes(sizeBytes: number): string {
+  if (sizeBytes < 1024) {
+    return `${sizeBytes} B`;
+  }
+
+  if (sizeBytes < 1024 * 1024) {
+    return `${(sizeBytes / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function splitLines(value: string): string[] {
@@ -176,6 +232,7 @@ export function ProjectDetailPanel({
   onChanged?: () => void;
   onDeleted?: (projectId: string) => void;
 }) {
+  const navigate = useNavigate();
   const record = project.project;
   const blockers = record.blockers.filter((blocker) => blocker.trim().length > 0);
   const recentProgress = record.recentProgress.filter((item) => item.trim().length > 0);
@@ -185,10 +242,13 @@ export function ProjectDetailPanel({
   const tasksByMilestone = new Map<string, ProjectTask[]>();
 
   project.tasks.forEach((task) => {
-    const existing = tasksByMilestone.get(task.milestoneId) ?? [];
+    const milestoneKey = task.milestoneId ?? UNASSIGNED_TASK_KEY;
+    const existing = tasksByMilestone.get(milestoneKey) ?? [];
     existing.push(task);
-    tasksByMilestone.set(task.milestoneId, existing);
+    tasksByMilestone.set(milestoneKey, existing);
   });
+
+  const unassignedTasks = tasksByMilestone.get(UNASSIGNED_TASK_KEY) ?? [];
 
   const [editingProject, setEditingProject] = useState(false);
   const [projectForm, setProjectForm] = useState<ProjectFormState>(() => projectFormFromDetail(project));
@@ -208,6 +268,21 @@ export function ProjectDetailPanel({
   const [taskForm, setTaskForm] = useState<TaskFormState>(() => emptyTaskForm());
   const [taskBusy, setTaskBusy] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
+
+  const [briefEditing, setBriefEditing] = useState(false);
+  const [briefContent, setBriefContent] = useState(project.brief?.content ?? '');
+  const [briefBusy, setBriefBusy] = useState(false);
+  const [briefError, setBriefError] = useState<string | null>(null);
+
+  const [noteEditor, setNoteEditor] = useState<{ mode: 'add' } | { mode: 'edit'; noteId: string } | null>(null);
+  const [noteForm, setNoteForm] = useState<NoteFormState>(() => emptyNoteForm());
+  const [noteBusy, setNoteBusy] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
+
+  const [fileUpload, setFileUpload] = useState<FileUploadState>(() => emptyFileUploadState());
+  const [fileBusy, setFileBusy] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [conversationBusy, setConversationBusy] = useState(false);
 
   const [rawProjectOpen, setRawProjectOpen] = useState(false);
   const [rawProjectLoaded, setRawProjectLoaded] = useState(false);
@@ -231,6 +306,14 @@ export function ProjectDetailPanel({
     setTaskEditor(null);
     setTaskForm(emptyTaskForm());
     setTaskError(null);
+    setBriefEditing(false);
+    setBriefContent(project.brief?.content ?? '');
+    setBriefError(null);
+    setNoteEditor(null);
+    setNoteForm(emptyNoteForm());
+    setNoteError(null);
+    setFileUpload(emptyFileUploadState());
+    setFileError(null);
     setRawProjectLoaded(false);
     setRawProjectError(null);
     setDeleteError(null);
@@ -351,8 +434,8 @@ export function ProjectDetailPanel({
     }
   }
 
-  function openTaskAdd(milestoneId: string) {
-    setTaskEditor({ mode: 'add', anchorMilestoneId: milestoneId });
+  function openTaskAdd(milestoneId = '') {
+    setTaskEditor({ mode: 'add', anchorMilestoneId: milestoneId || undefined });
     setTaskForm({
       ...emptyTaskForm(),
       milestoneId,
@@ -503,7 +586,7 @@ export function ProjectDetailPanel({
   }
 
   async function deleteProject() {
-    if (!window.confirm(`Delete project ${record.id}? This removes PROJECT.yaml and project artifacts.`)) {
+    if (!window.confirm(`Delete project ${record.id}? This removes PROJECT.yaml, notes, attachments, and artifacts.`)) {
       return;
     }
 
@@ -518,6 +601,166 @@ export function ProjectDetailPanel({
     } catch (error) {
       setDeleteError(error instanceof Error ? error.message : String(error));
       setDeleteBusy(false);
+    }
+  }
+
+  async function saveBrief(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBriefBusy(true);
+    setBriefError(null);
+
+    try {
+      await api.saveProjectBrief(record.id, briefContent);
+      setBriefEditing(false);
+      onChanged?.();
+    } catch (error) {
+      setBriefError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBriefBusy(false);
+    }
+  }
+
+  async function regenerateBrief() {
+    setBriefBusy(true);
+    setBriefError(null);
+
+    try {
+      await api.regenerateProjectBrief(record.id);
+      setBriefEditing(false);
+      onChanged?.();
+    } catch (error) {
+      setBriefError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setBriefBusy(false);
+    }
+  }
+
+  function openNoteAdd() {
+    setNoteEditor({ mode: 'add' });
+    setNoteForm(emptyNoteForm());
+    setNoteError(null);
+  }
+
+  function openNoteEdit(note: ProjectNote) {
+    setNoteEditor({ mode: 'edit', noteId: note.id });
+    setNoteForm(noteFormFromNote(note));
+    setNoteError(null);
+  }
+
+  async function saveNote(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!noteEditor) {
+      return;
+    }
+
+    setNoteBusy(true);
+    setNoteError(null);
+
+    try {
+      if (noteEditor.mode === 'add') {
+        await api.createProjectNote(record.id, noteForm);
+      } else {
+        await api.updateProjectNote(record.id, noteEditor.noteId, noteForm);
+      }
+      setNoteEditor(null);
+      setNoteForm(emptyNoteForm());
+      onChanged?.();
+    } catch (error) {
+      setNoteError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setNoteBusy(false);
+    }
+  }
+
+  async function deleteNote(noteId: string) {
+    if (!window.confirm(`Delete note ${noteId}?`)) {
+      return;
+    }
+
+    setNoteBusy(true);
+    setNoteError(null);
+
+    try {
+      await api.deleteProjectNote(record.id, noteId);
+      if (noteEditor?.mode === 'edit' && noteEditor.noteId === noteId) {
+        setNoteEditor(null);
+      }
+      onChanged?.();
+    } catch (error) {
+      setNoteError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setNoteBusy(false);
+    }
+  }
+
+  async function fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error(`Failed to read ${file.name}.`));
+      reader.onload = () => {
+        const result = typeof reader.result === 'string' ? reader.result : '';
+        const commaIndex = result.indexOf(',');
+        resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function saveFile(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!fileUpload.file) {
+      setFileError('Choose a file to upload.');
+      return;
+    }
+
+    setFileBusy(true);
+    setFileError(null);
+
+    try {
+      const data = await fileToBase64(fileUpload.file);
+      await api.uploadProjectFile(record.id, {
+        kind: fileUpload.kind,
+        name: fileUpload.file.name,
+        mimeType: fileUpload.file.type || undefined,
+        title: fileUpload.title.trim() || undefined,
+        description: fileUpload.description.trim() || undefined,
+        data,
+      });
+      setFileUpload(emptyFileUploadState());
+      onChanged?.();
+    } catch (error) {
+      setFileError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setFileBusy(false);
+    }
+  }
+
+  async function deleteFile(file: ProjectFile) {
+    if (!window.confirm(`Delete ${file.originalName}?`)) {
+      return;
+    }
+
+    setFileBusy(true);
+    setFileError(null);
+
+    try {
+      await api.deleteProjectFile(record.id, file.kind, file.id);
+      onChanged?.();
+    } catch (error) {
+      setFileError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setFileBusy(false);
+    }
+  }
+
+  async function startConversationFromProject() {
+    setConversationBusy(true);
+    try {
+      const { id } = await api.createLiveSession(undefined, [record.id]);
+      navigate(`/conversations/${id}`);
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : String(error));
+      setConversationBusy(false);
     }
   }
 
@@ -567,6 +810,7 @@ export function ProjectDetailPanel({
               onChange={(event) => setTaskForm((current) => ({ ...current, milestoneId: event.target.value }))}
               className={SELECT_CLASS}
             >
+              <option value="">No milestone</option>
               {milestones.map((milestone) => (
                 <option key={milestone.id} value={milestone.id}>{milestone.title}</option>
               ))}
@@ -615,6 +859,81 @@ export function ProjectDetailPanel({
     );
   }
 
+  function renderNoteEditorForm() {
+    if (!noteEditor) {
+      return null;
+    }
+
+    return (
+      <form onSubmit={saveNote} className="space-y-5 border border-border-subtle rounded-xl px-5 py-5">
+        <div className="flex items-center justify-between gap-3">
+          <p className="ui-card-meta">{noteEditor.mode === 'add' ? 'New note' : `Edit note ${noteEditor.noteId}`}</p>
+          <button type="button" onClick={() => setNoteEditor(null)} className={ACTION_BUTTON_CLASS}>Cancel</button>
+        </div>
+
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_15rem]">
+          <div className="space-y-1.5">
+            <label className="ui-card-meta">Title</label>
+            <input
+              value={noteForm.title}
+              onChange={(event) => setNoteForm((current) => ({ ...current, title: event.target.value }))}
+              className={INPUT_CLASS}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="ui-card-meta">Kind</label>
+            <select
+              value={noteForm.kind}
+              onChange={(event) => setNoteForm((current) => ({ ...current, kind: event.target.value }))}
+              className={SELECT_CLASS}
+            >
+              {PROJECT_NOTE_KINDS.map((kind) => (
+                <option key={kind} value={kind}>{formatProjectStatus(kind)}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="ui-card-meta">Body</label>
+          <textarea
+            value={noteForm.body}
+            onChange={(event) => setNoteForm((current) => ({ ...current, body: event.target.value }))}
+            className={TEXTAREA_CLASS}
+          />
+        </div>
+
+        {noteError && <p className="text-[12px] text-danger">{noteError}</p>}
+
+        <div className="flex items-center gap-3">
+          <ToolbarButton type="submit" disabled={noteBusy}>{noteBusy ? 'Saving…' : 'Save note'}</ToolbarButton>
+        </div>
+      </form>
+    );
+  }
+
+  function renderFileCard(file: ProjectFile) {
+    return (
+      <article key={file.id} className="py-4 flex items-start justify-between gap-4">
+        <div className="min-w-0 space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <a href={file.downloadPath} className="text-[14px] font-medium text-accent hover:text-accent/75 transition-colors">
+              {file.title}
+            </a>
+            <span className="ui-card-meta">{file.originalName}</span>
+            <span className="ui-card-meta">{formatBytes(file.sizeBytes)}</span>
+          </div>
+          {file.description && <p className="ui-card-meta break-words">{file.description}</p>}
+          <p className="ui-card-meta">updated {timeAgo(file.updatedAt)}</p>
+        </div>
+        <button type="button" onClick={() => { void deleteFile(file); }} className="text-[12px] text-danger hover:text-danger/75 transition-colors disabled:opacity-40" disabled={fileBusy}>
+          Delete
+        </button>
+      </article>
+    );
+  }
+
   return (
     <div className="min-w-0 space-y-10 px-4 py-3">
       <section className="space-y-5">
@@ -624,19 +943,29 @@ export function ProjectDetailPanel({
         </div>
 
         <div className="space-y-3">
-          <h2 className="max-w-4xl text-[26px] leading-[1.2] font-semibold tracking-tight text-primary">
-            {record.title}
-          </h2>
-          <p className="max-w-4xl text-[15px] leading-relaxed text-secondary">
-            {record.description}
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="space-y-3 min-w-0">
+              <h2 className="max-w-4xl text-[26px] leading-[1.2] font-semibold tracking-tight text-primary">
+                {record.title}
+              </h2>
+              <p className="max-w-4xl text-[15px] leading-relaxed text-secondary">
+                {record.description}
+              </p>
+            </div>
+            <ToolbarButton onClick={() => { void startConversationFromProject(); }} disabled={conversationBusy || deleteBusy}>
+              {conversationBusy ? 'Starting…' : 'Start conversation'}
+            </ToolbarButton>
+          </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Pill tone={hasMeaningfulBlockers(record.blockers) ? 'warning' : 'teal'}>
               {formatProjectStatus(record.status)}
             </Pill>
             <span className="ui-card-meta">{milestones.length} {milestones.length === 1 ? 'milestone' : 'milestones'}</span>
             <span className="ui-card-meta">{project.taskCount} {project.taskCount === 1 ? 'task' : 'tasks'}</span>
+            <span className="ui-card-meta">{project.noteCount} {project.noteCount === 1 ? 'note' : 'notes'}</span>
+            <span className="ui-card-meta">{project.attachmentCount} attachments</span>
             <span className="ui-card-meta">{project.artifactCount} artifacts</span>
+            <span className="ui-card-meta">{project.linkedConversations.length} {project.linkedConversations.length === 1 ? 'conversation' : 'conversations'}</span>
           </div>
           {deleteError && <p className="text-[12px] text-danger">{deleteError}</p>}
         </div>
@@ -840,9 +1169,14 @@ export function ProjectDetailPanel({
         title="Milestones"
         meta={`${done}/${total} complete · ${pct}%`}
         actions={(
-          <button type="button" onClick={openMilestoneAdd} className={ACTION_BUTTON_CLASS} disabled={milestoneBusy}>
-            + Add milestone
-          </button>
+          <>
+            <button type="button" onClick={() => openTaskAdd()} className={ACTION_BUTTON_CLASS} disabled={taskBusy}>
+              + Add task
+            </button>
+            <button type="button" onClick={openMilestoneAdd} className={ACTION_BUTTON_CLASS} disabled={milestoneBusy}>
+              + Add milestone
+            </button>
+          </>
         )}
       >
         <div className="max-w-5xl space-y-5">
@@ -1060,8 +1394,270 @@ export function ProjectDetailPanel({
               );
             })}
           </div>
+
+          {(unassignedTasks.length > 0 || (taskEditor?.mode === 'add' && !taskEditor.anchorMilestoneId)) && (
+            <div className="space-y-4 border-t border-border-subtle pt-4" id="project-unassigned-tasks">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="ui-card-meta">Unassigned tasks</p>
+                  <p className="ui-card-meta mt-1">Tasks that are not tied to a milestone yet.</p>
+                </div>
+                <button type="button" onClick={() => openTaskAdd()} className={ACTION_BUTTON_CLASS} disabled={taskBusy}>
+                  + Add task
+                </button>
+              </div>
+
+              {taskEditor?.mode === 'add' && !taskEditor.anchorMilestoneId && renderTaskEditorForm()}
+
+              {unassignedTasks.length > 0 ? (
+                <div className="space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
+                  {unassignedTasks.map((task, taskIndex) => renderTaskCard(task, taskIndex, unassignedTasks.length))}
+                </div>
+              ) : null}
+            </div>
+          )}
+
           {milestoneError && !milestoneEditor && <p className="text-[12px] text-danger">{milestoneError}</p>}
           {taskError && !taskEditor && <p className="text-[12px] text-danger max-w-4xl">{taskError}</p>}
+        </div>
+      </DetailSection>
+
+      <DetailSection
+        id="project-brief"
+        title="Project brief"
+        meta={project.brief ? `updated ${timeAgo(project.brief.updatedAt)}` : 'No brief yet'}
+        actions={(
+          <>
+            <button type="button" onClick={() => { void regenerateBrief(); }} className={ACTION_BUTTON_CLASS} disabled={briefBusy}>
+              {briefBusy ? 'Regenerating…' : 'Regenerate brief'}
+            </button>
+            <button type="button" onClick={() => setBriefEditing((value) => !value)} className={ACTION_BUTTON_CLASS} disabled={briefBusy}>
+              {briefEditing ? 'Cancel' : (project.brief ? 'Edit brief' : 'Write brief')}
+            </button>
+          </>
+        )}
+      >
+        <div className="max-w-5xl space-y-4">
+          {briefEditing ? (
+            <form onSubmit={saveBrief} className="space-y-4 border border-border-subtle rounded-xl px-5 py-5">
+              <textarea
+                value={briefContent}
+                onChange={(event) => setBriefContent(event.target.value)}
+                className={`${INPUT_CLASS} min-h-[18rem] resize-y font-mono text-[13px] leading-[1.7]`}
+                spellCheck={false}
+              />
+              {briefError && <p className="text-[12px] text-danger">{briefError}</p>}
+              <div className="flex items-center gap-3">
+                <ToolbarButton type="submit" disabled={briefBusy}>{briefBusy ? 'Saving…' : 'Save brief'}</ToolbarButton>
+              </div>
+            </form>
+          ) : project.brief ? (
+            <div className="ui-markdown max-w-none border-t border-border-subtle pt-4">
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{project.brief.content}</ReactMarkdown>
+            </div>
+          ) : (
+            <EmptyState
+              title="No project brief yet."
+              body="Write one manually or regenerate it from the current project state, notes, files, and linked conversations."
+              className="border border-dashed border-border-subtle rounded-xl max-w-3xl"
+            />
+          )}
+        </div>
+      </DetailSection>
+
+      <DetailSection
+        id="project-conversations"
+        title="Linked conversations"
+        meta={`${project.linkedConversations.length} linked`}
+      >
+        <div className="max-w-5xl space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
+          {project.linkedConversations.length === 0 ? (
+            <div className="py-4">
+              <EmptyState
+                title="No linked conversations yet."
+                body="Start a conversation from this project or reference the project inside an existing conversation to make it the cross-conversation through line."
+                className="border border-dashed border-border-subtle rounded-xl max-w-3xl"
+              />
+            </div>
+          ) : project.linkedConversations.map((conversation: ProjectLinkedConversation) => (
+            <article key={conversation.conversationId} className="py-4 space-y-2">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 space-y-1.5">
+                  <a href={`/conversations/${encodeURIComponent(conversation.conversationId)}`} className="text-[15px] font-medium text-accent hover:text-accent/75 transition-colors">
+                    {conversation.title}
+                  </a>
+                  <div className="flex flex-wrap items-center gap-2 text-[12px] text-dim">
+                    <span className="font-mono">{conversation.conversationId}</span>
+                    {conversation.lastActivityAt && <span>updated {timeAgo(conversation.lastActivityAt)}</span>}
+                    {conversation.cwd && <span className="font-mono break-all">{conversation.cwd}</span>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {conversation.isRunning && <Pill tone="accent">live</Pill>}
+                  {conversation.needsAttention && <Pill tone="warning">attention</Pill>}
+                </div>
+              </div>
+              {conversation.snippet && <p className="text-[13px] leading-relaxed text-secondary">{conversation.snippet}</p>}
+            </article>
+          ))}
+        </div>
+      </DetailSection>
+
+      <DetailSection
+        id="project-notes"
+        title="Notes"
+        meta={`${project.noteCount} notes`}
+        actions={(
+          <button type="button" onClick={openNoteAdd} className={ACTION_BUTTON_CLASS} disabled={noteBusy}>
+            + Add note
+          </button>
+        )}
+      >
+        <div className="max-w-5xl space-y-5">
+          {noteEditor?.mode === 'add' && renderNoteEditorForm()}
+
+          {project.notes.length === 0 && !noteEditor ? (
+            <EmptyState
+              title="No notes yet."
+              body="Append notes, decisions, questions, or checkpoints so the project keeps useful context between conversations."
+              className="border border-dashed border-border-subtle rounded-xl max-w-3xl"
+            />
+          ) : (
+            <div className="space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
+              {project.notes.map((note) => {
+                const isEditing = noteEditor?.mode === 'edit' && noteEditor.noteId === note.id;
+                if (isEditing) {
+                  return (
+                    <div key={note.id} id={`project-note-${note.id}`} className="py-4 scroll-mt-6">
+                      {renderNoteEditorForm()}
+                    </div>
+                  );
+                }
+
+                return (
+                  <article key={note.id} id={`project-note-${note.id}`} className="py-4 space-y-3 scroll-mt-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-[15px] font-medium text-primary">{note.title}</p>
+                          <Pill tone="muted">{formatProjectStatus(note.kind)}</Pill>
+                          <span className="ui-card-meta">updated {timeAgo(note.updatedAt)}</span>
+                        </div>
+                        {note.body.length > 0 && (
+                          <div className="ui-markdown max-w-none text-[14px]">
+                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{note.body}</ReactMarkdown>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <button type="button" onClick={() => openNoteEdit(note)} className={ACTION_BUTTON_CLASS}>Edit</button>
+                        <button type="button" onClick={() => { void deleteNote(note.id); }} className="text-[12px] text-danger hover:text-danger/75 transition-colors disabled:opacity-40" disabled={noteBusy}>Delete</button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+          {noteError && !noteEditor && <p className="text-[12px] text-danger">{noteError}</p>}
+        </div>
+      </DetailSection>
+
+      <DetailSection
+        id="project-files"
+        title="Files"
+        meta={`${project.attachmentCount} attachments · ${project.artifactCount} artifacts`}
+      >
+        <div className="max-w-5xl space-y-6">
+          <form onSubmit={saveFile} className="space-y-5 border border-border-subtle rounded-xl px-5 py-5">
+            <div className="grid gap-5 xl:grid-cols-[12rem_minmax(0,1fr)]">
+              <div className="space-y-1.5">
+                <label className="ui-card-meta">Kind</label>
+                <select
+                  value={fileUpload.kind}
+                  onChange={(event) => setFileUpload((current) => ({ ...current, kind: event.target.value as 'attachment' | 'artifact' }))}
+                  className={SELECT_CLASS}
+                >
+                  <option value="attachment">Attachment</option>
+                  <option value="artifact">Artifact</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="ui-card-meta">File</label>
+                <input
+                  type="file"
+                  onChange={(event) => setFileUpload((current) => ({ ...current, file: event.target.files?.[0] ?? null, title: current.title || event.target.files?.[0]?.name || '' }))}
+                  className={INPUT_CLASS}
+                />
+              </div>
+            </div>
+            <div className="grid gap-5 xl:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="ui-card-meta">Title</label>
+                <input
+                  value={fileUpload.title}
+                  onChange={(event) => setFileUpload((current) => ({ ...current, title: event.target.value }))}
+                  className={INPUT_CLASS}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="ui-card-meta">Description</label>
+                <input
+                  value={fileUpload.description}
+                  onChange={(event) => setFileUpload((current) => ({ ...current, description: event.target.value }))}
+                  className={INPUT_CLASS}
+                />
+              </div>
+            </div>
+            {fileError && <p className="text-[12px] text-danger">{fileError}</p>}
+            <div className="flex items-center gap-3">
+              <ToolbarButton type="submit" disabled={fileBusy}>{fileBusy ? 'Uploading…' : 'Add file'}</ToolbarButton>
+            </div>
+          </form>
+
+          <div className="space-y-5">
+            <div className="space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
+              <div className="py-3"><p className="ui-card-meta">Attachments</p></div>
+              {project.attachments.length > 0 ? project.attachments.map((file) => renderFileCard(file)) : (
+                <div className="py-4"><p className="ui-card-meta">No attachments yet.</p></div>
+              )}
+            </div>
+            <div className="space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
+              <div className="py-3"><p className="ui-card-meta">Artifacts</p></div>
+              {project.artifacts.length > 0 ? project.artifacts.map((file) => renderFileCard(file)) : (
+                <div className="py-4"><p className="ui-card-meta">No project artifacts yet.</p></div>
+              )}
+            </div>
+          </div>
+        </div>
+      </DetailSection>
+
+      <DetailSection
+        id="project-timeline"
+        title="Timeline"
+        meta={`${project.timeline.length} events`}
+      >
+        <div className="max-w-5xl space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
+          {project.timeline.length === 0 ? (
+            <div className="py-4"><p className="ui-card-meta">No timeline entries yet.</p></div>
+          ) : project.timeline.map((entry) => (
+            <article key={entry.id} className="py-4 flex items-start justify-between gap-4">
+              <div className="min-w-0 space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  {entry.href ? (
+                    <a href={entry.href} className="text-[14px] font-medium text-accent hover:text-accent/75 transition-colors">
+                      {entry.title}
+                    </a>
+                  ) : (
+                    <p className="text-[14px] font-medium text-primary">{entry.title}</p>
+                  )}
+                  <Pill tone="muted">{formatProjectStatus(entry.kind)}</Pill>
+                </div>
+                {entry.description && <p className="text-[13px] leading-relaxed text-secondary">{entry.description}</p>}
+              </div>
+              <span className="ui-card-meta shrink-0">{timeAgo(entry.createdAt)}</span>
+            </article>
+          ))}
         </div>
       </DetailSection>
     </div>

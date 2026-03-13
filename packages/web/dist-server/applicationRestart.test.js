@@ -47,7 +47,7 @@ describe('requestApplicationRestart', () => {
             port: 3741,
             logFile,
         });
-        const result = requestApplicationRestart({ repoRoot });
+        const result = requestApplicationRestart({ repoRoot, profile: 'datadog' });
         const lockFile = join(stateRoot, 'web', 'app-restart.lock.json');
         expect(result.accepted).toBe(true);
         expect(result.logFile).toBe(logFile);
@@ -57,6 +57,9 @@ describe('requestApplicationRestart', () => {
             stdio: ['ignore', expect.any(Number), expect.any(Number)],
             env: expect.objectContaining({
                 PERSONAL_AGENT_REPO_ROOT: repoRoot,
+                PERSONAL_AGENT_RESTART_NOTIFY_INBOX: '1',
+                PERSONAL_AGENT_RESTART_NOTIFY_PROFILE: 'datadog',
+                PERSONAL_AGENT_RESTART_REQUESTED_AT: result.requestedAt,
             }),
         });
         expect(unref).toHaveBeenCalledTimes(1);
@@ -64,6 +67,7 @@ describe('requestApplicationRestart', () => {
         expect(JSON.parse(readFileSync(lockFile, 'utf-8'))).toMatchObject({
             pid: 4242,
             repoRoot,
+            profile: 'datadog',
             port: 3741,
             command: [process.execPath, cliEntryFile, 'restart', '--rebuild'],
         });
@@ -79,7 +83,7 @@ describe('requestApplicationRestart', () => {
             installed: false,
             port: 3741,
         });
-        expect(() => requestApplicationRestart({ repoRoot })).toThrow('Managed web UI service is not installed.');
+        expect(() => requestApplicationRestart({ repoRoot, profile: 'datadog' })).toThrow('Managed web UI service is not installed.');
         expect(spawnMock).not.toHaveBeenCalled();
     });
     it('prevents concurrent restart requests while a lock pid is still running', () => {
@@ -96,7 +100,7 @@ describe('requestApplicationRestart', () => {
             installed: true,
             port: 3741,
         });
-        expect(() => requestApplicationRestart({ repoRoot })).toThrow('Application restart already in progress');
+        expect(() => requestApplicationRestart({ repoRoot, profile: 'datadog' })).toThrow('Application restart already in progress');
         expect(spawnMock).not.toHaveBeenCalled();
     });
 });

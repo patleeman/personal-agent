@@ -233,6 +233,15 @@ function extractAssistantText(content: unknown): string {
     .join('\n');
 }
 
+function readCompletionError(response: unknown): string | null {
+  if (!isRecord(response) || response.stopReason !== 'error') {
+    return null;
+  }
+
+  const errorMessage = readNonEmptyString(response.errorMessage);
+  return errorMessage || 'Conversation title generation failed.';
+}
+
 export function normalizeGeneratedConversationTitle(title: string | null | undefined, maxLength = DEFAULT_MAX_TITLE_LENGTH): string | null {
   if (typeof title !== 'string') {
     return null;
@@ -315,11 +324,15 @@ export async function generateConversationTitle(options: {
     {
       apiKey: await options.modelRegistry.getApiKey(model),
       reasoning: settings.reasoning,
-      temperature: 0.2,
       maxTokens: 32,
       cacheRetention: 'none',
     },
   );
+
+  const errorMessage = readCompletionError(response);
+  if (errorMessage) {
+    throw new Error(errorMessage);
+  }
 
   return normalizeGeneratedConversationTitle(extractAssistantText(response.content), settings.maxTitleLength);
 }

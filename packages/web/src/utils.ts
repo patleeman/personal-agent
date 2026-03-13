@@ -21,6 +21,8 @@ const KIND_META: Record<string, { label: string; color: string; dot: string }> =
   'deferred-resume': { label: 'resume',    color: 'text-teal bg-teal/10',        dot: 'bg-teal' },
   'subagent-run':    { label: 'subagent',  color: 'text-steel bg-steel/10',      dot: 'bg-steel' },
   'background-run':  { label: 'run',       color: 'text-steel bg-steel/10',      dot: 'bg-steel' },
+  'deployment':      { label: 'deploy',    color: 'text-success bg-success/10',  dot: 'bg-success' },
+  'service':         { label: 'service',   color: 'text-warning bg-warning/10',  dot: 'bg-warning' },
   'verification':    { label: 'verify',    color: 'text-success bg-success/10',  dot: 'bg-success' },
   'follow-up':       { label: 'follow-up', color: 'text-warning bg-warning/10',  dot: 'bg-warning' },
   'note':            { label: 'note',      color: 'text-secondary bg-surface',   dot: 'bg-dim' },

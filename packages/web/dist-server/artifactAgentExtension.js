@@ -53,7 +53,7 @@ export function createArtifactAgentExtension(options) {
             description: 'Create, update, inspect, and delete rendered conversation artifacts for the web UI.',
             promptSnippet: 'Create or update rendered HTML, Mermaid, and LaTeX artifacts for the artifact panel.',
             promptGuidelines: [
-                'Use this tool when the user asks for a rendered artifact in the web UI rather than a plain chat response.',
+                'Use this tool when the user asks for a rendered artifact in the web UI, or when rendering would explain an idea more clearly than plain chat (for example, Mermaid diagrams or HTML mockups).',
                 'Use kind=html for self-contained interactive artifacts, kind=mermaid for diagrams, and kind=latex for raw LaTeX source, including full document-style reports when appropriate.',
                 'Reuse the same artifactId when iterating on an existing artifact so the chat stub and artifact panel stay linked.',
                 'Keep HTML self-contained; do not rely on external network resources unless the user explicitly asks for that tradeoff.',

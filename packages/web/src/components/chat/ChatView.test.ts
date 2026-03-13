@@ -142,6 +142,58 @@ describe('chat view streaming disclosure', () => {
     expect(html).not.toContain('location=&quot;/repo/profiles/shared/agent/skills/workflow-checkpoint/SKILL.md&quot;');
   });
 
+  it('renders compaction summaries as system events instead of assistant bubbles', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'summary',
+        ts: '2026-03-11T18:00:00.000Z',
+        kind: 'compaction',
+        title: 'Compaction summary',
+        text: '## Goal\nKeep the compacted context visible.',
+      }],
+    }));
+
+    expect(html).toContain('data-summary-kind="compaction"');
+    expect(html).toContain('Context compacted');
+    expect(html).toContain('Older turns were summarized to keep the active context window focused.');
+    expect(html).not.toContain('ui-chat-avatar-mark">pa<');
+    expect(html).not.toContain('ui-message-card-assistant');
+  });
+
+  it('renders a resume action for the tail internal-work cluster when recovery is available', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'tool_use',
+        ts: '2026-03-11T18:00:00.000Z',
+        tool: 'bash',
+        input: { command: 'sleep 1' },
+        output: 'timed out',
+        status: 'error',
+      }],
+      onResumeConversation: () => undefined,
+      resumeConversationTitle: 'Resume the interrupted turn.',
+    }));
+
+    expect(html).toContain('resume');
+    expect(html).toContain('Internal work');
+  });
+
+  it('renders a resume action for a tail error trace when recovery is available', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'error',
+        ts: '2026-03-11T18:00:00.000Z',
+        message: 'The model returned an error before completing its response.',
+      }],
+      onResumeConversation: () => undefined,
+      resumeConversationTitle: 'Ask the agent to continue from the last error.',
+    }));
+
+    expect(html).toContain('resume');
+    expect(html).toContain('Internal work');
+    expect(html).toContain('ui-pill-danger');
+  });
+
   it('preserves inline code content without stringifying React nodes', () => {
     const html = renderToStaticMarkup(createElement(Fragment, null, renderText('Use `artifact` in `packages/web/src/pages/ConversationPage.tsx` before pinging @web-ui.')));
 

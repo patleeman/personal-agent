@@ -21,7 +21,7 @@ export interface ProjectTaskDocument {
   id: string;
   status: ProjectTaskStatus | FlexibleString;
   title: string;
-  milestoneId: string;
+  milestoneId?: string;
 }
 
 export interface ProjectPlanDocument {
@@ -50,6 +50,8 @@ export type ProjectActivityKind =
   | 'deferred-resume'
   | 'subagent-run'
   | 'background-run'
+  | 'deployment'
+  | 'service'
   | 'verification'
   | 'follow-up'
   | 'note';
@@ -218,7 +220,7 @@ function validateProjectPlan(
 
     seenTaskIds.add(task.id);
 
-    if (!seenMilestoneIds.has(task.milestoneId)) {
+    if (task.milestoneId && !seenMilestoneIds.has(task.milestoneId)) {
       throw new Error(`Task ${task.id} references missing milestone ${task.milestoneId} in ${label}.`);
     }
   }
@@ -242,7 +244,7 @@ function parseProjectTaskValue(value: unknown, label: string): ProjectTaskDocume
     id: readRequiredYamlString(object, 'id', label),
     status: readRequiredYamlString(object, 'status', label),
     title: readRequiredYamlString(object, 'title', label),
-    milestoneId: readRequiredYamlString(object, 'milestoneId', label),
+    milestoneId: readOptionalYamlString(object, 'milestoneId', label),
   };
 }
 
@@ -260,7 +262,9 @@ function formatProjectPlan(plan: ProjectPlanDocument): Record<string, unknown> {
     id: assertNonEmptyText(task.id, `Project task[${index}] id`),
     status: assertNonEmptyText(task.status, `Project task[${index}] status`),
     title: assertNonEmptyText(task.title, `Project task[${index}] title`),
-    milestoneId: assertNonEmptyText(task.milestoneId, `Project task[${index}] milestoneId`),
+    ...(normalizeOptionalText(task.milestoneId, `Project task[${index}] milestoneId`)
+      ? { milestoneId: normalizeOptionalText(task.milestoneId, `Project task[${index}] milestoneId`) }
+      : {}),
   }));
 
   validateProjectPlan(
@@ -274,7 +278,7 @@ function formatProjectPlan(plan: ProjectPlanDocument): Record<string, unknown> {
       id: task.id as string,
       status: task.status as ProjectTaskStatus,
       title: task.title as string,
-      milestoneId: task.milestoneId as string,
+      milestoneId: task.milestoneId as string | undefined,
     })),
     currentMilestoneId,
     'project plan',
@@ -308,18 +312,13 @@ export function createInitialProject(input: {
     title,
     description,
     ...(repoRoot ? { repoRoot } : {}),
-    summary: 'Project created. Refine the plan before executing the work.',
+    summary: 'Project created. Capture the brief, notes, and next steps as the work takes shape.',
     status: 'created',
     blockers: [],
-    currentFocus: 'Refine the project plan.',
+    currentFocus: 'Capture the goal and first next step.',
     recentProgress: [],
     plan: {
-      currentMilestoneId: 'refine-plan',
-      milestones: [
-        { id: 'refine-plan', title: 'Refine the plan', status: 'in_progress' },
-        { id: 'execute-work', title: 'Execute the work', status: 'pending' },
-        { id: 'verify-result', title: 'Verify the result', status: 'pending' },
-      ],
+      milestones: [],
       tasks: [],
     },
   };
@@ -655,13 +654,15 @@ export function createProjectTask(input: {
   id: string;
   status: ProjectTaskDocument['status'];
   title: string;
-  milestoneId: string;
+  milestoneId?: string;
 }): ProjectTaskDocument {
+  const milestoneId = normalizeOptionalText(input.milestoneId, 'Task milestoneId');
+
   return {
     id: assertNonEmptyText(input.id, 'Task id'),
     status: assertNonEmptyText(input.status, 'Task status'),
     title: assertNonEmptyText(input.title, 'Task title'),
-    milestoneId: assertNonEmptyText(input.milestoneId, 'Task milestoneId'),
+    ...(milestoneId ? { milestoneId } : {}),
   };
 }
 
@@ -670,7 +671,9 @@ export function formatProjectTask(document: ProjectTaskDocument): string {
     id: assertNonEmptyText(document.id, 'Task id'),
     status: assertNonEmptyText(document.status, 'Task status'),
     title: assertNonEmptyText(document.title, 'Task title'),
-    milestoneId: assertNonEmptyText(document.milestoneId, 'Task milestoneId'),
+    ...(normalizeOptionalText(document.milestoneId, 'Task milestoneId')
+      ? { milestoneId: normalizeOptionalText(document.milestoneId, 'Task milestoneId') }
+      : {}),
   };
 
   return stringifyYamlDocument(output);
@@ -683,7 +686,7 @@ export function parseProjectTask(yaml: string): ProjectTaskDocument {
     id: readRequiredYamlString(object, 'id', 'Task'),
     status: readRequiredYamlString(object, 'status', 'Task'),
     title: readRequiredYamlString(object, 'title', 'Task'),
-    milestoneId: readRequiredYamlString(object, 'milestoneId', 'Task'),
+    milestoneId: readOptionalYamlString(object, 'milestoneId', 'Task'),
   };
 }
 

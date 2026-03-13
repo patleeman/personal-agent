@@ -58,6 +58,10 @@ function ensureApplicationRestartNotRunning(lockFile) {
 }
 export function requestApplicationRestart(input) {
     const repoRoot = resolve(input.repoRoot);
+    const profile = input.profile.trim();
+    if (profile.length === 0) {
+        throw new Error('Application restart requires a profile.');
+    }
     const webUiStatus = getWebUiServiceStatus({ repoRoot });
     if (!webUiStatus.installed) {
         throw new Error('Managed web UI service is not installed. Install it from the Web UI page before restarting the application from inside the UI.');
@@ -73,7 +77,7 @@ export function requestApplicationRestart(input) {
     mkdirSync(dirname(logFile), { recursive: true });
     const requestedAt = new Date().toISOString();
     const command = [process.execPath, cliEntryFile, 'restart', '--rebuild'];
-    writeFileSync(lockFile, `${JSON.stringify({ requestedAt, repoRoot, port: webUiStatus.port, command }, null, 2)}\n`, {
+    writeFileSync(lockFile, `${JSON.stringify({ requestedAt, repoRoot, profile, port: webUiStatus.port, command }, null, 2)}\n`, {
         flag: 'wx',
     });
     let logFd;
@@ -86,6 +90,9 @@ export function requestApplicationRestart(input) {
             env: {
                 ...process.env,
                 PERSONAL_AGENT_REPO_ROOT: repoRoot,
+                PERSONAL_AGENT_RESTART_NOTIFY_INBOX: '1',
+                PERSONAL_AGENT_RESTART_NOTIFY_PROFILE: profile,
+                PERSONAL_AGENT_RESTART_REQUESTED_AT: requestedAt,
             },
         });
         if (!Number.isInteger(child.pid) || child.pid <= 0) {
@@ -96,6 +103,7 @@ export function requestApplicationRestart(input) {
             pid: child.pid,
             requestedAt,
             repoRoot,
+            profile,
             port: webUiStatus.port,
             command,
         }, null, 2)}\n`);

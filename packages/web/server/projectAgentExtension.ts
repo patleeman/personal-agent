@@ -3,56 +3,21 @@ import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import {
   addConversationProjectLink,
   getConversationProjectLink,
-  listProjectIds,
+  projectExists,
   removeConversationProjectLink,
-  resolveProjectPaths,
 } from '@personal-agent/core';
 import { invalidateAppTopics } from './appEvents.js';
-import {
-  addProjectMilestone,
-  createProjectRecord,
-  createProjectTaskRecord,
-  readProjectDetailFromProject,
-  updateProjectMilestone,
-  updateProjectRecord,
-  updateProjectTaskRecord,
-  type ProjectDetail,
-} from './projects.js';
 
 const PROJECT_ACTION_VALUES = [
-  'list',
-  'get',
-  'create',
   'reference',
   'unreference',
-  'update',
-  'add_milestone',
-  'update_milestone',
-  'add_task',
-  'update_task',
 ] as const;
 
 type ProjectAction = (typeof PROJECT_ACTION_VALUES)[number];
 
 const ProjectToolParams = Type.Object({
   action: Type.Union(PROJECT_ACTION_VALUES.map((value) => Type.Literal(value))),
-  projectId: Type.Optional(Type.String({ description: 'Project id, for example web-ui. Required for get/reference/unreference/update actions.' })),
-  title: Type.Optional(Type.String({ description: 'Project, milestone, or task title depending on the action.' })),
-  description: Type.Optional(Type.String({ description: 'Project description for create/update actions.' })),
-  repoRoot: Type.Optional(Type.String({ description: 'Project repo root. Used as the conversation cwd when this project is the sole referenced project with a repo root and no explicit cwd is set.' })),
-  summary: Type.Optional(Type.String({ description: 'Project or milestone summary text.' })),
-  status: Type.Optional(Type.String({ description: 'Project status for create/update actions.' })),
-  currentFocus: Type.Optional(Type.String({ description: 'Current focus for the project.' })),
-  blockers: Type.Optional(Type.Array(Type.String({ description: 'Project blocker.' }))),
-  recentProgress: Type.Optional(Type.Array(Type.String({ description: 'Recent progress item.' }))),
-  currentMilestoneId: Type.Optional(Type.String({ description: 'Current milestone id for the project.' })),
-  referenceInConversation: Type.Optional(Type.Boolean({ description: 'Whether to reference the project in the current conversation. Defaults to true for create.' })),
-  milestoneId: Type.Optional(Type.String({ description: 'Milestone id for update_milestone actions.' })),
-  milestoneStatus: Type.Optional(Type.String({ description: 'Milestone status.' })),
-  makeCurrent: Type.Optional(Type.Boolean({ description: 'Set the milestone as the current milestone.' })),
-  taskId: Type.Optional(Type.String({ description: 'Task id for update_task actions.' })),
-  taskStatus: Type.Optional(Type.String({ description: 'Task status.' })),
-  taskMilestoneId: Type.Optional(Type.String({ description: 'Milestone id to associate with the task. Defaults to the current milestone when omitted on add.' })),
+  projectId: Type.String({ description: 'Project id, for example web-ui.' }),
 });
 
 function readRequiredString(value: string | undefined, label: string): string {
@@ -64,134 +29,10 @@ function readRequiredString(value: string | undefined, label: string): string {
   return normalized;
 }
 
-function hasProjectMutation(params: {
-  title?: string;
-  description?: string;
-  repoRoot?: string;
-  summary?: string;
-  status?: string;
-  currentFocus?: string;
-  blockers?: string[];
-  recentProgress?: string[];
-  currentMilestoneId?: string;
-}): boolean {
-  return params.title !== undefined
-    || params.description !== undefined
-    || params.repoRoot !== undefined
-    || params.summary !== undefined
-    || params.status !== undefined
-    || params.currentFocus !== undefined
-    || params.blockers !== undefined
-    || params.recentProgress !== undefined
-    || params.currentMilestoneId !== undefined;
-}
-
-function hasMilestoneMutation(params: {
-  title?: string;
-  milestoneStatus?: string;
-  summary?: string;
-  makeCurrent?: boolean;
-}): boolean {
-  return params.title !== undefined
-    || params.milestoneStatus !== undefined
-    || params.summary !== undefined
-    || params.makeCurrent !== undefined;
-}
-
-function hasTaskMutation(params: {
-  title?: string;
-  taskStatus?: string;
-  taskMilestoneId?: string;
-}): boolean {
-  return params.title !== undefined
-    || params.taskStatus !== undefined
-    || params.taskMilestoneId !== undefined;
-}
-
 function formatConversationReferences(relatedProjectIds: string[]): string {
   return relatedProjectIds.length > 0
     ? relatedProjectIds.map((projectId) => `@${projectId}`).join(', ')
     : 'none';
-}
-
-function formatProjectList(details: ProjectDetail[], relatedProjectIds: string[]): string {
-  if (details.length === 0) {
-    return 'No projects found for the active profile.';
-  }
-
-  const lines = [
-    `Referenced in this conversation: ${formatConversationReferences(relatedProjectIds)}`,
-    '',
-    'Projects:',
-  ];
-
-  for (const detail of details) {
-    const description = detail.project.description.trim();
-    const suffix = description.length > 0 ? ` — ${description}` : '';
-    lines.push(`- ${detail.project.id} [${detail.project.status}] ${detail.project.title}${suffix}`);
-  }
-
-  return lines.join('\n');
-}
-
-function formatProjectDetail(detail: ProjectDetail, relatedProjectIds: string[]): string {
-  const currentMilestoneId = detail.project.plan.currentMilestoneId;
-  const currentMilestone = currentMilestoneId
-    ? detail.project.plan.milestones.find((milestone) => milestone.id === currentMilestoneId)
-    : undefined;
-
-  const lines = [
-    `Project ${detail.project.id}`,
-    `Title: ${detail.project.title}`,
-    `Referenced in this conversation: ${formatConversationReferences(relatedProjectIds)}`,
-    `Status: ${detail.project.status}`,
-    `Description: ${detail.project.description}`,
-    `Summary: ${detail.project.summary}`,
-  ];
-
-  if (detail.project.repoRoot) {
-    lines.push(`Repo root: ${detail.project.repoRoot}`);
-  }
-
-  if (detail.project.currentFocus) {
-    lines.push(`Current focus: ${detail.project.currentFocus}`);
-  }
-
-  if (currentMilestone) {
-    lines.push(`Current milestone: ${currentMilestone.id} — ${currentMilestone.title} [${currentMilestone.status}]`);
-  }
-
-  if (detail.project.blockers.length > 0) {
-    lines.push('Blockers:');
-    for (const blocker of detail.project.blockers) {
-      lines.push(`- ${blocker}`);
-    }
-  }
-
-  if (detail.project.recentProgress.length > 0) {
-    lines.push('Recent progress:');
-    for (const item of detail.project.recentProgress) {
-      lines.push(`- ${item}`);
-    }
-  }
-
-  lines.push('Milestones:');
-  for (const milestone of detail.project.plan.milestones) {
-    const suffix = milestone.summary ? ` — ${milestone.summary}` : '';
-    lines.push(`- ${milestone.id} [${milestone.status}] ${milestone.title}${suffix}`);
-  }
-
-  if (detail.tasks.length > 0) {
-    lines.push('Tasks:');
-    for (const task of detail.tasks) {
-      const milestoneSuffix = task.milestoneId ? ` (milestone: ${task.milestoneId})` : '';
-      lines.push(`- ${task.id} [${task.status}] ${task.title}${milestoneSuffix}`);
-    }
-  } else {
-    lines.push('Tasks: none');
-  }
-
-  return lines.join('\n');
 }
 
 function getConversationProjectIds(
@@ -215,88 +56,33 @@ export function createProjectAgentExtension(options: {
     pi.registerTool({
       name: 'project',
       label: 'Project',
-      description: 'Create, reference, inspect, and update durable projects backed by PROJECT.yaml.',
-      promptSnippet: 'Create, reference, inspect, and update durable projects and their milestones/tasks.',
+      description: 'Reference or unreference projects in the current conversation. Durable project edits are file-based and guided by the pa-project-hub skill.',
+      promptSnippet: 'Use the project tool only to reference or unreference projects in the current conversation. For durable project edits, load the pa-project-hub skill and use file tools.',
       promptGuidelines: [
-        'Use this tool when the user asks to create a project, inspect project state, or update milestones/tasks durably.',
-        'Reference a project in the current conversation when it should stay in working context for later turns.',
-        'Prefer the project tool over hand-editing PROJECT.yaml when you are managing structured project state.',
+        'Use this tool only to reference or unreference projects in the current conversation.',
+        'For durable project edits, load the pa-project-hub skill and use file tools on PROJECT.yaml, BRIEF.md, notes/, attachments/, and artifacts/.',
+        'Do not use this tool to edit project fields, milestones, tasks, briefs, notes, or files.',
       ],
       parameters: ProjectToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         try {
           const profile = options.getCurrentProfile();
           const conversationId = ctx.sessionManager.getSessionId();
-          const relatedProjectIds = getConversationProjectIds(profile, conversationId, options.stateRoot);
+          const projectId = readRequiredString(params.projectId, 'projectId');
 
           switch (params.action as ProjectAction) {
-            case 'list': {
-              const details = listProjectIds({ repoRoot: options.repoRoot, profile })
-                .map((projectId) => readProjectDetailFromProject({ repoRoot: options.repoRoot, profile, projectId }));
-
-              return {
-                content: [{ type: 'text' as const, text: formatProjectList(details, relatedProjectIds) }],
-                details: { action: 'list', projects: details.map((detail) => detail.project.id), relatedProjectIds },
-              };
-            }
-
-            case 'get': {
-              const projectId = readRequiredString(params.projectId, 'projectId');
-              const detail = readProjectDetailFromProject({ repoRoot: options.repoRoot, profile, projectId });
-              return {
-                content: [{ type: 'text' as const, text: formatProjectDetail(detail, relatedProjectIds) }],
-                details: { action: 'get', projectId, relatedProjectIds },
-              };
-            }
-
-            case 'create': {
-              const detail = createProjectRecord({
-                repoRoot: options.repoRoot,
-                profile,
-                title: readRequiredString(params.title, 'title'),
-                description: readRequiredString(params.description, 'description'),
-                ...(params.repoRoot !== undefined ? { projectRepoRoot: params.repoRoot } : {}),
-                ...(params.summary !== undefined ? { summary: params.summary } : {}),
-                ...(params.status !== undefined ? { status: params.status } : {}),
-                ...(params.currentFocus !== undefined ? { currentFocus: params.currentFocus } : {}),
-                ...(params.blockers !== undefined ? { blockers: params.blockers } : {}),
-                ...(params.recentProgress !== undefined ? { recentProgress: params.recentProgress } : {}),
-              });
-
-              const createdProjectId = detail.project.id;
-              const shouldReference = params.referenceInConversation ?? true;
-              if (shouldReference) {
-                addConversationProjectLink({
-                  stateRoot: options.stateRoot,
-                  profile,
-                  conversationId,
-                  projectId: createdProjectId,
-                });
+            case 'reference': {
+              if (!projectExists({ repoRoot: options.repoRoot, profile, projectId })) {
+                throw new Error(`Project not found: ${projectId}`);
               }
 
-              invalidateAppTopics('projects');
-              const nextRelatedProjectIds = shouldReference
-                ? getConversationProjectIds(profile, conversationId, options.stateRoot)
-                : relatedProjectIds;
-
-              return {
-                content: [{
-                  type: 'text' as const,
-                  text: `${shouldReference ? `Created and referenced @${createdProjectId}.` : `Created project ${createdProjectId}.`}\n\n${formatProjectDetail(detail, nextRelatedProjectIds)}`,
-                }],
-                details: { action: 'create', projectId: createdProjectId, referenced: shouldReference, relatedProjectIds: nextRelatedProjectIds },
-              };
-            }
-
-            case 'reference': {
-              const projectId = readRequiredString(params.projectId, 'projectId');
-              readProjectDetailFromProject({ repoRoot: options.repoRoot, profile, projectId });
               const document = addConversationProjectLink({
                 stateRoot: options.stateRoot,
                 profile,
                 conversationId,
                 projectId,
               });
+              invalidateAppTopics('projects', 'sessions');
 
               return {
                 content: [{ type: 'text' as const, text: `Referenced @${projectId} in this conversation.\nCurrent referenced projects: ${formatConversationReferences(document.relatedProjectIds)}` }],
@@ -305,131 +91,17 @@ export function createProjectAgentExtension(options: {
             }
 
             case 'unreference': {
-              const projectId = readRequiredString(params.projectId, 'projectId');
               const document = removeConversationProjectLink({
                 stateRoot: options.stateRoot,
                 profile,
                 conversationId,
                 projectId,
               });
+              invalidateAppTopics('projects', 'sessions');
 
               return {
                 content: [{ type: 'text' as const, text: `Stopped referencing @${projectId} in this conversation.\nCurrent referenced projects: ${formatConversationReferences(document.relatedProjectIds)}` }],
                 details: { action: 'unreference', projectId, relatedProjectIds: document.relatedProjectIds },
-              };
-            }
-
-            case 'update': {
-              if (!hasProjectMutation(params)) {
-                throw new Error('Provide at least one project field to update.');
-              }
-
-              const projectId = readRequiredString(params.projectId, 'projectId');
-              const detail = updateProjectRecord({
-                repoRoot: options.repoRoot,
-                profile,
-                projectId,
-                ...(params.title !== undefined ? { title: params.title } : {}),
-                ...(params.description !== undefined ? { description: params.description } : {}),
-                ...(params.repoRoot !== undefined ? { projectRepoRoot: params.repoRoot } : {}),
-                ...(params.summary !== undefined ? { summary: params.summary } : {}),
-                ...(params.status !== undefined ? { status: params.status } : {}),
-                ...(params.currentFocus !== undefined ? { currentFocus: params.currentFocus } : {}),
-                ...(params.blockers !== undefined ? { blockers: params.blockers } : {}),
-                ...(params.recentProgress !== undefined ? { recentProgress: params.recentProgress } : {}),
-                ...(params.currentMilestoneId !== undefined ? { currentMilestoneId: params.currentMilestoneId } : {}),
-              });
-
-              invalidateAppTopics('projects');
-              return {
-                content: [{ type: 'text' as const, text: `Updated project ${projectId}.\n\n${formatProjectDetail(detail, relatedProjectIds)}` }],
-                details: { action: 'update', projectId },
-              };
-            }
-
-            case 'add_milestone': {
-              const projectId = readRequiredString(params.projectId, 'projectId');
-              const detail = addProjectMilestone({
-                repoRoot: options.repoRoot,
-                profile,
-                projectId,
-                title: readRequiredString(params.title, 'title'),
-                status: params.milestoneStatus?.trim() || 'pending',
-                ...(params.summary !== undefined ? { summary: params.summary } : {}),
-                ...(params.makeCurrent !== undefined ? { makeCurrent: params.makeCurrent } : {}),
-              });
-
-              invalidateAppTopics('projects');
-              return {
-                content: [{ type: 'text' as const, text: `Added milestone to project ${projectId}.\n\n${formatProjectDetail(detail, relatedProjectIds)}` }],
-                details: { action: 'add_milestone', projectId },
-              };
-            }
-
-            case 'update_milestone': {
-              if (!hasMilestoneMutation(params)) {
-                throw new Error('Provide at least one milestone field to update.');
-              }
-
-              const projectId = readRequiredString(params.projectId, 'projectId');
-              const milestoneId = readRequiredString(params.milestoneId, 'milestoneId');
-              const detail = updateProjectMilestone({
-                repoRoot: options.repoRoot,
-                profile,
-                projectId,
-                milestoneId,
-                ...(params.title !== undefined ? { title: params.title } : {}),
-                ...(params.milestoneStatus !== undefined ? { status: params.milestoneStatus } : {}),
-                ...(params.summary !== undefined ? { summary: params.summary } : {}),
-                ...(params.makeCurrent !== undefined ? { makeCurrent: params.makeCurrent } : {}),
-              });
-
-              invalidateAppTopics('projects');
-              return {
-                content: [{ type: 'text' as const, text: `Updated milestone ${milestoneId} in project ${projectId}.\n\n${formatProjectDetail(detail, relatedProjectIds)}` }],
-                details: { action: 'update_milestone', projectId, milestoneId },
-              };
-            }
-
-            case 'add_task': {
-              const projectId = readRequiredString(params.projectId, 'projectId');
-              const detail = createProjectTaskRecord({
-                repoRoot: options.repoRoot,
-                profile,
-                projectId,
-                title: readRequiredString(params.title, 'title'),
-                status: params.taskStatus?.trim() || 'pending',
-                ...(params.taskMilestoneId !== undefined ? { milestoneId: params.taskMilestoneId } : {}),
-              });
-
-              invalidateAppTopics('projects');
-              return {
-                content: [{ type: 'text' as const, text: `Added task to project ${projectId}.\n\n${formatProjectDetail(detail, relatedProjectIds)}` }],
-                details: { action: 'add_task', projectId },
-              };
-            }
-
-            case 'update_task': {
-              if (!hasTaskMutation(params)) {
-                throw new Error('Provide at least one task field to update.');
-              }
-
-              const projectId = readRequiredString(params.projectId, 'projectId');
-              const taskId = readRequiredString(params.taskId, 'taskId');
-              const detail = updateProjectTaskRecord({
-                repoRoot: options.repoRoot,
-                profile,
-                projectId,
-                taskId,
-                ...(params.title !== undefined ? { title: params.title } : {}),
-                ...(params.taskStatus !== undefined ? { status: params.taskStatus } : {}),
-                ...(params.taskMilestoneId !== undefined ? { milestoneId: params.taskMilestoneId } : {}),
-              });
-
-              invalidateAppTopics('projects');
-              return {
-                content: [{ type: 'text' as const, text: `Updated task ${taskId} in project ${projectId}.\n\n${formatProjectDetail(detail, relatedProjectIds)}` }],
-                details: { action: 'update_task', projectId, taskId },
               };
             }
 
@@ -446,9 +118,4 @@ export function createProjectAgentExtension(options: {
       },
     });
   };
-}
-
-export function describeProjectFileLayout(repoRoot: string, profile: string, projectId: string): string {
-  const paths = resolveProjectPaths({ repoRoot, profile, projectId });
-  return paths.projectFile;
 }

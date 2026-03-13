@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { validateProjectId } from './projects.js';
 import { getStateRoot } from './runtime/paths.js';
@@ -93,6 +93,26 @@ export function readConversationProjectLink(path: string): ConversationProjectLi
     updatedAt: new Date(Date.parse(updatedAt)).toISOString(),
     relatedProjectIds: normalizeRelatedProjectIds(relatedProjectIds),
   };
+}
+
+export function listConversationProjectLinks(options: ResolveConversationLinkOptions): ConversationProjectLinkDocument[] {
+  const dir = resolveProfileConversationLinksDir(options);
+  if (!existsSync(dir)) {
+    return [];
+  }
+
+  return readdirSync(dir)
+    .filter((entry) => entry.endsWith('.json'))
+    .map((entry) => readConversationProjectLink(join(dir, entry)))
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
+export function listConversationIdsForProject(options: ResolveConversationLinkOptions & { projectId: string }): string[] {
+  validateProjectId(options.projectId);
+
+  return listConversationProjectLinks(options)
+    .filter((document) => document.relatedProjectIds.includes(options.projectId))
+    .map((document) => document.conversationId);
 }
 
 export function getConversationProjectLink(options: ResolveConversationLinkPathOptions): ConversationProjectLinkDocument | null {

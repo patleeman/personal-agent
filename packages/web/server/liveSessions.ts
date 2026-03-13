@@ -22,7 +22,13 @@ import {
   hasAssistantTitleSourceMessage,
 } from './conversationAutoTitle.js';
 import { syncWebLiveConversationRun, type WebLiveConversationRunState } from './conversationRuns.js';
-import { buildDisplayBlocksFromEntries, getAssistantErrorDisplayMessage, type DisplayBlock } from './sessions.js';
+import {
+  buildDisplayBlocksFromEntries,
+  getAssistantErrorDisplayMessage,
+  readSessionBlocksByFile,
+  readSessionMetaByFile,
+  type DisplayBlock,
+} from './sessions.js';
 import { estimateContextUsageSegments } from './sessionContextUsage.js';
 
 const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
@@ -195,23 +201,40 @@ function getSessionMessages(session: AgentSession): Array<{ role?: string; conte
   return Array.isArray(agentMessages) ? agentMessages : [];
 }
 
+function buildFallbackTitleFromContent(content: unknown): string {
+  const { text, imageCount } = summarizeUserMessageContent(content);
+  return formatConversationTitle(text, imageCount);
+}
+
+function resolveStableSessionTitle(session: AgentSession): string {
+  const sessionName = session.sessionName?.trim();
+  if (sessionName) {
+    return sessionName;
+  }
+
+  const sessionFile = session.sessionFile?.trim();
+  if (sessionFile) {
+    const persistedTitle = readSessionMetaByFile(sessionFile)?.title?.trim();
+    if (persistedTitle) {
+      return persistedTitle;
+    }
+  }
+
+  const firstUser = getSessionMessages(session).find((message) => message.role === 'user');
+  if (!firstUser) {
+    return '';
+  }
+
+  return buildFallbackTitleFromContent(firstUser.content);
+}
+
 function resolveEntryTitle(entry: LiveEntry): string {
   const sessionName = entry.session.sessionName?.trim();
   if (sessionName) {
     return sessionName;
   }
 
-  if (entry.title.trim()) {
-    return entry.title;
-  }
-
-  const firstUser = getSessionMessages(entry.session).find((message) => message.role === 'user');
-  if (!firstUser) {
-    return '';
-  }
-
-  const { text, imageCount } = summarizeUserMessageContent(firstUser.content);
-  return formatConversationTitle(text, imageCount);
+  return entry.title.trim();
 }
 
 function isLikelyUnsupportedImageInputError(error: unknown): boolean {
@@ -266,6 +289,72 @@ function readQueueState(session: AgentSession): { steering: string[]; followUp: 
   };
 }
 
+interface InternalQueuedAgentMessage {
+  role?: string;
+  content?: unknown;
+}
+
+interface InternalAgentQueues {
+  steeringQueue?: InternalQueuedAgentMessage[];
+  followUpQueue?: InternalQueuedAgentMessage[];
+}
+
+function removeQueuedUserMessage(
+  queue: InternalQueuedAgentMessage[],
+  index: number,
+): InternalQueuedAgentMessage | undefined {
+  let userQueueIndex = 0;
+
+  for (let queueIndex = 0; queueIndex < queue.length; queueIndex += 1) {
+    if (queue[queueIndex]?.role !== 'user') {
+      continue;
+    }
+
+    if (userQueueIndex === index) {
+      return queue.splice(queueIndex, 1)[0];
+    }
+
+    userQueueIndex += 1;
+  }
+
+  return undefined;
+}
+
+function extractQueuedPromptContent(
+  message: InternalQueuedAgentMessage | undefined,
+  fallbackText: string,
+): { text: string; images: PromptImageAttachment[] } {
+  const textParts: string[] = [];
+  const images: PromptImageAttachment[] = [];
+  const content = Array.isArray(message?.content) ? message.content : [];
+
+  for (const part of content) {
+    if (!part || typeof part !== 'object') {
+      continue;
+    }
+
+    if ((part as { type?: unknown }).type === 'text' && typeof (part as { text?: unknown }).text === 'string') {
+      textParts.push((part as { text: string }).text);
+      continue;
+    }
+
+    if ((part as { type?: unknown }).type === 'image'
+      && typeof (part as { data?: unknown }).data === 'string'
+      && typeof (part as { mimeType?: unknown }).mimeType === 'string') {
+      images.push({
+        type: 'image',
+        data: (part as { data: string }).data,
+        mimeType: (part as { mimeType: string }).mimeType,
+      });
+    }
+  }
+
+  return {
+    text: textParts.join('') || fallbackText,
+    images,
+  };
+}
+
 function buildUserMessageBlock(message: { content?: unknown; timestamp?: string | number }): Extract<DisplayBlock, { type: 'user' }> | null {
   const [block] = buildDisplayBlocksFromEntries([
     {
@@ -281,7 +370,7 @@ function buildUserMessageBlock(message: { content?: unknown; timestamp?: string 
   return block?.type === 'user' ? block : null;
 }
 
-function buildLiveSnapshotBlocks(session: AgentSession): DisplayBlock[] {
+function buildLiveStateBlocks(session: AgentSession): DisplayBlock[] {
   const state = session.state;
   const messages = state.messages.slice();
   const streamMessage = state.streamMessage;
@@ -301,8 +390,112 @@ function buildLiveSnapshotBlocks(session: AgentSession): DisplayBlock[] {
       details: (message as { details?: unknown }).details,
       stopReason: (message as { stopReason?: string }).stopReason,
       errorMessage: (message as { errorMessage?: string }).errorMessage,
+      summary: (message as { summary?: string }).summary,
+      tokensBefore: (message as { tokensBefore?: number }).tokensBefore,
+      fromId: (message as { fromId?: string }).fromId,
     },
   })));
+}
+
+function fingerprintDisplayBlock(block: DisplayBlock): string {
+  switch (block.type) {
+    case 'user':
+      return JSON.stringify({
+        type: block.type,
+        ts: block.ts,
+        text: block.text,
+        imageCount: block.images?.length ?? 0,
+      });
+    case 'text':
+    case 'thinking':
+      return JSON.stringify({ type: block.type, ts: block.ts, text: block.text });
+    case 'summary':
+      return JSON.stringify({ type: block.type, ts: block.ts, kind: block.kind, title: block.title, text: block.text });
+    case 'tool_use':
+      return JSON.stringify({
+        type: block.type,
+        ts: block.ts,
+        tool: block.tool,
+        toolCallId: block.toolCallId,
+        output: block.output,
+      });
+    case 'image':
+      return JSON.stringify({
+        type: block.type,
+        ts: block.ts,
+        alt: block.alt,
+        mimeType: block.mimeType,
+        caption: block.caption,
+        src: block.src?.slice(0, 128),
+      });
+    case 'error':
+      return JSON.stringify({
+        type: block.type,
+        ts: block.ts,
+        tool: block.tool,
+        message: block.message,
+      });
+  }
+}
+
+// Live session state only contains the currently-kept context window after compaction.
+// Merge it with the persisted snapshot so reconnects/navigation preserve any durable-only blocks while
+// still converging on the compacted view once summaries are present.
+function mergeConversationHistoryBlocks(persistedBlocks: DisplayBlock[], liveBlocks: DisplayBlock[]): DisplayBlock[] {
+  if (persistedBlocks.length === 0) {
+    return liveBlocks;
+  }
+
+  if (liveBlocks.length === 0) {
+    return persistedBlocks;
+  }
+
+  const persistedFingerprints = persistedBlocks.map(fingerprintDisplayBlock);
+  const liveFingerprints = liveBlocks.map(fingerprintDisplayBlock);
+  const maxOverlap = Math.min(persistedFingerprints.length, liveFingerprints.length);
+
+  for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
+    let matches = true;
+
+    for (let index = 0; index < overlap; index += 1) {
+      if (persistedFingerprints[persistedFingerprints.length - overlap + index] !== liveFingerprints[index]) {
+        matches = false;
+        break;
+      }
+    }
+
+    if (matches) {
+      return [...persistedBlocks, ...liveBlocks.slice(overlap)];
+    }
+  }
+
+  return [...persistedBlocks, ...liveBlocks];
+}
+
+function buildLiveSnapshotBlocks(entry: LiveEntry): DisplayBlock[] {
+  const liveBlocks = buildLiveStateBlocks(entry.session);
+  const sessionFile = entry.session.sessionFile?.trim();
+  if (!sessionFile || !existsSync(sessionFile)) {
+    return liveBlocks;
+  }
+
+  const persistedBlocks = readSessionBlocksByFile(sessionFile)?.blocks ?? [];
+  if (persistedBlocks.length === 0) {
+    return liveBlocks;
+  }
+
+  // session.state.messages is the *current context window*, not a chronological display transcript.
+  // After compaction it can reorder blocks as: summary → pre-compaction tail → post-compaction tail.
+  // For idle live sessions we should render the durable transcript from disk exactly as persisted.
+  if (!entry.session.isStreaming) {
+    return persistedBlocks;
+  }
+
+  return mergeConversationHistoryBlocks(persistedBlocks, liveBlocks);
+}
+
+function broadcastSnapshot(entry: LiveEntry): void {
+  broadcast(entry, { type: 'snapshot', blocks: buildLiveSnapshotBlocks(entry) });
 }
 
 function broadcastTitle(entry: LiveEntry): void {
@@ -387,21 +580,27 @@ function maybeAutoTitleConversation(entry: LiveEntry): void {
     settingsFile: SETTINGS_FILE,
   })
     .then((title) => {
-      if (!title) {
-        return;
-      }
-
       if (registry.get(entry.sessionId) !== entry) {
         return;
       }
 
       if (entry.session.sessionName?.trim()) {
+        entry.autoTitleRequested = true;
+        return;
+      }
+
+      if (!title) {
+        entry.autoTitleRequested = false;
         return;
       }
 
       applySessionTitle(entry, title);
     })
     .catch((error) => {
+      if (registry.get(entry.sessionId) === entry && !entry.session.sessionName?.trim()) {
+        entry.autoTitleRequested = false;
+      }
+
       const message = error instanceof Error ? error.message : String(error);
       const stack = error instanceof Error ? error.stack : undefined;
       console.error(`[${new Date().toISOString()}] [web] [error] conversation auto-title failed sessionId=${entry.sessionId} message=${message}`);
@@ -466,7 +665,7 @@ function wireSession(
     session,
     cwd,
     listeners: new Set(),
-    title: '',
+    title: resolveStableSessionTitle(session),
     autoTitleRequested: options.autoTitleRequested ?? false,
     lastContextUsageJson: null,
     lastQueueStateJson: null,
@@ -474,6 +673,7 @@ function wireSession(
   registry.set(id, entry);
   invalidateAppTopics('sessions');
   void syncDurableConversationRun(entry, session.isStreaming ? 'running' : 'waiting', { force: true });
+  maybeAutoTitleConversation(entry);
 
   session.subscribe((event: AgentSessionEvent) => {
     if (event.type === 'turn_end') {
@@ -494,6 +694,13 @@ function wireSession(
     }
 
     if (event.type === 'message_start' && event.message.role === 'user') {
+      if (!entry.session.sessionName?.trim() && !entry.title.trim()) {
+        const fallbackTitle = buildFallbackTitleFromContent(event.message.content);
+        if (fallbackTitle) {
+          entry.title = fallbackTitle;
+          broadcastTitle(entry);
+        }
+      }
       broadcastQueueState(entry);
     }
 
@@ -508,6 +715,13 @@ function wireSession(
     }
 
     if (event.type === 'turn_end') {
+      clearContextUsageTimer(entry);
+      broadcastContextUsage(entry, true);
+      invalidateAppTopics('sessions');
+    }
+
+    if (event.type === 'auto_compaction_end' && !event.aborted && event.result) {
+      broadcastSnapshot(entry);
       clearContextUsageTimer(entry);
       broadcastContextUsage(entry, true);
       invalidateAppTopics('sessions');
@@ -779,7 +993,7 @@ export async function resumeSession(
 
   const id = session.sessionId;
   wireSession(id, session, cwd, {
-    autoTitleRequested: Boolean(session.sessionName?.trim()) || hasAssistantTitleSourceMessage(getSessionMessages(session)),
+    autoTitleRequested: Boolean(session.sessionName?.trim()),
   });
   return { id };
 }
@@ -793,7 +1007,7 @@ export function subscribe(
   if (!entry) return null;
   entry.listeners.add(listener);
 
-  listener({ type: 'snapshot', blocks: buildLiveSnapshotBlocks(entry.session) });
+  listener({ type: 'snapshot', blocks: buildLiveSnapshotBlocks(entry) });
   const title = resolveEntryTitle(entry);
   if (title) {
     listener({ type: 'title_update', title });
@@ -868,10 +1082,56 @@ export async function promptSession(
   }
 }
 
+export function restoreQueuedMessage(
+  sessionId: string,
+  behavior: 'steer' | 'followUp',
+  index: number,
+): { text: string; images: PromptImageAttachment[] } {
+  const entry = registry.get(sessionId);
+  if (!entry) throw new Error(`Session ${sessionId} is not live`);
+  if (!Number.isInteger(index) || index < 0) {
+    throw new Error('Queued message index must be a non-negative integer');
+  }
+
+  const visibleQueue = (behavior === 'steer'
+    ? entry.session.getSteeringMessages()
+    : entry.session.getFollowUpMessages()) as string[];
+
+  if (index >= visibleQueue.length) {
+    throw new Error('Queued message not found');
+  }
+
+  const [fallbackText] = visibleQueue.splice(index, 1);
+  const internalAgent = entry.session.agent as unknown as InternalAgentQueues;
+  const internalQueue = behavior === 'steer'
+    ? internalAgent.steeringQueue
+    : internalAgent.followUpQueue;
+
+  if (!Array.isArray(internalQueue)) {
+    visibleQueue.splice(index, 0, fallbackText ?? '');
+    throw new Error('Queued message restore is unavailable for this session');
+  }
+
+  const removed = removeQueuedUserMessage(internalQueue, index);
+  if (!removed) {
+    visibleQueue.splice(index, 0, fallbackText ?? '');
+    throw new Error('Queued message not found');
+  }
+
+  const restored = extractQueuedPromptContent(removed, fallbackText ?? '');
+  broadcastQueueState(entry, true);
+  return restored;
+}
+
 export async function compactSession(sessionId: string, customInstructions?: string) {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
-  return entry.session.compact(customInstructions);
+  const result = await entry.session.compact(customInstructions);
+  broadcastSnapshot(entry);
+  clearContextUsageTimer(entry);
+  broadcastContextUsage(entry, true);
+  invalidateAppTopics('sessions');
+  return result;
 }
 
 export async function reloadSessionResources(sessionId: string): Promise<void> {
@@ -903,6 +1163,34 @@ export async function abortSession(sessionId: string): Promise<void> {
 }
 
 /** Fork a session at a given message entry ID. */
+export async function branchSession(
+  sessionId: string,
+  entryId: string,
+  options: LiveSessionLoaderOptions = {},
+): Promise<{ newSessionId: string; sessionFile: string }> {
+  const entry = registry.get(sessionId);
+  if (!entry) throw new Error(`Session ${sessionId} is not live`);
+  if (entry.session.isStreaming) throw new Error('Cannot branch while a response is running. Use stop first.');
+
+  const sourceSessionFile = entry.session.sessionFile;
+  if (!sourceSessionFile) {
+    throw new Error('Cannot branch a live session without a session file.');
+  }
+
+  const sourceManager = SessionManager.open(sourceSessionFile);
+  if (!sourceManager.getEntry(entryId)) {
+    throw new Error(`Session entry not found: ${entryId}`);
+  }
+
+  const branchedSessionFile = sourceManager.createBranchedSession(entryId);
+  if (!branchedSessionFile) {
+    throw new Error('Unable to create a branched session file.');
+  }
+
+  const resumed = await resumeSession(branchedSessionFile, options);
+  return { newSessionId: resumed.id, sessionFile: branchedSessionFile };
+}
+
 export async function forkSession(
   sessionId: string,
   entryId: string,

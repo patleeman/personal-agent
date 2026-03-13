@@ -1,13 +1,6 @@
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createProjectScaffold, createProjectTask, formatProject, listProjectIds, parseProject, readProject, resolveProjectPaths, resolveProjectRepoRoot, writeProject, } from '@personal-agent/core';
-function listFiles(dir, extension) {
-    if (!existsSync(dir)) {
-        return [];
-    }
-    return readdirSync(dir)
-        .filter((name) => extension ? name.endsWith(extension) : true)
-        .sort((left, right) => left.localeCompare(right));
-}
+import { listProjectFiles, listProjectNotes, readProjectBrief, } from './projectResources.js';
 function nowIso() {
     return new Date().toISOString();
 }
@@ -119,14 +112,24 @@ export function sortProjectTasks(tasks) {
     return [...tasks];
 }
 export function readProjectDetailFromProject(options) {
-    const paths = resolveProjectPaths(options);
-    const project = readProject(paths.projectFile);
+    const project = readProject(resolveProjectPaths(options).projectFile);
     const tasks = sortProjectTasks(project.plan.tasks ?? []);
+    const notes = listProjectNotes(options);
+    const attachments = listProjectFiles({ ...options, kind: 'attachment' });
+    const artifacts = listProjectFiles({ ...options, kind: 'artifact' });
     return {
         project,
         taskCount: tasks.length,
-        artifactCount: listFiles(paths.artifactsDir).length,
+        noteCount: notes.length,
+        attachmentCount: attachments.length,
+        artifactCount: artifacts.length,
         tasks,
+        brief: readProjectBrief(options),
+        notes,
+        attachments,
+        artifacts,
+        linkedConversations: [],
+        timeline: [],
     };
 }
 export function createProjectRecord(input) {
@@ -244,10 +247,9 @@ export function updateProjectMilestone(input) {
 }
 export function createProjectTaskRecord(input) {
     const { paths, project } = readProjectRecord(input);
-    const milestoneId = readOptionalString(input.milestoneId) ?? project.plan.currentMilestoneId;
-    if (!milestoneId) {
-        throw new Error(`Task milestoneId must not be empty.`);
-    }
+    const milestoneId = input.milestoneId !== undefined
+        ? readOptionalString(input.milestoneId)
+        : readOptionalString(project.plan.currentMilestoneId);
     assertMilestoneExists(project, milestoneId);
     const title = readRequiredString(input.title, 'Task title');
     const existingTasks = sortProjectTasks(project.plan.tasks ?? []);
@@ -285,16 +287,16 @@ export function updateProjectTaskRecord(input) {
     const milestoneId = input.milestoneId !== undefined
         ? readOptionalString(input.milestoneId)
         : existingTask.milestoneId;
-    if (!milestoneId) {
-        throw new Error('Task milestoneId must not be empty.');
-    }
     assertMilestoneExists(project, milestoneId);
     const updatedTask = {
         ...existingTask,
         ...(input.title !== undefined ? { title: readRequiredString(input.title, 'Task title') } : {}),
         ...(input.status !== undefined ? { status: readRequiredString(input.status, 'Task status') } : {}),
-        milestoneId,
+        ...(milestoneId ? { milestoneId } : {}),
     };
+    if (!milestoneId) {
+        delete updatedTask.milestoneId;
+    }
     const nextTasks = [...project.plan.tasks];
     nextTasks[taskIndex] = updatedTask;
     writeProject(paths.projectFile, {
@@ -313,13 +315,18 @@ export function deleteProjectMilestone(input) {
     if (milestoneIndex === -1) {
         throw new Error(`Milestone not found in project ${project.id}: ${input.milestoneId}`);
     }
-    if ((project.plan.tasks ?? []).some((task) => task.milestoneId === input.milestoneId)) {
-        throw new Error(`Cannot delete milestone ${input.milestoneId} while it still has tasks. Move or delete the tasks first.`);
-    }
     const nextMilestones = project.plan.milestones.filter((milestone) => milestone.id !== input.milestoneId);
     const nextCurrentMilestoneId = project.plan.currentMilestoneId === input.milestoneId
         ? nextMilestones[0]?.id
         : project.plan.currentMilestoneId;
+    const nextTasks = (project.plan.tasks ?? []).map((task) => {
+        if (task.milestoneId !== input.milestoneId) {
+            return task;
+        }
+        const updatedTask = { ...task };
+        delete updatedTask.milestoneId;
+        return updatedTask;
+    });
     writeProject(paths.projectFile, {
         ...project,
         updatedAt: nowIso(),
@@ -327,6 +334,7 @@ export function deleteProjectMilestone(input) {
             ...project.plan,
             currentMilestoneId: nextCurrentMilestoneId,
             milestones: nextMilestones,
+            tasks: nextTasks,
         },
     });
     return readProjectDetailFromProject(input);

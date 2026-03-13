@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { formatContextWindowLabel, formatThinkingLevelLabel } from '../conversationHeader';
 import { api } from '../api';
 import { useApi } from '../hooks';
+import { THINKING_LEVEL_OPTIONS, groupModelsByProvider } from '../modelPreferences';
 import { resetStoredConversationUiState, resetStoredLayoutPreferences } from '../localSettings';
 import { type Theme, useTheme } from '../theme';
 import type { ModelState } from '../types';
@@ -10,14 +11,6 @@ import { PageHeader, PageHeading, SectionLabel, ToolbarButton, cx } from '../com
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50';
 const ACTION_BUTTON_CLASS = 'inline-flex items-center rounded-lg border border-border-subtle bg-base px-3 py-1.5 text-[12px] font-medium text-primary transition-colors hover:bg-surface disabled:opacity-50';
 const CHECKBOX_CLASS = 'h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none';
-const THINKING_LEVEL_OPTIONS = [
-  { value: '', label: 'Unset' },
-  { value: 'off', label: 'Off' },
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-  { value: 'xhigh', label: 'Extra high' },
-] as const;
 
 type ModelOption = ModelState['models'][number];
 
@@ -115,17 +108,10 @@ export function SettingsPage() {
     modelState?.currentModel ? `model ${modelState.currentModel}` : null,
   ].filter(Boolean).join(' · ');
 
-  const groupedModels = useMemo(() => {
-    const groups = new Map<string, ModelState['models']>();
-
-    for (const model of modelState?.models ?? []) {
-      const current = groups.get(model.provider) ?? [];
-      current.push(model);
-      groups.set(model.provider, current);
-    }
-
-    return [...groups.entries()];
-  }, [modelState?.models]);
+  const groupedModels = useMemo(
+    () => groupModelsByProvider(modelState?.models ?? []),
+    [modelState?.models],
+  );
 
   const selectedModel = useMemo(() => {
     if (!modelState?.currentModel) {

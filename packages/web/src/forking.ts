@@ -26,6 +26,27 @@ export function resolveForkEntryForMessage(
   return entries[userMessageCount - 1] ?? entries[entries.length - 1] ?? null;
 }
 
+export function resolveSessionEntryIdFromBlockId(blockId: string | undefined): string | null {
+  const initial = blockId?.trim();
+  if (!initial) {
+    return null;
+  }
+
+  let candidate = initial;
+  const seen = new Set<string>();
+
+  while (!seen.has(candidate)) {
+    seen.add(candidate);
+    const trimmed = candidate.match(/^(.*)-[txcei]\d+$/)?.[1]?.trim();
+    if (!trimmed) {
+      break;
+    }
+    candidate = trimmed;
+  }
+
+  return candidate;
+}
+
 export function buildConversationComposerStorageKey(sessionId: string): string {
   return `pa:reload:conversation:${sessionId}:composer`;
 }

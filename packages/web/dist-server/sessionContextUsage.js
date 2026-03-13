@@ -183,7 +183,7 @@ function hasPostCompactionUsage(branchEntries, compactionIndex) {
             continue;
         }
         const assistant = entry.message;
-        if (assistant.stopReason === 'aborted' || assistant.stopReason === 'error') {
+        if (assistant.stopReason === 'aborted' || assistant.stopReason === 'error' || !assistant.usage) {
             continue;
         }
         return calculateContextTokens(assistant.usage) > 0;
