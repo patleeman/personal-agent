@@ -1,6 +1,6 @@
 ---
 name: workflow-litprog-artifact
-description: Generate literate-programming-style code walkthrough artifacts from a whole repo, selected paths, or a git diff. Use when the user wants an onboarding document, architecture explainer, change review, or narrative technical report delivered as a web UI artifact instead of plain chat prose.
+description: Generate literate-programming-style walkthrough artifacts from a whole repo, selected paths, or a git diff. Use when the user wants an onboarding document, architecture explainer, change review, or technical report delivered as a high-signal artifact rather than plain chat prose.
 ---
 
 # Literate Programming Artifact
@@ -8,38 +8,114 @@ description: Generate literate-programming-style code walkthrough artifacts from
 Adapt the spirit of [tlehman/litprog-skill](https://github.com/tlehman/litprog-skill) to `personal-agent` artifact output.
 
 The goal is **not** to make a `.lit.md` file the source of truth.
-The goal **is** to produce a reader-first technical document that explains a codebase, subsystem, or diff in psychological order and save it as an artifact when possible.
+The goal **is** to produce a reader-first technical document that helps Patrick understand:
 
-## What to Produce
+- what this area is really doing
+- which decisions shape it
+- what is easy to miss
+- where to start if he needs to change it
 
-When the `artifact` tool is available, prefer this output set:
+## Default Output
 
-1. **Primary readable artifact**
-   - Usually `kind=html`
-   - Self-contained, readable in the web UI
-   - Includes title, scope, narrative sections, code excerpts, and optional tables
+When the `artifact` tool is available, prefer this set:
 
-2. **Companion LaTeX source artifact**
+1. **Primary LaTeX report artifact**
    - `kind=latex`
-   - Raw LaTeX source for copy/export/editing
-   - Mirrors the section structure of the readable artifact
+   - full-document LaTeX source
+   - structured as a real report, not a formula fragment
+
+2. **Rendered HTML companion**
+   - `kind=html`
+   - strongly preferred for substantial reports because it is easier to read in the artifact panel
+   - can be written directly or compiled from the same LaTeX/report content
 
 3. **Optional Mermaid sidecar**
    - `kind=mermaid`
-   - Use only when a standalone architecture or flow diagram materially helps
+   - only when one diagram materially clarifies the core loop, architecture, or state change
 
-Use stable artifact ids when iterating, for example:
+Use stable artifact ids, for example:
 
-- `<slug>-litprog`
 - `<slug>-litprog-tex`
+- `<slug>-litprog-html`
 - `<slug>-litprog-diagram`
 
-If the user explicitly wants **source only**, skip the HTML companion and save only the LaTeX artifact.
-If the `artifact` tool is unavailable, return the LaTeX inline or write a `*.tex` file only if the user asks for file output.
+Default to LaTeX + HTML for substantial walkthroughs.
+If the user explicitly wants source only, save only the LaTeX artifact.
+If the `artifact` tool is unavailable, return the report inline or write files only if the user asks.
+
+## Editorial Stance
+
+The artifact should feel like an explanation, not an inventory.
+
+### Optimize for insight density
+
+The document should answer questions like:
+
+- What problem is this code solving?
+- Why is it shaped this way?
+- Which two or three decisions matter most?
+- What would a maintainer likely misunderstand on first read?
+- If I want to change behavior X, where do I start?
+
+### Use claims, not categories
+
+Prefer section titles that make an argument.
+
+Good:
+
+- `The real boundary is conversation scope, not rendering`
+- `The server adds binding, not much business logic`
+- `Full LaTeX documents are classified before they are rendered`
+
+Weak:
+
+- `Architecture Overview`
+- `Key Modules`
+- `Persistence Model`
+
+### File paths are evidence, not prose
+
+Do **not** turn the artifact into a file tour.
+Use file paths sparingly:
+
+- once in the scope statement
+- in excerpt captions or evidence notes
+- in a final `Where to edit` / `Start here` section
+- in the appendix
+
+Avoid repeating file paths in every paragraph unless the path itself is the point.
+
+### Snippets must earn their place
+
+Include only snippets that reveal one of these:
+
+- an invariant
+- a boundary
+- a branching decision
+- a failure mode
+- a load-bearing data transformation
+- a non-obvious tradeoff
+
+Do **not** include snippets that merely prove a constant exists, a type exists, or a wrapper forwards arguments unless that is the key behavioral hinge.
+
+### Sound like a person with a point of view
+
+The prose should be calm and precise, but not lifeless.
+Avoid report filler and managerial phrasing.
+
+Weak phrases unless followed by a concrete consequence:
+
+- `is the source of truth`
+- `translation layer`
+- `intentionally layered`
+- `this is important because`
+- `handles X, Y, and Z`
+
+If you use one of those, immediately explain the consequence for behavior, maintenance, or change risk.
 
 ## Scope First
 
-Before drafting, lock the scope into one of these modes:
+Before drafting, lock the run into one of these modes:
 
 - whole repo
 - selected directories
@@ -47,142 +123,135 @@ Before drafting, lock the scope into one of these modes:
 - symbol or subsystem
 - diff / commit range / PR
 
-Always state the scope near the top of the document.
-If the scope is partial or diff-based, label it clearly as partial coverage. Do **not** imply whole-repo completeness.
+Always state the scope near the top.
+If the scope is partial or diff-based, label it clearly as selective coverage.
+Do **not** imply whole-repo completeness from a narrow read.
 
 See `references/scope-modes.md`.
 
 ## Core Workflow
 
-### 1. Confirm the target
+### 1. Confirm scope, audience, and question
 
 Identify:
 
 - repo root or referenced project
-- requested scope
+- scope mode
 - audience and goal
-  - onboarding
-  - architecture overview
-  - review artifact
-  - change explanation
-  - handoff notes
+- the main question this document will answer
 
-If the scope is vague but still workable, make a sensible assumption and label it.
-Only interrupt for clarification when the ambiguity would make the document misleading.
+Examples of a main question:
 
-### 2. Inspect before writing
+- `What is the one path a new maintainer should understand first?`
+- `What really changed in this diff, behaviorally?`
+- `Why does this subsystem feel simple from the outside?`
 
-Use normal repo inspection tools to understand the scoped area:
+### 2. Find the spine before outlining
 
-- manifests and entry points
-- public APIs
-- data flow
-- background loops or async work
-- important types and state transitions
-- external systems and config surfaces
+Inspect the code and identify:
+
+- the core loop or happy path
+- the main pressure or constraint on the design
+- the two or three load-bearing decisions
+- what is surprising, subtle, or easy to break
+- what can be safely omitted
 
 See `references/analysis-workflow.md`.
 
-### 3. Choose a narrative order
+### 3. Outline in psychological order
 
-Pick the order that is easiest to understand:
-
-- **top-down** for layered systems
-- **data-centric** for pipelines and schemas
-- **request-lifecycle** for services and handlers
-- **change-centric** for diffs and refactors
-
-The narrative order does not need to match file order.
-
-### 4. Outline before drafting
-
-Draft a section plan before writing the final artifact.
-A good default outline is:
+Do not default to a file-by-file walk.
+Choose the order that makes the system easiest to understand.
+A good default shape is:
 
 1. title + scope
-2. executive summary
-3. architecture or change overview
-4. main flows
-5. key modules and why they exist
-6. risks, tradeoffs, or follow-ups
-7. appendix with focused code excerpts
+2. one-paragraph thesis
+3. the path to understand first
+4. the decisions that shape everything else
+5. what is easy to miss
+6. where to edit if you need to change behavior
+7. appendix with evidence snippets
 
-### 5. Write prose before code
+### 4. Choose evidence, not coverage
 
-Each code excerpt must be motivated first.
-For every excerpt:
+Select only a few excerpts.
+Each excerpt should prove a claim already made in prose.
+Lead with the claim, then show the code.
+If a snippet does not deepen understanding, cut it.
 
-- say why it matters
-- include the file path
-- keep it scoped and readable
-- avoid giant dumps when a focused slice will do
+### 5. Write the artifact
 
-Do not invent missing lines.
-Do not paraphrase code inside a quoted excerpt.
+When drafting:
+
+- lead with the most useful mental model, not a taxonomy
+- prefer claim-based headings
+- explain consequences, not just responsibilities
+- keep file paths mostly in evidence notes and the final change map
+- keep the appendix subordinate to the narrative
 
 ### 6. Save artifacts
 
 When the `artifact` tool is available:
 
-- save the readable HTML artifact first
-- save the companion LaTeX artifact second
-- add a Mermaid artifact only when it carries real explanatory value
-- reuse the same artifact ids on later revisions
+- save the primary LaTeX artifact first
+- save the HTML companion for substantial reports unless Patrick asked for source only
+- add a Mermaid sidecar only when it materially helps
+- reuse the same artifact ids on revisions
+- use the `artifact` tool itself rather than ad hoc files when artifact output is available
 
 See `references/artifact-output.md` and `assets/codebase-walkthrough.tex`.
 
 ### 7. Finish with a concise chat summary
 
-After saving artifacts, tell the user:
+After saving artifacts, tell Patrick:
 
 - which artifacts were saved
 - what scope they cover
+- the main angle of the report
 - any important omissions or uncertainty
-- suggested next iteration, if useful
+- the next refinement you would make if asked
 
-## Document Guidance
+## Guidance by Scope Type
 
-### For whole-repo or subsystem docs
-
-Focus on:
-
-- entry points
-- core data flow
-- major abstractions
-- background processes
-- important dependencies
-- notable design choices and constraints
-
-### For diff or PR docs
+### Whole repo or subsystem
 
 Bias toward:
 
-- what changed
-- why it changed
-- behavioral impact
-- migration or compatibility implications
-- testing and risk hotspots
+- what this area is fundamentally for
+- the path to understand first
+- the design pressures that explain the shape of the code
+- the handful of modules that actually matter
+- what to change first if behavior needs to move
+
+### Diff or PR
+
+Bias toward:
+
+- the behavioral change, not the file list
+- the motivation or pressure behind the change
+- what became simpler, safer, riskier, or more explicit
+- regressions or edge cases to watch
 - follow-up work the diff suggests
 
-### For partial path docs
+### Partial path docs
 
-Explicitly call out:
+Bias toward:
 
 - what is in scope
-- what neighboring modules are referenced but not fully covered
-- where the reader should look next
+- what is only referenced as context
+- what the reader should inspect next if they want the neighboring details
 
 ## Quality Bar
 
-Before saving the artifact, check:
+Before saving, check:
 
-- scope is explicit
-- narrative order is intentional
-- prose appears before each code excerpt
-- code excerpts are accurate and attributed
-- claims match the inspected code
-- the document is useful to a reader unfamiliar with the area
-- the final artifact is shorter than a full repo dump and more useful than a plain summary
+- the report makes a clear point, not just a summary
+- headings make claims instead of naming buckets
+- snippets prove claims instead of padding coverage
+- file paths support the narrative instead of crowding it
+- the document helps a maintainer decide where to look next
+- the report is selective enough to stay readable
+- the output is more useful than a code tour and more grounded than a vague essay
 
 ## References
 
