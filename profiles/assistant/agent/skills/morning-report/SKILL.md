@@ -49,10 +49,7 @@ Unless Patrick asks otherwise, format the report as:
 
 - Prefer local calendar reads. Load and use `apple-calendar-local`.
 - For the standard morning report, use only Apple Calendar / local Calendar.app data. Do not use Fastmail/CalDAV unless Patrick explicitly asks for Fastmail or local reads are not appropriate.
-- Default calendars:
-  - `Patrick Lee`
-  - `patrickc.lee@datadoghq.com`
-  - `Sanitation`
+- Use the `apple-calendar-local` default scope unless Patrick asks for different calendars.
 - Query calendars independently with bounded AppleScript timeouts (~20–25s) so one slow calendar does not block the rest.
 - Use two narrow windows:
   - `now -> end of today`
