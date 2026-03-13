@@ -1,27 +1,23 @@
 ---
 id: desktop
 title: Desktop Machine Notes
-summary: Reference notes for Patrick's local Ubuntu GPU workstation and operating workflow.
+summary: Reference facts for Patrick's local Ubuntu GPU workstation and when to prefer it over remote compute.
 type: reference
 status: active
 tags:
   - desktop
   - gpu
   - ubuntu
-updated: 2026-03-09
+updated: 2026-03-13
 ---
 
 # Desktop Machine Notes
 
-## Purpose
-
-Reference notes for Patrick's local headless Ubuntu GPU box (`desktop`) and how to use it for AI/dev workloads.
-
-## Stable access + identity
+## Identity
 
 - SSH host alias: `desktop`
-- Remote hostname: `patrick`
-- Headless Ubuntu workstation (non-GUI default)
+- Remote hostname / user context: `patrick`
+- Headless Ubuntu workstation used for local AI and development workloads
 
 ## Hardware summary
 
@@ -33,11 +29,11 @@ Reference notes for Patrick's local headless Ubuntu GPU box (`desktop`) and how 
 
 - OS observed: Ubuntu 24.04.2 LTS
 - Core tools available: `git`, `tmux`, `python3`, `python3-venv`, `node`, `npm`
-- Basic SSH / tmux / Python / Node workflows are ready without extra bootstrap
+- Basic SSH, tmux, Python, and Node workflows are ready without extra bootstrap
 
 ## Practical fit
 
-Good fit for:
+Prefer `desktop` for:
 
 - local inference on small-to-mid models
 - LoRA / QLoRA fine-tuning experiments
@@ -47,55 +43,11 @@ Good fit for:
 Main constraints:
 
 - larger full-finetuning jobs are VRAM-limited
-- multi-GPU/distributed work is out of scope on current hardware
-- containerized GPU workflows need Docker + NVIDIA container stack setup first
+- multi-GPU or distributed work is out of scope on current hardware
+- containerized GPU workflows still need Docker + NVIDIA container stack setup first
 
-## Standard workflow
+## Working rule
 
-### Connect
-
-```bash
-ssh desktop
-```
-
-### Run long work in tmux
-
-```bash
-tmux new -s <session-name>
-# run training / inference job
-# detach: Ctrl-b d
-```
-
-Reattach later:
-
-```bash
-tmux ls
-tmux attach -t <session-name>
-```
-
-### Monitor machine state
-
-```bash
-nvidia-smi
-watch -n 1 nvidia-smi
-htop
-free -h
-```
-
-### Python env baseline
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -U pip
-```
-
-## Quick verification commands
-
-```bash
-hostnamectl
-cat /etc/os-release
-nvidia-smi -L
-nvidia-smi
-systemctl get-default
-```
+- Use `desktop` before renting remote GPUs when local capacity is sufficient.
+- Put long-running jobs in `tmux`.
+- Escalate to Runpod only when local capacity or isolation is not enough.
