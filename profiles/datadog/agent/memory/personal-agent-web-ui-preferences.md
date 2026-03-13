@@ -34,12 +34,19 @@ Durable UX preferences repeatedly expressed for the personal-agent web interface
 - Preserve primary conversation drafts across reloads.
 - Allow setting or changing conversation cwd before the first user message; prefer a native folder picker as the primary flow and manual path entry as a fallback.
 - Make archived-conversation restore and conversation forking first-class in-app flows rather than tiny popovers or new browser tabs.
+- The conversation history/tree should show actual fork lineage with branch-aware layout instead of flattening or hiding inactive branches.
+- Fork actions should be available on any loaded, non-streaming conversation; if the thread is not currently live, lazily resume it first.
+- Forking from an assistant message should branch with an empty composer; only user-message forks should reuse the prior user prompt as editable draft text.
 - Open conversation tabs should be directly reorderable in the UI instead of fixed to creation order.
 - Conversation titles should be durable user-facing labels: manual rename should be first-class, and sidebar/open-tab labels should stay attached to the conversation title rather than drift to the latest prompt text.
-- Prefer human-readable labels in the UI. Fresh chats should render as `New Conversation`, raw ids should stay secondary, and open conversation titles/status should keep updating live without click-to-refresh.
+- Prefer human-readable labels in the UI. Fresh unsent chats should render as `New Conversation`; after the first user turn, use the truncated prompt as a temporary fallback until a better title exists; raw ids should stay secondary, and open conversation titles/status should keep updating live without click-to-refresh.
 - Prefer conversation titles that summarize the session from the first assistant response rather than copying the raw first user prompt when that makes the list easier to scan.
 - Keep running state and needs-attention state separate. A running conversation does not automatically need attention; attention should surface when there is unseen output or the agent has stopped and now needs review.
 - Prefer conversation-centric turn rendering over a raw event-log feel; when a turn contains many tool calls or thinking blocks, collapse that internal activity into a turn-level disclosure so the triggering user message and the assistant's visible answer stay in view together.
+- Preserve the full durable transcript across navigation and reconnects; live snapshots should extend persisted session history rather than replace it with the current compacted context window.
+- Render compaction summaries as distinct system events rather than ordinary assistant messages.
+- If a conversation dies mid-turn, surface a truthful recovery action: replay when a pending operation exists, otherwise reopen the thread without auto-sending a synthetic follow-up prompt.
+- Surface durable runs directly from a conversation via inline inspect affordances and a conversation-level Runs section with rich status, recovery, and log detail.
 - Expose common runtime defaults such as model and thinking level directly in the UI rather than only through slash commands.
 - Queued follow-ups in the web UI should be restorable back into the composer so they remain editable draft material.
 - Prefer explicit labels over multiple ambiguous status dots when distinguishing states such as `running` and `needs review`.
@@ -58,6 +65,7 @@ Durable UX preferences repeatedly expressed for the personal-agent web interface
 ## Settings and defaults
 
 - Put editable runtime defaults and appearance controls on a dedicated settings surface rather than scattering them across incidental UI chrome.
+- Changes made from the web UI settings surface should persist across app restarts via durable local settings, not just transient runtime state.
 - Inspect available tools on a dedicated Tools surface rather than burying tool reference or schema inspection inside general settings.
 - Do not surface TUI-only settings in the web UI when they do not affect the web experience.
 

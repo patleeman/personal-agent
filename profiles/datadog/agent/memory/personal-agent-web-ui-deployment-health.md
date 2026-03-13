@@ -1,7 +1,7 @@
 ---
 id: personal-agent-web-ui-deployment-health
 title: "Personal-agent web UI deployment health"
-summary: "Known local deployment caveat: pa update can false-positive when an unmanaged process already owns port 3741 and launchd status alone is misleading."
+summary: "Known local deployment guidance: blue/green validation must verify the managed slot, core routes, and bad-release handling rather than trusting any responder on port 3741."
 type: "project"
 status: "active"
 tags:
@@ -10,7 +10,7 @@ tags:
   - "deployment"
   - "health-check"
   - "launchd"
-updated: 2026-03-12
+updated: 2026-03-13
 ---
 
 # Personal-agent web UI deployment health
@@ -32,4 +32,6 @@ Known local deployment caveat: `pa update` can false-positive when an unmanaged 
 ## Product guidance
 
 - Deployment validation should confirm the managed instance took over the port, not merely that some responder exists on `3741`.
+- Blue/green validation should run a small smoke suite against core routes such as `/api/status`, `/`, and `/projects`, not just a single health endpoint.
+- Rollback and mark-bad should be first-class operator flows, and once a release is marked bad the rollout logic should avoid restaging it automatically.
 - Service-status reporting should avoid treating `spawn scheduled` as healthy when the service failed to start.
