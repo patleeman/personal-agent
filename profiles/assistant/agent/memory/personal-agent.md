@@ -8,10 +8,18 @@ tags:
   - "personal-agent"
   - "tui"
   - "gateway"
-updated: 2026-03-12
+updated: 2026-03-14
 ---
 
 # personal-agent Project Notes
+
+## Architecture mental model
+
+- `personal-agent` is a durable application layer around Pi, not a separate model runtime: Pi runs the agent loop, while this repo decides what stays portable, what stays machine-local, and how the same agent appears through CLI, web UI, daemon, and Telegram.
+- `packages/resources` is the profile-materialization boundary: it merges shared, profile, and local overlays into one runtime agent shape that the other surfaces reuse.
+- `packages/web` carries most live-conversation product semantics: it hosts in-process Pi sessions, resolves references, records pending operations, and projects state to the client over SSE.
+- `packages/daemon` owns unattended execution and recovery; `packages/gateway` owns more than chat transport, including service-management and web UI deployment logic.
+- HTML artifacts render as standalone blobs in the artifact panel, so CSS, fonts, and similar assets that must affect rendering need to be inlined or otherwise embedded instead of referenced as sibling repo files.
 
 ## Current interface direction
 
