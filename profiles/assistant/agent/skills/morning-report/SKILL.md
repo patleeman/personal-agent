@@ -80,4 +80,3 @@ Unless Patrick asks otherwise, format the report as:
 - Do not guess missing calendar, reminder, or weather data.
 - Prefer concise, actionable bullets over long prose.
 - Avoid duplicate explanation blocks or source notes unless something is unavailable or a fallback was required.
-- Keep the report concise (roughly 120 words when possible, unless the day genuinely requires more detail).
