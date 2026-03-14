@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { homedir } from 'os';
 import { dirname, join } from 'path';
+import { getConfigRoot } from '@personal-agent/core';
 
 export interface PersonalAgentConfig {
   defaultProfile: string;
@@ -16,7 +16,7 @@ export function getConfigFilePath(): string {
     return explicit;
   }
 
-  return join(homedir(), '.config', 'personal-agent', 'config.json');
+  return join(getConfigRoot(), 'config.json');
 }
 
 export function readConfig(): PersonalAgentConfig {

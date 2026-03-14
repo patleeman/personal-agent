@@ -9,6 +9,12 @@
 export {
   getDefaultStateRoot,
   getStateRoot,
+  getDefaultConfigRoot,
+  getConfigRoot,
+  getDefaultProfilesRoot,
+  getProfilesRoot,
+  getDefaultLocalProfileDir,
+  getLocalProfileDir,
   resolveStatePaths,
   isPathInRepo,
   validateStatePathsOutsideRepo,

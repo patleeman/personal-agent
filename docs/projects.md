@@ -26,11 +26,11 @@ Projects are scoped to the active profile.
 
 Canonical durable files live under:
 
-- `profiles/<profile>/agent/projects/<projectId>/PROJECT.yaml`
-- `profiles/<profile>/agent/projects/<projectId>/BRIEF.md`
-- `profiles/<profile>/agent/projects/<projectId>/notes/`
-- `profiles/<profile>/agent/projects/<projectId>/attachments/`
-- `profiles/<profile>/agent/projects/<projectId>/artifacts/`
+- `~/.local/state/personal-agent/profiles/<profile>/agent/projects/<projectId>/PROJECT.yaml`
+- `~/.local/state/personal-agent/profiles/<profile>/agent/projects/<projectId>/BRIEF.md`
+- `~/.local/state/personal-agent/profiles/<profile>/agent/projects/<projectId>/notes/`
+- `~/.local/state/personal-agent/profiles/<profile>/agent/projects/<projectId>/attachments/`
+- `~/.local/state/personal-agent/profiles/<profile>/agent/projects/<projectId>/artifacts/`
 
 `PROJECT.yaml` remains the canonical structured project record.
 
@@ -210,7 +210,7 @@ They represent work inside a project plan.
 
 Scheduled tasks are daemon-run automation under:
 
-- `profiles/<profile>/agent/tasks/*.task.md`
+- `~/.local/state/personal-agent/profiles/<profile>/agent/tasks/*.task.md`
 
 They are for unattended prompts on cron or one-time schedules.
 

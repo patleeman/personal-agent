@@ -4,7 +4,10 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
+  getConfigRoot,
   getDefaultStateRoot,
+  getLocalProfileDir,
+  getProfilesRoot,
   getStateRoot,
   resolveStatePaths,
   isPathInRepo,
@@ -60,6 +63,46 @@ describe('getStateRoot', () => {
   it('should fall back to default state root', () => {
     delete process.env.PERSONAL_AGENT_STATE_ROOT;
     expect(getStateRoot()).toBe(getDefaultStateRoot());
+  });
+});
+
+describe('profile and config path helpers', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+    delete process.env.PERSONAL_AGENT_STATE_ROOT;
+    delete process.env.PERSONAL_AGENT_CONFIG_ROOT;
+    delete process.env.PERSONAL_AGENT_PROFILES_ROOT;
+    delete process.env.PERSONAL_AGENT_LOCAL_PROFILE_DIR;
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  it('derives defaults from state root', () => {
+    process.env.PERSONAL_AGENT_STATE_ROOT = '/runtime/state';
+
+    expect(getConfigRoot()).toBe('/runtime/state/config');
+    expect(getProfilesRoot()).toBe('/runtime/state/profiles');
+    expect(getLocalProfileDir()).toBe('/runtime/state/config/local');
+  });
+
+  it('honors explicit overrides', () => {
+    process.env.PERSONAL_AGENT_CONFIG_ROOT = '/custom/config';
+    process.env.PERSONAL_AGENT_PROFILES_ROOT = '/custom/profiles';
+    process.env.PERSONAL_AGENT_LOCAL_PROFILE_DIR = '/custom/local';
+
+    expect(getConfigRoot()).toBe('/custom/config');
+    expect(getProfilesRoot()).toBe('/custom/profiles');
+    expect(getLocalProfileDir()).toBe('/custom/local');
+  });
+
+  it('expands ~ in path overrides', () => {
+    process.env.PERSONAL_AGENT_CONFIG_ROOT = '~/pa-config';
+
+    expect(getConfigRoot()).toBe(join(homedir(), 'pa-config'));
   });
 });
 

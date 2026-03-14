@@ -9,7 +9,7 @@ The guiding principle is:
 
 ## The main config files
 
-### `~/.config/personal-agent/config.json`
+### `~/.local/state/personal-agent/config/config.json`
 
 This stores the default profile.
 
@@ -27,7 +27,7 @@ Useful command:
 pa profile use assistant
 ```
 
-### `~/.config/personal-agent/daemon.json`
+### `~/.local/state/personal-agent/config/daemon.json`
 
 This configures the background daemon.
 
@@ -56,7 +56,7 @@ Example:
 
 See [Daemon and Background Automation](./daemon.md) and [Scheduled Tasks](./scheduled-tasks.md).
 
-### `~/.config/personal-agent/gateway.json`
+### `~/.local/state/personal-agent/config/gateway.json`
 
 This stores gateway setup, typically written by:
 
@@ -77,7 +77,10 @@ See [Gateway Guide](./gateway.md).
 
 ## Profile resource configuration
 
-Profile defaults live in the repo under `profiles/**/agent`.
+Profile resources resolve from two homes:
+
+- shared defaults from repo `profiles/shared/agent`
+- mutable profile resources from `~/.local/state/personal-agent/profiles/<profile>/agent`
 
 Common files:
 
@@ -97,9 +100,9 @@ See [Profiles, Memory, and Skills](./profiles-memory-skills.md).
 
 Profile resources resolve in this order:
 
-1. `profiles/shared/agent`
-2. `profiles/<selected-profile>/agent`
-3. local overlay (`~/.config/personal-agent/local` by default)
+1. repo `profiles/shared/agent`
+2. mutable profiles root `~/.local/state/personal-agent/profiles/<selected-profile>/agent`
+3. local overlay (`~/.local/state/personal-agent/config/local` by default)
 
 Higher layers override lower layers where that makes sense.
 
@@ -127,11 +130,39 @@ This includes:
 
 Do not point runtime state inside the git repo.
 
+For one-time migration from legacy `~/.config/personal-agent` and `~/.pi/agent` locations,
+run `./scripts/migrate-state-home.sh` from the repo root.
+
+Canonical state-home layout:
+
+```text
+~/.local/state/personal-agent/
+├── config/
+│   ├── config.json
+│   ├── daemon.json
+│   ├── gateway.json
+│   └── web.json
+├── profiles/
+│   └── <profile>/agent/
+│       ├── projects/
+│       ├── memory/
+│       ├── tasks/
+│       └── activity/
+├── pi-agent/
+├── daemon/
+├── gateway/
+├── web/
+└── logs/
+```
+
+Note: legacy top-level `tmux/` and `tmux-logs/` are intentionally not part of the canonical layout.
+
 ## Important environment variables
 
 ### Profile and repo selection
 
-- `PERSONAL_AGENT_REPO_ROOT` — override the repo root
+- `PERSONAL_AGENT_REPO_ROOT` — override the repo root (shared defaults)
+- `PERSONAL_AGENT_PROFILES_ROOT` — override the mutable profiles root
 - `PERSONAL_AGENT_LOCAL_PROFILE_DIR` — override the local overlay dir
 - `PERSONAL_AGENT_PROFILE` — override the active profile for some runtime surfaces, especially gateway and daemon contexts
 
@@ -157,7 +188,7 @@ Do not point runtime state inside the git repo.
 
 ### Web UI
 
-- `PERSONAL_AGENT_WEB_CONFIG_FILE` — override `~/.config/personal-agent/web.json`
+- `PERSONAL_AGENT_WEB_CONFIG_FILE` — override `~/.local/state/personal-agent/config/web.json`
 - `PERSONAL_AGENT_WEB_TAILSCALE_SERVE` — runtime override (`true`/`false`) for `pa ui` foreground launches
 
 ### 1Password secrets
@@ -197,7 +228,7 @@ These defaults are used when a run does not explicitly override them.
 
 ### Web UI runtime config
 
-`pa ui` and the managed web UI service use `~/.config/personal-agent/web.json`:
+`pa ui` and the managed web UI service use `~/.local/state/personal-agent/config/web.json`:
 
 ```json
 {
@@ -216,7 +247,7 @@ You can also adjust model, theme, and conversation title settings from the web U
 For most setups:
 
 1. set the default profile with `pa profile use <name>`
-2. keep profile behavior and durable knowledge in `profiles/**/agent`
+2. keep profile behavior and durable knowledge in `~/.local/state/personal-agent/profiles/**/agent` (with shared defaults in repo `profiles/shared/agent`)
 3. keep daemon behavior in `daemon.json`
 4. use `pa gateway setup telegram` for gateway config
 5. keep secrets in 1Password or env vars, not directly in repo files

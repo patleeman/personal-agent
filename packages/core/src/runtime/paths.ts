@@ -27,11 +27,80 @@ export function getDefaultStateRoot(): string {
   return join(homedir(), '.local', 'state', 'personal-agent');
 }
 
+function expandHomePath(pathValue: string): string {
+  if (pathValue === '~') {
+    return homedir();
+  }
+
+  if (pathValue.startsWith('~/')) {
+    return join(homedir(), pathValue.slice(2));
+  }
+
+  return pathValue;
+}
+
 /**
  * Get the configured state root directory
  */
 export function getStateRoot(): string {
-  return process.env.PERSONAL_AGENT_STATE_ROOT ?? getDefaultStateRoot();
+  const explicit = process.env.PERSONAL_AGENT_STATE_ROOT;
+  return explicit && explicit.trim().length > 0
+    ? expandHomePath(explicit.trim())
+    : getDefaultStateRoot();
+}
+
+/**
+ * Default config root directory.
+ *
+ * The canonical config home now lives under the runtime state root so mutable
+ * application state is colocated under a single home.
+ */
+export function getDefaultConfigRoot(): string {
+  return join(getStateRoot(), 'config');
+}
+
+/**
+ * Get the configured config root directory.
+ */
+export function getConfigRoot(): string {
+  const explicit = process.env.PERSONAL_AGENT_CONFIG_ROOT;
+  return explicit && explicit.trim().length > 0
+    ? expandHomePath(explicit.trim())
+    : getDefaultConfigRoot();
+}
+
+/**
+ * Default mutable profiles root directory.
+ */
+export function getDefaultProfilesRoot(): string {
+  return join(getStateRoot(), 'profiles');
+}
+
+/**
+ * Get the configured mutable profiles root directory.
+ */
+export function getProfilesRoot(): string {
+  const explicit = process.env.PERSONAL_AGENT_PROFILES_ROOT;
+  return explicit && explicit.trim().length > 0
+    ? expandHomePath(explicit.trim())
+    : getDefaultProfilesRoot();
+}
+
+/**
+ * Default local overlay directory.
+ */
+export function getDefaultLocalProfileDir(): string {
+  return join(getConfigRoot(), 'local');
+}
+
+/**
+ * Get the configured local overlay directory.
+ */
+export function getLocalProfileDir(): string {
+  const explicit = process.env.PERSONAL_AGENT_LOCAL_PROFILE_DIR;
+  return explicit && explicit.trim().length > 0
+    ? expandHomePath(explicit.trim())
+    : getDefaultLocalProfileDir();
 }
 
 /**

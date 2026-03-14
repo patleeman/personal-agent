@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { homedir } from 'os';
 import { dirname, join, resolve } from 'path';
+import { getConfigRoot } from '@personal-agent/core';
 
 export interface TelegramStoredConfig {
   token?: string;
@@ -100,7 +100,7 @@ export function getGatewayConfigFilePath(): string {
     return resolve(explicit);
   }
 
-  return join(homedir(), '.config', 'personal-agent', 'gateway.json');
+  return join(getConfigRoot(), 'gateway.json');
 }
 
 export function readGatewayConfig(): GatewayStoredConfig {

@@ -4,7 +4,22 @@ import { dirname, isAbsolute, join, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-const DEFAULT_LOCAL_PROFILE_DIR = join(homedir(), '.config', 'personal-agent', 'local');
+
+function getDefaultStateRoot(): string {
+  const explicit = process.env.PERSONAL_AGENT_STATE_ROOT;
+  if (explicit && explicit.trim().length > 0) {
+    return resolve(expandHomePath(explicit.trim()));
+  }
+
+  const xdgStateHome = process.env.XDG_STATE_HOME;
+  if (xdgStateHome && xdgStateHome.trim().length > 0) {
+    return join(resolve(expandHomePath(xdgStateHome.trim())), 'personal-agent');
+  }
+
+  return join(homedir(), '.local', 'state', 'personal-agent');
+}
+
+const DEFAULT_LOCAL_PROFILE_DIR = join(getDefaultStateRoot(), 'config', 'local');
 
 export interface ProfileLayer {
   name: string;
@@ -33,6 +48,7 @@ export interface ResolvedResourceProfile {
 export interface ResolveProfileOptions {
   repoRoot?: string;
   localProfileDir?: string;
+  profilesRoot?: string;
 }
 
 export type PackageInstallTarget = 'profile' | 'local';
@@ -217,7 +233,7 @@ export function resolveLocalProfileDir(options: ResolveProfileOptions = {}): str
   const explicit = options.localProfileDir ?? process.env.PERSONAL_AGENT_LOCAL_PROFILE_DIR;
 
   if (typeof explicit === 'string' && explicit.trim().length > 0) {
-    return resolve(explicit.trim());
+    return resolve(expandHomePath(explicit.trim()));
   }
 
   return DEFAULT_LOCAL_PROFILE_DIR;
@@ -353,21 +369,39 @@ export function getRepoRoot(explicitRepoRoot?: string): string {
 }
 
 export function getProfilesRoot(options: ResolveProfileOptions = {}): string {
-  return join(getRepoRoot(options.repoRoot), 'profiles');
+  const explicit = options.profilesRoot ?? process.env.PERSONAL_AGENT_PROFILES_ROOT;
+  if (typeof explicit === 'string' && explicit.trim().length > 0) {
+    return resolve(expandHomePath(explicit.trim()));
+  }
+
+  if (options.repoRoot) {
+    return join(getRepoRoot(options.repoRoot), 'profiles');
+  }
+
+  return join(getDefaultStateRoot(), 'profiles');
+}
+
+function listProfilesInRoot(root: string): string[] {
+  if (!existsSync(root)) {
+    return [];
+  }
+
+  return readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .filter((name) => existsSync(join(root, name, 'agent')));
 }
 
 export function listProfiles(options: ResolveProfileOptions = {}): string[] {
   const profilesRoot = getProfilesRoot(options);
-  if (!existsSync(profilesRoot)) return [];
+  const repoProfilesRoot = join(getRepoRoot(options.repoRoot), 'profiles');
 
-  const entries = readdirSync(profilesRoot, { withFileTypes: true });
-  const profiles = entries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .filter((name) => existsSync(join(profilesRoot, name, 'agent')));
+  const profiles = new Set<string>([
+    ...listProfilesInRoot(repoProfilesRoot),
+    ...listProfilesInRoot(profilesRoot),
+  ]);
 
-  profiles.sort();
-  return profiles;
+  return [...profiles].sort((left, right) => left.localeCompare(right));
 }
 
 function collectLayerDirs(layers: ProfileLayer[], relativePath: string): string[] {
@@ -493,30 +527,39 @@ export function resolveResourceProfile(
   validateProfileName(profileName);
 
   const repoRoot = getRepoRoot(options.repoRoot);
-  const profilesRoot = join(repoRoot, 'profiles');
-  const sharedAgentDir = assertPathWithinRoot(join(profilesRoot, 'shared', 'agent'), profilesRoot, 'Shared profile');
+  const repoProfilesRoot = join(repoRoot, 'profiles');
+  const profilesRoot = getProfilesRoot(options);
 
-  if (!existsSync(sharedAgentDir)) {
-    throw new Error(`Shared profile not found: ${sharedAgentDir}`);
+  const repoSharedAgentDir = assertPathWithinRoot(join(repoProfilesRoot, 'shared', 'agent'), repoProfilesRoot, 'Shared profile');
+  if (!existsSync(repoSharedAgentDir)) {
+    throw new Error(`Shared profile not found: ${repoSharedAgentDir}`);
   }
+
+  const mutableSharedAgentDir = existingDir(join(profilesRoot, 'shared', 'agent'));
+  const sharedAgentDir = mutableSharedAgentDir ?? repoSharedAgentDir;
 
   const layers: ProfileLayer[] = [{ name: 'shared', agentDir: resolve(sharedAgentDir) }];
 
   if (profileName !== 'shared') {
-    const overlayDir = assertPathWithinRoot(
-      join(profilesRoot, profileName, 'agent'),
-      profilesRoot,
+    const mutableOverlayDir = existingDir(join(profilesRoot, profileName, 'agent'));
+    const repoOverlayPath = assertPathWithinRoot(
+      join(repoProfilesRoot, profileName, 'agent'),
+      repoProfilesRoot,
       `Profile ${profileName}`,
     );
+    const repoOverlayDir = existingDir(repoOverlayPath);
+    const overlayDir = mutableOverlayDir ?? repoOverlayDir;
 
-    if (!existsSync(overlayDir)) {
-      throw new Error(`Profile not found: ${profileName} (${overlayDir})`);
+    if (!overlayDir) {
+      throw new Error(
+        `Profile not found: ${profileName}. Checked ${join(profilesRoot, profileName, 'agent')} and ${repoOverlayPath}`,
+      );
     }
 
     layers.push({ name: profileName, agentDir: resolve(overlayDir) });
   }
 
-  const localBase = options.localProfileDir ?? process.env.PERSONAL_AGENT_LOCAL_PROFILE_DIR ?? DEFAULT_LOCAL_PROFILE_DIR;
+  const localBase = resolveLocalProfileDir(options);
   const localAgentDir = existingDir(join(localBase, 'agent')) ?? existingDir(localBase);
   if (localAgentDir) {
     layers.push({ name: 'local', agentDir: localAgentDir });

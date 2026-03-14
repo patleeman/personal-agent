@@ -44,17 +44,17 @@ These docs intentionally focus on product behavior and daily use. They are not p
 | --- | --- | --- |
 | Work interactively with the agent right now | conversation / live session | local runtime session state |
 | Notice something that happened asynchronously later | inbox/activity | local runtime inbox state under `~/.local/state/personal-agent/pi-agent/state/inbox/**` |
-| Track long-running work, briefs, notes, files, blockers, and next steps across conversations | project | `profiles/<profile>/agent/projects/<projectId>/PROJECT.yaml` + sibling project resources |
-| Store durable behavior, knowledge, or reusable workflows | profiles, AGENTS, memory docs, skills | `profiles/**/agent/**` |
-| Run automation on a schedule | scheduled task + daemon | `profiles/<profile>/agent/tasks/*.task.md` + local daemon state |
+| Track long-running work, briefs, notes, files, blockers, and next steps across conversations | project | `~/.local/state/personal-agent/profiles/<profile>/agent/projects/<projectId>/PROJECT.yaml` + sibling project resources |
+| Store durable behavior, knowledge, or reusable workflows | profiles, AGENTS, memory docs, skills | shared repo defaults + `~/.local/state/personal-agent/profiles/<profile>/agent/**` |
+| Run automation on a schedule | scheduled task + daemon | `~/.local/state/personal-agent/profiles/<profile>/agent/tasks/*.task.md` + local daemon state |
 | Talk to the same agent through Telegram | gateway | local gateway state + the active profile |
 
 ## Read this if you are an agent
 
 The most important model is:
 
-- keep portable, durable knowledge in repo-managed profile files
-- keep local runtime state out of the repo
+- keep shared defaults in repo-managed profile files
+- keep mutable durable/runtime state under `~/.local/state/personal-agent`
 - use the right durable surface for the job
 
 In practice:

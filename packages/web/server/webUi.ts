@@ -8,8 +8,8 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { getConfigRoot } from '@personal-agent/core';
 import {
   findBadWebUiRelease,
   getWebUiServiceStatus,
@@ -127,7 +127,7 @@ function resolveWebUiConfigFilePath(): string {
     return resolve(explicit);
   }
 
-  return join(homedir(), '.config', 'personal-agent', 'web.json');
+  return join(getConfigRoot(), 'web.json');
 }
 
 export function readWebUiConfig(): WebUiConfigState {

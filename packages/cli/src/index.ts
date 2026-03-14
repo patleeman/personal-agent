@@ -13,6 +13,8 @@ import {
   createProjectActivityEntry,
   ensureConversationAttentionBaselines,
   getActivityConversationLink,
+  getConfigRoot,
+  getProfilesRoot,
   listProfileActivityEntries,
   listStoredSessions,
   loadProfileActivityReadState,
@@ -146,10 +148,10 @@ function parseGlobalFlags(argv: string[]): ParsedGlobalFlags {
 const PI_PACKAGE_NAME = '@mariozechner/pi-coding-agent';
 const DEFAULT_WEB_UI_PORT = 3741;
 const INSTALL_COMMAND_USAGE = 'pa install <source> [--profile <name> | -l | --local]';
-const INSTALL_COMMAND_HELP_TEXT = `Default target: active profile settings.json.
+const INSTALL_COMMAND_HELP_TEXT = `Default target: active mutable profile settings.json.
 
 Options:
-  --profile <name>   Install into profiles/<name>/agent/settings.json
+  --profile <name>   Install into the selected profile's settings.json
   -l, --local        Install into the machine-local overlay settings.json
 
 Examples:
@@ -170,7 +172,7 @@ function getWebUiConfigFilePath(): string {
     return resolve(explicit);
   }
 
-  return join(homedir(), '.config', 'personal-agent', 'web.json');
+  return join(getConfigRoot(), 'web.json');
 }
 
 function normalizeWebUiPort(value: unknown, fallback = DEFAULT_WEB_UI_PORT): number {
@@ -1207,6 +1209,7 @@ async function installCommand(args: string[]): Promise<number> {
   const profileName = parsed.local ? undefined : (parsed.profileName ?? resolveProfileName());
   const result = installPackageSource({
     repoRoot: getRepoRoot(),
+    profilesRoot: getProfilesRoot(),
     source: parsed.source,
     target,
     profileName,

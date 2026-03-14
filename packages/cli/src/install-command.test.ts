@@ -20,8 +20,13 @@ function writeFile(path: string, content: string): void {
   writeFileSync(path, content);
 }
 
-function createTestRepo(): string {
+function createTestRepo(): { repo: string; profilesRoot: string } {
   const repo = createTempDir('personal-agent-cli-install-repo-');
+  const stateRoot = process.env.PERSONAL_AGENT_STATE_ROOT;
+  if (!stateRoot) {
+    throw new Error('PERSONAL_AGENT_STATE_ROOT must be set in test setup');
+  }
+  const profilesRoot = join(stateRoot, 'profiles');
 
   writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
   writeFile(
@@ -32,16 +37,16 @@ function createTestRepo(): string {
     }),
   );
 
-  writeFile(join(repo, 'profiles/assistant/agent/AGENTS.md'), '# Assistant\n');
+  writeFile(join(profilesRoot, 'assistant/agent/AGENTS.md'), '# Assistant\n');
   writeFile(
-    join(repo, 'profiles/assistant/agent/settings.json'),
+    join(profilesRoot, 'assistant/agent/settings.json'),
     JSON.stringify({
       theme: 'cobalt2',
       packages: ['/existing-package'],
     }),
   );
 
-  return repo;
+  return { repo, profilesRoot };
 }
 
 function captureLogs(): string[] {
@@ -75,7 +80,7 @@ afterEach(async () => {
 
 describe('install command', () => {
   it('adds a package source to the active profile settings', async () => {
-    const repo = createTestRepo();
+    const { repo, profilesRoot } = createTestRepo();
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
     const logs = captureLogs();
 
@@ -84,7 +89,7 @@ describe('install command', () => {
     expect(exitCode).toBe(0);
 
     const settings = JSON.parse(
-      readFileSync(join(repo, 'profiles/assistant/agent/settings.json'), 'utf-8'),
+      readFileSync(join(profilesRoot, 'assistant/agent/settings.json'), 'utf-8'),
     ) as { packages: string[] };
 
     expect(settings.packages).toEqual([
@@ -95,10 +100,10 @@ describe('install command', () => {
   });
 
   it('does not duplicate package sources already present in object entries', async () => {
-    const repo = createTestRepo();
+    const { repo, profilesRoot } = createTestRepo();
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
     writeFile(
-      join(repo, 'profiles/assistant/agent/settings.json'),
+      join(profilesRoot, 'assistant/agent/settings.json'),
       JSON.stringify({
         packages: [
           {
@@ -115,7 +120,7 @@ describe('install command', () => {
     expect(exitCode).toBe(0);
 
     const settings = JSON.parse(
-      readFileSync(join(repo, 'profiles/assistant/agent/settings.json'), 'utf-8'),
+      readFileSync(join(profilesRoot, 'assistant/agent/settings.json'), 'utf-8'),
     ) as { packages: Array<Record<string, unknown>> };
 
     expect(settings.packages).toHaveLength(1);
@@ -123,7 +128,7 @@ describe('install command', () => {
   });
 
   it('writes to the local overlay when --local is used', async () => {
-    const repo = createTestRepo();
+    const { repo } = createTestRepo();
     const localDir = createTempDir('personal-agent-cli-install-local-');
     mkdirSync(join(localDir, 'agent'), { recursive: true });
 
@@ -142,7 +147,7 @@ describe('install command', () => {
   });
 
   it('stores relative local package paths as absolute paths', async () => {
-    const repo = createTestRepo();
+    const { repo, profilesRoot } = createTestRepo();
     const workingDir = createTempDir('personal-agent-cli-install-cwd-');
     const packageDir = join(workingDir, 'my-package');
     mkdirSync(packageDir, { recursive: true });
@@ -156,7 +161,7 @@ describe('install command', () => {
     expect(exitCode).toBe(0);
 
     const settings = JSON.parse(
-      readFileSync(join(repo, 'profiles/assistant/agent/settings.json'), 'utf-8'),
+      readFileSync(join(profilesRoot, 'assistant/agent/settings.json'), 'utf-8'),
     ) as { packages: string[] };
 
     expect(settings.packages).toEqual([

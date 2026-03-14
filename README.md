@@ -137,7 +137,7 @@ pa tasks list --status active
 pa tasks list --json --status completed
 pa tasks show <id>
 pa tasks validate --all
-pa tasks validate ~/.config/personal-agent/tasks/example.task.md
+pa tasks validate ~/.local/state/personal-agent/profiles/<profile>/agent/tasks/example.task.md
 pa tasks logs <id> --tail 120
 ```
 
@@ -188,8 +188,8 @@ When daemon is unavailable, clients warn and continue (non-fatal).
 Pi extensions are auto-discovered from profile layers:
 
 - `profiles/shared/agent/extensions/*`
-- `profiles/<profile>/agent/extensions/*`
-- `~/.config/personal-agent/local/extensions/*`
+- `~/.local/state/personal-agent/profiles/<profile>/agent/extensions/*`
+- `~/.local/state/personal-agent/config/local/extensions/*`
 
 Extensions with `package.json` dependencies are auto-installed on first use.
 
@@ -278,7 +278,7 @@ Profiles live in:
 
 Optional local overlay:
 
-- `~/.config/personal-agent/local`
+- `~/.local/state/personal-agent/config/local`
 
 See docs:
 

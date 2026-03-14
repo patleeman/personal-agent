@@ -95,7 +95,7 @@ Launch Pi with the resolved active profile.
 
 Add a Pi package source to durable `pa` settings.
 
-By default this writes to the active profile's `settings.json` under `profiles/<profile>/agent`.
+By default this writes to the active profile's mutable `settings.json` in the configured profiles root.
 Use `--local` to write to the machine-local overlay instead.
 
 Examples:

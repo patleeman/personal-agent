@@ -6,6 +6,7 @@ import {
   readProject,
   writeProject,
 } from './project-artifacts.js';
+import { getProfilesRoot as getRuntimeProfilesRoot } from './runtime/paths.js';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 const PROJECT_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
@@ -143,8 +144,7 @@ function formatIsoTimestamp(date: Date): string {
 
 export function resolveProfileProjectsDir(options: ResolveProjectOptions): string {
   validateProfileName(options.profile);
-  const repoRoot = getRepoRoot(options.repoRoot);
-  return join(repoRoot, 'profiles', options.profile, 'agent', 'projects');
+  return join(getRuntimeProfilesRoot(), options.profile, 'agent', 'projects');
 }
 
 export function resolveProjectPaths(options: ResolveProjectPathsOptions): ProjectPaths {

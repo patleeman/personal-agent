@@ -4,27 +4,30 @@
 
 The core idea is simple:
 
-- keep durable resources in the repo
-- keep mutable runtime state local
+- keep shared defaults in the repo
+- keep mutable durable state under `~/.local/state/personal-agent`
 - use the right durable surface for each kind of work
 
 This page is the main mental model for both users and agents.
 
 ## The two kinds of state
 
-### Repo-managed state
+### Shared defaults + mutable profile state
 
-This is the portable, shareable, durable part of the system.
+Shared defaults remain repo-managed.
 
-Common examples:
+Common shared examples:
 
-- `profiles/<profile>/agent/AGENTS.md`
-- `profiles/<profile>/agent/memory/*.md`
-- `profiles/<profile>/agent/tasks/*.task.md`
-- `profiles/<profile>/agent/projects/<projectId>/PROJECT.yaml`
-- shared skills, extensions, prompts, themes, and settings
+- `profiles/shared/agent/settings.json`
+- `profiles/shared/agent/skills/**`
+- `profiles/shared/agent/extensions/**`
 
-Use repo-managed state for things that should survive across machines and sessions.
+Mutable profile state defaults to the state home:
+
+- `~/.local/state/personal-agent/profiles/<profile>/agent/AGENTS.md`
+- `~/.local/state/personal-agent/profiles/<profile>/agent/memory/*.md`
+- `~/.local/state/personal-agent/profiles/<profile>/agent/tasks/*.task.md`
+- `~/.local/state/personal-agent/profiles/<profile>/agent/projects/<projectId>/PROJECT.yaml`
 
 ### Local runtime state
 

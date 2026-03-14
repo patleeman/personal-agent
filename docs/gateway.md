@@ -64,7 +64,7 @@ Target resolution order:
 
 Gateway config file:
 
-- `~/.config/personal-agent/gateway.json`
+- `~/.local/state/personal-agent/config/gateway.json`
 
 Per-setting precedence:
 

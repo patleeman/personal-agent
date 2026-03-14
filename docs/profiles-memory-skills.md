@@ -8,9 +8,9 @@ A profile is not just a name. It is the durable resource bundle the agent runs w
 
 Resources resolve in this order:
 
-1. `profiles/shared/agent`
-2. `profiles/<selected-profile>/agent`
-3. local overlay (`~/.config/personal-agent/local` by default)
+1. repo `profiles/shared/agent`
+2. mutable profiles root `~/.local/state/personal-agent/profiles/<selected-profile>/agent`
+3. local overlay (`~/.local/state/personal-agent/config/local` by default)
 
 Think of it like this:
 
@@ -40,22 +40,26 @@ Non-shared profiles can also keep durable profile state in:
 ## Example layout
 
 ```text
-profiles/
-├── shared/
-│   └── agent/
-│       ├── settings.json
-│       ├── models.json
-│       ├── skills/
-│       ├── extensions/
-│       └── themes/
-└── assistant/
-    └── agent/
-        ├── AGENTS.md
-        ├── settings.json
-        ├── memory/
-        ├── tasks/
-        ├── projects/
-        └── activity/
+<repo>/
+└── profiles/
+    └── shared/
+        └── agent/
+            ├── settings.json
+            ├── models.json
+            ├── skills/
+            ├── extensions/
+            └── themes/
+
+~/.local/state/personal-agent/
+└── profiles/
+    └── assistant/
+        └── agent/
+            ├── AGENTS.md
+            ├── settings.json
+            ├── memory/
+            ├── tasks/
+            ├── projects/
+            └── activity/
 ```
 
 ## What belongs where
@@ -110,7 +114,7 @@ Skills show up in the Memory page and can also be invoked from supported interfa
 
 Memory docs live under:
 
-- `profiles/<profile>/agent/memory/*.md`
+- `~/.local/state/personal-agent/profiles/<profile>/agent/memory/*.md`
 
 They are flat Markdown files with YAML frontmatter.
 
@@ -208,7 +212,7 @@ pa memory lint
 
 The optional local overlay defaults to:
 
-- `~/.config/personal-agent/local`
+- `~/.local/state/personal-agent/config/local`
 
 Use it for machine-local additions that should not live in the repo.
 

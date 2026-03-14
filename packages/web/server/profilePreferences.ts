@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { getConfigRoot } from '@personal-agent/core';
 
 export interface SavedProfilePreferences {
   defaultProfile: string;
@@ -16,7 +16,7 @@ export function getProfileConfigFilePath(): string {
     return explicit;
   }
 
-  return join(homedir(), '.config', 'personal-agent', 'config.json');
+  return join(getConfigRoot(), 'config.json');
 }
 
 export function readSavedProfilePreferences(configFile = getProfileConfigFilePath()): SavedProfilePreferences {

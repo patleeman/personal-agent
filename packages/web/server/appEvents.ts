@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import {
   resolveActivityReadStatePath,
   resolveConversationAttentionStatePath,
+  getProfilesRoot,
   resolveDeferredResumeStateFile,
   resolveProfileActivityConversationLinksDir,
   resolveProfileActivityDir,
@@ -79,7 +80,7 @@ function createTopicSignatures(options: AppEventMonitorOptions, profile: string)
   const projectsDir = resolveProfileProjectsDir({ repoRoot: options.repoRoot, profile });
   const conversationLinksDir = resolveProfileConversationLinksDir({ profile });
   const conversationArtifactsDir = resolveProfileConversationArtifactsDir({ profile });
-  const tasksDir = join(options.repoRoot, 'profiles', profile, 'agent', 'tasks');
+  const tasksDir = join(getProfilesRoot(), profile, 'agent', 'tasks');
   const readStateFile = resolveActivityReadStatePath({ profile });
   const conversationAttentionStateFile = resolveConversationAttentionStatePath({ profile });
   const deferredResumeStateFile = resolveDeferredResumeStateFile();

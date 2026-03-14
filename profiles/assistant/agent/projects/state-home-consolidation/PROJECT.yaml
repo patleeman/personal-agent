@@ -1,6 +1,6 @@
 id: state-home-consolidation
 createdAt: 2026-03-14T19:04:25.000Z
-updatedAt: 2026-03-14T19:04:25.000Z
+updatedAt: 2026-03-14T19:33:00.000Z
 title: Consolidate personal-agent state under one home
 description: >-
   Move mutable personal-agent state out of the repo into a single state home rooted at
@@ -13,20 +13,22 @@ summary: >-
 status: in_progress
 blockers: []
 currentFocus: >-
-  Land the first implementation pass for unified state/config path resolution and state-home
-  documentation updates.
+  Validate end-to-end behavior (web/daemon/gateway/profile resource resolution) and tighten
+  remaining docs around the finalized state-home contract.
 recentProgress:
-  - Created the project scaffold and initial brief.
-  - Captured scope to exclude tmux/tmux-logs and include a projects directory in shared state.
+  - Replaced hardcoded config/state path defaults across CLI/core/daemon/gateway/resources/web with centralized runtime path helpers.
+  - Switched mutable profile/project resolution to state-home profiles root, including web/server and resources callsites.
+  - Added one-time migration script (`scripts/migrate-state-home.sh`) with compatibility symlink creation and legacy tmux/tmux-logs relocation.
+  - Updated configuration/docs to reflect canonical `~/.local/state/personal-agent` layout with explicit per-profile `projects/` space.
 plan:
   milestones: []
   tasks:
     - id: unify-path-resolution
-      status: in_progress
+      status: completed
       title: Replace hardcoded config/state paths with one state-home resolver.
     - id: add-projects-space
-      status: pending
+      status: completed
       title: Ensure shared state layout includes profiles/<profile>/agent/projects.
     - id: migration-runbook
-      status: pending
+      status: completed
       title: Provide a one-time migration script and validation checklist.

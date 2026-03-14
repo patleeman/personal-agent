@@ -19,7 +19,7 @@ Most users and agents should think about them this way:
 Skills live in layered profile directories such as:
 
 - `profiles/shared/agent/skills/`
-- `profiles/<profile>/agent/skills/`
+- `~/.local/state/personal-agent/profiles/<profile>/agent/skills/`
 - local overlay skill dirs
 - repo/package-provided internal skills such as `skills/`
 

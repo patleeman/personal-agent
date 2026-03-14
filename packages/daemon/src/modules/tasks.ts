@@ -1,9 +1,9 @@
 import { randomUUID } from 'crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'fs';
-import { homedir } from 'os';
 import { dirname, join, resolve } from 'path';
 import {
   createProjectActivityEntry,
+  getStateRoot,
   setActivityConversationLinks,
   writeProfileActivityEntry,
 } from '@personal-agent/core';
@@ -145,11 +145,11 @@ export interface TasksModuleDependencies {
 
 /**
  * Find Pi session IDs that were created within a ±5 minute window of a task run.
- * Sessions live at ~/.local/state/personal-agent/pi-agent/sessions/<cwd-slug>/<ts>_<uuid>.jsonl
+ * Sessions live at <stateRoot>/pi-agent/sessions/<cwd-slug>/<ts>_<uuid>.jsonl.
  */
 function findRelatedSessionIds(startedAt: string, endedAt: string): string[] {
   try {
-    const sessionsBase = join(homedir(), '.local', 'state', 'personal-agent', 'pi-agent', 'sessions');
+    const sessionsBase = join(getStateRoot(), 'pi-agent', 'sessions');
     if (!existsSync(sessionsBase)) return [];
 
     const startMs = new Date(startedAt).getTime() - 60_000;   // 1 min before

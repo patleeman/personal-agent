@@ -1,6 +1,5 @@
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { basename, dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
@@ -112,7 +111,9 @@ import {
   getConversationArtifact,
   getConversationAttachment,
   getConversationProjectLink,
+  getProfilesRoot,
   getReadySessionDeferredResumeEntries,
+  getStateRoot,
   listConversationProjectLinks,
   listConversationArtifacts,
   listConversationAttachments,
@@ -199,9 +200,9 @@ const PORT = parseInt(process.env.PA_WEB_PORT ?? '3741', 10);
 const DEFAULT_REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? DEFAULT_REPO_ROOT;
 const DEFAULT_WEB_CWD = process.cwd();
-const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
+const AGENT_DIR = join(getStateRoot(), 'pi-agent');
 const SESSIONS_DIR = join(AGENT_DIR, 'sessions');
-const TASK_STATE_FILE = join(homedir(), '.local/state/personal-agent/daemon/task-state.json');
+const TASK_STATE_FILE = join(getStateRoot(), 'daemon', 'task-state.json');
 const PROFILE_CONFIG_FILE = getProfileConfigFilePath();
 const DEFERRED_RESUME_POLL_MS = 3_000;
 const DEFERRED_RESUME_RETRY_DELAY_MS = 30_000;
@@ -215,7 +216,10 @@ function resolveDaemonRoot(): string {
 installProcessLogging();
 
 function listAvailableProfiles(): string[] {
-  return listProfiles({ repoRoot: REPO_ROOT });
+  return listProfiles({
+    repoRoot: REPO_ROOT,
+    profilesRoot: getProfilesRoot(),
+  });
 }
 
 function applyProfileEnvironment(profile: string): void {
@@ -226,7 +230,10 @@ function applyProfileEnvironment(profile: string): void {
 
 function materializeWebProfile(profile: string): void {
   applyProfileEnvironment(profile);
-  const resolved = resolveResourceProfile(profile, { repoRoot: REPO_ROOT });
+  const resolved = resolveResourceProfile(profile, {
+    repoRoot: REPO_ROOT,
+    profilesRoot: getProfilesRoot(),
+  });
   materializeProfileToAgentDir(resolved, AGENT_DIR);
 }
 
@@ -320,7 +327,10 @@ function buildLiveSessionExtensionFactories() {
 }
 
 function buildLiveSessionResourceOptions() {
-  const resolved = resolveResourceProfile(getCurrentProfile(), { repoRoot: REPO_ROOT });
+  const resolved = resolveResourceProfile(getCurrentProfile(), {
+    repoRoot: REPO_ROOT,
+    profilesRoot: getProfilesRoot(),
+  });
 
   return {
     additionalExtensionPaths: resolved.extensionEntries,
@@ -331,8 +341,14 @@ function buildLiveSessionResourceOptions() {
 }
 
 function buildPackageInstallState(profile = getCurrentProfile()) {
-  const profileTargets = listProfiles({ repoRoot: REPO_ROOT }).map((profileName) => ({
-    ...readPackageSourceTargetState('profile', profileName, { repoRoot: REPO_ROOT }),
+  const profileTargets = listProfiles({
+    repoRoot: REPO_ROOT,
+    profilesRoot: getProfilesRoot(),
+  }).map((profileName) => ({
+    ...readPackageSourceTargetState('profile', profileName, {
+      repoRoot: REPO_ROOT,
+      profilesRoot: getProfilesRoot(),
+    }),
     profileName,
     current: profileName === profile,
   }));
@@ -1091,7 +1107,7 @@ function buildDistilledMemoryMarkdown(input: {
 }
 
 function saveDistilledConversationMemory(options: SaveDistilledConversationMemoryOptions): MemoryDocItem {
-  const memoryDir = join(REPO_ROOT, `profiles/${options.profile}/agent/memory`);
+  const memoryDir = join(getProfilesRoot(), options.profile, 'agent', 'memory');
   mkdirSync(memoryDir, { recursive: true });
 
   const draft = deriveDistilledConversationMemoryDraft(options);
@@ -2003,7 +2019,10 @@ function listAvailableModelDefinitions() {
 
 function listAvailableThemeIds(): string[] {
   try {
-    const profile = resolveResourceProfile(getCurrentProfile(), { repoRoot: REPO_ROOT });
+    const profile = resolveResourceProfile(getCurrentProfile(), {
+      repoRoot: REPO_ROOT,
+      profilesRoot: getProfilesRoot(),
+    });
     const ids = profile.themeEntries
       .map((entry) => basename(entry, '.json').trim())
       .filter((entry) => entry.length > 0);
@@ -2162,6 +2181,7 @@ app.post('/api/tools/packages/install', (req, res) => {
     const currentProfile = getCurrentProfile();
     const result = installPackageSource({
       repoRoot: REPO_ROOT,
+      profilesRoot: getProfilesRoot(),
       profileName: target === 'profile' ? profileName : undefined,
       source,
       target,
@@ -5065,7 +5085,7 @@ function listMemoryDocsForCurrentProfile(options: { includeSearchText?: boolean 
   const includeSearchText = options.includeSearchText === true;
   const profile = getCurrentProfile();
   const memoryDocs: MemoryDocItem[] = [];
-  const memDir = join(REPO_ROOT, `profiles/${profile}/agent/memory`);
+  const memDir = join(getProfilesRoot(), profile, 'agent', 'memory');
   if (!existsSync(memDir)) {
     return memoryDocs;
   }
@@ -5120,7 +5140,7 @@ function listSkillsForCurrentProfile(): SkillItem[] {
   const skillSources = profile === 'shared' ? ['shared'] : ['shared', profile];
 
   for (const src of skillSources) {
-    const dir = join(REPO_ROOT, `profiles/${src}/agent/skills`);
+    const dir = join(getProfilesRoot(), src, 'agent', 'skills');
     if (!existsSync(dir)) {
       continue;
     }
@@ -5151,7 +5171,7 @@ function listProfileAgentItems(): AgentsItem[] {
   const items: AgentsItem[] = [];
 
   for (const profile of listAvailableProfiles()) {
-    const filePath = join(REPO_ROOT, `profiles/${profile}/agent/AGENTS.md`);
+    const filePath = join(getProfilesRoot(), profile, 'agent', 'AGENTS.md');
     if (!existsSync(filePath)) {
       continue;
     }
@@ -5244,8 +5264,8 @@ function buildRecentReadUsage(trackedPaths: string[]): Map<string, MemoryUsageSu
 app.get('/api/memory', (_req, res) => {
   try {
     const profile = getCurrentProfile();
-    const sharedPath  = join(REPO_ROOT, 'profiles/shared/agent/AGENTS.md');
-    const profilePath = join(REPO_ROOT, `profiles/${profile}/agent/AGENTS.md`);
+    const sharedPath = join(REPO_ROOT, 'profiles', 'shared', 'agent', 'AGENTS.md');
+    const profilePath = join(getProfilesRoot(), profile, 'agent', 'AGENTS.md');
     const agentsMd: AgentsItem[] = [{
       source: 'shared',
       path: sharedPath,

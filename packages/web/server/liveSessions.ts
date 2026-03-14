@@ -5,7 +5,9 @@
  */
 import { appendFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
+import {
+  getStateRoot,
+} from '@personal-agent/core';
 import {
   AgentSession,
   AuthStorage,
@@ -31,7 +33,7 @@ import {
 } from './sessions.js';
 import { estimateContextUsageSegments } from './sessionContextUsage.js';
 
-const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
+const AGENT_DIR = join(getStateRoot(), 'pi-agent');
 const SETTINGS_FILE = join(AGENT_DIR, 'settings.json');
 const SESSIONS_DIR = join(AGENT_DIR, 'sessions');
 

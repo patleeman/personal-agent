@@ -39,7 +39,7 @@ Default address (local interface):
 ## Expose with Tailscale Serve
 
 You can expose the running web UI to your Tailnet via Tailscale Serve.
-The UI and `pa ui` config persist this preference in `~/.config/personal-agent/web.json` as:
+The UI and `pa ui` config persist this preference in `~/.local/state/personal-agent/config/web.json` as:
 
 ```json
 {

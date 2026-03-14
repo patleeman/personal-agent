@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
-import { dirname, join, resolve } from 'path';
-import { fileURLToPath } from 'url';
+import { join, resolve } from 'path';
+import { getConfigRoot, getProfilesRoot } from '@personal-agent/core';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -33,9 +33,8 @@ export interface DaemonConfig {
   };
 }
 
-const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-const DEFAULT_DAEMON_CONFIG_FILE = join(homedir(), '.config', 'personal-agent', 'daemon.json');
-const DEFAULT_PERSONAL_AGENT_CONFIG_FILE = join(homedir(), '.config', 'personal-agent', 'config.json');
+const DEFAULT_DAEMON_CONFIG_FILE = join(getConfigRoot(), 'daemon.json');
+const DEFAULT_PERSONAL_AGENT_CONFIG_FILE = join(getConfigRoot(), 'config.json');
 const DEFAULT_PROFILE_NAME = 'shared';
 
 function expandHome(path: string): string {
@@ -96,11 +95,8 @@ function getActiveProfileName(): string {
 }
 
 function getDefaultTasksDir(): string {
-  const repoRoot = process.env.PERSONAL_AGENT_REPO_ROOT
-    ? resolve(expandHome(process.env.PERSONAL_AGENT_REPO_ROOT))
-    : PACKAGE_ROOT;
-
-  return join(repoRoot, 'profiles', getActiveProfileName(), 'agent', 'tasks');
+  const profilesRoot = resolve(expandHome(getProfilesRoot()));
+  return join(profilesRoot, getActiveProfileName(), 'agent', 'tasks');
 }
 
 function expandConfigPaths(config: DaemonConfig): DaemonConfig {

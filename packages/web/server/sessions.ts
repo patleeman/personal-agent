@@ -14,17 +14,17 @@
  */
 
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
+import { getStateRoot } from '@personal-agent/core';
 import {
   SessionManager,
   type SessionEntry,
 } from '@mariozechner/pi-coding-agent';
 import { readSessionContextUsageFromFile, type SessionContextUsageSnapshot } from './sessionContextUsage.js';
 
-export const DEFAULT_SESSIONS_DIR = join(homedir(), '.local/state/personal-agent/pi-agent/sessions');
+export const DEFAULT_SESSIONS_DIR = join(getStateRoot(), 'pi-agent', 'sessions');
 export const SESSIONS_DIR = DEFAULT_SESSIONS_DIR;
-export const DEFAULT_SESSIONS_INDEX_FILE = join(homedir(), '.local/state/personal-agent/pi-agent/session-meta-index.json');
+export const DEFAULT_SESSIONS_INDEX_FILE = join(getStateRoot(), 'pi-agent', 'session-meta-index.json');
 export const SESSIONS_INDEX_FILE = DEFAULT_SESSIONS_INDEX_FILE;
 
 // ── Raw JSONL types ────────────────────────────────────────────────────────────
