@@ -27,14 +27,23 @@ updated: 2026-03-14
 - Use daemon-backed durable runs for background orchestration, not a terminal multiplexer.
 - Keep richer workbench-style UX experimentation in the web UI, not in a more complex Pi TUI shell.
 
+## State model direction
+
+- Long-term, Patrick wants one personal-agent home outside the repo that cleanly separates synced durable app/profile state from machine-local runtime state.
+- Cross-machine sync for that durable home should be versioned and conflict-tolerant without relying on Git-style merge workflows for high-churn app state.
+
 ## Web conversation UX constraints
 
 - Keep conversation-header metadata compact and low-noise: prefer plain text over pill badges, keep model/thinking/context on one row when practical, and prefer one clear `Resume` path over duplicate recovery controls.
+- The command palette should be the unified search surface for open conversations, archived conversations, memories, tasks, and projects; changing focus should change scope within one menu, not open parallel modal families.
+- Command-palette search should support keyboard scope cycling and content-aware fuzzy search, including memory body text and archived user/assistant message text.
 - Context-usage UI and any breakdowns must be compaction-aware: derive from the effective current context, never from lifetime totals or the full transcript.
 - Treat the chat scrollbar as a quiet right-edge conversation rail that preserves transcript width and makes user turns more prominent landmarks than assistant turns.
+- In the session right rail, runs are secondary inspectability data: keep them below referenced projects and collapsed by default with a compact summary.
 - Use human-readable project labels/descriptions as the primary UI text; opaque generated project ids are secondary metadata.
 - In the right rail/project UI, prefer a single focused project card with inline remove controls over nested pill-plus-box chrome.
 - Web conversations should stay cwd-agnostic by default: explicit `cwd` wins; otherwise inherit from a single referenced project's durable `repoRoot` instead of assuming the server working directory.
+- UI and CLI toggles should perform their named effect when feasible; avoid controls that only persist intent while leaving the real side effect as a separate manual operator step.
 
 ## Memory + attachment direction
 
@@ -65,6 +74,7 @@ updated: 2026-03-14
 
 - Conversation state and metadata are machine-local runtime state under `~/.local/state/personal-agent/**`, not repo-managed profile artifacts.
 - Portable repo artifacts must not reference conversation ids; when something needs to sync across machines, use stable task/project identifiers plus summaries or other durable metadata instead.
+- Cross-surface conversation handoff (Telegram ↔ web UI) should bind both surfaces to the same underlying conversation/session rather than duplicating durable threads.
 - Agent runs should survive UI restarts so the web UI can reconnect to durable local workers instead of owning the run lifecycle.
 - Archived/open conversation views should enumerate all locally available personal-agent conversations rather than filtering to the current cwd, and fork flows should stay in-app.
 
