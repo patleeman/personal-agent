@@ -225,7 +225,7 @@ function seedSharedProfile(syncProfilesRoot: string, repoRoot: string): void {
 }
 
 function syncRepoGitignore(): string {
-  return `# personal-agent sync repo (managed by pa sync setup)\n\n*\n!.gitignore\n!.gitattributes\n!README.md\n\n!profiles/\nprofiles/*\n!profiles/**\n\n!pi-agent/\npi-agent/*\n!pi-agent/sessions/\n!pi-agent/sessions/**\n!pi-agent/state/\n!pi-agent/state/**\n\n!config/\nconfig/*\n!config/config.json\n\n# Never sync auth/secrets or machine-local runtime bits\n.DS_Store\n**/.DS_Store\npi-agent/auth.json\npi-agent/models.json\npi-agent/settings.json\npi-agent/bin/\npi-agent/session-meta-index.json\n`;
+  return `# personal-agent sync repo (managed by pa sync setup)\n\n*\n!.gitignore\n!.gitattributes\n!README.md\n\n# Whitelist complete durable-sync roots so new files/directories under them sync by default\n!profiles/\n!profiles/**\n\n!pi-agent/\n!pi-agent/**\n\n!config/\n!config/**\n\n# Never sync auth/secrets or machine-local runtime bits\n.DS_Store\n**/.DS_Store\npi-agent/auth.json\npi-agent/models.json\npi-agent/settings.json\npi-agent/bin/\npi-agent/session-meta-index.json\n`;
 }
 
 function syncRepoGitattributes(): string {
@@ -233,7 +233,7 @@ function syncRepoGitattributes(): string {
 }
 
 function syncRepoReadme(): string {
-  return `# personal-agent sync repo\n\nManaged by \`pa sync setup\`.\n\nThis repo tracks durable cross-machine state:\n\n- \`profiles/**\`\n- \`pi-agent/sessions/**\`\n- \`pi-agent/state/**\`\n- \`config/config.json\`\n\nAuth, machine-local caches/logs, and volatile runtime files are intentionally excluded.\n`;
+  return `# personal-agent sync repo\n\nManaged by \`pa sync setup\`.\n\nThis repo tracks durable cross-machine state from full sync roots:\n\n- \`profiles/**\`\n- \`pi-agent/**\` (with auth/settings/bin/index exceptions)\n- \`config/**\`\n\nAuth and machine-local runtime files are intentionally excluded by \`.gitignore\`.\n`;
 }
 
 function writeManagedSyncRepoFiles(syncRoot: string): void {
