@@ -29,12 +29,19 @@ updated: 2026-03-14
 
 ## Web conversation UX constraints
 
-- Keep conversation-header metadata compact and low-noise: prefer plain text over pill badges, keep model/thinking/context on one row when practical, and avoid redundant manual resume controls when send already auto-resumes the session.
+- Keep conversation-header metadata compact and low-noise: prefer plain text over pill badges, keep model/thinking/context on one row when practical, and prefer one clear `Resume` path over duplicate recovery controls.
 - Context-usage UI and any breakdowns must be compaction-aware: derive from the effective current context, never from lifetime totals or the full transcript.
 - Treat the chat scrollbar as a quiet right-edge conversation rail that preserves transcript width and makes user turns more prominent landmarks than assistant turns.
 - Use human-readable project labels/descriptions as the primary UI text; opaque generated project ids are secondary metadata.
 - In the right rail/project UI, prefer a single focused project card with inline remove controls over nested pill-plus-box chrome.
 - Web conversations should stay cwd-agnostic by default: explicit `cwd` wins; otherwise inherit from a single referenced project's durable `repoRoot` instead of assuming the server working directory.
+
+## Memory + attachment direction
+
+- Treat checkpoints as a memory-distillation action, not as a separate durable object; distilled results should land as normal memory docs.
+- Starting a conversation from a memory and `@`-mentioning memories are the preferred interaction patterns; if a standalone memory page becomes redundant, move AGENTS/skills browsing into Tools instead of keeping a separate configuration surface.
+- Conversation attachments should be first-class local runtime objects, separate from project artifacts.
+- Excalidraw support should preserve editable `.excalidraw` source plus rendered previews so the agent can inspect the drawing and Patrick can revise it later.
 
 ## Conversation + inbox model
 
