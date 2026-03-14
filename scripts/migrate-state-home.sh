@@ -4,8 +4,10 @@ set -euo pipefail
 PA_HOME="${PA_HOME:-$HOME/.local/state/personal-agent}"
 STATE_ROOT="$PA_HOME"
 CONFIG_ROOT="$PA_HOME/config"
-PROFILES_ROOT="$PA_HOME/profiles"
-PI_AGENT_ROOT="$PA_HOME/pi-agent"
+SYNC_ROOT="$PA_HOME/sync"
+SYNC_CONFIG_ROOT="$SYNC_ROOT/config"
+SYNC_PROFILES_ROOT="$SYNC_ROOT/profiles"
+SYNC_PI_AGENT_ROOT="$SYNC_ROOT/pi-agent"
 LOG_ROOT="$PA_HOME/logs"
 
 OLD_CONFIG_ROOT="$HOME/.config/personal-agent"
@@ -23,7 +25,7 @@ if [[ -z "$REPO_ROOT" ]]; then
   fi
 fi
 
-mkdir -p "$CONFIG_ROOT" "$PROFILES_ROOT" "$PI_AGENT_ROOT" "$LOG_ROOT" "$BACKUP_ROOT"
+mkdir -p "$CONFIG_ROOT" "$SYNC_ROOT" "$SYNC_CONFIG_ROOT" "$SYNC_PROFILES_ROOT" "$SYNC_PI_AGENT_ROOT" "$LOG_ROOT" "$BACKUP_ROOT"
 
 backup_path() {
   local source="$1"
@@ -67,43 +69,54 @@ link_dir() {
   ln -s "$target_path" "$link_path"
 }
 
+link_file() {
+  local link_path="$1"
+  local target_path="$2"
+
+  if [[ -L "$link_path" ]]; then
+    rm -f "$link_path"
+  elif [[ -e "$link_path" ]]; then
+    backup_path "$link_path" "$(basename "$link_path")-pre-link"
+    rm -f "$link_path"
+  fi
+
+  mkdir -p "$(dirname "$link_path")"
+  ln -s "$target_path" "$link_path"
+}
+
 echo "==> Backing up existing config + pi paths"
 backup_path "$OLD_CONFIG_ROOT" "old-config"
 backup_path "$OLD_PI_AGENT_ROOT" "old-pi-agent"
 
-echo "==> Migrating config files into $CONFIG_ROOT"
-copy_file_if_exists "$OLD_CONFIG_ROOT/config.json" "$CONFIG_ROOT/config.json"
+echo "==> Migrating config files"
+copy_file_if_exists "$OLD_CONFIG_ROOT/config.json" "$SYNC_CONFIG_ROOT/config.json"
 copy_file_if_exists "$OLD_CONFIG_ROOT/daemon.json" "$CONFIG_ROOT/daemon.json"
 copy_file_if_exists "$OLD_CONFIG_ROOT/gateway.json" "$CONFIG_ROOT/gateway.json"
 copy_file_if_exists "$OLD_CONFIG_ROOT/web.json" "$CONFIG_ROOT/web.json"
 copy_dir_if_exists "$OLD_CONFIG_ROOT/local" "$CONFIG_ROOT/local"
 
-echo "==> Migrating legacy ~/.pi/agent files into $PI_AGENT_ROOT"
-copy_file_if_exists "$OLD_PI_AGENT_ROOT/auth.json" "$PI_AGENT_ROOT/auth.json"
-copy_file_if_exists "$OLD_PI_AGENT_ROOT/settings.json" "$PI_AGENT_ROOT/settings.json"
-copy_file_if_exists "$OLD_PI_AGENT_ROOT/models.json" "$PI_AGENT_ROOT/models.json"
-copy_dir_if_exists "$OLD_PI_AGENT_ROOT/sessions" "$PI_AGENT_ROOT/sessions"
-copy_dir_if_exists "$OLD_PI_AGENT_ROOT/state" "$PI_AGENT_ROOT/state"
+echo "==> Migrating legacy ~/.pi/agent files into $SYNC_PI_AGENT_ROOT"
+copy_file_if_exists "$OLD_PI_AGENT_ROOT/auth.json" "$SYNC_PI_AGENT_ROOT/auth.json"
+copy_file_if_exists "$OLD_PI_AGENT_ROOT/settings.json" "$SYNC_PI_AGENT_ROOT/settings.json"
+copy_file_if_exists "$OLD_PI_AGENT_ROOT/models.json" "$SYNC_PI_AGENT_ROOT/models.json"
+copy_dir_if_exists "$OLD_PI_AGENT_ROOT/sessions" "$SYNC_PI_AGENT_ROOT/sessions"
+copy_dir_if_exists "$OLD_PI_AGENT_ROOT/state" "$SYNC_PI_AGENT_ROOT/state"
 
-echo "==> Creating profile roots under $PROFILES_ROOT"
-mkdir -p "$PROFILES_ROOT"
+echo "==> Creating profile roots under $SYNC_PROFILES_ROOT"
+mkdir -p "$SYNC_PROFILES_ROOT"
 
 if [[ -d "$REPO_ROOT/profiles" ]]; then
   while IFS= read -r profile_dir; do
     profile_name="$(basename "$profile_dir")"
-    if [[ "$profile_name" == "shared" ]]; then
-      continue
-    fi
-
     src_agent="$profile_dir/agent"
     if [[ ! -d "$src_agent" ]]; then
       continue
     fi
 
-    dest_agent="$PROFILES_ROOT/$profile_name/agent"
+    dest_agent="$SYNC_PROFILES_ROOT/$profile_name/agent"
     mkdir -p "$dest_agent"
 
-    for entry in AGENTS.md settings.json models.json memory tasks projects activity; do
+    for entry in AGENTS.md settings.json models.json memory tasks projects activity skills extensions prompts themes; do
       if [[ -e "$src_agent/$entry" ]]; then
         if [[ -d "$src_agent/$entry" ]]; then
           copy_dir_if_exists "$src_agent/$entry" "$dest_agent/$entry"
@@ -113,7 +126,9 @@ if [[ -d "$REPO_ROOT/profiles" ]]; then
       fi
     done
 
-    mkdir -p "$dest_agent/projects"
+    if [[ "$profile_name" != "shared" ]]; then
+      mkdir -p "$dest_agent/projects"
+    fi
   done < <(find "$REPO_ROOT/profiles" -mindepth 1 -maxdepth 1 -type d)
 fi
 
@@ -128,18 +143,22 @@ if [[ -d "$PA_HOME/tmux-logs" ]]; then
 fi
 
 echo "==> Linking compatibility paths"
+link_dir "$PA_HOME/profiles" "$SYNC_PROFILES_ROOT"
+link_dir "$PA_HOME/pi-agent" "$SYNC_PI_AGENT_ROOT"
+link_file "$CONFIG_ROOT/config.json" "../sync/config/config.json"
 link_dir "$HOME/.config/personal-agent" "$CONFIG_ROOT"
-link_dir "$HOME/.pi/agent" "$PI_AGENT_ROOT"
+link_dir "$HOME/.pi/agent" "$PA_HOME/pi-agent"
 
 echo ""
 echo "State-home migration complete."
-echo "  PA_HOME:       $PA_HOME"
-echo "  Config root:   $CONFIG_ROOT"
-echo "  Profiles root: $PROFILES_ROOT"
-echo "  Pi agent root: $PI_AGENT_ROOT"
-echo "  Backup:        $BACKUP_ROOT"
+echo "  PA_HOME:           $PA_HOME"
+echo "  Sync root:         $SYNC_ROOT"
+echo "  Sync profiles:     $SYNC_PROFILES_ROOT"
+echo "  Sync pi-agent:     $SYNC_PI_AGENT_ROOT"
+echo "  Runtime config:    $CONFIG_ROOT"
+echo "  Backup:            $BACKUP_ROOT"
 echo ""
 echo "Next steps:"
 echo "  1) pa doctor"
-echo "  2) pa profile list"
-echo "  3) pa daemon restart"
+echo "  2) pa sync setup --repo <git-url> --fresh"
+echo "  3) pa sync status"

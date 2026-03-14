@@ -96,6 +96,7 @@ import {
   writeWebUiRollbackInboxEntry,
 } from './restartNotifications.js';
 import { runsCommand } from './runs-command.js';
+import { syncCommand } from './sync-command.js';
 import { waitForWebUiHealthy } from './web-ui-health.js';
 import {
   accent,
@@ -4693,6 +4694,13 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       disableBuiltInHelp: true,
       run: runsCommand,
     },
+    {
+      name: 'sync',
+      usage: 'sync [status|run|setup|help] [args...]',
+      description: 'Configure and run automatic git state sync',
+      disableBuiltInHelp: true,
+      run: syncCommand,
+    },
 
   ];
 
@@ -4798,6 +4806,9 @@ Examples:
   pa runs show <id>
   pa runs start code-review -- pa -p "review this diff"
   pa runs cancel <id>
+  pa sync status
+  pa sync setup --repo git@github.com:you/personal-agent-state.git --fresh
+  pa sync run
 
 `,
     )

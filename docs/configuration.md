@@ -137,18 +137,25 @@ Canonical state-home layout:
 
 ```text
 ~/.local/state/personal-agent/
+├── sync/                      # git-synced durable state
+│   ├── config/
+│   │   └── config.json
+│   ├── profiles/
+│   │   └── <profile>/agent/
+│   │       ├── projects/
+│   │       ├── memory/
+│   │       ├── tasks/
+│   │       └── activity/
+│   └── pi-agent/
+│       ├── sessions/
+│       └── state/
+├── profiles -> sync/profiles          # compatibility symlink
+├── pi-agent -> sync/pi-agent          # compatibility symlink
 ├── config/
-│   ├── config.json
+│   ├── config.json -> ../sync/config/config.json
 │   ├── daemon.json
 │   ├── gateway.json
 │   └── web.json
-├── profiles/
-│   └── <profile>/agent/
-│       ├── projects/
-│       ├── memory/
-│       ├── tasks/
-│       └── activity/
-├── pi-agent/
 ├── daemon/
 ├── gateway/
 ├── web/
@@ -156,6 +163,13 @@ Canonical state-home layout:
 ```
 
 Note: legacy top-level `tmux/` and `tmux-logs/` are intentionally not part of the canonical layout.
+
+For git-based automatic cross-machine sync, use:
+
+- `pa sync setup --repo <git-url> --fresh` (new/fresh repo)
+- `pa sync setup --repo <git-url> --bootstrap` (existing remote history)
+
+This enables the daemon sync module and schedules periodic background sync.
 
 ## Important environment variables
 

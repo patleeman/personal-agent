@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
-import { getConfigRoot, getProfilesRoot } from '@personal-agent/core';
+import { getConfigRoot, getProfilesRoot, getStateRoot } from '@personal-agent/core';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -19,6 +19,17 @@ export interface TasksModuleConfig {
   defaultTimeoutSeconds: number;
 }
 
+export interface SyncModuleConfig {
+  enabled: boolean;
+  repoDir: string;
+  branch: string;
+  remote: string;
+  intervalSeconds: number;
+  autoResolveWithAgent: boolean;
+  conflictResolverTaskSlug: string;
+  resolverCooldownMinutes: number;
+}
+
 export interface DaemonConfig {
   logLevel: LogLevel;
   queue: {
@@ -30,6 +41,7 @@ export interface DaemonConfig {
   modules: {
     maintenance: MaintenanceModuleConfig;
     tasks: TasksModuleConfig;
+    sync?: SyncModuleConfig;
   };
 }
 
@@ -99,6 +111,23 @@ function getDefaultTasksDir(): string {
   return join(profilesRoot, getActiveProfileName(), 'agent', 'tasks');
 }
 
+function getDefaultSyncRepoDir(): string {
+  return join(getStateRoot(), 'sync');
+}
+
+export function getDefaultSyncModuleConfig(): SyncModuleConfig {
+  return {
+    enabled: false,
+    repoDir: getDefaultSyncRepoDir(),
+    branch: 'main',
+    remote: 'origin',
+    intervalSeconds: 120,
+    autoResolveWithAgent: true,
+    conflictResolverTaskSlug: 'sync-conflict-resolver',
+    resolverCooldownMinutes: 30,
+  };
+}
+
 function expandConfigPaths(config: DaemonConfig): DaemonConfig {
   return {
     ...config,
@@ -112,6 +141,14 @@ function expandConfigPaths(config: DaemonConfig): DaemonConfig {
         ...config.modules.tasks,
         taskDir: resolve(expandHome(config.modules.tasks.taskDir)),
       },
+      ...(config.modules.sync
+        ? {
+            sync: {
+              ...config.modules.sync,
+              repoDir: resolve(expandHome(config.modules.sync.repoDir)),
+            },
+          }
+        : {}),
     },
   };
 }
@@ -192,6 +229,7 @@ export function getDefaultDaemonConfig(): DaemonConfig {
         reapAfterDays: 7,
         defaultTimeoutSeconds: 1800,
       },
+      sync: getDefaultSyncModuleConfig(),
     },
   };
 }

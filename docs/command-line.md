@@ -226,6 +226,22 @@ pa runs cancel <id>
 
 Use this as the main control surface for detached local background work.
 
+### `pa sync [status|run|setup|help]`
+
+Configure and trigger automatic git sync for durable state.
+
+Examples:
+
+```bash
+pa sync status
+pa sync setup --repo git@github.com:<you>/personal-agent-state.git --fresh
+pa sync setup --repo git@github.com:<you>/personal-agent-state.git --bootstrap
+pa sync run
+```
+
+The setup command moves syncable state under `<stateRoot>/sync`, configures the daemon sync module,
+and enables periodic background git sync.
+
 ### `pa gateway ...`
 
 Manage the Telegram gateway.

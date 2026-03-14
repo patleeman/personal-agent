@@ -151,6 +151,15 @@ pa runs logs <id> --tail 120
 pa runs cancel <id>
 ```
 
+### Automatic git sync
+
+```bash
+pa sync status
+pa sync setup --repo git@github.com:<you>/personal-agent-state.git --fresh
+pa sync setup --repo git@github.com:<you>/personal-agent-state.git --bootstrap
+pa sync run
+```
+
 ### Gateway (Telegram)
 
 ```bash
@@ -172,12 +181,14 @@ pa gateway service uninstall telegram
 
 - **maintenance** - Periodic cleanup and retention
 - **tasks** - Scheduled `*.task.md` execution with retries, logs, and gateway output routing
+- **sync** - Periodic git sync for durable cross-machine state
 
 CLI surface:
 
 - `pa daemon` (help), `pa daemon status|start|stop|restart|logs`
 - `pa daemon service install|status|uninstall|help`
 - `pa tasks list|show|validate|logs`
+- `pa sync status|setup|run`
 - `pa restart`
 - `pa update`
 

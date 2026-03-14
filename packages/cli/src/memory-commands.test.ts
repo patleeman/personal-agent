@@ -84,6 +84,7 @@ Desktop operational notes.
     );
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
+    process.env.PERSONAL_AGENT_PROFILES_ROOT = join(repoRoot, 'profiles');
     process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
 
     const logs: string[] = [];
@@ -159,6 +160,7 @@ Desktop operational notes.
     );
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
+    process.env.PERSONAL_AGENT_PROFILES_ROOT = join(repoRoot, 'profiles');
     process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
 
     const logs: string[] = [];
@@ -231,6 +233,7 @@ Duplicate memory doc.
     );
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
+    process.env.PERSONAL_AGENT_PROFILES_ROOT = join(repoRoot, 'profiles');
     process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
 
     const logs: string[] = [];
@@ -257,6 +260,7 @@ Duplicate memory doc.
     const { repoRoot, configPath } = createMemoryRepo();
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
+    process.env.PERSONAL_AGENT_PROFILES_ROOT = join(repoRoot, 'profiles');
     process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
 
     const logs: string[] = [];
@@ -315,6 +319,7 @@ Duplicate memory doc.
     const { repoRoot, configPath } = createMemoryRepo();
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
+    process.env.PERSONAL_AGENT_PROFILES_ROOT = join(repoRoot, 'profiles');
     process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
 
     const initialLogs: string[] = [];
