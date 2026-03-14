@@ -29,7 +29,8 @@ updated: 2026-03-14
 
 ## State model direction
 
-- Long-term, Patrick wants one personal-agent home outside the repo that cleanly separates synced durable app/profile state from machine-local runtime state.
+- Long-term, Patrick wants one personal-agent home outside the repo that cleanly separates synced durable app/profile state, machine-local durable state, and disposable volatile runtime state.
+- If state persistence is redesigned, prefer one canonical path/writer layer instead of scattering mutable state across repo files, local config, and runtime directories.
 - Cross-machine sync for that durable home should be versioned and conflict-tolerant without relying on Git-style merge workflows for high-churn app state.
 
 ## Web conversation UX constraints
@@ -73,6 +74,7 @@ updated: 2026-03-14
 ## Conversation durability and locality
 
 - Conversation state and metadata are machine-local runtime state under `~/.local/state/personal-agent/**`, not repo-managed profile artifacts.
+- If file-based Pi sessions remain part of the design, route their storage into the canonical application-state home instead of relying on default scattered paths.
 - Portable repo artifacts must not reference conversation ids; when something needs to sync across machines, use stable task/project identifiers plus summaries or other durable metadata instead.
 - Cross-surface conversation handoff (Telegram ↔ web UI) should bind both surfaces to the same underlying conversation/session rather than duplicating durable threads.
 - Agent runs should survive UI restarts so the web UI can reconnect to durable local workers instead of owning the run lifecycle.
