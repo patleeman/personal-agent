@@ -128,7 +128,8 @@ PY
 
 - Calendar access is via **CalDAV**.
 - Mailbox/email queries now use **IMAP** (no JMAP token required).
-- IMAP scripts fail fast on stalled 1Password reads (`FASTMAIL_OP_READ_TIMEOUT_SECONDS`) and socket timeouts (`FASTMAIL_IMAP_TIMEOUT_SECONDS`).
+- Fastmail automation in this profile should authenticate with the app password (`FASTMAIL_APP_PASSWORD` / `FASTMAIL_APP_PASSWORD_OP_REF`); make sure that secret resolves before starting longer mailbox-sync tasks.
+- IMAP scripts fail fast on stalled 1Password reads (`FASTMAIL_OP_READ_TIMEOUT_SECONDS`) and socket timeouts (`FASTMAIL_IMAP_TIMEOUT_SECONDS`). If secret resolution fails, report the exact `op` / SDK error instead of masking it with generic retry noise.
 - CalDAV scripts honor `FASTMAIL_CURL_CONNECT_TIMEOUT_SECONDS` and `FASTMAIL_CURL_MAX_TIME_SECONDS`.
 - Keep credentials in env vars or a secret manager.
 - Do not write secrets to repo files, AGENTS.md, or skills.
