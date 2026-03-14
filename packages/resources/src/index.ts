@@ -144,6 +144,22 @@ function existingFile(path: string): string | undefined {
   return resolve(path);
 }
 
+function hasSharedLayerResources(agentDir: string): boolean {
+  const canonicalSharedEntries = [
+    'AGENTS.md',
+    'APPEND_SYSTEM.md',
+    'SYSTEM.md',
+    'settings.json',
+    'models.json',
+    'extensions',
+    'skills',
+    'prompts',
+    'themes',
+  ];
+
+  return canonicalSharedEntries.some((entry) => existsSync(join(agentDir, entry)));
+}
+
 function readSettingsObject(settingsPath: string): Record<string, unknown> {
   if (!existsSync(settingsPath)) {
     return {};
@@ -535,7 +551,10 @@ export function resolveResourceProfile(
     throw new Error(`Shared profile not found: ${repoSharedAgentDir}`);
   }
 
-  const mutableSharedAgentDir = existingDir(join(profilesRoot, 'shared', 'agent'));
+  const sharedAgentDirCandidate = existingDir(join(profilesRoot, 'shared', 'agent'));
+  const mutableSharedAgentDir = sharedAgentDirCandidate && hasSharedLayerResources(sharedAgentDirCandidate)
+    ? sharedAgentDirCandidate
+    : undefined;
   const sharedAgentDir = mutableSharedAgentDir ?? repoSharedAgentDir;
 
   const layers: ProfileLayer[] = [{ name: 'shared', agentDir: resolve(sharedAgentDir) }];

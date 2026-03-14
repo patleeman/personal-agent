@@ -75,6 +75,33 @@ describe('resources profile loader', () => {
     expect(resolved.agentsFiles.length).toBe(3);
   });
 
+  it('falls back to repo shared layer when mutable shared overlay has no shared resources', () => {
+    const repo = createTempRepo();
+    const profilesRoot = mkdtempSync(join(tmpdir(), 'personal-agent-profiles-'));
+    tempDirs.push(profilesRoot);
+
+    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'profiles/shared/agent/settings.json'), JSON.stringify({ theme: 'cobalt2' }));
+    writeFile(join(repo, 'profiles/shared/agent/skills/shared-skill/SKILL.md'), '# Shared skill\n');
+
+    // Tasks-only shared overlays should not shadow canonical shared defaults.
+    writeFile(join(profilesRoot, 'shared/agent/tasks/README.md'), '# tasks\n');
+    writeFile(join(profilesRoot, 'assistant/agent/AGENTS.md'), '# Assistant\n');
+
+    const resolved = resolveResourceProfile('assistant', {
+      repoRoot: repo,
+      profilesRoot,
+      localProfileDir: join(repo, '.local-profile'),
+    });
+
+    expect(resolved.layers[0]).toEqual({
+      name: 'shared',
+      agentDir: join(repo, 'profiles/shared/agent'),
+    });
+    expect(resolved.skillDirs).toContain(join(repo, 'profiles/shared/agent/skills'));
+    expect(resolved.settingsFiles).toContain(join(repo, 'profiles/shared/agent/settings.json'));
+  });
+
   it('ignores top-level extension test files', () => {
     const repo = createTempRepo();
 
