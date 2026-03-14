@@ -107,6 +107,7 @@ export {
 } from './config.js';
 export { parseAllowlist } from './allowlist.js';
 export { parseGatewayCliArgs } from './cli-helpers.js';
+export { resolveWebUiTailscaleUrl, syncWebUiTailscaleServe, type SyncWebUiTailscaleServeInput } from './tailscale-serve.js';
 export {
   activateWebUiSlot,
   ensureActiveWebUiRelease,
@@ -8554,6 +8555,235 @@ function waitIndefinitely(): Promise<void> {
   });
 }
 
+function gatewaySendUsageText(provider?: GatewayProvider): string {
+  if (provider === 'telegram') {
+    return 'Usage: pa gateway telegram send <message> [--chat-id <id>]... [--chat-ids <id,id,...>] [--json]';
+  }
+
+  return 'Usage: pa gateway send <message> [--chat-id <id>]... [--chat-ids <id,id,...>] [--json]';
+}
+
+interface ParsedGatewaySendArgs {
+  message: string;
+  explicitChatIds: string[];
+  jsonMode: boolean;
+}
+
+function parseGatewaySendArgs(args: string[], provider?: GatewayProvider): ParsedGatewaySendArgs {
+  const usage = gatewaySendUsageText(provider);
+  const explicitChatIds: string[] = [];
+  const messageParts: string[] = [];
+  let jsonMode = false;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+
+    if (arg === '--') {
+      messageParts.push(...args.slice(index + 1));
+      break;
+    }
+
+    if (arg === '--json') {
+      jsonMode = true;
+      continue;
+    }
+
+    if (arg === '--chat-id') {
+      const value = args[index + 1];
+      if (!value) {
+        throw new Error(usage);
+      }
+
+      explicitChatIds.push(value);
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--chat-id=')) {
+      const value = arg.slice('--chat-id='.length);
+      if (value.trim().length === 0) {
+        throw new Error(usage);
+      }
+
+      explicitChatIds.push(value);
+      continue;
+    }
+
+    if (arg === '--chat-ids') {
+      const value = args[index + 1];
+      if (!value) {
+        throw new Error(usage);
+      }
+
+      explicitChatIds.push(...parseAllowlist(value));
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--chat-ids=')) {
+      const value = arg.slice('--chat-ids='.length);
+      if (value.trim().length === 0) {
+        throw new Error(usage);
+      }
+
+      explicitChatIds.push(...parseAllowlist(value));
+      continue;
+    }
+
+    if (arg.startsWith('--')) {
+      throw new Error(usage);
+    }
+
+    messageParts.push(arg);
+  }
+
+  const message = messageParts.join(' ').trim();
+  if (message.length === 0) {
+    throw new Error(usage);
+  }
+
+  return {
+    message,
+    explicitChatIds,
+    jsonMode,
+  };
+}
+
+function resolveTelegramSendTargets(explicitChatIds: string[]): number[] {
+  const stored = readGatewayConfig();
+  const storedTelegram = stored.telegram;
+
+  const explicitTargets = new Set<string>();
+  for (const explicitChatId of explicitChatIds) {
+    const resolved = resolveConfiguredValue(explicitChatId, { fieldName: '--chat-id' });
+    if (!resolved) {
+      continue;
+    }
+
+    for (const entry of parseAllowlist(resolved)) {
+      explicitTargets.add(entry);
+    }
+  }
+
+  const allowlistFromEnv = parseAllowlist(resolveConfiguredValue(
+    process.env.PERSONAL_AGENT_TELEGRAM_ALLOWLIST,
+    { fieldName: 'PERSONAL_AGENT_TELEGRAM_ALLOWLIST' },
+  ));
+  const storedAllowlist = resolveConfiguredAllowlistEntries(
+    storedTelegram?.allowlist,
+    { fieldName: 'gateway.telegram.allowlist' },
+  );
+  const allowlist = allowlistFromEnv.size > 0
+    ? allowlistFromEnv
+    : storedAllowlist;
+
+  const allowedUserIdsFromEnv = parseAllowlist(resolveConfiguredValue(
+    process.env.PERSONAL_AGENT_TELEGRAM_ALLOWED_USER_IDS,
+    { fieldName: 'PERSONAL_AGENT_TELEGRAM_ALLOWED_USER_IDS' },
+  ));
+  const storedAllowedUserIds = resolveConfiguredAllowlistEntries(
+    storedTelegram?.allowedUserIds,
+    { fieldName: 'gateway.telegram.allowedUserIds' },
+  );
+  const allowedUserIds = allowedUserIdsFromEnv.size > 0
+    ? allowedUserIdsFromEnv
+    : storedAllowedUserIds;
+
+  const targetIds = explicitTargets.size > 0
+    ? explicitTargets
+    : (allowedUserIds.size > 0 ? allowedUserIds : allowlist);
+
+  if (targetIds.size === 0) {
+    throw new Error(
+      'No Telegram destination configured. Pass --chat-id <id> or configure PERSONAL_AGENT_TELEGRAM_ALLOWED_USER_IDS. ' +
+      'As a fallback, gateway allowlist chat IDs are also used when allowed user IDs are empty.',
+    );
+  }
+
+  const numericTargetIds = [...targetIds]
+    .map((value) => {
+      const parsed = toNumericDestinationId(value);
+      if (typeof parsed !== 'number') {
+        throw new Error(`Invalid Telegram chat id: ${value}`);
+      }
+
+      return parsed;
+    });
+
+  return [...new Set(numericTargetIds)];
+}
+
+function resolveTelegramSendToken(): string {
+  const stored = readGatewayConfig();
+  const token = resolveConfiguredValue(
+    process.env.TELEGRAM_BOT_TOKEN ?? stored.telegram?.token,
+    { fieldName: 'TELEGRAM_BOT_TOKEN (or gateway.telegram.token)' },
+  );
+
+  if (!token) {
+    throw new Error('TELEGRAM_BOT_TOKEN is required. Run `pa gateway setup telegram` or set TELEGRAM_BOT_TOKEN.');
+  }
+
+  return token;
+}
+
+async function runGatewaySendCommand(provider: GatewayProvider, args: string[]): Promise<number> {
+  if (provider !== 'telegram') {
+    throw new Error(`Unsupported gateway provider for send: ${provider}`);
+  }
+
+  const parsed = parseGatewaySendArgs(args, provider);
+  const token = resolveTelegramSendToken();
+  const targetChatIds = resolveTelegramSendTargets(parsed.explicitChatIds);
+  const chunks = splitTelegramMessage(parsed.message);
+
+  const bot = new TelegramBot(token, { polling: false });
+  const failures: Array<{ chatId: number; message: string }> = [];
+  const deliveries: Array<{ chatId: number; sentMessageIds: number[] }> = [];
+
+  for (const chatId of targetChatIds) {
+    try {
+      const sentMessageIds: number[] = [];
+
+      for (const chunk of chunks) {
+        const sent = await bot.sendMessage(chatId, chunk);
+        const sentMessageId = toTelegramSentMessageId(sent);
+        if (typeof sentMessageId === 'number') {
+          sentMessageIds.push(sentMessageId);
+        }
+      }
+
+      deliveries.push({ chatId, sentMessageIds });
+    } catch (error) {
+      failures.push({
+        chatId,
+        message: (error as Error).message,
+      });
+    }
+  }
+
+  if (failures.length > 0) {
+    const detail = failures.map((failure) => `- chat ${failure.chatId}: ${failure.message}`).join('\n');
+    throw new Error(`Failed to send Telegram message to ${failures.length} chat(s):\n${detail}`);
+  }
+
+  if (parsed.jsonMode) {
+    console.log(JSON.stringify({
+      provider,
+      message: parsed.message,
+      chunkCount: chunks.length,
+      targets: deliveries,
+    }, null, 2));
+    return 0;
+  }
+
+  console.log(gatewaySuccess(`Sent Telegram message to ${deliveries.length} chat${deliveries.length === 1 ? '' : 's'}`));
+  console.log(gatewayKeyValue('Targets', deliveries.map((delivery) => String(delivery.chatId)).join(', ')));
+  console.log(gatewayKeyValue('Chunks', chunks.length));
+
+  return 0;
+}
+
 async function runGatewayCommand(args: string[]): Promise<number> {
   const parsed = parseGatewayCliArgs(args);
 
@@ -8580,6 +8810,10 @@ async function runGatewayCommand(args: string[]): Promise<number> {
     return 0;
   }
 
+  if (parsed.action === 'send') {
+    return runGatewaySendCommand(parsed.provider ?? 'telegram', parsed.sendArgs ?? []);
+  }
+
   await ensureDaemonRunningForGatewayStartup();
   await startGateway(parsed.provider ?? 'telegram');
   await waitIndefinitely();
@@ -8598,7 +8832,7 @@ export type CliCommandRegistrar = (command: RegisteredCliCommand) => void;
 export function registerGatewayCliCommands(register: CliCommandRegistrar): void {
   register({
     name: 'gateway',
-    usage: 'pa gateway [telegram|service] [subcommand]',
+    usage: 'pa gateway [telegram|service|send] [subcommand]',
     description: 'Run messaging gateway commands',
     run: runGatewayCommand,
   });

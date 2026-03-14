@@ -77,6 +77,7 @@ export interface PromptImageAttachment {
   type: 'image';
   data: string;
   mimeType: string;
+  name?: string;
 }
 
 // ── Internal entry ────────────────────────────────────────────────────────────
@@ -341,10 +342,15 @@ function extractQueuedPromptContent(
     if ((part as { type?: unknown }).type === 'image'
       && typeof (part as { data?: unknown }).data === 'string'
       && typeof (part as { mimeType?: unknown }).mimeType === 'string') {
+      const name = typeof (part as { name?: unknown }).name === 'string'
+        ? (part as { name: string }).name
+        : undefined;
+
       images.push({
         type: 'image',
         data: (part as { data: string }).data,
         mimeType: (part as { mimeType: string }).mimeType,
+        ...(name ? { name } : {}),
       });
     }
   }

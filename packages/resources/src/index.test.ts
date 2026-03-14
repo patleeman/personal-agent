@@ -6,9 +6,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildPiResourceArgs,
   getExtensionDependencyDirs,
+  installPackageSource,
   listProfiles,
   materializeProfileToAgentDir,
   mergeJsonFiles,
+  readPackageSourceTargetState,
+  resolveLocalProfileSettingsFilePath,
   resolveResourceProfile,
 } from './index.js';
 
@@ -257,6 +260,88 @@ describe('resources profile loader', () => {
     expect(settings.lastChangelogVersion).toBe('0.55.3');
     expect(settings.theme).toBe('cobalt2');
     expect(settings.runtimeOnly).toBeUndefined();
+  });
+
+  it('installs package sources into the selected target settings file', () => {
+    const repo = createTempRepo();
+    const local = mkdtempSync(join(tmpdir(), 'personal-agent-local-'));
+    tempDirs.push(local);
+
+    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'profiles/assistant/agent/AGENTS.md'), '# Assistant\n');
+    writeFile(
+      join(repo, 'profiles/assistant/agent/settings.json'),
+      JSON.stringify({ packages: ['/existing-package'] }),
+    );
+
+    const profileInstall = installPackageSource({
+      repoRoot: repo,
+      localProfileDir: local,
+      profileName: 'assistant',
+      source: 'https://github.com/davebcn87/pi-autoresearch',
+      target: 'profile',
+      sourceBaseDir: repo,
+    });
+
+    expect(profileInstall.installed).toBe(true);
+    expect(profileInstall.alreadyPresent).toBe(false);
+    expect(profileInstall.settingsPath).toBe(join(repo, 'profiles/assistant/agent/settings.json'));
+
+    const profileState = readPackageSourceTargetState('profile', 'assistant', { repoRoot: repo, localProfileDir: local });
+    expect(profileState.packages).toEqual([
+      { source: '/existing-package', filtered: false },
+      { source: 'https://github.com/davebcn87/pi-autoresearch', filtered: false },
+    ]);
+
+    const localInstall = installPackageSource({
+      repoRoot: repo,
+      localProfileDir: local,
+      source: './local-package',
+      target: 'local',
+      sourceBaseDir: repo,
+    });
+
+    expect(localInstall.installed).toBe(true);
+    expect(localInstall.settingsPath).toBe(resolveLocalProfileSettingsFilePath({ localProfileDir: local }));
+
+    const localState = readPackageSourceTargetState('local', { repoRoot: repo, localProfileDir: local });
+    expect(localState.packages).toEqual([
+      { source: join(repo, 'local-package'), filtered: false },
+    ]);
+  });
+
+  it('treats filtered package entries as already configured when sources match', () => {
+    const repo = createTempRepo();
+
+    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'profiles/assistant/agent/AGENTS.md'), '# Assistant\n');
+    writeFile(
+      join(repo, 'profiles/assistant/agent/settings.json'),
+      JSON.stringify({
+        packages: [
+          {
+            source: 'https://github.com/davebcn87/pi-autoresearch',
+            skills: [],
+          },
+        ],
+      }),
+    );
+
+    const result = installPackageSource({
+      repoRoot: repo,
+      profileName: 'assistant',
+      source: 'https://github.com/davebcn87/pi-autoresearch',
+      target: 'profile',
+      sourceBaseDir: repo,
+    });
+
+    expect(result.installed).toBe(false);
+    expect(result.alreadyPresent).toBe(true);
+
+    const settings = JSON.parse(
+      readFileSync(join(repo, 'profiles/assistant/agent/settings.json'), 'utf-8'),
+    ) as { packages: Array<Record<string, unknown>> };
+    expect(settings.packages).toHaveLength(1);
   });
 
   it('drops profile-provided lastChangelogVersion when runtime value is missing', () => {

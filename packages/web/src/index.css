@@ -91,6 +91,16 @@
     @apply rounded-xl border border-border-subtle bg-elevated transition-all;
   }
 
+  .excalidraw-embed-lite .main-menu-trigger,
+  .excalidraw-embed-lite .default-sidebar-trigger,
+  .excalidraw-embed-lite .layer-ui__wrapper__top-right,
+  .excalidraw-embed-lite .layer-ui__wrapper__footer,
+  .excalidraw-embed-lite .sidebar-tabs-root,
+  .excalidraw-embed-lite .sidebar-triggers,
+  .excalidraw-embed-lite .selected-shape-actions {
+    display: none !important;
+  }
+
   .ui-chat-avatar {
     @apply w-6 h-6 rounded-md bg-accent/20 flex items-center justify-center shrink-0;
   }

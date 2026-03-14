@@ -39,6 +39,27 @@ pa gateway service install telegram
 
 Installing the gateway service also provisions the managed daemon so background events stay enabled.
 
+## Send a one-off Telegram message from CLI
+
+You can push a one-off message to Telegram without starting a foreground gateway loop:
+
+```bash
+pa gateway send "Your message here"
+```
+
+Optional explicit targets:
+
+```bash
+pa gateway send "Your message here" --chat-id 123456789
+pa gateway telegram send "Your message here" --chat-ids 123456789,-100987654321
+```
+
+Target resolution order:
+
+1. explicit `--chat-id` / `--chat-ids`
+2. `PERSONAL_AGENT_TELEGRAM_ALLOWED_USER_IDS` / `gateway.telegram.allowedUserIds`
+3. `PERSONAL_AGENT_TELEGRAM_ALLOWLIST` / `gateway.telegram.allowlist`
+
 ## Configuration model
 
 Gateway config file:

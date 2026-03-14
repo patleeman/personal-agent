@@ -11,6 +11,12 @@ function isDaemonUnavailable(error) {
         || message.includes('closed without response')
         || message.includes('unknown request type');
 }
+function isRunNotFound(error) {
+    if (!(error instanceof Error)) {
+        return false;
+    }
+    return error.message.toLowerCase().includes('run not found');
+}
 function resolveRunsRoot() {
     return resolveDurableRunsRoot(resolveDaemonPaths().root);
 }
@@ -81,6 +87,9 @@ export async function getDurableRun(runId) {
         }
     }
     catch (error) {
+        if (isRunNotFound(error)) {
+            return undefined;
+        }
         if (!isDaemonUnavailable(error)) {
             throw error;
         }

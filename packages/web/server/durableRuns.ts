@@ -27,6 +27,14 @@ function isDaemonUnavailable(error: unknown): boolean {
     || message.includes('unknown request type');
 }
 
+function isRunNotFound(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return error.message.toLowerCase().includes('run not found');
+}
+
 function resolveRunsRoot(): string {
   return resolveDurableRunsRoot(resolveDaemonPaths().root);
 }
@@ -103,6 +111,10 @@ export async function getDurableRun(runId: string): Promise<(GetDurableRunResult
       };
     }
   } catch (error) {
+    if (isRunNotFound(error)) {
+      return undefined;
+    }
+
     if (!isDaemonUnavailable(error)) {
       throw error;
     }

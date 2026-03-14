@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { ArchivedConversationsModal } from './ArchivedConversationsModal';
 import { ConversationStatusText } from './ConversationStatusText';
 import { api } from '../api';
+import { openCommandPalette } from '../commandPaletteEvents';
 import { useApi } from '../hooks';
 import { useConversations } from '../hooks/useConversations';
 import { useAppData } from '../contexts';
@@ -20,7 +20,6 @@ import {
   shouldShowDraftConversationTab,
 } from '../draftConversation';
 import { getSidebarBrandLabel } from '../sidebarBrand';
-import { setConversationCheckpointsOpenInSearch, shouldOpenConversationCheckpointsFromSearch } from '../conversationCheckpoints';
 import { timeAgo } from '../utils';
 
 // ── Icons ──────────────────────────────────────────────────────────────────
@@ -36,7 +35,6 @@ function Ico({ d, size = 16 }: { d: string; size?: number }) {
 
 const PATH = {
   inbox:    'M2.25 13.5h3.86a2.25 2.25 0 0 1 2.012 1.244l.256.512a2.25 2.25 0 0 0 2.013 1.244h3.218a2.25 2.25 0 0 0 2.013-1.244l.256-.512a2.25 2.25 0 0 1 2.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 0 0-2.15-1.588H6.911a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.661Z',
-  checkpoints: 'M12 3.75l2.32 4.701 5.18.753-3.75 3.655.885 5.161L12 15.75l-4.635 2.27.885-5.161-3.75-3.655 5.18-.753L12 3.75Z',
   archive:  'M20.25 7.5v10.125c0 1.243-1.007 2.25-2.25 2.25H6c-1.243 0-2.25-1.007-2.25-2.25V7.5m16.5 0-2.394-2.992A2.25 2.25 0 0 0 16.099 3.75H7.901a2.25 2.25 0 0 0-1.757.758L3.75 7.5m16.5 0H3.75m5.25 4.5h6',
   gateway:  'M7.5 7.5 3.75 12l3.75 4.5m9-9 3.75 4.5-3.75 4.5M20.25 12H3.75',
   daemon:   'M6 4.5h12A1.5 1.5 0 0 1 19.5 6v12a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V6A1.5 1.5 0 0 1 6 4.5Zm0 3.75h12M6 12h12M6 15.75h12',
@@ -113,18 +111,21 @@ function TopActionButton({
   label,
   badge,
   isActive = false,
+  title,
   onClick,
 }: {
   icon: string;
   label: string;
   badge?: number | string | null;
   isActive?: boolean;
+  title?: string;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      title={title}
       aria-haspopup="dialog"
       aria-expanded={isActive}
       className={[
@@ -322,7 +323,7 @@ function ShelfDropZone({
 function SidebarFooter() {
   return (
     <div className="border-t border-border-subtle px-2 py-2 shrink-0 space-y-0.5">
-      <TopNavItem to="/memory" icon={PATH.memory} label="Memory" />
+      <TopNavItem to="/memories" icon={PATH.memory} label="Manage memories" />
       <TopNavItem to="/tools" icon={PATH.tools} label="Tools" />
       <TopNavItem to="/daemon" icon={PATH.daemon} label="Daemon" />
       <TopNavItem to="/gateway" icon={PATH.gateway} label="Gateway" />
@@ -349,14 +350,12 @@ export function Sidebar() {
     pinnedSessions,
     tabs,
     archivedSessions,
-    openSession,
     closeSession,
     pinSession,
     unpinSession,
     moveSession,
     loading,
   } = useConversations();
-  const [archiveOpen, setArchiveOpen] = useState(false);
   const [draggingSessionId, setDraggingSessionId] = useState<string | null>(null);
   const [draggingSection, setDraggingSection] = useState<ConversationShelf | null>(null);
   const [dropTarget, setDropTarget] = useState<{
@@ -366,7 +365,6 @@ export function Sidebar() {
   } | null>(null);
   const allSessions = useMemo(() => [...pinnedSessions, ...tabs, ...archivedSessions], [archivedSessions, pinnedSessions, tabs]);
   const activeConversationId = useMemo(() => getActiveConversationId(location.pathname), [location.pathname]);
-  const checkpointsOpen = activeConversationId !== null && shouldOpenConversationCheckpointsFromSearch(location.search);
   const attentionIds = useMemo(
     () => new Set(allSessions.filter((session) => sessionNeedsAttention(session)).map((session) => session.id)),
     [allSessions],
@@ -497,12 +495,6 @@ export function Sidebar() {
     handleConversationDrop(section, null, 'after');
   }
 
-  function handleRestoreArchivedConversation(session: SessionMeta) {
-    openSession(session.id);
-    setArchiveOpen(false);
-    navigate(`/conversations/${session.id}`);
-  }
-
   function handleCloseDraftTab() {
     clearDraftConversationComposer();
     clearDraftConversationCwd();
@@ -566,22 +558,13 @@ export function Sidebar() {
     navigate('/conversations/new');
   }, [navigate]);
 
-  const handleOpenCheckpoints = useCallback(() => {
-    const targetConversationId = activeConversationId ?? tabs[0]?.id ?? pinnedSessions[0]?.id;
+  const handleOpenMemories = useCallback(() => {
+    openCommandPalette({ scope: 'memories' });
+  }, []);
 
-    if (!targetConversationId) {
-      navigate('/conversations/new');
-      return;
-    }
-
-    const targetPath = `/conversations/${targetConversationId}`;
-    const baseSearch = location.pathname === targetPath ? location.search : '';
-
-    navigate({
-      pathname: targetPath,
-      search: setConversationCheckpointsOpenInSearch(baseSearch, true),
-    });
-  }, [activeConversationId, location.pathname, location.search, navigate, pinnedSessions, tabs]);
+  const handleOpenArchived = useCallback(() => {
+    openCommandPalette({ scope: 'archived' });
+  }, []);
 
   const navigateOpenConversation = useCallback((direction: -1 | 1) => {
     if (tabs.length === 0) {
@@ -666,16 +649,16 @@ export function Sidebar() {
       <div className="pb-1 space-y-0.5">
         <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={inboxCount} />
         <TopActionButton
-          icon={PATH.checkpoints}
-          label="Checkpoints"
-          isActive={checkpointsOpen}
-          onClick={handleOpenCheckpoints}
+          icon={PATH.memory}
+          label="Search memories"
+          title="Open unified search focused on memories"
+          onClick={handleOpenMemories}
         />
         <TopActionButton
           icon={PATH.archive}
-          label="Archived"
-          isActive={archiveOpen}
-          onClick={() => setArchiveOpen(true)}
+          label="Search archived"
+          title="Open unified search focused on archived conversations"
+          onClick={handleOpenArchived}
         />
         <TopNavItem to="/scheduled" icon={PATH.tasks} label="Scheduled" />
         <TopNavItem to="/projects" icon={PATH.projects} label="Projects" />
@@ -788,22 +771,6 @@ export function Sidebar() {
       </div>
 
       <SidebarFooter />
-
-      {archiveOpen && (
-        <ArchivedConversationsModal
-          sessions={archivedSessions}
-          loading={loading}
-          attentionIds={attentionIds}
-          onRestore={(sessionId) => {
-            const session = archivedSessions.find((item) => item.id === sessionId);
-            if (!session) {
-              return;
-            }
-            handleRestoreArchivedConversation(session);
-          }}
-          onClose={() => setArchiveOpen(false)}
-        />
-      )}
     </aside>
   );
 }

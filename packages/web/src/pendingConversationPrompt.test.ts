@@ -35,12 +35,14 @@ describe('pendingConversationPrompt helpers', () => {
       text: 'hello world',
       behavior: 'followUp',
       images: [{ mimeType: 'image/png', data: 'abc', name: 'diagram.png' }],
+      attachmentRefs: [{ attachmentId: 'diagram-1' }],
     }, storage);
 
     expect(readPendingConversationPrompt('session-123', storage)).toEqual({
       text: 'hello world',
       behavior: 'followUp',
       images: [{ mimeType: 'image/png', data: 'abc', name: 'diagram.png' }],
+      attachmentRefs: [{ attachmentId: 'diagram-1' }],
     });
   });
 
@@ -48,11 +50,13 @@ describe('pendingConversationPrompt helpers', () => {
     persistPendingConversationPrompt('session-in-memory', {
       text: 'hello world',
       images: [],
+      attachmentRefs: [],
     }, null);
 
     expect(readPendingConversationPrompt('session-in-memory', null)).toEqual({
       text: 'hello world',
       images: [],
+      attachmentRefs: [],
     });
 
     clearPendingConversationPrompt('session-in-memory', null);
@@ -65,6 +69,7 @@ describe('pendingConversationPrompt helpers', () => {
     persistPendingConversationPrompt('session-123', {
       text: 'hello world',
       images: [],
+      attachmentRefs: [],
     }, storage);
     clearPendingConversationPrompt('session-123', storage);
 
@@ -77,10 +82,12 @@ describe('pendingConversationPrompt helpers', () => {
     persistPendingConversationPrompt('session-123', {
       text: 'hello world',
       images: [],
+      attachmentRefs: [],
     }, storage);
     persistPendingConversationPrompt('session-123', {
       text: '',
       images: [],
+      attachmentRefs: [],
     }, storage);
 
     expect(readPendingConversationPrompt('session-123', storage)).toBeNull();

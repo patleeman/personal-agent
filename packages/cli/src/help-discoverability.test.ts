@@ -27,6 +27,7 @@ beforeEach(() => {
     ...originalEnv,
     PERSONAL_AGENT_CONFIG_FILE: join(createTempDir('pa-config-'), 'config.json'),
     PERSONAL_AGENT_DAEMON_CONFIG: join(createTempDir('pa-daemon-config-'), 'daemon.json'),
+    PERSONAL_AGENT_LOCAL_PROFILE_DIR: createTempDir('pa-local-'),
     PERSONAL_AGENT_STATE_ROOT: createTempDir('pa-state-'),
     PERSONAL_AGENT_DISABLE_DAEMON_EVENTS: '1',
     PI_SESSION_DIR: createTempDir('pi-session-'),
@@ -41,6 +42,10 @@ afterEach(async () => {
 
 describe('subcommand help discoverability', () => {
   it.each([
+    {
+      argv: ['install', '--help'],
+      expected: ['Install packages', 'Usage: pa install <source> [--profile <name> | -l | --local]', 'pa install https://github.com/davebcn87/pi-autoresearch'],
+    },
     {
       argv: ['profile', '--help'],
       expected: ['Profile commands', 'Usage: pa profile [list|show|use|help]', 'list'],
@@ -71,7 +76,7 @@ describe('subcommand help discoverability', () => {
     },
     {
       argv: ['gateway', '--help'],
-      expected: ['Gateway commands', 'pa gateway help', 'pa gateway telegram [setup|start|help]'],
+      expected: ['Gateway commands', 'pa gateway help', 'pa gateway telegram [setup|start|send|help]'],
     },
     {
       argv: ['gateway', 'service', '--help'],

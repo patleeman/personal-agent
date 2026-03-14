@@ -14,6 +14,11 @@ export interface PromptImageInput {
   previewUrl?: string;
 }
 
+export interface PromptAttachmentRefInput {
+  attachmentId: string;
+  revision?: number;
+}
+
 export type ConversationArtifactKind = 'html' | 'mermaid' | 'latex';
 
 export interface ConversationArtifactSummary {
@@ -42,6 +47,35 @@ export interface ConversationArtifactToolDetails {
   artifactCount?: number;
   artifactIds?: string[];
   deleted?: boolean;
+}
+
+export type ConversationAttachmentKind = 'excalidraw';
+
+export interface ConversationAttachmentRevision {
+  revision: number;
+  createdAt: string;
+  sourceName: string;
+  sourceMimeType: string;
+  sourceDownloadPath: string;
+  previewName: string;
+  previewMimeType: string;
+  previewDownloadPath: string;
+  note?: string;
+}
+
+export interface ConversationAttachmentSummary {
+  id: string;
+  conversationId: string;
+  kind: ConversationAttachmentKind;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  currentRevision: number;
+  latestRevision: ConversationAttachmentRevision;
+}
+
+export interface ConversationAttachmentRecord extends ConversationAttachmentSummary {
+  revisions: ConversationAttachmentRevision[];
 }
 
 export type MessageBlock =
@@ -444,6 +478,9 @@ export interface WebUiServiceSummary {
   repoRoot: string;
   port: number;
   url: string;
+  tailscaleServe: boolean;
+  tailscaleUrl?: string;
+  resumeFallbackPrompt: string;
   deployment?: WebUiDeploymentSummary;
 }
 
@@ -564,41 +601,6 @@ export interface DeferredResumeSummary {
   readyAt?: string;
 }
 
-export interface ConversationCheckpointSource {
-  conversationId: string;
-  conversationTitle?: string;
-  cwd?: string;
-  relatedProjectIds: string[];
-}
-
-export interface ConversationCheckpointAnchor {
-  messageId: string;
-  role: string;
-  timestamp: string;
-  preview: string;
-}
-
-export interface ConversationCheckpointSnapshot {
-  file: string;
-  messageCount: number;
-  lineCount: number;
-  bytes: number;
-}
-
-export interface ConversationCheckpointSummary {
-  version: 1;
-  id: string;
-  title: string;
-  note?: string;
-  summary?: string;
-  createdAt: string;
-  updatedAt: string;
-  source: ConversationCheckpointSource;
-  anchor: ConversationCheckpointAnchor;
-  snapshot: ConversationCheckpointSnapshot;
-  snapshotMissing?: boolean;
-}
-
 export interface ConversationCwdChangeResult {
   id: string;
   sessionFile: string;
@@ -666,9 +668,15 @@ export interface MemoryDocItem {
   type?: string;
   status?: string;
   updated?: string;
+  searchText?: string;
   recentSessionCount?: number;
   lastUsedAt?: string | null;
   usedInLastSession?: boolean;
+}
+
+export interface MemoryDocDetail {
+  memory: MemoryDocItem;
+  content: string;
 }
 
 export interface MemoryData {
@@ -802,6 +810,37 @@ export interface McpCliToolDetail {
   exitCode: number;
 }
 
+export interface ConfiguredPackageSource {
+  source: string;
+  filtered: boolean;
+}
+
+export interface PackageSourceTargetState {
+  target: 'profile' | 'local';
+  settingsPath: string;
+  packages: ConfiguredPackageSource[];
+}
+
+export interface ProfilePackageSourceTargetState extends PackageSourceTargetState {
+  profileName: string;
+  current: boolean;
+}
+
+export interface PackageInstallState {
+  currentProfile: string;
+  profileTargets: ProfilePackageSourceTargetState[];
+  localTarget: PackageSourceTargetState;
+}
+
+export interface PackageInstallResult {
+  installed: boolean;
+  alreadyPresent: boolean;
+  source: string;
+  target: 'profile' | 'local';
+  settingsPath: string;
+  packageInstall: PackageInstallState;
+}
+
 export interface ToolsState {
   profile: string;
   cwd: string;
@@ -809,4 +848,5 @@ export interface ToolsState {
   tools: AgentToolInfo[];
   dependentCliTools: DependentCliToolState[];
   mcpCli: McpCliState;
+  packageInstall: PackageInstallState;
 }

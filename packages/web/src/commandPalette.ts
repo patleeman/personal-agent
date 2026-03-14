@@ -1,6 +1,6 @@
 import { fuzzyScore } from './slashMenu';
 
-export type CommandPaletteSection = 'nav' | 'open' | 'archived' | 'checkpoints' | 'tasks' | 'projects';
+export type CommandPaletteSection = 'nav' | 'open' | 'archived' | 'memories' | 'tasks' | 'projects';
 export type CommandPaletteScope = 'all' | CommandPaletteSection;
 
 export interface CommandPaletteItem<TAction = unknown> {
@@ -30,7 +30,7 @@ export const COMMAND_PALETTE_SECTION_ORDER: CommandPaletteSection[] = [
   'nav',
   'open',
   'archived',
-  'checkpoints',
+  'memories',
   'tasks',
   'projects',
 ];
@@ -39,7 +39,7 @@ export const COMMAND_PALETTE_SECTION_LABELS: Record<CommandPaletteSection, strin
   nav: 'Navigation',
   open: 'Open conversations',
   archived: 'Archived conversations',
-  checkpoints: 'Checkpoints',
+  memories: 'Memories',
   tasks: 'Scheduled tasks',
   projects: 'Projects',
 };
@@ -49,7 +49,7 @@ export const COMMAND_PALETTE_SCOPE_OPTIONS: Array<{ value: CommandPaletteScope; 
   { value: 'nav', label: 'Navigation' },
   { value: 'open', label: 'Open' },
   { value: 'archived', label: 'Archived' },
-  { value: 'checkpoints', label: 'Checkpoints' },
+  { value: 'memories', label: 'Memories' },
   { value: 'tasks', label: 'Scheduled' },
   { value: 'projects', label: 'Projects' },
 ];
@@ -58,7 +58,7 @@ const EMPTY_QUERY_LIMITS: Record<CommandPaletteSection, number> = {
   nav: 12,
   open: 12,
   archived: 8,
-  checkpoints: 8,
+  memories: 8,
   tasks: 8,
   projects: 8,
 };

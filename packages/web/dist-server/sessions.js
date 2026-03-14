@@ -76,9 +76,14 @@ function extractUserContent(content) {
     const images = blocks
         .filter((block) => block.type === 'image')
         .map((block) => ({
-        alt: 'Attached image',
+        alt: typeof block.name === 'string' && block.name.trim().length > 0
+            ? `Attached image: ${block.name.trim()}`
+            : 'Attached image',
         src: imageSrc(block),
         mimeType: imageMimeType(block),
+        ...(typeof block.name === 'string' && block.name.trim().length > 0
+            ? { caption: block.name.trim() }
+            : {}),
     }));
     return { text, images };
 }
@@ -90,6 +95,50 @@ export function getAssistantErrorDisplayMessage(message) {
     return errorMessage && errorMessage.length > 0
         ? errorMessage
         : 'The model returned an error before completing its response.';
+}
+function normalizeSearchSegment(text, maxLength = 360) {
+    const normalized = text.replace(/\s+/g, ' ').trim();
+    if (!normalized) {
+        return '';
+    }
+    return normalized.length > maxLength
+        ? `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`
+        : normalized;
+}
+function buildSessionSearchText(entries, maxCharacters) {
+    const segments = [];
+    let remaining = Math.max(0, maxCharacters);
+    for (const entry of entries) {
+        if (remaining <= 0) {
+            break;
+        }
+        if (entry.type !== 'message') {
+            continue;
+        }
+        let segment = '';
+        if (entry.message.role === 'user') {
+            segment = extractUserContent(entry.message.content).text;
+        }
+        else if (entry.message.role === 'assistant') {
+            segment = normalizeContent(entry.message.content)
+                .filter((block) => block.type === 'text')
+                .map((block) => block.text ?? '')
+                .join('\n');
+        }
+        const normalizedSegment = normalizeSearchSegment(segment);
+        if (!normalizedSegment) {
+            continue;
+        }
+        const limitedSegment = normalizedSegment.length > remaining
+            ? `${normalizedSegment.slice(0, Math.max(0, remaining - 1)).trimEnd()}…`
+            : normalizedSegment;
+        if (!limitedSegment) {
+            continue;
+        }
+        segments.push(limitedSegment);
+        remaining -= limitedSegment.length + 1;
+    }
+    return segments.join('\n');
 }
 function summarizeTreeText(text, maxLength = 120) {
     const normalized = text.replace(/\s+/g, ' ').trim();
@@ -711,6 +760,19 @@ function buildConversationTreeSnapshotFromFile(filePath) {
 // ── Public API ─────────────────────────────────────────────────────────────────
 export function listSessions() {
     return scanSessionMetas();
+}
+export function readSessionSearchText(sessionId, maxCharacters = 12_000) {
+    const meta = resolveSessionMeta(sessionId);
+    if (!meta) {
+        return null;
+    }
+    try {
+        const manager = SessionManager.open(meta.file);
+        return buildSessionSearchText(manager.getBranch(), maxCharacters);
+    }
+    catch {
+        return null;
+    }
 }
 export function readSessionMetaByFile(filePath) {
     return readCachedSessionMeta(filePath, resolveSessionFileCwdSlug(filePath));

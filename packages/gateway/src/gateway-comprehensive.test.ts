@@ -159,7 +159,7 @@ describe('gateway command registration breadth', () => {
     expect(commands).toEqual([
       {
         name: 'gateway',
-        usage: 'pa gateway [telegram|service] [subcommand]',
+        usage: 'pa gateway [telegram|service|send] [subcommand]',
         description: 'Run messaging gateway commands',
       },
     ]);
@@ -169,6 +169,16 @@ describe('gateway command registration breadth', () => {
     expect(parseGatewayCliArgs(['telegram', 'start'])).toEqual({ action: 'start', provider: 'telegram' });
     expect(parseGatewayCliArgs(['telegram', 'help'])).toEqual({ action: 'help', provider: 'telegram' });
     expect(parseGatewayCliArgs(['setup', 'telegram'])).toEqual({ action: 'setup', provider: 'telegram' });
+    expect(parseGatewayCliArgs(['send', 'hello'])).toEqual({
+      action: 'send',
+      provider: 'telegram',
+      sendArgs: ['hello'],
+    });
+    expect(parseGatewayCliArgs(['telegram', 'send', 'hello'])).toEqual({
+      action: 'send',
+      provider: 'telegram',
+      sendArgs: ['hello'],
+    });
     expect(parseGatewayCliArgs(['service', 'install', 'telegram'])).toEqual({
       action: 'service',
       serviceAction: 'install',

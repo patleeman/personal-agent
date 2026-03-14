@@ -56,6 +56,10 @@ function isServiceToken(value: string | undefined): boolean {
   return value === 'service';
 }
 
+function isSendToken(value: string | undefined): boolean {
+  return value === 'send';
+}
+
 function isGatewayServiceRuntimeAction(value: string | undefined): value is GatewayServiceRuntimeAction {
   if (!value) {
     return false;
@@ -73,9 +77,10 @@ function ensureNoExtraGatewayArgs(args: string[], expectedLength: number, comman
 }
 
 export interface ParsedGatewayCliArgs {
-  action: 'start' | 'setup' | 'help' | 'service';
+  action: 'start' | 'setup' | 'help' | 'service' | 'send';
   provider?: GatewayProvider;
   serviceAction?: GatewayServiceCliAction;
+  sendArgs?: string[];
 }
 
 function parseGatewayServiceCliArgs(args: string[]): ParsedGatewayCliArgs {
@@ -155,6 +160,14 @@ export function parseGatewayCliArgs(args: string[]): ParsedGatewayCliArgs {
     return parseGatewayServiceCliArgs(args);
   }
 
+  if (isSendToken(first)) {
+    return {
+      action: 'send',
+      provider: 'telegram',
+      sendArgs: args.slice(1),
+    };
+  }
+
   if (isStartToken(first) || isSetupToken(first)) {
     const action: ParsedGatewayCliArgs['action'] = isStartToken(first) ? 'start' : 'setup';
 
@@ -197,6 +210,14 @@ export function parseGatewayCliArgs(args: string[]): ParsedGatewayCliArgs {
       return {
         action: 'setup',
         provider: first,
+      };
+    }
+
+    if (isSendToken(second)) {
+      return {
+        action: 'send',
+        provider: first,
+        sendArgs: args.slice(2),
       };
     }
 
@@ -537,6 +558,7 @@ export function printGatewayHelp(provider?: GatewayProvider): void {
     console.log('Commands:');
     console.log('  pa gateway telegram setup                 Interactive setup for Telegram gateway');
     console.log('  pa gateway telegram start                 Start Telegram bridge in foreground');
+    console.log('  pa gateway telegram send <message> [--chat-id <id>]...\n                                                 Send a one-off Telegram message');
     console.log('  pa gateway telegram help                  Show Telegram gateway help');
     console.log('  pa gateway service install telegram       Install Telegram background service');
     console.log('  pa gateway service status telegram        Show Telegram service status');
@@ -563,8 +585,9 @@ export function printGatewayHelp(provider?: GatewayProvider): void {
   console.log('  pa gateway help                                          Show gateway help');
   console.log('  pa gateway setup [provider]                              Interactive setup walkthrough');
   console.log('  pa gateway start [provider]                              Start provider (default: telegram)');
+  console.log('  pa gateway send <message> [--chat-id <id>]...            Send a one-off message (default provider: telegram)');
   console.log('  pa gateway service [install|status|uninstall|help] [...] Manage background service');
-  console.log('  pa gateway telegram [setup|start|help]                   Telegram gateway commands');
+  console.log('  pa gateway telegram [setup|start|send|help]              Telegram gateway commands');
   console.log('');
   console.log(`Config file: ${getGatewayConfigFilePath()}`);
   console.log('');

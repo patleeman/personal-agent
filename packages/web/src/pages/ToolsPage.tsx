@@ -1,8 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
-import { ChatView } from '../components/chat/ChatView';
 import { PageHeader, PageHeading, SectionLabel, ToolbarButton, cx } from '../components/ui';
-import { AGENT_OUTPUT_PREVIEW_BLOCKS, AGENT_OUTPUT_PREVIEW_MARKDOWN, AGENT_OUTPUT_PREVIEW_MARKDOWN_PATH } from '../fixtures/agentOutputPreview';
 import { useApi } from '../hooks';
 import type {
   AgentToolInfo,
@@ -10,6 +8,8 @@ import type {
   DependentCliToolState,
   McpCliServerDetail,
   McpCliToolDetail,
+  PackageSourceTargetState,
+  ProfilePackageSourceTargetState,
   ToolParameterSchema,
 } from '../types';
 
@@ -155,6 +155,41 @@ function summarizeCliBinary(binary: CliBinaryState): string {
     : `Unavailable${binary.error ? ` · ${binary.error}` : ''}`;
 }
 
+function PackageTargetBlock({
+  title,
+  description,
+  state,
+}: {
+  title: string;
+  description: string;
+  state: PackageSourceTargetState;
+}) {
+  return (
+    <div className="space-y-3 min-w-0">
+      <div className="space-y-1">
+        <h3 className="text-[14px] font-medium text-primary">{title}</h3>
+        <p className="ui-card-meta max-w-2xl">{description}</p>
+        <p className="break-all font-mono text-[12px] leading-relaxed text-primary">{state.settingsPath}</p>
+      </div>
+
+      {state.packages.length === 0 ? (
+        <p className="ui-card-meta">No package sources configured.</p>
+      ) : (
+        <div>
+          {state.packages.map((entry, index) => (
+            <div key={`${state.target}:${entry.source}`} className={cx('space-y-1 py-3', index > 0 && 'border-t border-border-subtle')}>
+              <p className="break-all font-mono text-[12px] leading-relaxed text-primary">{entry.source}</p>
+              <p className="ui-card-meta">
+                {entry.filtered ? 'Filtered package config' : 'Package source'}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ToolsPage() {
   const {
     data: toolsState,
@@ -163,11 +198,23 @@ export function ToolsPage() {
     refreshing,
     refetch,
   } = useApi(api.tools);
+  const {
+    data: memoryData,
+    loading: memoryLoading,
+    error: memoryError,
+    refetch: refetchMemory,
+  } = useApi(api.memory);
   const [serverDetails, setServerDetails] = useState<Record<string, Loadable<McpCliServerDetail>>>({});
   const [toolDetails, setToolDetails] = useState<Record<string, Loadable<McpCliToolDetail>>>({});
   const [toolFilter, setToolFilter] = useState<ToolFilter>('active');
   const [toolQuery, setToolQuery] = useState('');
   const [expandedTools, setExpandedTools] = useState<string[]>([]);
+  const [packageSource, setPackageSource] = useState('');
+  const [packageTarget, setPackageTarget] = useState<'profile' | 'local'>('profile');
+  const [selectedProfileName, setSelectedProfileName] = useState('');
+  const [installingPackage, setInstallingPackage] = useState(false);
+  const [installMessage, setInstallMessage] = useState<string | null>(null);
+  const [installError, setInstallError] = useState<string | null>(null);
 
   const pageMeta = toolsState
     ? `${toolsState.tools.length} tools · ${toolsState.activeTools.length} active by default · profile ${toolsState.profile}`
@@ -185,6 +232,41 @@ export function ToolsPage() {
     servers: [],
   };
   const hasMcpCliMetadata = Boolean(toolsState?.mcpCli);
+  const packageInstall = toolsState?.packageInstall ?? {
+    currentProfile: '',
+    profileTargets: [] as ProfilePackageSourceTargetState[],
+    localTarget: { target: 'local' as const, settingsPath: '', packages: [] },
+  };
+  const selectedProfileTarget = packageInstall.profileTargets.find((target) => target.profileName === selectedProfileName)
+    ?? packageInstall.profileTargets.find((target) => target.current)
+    ?? packageInstall.profileTargets[0]
+    ?? null;
+  const availableAgentsInstructions = memoryData?.agentsMd.filter((item) => item.exists) ?? [];
+  const availableSkills = useMemo(() => {
+    if (!memoryData) {
+      return [];
+    }
+
+    return [...memoryData.skills].sort((left, right) => {
+      return left.source.localeCompare(right.source)
+        || left.name.localeCompare(right.name);
+    });
+  }, [memoryData]);
+
+  useEffect(() => {
+    if (packageInstall.profileTargets.length === 0) {
+      if (selectedProfileName !== '') {
+        setSelectedProfileName('');
+      }
+      return;
+    }
+
+    if (selectedProfileTarget && selectedProfileTarget.profileName === selectedProfileName) {
+      return;
+    }
+
+    setSelectedProfileName(selectedProfileTarget?.profileName ?? '');
+  }, [packageInstall.profileTargets, selectedProfileName, selectedProfileTarget]);
 
   const filteredTools = useMemo(() => {
     const tools = toolsState?.tools ?? [];
@@ -250,9 +332,49 @@ export function ToolsPage() {
     }
   }
 
+  async function handleInstallPackage() {
+    const trimmedSource = packageSource.trim();
+    if (!trimmedSource || installingPackage) {
+      return;
+    }
+
+    if (packageTarget === 'profile' && !selectedProfileTarget) {
+      setInstallError('No profile is available for package installs.');
+      return;
+    }
+
+    setInstallMessage(null);
+    setInstallError(null);
+    setInstallingPackage(true);
+
+    try {
+      const targetLabel = packageTarget === 'profile'
+        ? `profile ${selectedProfileTarget?.profileName ?? ''}`
+        : 'the local overlay';
+      const result = await api.installPackageSource({
+        source: trimmedSource,
+        target: packageTarget,
+        profileName: packageTarget === 'profile' ? selectedProfileTarget?.profileName : undefined,
+      });
+      setInstallMessage(
+        result.alreadyPresent
+          ? `Package source already exists in ${targetLabel}.`
+          : `Installed into ${targetLabel}. Start a new pa session to load it.`,
+      );
+      if (!result.alreadyPresent) {
+        setPackageSource('');
+      }
+      await refetch({ resetLoading: false });
+    } catch (installPackageError) {
+      setInstallError(installPackageError instanceof Error ? installPackageError.message : String(installPackageError));
+    } finally {
+      setInstallingPackage(false);
+    }
+  }
+
   return (
     <div className="flex h-full flex-col">
-      <PageHeader actions={<ToolbarButton onClick={() => { void refetch({ resetLoading: false }); }} disabled={refreshing}>↻ Refresh</ToolbarButton>}>
+      <PageHeader actions={<ToolbarButton onClick={() => { void Promise.all([refetch({ resetLoading: false }), refetchMemory({ resetLoading: false })]); }} disabled={refreshing}>↻ Refresh</ToolbarButton>}>
         <PageHeading
           title="Tools"
           meta={pageMeta}
@@ -262,25 +384,58 @@ export function ToolsPage() {
       <div className="flex-1 overflow-y-auto px-6 py-4">
         <div className="max-w-5xl space-y-8 pb-6">
           <section className="space-y-5">
-            <SectionLabel label="Rendering preview" />
+            <SectionLabel label="Agent instructions" />
 
             <div className="space-y-1">
-              <h2 className="text-[15px] font-medium text-primary">Agent output preview</h2>
+              <h2 className="text-[15px] font-medium text-primary">AGENTS.md and skills</h2>
               <p className="ui-card-meta max-w-3xl">
-                Manual QA surface for assistant markdown rendering plus every non-text chat block type. Edit the fixture file and refresh this page to inspect changes.
+                Durable profile instructions and reusable skills live here. This replaces the old memory page sections for identity and capabilities.
               </p>
             </div>
 
-            <p className="break-all font-mono text-[12px] leading-relaxed text-primary">{AGENT_OUTPUT_PREVIEW_MARKDOWN_PATH}</p>
+            {memoryLoading && !memoryData ? (
+              <p className="ui-card-meta">Loading agent instructions…</p>
+            ) : memoryError && !memoryData ? (
+              <p className="text-[12px] text-danger">Failed to load agent instructions: {memoryError}</p>
+            ) : memoryData ? (
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <h3 className="text-[13px] font-medium text-primary">AGENTS.md sources</h3>
+                  {availableAgentsInstructions.length === 0 ? (
+                    <p className="ui-card-meta">No AGENTS.md files found for the active profile stack.</p>
+                  ) : (
+                    <div>
+                      {availableAgentsInstructions.map((item, index) => (
+                        <div key={`${item.source}:${item.path}`} className={cx('space-y-1 py-3', index > 0 && 'border-t border-border-subtle')}>
+                          <p className="text-[13px] text-primary">{item.source}</p>
+                          <p className="break-all font-mono text-[12px] leading-relaxed text-primary">{item.path}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
-            <ChatView messages={AGENT_OUTPUT_PREVIEW_BLOCKS} />
-
-            <details>
-              <summary className="ui-card-meta cursor-pointer select-none">Show raw markdown fixture</summary>
-              <pre className="mt-2 overflow-x-auto rounded-lg bg-surface/70 px-3 py-2 text-[11px] leading-relaxed text-secondary whitespace-pre-wrap break-words">
-                {AGENT_OUTPUT_PREVIEW_MARKDOWN}
-              </pre>
-            </details>
+                <div className="space-y-2 border-t border-border-subtle pt-5">
+                  <h3 className="text-[13px] font-medium text-primary">Skills</h3>
+                  {availableSkills.length === 0 ? (
+                    <p className="ui-card-meta">No skills are available in the active profile layers.</p>
+                  ) : (
+                    <div>
+                      {availableSkills.map((skill, index) => (
+                        <div key={`${skill.source}:${skill.name}:${skill.path}`} className={cx('space-y-1 py-3', index > 0 && 'border-t border-border-subtle')}>
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <p className="font-mono text-[12px] text-primary">{skill.name}</p>
+                            <span className="ui-card-meta">source {skill.source}</span>
+                          </div>
+                          <p className="text-[13px] text-primary/90">{skill.description || 'No description provided.'}</p>
+                          <p className="break-all font-mono text-[12px] leading-relaxed text-primary">{skill.path}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : null}
           </section>
 
           <section className="space-y-4 border-t border-border-subtle pt-6">
@@ -428,6 +583,120 @@ export function ToolsPage() {
                 </div>
               </div>
             ) : null}
+          </section>
+
+          <section className="space-y-5 border-t border-border-subtle pt-6">
+            <SectionLabel label="Pi packages" />
+
+            <div className="space-y-1">
+              <h2 className="text-[15px] font-medium text-primary">Install package sources</h2>
+              <p className="ui-card-meta max-w-3xl">
+                Add npm, git, GitHub, or local Pi package sources to durable <code>pa</code> settings without leaving the UI. New <code>pa</code> sessions will load newly installed packages.
+              </p>
+            </div>
+
+            {!toolsState ? null : (
+              <div className="grid gap-8 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+                <div className="space-y-4 min-w-0">
+                  <div className="space-y-1">
+                    <label htmlFor="package-source" className="ui-card-meta">Package source</label>
+                    <input
+                      id="package-source"
+                      value={packageSource}
+                      onChange={(event) => setPackageSource(event.target.value)}
+                      placeholder="https://github.com/user/repo · npm:@scope/package · ./local-package"
+                      className={INPUT_CLASS}
+                      disabled={installingPackage}
+                    />
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <span className="ui-card-meta">Install into</span>
+                      <div className="ui-segmented-control" role="group" aria-label="Package install target">
+                        <button
+                          type="button"
+                          className={cx('ui-segmented-button', packageTarget === 'profile' && 'ui-segmented-button-active')}
+                          aria-pressed={packageTarget === 'profile'}
+                          onClick={() => setPackageTarget('profile')}
+                          disabled={installingPackage}
+                        >
+                          Profile
+                        </button>
+                        <button
+                          type="button"
+                          className={cx('ui-segmented-button', packageTarget === 'local' && 'ui-segmented-button-active')}
+                          aria-pressed={packageTarget === 'local'}
+                          onClick={() => setPackageTarget('local')}
+                          disabled={installingPackage}
+                        >
+                          Local overlay
+                        </button>
+                      </div>
+                    </div>
+
+                    {packageTarget === 'profile' && (
+                      <div className="space-y-1">
+                        <label htmlFor="package-profile" className="ui-card-meta">Profile</label>
+                        <select
+                          id="package-profile"
+                          value={selectedProfileTarget?.profileName ?? ''}
+                          onChange={(event) => setSelectedProfileName(event.target.value)}
+                          disabled={installingPackage || packageInstall.profileTargets.length === 0}
+                          className={INPUT_CLASS}
+                        >
+                          {packageInstall.profileTargets.map((target) => (
+                            <option key={target.profileName} value={target.profileName}>
+                              {target.profileName}{target.current ? ' (active)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    <div className="flex justify-start">
+                      <button
+                        type="button"
+                        className={ACTION_BUTTON_CLASS}
+                        onClick={() => { void handleInstallPackage(); }}
+                        disabled={installingPackage || packageSource.trim().length === 0 || (packageTarget === 'profile' && !selectedProfileTarget)}
+                      >
+                        {installingPackage ? 'Installing…' : 'Install package'}
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="ui-card-meta break-words">
+                    {packageTarget === 'profile'
+                      ? `Writes to ${selectedProfileTarget?.settingsPath ?? 'No profile settings file available.'}`
+                      : `Writes to ${packageInstall.localTarget.settingsPath}`}
+                  </p>
+
+                  {installMessage && <p className="text-[12px] text-success">{installMessage}</p>}
+                  {installError && <p className="text-[12px] text-danger">{installError}</p>}
+                </div>
+
+                <div className="grid gap-8 lg:grid-cols-2">
+                  {selectedProfileTarget ? (
+                    <PackageTargetBlock
+                      title={`Profile · ${selectedProfileTarget.profileName}${selectedProfileTarget.current ? ' (active)' : ''}`}
+                      description="Package sources saved into a profile travel with the repo and become defaults for that profile on every machine."
+                      state={selectedProfileTarget}
+                    />
+                  ) : (
+                    <div className="space-y-2 min-w-0">
+                      <h3 className="text-[14px] font-medium text-primary">Profile</h3>
+                      <p className="ui-card-meta">No profile settings are available.</p>
+                    </div>
+                  )}
+                  <PackageTargetBlock
+                    title="Local overlay"
+                    description="Machine-local package sources stay outside the repo. Use this for personal experiments or tools that should not be committed."
+                    state={packageInstall.localTarget}
+                  />
+                </div>
+              </div>
+            )}
           </section>
 
           <section className="space-y-5 border-t border-border-subtle pt-6">

@@ -190,10 +190,14 @@ function extractQueuedPromptContent(message, fallbackText) {
         if (part.type === 'image'
             && typeof part.data === 'string'
             && typeof part.mimeType === 'string') {
+            const name = typeof part.name === 'string'
+                ? part.name
+                : undefined;
             images.push({
                 type: 'image',
                 data: part.data,
                 mimeType: part.mimeType,
+                ...(name ? { name } : {}),
             });
         }
     }

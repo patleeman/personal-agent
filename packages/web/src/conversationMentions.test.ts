@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildMentionItems, filterMentionItems, resolveMentionItems } from './conversationMentions';
 
 describe('conversationMentions', () => {
-  it('builds project, task, knowledge, skill, and per-profile mentions without view scaffolding', () => {
+  it('builds project, task, knowledge, and per-profile mentions without view scaffolding', () => {
     const items = buildMentionItems({
       projects: [{
         id: 'web-ui',
@@ -31,12 +31,6 @@ describe('conversationMentions', () => {
         tags: ['architecture'],
         path: '/tmp/project-state-model.md',
       }],
-      skills: [{
-        source: 'shared',
-        name: 'dd-pup-cli',
-        description: 'Query Datadog platform data.',
-        path: '/tmp/dd-pup-cli/SKILL.md',
-      }],
       profiles: ['assistant', 'datadog', 'shared'],
     });
 
@@ -44,7 +38,6 @@ describe('conversationMentions', () => {
       'project:@web-ui',
       'task:@daily-review',
       'knowledge:@project-state-model',
-      'skill:@dd-pup-cli',
       'profile:@assistant',
       'profile:@datadog',
       'profile:@shared',
@@ -69,19 +62,12 @@ describe('conversationMentions', () => {
         tags: ['architecture'],
         path: '/tmp/project-state-model.md',
       }],
-      skills: [{
-        source: 'shared',
-        name: 'dd-pup-cli',
-        description: 'Query Datadog platform data.',
-        path: '/tmp/dd-pup-cli/SKILL.md',
-      }],
       profiles: ['assistant', 'datadog', 'shared'],
     });
 
     expect(filterMentionItems(items, '@daily').map((item) => item.id)).toEqual(['@daily-review']);
     expect(filterMentionItems(items, '@state').map((item) => item.id)).toEqual(['@project-state-model']);
     expect(filterMentionItems(items, '@stored').map((item) => item.id)).toEqual(['@project-state-model']);
-    expect(filterMentionItems(items, '@pup').map((item) => item.id)).toEqual(['@dd-pup-cli']);
     expect(filterMentionItems(items, '@assist').map((item) => item.id)).toEqual(['@assistant']);
   });
 
@@ -103,18 +89,11 @@ describe('conversationMentions', () => {
         tags: ['architecture'],
         path: '/tmp/project-state-model.md',
       }],
-      skills: [{
-        source: 'shared',
-        name: 'dd-pup-cli',
-        description: 'Query Datadog platform data.',
-        path: '/tmp/dd-pup-cli/SKILL.md',
-      }],
       profiles: ['assistant', 'datadog', 'shared'],
     });
 
-    expect(resolveMentionItems('Use @assistant with @dd-pup-cli and @project-state-model.', items).map((item) => item.id)).toEqual([
+    expect(resolveMentionItems('Use @assistant with @project-state-model.', items).map((item) => item.id)).toEqual([
       '@assistant',
-      '@dd-pup-cli',
       '@project-state-model',
     ]);
   });

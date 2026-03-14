@@ -5,7 +5,7 @@ export interface ConversationResumeState {
   mode: 'replay' | 'continue' | null;
   reason: 'interrupted' | 'failed' | 'queued' | 'error' | null;
   title: string | null;
-  actionLabel: 'resume' | 'reopen' | null;
+  actionLabel: 'resume' | null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -64,6 +64,16 @@ export function getConversationResumeState(input: {
   lastMessage?: MessageBlock | null;
 }): ConversationResumeState {
   if (input.isLiveSession) {
+    if (didConversationStopWithError(input.lastMessage)) {
+      return {
+        canResume: true,
+        mode: 'continue',
+        reason: 'error',
+        title: 'Resume this conversation after the last error.',
+        actionLabel: 'resume',
+      };
+    }
+
     return {
       canResume: false,
       mode: null,
@@ -83,8 +93,8 @@ export function getConversationResumeState(input: {
       reason: 'interrupted',
       title: hasPendingOperation
         ? 'Resume the interrupted turn.'
-        : 'Reopen this interrupted conversation. The previous turn cannot be replayed exactly.',
-      actionLabel: hasPendingOperation ? 'resume' : 'reopen',
+        : 'Resume this interrupted conversation. The previous turn cannot be replayed exactly.',
+      actionLabel: 'resume',
     };
   }
 
@@ -95,8 +105,8 @@ export function getConversationResumeState(input: {
       reason: 'failed',
       title: hasPendingOperation
         ? 'Retry the failed turn.'
-        : 'Reopen this failed conversation. The previous turn cannot be replayed exactly.',
-      actionLabel: hasPendingOperation ? 'resume' : 'reopen',
+        : 'Resume this failed conversation. The previous turn cannot be replayed exactly.',
+      actionLabel: 'resume',
     };
   }
 
@@ -115,8 +125,8 @@ export function getConversationResumeState(input: {
       canResume: true,
       mode: 'continue',
       reason: 'error',
-      title: 'Reopen this conversation after the last error. The previous turn cannot be replayed exactly.',
-      actionLabel: 'reopen',
+      title: 'Resume this conversation after the last error. The previous turn cannot be replayed exactly.',
+      actionLabel: 'resume',
     };
   }
 
@@ -125,8 +135,8 @@ export function getConversationResumeState(input: {
       canResume: true,
       mode: 'continue',
       reason: 'interrupted',
-      title: 'Reopen this unfinished conversation. The previous turn cannot be replayed exactly.',
-      actionLabel: 'reopen',
+      title: 'Resume this unfinished conversation. The previous turn cannot be replayed exactly.',
+      actionLabel: 'resume',
     };
   }
 

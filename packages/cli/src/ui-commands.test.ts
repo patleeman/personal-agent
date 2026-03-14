@@ -17,9 +17,10 @@ describe('ui command help', () => {
     expect(exitCode).toBe(0);
     expect(logs.some((line) => line.includes('Commands:'))).toBe(true);
     expect(logs.some((line) => line.includes('pa ui logs [--tail <count>]'))).toBe(true);
-    expect(logs.some((line) => line.includes('pa ui service install [--port <port>]'))).toBe(true);
-    expect(logs.some((line) => line.includes('pa ui service status [--port <port>]'))).toBe(true);
-    expect(logs.some((line) => line.includes('pa ui service rollback [--port <port>]'))).toBe(true);
+    expect(logs.some((line) => line.includes('pa ui [--open] [--port <port>] [--tailscale-serve|--no-tailscale-serve]'))).toBe(true);
+    expect(logs.some((line) => line.includes('pa ui service install [--port <port>] [--tailscale-serve|--no-tailscale-serve]'))).toBe(true);
+    expect(logs.some((line) => line.includes('pa ui service status [--port <port>] [--tailscale-serve|--no-tailscale-serve]'))).toBe(true);
+    expect(logs.some((line) => line.includes('pa ui service rollback [--port <port>] [--tailscale-serve|--no-tailscale-serve]'))).toBe(true);
     expect(logs.some((line) => line.includes('pa ui service mark-bad [--port <port>]'))).toBe(true);
     expect(logs.some((line) => line.includes('pa ui service help'))).toBe(true);
 
@@ -36,9 +37,9 @@ describe('ui command help', () => {
 
     expect(exitCode).toBe(0);
     expect(logs.some((line) => line.includes('Web UI service'))).toBe(true);
-    expect(logs.some((line) => line.includes('pa ui service install [--port <port>]'))).toBe(true);
-    expect(logs.some((line) => line.includes('pa ui service restart [--port <port>]'))).toBe(true);
-    expect(logs.some((line) => line.includes('pa ui service rollback [--port <port>]'))).toBe(true);
+    expect(logs.some((line) => line.includes('pa ui service install [--port <port>] [--tailscale-serve|--no-tailscale-serve]'))).toBe(true);
+    expect(logs.some((line) => line.includes('pa ui service restart [--port <port>] [--tailscale-serve|--no-tailscale-serve]'))).toBe(true);
+    expect(logs.some((line) => line.includes('pa ui service rollback [--port <port>] [--tailscale-serve|--no-tailscale-serve]'))).toBe(true);
     expect(logs.some((line) => line.includes('pa ui service mark-bad [--port <port>]'))).toBe(true);
     expect(logs.some((line) => line.includes('Supported platforms'))).toBe(true);
 

@@ -3,7 +3,7 @@
  * a growing MessageBlock list in real time.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { MessageBlock, PromptImageInput, SessionContextUsage, SseEvent } from '../types';
+import type { MessageBlock, PromptAttachmentRefInput, PromptImageInput, SessionContextUsage, SseEvent } from '../types';
 import { api } from '../api';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 
@@ -47,7 +47,12 @@ export function useSessionStream(sessionId: string | null) {
   const streamingRef = useRef(false);
   const stateSessionIdRef = useRef<string | null>(sessionId);
 
-  const send = useCallback(async (text: string, behavior?: 'steer' | 'followUp', images?: PromptImageInput[]) => {
+  const send = useCallback(async (
+    text: string,
+    behavior?: 'steer' | 'followUp',
+    images?: PromptImageInput[],
+    attachmentRefs?: PromptAttachmentRefInput[],
+  ) => {
     if (!sessionId) return;
 
     if (!behavior) {
@@ -72,7 +77,7 @@ export function useSessionStream(sessionId: string | null) {
       setState((s) => ({ ...s, blocks: blocksRef.current }));
     }
 
-    await api.promptSession(sessionId, text, behavior, images);
+    await api.promptSession(sessionId, text, behavior, images, attachmentRefs);
   }, [sessionId]);
 
   const abort = useCallback(async () => {

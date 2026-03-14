@@ -89,6 +89,7 @@ beforeEach(() => {
     PERSONAL_AGENT_DISABLE_DAEMON_EVENTS: '1',
     PERSONAL_AGENT_NO_DAEMON_PROMPT: '1',
     PERSONAL_AGENT_CONFIG_FILE: configPath,
+    PERSONAL_AGENT_LOCAL_PROFILE_DIR: createTempDir('personal-agent-cli-local-'),
     PERSONAL_AGENT_STATE_ROOT: createTempDir('personal-agent-cli-state-'),
     PI_SESSION_DIR: createTempDir('pi-session-')
   };

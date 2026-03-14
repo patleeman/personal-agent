@@ -84,6 +84,21 @@ describe('conversation resume helpers', () => {
       canResume: true,
       mode: 'replay',
       reason: 'interrupted',
+      actionLabel: 'resume',
+    });
+  });
+
+  it('keeps the resume label when replay is not available', () => {
+    const state = getConversationResumeState({
+      run: createRun({ status: 'interrupted', pendingOperation: null }),
+      isLiveSession: false,
+    });
+
+    expect(state).toMatchObject({
+      canResume: true,
+      mode: 'continue',
+      reason: 'interrupted',
+      actionLabel: 'resume',
     });
   });
 
@@ -104,6 +119,7 @@ describe('conversation resume helpers', () => {
       canResume: true,
       mode: 'continue',
       reason: 'error',
+      actionLabel: 'resume',
     });
   });
 
@@ -148,15 +164,35 @@ describe('conversation resume helpers', () => {
       canResume: true,
       mode: 'continue',
       reason: 'interrupted',
+      actionLabel: 'resume',
     });
   });
 
-  it('does not offer resume while the conversation is already live', () => {
+  it('does not offer resume for ordinary live conversations', () => {
     const state = getConversationResumeState({
       run: createRun({ status: 'interrupted' }),
       isLiveSession: true,
     });
 
     expect(state.canResume).toBe(false);
+  });
+
+  it('offers resume for a live conversation that ended with an error', () => {
+    const state = getConversationResumeState({
+      run: createRun({ status: 'waiting' }),
+      isLiveSession: true,
+      lastMessage: {
+        type: 'error',
+        ts: '2026-03-13T12:05:00.000Z',
+        message: 'The model returned an error before completing its response.',
+      },
+    });
+
+    expect(state).toMatchObject({
+      canResume: true,
+      mode: 'continue',
+      reason: 'error',
+      actionLabel: 'resume',
+    });
   });
 });

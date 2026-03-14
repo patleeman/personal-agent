@@ -1,4 +1,4 @@
-import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationCheckpointSummary, ConversationCwdChangeResult, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DeferredResumeSummary, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, ModelState, ProfileState, ProjectDetail, ProjectRecord, PromptImageInput, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, ToolsState, WebUiState } from './types';
+import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationCwdChangeResult, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DeferredResumeSummary, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, ToolsState, WebUiState } from './types';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch('/api' + path);
@@ -70,11 +70,13 @@ export const api = {
   markBadWebUiRelease: (input?: { slot?: 'blue' | 'green'; reason?: string }) => post<WebUiState>('/web-ui/service/mark-bad', input),
   stopWebUiService: () => post<WebUiState>('/web-ui/service/stop'),
   uninstallWebUiService: () => post<WebUiState>('/web-ui/service/uninstall'),
+  setWebUiConfig: (input: { useTailscaleServe?: boolean; resumeFallbackPrompt?: string }) => patch<WebUiState>('/web-ui/config', input),
   activity:     () => get<ActivityEntry[]>('/activity'),
   activityById: (id: string) => get<ActivityEntry>(`/activity/${encodeURIComponent(id)}`),
   sessions:     () => get<SessionMeta[]>('/sessions'),
   sessionDetail: (id: string) => get<SessionDetail>(`/sessions/${encodeURIComponent(id)}`),
   sessionTree: (id: string) => get<ConversationTreeSnapshot>(`/sessions/${encodeURIComponent(id)}/tree`),
+  sessionSearchIndex: (sessionIds: string[]) => post<{ index: Record<string, string> }>('/sessions/search-index', { sessionIds }),
   projects:     () => get<ProjectRecord[]>('/projects'),
   projectById:  (id: string) => get<ProjectDetail>(`/projects/${encodeURIComponent(id)}`),
   createProject: (input: {
@@ -155,6 +157,8 @@ export const api = {
   // ── Models ────────────────────────────────────────────────────────────────
   models: () => get<ModelState>('/models'),
   tools: () => get<ToolsState>('/tools'),
+  installPackageSource: (input: { source: string; target: 'profile' | 'local'; profileName?: string }) =>
+    post<PackageInstallResult>('/tools/packages/install', input),
   mcpCliServer: (server: string) => get<McpCliServerDetail>(`/tools/mcp/servers/${encodeURIComponent(server)}`),
   mcpCliTool: (server: string, tool: string) => get<McpCliToolDetail>(`/tools/mcp/servers/${encodeURIComponent(server)}/tools/${encodeURIComponent(tool)}`),
   setModel: (model: string) => patch<{ ok: boolean }>('/models/current', { model }),
@@ -216,6 +220,54 @@ export const api = {
 
       return res.json() as Promise<{ conversationId: string; deleted: boolean; artifactId: string; artifacts: ConversationArtifactSummary[] }>;
     }),
+  conversationAttachments: (id: string) =>
+    get<{ conversationId: string; attachments: ConversationAttachmentSummary[] }>(`/conversations/${encodeURIComponent(id)}/attachments`),
+  conversationAttachment: (id: string, attachmentId: string) =>
+    get<{ conversationId: string; attachment: ConversationAttachmentRecord }>(`/conversations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`),
+  createConversationAttachment: (id: string, input: {
+    kind?: 'excalidraw';
+    title?: string;
+    sourceData: string;
+    sourceName?: string;
+    sourceMimeType?: string;
+    previewData: string;
+    previewName?: string;
+    previewMimeType?: string;
+    note?: string;
+  }) =>
+    post<{
+      conversationId: string;
+      attachment: ConversationAttachmentRecord;
+      attachments: ConversationAttachmentSummary[];
+    }>(`/conversations/${encodeURIComponent(id)}/attachments`, input),
+  updateConversationAttachment: (id: string, attachmentId: string, input: {
+    title?: string;
+    sourceData: string;
+    sourceName?: string;
+    sourceMimeType?: string;
+    previewData: string;
+    previewName?: string;
+    previewMimeType?: string;
+    note?: string;
+  }) =>
+    patch<{
+      conversationId: string;
+      attachment: ConversationAttachmentRecord;
+      attachments: ConversationAttachmentSummary[];
+    }>(`/conversations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`, input),
+  deleteConversationAttachment: (id: string, attachmentId: string) =>
+    fetch(`/api/conversations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`, { method: 'DELETE' }).then(async (res) => {
+      if (!res.ok) {
+        throw new Error(await readApiError(res));
+      }
+
+      return res.json() as Promise<{
+        conversationId: string;
+        deleted: boolean;
+        attachmentId: string;
+        attachments: ConversationAttachmentSummary[];
+      }>;
+    }),
   conversationProjects: (id: string) => get<ConversationProjectLinks>(`/conversations/${encodeURIComponent(id)}/projects`),
   deferredResumes: (id: string) => get<{ conversationId: string; resumes: DeferredResumeSummary[] }>(`/conversations/${encodeURIComponent(id)}/deferred-resumes`),
   scheduleDeferredResume: (id: string, input: { delay: string; prompt?: string }) =>
@@ -238,24 +290,22 @@ export const api = {
 
       return res.json() as Promise<{ conversationId: string; cancelledId: string; resumes: DeferredResumeSummary[] }>;
     }),
-  conversationCheckpoints: (id: string) =>
-    get<{ conversationId: string; checkpoints: ConversationCheckpointSummary[] }>(`/conversations/${encodeURIComponent(id)}/checkpoints`),
-  checkpoints: () => get<{ checkpoints: ConversationCheckpointSummary[] }>('/checkpoints'),
-  createConversationCheckpoint: (
+  memories: () => get<{ memories: MemoryDocItem[] }>('/memories'),
+  memoryDoc: (memoryId: string) =>
+    get<MemoryDocDetail>(`/memories/${encodeURIComponent(memoryId)}`),
+  saveMemoryDoc: (memoryId: string, content: string) =>
+    post<MemoryDocDetail>(`/memories/${encodeURIComponent(memoryId)}`, { content }),
+  deleteMemoryDoc: (memoryId: string) =>
+    del<{ deleted: boolean; memoryId: string }>(`/memories/${encodeURIComponent(memoryId)}`),
+  conversationMemoryDistillStatus: (id: string) =>
+    get<{ conversationId: string; running: boolean; runId: string | null; status: string | null }>(`/conversations/${encodeURIComponent(id)}/memories/status`),
+  createConversationMemory: (
     id: string,
-    input: { title?: string; note?: string; summary?: string; anchorMessageId?: string },
+    input: { title?: string; summary?: string; anchorMessageId?: string; tags?: string[] },
   ) =>
-    post<{ conversationId: string; checkpoint: ConversationCheckpointSummary }>(`/conversations/${encodeURIComponent(id)}/checkpoints`, input),
-  startCheckpoint: (checkpointId: string, input?: { cwd?: string }) =>
-    post<{ checkpointId: string; id: string; sessionFile: string; cwd: string }>(`/checkpoints/${encodeURIComponent(checkpointId)}/start`, input ?? {}),
-  deleteCheckpoint: (checkpointId: string) =>
-    fetch(`/api/checkpoints/${encodeURIComponent(checkpointId)}`, { method: 'DELETE' }).then(async (res) => {
-      if (!res.ok) {
-        throw new Error(await readApiError(res));
-      }
-
-      return res.json() as Promise<{ ok: true; checkpointId: string; deleted: true }>;
-    }),
+    post<{ conversationId: string; accepted: boolean; runId: string; running: boolean; status: string }>(`/conversations/${encodeURIComponent(id)}/memories`, input),
+  startMemoryConversation: (memoryId: string, input?: { cwd?: string }) =>
+    post<{ memoryId: string; id: string; sessionFile: string; cwd: string }>(`/memories/${encodeURIComponent(memoryId)}/start`, input ?? {}),
   addConversationProject: (id: string, projectId: string) =>
     post<ConversationProjectLinks>(`/conversations/${encodeURIComponent(id)}/projects`, { projectId }),
   removeConversationProject: (id: string, projectId: string) =>
@@ -292,7 +342,13 @@ export const api = {
   resumeSession: (sessionFile: string) =>
     post<{ id: string }>('/live-sessions/resume', { sessionFile }),
 
-  promptSession: (id: string, text: string, behavior?: 'steer' | 'followUp', images?: PromptImageInput[]) =>
+  promptSession: (
+    id: string,
+    text: string,
+    behavior?: 'steer' | 'followUp',
+    images?: PromptImageInput[],
+    attachmentRefs?: PromptAttachmentRefInput[],
+  ) =>
     post<{ ok: boolean }>(`/live-sessions/${id}/prompt`, {
       text,
       behavior,
@@ -301,6 +357,10 @@ export const api = {
         data: image.data,
         mimeType: image.mimeType,
         ...(image.name ? { name: image.name } : {}),
+      })),
+      attachmentRefs: attachmentRefs?.map((attachmentRef) => ({
+        attachmentId: attachmentRef.attachmentId,
+        ...(attachmentRef.revision ? { revision: attachmentRef.revision } : {}),
       })),
     }),
   restoreQueuedMessage: (id: string, input: { behavior: 'steer' | 'followUp'; index: number }) =>

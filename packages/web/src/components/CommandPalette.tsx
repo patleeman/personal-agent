@@ -9,10 +9,11 @@ import {
   type CommandPaletteScope,
   type CommandPaletteSection,
 } from '../commandPalette';
+import { OPEN_COMMAND_PALETTE_EVENT, type OpenCommandPaletteDetail } from '../commandPaletteEvents';
 import { formatProjectStatus, hasMeaningfulBlockers, summarizeProjectPreview } from '../contextRailProject';
 import { useAppData } from '../contexts';
 import { useConversations } from '../hooks/useConversations';
-import type { ConversationCheckpointSummary, ProjectRecord, ScheduledTaskSummary, SessionMeta } from '../types';
+import type { MemoryDocItem, ProjectRecord, ScheduledTaskSummary, SessionMeta } from '../types';
 import { timeAgo } from '../utils';
 import { IconButton, Keycap, Pill, cx } from './ui';
 
@@ -20,7 +21,8 @@ type CommandPaletteAction =
   | { kind: 'navigate'; to: string }
   | { kind: 'restoreArchivedConversation'; conversationId: string }
   | { kind: 'setScope'; scope: CommandPaletteSection }
-  | { kind: 'startCheckpoint'; checkpointId: string };
+  | { kind: 'startMemory'; memoryId: string }
+  | { kind: 'openMemoryEditor'; memoryId: string };
 
 interface ScopedSessionMeta extends SessionMeta {
   pinned?: boolean;
@@ -119,20 +121,20 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       action: { kind: 'navigate', to: '/inbox' },
     },
     {
-      id: 'nav:checkpoints',
+      id: 'nav:memories',
       section: 'nav',
-      title: 'Checkpoints',
-      subtitle: 'Search saved conversation branches',
-      keywords: ['branches', 'forks', 'saved'],
+      title: 'Memories',
+      subtitle: 'Search memory summaries and full memory content',
+      keywords: ['memory', 'knowledge', 'distilled', 'content', 'fuzzy'],
       order: 2,
-      action: { kind: 'setScope', scope: 'checkpoints' },
+      action: { kind: 'setScope', scope: 'memories' },
     },
     {
       id: 'nav:archived',
       section: 'nav',
       title: 'Archived conversations',
-      subtitle: 'Search archived chats and restore them',
-      keywords: ['archive', 'restore', 'history'],
+      subtitle: 'Fuzzy search archived user/assistant messages and restore chats',
+      keywords: ['archive', 'restore', 'history', 'messages', 'fuzzy'],
       order: 3,
       action: { kind: 'setScope', scope: 'archived' },
     },
@@ -153,15 +155,6 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       keywords: ['project', 'work'],
       order: 5,
       action: { kind: 'navigate', to: '/projects' },
-    },
-    {
-      id: 'nav:memory',
-      section: 'nav',
-      title: 'Memory',
-      subtitle: 'Inspect memory docs, skills, and briefs',
-      keywords: ['docs', 'skills'],
-      order: 6,
-      action: { kind: 'navigate', to: '/memory' },
     },
     {
       id: 'nav:tools',
@@ -223,6 +216,7 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
 function buildConversationItems(
   section: 'open' | 'archived',
   sessions: ScopedSessionMeta[],
+  archivedSearchIndex: Record<string, string> = {},
 ): CommandPaletteItem<CommandPaletteAction>[] {
   const orderedSessions = section === 'archived'
     ? [...sessions].sort((left, right) => {
@@ -252,13 +246,15 @@ function buildConversationItems(
       metaParts.push(session.model.split('/').pop() ?? session.model);
     }
 
+    const archivedSearchText = section === 'archived' ? archivedSearchIndex[session.id] ?? '' : '';
+
     return {
       id: `${section}:${session.id}`,
       section,
       title: session.title,
       subtitle: session.cwd,
       meta: metaParts.join(' · '),
-      keywords: [session.id, session.file, session.cwd, session.model, session.cwdSlug],
+      keywords: [session.id, session.file, session.cwd, session.model, session.cwdSlug, archivedSearchText],
       order: index,
       action: section === 'archived'
         ? { kind: 'restoreArchivedConversation', conversationId: session.id }
@@ -267,36 +263,47 @@ function buildConversationItems(
   });
 }
 
-function buildCheckpointItems(checkpoints: ConversationCheckpointSummary[]): CommandPaletteItem<CommandPaletteAction>[] {
-  const orderedCheckpoints = [...checkpoints].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+function buildMemoryItems(memories: MemoryDocItem[]): CommandPaletteItem<CommandPaletteAction>[] {
+  const orderedMemories = [...memories].sort((left, right) => {
+    const leftUpdated = left.updated ?? '';
+    const rightUpdated = right.updated ?? '';
+    if (leftUpdated !== rightUpdated) {
+      return rightUpdated.localeCompare(leftUpdated);
+    }
 
-  return orderedCheckpoints.map((checkpoint, index) => {
-    const sourceTitle = checkpoint.source.conversationTitle || checkpoint.source.conversationId;
-    const metaParts = [sourceTitle, timeAgo(checkpoint.updatedAt), `${checkpoint.snapshot.messageCount} msgs`];
-    if (checkpoint.snapshotMissing) {
-      metaParts.push('snapshot missing');
+    return left.title.localeCompare(right.title);
+  });
+
+  return orderedMemories.map((memory, index) => {
+    const metaParts = [memory.type ?? 'memory'];
+    if (memory.updated) {
+      metaParts.push(timeAgo(memory.updated));
+    }
+    if (memory.tags.length > 0) {
+      metaParts.push(memory.tags.join(', '));
     }
 
     return {
-      id: `checkpoint:${checkpoint.id}`,
-      section: 'checkpoints',
-      title: checkpoint.title,
-      subtitle: excerpt(checkpoint.anchor.preview || checkpoint.summary || checkpoint.note, 120),
+      id: `memory:${memory.id}`,
+      section: 'memories',
+      title: memory.title,
+      subtitle: excerpt(memory.summary, 120),
       meta: metaParts.join(' · '),
       keywords: [
-        checkpoint.id,
-        checkpoint.title,
-        checkpoint.note ?? '',
-        checkpoint.summary ?? '',
-        checkpoint.source.conversationId,
-        checkpoint.source.conversationTitle ?? '',
-        checkpoint.source.cwd ?? '',
-        checkpoint.anchor.preview,
-        ...checkpoint.source.relatedProjectIds,
+        memory.id,
+        memory.title,
+        memory.summary,
+        memory.type ?? '',
+        memory.status ?? '',
+        memory.searchText ?? '',
+        'start',
+        'conversation',
+        'edit',
+        'markdown',
+        ...memory.tags,
       ],
       order: index,
-      disabled: checkpoint.snapshotMissing,
-      action: { kind: 'startCheckpoint', checkpointId: checkpoint.id },
+      action: { kind: 'startMemory', memoryId: memory.id },
     };
   });
 }
@@ -383,8 +390,8 @@ function emptyStateCopy(scope: CommandPaletteScope, query: string): string {
         return `No open conversations match “${query}”.`;
       case 'archived':
         return `No archived conversations match “${query}”.`;
-      case 'checkpoints':
-        return `No checkpoints match “${query}”.`;
+      case 'memories':
+        return `No memories match “${query}”.`;
       case 'tasks':
         return `No scheduled tasks match “${query}”.`;
       case 'projects':
@@ -399,8 +406,8 @@ function emptyStateCopy(scope: CommandPaletteScope, query: string): string {
       return 'No open conversations yet.';
     case 'archived':
       return 'No archived conversations yet.';
-    case 'checkpoints':
-      return 'No checkpoints yet.';
+    case 'memories':
+      return 'No memories yet.';
     case 'tasks':
       return 'No scheduled tasks yet.';
     case 'projects':
@@ -430,9 +437,12 @@ export function CommandPalette() {
   const [cursor, setCursor] = useState(0);
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [checkpoints, setCheckpoints] = useState<ConversationCheckpointSummary[]>([]);
-  const [checkpointsLoading, setCheckpointsLoading] = useState(false);
-  const [checkpointsError, setCheckpointsError] = useState<string | null>(null);
+  const [memories, setMemories] = useState<MemoryDocItem[]>([]);
+  const [memoriesLoading, setMemoriesLoading] = useState(false);
+  const [memoriesError, setMemoriesError] = useState<string | null>(null);
+  const [archivedSearchIndex, setArchivedSearchIndex] = useState<Record<string, string>>({});
+  const [archivedSearchLoading, setArchivedSearchLoading] = useState(false);
+  const [archivedSearchError, setArchivedSearchError] = useState<string | null>(null);
 
   const openConversationItems = useMemo(
     () => buildConversationItems('open', [
@@ -442,10 +452,10 @@ export function CommandPalette() {
     [pinnedSessions, tabs],
   );
   const archivedConversationItems = useMemo(
-    () => buildConversationItems('archived', archivedSessions),
-    [archivedSessions],
+    () => buildConversationItems('archived', archivedSessions, archivedSearchIndex),
+    [archivedSearchIndex, archivedSessions],
   );
-  const checkpointItems = useMemo(() => buildCheckpointItems(checkpoints), [checkpoints]);
+  const memoryItems = useMemo(() => buildMemoryItems(memories), [memories]);
   const taskItems = useMemo(() => buildTaskItems(tasks ?? []), [tasks]);
   const projectItems = useMemo(() => buildProjectItems(projects ?? []), [projects]);
   const items = useMemo(
@@ -453,11 +463,11 @@ export function CommandPalette() {
       ...buildNavItems(),
       ...openConversationItems,
       ...archivedConversationItems,
-      ...checkpointItems,
+      ...memoryItems,
       ...taskItems,
       ...projectItems,
     ],
-    [archivedConversationItems, checkpointItems, openConversationItems, projectItems, taskItems],
+    [archivedConversationItems, memoryItems, openConversationItems, projectItems, taskItems],
   );
   const groups = useMemo(
     () => searchCommandPaletteItems(items, { query, scope }),
@@ -474,14 +484,29 @@ export function CommandPalette() {
     setActionError(null);
   }, []);
 
-  const openPalette = useCallback(() => {
-    setQuery('');
-    setScope('all');
+  const openPalette = useCallback((options: OpenCommandPaletteDetail = {}) => {
+    setQuery(options.query ?? '');
+    setScope(options.scope ?? 'all');
     setCursor(0);
     setBusyItemId(null);
     setActionError(null);
     setOpen(true);
   }, []);
+
+  useEffect(() => {
+    function handleOpenPalette(event: Event) {
+      const detail = (event as CustomEvent<OpenCommandPaletteDetail>).detail;
+      openPalette(detail ?? {});
+    }
+
+    window.addEventListener(OPEN_COMMAND_PALETTE_EVENT, handleOpenPalette);
+    return () => window.removeEventListener(OPEN_COMMAND_PALETTE_EVENT, handleOpenPalette);
+  }, [openPalette]);
+
+  const openMemoryEditor = useCallback((memoryId: string) => {
+    navigate(`/memories?memory=${encodeURIComponent(memoryId)}`);
+    closePalette();
+  }, [closePalette, navigate]);
 
   const activateItem = useCallback(async (item: CommandPaletteItem<CommandPaletteAction>) => {
     if (item.disabled) {
@@ -509,13 +534,16 @@ export function CommandPalette() {
           setBusyItemId(null);
           window.requestAnimationFrame(() => inputRef.current?.focus());
           return;
-        case 'startCheckpoint': {
-          const result = await api.startCheckpoint(item.action.checkpointId);
+        case 'startMemory': {
+          const result = await api.startMemoryConversation(item.action.memoryId);
           openSession(result.id);
           navigate(`/conversations/${encodeURIComponent(result.id)}`);
           closePalette();
           return;
         }
+        case 'openMemoryEditor':
+          openMemoryEditor(item.action.memoryId);
+          return;
         default:
           return;
       }
@@ -524,7 +552,7 @@ export function CommandPalette() {
     } finally {
       setBusyItemId(null);
     }
-  }, [closePalette, navigate, openSession]);
+  }, [closePalette, navigate, openMemoryEditor, openSession]);
 
   useEffect(() => {
     if (!open) {
@@ -566,32 +594,86 @@ export function CommandPalette() {
       return;
     }
 
-    setCheckpointsLoading(true);
-    setCheckpointsError(null);
+    setMemoriesLoading(true);
+    setMemoriesError(null);
     let cancelled = false;
 
-    api.checkpoints()
+    api.memories()
       .then((result) => {
         if (cancelled) {
           return;
         }
 
-        setCheckpoints(result.checkpoints);
-        setCheckpointsLoading(false);
+        setMemories(result.memories);
+        setMemoriesLoading(false);
       })
       .catch((error) => {
         if (cancelled) {
           return;
         }
 
-        setCheckpointsLoading(false);
-        setCheckpointsError(error instanceof Error ? error.message : String(error));
+        setMemoriesLoading(false);
+        setMemoriesError(error instanceof Error ? error.message : String(error));
       });
 
     return () => {
       cancelled = true;
     };
   }, [open]);
+
+  const archivedSessionIds = useMemo(
+    () => archivedSessions.map((session) => session.id),
+    [archivedSessions],
+  );
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    if (archivedSessionIds.length === 0) {
+      setArchivedSearchIndex({});
+      setArchivedSearchError(null);
+      return;
+    }
+
+    const missingSessionIds = archivedSessionIds.filter((sessionId) => archivedSearchIndex[sessionId] === undefined);
+    if (missingSessionIds.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    setArchivedSearchLoading(true);
+    setArchivedSearchError(null);
+
+    api.sessionSearchIndex(missingSessionIds)
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+
+        setArchivedSearchIndex((current) => ({
+          ...current,
+          ...result.index,
+        }));
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+
+        setArchivedSearchError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setArchivedSearchLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [archivedSearchIndex, archivedSessionIds, open]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -619,7 +701,24 @@ export function CommandPalette() {
 
       if (event.key === 'Escape') {
         event.preventDefault();
+        event.stopPropagation();
         closePalette();
+        return;
+      }
+
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        const scopeValues = COMMAND_PALETTE_SCOPE_OPTIONS.map((option) => option.value);
+        const currentIndex = scopeValues.indexOf(scope);
+        const direction = event.shiftKey ? -1 : 1;
+        const nextIndex = currentIndex === -1
+          ? 0
+          : (currentIndex + direction + scopeValues.length) % scopeValues.length;
+        const nextScope = scopeValues[nextIndex];
+        setScope(nextScope);
+        setCursor(0);
+        setActionError(null);
+        window.requestAnimationFrame(() => inputRef.current?.focus());
         return;
       }
 
@@ -670,7 +769,7 @@ export function CommandPalette() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activateItem, closePalette, cursor, open, openPalette, visibleItems]);
+  }, [activateItem, closePalette, cursor, open, openPalette, scope, visibleItems]);
 
   useEffect(() => {
     closePalette();
@@ -684,8 +783,11 @@ export function CommandPalette() {
         sections.add(scope === 'archived' ? 'archived' : 'open');
       }
     }
-    if ((scope === 'all' || scope === 'checkpoints') && checkpointsLoading) {
-      sections.add('checkpoints');
+    if ((scope === 'all' || scope === 'archived') && archivedSearchLoading) {
+      sections.add('archived');
+    }
+    if ((scope === 'all' || scope === 'memories') && memoriesLoading) {
+      sections.add('memories');
     }
     if ((scope === 'all' || scope === 'tasks') && tasks === null) {
       sections.add('tasks');
@@ -694,7 +796,7 @@ export function CommandPalette() {
       sections.add('projects');
     }
     return [...sections];
-  }, [checkpointsLoading, projects, scope, sessionsLoading, tasks]);
+  }, [archivedSearchLoading, memoriesLoading, projects, scope, sessionsLoading, tasks]);
 
   if (!open) {
     return null;
@@ -725,7 +827,7 @@ export function CommandPalette() {
             <div>
               <p className="ui-section-label text-[11px]">Command palette</p>
               <p className="text-[12px] text-secondary mt-1">
-                Jump across conversations, navigation, checkpoints, scheduled tasks, and projects.
+                Unified search for open chats, archived message history, memories, tasks, and projects.
               </p>
             </div>
             <div className="flex items-center gap-2 text-[10px] text-dim/70 font-mono">
@@ -733,6 +835,10 @@ export function CommandPalette() {
               <span>move</span>
               <Keycap>↵</Keycap>
               <span>open</span>
+              <Keycap>⇥</Keycap>
+              <span>scope</span>
+              <Keycap>esc</Keycap>
+              <span>close</span>
               <Pill tone="muted" mono className="tabular-nums">{visibleCount}</Pill>
               <IconButton onClick={closePalette} title="Close command palette" aria-label="Close command palette" compact>
                 ✕
@@ -750,7 +856,7 @@ export function CommandPalette() {
                 setCursor(0);
                 setActionError(null);
               }}
-              placeholder="Search conversations, routes, checkpoints, tasks, and projects…"
+              placeholder="Search everything… (tab / shift+tab changes scope)"
               aria-label="Search command palette"
               className="flex-1 bg-transparent text-[13px] text-primary placeholder:text-dim outline-none font-mono min-w-0"
             />
@@ -796,6 +902,81 @@ export function CommandPalette() {
                 const itemIndex = runningIndex;
                 const isSelected = itemIndex === cursor;
                 const isBusy = busyItemId === item.id;
+                const isMemoryRow = group.section === 'memories' && item.action.kind === 'startMemory';
+
+                if (isMemoryRow) {
+                  const memoryId = item.action.memoryId;
+
+                  return (
+                    <div
+                      key={item.id}
+                      data-command-palette-idx={itemIndex}
+                      onMouseEnter={() => setCursor(itemIndex)}
+                      className={cx(
+                        'group w-full flex items-start gap-2 transition-colors',
+                        isSelected ? 'bg-elevated' : 'hover:bg-elevated/40',
+                        item.disabled && 'opacity-55',
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => { void activateItem(item); }}
+                        disabled={item.disabled || isBusy}
+                        className="min-w-0 flex-1 flex items-start gap-3 px-5 py-2 text-left disabled:cursor-not-allowed"
+                        title={item.subtitle ?? item.title}
+                      >
+                        <span className={cx(
+                          'text-[11px] shrink-0 w-2 mt-1',
+                          isSelected ? 'text-accent' : 'text-border-default/50',
+                        )}>
+                          {isSelected ? '▶' : '·'}
+                        </span>
+
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] text-primary leading-snug truncate">{item.title}</p>
+                          {item.subtitle && (
+                            <p className="mt-0.5 text-[11px] text-secondary truncate" title={item.subtitle}>{item.subtitle}</p>
+                          )}
+                          {item.meta && (
+                            <p className="mt-0.5 text-[11px] text-dim/70 truncate" title={item.meta}>{item.meta}</p>
+                          )}
+                        </div>
+                      </button>
+
+                      <div className="shrink-0 flex items-center gap-1 pr-5 pt-2">
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setCursor(itemIndex);
+                            void activateItem(item);
+                          }}
+                          disabled={item.disabled || isBusy}
+                          className="ui-action-button"
+                          title="Start a new conversation from this memory"
+                        >
+                          {isBusy ? 'starting…' : 'start'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setCursor(itemIndex);
+                            openMemoryEditor(memoryId);
+                          }}
+                          disabled={item.disabled || isBusy}
+                          className="ui-action-button"
+                          title="Open this memory in the memory editor"
+                        >
+                          edit
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+
                 return (
                   <button
                     key={item.id}
@@ -846,16 +1027,27 @@ export function CommandPalette() {
             </section>
           ))}
 
-          {checkpointsError && (scope === 'all' || scope === 'checkpoints') && (
+          {archivedSearchError && (scope === 'all' || scope === 'archived') && (
             <section className="py-1">
               <div className="px-5 pb-1 flex items-center gap-2">
-                <p className="ui-section-label">Checkpoints</p>
+                <p className="ui-section-label">Archived conversations</p>
               </div>
-              <p className="px-5 py-3 text-[12px] text-danger">Failed to load checkpoints: {checkpointsError}</p>
+              <p className="px-5 py-3 text-[12px] text-danger">Failed to index archived messages: {archivedSearchError}</p>
             </section>
           )}
 
-          {visibleCount === 0 && loadingSections.length === 0 && !(checkpointsError && (scope === 'all' || scope === 'checkpoints')) && (
+          {memoriesError && (scope === 'all' || scope === 'memories') && (
+            <section className="py-1">
+              <div className="px-5 pb-1 flex items-center gap-2">
+                <p className="ui-section-label">Memories</p>
+              </div>
+              <p className="px-5 py-3 text-[12px] text-danger">Failed to load memories: {memoriesError}</p>
+            </section>
+          )}
+
+          {visibleCount === 0 && loadingSections.length === 0
+            && !(archivedSearchError && (scope === 'all' || scope === 'archived'))
+            && !(memoriesError && (scope === 'all' || scope === 'memories')) && (
             <p className="px-6 py-10 text-[12px] text-dim text-center font-mono">{emptyStateCopy(scope, query)}</p>
           )}
         </div>
@@ -863,7 +1055,7 @@ export function CommandPalette() {
         <div className="px-5 py-2.5 border-t border-border-subtle flex items-center justify-between text-[10px] text-dim/60 font-mono gap-3">
           <Pill tone="muted" mono>{visibleCount > 0 ? `${cursor + 1} / ${visibleCount}` : '0 / 0'}</Pill>
           <span>
-            Search across open chats, archived chats, checkpoints, scheduled tasks, projects, and routes · esc to close
+            Memory rows include start + edit actions · tab/shift+tab to change scope · esc to close
           </span>
         </div>
       </div>

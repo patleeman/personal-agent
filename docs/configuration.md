@@ -155,6 +155,11 @@ Do not point runtime state inside the git repo.
 - `PERSONAL_AGENT_TELEGRAM_ALLOWED_USER_IDS`
 - `PERSONAL_AGENT_TELEGRAM_ALLOWLIST`
 
+### Web UI
+
+- `PERSONAL_AGENT_WEB_CONFIG_FILE` — override `~/.config/personal-agent/web.json`
+- `PERSONAL_AGENT_WEB_TAILSCALE_SERVE` — runtime override (`true`/`false`) for `pa ui` foreground launches
+
 ### 1Password secrets
 
 If you store secrets as `op://...` references:
@@ -189,6 +194,20 @@ Example:
 These defaults are used when a run does not explicitly override them.
 
 `webUi.conversationTitles.model` is optional. If omitted, conversation auto-titles fall back to the saved runtime default model.
+
+### Web UI runtime config
+
+`pa ui` and the managed web UI service use `~/.config/personal-agent/web.json`:
+
+```json
+{
+  "port": 3741,
+  "useTailscaleServe": false
+}
+```
+
+This file persists the web UI port and whether `tailscale serve` should be enabled for the web UI. It is managed by the CLI and editable if needed.
+When that setting is toggled via `pa ui` or the Web UI page, `personal-agent` also runs the matching `tailscale serve` command for `localhost:<port>`.
 
 You can also adjust model, theme, and conversation title settings from the web UI Settings page.
 

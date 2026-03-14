@@ -119,6 +119,28 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('ui-markdown-mention');
   });
 
+  it('does not turn email addresses into mention pills', () => {
+    const html = renderToStaticMarkup(createElement(Fragment, null, renderText('Email patrick@example.com and ping @web-ui for follow-up.')));
+
+    expect(html).toContain('patrick@example.com');
+    expect(html.match(/ui-markdown-mention/g)).toHaveLength(1);
+  });
+
+  it('renders markdown formatting in user messages', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'user',
+        ts: '2026-03-11T18:00:00.000Z',
+        text: '# Checklist\n\n- **One**\n- `Two`',
+      }],
+    }));
+
+    expect(html).toContain('<h1');
+    expect(html).toContain('<ul');
+    expect(html).toContain('<strong>One</strong>');
+    expect(html).toContain('<code');
+  });
+
   it('renders skill invocations as disclosure cards instead of raw wrapper markup', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: [{

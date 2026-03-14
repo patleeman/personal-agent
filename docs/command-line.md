@@ -32,6 +32,7 @@ pa -p "summarize this repo"
 
 These commands are handled by `personal-agent` itself:
 
+- `pa install ...`
 - `pa profile ...`
 - `pa doctor`
 - `pa daemon ...`
@@ -49,6 +50,7 @@ These commands are handled by `personal-agent` itself:
 
 ```bash
 pa doctor
+pa install https://github.com/davebcn87/pi-autoresearch
 pa profile list
 pa profile use <name>
 pa daemon status
@@ -79,6 +81,7 @@ pa tasks logs <id>
 ```bash
 pa gateway setup telegram
 pa gateway telegram start
+pa gateway send "Ping from CLI"
 pa gateway service install telegram
 ```
 
@@ -87,6 +90,23 @@ pa gateway service install telegram
 ### `pa tui [args...]`
 
 Launch Pi with the resolved active profile.
+
+### `pa install <source> [--profile <name> | -l | --local]`
+
+Add a Pi package source to durable `pa` settings.
+
+By default this writes to the active profile's `settings.json` under `profiles/<profile>/agent`.
+Use `--local` to write to the machine-local overlay instead.
+
+Examples:
+
+```bash
+pa install https://github.com/davebcn87/pi-autoresearch
+pa install npm:@scope/package@1.2.3
+pa install ./my-package
+pa install --profile assistant https://github.com/user/repo
+pa install --local ./my-package
+```
 
 ### `pa profile [list|show|use]`
 
@@ -148,7 +168,7 @@ pa inbox read conversation:conv-123
 
 See [Inbox and Activity](./inbox.md).
 
-### `pa ui [--open] [--port <port>]`
+### `pa ui [--open] [--port <port>] [--tailscale-serve|--no-tailscale-serve]`
 
 Start the web UI in the foreground.
 
@@ -158,15 +178,18 @@ Examples:
 pa ui
 pa ui --open
 pa ui --port 4000
+pa ui --tailscale-serve
 ```
+
+`--tailscale-serve` and `--no-tailscale-serve` apply the Tailscale Serve change immediately by invoking the `tailscale` CLI for `localhost:<port>`.
 
 Useful related commands:
 
 ```bash
 pa ui logs --tail 120
-pa ui service install --port 3741
-pa ui service status
-pa ui service restart
+pa ui service install --port 3741 [--tailscale-serve|--no-tailscale-serve]
+pa ui service status [--port <port>] [--tailscale-serve|--no-tailscale-serve]
+pa ui service restart [--port <port>] [--tailscale-serve|--no-tailscale-serve]
 ```
 
 See [Web UI Guide](./web-ui.md).

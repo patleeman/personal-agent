@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
-import { dirname, join, resolve, sep } from 'path';
+import { dirname, isAbsolute, join, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -33,6 +33,34 @@ export interface ResolvedResourceProfile {
 export interface ResolveProfileOptions {
   repoRoot?: string;
   localProfileDir?: string;
+}
+
+export type PackageInstallTarget = 'profile' | 'local';
+
+export interface ConfiguredPackageSource {
+  source: string;
+  filtered: boolean;
+}
+
+export interface PackageSourceTargetState {
+  target: PackageInstallTarget;
+  settingsPath: string;
+  packages: ConfiguredPackageSource[];
+}
+
+export interface InstallPackageSourceOptions extends ResolveProfileOptions {
+  source: string;
+  target: PackageInstallTarget;
+  profileName?: string;
+  sourceBaseDir?: string;
+}
+
+export interface InstallPackageSourceResult {
+  installed: boolean;
+  alreadyPresent: boolean;
+  source: string;
+  target: PackageInstallTarget;
+  settingsPath: string;
 }
 
 function readJsonFile(path: string): Record<string, unknown> {
@@ -98,6 +126,225 @@ function existingFile(path: string): string | undefined {
   if (!existsSync(path)) return undefined;
   if (!statSync(path).isFile()) return undefined;
   return resolve(path);
+}
+
+function readSettingsObject(settingsPath: string): Record<string, unknown> {
+  if (!existsSync(settingsPath)) {
+    return {};
+  }
+
+  const parsed = readJsonFile(settingsPath);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`Settings file must contain a JSON object: ${settingsPath}`);
+  }
+
+  return parsed;
+}
+
+function writeSettingsObject(settingsPath: string, settings: Record<string, unknown>): void {
+  mkdirSync(dirname(settingsPath), { recursive: true });
+  writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+}
+
+function isRemotePackageSource(value: string): boolean {
+  return value.startsWith('npm:')
+    || value.startsWith('git:')
+    || value.startsWith('https://')
+    || value.startsWith('http://')
+    || value.startsWith('ssh://')
+    || value.startsWith('git://');
+}
+
+function expandHomePath(value: string): string {
+  if (value === '~') {
+    return homedir();
+  }
+
+  if (value.startsWith('~/')) {
+    return join(homedir(), value.slice(2));
+  }
+
+  return value;
+}
+
+function looksLikeExplicitLocalPath(value: string): boolean {
+  return value === '.'
+    || value === '..'
+    || value.startsWith('./')
+    || value.startsWith('../')
+    || value.startsWith('~/')
+    || value === '~'
+    || value.startsWith('/');
+}
+
+function normalizePackageSource(value: string, baseDir: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new Error('Package source must not be empty');
+  }
+
+  if (isRemotePackageSource(trimmed)) {
+    return trimmed;
+  }
+
+  const expanded = expandHomePath(trimmed);
+  if (isAbsolute(expanded)) {
+    return resolve(expanded);
+  }
+
+  const candidate = resolve(baseDir, expanded);
+  if (looksLikeExplicitLocalPath(trimmed) || existsSync(candidate)) {
+    return candidate;
+  }
+
+  return trimmed;
+}
+
+function extractPackageSource(entry: unknown): string | undefined {
+  if (typeof entry === 'string') {
+    return entry;
+  }
+
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+    return undefined;
+  }
+
+  const source = (entry as { source?: unknown }).source;
+  return typeof source === 'string' ? source : undefined;
+}
+
+export function resolveLocalProfileDir(options: ResolveProfileOptions = {}): string {
+  const explicit = options.localProfileDir ?? process.env.PERSONAL_AGENT_LOCAL_PROFILE_DIR;
+
+  if (typeof explicit === 'string' && explicit.trim().length > 0) {
+    return resolve(explicit.trim());
+  }
+
+  return DEFAULT_LOCAL_PROFILE_DIR;
+}
+
+export function resolveLocalProfileSettingsFilePath(options: ResolveProfileOptions = {}): string {
+  const localProfileDir = resolveLocalProfileDir(options);
+  const nestedAgentDir = join(localProfileDir, 'agent');
+
+  if (existsSync(nestedAgentDir)) {
+    if (!statSync(nestedAgentDir).isDirectory()) {
+      throw new Error(`Local profile agent path is not a directory: ${nestedAgentDir}`);
+    }
+
+    return join(nestedAgentDir, 'settings.json');
+  }
+
+  if (existsSync(localProfileDir) && !statSync(localProfileDir).isDirectory()) {
+    throw new Error(`Local profile path is not a directory: ${localProfileDir}`);
+  }
+
+  return join(localProfileDir, 'settings.json');
+}
+
+export function resolveProfileSettingsFilePath(profileName: string, options: ResolveProfileOptions = {}): string {
+  const resolvedProfile = resolveResourceProfile(profileName, options);
+  return join(resolvedProfile.profilesRoot, resolvedProfile.name, 'agent', 'settings.json');
+}
+
+function readConfiguredPackageEntries(settingsPath: string): unknown[] {
+  const settings = readSettingsObject(settingsPath);
+  const value = settings.packages;
+
+  if (value === undefined) {
+    return [];
+  }
+
+  if (!Array.isArray(value)) {
+    throw new Error(`Expected "packages" in ${settingsPath} to be an array`);
+  }
+
+  return [...value];
+}
+
+export function readConfiguredPackageSources(settingsPath: string): ConfiguredPackageSource[] {
+  return readConfiguredPackageEntries(settingsPath)
+    .map((entry) => {
+      if (typeof entry === 'string') {
+        return {
+          source: entry,
+          filtered: false,
+        } satisfies ConfiguredPackageSource;
+      }
+
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+        return null;
+      }
+
+      const source = extractPackageSource(entry);
+      if (!source) {
+        return null;
+      }
+
+      return {
+        source,
+        filtered: true,
+      } satisfies ConfiguredPackageSource;
+    })
+    .filter((entry): entry is ConfiguredPackageSource => entry !== null);
+}
+
+export function readPackageSourceTargetState(
+  target: PackageInstallTarget,
+  profileNameOrOptions?: string | ResolveProfileOptions,
+  maybeOptions: ResolveProfileOptions = {},
+): PackageSourceTargetState {
+  const profileName = typeof profileNameOrOptions === 'string' ? profileNameOrOptions : undefined;
+  const options = typeof profileNameOrOptions === 'string' ? maybeOptions : (profileNameOrOptions ?? maybeOptions);
+
+  const settingsPath = target === 'local'
+    ? resolveLocalProfileSettingsFilePath(options)
+    : resolveProfileSettingsFilePath(profileName ?? 'shared', options);
+
+  return {
+    target,
+    settingsPath,
+    packages: readConfiguredPackageSources(settingsPath),
+  };
+}
+
+export function installPackageSource(options: InstallPackageSourceOptions): InstallPackageSourceResult {
+  const settingsPath = options.target === 'local'
+    ? resolveLocalProfileSettingsFilePath(options)
+    : resolveProfileSettingsFilePath(options.profileName ?? 'shared', options);
+  const normalizedSource = normalizePackageSource(options.source, options.sourceBaseDir ?? process.cwd());
+  const configuredPackages = readConfiguredPackageEntries(settingsPath);
+  const settingsDir = dirname(settingsPath);
+  const alreadyPresent = configuredPackages.some((entry) => {
+    const source = extractPackageSource(entry);
+    if (!source) {
+      return false;
+    }
+
+    return normalizePackageSource(source, settingsDir) === normalizedSource;
+  });
+
+  if (alreadyPresent) {
+    return {
+      installed: false,
+      alreadyPresent: true,
+      source: normalizedSource,
+      target: options.target,
+      settingsPath,
+    };
+  }
+
+  const settings = readSettingsObject(settingsPath);
+  settings.packages = [...configuredPackages, normalizedSource];
+  writeSettingsObject(settingsPath, settings);
+
+  return {
+    installed: true,
+    alreadyPresent: false,
+    source: normalizedSource,
+    target: options.target,
+    settingsPath,
+  };
 }
 
 export function getRepoRoot(explicitRepoRoot?: string): string {

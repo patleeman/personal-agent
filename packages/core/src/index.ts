@@ -32,6 +32,9 @@ export * from './conversation-project-links.js';
 // Conversation artifact exports
 export * from './conversation-artifacts.js';
 
+// Conversation attachment exports
+export * from './conversation-attachments.js';
+
 // Conversation checkpoint exports
 export * from './conversation-checkpoints.js';
 

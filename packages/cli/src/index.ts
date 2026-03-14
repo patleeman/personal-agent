@@ -33,6 +33,7 @@ import {
   buildPiResourceArgs,
   getExtensionDependencyDirs,
   getRepoRoot,
+  installPackageSource,
   listProfiles,
   materializeProfileToAgentDir,
   mergeJsonFiles,
@@ -74,6 +75,7 @@ import {
   stageWebUiRelease,
   startWebUiService,
   stopWebUiService,
+  syncWebUiTailscaleServe,
   uninstallManagedDaemonService,
   uninstallWebUiService,
   type RegisteredCliCommand,
@@ -143,9 +145,23 @@ function parseGlobalFlags(argv: string[]): ParsedGlobalFlags {
 
 const PI_PACKAGE_NAME = '@mariozechner/pi-coding-agent';
 const DEFAULT_WEB_UI_PORT = 3741;
+const INSTALL_COMMAND_USAGE = 'pa install <source> [--profile <name> | -l | --local]';
+const INSTALL_COMMAND_HELP_TEXT = `Default target: active profile settings.json.
+
+Options:
+  --profile <name>   Install into profiles/<name>/agent/settings.json
+  -l, --local        Install into the machine-local overlay settings.json
+
+Examples:
+  pa install https://github.com/davebcn87/pi-autoresearch
+  pa install npm:@scope/package@1.2.3
+  pa install ./my-package
+  pa install --profile assistant https://github.com/user/repo
+  pa install --local ./my-package`;
 
 interface WebUiConfig {
   port: number;
+  useTailscaleServe: boolean;
 }
 
 function getWebUiConfigFilePath(): string {
@@ -166,26 +182,50 @@ function normalizeWebUiPort(value: unknown, fallback = DEFAULT_WEB_UI_PORT): num
   return parsed > 0 && parsed <= 65535 ? parsed : fallback;
 }
 
+function normalizeWebUiBool(value: unknown, fallback = false): boolean {
+  return value === true || value === 'true' ? true : value === false ? false : fallback;
+}
+
+function parseWebUiEnvBool(value: string | undefined): boolean | undefined {
+  return value === 'true' ? true : value === 'false' ? false : undefined;
+}
+
 function readWebUiConfig(): WebUiConfig {
   const filePath = getWebUiConfigFilePath();
+  const envOverride = parseWebUiEnvBool(process.env.PERSONAL_AGENT_WEB_TAILSCALE_SERVE);
+
   if (!existsSync(filePath)) {
-    return { port: DEFAULT_WEB_UI_PORT };
+    return { port: DEFAULT_WEB_UI_PORT, useTailscaleServe: envOverride ?? false };
   }
 
   try {
-    const parsed = JSON.parse(readFileSync(filePath, 'utf-8')) as { port?: unknown };
+    const parsed = JSON.parse(readFileSync(filePath, 'utf-8')) as { port?: unknown; useTailscaleServe?: unknown };
     return {
       port: normalizeWebUiPort(parsed.port),
+      useTailscaleServe: envOverride ?? normalizeWebUiBool(parsed.useTailscaleServe),
     };
   } catch {
-    return { port: DEFAULT_WEB_UI_PORT };
+    return { port: DEFAULT_WEB_UI_PORT, useTailscaleServe: envOverride ?? false };
   }
 }
 
 function writeWebUiConfig(config: WebUiConfig): void {
   const filePath = getWebUiConfigFilePath();
+  const current = readWebUiConfig();
+  const next = {
+    port: normalizeWebUiPort(config.port),
+    useTailscaleServe: normalizeWebUiBool(config.useTailscaleServe),
+  };
+
   mkdirSync(dirname(filePath), { recursive: true });
-  writeFileSync(filePath, `${JSON.stringify({ port: normalizeWebUiPort(config.port) }, null, 2)}\n`);
+  writeFileSync(filePath, `${JSON.stringify(
+    {
+      ...current,
+      ...next,
+    },
+    null,
+    2,
+  )}\n`);
 }
 
 function getWebUiServiceOptions(overrides: WebUiServiceOptions = {}): Required<WebUiServiceOptions> {
@@ -1073,6 +1113,120 @@ async function profileCommand(args: string[]): Promise<number> {
   throw new Error(`Unknown profile subcommand: ${subcommand}`);
 }
 
+interface ParsedInstallCommandArgs {
+  source: string;
+  local: boolean;
+  profileName?: string;
+}
+
+function printInstallHelp(): void {
+  console.log(section('Install packages'));
+  console.log('');
+  console.log(`Usage: ${INSTALL_COMMAND_USAGE}
+
+Add a Pi package source to the durable settings used by pa.
+
+${INSTALL_COMMAND_HELP_TEXT}
+`);
+}
+
+function parseInstallCommandArgs(args: string[]): ParsedInstallCommandArgs {
+  let source: string | undefined;
+  let local = false;
+  let profileName: string | undefined;
+  let parseOptions = true;
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+
+    if (parseOptions && arg === '--') {
+      parseOptions = false;
+      continue;
+    }
+
+    if (parseOptions && (arg === '-l' || arg === '--local')) {
+      local = true;
+      continue;
+    }
+
+    if (parseOptions && arg === '--profile') {
+      const value = args[i + 1];
+      if (!value || value.startsWith('-')) {
+        throw new Error(`Usage: ${INSTALL_COMMAND_USAGE}`);
+      }
+
+      profileName = value;
+      i += 1;
+      continue;
+    }
+
+    if (parseOptions && arg.startsWith('--profile=')) {
+      const value = arg.slice('--profile='.length).trim();
+      if (value.length === 0) {
+        throw new Error(`Usage: ${INSTALL_COMMAND_USAGE}`);
+      }
+
+      profileName = value;
+      continue;
+    }
+
+    if (parseOptions && arg.startsWith('-')) {
+      throw new Error(`Usage: ${INSTALL_COMMAND_USAGE}`);
+    }
+
+    if (!source) {
+      source = arg;
+      continue;
+    }
+
+    throw new Error(`Usage: ${INSTALL_COMMAND_USAGE}`);
+  }
+
+  if (!source || (local && profileName)) {
+    throw new Error(`Usage: ${INSTALL_COMMAND_USAGE}`);
+  }
+
+  return {
+    source,
+    local,
+    profileName,
+  };
+}
+
+async function installCommand(args: string[]): Promise<number> {
+  const [subcommand, ...rest] = args;
+
+  if (isCliHelpToken(subcommand)) {
+    ensureNoExtraCommandArgs(rest, 'pa install help');
+    printInstallHelp();
+    return 0;
+  }
+
+  const parsed = parseInstallCommandArgs(args);
+  const target = parsed.local ? 'local' : 'profile';
+  const profileName = parsed.local ? undefined : (parsed.profileName ?? resolveProfileName());
+  const result = installPackageSource({
+    repoRoot: getRepoRoot(),
+    source: parsed.source,
+    target,
+    profileName,
+    sourceBaseDir: process.cwd(),
+  });
+  const targetLabel = target === 'local' ? 'local overlay' : `profile ${profileName}`;
+
+  if (result.alreadyPresent) {
+    console.log(warning(`Package source already present in ${result.settingsPath}`));
+    console.log(keyValue('Source', result.source));
+    console.log(keyValue('Target', targetLabel));
+    return 0;
+  }
+
+  console.log(success('Installed package source', result.source));
+  console.log(keyValue('Target', targetLabel));
+  console.log(keyValue('Settings', result.settingsPath));
+  console.log(`  ${formatHint('Start a new pa session to load the package')}`);
+  return 0;
+}
 
 function printMaintenanceModuleStatus(module: DaemonStatus['modules'][0]): void {
   const detail = module.detail as {
@@ -3747,6 +3901,37 @@ function parseNumericOption(
   return { value, rest };
 }
 
+function parseBooleanOption(
+  args: string[],
+  optionName: string,
+  _usage: string,
+): { value: boolean; rest: string[]; explicit: boolean } {
+  const rest: string[] = [];
+  let value = false;
+  let explicit = false;
+  const negated = `--no-${optionName.slice(2)}`;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+
+    if (arg === optionName) {
+      value = true;
+      explicit = true;
+      continue;
+    }
+
+    if (arg === negated) {
+      value = false;
+      explicit = true;
+      continue;
+    }
+
+    rest.push(arg);
+  }
+
+  return { value, rest, explicit };
+}
+
 function parseStringOption(
   args: string[],
   optionName: string,
@@ -3905,17 +4090,26 @@ function printWebUiHelp(): void {
   console.log('');
   console.log('Commands:');
   console.log('  pa ui help                                    Show web UI help');
-  console.log('  pa ui [--open] [--port <port>]                Start the web UI in the foreground');
+  console.log('  pa ui [--open] [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+    + ' Start the web UI in the foreground');
   console.log('  pa ui logs [--tail <count>]                   Show recent managed web UI logs');
   console.log('  pa ui service help                            Show web UI service help');
-  console.log('  pa ui service install [--port <port>]         Install and start managed web UI service');
-  console.log('  pa ui service status [--port <port>]          Show managed web UI service status');
-  console.log('  pa ui service start [--port <port>]           Start managed web UI service');
-  console.log('  pa ui service stop [--port <port>]            Stop managed web UI service');
-  console.log('  pa ui service restart [--port <port>]         Restart managed web UI service');
-  console.log('  pa ui service rollback [--port <port>]        Roll back to the inactive staged web UI slot');
-  console.log('  pa ui service mark-bad [--port <port>]        Mark the active staged web UI release as bad');
-  console.log('  pa ui service uninstall [--port <port>]       Stop and remove managed web UI service');
+  console.log('  pa ui service install [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+    + ' Install and start managed web UI service');
+  console.log('  pa ui service status [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+    + ' Show managed web UI service status');
+  console.log('  pa ui service start [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+    + ' Start managed web UI service');
+  console.log('  pa ui service stop [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+    + ' Stop managed web UI service');
+  console.log('  pa ui service restart [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+    + ' Restart managed web UI service');
+  console.log('  pa ui service rollback [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+    + ' Roll back to the inactive staged web UI slot');
+  console.log('  pa ui service mark-bad [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+    + ' Mark the active staged web UI release as bad');
+  console.log('  pa ui service uninstall [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+    + ' Stop and remove managed web UI service');
   console.log('');
   console.log(`  ${formatNextStep('pa ui service install')}`);
 }
@@ -3925,14 +4119,22 @@ function printWebUiServiceHelp(): void {
   console.log('');
   console.log('Commands:');
   console.log('  pa ui service help                            Show web UI service help');
-  console.log('  pa ui service install [--port <port>]         Install and start managed web UI service');
-  console.log('  pa ui service status [--port <port>]          Show managed web UI service status');
-  console.log('  pa ui service start [--port <port>]           Start managed web UI service');
-  console.log('  pa ui service stop [--port <port>]            Stop managed web UI service');
-  console.log('  pa ui service restart [--port <port>]         Restart managed web UI service');
-  console.log('  pa ui service rollback [--port <port>]        Roll back to the inactive staged web UI slot');
-  console.log('  pa ui service mark-bad [--port <port>]        Mark the active staged web UI release as bad');
-  console.log('  pa ui service uninstall [--port <port>]       Stop and remove managed web UI service');
+  console.log('  pa ui service install [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+    + ' Install and start managed web UI service');
+  console.log('  pa ui service status [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+    + ' Show managed web UI service status');
+  console.log('  pa ui service start [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+    + ' Start managed web UI service');
+  console.log('  pa ui service stop [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+    + ' Stop managed web UI service');
+  console.log('  pa ui service restart [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+    + ' Restart managed web UI service');
+  console.log('  pa ui service rollback [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+    + ' Roll back to the inactive staged web UI slot');
+  console.log('  pa ui service mark-bad [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+    + ' Mark the active staged web UI release as bad');
+  console.log('  pa ui service uninstall [--port <port>] [--tailscale-serve|--no-tailscale-serve]'
+    + ' Stop and remove managed web UI service');
   console.log('');
   console.log('Updates use blue/green staging automatically when the managed web UI service is installed.');
   console.log('');
@@ -3958,6 +4160,7 @@ function printWebUiServiceStatus(status: WebUiServiceStatus): void {
   if (status.deployment?.activeSlot) {
     console.log(keyValue('Active slot', status.deployment.activeSlot));
   }
+  console.log(keyValue('Tailscale Serve', readWebUiConfig().useTailscaleServe ? 'enabled' : 'disabled'));
   if (status.deployment?.activeRelease?.revision) {
     console.log(keyValue('Active release', status.deployment.activeRelease.revision));
   }
@@ -4019,13 +4222,35 @@ function showWebUiLogs(args: string[]): void {
   console.log(tail);
 }
 
+function syncWebUiTailscaleServeFromCli(input: {
+  enabled: boolean;
+  port: number;
+  strict: boolean;
+  context: string;
+}): void {
+  try {
+    syncWebUiTailscaleServe({ enabled: input.enabled, port: input.port });
+    console.log(keyValue('Tailscale Serve', `${input.enabled ? 'enabled' : 'disabled'} · localhost:${input.port}`));
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    if (input.strict) {
+      throw new Error(`${input.context}: ${detail}`);
+    }
+
+    console.log(`  ${warning(`${input.context}: ${detail}`)}`);
+  }
+}
+
 async function runWebUiServiceAction(action: string, args: string[]): Promise<void> {
   const usage = action === 'rollback'
-    ? 'pa ui service rollback [--port <port>] [--reason <text>]'
+    ? 'pa ui service rollback [--port <port>] [--tailscale-serve|--no-tailscale-serve] [--reason <text>]'
     : action === 'mark-bad'
-      ? 'pa ui service mark-bad [--port <port>] [--slot <blue|green>] [--reason <text>]'
-      : `pa ui service ${action} [--port <port>]`;
-  const parsedPort = parseNumericOption(args, '--port', readWebUiConfig().port, usage);
+      ? 'pa ui service mark-bad [--port <port>] [--tailscale-serve|--no-tailscale-serve] [--slot <blue|green>] [--reason <text>]'
+      : `pa ui service ${action} [--port <port>] [--tailscale-serve|--no-tailscale-serve]`;
+
+  const parsedTailscaleServe = parseBooleanOption(args, '--tailscale-serve', usage);
+  const parsedPort = parseNumericOption(parsedTailscaleServe.rest, '--port', readWebUiConfig().port, usage);
+
   let rest = parsedPort.rest;
   let reason: string | undefined;
   let slot: 'blue' | 'green' | undefined;
@@ -4049,12 +4274,46 @@ async function runWebUiServiceAction(action: string, args: string[]): Promise<vo
 
   ensureNoExtraCommandArgs(rest, usage);
 
+  const currentConfig = readWebUiConfig();
   const options = getWebUiServiceOptions({ port: parsedPort.value });
+  const desiredUseTailscaleServe = parsedTailscaleServe.explicit
+    ? parsedTailscaleServe.value
+    : currentConfig.useTailscaleServe;
+  const autoEnableTailscaleAfterServiceStart = !parsedTailscaleServe.explicit
+    && desiredUseTailscaleServe
+    && ['install', 'start', 'restart'].includes(action);
+
+  if (parsedTailscaleServe.explicit) {
+    syncWebUiTailscaleServeFromCli({
+      enabled: parsedTailscaleServe.value,
+      port: options.port,
+      strict: true,
+      context: `Unable to ${parsedTailscaleServe.value ? 'enable' : 'disable'} Tailscale Serve`,
+    });
+    writeWebUiConfig({
+      ...currentConfig,
+      port: options.port,
+      useTailscaleServe: parsedTailscaleServe.value,
+    });
+  }
 
   if (action === 'install') {
-    writeWebUiConfig({ port: options.port ?? DEFAULT_WEB_UI_PORT });
+    writeWebUiConfig({
+      ...currentConfig,
+      port: options.port,
+      useTailscaleServe: desiredUseTailscaleServe,
+    });
     const service = installWebUiService(options);
     await waitForWebUiHealthy(service.port);
+
+    if (autoEnableTailscaleAfterServiceStart) {
+      syncWebUiTailscaleServeFromCli({
+        enabled: true,
+        port: service.port,
+        strict: false,
+        context: 'Could not re-apply configured Tailscale Serve setting',
+      });
+    }
 
     console.log(success('Installed managed web UI service'));
     console.log(keyValue('Service', service.identifier));
@@ -4075,6 +4334,16 @@ async function runWebUiServiceAction(action: string, args: string[]): Promise<vo
   if (action === 'start') {
     const service = startWebUiService(options);
     await waitForWebUiHealthy(service.port);
+
+    if (autoEnableTailscaleAfterServiceStart) {
+      syncWebUiTailscaleServeFromCli({
+        enabled: true,
+        port: service.port,
+        strict: false,
+        context: 'Could not re-apply configured Tailscale Serve setting',
+      });
+    }
+
     console.log(success(`Started managed web UI service on ${service.url}`));
     return;
   }
@@ -4088,6 +4357,16 @@ async function runWebUiServiceAction(action: string, args: string[]): Promise<vo
   if (action === 'restart') {
     const service = restartWebUiService(options);
     await waitForWebUiHealthy(service.port);
+
+    if (autoEnableTailscaleAfterServiceStart) {
+      syncWebUiTailscaleServeFromCli({
+        enabled: true,
+        port: service.port,
+        strict: false,
+        context: 'Could not re-apply configured Tailscale Serve setting',
+      });
+    }
+
     console.log(success(`Restarted managed web UI service on ${service.url}`));
     return;
   }
@@ -4107,6 +4386,15 @@ async function runWebUiServiceAction(action: string, args: string[]): Promise<vo
       slot: result.restoredRelease.slot,
       revision: result.restoredRelease.revision,
     });
+
+    if (!parsedTailscaleServe.explicit && desiredUseTailscaleServe) {
+      syncWebUiTailscaleServeFromCli({
+        enabled: true,
+        port: service.port,
+        strict: false,
+        context: 'Could not re-apply configured Tailscale Serve setting',
+      });
+    }
 
     console.log(success(`Rolled back managed web UI to ${result.restoredRelease.slot}${result.restoredRelease.revision ? ` (${result.restoredRelease.revision})` : ''}`));
     console.log(keyValue('Rolled back from', `${result.rolledBackFrom.slot}${result.rolledBackFrom.revision ? ` · ${result.rolledBackFrom.revision}` : ''}`));
@@ -4175,10 +4463,46 @@ async function runWebUiServiceAction(action: string, args: string[]): Promise<vo
 }
 
 async function startForegroundWebUi(args: string[]): Promise<number> {
-  const portParse = parseNumericOption(args, '--port', readWebUiConfig().port, 'pa ui [--open] [--port <port>]');
+  const parsedTailscaleServe = parseBooleanOption(args, '--tailscale-serve', 'pa ui [--open] [--port <port>] [--tailscale-serve|--no-tailscale-serve]');
+  const currentConfig = readWebUiConfig();
+  const portParse = parseNumericOption(
+    parsedTailscaleServe.rest,
+    '--port',
+    currentConfig.port,
+    'pa ui [--open] [--port <port>] [--tailscale-serve|--no-tailscale-serve]',
+  );
   const openBrowser = hasOption(portParse.rest, '--open');
   const remainingArgs = portParse.rest.filter((arg) => arg !== '--open');
-  ensureNoExtraCommandArgs(remainingArgs, 'pa ui [--open] [--port <port>]');
+  ensureNoExtraCommandArgs(
+    remainingArgs,
+    'pa ui [--open] [--port <port>] [--tailscale-serve|--no-tailscale-serve]',
+  );
+
+  const desiredUseTailscaleServe = parsedTailscaleServe.explicit
+    ? parsedTailscaleServe.value
+    : currentConfig.useTailscaleServe;
+
+  if (parsedTailscaleServe.explicit) {
+    syncWebUiTailscaleServeFromCli({
+      enabled: parsedTailscaleServe.value,
+      port: portParse.value,
+      strict: true,
+      context: `Unable to ${parsedTailscaleServe.value ? 'enable' : 'disable'} Tailscale Serve`,
+    });
+
+    writeWebUiConfig({
+      ...currentConfig,
+      port: portParse.value,
+      useTailscaleServe: parsedTailscaleServe.value,
+    });
+  } else if (desiredUseTailscaleServe) {
+    syncWebUiTailscaleServeFromCli({
+      enabled: true,
+      port: portParse.value,
+      strict: false,
+      context: 'Could not re-apply configured Tailscale Serve setting',
+    });
+  }
 
   const repoRoot = getRepoRoot();
   const serverPath = join(repoRoot, 'packages', 'web', 'dist-server', 'index.js');
@@ -4207,6 +4531,7 @@ async function startForegroundWebUi(args: string[]): Promise<number> {
       PA_WEB_PORT: String(portParse.value),
       PA_WEB_DIST: distPath,
       PERSONAL_AGENT_REPO_ROOT: repoRoot,
+      PERSONAL_AGENT_WEB_TAILSCALE_SERVE: String(desiredUseTailscaleServe),
     },
   });
 
@@ -4282,6 +4607,14 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       usage: 'tui [args...]',
       description: 'Run pi with profile resources',
       run: runCommand,
+    },
+    {
+      name: 'install',
+      usage: 'install [args...]',
+      description: 'Add a Pi package source to durable pa settings',
+      helpText: `\nUsage: ${INSTALL_COMMAND_USAGE}\n\n${INSTALL_COMMAND_HELP_TEXT}\n`,
+      disableBuiltInHelp: true,
+      run: installCommand,
     },
     {
       name: 'profile',
@@ -4435,6 +4768,8 @@ Examples:
   pa --plain -p "hello"
   pa tui --profile datadog -p "hello"
   pa tui -- --model kimi-coding/k2p5
+  pa install https://github.com/davebcn87/pi-autoresearch
+  pa install --local ./my-package
   pa profile use datadog
   pa profile list
   pa doctor

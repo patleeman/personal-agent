@@ -21,19 +21,43 @@ Foreground mode:
 pa ui
 pa ui --open
 pa ui --port 4000
+pa ui --tailscale-serve
 ```
 
 Managed service mode for day-to-day use:
 
 ```bash
-pa ui service install
-pa ui service status
-pa ui service restart
+pa ui service install [--port <port>] [--tailscale-serve|--no-tailscale-serve]
+pa ui service status [--port <port>] [--tailscale-serve|--no-tailscale-serve]
+pa ui service restart [--port <port>] [--tailscale-serve|--no-tailscale-serve]
 ```
 
-Default address:
+Default address (local interface):
 
 - `http://localhost:3741`
+
+## Expose with Tailscale Serve
+
+You can expose the running web UI to your Tailnet via Tailscale Serve.
+The UI and `pa ui` config persist this preference in `~/.config/personal-agent/web.json` as:
+
+```json
+{
+  "useTailscaleServe": true,
+  "port": 3741
+}
+```
+
+This means:
+
+- web UI launch and managed service actions read the preference consistently,
+- the Web UI page shows and toggles the setting,
+- enabling it in the UI or via `--tailscale-serve` runs `tailscale serve --bg localhost:<port>` for you,
+- disabling it via `--no-tailscale-serve` runs `tailscale serve --bg localhost:<port> off`.
+
+If the `tailscale` CLI is unavailable (or the node is not authenticated), the toggle/flag returns an error so the mismatch is visible immediately.
+
+Note: `tailscale serve` is tailnet-only by default. Use [Funnel](https://tailscale.com/kb/1223/funnel/) only when you explicitly want public internet access.
 
 The web app uses the current active profile.
 
@@ -194,6 +218,17 @@ It is meant to answer:
 
 See [Profiles, Memory, and Skills](./profiles-memory-skills.md).
 
+### Tools
+
+The Tools page is the inspection and package-install surface for agent capabilities.
+
+You can:
+
+- inspect the tools available to new sessions
+- review tool schemas and parameters
+- add Pi package sources to any profile or the local overlay
+- inspect dependent CLI tools and configured MCP servers
+
 ### Settings
 
 Settings lets you change:
@@ -249,6 +284,8 @@ Common ones include:
 - `/project reference <id>` — reference a project in this conversation
 - `/project unreference <id>` — stop referencing a project
 - `/resume <delay> [prompt]` — schedule this conversation to continue later (`/defer` also works)
+- `/draw` — open the Excalidraw editor and attach a drawing
+- `/drawings` — attach an existing saved drawing/revision from this conversation
 - `/fork` — fork a conversation branch
 - `/compact` — compact context
 - `/reload` — reload profile resources

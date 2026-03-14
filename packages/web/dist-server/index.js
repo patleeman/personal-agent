@@ -1,10 +1,10 @@
 import { execSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
-import { listSessions, readSessionBlocks, readSessionTree, renameStoredSession } from './sessions.js';
+import { listSessions, readSessionBlocks, readSessionSearchText, readSessionTree, renameStoredSession } from './sessions.js';
 import { invalidateAppTopics, startAppEventMonitor, subscribeAppEvents } from './appEvents.js';
 import { resolveConversationCwd, resolveRequestedCwd } from './conversationCwd.js';
 import { pickFolder } from './folderPicker.js';
@@ -12,7 +12,7 @@ import { readGitStatusSummary } from './gitStatus.js';
 import { installGatewayAndReadState, readGatewayState, restartGatewayAndReadState, saveGatewayConfigAndReadState, startGatewayAndReadState, stopGatewayAndReadState, uninstallGatewayAndReadState, } from './gateway.js';
 import { parseGatewayConfigUpdateInput } from './gatewayConfig.js';
 import { installDaemonServiceAndReadState, readDaemonState, restartDaemonServiceAndReadState, startDaemonServiceAndReadState, stopDaemonServiceAndReadState, uninstallDaemonServiceAndReadState, } from './daemon.js';
-import { installWebUiServiceAndReadState, markBadWebUiReleaseAndReadState, readWebUiState, restartWebUiServiceAndReadState, rollbackWebUiServiceAndReadState, startWebUiServiceAndReadState, stopWebUiServiceAndReadState, uninstallWebUiServiceAndReadState, } from './webUi.js';
+import { installWebUiServiceAndReadState, markBadWebUiReleaseAndReadState, readWebUiState, readWebUiConfig, restartWebUiServiceAndReadState, rollbackWebUiServiceAndReadState, startWebUiServiceAndReadState, stopWebUiServiceAndReadState, syncConfiguredWebUiTailscaleServe, uninstallWebUiServiceAndReadState, writeWebUiConfig, } from './webUi.js';
 import { requestApplicationRestart } from './applicationRestart.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from './modelPreferences.js';
 import { readSavedConversationTitlePreferences, writeSavedConversationTitlePreferences } from './conversationTitlePreferences.js';
@@ -32,9 +32,9 @@ import { recoverDurableLiveConversations } from './conversationRecovery.js';
 import { createWebLiveConversationRunId, syncWebLiveConversationRun } from './conversationRuns.js';
 import { cancelDurableRun, getDurableRun, getDurableRunLog, listDurableRuns } from './durableRuns.js';
 import { buildReferencedMemoryDocsContext, buildReferencedProfilesContext, buildReferencedSkillsContext, buildReferencedTasksContext, pickPromptReferencesInOrder, resolvePromptReferences, } from './promptReferences.js';
-import { activateDueDeferredResumes, addConversationProjectLink, deleteConversationArtifact, ensureConversationAttentionBaselines, getActivityConversationLink, getConversationArtifact, getConversationProjectLink, getReadySessionDeferredResumeEntries, listConversationProjectLinks, listConversationArtifacts, listConversationCheckpoints, getConversationCheckpoint, saveConversationCheckpoint, deleteConversationCheckpoint, resolveConversationCheckpointSnapshotFile, cleanMcpCliStderr, inspectCliBinary, inspectMcpCliServer, inspectMcpCliTool, listProfileActivityEntries, listProjectIds, loadDeferredResumeState, loadProfileActivityReadState, markConversationAttentionRead, markConversationAttentionUnread, readMcpCliConfig, readProject, removeConversationProjectLink, removeDeferredResume, resolveProjectPaths, retryDeferredResume, saveDeferredResumeState, saveProfileActivityReadState, setConversationProjectLinks, summarizeConversationAttention, } from '@personal-agent/core';
-import { listProfiles, materializeProfileToAgentDir, resolveResourceProfile, } from '@personal-agent/resources';
-import { completeDeferredResumeConversationRun, loadDaemonConfig, markDeferredResumeConversationRunReady, markDeferredResumeConversationRunRetryScheduled, parsePendingOperation, resolveDaemonPaths, startScheduledTaskRun, } from '@personal-agent/daemon';
+import { activateDueDeferredResumes, addConversationProjectLink, deleteConversationArtifact, deleteConversationAttachment, ensureConversationAttentionBaselines, getActivityConversationLink, getConversationArtifact, getConversationAttachment, getConversationProjectLink, getReadySessionDeferredResumeEntries, listConversationProjectLinks, listConversationArtifacts, listConversationAttachments, cleanMcpCliStderr, inspectCliBinary, inspectMcpCliServer, inspectMcpCliTool, listProfileActivityEntries, listProjectIds, createProjectActivityEntry, loadDeferredResumeState, loadProfileActivityReadState, markConversationAttentionRead, markConversationAttentionUnread, readConversationAttachmentDownload, readMcpCliConfig, readProject, removeConversationProjectLink, removeDeferredResume, resolveConversationAttachmentPromptFiles, resolveProjectPaths, retryDeferredResume, saveConversationAttachment, saveDeferredResumeState, saveProfileActivityReadState, setActivityConversationLinks, setConversationProjectLinks, summarizeConversationAttention, writeProfileActivityEntry, } from '@personal-agent/core';
+import { installPackageSource, listProfiles, materializeProfileToAgentDir, readPackageSourceTargetState, resolveResourceProfile, } from '@personal-agent/resources';
+import { completeDeferredResumeConversationRun, loadDaemonConfig, markDeferredResumeConversationRunReady, markDeferredResumeConversationRunRetryScheduled, parsePendingOperation, resolveDaemonPaths, startScheduledTaskRun, startBackgroundRun, } from '@personal-agent/daemon';
 import { addProjectMilestone, createProjectRecord, createProjectTaskRecord, deleteProjectMilestone, deleteProjectRecord, deleteProjectTaskRecord, moveProjectMilestone, moveProjectTaskRecord, readProjectDetailFromProject, readProjectSource, saveProjectSource, updateProjectMilestone, updateProjectRecord, updateProjectTaskRecord, } from './projects.js';
 import { createProjectNoteRecord, deleteProjectFileRecord, deleteProjectNoteRecord, readProjectFileDownload, saveProjectBrief, updateProjectNoteRecord, uploadProjectFile, } from './projectResources.js';
 import { generateProjectBrief } from './projectBriefs.js';
@@ -49,6 +49,8 @@ const TASK_STATE_FILE = join(homedir(), '.local/state/personal-agent/daemon/task
 const PROFILE_CONFIG_FILE = getProfileConfigFilePath();
 const DEFERRED_RESUME_POLL_MS = 3_000;
 const DEFERRED_RESUME_RETRY_DELAY_MS = 30_000;
+const CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE = 'conversation-memory-distill';
+const CONVERSATION_MEMORY_DISTILL_ACTIVE_STATUSES = new Set(['queued', 'running', 'recovering', 'waiting']);
 function resolveDaemonRoot() {
     return resolveDaemonPaths(loadDaemonConfig().ipc.socketPath).root;
 }
@@ -157,6 +159,18 @@ function buildLiveSessionResourceOptions() {
         additionalThemePaths: resolved.themeEntries,
     };
 }
+function buildPackageInstallState(profile = getCurrentProfile()) {
+    const profileTargets = listProfiles({ repoRoot: REPO_ROOT }).map((profileName) => ({
+        ...readPackageSourceTargetState('profile', profileName, { repoRoot: REPO_ROOT }),
+        profileName,
+        current: profileName === profile,
+    }));
+    return {
+        currentProfile: profile,
+        profileTargets,
+        localTarget: readPackageSourceTargetState('local', { repoRoot: REPO_ROOT }),
+    };
+}
 // ── Activity read-state ───────────────────────────────────────────────────────
 // Stored as a simple JSON set alongside activity files.
 function loadReadState(profile = getCurrentProfile()) {
@@ -209,6 +223,57 @@ function getActivitySnapshotForCurrentProfile() {
     return {
         entries,
         unreadCount: entries.filter((entry) => !entry.read).length,
+    };
+}
+function createInboxActivityId(prefix) {
+    const timestamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+    const suffix = Math.random().toString(36).slice(2, 8);
+    return `${prefix}-${timestamp}-${suffix}`;
+}
+function writeConversationMemoryDistillActivity(options) {
+    const activityId = createInboxActivityId(options.kind === 'conversation-memory-distilled' ? 'memory-distill' : 'memory-distill-fail');
+    const createdAt = new Date().toISOString();
+    const entry = createProjectActivityEntry({
+        id: activityId,
+        createdAt,
+        profile: options.profile,
+        kind: options.kind,
+        summary: options.summary,
+        details: options.details,
+        relatedProjectIds: options.relatedProjectIds,
+    });
+    writeProfileActivityEntry({
+        profile: options.profile,
+        entry,
+    });
+    setActivityConversationLinks({
+        profile: options.profile,
+        activityId,
+        relatedConversationIds: [options.conversationId],
+    });
+    invalidateAppTopics('activity', 'sessions');
+    return activityId;
+}
+function isConversationMemoryDistillRun(run, conversationId) {
+    return run.manifest?.kind === 'background-run'
+        && run.manifest.source?.type === CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE
+        && run.manifest.source?.id === conversationId;
+}
+async function readConversationMemoryDistillRunState(conversationId) {
+    const runs = (await listDurableRuns()).runs
+        .filter((run) => isConversationMemoryDistillRun(run, conversationId))
+        .sort((left, right) => {
+        const leftCreatedAt = left.manifest?.createdAt ?? '';
+        const rightCreatedAt = right.manifest?.createdAt ?? '';
+        return rightCreatedAt.localeCompare(leftCreatedAt);
+    });
+    const latest = runs[0];
+    const status = latest?.status?.status ?? null;
+    return {
+        conversationId,
+        running: Boolean(status && CONVERSATION_MEMORY_DISTILL_ACTIVE_STATUSES.has(status)),
+        runId: latest?.runId ?? null,
+        status,
     };
 }
 function loadTaskStateEntries() {
@@ -431,17 +496,6 @@ function resolveAnchorMessageId(messageIds, requestedAnchorMessageId) {
     }
     return undefined;
 }
-function defaultCheckpointTitleFromAnchor(anchorPreview, anchorTimestamp) {
-    const normalizedPreview = anchorPreview.trim();
-    if (normalizedPreview.length > 0 && normalizedPreview !== 'Checkpoint anchor') {
-        return normalizedPreview.length > 80 ? `${normalizedPreview.slice(0, 79).trimEnd()}…` : normalizedPreview;
-    }
-    const date = new Date(Date.parse(anchorTimestamp));
-    if (Number.isFinite(date.getTime())) {
-        return `Checkpoint ${date.toISOString().slice(0, 16).replace('T', ' ')}`;
-    }
-    return 'Checkpoint';
-}
 function buildCheckpointSnapshotFromSessionFile(sessionFile, requestedAnchorMessageId) {
     const lines = parseSessionJsonLines(sessionFile);
     const messageEntries = lines
@@ -457,15 +511,15 @@ function buildCheckpointSnapshotFromSessionFile(sessionFile, requestedAnchorMess
     })
         .filter((entry) => entry !== null);
     if (messageEntries.length === 0) {
-        throw new Error('Cannot create a checkpoint from an empty conversation. Send at least one prompt first.');
+        throw new Error('Cannot distill memory from an empty conversation. Send at least one prompt first.');
     }
     const anchorMessageId = resolveAnchorMessageId(messageEntries.map((entry) => entry.message.id), requestedAnchorMessageId);
     if (!anchorMessageId) {
-        throw new Error('Unable to resolve checkpoint anchor message.');
+        throw new Error('Unable to resolve memory anchor message.');
     }
     const anchorEntry = messageEntries.find((entry) => entry.message.id === anchorMessageId);
     if (!anchorEntry) {
-        throw new Error(`Checkpoint anchor message ${anchorMessageId} not found.`);
+        throw new Error(`Memory anchor message ${anchorMessageId} not found.`);
     }
     const snapshotLines = lines.slice(0, anchorEntry.lineIndex + 1);
     const snapshotMessageCount = snapshotLines
@@ -482,6 +536,228 @@ function buildCheckpointSnapshotFromSessionFile(sessionFile, requestedAnchorMess
             timestamp: anchorEntry.message.timestamp,
             preview: buildCheckpointAnchorPreview(anchorEntry.message.content),
         },
+    };
+}
+const MEMORY_DOC_ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
+function normalizeDistilledText(value, maxLength = 180) {
+    const normalized = value.replace(/\s+/g, ' ').trim();
+    if (!normalized) {
+        return '';
+    }
+    return normalized.length > maxLength
+        ? `${normalized.slice(0, maxLength - 1).trimEnd()}…`
+        : normalized;
+}
+function normalizeOptionalDistilledText(value) {
+    if (typeof value !== 'string') {
+        return undefined;
+    }
+    const normalized = normalizeDistilledText(value, 220);
+    return normalized.length > 0 ? normalized : undefined;
+}
+function toYamlQuotedString(value) {
+    return JSON.stringify(value);
+}
+function currentDateYyyyMmDd(now = new Date()) {
+    return now.toISOString().slice(0, 10);
+}
+function compactDateStamp(now = new Date()) {
+    return now.toISOString().slice(0, 10).replace(/-/g, '');
+}
+function slugifyMemoryIdSegment(value) {
+    const slug = value
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .replace(/-+/g, '-');
+    if (!slug) {
+        return 'conversation-memory';
+    }
+    return slug.length > 52 ? slug.slice(0, 52).replace(/-+$/g, '') : slug;
+}
+function normalizeDistilledTag(value) {
+    const normalized = value
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9-]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .replace(/-+/g, '-');
+    return normalized.length > 0 ? normalized : null;
+}
+function buildDefaultDistilledTags(input) {
+    const tags = [
+        'conversation',
+        'checkpoint',
+        ...input.relatedProjectIds.map((projectId) => normalizeDistilledTag(projectId)).filter((value) => Boolean(value)),
+        ...((Array.isArray(input.requestedTags) ? input.requestedTags : [])
+            .map((tag) => (typeof tag === 'string' ? normalizeDistilledTag(tag) : null))
+            .filter((value) => Boolean(value))),
+    ];
+    return [...new Set(tags)].slice(0, 12);
+}
+function buildDefaultDistilledTitle(anchorPreview, anchorTimestamp) {
+    const normalizedPreview = normalizeDistilledText(anchorPreview, 88);
+    if (normalizedPreview.length > 0 && normalizedPreview !== 'Checkpoint anchor' && !normalizedPreview.startsWith('(')) {
+        return normalizedPreview;
+    }
+    const date = new Date(Date.parse(anchorTimestamp));
+    if (Number.isFinite(date.getTime())) {
+        return `Conversation memory ${date.toISOString().slice(0, 16).replace('T', ' ')}`;
+    }
+    return 'Conversation memory';
+}
+function parseSnapshotMessages(snapshotContent) {
+    return snapshotContent
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+        .flatMap((line) => {
+        try {
+            const parsed = JSON.parse(line);
+            const message = parseSessionMessageLine(parsed);
+            return message ? [message] : [];
+        }
+        catch {
+            return [];
+        }
+    });
+}
+function deriveDistilledConversationMemoryDraft(options) {
+    const snapshotMessages = parseSnapshotMessages(options.snapshot.snapshotContent);
+    const userMessages = snapshotMessages
+        .filter((message) => message.role === 'user')
+        .map((message) => normalizeDistilledText(buildCheckpointAnchorPreview(message.content), 200))
+        .filter((message) => message.length > 0);
+    const assistantMessages = snapshotMessages
+        .filter((message) => message.role === 'assistant')
+        .map((message) => normalizeDistilledText(buildCheckpointAnchorPreview(message.content), 200))
+        .filter((message) => message.length > 0 && message !== 'Checkpoint anchor');
+    const userIntentCandidate = userMessages[userMessages.length - 1]
+        ?? userMessages[0]
+        ?? normalizeDistilledText(options.snapshot.anchor.preview, 200);
+    const userIntent = userIntentCandidate.length > 0
+        ? userIntentCandidate
+        : 'Continue the same work with the same intent.';
+    const learnedPoints = [...new Set([
+            ...assistantMessages.slice(-2),
+            options.snapshot.anchor.role === 'assistant' ? normalizeDistilledText(options.snapshot.anchor.preview, 200) : '',
+        ].filter((value) => value.length > 0))].slice(0, 3);
+    const carryForwardPoints = [
+        options.relatedProjectIds.length > 0 ? `Related projects: ${options.relatedProjectIds.map((projectId) => `@${projectId}`).join(', ')}` : '',
+        options.sourceCwd ? `Working directory at distillation: ${options.sourceCwd}` : '',
+        `Anchor: ${options.snapshot.anchor.role} at ${new Date(options.snapshot.anchor.timestamp).toLocaleString()} — ${normalizeDistilledText(options.snapshot.anchor.preview, 160)}`,
+    ].filter((value) => value.length > 0);
+    const title = normalizeOptionalDistilledText(options.title) ?? buildDefaultDistilledTitle(options.snapshot.anchor.preview, options.snapshot.anchor.timestamp);
+    const derivedSummary = normalizeDistilledText(options.summary
+        ?? `User intent: ${userIntent}`, 180) || 'Distilled memory from a conversation checkpoint.';
+    const bodyLines = [
+        `# ${title}`,
+        '',
+        derivedSummary,
+        '',
+        `At this checkpoint, the user intent was: ${userIntent}`,
+    ];
+    if (learnedPoints.length > 0) {
+        bodyLines.push('', 'What the agent had learned by this point:');
+        for (const point of learnedPoints) {
+            bodyLines.push(`- ${point}`);
+        }
+    }
+    if (carryForwardPoints.length > 0) {
+        bodyLines.push('', 'Key carry-forward points:');
+        for (const point of carryForwardPoints) {
+            bodyLines.push(`- ${point}`);
+        }
+    }
+    const sourceLabel = options.sourceConversationTitle
+        ? `conversation "${options.sourceConversationTitle}"`
+        : 'conversation context';
+    bodyLines.push('', `_Distilled from ${sourceLabel} on ${new Date(options.snapshot.anchor.timestamp).toLocaleString()}._`);
+    return {
+        title,
+        summary: derivedSummary,
+        body: `${bodyLines.join('\n')}\n`,
+        tags: buildDefaultDistilledTags({
+            requestedTags: options.tags,
+            relatedProjectIds: options.relatedProjectIds,
+        }),
+    };
+}
+function allocateDistilledMemoryId(memoryDir, title) {
+    const baseSlug = `conv-${slugifyMemoryIdSegment(title)}-${compactDateStamp()}`;
+    const safeBase = MEMORY_DOC_ID_PATTERN.test(baseSlug) ? baseSlug : `conv-memory-${compactDateStamp()}`;
+    let candidate = safeBase;
+    let suffix = 2;
+    while (existsSync(join(memoryDir, `${candidate}.md`))) {
+        candidate = `${safeBase}-${suffix}`;
+        suffix += 1;
+    }
+    return candidate;
+}
+function buildDistilledMemoryMarkdown(input) {
+    const frontmatterLines = [
+        '---',
+        `id: ${input.id}`,
+        `title: ${toYamlQuotedString(input.title)}`,
+        `summary: ${toYamlQuotedString(input.summary)}`,
+        'type: "conversation-checkpoint"',
+        'status: "active"',
+        'tags:',
+        ...input.tags.map((tag) => `  - ${toYamlQuotedString(tag)}`),
+        `updated: ${input.updated}`,
+        'origin: "conversation"',
+        `distilled_at: ${input.distilledAt}`,
+        `anchor_preview: ${toYamlQuotedString(input.anchorPreview)}`,
+    ];
+    if (input.sourceConversationTitle) {
+        frontmatterLines.push(`origin_title: ${toYamlQuotedString(input.sourceConversationTitle)}`);
+    }
+    if (input.sourceCwd) {
+        frontmatterLines.push(`source_cwd: ${toYamlQuotedString(input.sourceCwd)}`);
+    }
+    if (input.relatedProjectIds.length > 0) {
+        frontmatterLines.push('related_project_ids:');
+        for (const projectId of input.relatedProjectIds) {
+            frontmatterLines.push(`  - ${toYamlQuotedString(projectId)}`);
+        }
+    }
+    frontmatterLines.push('---', '');
+    return `${frontmatterLines.join('\n')}${input.body.startsWith('#') ? '' : '\n'}${input.body}`;
+}
+function saveDistilledConversationMemory(options) {
+    const memoryDir = join(REPO_ROOT, `profiles/${options.profile}/agent/memory`);
+    mkdirSync(memoryDir, { recursive: true });
+    const draft = deriveDistilledConversationMemoryDraft(options);
+    const id = allocateDistilledMemoryId(memoryDir, draft.title);
+    const updated = currentDateYyyyMmDd();
+    const distilledAt = new Date().toISOString();
+    const filePath = join(memoryDir, `${id}.md`);
+    const content = buildDistilledMemoryMarkdown({
+        id,
+        title: draft.title,
+        summary: draft.summary,
+        tags: draft.tags,
+        updated,
+        distilledAt,
+        sourceConversationTitle: options.sourceConversationTitle,
+        sourceCwd: options.sourceCwd,
+        relatedProjectIds: options.relatedProjectIds,
+        anchorPreview: normalizeDistilledText(options.snapshot.anchor.preview, 180),
+        body: draft.body,
+    });
+    writeFileSync(filePath, content, 'utf-8');
+    return {
+        id,
+        title: draft.title,
+        summary: draft.summary,
+        tags: draft.tags,
+        path: filePath,
+        type: 'conversation-checkpoint',
+        status: 'active',
+        updated,
+        recentSessionCount: 0,
+        lastUsedAt: null,
+        usedInLastSession: false,
     };
 }
 function summarizeProjectConversationSnippet(conversationId) {
@@ -1424,6 +1700,43 @@ app.get('/api/tools', async (_req, res) => {
                 searchedPaths: mcpCliConfig.searchedPaths,
                 servers: mcpCliConfig.servers,
             },
+            packageInstall: buildPackageInstallState(profile),
+        });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/tools/packages/install', (req, res) => {
+    try {
+        const { source, target, profileName } = req.body;
+        if (typeof source !== 'string' || source.trim().length === 0) {
+            res.status(400).json({ error: 'source required' });
+            return;
+        }
+        if (target !== 'profile' && target !== 'local') {
+            res.status(400).json({ error: 'target must be profile or local' });
+            return;
+        }
+        if (target === 'profile' && typeof profileName !== 'string') {
+            res.status(400).json({ error: 'profileName required for profile installs' });
+            return;
+        }
+        const currentProfile = getCurrentProfile();
+        const result = installPackageSource({
+            repoRoot: REPO_ROOT,
+            profileName: target === 'profile' ? profileName : undefined,
+            source,
+            target,
+            sourceBaseDir: REPO_ROOT,
+        });
+        res.json({
+            ...result,
+            packageInstall: buildPackageInstallState(currentProfile),
         });
     }
     catch (err) {
@@ -1586,6 +1899,46 @@ app.patch('/api/web-ui/open-conversations', (req, res) => {
             ok: true,
             sessionIds: saved.openConversationIds,
             pinnedSessionIds: saved.pinnedConversationIds,
+        });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.patch('/api/web-ui/config', (req, res) => {
+    try {
+        const { useTailscaleServe, resumeFallbackPrompt } = req.body;
+        if (useTailscaleServe === undefined && resumeFallbackPrompt === undefined) {
+            res.status(400).json({ error: 'Provide useTailscaleServe and/or resumeFallbackPrompt.' });
+            return;
+        }
+        if (useTailscaleServe !== undefined && typeof useTailscaleServe !== 'boolean') {
+            res.status(400).json({ error: 'useTailscaleServe must be a boolean when provided.' });
+            return;
+        }
+        if (resumeFallbackPrompt !== undefined && typeof resumeFallbackPrompt !== 'string') {
+            res.status(400).json({ error: 'resumeFallbackPrompt must be a string when provided.' });
+            return;
+        }
+        if (useTailscaleServe !== undefined) {
+            syncConfiguredWebUiTailscaleServe(useTailscaleServe);
+        }
+        const savedConfig = writeWebUiConfig({
+            ...(useTailscaleServe !== undefined ? { useTailscaleServe } : {}),
+            ...(resumeFallbackPrompt !== undefined ? { resumeFallbackPrompt } : {}),
+        });
+        const state = readWebUiState();
+        res.json({
+            ...state,
+            service: {
+                ...state.service,
+                tailscaleServe: savedConfig.useTailscaleServe,
+                resumeFallbackPrompt: savedConfig.resumeFallbackPrompt,
+            },
         });
     }
     catch (err) {
@@ -1823,12 +2176,37 @@ app.get('/api/sessions/:id/tree', (req, res) => {
         res.status(500).json({ error: String(err) });
     }
 });
-// ── Conversation checkpoints ─────────────────────────────────────────────────
-app.get('/api/checkpoints', (_req, res) => {
+app.post('/api/sessions/search-index', (req, res) => {
     try {
-        const profile = getCurrentProfile();
+        const rawSessionIds = Array.isArray(req.body?.sessionIds) ? req.body.sessionIds : [];
+        const sessionIds = rawSessionIds
+            .filter((value) => typeof value === 'string')
+            .map((value) => value.trim())
+            .filter((value) => value.length > 0);
+        if (sessionIds.length === 0) {
+            res.json({ index: {} });
+            return;
+        }
+        const index = {};
+        for (const sessionId of sessionIds) {
+            const searchText = readSessionSearchText(sessionId);
+            index[sessionId] = typeof searchText === 'string' ? searchText : '';
+        }
+        res.json({ index });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+// ── Conversation memories ────────────────────────────────────────────────────
+app.get('/api/memories', (_req, res) => {
+    try {
         res.json({
-            checkpoints: listConversationCheckpoints({ profile }),
+            memories: listMemoryDocsForCurrentProfile({ includeSearchText: true }),
         });
     }
     catch (err) {
@@ -1839,28 +2217,286 @@ app.get('/api/checkpoints', (_req, res) => {
         res.status(500).json({ error: String(err) });
     }
 });
-app.post('/api/checkpoints/:checkpointId/start', async (req, res) => {
+app.get('/api/memories/:memoryId', (req, res) => {
+    try {
+        const memory = findMemoryDocById(req.params.memoryId, { includeSearchText: true });
+        if (!memory) {
+            res.status(404).json({ error: 'Memory not found.' });
+            return;
+        }
+        if (!existsSync(memory.path)) {
+            res.status(404).json({ error: 'Memory file not found.' });
+            return;
+        }
+        res.json({
+            memory,
+            content: readFileSync(memory.path, 'utf-8'),
+        });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/memories/:memoryId', (req, res) => {
     try {
         const profile = getCurrentProfile();
-        const checkpoint = getConversationCheckpoint({
-            profile,
-            checkpointId: req.params.checkpointId,
-        });
-        if (!checkpoint) {
-            res.status(404).json({ error: 'Checkpoint not found.' });
+        if (profile === 'shared') {
+            res.status(400).json({ error: 'Shared profile does not support profile-local memory docs.' });
             return;
         }
-        const snapshotFile = resolveConversationCheckpointSnapshotFile({
-            profile,
-            checkpoint,
-        });
-        if (!existsSync(snapshotFile)) {
-            res.status(409).json({ error: 'Checkpoint snapshot is missing. Delete and recreate this checkpoint.' });
+        const memory = findMemoryDocById(req.params.memoryId);
+        if (!memory) {
+            res.status(404).json({ error: 'Memory not found.' });
             return;
         }
+        const { content } = req.body;
+        if (typeof content !== 'string') {
+            res.status(400).json({ error: 'content required' });
+            return;
+        }
+        writeFileSync(memory.path, content, 'utf-8');
+        const refreshed = listMemoryDocsForCurrentProfile({ includeSearchText: true }).find((entry) => entry.path === memory.path) ?? memory;
+        res.json({
+            memory: refreshed,
+            content,
+        });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.delete('/api/memories/:memoryId', (req, res) => {
+    try {
+        const profile = getCurrentProfile();
+        if (profile === 'shared') {
+            res.status(400).json({ error: 'Shared profile does not support profile-local memory docs.' });
+            return;
+        }
+        const memory = findMemoryDocById(req.params.memoryId);
+        if (!memory) {
+            res.status(404).json({ error: 'Memory not found.' });
+            return;
+        }
+        if (!existsSync(memory.path)) {
+            res.status(404).json({ error: 'Memory file not found.' });
+            return;
+        }
+        unlinkSync(memory.path);
+        res.json({ deleted: true, memoryId: memory.id });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.get('/api/conversations/:id/memories/status', async (req, res) => {
+    try {
+        const conversationId = req.params.id;
+        const state = await readConversationMemoryDistillRunState(conversationId);
+        res.json(state);
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        logError('request handler error', {
+            message,
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: message });
+    }
+});
+app.post('/api/conversations/:id/memories', async (req, res) => {
+    try {
+        const profile = getCurrentProfile();
+        if (profile === 'shared') {
+            res.status(400).json({ error: 'Shared profile does not support profile-local memory docs.' });
+            return;
+        }
+        const conversationId = req.params.id;
+        const sessionFile = resolveConversationSessionFile(conversationId);
+        if (!sessionFile || !existsSync(sessionFile)) {
+            res.status(404).json({ error: 'Conversation not found.' });
+            return;
+        }
+        const existing = await readConversationMemoryDistillRunState(conversationId);
+        if (existing.running) {
+            res.status(409).json({
+                error: 'A memory distillation is already running for this conversation.',
+                ...existing,
+            });
+            return;
+        }
+        const { title, summary, anchorMessageId, tags } = req.body;
+        const runnerPath = join(REPO_ROOT, 'packages/web/dist-server/distillConversationMemoryRun.js');
+        if (!existsSync(runnerPath)) {
+            res.status(500).json({ error: `Distillation runner not found: ${runnerPath}` });
+            return;
+        }
+        const payload = Buffer.from(JSON.stringify({
+            conversationId,
+            anchorMessageId,
+            title,
+            summary,
+            tags,
+        }), 'utf-8').toString('base64url');
+        const result = await startBackgroundRun({
+            taskSlug: `distill-memory-${conversationId}`,
+            cwd: REPO_ROOT,
+            argv: [
+                process.execPath,
+                runnerPath,
+                '--port',
+                String(PORT),
+                '--profile',
+                profile,
+                '--payload',
+                payload,
+            ],
+            source: {
+                type: CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE,
+                id: conversationId,
+            },
+        });
+        if (!result.accepted) {
+            res.status(503).json({
+                error: result.reason ?? 'Could not start conversation memory distillation.',
+                accepted: false,
+                runId: result.runId,
+            });
+            return;
+        }
+        res.json({
+            conversationId,
+            accepted: true,
+            runId: result.runId,
+            running: true,
+            status: 'queued',
+        });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        logError('request handler error', {
+            message,
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: message });
+    }
+});
+app.post('/api/conversations/:id/memories/distill-now', (req, res) => {
+    const currentProfile = getCurrentProfile();
+    const conversationId = req.params.id;
+    const { profile: requestedProfile, title, summary, anchorMessageId, tags, emitActivity = false, } = req.body;
+    const profile = typeof requestedProfile === 'string' && requestedProfile.trim().length > 0
+        ? requestedProfile.trim()
+        : currentProfile;
+    try {
+        if (profile === 'shared') {
+            res.status(400).json({ error: 'Shared profile does not support profile-local memory docs.' });
+            return;
+        }
+        if (liveRegistry.get(conversationId)?.session.isStreaming) {
+            res.status(409).json({ error: 'Stop the current response before distilling memory.' });
+            return;
+        }
+        const sessionFile = resolveConversationSessionFile(conversationId);
+        if (!sessionFile || !existsSync(sessionFile)) {
+            res.status(404).json({ error: 'Conversation not found.' });
+            return;
+        }
+        const snapshot = buildCheckpointSnapshotFromSessionFile(sessionFile, anchorMessageId);
+        const sourceSession = listConversationSessionsSnapshot().find((session) => session.id === conversationId);
+        const relatedProjectIds = getConversationProjectLink({
+            profile,
+            conversationId,
+        })?.relatedProjectIds ?? [];
+        const memory = saveDistilledConversationMemory({
+            profile,
+            title,
+            summary,
+            tags,
+            sourceConversationTitle: sourceSession?.title,
+            sourceCwd: sourceSession?.cwd,
+            relatedProjectIds,
+            snapshot,
+        });
+        const activityId = emitActivity
+            ? writeConversationMemoryDistillActivity({
+                profile,
+                conversationId,
+                kind: 'conversation-memory-distilled',
+                summary: `Distilled memory @${memory.id}`,
+                details: [
+                    `Created durable memory @${memory.id} from this conversation.`,
+                    `Title: ${memory.title}`,
+                    memory.summary ? `Summary: ${memory.summary}` : undefined,
+                ].filter((line) => Boolean(line)).join('\n'),
+                relatedProjectIds,
+            })
+            : undefined;
+        res.json({
+            conversationId,
+            memory,
+            ...(activityId ? { activityId } : {}),
+        });
+    }
+    catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (emitActivity) {
+            try {
+                const relatedProjectIds = getConversationProjectLink({
+                    profile,
+                    conversationId,
+                })?.relatedProjectIds ?? [];
+                writeConversationMemoryDistillActivity({
+                    profile,
+                    conversationId,
+                    kind: 'conversation-memory-distill-failed',
+                    summary: 'Conversation memory distillation failed',
+                    details: `Distillation failed for this conversation.\nError: ${message}`,
+                    relatedProjectIds,
+                });
+            }
+            catch {
+                // Ignore activity write errors in failure path.
+            }
+        }
+        const status = message.includes('not found')
+            ? 404
+            : message.includes('Invalid') || message.includes('required') || message.includes('Unable to resolve') || message.includes('empty conversation')
+                ? 400
+                : 500;
+        logError('request handler error', {
+            message,
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(status).json({ error: message });
+    }
+});
+app.post('/api/memories/:memoryId/start', async (req, res) => {
+    try {
+        const profile = getCurrentProfile();
+        const memoryId = req.params.memoryId;
+        const memory = listMemoryDocsForCurrentProfile().find((entry) => entry.id === memoryId);
+        if (!memory) {
+            res.status(404).json({ error: 'Memory not found.' });
+            return;
+        }
+        const frontmatter = parseFrontmatter(memory.path);
+        const sourceCwd = typeof frontmatter.source_cwd === 'string'
+            ? frontmatter.source_cwd.trim()
+            : '';
         const { cwd: requestedCwd } = req.body;
-        const sourceCwd = checkpoint.source.cwd || DEFAULT_WEB_CWD;
-        let nextCwd = resolveRequestedCwd(requestedCwd, sourceCwd);
+        let nextCwd = resolveRequestedCwd(requestedCwd, sourceCwd || DEFAULT_WEB_CWD);
         if (!nextCwd && !requestedCwd) {
             nextCwd = DEFAULT_WEB_CWD;
         }
@@ -1879,12 +2515,15 @@ app.post('/api/checkpoints/:checkpointId/start', async (req, res) => {
             res.status(400).json({ error: `Not a directory: ${nextCwd}` });
             return;
         }
-        const result = await createSessionFromExisting(snapshotFile, nextCwd, {
+        const result = await createSession(nextCwd, {
             ...buildLiveSessionResourceOptions(),
             extensionFactories: buildLiveSessionExtensionFactories(),
         });
+        const requestedRelatedProjectIds = Array.isArray(frontmatter.related_project_ids)
+            ? frontmatter.related_project_ids.filter((projectId) => typeof projectId === 'string' && projectId.trim().length > 0)
+            : [];
         const availableProjectIds = new Set(listProjectIds({ repoRoot: REPO_ROOT, profile }));
-        const relatedProjectIds = checkpoint.source.relatedProjectIds.filter((projectId) => availableProjectIds.has(projectId));
+        const relatedProjectIds = requestedRelatedProjectIds.filter((projectId) => availableProjectIds.has(projectId));
         if (relatedProjectIds.length > 0) {
             setConversationProjectLinks({
                 profile,
@@ -1893,8 +2532,18 @@ app.post('/api/checkpoints/:checkpointId/start', async (req, res) => {
             });
             invalidateAppTopics('projects', 'sessions');
         }
+        await queuePromptContext(result.id, 'referenced_context', buildReferencedMemoryDocsContext([
+            {
+                id: memory.id,
+                title: memory.title,
+                summary: memory.summary,
+                tags: memory.tags,
+                path: memory.path,
+                updated: memory.updated,
+            },
+        ], REPO_ROOT));
         res.json({
-            checkpointId: checkpoint.id,
+            memoryId,
             id: result.id,
             sessionFile: result.sessionFile,
             cwd: nextCwd,
@@ -1907,104 +2556,6 @@ app.post('/api/checkpoints/:checkpointId/start', async (req, res) => {
             stack: err instanceof Error ? err.stack : undefined,
         });
         res.status(500).json({ error: message });
-    }
-});
-app.delete('/api/checkpoints/:checkpointId', (req, res) => {
-    try {
-        const profile = getCurrentProfile();
-        const deleted = deleteConversationCheckpoint({
-            profile,
-            checkpointId: req.params.checkpointId,
-        });
-        if (!deleted) {
-            res.status(404).json({ error: 'Checkpoint not found.' });
-            return;
-        }
-        invalidateAppTopics('sessions');
-        res.json({ ok: true, checkpointId: req.params.checkpointId, deleted: true });
-    }
-    catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        const status = message.includes('Invalid checkpoint id') ? 400 : 500;
-        logError('request handler error', {
-            message,
-            stack: err instanceof Error ? err.stack : undefined,
-        });
-        res.status(status).json({ error: message });
-    }
-});
-app.get('/api/conversations/:id/checkpoints', (req, res) => {
-    try {
-        const profile = getCurrentProfile();
-        res.json({
-            conversationId: req.params.id,
-            checkpoints: listConversationCheckpoints({
-                profile,
-                conversationId: req.params.id,
-            }),
-        });
-    }
-    catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        const status = message.includes('Invalid conversation id') ? 400 : 500;
-        logError('request handler error', {
-            message,
-            stack: err instanceof Error ? err.stack : undefined,
-        });
-        res.status(status).json({ error: message });
-    }
-});
-app.post('/api/conversations/:id/checkpoints', (req, res) => {
-    try {
-        const profile = getCurrentProfile();
-        const conversationId = req.params.id;
-        if (liveRegistry.get(conversationId)?.session.isStreaming) {
-            res.status(409).json({ error: 'Stop the current response before saving a checkpoint.' });
-            return;
-        }
-        const sessionFile = resolveConversationSessionFile(conversationId);
-        if (!sessionFile || !existsSync(sessionFile)) {
-            res.status(404).json({ error: 'Conversation not found.' });
-            return;
-        }
-        const { title, note, summary, anchorMessageId, } = req.body;
-        const snapshot = buildCheckpointSnapshotFromSessionFile(sessionFile, anchorMessageId);
-        const sourceSession = listConversationSessionsSnapshot().find((session) => session.id === conversationId);
-        const relatedProjectIds = getConversationProjectLink({
-            profile,
-            conversationId,
-        })?.relatedProjectIds ?? [];
-        const checkpoint = saveConversationCheckpoint({
-            profile,
-            title: title?.trim() || defaultCheckpointTitleFromAnchor(snapshot.anchor.preview, snapshot.anchor.timestamp),
-            note,
-            summary,
-            source: {
-                conversationId,
-                conversationTitle: sourceSession?.title,
-                cwd: sourceSession?.cwd,
-                relatedProjectIds,
-            },
-            anchor: snapshot.anchor,
-            snapshotContent: snapshot.snapshotContent,
-            snapshotMessageCount: snapshot.snapshotMessageCount,
-            snapshotLineCount: snapshot.snapshotLineCount,
-        });
-        invalidateAppTopics('sessions');
-        res.json({ conversationId, checkpoint });
-    }
-    catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        const status = message.includes('not found')
-            ? 404
-            : message.includes('Invalid') || message.includes('required') || message.includes('Unable to resolve') || message.includes('empty conversation')
-                ? 400
-                : 500;
-        logError('request handler error', {
-            message,
-            stack: err instanceof Error ? err.stack : undefined,
-        });
-        res.status(status).json({ error: message });
     }
 });
 // ── Live sessions (Pi SDK) ────────────────────────────────────────────────────
@@ -2089,13 +2640,48 @@ app.post('/api/conversations/:id/recover', async (req, res) => {
             res.status(400).json({ error: 'conversation id required' });
             return;
         }
+        const resumeFallbackPrompt = readWebUiConfig().resumeFallbackPrompt;
         if (isLive(conversationId)) {
+            const liveEntry = liveRegistry.get(conversationId);
+            if (liveEntry?.session.sessionFile) {
+                await syncWebLiveConversationRun({
+                    conversationId,
+                    sessionFile: liveEntry.session.sessionFile,
+                    cwd: liveEntry.cwd,
+                    title: liveEntry.title,
+                    profile: getCurrentProfile(),
+                    state: 'running',
+                    pendingOperation: {
+                        type: 'prompt',
+                        text: resumeFallbackPrompt,
+                        enqueuedAt: new Date().toISOString(),
+                    },
+                });
+            }
+            promptSession(conversationId, resumeFallbackPrompt).catch(async (error) => {
+                if (liveEntry?.session.sessionFile) {
+                    await syncWebLiveConversationRun({
+                        conversationId,
+                        sessionFile: liveEntry.session.sessionFile,
+                        cwd: liveEntry.cwd,
+                        title: liveEntry.title,
+                        profile: getCurrentProfile(),
+                        state: 'failed',
+                        lastError: error instanceof Error ? error.message : String(error),
+                    });
+                }
+                logError('conversation recovery error', {
+                    sessionId: conversationId,
+                    message: error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined,
+                });
+            });
             res.json({
                 conversationId,
                 live: true,
-                recovered: false,
+                recovered: true,
                 replayedPendingOperation: false,
-                usedFallbackPrompt: false,
+                usedFallbackPrompt: true,
             });
             return;
         }
@@ -2138,16 +2724,13 @@ app.post('/api/conversations/:id/recover', async (req, res) => {
             res.status(500).json({ error: 'Could not determine the conversation working directory.' });
             return;
         }
-        if (!pendingOperation) {
-            res.json({
-                conversationId: resumed.id,
-                live: true,
-                recovered: true,
-                replayedPendingOperation: false,
-                usedFallbackPrompt: false,
-            });
-            return;
-        }
+        const recoveryOperation = pendingOperation ?? {
+            type: 'prompt',
+            text: resumeFallbackPrompt,
+            enqueuedAt: new Date().toISOString(),
+        };
+        const replayedPendingOperation = Boolean(pendingOperation);
+        const usedFallbackPrompt = !pendingOperation;
         await syncWebLiveConversationRun({
             conversationId: resumed.id,
             sessionFile,
@@ -2155,12 +2738,12 @@ app.post('/api/conversations/:id/recover', async (req, res) => {
             title: effectiveTitle,
             profile: effectiveProfile,
             state: 'running',
-            pendingOperation,
+            pendingOperation: recoveryOperation,
         });
-        for (const message of pendingOperation.contextMessages ?? []) {
+        for (const message of recoveryOperation.contextMessages ?? []) {
             await queuePromptContext(resumed.id, message.customType, message.content);
         }
-        promptSession(resumed.id, pendingOperation.text, pendingOperation.behavior, pendingOperation.images).catch(async (error) => {
+        promptSession(resumed.id, recoveryOperation.text, recoveryOperation.behavior, recoveryOperation.images).catch(async (error) => {
             await syncWebLiveConversationRun({
                 conversationId: resumed.id,
                 sessionFile,
@@ -2180,8 +2763,8 @@ app.post('/api/conversations/:id/recover', async (req, res) => {
             conversationId: resumed.id,
             live: true,
             recovered: true,
-            replayedPendingOperation: true,
-            usedFallbackPrompt: false,
+            replayedPendingOperation,
+            usedFallbackPrompt,
         });
     }
     catch (err) {
@@ -2294,13 +2877,66 @@ function buildReferencedProjectsContext(projectIds) {
         'Projects are durable cross-conversation hubs. Read the project brief and notes when you need continuity, load the pa-project-hub skill before making durable project file edits, and use the project tool only for conversation reference changes.',
     ].join('\n');
 }
+function normalizePromptAttachmentRefs(value) {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    const refs = [];
+    const seen = new Set();
+    for (const candidate of value) {
+        if (!candidate || typeof candidate !== 'object') {
+            continue;
+        }
+        const attachmentId = typeof candidate.attachmentId === 'string'
+            ? candidate.attachmentId.trim()
+            : '';
+        if (!attachmentId) {
+            continue;
+        }
+        const revisionCandidate = candidate.revision;
+        const revision = Number.isInteger(revisionCandidate) && revisionCandidate > 0
+            ? revisionCandidate
+            : undefined;
+        const dedupeKey = `${attachmentId}:${String(revision ?? 'latest')}`;
+        if (seen.has(dedupeKey)) {
+            continue;
+        }
+        seen.add(dedupeKey);
+        refs.push({
+            attachmentId,
+            ...(revision ? { revision } : {}),
+        });
+    }
+    return refs;
+}
+function buildConversationAttachmentsContext(attachments) {
+    if (attachments.length === 0) {
+        return '';
+    }
+    const lines = attachments.map((attachment) => {
+        const lineParts = [
+            `- ${attachment.attachmentId} [${attachment.kind}] ${attachment.title} (rev ${attachment.revision})`,
+            `  sourcePath: ${attachment.sourcePath}`,
+            `  previewPath: ${attachment.previewPath}`,
+            `  sourceMimeType: ${attachment.sourceMimeType}`,
+            `  previewMimeType: ${attachment.previewMimeType}`,
+        ];
+        return lineParts.join('\n');
+    });
+    return [
+        'Referenced conversation attachments:',
+        ...lines,
+        'Use these local files with tools when needed. The sourcePath points at editable .excalidraw data, and previewPath points at the rendered PNG preview.',
+    ].join('\n');
+}
 /** Send a prompt to a live session */
 app.post('/api/live-sessions/:id/prompt', async (req, res) => {
     try {
         const { id } = req.params;
-        const { text = '', behavior, images } = req.body;
-        if (!text && (!images || images.length === 0)) {
-            res.status(400).json({ error: 'text or images required' });
+        const { text = '', behavior, images, attachmentRefs } = req.body;
+        const normalizedAttachmentRefs = normalizePromptAttachmentRefs(attachmentRefs);
+        if (!text && (!images || images.length === 0) && normalizedAttachmentRefs.length === 0) {
+            res.status(400).json({ error: 'text, images, or attachmentRefs required' });
             return;
         }
         const currentProfile = getCurrentProfile();
@@ -2325,8 +2961,23 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
         const referencedMemoryDocs = pickPromptReferencesInOrder(promptReferences.memoryDocIds, memoryDocs);
         const referencedSkills = pickPromptReferencesInOrder(promptReferences.skillNames, skills);
         const referencedProfiles = pickPromptReferencesInOrder(promptReferences.profileIds, profileAgents);
+        let referencedAttachments = [];
+        if (normalizedAttachmentRefs.length > 0) {
+            try {
+                referencedAttachments = resolveConversationAttachmentPromptFiles({
+                    profile: currentProfile,
+                    conversationId: id,
+                    refs: normalizedAttachmentRefs,
+                });
+            }
+            catch (error) {
+                res.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+                return;
+            }
+        }
         const queuedContextBlocks = [
             relatedProjectIds.length > 0 ? buildReferencedProjectsContext(relatedProjectIds) : '',
+            referencedAttachments.length > 0 ? buildConversationAttachmentsContext(referencedAttachments) : '',
             referencedTasks.length > 0 ? buildReferencedTasksContext(referencedTasks, REPO_ROOT) : '',
             referencedMemoryDocs.length > 0 ? buildReferencedMemoryDocsContext(referencedMemoryDocs, REPO_ROOT) : '',
             referencedSkills.length > 0 ? buildReferencedSkillsContext(referencedSkills, REPO_ROOT) : '',
@@ -2401,6 +3052,7 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
             referencedMemoryDocIds: promptReferences.memoryDocIds,
             referencedSkillNames: promptReferences.skillNames,
             referencedProfileIds: promptReferences.profileIds,
+            referencedAttachmentIds: referencedAttachments.map((attachment) => attachment.attachmentId),
         });
     }
     catch (err) {
@@ -2717,6 +3369,190 @@ app.delete('/api/conversations/:id/artifacts/:artifactId', (req, res) => {
             stack: err instanceof Error ? err.stack : undefined,
         });
         res.status(500).json({ error: String(err) });
+    }
+});
+app.get('/api/conversations/:id/attachments', (req, res) => {
+    try {
+        const profile = getCurrentProfile();
+        const attachments = listConversationAttachments({
+            profile,
+            conversationId: req.params.id,
+        });
+        res.json({ conversationId: req.params.id, attachments });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.get('/api/conversations/:id/attachments/:attachmentId', (req, res) => {
+    try {
+        const profile = getCurrentProfile();
+        const attachment = getConversationAttachment({
+            profile,
+            conversationId: req.params.id,
+            attachmentId: req.params.attachmentId,
+        });
+        if (!attachment) {
+            res.status(404).json({ error: 'Attachment not found' });
+            return;
+        }
+        res.json({ conversationId: req.params.id, attachment });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/conversations/:id/attachments', (req, res) => {
+    try {
+        const profile = getCurrentProfile();
+        const body = req.body;
+        if (!body.sourceData || !body.previewData) {
+            res.status(400).json({ error: 'sourceData and previewData are required.' });
+            return;
+        }
+        const attachment = saveConversationAttachment({
+            profile,
+            conversationId: req.params.id,
+            kind: body.kind ?? 'excalidraw',
+            title: body.title,
+            sourceData: body.sourceData,
+            sourceName: body.sourceName,
+            sourceMimeType: body.sourceMimeType,
+            previewData: body.previewData,
+            previewName: body.previewName,
+            previewMimeType: body.previewMimeType,
+            note: body.note,
+        });
+        invalidateAppTopics('sessions');
+        res.json({
+            conversationId: req.params.id,
+            attachment,
+            attachments: listConversationAttachments({ profile, conversationId: req.params.id }),
+        });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.patch('/api/conversations/:id/attachments/:attachmentId', (req, res) => {
+    try {
+        const profile = getCurrentProfile();
+        const body = req.body;
+        if (!body.sourceData || !body.previewData) {
+            res.status(400).json({ error: 'sourceData and previewData are required.' });
+            return;
+        }
+        const existing = getConversationAttachment({
+            profile,
+            conversationId: req.params.id,
+            attachmentId: req.params.attachmentId,
+        });
+        if (!existing) {
+            res.status(404).json({ error: 'Attachment not found' });
+            return;
+        }
+        const attachment = saveConversationAttachment({
+            profile,
+            conversationId: req.params.id,
+            attachmentId: req.params.attachmentId,
+            title: body.title,
+            sourceData: body.sourceData,
+            sourceName: body.sourceName,
+            sourceMimeType: body.sourceMimeType,
+            previewData: body.previewData,
+            previewName: body.previewName,
+            previewMimeType: body.previewMimeType,
+            note: body.note,
+        });
+        invalidateAppTopics('sessions');
+        res.json({
+            conversationId: req.params.id,
+            attachment,
+            attachments: listConversationAttachments({ profile, conversationId: req.params.id }),
+        });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.delete('/api/conversations/:id/attachments/:attachmentId', (req, res) => {
+    try {
+        const profile = getCurrentProfile();
+        const deleted = deleteConversationAttachment({
+            profile,
+            conversationId: req.params.id,
+            attachmentId: req.params.attachmentId,
+        });
+        invalidateAppTopics('sessions');
+        res.json({
+            conversationId: req.params.id,
+            deleted,
+            attachmentId: req.params.attachmentId,
+            attachments: listConversationAttachments({ profile, conversationId: req.params.id }),
+        });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.get('/api/conversations/:id/attachments/:attachmentId/download/:asset', (req, res) => {
+    try {
+        const profile = getCurrentProfile();
+        const asset = req.params.asset === 'source' ? 'source' : req.params.asset === 'preview' ? 'preview' : null;
+        if (!asset) {
+            res.status(400).json({ error: 'asset must be "source" or "preview"' });
+            return;
+        }
+        const revisionQuery = typeof req.query.revision === 'string'
+            ? Number.parseInt(req.query.revision, 10)
+            : undefined;
+        if (req.query.revision !== undefined && (!Number.isInteger(revisionQuery) || revisionQuery <= 0)) {
+            res.status(400).json({ error: 'revision must be a positive integer when provided.' });
+            return;
+        }
+        const download = readConversationAttachmentDownload({
+            profile,
+            conversationId: req.params.id,
+            attachmentId: req.params.attachmentId,
+            asset,
+            ...(revisionQuery ? { revision: revisionQuery } : {}),
+        });
+        const sanitizedFileName = download.fileName.replace(/"/g, '');
+        res.setHeader('Content-Type', download.mimeType);
+        res.setHeader('Content-Disposition', `${asset === 'preview' ? 'inline' : 'attachment'}; filename="${sanitizedFileName}"`);
+        res.sendFile(download.filePath);
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        const message = err instanceof Error ? err.message : String(err);
+        if (message.toLowerCase().includes('not found')) {
+            res.status(404).json({ error: message });
+            return;
+        }
+        res.status(500).json({ error: message });
     }
 });
 app.get('/api/conversations/:id/projects', (req, res) => {
@@ -3486,7 +4322,26 @@ function normalizeMemoryPath(value) {
     }
     return normalize(trimmed.startsWith('/') ? trimmed : join(REPO_ROOT, trimmed));
 }
-function listMemoryDocsForCurrentProfile() {
+function extractMemorySearchText(filePath, maxCharacters = 16_000) {
+    try {
+        const raw = readFileSync(filePath, 'utf-8');
+        const body = raw.replace(/^---\n[\s\S]*?\n---\n?/, '');
+        return body
+            .replace(/```[\s\S]*?```/g, ' ')
+            .replace(/`([^`]+)`/g, '$1')
+            .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+            .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+            .replace(/[>#*_~|-]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, maxCharacters);
+    }
+    catch {
+        return '';
+    }
+}
+function listMemoryDocsForCurrentProfile(options = {}) {
+    const includeSearchText = options.includeSearchText === true;
     const profile = getCurrentProfile();
     const memoryDocs = [];
     const memDir = join(REPO_ROOT, `profiles/${profile}/agent/memory`);
@@ -3498,6 +4353,7 @@ function listMemoryDocsForCurrentProfile() {
         const fm = parseFrontmatter(filePath);
         const id = file.replace(/\.md$/, '');
         const tags = fm.tags;
+        const searchText = includeSearchText ? extractMemorySearchText(filePath) : '';
         memoryDocs.push({
             id: String(fm.id ?? id),
             title: String(fm.title ?? id),
@@ -3507,12 +4363,28 @@ function listMemoryDocsForCurrentProfile() {
             type: typeof fm.type === 'string' ? fm.type : undefined,
             status: typeof fm.status === 'string' ? fm.status : undefined,
             updated: typeof fm.updated === 'string' ? fm.updated : undefined,
+            ...(searchText ? { searchText } : {}),
             recentSessionCount: 0,
             lastUsedAt: null,
             usedInLastSession: false,
         });
     }
-    return memoryDocs;
+    return memoryDocs.sort((left, right) => {
+        const leftUpdated = left.updated ?? '';
+        const rightUpdated = right.updated ?? '';
+        if (leftUpdated !== rightUpdated) {
+            return rightUpdated.localeCompare(leftUpdated);
+        }
+        return left.title.localeCompare(right.title);
+    });
+}
+function findMemoryDocById(memoryId, options = {}) {
+    const normalizedId = memoryId.trim();
+    if (!normalizedId) {
+        return null;
+    }
+    const memoryDocs = listMemoryDocsForCurrentProfile(options);
+    return memoryDocs.find((entry) => entry.id === normalizedId) ?? null;
 }
 function listSkillsForCurrentProfile() {
     const profile = getCurrentProfile();

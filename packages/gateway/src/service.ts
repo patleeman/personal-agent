@@ -265,6 +265,7 @@ function buildWebUiServiceEnvironment(
     'PERSONAL_AGENT_DISABLE_DAEMON_EVENTS',
     'PERSONAL_AGENT_OP_BIN',
     'OP_SERVICE_ACCOUNT_TOKEN',
+    'PERSONAL_AGENT_WEB_CONFIG_FILE',
     'XDG_CONFIG_HOME',
     'XDG_STATE_HOME',
   ] as const;

@@ -34,13 +34,13 @@ const ITEMS: CommandPaletteItem<TestAction>[] = [
     action: { kind: 'restore' },
   },
   {
-    id: 'checkpoint:ship',
-    section: 'checkpoints',
+    id: 'memory:ship',
+    section: 'memories',
     title: 'Ship candidate',
     subtitle: 'ready to branch',
-    keywords: ['checkpoint-123', 'release'],
+    keywords: ['memory-123', 'release'],
     order: 1,
-    action: { kind: 'checkpoint' },
+    action: { kind: 'memory' },
   },
   {
     id: 'task:nightly',
@@ -75,8 +75,8 @@ describe('command palette search', () => {
     const results = searchCommandPaletteItems(ITEMS, { query: 'ship release', scope: 'all' });
 
     expect(results).toHaveLength(1);
-    expect(results[0]?.section).toBe('checkpoints');
-    expect(results[0]?.items[0]?.id).toBe('checkpoint:ship');
+    expect(results[0]?.section).toBe('memories');
+    expect(results[0]?.items[0]?.id).toBe('memory:ship');
   });
 
   it('filters to the requested scope', () => {
@@ -94,7 +94,7 @@ describe('command palette search', () => {
       'nav',
       'open',
       'archived',
-      'checkpoints',
+      'memories',
       'tasks',
       'projects',
     ]);

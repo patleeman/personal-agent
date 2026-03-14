@@ -5,6 +5,8 @@ import type { GatewayLogTail, WebUiBadReleaseSummary, WebUiReleaseSummary } from
 import { timeAgo } from '../utils';
 import { ErrorState, LoadingState, PageHeader, PageHeading, SectionLabel, ToolbarButton } from '../components/ui';
 
+const DEFAULT_RESUME_FALLBACK_PROMPT = 'Continue from where you left off.';
+
 function shortPath(path: string | undefined, maxLen = 84): string {
   if (!path || path.trim().length === 0) {
     return '—';
@@ -150,6 +152,8 @@ export function WebUiPage() {
   const { data, loading, error, refetch } = useApi(api.webUiState);
   const [serviceAction, setServiceAction] = useState<'install' | 'start' | 'stop' | 'uninstall' | null>(null);
   const [deploymentAction, setDeploymentAction] = useState<'rollback' | 'mark-bad' | null>(null);
+  const [configAction, setConfigAction] = useState(false);
+  const [resumeFallbackPromptDraft, setResumeFallbackPromptDraft] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
   const [deploymentMessage, setDeploymentMessage] = useState<string | null>(null);
   const [applicationRestarting, setApplicationRestarting] = useState(false);
@@ -207,7 +211,15 @@ export function WebUiPage() {
     clearApplicationRestartMonitor();
   }, []);
 
-  const busy = serviceAction !== null || deploymentAction !== null || applicationRestarting;
+  useEffect(() => {
+    if (!data) {
+      return;
+    }
+
+    setResumeFallbackPromptDraft(data.service.resumeFallbackPrompt);
+  }, [data?.service.resumeFallbackPrompt]);
+
+  const busy = serviceAction !== null || deploymentAction !== null || applicationRestarting || configAction;
 
   async function handleServiceAction(action: 'install' | 'start' | 'stop' | 'uninstall') {
     if (busy || !data) return;
@@ -230,6 +242,43 @@ export function WebUiPage() {
       setActionError(serviceError instanceof Error ? serviceError.message : String(serviceError));
     } finally {
       setServiceAction(null);
+    }
+  }
+
+  async function handleSetTailscaleServe() {
+    if (busy || !data) return;
+
+    const next = !data.service.tailscaleServe;
+    setConfigAction(true);
+    setActionError(null);
+    setDeploymentMessage(null);
+    try {
+      await api.setWebUiConfig({ useTailscaleServe: next });
+      await refetch({ resetLoading: false });
+      setDeploymentMessage(`Tailscale Serve ${next ? 'enabled' : 'disabled'} for localhost:${data.service.port}.`);
+    } catch (configErr) {
+      setActionError(configErr instanceof Error ? configErr.message : String(configErr));
+    } finally {
+      setConfigAction(false);
+    }
+  }
+
+  async function handleSaveResumeFallbackPrompt() {
+    if (busy || !data) {
+      return;
+    }
+
+    setConfigAction(true);
+    setActionError(null);
+    setDeploymentMessage(null);
+    try {
+      await api.setWebUiConfig({ resumeFallbackPrompt: resumeFallbackPromptDraft });
+      await refetch({ resetLoading: false });
+      setDeploymentMessage('Saved conversation resume fallback prompt.');
+    } catch (configErr) {
+      setActionError(configErr instanceof Error ? configErr.message : String(configErr));
+    } finally {
+      setConfigAction(false);
     }
   }
 
@@ -319,6 +368,12 @@ export function WebUiPage() {
     ? [data.service.platform, data.service.identifier].filter(Boolean).join(' · ')
     : undefined;
   const serviceTone = data ? serviceStatusToneClass(data.service) : undefined;
+  const publicUrlMeta = data
+    ? [
+      `port ${data.service.port}`,
+      data.service.tailscaleUrl ? `tailnet ${data.service.tailscaleUrl}` : '',
+    ].filter(Boolean).join(' · ')
+    : undefined;
   const deployment = data?.service.deployment;
   const activeRelease = deployment?.activeRelease;
   const inactiveRelease = deployment?.inactiveRelease;
@@ -337,6 +392,12 @@ export function WebUiPage() {
       : data?.service.running
         ? 'Stop service'
         : 'Start service';
+  const normalizedResumeFallbackPromptDraft = resumeFallbackPromptDraft.trim();
+  const resumeFallbackPromptDirty = Boolean(data) && (
+    normalizedResumeFallbackPromptDraft.length === 0
+      ? data.service.resumeFallbackPrompt !== DEFAULT_RESUME_FALLBACK_PROMPT
+      : normalizedResumeFallbackPromptDraft !== data.service.resumeFallbackPrompt
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -365,6 +426,18 @@ export function WebUiPage() {
               disabled={busy || !data?.service.installed}
             >
               {applicationRestarting ? 'Restart requested…' : 'Restart service'}
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={() => {
+                void handleSetTailscaleServe();
+              }}
+              disabled={!data || busy}
+            >
+              {configAction
+                ? 'Saving…'
+                : data?.service.tailscaleServe
+                  ? 'Disable Tailscale Serve'
+                  : 'Enable Tailscale Serve'}
             </ToolbarButton>
             <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); }} disabled={busy}>↻ Refresh</ToolbarButton>
           </>
@@ -400,9 +473,9 @@ export function WebUiPage() {
 
             <section className="space-y-4">
               <SectionLabel label="Overview" />
-              <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2 xl:grid-cols-5">
                 <StatBlock label="Managed service" value={serviceText} meta={serviceMeta} valueClassName={serviceTone} />
-                <StatBlock label="Public URL" value={data.service.url} meta={`port ${data.service.port}`} />
+                <StatBlock label="Public URL" value={data.service.url} meta={publicUrlMeta} />
                 <StatBlock
                   label="Deployment mode"
                   value="blue / green"
@@ -413,6 +486,47 @@ export function WebUiPage() {
                   value={activeRelease?.revision ?? (activeRelease ? activeRelease.slot : '—')}
                   meta={activeRelease ? `built ${timeAgo(activeRelease.builtAt)}` : 'No staged release'}
                 />
+                <StatBlock
+                  label="Tailscale Serve"
+                  value={data.service.tailscaleServe ? 'enabled' : 'disabled'}
+                  meta={data.service.tailscaleServe
+                    ? data.service.tailscaleUrl
+                      ? `Tailnet URL ${data.service.tailscaleUrl} (no internet by default)`
+                      : 'Enabled, but Tailnet URL is currently unavailable'
+                    : 'Run via --tailscale-serve to enable'}
+                />
+              </div>
+            </section>
+
+            <section className="space-y-4 border-t border-border-subtle pt-6">
+              <SectionLabel label="Conversation recovery" />
+              <div className="space-y-3 max-w-3xl">
+                <p className="ui-card-meta">
+                  When Resume cannot replay an interrupted turn exactly, it sends this fallback prompt automatically.
+                </p>
+                <textarea
+                  value={resumeFallbackPromptDraft}
+                  onChange={(event) => setResumeFallbackPromptDraft(event.target.value)}
+                  rows={3}
+                  className="w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary outline-none transition-colors focus:border-accent/60"
+                  spellCheck={false}
+                  placeholder={DEFAULT_RESUME_FALLBACK_PROMPT}
+                  disabled={busy}
+                />
+                <div className="flex flex-wrap items-center gap-3">
+                  <ToolbarButton
+                    onClick={() => { void handleSaveResumeFallbackPrompt(); }}
+                    disabled={busy || !resumeFallbackPromptDirty}
+                  >
+                    {configAction ? 'Saving…' : 'Save fallback prompt'}
+                  </ToolbarButton>
+                  <ToolbarButton
+                    onClick={() => { setResumeFallbackPromptDraft(DEFAULT_RESUME_FALLBACK_PROMPT); }}
+                    disabled={busy || resumeFallbackPromptDraft === DEFAULT_RESUME_FALLBACK_PROMPT}
+                  >
+                    Use default
+                  </ToolbarButton>
+                </div>
               </div>
             </section>
 

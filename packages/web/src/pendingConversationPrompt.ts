@@ -1,10 +1,11 @@
 import { clearStoredState, getSessionStorage, persistStoredState, readStoredState, type StorageLike } from './reloadState';
-import type { PromptImageInput } from './types';
+import type { PromptAttachmentRefInput, PromptImageInput } from './types';
 
 export interface PendingConversationPrompt {
   text: string;
   behavior?: 'steer' | 'followUp';
   images: PromptImageInput[];
+  attachmentRefs: PromptAttachmentRefInput[];
 }
 
 const inMemoryPendingPrompts = new Map<string, PendingConversationPrompt>();
@@ -22,7 +23,7 @@ export function persistPendingConversationPrompt(
     return;
   }
 
-  const shouldPersist = prompt.text.trim().length > 0 || prompt.images.length > 0;
+  const shouldPersist = prompt.text.trim().length > 0 || prompt.images.length > 0 || prompt.attachmentRefs.length > 0;
   if (!shouldPersist) {
     inMemoryPendingPrompts.delete(sessionId);
   } else {
@@ -76,12 +77,29 @@ export function readPendingConversationPrompt(
           }))
         : [];
 
+      const attachmentRefs = Array.isArray(parsed.attachmentRefs)
+        ? parsed.attachmentRefs
+          .filter((attachmentRef): attachmentRef is { attachmentId: string; revision?: number } => (
+            !!attachmentRef
+            && typeof attachmentRef === 'object'
+            && typeof attachmentRef.attachmentId === 'string'
+            && attachmentRef.attachmentId.trim().length > 0
+            && (attachmentRef.revision === undefined
+              || (Number.isInteger(attachmentRef.revision) && attachmentRef.revision > 0))
+          ))
+          .map((attachmentRef) => ({
+            attachmentId: attachmentRef.attachmentId.trim(),
+            ...(attachmentRef.revision ? { revision: attachmentRef.revision } : {}),
+          }))
+        : [];
+
       return {
         text: typeof parsed.text === 'string' ? parsed.text : '',
         behavior: parsed.behavior === 'steer' || parsed.behavior === 'followUp'
           ? parsed.behavior
           : undefined,
         images,
+        attachmentRefs,
       };
     },
   });

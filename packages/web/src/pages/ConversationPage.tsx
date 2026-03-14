@@ -3,9 +3,10 @@ import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import { ChatView } from '../components/chat/ChatView';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import { ConversationTree } from '../components/ConversationTree';
-import { ConversationCheckpointsModal } from '../components/ConversationCheckpointsModal';
+import { ConversationDrawingsPickerModal } from '../components/ConversationDrawingsPickerModal';
+import { ExcalidrawEditorModal, type ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationCheckpointSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, MessageBlock, ModelInfo, PromptImageInput } from '../types';
+import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput } from '../types';
 import { useApi } from '../hooks';
 import { useSessionDetail } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
@@ -13,7 +14,6 @@ import { api } from '../api';
 import { appendComposerHistory, readComposerHistory } from '../composerHistory';
 import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversationArtifacts';
 import { createConversationLiveRunId, getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversationRuns';
-import { setConversationCheckpointsOpenInSearch, shouldOpenConversationCheckpointsFromSearch } from '../conversationCheckpoints';
 import { formatContextShareLabel, formatContextUsageLabel, formatContextWindowLabel, formatLiveSessionLabel, formatThinkingLevelLabel, getContextUsagePercent } from '../conversationHeader';
 import { isConversationScrolledToBottom, shouldShowScrollToBottomControl } from '../conversationScroll';
 import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE } from '../conversationTitle';
@@ -45,6 +45,7 @@ import { getConversationResumeState } from '../conversationResume';
 import { resolveConversationComposerSubmitState } from '../conversationComposerSubmit';
 import { useReloadState } from '../reloadState';
 import { ensureConversationTabOpen } from '../sessionTabs';
+import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSceneFromBlob, parseExcalidrawSceneFromSourceData, serializeExcalidrawScene, type ExcalidrawSceneData } from '../excalidrawUtils';
 
 // ── Model picker ──────────────────────────────────────────────────────────────
 
@@ -502,6 +503,102 @@ async function buildPromptImages(files: File[]): Promise<PromptImageInput[]> {
   return images;
 }
 
+interface ComposerDrawingAttachment {
+  localId: string;
+  title: string;
+  attachmentId?: string;
+  revision?: number;
+  sourceData: string;
+  sourceMimeType: string;
+  sourceName: string;
+  previewData: string;
+  previewMimeType: string;
+  previewName: string;
+  previewUrl: string;
+  scene: ExcalidrawSceneData;
+  dirty: boolean;
+}
+
+function createComposerDrawingLocalId(): string {
+  return `drawing-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function isPotentialExcalidrawFile(file: File): boolean {
+  const lowerName = file.name.trim().toLowerCase();
+  if (lowerName.endsWith('.excalidraw')) {
+    return true;
+  }
+
+  if (lowerName.endsWith('.png')) {
+    return true;
+  }
+
+  return file.type === 'application/json' || file.type === 'application/vnd.excalidraw+json';
+}
+
+function drawingAttachmentToPromptImage(attachment: ComposerDrawingAttachment): PromptImageInput {
+  return {
+    name: `${attachment.title}.png`,
+    mimeType: attachment.previewMimeType,
+    data: attachment.previewData,
+    previewUrl: attachment.previewUrl,
+  };
+}
+
+function drawingAttachmentToPromptRef(attachment: ComposerDrawingAttachment): PromptAttachmentRefInput | null {
+  const attachmentId = attachment.attachmentId?.trim();
+  if (!attachmentId) {
+    return null;
+  }
+
+  return {
+    attachmentId,
+    ...(attachment.revision ? { revision: attachment.revision } : {}),
+  };
+}
+
+function buildComposerDrawingPreviewTitle(attachment: ComposerDrawingAttachment): string {
+  const revisionText = attachment.revision ? ` (rev ${attachment.revision})` : '';
+  return `${attachment.title}${revisionText}`;
+}
+
+async function buildComposerDrawingFromFile(file: File): Promise<ComposerDrawingAttachment> {
+  const scene = await loadExcalidrawSceneFromBlob(file);
+  const serialized = await serializeExcalidrawScene(scene);
+  const title = inferDrawingTitleFromFileName(file.name);
+  const fileNames = buildDrawingFileNames(title);
+
+  return {
+    localId: createComposerDrawingLocalId(),
+    title,
+    sourceData: serialized.sourceData,
+    sourceMimeType: serialized.sourceMimeType,
+    sourceName: fileNames.sourceName,
+    previewData: serialized.previewData,
+    previewMimeType: serialized.previewMimeType,
+    previewName: fileNames.previewName,
+    previewUrl: serialized.previewUrl,
+    scene,
+    dirty: true,
+  };
+}
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read blob as data URL.'));
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') {
+        reject(new Error('Failed to read blob as data URL.'));
+        return;
+      }
+
+      resolve(reader.result);
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
 function formatDeferredResumeWhen(resume: DeferredResumeSummary): string {
   const target = resume.status === 'ready'
     ? resume.readyAt ?? resume.dueAt
@@ -519,8 +616,8 @@ function formatDeferredResumeWhen(resume: DeferredResumeSummary): string {
   });
 }
 
-function buildCheckpointTitleFromBlock(block: MessageBlock): string {
-  const fallback = 'Conversation checkpoint';
+function buildDistilledMemoryTitleFromBlock(block: MessageBlock): string {
+  const fallback = 'Conversation memory';
 
   if (block.type === 'tool_use') {
     return `After ${block.tool}`;
@@ -530,14 +627,15 @@ function buildCheckpointTitleFromBlock(block: MessageBlock): string {
     return block.alt?.trim() ? `After ${block.alt.trim()}` : fallback;
   }
 
-  const text = (
-    block.type === 'user'
-    || block.type === 'text'
-    || block.type === 'thinking'
-    || block.type === 'error'
-  )
-    ? block.text
-    : '';
+  const text = block.type === 'error'
+    ? block.message
+    : (
+      block.type === 'user'
+      || block.type === 'text'
+      || block.type === 'thinking'
+    )
+      ? block.text
+      : '';
 
   const normalized = text.replace(/\s+/g, ' ').trim();
   if (!normalized) {
@@ -545,6 +643,14 @@ function buildCheckpointTitleFromBlock(block: MessageBlock): string {
   }
 
   return normalized.length > 80 ? `${normalized.slice(0, 79).trimEnd()}…` : normalized;
+}
+
+function hasBlockingOverlayOpen(): boolean {
+  if (typeof document === 'undefined') {
+    return false;
+  }
+
+  return document.querySelector('.ui-overlay-backdrop') !== null;
 }
 
 // ── ConversationPage ──────────────────────────────────────────────────────────
@@ -556,7 +662,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const navigate = useNavigate();
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
   const selectedRunId = getConversationRunIdFromSearch(location.search);
-  const checkpointsOpenRequested = shouldOpenConversationCheckpointsFromSearch(location.search);
 
   const openArtifact = useCallback((artifactId: string) => {
     if (selectedArtifactId === artifactId) {
@@ -589,13 +694,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       search: nextSearch,
     });
   }, [location.pathname, location.search, navigate, selectedRunId]);
-
-  const setCheckpointsOpen = useCallback((open: boolean) => {
-    navigate({
-      pathname: location.pathname,
-      search: setConversationCheckpointsOpenInSearch(location.search, open),
-    });
-  }, [location.pathname, location.search, navigate]);
 
   useEffect(() => {
     if (draft || !id) {
@@ -638,11 +736,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     ? visibleSessionDetail.blocks.map(displayBlockToMessageBlock)
     : [];
 
-  // Live sessions hydrate from the SSE snapshot; until that arrives, fall back to JSONL + live deltas.
+  // Live sessions hydrate from the SSE snapshot; until that arrives, fall back to
+  // JSONL + live deltas only when we have at least one source of blocks.
   const realMessages: MessageBlock[] | undefined = isLiveSession
     ? stream.hasSnapshot
       ? stream.blocks
-      : [...baseMessages, ...stream.blocks]
+      : (baseMessages.length > 0 || stream.blocks.length > 0)
+        ? [...baseMessages, ...stream.blocks]
+        : undefined
     : visibleSessionDetail
       ? baseMessages
       : undefined;
@@ -835,6 +936,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [slashIdx, setSlashIdx] = useState(0);
   const [mentionIdx, setMentionIdx] = useState(0);
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [drawingAttachments, setDrawingAttachments] = useState<ComposerDrawingAttachment[]>([]);
+  const [editingDrawingLocalId, setEditingDrawingLocalId] = useState<string | null>(null);
+  const [drawingsPickerOpen, setDrawingsPickerOpen] = useState(false);
+  const [conversationAttachments, setConversationAttachments] = useState<ConversationAttachmentSummary[]>([]);
+  const [drawingsBusy, setDrawingsBusy] = useState(false);
+  const [drawingsError, setDrawingsError] = useState<string | null>(null);
   const [composerAltHeld, setComposerAltHeld] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
@@ -849,6 +956,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     setAttachments([]);
+    setDrawingAttachments([]);
+    setEditingDrawingLocalId(null);
+    setDrawingsPickerOpen(false);
+    setConversationAttachments([]);
     setDragOver(false);
     setSlashIdx(0);
     setMentionIdx(0);
@@ -922,7 +1033,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     })),
   ]), [stream.pendingQueue.followUp, stream.pendingQueue.steering]);
   const prevStreamingRef = useRef(false);
-  const { data: memoryData } = useApi(api.memory);
+  const { data: memoryData, refetch: refetchMemoryData } = useApi(api.memory);
   const { data: profileState } = useApi(api.profiles);
   const { versions } = useAppEvents();
   const { projects, tasks, sessions, setProjects, setSessions } = useAppData();
@@ -945,10 +1056,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [deferredResumesBusy, setDeferredResumesBusy] = useState(false);
   const [showDeferredResumeDetails, setShowDeferredResumeDetails] = useState(false);
   const [deferredResumeNowMs, setDeferredResumeNowMs] = useState(() => Date.now());
-  const [checkpointScope, setCheckpointScope] = useState<'conversation' | 'all'>('conversation');
-  const [checkpoints, setCheckpoints] = useState<ConversationCheckpointSummary[]>([]);
-  const [checkpointsLoading, setCheckpointsLoading] = useState(false);
-  const [checkpointActionId, setCheckpointActionId] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -969,7 +1076,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     projects: projects ?? [],
     tasks: tasks ?? [],
     memoryDocs: memoryData?.memoryDocs ?? [],
-    skills: memoryData?.skills ?? [],
     profiles: profileState?.profiles ?? [],
   }), [projects, tasks, memoryData, profileState]);
   const referencedProjectIds = conversationProjects?.relatedProjectIds ?? [];
@@ -1030,6 +1136,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     };
   }, [conversationRunId, draft, versions.sessions]);
 
+  const refetchConversationAttachments = useCallback(async () => {
+    if (!id) {
+      setConversationAttachments([]);
+      return [] as ConversationAttachmentSummary[];
+    }
+
+    const data = await api.conversationAttachments(id);
+    setConversationAttachments(data.attachments);
+    return data.attachments;
+  }, [id]);
+
   const refetchDeferredResumes = useCallback(async () => {
     if (!id) {
       setDeferredResumes([]);
@@ -1041,22 +1158,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return data.resumes;
   }, [id]);
 
-  const refetchCheckpoints = useCallback(async (scope = checkpointScope) => {
-    if (scope === 'conversation') {
-      if (!id) {
-        setCheckpoints([]);
-        return [] as ConversationCheckpointSummary[];
-      }
-
-      const data = await api.conversationCheckpoints(id);
-      setCheckpoints(data.checkpoints);
-      return data.checkpoints;
+  useEffect(() => {
+    if (draft || !id) {
+      setConversationAttachments([]);
+      return;
     }
 
-    const data = await api.checkpoints();
-    setCheckpoints(data.checkpoints);
-    return data.checkpoints;
-  }, [checkpointScope, id]);
+    setDrawingsError(null);
+    void refetchConversationAttachments().catch((error) => {
+      setDrawingsError(error instanceof Error ? error.message : String(error));
+    });
+  }, [draft, id, refetchConversationAttachments]);
 
   useEffect(() => {
     if (!id) {
@@ -1081,35 +1193,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       window.clearInterval(intervalHandle);
     };
   }, [deferredResumes.length]);
-
-  useEffect(() => {
-    if ((draft || !id) && checkpointsOpenRequested) {
-      setCheckpointsOpen(false);
-    }
-
-    if (draft) {
-      setCheckpoints([]);
-      return;
-    }
-
-    setCheckpointScope('conversation');
-    setCheckpoints([]);
-  }, [checkpointsOpenRequested, draft, id, setCheckpointsOpen]);
-
-  useEffect(() => {
-    if (!checkpointsOpenRequested) {
-      return;
-    }
-
-    setCheckpointsLoading(true);
-    void refetchCheckpoints()
-      .catch(() => {
-        // Errors are surfaced through explicit actions and notices.
-      })
-      .finally(() => {
-        setCheckpointsLoading(false);
-      });
-  }, [checkpointsOpenRequested, refetchCheckpoints]);
 
   // Auto-resize textarea
   const resize = useCallback(() => {
@@ -1317,6 +1400,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         return; // let focused controls / tree handle their own Escape
       }
 
+      if (hasBlockingOverlayOpen()) {
+        return;
+      }
+
       if (stream.isStreaming) {
         e.preventDefault();
         lastEsc = 0;
@@ -1480,6 +1567,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       pendingInitialPrompt.text,
       pendingInitialPrompt.behavior,
       pendingInitialPrompt.images,
+      pendingInitialPrompt.attachmentRefs,
     ).then(async () => {
       clearPendingConversationPrompt(id);
       pendingInitialPromptSessionIdRef.current = null;
@@ -1637,8 +1725,255 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
+  async function addComposerFiles(files: File[]) {
+    const nextImageFiles: File[] = [];
+    const nextDrawingAttachments: ComposerDrawingAttachment[] = [];
+    const rejectedFiles: string[] = [];
+
+    for (const file of files) {
+      if (isPotentialExcalidrawFile(file)) {
+        try {
+          const drawing = await buildComposerDrawingFromFile(file);
+          nextDrawingAttachments.push(drawing);
+          continue;
+        } catch (error) {
+          if (file.name.trim().toLowerCase().endsWith('.excalidraw')) {
+            showNotice('danger', `Failed to parse ${file.name}: ${error instanceof Error ? error.message : String(error)}`, 4000);
+            continue;
+          }
+        }
+      }
+
+      if (file.type.startsWith('image/')) {
+        nextImageFiles.push(file);
+        continue;
+      }
+
+      rejectedFiles.push(file.name || 'Unnamed file');
+    }
+
+    if (nextImageFiles.length > 0) {
+      addImageAttachments(nextImageFiles);
+    }
+
+    if (nextDrawingAttachments.length > 0) {
+      setDrawingAttachments((current) => [...current, ...nextDrawingAttachments]);
+      showNotice('accent', `Attached ${nextDrawingAttachments.length} drawing${nextDrawingAttachments.length === 1 ? '' : 's'}.`);
+    }
+
+    if (rejectedFiles.length > 0) {
+      const preview = rejectedFiles.slice(0, 3).join(', ');
+      const suffix = rejectedFiles.length > 3 ? `, +${rejectedFiles.length - 3} more` : '';
+      showNotice('danger', `Unsupported file type: ${preview}${suffix}`, 4000);
+    }
+  }
+
   function openFilePicker() {
     fileInputRef.current?.click();
+  }
+
+  function openDrawingEditor() {
+    setEditingDrawingLocalId('__new__');
+  }
+
+  function openDrawingsPicker() {
+    setDrawingsPickerOpen(true);
+  }
+
+  function closeDrawingEditor() {
+    setEditingDrawingLocalId(null);
+  }
+
+  function editDrawing(localId: string) {
+    setEditingDrawingLocalId(localId);
+  }
+
+  function removeDrawingAttachment(localId: string) {
+    setDrawingAttachments((current) => current.filter((attachment) => attachment.localId !== localId));
+  }
+
+  async function saveDrawingFromEditor(payload: ExcalidrawEditorSavePayload) {
+    const activeLocalId = editingDrawingLocalId;
+
+    setDrawingAttachments((current) => {
+      if (activeLocalId && activeLocalId !== '__new__') {
+        return current.map((attachment) => {
+          if (attachment.localId !== activeLocalId) {
+            return attachment;
+          }
+
+          return {
+            ...attachment,
+            title: payload.title,
+            sourceData: payload.sourceData,
+            sourceMimeType: payload.sourceMimeType,
+            sourceName: payload.sourceName,
+            previewData: payload.previewData,
+            previewMimeType: payload.previewMimeType,
+            previewName: payload.previewName,
+            previewUrl: payload.previewUrl,
+            scene: payload.scene,
+            dirty: true,
+          } satisfies ComposerDrawingAttachment;
+        });
+      }
+
+      return [
+        ...current,
+        {
+          localId: createComposerDrawingLocalId(),
+          title: payload.title,
+          sourceData: payload.sourceData,
+          sourceMimeType: payload.sourceMimeType,
+          sourceName: payload.sourceName,
+          previewData: payload.previewData,
+          previewMimeType: payload.previewMimeType,
+          previewName: payload.previewName,
+          previewUrl: payload.previewUrl,
+          scene: payload.scene,
+          dirty: true,
+        } satisfies ComposerDrawingAttachment,
+      ];
+    });
+
+    closeDrawingEditor();
+    showNotice('accent', 'Drawing saved to composer.');
+  }
+
+  async function fetchAttachmentDataUrl(downloadPath: string): Promise<string> {
+    const response = await fetch(downloadPath);
+    if (!response.ok) {
+      throw new Error(`Failed to download attachment asset (${response.status} ${response.statusText}).`);
+    }
+
+    return blobToDataUrl(await response.blob());
+  }
+
+  async function attachSavedDrawing(selection: { attachment: ConversationAttachmentSummary; revision: number }) {
+    if (!id) {
+      showNotice('danger', 'Saved drawing picker requires an existing conversation.', 4000);
+      return;
+    }
+
+    setDrawingsBusy(true);
+    setDrawingsError(null);
+    try {
+      const detail = await api.conversationAttachment(id, selection.attachment.id);
+      const record = detail.attachment;
+      const revision = record.revisions.find((entry) => entry.revision === selection.revision)
+        ?? record.latestRevision;
+
+      const sourceDataUrl = await fetchAttachmentDataUrl(revision.sourceDownloadPath);
+      const sourceCommaIndex = sourceDataUrl.indexOf(',');
+      const sourceData = sourceCommaIndex >= 0 ? sourceDataUrl.slice(sourceCommaIndex + 1) : sourceDataUrl;
+      const previewDataUrl = await fetchAttachmentDataUrl(revision.previewDownloadPath);
+      const previewCommaIndex = previewDataUrl.indexOf(',');
+      const previewData = previewCommaIndex >= 0 ? previewDataUrl.slice(previewCommaIndex + 1) : previewDataUrl;
+      const scene = parseExcalidrawSceneFromSourceData(sourceData);
+
+      const nextAttachment: ComposerDrawingAttachment = {
+        localId: createComposerDrawingLocalId(),
+        attachmentId: record.id,
+        revision: revision.revision,
+        title: record.title,
+        sourceData,
+        sourceMimeType: revision.sourceMimeType,
+        sourceName: revision.sourceName,
+        previewData,
+        previewMimeType: revision.previewMimeType,
+        previewName: revision.previewName,
+        previewUrl: previewDataUrl,
+        scene,
+        dirty: false,
+      };
+
+      setDrawingAttachments((current) => {
+        const alreadyAttached = current.some((attachment) => (
+          attachment.attachmentId === nextAttachment.attachmentId
+          && attachment.revision === nextAttachment.revision
+          && !attachment.dirty
+        ));
+
+        if (alreadyAttached) {
+          return current;
+        }
+
+        return [...current, nextAttachment];
+      });
+
+      setDrawingsPickerOpen(false);
+      showNotice('accent', `Attached drawing ${record.title} (rev ${revision.revision}).`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setDrawingsError(message);
+      showNotice('danger', message, 4000);
+    } finally {
+      setDrawingsBusy(false);
+    }
+  }
+
+  async function persistDrawingsForConversation(
+    conversationId: string,
+    currentDrawings: ComposerDrawingAttachment[],
+  ): Promise<ComposerDrawingAttachment[]> {
+    const persisted: ComposerDrawingAttachment[] = [];
+
+    for (const drawing of currentDrawings) {
+      if (drawing.attachmentId && !drawing.dirty) {
+        persisted.push(drawing);
+        continue;
+      }
+
+      if (drawing.attachmentId) {
+        const result = await api.updateConversationAttachment(conversationId, drawing.attachmentId, {
+          title: drawing.title,
+          sourceData: drawing.sourceData,
+          sourceName: drawing.sourceName,
+          sourceMimeType: drawing.sourceMimeType,
+          previewData: drawing.previewData,
+          previewName: drawing.previewName,
+          previewMimeType: drawing.previewMimeType,
+        });
+
+        persisted.push({
+          ...drawing,
+          attachmentId: result.attachment.id,
+          revision: result.attachment.currentRevision,
+          title: result.attachment.title,
+          sourceName: result.attachment.latestRevision.sourceName,
+          sourceMimeType: result.attachment.latestRevision.sourceMimeType,
+          previewName: result.attachment.latestRevision.previewName,
+          previewMimeType: result.attachment.latestRevision.previewMimeType,
+          dirty: false,
+        });
+        continue;
+      }
+
+      const result = await api.createConversationAttachment(conversationId, {
+        kind: 'excalidraw',
+        title: drawing.title,
+        sourceData: drawing.sourceData,
+        sourceName: drawing.sourceName,
+        sourceMimeType: drawing.sourceMimeType,
+        previewData: drawing.previewData,
+        previewName: drawing.previewName,
+        previewMimeType: drawing.previewMimeType,
+      });
+
+      persisted.push({
+        ...drawing,
+        attachmentId: result.attachment.id,
+        revision: result.attachment.currentRevision,
+        title: result.attachment.title,
+        sourceName: result.attachment.latestRevision.sourceName,
+        sourceMimeType: result.attachment.latestRevision.sourceMimeType,
+        previewName: result.attachment.latestRevision.previewName,
+        previewMimeType: result.attachment.latestRevision.previewMimeType,
+        dirty: false,
+      });
+    }
+
+    return persisted;
   }
 
   async function refreshProjectMentions() {
@@ -1731,7 +2066,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         'accent',
         result.replayedPendingOperation
           ? 'Resuming interrupted turn…'
-          : 'Conversation reopened. Send a follow-up to continue.',
+          : result.usedFallbackPrompt
+            ? 'Resuming with a follow-up prompt…'
+            : 'Conversation resumed. Send a follow-up to continue.',
       );
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
@@ -1740,67 +2077,34 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
-  async function saveCheckpointFromMessage(block: MessageBlock, messageIndex: number) {
+  async function saveMemoryFromMessage(block: MessageBlock, messageIndex: number) {
     if (draft || !id) {
-      showNotice('danger', 'Checkpoints require an existing conversation.', 4000);
+      showNotice('danger', 'Distilling memory requires an existing conversation.', 4000);
       return;
     }
 
     const anchorMessageId = block.id?.trim();
     if (!anchorMessageId) {
-      showNotice('danger', 'Unable to resolve checkpoint anchor for this message.', 4000);
+      showNotice('danger', 'Unable to resolve where to anchor this distillation.', 4000);
       return;
     }
 
     try {
-      await api.createConversationCheckpoint(id, {
-        title: buildCheckpointTitleFromBlock(block),
+      const result = await api.createConversationMemory(id, {
+        title: buildDistilledMemoryTitleFromBlock(block),
         anchorMessageId,
       });
-      showNotice('accent', `Checkpoint saved at message ${messageIndex + 1}.`);
-      if (checkpointsOpenRequested) {
-        await refetchCheckpoints();
+
+      if (result.accepted) {
+        showNotice('accent', `Queued memory distillation from conversation up to message ${messageIndex + 1}.`);
+      } else {
+        showNotice('danger', 'Unable to queue memory distillation right now.', 4000);
       }
+
+      await refetchMemoryData({ resetLoading: false });
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     }
-  }
-
-  async function startCheckpointConversation(checkpointId: string) {
-    setCheckpointActionId(checkpointId);
-    try {
-      const result = await api.startCheckpoint(checkpointId);
-      ensureConversationTabOpen(result.id);
-      navigate(`/conversations/${result.id}`);
-      showNotice('accent', 'Started a new conversation from checkpoint.');
-    } catch (error) {
-      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-    } finally {
-      setCheckpointActionId(null);
-    }
-  }
-
-  async function deleteCheckpointById(checkpointId: string) {
-    const checkpoint = checkpoints.find((entry) => entry.id === checkpointId);
-    const confirmed = window.confirm(`Delete checkpoint "${checkpoint?.title ?? checkpointId}"?`);
-    if (!confirmed) {
-      return;
-    }
-
-    setCheckpointActionId(checkpointId);
-    try {
-      await api.deleteCheckpoint(checkpointId);
-      setCheckpoints((current) => current.filter((entry) => entry.id !== checkpointId));
-      showNotice('accent', 'Checkpoint deleted.');
-    } catch (error) {
-      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-    } finally {
-      setCheckpointActionId(null);
-    }
-  }
-
-  function updateCheckpointScope(scope: 'conversation' | 'all') {
-    setCheckpointScope(scope);
   }
 
   async function removeReferencedProject(projectId: string) {
@@ -1870,10 +2174,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   async function submitComposer(behavior?: 'steer' | 'followUp') {
     const inputSnapshot = input;
     const text = inputSnapshot.trim();
-    const pendingAttachments = attachments;
-    if (!text && pendingAttachments.length === 0) return;
+    const pendingImageAttachments = attachments;
+    const pendingDrawingAttachments = drawingAttachments;
+    if (!text && pendingImageAttachments.length === 0 && pendingDrawingAttachments.length === 0) {
+      return;
+    }
 
-    if (pendingAttachments.length === 0) {
+    if (pendingImageAttachments.length === 0 && pendingDrawingAttachments.length === 0) {
       const projectSlash = parseProjectSlashCommand(text);
       if (projectSlash) {
         if (projectSlash.kind === 'invalid') {
@@ -1901,10 +2208,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     try {
-      const promptImages = await buildPromptImages(pendingAttachments);
+      const filePromptImages = await buildPromptImages(pendingImageAttachments);
+      const drawingPromptImages = pendingDrawingAttachments.map((drawing) => drawingAttachmentToPromptImage(drawing));
+      const promptImages = [...filePromptImages, ...drawingPromptImages];
       let textToSend = text;
+
       setInput('');
       setAttachments([]);
+      setDrawingAttachments([]);
+      setDrawingsError(null);
 
       if (promptImages.length === 0) {
         if (text === '/clear') {
@@ -1915,7 +2227,27 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           await handleClear();
           return;
         }
-        if (text === '/image') { openFilePicker(); return; }
+
+        if (text === '/image') {
+          openFilePicker();
+          return;
+        }
+
+        if (text === '/draw') {
+          openDrawingEditor();
+          return;
+        }
+
+        if (text === '/drawings') {
+          if (!id) {
+            showNotice('danger', 'Saved drawings are only available in existing conversations.', 4000);
+            return;
+          }
+
+          setDrawingsPickerOpen(true);
+          return;
+        }
+
         if (text.startsWith('/run ')) {
           if (draft) {
             textToSend = `Run this shell command and show me the output:\n\`\`\`\n${text.slice(5)}\n\`\`\``;
@@ -1925,6 +2257,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             return;
           }
         }
+
         if (text.startsWith('/search ')) {
           if (draft) {
             textToSend = `Search the web for: ${text.slice(8)}`;
@@ -1934,6 +2267,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             return;
           }
         }
+
         if (text === '/summarize') {
           if (draft) {
             textToSend = 'Summarize our conversation so far concisely.';
@@ -1943,6 +2277,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             return;
           }
         }
+
         if (text === '/think') {
           if (draft) {
             textToSend = 'Think step-by-step about our conversation so far and share your reasoning.';
@@ -1952,6 +2287,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             return;
           }
         }
+
         if (text.startsWith('/think ')) {
           if (draft) {
             textToSend = `Think step-by-step about: ${text.slice(7)}`;
@@ -1961,19 +2297,24 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             return;
           }
         }
+
         if (text === '/fork' && id) {
           try {
             rememberComposerInput(inputSnapshot);
             const liveConversationId = await ensureConversationIsLiveForFork();
             const entries = await api.forkEntries(liveConversationId);
-            if (entries.length === 0) { sendToAgent('(No forkable messages yet)'); return; }
+            if (entries.length === 0) {
+              sendToAgent('(No forkable messages yet)');
+              return;
+            }
+
             const entry = entries[entries.length - 1];
             const { newSessionId } = await api.forkSession(liveConversationId, entry.entryId, { preserveSource: true });
             persistForkPromptDraft(newSessionId, entry.text);
             ensureConversationTabOpen(newSessionId);
             navigate(`/conversations/${newSessionId}`);
-          } catch (err) {
-            console.error('Fork failed:', err);
+          } catch (error) {
+            console.error('Fork failed:', error);
           }
           return;
         }
@@ -1981,35 +2322,74 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
       const queuedBehavior = behavior ?? (isLiveSession && stream.isStreaming ? 'steer' : undefined);
 
+      const persistPromptDrawings = async (conversationId: string): Promise<PromptAttachmentRefInput[]> => {
+        if (pendingDrawingAttachments.length === 0) {
+          return [];
+        }
+
+        setDrawingsBusy(true);
+        try {
+          const persistedDrawings = await persistDrawingsForConversation(conversationId, pendingDrawingAttachments);
+          return persistedDrawings
+            .map((drawing) => drawingAttachmentToPromptRef(drawing))
+            .filter((attachmentRef): attachmentRef is PromptAttachmentRefInput => attachmentRef !== null);
+        } finally {
+          setDrawingsBusy(false);
+        }
+      };
+
       if (!id && !visibleSessionDetail) {
         rememberComposerInput(inputSnapshot);
         try {
           const draftCwd = readDraftConversationCwd().trim() || undefined;
           const { id: newId } = await api.createLiveSession(draftCwd, draftReferencedProjectIds);
+          const attachmentRefs = await persistPromptDrawings(newId);
+
           rememberComposerInput(inputSnapshot, newId);
           persistPendingConversationPrompt(newId, {
             text: textToSend,
             behavior: queuedBehavior,
             images: promptImages,
+            attachmentRefs,
           });
           clearDraftConversationCwd();
           ensureConversationTabOpen(newId);
           navigate(`/conversations/${newId}`, { replace: true });
         } catch (error) {
           showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+          setInput(inputSnapshot);
+          setAttachments(pendingImageAttachments);
+          setDrawingAttachments(pendingDrawingAttachments);
         }
         return;
       }
 
+      if (!id) {
+        return;
+      }
+
+      if (!isLiveSession && !visibleSessionDetail) {
+        showNotice('danger', 'Conversation is still loading. Try sending again in a moment.', 4000);
+        setInput(inputSnapshot);
+        setAttachments(pendingImageAttachments);
+        setDrawingAttachments(pendingDrawingAttachments);
+        return;
+      }
+
+      const attachmentRefs = await persistPromptDrawings(id);
+
       if (isLiveSession) {
         rememberComposerInput(inputSnapshot);
-        await stream.send(textToSend, queuedBehavior, promptImages);
-        if (id) {
-          await refetchConversationProjects({ resetLoading: false });
-          emitConversationProjectsChanged(id);
-        }
+        await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs);
+
+        await refetchConversationProjects({ resetLoading: false });
+        emitConversationProjectsChanged(id);
+        await refetchConversationAttachments();
+
         setTimeout(() => {
-          if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
         }, 50);
       } else if (visibleSessionDetail) {
         try {
@@ -2018,25 +2398,26 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           setConfirmedLive(true);
           stream.reconnect();
           setTimeout(() => {
-            void stream.send(textToSend, queuedBehavior, promptImages)
+            void stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs)
               .then(async () => {
-                if (!id) {
-                  return;
-                }
-
                 await refetchConversationProjects({ resetLoading: false });
                 emitConversationProjectsChanged(id);
+                await refetchConversationAttachments();
               })
               .catch((error) => {
                 console.error('Send after auto-resume failed:', error);
               });
           }, 150);
-        } catch (err) {
-          console.error('Auto-resume failed:', err);
+        } catch (error) {
+          console.error('Auto-resume failed:', error);
         }
       }
-    } catch (err) {
-      console.error('Failed to prepare attachments:', err);
+    } catch (error) {
+      console.error('Failed to prepare attachments:', error);
+      setInput(inputSnapshot);
+      setAttachments(pendingImageAttachments);
+      setDrawingAttachments(pendingDrawingAttachments);
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     }
   }
 
@@ -2078,10 +2459,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }
 
   function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
-    const files = Array.from(e.clipboardData.files).filter((file) => file.type.startsWith('image/'));
-    if (files.length === 0) return;
+    const files = Array.from(e.clipboardData.files);
+    if (files.length === 0) {
+      return;
+    }
+
     e.preventDefault();
-    addImageAttachments(files);
+    void addComposerFiles(files);
   }
 
   function canNavigateComposerHistory(textarea: HTMLTextAreaElement, key: 'ArrowUp' | 'ArrowDown'): boolean {
@@ -2101,10 +2485,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       if (input.trim().length > 0) {
         rememberComposerInput(input);
       }
-      if (input.length > 0 || attachments.length > 0) {
+      if (input.length > 0 || attachments.length > 0 || drawingAttachments.length > 0) {
         e.preventDefault();
         setInput('');
         setAttachments([]);
+        setDrawingAttachments([]);
       }
       return;
     }
@@ -2136,6 +2521,18 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               setInput('');
               setSlashIdx(0);
               openFilePicker();
+            } else if (sel.displayCmd === '/draw') {
+              setInput('');
+              setSlashIdx(0);
+              openDrawingEditor();
+            } else if (sel.displayCmd === '/drawings') {
+              setInput('');
+              setSlashIdx(0);
+              if (!id) {
+                showNotice('danger', 'Saved drawings are only available in existing conversations.', 4000);
+              } else {
+                openDrawingsPicker();
+              }
             } else {
               setInput(sel.insertText);
               setSlashIdx(0);
@@ -2180,15 +2577,31 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setDragOver(false);
 
     const files = Array.from(e.dataTransfer.files);
-    if (files.length) addImageAttachments(files);
+    if (files.length > 0) {
+      void addComposerFiles(files);
+    }
   }
   function removeAttachment(i: number) {
     setAttachments(prev => prev.filter((_, j) => j !== i));
   }
 
-  const composerHasContent = input.trim().length > 0 || attachments.length > 0;
+  const composerHasContent = input.trim().length > 0 || attachments.length > 0 || drawingAttachments.length > 0;
   const composerSubmit = resolveConversationComposerSubmitState(stream.isStreaming, composerAltHeld);
   const showScrollToBottomControl = shouldShowScrollToBottomControl(messageCount, atBottom);
+  const hasRenderableMessages = (realMessages?.length ?? 0) > 0;
+  const editingDrawingAttachment = useMemo(() => {
+    if (!editingDrawingLocalId || editingDrawingLocalId === '__new__') {
+      return null;
+    }
+
+    return drawingAttachments.find((attachment) => attachment.localId === editingDrawingLocalId) ?? null;
+  }, [drawingAttachments, editingDrawingLocalId]);
+  const hydratingLiveConversation = isLiveSession
+    && !stream.hasSnapshot
+    && !visibleSessionDetail
+    && stream.blocks.length === 0;
+  const showConversationLoadingState = !hasRenderableMessages
+    && (sessionLoading || hydratingLiveConversation);
 
   return (
     <div className="flex flex-col h-full">
@@ -2298,12 +2711,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       {/* Messages */}
       <div className="relative flex-1 min-h-0">
         <div ref={scrollRef} className="conversation-scroll-shell h-full overflow-y-auto overflow-x-hidden">
-          {realMessages ? (
+          {hasRenderableMessages && realMessages ? (
             <ChatView
               messages={realMessages}
               isStreaming={stream.isStreaming}
-              onCheckpointMessage={id && !stream.isStreaming ? saveCheckpointFromMessage : undefined}
-              onForkMessage={id && !stream.isStreaming && Boolean(realMessages) ? forkConversationFromMessage : undefined}
+              onCheckpointMessage={id && !stream.isStreaming ? saveMemoryFromMessage : undefined}
+              onForkMessage={id && !stream.isStreaming ? forkConversationFromMessage : undefined}
               onOpenArtifact={openArtifact}
               activeArtifactId={selectedArtifactId}
               onOpenRun={openRun}
@@ -2313,7 +2726,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               resumeConversationTitle={conversationResumeState.title}
               resumeConversationLabel={conversationResumeState.actionLabel ?? 'resume'}
             />
-          ) : sessionLoading ? (
+          ) : showConversationLoadingState ? (
             <LoadingState label="Loading session…" className="justify-center h-full" />
           ) : (
             <EmptyState
@@ -2325,10 +2738,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   </svg>
                 </div>
               )}
-              title={NEW_CONVERSATION_TITLE}
+              title={draft ? NEW_CONVERSATION_TITLE : title}
               body={draft
                 ? 'Start typing to create a conversation. You can set its initial working directory in the right rail, or let a single referenced project repo root pick it automatically.'
-                : 'Start a Pi session to populate this conversation.'}
+                : isLiveSession
+                  ? 'This conversation is live but has no messages yet. Send a prompt to get started.'
+                  : 'Start a Pi session to populate this conversation.'}
             />
           )}
           {showScrollToBottomControl && (
@@ -2340,7 +2755,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             </button>
           )}
         </div>
-        {realMessages && (
+        {hasRenderableMessages && realMessages && (
           <ConversationRail
             messages={realMessages}
             scrollContainerRef={scrollRef}
@@ -2366,8 +2781,18 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           {showSlash   && <SlashMenu items={slashItems} idx={slashIdx} onSelect={(item) => {
             const c = item.displayCmd.trim();
             if (c === '/tree')       { setInput(''); setShowTree(true); return; }
-            if (c === '/clear')      { setInput(''); setAttachments([]); if (!draft) { void handleClear(); } return; }
+            if (c === '/clear')      { setInput(''); setAttachments([]); setDrawingAttachments([]); if (!draft) { void handleClear(); } return; }
             if (c === '/image')      { setInput(''); openFilePicker(); return; }
+            if (c === '/draw')       { setInput(''); openDrawingEditor(); return; }
+            if (c === '/drawings')   {
+              setInput('');
+              if (!id) {
+                showNotice('danger', 'Saved drawings are only available in existing conversations.', 4000);
+              } else {
+                setDrawingsPickerOpen(true);
+              }
+              return;
+            }
             if (c === '/summarize')  {
               if (draft) {
                 setInput('/summarize');
@@ -2483,6 +2908,48 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               </div>
             )}
 
+            {drawingAttachments.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 px-3 pt-2.5">
+                {drawingAttachments.map((attachment) => (
+                  <div key={attachment.localId} className="flex items-center gap-1.5 rounded-lg border border-border-subtle bg-surface px-2 py-1 text-[11px] max-w-[270px]">
+                    <img
+                      src={attachment.previewUrl}
+                      alt={buildComposerDrawingPreviewTitle(attachment)}
+                      className="h-7 w-9 rounded object-cover"
+                    />
+                    <div className="min-w-0">
+                      <p className="truncate text-secondary">{buildComposerDrawingPreviewTitle(attachment)}</p>
+                      <p className="text-[10px] text-dim">{attachment.attachmentId ? `#${attachment.attachmentId}` : 'new drawing'}{attachment.dirty ? ' · unsaved' : ''}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => editDrawing(attachment.localId)}
+                      className="text-[11px] text-accent transition-colors hover:text-accent/80"
+                      title={`Edit ${attachment.title}`}
+                    >
+                      edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeDrawingAttachment(attachment.localId)}
+                      className="ui-icon-button ui-icon-button-compact ml-0.5 shrink-0 leading-none"
+                      title={`Remove ${attachment.title}`}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {drawingsBusy && (
+              <div className="px-3 pt-2 text-[11px] text-dim">Syncing drawings…</div>
+            )}
+
+            {drawingsError && (
+              <div className="px-3 pt-2 text-[11px] text-danger">{drawingsError}</div>
+            )}
+
             {/* Pending steer / follow-up queue */}
             {pendingQueue.length > 0 && (
               <div className="px-3 pt-2.5 pb-2 border-b border-border-subtle flex flex-col gap-1.5">
@@ -2581,24 +3048,38 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,.excalidraw,application/json"
                 multiple
                 className="hidden"
                 onChange={(e) => {
                   const files = Array.from(e.target.files ?? []);
-                  if (files.length > 0) addImageAttachments(files);
+                  if (files.length > 0) {
+                    void addComposerFiles(files);
+                  }
                   e.target.value = '';
                 }}
               />
 
               <IconButton
                 className="shrink-0 mb-0.5"
-                title="Attach image"
-                aria-label="Attach image"
+                title="Attach image or Excalidraw file"
+                aria-label="Attach image or Excalidraw file"
                 onClick={openFilePicker}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                </svg>
+              </IconButton>
+
+              <IconButton
+                className="shrink-0 mb-0.5"
+                title="Create drawing"
+                aria-label="Create drawing"
+                onClick={openDrawingEditor}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
                 </svg>
               </IconButton>
 
@@ -2610,7 +3091,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 onPaste={handlePaste}
                 rows={1}
                 className="flex-1 bg-transparent text-sm text-primary placeholder:text-dim outline-none resize-none leading-relaxed"
-                placeholder="Message… (/ for commands, @ to reference projects, tasks, knowledge, skills, and profiles)"
+                placeholder="Message… (/ for commands, @ to reference projects, tasks, knowledge, and profiles)"
                 title="Ctrl+C clears the composer. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts."
                 style={{ minHeight: '24px', maxHeight: '160px' }}
               />
@@ -2636,17 +3117,26 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         </div>
       </div>
 
-      {checkpointsOpenRequested && id && (
-        <ConversationCheckpointsModal
-          conversationId={id}
-          checkpoints={checkpoints}
-          loading={checkpointsLoading}
-          scope={checkpointScope}
-          busyCheckpointId={checkpointActionId}
-          onScopeChange={updateCheckpointScope}
-          onStart={startCheckpointConversation}
-          onDelete={deleteCheckpointById}
-          onClose={() => setCheckpointsOpen(false)}
+      {editingDrawingLocalId && (
+        <ExcalidrawEditorModal
+          key={editingDrawingLocalId}
+          initialTitle={editingDrawingAttachment?.title ?? 'Drawing'}
+          initialScene={editingDrawingAttachment?.scene ?? null}
+          saveLabel={editingDrawingAttachment ? 'Update drawing' : 'Save drawing'}
+          onSave={saveDrawingFromEditor}
+          onClose={closeDrawingEditor}
+        />
+      )}
+
+      {drawingsPickerOpen && id && (
+        <ConversationDrawingsPickerModal
+          attachments={conversationAttachments}
+          onLoadAttachment={async (attachmentId) => {
+            const detail = await api.conversationAttachment(id, attachmentId);
+            return detail.attachment;
+          }}
+          onAttach={(selection) => { void attachSavedDrawing(selection); }}
+          onClose={() => setDrawingsPickerOpen(false)}
         />
       )}
 

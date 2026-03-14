@@ -18,32 +18,45 @@ function MentionPill({ text }: { text: string }) {
   return <span className="ui-markdown-mention">{text}</span>;
 }
 
-function InlineText({ text }: { text: string }) {
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
-  return (
-    <>
-      {parts.map((part, index) => {
-        if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={index} className="font-semibold text-primary">{part.slice(2, -2)}</strong>;
-        }
+function splitMentionFragments(text: string): Array<{ text: string; mention: boolean }> {
+  const fragments: Array<{ text: string; mention: boolean }> = [];
+  const mentionRegex = /@[\w-]+/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null = null;
 
-        if (part.startsWith('`') && part.endsWith('`')) {
-          return <code key={index} className="font-mono text-[0.82em] bg-elevated px-1 py-0.5 rounded text-accent">{part.slice(1, -1)}</code>;
-        }
+  while ((match = mentionRegex.exec(text)) !== null) {
+    const mention = match[0];
+    const start = match.index;
+    const end = start + mention.length;
+    const previous = start > 0 ? text[start - 1] : '';
+    const shouldSkip = start > 0 && /[\w./+-]/.test(previous);
 
-        return <React.Fragment key={index}>{part}</React.Fragment>;
-      })}
-    </>
-  );
+    if (shouldSkip) {
+      continue;
+    }
+
+    if (start > cursor) {
+      fragments.push({ text: text.slice(cursor, start), mention: false });
+    }
+
+    fragments.push({ text: mention, mention: true });
+    cursor = end;
+  }
+
+  if (cursor < text.length) {
+    fragments.push({ text: text.slice(cursor), mention: false });
+  }
+
+  return fragments;
 }
 
 function renderMentionFragments(text: string): ReactNode[] {
-  return text.split(/(@[\w-]+)/g).map((part, index) => {
-    if (/^@[\w-]+$/.test(part)) {
-      return <MentionPill key={`${part}-${index}`} text={part} />;
+  return splitMentionFragments(text).map((fragment, index) => {
+    if (fragment.mention) {
+      return <MentionPill key={`${fragment.text}-${index}`} text={fragment.text} />;
     }
 
-    return <React.Fragment key={`${index}-${part}`}>{part}</React.Fragment>;
+    return <React.Fragment key={`${index}-${fragment.text}`}>{fragment.text}</React.Fragment>;
   });
 }
 
@@ -149,21 +162,6 @@ function renderChildrenWithMentions(children: ReactNode): ReactNode {
 
     return cloneElement(child as ReactElement<{ children?: ReactNode }>, undefined, renderChildrenWithMentions(props.children));
   });
-}
-
-function MentionText({ text }: { text: string }) {
-  const parts = text.split(/(@[\w-]+)/g);
-  return (
-    <>
-      {parts.map((part, index) => {
-        if (/^@[\w-]+$/.test(part)) {
-          return <MentionPill key={`${part}-${index}`} text={part} />;
-        }
-
-        return <InlineText key={`${index}-${part}`} text={part} />;
-      })}
-    </>
-  );
 }
 
 function MarkdownCodeBlock({ children }: { children: ReactNode }) {
@@ -753,37 +751,45 @@ function TraceClusterBlock({
   return (
     <div className="space-y-2">
       <div className="flex items-start gap-2">
-        <button
-          type="button"
-          onClick={() => setPreference((current) => toggleDisclosurePreference(autoOpen, current))}
-          aria-expanded={open}
-          className={panelClassName}
-        >
-          <div className="flex items-center gap-2 text-[12px]">
-            {isActive ? (
-              <span className="h-4 w-4 shrink-0 rounded-full border-[1.5px] border-current border-t-transparent animate-spin text-accent" />
-            ) : (
-              <span className={cx('w-4 shrink-0 text-center text-[11px] select-none', summary.hasError ? 'text-danger' : 'text-dim')}>⋯</span>
-            )}
-            <span className="font-medium text-primary">{title}</span>
-            <span className="text-secondary">· {summary.stepCount} step{summary.stepCount === 1 ? '' : 's'}</span>
-            <span className="flex-1" />
-            {isActive && <span className="text-[10px] uppercase tracking-[0.14em] text-accent/80">live</span>}
-            {durationLabel && !isActive && <span className="text-[11px] text-dim">{durationLabel}</span>}
-            <span className="text-[10px] text-dim">{open ? '▲ hide' : '▼ show'}</span>
-          </div>
-          {summary.categories.length > 0 && (
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              {expandedCategories.map((category) => (
-                <Pill key={category.key} tone={traceSummaryTone(category)} mono={category.kind === 'tool'}>
-                  {category.label}{category.count > 1 ? ` ×${category.count}` : ''}
-                </Pill>
-              ))}
-              {remainingCategoryCount > 0 && <span className="text-[11px] text-dim">+{remainingCategoryCount} more</span>}
+        <div className="flex-1 min-w-0 space-y-1.5">
+          <button
+            type="button"
+            onClick={() => setPreference((current) => toggleDisclosurePreference(autoOpen, current))}
+            aria-expanded={open}
+            className={panelClassName}
+          >
+            <div className="flex items-center gap-2 text-[12px]">
+              {isActive ? (
+                <span className="h-4 w-4 shrink-0 rounded-full border-[1.5px] border-current border-t-transparent animate-spin text-accent" />
+              ) : (
+                <span className={cx('w-4 shrink-0 text-center text-[11px] select-none', summary.hasError ? 'text-danger' : 'text-dim')}>⋯</span>
+              )}
+              <span className="font-medium text-primary">{title}</span>
+              <span className="text-secondary">· {summary.stepCount} step{summary.stepCount === 1 ? '' : 's'}</span>
+              <span className="flex-1" />
+              {isActive && <span className="text-[10px] uppercase tracking-[0.14em] text-accent/80">live</span>}
+              {durationLabel && !isActive && <span className="text-[11px] text-dim">{durationLabel}</span>}
+              <span className="text-[10px] text-dim">{open ? '▲ hide' : '▼ show'}</span>
             </div>
-          )}
-        </button>
-        <ResumeConversationAction onResume={onResume} busy={resumeBusy} title={resumeTitle} label={resumeLabel} />
+            {summary.categories.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                {expandedCategories.map((category) => (
+                  <Pill key={category.key} tone={traceSummaryTone(category)} mono={category.kind === 'tool'}>
+                    {category.label}{category.count > 1 ? ` ×${category.count}` : ''}
+                  </Pill>
+                ))}
+                {remainingCategoryCount > 0 && <span className="text-[11px] text-dim">+{remainingCategoryCount} more</span>}
+              </div>
+            )}
+          </button>
+          <ResumeConversationAction
+            onResume={onResume}
+            busy={resumeBusy}
+            title={resumeTitle}
+            label={resumeLabel}
+            variant="inline"
+          />
+        </div>
       </div>
 
       {open && (
@@ -879,15 +885,20 @@ function ResumeConversationAction({
   busy = false,
   title,
   label = 'resume',
+  variant = 'compact',
 }: {
   onResume?: () => Promise<void> | void;
   busy?: boolean;
   title?: string | null;
   label?: string;
+  variant?: 'compact' | 'inline';
 }) {
   if (!onResume) {
     return null;
   }
+
+  const compactClassName = 'shrink-0 text-[11px] font-medium text-accent transition-colors hover:text-accent/80 disabled:cursor-default disabled:text-dim';
+  const inlineClassName = 'inline-flex items-center gap-1.5 rounded-md border border-accent/35 bg-accent/10 px-2.5 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent/15 disabled:cursor-default disabled:border-border-subtle disabled:bg-surface disabled:text-dim';
 
   return (
     <button
@@ -895,8 +906,9 @@ function ResumeConversationAction({
       onClick={() => { void onResume(); }}
       disabled={busy}
       title={title ?? 'Resume this conversation'}
-      className="shrink-0 text-[11px] font-medium text-accent transition-colors hover:text-accent/80 disabled:cursor-default disabled:text-dim"
+      className={variant === 'inline' ? inlineClassName : compactClassName}
     >
+      {variant === 'inline' && <span aria-hidden className="text-[12px] leading-none">↻</span>}
       {busy ? 'opening…' : label}
     </button>
   );
@@ -920,11 +932,19 @@ function ErrorBlock({
   return (
     <SurfacePanel className="border-danger/30 bg-danger/5 px-3 py-2.5 text-[12px] font-mono flex gap-2 items-start">
       <span className="text-danger font-bold shrink-0 mt-0.5 select-none">✕</span>
-      <div className="flex-1 min-w-0">
-        {block.tool && <span className="text-danger/70 font-semibold">{block.tool} · </span>}
-        <span className="text-danger/85 leading-relaxed">{block.message}</span>
+      <div className="flex-1 min-w-0 space-y-2">
+        <div>
+          {block.tool && <span className="text-danger/70 font-semibold">{block.tool} · </span>}
+          <span className="text-danger/85 leading-relaxed">{block.message}</span>
+        </div>
+        <ResumeConversationAction
+          onResume={onResume}
+          busy={resumeBusy}
+          title={resumeTitle}
+          label={resumeLabel}
+          variant="inline"
+        />
       </div>
-      <ResumeConversationAction onResume={onResume} busy={resumeBusy} title={resumeTitle} />
     </SurfacePanel>
   );
 }
@@ -978,10 +998,10 @@ function MsgActions({
         <button
           onClick={() => { void handleCheckpoint(); }}
           className={cx('ui-action-button', isSavingCheckpoint && 'text-accent')}
-          title="Save checkpoint at this message"
+          title="Distill conversation up to this point into durable memory"
           disabled={isSavingCheckpoint}
         >
-          {isSavingCheckpoint ? '⟡ saving…' : '⟡ checkpoint'}
+          {isSavingCheckpoint ? '⟡ distilling…' : '⟡ distill'}
         </button>
       )}
       {!isUser && onFork && (
@@ -1037,13 +1057,11 @@ function UserMessage({
           {skillBlock ? (
             <div className="space-y-2 px-1.5 pb-0.5">
               <SkillInvocationCard skillBlock={skillBlock} className="ui-skill-invocation-user" />
-              {skillBlock.userMessage && (
-                <p className="text-sm leading-relaxed text-primary whitespace-pre-wrap"><MentionText text={skillBlock.userMessage} /></p>
-              )}
+              {skillBlock.userMessage && renderMarkdownText(skillBlock.userMessage)}
             </div>
           ) : hasText ? (
             <div className="px-1.5 pb-0.5">
-              <p className="text-sm leading-relaxed text-primary whitespace-pre-wrap"><MentionText text={block.text} /></p>
+              {renderMarkdownText(block.text)}
             </div>
           ) : null}
         </div>

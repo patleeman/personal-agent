@@ -573,6 +573,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const [runRecordsById, setRunRecordsById] = useState<Map<string, DurableRunRecord>>(new Map());
   const [runsLoading, setRunsLoading] = useState(true);
   const [runsError, setRunsError] = useState<string | null>(null);
+  const [runsExpanded, setRunsExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [linkBusy, setLinkBusy] = useState(false);
@@ -653,6 +654,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     setChangeCwdBusy(false);
     setChangeCwdError(null);
     setOpenCwdError(null);
+    setRunsExpanded(false);
   }, [id]);
 
   useEffect(() => {
@@ -740,6 +742,31 @@ function LiveSessionContextPanel({ id }: { id: string }) {
       };
     });
   }, [runLookups, runRecordsById, visibleRunMentions]);
+
+  const activeRunCount = visibleRunCards.reduce((count, { record }) => (record && isRefreshingRun(record) ? count + 1 : count), 0);
+  const runIssueCount = visibleRunCards.reduce((count, { record }) => (record && record.problems.length > 0 ? count + 1 : count), 0);
+  const unresolvedRunCount = visibleRunCards.reduce((count, { record }) => (!record ? count + 1 : count), 0);
+  const runSummary = useMemo(() => {
+    if (runsLoading && visibleRunCards.every(({ record }) => !record)) {
+      return 'Refreshing run metadata…';
+    }
+
+    const parts = [`${visibleRunCards.length} ${visibleRunCards.length === 1 ? 'run' : 'runs'}`];
+
+    if (activeRunCount > 0) {
+      parts.push(`${activeRunCount} active`);
+    }
+
+    if (runIssueCount > 0) {
+      parts.push(`${runIssueCount} with issues`);
+    }
+
+    if (unresolvedRunCount > 0) {
+      parts.push(`${unresolvedRunCount} unresolved`);
+    }
+
+    return parts.join(' · ');
+  }, [activeRunCount, runIssueCount, runsLoading, unresolvedRunCount, visibleRunCards]);
 
   const shouldPollRuns = visibleRunCards.some(({ record }) => !record || isRefreshingRun(record));
 
@@ -1054,75 +1081,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         </SurfacePanel>
       </Section>
 
-      <Section title="Runs">
-        <div className="space-y-2.5">
-          {runsLoading && visibleRunCards.every(({ record }) => !record) && (
-            <p className="text-[11px] text-dim animate-pulse">Refreshing run metadata…</p>
-          )}
-          {runsError && (
-            <p className="text-[11px] text-danger/80">{runsError}</p>
-          )}
-          {visibleRunCards.map(({ mention, record, headline, primaryConnection, status, activityAt }) => {
-            const isSelected = mention.selected;
-            const title = headline?.title ?? mention.label;
-            const summary = headline?.summary ?? mention.meta;
-            const issueCount = record?.problems.length ?? 0;
-            const showRecovery = record && record.recoveryAction !== 'none';
-            const timeLabel = activityAt ? timeAgo(activityAt) : null;
-
-            return (
-              <button
-                key={mention.runId}
-                type="button"
-                onClick={() => openRun(mention.runId)}
-                className={isSelected ? 'w-full rounded-lg border border-accent/30 bg-accent/10 px-3 py-2.5 text-left transition-colors' : 'w-full rounded-lg border border-border-subtle bg-surface px-3 py-2.5 text-left transition-colors hover:border-accent/25 hover:bg-elevated/70'}
-                title={mention.runId}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <p className="truncate text-[12px] font-medium text-primary">{title}</p>
-                      {mention.kind === 'conversation' && (
-                        <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-dim">session</span>
-                      )}
-                    </div>
-                    <p className="mt-0.5 text-[11px] text-secondary break-words">{summary}</p>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px]">
-                      <span className={status.cls}>{status.text}</span>
-                      {timeLabel && (
-                        <>
-                          <span className="opacity-35">·</span>
-                          <span className="text-dim">{timeLabel}</span>
-                        </>
-                      )}
-                      {showRecovery && record && (
-                        <>
-                          <span className="opacity-35">·</span>
-                          <span className="text-warning">{formatRecoveryAction(record.recoveryAction)}</span>
-                        </>
-                      )}
-                      {issueCount > 0 && (
-                        <>
-                          <span className="opacity-35">·</span>
-                          <span className="text-danger">{issueCount} issue{issueCount === 1 ? '' : 's'}</span>
-                        </>
-                      )}
-                    </div>
-                    {primaryConnection?.detail && (
-                      <p className="mt-1 text-[11px] text-dim break-words">{primaryConnection.detail}</p>
-                    )}
-                    <p className="mt-1 break-all font-mono text-[10px] text-dim">{mention.runId}</p>
-                  </div>
-                  <span className={isSelected ? 'shrink-0 text-[10px] uppercase tracking-[0.14em] text-accent' : 'shrink-0 text-[10px] uppercase tracking-[0.14em] text-dim'}>
-                    {isSelected ? 'open' : 'inspect'}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </Section>
-
       <Section title="Referenced projects">
         <div className="space-y-3">
           {relatedProjectIds.length > 1 && (
@@ -1180,6 +1138,94 @@ function LiveSessionContextPanel({ id }: { id: string }) {
 
           {!focusedProject && !focusedLoading && availableProjects.length === 0 && relatedProjectIds.length === 0 && (
             <p className="text-[12px] text-dim">No projects available.</p>
+          )}
+        </div>
+      </Section>
+
+      <Section title="Runs">
+        <div className="space-y-2.5">
+          <button
+            type="button"
+            onClick={() => setRunsExpanded((open) => !open)}
+            aria-expanded={runsExpanded}
+            aria-controls={`conversation-runs-${id}`}
+            className={runsExpanded ? 'w-full rounded-lg border border-accent/25 bg-accent/10 px-3 py-2 text-left transition-colors' : 'w-full rounded-lg border border-border-subtle bg-surface px-3 py-2 text-left transition-colors hover:border-accent/25 hover:bg-elevated/70'}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] text-secondary">{runSummary}</span>
+              <span className={runsExpanded ? 'text-[10px] uppercase tracking-[0.14em] text-accent' : 'text-[10px] uppercase tracking-[0.14em] text-dim'}>
+                {runsExpanded ? 'hide' : 'inspect'}
+              </span>
+            </div>
+          </button>
+
+          {runsExpanded && (
+            <div id={`conversation-runs-${id}`} className="space-y-2.5">
+              {runsLoading && visibleRunCards.every(({ record }) => !record) && (
+                <p className="text-[11px] text-dim animate-pulse">Refreshing run metadata…</p>
+              )}
+              {runsError && (
+                <p className="text-[11px] text-danger/80">{runsError}</p>
+              )}
+              {visibleRunCards.map(({ mention, record, headline, primaryConnection, status, activityAt }) => {
+                const isSelected = mention.selected;
+                const title = headline?.title ?? mention.label;
+                const summary = headline?.summary ?? mention.meta;
+                const issueCount = record?.problems.length ?? 0;
+                const showRecovery = record && record.recoveryAction !== 'none';
+                const timeLabel = activityAt ? timeAgo(activityAt) : null;
+
+                return (
+                  <button
+                    key={mention.runId}
+                    type="button"
+                    onClick={() => openRun(mention.runId)}
+                    className={isSelected ? 'w-full rounded-lg border border-accent/30 bg-accent/10 px-3 py-2.5 text-left transition-colors' : 'w-full rounded-lg border border-border-subtle bg-surface px-3 py-2.5 text-left transition-colors hover:border-accent/25 hover:bg-elevated/70'}
+                    title={mention.runId}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <p className="truncate text-[12px] font-medium text-primary">{title}</p>
+                          {mention.kind === 'conversation' && (
+                            <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-dim">session</span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-[11px] text-secondary break-words">{summary}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px]">
+                          <span className={status.cls}>{status.text}</span>
+                          {timeLabel && (
+                            <>
+                              <span className="opacity-35">·</span>
+                              <span className="text-dim">{timeLabel}</span>
+                            </>
+                          )}
+                          {showRecovery && record && (
+                            <>
+                              <span className="opacity-35">·</span>
+                              <span className="text-warning">{formatRecoveryAction(record.recoveryAction)}</span>
+                            </>
+                          )}
+                          {issueCount > 0 && (
+                            <>
+                              <span className="opacity-35">·</span>
+                              <span className="text-danger">{issueCount} issue{issueCount === 1 ? '' : 's'}</span>
+                            </>
+                          )}
+                        </div>
+                        {primaryConnection?.detail && (
+                          <p className="mt-1 text-[11px] text-dim break-words">{primaryConnection.detail}</p>
+                        )}
+                        <p className="mt-1 break-all font-mono text-[10px] text-dim">{mention.runId}</p>
+                      </div>
+                      <span className={isSelected ? 'shrink-0 text-[10px] uppercase tracking-[0.14em] text-accent' : 'shrink-0 text-[10px] uppercase tracking-[0.14em] text-dim'}>
+                        {isSelected ? 'open' : 'inspect'}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           )}
         </div>
       </Section>

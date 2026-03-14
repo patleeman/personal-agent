@@ -1,6 +1,6 @@
-import type { MemoryDocItem, MemorySkillItem, ProjectRecord, ScheduledTaskSummary } from './types';
+import type { MemoryDocItem, ProjectRecord, ScheduledTaskSummary } from './types';
 
-export type MentionKind = 'project' | 'task' | 'knowledge' | 'skill' | 'profile';
+export type MentionKind = 'project' | 'task' | 'knowledge' | 'profile';
 
 export interface MentionItem {
   id: string;
@@ -15,8 +15,7 @@ function compareMentionItems(left: MentionItem, right: MentionItem): number {
     project: 0,
     task: 1,
     knowledge: 2,
-    skill: 3,
-    profile: 4,
+    profile: 3,
   };
 
   return kindOrder[left.kind] - kindOrder[right.kind]
@@ -44,7 +43,6 @@ export function buildMentionItems(input: {
   projects: ProjectRecord[];
   tasks: ScheduledTaskSummary[];
   memoryDocs: MemoryDocItem[];
-  skills: MemorySkillItem[];
   profiles: string[];
 }): MentionItem[] {
   const items: MentionItem[] = [
@@ -68,13 +66,6 @@ export function buildMentionItems(input: {
       kind: 'knowledge' as const,
       title: doc.title,
       summary: doc.summary,
-    })),
-    ...input.skills.map((skill) => ({
-      id: `@${skill.name}`,
-      label: skill.name,
-      kind: 'skill' as const,
-      title: skill.name,
-      summary: skill.description,
     })),
     ...input.profiles.map((profile) => ({
       id: `@${profile}`,
