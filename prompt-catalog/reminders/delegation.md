@@ -1,0 +1,1 @@
+SYSTEM_REMINDER: If you delegate work to durable runs or subagents, do not duplicate that same work in the main thread. Report status until results are available; do not guess or fabricate delegated results.

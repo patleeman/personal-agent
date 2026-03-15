@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
+import { composePromptCatalogDirectory } from './prompt-catalog.js';
 import { homedir } from 'os';
 import { dirname, isAbsolute, join, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
@@ -18,8 +19,6 @@ function getDefaultStateRoot(): string {
 
   return join(homedir(), '.local', 'state', 'personal-agent');
 }
-
-const DEFAULT_LOCAL_PROFILE_DIR = join(getDefaultStateRoot(), 'config', 'local');
 
 export interface ProfileLayer {
   name: string;
@@ -252,7 +251,7 @@ export function resolveLocalProfileDir(options: ResolveProfileOptions = {}): str
     return resolve(expandHomePath(explicit.trim()));
   }
 
-  return DEFAULT_LOCAL_PROFILE_DIR;
+  return join(getDefaultStateRoot(), 'config', 'local');
 }
 
 export function resolveLocalProfileSettingsFilePath(options: ResolveProfileOptions = {}): string {
@@ -390,10 +389,6 @@ export function getProfilesRoot(options: ResolveProfileOptions = {}): string {
     return resolve(expandHomePath(explicit.trim()));
   }
 
-  if (options.repoRoot) {
-    return join(getRepoRoot(options.repoRoot), 'profiles');
-  }
-
   return join(getDefaultStateRoot(), 'profiles');
 }
 
@@ -410,12 +405,14 @@ function listProfilesInRoot(root: string): string[] {
 
 export function listProfiles(options: ResolveProfileOptions = {}): string[] {
   const profilesRoot = getProfilesRoot(options);
-  const repoProfilesRoot = join(getRepoRoot(options.repoRoot), 'profiles');
-
+  const repoRoot = getRepoRoot(options.repoRoot);
   const profiles = new Set<string>([
-    ...listProfilesInRoot(repoProfilesRoot),
     ...listProfilesInRoot(profilesRoot),
   ]);
+
+  if (existsSync(join(repoRoot, 'profiles', 'shared', 'agent'))) {
+    profiles.add('shared');
+  }
 
   return [...profiles].sort((left, right) => left.localeCompare(right));
 }
@@ -560,18 +557,11 @@ export function resolveResourceProfile(
   const layers: ProfileLayer[] = [{ name: 'shared', agentDir: resolve(sharedAgentDir) }];
 
   if (profileName !== 'shared') {
-    const mutableOverlayDir = existingDir(join(profilesRoot, profileName, 'agent'));
-    const repoOverlayPath = assertPathWithinRoot(
-      join(repoProfilesRoot, profileName, 'agent'),
-      repoProfilesRoot,
-      `Profile ${profileName}`,
-    );
-    const repoOverlayDir = existingDir(repoOverlayPath);
-    const overlayDir = mutableOverlayDir ?? repoOverlayDir;
+    const overlayDir = existingDir(join(profilesRoot, profileName, 'agent'));
 
     if (!overlayDir) {
       throw new Error(
-        `Profile not found: ${profileName}. Checked ${join(profilesRoot, profileName, 'agent')} and ${repoOverlayPath}`,
+        `Profile not found: ${profileName}. Checked ${join(profilesRoot, profileName, 'agent')}`,
       );
     }
 
@@ -629,9 +619,12 @@ export function mergeJsonFiles(paths: string[]): Record<string, unknown> {
   return merged;
 }
 
+function combineMarkdownChunks(chunks: string[], separator = '\n\n---\n\n'): string {
+  return chunks.map((chunk) => chunk.trim()).filter((text) => text.length > 0).join(separator);
+}
+
 function combineMarkdownFiles(paths: string[]): string {
-  const chunks = paths.map((path) => readFileSync(path, 'utf-8').trim()).filter((text) => text.length > 0);
-  return chunks.join('\n\n---\n\n');
+  return combineMarkdownChunks(paths.map((path) => readFileSync(path, 'utf-8')));
 }
 
 function readRuntimeLastChangelogVersion(settingsPath: string): string | undefined {
@@ -727,8 +720,16 @@ export function materializeProfileToAgentDir(
     writeOrRemove('SYSTEM.md', undefined);
   }
 
-  if (profile.appendSystemFiles.length > 0) {
-    const appendContent = combineMarkdownFiles(profile.appendSystemFiles);
+  const generatedAppendContent = composePromptCatalogDirectory('system', { repoRoot: profile.repoRoot, separator: '\n\n' });
+  const fileAppendContent = profile.appendSystemFiles.length > 0
+    ? combineMarkdownFiles(profile.appendSystemFiles)
+    : undefined;
+  const appendContent = combineMarkdownChunks([
+    generatedAppendContent ?? '',
+    fileAppendContent ?? '',
+  ]);
+
+  if (appendContent.length > 0) {
     writeOrRemove('APPEND_SYSTEM.md', `${appendContent}\n`);
   } else {
     writeOrRemove('APPEND_SYSTEM.md', undefined);
@@ -798,3 +799,13 @@ export function buildPiResourceArgs(
 
   return args;
 }
+
+export {
+  composePromptCatalogDirectory,
+  composePromptCatalogEntries,
+  getPromptCatalogRoot,
+  listPromptCatalogEntries,
+  readPromptCatalogEntry,
+  renderPromptCatalogTemplate,
+  requirePromptCatalogEntry,
+} from './prompt-catalog.js';

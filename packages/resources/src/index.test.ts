@@ -27,6 +27,12 @@ function createTempRepo(): string {
   return dir;
 }
 
+function createTempProfilesRoot(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'personal-agent-profiles-'));
+  tempDirs.push(dir);
+  return dir;
+}
+
 function writeFile(path: string, content: string): void {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, content);
@@ -35,10 +41,11 @@ function writeFile(path: string, content: string): void {
 describe('resources profile loader', () => {
   it('lists available profiles', () => {
     const repo = createTempRepo();
+    const profilesRoot = createTempProfilesRoot();
     writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(repo, 'profiles/datadog/agent/AGENTS.md'), '# Datadog\n');
+    writeFile(join(profilesRoot, 'datadog/agent/AGENTS.md'), '# Datadog\n');
 
-    const profiles = listProfiles({ repoRoot: repo });
+    const profiles = listProfiles({ repoRoot: repo, profilesRoot });
     expect(profiles).toEqual(['datadog', 'shared']);
   });
 
@@ -51,6 +58,7 @@ describe('resources profile loader', () => {
 
   it('resolves layered profile with shared + overlay + local', () => {
     const repo = createTempRepo();
+    const profilesRoot = createTempProfilesRoot();
     const local = mkdtempSync(join(tmpdir(), 'personal-agent-local-'));
     tempDirs.push(local);
 
@@ -58,14 +66,15 @@ describe('resources profile loader', () => {
     writeFile(join(repo, 'profiles/shared/agent/extensions/index.ts'), 'export default {}\n');
     writeFile(join(repo, 'profiles/shared/agent/settings.json'), JSON.stringify({ a: 1, nested: { one: true } }));
 
-    writeFile(join(repo, 'profiles/datadog/agent/AGENTS.md'), '# Datadog\n');
-    writeFile(join(repo, 'profiles/datadog/agent/settings.json'), JSON.stringify({ nested: { two: true } }));
+    writeFile(join(profilesRoot, 'datadog/agent/AGENTS.md'), '# Datadog\n');
+    writeFile(join(profilesRoot, 'datadog/agent/settings.json'), JSON.stringify({ nested: { two: true } }));
 
     writeFile(join(local, 'agent/AGENTS.md'), '# Local\n');
     writeFile(join(local, 'agent/settings.json'), JSON.stringify({ localOnly: true }));
 
     const resolved = resolveResourceProfile('datadog', {
       repoRoot: repo,
+      profilesRoot,
       localProfileDir: local,
     });
 
@@ -104,6 +113,7 @@ describe('resources profile loader', () => {
 
   it('ignores top-level extension test files', () => {
     const repo = createTempRepo();
+    const profilesRoot = createTempProfilesRoot();
 
     writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(repo, 'profiles/shared/agent/extensions/sample.ts'), 'export default {}\n');
@@ -113,6 +123,7 @@ describe('resources profile loader', () => {
 
     const resolved = resolveResourceProfile('shared', {
       repoRoot: repo,
+      profilesRoot,
       localProfileDir: join(repo, '.local-profile'),
     });
 
@@ -124,6 +135,7 @@ describe('resources profile loader', () => {
 
   it('discovers extension dependency directories for nested extension packages', () => {
     const repo = createTempRepo();
+    const profilesRoot = createTempProfilesRoot();
 
     writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(repo, 'profiles/shared/agent/extensions/basic/index.ts'), 'export default {}\n');
@@ -132,7 +144,11 @@ describe('resources profile loader', () => {
       version: '1.0.0',
     }));
 
-    const resolved = resolveResourceProfile('shared', { repoRoot: repo });
+    const resolved = resolveResourceProfile('shared', {
+      repoRoot: repo,
+      profilesRoot,
+      localProfileDir: join(repo, '.local-profile'),
+    });
     const dependencyDirs = getExtensionDependencyDirs(resolved);
 
     expect(dependencyDirs).toEqual([
@@ -142,13 +158,15 @@ describe('resources profile loader', () => {
 
   it('layers shared and profile skills for datadog even without overlay AGENTS.md', () => {
     const repo = createTempRepo();
+    const profilesRoot = createTempProfilesRoot();
 
     writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(repo, 'profiles/shared/agent/skills/shared-skill/SKILL.md'), '# Shared Skill\n');
-    writeFile(join(repo, 'profiles/datadog/agent/skills/dd-skill/SKILL.md'), '# Datadog Skill\n');
+    writeFile(join(profilesRoot, 'datadog/agent/skills/dd-skill/SKILL.md'), '# Datadog Skill\n');
 
     const resolved = resolveResourceProfile('datadog', {
       repoRoot: repo,
+      profilesRoot,
       localProfileDir: join(repo, '.local-profile'),
     });
 
@@ -156,7 +174,7 @@ describe('resources profile loader', () => {
     expect(resolved.agentsFiles).toEqual([join(repo, 'profiles/shared/agent/AGENTS.md')]);
     expect(resolved.skillDirs).toEqual([
       join(repo, 'profiles/shared/agent/skills'),
-      join(repo, 'profiles/datadog/agent/skills'),
+      join(profilesRoot, 'datadog/agent/skills'),
     ]);
 
     const args = buildPiResourceArgs(resolved);
@@ -167,18 +185,23 @@ describe('resources profile loader', () => {
 
     expect(skillArgs).toEqual([
       join(repo, 'profiles/shared/agent/skills'),
-      join(repo, 'profiles/datadog/agent/skills'),
+      join(profilesRoot, 'datadog/agent/skills'),
     ]);
   });
 
   it('includes repo-provided internal skills alongside profile skills', () => {
     const repo = createTempRepo();
+    const profilesRoot = createTempProfilesRoot();
 
     writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(repo, 'profiles/shared/agent/skills/shared-skill/SKILL.md'), '# Shared Skill\n');
     writeFile(join(repo, 'skills/pa-project-hub/SKILL.md'), '# Internal Skill\n');
 
-    const resolved = resolveResourceProfile('shared', { repoRoot: repo });
+    const resolved = resolveResourceProfile('shared', {
+      repoRoot: repo,
+      profilesRoot,
+      localProfileDir: join(repo, '.local-profile'),
+    });
 
     expect(resolved.skillDirs).toEqual([
       join(repo, 'profiles/shared/agent/skills'),
@@ -244,6 +267,7 @@ describe('resources profile loader', () => {
 
   it('materializes merged files into runtime agent dir', () => {
     const repo = createTempRepo();
+    const profilesRoot = createTempProfilesRoot();
     const runtime = mkdtempSync(join(tmpdir(), 'personal-agent-runtime-'));
     tempDirs.push(runtime);
 
@@ -251,21 +275,26 @@ describe('resources profile loader', () => {
     writeFile(join(repo, 'profiles/shared/agent/APPEND_SYSTEM.md'), 'shared append\n');
     writeFile(join(repo, 'profiles/shared/agent/settings.json'), JSON.stringify({ shared: true }));
     writeFile(join(repo, 'profiles/shared/agent/models.json'), JSON.stringify({ providers: { a: {} } }));
+    writeFile(join(repo, 'prompt-catalog/system/00-role.md'), 'catalog role\n');
 
-    writeFile(join(repo, 'profiles/datadog/agent/AGENTS.md'), '# Datadog\n');
-    writeFile(join(repo, 'profiles/datadog/agent/settings.json'), JSON.stringify({ datadog: true }));
+    writeFile(join(profilesRoot, 'datadog/agent/AGENTS.md'), '# Datadog\n');
+    writeFile(join(profilesRoot, 'datadog/agent/settings.json'), JSON.stringify({ datadog: true }));
 
-    const resolved = resolveResourceProfile('datadog', { repoRoot: repo });
+    const resolved = resolveResourceProfile('datadog', { repoRoot: repo, profilesRoot });
     const result = materializeProfileToAgentDir(resolved, runtime);
 
     expect(result.writtenFiles.length).toBeGreaterThan(0);
     expect(result.writtenFiles.some((path) => path.endsWith('/AGENTS.md'))).toBe(true);
+    expect(result.writtenFiles.some((path) => path.endsWith('/APPEND_SYSTEM.md'))).toBe(true);
     expect(result.writtenFiles.some((path) => path.endsWith('/settings.json'))).toBe(true);
     expect(result.writtenFiles.some((path) => path.endsWith('/models.json'))).toBe(true);
+    expect(readFileSync(join(runtime, 'APPEND_SYSTEM.md'), 'utf-8')).toContain('catalog role');
+    expect(readFileSync(join(runtime, 'APPEND_SYSTEM.md'), 'utf-8')).toContain('shared append');
   });
 
   it('preserves runtime lastChangelogVersion over profile value', () => {
     const repo = createTempRepo();
+    const profilesRoot = createTempProfilesRoot();
     const runtime = mkdtempSync(join(tmpdir(), 'personal-agent-runtime-'));
     tempDirs.push(runtime);
 
@@ -280,7 +309,11 @@ describe('resources profile loader', () => {
       JSON.stringify({ theme: 'cobalt2', lastChangelogVersion: '0.52.9' }),
     );
 
-    const resolved = resolveResourceProfile('shared', { repoRoot: repo });
+    const resolved = resolveResourceProfile('shared', {
+      repoRoot: repo,
+      profilesRoot,
+      localProfileDir: join(repo, '.local-profile'),
+    });
     materializeProfileToAgentDir(resolved, runtime);
 
     const settings = JSON.parse(readFileSync(join(runtime, 'settings.json'), 'utf-8')) as Record<string, unknown>;
@@ -291,18 +324,20 @@ describe('resources profile loader', () => {
 
   it('installs package sources into the selected target settings file', () => {
     const repo = createTempRepo();
+    const profilesRoot = createTempProfilesRoot();
     const local = mkdtempSync(join(tmpdir(), 'personal-agent-local-'));
     tempDirs.push(local);
 
     writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(repo, 'profiles/assistant/agent/AGENTS.md'), '# Assistant\n');
+    writeFile(join(profilesRoot, 'assistant/agent/AGENTS.md'), '# Assistant\n');
     writeFile(
-      join(repo, 'profiles/assistant/agent/settings.json'),
+      join(profilesRoot, 'assistant/agent/settings.json'),
       JSON.stringify({ packages: ['/existing-package'] }),
     );
 
     const profileInstall = installPackageSource({
       repoRoot: repo,
+      profilesRoot,
       localProfileDir: local,
       profileName: 'assistant',
       source: 'https://github.com/davebcn87/pi-autoresearch',
@@ -312,9 +347,9 @@ describe('resources profile loader', () => {
 
     expect(profileInstall.installed).toBe(true);
     expect(profileInstall.alreadyPresent).toBe(false);
-    expect(profileInstall.settingsPath).toBe(join(repo, 'profiles/assistant/agent/settings.json'));
+    expect(profileInstall.settingsPath).toBe(join(profilesRoot, 'assistant/agent/settings.json'));
 
-    const profileState = readPackageSourceTargetState('profile', 'assistant', { repoRoot: repo, localProfileDir: local });
+    const profileState = readPackageSourceTargetState('profile', 'assistant', { repoRoot: repo, profilesRoot, localProfileDir: local });
     expect(profileState.packages).toEqual([
       { source: '/existing-package', filtered: false },
       { source: 'https://github.com/davebcn87/pi-autoresearch', filtered: false },
@@ -331,7 +366,7 @@ describe('resources profile loader', () => {
     expect(localInstall.installed).toBe(true);
     expect(localInstall.settingsPath).toBe(resolveLocalProfileSettingsFilePath({ localProfileDir: local }));
 
-    const localState = readPackageSourceTargetState('local', { repoRoot: repo, localProfileDir: local });
+    const localState = readPackageSourceTargetState('local', { repoRoot: repo, profilesRoot, localProfileDir: local });
     expect(localState.packages).toEqual([
       { source: join(repo, 'local-package'), filtered: false },
     ]);
@@ -339,11 +374,12 @@ describe('resources profile loader', () => {
 
   it('treats filtered package entries as already configured when sources match', () => {
     const repo = createTempRepo();
+    const profilesRoot = createTempProfilesRoot();
 
     writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(repo, 'profiles/assistant/agent/AGENTS.md'), '# Assistant\n');
+    writeFile(join(profilesRoot, 'assistant/agent/AGENTS.md'), '# Assistant\n');
     writeFile(
-      join(repo, 'profiles/assistant/agent/settings.json'),
+      join(profilesRoot, 'assistant/agent/settings.json'),
       JSON.stringify({
         packages: [
           {
@@ -356,6 +392,7 @@ describe('resources profile loader', () => {
 
     const result = installPackageSource({
       repoRoot: repo,
+      profilesRoot,
       profileName: 'assistant',
       source: 'https://github.com/davebcn87/pi-autoresearch',
       target: 'profile',
@@ -366,13 +403,14 @@ describe('resources profile loader', () => {
     expect(result.alreadyPresent).toBe(true);
 
     const settings = JSON.parse(
-      readFileSync(join(repo, 'profiles/assistant/agent/settings.json'), 'utf-8'),
+      readFileSync(join(profilesRoot, 'assistant/agent/settings.json'), 'utf-8'),
     ) as { packages: Array<Record<string, unknown>> };
     expect(settings.packages).toHaveLength(1);
   });
 
   it('drops profile-provided lastChangelogVersion when runtime value is missing', () => {
     const repo = createTempRepo();
+    const profilesRoot = createTempProfilesRoot();
     const runtime = mkdtempSync(join(tmpdir(), 'personal-agent-runtime-'));
     tempDirs.push(runtime);
 
@@ -382,7 +420,11 @@ describe('resources profile loader', () => {
       JSON.stringify({ theme: 'cobalt2', lastChangelogVersion: '0.52.9' }),
     );
 
-    const resolved = resolveResourceProfile('shared', { repoRoot: repo });
+    const resolved = resolveResourceProfile('shared', {
+      repoRoot: repo,
+      profilesRoot,
+      localProfileDir: join(repo, '.local-profile'),
+    });
     materializeProfileToAgentDir(resolved, runtime);
 
     const settings = JSON.parse(readFileSync(join(runtime, 'settings.json'), 'utf-8')) as Record<string, unknown>;
@@ -392,6 +434,7 @@ describe('resources profile loader', () => {
 
   it('removes stale runtime files when profile no longer provides them', () => {
     const repo = createTempRepo();
+    const profilesRoot = createTempProfilesRoot();
     const runtime = mkdtempSync(join(tmpdir(), 'personal-agent-runtime-'));
     tempDirs.push(runtime);
 
@@ -399,7 +442,11 @@ describe('resources profile loader', () => {
 
     writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
 
-    const resolved = resolveResourceProfile('shared', { repoRoot: repo });
+    const resolved = resolveResourceProfile('shared', {
+      repoRoot: repo,
+      profilesRoot,
+      localProfileDir: join(repo, '.local-profile'),
+    });
     materializeProfileToAgentDir(resolved, runtime);
 
     expect(existsSync(join(runtime, 'SYSTEM.md'))).toBe(false);
@@ -407,13 +454,18 @@ describe('resources profile loader', () => {
 
   it('builds pi args from resource directories', () => {
     const repo = createTempRepo();
+    const profilesRoot = createTempProfilesRoot();
     writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(repo, 'profiles/shared/agent/extensions/index.ts'), 'export default {}\n');
     writeFile(join(repo, 'profiles/shared/agent/skills/test/SKILL.md'), '# Skill\n');
     writeFile(join(repo, 'profiles/shared/agent/prompts/review.md'), 'review\n');
     writeFile(join(repo, 'profiles/shared/agent/themes/theme.json'), '{}\n');
 
-    const resolved = resolveResourceProfile('shared', { repoRoot: repo });
+    const resolved = resolveResourceProfile('shared', {
+      repoRoot: repo,
+      profilesRoot,
+      localProfileDir: join(repo, '.local-profile'),
+    });
     const args = buildPiResourceArgs(resolved);
 
     expect(args).toContain('--no-extensions');

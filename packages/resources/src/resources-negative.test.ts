@@ -3,7 +3,7 @@
  * Tests for malformed profile structures, missing files, and edge cases
  */
 
-import { mkdtempSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
@@ -20,6 +20,12 @@ const tempDirs: string[] = [];
 
 function createTempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
+  tempDirs.push(dir);
+  return dir;
+}
+
+function createTempProfilesRoot(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'personal-agent-profiles-'));
   tempDirs.push(dir);
   return dir;
 }
@@ -63,12 +69,14 @@ describe('resources negative tests', () => {
 
     it('handles profile with empty extension directory', () => {
       const repo = createTempDir('personal-agent-resources-');
+      const profilesRoot = createTempProfilesRoot();
       const extensionsDir = join(repo, 'profiles/shared/agent/extensions');
       mkdirSync(extensionsDir, { recursive: true });
       writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
 
       const resolved = resolveResourceProfile('shared', {
         repoRoot: repo,
+        profilesRoot,
         localProfileDir: join(repo, '.local-profile'),
       });
 
@@ -78,12 +86,14 @@ describe('resources negative tests', () => {
 
     it('handles profile with empty skills directory', () => {
       const repo = createTempDir('personal-agent-resources-');
+      const profilesRoot = createTempProfilesRoot();
       const skillsDir = join(repo, 'profiles/shared/agent/skills');
       mkdirSync(skillsDir, { recursive: true });
       writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
 
       const resolved = resolveResourceProfile('shared', {
         repoRoot: repo,
+        profilesRoot,
         localProfileDir: join(repo, '.local-profile'),
       });
 
@@ -137,23 +147,50 @@ describe('resources negative tests', () => {
   describe('materializeProfileToAgentDir edge cases', () => {
     it('handles empty profile resolution', () => {
       const repo = createTempDir('personal-agent-resources-');
+      const profilesRoot = createTempProfilesRoot();
       const runtime = createTempDir('personal-agent-runtime-');
 
       writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
 
-      const resolved = resolveResourceProfile('shared', { repoRoot: repo });
+      const resolved = resolveResourceProfile('shared', {
+        repoRoot: repo,
+        profilesRoot,
+        localProfileDir: join(repo, '.local-profile'),
+      });
       const result = materializeProfileToAgentDir(resolved, runtime);
 
       expect(result.writtenFiles.length).toBeGreaterThan(0);
     });
 
+    it('does not create APPEND_SYSTEM when neither prompt catalog system sections nor append files exist', () => {
+      const repo = createTempDir('personal-agent-resources-');
+      const profilesRoot = createTempProfilesRoot();
+      const runtime = createTempDir('personal-agent-runtime-');
+
+      writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+
+      const resolved = resolveResourceProfile('shared', {
+        repoRoot: repo,
+        profilesRoot,
+        localProfileDir: join(repo, '.local-profile'),
+      });
+      materializeProfileToAgentDir(resolved, runtime);
+
+      expect(existsSync(join(runtime, 'APPEND_SYSTEM.md'))).toBe(false);
+    });
+
     it('handles runtime directory that does not exist', () => {
       const repo = createTempDir('personal-agent-resources-');
+      const profilesRoot = createTempProfilesRoot();
       const runtime = join(createTempDir('personal-agent-parent-'), 'nested', 'runtime');
 
       writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
 
-      const resolved = resolveResourceProfile('shared', { repoRoot: repo });
+      const resolved = resolveResourceProfile('shared', {
+        repoRoot: repo,
+        profilesRoot,
+        localProfileDir: join(repo, '.local-profile'),
+      });
       const result = materializeProfileToAgentDir(resolved, runtime);
 
       expect(result.writtenFiles.length).toBeGreaterThan(0);
@@ -161,12 +198,17 @@ describe('resources negative tests', () => {
 
     it('preserves existing files not managed by profile', () => {
       const repo = createTempDir('personal-agent-resources-');
+      const profilesRoot = createTempProfilesRoot();
       const runtime = createTempDir('personal-agent-runtime-');
 
       writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
       writeFile(join(runtime, 'UNRELATED.md'), 'should be preserved\n');
 
-      const resolved = resolveResourceProfile('shared', { repoRoot: repo });
+      const resolved = resolveResourceProfile('shared', {
+        repoRoot: repo,
+        profilesRoot,
+        localProfileDir: join(repo, '.local-profile'),
+      });
       materializeProfileToAgentDir(resolved, runtime);
 
       // The unrelated file should be removed (current behavior is to clear runtime dir)
@@ -177,51 +219,70 @@ describe('resources negative tests', () => {
   describe('listProfiles edge cases', () => {
     it('returns empty array when profiles directory does not exist', () => {
       const repo = createTempDir('personal-agent-resources-');
+      const profilesRoot = createTempProfilesRoot();
 
-      const profiles = listProfiles({ repoRoot: repo });
+      const profiles = listProfiles({ repoRoot: repo, profilesRoot });
       expect(profiles).toEqual([]);
     });
 
     it('returns empty array when profiles directory is empty', () => {
       const repo = createTempDir('personal-agent-resources-');
-      mkdirSync(join(repo, 'profiles'), { recursive: true });
+      const profilesRoot = createTempProfilesRoot();
 
-      const profiles = listProfiles({ repoRoot: repo });
+      const profiles = listProfiles({ repoRoot: repo, profilesRoot });
       expect(profiles).toEqual([]);
     });
 
     it('ignores profiles without agent directory', () => {
       const repo = createTempDir('personal-agent-resources-');
-      mkdirSync(join(repo, 'profiles/invalid-profile'), { recursive: true });
+      const profilesRoot = createTempProfilesRoot();
+      mkdirSync(join(profilesRoot, 'invalid-profile'), { recursive: true });
       // No agent subdirectory
 
-      const profiles = listProfiles({ repoRoot: repo });
+      const profiles = listProfiles({ repoRoot: repo, profilesRoot });
       expect(profiles).toEqual([]);
     });
 
     it('includes profiles with agent directory even without AGENTS.md', () => {
       const repo = createTempDir('personal-agent-resources-');
-      mkdirSync(join(repo, 'profiles/incomplete/agent'), { recursive: true });
+      const profilesRoot = createTempProfilesRoot();
+      mkdirSync(join(profilesRoot, 'incomplete/agent'), { recursive: true });
 
-      const profiles = listProfiles({ repoRoot: repo });
+      const profiles = listProfiles({ repoRoot: repo, profilesRoot });
       expect(profiles).toEqual(['incomplete']);
     });
 
     it('handles profiles with special characters in name (valid)', () => {
       const repo = createTempDir('personal-agent-resources-');
-      writeFile(join(repo, 'profiles/test-profile_v2/agent/AGENTS.md'), '# Test\n');
+      const profilesRoot = createTempProfilesRoot();
+      writeFile(join(profilesRoot, 'test-profile_v2/agent/AGENTS.md'), '# Test\n');
 
-      const profiles = listProfiles({ repoRoot: repo });
+      const profiles = listProfiles({ repoRoot: repo, profilesRoot });
       expect(profiles).toContain('test-profile_v2');
+    });
+
+    it('ignores repo-managed non-shared profiles', () => {
+      const repo = createTempDir('personal-agent-resources-');
+      const profilesRoot = createTempProfilesRoot();
+      writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+      writeFile(join(repo, 'profiles/datadog/agent/AGENTS.md'), '# Datadog\n');
+
+      const profiles = listProfiles({ repoRoot: repo, profilesRoot });
+      expect(profiles).toEqual(['shared']);
     });
   });
 
   describe('buildPiResourceArgs edge cases', () => {
     it('handles profile with no resource directories', () => {
       const repo = createTempDir('personal-agent-resources-');
+      const profilesRoot = createTempProfilesRoot();
       writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
 
-      const resolved = resolveResourceProfile('shared', { repoRoot: repo });
+      const resolved = resolveResourceProfile('shared', {
+        repoRoot: repo,
+        profilesRoot,
+        localProfileDir: join(repo, '.local-profile'),
+      });
       // Manually clear resource dirs
       const emptyResolved = {
         ...resolved,
@@ -239,11 +300,16 @@ describe('resources negative tests', () => {
 
     it('handles multiple extensions', () => {
       const repo = createTempDir('personal-agent-resources-');
+      const profilesRoot = createTempProfilesRoot();
       writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
       writeFile(join(repo, 'profiles/shared/agent/extensions/ext1/index.ts'), 'export default {}');
       writeFile(join(repo, 'profiles/shared/agent/extensions/ext2/index.ts'), 'export default {}');
 
-      const resolved = resolveResourceProfile('shared', { repoRoot: repo });
+      const resolved = resolveResourceProfile('shared', {
+        repoRoot: repo,
+        profilesRoot,
+        localProfileDir: join(repo, '.local-profile'),
+      });
       const args = buildPiResourceArgs(resolved);
 
       // Should have extension args

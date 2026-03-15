@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { completeSimple, type Api, type Model, type ThinkingLevel } from '@mariozechner/pi-ai';
 import { AuthStorage, ModelRegistry } from '@mariozechner/pi-coding-agent';
+import { requirePromptCatalogEntry } from '@personal-agent/resources';
 import type { ProjectDetail, ProjectLinkedConversation } from './projects.js';
 
 const DEFAULT_PROVIDER = 'openai-codex';
@@ -181,12 +182,7 @@ export async function generateProjectBrief(options: {
   const response = await completeSimple(
     model,
     {
-      systemPrompt: [
-        'You write high-signal project briefs for an engineering assistant.',
-        'Return markdown only with no code fences.',
-        'Write a durable brief that helps future conversations pick up the work quickly.',
-        'Use concise sections and include only facts supported by the provided project context.',
-      ].join(' '),
+      systemPrompt: requirePromptCatalogEntry('utilities/project-brief.md'),
       messages: [
         {
           role: 'user',

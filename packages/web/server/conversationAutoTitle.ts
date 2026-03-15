@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { completeSimple, type Api, type Model, type ThinkingLevel } from '@mariozechner/pi-ai';
+import { requirePromptCatalogEntry } from '@personal-agent/resources';
 
 const DEFAULT_PROVIDER = 'openai-codex';
 const DEFAULT_MODEL = 'gpt-5.1-codex-mini';
@@ -301,7 +302,7 @@ export async function generateConversationTitle(options: {
   const response = await completeSimple(
     model,
     {
-      systemPrompt: 'You write concise, specific titles for assistant conversations. Focus on the concrete task or outcome. Return only the title with no quotes or markdown.',
+      systemPrompt: requirePromptCatalogEntry('utilities/conversation-title.md'),
       messages: [
         {
           role: 'user',

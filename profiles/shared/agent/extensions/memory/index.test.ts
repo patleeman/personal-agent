@@ -50,7 +50,7 @@ describe('memory extension', () => {
         systemPrompt: 'BASE_SYSTEM_PROMPT',
       },
       { cwd: repoRoot },
-    ) as { systemPrompt?: string } | undefined;
+    ) as { systemPrompt?: string; message?: { customType?: string; content?: string; display?: boolean } } | undefined;
 
     expect(result?.systemPrompt).toContain('MEMORY_POLICY');
     expect(result?.systemPrompt).toContain('- active_profile: datadog');
@@ -60,11 +60,14 @@ describe('memory extension', () => {
     expect(result?.systemPrompt).toContain('- Scheduled tasks dir: profiles/datadog/agent/tasks');
     expect(result?.systemPrompt).toContain('- Memory dir: profiles/datadog/agent/memory');
     expect(result?.systemPrompt).toContain('Use profile-local AGENTS.md, skills, and memory docs as the durable memory system.');
-    expect(result?.systemPrompt).toContain('pa memory list --profile datadog');
-    expect(result?.systemPrompt).toContain('pa memory find --profile datadog --text <query>');
-    expect(result?.systemPrompt).toContain('pa memory show <id> --profile datadog');
-    expect(result?.systemPrompt).toContain('Use CLI discovery first, then use the read tool on the exact file before editing.');
-    expect(result?.systemPrompt).toContain('Do not write durable memory into profiles/shared/agent/AGENTS.md.');
+    expect(result?.systemPrompt).not.toContain('pa memory list --profile datadog');
+    expect(result?.message?.customType).toBe('memory-operations-reminder');
+    expect(result?.message?.display).toBe(false);
+    expect(result?.message?.content).toContain('SYSTEM_REMINDER: This request touches durable memory or profile behavior.');
+    expect(result?.message?.content).toContain('pa memory list --profile datadog');
+    expect(result?.message?.content).toContain('pa memory find --profile datadog --text <query>');
+    expect(result?.message?.content).toContain('pa memory show <id> --profile datadog');
+    expect(result?.message?.content).toContain('Use the active profile targets already present in system context.');
   });
 
   it('falls back to shared when requested profile directory is missing', async () => {
@@ -92,7 +95,7 @@ describe('memory extension', () => {
         systemPrompt: 'BASE_SYSTEM_PROMPT',
       },
       { cwd: repoRoot },
-    ) as { systemPrompt?: string } | undefined;
+    ) as { systemPrompt?: string; message?: { content?: string } } | undefined;
 
     expect(result?.systemPrompt).toContain('- active_profile: shared');
     expect(result?.systemPrompt).toContain('- requested_profile: missing-profile');
@@ -100,8 +103,8 @@ describe('memory extension', () => {
     expect(result?.systemPrompt).toContain('- AGENTS.md edit target: none (shared profile does not use AGENTS.md)');
     expect(result?.systemPrompt).toContain('- Scheduled tasks dir: none (shared profile does not use profile task dir)');
     expect(result?.systemPrompt).toContain('- Memory dir: none (shared profile has no memory dir)');
-    expect(result?.systemPrompt).toContain('Shared profile has no profile-local memory docs.');
     expect(result?.systemPrompt).not.toContain('pa memory list --profile shared');
+    expect(result?.message?.content).toContain('Shared profile has no profile-local memory docs');
   });
 
   it('does not inject memory policy for slash commands or empty prompts', async () => {
@@ -140,6 +143,39 @@ describe('memory extension', () => {
 
     expect(slashResult).toBeUndefined();
     expect(emptyResult).toBeUndefined();
+  });
+
+  it('injects only the lean memory policy for generic prompts', async () => {
+    const repoRoot = createTempDir('memory-repo-');
+    process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
+    process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
+
+    mkdirSync(join(repoRoot, 'profiles', 'shared', 'agent'), { recursive: true });
+    mkdirSync(join(repoRoot, 'profiles', 'datadog', 'agent'), { recursive: true });
+
+    let beforeAgentStartHandler: ((event: { prompt: string; systemPrompt: string }, ctx: { cwd: string }) => Promise<unknown>) | undefined;
+
+    const pi = {
+      on: (eventName: string, handler: unknown) => {
+        if (eventName === 'before_agent_start') {
+          beforeAgentStartHandler = handler as (event: { prompt: string; systemPrompt: string }, ctx: { cwd: string }) => Promise<unknown>;
+        }
+      },
+    };
+
+    memoryExtension(pi as never);
+
+    const result = await beforeAgentStartHandler!(
+      {
+        prompt: 'inspect the gateway prompt behavior',
+        systemPrompt: 'BASE_SYSTEM_PROMPT',
+      },
+      { cwd: repoRoot },
+    ) as { systemPrompt?: string; message?: unknown } | undefined;
+
+    expect(result?.systemPrompt).toContain('MEMORY_POLICY');
+    expect(result?.systemPrompt).not.toContain('pa memory list --profile datadog');
+    expect(result?.message).toBeUndefined();
   });
 
   it('resolves the active memory profile context', () => {

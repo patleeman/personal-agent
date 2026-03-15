@@ -14,10 +14,14 @@ So each extension here uses either a top-level `*.ts` entrypoint or an `index.ts
 
 ```text
 extensions/
+├── _shared/
+│   └── prompt-catalog.ts
 ├── exit-alias.ts
 ├── memory/
 │   └── index.ts
 ├── daemon-run-orchestration-prompt/
+│   └── index.ts
+├── prompt-reminders/
 │   └── index.ts
 ├── web-tools/
 │   └── index.ts
@@ -28,5 +32,6 @@ extensions/
 
 - `/reload` works with this structure.
 - Keep extension entrypoints at exactly one level under `extensions/`.
+- Support files without `index.ts` can live in helper dirs like `_shared/`.
 - Shared lightweight dependencies live in `extensions/package.json`.
 - Heavier extension-specific dependencies should live beside that extension (for example `web-tools/package.json`).
