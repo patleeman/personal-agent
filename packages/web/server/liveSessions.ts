@@ -100,6 +100,22 @@ interface LiveEntry {
 export const registry = new Map<string, LiveEntry>();
 const toolTimings = new Map<string, number>(); // toolCallId → start ms
 
+export function reloadAllLiveSessionAuth(): number {
+  let reloadedCount = 0;
+
+  for (const entry of registry.values()) {
+    const authStorage = entry.session.modelRegistry?.authStorage;
+    if (!authStorage || typeof authStorage.reload !== 'function') {
+      continue;
+    }
+
+    authStorage.reload();
+    reloadedCount += 1;
+  }
+
+  return reloadedCount;
+}
+
 // ── Auth / model helpers ──────────────────────────────────────────────────────
 
 function makeAuth() {

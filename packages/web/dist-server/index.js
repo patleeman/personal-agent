@@ -28,7 +28,7 @@ import { readScheduledTaskFileMetadata, taskBelongsToProfile, } from './schedule
 import { createProjectAgentExtension } from './projectAgentExtension.js';
 import { createArtifactAgentExtension } from './artifactAgentExtension.js';
 import { createDeferredResumeAgentExtension } from './deferredResumeAgentExtension.js';
-import { createSession, createSessionFromExisting, resumeSession, getLiveSessions, getSessionStats, getSessionContextUsage, getAvailableModels, inspectAvailableTools, isLive, subscribe, promptSession, restoreQueuedMessage, queuePromptContext, compactSession, reloadSessionResources, exportSessionHtml, renameSession, abortSession, destroySession, branchSession, forkSession, registry as liveRegistry, } from './liveSessions.js';
+import { createSession, createSessionFromExisting, resumeSession, getLiveSessions, getSessionStats, getSessionContextUsage, getAvailableModels, inspectAvailableTools, isLive, subscribe, promptSession, restoreQueuedMessage, queuePromptContext, compactSession, reloadSessionResources, reloadAllLiveSessionAuth, exportSessionHtml, renameSession, abortSession, destroySession, branchSession, forkSession, registry as liveRegistry, } from './liveSessions.js';
 import { recoverDurableLiveConversations } from './conversationRecovery.js';
 import { createWebLiveConversationRunId, syncWebLiveConversationRun } from './conversationRuns.js';
 import { cancelDurableRun, getDurableRun, getDurableRunLog, listDurableRuns } from './durableRuns.js';
@@ -1729,6 +1729,7 @@ app.patch('/api/provider-auth/:provider/api-key', (req, res) => {
             return;
         }
         const state = setProviderApiKey(AUTH_FILE, provider, apiKey);
+        reloadAllLiveSessionAuth();
         res.json(state);
     }
     catch (err) {
@@ -1747,6 +1748,7 @@ app.delete('/api/provider-auth/:provider', (req, res) => {
             return;
         }
         const state = removeProviderCredential(AUTH_FILE, provider);
+        reloadAllLiveSessionAuth();
         res.json(state);
     }
     catch (err) {
@@ -1787,6 +1789,9 @@ app.get('/api/provider-auth/oauth/:loginId', (req, res) => {
             res.status(404).json({ error: `OAuth login not found: ${loginId}` });
             return;
         }
+        if (login.status === 'completed') {
+            reloadAllLiveSessionAuth();
+        }
         res.json(login);
     }
     catch (err) {
@@ -1810,6 +1815,9 @@ app.post('/api/provider-auth/oauth/:loginId/input', (req, res) => {
             return;
         }
         const login = submitProviderOAuthLoginInput(loginId, value);
+        if (login.status === 'completed') {
+            reloadAllLiveSessionAuth();
+        }
         res.json(login);
     }
     catch (err) {

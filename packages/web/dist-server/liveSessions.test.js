@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ensureSessionFileExists, getLiveSessions, patchSessionManagerPersistence, registry, renameSession, resolvePersistentSessionDir, restoreQueuedMessage, subscribe, toSse, } from './liveSessions.js';
+import { ensureSessionFileExists, getLiveSessions, patchSessionManagerPersistence, registry, reloadAllLiveSessionAuth, renameSession, resolvePersistentSessionDir, restoreQueuedMessage, subscribe, toSse, } from './liveSessions.js';
 import { clearSessionCaches } from './sessions.js';
 const tempDirs = [];
 afterEach(() => {
@@ -11,6 +11,57 @@ afterEach(() => {
     for (const dir of tempDirs.splice(0)) {
         rmSync(dir, { recursive: true, force: true });
     }
+});
+describe('reloadAllLiveSessionAuth', () => {
+    it('reloads auth storage for every live session that exposes a model registry', () => {
+        const firstReload = vi.fn();
+        const secondReload = vi.fn();
+        registry.set('session-1', {
+            sessionId: 'session-1',
+            cwd: '/tmp/workspace-a',
+            listeners: new Set(),
+            title: 'First',
+            autoTitleRequested: false,
+            lastContextUsageJson: null,
+            lastQueueStateJson: null,
+            session: {
+                modelRegistry: {
+                    authStorage: {
+                        reload: firstReload,
+                    },
+                },
+            },
+        });
+        registry.set('session-2', {
+            sessionId: 'session-2',
+            cwd: '/tmp/workspace-b',
+            listeners: new Set(),
+            title: 'Second',
+            autoTitleRequested: false,
+            lastContextUsageJson: null,
+            lastQueueStateJson: null,
+            session: {
+                modelRegistry: {
+                    authStorage: {
+                        reload: secondReload,
+                    },
+                },
+            },
+        });
+        registry.set('session-3', {
+            sessionId: 'session-3',
+            cwd: '/tmp/workspace-c',
+            listeners: new Set(),
+            title: 'Third',
+            autoTitleRequested: false,
+            lastContextUsageJson: null,
+            lastQueueStateJson: null,
+            session: {},
+        });
+        expect(reloadAllLiveSessionAuth()).toBe(2);
+        expect(firstReload).toHaveBeenCalledTimes(1);
+        expect(secondReload).toHaveBeenCalledTimes(1);
+    });
 });
 describe('live session subscriptions', () => {
     it('replays a snapshot of the current live conversation before future events', () => {

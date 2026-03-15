@@ -21,6 +21,18 @@ export function resolvePersistentSessionDir(cwd) {
 }
 export const registry = new Map();
 const toolTimings = new Map(); // toolCallId → start ms
+export function reloadAllLiveSessionAuth() {
+    let reloadedCount = 0;
+    for (const entry of registry.values()) {
+        const authStorage = entry.session.modelRegistry?.authStorage;
+        if (!authStorage || typeof authStorage.reload !== 'function') {
+            continue;
+        }
+        authStorage.reload();
+        reloadedCount += 1;
+    }
+    return reloadedCount;
+}
 // ── Auth / model helpers ──────────────────────────────────────────────────────
 function makeAuth() {
     return AuthStorage.create(join(AGENT_DIR, 'auth.json'));

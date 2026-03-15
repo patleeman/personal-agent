@@ -97,6 +97,7 @@ import {
   queuePromptContext,
   compactSession,
   reloadSessionResources,
+  reloadAllLiveSessionAuth,
   exportSessionHtml,
   renameSession,
   abortSession,
@@ -2168,6 +2169,7 @@ app.patch('/api/provider-auth/:provider/api-key', (req, res) => {
     }
 
     const state = setProviderApiKey(AUTH_FILE, provider, apiKey);
+    reloadAllLiveSessionAuth();
     res.json(state);
   } catch (err) {
     logError('request handler error', {
@@ -2187,6 +2189,7 @@ app.delete('/api/provider-auth/:provider', (req, res) => {
     }
 
     const state = removeProviderCredential(AUTH_FILE, provider);
+    reloadAllLiveSessionAuth();
     res.json(state);
   } catch (err) {
     logError('request handler error', {
@@ -2230,6 +2233,10 @@ app.get('/api/provider-auth/oauth/:loginId', (req, res) => {
       return;
     }
 
+    if (login.status === 'completed') {
+      reloadAllLiveSessionAuth();
+    }
+
     res.json(login);
   } catch (err) {
     logError('request handler error', {
@@ -2256,6 +2263,9 @@ app.post('/api/provider-auth/oauth/:loginId/input', (req, res) => {
     }
 
     const login = submitProviderOAuthLoginInput(loginId, value);
+    if (login.status === 'completed') {
+      reloadAllLiveSessionAuth();
+    }
     res.json(login);
   } catch (err) {
     logError('request handler error', {
