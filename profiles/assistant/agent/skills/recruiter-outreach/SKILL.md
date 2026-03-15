@@ -13,8 +13,7 @@ From the repo root (`/Users/patrick/workingdir/personal-agent`), run:
 
 ```bash
 FASTMAIL_SECRET_RESOLVER="sdk-only" \
-FASTMAIL_API_KEY_OP_REF="op://Assistant/FASTMAIL_API_KEY/password" \
-FASTMAIL_APP_PASSWORD_OP_REF="op://Assistant/FASTMAIL_API_KEY/password" \
+FASTMAIL_APP_PASSWORD_OP_REF="op://Assistant/FASTMAIL_APP_PASSWORD/password" \
 FASTMAIL_USERNAME="me@patricklee.nyc" \
 profiles/assistant/agent/tasks/scripts/recruiter-outreach.sh
 ```
@@ -29,7 +28,7 @@ Optional flags:
 - Default window: the previous local calendar day in `America/New_York`.
 - The script appends new recruiter-like messages to `~/.local/state/personal-agent/recruiter-outreach/recruiter_outreach.jsonl`.
 - The script prints a compact sync summary with counts and up to 15 new records.
-- Secret resolution is already built into the script; prefer the Fastmail env vars shown above.
+- Secret resolution is already built into the script; prefer `FASTMAIL_APP_PASSWORD_OP_REF` for IMAP auth. The script still falls back through legacy `FASTMAIL_API_KEY*` env vars/references if needed.
 
 ## Reporting
 
