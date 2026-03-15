@@ -1,6 +1,15 @@
 import type { FormEventHandler, ReactNode } from 'react';
 import { formatProjectStatus } from '../contextRailProject';
 import type { ProjectFile, ProjectMilestone, ProjectNote, ProjectTask } from '../types';
+import {
+  type FileUploadState,
+  type MilestoneFormState,
+  type NoteFormState,
+  type ProjectMilestoneEditorState,
+  type ProjectTaskEditorState,
+  type ProjectFormState,
+  type TaskFormState,
+} from './projectDetailState';
 import { timeAgo } from '../utils';
 import { Pill, ToolbarButton, cx, type PillTone } from './ui';
 
@@ -9,58 +18,6 @@ const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[132px] resize-y`;
 const SELECT_CLASS = `${INPUT_CLASS} pr-10`;
 const ACTION_BUTTON_CLASS = 'text-[12px] text-accent hover:text-accent/70 transition-colors disabled:opacity-40';
 const STATUS_ACTION_BUTTON_CLASS = 'rounded-full border px-2.5 py-1 text-[11px] font-medium capitalize transition-colors disabled:opacity-40';
-
-interface ProjectFormStateShape {
-  title: string;
-  description: string;
-  repoRoot: string;
-  summary: string;
-  goal: string;
-  acceptanceCriteria: string;
-  planSummary: string;
-  completionSummary: string;
-  status: string;
-  currentFocus: string;
-  blockers: string;
-  recentProgress: string;
-}
-
-interface MilestoneFormStateShape {
-  title: string;
-  status: string;
-  summary: string;
-  makeCurrent: boolean;
-}
-
-interface TaskFormStateShape {
-  title: string;
-  status: string;
-  milestoneId: string;
-}
-
-interface NoteFormStateShape {
-  title: string;
-  kind: string;
-  body: string;
-}
-
-interface FileUploadStateShape {
-  kind: 'attachment' | 'artifact';
-  title: string;
-  description: string;
-  file: File | null;
-}
-
-interface TaskEditorShapeAdd {
-  mode: 'add';
-  anchorMilestoneId?: string;
-}
-
-interface TaskEditorShapeEdit {
-  mode: 'edit';
-  taskId: string;
-  anchorMilestoneId?: string;
-}
 
 function toneForStatus(status: string): PillTone {
   switch (status) {
@@ -124,11 +81,11 @@ export function ProjectRecordEditorForm({
   onSubmit,
   onCancel,
 }: {
-  value: ProjectFormStateShape;
+  value: ProjectFormState;
   statuses: string[];
   busy: boolean;
   error: string | null;
-  onChange: (patch: Partial<ProjectFormStateShape>) => void;
+  onChange: (patch: Partial<ProjectFormState>) => void;
   onSubmit: FormEventHandler<HTMLFormElement>;
   onCancel: () => void;
 }) {
@@ -254,12 +211,12 @@ export function ProjectMilestoneEditorForm({
   onSubmit,
   showDivider = true,
 }: {
-  editor: { mode: 'add' } | { mode: 'edit'; milestoneId: string };
-  value: MilestoneFormStateShape;
+  editor: ProjectMilestoneEditorState;
+  value: MilestoneFormState;
   statuses: string[];
   busy: boolean;
   error: string | null;
-  onChange: (patch: Partial<MilestoneFormStateShape>) => void;
+  onChange: (patch: Partial<MilestoneFormState>) => void;
   onCancel: () => void;
   onSubmit: FormEventHandler<HTMLFormElement>;
   showDivider?: boolean;
@@ -319,13 +276,13 @@ export function ProjectTaskEditorForm({
   onCancel,
   onSubmit,
 }: {
-  editor: TaskEditorShapeAdd | TaskEditorShapeEdit;
-  value: TaskFormStateShape;
+  editor: ProjectTaskEditorState;
+  value: TaskFormState;
   milestones: ProjectMilestone[];
   statuses: string[];
   error: string | null;
   busy: boolean;
-  onChange: (patch: Partial<TaskFormStateShape>) => void;
+  onChange: (patch: Partial<TaskFormState>) => void;
   onCancel: () => void;
   onSubmit: FormEventHandler<HTMLFormElement>;
 }) {
@@ -485,7 +442,7 @@ export function ProjectMilestoneRow({
   quickStatuses: string[];
   taskBusy: boolean;
   milestoneTasks: ProjectTask[];
-  taskEditor: TaskEditorShapeAdd | TaskEditorShapeEdit | null;
+  taskEditor: ProjectTaskEditorState | null;
   taskEditorForm: ReactNode;
   onMove: (direction: 'up' | 'down') => void;
   onMakeCurrent: () => void;
@@ -590,11 +547,11 @@ export function ProjectNoteEditorForm({
   onSubmit,
 }: {
   editor: { mode: 'add' } | { mode: 'edit'; noteId: string };
-  value: NoteFormStateShape;
+  value: NoteFormState;
   kinds: string[];
   error: string | null;
   busy: boolean;
-  onChange: (patch: Partial<NoteFormStateShape>) => void;
+  onChange: (patch: Partial<NoteFormState>) => void;
   onCancel: () => void;
   onSubmit: FormEventHandler<HTMLFormElement>;
 }) {
@@ -675,10 +632,10 @@ export function ProjectFileUploadForm({
   onChange,
   onSubmit,
 }: {
-  value: FileUploadStateShape;
+  value: FileUploadState;
   error: string | null;
   busy: boolean;
-  onChange: (patch: Partial<FileUploadStateShape>) => void;
+  onChange: (patch: Partial<FileUploadState>) => void;
   onSubmit: FormEventHandler<HTMLFormElement>;
 }) {
   return (
