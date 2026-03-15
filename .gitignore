@@ -10,6 +10,7 @@ profiles/**/node_modules/
 dist/
 *.tsbuildinfo
 packages/*/dist/
+packages/*/dist-server/
 profiles/**/dist/
 profiles/**/build/
 

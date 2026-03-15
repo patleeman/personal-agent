@@ -15,7 +15,7 @@
     "pa": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc --build",
+    "build": "tsc --build --force && chmod +x dist/index.js",
     "lint": "eslint src --ext .ts",
     "test": "vitest run",
     "clean": "rm -rf dist tsconfig.tsbuildinfo"

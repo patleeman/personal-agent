@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "build": "npm run build:ts && npm run build:web",
-    "build:ts": "tsc --build",
+    "build:ts": "tsc --build --force && node scripts/verify-build-artifacts.mjs",
     "build:web": "npm --prefix packages/web run build",
     "lint": "eslint packages --ext .ts",
     "test": "vitest run",
