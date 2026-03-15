@@ -111,6 +111,73 @@ describe('project agent extension', () => {
     expect(link?.relatedProjectIds ?? []).toEqual([]);
   });
 
+  it('creates, lists, gets, and updates projects', async () => {
+    const repoRoot = createTempRepo();
+    const stateRoot = join(repoRoot, '.state');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const projectTool = registerProjectTool(repoRoot, stateRoot);
+
+    const created = await projectTool.execute(
+      'tool-1',
+      {
+        action: 'create',
+        title: 'Artifact model',
+        description: 'Build the artifact model.',
+        summary: 'Initial scaffold',
+        status: 'in_progress',
+      },
+      undefined,
+      undefined,
+      createToolContext(),
+    );
+
+    expect(created.isError).not.toBe(true);
+    expect(created.content[0]?.text).toContain('Created project @artifact-model');
+
+    const listed = await projectTool.execute(
+      'tool-2',
+      { action: 'list' },
+      undefined,
+      undefined,
+      createToolContext(),
+    );
+    expect(listed.content[0]?.text).toContain('@artifact-model');
+
+    const fetched = await projectTool.execute(
+      'tool-3',
+      { action: 'get', projectId: 'artifact-model' },
+      undefined,
+      undefined,
+      createToolContext(),
+    );
+    expect(fetched.content[0]?.text).toContain('Project @artifact-model');
+    expect(fetched.content[0]?.text).toContain('summary: Initial scaffold');
+
+    const updated = await projectTool.execute(
+      'tool-4',
+      {
+        action: 'update',
+        projectId: 'artifact-model',
+        summary: 'Schema settled',
+        currentFocus: 'Implement structured tools.',
+      },
+      undefined,
+      undefined,
+      createToolContext(),
+    );
+    expect(updated.isError).not.toBe(true);
+
+    const fetchedAfterUpdate = await projectTool.execute(
+      'tool-5',
+      { action: 'get', projectId: 'artifact-model' },
+      undefined,
+      undefined,
+      createToolContext(),
+    );
+    expect(fetchedAfterUpdate.content[0]?.text).toContain('summary: Schema settled');
+    expect(fetchedAfterUpdate.content[0]?.text).toContain('currentFocus: Implement structured tools.');
+  });
+
   it('returns an error when referencing a missing project', async () => {
     const repoRoot = createTempRepo();
     const stateRoot = join(repoRoot, '.state');
