@@ -81,7 +81,7 @@ describe('CLI main flow integration', () => {
       join(repo, 'profiles/shared/agent/settings.json'),
       JSON.stringify({ defaultProvider: 'test', defaultModel: 'model' })
     );
-    writeFile(join(repo, 'profiles/datadog/agent/AGENTS.md'), '# Datadog\n');
+    writeFile(join(stateRoot, 'profiles/datadog/agent/AGENTS.md'), '# Datadog\n');
 
     process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
@@ -113,8 +113,8 @@ describe('CLI main flow integration', () => {
     // Create profiles with different content
     writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared Content\n');
     writeFile(join(repo, 'profiles/shared/agent/settings.json'), JSON.stringify({ shared: true }));
-    writeFile(join(repo, 'profiles/datadog/agent/AGENTS.md'), '# Datadog Content\n');
-    writeFile(join(repo, 'profiles/datadog/agent/settings.json'), JSON.stringify({ datadog: true }));
+    writeFile(join(stateRoot, 'profiles/datadog/agent/AGENTS.md'), '# Datadog Content\n');
+    writeFile(join(stateRoot, 'profiles/datadog/agent/settings.json'), JSON.stringify({ datadog: true }));
 
     process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;

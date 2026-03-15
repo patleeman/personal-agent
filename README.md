@@ -2,8 +2,8 @@
 
 A personal application layer over Pi that keeps:
 
-- **profiles/resources in git** (`profiles/*`)
-- **runtime state local** (`~/.local/state/personal-agent`)
+- **built-in capabilities and shared defaults in git** (`skills/`, `extensions/`, `themes/`, `profiles/shared`)
+- **mutable profile + runtime state local** (`~/.local/state/personal-agent`)
 - **chat gateways** (Telegram)
 
 ## Features
@@ -196,9 +196,9 @@ When daemon is unavailable, clients warn and continue (non-fatal).
 
 ## Extensions
 
-Pi extensions are auto-discovered from profile layers:
+Pi extensions are auto-discovered from repo and profile layers:
 
-- `profiles/shared/agent/extensions/*`
+- `extensions/*`
 - `~/.local/state/personal-agent/profiles/<profile>/agent/extensions/*`
 - `~/.local/state/personal-agent/config/local/extensions/*`
 
@@ -211,6 +211,7 @@ Built-in extensions in this repo:
 - `deferred-resume` - Resume this same TUI session later after a delay
 - `web-tools` - Web search/integration
 - `daemon-run-orchestration-prompt` - System-prompt policy for daemon-backed background orchestration and status reporting
+- `prompt-reminders` - Lightweight prompt-time reminders for code-reference and similar review tasks
 
 See `docs/skills-and-capabilities.md` for a user-facing overview of skills and runtime capabilities.
 
@@ -282,10 +283,11 @@ Gateway slash commands include:
 
 ## Profiles
 
-Profiles live in:
+Profile resources resolve from:
 
-- `profiles/shared/agent`
-- `profiles/datadog/agent`
+- `profiles/shared/agent` for repo-managed shared default profile files
+- repo built-ins from `skills/`, `extensions/`, and `themes/`
+- `~/.local/state/personal-agent/profiles/<profile>/agent` for mutable non-shared profiles
 
 Optional local overlay:
 

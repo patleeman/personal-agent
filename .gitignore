@@ -1,3 +1,8 @@
+# Profiles
+profiles/*
+!profiles/shared/
+!profiles/shared/**
+
 # Dependencies
 node_modules
 node_modules/

@@ -8,13 +8,32 @@ function normalizePromptText(text: string): string {
   return text.replace(/\r\n/g, '\n').trim();
 }
 
+function inferRepoRootFromExtension(importMetaUrl: string): string {
+  let current = resolve(dirname(fileURLToPath(importMetaUrl)));
+
+  while (true) {
+    if (existsSync(join(current, 'prompt-catalog'))) {
+      return current;
+    }
+
+    const parent = dirname(current);
+    if (parent === current) {
+      break;
+    }
+
+    current = parent;
+  }
+
+  return resolve(dirname(fileURLToPath(importMetaUrl)), '../..');
+}
+
 export function resolveRepoRootFromExtension(importMetaUrl: string): string {
   const explicit = process.env.PERSONAL_AGENT_REPO_ROOT?.trim();
   if (explicit && explicit.length > 0) {
     return resolve(explicit);
   }
 
-  return resolve(dirname(fileURLToPath(importMetaUrl)), '../../../../..');
+  return inferRepoRootFromExtension(importMetaUrl);
 }
 
 function resolvePromptCatalogPath(root: string, relativePath: string): string {
@@ -37,10 +56,10 @@ function resolvePromptCatalogPath(root: string, relativePath: string): string {
 
 function getPromptCatalogRoots(importMetaUrl: string): string[] {
   const explicitRepoRoot = process.env.PERSONAL_AGENT_REPO_ROOT?.trim();
-  const fallbackRepoRoot = resolve(dirname(fileURLToPath(importMetaUrl)), '../../../../..');
+  const inferredRepoRoot = inferRepoRootFromExtension(importMetaUrl);
   const roots = [
     explicitRepoRoot ? join(resolve(explicitRepoRoot), 'prompt-catalog') : undefined,
-    join(fallbackRepoRoot, 'prompt-catalog'),
+    join(inferredRepoRoot, 'prompt-catalog'),
   ].filter((value, index, values): value is string => typeof value === 'string' && value.length > 0 && values.indexOf(value) === index);
 
   return roots;

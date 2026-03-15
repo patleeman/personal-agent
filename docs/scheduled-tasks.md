@@ -27,7 +27,7 @@ Do not confuse scheduled tasks with:
 
 Recommended location:
 
-- `profiles/<active-profile>/agent/tasks/*.task.md`
+- `~/.local/state/personal-agent/profiles/<active-profile>/agent/tasks/*.task.md`
 
 Only files ending in `.task.md` are discovered automatically.
 

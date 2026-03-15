@@ -8,13 +8,20 @@ A profile is not just a name. It is the durable resource bundle the agent runs w
 
 Resources resolve in this order:
 
-1. repo `profiles/shared/agent`
+1. repo `profiles/shared/agent` for shared default profile files
 2. mutable profiles root `~/.local/state/personal-agent/profiles/<selected-profile>/agent`
 3. local overlay (`~/.local/state/personal-agent/config/local` by default)
 
+In addition, repo built-ins are always available from:
+
+- `skills/`
+- `extensions/`
+- `themes/`
+
 Think of it like this:
 
-- `shared` holds common defaults
+- `shared` holds common default profile files
+- repo built-ins hold product-shipped capabilities
 - the selected profile adds persona- or context-specific behavior
 - the local overlay is for machine-local additions
 
@@ -41,14 +48,14 @@ Non-shared profiles can also keep durable profile state in:
 
 ```text
 <repo>/
-└── profiles/
-    └── shared/
-        └── agent/
-            ├── settings.json
-            ├── models.json
-            ├── skills/
-            ├── extensions/
-            └── themes/
+├── profiles/
+│   └── shared/
+│       └── agent/
+│           ├── settings.json
+│           └── models.json
+├── skills/
+├── extensions/
+└── themes/
 
 ~/.local/state/personal-agent/
 └── profiles/

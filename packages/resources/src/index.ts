@@ -430,6 +430,16 @@ function collectRepoInternalSkillDirs(repoRoot: string): string[] {
   return internalSkillsDir ? [internalSkillsDir] : [];
 }
 
+function collectRepoInternalExtensionDirs(repoRoot: string): string[] {
+  const internalExtensionsDir = existingDir(join(repoRoot, 'extensions'));
+  return internalExtensionsDir ? [internalExtensionsDir] : [];
+}
+
+function collectRepoInternalThemeDirs(repoRoot: string): string[] {
+  const internalThemesDir = existingDir(join(repoRoot, 'themes'));
+  return internalThemesDir ? [internalThemesDir] : [];
+}
+
 function collectLayerFiles(layers: ProfileLayer[], relativePath: string): string[] {
   const files = layers
     .map((layer) => existingFile(join(layer.agentDir, relativePath)))
@@ -579,13 +589,19 @@ export function resolveResourceProfile(
     .map((layer) => existingFile(join(layer.agentDir, 'SYSTEM.md')))
     .find((file): file is string => file !== undefined);
 
-  const extensionDirs = collectLayerDirs(layers, 'extensions');
+  const extensionDirs = dedupe([
+    ...collectLayerDirs(layers, 'extensions'),
+    ...collectRepoInternalExtensionDirs(repoRoot),
+  ]);
   const skillDirs = dedupe([
     ...collectLayerDirs(layers, 'skills'),
     ...collectRepoInternalSkillDirs(repoRoot),
   ]);
   const promptDirs = collectLayerDirs(layers, 'prompts');
-  const themeDirs = collectLayerDirs(layers, 'themes');
+  const themeDirs = dedupe([
+    ...collectLayerDirs(layers, 'themes'),
+    ...collectRepoInternalThemeDirs(repoRoot),
+  ]);
 
   const extensionEntries = dedupe(extensionDirs.flatMap((dir) => discoverExtensionEntries(dir)));
   const promptEntries = dedupe(promptDirs.flatMap((dir) => discoverFilesWithExtensions(dir, ['.md'])));

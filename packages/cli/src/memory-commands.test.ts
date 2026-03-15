@@ -19,17 +19,19 @@ function writeFile(path: string, content: string): void {
   writeFileSync(path, content);
 }
 
-function createMemoryRepo(): { repoRoot: string; configPath: string } {
+function createMemoryRepo(): { repoRoot: string; profilesRoot: string; configPath: string } {
   const repoRoot = createTempDir('personal-agent-memory-repo-');
+  const profilesRoot = createTempDir('personal-agent-memory-profiles-');
   const configDir = createTempDir('personal-agent-memory-config-');
   const configPath = join(configDir, 'config.json');
 
   writeFile(configPath, JSON.stringify({ defaultProfile: 'assistant' }));
   writeFile(join(repoRoot, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
-  writeFile(join(repoRoot, 'profiles/assistant/agent/AGENTS.md'), '# Assistant\n');
+  writeFile(join(profilesRoot, 'assistant/agent/AGENTS.md'), '# Assistant\n');
 
   return {
     repoRoot,
+    profilesRoot,
     configPath,
   };
 }
@@ -51,10 +53,10 @@ afterEach(async () => {
 
 describe('memory command', () => {
   it('lists and shows memory docs from the active profile', async () => {
-    const { repoRoot, configPath } = createMemoryRepo();
+    const { repoRoot, profilesRoot, configPath } = createMemoryRepo();
 
     writeFile(
-      join(repoRoot, 'profiles/assistant/agent/memory/runpod.md'),
+      join(profilesRoot, 'assistant/agent/memory/runpod.md'),
       `---
 id: runpod
 title: Runpod Notes
@@ -69,7 +71,7 @@ Runpod operational notes.
     );
 
     writeFile(
-      join(repoRoot, 'profiles/assistant/agent/memory/desktop.md'),
+      join(profilesRoot, 'assistant/agent/memory/desktop.md'),
       `---
 id: desktop
 title: Desktop Machine Notes
@@ -84,7 +86,7 @@ Desktop operational notes.
     );
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
-    process.env.PERSONAL_AGENT_PROFILES_ROOT = join(repoRoot, 'profiles');
+    process.env.PERSONAL_AGENT_PROFILES_ROOT = profilesRoot;
     process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
 
     const logs: string[] = [];
@@ -127,10 +129,10 @@ Desktop operational notes.
   });
 
   it('filters memory docs by tag/type/status/text', async () => {
-    const { repoRoot, configPath } = createMemoryRepo();
+    const { repoRoot, profilesRoot, configPath } = createMemoryRepo();
 
     writeFile(
-      join(repoRoot, 'profiles/assistant/agent/memory/runpod.md'),
+      join(profilesRoot, 'assistant/agent/memory/runpod.md'),
       `---
 id: runpod
 title: Runpod Notes
@@ -145,7 +147,7 @@ Runpod operational notes.
     );
 
     writeFile(
-      join(repoRoot, 'profiles/assistant/agent/memory/desktop.md'),
+      join(profilesRoot, 'assistant/agent/memory/desktop.md'),
       `---
 id: desktop
 title: Desktop Machine Notes
@@ -160,7 +162,7 @@ Desktop operational notes.
     );
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
-    process.env.PERSONAL_AGENT_PROFILES_ROOT = join(repoRoot, 'profiles');
+    process.env.PERSONAL_AGENT_PROFILES_ROOT = profilesRoot;
     process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
 
     const logs: string[] = [];
@@ -195,10 +197,10 @@ Desktop operational notes.
   });
 
   it('fails lint when docs have parse errors or duplicate ids', async () => {
-    const { repoRoot, configPath } = createMemoryRepo();
+    const { repoRoot, profilesRoot, configPath } = createMemoryRepo();
 
     writeFile(
-      join(repoRoot, 'profiles/assistant/agent/memory/runpod.md'),
+      join(profilesRoot, 'assistant/agent/memory/runpod.md'),
       `---
 id: runpod
 title: Runpod Notes
@@ -213,7 +215,7 @@ Runpod operational notes.
     );
 
     writeFile(
-      join(repoRoot, 'profiles/assistant/agent/memory/duplicate.md'),
+      join(profilesRoot, 'assistant/agent/memory/duplicate.md'),
       `---
 id: runpod
 title: Duplicate id
@@ -228,12 +230,12 @@ Duplicate memory doc.
     );
 
     writeFile(
-      join(repoRoot, 'profiles/assistant/agent/memory/invalid.md'),
+      join(profilesRoot, 'assistant/agent/memory/invalid.md'),
       '# Missing frontmatter\n',
     );
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
-    process.env.PERSONAL_AGENT_PROFILES_ROOT = join(repoRoot, 'profiles');
+    process.env.PERSONAL_AGENT_PROFILES_ROOT = profilesRoot;
     process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
 
     const logs: string[] = [];
@@ -257,10 +259,10 @@ Duplicate memory doc.
   });
 
   it('creates a memory doc template with memory new', async () => {
-    const { repoRoot, configPath } = createMemoryRepo();
+    const { repoRoot, profilesRoot, configPath } = createMemoryRepo();
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
-    process.env.PERSONAL_AGENT_PROFILES_ROOT = join(repoRoot, 'profiles');
+    process.env.PERSONAL_AGENT_PROFILES_ROOT = profilesRoot;
     process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
 
     const logs: string[] = [];
@@ -316,10 +318,10 @@ Duplicate memory doc.
   });
 
   it('requires --force to overwrite an existing memory doc', async () => {
-    const { repoRoot, configPath } = createMemoryRepo();
+    const { repoRoot, profilesRoot, configPath } = createMemoryRepo();
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
-    process.env.PERSONAL_AGENT_PROFILES_ROOT = join(repoRoot, 'profiles');
+    process.env.PERSONAL_AGENT_PROFILES_ROOT = profilesRoot;
     process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
 
     const initialLogs: string[] = [];

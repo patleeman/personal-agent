@@ -24,10 +24,14 @@ function writeFile(path: string, content: string): void {
   writeFileSync(path, content);
 }
 
-function createTestRepo(): string {
+function createTestRepo(stateRoot?: string): string {
   const repo = createTempDir('personal-agent-cli-repo-');
   writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
-  writeFile(join(repo, 'profiles/datadog/agent/AGENTS.md'), '# Datadog\n');
+
+  if (stateRoot) {
+    writeFile(join(stateRoot, 'profiles/datadog/agent/AGENTS.md'), '# Datadog\n');
+  }
+
   return repo;
 }
 
@@ -47,8 +51,8 @@ afterEach(async () => {
 
 describe('profile command failure paths', () => {
   it('fails when profile use is called without a profile name', async () => {
-    const repo = createTestRepo();
     const stateRoot = createTempDir('personal-agent-cli-state-');
+    const repo = createTestRepo(stateRoot);
     const configDir = createTempDir('personal-agent-cli-config-');
     const configPath = join(configDir, 'config.json');
 
@@ -70,8 +74,8 @@ describe('profile command failure paths', () => {
   });
 
   it('fails when profile use is called with unknown profile', async () => {
-    const repo = createTestRepo();
     const stateRoot = createTempDir('personal-agent-cli-state-');
+    const repo = createTestRepo(stateRoot);
     const configDir = createTempDir('personal-agent-cli-config-');
     const configPath = join(configDir, 'config.json');
 
@@ -93,8 +97,8 @@ describe('profile command failure paths', () => {
   });
 
   it('fails when profile subcommand is unknown', async () => {
-    const repo = createTestRepo();
     const stateRoot = createTempDir('personal-agent-cli-state-');
+    const repo = createTestRepo(stateRoot);
     const configDir = createTempDir('personal-agent-cli-config-');
     const configPath = join(configDir, 'config.json');
 
@@ -116,8 +120,8 @@ describe('profile command failure paths', () => {
   });
 
   it('succeeds when profile use is called with valid profile name', async () => {
-    const repo = createTestRepo();
     const stateRoot = createTempDir('personal-agent-cli-state-');
+    const repo = createTestRepo(stateRoot);
     const configDir = createTempDir('personal-agent-cli-config-');
     const configPath = join(configDir, 'config.json');
 
@@ -143,8 +147,8 @@ describe('profile command failure paths', () => {
   });
 
   it('profile list shows profiles with default marker', async () => {
-    const repo = createTestRepo();
     const stateRoot = createTempDir('personal-agent-cli-state-');
+    const repo = createTestRepo(stateRoot);
     const configDir = createTempDir('personal-agent-cli-config-');
     const configPath = join(configDir, 'config.json');
 
@@ -172,8 +176,8 @@ describe('profile command failure paths', () => {
   });
 
   it('profile show displays resolved profile details', async () => {
-    const repo = createTestRepo();
     const stateRoot = createTempDir('personal-agent-cli-state-');
+    const repo = createTestRepo(stateRoot);
     const configDir = createTempDir('personal-agent-cli-config-');
     const configPath = join(configDir, 'config.json');
 
@@ -205,8 +209,8 @@ describe('profile command failure paths', () => {
   });
 
   it('profile show with explicit name displays that profile', async () => {
-    const repo = createTestRepo();
     const stateRoot = createTempDir('personal-agent-cli-state-');
+    const repo = createTestRepo(stateRoot);
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;

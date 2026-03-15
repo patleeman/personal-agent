@@ -5364,13 +5364,43 @@ function findMemoryDocById(memoryId: string, options: { includeSearchText?: bool
   return memoryDocs.find((entry) => entry.id === normalizedId) ?? null;
 }
 
+function pathIsWithin(pathValue: string, dirValue: string): boolean {
+  const normalizedPath = normalize(pathValue);
+  const normalizedDir = normalize(dirValue);
+  return normalizedPath === normalizedDir
+    || normalizedPath.startsWith(`${normalizedDir}/`)
+    || normalizedPath.startsWith(`${normalizedDir}\\`);
+}
+
+function inferSkillSource(skillPath: string, profile: string): string {
+  const profileSkillDir = join(getProfilesRoot(), profile, 'agent', 'skills');
+  if (profile !== 'shared' && pathIsWithin(skillPath, profileSkillDir)) {
+    return profile;
+  }
+
+  const sharedSkillDirs = [
+    join(getProfilesRoot(), 'shared', 'agent', 'skills'),
+    join(REPO_ROOT, 'profiles', 'shared', 'agent', 'skills'),
+    join(REPO_ROOT, 'skills'),
+  ];
+
+  if (sharedSkillDirs.some((dir) => pathIsWithin(skillPath, dir))) {
+    return 'shared';
+  }
+
+  return 'shared';
+}
+
 function listSkillsForCurrentProfile(): SkillItem[] {
   const profile = getCurrentProfile();
+  const resolved = resolveResourceProfile(profile, {
+    repoRoot: REPO_ROOT,
+    profilesRoot: getProfilesRoot(),
+  });
   const skills: SkillItem[] = [];
-  const skillSources = profile === 'shared' ? ['shared'] : ['shared', profile];
+  const seenPaths = new Set<string>();
 
-  for (const src of skillSources) {
-    const dir = join(getProfilesRoot(), src, 'agent', 'skills');
+  for (const dir of resolved.skillDirs) {
     if (!existsSync(dir)) {
       continue;
     }
@@ -5381,9 +5411,15 @@ function listSkillsForCurrentProfile(): SkillItem[] {
         continue;
       }
 
+      const normalizedPath = normalize(skillMd);
+      if (seenPaths.has(normalizedPath)) {
+        continue;
+      }
+      seenPaths.add(normalizedPath);
+
       const fm = parseFrontmatter(skillMd);
       skills.push({
-        source: src,
+        source: inferSkillSource(skillMd, profile),
         name: String(fm.name ?? name),
         description: String(fm.description ?? ''),
         path: skillMd,

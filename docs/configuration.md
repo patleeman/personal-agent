@@ -47,7 +47,7 @@ Example:
   "modules": {
     "tasks": {
       "enabled": true,
-      "taskDir": "/path/to/personal-agent/profiles/assistant/agent/tasks",
+      "taskDir": "~/.local/state/personal-agent/profiles/assistant/agent/tasks",
       "tickIntervalSeconds": 30,
       "maxRetries": 3,
       "defaultTimeoutSeconds": 1800
@@ -79,9 +79,10 @@ See [Gateway Guide](./gateway.md).
 
 ## Profile resource configuration
 
-Profile resources resolve from two homes:
+Profile resources resolve from repo built-ins plus mutable profile homes:
 
-- shared defaults from repo `profiles/shared/agent`
+- repo shared defaults from `profiles/shared/agent`
+- repo built-ins from `skills/`, `extensions/`, and `themes/`
 - mutable profile resources from `~/.local/state/personal-agent/profiles/<profile>/agent`
 
 Common files:

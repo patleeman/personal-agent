@@ -25,7 +25,7 @@ function writeFile(path: string, content: string): void {
   writeFileSync(path, content);
 }
 
-function createTestRepo(): string {
+function createTestRepo(stateRoot: string = process.env.PERSONAL_AGENT_STATE_ROOT ?? ''): string {
   const repo = createTempDir('personal-agent-cli-repo-');
 
   writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
@@ -37,7 +37,10 @@ function createTestRepo(): string {
       defaultThinkingLevel: 'off',
     }),
   );
-  writeFile(join(repo, 'profiles/datadog/agent/AGENTS.md'), '# Datadog\n');
+
+  if (stateRoot) {
+    writeFile(join(stateRoot, 'profiles/datadog/agent/AGENTS.md'), '# Datadog\n');
+  }
 
   return repo;
 }
@@ -102,8 +105,8 @@ afterEach(async () => {
 
 describe('CLI command flows', () => {
   it('persists selected profile and reuses it for run', async () => {
-    const repo = createTestRepo();
     const stateRoot = createTempDir('personal-agent-cli-state-');
+    const repo = createTestRepo(stateRoot);
     const configDir = createTempDir('personal-agent-cli-config-');
     const runLogDir = createTempDir('personal-agent-cli-log-');
 
@@ -138,8 +141,8 @@ describe('CLI command flows', () => {
   });
 
   it('allows one-off profile override for tui with --profile', async () => {
-    const repo = createTestRepo();
     const stateRoot = createTempDir('personal-agent-cli-state-');
+    const repo = createTestRepo(stateRoot);
     const configDir = createTempDir('personal-agent-cli-config-');
     const runLogDir = createTempDir('personal-agent-cli-log-');
 
@@ -170,8 +173,8 @@ describe('CLI command flows', () => {
   });
 
   it('shows help with no args and passes unknown args through to pi', async () => {
-    const repo = createTestRepo();
     const stateRoot = createTempDir('personal-agent-cli-state-');
+    const repo = createTestRepo(stateRoot);
     const runLogDir = createTempDir('personal-agent-cli-log-');
     const argsLogPath = join(runLogDir, 'pi-args.log');
     const fakePiBinDir = createFakePiBinary(argsLogPath);
@@ -191,8 +194,8 @@ describe('CLI command flows', () => {
   });
 
   it('returns non-zero for invalid profile usage and rejects doctor --profile flag', async () => {
-    const repo = createTestRepo();
     const stateRoot = createTempDir('personal-agent-cli-state-');
+    const repo = createTestRepo(stateRoot);
     const fakePiBinDir = createFakePiBinary(join(createTempDir('personal-agent-cli-log-'), 'pi-args.log'));
 
     process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
@@ -206,8 +209,8 @@ describe('CLI command flows', () => {
   });
 
   it('runs doctor success and failure paths based on configured profile', async () => {
-    const repo = createTestRepo();
     const stateRoot = createTempDir('personal-agent-cli-state-');
+    const repo = createTestRepo(stateRoot);
     const configDir = createTempDir('personal-agent-cli-config-');
     const fakePiBinDir = createFakePiBinary(join(createTempDir('personal-agent-cli-log-'), 'pi-args.log'));
 

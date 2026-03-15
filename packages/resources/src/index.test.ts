@@ -220,6 +220,36 @@ describe('resources profile loader', () => {
     ]);
   });
 
+  it('includes repo-provided internal extensions and themes', () => {
+    const repo = createTempRepo();
+    const profilesRoot = createTempProfilesRoot();
+
+    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'extensions/basic/index.ts'), 'export default {}\n');
+    writeFile(join(repo, 'extensions/basic/package.json'), JSON.stringify({ name: 'basic', version: '1.0.0' }));
+    writeFile(join(repo, 'themes/cobalt2.json'), '{}\n');
+
+    const resolved = resolveResourceProfile('shared', {
+      repoRoot: repo,
+      profilesRoot,
+      localProfileDir: join(repo, '.local-profile'),
+    });
+
+    expect(resolved.extensionDirs).toEqual([join(repo, 'extensions')]);
+    expect(resolved.extensionEntries).toEqual([join(repo, 'extensions/basic/index.ts')]);
+    expect(resolved.themeDirs).toEqual([join(repo, 'themes')]);
+    expect(resolved.themeEntries).toEqual([join(repo, 'themes/cobalt2.json')]);
+    expect(getExtensionDependencyDirs(resolved)).toEqual([
+      join(repo, 'extensions/basic'),
+    ]);
+
+    const args = buildPiResourceArgs(resolved);
+    expect(args).toContain('-e');
+    expect(args).toContain(join(repo, 'extensions/basic/index.ts'));
+    expect(args).toContain('--theme');
+    expect(args).toContain(join(repo, 'themes/cobalt2.json'));
+  });
+
   it('merges json files in layer order', () => {
     const repo = createTempRepo();
     const fileA = join(repo, 'a.json');

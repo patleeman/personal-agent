@@ -6,13 +6,14 @@
 ## AGENTS ownership model
 
 - Do not use `profiles/shared/agent/AGENTS.md`.
-- Keep one `AGENTS.md` per non-shared profile at `profiles/<profile>/agent/AGENTS.md`.
+- Keep one `AGENTS.md` per non-shared profile at `~/.local/state/personal-agent/profiles/<profile>/agent/AGENTS.md`.
+- This repo should only carry shared defaults under `profiles/shared/agent`; non-shared profile state belongs in the state root/state repo.
 - Duplicate shared guidance across profile AGENTS files when needed; do not centralize behavior rules in shared AGENTS.
 - Memory and behavior updates should target the active profile's AGENTS path.
 
 ## Profile memory convention
 
-- Each non-shared profile keeps project-specific context under `profiles/<profile>/agent/memory/`.
+- Each non-shared profile keeps project-specific context under `~/.local/state/personal-agent/profiles/<profile>/agent/memory/`.
 - There is never a shared-profile memory dir (`profiles/shared/agent/memory` should not exist).
 - Memory docs are available to the agent via normal file tools (`read`, `edit`, `write`).
 - Use memory docs for project-local briefs, runbooks, specs, and notes.
@@ -25,7 +26,7 @@
 ## Conversation locality boundary
 
 - Conversations and session ids are local runtime state, not portable profile state.
-- Do not add repo-managed files or portable metadata keyed by conversation id. This includes things like `profiles/<profile>/agent/conversations/`, repo-managed frontmatter fields such as `relatedConversationIds`, or any other portable schema that persists conversation ids.
+- Do not add portable profile files or metadata keyed by conversation id. This includes things like `~/.local/state/personal-agent/profiles/<profile>/agent/conversations/`, frontmatter fields such as `relatedConversationIds`, or any other portable schema that persists conversation ids.
 - If a portable artifact needs to relate to interactive work, use stable portable identifiers (for example project ids, task ids, artifact paths, timestamps) and keep any conversation↔artifact mapping under local state in `~/.local/state/personal-agent/**`.
 - Treat conversation identity as machine-local/private context that must not leak into versioned repo resources just because `.gitignore` would hide new files.
 

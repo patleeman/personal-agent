@@ -19,8 +19,9 @@ Shared defaults remain repo-managed.
 Common shared examples:
 
 - `profiles/shared/agent/settings.json`
-- `profiles/shared/agent/skills/**`
-- `profiles/shared/agent/extensions/**`
+- `skills/**`
+- `extensions/**`
+- `themes/**`
 
 Mutable profile state defaults to the state home:
 

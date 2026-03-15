@@ -20,11 +20,11 @@ Use this skill when the user wants to:
 
 A project lives under:
 
-- `profiles/<profile>/agent/projects/<projectId>/PROJECT.yaml`
-- `profiles/<profile>/agent/projects/<projectId>/BRIEF.md`
-- `profiles/<profile>/agent/projects/<projectId>/notes/`
-- `profiles/<profile>/agent/projects/<projectId>/attachments/`
-- `profiles/<profile>/agent/projects/<projectId>/artifacts/`
+- `~/.local/state/personal-agent/profiles/<profile>/agent/projects/<projectId>/PROJECT.yaml`
+- `~/.local/state/personal-agent/profiles/<profile>/agent/projects/<projectId>/BRIEF.md`
+- `~/.local/state/personal-agent/profiles/<profile>/agent/projects/<projectId>/notes/`
+- `~/.local/state/personal-agent/profiles/<profile>/agent/projects/<projectId>/attachments/`
+- `~/.local/state/personal-agent/profiles/<profile>/agent/projects/<projectId>/artifacts/`
 
 `PROJECT.yaml` is the canonical structured record.
 
