@@ -32,10 +32,12 @@ updated: 2026-03-15
 - Long-term, Patrick wants one personal-agent home outside the repo that cleanly separates synced durable app/profile state, machine-local durable state, and disposable volatile runtime state.
 - If state persistence is redesigned, prefer one canonical path/writer layer instead of scattering mutable state across repo files, local config, and runtime directories.
 - Cross-machine sync for that durable home should be versioned and conflict-tolerant without relying on Git-style merge workflows for high-churn app state.
+- Default/active profile selection is machine-local operator state and should not be propagated through synced portable config.
 
 ## Settings + auth direction
 
 - Settings should expose provider selection and runtime auth/API-key management in the same spirit as TUI `/login`, including saving credentials into the auth JSON instead of requiring manual file edits.
+- Provider-auth changes made in Settings should refresh active UI/session state immediately instead of requiring a manual restart or page reload.
 
 ## Web conversation UX constraints
 
@@ -75,6 +77,13 @@ updated: 2026-03-15
 - New conversations should start from durable profile memory (`AGENTS.md`, skills, memory docs), not from blank transcript state.
 - Tasks should be first-class, profile-scoped objects that can start in one surface, run elsewhere, and later be resumed or checked from another surface.
 
+## Projects + team orchestration direction
+
+- Projects are the durable hub for multi-conversation work; execution grouping should hang off the project instead of inventing separate durable containers.
+- For agent teams, use a separate local runtime `team run` object to group lead/worker conversations, task state, statuses, and durable-run ids; do not store that conversation-linked team state in portable project files.
+- Sidebar nesting of lead/worker conversations can be a UI affordance over that runtime team-run object, not the primary persistence model.
+- Project lists/details should surface invalid project files as diagnostics instead of silently omitting them.
+
 ## Conversation durability and locality
 
 - Conversation state and metadata are machine-local runtime state under `~/.local/state/personal-agent/**`, not repo-managed profile artifacts.
@@ -93,7 +102,3 @@ updated: 2026-03-15
 - Keep the full conversation or execution trail inspectable when Patrick needs to drill in.
 - Also maintain compact summaries that expose durable facts, progress, blockers, decisions, artifacts, and next actions without reloading the full transcript.
 - Treat inspectability as a core trust requirement, not only a debugging aid.
-
-## Revisit gate
-
-- Do not reintroduce multi-pane/tab workbench UX for the TUI without a fresh user decision.
