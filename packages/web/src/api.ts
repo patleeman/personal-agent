@@ -63,6 +63,12 @@ export const api = {
   uninstallDaemonService: () => post<DaemonState>('/daemon/service/uninstall'),
   sync: () => get<SyncState>('/sync'),
   runSync: () => post<SyncState>('/sync/run'),
+  setupSync: (input: {
+    repoUrl: string;
+    branch?: string;
+    mode?: 'fresh' | 'bootstrap';
+    repoDir?: string;
+  }) => post<SyncState>('/sync/setup', input),
   webUiState:   () => get<WebUiState>('/web-ui/state'),
   restartApplication: () => post<ApplicationRestartRequestResult>('/application/restart'),
   installWebUiService: () => post<WebUiState>('/web-ui/service/install'),

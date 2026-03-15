@@ -11,7 +11,7 @@ import { readGitStatusSummary } from './gitStatus.js';
 import { installGatewayAndReadState, readGatewayState, restartGatewayAndReadState, saveGatewayConfigAndReadState, startGatewayAndReadState, stopGatewayAndReadState, uninstallGatewayAndReadState, } from './gateway.js';
 import { parseGatewayConfigUpdateInput } from './gatewayConfig.js';
 import { installDaemonServiceAndReadState, readDaemonState, restartDaemonServiceAndReadState, startDaemonServiceAndReadState, stopDaemonServiceAndReadState, uninstallDaemonServiceAndReadState, } from './daemon.js';
-import { readSyncState, requestSyncRunAndReadState, } from './sync.js';
+import { parseSyncSetupInput, readSyncState, requestSyncRunAndReadState, setupSyncAndReadState, } from './sync.js';
 import { installWebUiServiceAndReadState, markBadWebUiReleaseAndReadState, readWebUiState, readWebUiConfig, restartWebUiServiceAndReadState, rollbackWebUiServiceAndReadState, startWebUiServiceAndReadState, stopWebUiServiceAndReadState, syncConfiguredWebUiTailscaleServe, uninstallWebUiServiceAndReadState, writeWebUiConfig, } from './webUi.js';
 import { requestApplicationRestart } from './applicationRestart.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from './modelPreferences.js';
@@ -1381,6 +1381,26 @@ app.get('/api/sync', async (_req, res) => {
 app.post('/api/sync/run', async (_req, res) => {
     try {
         res.json(await requestSyncRunAndReadState());
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/sync/setup', async (req, res) => {
+    let input;
+    try {
+        input = parseSyncSetupInput(req.body);
+    }
+    catch (err) {
+        res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+        return;
+    }
+    try {
+        res.json(await setupSyncAndReadState(input));
     }
     catch (err) {
         logError('request handler error', {

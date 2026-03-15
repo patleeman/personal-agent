@@ -1,7 +1,9 @@
 import { spawnSync } from 'node:child_process';
 import { closeSync, existsSync, openSync, readSync, statSync, } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { emitDaemonEvent, getDaemonStatus, loadDaemonConfig, pingDaemon, resolveDaemonPaths, } from '@personal-agent/daemon';
+import { getRepoRoot } from '@personal-agent/resources';
+const DEFAULT_SYNC_BRANCH = 'main';
 function readTailLines(filePath, maxLines = 80, maxBytes = 96 * 1024) {
     if (!filePath || !existsSync(filePath)) {
         return [];
@@ -53,6 +55,35 @@ function toOptionalString(value) {
     }
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : undefined;
+}
+function isRecord(value) {
+    return typeof value === 'object' && value !== null;
+}
+function parseSyncSetupMode(value) {
+    if (value === undefined || value === null || value === '') {
+        return 'fresh';
+    }
+    if (value === 'fresh' || value === 'bootstrap') {
+        return value;
+    }
+    throw new Error('mode must be "fresh" or "bootstrap" when provided');
+}
+export function parseSyncSetupInput(value) {
+    if (!isRecord(value)) {
+        throw new Error('sync setup body must be an object');
+    }
+    const repoUrl = toOptionalString(value.repoUrl);
+    if (!repoUrl) {
+        throw new Error('repoUrl is required');
+    }
+    const branch = toOptionalString(value.branch) ?? DEFAULT_SYNC_BRANCH;
+    const repoDir = toOptionalString(value.repoDir);
+    return {
+        repoUrl,
+        branch,
+        mode: parseSyncSetupMode(value.mode),
+        repoDir: repoDir ? resolve(repoDir) : undefined,
+    };
 }
 function toStringArray(value) {
     if (!Array.isArray(value)) {
@@ -180,6 +211,55 @@ export async function readSyncState() {
             lines: readTailLines(daemonPaths.logFile).filter((line) => line.includes('[module:sync]') || line.includes('sync ')).slice(-60),
         },
     };
+}
+function trimProcessOutput(value, maxLength = 2_000) {
+    const trimmed = (value ?? '').trim();
+    if (trimmed.length <= maxLength) {
+        return trimmed;
+    }
+    return `${trimmed.slice(0, maxLength - 1)}…`;
+}
+function runSyncSetupCommand(input) {
+    const repoRoot = getRepoRoot();
+    const cliEntryFile = join(repoRoot, 'packages', 'cli', 'dist', 'index.js');
+    if (!existsSync(cliEntryFile)) {
+        throw new Error(`CLI entrypoint is not built at ${cliEntryFile}. Run "npm --prefix packages/cli run build" from ${repoRoot}.`);
+    }
+    const args = [
+        cliEntryFile,
+        'sync',
+        'setup',
+        '--repo',
+        input.repoUrl,
+        '--branch',
+        input.branch,
+        input.mode === 'bootstrap' ? '--bootstrap' : '--fresh',
+    ];
+    if (input.repoDir) {
+        args.push('--repo-dir', input.repoDir);
+    }
+    const result = spawnSync(process.execPath, args, {
+        cwd: repoRoot,
+        encoding: 'utf-8',
+        env: {
+            ...process.env,
+            PERSONAL_AGENT_REPO_ROOT: repoRoot,
+        },
+    });
+    if (result.error) {
+        throw result.error;
+    }
+    const code = result.status ?? 1;
+    if (code !== 0) {
+        const details = [trimProcessOutput(result.stderr), trimProcessOutput(result.stdout)]
+            .filter((entry) => entry.length > 0)
+            .join('\n');
+        throw new Error(details || `pa sync setup failed with exit code ${code}`);
+    }
+}
+export async function setupSyncAndReadState(input) {
+    runSyncSetupCommand(input);
+    return readSyncState();
 }
 export async function requestSyncRunAndReadState() {
     const config = loadDaemonConfig();

@@ -27,8 +27,10 @@ import {
   uninstallDaemonServiceAndReadState,
 } from './daemon.js';
 import {
+  parseSyncSetupInput,
   readSyncState,
   requestSyncRunAndReadState,
+  setupSyncAndReadState,
 } from './sync.js';
 import {
   installWebUiServiceAndReadState,
@@ -1812,6 +1814,27 @@ app.get('/api/sync', async (_req, res) => {
 app.post('/api/sync/run', async (_req, res) => {
   try {
     res.json(await requestSyncRunAndReadState());
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/sync/setup', async (req, res) => {
+  let input: ReturnType<typeof parseSyncSetupInput>;
+
+  try {
+    input = parseSyncSetupInput(req.body);
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+    return;
+  }
+
+  try {
+    res.json(await setupSyncAndReadState(input));
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),

@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { useApi } from '../hooks';
 import { timeAgo } from '../utils';
 import { ErrorState, LoadingState, PageHeader, PageHeading, SectionLabel, ToolbarButton } from '../components/ui';
+
+const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50';
+const SELECT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50';
 
 function shortPath(path: string | undefined, maxLen = 90): string {
   if (!path || path.trim().length === 0) {
@@ -43,7 +46,14 @@ function StatBlock({
 export function SyncPage() {
   const { data, loading, error, refetch } = useApi(api.sync);
   const [runningSync, setRunningSync] = useState(false);
+  const [runningSetup, setRunningSetup] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [setupNotice, setSetupNotice] = useState<string | null>(null);
+  const [setupRepoUrl, setSetupRepoUrl] = useState('');
+  const [setupBranch, setSetupBranch] = useState('main');
+  const [setupMode, setSetupMode] = useState<'fresh' | 'bootstrap'>('fresh');
+  const [setupRepoDir, setSetupRepoDir] = useState('');
+  const [setupSeedKey, setSetupSeedKey] = useState<string | null>(null);
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -53,11 +63,29 @@ export function SyncPage() {
     return () => window.clearInterval(id);
   }, [refetch]);
 
+  useEffect(() => {
+    if (!data) {
+      return;
+    }
+
+    const nextSeedKey = `${data.config.repoDir}::${data.config.branch}::${data.git.remoteUrl ?? ''}`;
+    if (setupSeedKey === nextSeedKey) {
+      return;
+    }
+
+    setSetupRepoUrl(data.git.remoteUrl ?? '');
+    setSetupBranch(data.config.branch || 'main');
+    setSetupRepoDir(data.config.repoDir || '');
+    setSetupSeedKey(nextSeedKey);
+  }, [data, setupSeedKey]);
+
   async function handleRunNow() {
-    if (runningSync) return;
+    if (runningSync || runningSetup) return;
 
     setRunningSync(true);
     setActionError(null);
+    setSetupNotice(null);
+
     try {
       await api.runSync();
       await refetch({ resetLoading: false });
@@ -65,6 +93,42 @@ export function SyncPage() {
       setActionError(runError instanceof Error ? runError.message : String(runError));
     } finally {
       setRunningSync(false);
+    }
+  }
+
+  async function handleSetup(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (runningSetup) {
+      return;
+    }
+
+    const repoUrl = setupRepoUrl.trim();
+    const branch = setupBranch.trim() || 'main';
+    const repoDir = setupRepoDir.trim();
+
+    if (!repoUrl) {
+      setActionError('Git repository URL is required for sync setup.');
+      return;
+    }
+
+    setRunningSetup(true);
+    setActionError(null);
+    setSetupNotice(null);
+
+    try {
+      await api.setupSync({
+        repoUrl,
+        branch,
+        mode: setupMode,
+        repoDir: repoDir.length > 0 ? repoDir : undefined,
+      });
+      await refetch({ resetLoading: false });
+      setSetupNotice('Sync setup completed. Automatic background sync is now configured.');
+    } catch (setupError) {
+      setActionError(setupError instanceof Error ? setupError.message : String(setupError));
+    } finally {
+      setRunningSetup(false);
     }
   }
 
@@ -88,10 +152,18 @@ export function SyncPage() {
       <PageHeader
         actions={(
           <>
-            <ToolbarButton onClick={() => { void handleRunNow(); }} disabled={runningSync || !data?.daemon.connected}>
+            <ToolbarButton
+              onClick={() => { void handleRunNow(); }}
+              disabled={runningSync || runningSetup || !data?.daemon.connected || !hasRepo}
+            >
               {runningSync ? 'Running sync…' : 'Run sync now'}
             </ToolbarButton>
-            <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); }} disabled={runningSync}>↻ Refresh</ToolbarButton>
+            <ToolbarButton
+              onClick={() => { void refetch({ resetLoading: false }); }}
+              disabled={runningSync || runningSetup}
+            >
+              ↻ Refresh
+            </ToolbarButton>
           </>
         )}
       >
@@ -112,17 +184,88 @@ export function SyncPage() {
 
         {data && (
           <div className="space-y-8">
-            {(data.warnings.length > 0 || actionError) && (
+            {(data.warnings.length > 0 || actionError || setupNotice) && (
               <div className="space-y-1">
                 {data.warnings.map((warning) => (
                   <p key={warning} className="text-[12px] text-warning">{warning}</p>
                 ))}
                 {actionError && <p className="text-[12px] text-danger">{actionError}</p>}
+                {setupNotice && <p className="text-[12px] text-success">{setupNotice}</p>}
                 {lastError && <p className="text-[12px] text-danger">Last sync error: {lastError}</p>}
               </div>
             )}
 
             <section className="space-y-4">
+              <SectionLabel label="Setup" />
+              <p className="ui-card-meta">
+                Add your git remote here for first-time setup. Use <strong>Fresh</strong> for a new/empty remote, or <strong>Bootstrap</strong> to merge existing remote history.
+              </p>
+              <form onSubmit={(event) => { void handleSetup(event); }} className="space-y-3">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="space-y-1 md:col-span-2">
+                    <span className="ui-section-label">Git repo URL</span>
+                    <input
+                      type="text"
+                      value={setupRepoUrl}
+                      onChange={(event) => setSetupRepoUrl(event.target.value)}
+                      placeholder="git@github.com:you/personal-agent-state.git"
+                      className={INPUT_CLASS}
+                      disabled={runningSetup}
+                    />
+                  </label>
+
+                  <label className="space-y-1">
+                    <span className="ui-section-label">Branch</span>
+                    <input
+                      type="text"
+                      value={setupBranch}
+                      onChange={(event) => setSetupBranch(event.target.value)}
+                      placeholder="main"
+                      className={INPUT_CLASS}
+                      disabled={runningSetup}
+                    />
+                  </label>
+
+                  <label className="space-y-1">
+                    <span className="ui-section-label">Mode</span>
+                    <select
+                      value={setupMode}
+                      onChange={(event) => setSetupMode(event.target.value === 'bootstrap' ? 'bootstrap' : 'fresh')}
+                      className={SELECT_CLASS}
+                      disabled={runningSetup}
+                    >
+                      <option value="fresh">Fresh (new remote)</option>
+                      <option value="bootstrap">Bootstrap (existing remote)</option>
+                    </select>
+                  </label>
+
+                  <label className="space-y-1 md:col-span-2">
+                    <span className="ui-section-label">Repo directory (optional override)</span>
+                    <input
+                      type="text"
+                      value={setupRepoDir}
+                      onChange={(event) => setSetupRepoDir(event.target.value)}
+                      placeholder={data.config.repoDir || 'Leave blank for default stateRoot/sync'}
+                      className={INPUT_CLASS}
+                      disabled={runningSetup}
+                    />
+                  </label>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <ToolbarButton type="submit" disabled={runningSetup || runningSync}>
+                    {runningSetup ? 'Setting up sync…' : (hasRepo ? 'Re-run sync setup' : 'Set up sync')}
+                  </ToolbarButton>
+                  <p className="ui-card-meta">
+                    {setupMode === 'fresh'
+                      ? 'Fresh mode commits local durable state and pushes it to the remote.'
+                      : 'Bootstrap mode fetches and merges existing remote history before syncing.'}
+                  </p>
+                </div>
+              </form>
+            </section>
+
+            <section className="space-y-4 border-t border-border-subtle pt-6">
               <SectionLabel label="Overview" />
               <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2 xl:grid-cols-4">
                 <StatBlock

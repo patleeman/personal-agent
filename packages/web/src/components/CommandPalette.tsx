@@ -178,7 +178,7 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       id: 'nav:sync',
       section: 'nav',
       title: 'Sync',
-      subtitle: 'Track automatic git sync health and run sync now',
+      subtitle: 'Set up git sync, monitor health, and trigger manual runs',
       keywords: ['git', 'sync', 'conflicts'],
       order: 9,
       action: { kind: 'navigate', to: '/sync' },
