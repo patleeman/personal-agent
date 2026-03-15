@@ -2589,6 +2589,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const composerSubmit = resolveConversationComposerSubmitState(stream.isStreaming, composerAltHeld);
   const showScrollToBottomControl = shouldShowScrollToBottomControl(messageCount, atBottom);
   const hasRenderableMessages = (realMessages?.length ?? 0) > 0;
+  // Skip rail overlay in very large transcripts to avoid expensive marker re-measurement while streaming.
+  const shouldRenderConversationRail = hasRenderableMessages
+    && Boolean(realMessages)
+    && (realMessages?.length ?? 0) <= 1200;
   const editingDrawingAttachment = useMemo(() => {
     if (!editingDrawingLocalId || editingDrawingLocalId === '__new__') {
       return null;
@@ -2755,7 +2759,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             </button>
           )}
         </div>
-        {hasRenderableMessages && realMessages && (
+        {shouldRenderConversationRail && realMessages && (
           <ConversationRail
             messages={realMessages}
             scrollContainerRef={scrollRef}

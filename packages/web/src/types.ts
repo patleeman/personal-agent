@@ -438,6 +438,57 @@ export interface DaemonState {
   log: GatewayLogTail;
 }
 
+export interface SyncConfigSummary {
+  enabled: boolean;
+  repoDir: string;
+  remote: string;
+  branch: string;
+  intervalSeconds: number;
+  autoResolveWithAgent: boolean;
+  conflictResolverTaskSlug: string;
+  resolverCooldownMinutes: number;
+  autoResolveErrorsWithAgent: boolean;
+  errorResolverTaskSlug: string;
+  errorResolverCooldownMinutes: number;
+}
+
+export interface SyncGitSummary {
+  hasRepo: boolean;
+  currentBranch?: string;
+  dirtyEntries?: number;
+  lastCommit?: string;
+  remoteUrl?: string;
+}
+
+export interface SyncModuleRuntimeDetail {
+  running: boolean;
+  lastRunAt?: string;
+  lastSuccessAt?: string;
+  lastCommitAt?: string;
+  lastConflictAt?: string;
+  lastConflictFiles: string[];
+  lastResolverStartedAt?: string;
+  lastResolverResult?: string;
+  lastErrorResolverStartedAt?: string;
+  lastErrorResolverResult?: string;
+  lastError?: string;
+}
+
+export interface SyncDaemonSummary {
+  connected: boolean;
+  moduleLoaded: boolean;
+  moduleEnabled: boolean;
+  moduleDetail?: SyncModuleRuntimeDetail;
+}
+
+export interface SyncState {
+  warnings: string[];
+  config: SyncConfigSummary;
+  git: SyncGitSummary;
+  daemon: SyncDaemonSummary;
+  log: GatewayLogTail;
+}
+
 export interface WebUiReleaseSummary {
   slot: 'blue' | 'green';
   slotDir: string;
@@ -713,6 +764,46 @@ export interface ModelState {
   currentModel: string;
   currentThinkingLevel: string;
   models: ModelInfo[];
+}
+
+export type ProviderAuthType = 'none' | 'api_key' | 'oauth' | 'environment';
+
+export interface ProviderAuthSummary {
+  id: string;
+  modelCount: number;
+  authType: ProviderAuthType;
+  hasStoredCredential: boolean;
+  oauthSupported: boolean;
+  oauthProviderName: string;
+  oauthUsesCallbackServer: boolean;
+}
+
+export interface ProviderAuthState {
+  authFile: string;
+  providers: ProviderAuthSummary[];
+}
+
+export type ProviderOAuthLoginStatus = 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface ProviderOAuthPromptState {
+  message: string;
+  placeholder: string;
+  allowEmpty: boolean;
+  manualCode: boolean;
+}
+
+export interface ProviderOAuthLoginState {
+  id: string;
+  provider: string;
+  providerName: string;
+  status: ProviderOAuthLoginStatus;
+  authUrl: string;
+  authInstructions: string;
+  prompt: ProviderOAuthPromptState | null;
+  progress: string[];
+  error: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ConversationTitleSettingsState {

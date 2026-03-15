@@ -1,6 +1,6 @@
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, statSync, writeFileSync, } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import { getConfigRoot } from '@personal-agent/core';
 import { findBadWebUiRelease, getWebUiServiceStatus, installWebUiService, listBadWebUiReleases, markWebUiReleaseBad, resolveWebUiTailscaleUrl, restartWebUiService, rollbackWebUiDeployment, startWebUiService, stopWebUiService, syncWebUiTailscaleServe, uninstallWebUiService, } from '@personal-agent/gateway';
 const WEB_REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? process.cwd();
 const DEFAULT_WEB_UI_PORT = 3741;
@@ -33,7 +33,7 @@ function resolveWebUiConfigFilePath() {
     if (explicit && explicit.trim().length > 0) {
         return resolve(explicit);
     }
-    return join(homedir(), '.config', 'personal-agent', 'web.json');
+    return join(getConfigRoot(), 'web.json');
 }
 export function readWebUiConfig() {
     const filePath = resolveWebUiConfigFilePath();

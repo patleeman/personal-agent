@@ -446,6 +446,17 @@ function fingerprintDisplayBlock(block: DisplayBlock): string {
   }
 }
 
+function mergeIdentityKey(block: DisplayBlock): string | null {
+  switch (block.type) {
+    case 'tool_use':
+      return block.toolCallId ? `tool:${block.toolCallId}` : null;
+    case 'summary':
+      return `summary:${block.kind}:${block.title}:${block.text}`;
+    default:
+      return null;
+  }
+}
+
 // Live session state only contains the currently-kept context window after compaction.
 // Merge it with the persisted snapshot so reconnects/navigation preserve any durable-only blocks while
 // still converging on the compacted view once summaries are present.
@@ -477,7 +488,42 @@ function mergeConversationHistoryBlocks(persistedBlocks: DisplayBlock[], liveBlo
     }
   }
 
-  return [...persistedBlocks, ...liveBlocks];
+  const merged = [...persistedBlocks];
+  const seenFingerprints = new Set(persistedFingerprints);
+  const mergedIndexByIdentity = new Map<string, number>();
+
+  for (const [index, block] of merged.entries()) {
+    const identityKey = mergeIdentityKey(block);
+    if (identityKey) {
+      mergedIndexByIdentity.set(identityKey, index);
+    }
+  }
+
+  for (const liveBlock of liveBlocks) {
+    const identityKey = mergeIdentityKey(liveBlock);
+    if (identityKey) {
+      const existingIndex = mergedIndexByIdentity.get(identityKey);
+      if (existingIndex !== undefined) {
+        merged[existingIndex] = liveBlock;
+        seenFingerprints.add(fingerprintDisplayBlock(liveBlock));
+        continue;
+      }
+    }
+
+    const fingerprint = fingerprintDisplayBlock(liveBlock);
+    if (seenFingerprints.has(fingerprint)) {
+      continue;
+    }
+
+    merged.push(liveBlock);
+    seenFingerprints.add(fingerprint);
+
+    if (identityKey) {
+      mergedIndexByIdentity.set(identityKey, merged.length - 1);
+    }
+  }
+
+  return merged;
 }
 
 function buildLiveSnapshotBlocks(entry: LiveEntry): DisplayBlock[] {

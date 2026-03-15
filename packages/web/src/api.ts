@@ -1,4 +1,4 @@
-import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationCwdChangeResult, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DeferredResumeSummary, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, ToolsState, WebUiState } from './types';
+import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationCwdChangeResult, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DeferredResumeSummary, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SyncState, ToolsState, WebUiState } from './types';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch('/api' + path);
@@ -61,6 +61,8 @@ export const api = {
   restartDaemonService: () => post<DaemonState>('/daemon/service/restart'),
   stopDaemonService: () => post<DaemonState>('/daemon/service/stop'),
   uninstallDaemonService: () => post<DaemonState>('/daemon/service/uninstall'),
+  sync: () => get<SyncState>('/sync'),
+  runSync: () => post<SyncState>('/sync/run'),
   webUiState:   () => get<WebUiState>('/web-ui/state'),
   restartApplication: () => post<ApplicationRestartRequestResult>('/application/restart'),
   installWebUiService: () => post<WebUiState>('/web-ui/service/install'),
@@ -164,6 +166,19 @@ export const api = {
   setModel: (model: string) => patch<{ ok: boolean }>('/models/current', { model }),
   updateModelPreferences: (input: { model?: string; thinkingLevel?: string }) =>
     patch<{ ok: boolean }>('/models/current', input),
+  providerAuth: () => get<ProviderAuthState>('/provider-auth'),
+  setProviderApiKey: (provider: string, apiKey: string) =>
+    patch<ProviderAuthState>(`/provider-auth/${encodeURIComponent(provider)}/api-key`, { apiKey }),
+  removeProviderCredential: (provider: string) =>
+    del<ProviderAuthState>(`/provider-auth/${encodeURIComponent(provider)}`),
+  startProviderOAuthLogin: (provider: string) =>
+    post<ProviderOAuthLoginState>(`/provider-auth/${encodeURIComponent(provider)}/oauth/start`),
+  providerOAuthLogin: (loginId: string) =>
+    get<ProviderOAuthLoginState>(`/provider-auth/oauth/${encodeURIComponent(loginId)}`),
+  submitProviderOAuthLoginInput: (loginId: string, value: string) =>
+    post<ProviderOAuthLoginState>(`/provider-auth/oauth/${encodeURIComponent(loginId)}/input`, { value }),
+  cancelProviderOAuthLogin: (loginId: string) =>
+    post<ProviderOAuthLoginState>(`/provider-auth/oauth/${encodeURIComponent(loginId)}/cancel`),
   conversationTitleSettings: () => get<ConversationTitleSettingsState>('/conversation-titles/settings'),
   updateConversationTitleSettings: (input: { enabled?: boolean; model?: string | null }) =>
     patch<ConversationTitleSettingsState>('/conversation-titles/settings', input),

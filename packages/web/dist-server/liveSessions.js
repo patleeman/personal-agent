@@ -5,14 +5,14 @@
  */
 import { appendFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
+import { getStateRoot, } from '@personal-agent/core';
 import { AuthStorage, DefaultResourceLoader, ModelRegistry, SessionManager, createAgentSession, } from '@mariozechner/pi-coding-agent';
 import { invalidateAppTopics, publishAppEvent } from './appEvents.js';
 import { generateConversationTitle, hasAssistantTitleSourceMessage, } from './conversationAutoTitle.js';
 import { syncWebLiveConversationRun } from './conversationRuns.js';
 import { buildDisplayBlocksFromEntries, getAssistantErrorDisplayMessage, readSessionBlocksByFile, readSessionMetaByFile, } from './sessions.js';
 import { estimateContextUsageSegments } from './sessionContextUsage.js';
-const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
+const AGENT_DIR = join(getStateRoot(), 'pi-agent');
 const SETTINGS_FILE = join(AGENT_DIR, 'settings.json');
 const SESSIONS_DIR = join(AGENT_DIR, 'sessions');
 export function resolvePersistentSessionDir(cwd) {
@@ -283,6 +283,16 @@ function fingerprintDisplayBlock(block) {
             });
     }
 }
+function mergeIdentityKey(block) {
+    switch (block.type) {
+        case 'tool_use':
+            return block.toolCallId ? `tool:${block.toolCallId}` : null;
+        case 'summary':
+            return `summary:${block.kind}:${block.title}:${block.text}`;
+        default:
+            return null;
+    }
+}
 // Live session state only contains the currently-kept context window after compaction.
 // Merge it with the persisted snapshot so reconnects/navigation preserve any durable-only blocks while
 // still converging on the compacted view once summaries are present.
@@ -308,7 +318,36 @@ function mergeConversationHistoryBlocks(persistedBlocks, liveBlocks) {
             return [...persistedBlocks, ...liveBlocks.slice(overlap)];
         }
     }
-    return [...persistedBlocks, ...liveBlocks];
+    const merged = [...persistedBlocks];
+    const seenFingerprints = new Set(persistedFingerprints);
+    const mergedIndexByIdentity = new Map();
+    for (const [index, block] of merged.entries()) {
+        const identityKey = mergeIdentityKey(block);
+        if (identityKey) {
+            mergedIndexByIdentity.set(identityKey, index);
+        }
+    }
+    for (const liveBlock of liveBlocks) {
+        const identityKey = mergeIdentityKey(liveBlock);
+        if (identityKey) {
+            const existingIndex = mergedIndexByIdentity.get(identityKey);
+            if (existingIndex !== undefined) {
+                merged[existingIndex] = liveBlock;
+                seenFingerprints.add(fingerprintDisplayBlock(liveBlock));
+                continue;
+            }
+        }
+        const fingerprint = fingerprintDisplayBlock(liveBlock);
+        if (seenFingerprints.has(fingerprint)) {
+            continue;
+        }
+        merged.push(liveBlock);
+        seenFingerprints.add(fingerprint);
+        if (identityKey) {
+            mergedIndexByIdentity.set(identityKey, merged.length - 1);
+        }
+    }
+    return merged;
 }
 function buildLiveSnapshotBlocks(entry) {
     const liveBlocks = buildLiveStateBlocks(entry.session);

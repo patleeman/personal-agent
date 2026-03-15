@@ -6,6 +6,7 @@ import { Layout } from './components/Layout';
 import { ConversationPage } from './pages/ConversationPage';
 import { GatewayPage } from './pages/GatewayPage';
 import { DaemonPage } from './pages/DaemonPage';
+import { SyncPage } from './pages/SyncPage';
 import { InboxPage } from './pages/InboxPage';
 import { RunsPage } from './pages/RunsPage';
 import { WebUiPage } from './pages/WebUiPage';
@@ -187,6 +188,7 @@ export function App() {
                     <Route path="inbox/:id" element={<InboxPage />} />
                     <Route path="gateway" element={<GatewayPage />} />
                     <Route path="daemon" element={<DaemonPage />} />
+                    <Route path="sync" element={<SyncPage />} />
                     <Route path="web-ui" element={<WebUiPage />} />
                     <Route path="projects" element={<ProjectsPage />} />
                     <Route path="projects/:id" element={<ProjectsPage />} />

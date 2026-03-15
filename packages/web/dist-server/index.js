@@ -1,6 +1,5 @@
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { basename, dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
@@ -12,9 +11,11 @@ import { readGitStatusSummary } from './gitStatus.js';
 import { installGatewayAndReadState, readGatewayState, restartGatewayAndReadState, saveGatewayConfigAndReadState, startGatewayAndReadState, stopGatewayAndReadState, uninstallGatewayAndReadState, } from './gateway.js';
 import { parseGatewayConfigUpdateInput } from './gatewayConfig.js';
 import { installDaemonServiceAndReadState, readDaemonState, restartDaemonServiceAndReadState, startDaemonServiceAndReadState, stopDaemonServiceAndReadState, uninstallDaemonServiceAndReadState, } from './daemon.js';
+import { readSyncState, requestSyncRunAndReadState, } from './sync.js';
 import { installWebUiServiceAndReadState, markBadWebUiReleaseAndReadState, readWebUiState, readWebUiConfig, restartWebUiServiceAndReadState, rollbackWebUiServiceAndReadState, startWebUiServiceAndReadState, stopWebUiServiceAndReadState, syncConfiguredWebUiTailscaleServe, uninstallWebUiServiceAndReadState, writeWebUiConfig, } from './webUi.js';
 import { requestApplicationRestart } from './applicationRestart.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from './modelPreferences.js';
+import { cancelProviderOAuthLogin, getProviderOAuthLoginState, readProviderAuthState, removeProviderCredential, setProviderApiKey, startProviderOAuthLogin, submitProviderOAuthLoginInput, } from './providerAuth.js';
 import { readSavedConversationTitlePreferences, writeSavedConversationTitlePreferences } from './conversationTitlePreferences.js';
 import { logError, logInfo, logWarn, installProcessLogging, webRequestLoggingMiddleware } from './logging.js';
 import { createServiceAttentionMonitor, suppressMonitoredServiceAttention, writeInternalAttentionEntry, } from './internalAttention.js';
@@ -32,7 +33,7 @@ import { recoverDurableLiveConversations } from './conversationRecovery.js';
 import { createWebLiveConversationRunId, syncWebLiveConversationRun } from './conversationRuns.js';
 import { cancelDurableRun, getDurableRun, getDurableRunLog, listDurableRuns } from './durableRuns.js';
 import { buildReferencedMemoryDocsContext, buildReferencedProfilesContext, buildReferencedSkillsContext, buildReferencedTasksContext, pickPromptReferencesInOrder, resolvePromptReferences, } from './promptReferences.js';
-import { activateDueDeferredResumes, addConversationProjectLink, deleteConversationArtifact, deleteConversationAttachment, ensureConversationAttentionBaselines, getActivityConversationLink, getConversationArtifact, getConversationAttachment, getConversationProjectLink, getReadySessionDeferredResumeEntries, listConversationProjectLinks, listConversationArtifacts, listConversationAttachments, cleanMcpCliStderr, inspectCliBinary, inspectMcpCliServer, inspectMcpCliTool, listProfileActivityEntries, listProjectIds, createProjectActivityEntry, loadDeferredResumeState, loadProfileActivityReadState, markConversationAttentionRead, markConversationAttentionUnread, readConversationAttachmentDownload, readMcpCliConfig, readProject, removeConversationProjectLink, removeDeferredResume, resolveConversationAttachmentPromptFiles, resolveProjectPaths, retryDeferredResume, saveConversationAttachment, saveDeferredResumeState, saveProfileActivityReadState, setActivityConversationLinks, setConversationProjectLinks, summarizeConversationAttention, writeProfileActivityEntry, } from '@personal-agent/core';
+import { activateDueDeferredResumes, addConversationProjectLink, deleteConversationArtifact, deleteConversationAttachment, ensureConversationAttentionBaselines, getActivityConversationLink, getConversationArtifact, getConversationAttachment, getConversationProjectLink, getProfilesRoot, getReadySessionDeferredResumeEntries, getStateRoot, listConversationProjectLinks, listConversationArtifacts, listConversationAttachments, cleanMcpCliStderr, inspectCliBinary, inspectMcpCliServer, inspectMcpCliTool, listProfileActivityEntries, listProjectIds, createProjectActivityEntry, loadDeferredResumeState, loadProfileActivityReadState, markConversationAttentionRead, markConversationAttentionUnread, readConversationAttachmentDownload, readMcpCliConfig, readProject, removeConversationProjectLink, removeDeferredResume, resolveConversationAttachmentPromptFiles, resolveProjectPaths, retryDeferredResume, saveConversationAttachment, saveDeferredResumeState, saveProfileActivityReadState, setActivityConversationLinks, setConversationProjectLinks, summarizeConversationAttention, writeProfileActivityEntry, } from '@personal-agent/core';
 import { installPackageSource, listProfiles, materializeProfileToAgentDir, readPackageSourceTargetState, resolveResourceProfile, } from '@personal-agent/resources';
 import { completeDeferredResumeConversationRun, loadDaemonConfig, markDeferredResumeConversationRunReady, markDeferredResumeConversationRunRetryScheduled, parsePendingOperation, resolveDaemonPaths, startScheduledTaskRun, startBackgroundRun, } from '@personal-agent/daemon';
 import { addProjectMilestone, createProjectRecord, createProjectTaskRecord, deleteProjectMilestone, deleteProjectRecord, deleteProjectTaskRecord, moveProjectMilestone, moveProjectTaskRecord, readProjectDetailFromProject, readProjectSource, saveProjectSource, updateProjectMilestone, updateProjectRecord, updateProjectTaskRecord, } from './projects.js';
@@ -43,9 +44,10 @@ const PORT = parseInt(process.env.PA_WEB_PORT ?? '3741', 10);
 const DEFAULT_REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? DEFAULT_REPO_ROOT;
 const DEFAULT_WEB_CWD = process.cwd();
-const AGENT_DIR = join(homedir(), '.local/state/personal-agent/pi-agent');
+const AGENT_DIR = join(getStateRoot(), 'pi-agent');
+const AUTH_FILE = join(AGENT_DIR, 'auth.json');
 const SESSIONS_DIR = join(AGENT_DIR, 'sessions');
-const TASK_STATE_FILE = join(homedir(), '.local/state/personal-agent/daemon/task-state.json');
+const TASK_STATE_FILE = join(getStateRoot(), 'daemon', 'task-state.json');
 const PROFILE_CONFIG_FILE = getProfileConfigFilePath();
 const DEFERRED_RESUME_POLL_MS = 3_000;
 const DEFERRED_RESUME_RETRY_DELAY_MS = 30_000;
@@ -56,7 +58,10 @@ function resolveDaemonRoot() {
 }
 installProcessLogging();
 function listAvailableProfiles() {
-    return listProfiles({ repoRoot: REPO_ROOT });
+    return listProfiles({
+        repoRoot: REPO_ROOT,
+        profilesRoot: getProfilesRoot(),
+    });
 }
 function applyProfileEnvironment(profile) {
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = profile;
@@ -65,7 +70,10 @@ function applyProfileEnvironment(profile) {
 }
 function materializeWebProfile(profile) {
     applyProfileEnvironment(profile);
-    const resolved = resolveResourceProfile(profile, { repoRoot: REPO_ROOT });
+    const resolved = resolveResourceProfile(profile, {
+        repoRoot: REPO_ROOT,
+        profilesRoot: getProfilesRoot(),
+    });
     materializeProfileToAgentDir(resolved, AGENT_DIR);
 }
 let currentProfile = resolveActiveProfile({
@@ -151,7 +159,10 @@ function buildLiveSessionExtensionFactories() {
     ];
 }
 function buildLiveSessionResourceOptions() {
-    const resolved = resolveResourceProfile(getCurrentProfile(), { repoRoot: REPO_ROOT });
+    const resolved = resolveResourceProfile(getCurrentProfile(), {
+        repoRoot: REPO_ROOT,
+        profilesRoot: getProfilesRoot(),
+    });
     return {
         additionalExtensionPaths: resolved.extensionEntries,
         additionalSkillPaths: resolved.skillDirs,
@@ -160,8 +171,14 @@ function buildLiveSessionResourceOptions() {
     };
 }
 function buildPackageInstallState(profile = getCurrentProfile()) {
-    const profileTargets = listProfiles({ repoRoot: REPO_ROOT }).map((profileName) => ({
-        ...readPackageSourceTargetState('profile', profileName, { repoRoot: REPO_ROOT }),
+    const profileTargets = listProfiles({
+        repoRoot: REPO_ROOT,
+        profilesRoot: getProfilesRoot(),
+    }).map((profileName) => ({
+        ...readPackageSourceTargetState('profile', profileName, {
+            repoRoot: REPO_ROOT,
+            profilesRoot: getProfilesRoot(),
+        }),
         profileName,
         current: profileName === profile,
     }));
@@ -725,7 +742,7 @@ function buildDistilledMemoryMarkdown(input) {
     return `${frontmatterLines.join('\n')}${input.body.startsWith('#') ? '' : '\n'}${input.body}`;
 }
 function saveDistilledConversationMemory(options) {
-    const memoryDir = join(REPO_ROOT, `profiles/${options.profile}/agent/memory`);
+    const memoryDir = join(getProfilesRoot(), options.profile, 'agent', 'memory');
     mkdirSync(memoryDir, { recursive: true });
     const draft = deriveDistilledConversationMemoryDraft(options);
     const id = allocateDistilledMemoryId(memoryDir, draft.title);
@@ -1348,6 +1365,31 @@ app.post('/api/daemon/service/uninstall', async (_req, res) => {
         res.status(500).json({ error: String(err) });
     }
 });
+// ── Sync ─────────────────────────────────────────────────────────────────────
+app.get('/api/sync', async (_req, res) => {
+    try {
+        res.json(await readSyncState());
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/sync/run', async (_req, res) => {
+    try {
+        res.json(await requestSyncRunAndReadState());
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
 // ── Web UI ───────────────────────────────────────────────────────────────────
 app.get('/api/web-ui/state', (_req, res) => {
     try {
@@ -1587,7 +1629,10 @@ function listAvailableModelDefinitions() {
 }
 function listAvailableThemeIds() {
     try {
-        const profile = resolveResourceProfile(getCurrentProfile(), { repoRoot: REPO_ROOT });
+        const profile = resolveResourceProfile(getCurrentProfile(), {
+            repoRoot: REPO_ROOT,
+            profilesRoot: getProfilesRoot(),
+        });
         const ids = profile.themeEntries
             .map((entry) => basename(entry, '.json').trim())
             .filter((entry) => entry.length > 0);
@@ -1630,6 +1675,140 @@ app.patch('/api/models/current', (req, res) => {
             runtimeSettingsFile: SETTINGS_FILE,
         });
         res.json({ ok: true });
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.get('/api/provider-auth', (_req, res) => {
+    try {
+        res.json(readProviderAuthState(AUTH_FILE));
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.patch('/api/provider-auth/:provider/api-key', (req, res) => {
+    try {
+        const { provider } = req.params;
+        const { apiKey } = req.body;
+        if (!provider || provider.trim().length === 0) {
+            res.status(400).json({ error: 'provider required' });
+            return;
+        }
+        if (typeof apiKey !== 'string' || apiKey.trim().length === 0) {
+            res.status(400).json({ error: 'apiKey required' });
+            return;
+        }
+        const state = setProviderApiKey(AUTH_FILE, provider, apiKey);
+        res.json(state);
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.delete('/api/provider-auth/:provider', (req, res) => {
+    try {
+        const { provider } = req.params;
+        if (!provider || provider.trim().length === 0) {
+            res.status(400).json({ error: 'provider required' });
+            return;
+        }
+        const state = removeProviderCredential(AUTH_FILE, provider);
+        res.json(state);
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/provider-auth/:provider/oauth/start', (req, res) => {
+    try {
+        const { provider } = req.params;
+        if (!provider || provider.trim().length === 0) {
+            res.status(400).json({ error: 'provider required' });
+            return;
+        }
+        const login = startProviderOAuthLogin(AUTH_FILE, provider);
+        res.json(login);
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.get('/api/provider-auth/oauth/:loginId', (req, res) => {
+    try {
+        const { loginId } = req.params;
+        if (!loginId || loginId.trim().length === 0) {
+            res.status(400).json({ error: 'loginId required' });
+            return;
+        }
+        const login = getProviderOAuthLoginState(loginId);
+        if (!login) {
+            res.status(404).json({ error: `OAuth login not found: ${loginId}` });
+            return;
+        }
+        res.json(login);
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/provider-auth/oauth/:loginId/input', (req, res) => {
+    try {
+        const { loginId } = req.params;
+        const { value } = req.body;
+        if (!loginId || loginId.trim().length === 0) {
+            res.status(400).json({ error: 'loginId required' });
+            return;
+        }
+        if (typeof value !== 'string') {
+            res.status(400).json({ error: 'value must be a string' });
+            return;
+        }
+        const login = submitProviderOAuthLoginInput(loginId, value);
+        res.json(login);
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.post('/api/provider-auth/oauth/:loginId/cancel', (req, res) => {
+    try {
+        const { loginId } = req.params;
+        if (!loginId || loginId.trim().length === 0) {
+            res.status(400).json({ error: 'loginId required' });
+            return;
+        }
+        const login = cancelProviderOAuthLogin(loginId);
+        res.json(login);
     }
     catch (err) {
         logError('request handler error', {
@@ -1729,6 +1908,7 @@ app.post('/api/tools/packages/install', (req, res) => {
         const currentProfile = getCurrentProfile();
         const result = installPackageSource({
             repoRoot: REPO_ROOT,
+            profilesRoot: getProfilesRoot(),
             profileName: target === 'profile' ? profileName : undefined,
             source,
             target,
@@ -3927,7 +4107,7 @@ app.post('/api/projects/:id/brief/regenerate', async (req, res) => {
             linkedConversations: detail.linkedConversations,
             activityEntries: listActivityForCurrentProfile().filter((entry) => (entry.relatedProjectIds ?? []).includes(req.params.id)),
             settingsFile: SETTINGS_FILE,
-            authFile: join(AGENT_DIR, 'auth.json'),
+            authFile: AUTH_FILE,
         });
         saveProjectBrief({
             repoRoot: REPO_ROOT,
@@ -4344,7 +4524,7 @@ function listMemoryDocsForCurrentProfile(options = {}) {
     const includeSearchText = options.includeSearchText === true;
     const profile = getCurrentProfile();
     const memoryDocs = [];
-    const memDir = join(REPO_ROOT, `profiles/${profile}/agent/memory`);
+    const memDir = join(getProfilesRoot(), profile, 'agent', 'memory');
     if (!existsSync(memDir)) {
         return memoryDocs;
     }
@@ -4391,7 +4571,7 @@ function listSkillsForCurrentProfile() {
     const skills = [];
     const skillSources = profile === 'shared' ? ['shared'] : ['shared', profile];
     for (const src of skillSources) {
-        const dir = join(REPO_ROOT, `profiles/${src}/agent/skills`);
+        const dir = join(getProfilesRoot(), src, 'agent', 'skills');
         if (!existsSync(dir)) {
             continue;
         }
@@ -4417,7 +4597,7 @@ function listSkillsForCurrentProfile() {
 function listProfileAgentItems() {
     const items = [];
     for (const profile of listAvailableProfiles()) {
-        const filePath = join(REPO_ROOT, `profiles/${profile}/agent/AGENTS.md`);
+        const filePath = join(getProfilesRoot(), profile, 'agent', 'AGENTS.md');
         if (!existsSync(filePath)) {
             continue;
         }
@@ -4491,8 +4671,8 @@ function buildRecentReadUsage(trackedPaths) {
 app.get('/api/memory', (_req, res) => {
     try {
         const profile = getCurrentProfile();
-        const sharedPath = join(REPO_ROOT, 'profiles/shared/agent/AGENTS.md');
-        const profilePath = join(REPO_ROOT, `profiles/${profile}/agent/AGENTS.md`);
+        const sharedPath = join(REPO_ROOT, 'profiles', 'shared', 'agent', 'AGENTS.md');
+        const profilePath = join(getProfilesRoot(), profile, 'agent', 'AGENTS.md');
         const agentsMd = [{
                 source: 'shared',
                 path: sharedPath,

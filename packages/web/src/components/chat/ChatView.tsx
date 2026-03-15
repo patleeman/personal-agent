@@ -1202,6 +1202,11 @@ export function ChatView({
   const streamingStatusLabel = getStreamingStatusLabel(messages, isStreaming);
   const lastBlock = messages[messages.length - 1];
   const showStreamingIndicator = !!streamingStatusLabel && (!lastBlock || lastBlock.type === 'user');
+  const shouldUseContentVisibility = renderItems.length >= 120;
+  const contentVisibilityStyle = useMemo(
+    () => (shouldUseContentVisibility ? { contentVisibility: 'auto' } : undefined),
+    [shouldUseContentVisibility],
+  );
 
   function renderMessageBlock(block: MessageBlock, index: number, isTailItem: boolean) {
     const markerKind = block.type === 'user'
@@ -1265,6 +1270,7 @@ export function ChatView({
         id={`msg-${index}`}
         data-message-index={index}
         data-conversation-rail-kind={markerKind}
+        style={contentVisibilityStyle}
       >
         {el}
       </div>
@@ -1282,7 +1288,7 @@ export function ChatView({
             const live = isStreaming && isTailItem;
 
             return (
-              <div key={`trace-${item.startIndex}-${item.endIndex}`}>
+              <div key={`trace-${item.startIndex}-${item.endIndex}`} style={contentVisibilityStyle}>
                 {item.blocks.map((_, offset) => (
                   <span key={`anchor-${item.startIndex + offset}`} id={`msg-${item.startIndex + offset}`} className="block h-0 overflow-hidden" aria-hidden />
                 ))}

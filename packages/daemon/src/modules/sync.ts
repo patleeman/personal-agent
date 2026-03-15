@@ -1,9 +1,17 @@
 import { existsSync } from 'fs';
 import { hostname } from 'os';
-import { join } from 'path';
+import { join, resolve, sep } from 'path';
+import {
+  createProjectActivityEntry,
+  writeProfileActivityEntry,
+  type ProjectActivityEntryDocument,
+} from '@personal-agent/core';
 import type { SyncModuleConfig } from '../config.js';
-import type { DaemonModule } from './types.js';
+import type { DaemonEvent } from '../types.js';
+import type { DaemonModule, DaemonModuleContext } from './types.js';
 import { runCommand } from './command.js';
+
+const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 
 interface SyncModuleState {
   running: boolean;
@@ -16,6 +24,11 @@ interface SyncModuleState {
   lastConflictFingerprint?: string;
   lastResolverStartedAt?: string;
   lastResolverResult?: string;
+  lastErrorResolverStartedAt?: string;
+  lastErrorResolverResult?: string;
+  lastErrorResolverFingerprint?: string;
+  lastNotifiedErrorFingerprint?: string;
+  lastNotifiedConflictFingerprint?: string;
 }
 
 function nowIso(): string {
@@ -29,6 +42,15 @@ function trimOutput(value: string, limit = 600): string {
   }
 
   return `${trimmed.slice(0, limit - 1)}…`;
+}
+
+function summarizeForLine(value: string, limit = 120): string {
+  const singleLine = value.replace(/\s+/g, ' ').trim();
+  if (singleLine.length <= limit) {
+    return singleLine;
+  }
+
+  return `${singleLine.slice(0, limit - 1)}…`;
 }
 
 function normalizeConflictFingerprint(conflicts: string[]): string {
@@ -59,6 +81,34 @@ function buildConflictResolverPrompt(repoDir: string, branch: string, remote: st
     '- commit the resolution',
     '- push to remote branch',
     '- summarize what was resolved',
+  ].join('\n');
+}
+
+function buildErrorResolverPrompt(input: {
+  repoDir: string;
+  branch: string;
+  remote: string;
+  phase: string;
+  trigger: string;
+  error: string;
+}): string {
+  return [
+    `Diagnose and recover a personal-agent git sync failure in ${input.repoDir}.`,
+    '',
+    `Phase: ${input.phase}`,
+    `Trigger: ${input.trigger}`,
+    `Remote/branch: ${input.remote}/${input.branch}`,
+    '',
+    'Latest error:',
+    input.error,
+    '',
+    'Instructions:',
+    '- inspect repository state (status, branch, remotes, and pending operations)',
+    '- determine root cause and apply the minimal safe fix',
+    '- do not discard durable state data unless absolutely required',
+    '- run the relevant git commands to verify recovery (fetch/merge/push as appropriate)',
+    '- if credentials/network are the blocker, capture precise remediation steps',
+    '- summarize what changed and what remains blocked',
   ].join('\n');
 }
 
@@ -102,6 +152,163 @@ async function remoteExists(repoDir: string, remote: string): Promise<boolean> {
   return result.code === 0;
 }
 
+function sanitizeProfileName(raw: string | undefined): string | undefined {
+  if (!raw) {
+    return undefined;
+  }
+
+  const normalized = raw.trim();
+  return PROFILE_NAME_PATTERN.test(normalized) ? normalized : undefined;
+}
+
+function inferProfileFromTaskDir(taskDir: string): string | undefined {
+  const normalized = resolve(taskDir);
+  const segments = normalized.split(sep).filter((segment) => segment.length > 0);
+  const profilesIndex = segments.lastIndexOf('profiles');
+  if (profilesIndex < 0) {
+    return undefined;
+  }
+
+  return sanitizeProfileName(segments[profilesIndex + 1]);
+}
+
+function resolveActivityProfile(context: DaemonModuleContext): string {
+  return inferProfileFromTaskDir(context.config.modules.tasks.taskDir)
+    ?? sanitizeProfileName(process.env.PERSONAL_AGENT_ACTIVE_PROFILE)
+    ?? sanitizeProfileName(process.env.PERSONAL_AGENT_PROFILE)
+    ?? 'shared';
+}
+
+function sanitizeActivityIdSegment(value: string): string {
+  const sanitized = value
+    .replace(/[^a-zA-Z0-9-_]+/g, '-')
+    .replace(/^-+/, '')
+    .replace(/-+$/, '');
+
+  return sanitized.length > 0 ? sanitized : 'activity';
+}
+
+function createActivityId(prefix: string, createdAt: string): string {
+  const stamp = createdAt.replace(/[-:.TZ]/g, '').slice(0, 14);
+  const random = Math.random().toString(36).slice(2, 8);
+  return `${prefix}-${sanitizeActivityIdSegment(stamp)}-${sanitizeActivityIdSegment(random)}`;
+}
+
+function triggerLabel(event: DaemonEvent): string {
+  return event.source
+    ? `${event.type} (${event.source})`
+    : event.type;
+}
+
+function writeSyncActivity(
+  context: DaemonModuleContext,
+  profile: string,
+  input: {
+    idPrefix: string;
+    kind: ProjectActivityEntryDocument['kind'];
+    createdAt?: string;
+    summary: string;
+    details?: string;
+  },
+): void {
+  const createdAt = input.createdAt ?? nowIso();
+
+  try {
+    writeProfileActivityEntry({
+      stateRoot: context.paths.root,
+      profile,
+      entry: createProjectActivityEntry({
+        id: createActivityId(input.idPrefix, createdAt),
+        createdAt,
+        profile,
+        kind: input.kind,
+        summary: input.summary,
+        details: input.details,
+        notificationState: 'none',
+      }),
+    });
+  } catch (error) {
+    context.logger.warn(`sync activity write failed: ${(error as Error).message}`);
+  }
+}
+
+function formatConflictDetails(config: SyncModuleConfig, conflicts: string[], trigger: string): string {
+  const conflictLines = conflicts.length > 0
+    ? conflicts.map((file) => `- ${file}`)
+    : ['- (unknown)'];
+
+  return [
+    `Repository: ${config.repoDir}`,
+    `Remote/branch: ${config.remote}/${config.branch}`,
+    `Trigger: ${trigger}`,
+    '',
+    'Conflicted files:',
+    ...conflictLines,
+    '',
+    config.autoResolveWithAgent
+      ? `Auto resolver is enabled (task: ${config.conflictResolverTaskSlug}).`
+      : 'Auto resolver is disabled; resolve conflicts manually.',
+  ].join('\n');
+}
+
+function maybeNotifySyncError(
+  state: SyncModuleState,
+  context: DaemonModuleContext,
+  config: SyncModuleConfig,
+  profile: string,
+  event: DaemonEvent,
+  phase: string,
+  message: string,
+): void {
+  const normalized = message.trim();
+  if (normalized.length === 0) {
+    return;
+  }
+
+  const fingerprint = `${phase}:${normalized}`;
+  if (state.lastNotifiedErrorFingerprint === fingerprint) {
+    return;
+  }
+
+  state.lastNotifiedErrorFingerprint = fingerprint;
+
+  writeSyncActivity(context, profile, {
+    idPrefix: 'sync-error',
+    kind: 'service',
+    summary: `Sync ${phase} failed: ${summarizeForLine(normalized, 90)}`,
+    details: [
+      `Repository: ${config.repoDir}`,
+      `Remote/branch: ${config.remote}/${config.branch}`,
+      `Trigger: ${triggerLabel(event)}`,
+      '',
+      normalized,
+    ].join('\n'),
+  });
+}
+
+function maybeNotifyConflicts(
+  state: SyncModuleState,
+  context: DaemonModuleContext,
+  config: SyncModuleConfig,
+  profile: string,
+  event: DaemonEvent,
+  conflicts: string[],
+): void {
+  const fingerprint = normalizeConflictFingerprint(conflicts);
+  if (state.lastNotifiedConflictFingerprint === fingerprint) {
+    return;
+  }
+
+  state.lastNotifiedConflictFingerprint = fingerprint;
+
+  writeSyncActivity(context, profile, {
+    idPrefix: 'sync-conflict',
+    kind: 'service',
+    summary: `Sync blocked by merge conflicts (${conflicts.length} file${conflicts.length === 1 ? '' : 's'}).`,
+    details: formatConflictDetails(config, conflicts, triggerLabel(event)),
+  });
+}
+
 async function startConflictResolverRun(config: SyncModuleConfig, conflicts: string[]): Promise<string> {
   const prompt = buildConflictResolverPrompt(config.repoDir, config.branch, config.remote, conflicts);
 
@@ -128,13 +335,57 @@ async function startConflictResolverRun(config: SyncModuleConfig, conflicts: str
   return trimOutput(result.stdout || 'started');
 }
 
+async function startErrorResolverRun(input: {
+  config: SyncModuleConfig;
+  phase: string;
+  error: string;
+  trigger: string;
+  cwd: string;
+}): Promise<string> {
+  const prompt = buildErrorResolverPrompt({
+    repoDir: input.config.repoDir,
+    branch: input.config.branch,
+    remote: input.config.remote,
+    phase: input.phase,
+    trigger: input.trigger,
+    error: input.error,
+  });
+
+  const result = await runCommand(
+    'pa',
+    [
+      'runs',
+      'start',
+      input.config.errorResolverTaskSlug,
+      '--cwd',
+      input.cwd,
+      '--',
+      'pa',
+      '-p',
+      prompt,
+    ],
+    60_000,
+  );
+
+  if (result.code !== 0) {
+    throw new Error(result.stderr || result.stdout || `pa runs start failed with exit code ${result.code}`);
+  }
+
+  return trimOutput(result.stdout || 'started');
+}
+
 export function createSyncModule(config: SyncModuleConfig): DaemonModule {
   const state: SyncModuleState = {
     running: false,
     lastConflictFiles: [],
   };
 
-  async function maybeStartConflictResolver(conflicts: string[], context: Parameters<DaemonModule['handleEvent']>[1]): Promise<void> {
+  async function maybeStartConflictResolver(
+    conflicts: string[],
+    event: DaemonEvent,
+    context: DaemonModuleContext,
+    profile: string,
+  ): Promise<void> {
     if (!config.autoResolveWithAgent) {
       return;
     }
@@ -157,19 +408,106 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
       state.lastResolverResult = resolverResult;
       state.lastConflictFingerprint = fingerprint;
       context.logger.warn(`git sync conflict detected; started resolver run (${resolverResult})`);
+
+      writeSyncActivity(context, profile, {
+        idPrefix: 'sync-resolver',
+        kind: 'background-run',
+        createdAt: now,
+        summary: 'Sync conflict resolver run started.',
+        details: [
+          `Repository: ${config.repoDir}`,
+          `Remote/branch: ${config.remote}/${config.branch}`,
+          `Trigger: ${triggerLabel(event)}`,
+          '',
+          'Conflicted files:',
+          ...conflicts.map((file) => `- ${file}`),
+          '',
+          'Resolver output:',
+          resolverResult,
+        ].join('\n'),
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       state.lastError = `conflict resolver start failed: ${message}`;
       context.logger.error(state.lastError);
+      maybeNotifySyncError(state, context, config, profile, event, 'resolver', state.lastError);
     }
   }
 
-  async function runSyncCycle(context: Parameters<DaemonModule['handleEvent']>[1]): Promise<void> {
+  async function maybeStartErrorResolver(input: {
+    phase: string;
+    message: string;
+    event: DaemonEvent;
+    context: DaemonModuleContext;
+    profile: string;
+  }): Promise<void> {
+    if (!config.autoResolveErrorsWithAgent) {
+      return;
+    }
+
+    const normalized = input.message.trim();
+    if (normalized.length === 0) {
+      return;
+    }
+
+    const fingerprint = `${input.phase}:${normalized}`;
+    const now = nowIso();
+    const cooldownMs = Math.max(1, config.errorResolverCooldownMinutes) * 60_000;
+    const canRetryByTime = !state.lastErrorResolverStartedAt
+      || (Date.now() - Date.parse(state.lastErrorResolverStartedAt)) >= cooldownMs;
+    const shouldStartResolver = state.lastErrorResolverFingerprint !== fingerprint || canRetryByTime;
+
+    if (!shouldStartResolver) {
+      return;
+    }
+
+    try {
+      const resolverResult = await startErrorResolverRun({
+        config,
+        phase: input.phase,
+        error: normalized,
+        trigger: triggerLabel(input.event),
+        cwd: input.context.paths.root,
+      });
+
+      state.lastErrorResolverStartedAt = now;
+      state.lastErrorResolverResult = resolverResult;
+      state.lastErrorResolverFingerprint = fingerprint;
+      input.context.logger.warn(`git sync error detected; started error resolver run (${resolverResult})`);
+
+      writeSyncActivity(input.context, input.profile, {
+        idPrefix: 'sync-error-resolver',
+        kind: 'background-run',
+        createdAt: now,
+        summary: 'Sync error resolver run started.',
+        details: [
+          `Repository: ${config.repoDir}`,
+          `Remote/branch: ${config.remote}/${config.branch}`,
+          `Trigger: ${triggerLabel(input.event)}`,
+          `Phase: ${input.phase}`,
+          '',
+          'Error:',
+          normalized,
+          '',
+          'Resolver output:',
+          resolverResult,
+        ].join('\n'),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      state.lastError = `error resolver start failed: ${message}`;
+      input.context.logger.error(state.lastError);
+      maybeNotifySyncError(state, input.context, config, input.profile, input.event, 'error-resolver', state.lastError);
+    }
+  }
+
+  async function runSyncCycle(event: DaemonEvent, context: DaemonModuleContext): Promise<void> {
     if (state.running) {
       return;
     }
 
     state.running = true;
+    const profile = resolveActivityProfile(context);
 
     try {
       const startedAt = nowIso();
@@ -178,6 +516,14 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
       if (!existsSync(join(config.repoDir, '.git'))) {
         state.lastError = `sync repo not initialized: ${config.repoDir}`;
         context.logger.warn(state.lastError);
+        maybeNotifySyncError(state, context, config, profile, event, 'setup', state.lastError);
+        await maybeStartErrorResolver({
+          phase: 'setup',
+          message: state.lastError,
+          event,
+          context,
+          profile,
+        });
         return;
       }
 
@@ -186,7 +532,9 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
         state.lastConflictAt = startedAt;
         state.lastConflictFiles = preexistingConflicts;
         state.lastError = `sync blocked by ${preexistingConflicts.length} unresolved merge conflict(s)`;
-        await maybeStartConflictResolver(preexistingConflicts, context);
+
+        maybeNotifyConflicts(state, context, config, profile, event, preexistingConflicts);
+        await maybeStartConflictResolver(preexistingConflicts, event, context, profile);
         return;
       }
 
@@ -194,6 +542,14 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
       if (addResult.code !== 0) {
         state.lastError = addResult.stderr || addResult.stdout || 'git add failed';
         context.logger.warn(`git sync add failed: ${state.lastError}`);
+        maybeNotifySyncError(state, context, config, profile, event, 'add', state.lastError);
+        await maybeStartErrorResolver({
+          phase: 'add',
+          message: state.lastError,
+          event,
+          context,
+          profile,
+        });
         return;
       }
 
@@ -203,6 +559,14 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
         if (commitResult.code !== 0) {
           state.lastError = commitResult.stderr || commitResult.stdout || 'git commit failed';
           context.logger.warn(`git sync commit failed: ${state.lastError}`);
+          maybeNotifySyncError(state, context, config, profile, event, 'commit', state.lastError);
+          await maybeStartErrorResolver({
+            phase: 'commit',
+            message: state.lastError,
+            event,
+            context,
+            profile,
+          });
           return;
         }
 
@@ -211,6 +575,11 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
 
       if (!(await remoteExists(config.repoDir, config.remote))) {
         state.lastError = undefined;
+        state.lastConflictFiles = [];
+        state.lastConflictFingerprint = undefined;
+        state.lastErrorResolverFingerprint = undefined;
+        state.lastNotifiedConflictFingerprint = undefined;
+        state.lastNotifiedErrorFingerprint = undefined;
         state.lastSuccessAt = nowIso();
         return;
       }
@@ -219,6 +588,14 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
       if (fetchResult.code !== 0) {
         state.lastError = fetchResult.stderr || fetchResult.stdout || 'git fetch failed';
         context.logger.warn(`git sync fetch failed: ${state.lastError}`);
+        maybeNotifySyncError(state, context, config, profile, event, 'fetch', state.lastError);
+        await maybeStartErrorResolver({
+          phase: 'fetch',
+          message: state.lastError,
+          event,
+          context,
+          profile,
+        });
         return;
       }
 
@@ -230,12 +607,21 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
           state.lastConflictFiles = conflicts;
           state.lastError = `sync blocked by ${conflicts.length} unresolved merge conflict(s)`;
           context.logger.warn(state.lastError);
-          await maybeStartConflictResolver(conflicts, context);
+          maybeNotifyConflicts(state, context, config, profile, event, conflicts);
+          await maybeStartConflictResolver(conflicts, event, context, profile);
           return;
         }
 
         state.lastError = mergeResult.stderr || mergeResult.stdout || 'git merge failed';
         context.logger.warn(`git sync merge failed: ${state.lastError}`);
+        maybeNotifySyncError(state, context, config, profile, event, 'merge', state.lastError);
+        await maybeStartErrorResolver({
+          phase: 'merge',
+          message: state.lastError,
+          event,
+          context,
+          profile,
+        });
         return;
       }
 
@@ -243,16 +629,36 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
       if (pushResult.code !== 0) {
         state.lastError = pushResult.stderr || pushResult.stdout || 'git push failed';
         context.logger.warn(`git sync push failed: ${state.lastError}`);
+        maybeNotifySyncError(state, context, config, profile, event, 'push', state.lastError);
+        await maybeStartErrorResolver({
+          phase: 'push',
+          message: state.lastError,
+          event,
+          context,
+          profile,
+        });
         return;
       }
 
       state.lastConflictFiles = [];
+      state.lastConflictFingerprint = undefined;
+      state.lastErrorResolverFingerprint = undefined;
+      state.lastNotifiedConflictFingerprint = undefined;
       state.lastError = undefined;
+      state.lastNotifiedErrorFingerprint = undefined;
       state.lastSuccessAt = nowIso();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       state.lastError = message;
       context.logger.warn(`git sync cycle failed: ${message}`);
+      maybeNotifySyncError(state, context, config, profile, event, 'runtime', message);
+      await maybeStartErrorResolver({
+        phase: 'runtime',
+        message,
+        event,
+        context,
+        profile,
+      });
     } finally {
       state.running = false;
     }
@@ -279,7 +685,7 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
         return;
       }
 
-      await runSyncCycle(context);
+      await runSyncCycle(event, context);
     },
 
     getStatus(): Record<string, unknown> {
@@ -291,6 +697,9 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
         autoResolveWithAgent: config.autoResolveWithAgent,
         conflictResolverTaskSlug: config.conflictResolverTaskSlug,
         resolverCooldownMinutes: config.resolverCooldownMinutes,
+        autoResolveErrorsWithAgent: config.autoResolveErrorsWithAgent,
+        errorResolverTaskSlug: config.errorResolverTaskSlug,
+        errorResolverCooldownMinutes: config.errorResolverCooldownMinutes,
         running: state.running,
         lastRunAt: state.lastRunAt,
         lastSuccessAt: state.lastSuccessAt,
@@ -299,6 +708,8 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
         lastConflictFiles: state.lastConflictFiles,
         lastResolverStartedAt: state.lastResolverStartedAt,
         lastResolverResult: state.lastResolverResult,
+        lastErrorResolverStartedAt: state.lastErrorResolverStartedAt,
+        lastErrorResolverResult: state.lastErrorResolverResult,
         lastError: state.lastError,
       };
     },

@@ -619,13 +619,27 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   }, []);
 
   const runLookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
+  const isSessionRunning = Boolean(sessions?.find((session) => session.id === id)?.isRunning);
+  const runMentionsLastFetchedAtRef = useRef(0);
 
   useEffect(() => load(), [load]);
   useEffect(() => {
     void loadRuns();
-  }, [id, loadRuns, versions.sessions, versions.tasks]);
+  }, [id, loadRuns, versions.tasks]);
 
   useEffect(() => {
+    runMentionsLastFetchedAtRef.current = 0;
+  }, [id]);
+
+  useEffect(() => {
+    // Session detail can exceed MBs for long conversations; throttle mention scans while live.
+    const minRefreshIntervalMs = isSessionRunning ? 12_000 : 0;
+    const now = Date.now();
+    if (minRefreshIntervalMs > 0 && (now - runMentionsLastFetchedAtRef.current) < minRefreshIntervalMs) {
+      return;
+    }
+
+    runMentionsLastFetchedAtRef.current = now;
     let cancelled = false;
 
     api.sessionDetail(id)
@@ -645,7 +659,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     return () => {
       cancelled = true;
     };
-  }, [id, versions.sessions]);
+  }, [id, versions.sessions, isSessionRunning]);
 
   useEffect(() => {
     setChangingCwd(false);

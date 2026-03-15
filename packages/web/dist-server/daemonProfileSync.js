@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { getProfilesRoot } from '@personal-agent/core';
 import { getDaemonConfigFilePath, getDaemonStatus, pingDaemon, startDaemonDetached, stopDaemonGracefully, } from '@personal-agent/daemon';
 function isRecord(value) {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -7,23 +8,28 @@ function isRecord(value) {
 function normalizePath(value) {
     return resolve(value).replace(/\\/g, '/').replace(/\/+$/, '');
 }
-export function resolveProfileTaskDir(repoRoot, profile) {
-    return resolve(repoRoot, 'profiles', profile, 'agent', 'tasks');
+export function resolveProfileTaskDir(_repoRoot, profile) {
+    return resolve(getProfilesRoot(), profile, 'agent', 'tasks');
 }
 export function classifyRepoManagedTaskDir(taskDir, repoRoot) {
     if (!taskDir || taskDir.trim().length === 0) {
         return 'missing';
     }
     const normalizedTaskDir = normalizePath(taskDir);
-    const profilesRoot = normalizePath(join(repoRoot, 'profiles'));
-    if (normalizedTaskDir === profilesRoot) {
-        return 'profiles-root';
-    }
-    const relativeToProfiles = normalizedTaskDir.startsWith(`${profilesRoot}/`)
-        ? normalizedTaskDir.slice(profilesRoot.length + 1)
-        : undefined;
-    if (relativeToProfiles && /^[^/]+\/agent\/tasks(?:\/.*)?$/.test(relativeToProfiles)) {
-        return 'profile-task-dir';
+    const candidateProfilesRoots = [...new Set([
+            normalizePath(getProfilesRoot()),
+            normalizePath(join(repoRoot, 'profiles')),
+        ])];
+    for (const profilesRoot of candidateProfilesRoots) {
+        if (normalizedTaskDir === profilesRoot) {
+            return 'profiles-root';
+        }
+        const relativeToProfiles = normalizedTaskDir.startsWith(`${profilesRoot}/`)
+            ? normalizedTaskDir.slice(profilesRoot.length + 1)
+            : undefined;
+        if (relativeToProfiles && /^[^/]+\/agent\/tasks(?:\/.*)?$/.test(relativeToProfiles)) {
+            return 'profile-task-dir';
+        }
     }
     return 'other';
 }

@@ -298,6 +298,9 @@ function configureDaemonSyncModule(input: {
     autoResolveWithAgent: sync.autoResolveWithAgent === false ? false : true,
     conflictResolverTaskSlug: toOptionalString(sync.conflictResolverTaskSlug) ?? 'sync-conflict-resolver',
     resolverCooldownMinutes: parseNumber(sync.resolverCooldownMinutes, 30),
+    autoResolveErrorsWithAgent: sync.autoResolveErrorsWithAgent === false ? false : true,
+    errorResolverTaskSlug: toOptionalString(sync.errorResolverTaskSlug) ?? 'sync-error-resolver',
+    errorResolverCooldownMinutes: parseNumber(sync.errorResolverCooldownMinutes, 30),
   };
 
   root.modules = modules;
@@ -498,6 +501,7 @@ async function syncStatusCommand(args: string[]): Promise<number> {
   console.log(keyValue('Branch', syncConfig.branch));
   console.log(keyValue('Interval', `${syncConfig.intervalSeconds}s`));
   console.log(keyValue('Conflict resolver', syncConfig.autoResolveWithAgent ? 'enabled' : 'disabled'));
+  console.log(keyValue('Error resolver', syncConfig.autoResolveErrorsWithAgent ? 'enabled' : 'disabled'));
 
   if (existsSync(join(syncConfig.repoDir, '.git'))) {
     const branch = runGit(syncConfig.repoDir, ['rev-parse', '--abbrev-ref', 'HEAD'], true);
@@ -526,7 +530,8 @@ async function syncStatusCommand(args: string[]): Promise<number> {
       console.log(keyValue('Last success', toOptionalString(detail.lastSuccessAt) ?? dim('never')));
       console.log(keyValue('Last commit', toOptionalString(detail.lastCommitAt) ?? dim('none')));
       console.log(keyValue('Last conflict', toOptionalString(detail.lastConflictAt) ?? dim('none')));
-      console.log(keyValue('Last resolver', toOptionalString(detail.lastResolverStartedAt) ?? dim('none')));
+      console.log(keyValue('Last conflict resolver', toOptionalString(detail.lastResolverStartedAt) ?? dim('none')));
+      console.log(keyValue('Last error resolver', toOptionalString(detail.lastErrorResolverStartedAt) ?? dim('none')));
       if (toOptionalString(detail.lastError)) {
         console.log(keyValue('Last error', toOptionalString(detail.lastError) as string));
       }

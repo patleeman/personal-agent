@@ -175,12 +175,21 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       action: { kind: 'navigate', to: '/daemon' },
     },
     {
+      id: 'nav:sync',
+      section: 'nav',
+      title: 'Sync',
+      subtitle: 'Track automatic git sync health and run sync now',
+      keywords: ['git', 'sync', 'conflicts'],
+      order: 9,
+      action: { kind: 'navigate', to: '/sync' },
+    },
+    {
       id: 'nav:gateway',
       section: 'nav',
       title: 'Gateway',
       subtitle: 'Inspect messaging gateway state',
       keywords: ['telegram', 'bot'],
-      order: 9,
+      order: 10,
       action: { kind: 'navigate', to: '/gateway' },
     },
     {
@@ -189,7 +198,7 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       title: 'Web UI',
       subtitle: 'Inspect deployment status and releases',
       keywords: ['deploy', 'release'],
-      order: 10,
+      order: 11,
       action: { kind: 'navigate', to: '/web-ui' },
     },
     {
@@ -198,7 +207,7 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       title: 'Executions',
       subtitle: 'Browse durable runs and recoverable work',
       keywords: ['runs', 'background'],
-      order: 11,
+      order: 12,
       action: { kind: 'navigate', to: '/runs' },
     },
     {
@@ -207,7 +216,7 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       title: 'Settings',
       subtitle: 'Adjust UI and model preferences',
       keywords: ['preferences', 'config'],
-      order: 12,
+      order: 13,
       action: { kind: 'navigate', to: '/settings' },
     },
   ];

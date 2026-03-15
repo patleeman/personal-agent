@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { getConfigRoot } from '@personal-agent/core';
 function readNonEmptyString(value) {
     return typeof value === 'string' && value.trim().length > 0 ? value.trim() : '';
 }
@@ -9,7 +9,7 @@ export function getProfileConfigFilePath() {
     if (explicit && explicit.trim().length > 0) {
         return explicit;
     }
-    return join(homedir(), '.config', 'personal-agent', 'config.json');
+    return join(getConfigRoot(), 'config.json');
 }
 export function readSavedProfilePreferences(configFile = getProfileConfigFilePath()) {
     if (!existsSync(configFile)) {

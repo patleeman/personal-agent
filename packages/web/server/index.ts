@@ -27,6 +27,10 @@ import {
   uninstallDaemonServiceAndReadState,
 } from './daemon.js';
 import {
+  readSyncState,
+  requestSyncRunAndReadState,
+} from './sync.js';
+import {
   installWebUiServiceAndReadState,
   markBadWebUiReleaseAndReadState,
   readWebUiState,
@@ -41,6 +45,15 @@ import {
 } from './webUi.js';
 import { requestApplicationRestart } from './applicationRestart.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from './modelPreferences.js';
+import {
+  cancelProviderOAuthLogin,
+  getProviderOAuthLoginState,
+  readProviderAuthState,
+  removeProviderCredential,
+  setProviderApiKey,
+  startProviderOAuthLogin,
+  submitProviderOAuthLoginInput,
+} from './providerAuth.js';
 import { readSavedConversationTitlePreferences, writeSavedConversationTitlePreferences } from './conversationTitlePreferences.js';
 import { logError, logInfo, logWarn, installProcessLogging, webRequestLoggingMiddleware } from './logging.js';
 import {
@@ -201,6 +214,7 @@ const DEFAULT_REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? DEFAULT_REPO_ROOT;
 const DEFAULT_WEB_CWD = process.cwd();
 const AGENT_DIR = join(getStateRoot(), 'pi-agent');
+const AUTH_FILE = join(AGENT_DIR, 'auth.json');
 const SESSIONS_DIR = join(AGENT_DIR, 'sessions');
 const TASK_STATE_FILE = join(getStateRoot(), 'daemon', 'task-state.json');
 const PROFILE_CONFIG_FILE = getProfileConfigFilePath();
@@ -1781,6 +1795,32 @@ app.post('/api/daemon/service/uninstall', async (_req, res) => {
   }
 });
 
+// ── Sync ─────────────────────────────────────────────────────────────────────
+
+app.get('/api/sync', async (_req, res) => {
+  try {
+    res.json(await readSyncState());
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/sync/run', async (_req, res) => {
+  try {
+    res.json(await requestSyncRunAndReadState());
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // ── Web UI ───────────────────────────────────────────────────────────────────
 
 app.get('/api/web-ui/state', (_req, res) => {
@@ -2068,6 +2108,152 @@ app.patch('/api/models/current', (req, res) => {
     });
 
     res.json({ ok: true });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.get('/api/provider-auth', (_req, res) => {
+  try {
+    res.json(readProviderAuthState(AUTH_FILE));
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.patch('/api/provider-auth/:provider/api-key', (req, res) => {
+  try {
+    const { provider } = req.params;
+    const { apiKey } = req.body as { apiKey?: string };
+
+    if (!provider || provider.trim().length === 0) {
+      res.status(400).json({ error: 'provider required' });
+      return;
+    }
+
+    if (typeof apiKey !== 'string' || apiKey.trim().length === 0) {
+      res.status(400).json({ error: 'apiKey required' });
+      return;
+    }
+
+    const state = setProviderApiKey(AUTH_FILE, provider, apiKey);
+    res.json(state);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.delete('/api/provider-auth/:provider', (req, res) => {
+  try {
+    const { provider } = req.params;
+    if (!provider || provider.trim().length === 0) {
+      res.status(400).json({ error: 'provider required' });
+      return;
+    }
+
+    const state = removeProviderCredential(AUTH_FILE, provider);
+    res.json(state);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/provider-auth/:provider/oauth/start', (req, res) => {
+  try {
+    const { provider } = req.params;
+    if (!provider || provider.trim().length === 0) {
+      res.status(400).json({ error: 'provider required' });
+      return;
+    }
+
+    const login = startProviderOAuthLogin(AUTH_FILE, provider);
+    res.json(login);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.get('/api/provider-auth/oauth/:loginId', (req, res) => {
+  try {
+    const { loginId } = req.params;
+    if (!loginId || loginId.trim().length === 0) {
+      res.status(400).json({ error: 'loginId required' });
+      return;
+    }
+
+    const login = getProviderOAuthLoginState(loginId);
+    if (!login) {
+      res.status(404).json({ error: `OAuth login not found: ${loginId}` });
+      return;
+    }
+
+    res.json(login);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/provider-auth/oauth/:loginId/input', (req, res) => {
+  try {
+    const { loginId } = req.params;
+    const { value } = req.body as { value?: string };
+
+    if (!loginId || loginId.trim().length === 0) {
+      res.status(400).json({ error: 'loginId required' });
+      return;
+    }
+
+    if (typeof value !== 'string') {
+      res.status(400).json({ error: 'value must be a string' });
+      return;
+    }
+
+    const login = submitProviderOAuthLoginInput(loginId, value);
+    res.json(login);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/provider-auth/oauth/:loginId/cancel', (req, res) => {
+  try {
+    const { loginId } = req.params;
+
+    if (!loginId || loginId.trim().length === 0) {
+      res.status(400).json({ error: 'loginId required' });
+      return;
+    }
+
+    const login = cancelProviderOAuthLogin(loginId);
+    res.json(login);
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -4613,7 +4799,7 @@ app.post('/api/projects/:id/brief/regenerate', async (req, res) => {
       linkedConversations: detail.linkedConversations,
       activityEntries: listActivityForCurrentProfile().filter((entry) => (entry.relatedProjectIds ?? []).includes(req.params.id)),
       settingsFile: SETTINGS_FILE,
-      authFile: join(AGENT_DIR, 'auth.json'),
+      authFile: AUTH_FILE,
     });
     saveProjectBrief({
       repoRoot: REPO_ROOT,

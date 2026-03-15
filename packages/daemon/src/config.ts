@@ -28,6 +28,9 @@ export interface SyncModuleConfig {
   autoResolveWithAgent: boolean;
   conflictResolverTaskSlug: string;
   resolverCooldownMinutes: number;
+  autoResolveErrorsWithAgent: boolean;
+  errorResolverTaskSlug: string;
+  errorResolverCooldownMinutes: number;
 }
 
 export interface DaemonConfig {
@@ -125,6 +128,9 @@ export function getDefaultSyncModuleConfig(): SyncModuleConfig {
     autoResolveWithAgent: true,
     conflictResolverTaskSlug: 'sync-conflict-resolver',
     resolverCooldownMinutes: 30,
+    autoResolveErrorsWithAgent: true,
+    errorResolverTaskSlug: 'sync-error-resolver',
+    errorResolverCooldownMinutes: 30,
   };
 }
 

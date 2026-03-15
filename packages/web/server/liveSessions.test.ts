@@ -208,6 +208,238 @@ describe('live session subscriptions', () => {
     });
   });
 
+  it('deduplicates reordered live compaction windows against persisted history', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
+    tempDirs.push(dir);
+    const sessionFile = join(dir, 'session-reordered.jsonl');
+    writeFileSync(sessionFile, [
+      JSON.stringify({ type: 'session', id: 'session-reordered', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
+      JSON.stringify({
+        type: 'message',
+        id: 'user-1',
+        parentId: null,
+        timestamp: '2026-03-13T18:00:01.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Initial prompt' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-1',
+        parentId: 'user-1',
+        timestamp: '2026-03-13T18:00:02.000Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Initial answer' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-2',
+        parentId: 'assistant-1',
+        timestamp: '2026-03-13T18:00:03.000Z',
+        message: { role: 'assistant', content: [{ type: 'thinking', thinking: 'Pre-compaction A' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-3',
+        parentId: 'assistant-2',
+        timestamp: '2026-03-13T18:00:04.000Z',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'toolCall', id: 'tool-a', name: 'bash', arguments: { command: 'echo A' } }],
+        },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'tool-result-1',
+        parentId: 'assistant-3',
+        timestamp: '2026-03-13T18:00:04.500Z',
+        message: {
+          role: 'toolResult',
+          toolCallId: 'tool-a',
+          toolName: 'bash',
+          content: [{ type: 'text', text: 'A output' }],
+        },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-4',
+        parentId: 'tool-result-1',
+        timestamp: '2026-03-13T18:00:05.000Z',
+        message: { role: 'assistant', content: [{ type: 'thinking', thinking: 'Pre-compaction B' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-5',
+        parentId: 'assistant-4',
+        timestamp: '2026-03-13T18:00:06.000Z',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'toolCall', id: 'tool-b', name: 'read', arguments: { path: 'README.md' } }],
+        },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'tool-result-2',
+        parentId: 'assistant-5',
+        timestamp: '2026-03-13T18:00:06.500Z',
+        message: {
+          role: 'toolResult',
+          toolCallId: 'tool-b',
+          toolName: 'read',
+          content: [{ type: 'text', text: 'B output' }],
+        },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'summary-1',
+        parentId: 'tool-result-2',
+        timestamp: '2026-03-13T18:00:07.000Z',
+        message: {
+          role: 'compactionSummary',
+          summary: '## Goal\nCarry the compacted context forward.',
+        },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-6',
+        parentId: 'summary-1',
+        timestamp: '2026-03-13T18:00:08.000Z',
+        message: { role: 'assistant', content: [{ type: 'thinking', thinking: 'Post-compaction C' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-7',
+        parentId: 'assistant-6',
+        timestamp: '2026-03-13T18:00:09.000Z',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'toolCall', id: 'tool-c', name: 'edit', arguments: { path: 'notes.md' } }],
+        },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'tool-result-3',
+        parentId: 'assistant-7',
+        timestamp: '2026-03-13T18:00:09.500Z',
+        message: {
+          role: 'toolResult',
+          toolCallId: 'tool-c',
+          toolName: 'edit',
+          content: [{ type: 'text', text: 'C output' }],
+        },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-8',
+        parentId: 'tool-result-3',
+        timestamp: '2026-03-13T18:00:10.000Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Durable tail' }] },
+      }),
+      '',
+    ].join('\n'));
+
+    registry.set('session-reordered', {
+      sessionId: 'session-reordered',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Reordered compaction merge',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        sessionFile,
+        state: {
+          messages: [
+            {
+              role: 'compactionSummary',
+              summary: '## Goal\nCarry the compacted context forward.',
+              timestamp: '2026-03-13T18:00:07.000Z',
+            },
+            {
+              role: 'assistant',
+              content: [{ type: 'thinking', thinking: 'Pre-compaction A' }],
+              timestamp: '2026-03-13T18:00:03.000Z',
+            },
+            {
+              role: 'assistant',
+              content: [{ type: 'toolCall', id: 'tool-a', name: 'bash', arguments: { command: 'echo A' } }],
+              timestamp: '2026-03-13T18:00:03.100Z',
+            },
+            {
+              role: 'toolResult',
+              toolCallId: 'tool-a',
+              toolName: 'bash',
+              content: [{ type: 'text', text: 'A output' }],
+              timestamp: '2026-03-13T18:00:04.100Z',
+            },
+            {
+              role: 'assistant',
+              content: [{ type: 'thinking', thinking: 'Pre-compaction B' }],
+              timestamp: '2026-03-13T18:00:05.000Z',
+            },
+            {
+              role: 'assistant',
+              content: [{ type: 'toolCall', id: 'tool-b', name: 'read', arguments: { path: 'README.md' } }],
+              timestamp: '2026-03-13T18:00:05.100Z',
+            },
+            {
+              role: 'toolResult',
+              toolCallId: 'tool-b',
+              toolName: 'read',
+              content: [{ type: 'text', text: 'B output' }],
+              timestamp: '2026-03-13T18:00:06.100Z',
+            },
+            {
+              role: 'assistant',
+              content: [{ type: 'thinking', thinking: 'Post-compaction C' }],
+              timestamp: '2026-03-13T18:00:08.000Z',
+            },
+            {
+              role: 'assistant',
+              content: [{ type: 'toolCall', id: 'tool-c', name: 'edit', arguments: { path: 'notes.md' } }],
+              timestamp: '2026-03-13T18:00:08.100Z',
+            },
+            {
+              role: 'toolResult',
+              toolCallId: 'tool-c',
+              toolName: 'edit',
+              content: [{ type: 'text', text: 'C output' }],
+              timestamp: '2026-03-13T18:00:09.100Z',
+            },
+            {
+              role: 'assistant',
+              content: [{ type: 'thinking', thinking: 'Live-only planning' }],
+              timestamp: '2026-03-13T18:00:11.000Z',
+            },
+          ],
+          streamMessage: null,
+        },
+        getContextUsage: () => null,
+        isStreaming: true,
+      },
+    } as any);
+
+    const events: SseEvent[] = [];
+    subscribe('session-reordered', (event) => {
+      events.push(event);
+    });
+
+    expect(events[0]?.type).toBe('snapshot');
+    if (events[0]?.type !== 'snapshot') {
+      return;
+    }
+
+    const blocks = events[0].blocks;
+    const toolABlocks = blocks.filter((block): block is Extract<(typeof blocks)[number], { type: 'tool_use' }> => (
+      block.type === 'tool_use' && block.toolCallId === 'tool-a'
+    ));
+    expect(toolABlocks).toHaveLength(1);
+    expect(toolABlocks[0]?.ts).toBe('2026-03-13T18:00:03.100Z');
+
+    expect(blocks.filter((block) => block.type === 'summary')).toHaveLength(1);
+    expect(blocks.filter((block): block is Extract<(typeof blocks)[number], { type: 'thinking' }> => (
+      block.type === 'thinking' && block.text === 'Live-only planning'
+    ))).toHaveLength(1);
+    expect(blocks).toHaveLength(11);
+  });
+
   it('includes compaction summaries in the live snapshot', () => {
     registry.set('session-summary', {
       sessionId: 'session-summary',

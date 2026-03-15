@@ -2,10 +2,18 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it, vi, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { classifyRepoManagedTaskDir, normalizeDaemonTaskDirOverride, syncDaemonTaskScopeToProfile, } from './daemonProfileSync.js';
+const originalEnv = process.env;
 const tempDirs = [];
+beforeEach(() => {
+    process.env = {
+        ...originalEnv,
+        PERSONAL_AGENT_PROFILES_ROOT: '/profiles-root',
+    };
+});
 afterEach(async () => {
+    process.env = originalEnv;
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 function createTempDir() {
@@ -121,14 +129,14 @@ describe('daemonProfileSync', () => {
             configUpdated: true,
             daemonWasRunning: true,
             daemonRestarted: true,
-            desiredTaskDir: '/repo/profiles/datadog/agent/tasks',
+            desiredTaskDir: '/profiles-root/datadog/agent/tasks',
             runningTaskDir: '/repo/profiles',
         });
         expect(stopDaemonGracefully).toHaveBeenCalledTimes(1);
         expect(startDaemonDetached).toHaveBeenCalledTimes(1);
         expect(JSON.parse(readFileSync(configFile, 'utf-8'))).toEqual({});
     });
-    it('does not restart the daemon when it already matches the active profile', async () => {
+    it('restarts the daemon when running in legacy repo task scope', async () => {
         const stopDaemonGracefully = vi.fn(async () => { });
         const startDaemonDetached = vi.fn(async () => { });
         const result = await syncDaemonTaskScopeToProfile({
@@ -143,11 +151,11 @@ describe('daemonProfileSync', () => {
         expect(result).toMatchObject({
             configUpdated: false,
             daemonWasRunning: true,
-            daemonRestarted: false,
-            desiredTaskDir: '/repo/profiles/datadog/agent/tasks',
+            daemonRestarted: true,
+            desiredTaskDir: '/profiles-root/datadog/agent/tasks',
             runningTaskDir: '/repo/profiles/datadog/agent/tasks',
         });
-        expect(stopDaemonGracefully).not.toHaveBeenCalled();
-        expect(startDaemonDetached).not.toHaveBeenCalled();
+        expect(stopDaemonGracefully).toHaveBeenCalledTimes(1);
+        expect(startDaemonDetached).toHaveBeenCalledTimes(1);
     });
 });

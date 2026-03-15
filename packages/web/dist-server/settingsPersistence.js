@@ -1,8 +1,8 @@
 import { existsSync, statSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
-const DEFAULT_LOCAL_PROFILE_DIR = join(homedir(), '.config', 'personal-agent', 'local');
-export const DEFAULT_RUNTIME_SETTINGS_FILE = join(homedir(), '.local/state/personal-agent/pi-agent/settings.json');
+import { getConfigRoot, getStateRoot } from '@personal-agent/core';
+const DEFAULT_LOCAL_PROFILE_DIR = join(getConfigRoot(), 'local');
+export const DEFAULT_RUNTIME_SETTINGS_FILE = join(getStateRoot(), 'pi-agent', 'settings.json');
 function readLocalProfileDir(explicitLocalProfileDir) {
     const value = explicitLocalProfileDir ?? process.env.PERSONAL_AGENT_LOCAL_PROFILE_DIR;
     if (typeof value === 'string' && value.trim().length > 0) {
