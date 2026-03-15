@@ -8,7 +8,7 @@ tags:
   - "personal-agent"
   - "tui"
   - "gateway"
-updated: 2026-03-14
+updated: 2026-03-15
 ---
 
 # personal-agent Project Notes
@@ -32,6 +32,10 @@ updated: 2026-03-14
 - Long-term, Patrick wants one personal-agent home outside the repo that cleanly separates synced durable app/profile state, machine-local durable state, and disposable volatile runtime state.
 - If state persistence is redesigned, prefer one canonical path/writer layer instead of scattering mutable state across repo files, local config, and runtime directories.
 - Cross-machine sync for that durable home should be versioned and conflict-tolerant without relying on Git-style merge workflows for high-churn app state.
+
+## Settings + auth direction
+
+- Settings should expose provider selection and runtime auth/API-key management in the same spirit as TUI `/login`, including saving credentials into the auth JSON instead of requiring manual file edits.
 
 ## Web conversation UX constraints
 
@@ -79,6 +83,10 @@ updated: 2026-03-14
 - Cross-surface conversation handoff (Telegram ↔ web UI) should bind both surfaces to the same underlying conversation/session rather than duplicating durable threads.
 - Agent runs should survive UI restarts so the web UI can reconnect to durable local workers instead of owning the run lifecycle.
 - Archived/open conversation views should enumerate all locally available personal-agent conversations rather than filtering to the current cwd, and fork flows should stay in-app.
+
+## Conversation performance guardrails
+
+- Large tool-heavy conversations must stay responsive: live-session history merges should reconcile persisted and live blocks by stable identity instead of concatenating reordered duplicates, or SSE/API payloads can balloon and lag the UI.
 
 ## Inspectability and context reduction
 
