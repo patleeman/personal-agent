@@ -50,6 +50,38 @@ function readProjectRecord(options) {
         project: readProject(paths.projectFile),
     };
 }
+export function listProjectIndex(options) {
+    const projectIds = listProjectIds(options);
+    const projects = [];
+    const invalidProjects = [];
+    for (const projectId of projectIds) {
+        const paths = resolveProjectPaths({
+            repoRoot: options.repoRoot,
+            profile: options.profile,
+            projectId,
+        });
+        if (!existsSync(paths.projectFile)) {
+            invalidProjects.push({
+                projectId,
+                path: paths.projectFile,
+                error: 'PROJECT.yaml not found.',
+            });
+            continue;
+        }
+        try {
+            projects.push(readProject(paths.projectFile));
+        }
+        catch (error) {
+            invalidProjects.push({
+                projectId,
+                path: paths.projectFile,
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }
+    projects.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    return { projects, invalidProjects };
+}
 function moveArrayItem(items, index, direction) {
     const nextIndex = direction === 'up' ? index - 1 : index + 1;
     if (index < 0 || nextIndex < 0 || nextIndex >= items.length) {

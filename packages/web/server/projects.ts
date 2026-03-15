@@ -57,6 +57,17 @@ export interface ProjectDetail {
   timeline: ProjectTimelineEntry[];
 }
 
+export interface InvalidProjectRecord {
+  projectId: string;
+  path: string;
+  error: string;
+}
+
+export interface ProjectIndexRecord {
+  projects: ProjectDocument[];
+  invalidProjects: InvalidProjectRecord[];
+}
+
 export interface CreateProjectRecordInput {
   repoRoot?: string;
   profile: string;
@@ -240,6 +251,45 @@ function readProjectRecord(options: {
     paths,
     project: readProject(paths.projectFile),
   };
+}
+
+export function listProjectIndex(options: {
+  repoRoot?: string;
+  profile: string;
+}): ProjectIndexRecord {
+  const projectIds = listProjectIds(options);
+  const projects: ProjectDocument[] = [];
+  const invalidProjects: InvalidProjectRecord[] = [];
+
+  for (const projectId of projectIds) {
+    const paths = resolveProjectPaths({
+      repoRoot: options.repoRoot,
+      profile: options.profile,
+      projectId,
+    });
+
+    if (!existsSync(paths.projectFile)) {
+      invalidProjects.push({
+        projectId,
+        path: paths.projectFile,
+        error: 'PROJECT.yaml not found.',
+      });
+      continue;
+    }
+
+    try {
+      projects.push(readProject(paths.projectFile));
+    } catch (error) {
+      invalidProjects.push({
+        projectId,
+        path: paths.projectFile,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  projects.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  return { projects, invalidProjects };
 }
 
 function moveArrayItem<T>(items: T[], index: number, direction: 'up' | 'down'): T[] {

@@ -33,10 +33,10 @@ import { recoverDurableLiveConversations } from './conversationRecovery.js';
 import { createWebLiveConversationRunId, syncWebLiveConversationRun } from './conversationRuns.js';
 import { cancelDurableRun, getDurableRun, getDurableRunLog, listDurableRuns } from './durableRuns.js';
 import { buildReferencedMemoryDocsContext, buildReferencedProfilesContext, buildReferencedSkillsContext, buildReferencedTasksContext, pickPromptReferencesInOrder, resolvePromptReferences, } from './promptReferences.js';
-import { activateDueDeferredResumes, addConversationProjectLink, deleteConversationArtifact, deleteConversationAttachment, ensureConversationAttentionBaselines, getActivityConversationLink, getConversationArtifact, getConversationAttachment, getConversationProjectLink, getProfilesRoot, getReadySessionDeferredResumeEntries, getStateRoot, listConversationProjectLinks, listConversationArtifacts, listConversationAttachments, cleanMcpCliStderr, inspectCliBinary, inspectMcpCliServer, inspectMcpCliTool, listProfileActivityEntries, listProjectIds, createProjectActivityEntry, loadDeferredResumeState, loadProfileActivityReadState, markConversationAttentionRead, markConversationAttentionUnread, readConversationAttachmentDownload, readMcpCliConfig, readProject, removeConversationProjectLink, removeDeferredResume, resolveConversationAttachmentPromptFiles, resolveProjectPaths, retryDeferredResume, saveConversationAttachment, saveDeferredResumeState, saveProfileActivityReadState, setActivityConversationLinks, setConversationProjectLinks, summarizeConversationAttention, writeProfileActivityEntry, } from '@personal-agent/core';
+import { activateDueDeferredResumes, addConversationProjectLink, deleteConversationArtifact, deleteConversationAttachment, ensureConversationAttentionBaselines, getActivityConversationLink, getConversationArtifact, getConversationAttachment, getConversationProjectLink, getProfilesRoot, getReadySessionDeferredResumeEntries, getStateRoot, listConversationProjectLinks, listConversationArtifacts, listConversationAttachments, cleanMcpCliStderr, inspectCliBinary, inspectMcpCliServer, inspectMcpCliTool, listProfileActivityEntries, listProjectIds, createProjectActivityEntry, loadDeferredResumeState, loadProfileActivityReadState, markConversationAttentionRead, markConversationAttentionUnread, readConversationAttachmentDownload, readMcpCliConfig, removeConversationProjectLink, removeDeferredResume, resolveConversationAttachmentPromptFiles, resolveProjectPaths, retryDeferredResume, saveConversationAttachment, saveDeferredResumeState, saveProfileActivityReadState, setActivityConversationLinks, setConversationProjectLinks, summarizeConversationAttention, writeProfileActivityEntry, } from '@personal-agent/core';
 import { installPackageSource, listProfiles, materializeProfileToAgentDir, readPackageSourceTargetState, resolveResourceProfile, } from '@personal-agent/resources';
 import { completeDeferredResumeConversationRun, loadDaemonConfig, markDeferredResumeConversationRunReady, markDeferredResumeConversationRunRetryScheduled, parsePendingOperation, resolveDaemonPaths, startScheduledTaskRun, startBackgroundRun, } from '@personal-agent/daemon';
-import { addProjectMilestone, createProjectRecord, createProjectTaskRecord, deleteProjectMilestone, deleteProjectRecord, deleteProjectTaskRecord, moveProjectMilestone, moveProjectTaskRecord, readProjectDetailFromProject, readProjectSource, saveProjectSource, updateProjectMilestone, updateProjectRecord, updateProjectTaskRecord, } from './projects.js';
+import { addProjectMilestone, createProjectRecord, createProjectTaskRecord, deleteProjectMilestone, deleteProjectRecord, deleteProjectTaskRecord, listProjectIndex, moveProjectMilestone, moveProjectTaskRecord, readProjectDetailFromProject, readProjectSource, saveProjectSource, updateProjectMilestone, updateProjectRecord, updateProjectTaskRecord, } from './projects.js';
 import { createProjectNoteRecord, deleteProjectFileRecord, deleteProjectNoteRecord, readProjectFileDownload, saveProjectBrief, updateProjectNoteRecord, uploadProjectFile, } from './projectResources.js';
 import { generateProjectBrief } from './projectBriefs.js';
 import { cancelDeferredResumeForSessionFile, listDeferredResumesForSessionFile, scheduleDeferredResumeForSessionFile, } from './deferredResumes.js';
@@ -4008,24 +4008,14 @@ app.delete('/api/live-sessions/:id', (req, res) => {
     res.json({ ok: true });
 });
 // ── Projects ─────────────────────────────────────────────────────────────────
-function listProjectsForCurrentProfile() {
-    const profile = getCurrentProfile();
-    const ids = listProjectIds({ repoRoot: REPO_ROOT, profile });
-    const projects = ids.flatMap((id) => {
-        try {
-            const paths = resolveProjectPaths({
-                repoRoot: REPO_ROOT,
-                profile,
-                projectId: id,
-            });
-            return [readProject(paths.projectFile)];
-        }
-        catch {
-            return [];
-        }
+function readProjectIndexForCurrentProfile() {
+    return listProjectIndex({
+        repoRoot: REPO_ROOT,
+        profile: getCurrentProfile(),
     });
-    projects.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-    return projects;
+}
+function listProjectsForCurrentProfile() {
+    return readProjectIndexForCurrentProfile().projects;
 }
 function projectErrorStatus(error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -4033,7 +4023,26 @@ function projectErrorStatus(error) {
 }
 app.get('/api/projects', (_req, res) => {
     try {
-        res.json(listProjectsForCurrentProfile());
+        const index = readProjectIndexForCurrentProfile();
+        res.set('X-Personal-Agent-Project-Warning-Count', String(index.invalidProjects.length));
+        res.json(index.projects);
+    }
+    catch (err) {
+        logError('request handler error', {
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack : undefined,
+        });
+        res.status(500).json({ error: String(err) });
+    }
+});
+app.get('/api/projects/diagnostics', (_req, res) => {
+    try {
+        const profile = getCurrentProfile();
+        const index = readProjectIndexForCurrentProfile();
+        res.json({
+            profile,
+            invalidProjects: index.invalidProjects,
+        });
     }
     catch (err) {
         logError('request handler error', {
@@ -4047,8 +4056,8 @@ app.get('/api/projects/:id', (req, res) => {
     try {
         res.json(readProjectDetailForCurrentProfile(req.params.id));
     }
-    catch {
-        res.status(404).json({ error: 'Project not found' });
+    catch (error) {
+        res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
     }
 });
 app.post('/api/projects', (req, res) => {

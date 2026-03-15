@@ -68,6 +68,7 @@ Projects start lightweight.
 - `currentMilestoneId` is optional
 - tasks may omit `milestoneId`
 - new projects should not be seeded with default milestones
+- quote YAML list items when they contain `:` and you intend them to stay plain strings
 
 Keep these fields current when useful:
 
@@ -165,7 +166,8 @@ When asked to make durable project changes:
 4. keep briefs concise and restart-friendly
 5. add notes for decisions or accumulated context
 6. leave derived state alone
-7. use the `project` tool only when you need to reference or unreference the project in the active conversation
+7. validate `PROJECT.yaml` before finishing with `node scripts/validate-projects.mjs --profile <profile> --project <projectId>` (or `--path <absolute-path-to-PROJECT.yaml>` for a one-off file check)
+8. use the `project` tool only when you need to reference or unreference the project in the active conversation
 
 ## Inspection checklist
 

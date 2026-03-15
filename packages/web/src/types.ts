@@ -134,6 +134,17 @@ export interface ProjectRecord {
   plan: ProjectPlan;
 }
 
+export interface InvalidProjectRecord {
+  projectId: string;
+  path: string;
+  error: string;
+}
+
+export interface ProjectDiagnostics {
+  profile: string;
+  invalidProjects: InvalidProjectRecord[];
+}
+
 export interface ProjectTask {
   id: string;
   status: string;

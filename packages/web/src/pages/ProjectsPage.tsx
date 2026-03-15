@@ -146,6 +146,45 @@ function CreateProjectPanel({
   );
 }
 
+function ProjectDiagnosticsPanel({
+  profile,
+  invalidProjects,
+}: {
+  profile: string;
+  invalidProjects: Array<{ projectId: string; path: string; error: string }>;
+}) {
+  if (invalidProjects.length === 0) {
+    return null;
+  }
+
+  const validatorCommand = `npm run validate:projects -- --profile ${profile}`;
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-1">
+        <p className="text-[13px] text-danger">
+          {invalidProjects.length} {invalidProjects.length === 1 ? 'project file could not be loaded.' : 'project files could not be loaded.'}
+        </p>
+        <p className="ui-card-meta">
+          Fix the invalid YAML or run{' '}
+          <span className="font-mono text-primary">{validatorCommand}</span>
+          {' '}to inspect all project files for this profile.
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {invalidProjects.map((issue) => (
+          <div key={issue.projectId} className="space-y-0.5">
+            <p className="font-mono text-[12px] text-danger">{issue.projectId}</p>
+            <p className="text-[12px] text-danger/85">{issue.error}</p>
+            <p className="ui-card-meta break-all font-mono">{issue.path}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function ProjectsPage() {
   const navigate = useNavigate();
   const { id: selectedId } = useParams<{ id?: string }>();
@@ -156,19 +195,31 @@ export function ProjectsPage() {
     shouldPersist: (value) => value,
   });
   const { data, loading, error, refetch } = useApi(api.projects);
+  const {
+    data: diagnostics,
+    loading: diagnosticsLoading,
+    error: diagnosticsError,
+    refetch: refetchDiagnostics,
+  } = useApi(api.projectDiagnostics);
   const { projects: projectSnapshot, setProjects } = useAppData();
 
   const projects = projectSnapshot ?? data ?? null;
+  const invalidProjects = diagnostics?.invalidProjects ?? [];
   const isLoading = projectSnapshot === null && loading;
   const visibleError = projectSnapshot === null ? error : null;
 
   const refreshProjects = useCallback(async () => {
-    const next = await refetch();
-    if (next) {
-      setProjects(next);
+    const [nextProjects] = await Promise.all([
+      refetch(),
+      refetchDiagnostics({ resetLoading: false }),
+    ]);
+
+    if (nextProjects) {
+      setProjects(nextProjects);
     }
-    return next;
-  }, [refetch, setProjects]);
+
+    return nextProjects;
+  }, [refetch, refetchDiagnostics, setProjects]);
 
   useEffect(() => {
     function handleProjectsChanged() {
@@ -224,7 +275,7 @@ export function ProjectsPage() {
         {isLoading && <LoadingState label="Loading projects…" />}
         {visibleError && <ErrorState message={`Failed to load projects: ${visibleError}`} />}
 
-        {!isLoading && !visibleError && projects?.length === 0 && !showCreateForm && (
+        {!isLoading && !visibleError && !diagnosticsLoading && projects?.length === 0 && invalidProjects.length === 0 && !diagnosticsError && !showCreateForm && (
           <EmptyState
             title="No projects yet."
             body="Projects track ongoing work, milestones, and tasks."
@@ -232,12 +283,23 @@ export function ProjectsPage() {
           />
         )}
 
-        {!isLoading && !visibleError && (showCreateForm || (projects && projects.length > 0)) && (
+        {!isLoading && !visibleError && (showCreateForm || diagnosticsError !== null || invalidProjects.length > 0 || (projects && projects.length > 0)) && (
           <div className="space-y-6">
             {showCreateForm && (
               <CreateProjectPanel
                 onCreated={handleCreated}
                 onCancel={() => setShowCreateForm(false)}
+              />
+            )}
+
+            {diagnosticsError && (
+              <p className="text-[12px] text-danger/80">Failed to load project diagnostics: {diagnosticsError}</p>
+            )}
+
+            {diagnostics && invalidProjects.length > 0 && (
+              <ProjectDiagnosticsPanel
+                profile={diagnostics.profile}
+                invalidProjects={invalidProjects}
               />
             )}
 
