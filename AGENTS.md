@@ -7,7 +7,7 @@
 
 - Do not use shared/default `AGENTS.md` files for durable behavior.
 - Keep one `AGENTS.md` per non-shared profile at `~/.local/state/personal-agent/profiles/<profile>/agent/AGENTS.md`.
-- This repo should only carry shared defaults under `defaults/agent` plus repo-built-in capabilities under `skills/`, `extensions/`, and `themes/`; non-shared profile state belongs in the state root/state repo.
+- This repo should only carry shared defaults under `defaults/agent` plus repo-built-in runtime capabilities under `extensions/` and `themes/`; profile skills and non-shared profile state belong in the state root/state repo.
 - Duplicate shared guidance across profile AGENTS files when needed; do not centralize behavior rules in shared AGENTS.
 - Memory and behavior updates should target the active profile's AGENTS path.
 
@@ -21,7 +21,7 @@
 - Every memory doc must include YAML frontmatter with at least: `id`, `title`, `summary`, `tags`, `updated`.
 - Use `pa memory list/find/show/new/lint` for discovery, creation, and validation.
 - Keep non-markdown automation state outside memory (for example `agent/state/...`).
-- Keep reusable cross-project workflows in `skills/`; keep durable behavior/preferences in `AGENTS.md`.
+- Keep reusable cross-project workflows in profile `skills/` dirs under the state root; keep durable behavior/preferences in `AGENTS.md`.
 
 ## Conversation locality boundary
 

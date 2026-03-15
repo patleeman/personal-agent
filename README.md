@@ -2,8 +2,8 @@
 
 A personal application layer over Pi that keeps:
 
-- **built-in capabilities and shared defaults in git** (`skills/`, `extensions/`, `themes/`, `profiles/shared`)
-- **mutable profile + runtime state local** (`~/.local/state/personal-agent`)
+- **product code and shared defaults in git** (`defaults/`, `extensions/`, `themes/`)
+- **mutable profile skills + runtime state local** (`~/.local/state/personal-agent`)
 - **chat gateways** (Telegram)
 
 ## Features
@@ -286,8 +286,8 @@ Gateway slash commands include:
 Profile resources resolve from:
 
 - `defaults/agent` for repo-managed shared default profile files
-- repo built-ins from `skills/`, `extensions/`, and `themes/`
-- `~/.local/state/personal-agent/profiles/<profile>/agent` for mutable non-shared profiles
+- repo built-ins from `extensions/` and `themes/`
+- `~/.local/state/personal-agent/profiles/<profile>/agent` for mutable profile resources, including skills
 
 Optional local overlay:
 

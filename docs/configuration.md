@@ -79,11 +79,11 @@ See [Gateway Guide](./gateway.md).
 
 ## Profile resource configuration
 
-Profile resources resolve from repo built-ins plus mutable profile homes:
+Profile resources resolve from repo defaults plus mutable profile homes:
 
 - repo shared defaults from `defaults/agent`
-- repo built-ins from `skills/`, `extensions/`, and `themes/`
-- mutable profile resources from `~/.local/state/personal-agent/profiles/<profile>/agent`
+- repo built-ins from `extensions/` and `themes/`
+- mutable profile resources from `~/.local/state/personal-agent/profiles/<profile>/agent` (including `skills/`)
 
 Common files:
 

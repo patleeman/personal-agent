@@ -15,14 +15,13 @@ Resources resolve in this order:
 
 In addition, repo built-ins are always available from:
 
-- `skills/`
 - `extensions/`
 - `themes/`
 
 Think of it like this:
 
-- `shared` holds common default profile files
-- repo built-ins hold product-shipped capabilities
+- `shared` holds common default profile files and shared profile skills when present
+- repo built-ins hold product-shipped runtime capabilities
 - the selected profile adds persona- or context-specific behavior
 - the local overlay is for machine-local additions
 
@@ -52,7 +51,6 @@ Non-shared profiles can also keep durable profile state in:
 ├── defaults/
 │   └── agent/
 │       └── settings.json
-├── skills/
 ├── extensions/
 └── themes/
 

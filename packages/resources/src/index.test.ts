@@ -185,13 +185,13 @@ describe('resources profile loader', () => {
     ]);
   });
 
-  it('includes repo-provided internal skills alongside profile skills', () => {
+  it('does not treat repo skill directories as built-in resources', () => {
     const repo = createTempRepo();
     const profilesRoot = createTempProfilesRoot();
 
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(profilesRoot, 'shared/agent/skills/shared-skill/SKILL.md'), '# Shared Skill\n');
-    writeFile(join(repo, 'skills/pa-project-hub/SKILL.md'), '# Internal Skill\n');
+    writeFile(join(repo, 'skills/legacy-skill/SKILL.md'), '# Legacy Internal Skill\n');
 
     const resolved = resolveResourceProfile('shared', {
       repoRoot: repo,
@@ -201,7 +201,6 @@ describe('resources profile loader', () => {
 
     expect(resolved.skillDirs).toEqual([
       join(profilesRoot, 'shared/agent/skills'),
-      join(repo, 'skills'),
     ]);
 
     const args = buildPiResourceArgs(resolved);
@@ -212,7 +211,6 @@ describe('resources profile loader', () => {
 
     expect(skillArgs).toEqual([
       join(profilesRoot, 'shared/agent/skills'),
-      join(repo, 'skills'),
     ]);
   });
 

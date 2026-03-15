@@ -16,10 +16,9 @@ This page is the main mental model for both users and agents.
 
 Shared defaults remain repo-managed.
 
-Common shared examples:
+Common repo-managed examples:
 
 - `defaults/agent/settings.json`
-- `skills/**`
 - `extensions/**`
 - `themes/**`
 

@@ -13,7 +13,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'fs';
-import { dirname, join, relative, resolve, sep } from 'path';
+import { dirname, join, relative, resolve } from 'path';
 import { getStateRoot } from '@personal-agent/core';
 import {
   emitDaemonEventNonFatal,
@@ -24,7 +24,6 @@ import {
   startDaemonDetached,
   stopDaemonGracefully,
 } from '@personal-agent/daemon';
-import { getRepoDefaultsAgentDir, getRepoRoot } from '@personal-agent/resources';
 import { bullet, dim, keyValue, section, success, warning } from './ui.js';
 
 const DEFAULT_SYNC_BRANCH = 'main';
@@ -95,22 +94,6 @@ function runGit(repoDir: string, args: string[], allowFailure = false): { code: 
   }
 
   return { code, stdout, stderr };
-}
-
-function pathHasSharedResources(agentDir: string): boolean {
-  const canonicalEntries = [
-    'AGENTS.md',
-    'APPEND_SYSTEM.md',
-    'SYSTEM.md',
-    'settings.json',
-    'models.json',
-    'extensions',
-    'skills',
-    'prompts',
-    'themes',
-  ];
-
-  return canonicalEntries.some((entry) => existsSync(join(agentDir, entry)));
 }
 
 function ensureDirectory(path: string): void {
@@ -249,30 +232,6 @@ function removeLegacySyncedDefaultProfileConfig(syncRoot: string): void {
   if (readdirSync(legacyConfigDir).length === 0) {
     rmSync(legacyConfigDir, { force: true, recursive: true });
   }
-}
-
-function seedSharedProfile(syncProfilesRoot: string, repoRoot: string): void {
-  const sourceSharedAgentDir = getRepoDefaultsAgentDir(repoRoot);
-  if (!existsSync(sourceSharedAgentDir)) {
-    return;
-  }
-
-  const targetSharedAgentDir = join(syncProfilesRoot, 'shared', 'agent');
-
-  if (existsSync(targetSharedAgentDir) && pathHasSharedResources(targetSharedAgentDir)) {
-    return;
-  }
-
-  ensureDirectory(targetSharedAgentDir);
-
-  cpSync(sourceSharedAgentDir, targetSharedAgentDir, {
-    recursive: true,
-    force: true,
-    filter: (source) => {
-      const normalized = source.split(sep).join('/');
-      return !normalized.includes('/node_modules/') && !normalized.endsWith('/node_modules');
-    },
-  });
 }
 
 function syncRepoGitignore(): string {
@@ -457,14 +416,12 @@ async function setupSyncCommand(args: string[]): Promise<number> {
   const parsed = parseSyncSetupArgs(args);
   const stateRoot = getStateRoot();
   const syncRoot = parsed.repoDir;
-  const repoRoot = getRepoRoot();
 
   ensureDirectory(syncRoot);
   movePathIntoSyncRoot(stateRoot, syncRoot, 'profiles');
   movePathIntoSyncRoot(stateRoot, syncRoot, 'pi-agent');
   const localProfileConfigPath = ensureLocalDefaultProfileConfig(stateRoot, syncRoot);
   removeLegacySyncedDefaultProfileConfig(syncRoot);
-  seedSharedProfile(join(syncRoot, 'profiles'), repoRoot);
   writeManagedSyncRepoFiles(syncRoot);
 
   ensureGitRepo(syncRoot, parsed.branch);

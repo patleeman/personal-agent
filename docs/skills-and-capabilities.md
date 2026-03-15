@@ -16,9 +16,8 @@ Most users and agents should think about them this way:
 
 ## Skills
 
-Skills live in layered and built-in directories such as:
+Skills live in layered profile directories such as:
 
-- repo built-in `skills/`
 - `~/.local/state/personal-agent/profiles/<profile>/agent/skills/`
 - local overlay skill dirs
 - optional shared-profile skill dirs when provided from mutable state
@@ -29,13 +28,12 @@ A skill is the right place for:
 - domain-specific procedures
 - operational runbooks with commands or helper scripts
 
-Examples in this repo include:
+Examples include:
 
-- scheduled task workflows
 - browser automation helpers
 - morning report workflows
 - repo and coding best-practice workflows
-- the internal `pa-project-hub` workflow for durable project editing
+- deep research and code review workflows
 
 Skills are surfaced in user-facing places like:
 
@@ -54,7 +52,7 @@ Examples of user-visible extension behavior in this repo:
 - **memory** — keeps AGENTS, skills, and memory rules visible to the agent
 - **web-tools** — gives the agent web search/fetch capability
 - **daemon-run orchestration prompt** — gives the agent better policy for daemon-backed durable background work
-- **project agent extension** — manages current conversation ↔ project references
+- **project agent extension** — manages durable projects and current conversation ↔ project references
 
 ## What to edit when you want to change behavior
 
