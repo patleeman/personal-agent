@@ -40,6 +40,7 @@ These commands are handled by `personal-agent` itself:
 - `pa inbox ...`
 - `pa ui ...`
 - `pa memory ...`
+- `pa sync ...`
 - `pa gateway ...`
 - `pa restart`
 - `pa update`
@@ -65,6 +66,7 @@ pa -p "hello"
 pa inbox list
 pa memory list
 pa tasks list
+pa sync status
 ```
 
 ### Background automation
@@ -236,11 +238,21 @@ Examples:
 pa sync status
 pa sync setup --repo git@github.com:<you>/personal-agent-state.git --fresh
 pa sync setup --repo git@github.com:<you>/personal-agent-state.git --bootstrap
+pa sync setup --repo <git-url> --branch main --repo-dir ~/.local/state/personal-agent/sync
 pa sync run
 ```
 
-The setup command moves `profiles/` and `pi-agent/` state under `<stateRoot>/sync`, configures the daemon sync module,
-and enables periodic background git sync. `config/config.json` remains machine-local.
+Use `--fresh` for first-time setup into a new/empty remote. Use `--bootstrap` on additional devices (or existing remotes with history).
+
+The setup command moves syncable state under `<stateRoot>/sync`, configures the daemon sync module, and enables periodic background git sync.
+
+Synced roots include:
+
+- `profiles/**`
+- `pi-agent/**` (with machine-local auth/settings/bin/index exclusions)
+- `config/**` (setup seeds `config/config.json`; daemon/gateway/web config stay machine-local)
+
+See [Sync Guide](./sync.md).
 
 ### `pa gateway ...`
 
@@ -294,6 +306,16 @@ pa tasks logs morning-report --tail 120
 pa tasks validate --all
 ```
 
+### Configure sync on another device
+
+```bash
+git pull
+pa restart --rebuild
+pa sync setup --repo git@github.com:<you>/personal-agent-state.git --bootstrap
+pa sync run
+pa sync status
+```
+
 ## JSON output
 
 Machine-readable output is available for the main inspection commands.
@@ -328,5 +350,6 @@ Or set:
 - [Getting Started](./getting-started.md)
 - [How personal-agent works](./how-it-works.md)
 - [Web UI Guide](./web-ui.md)
+- [Sync Guide](./sync.md)
 - [Configuration](./configuration.md)
 - [Troubleshooting](./troubleshooting.md)

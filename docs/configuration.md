@@ -27,6 +27,8 @@ Useful command:
 pa profile use assistant
 ```
 
+If git sync is set up, this file is typically a symlink into `~/.local/state/personal-agent/sync/config/config.json` so the default profile can sync across machines.
+
 ### `~/.local/state/personal-agent/config/daemon.json`
 
 This configures the background daemon.
@@ -144,13 +146,15 @@ Canonical state-home layout:
 │   │       ├── memory/
 │   │       ├── tasks/
 │   │       └── activity/
-│   └── pi-agent/
-│       ├── sessions/
-│       └── state/
+│   ├── pi-agent/
+│   │   ├── sessions/
+│   │   └── state/
+│   └── config/
+│       └── config.json
 ├── profiles -> sync/profiles          # compatibility symlink
 ├── pi-agent -> sync/pi-agent          # compatibility symlink
 ├── config/
-│   ├── config.json
+│   ├── config.json -> ../sync/config/config.json   # after sync setup
 │   ├── daemon.json
 │   ├── gateway.json
 │   └── web.json
@@ -164,12 +168,20 @@ Note: legacy top-level `tmux/` and `tmux-logs/` are intentionally not part of th
 
 For git-based automatic cross-machine sync, use:
 
-- `pa sync setup --repo <git-url> --fresh` (new/fresh repo)
-- `pa sync setup --repo <git-url> --bootstrap` (existing remote history)
+- `pa sync setup --repo <git-url> --fresh` (first machine / new remote)
+- `pa sync setup --repo <git-url> --bootstrap` (additional machines / existing remote history)
 
-This enables the daemon sync module and schedules periodic background sync.
+You can do the same setup from the Web UI **Sync** tab.
 
-By default, sync tracks `profiles/**` and `pi-agent/**`. Machine-local config files (including `config/config.json` default profile selection) stay local.
+Setup enables the daemon sync module and schedules periodic background sync.
+
+By default, sync tracks:
+
+- `profiles/**`
+- `pi-agent/**` (with machine-local auth/settings/bin/index exclusions)
+- `config/**` (setup seeds `config/config.json`; `daemon.json`, `gateway.json`, and `web.json` stay machine-local by default)
+
+See [Sync Guide](./sync.md).
 
 ## Important environment variables
 
@@ -271,5 +283,6 @@ For most setups:
 - [Getting Started](./getting-started.md)
 - [Profiles, Memory, and Skills](./profiles-memory-skills.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
+- [Sync Guide](./sync.md)
 - [Gateway Guide](./gateway.md)
 - [Troubleshooting](./troubleshooting.md)

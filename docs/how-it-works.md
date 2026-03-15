@@ -31,15 +31,17 @@ Mutable profile state defaults to the state home:
 
 ### Local runtime state
 
-This is machine-local and mutable.
+This is mutable runtime state rooted at `~/.local/state/personal-agent`.
+
+By default it is machine-local. If you enable git sync (`pa sync setup`), selected roots are replicated across devices.
 
 Common examples:
 
-- `~/.local/state/personal-agent/pi-agent/auth.json`
-- `~/.local/state/personal-agent/pi-agent/sessions/**`
-- `~/.local/state/personal-agent/daemon/**`
-- `~/.local/state/personal-agent/gateway/**`
-- inbox activity and read-state under `~/.local/state/personal-agent/pi-agent/state/inbox/**`
+- `~/.local/state/personal-agent/pi-agent/auth.json` (always machine-local)
+- `~/.local/state/personal-agent/pi-agent/sessions/**` (synced when sync is enabled)
+- `~/.local/state/personal-agent/daemon/**` (machine-local)
+- `~/.local/state/personal-agent/gateway/**` (machine-local)
+- inbox activity and read-state under `~/.local/state/personal-agent/pi-agent/state/inbox/**` (synced when sync is enabled)
 - conversation-local link state such as conversation ↔ referenced project bindings
 
 Use local runtime state for:
@@ -161,6 +163,14 @@ Use it for:
 
 See [Daemon and Background Automation](./daemon.md).
 
+### Sync
+
+Sync keeps selected durable state aligned across devices using a git-backed state repo and the daemon sync module.
+
+Use it when you want profile/memory/project/session durability across machines.
+
+See [Sync Guide](./sync.md).
+
 ## Choose the right feature
 
 | Need | Best fit | Why |
@@ -170,6 +180,7 @@ See [Daemon and Background Automation](./daemon.md).
 | Save something the agent should know later | memory doc / skill / AGENTS | reusable durable knowledge |
 | Notice async outcomes later | inbox/activity | attention surface, not a transcript |
 | Run something on a schedule | scheduled task | unattended automation |
+| Keep durable state aligned across devices | sync (`pa sync`) | git-backed state sharing under `~/.local/state/personal-agent/sync/**` |
 | Chat remotely | gateway | same agent through Telegram |
 
 ## A useful rule of thumb
@@ -181,6 +192,7 @@ Think about the system this way:
 - **memory** = durable knowledge and behavior
 - **inbox** = durable attention for async events
 - **scheduled task** = durable automation definition
+- **sync** = cross-machine durable-state replication
 - **daemon** = background runner
 - **gateway** = remote chat entry point
 
@@ -226,4 +238,5 @@ That is the intended shape of the product.
 - [Projects](./projects.md)
 - [Profiles, Memory, and Skills](./profiles-memory-skills.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
+- [Sync Guide](./sync.md)
 - [Gateway Guide](./gateway.md)

@@ -8,6 +8,7 @@ It gives you one place to see:
 - conversations
 - projects
 - scheduled tasks
+- sync state
 - gateway state
 - daemon state
 - memory
@@ -92,7 +93,7 @@ Use the UI when you want:
 - a persistent inbox
 - easy conversation browsing and branching
 - project management backed by `PROJECT.yaml`
-- visibility into daemon and gateway state
+- visibility into daemon, sync, and gateway state
 - a visual memory browser
 - live updates without polling
 
@@ -201,6 +202,20 @@ It surfaces:
 You can also manage the daemon service from the UI.
 
 See [Daemon and Background Automation](./daemon.md).
+
+### Sync
+
+The Sync page is the UI control surface for git-backed durable-state sync.
+
+It lets you:
+
+- run first-time sync setup (repo URL, branch, mode, optional repo directory)
+- choose **Fresh** for first machine/new remote or **Bootstrap** for additional devices/existing history
+- run sync immediately
+- inspect sync module status, repo status, last run/success/commit, and resolver activity
+- inspect recent sync log lines and conflict/error warnings
+
+See [Sync Guide](./sync.md).
 
 ### Memory
 
@@ -330,5 +345,6 @@ So, for example:
 - [Projects](./projects.md)
 - [Inbox and Activity](./inbox.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
+- [Sync Guide](./sync.md)
 - [Gateway Guide](./gateway.md)
 - [Daemon and Background Automation](./daemon.md)

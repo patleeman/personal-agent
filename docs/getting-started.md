@@ -114,11 +114,30 @@ The web UI is the easiest place to explore:
 - Conversations
 - Projects
 - Scheduled tasks
+- Sync state
 - Gateway state
 - Memory
 - Settings
 
 See [Web UI Guide](./web-ui.md).
+
+## Optional: set up cross-machine sync
+
+If you want durable state synced across devices, run:
+
+```bash
+pa sync setup --repo git@github.com:<you>/personal-agent-state.git --fresh
+```
+
+On additional devices, use `--bootstrap` instead:
+
+```bash
+pa sync setup --repo git@github.com:<you>/personal-agent-state.git --bootstrap
+```
+
+You can also do this from the Web UI **Sync** tab.
+
+See [Sync Guide](./sync.md).
 
 ## Optional: use the terminal UI directly
 
@@ -191,9 +210,10 @@ After this page:
 
 1. [How personal-agent works](./how-it-works.md)
 2. [Web UI Guide](./web-ui.md)
-3. [Projects](./projects.md)
-4. [Profiles, Memory, and Skills](./profiles-memory-skills.md)
-5. [Scheduled Tasks](./scheduled-tasks.md)
+3. [Sync Guide](./sync.md)
+4. [Projects](./projects.md)
+5. [Profiles, Memory, and Skills](./profiles-memory-skills.md)
+6. [Scheduled Tasks](./scheduled-tasks.md)
 
 ## If something fails
 
