@@ -239,8 +239,8 @@ pa sync setup --repo git@github.com:<you>/personal-agent-state.git --bootstrap
 pa sync run
 ```
 
-The setup command moves syncable state under `<stateRoot>/sync`, configures the daemon sync module,
-and enables periodic background git sync.
+The setup command moves `profiles/` and `pi-agent/` state under `<stateRoot>/sync`, configures the daemon sync module,
+and enables periodic background git sync. `config/config.json` remains machine-local.
 
 ### `pa gateway ...`
 

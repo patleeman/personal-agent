@@ -4,6 +4,7 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   readlinkSync,
   renameSync,
@@ -28,6 +29,7 @@ import { bullet, dim, keyValue, section, success, warning } from './ui.js';
 
 const DEFAULT_SYNC_BRANCH = 'main';
 const DEFAULT_SYNC_REMOTE = 'origin';
+const DEFAULT_PROFILE_CONFIG_JSON = '{\n  "defaultProfile": "shared"\n}\n';
 
 function syncUsageText(): string {
   return 'Usage: pa sync [status|run|setup|help] [args...]';
@@ -191,13 +193,62 @@ function movePathIntoSyncRoot(stateRoot: string, syncRoot: string, relativePath:
   if (!existsSync(targetPath)) {
     if (relativePath.endsWith('.json')) {
       ensureDirectory(dirname(targetPath));
-      writeFileSync(targetPath, '{\n  "defaultProfile": "shared"\n}\n');
+      writeFileSync(targetPath, DEFAULT_PROFILE_CONFIG_JSON);
     } else {
       ensureDirectory(targetPath);
     }
   }
 
   ensureSymlink(sourcePath, targetPath);
+}
+
+function readFileUtf8Safe(path: string): string | undefined {
+  try {
+    return readFileSync(path, 'utf-8');
+  } catch {
+    return undefined;
+  }
+}
+
+function ensureLocalDefaultProfileConfig(stateRoot: string, syncRoot: string): string {
+  const localConfigPath = join(stateRoot, 'config', 'config.json');
+  const legacySyncedConfigPath = join(syncRoot, 'config', 'config.json');
+  const fallbackContent = readFileUtf8Safe(localConfigPath)
+    ?? readFileUtf8Safe(legacySyncedConfigPath)
+    ?? DEFAULT_PROFILE_CONFIG_JSON;
+
+  if (lstatSyncSafe(localConfigPath)?.isSymbolicLink()) {
+    rmSync(localConfigPath, { force: true });
+  }
+
+  if (existsSync(localConfigPath)) {
+    if (statSync(localConfigPath).isDirectory()) {
+      throw new Error(`Expected file at ${localConfigPath}, found directory`);
+    }
+
+    return localConfigPath;
+  }
+
+  ensureDirectory(dirname(localConfigPath));
+  writeFileSync(localConfigPath, fallbackContent);
+  return localConfigPath;
+}
+
+function removeLegacySyncedDefaultProfileConfig(syncRoot: string): void {
+  const legacyConfigPath = join(syncRoot, 'config', 'config.json');
+  if (lstatSyncSafe(legacyConfigPath)) {
+    rmSync(legacyConfigPath, { force: true, recursive: true });
+  }
+
+  const legacyConfigDir = join(syncRoot, 'config');
+  const legacyConfigDirStats = lstatSyncSafe(legacyConfigDir);
+  if (!legacyConfigDirStats?.isDirectory()) {
+    return;
+  }
+
+  if (readdirSync(legacyConfigDir).length === 0) {
+    rmSync(legacyConfigDir, { force: true, recursive: true });
+  }
 }
 
 function seedSharedProfile(syncProfilesRoot: string, repoRoot: string): void {
@@ -225,7 +276,7 @@ function seedSharedProfile(syncProfilesRoot: string, repoRoot: string): void {
 }
 
 function syncRepoGitignore(): string {
-  return `# personal-agent sync repo (managed by pa sync setup)\n\n*\n!.gitignore\n!.gitattributes\n!README.md\n\n# Whitelist complete durable-sync roots so new files/directories under them sync by default\n!profiles/\n!profiles/**\n\n!pi-agent/\n!pi-agent/**\n\n!config/\n!config/**\n\n# Never sync auth/secrets or machine-local runtime bits\n.DS_Store\n**/.DS_Store\npi-agent/auth.json\npi-agent/models.json\npi-agent/settings.json\npi-agent/bin/\npi-agent/session-meta-index.json\n`;
+  return `# personal-agent sync repo (managed by pa sync setup)\n\n*\n!.gitignore\n!.gitattributes\n!README.md\n\n# Whitelist durable-sync roots so new files/directories under them sync by default\n!profiles/\n!profiles/**\n\n!pi-agent/\n!pi-agent/**\n\n# Never sync auth/secrets or machine-local runtime bits\n.DS_Store\n**/.DS_Store\npi-agent/auth.json\npi-agent/models.json\npi-agent/settings.json\npi-agent/bin/\npi-agent/session-meta-index.json\n`;
 }
 
 function syncRepoGitattributes(): string {
@@ -233,7 +284,7 @@ function syncRepoGitattributes(): string {
 }
 
 function syncRepoReadme(): string {
-  return `# personal-agent sync repo\n\nManaged by \`pa sync setup\`.\n\nThis repo tracks durable cross-machine state from full sync roots:\n\n- \`profiles/**\`\n- \`pi-agent/**\` (with auth/settings/bin/index exceptions)\n- \`config/**\`\n\nAuth and machine-local runtime files are intentionally excluded by \`.gitignore\`.\n`;
+  return `# personal-agent sync repo\n\nManaged by \`pa sync setup\`.\n\nThis repo tracks durable cross-machine state from sync roots:\n\n- \`profiles/**\`\n- \`pi-agent/**\` (with auth/settings/bin/index exceptions)\n\nMachine-local config (including \`config/config.json\` default profile selection) is intentionally not synced.\n`;
 }
 
 function writeManagedSyncRepoFiles(syncRoot: string): void {
@@ -410,8 +461,9 @@ async function setupSyncCommand(args: string[]): Promise<number> {
 
   ensureDirectory(syncRoot);
   movePathIntoSyncRoot(stateRoot, syncRoot, 'profiles');
-  movePathIntoSyncRoot(stateRoot, syncRoot, join('config', 'config.json'));
   movePathIntoSyncRoot(stateRoot, syncRoot, 'pi-agent');
+  const localProfileConfigPath = ensureLocalDefaultProfileConfig(stateRoot, syncRoot);
+  removeLegacySyncedDefaultProfileConfig(syncRoot);
   seedSharedProfile(join(syncRoot, 'profiles'), repoRoot);
   writeManagedSyncRepoFiles(syncRoot);
 
@@ -475,6 +527,7 @@ async function setupSyncCommand(args: string[]): Promise<number> {
   console.log(keyValue('Branch', parsed.branch));
   console.log(keyValue('Mode', parsed.mode));
   console.log(keyValue('Daemon config', daemonConfigPath));
+  console.log(keyValue('Profile config', `${localProfileConfigPath} (machine-local)`));
   console.log(`  ${warning('A sync run was requested from the daemon.')}`);
 
   return 0;
@@ -568,7 +621,7 @@ Commands:
   status                                      Show sync configuration and daemon sync status
   run                                         Trigger an immediate daemon sync cycle
   setup --repo <git-url> [--branch <name>] [--fresh|--bootstrap] [--repo-dir <path>]
-                                              Configure git sync, move syncable state under <state>/sync, and enable daemon auto-sync
+                                              Configure git sync, move profiles/pi-agent state under <state>/sync, and enable daemon auto-sync
   help                                        Show sync help
 `);
   console.log(bullet('Fresh mode initializes from current local state and pushes to remote.'));

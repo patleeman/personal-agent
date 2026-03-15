@@ -138,8 +138,6 @@ Canonical state-home layout:
 ```text
 ~/.local/state/personal-agent/
 ├── sync/                      # git-synced durable state
-│   ├── config/
-│   │   └── config.json
 │   ├── profiles/
 │   │   └── <profile>/agent/
 │   │       ├── projects/
@@ -152,7 +150,7 @@ Canonical state-home layout:
 ├── profiles -> sync/profiles          # compatibility symlink
 ├── pi-agent -> sync/pi-agent          # compatibility symlink
 ├── config/
-│   ├── config.json -> ../sync/config/config.json
+│   ├── config.json
 │   ├── daemon.json
 │   ├── gateway.json
 │   └── web.json
@@ -170,6 +168,8 @@ For git-based automatic cross-machine sync, use:
 - `pa sync setup --repo <git-url> --bootstrap` (existing remote history)
 
 This enables the daemon sync module and schedules periodic background sync.
+
+By default, sync tracks `profiles/**` and `pi-agent/**`. Machine-local config files (including `config/config.json` default profile selection) stay local.
 
 ## Important environment variables
 
