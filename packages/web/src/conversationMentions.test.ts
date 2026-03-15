@@ -11,6 +11,10 @@ describe('conversationMentions', () => {
         title: 'Web UI shell',
         description: 'Build the web UI shell.',
         summary: 'Inbox-first web shell.',
+        requirements: {
+          goal: 'Build the web UI shell.',
+          acceptanceCriteria: [],
+        },
         status: 'active',
         blockers: [],
         recentProgress: [],

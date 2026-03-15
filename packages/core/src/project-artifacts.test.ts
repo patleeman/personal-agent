@@ -51,11 +51,17 @@ describe('project artifacts', () => {
       updatedAt: '2026-03-10T12:00:00.000Z',
       title: 'Durable artifact model',
       description: 'Create a durable artifact model.',
-      summary: 'Project created. Capture the brief, notes, and next steps as the work takes shape.',
+      summary: 'Project created. Capture the durable requirements, plan, and next steps as the work takes shape.',
+      requirements: {
+        goal: 'Create a durable artifact model.',
+        acceptanceCriteria: [],
+      },
       status: 'created',
       blockers: [],
-      currentFocus: 'Capture the goal and first next step.',
+      currentFocus: 'Capture the first concrete work chunk.',
       recentProgress: [],
+      planSummary: 'Break the work into milestones and tasks once the approach is clear.',
+      completionSummary: undefined,
       plan: {
         milestones: [],
         tasks: [],
@@ -72,10 +78,19 @@ describe('project artifacts', () => {
       description: 'Create a durable artifact model.',
       repoRoot: '/Users/patrick/workingdir/personal-agent',
       summary: 'Core storage is in place and the CLI surface is next.',
+      requirements: {
+        goal: 'Create a durable artifact model that stays easy to inspect and edit.',
+        acceptanceCriteria: [
+          'Projects serialize cleanly to YAML.',
+          'Agents can recover the state without reading the whole repo.',
+        ],
+      },
       status: 'in_progress',
       blockers: ['Need to settle the activity entry shape'],
       currentFocus: 'Build the CLI inbox surface.',
       recentProgress: ['Added project scaffold', 'Added path helpers'],
+      planSummary: 'Land the schema first, then wire the CLI surface around it.',
+      completionSummary: 'Not complete yet. The schema is stable and the CLI work is next.',
       plan: {
         currentMilestoneId: 'cli-inbox',
         milestones: [
@@ -93,6 +108,10 @@ describe('project artifacts', () => {
     expect(yaml).toContain('title: Durable artifact model');
     expect(yaml).toContain('description: Create a durable artifact model.');
     expect(yaml).toContain('repoRoot: /Users/patrick/workingdir/personal-agent');
+    expect(yaml).toContain('goal: Create a durable artifact model that stays easy to inspect and edit.');
+    expect(yaml).toContain('acceptanceCriteria:');
+    expect(yaml).toContain('planSummary: Land the schema first, then wire the CLI surface around it.');
+    expect(yaml).toContain('completionSummary: Not complete yet. The schema is stable and the CLI work is next.');
     expect(yaml).toContain('currentMilestoneId: cli-inbox');
 
     expect(parseProject(yaml)).toEqual(document);
@@ -135,6 +154,46 @@ plan:
     expect(() => parseProject(yaml)).toThrow('Current milestone id missing does not exist');
   });
 
+  it('defaults missing structured fields when parsing older project yaml', () => {
+    const yaml = `id: artifact-model
+createdAt: 2026-03-10T12:00:00.000Z
+updatedAt: 2026-03-10T12:00:00.000Z
+title: Durable artifact model
+description: Create a durable artifact model.
+summary: Project created.
+status: created
+blockers: []
+currentFocus: Capture the first step.
+recentProgress: []
+plan:
+  milestones: []
+  tasks: []
+`;
+
+    expect(parseProject(yaml)).toEqual({
+      id: 'artifact-model',
+      createdAt: '2026-03-10T12:00:00.000Z',
+      updatedAt: '2026-03-10T12:00:00.000Z',
+      title: 'Durable artifact model',
+      description: 'Create a durable artifact model.',
+      summary: 'Project created.',
+      requirements: {
+        goal: 'Create a durable artifact model.',
+        acceptanceCriteria: [],
+      },
+      status: 'created',
+      blockers: [],
+      currentFocus: 'Capture the first step.',
+      recentProgress: [],
+      planSummary: undefined,
+      completionSummary: undefined,
+      plan: {
+        milestones: [],
+        tasks: [],
+      },
+    });
+  });
+
   it('writes and reads project files', () => {
     const dir = createTempDir();
     const path = join(dir, 'PROJECT.yaml');
@@ -148,6 +207,7 @@ plan:
     writeProject(path, document);
 
     expect(readFileSync(path, 'utf-8')).toContain('plan:');
+    expect(readFileSync(path, 'utf-8')).toContain('requirements:');
     expect(readProject(path)).toEqual(document);
   });
 });

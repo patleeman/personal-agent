@@ -133,12 +133,12 @@ describe('listResolvedProjectRepoRoots', () => {
     });
 
     writeFileSync(first.paths.projectFile, readFileSync(first.paths.projectFile, 'utf-8').replace(
-      'summary: Project created. Capture the brief, notes, and next steps as the work takes shape.',
-      'repoRoot: ../workspace/alpha\nsummary: Project created. Capture the brief, notes, and next steps as the work takes shape.',
+      'summary: Project created. Capture the durable requirements, plan, and next steps as the work takes shape.',
+      'repoRoot: ../workspace/alpha\nsummary: Project created. Capture the durable requirements, plan, and next steps as the work takes shape.',
     ));
     writeFileSync(second.paths.projectFile, readFileSync(second.paths.projectFile, 'utf-8').replace(
-      'summary: Project created. Capture the brief, notes, and next steps as the work takes shape.',
-      'repoRoot: ../workspace/alpha\nsummary: Project created. Capture the brief, notes, and next steps as the work takes shape.',
+      'summary: Project created. Capture the durable requirements, plan, and next steps as the work takes shape.',
+      'repoRoot: ../workspace/alpha\nsummary: Project created. Capture the durable requirements, plan, and next steps as the work takes shape.',
     ));
 
     expect(listResolvedProjectRepoRoots({

@@ -93,6 +93,10 @@ export const api = {
     description: string;
     repoRoot?: string | null;
     summary?: string;
+    goal?: string;
+    acceptanceCriteria?: string[];
+    planSummary?: string;
+    completionSummary?: string | null;
     status?: string;
     currentFocus?: string | null;
     blockers?: string[];
@@ -103,6 +107,10 @@ export const api = {
     description?: string;
     repoRoot?: string | null;
     summary?: string;
+    goal?: string;
+    acceptanceCriteria?: string[];
+    planSummary?: string | null;
+    completionSummary?: string | null;
     status?: string;
     currentFocus?: string | null;
     currentMilestoneId?: string | null;

@@ -70,11 +70,15 @@ describe('context rail project helpers', () => {
     expect(summarizeProjectPreview({
       currentFocus: 'Unify the right rail around one coherent project view.',
       summary: 'The project is in progress.',
+      requirements: { goal: 'Make projects easier to scan.', acceptanceCriteria: [] },
+      description: 'Improve the project layout.',
       blockers: [],
     })).toBe('Unify the right rail around one coherent project view.');
 
     expect(summarizeProjectPreview({
       summary: 'The project is in progress.',
+      requirements: { goal: 'Make projects easier to scan.', acceptanceCriteria: [] },
+      description: 'Improve the project layout.',
       blockers: ['waiting on API'],
     })).toBe('The project is in progress.');
   });

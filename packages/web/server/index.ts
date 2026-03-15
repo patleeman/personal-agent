@@ -81,6 +81,9 @@ import {
 import { createProjectAgentExtension } from './projectAgentExtension.js';
 import { createArtifactAgentExtension } from './artifactAgentExtension.js';
 import { createDeferredResumeAgentExtension } from './deferredResumeAgentExtension.js';
+import { createScheduledTaskAgentExtension } from './scheduledTaskAgentExtension.js';
+import { createActivityAgentExtension } from './activityAgentExtension.js';
+import { createRunAgentExtension } from './runAgentExtension.js';
 import {
   createSession,
   createSessionFromExisting,
@@ -336,9 +339,19 @@ function buildLiveSessionExtensionFactories() {
   return [
     createProjectAgentExtension({
       repoRoot: REPO_ROOT,
+      stateRoot: getStateRoot(),
       getCurrentProfile,
     }),
+    createScheduledTaskAgentExtension({
+      getCurrentProfile,
+    }),
+    createActivityAgentExtension({
+      stateRoot: getStateRoot(),
+      getCurrentProfile,
+    }),
+    createRunAgentExtension(),
     createArtifactAgentExtension({
+      stateRoot: getStateRoot(),
       getCurrentProfile,
     }),
     createDeferredResumeAgentExtension(),
@@ -1220,9 +1233,9 @@ function buildProjectTimeline(detail: ProjectDetail): ProjectTimelineEntry[] {
       id: `brief:${detail.project.id}`,
       kind: 'brief',
       createdAt: detail.brief.updatedAt,
-      title: 'Project document updated',
+      title: 'Project handoff doc updated',
       description: detail.brief.content.split('\n').find((line) => line.trim().length > 0)?.trim(),
-      href: '#project-requirements',
+      href: '#project-handoff',
     });
   }
 
@@ -3638,6 +3651,16 @@ function buildReferencedProjectsContext(projectIds: string[]): string {
       lineParts.push(`  title: ${detail.project.title}`);
       lineParts.push(`  description: ${detail.project.description}`);
       lineParts.push(`  summary: ${detail.project.summary}`);
+      lineParts.push(`  goal: ${detail.project.requirements.goal}`);
+      if (detail.project.requirements.acceptanceCriteria.length > 0) {
+        lineParts.push(`  acceptanceCriteria: ${detail.project.requirements.acceptanceCriteria.join(' | ')}`);
+      }
+      if (detail.project.planSummary) {
+        lineParts.push(`  planSummary: ${detail.project.planSummary}`);
+      }
+      if (detail.project.completionSummary) {
+        lineParts.push(`  completionSummary: ${detail.project.completionSummary}`);
+      }
       if (detail.project.currentFocus) {
         lineParts.push(`  currentFocus: ${detail.project.currentFocus}`);
       }
@@ -3666,7 +3689,7 @@ function buildReferencedProjectsContext(projectIds: string[]): string {
   return [
     'Referenced projects for this conversation:',
     ...lines,
-    'Projects are durable cross-conversation hubs. Read the project brief and notes when you need continuity, load the pa-project-hub skill before making durable project file edits, and use the project tool only for conversation reference changes.',
+    'Projects are durable cross-conversation hubs. Read the structured project fields, handoff doc, and notes when you need continuity, and use the project tool for structured project CRUD plus conversation reference changes.',
   ].join('\n');
 }
 
@@ -4746,6 +4769,10 @@ app.post('/api/projects', (req, res) => {
       description?: string;
       repoRoot?: string | null;
       summary?: string;
+      goal?: string;
+      acceptanceCriteria?: string[];
+      planSummary?: string;
+      completionSummary?: string | null;
       status?: string;
       currentFocus?: string | null;
       blockers?: string[];
@@ -4759,6 +4786,10 @@ app.post('/api/projects', (req, res) => {
       description: body.description ?? '',
       projectRepoRoot: body.repoRoot,
       summary: body.summary,
+      goal: body.goal,
+      acceptanceCriteria: body.acceptanceCriteria,
+      planSummary: body.planSummary,
+      completionSummary: body.completionSummary,
       status: body.status,
       currentFocus: body.currentFocus,
       blockers: body.blockers,
@@ -4778,6 +4809,10 @@ app.patch('/api/projects/:id', (req, res) => {
       description?: string;
       repoRoot?: string | null;
       summary?: string;
+      goal?: string;
+      acceptanceCriteria?: string[];
+      planSummary?: string | null;
+      completionSummary?: string | null;
       status?: string;
       currentFocus?: string | null;
       currentMilestoneId?: string | null;
@@ -4793,6 +4828,10 @@ app.patch('/api/projects/:id', (req, res) => {
       description: body.description,
       projectRepoRoot: body.repoRoot,
       summary: body.summary,
+      goal: body.goal,
+      acceptanceCriteria: body.acceptanceCriteria,
+      planSummary: body.planSummary,
+      completionSummary: body.completionSummary,
       status: body.status,
       currentFocus: body.currentFocus,
       currentMilestoneId: body.currentMilestoneId,

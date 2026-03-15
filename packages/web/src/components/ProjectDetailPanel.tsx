@@ -1,8 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import ReactMarkdown from 'react-markdown';
-import remarkBreaks from 'remark-breaks';
-import remarkGfm from 'remark-gfm';
 import { api } from '../api';
 import {
   formatProjectStatus,
@@ -10,15 +7,32 @@ import {
   hasMeaningfulBlockers,
   pickCurrentMilestone,
 } from '../contextRailProject';
-import type { ProjectDetail, ProjectFile, ProjectLinkedConversation, ProjectMilestone, ProjectNote, ProjectTask } from '../types';
+import type { ProjectDetail, ProjectFile, ProjectMilestone, ProjectNote, ProjectTask } from '../types';
+import { createEmptyProjectDocument, parseProjectDocument } from '../projectDocument';
 import { timeAgo } from '../utils';
-import { EmptyState, Pill, SectionLabel, ToolbarButton, cx, type PillTone } from './ui';
+import {
+  ProjectFileUploadForm,
+  ProjectMilestoneEditorForm,
+  ProjectMilestoneRow,
+  ProjectNoteEditorForm,
+  ProjectRecordEditorForm,
+  ProjectTaskEditorForm,
+  ProjectTaskList,
+} from './ProjectDetailForms';
+import {
+  ProjectActivityContent,
+  type ProjectActivityItemShape,
+  ProjectCompletionContent,
+  ProjectFilesContent,
+  ProjectHandoffDocContent,
+  ProjectNotesContent,
+  ProjectPlanOverview,
+  ProjectRecordViewer,
+  ProjectRequirementsContent,
+} from './ProjectDetailSections';
+import { EmptyState, Pill, SectionLabel, ToolbarButton } from './ui';
 
-const INPUT_CLASS = 'w-full rounded-xl border border-border-default bg-base px-4 py-3 text-[15px] leading-relaxed text-primary focus:outline-none focus:border-accent/60';
-const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[132px] resize-y`;
-const SELECT_CLASS = `${INPUT_CLASS} pr-10`;
 const ACTION_BUTTON_CLASS = 'text-[12px] text-accent hover:text-accent/70 transition-colors disabled:opacity-40';
-const STATUS_ACTION_BUTTON_CLASS = 'rounded-full border px-2.5 py-1 text-[11px] font-medium capitalize transition-colors disabled:opacity-40';
 
 const PROJECT_STATUSES = ['created', 'in_progress', 'blocked', 'completed', 'cancelled'];
 const MILESTONE_STATUSES = ['pending', 'in_progress', 'blocked', 'completed', 'cancelled'];
@@ -40,6 +54,10 @@ interface ProjectFormState {
   description: string;
   repoRoot: string;
   summary: string;
+  goal: string;
+  acceptanceCriteria: string;
+  planSummary: string;
+  completionSummary: string;
   status: string;
   currentFocus: string;
   blockers: string;
@@ -72,47 +90,6 @@ interface FileUploadState {
   file: File | null;
 }
 
-function toneForStatus(status: string): PillTone {
-  switch (status) {
-    case 'running':
-    case 'in_progress':
-      return 'accent';
-    case 'blocked':
-      return 'warning';
-    case 'failed':
-      return 'danger';
-    case 'completed':
-      return 'success';
-    default:
-      return 'muted';
-  }
-}
-
-function dotClassForStatus(status: string): string {
-  switch (status) {
-    case 'in_progress':
-    case 'running':
-      return 'bg-accent';
-    case 'blocked':
-      return 'bg-warning';
-    case 'failed':
-      return 'bg-danger';
-    case 'completed':
-      return 'bg-success';
-    default:
-      return 'bg-border-default';
-  }
-}
-
-function milestoneStatusButtonClass(isActive: boolean): string {
-  return cx(
-    STATUS_ACTION_BUTTON_CLASS,
-    isActive
-      ? 'border-accent/30 bg-accent/10 text-accent'
-      : 'border-border-subtle bg-base text-dim hover:border-border-default hover:text-primary',
-  );
-}
-
 function detailSection({ id, title, meta, actions, children }: DetailSectionProps) {
   return (
     <section id={id} className="border-t border-border-subtle pt-8 space-y-5 scroll-mt-6">
@@ -134,6 +111,10 @@ function projectFormFromDetail(project: ProjectDetail): ProjectFormState {
     description: project.project.description,
     repoRoot: project.project.repoRoot ?? '',
     summary: project.project.summary,
+    goal: project.project.requirements.goal,
+    acceptanceCriteria: project.project.requirements.acceptanceCriteria.join('\n'),
+    planSummary: project.project.planSummary ?? '',
+    completionSummary: project.project.completionSummary ?? '',
     status: project.project.status,
     currentFocus: project.project.currentFocus ?? '',
     blockers: project.project.blockers.join('\n'),
@@ -200,23 +181,20 @@ function emptyFileUploadState(): FileUploadState {
   };
 }
 
-function formatBytes(sizeBytes: number): string {
-  if (sizeBytes < 1024) {
-    return `${sizeBytes} B`;
-  }
-
-  if (sizeBytes < 1024 * 1024) {
-    return `${(sizeBytes / 1024).toFixed(1)} KB`;
-  }
-
-  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 function splitLines(value: string): string[] {
   return value
     .split('\n')
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
+}
+
+function sortTimestamp(value: string | undefined): number {
+  if (!value) {
+    return 0;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function DetailSection(props: DetailSectionProps) {
@@ -293,6 +271,38 @@ export function ProjectDetailPanel({
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const projectDocumentSource = briefEditing ? briefContent : (project.brief?.content ?? '');
+  const projectDocument = parseProjectDocument(projectDocumentSource);
+  const goal = record.requirements.goal.trim();
+  const acceptanceCriteria = record.requirements.acceptanceCriteria.filter((item) => item.trim().length > 0);
+  const requirementsFallbackContent = projectDocument.requirements.trim();
+  const planContent = (record.planSummary ?? '').trim() || projectDocument.plan.trim();
+  const completionSummaryContent = (record.completionSummary ?? '').trim() || projectDocument.completionSummary.trim();
+  const activityItems: ProjectActivityItemShape[] = [
+    ...project.linkedConversations.map((conversation) => ({
+      id: `conversation:${conversation.conversationId}`,
+      sortAt: sortTimestamp(conversation.lastActivityAt),
+      item: {
+        id: `conversation:${conversation.conversationId}`,
+        kind: 'conversation' as const,
+        conversation,
+      },
+    })),
+    ...project.timeline
+      .filter((entry) => entry.kind !== 'conversation')
+      .map((entry) => ({
+        id: `timeline:${entry.id}`,
+        sortAt: sortTimestamp(entry.createdAt),
+        item: {
+          id: `timeline:${entry.id}`,
+          kind: 'timeline' as const,
+          entry,
+        },
+      })),
+  ]
+    .sort((left, right) => right.sortAt - left.sortAt || left.id.localeCompare(right.id))
+    .map(({ item }) => item);
+
   useEffect(() => {
     if (!editingProject) {
       setProjectForm(projectFormFromDetail(project));
@@ -322,6 +332,12 @@ export function ProjectDetailPanel({
     }
   }, [project, rawProjectOpen]);
 
+  function openProjectEditor() {
+    setEditingProject(true);
+    setProjectError(null);
+    document.getElementById('project-record')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   async function handleProjectSave(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setProjectBusy(true);
@@ -333,6 +349,10 @@ export function ProjectDetailPanel({
         description: projectForm.description,
         repoRoot: projectForm.repoRoot.trim() || null,
         summary: projectForm.summary,
+        goal: projectForm.goal,
+        acceptanceCriteria: splitLines(projectForm.acceptanceCriteria),
+        planSummary: projectForm.planSummary.trim() || null,
+        completionSummary: projectForm.completionSummary.trim() || null,
         status: projectForm.status,
         currentFocus: projectForm.currentFocus.trim() || null,
         blockers: splitLines(projectForm.blockers),
@@ -764,175 +784,55 @@ export function ProjectDetailPanel({
     }
   }
 
-  function renderTaskEditorForm() {
-    if (!taskEditor) {
-      return null;
-    }
+  const taskEditorForm = taskEditor ? (
+    <ProjectTaskEditorForm
+      editor={taskEditor}
+      value={taskForm}
+      milestones={milestones}
+      statuses={TASK_STATUSES}
+      error={taskError}
+      busy={taskBusy}
+      onChange={(patch) => setTaskForm((current) => ({ ...current, ...patch }))}
+      onCancel={() => setTaskEditor(null)}
+      onSubmit={saveTask}
+    />
+  ) : null;
 
-    return (
-      <form onSubmit={saveTask} className="space-y-5 border border-border-subtle rounded-xl px-5 py-5">
-        <div className="flex items-center justify-between gap-3">
-          <p className="ui-card-meta">{taskEditor.mode === 'add' ? 'New task' : `Edit task ${taskEditor.taskId}`}</p>
-          <button type="button" onClick={() => setTaskEditor(null)} className={ACTION_BUTTON_CLASS}>Cancel</button>
-        </div>
+  const milestoneEditorForm = milestoneEditor ? (
+    <ProjectMilestoneEditorForm
+      editor={milestoneEditor}
+      value={milestoneForm}
+      statuses={MILESTONE_STATUSES}
+      busy={milestoneBusy}
+      error={milestoneError}
+      onChange={(patch) => setMilestoneForm((current) => ({ ...current, ...patch }))}
+      onCancel={() => setMilestoneEditor(null)}
+      onSubmit={saveMilestone}
+    />
+  ) : null;
 
-        {taskEditor.mode === 'edit' && (
-          <p className="ui-card-meta font-mono">{taskEditor.taskId}</p>
-        )}
+  const noteEditorForm = noteEditor ? (
+    <ProjectNoteEditorForm
+      editor={noteEditor}
+      value={noteForm}
+      kinds={PROJECT_NOTE_KINDS}
+      error={noteError}
+      busy={noteBusy}
+      onChange={(patch) => setNoteForm((current) => ({ ...current, ...patch }))}
+      onCancel={() => setNoteEditor(null)}
+      onSubmit={saveNote}
+    />
+  ) : null;
 
-        <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_15rem_15rem]">
-          <div className="space-y-1.5">
-            <label className="ui-card-meta">Title</label>
-            <input
-              value={taskForm.title}
-              onChange={(event) => setTaskForm((current) => ({ ...current, title: event.target.value }))}
-              className={INPUT_CLASS}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="ui-card-meta">Status</label>
-            <select
-              value={taskForm.status}
-              onChange={(event) => setTaskForm((current) => ({ ...current, status: event.target.value }))}
-              className={SELECT_CLASS}
-            >
-              {TASK_STATUSES.map((status) => (
-                <option key={status} value={status}>{formatProjectStatus(status)}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="ui-card-meta">Milestone</label>
-            <select
-              value={taskForm.milestoneId}
-              onChange={(event) => setTaskForm((current) => ({ ...current, milestoneId: event.target.value }))}
-              className={SELECT_CLASS}
-            >
-              <option value="">No milestone</option>
-              {milestones.map((milestone) => (
-                <option key={milestone.id} value={milestone.id}>{milestone.title}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {taskError && <p className="text-[12px] text-danger">{taskError}</p>}
-
-        <div className="flex items-center gap-3">
-          <ToolbarButton type="submit" disabled={taskBusy}>{taskBusy ? 'Saving…' : 'Save task'}</ToolbarButton>
-        </div>
-      </form>
-    );
-  }
-
-  function renderTaskCard(task: ProjectTask, taskIndex: number, taskCount: number) {
-    const isEditing = taskEditor?.mode === 'edit' && taskEditor.taskId === task.id;
-
-    if (isEditing) {
-      return (
-        <div key={task.id} id={`project-task-${task.id}`} className="py-4 scroll-mt-6">
-          {renderTaskEditorForm()}
-        </div>
-      );
-    }
-
-    return (
-      <article key={task.id} id={`project-task-${task.id}`} className="py-4 scroll-mt-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0 space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-[15px] font-medium leading-relaxed text-primary">{task.title}</p>
-              <span className="ui-card-meta font-mono">{task.id}</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 shrink-0 flex-wrap justify-end">
-            <button type="button" onClick={() => { void moveTask(task.id, 'up'); }} className={ACTION_BUTTON_CLASS} disabled={taskBusy || taskIndex === 0}>↑</button>
-            <button type="button" onClick={() => { void moveTask(task.id, 'down'); }} className={ACTION_BUTTON_CLASS} disabled={taskBusy || taskIndex === taskCount - 1}>↓</button>
-            <button type="button" onClick={() => openTaskEdit(task)} className={ACTION_BUTTON_CLASS}>Edit</button>
-            <button type="button" onClick={() => { void deleteTask(task.id); }} className="text-[12px] text-danger hover:text-danger/75 transition-colors disabled:opacity-40" disabled={taskBusy}>Delete</button>
-            <Pill tone={toneForStatus(task.status)}>{formatProjectStatus(task.status)}</Pill>
-          </div>
-        </div>
-      </article>
-    );
-  }
-
-  function renderNoteEditorForm() {
-    if (!noteEditor) {
-      return null;
-    }
-
-    return (
-      <form onSubmit={saveNote} className="space-y-5 border border-border-subtle rounded-xl px-5 py-5">
-        <div className="flex items-center justify-between gap-3">
-          <p className="ui-card-meta">{noteEditor.mode === 'add' ? 'New note' : `Edit note ${noteEditor.noteId}`}</p>
-          <button type="button" onClick={() => setNoteEditor(null)} className={ACTION_BUTTON_CLASS}>Cancel</button>
-        </div>
-
-        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_15rem]">
-          <div className="space-y-1.5">
-            <label className="ui-card-meta">Title</label>
-            <input
-              value={noteForm.title}
-              onChange={(event) => setNoteForm((current) => ({ ...current, title: event.target.value }))}
-              className={INPUT_CLASS}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="ui-card-meta">Kind</label>
-            <select
-              value={noteForm.kind}
-              onChange={(event) => setNoteForm((current) => ({ ...current, kind: event.target.value }))}
-              className={SELECT_CLASS}
-            >
-              {PROJECT_NOTE_KINDS.map((kind) => (
-                <option key={kind} value={kind}>{formatProjectStatus(kind)}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        <div className="space-y-1.5">
-          <label className="ui-card-meta">Body</label>
-          <textarea
-            value={noteForm.body}
-            onChange={(event) => setNoteForm((current) => ({ ...current, body: event.target.value }))}
-            className={TEXTAREA_CLASS}
-          />
-        </div>
-
-        {noteError && <p className="text-[12px] text-danger">{noteError}</p>}
-
-        <div className="flex items-center gap-3">
-          <ToolbarButton type="submit" disabled={noteBusy}>{noteBusy ? 'Saving…' : 'Save note'}</ToolbarButton>
-        </div>
-      </form>
-    );
-  }
-
-  function renderFileCard(file: ProjectFile) {
-    return (
-      <article key={file.id} className="py-4 flex items-start justify-between gap-4">
-        <div className="min-w-0 space-y-1.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <a href={file.downloadPath} className="text-[14px] font-medium text-accent hover:text-accent/75 transition-colors">
-              {file.title}
-            </a>
-            <span className="ui-card-meta">{file.originalName}</span>
-            <span className="ui-card-meta">{formatBytes(file.sizeBytes)}</span>
-          </div>
-          {file.description && <p className="ui-card-meta break-words">{file.description}</p>}
-          <p className="ui-card-meta">updated {timeAgo(file.updatedAt)}</p>
-        </div>
-        <button type="button" onClick={() => { void deleteFile(file); }} className="text-[12px] text-danger hover:text-danger/75 transition-colors disabled:opacity-40" disabled={fileBusy}>
-          Delete
-        </button>
-      </article>
-    );
-  }
+  const fileUploadForm = (
+    <ProjectFileUploadForm
+      value={fileUpload}
+      error={fileError}
+      busy={fileBusy}
+      onChange={(patch) => setFileUpload((current) => ({ ...current, ...patch }))}
+      onSubmit={saveFile}
+    />
+  );
 
   return (
     <div className="min-w-0 space-y-10 px-4 py-3">
@@ -972,8 +872,192 @@ export function ProjectDetailPanel({
       </section>
 
       <DetailSection
-        id="project-overview"
-        title="Overview"
+        id="project-requirements"
+        title="Requirements"
+        actions={<button type="button" onClick={openProjectEditor} className={ACTION_BUTTON_CLASS}>Edit fields</button>}
+      >
+        <ProjectRequirementsContent
+          goal={goal}
+          fallbackContent={requirementsFallbackContent}
+          acceptanceCriteria={acceptanceCriteria}
+        />
+      </DetailSection>
+
+      <DetailSection
+        id="project-plan"
+        title="Plan"
+        meta={`${done}/${total} complete · ${pct}%`}
+        actions={(
+          <>
+            <button type="button" onClick={() => openTaskAdd()} className={ACTION_BUTTON_CLASS} disabled={taskBusy}>
+              + Add task
+            </button>
+            <button type="button" onClick={openMilestoneAdd} className={ACTION_BUTTON_CLASS} disabled={milestoneBusy}>
+              + Add milestone
+            </button>
+          </>
+        )}
+      >
+        <div className="max-w-5xl space-y-6">
+          <ProjectPlanOverview
+            planContent={planContent}
+            currentFocus={record.currentFocus ?? ''}
+            blockers={blockers}
+            recentProgress={recentProgress}
+            pct={pct}
+          />
+
+          {milestoneEditor?.mode === 'add' && milestoneEditorForm}
+
+          {milestones.length === 0 && !milestoneEditor && (
+            <EmptyState
+              title="No milestones yet."
+              body="Add milestones to break the work into clear chunks. Tasks can then live inside each chunk instead of floating around the project."
+              className="max-w-3xl py-8"
+            />
+          )}
+
+          <div className="space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
+            {milestones.map((milestone, milestoneIndex) => {
+              const isCurrent = currentMilestone?.id === milestone.id;
+              const isEditing = milestoneEditor?.mode === 'edit' && milestoneEditor.milestoneId === milestone.id;
+              const milestoneTasks = tasksByMilestone.get(milestone.id) ?? [];
+
+              if (isEditing) {
+                return (
+                  <div key={milestone.id} className="py-5" id={`project-milestone-${milestone.id}`}>
+                    <ProjectMilestoneEditorForm
+                      editor={milestoneEditor}
+                      value={milestoneForm}
+                      statuses={MILESTONE_STATUSES}
+                      busy={milestoneBusy}
+                      error={milestoneError}
+                      onChange={(patch) => setMilestoneForm((current) => ({ ...current, ...patch }))}
+                      onCancel={() => setMilestoneEditor(null)}
+                      onSubmit={saveMilestone}
+                      showDivider={false}
+                    />
+                  </div>
+                );
+              }
+
+              return (
+                <ProjectMilestoneRow
+                  key={milestone.id}
+                  milestone={milestone}
+                  isCurrent={isCurrent}
+                  milestoneIndex={milestoneIndex}
+                  milestoneCount={milestones.length}
+                  busy={milestoneBusy}
+                  quickStatuses={MILESTONE_QUICK_STATUSES}
+                  taskBusy={taskBusy}
+                  milestoneTasks={milestoneTasks}
+                  taskEditor={taskEditor}
+                  taskEditorForm={taskEditorForm}
+                  onMove={(direction) => { void moveMilestone(milestone.id, direction); }}
+                  onMakeCurrent={() => { void makeMilestoneCurrent(milestone.id); }}
+                  onEdit={() => openMilestoneEdit(milestone)}
+                  onDelete={() => { void deleteMilestone(milestone.id); }}
+                  onSetStatus={(status) => { void setMilestoneStatus(milestone.id, status); }}
+                  onOpenTaskAdd={() => openTaskAdd(milestone.id)}
+                  onMoveTask={(taskId, direction) => { void moveTask(taskId, direction); }}
+                  onEditTask={openTaskEdit}
+                  onDeleteTask={(taskId) => { void deleteTask(taskId); }}
+                />
+              );
+            })}
+          </div>
+
+          {(unassignedTasks.length > 0 || (taskEditor?.mode === 'add' && !taskEditor.anchorMilestoneId)) && (
+            <div className="space-y-4 border-t border-border-subtle pt-4" id="project-unassigned-tasks">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="ui-card-meta">Unassigned tasks</p>
+                  <p className="ui-card-meta mt-1">Tasks that are not tied to a milestone yet.</p>
+                </div>
+                <button type="button" onClick={() => openTaskAdd()} className={ACTION_BUTTON_CLASS} disabled={taskBusy}>
+                  + Add task
+                </button>
+              </div>
+
+              {taskEditor?.mode === 'add' && !taskEditor.anchorMilestoneId && taskEditorForm}
+
+              {unassignedTasks.length > 0 ? (
+                <ProjectTaskList
+                  tasks={unassignedTasks}
+                  taskEditorTaskId={taskEditor?.mode === 'edit' ? taskEditor.taskId : null}
+                  taskEditorForm={taskEditorForm}
+                  busy={taskBusy}
+                  onMoveTask={(taskId, direction) => { void moveTask(taskId, direction); }}
+                  onEditTask={openTaskEdit}
+                  onDeleteTask={(taskId) => { void deleteTask(taskId); }}
+                />
+              ) : null}
+            </div>
+          )}
+
+          {milestoneError && !milestoneEditor && <p className="text-[12px] text-danger">{milestoneError}</p>}
+          {taskError && !taskEditor && <p className="text-[12px] text-danger max-w-4xl">{taskError}</p>}
+        </div>
+      </DetailSection>
+
+      <DetailSection
+        id="project-completion"
+        title="Completion summary"
+        meta={record.status === 'completed' ? 'project completed' : formatProjectStatus(record.status)}
+        actions={<button type="button" onClick={openProjectEditor} className={ACTION_BUTTON_CLASS}>Edit fields</button>}
+      >
+        <ProjectCompletionContent status={record.status} content={completionSummaryContent} />
+      </DetailSection>
+
+      <DetailSection
+        id="project-activity"
+        title="Activity"
+        meta={`${activityItems.length} items`}
+      >
+        <ProjectActivityContent items={activityItems} />
+      </DetailSection>
+
+      <DetailSection
+        id="project-handoff"
+        title="Handoff doc"
+        meta={project.brief ? `updated ${timeAgo(project.brief.updatedAt)}` : 'No handoff doc yet'}
+        actions={(
+          <>
+            <button type="button" onClick={() => { void regenerateBrief(); }} className={ACTION_BUTTON_CLASS} disabled={briefBusy}>
+              {briefBusy ? 'Regenerating…' : 'Regenerate doc'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setBriefError(null);
+                if (!briefEditing && briefContent.trim().length === 0) {
+                  setBriefContent(project.brief?.content ?? createEmptyProjectDocument(record.title));
+                }
+                setBriefEditing((value) => !value);
+              }}
+              className={ACTION_BUTTON_CLASS}
+              disabled={briefBusy}
+            >
+              {briefEditing ? 'Cancel' : (project.brief ? 'Edit doc' : 'Write doc')}
+            </button>
+          </>
+        )}
+      >
+        <ProjectHandoffDocContent
+          brief={project.brief}
+          editing={briefEditing}
+          content={briefContent}
+          busy={briefBusy}
+          error={briefError}
+          onChange={setBriefContent}
+          onSubmit={saveBrief}
+        />
+      </DetailSection>
+
+      <DetailSection
+        id="project-record"
+        title="Project record"
         actions={(
           <>
             <button
@@ -1007,500 +1091,39 @@ export function ProjectDetailPanel({
         )}
       >
         {editingProject ? (
-          <form onSubmit={handleProjectSave} className="max-w-4xl space-y-6 border-t border-border-subtle pt-6">
-            <div className="space-y-1.5">
-              <label className="ui-card-meta">Title</label>
-              <input
-                value={projectForm.title}
-                onChange={(event) => setProjectForm((current) => ({ ...current, title: event.target.value }))}
-                className={INPUT_CLASS}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="ui-card-meta">Description</label>
-              <textarea
-                value={projectForm.description}
-                onChange={(event) => setProjectForm((current) => ({ ...current, description: event.target.value }))}
-                className={TEXTAREA_CLASS}
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="ui-card-meta">Repo root</label>
-              <input
-                value={projectForm.repoRoot}
-                onChange={(event) => setProjectForm((current) => ({ ...current, repoRoot: event.target.value }))}
-                className={INPUT_CLASS}
-                placeholder="Optional. Absolute path or a path relative to the personal-agent repo."
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="ui-card-meta">Summary</label>
-              <textarea
-                value={projectForm.summary}
-                onChange={(event) => setProjectForm((current) => ({ ...current, summary: event.target.value }))}
-                className={TEXTAREA_CLASS}
-              />
-            </div>
-
-            <div className="grid gap-5 xl:grid-cols-2">
-              <div className="space-y-1.5">
-                <label className="ui-card-meta">Status</label>
-                <select
-                  value={projectForm.status}
-                  onChange={(event) => setProjectForm((current) => ({ ...current, status: event.target.value }))}
-                  className={SELECT_CLASS}
-                >
-                  {PROJECT_STATUSES.map((status) => (
-                    <option key={status} value={status}>{formatProjectStatus(status)}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="ui-card-meta">Current focus</label>
-                <input
-                  value={projectForm.currentFocus}
-                  onChange={(event) => setProjectForm((current) => ({ ...current, currentFocus: event.target.value }))}
-                  className={INPUT_CLASS}
-                  placeholder="Optional"
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-5 xl:grid-cols-2">
-              <div className="space-y-1.5">
-                <label className="ui-card-meta">Blockers (one per line)</label>
-                <textarea
-                  value={projectForm.blockers}
-                  onChange={(event) => setProjectForm((current) => ({ ...current, blockers: event.target.value }))}
-                  className={TEXTAREA_CLASS}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="ui-card-meta">Recent progress (one per line)</label>
-                <textarea
-                  value={projectForm.recentProgress}
-                  onChange={(event) => setProjectForm((current) => ({ ...current, recentProgress: event.target.value }))}
-                  className={TEXTAREA_CLASS}
-                />
-              </div>
-            </div>
-
-            {projectError && <p className="text-[12px] text-danger">{projectError}</p>}
-
-            <div className="flex items-center gap-3">
-              <ToolbarButton type="submit" disabled={projectBusy}>{projectBusy ? 'Saving…' : 'Save project'}</ToolbarButton>
-              <button type="button" onClick={() => setEditingProject(false)} className="text-[13px] text-secondary hover:text-primary transition-colors">
-                Cancel
-              </button>
-            </div>
-          </form>
+          <ProjectRecordEditorForm
+            value={projectForm}
+            statuses={PROJECT_STATUSES}
+            busy={projectBusy}
+            error={projectError}
+            onChange={(patch) => setProjectForm((current) => ({ ...current, ...patch }))}
+            onSubmit={handleProjectSave}
+            onCancel={() => setEditingProject(false)}
+          />
         ) : (
-          <div className="space-y-6 max-w-4xl">
-            <p className="ui-card-body">{record.summary}</p>
-
-            {record.repoRoot && (
-              <div className="space-y-1.5">
-                <p className="ui-card-meta">Repo root</p>
-                <p className="ui-card-body font-mono break-all">{record.repoRoot}</p>
-              </div>
-            )}
-
-            {record.currentFocus && (
-              <div className="space-y-1.5">
-                <p className="ui-card-meta">Current focus</p>
-                <p className="ui-card-body">{record.currentFocus}</p>
-              </div>
-            )}
-
-            {blockers.length > 0 && (
-              <div className="space-y-2">
-                <p className="ui-card-meta">Blockers</p>
-                <ul className="space-y-1.5">
-                  {blockers.map((blocker) => (
-                    <li key={blocker} className="flex items-start gap-2 text-[14px] leading-relaxed text-warning">
-                      <span className="mt-[2px] shrink-0">⚠</span>
-                      <span>{blocker}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {recentProgress.length > 0 && (
-              <div className="space-y-2">
-                <p className="ui-card-meta">Recent progress</p>
-                <ul className="space-y-1.5">
-                  {recentProgress.map((item) => (
-                    <li key={item} className="flex items-start gap-2 text-[14px] leading-relaxed text-secondary">
-                      <span className="mt-[2px] shrink-0 text-success">✓</span>
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
+          <ProjectRecordViewer
+            repoRoot={record.repoRoot}
+            summary={record.summary}
+            rawProjectOpen={false}
+            rawProjectContent={rawProjectContent}
+            rawProjectBusy={rawProjectBusy}
+            rawProjectError={rawProjectError}
+            onRawProjectContentChange={setRawProjectContent}
+            onRawProjectSubmit={saveRawProject}
+          />
         )}
 
-        {rawProjectOpen && (
-          <form onSubmit={saveRawProject} className="max-w-5xl space-y-4 border-t border-border-subtle pt-6">
-            <p className="ui-card-meta">PROJECT.yaml</p>
-            <textarea
-              value={rawProjectContent}
-              onChange={(event) => setRawProjectContent(event.target.value)}
-              className={`${INPUT_CLASS} min-h-[20rem] resize-y font-mono text-[12px] leading-[1.6]`}
-              spellCheck={false}
-            />
-            {rawProjectError && <p className="text-[12px] text-danger">{rawProjectError}</p>}
-            <div className="flex items-center gap-3">
-              <ToolbarButton type="submit" disabled={rawProjectBusy}>{rawProjectBusy ? 'Saving…' : 'Save YAML'}</ToolbarButton>
-            </div>
-          </form>
-        )}
-      </DetailSection>
-
-      <DetailSection
-        id="project-milestones"
-        title="Milestones"
-        meta={`${done}/${total} complete · ${pct}%`}
-        actions={(
-          <>
-            <button type="button" onClick={() => openTaskAdd()} className={ACTION_BUTTON_CLASS} disabled={taskBusy}>
-              + Add task
-            </button>
-            <button type="button" onClick={openMilestoneAdd} className={ACTION_BUTTON_CLASS} disabled={milestoneBusy}>
-              + Add milestone
-            </button>
-          </>
-        )}
-      >
-        <div className="max-w-5xl space-y-5">
-          <div className="h-1 rounded-full bg-base overflow-hidden">
-            <div className="h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
-          </div>
-
-          {milestoneEditor && milestoneEditor.mode === 'add' && (
-            <form onSubmit={saveMilestone} className="space-y-5 border border-border-subtle rounded-xl px-5 py-5">
-              <div className="flex items-center justify-between gap-3">
-                <p className="ui-card-meta">New milestone</p>
-                <button type="button" onClick={() => setMilestoneEditor(null)} className={ACTION_BUTTON_CLASS}>Cancel</button>
-              </div>
-
-              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_15rem]">
-                <div className="space-y-1.5">
-                  <label className="ui-card-meta">Title</label>
-                  <input
-                    value={milestoneForm.title}
-                    onChange={(event) => setMilestoneForm((current) => ({ ...current, title: event.target.value }))}
-                    className={INPUT_CLASS}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="ui-card-meta">Status</label>
-                  <select
-                    value={milestoneForm.status}
-                    onChange={(event) => setMilestoneForm((current) => ({ ...current, status: event.target.value }))}
-                    className={SELECT_CLASS}
-                  >
-                    {MILESTONE_STATUSES.map((status) => (
-                      <option key={status} value={status}>{formatProjectStatus(status)}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="ui-card-meta">Summary</label>
-                <textarea
-                  value={milestoneForm.summary}
-                  onChange={(event) => setMilestoneForm((current) => ({ ...current, summary: event.target.value }))}
-                  className={TEXTAREA_CLASS}
-                />
-              </div>
-
-              <label className="flex items-center gap-2 text-[13px] text-secondary">
-                <input
-                  type="checkbox"
-                  checked={milestoneForm.makeCurrent}
-                  onChange={(event) => setMilestoneForm((current) => ({ ...current, makeCurrent: event.target.checked }))}
-                />
-                Set as current milestone
-              </label>
-
-              {milestoneError && <p className="text-[12px] text-danger">{milestoneError}</p>}
-
-              <div className="flex items-center gap-3">
-                <ToolbarButton type="submit" disabled={milestoneBusy}>{milestoneBusy ? 'Saving…' : 'Save milestone'}</ToolbarButton>
-              </div>
-            </form>
-          )}
-
-          {milestones.length === 0 && !milestoneEditor && (
-            <EmptyState
-              title="No milestones yet."
-              body="Add milestones to define the durable plan. Tasks can then live inside each milestone instead of feeling disconnected from the roadmap."
-              className="border border-dashed border-border-subtle rounded-xl max-w-3xl"
-            />
-          )}
-
-          <div className="space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
-            {milestones.map((milestone, milestoneIndex) => {
-              const isCurrent = currentMilestone?.id === milestone.id;
-              const isEditing = milestoneEditor?.mode === 'edit' && milestoneEditor.milestoneId === milestone.id;
-              const milestoneTasks = tasksByMilestone.get(milestone.id) ?? [];
-              const taskEditorIsAnchoredHere = taskEditor != null && taskEditor.anchorMilestoneId === milestone.id;
-
-              if (isEditing) {
-                return (
-                  <form key={milestone.id} onSubmit={saveMilestone} className="py-5 space-y-5" id={`project-milestone-${milestone.id}`}>
-                    <p className="ui-card-meta font-mono">{milestone.id}</p>
-
-                    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_15rem]">
-                      <div className="space-y-1.5">
-                        <label className="ui-card-meta">Title</label>
-                        <input
-                          value={milestoneForm.title}
-                          onChange={(event) => setMilestoneForm((current) => ({ ...current, title: event.target.value }))}
-                          className={INPUT_CLASS}
-                        />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="ui-card-meta">Status</label>
-                        <select
-                          value={milestoneForm.status}
-                          onChange={(event) => setMilestoneForm((current) => ({ ...current, status: event.target.value }))}
-                          className={SELECT_CLASS}
-                        >
-                          {MILESTONE_STATUSES.map((status) => (
-                            <option key={status} value={status}>{formatProjectStatus(status)}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="ui-card-meta">Summary</label>
-                      <textarea
-                        value={milestoneForm.summary}
-                        onChange={(event) => setMilestoneForm((current) => ({ ...current, summary: event.target.value }))}
-                        className={TEXTAREA_CLASS}
-                      />
-                    </div>
-
-                    <label className="flex items-center gap-2 text-[13px] text-secondary">
-                      <input
-                        type="checkbox"
-                        checked={milestoneForm.makeCurrent}
-                        onChange={(event) => setMilestoneForm((current) => ({ ...current, makeCurrent: event.target.checked }))}
-                      />
-                      Set as current milestone
-                    </label>
-
-                    {milestoneError && <p className="text-[12px] text-danger">{milestoneError}</p>}
-
-                    <div className="flex items-center gap-3">
-                      <ToolbarButton type="submit" disabled={milestoneBusy}>{milestoneBusy ? 'Saving…' : 'Save milestone'}</ToolbarButton>
-                      <button type="button" onClick={() => setMilestoneEditor(null)} className="text-[13px] text-secondary hover:text-primary transition-colors">
-                        Cancel
-                      </button>
-                    </div>
-                  </form>
-                );
-              }
-
-              return (
-                <div key={milestone.id} className="py-4 space-y-4" id={`project-milestone-${milestone.id}`}>
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1 space-y-1.5">
-                      <div className="flex items-start gap-2.5">
-                        <span className={cx('mt-[7px] h-2 w-2 shrink-0 rounded-full', dotClassForStatus(milestone.status))} />
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-[14px] font-medium leading-relaxed text-primary">{milestone.title}</p>
-                            {isCurrent && <span className="ui-card-meta">current</span>}
-                            <Pill tone={toneForStatus(milestone.status)}>{formatProjectStatus(milestone.status)}</Pill>
-                          </div>
-                          {milestone.summary && <p className="ui-card-meta mt-1 break-words">{milestone.summary}</p>}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0 flex-wrap justify-end">
-                      <button type="button" onClick={() => { void moveMilestone(milestone.id, 'up'); }} className={ACTION_BUTTON_CLASS} disabled={milestoneBusy || milestoneIndex === 0}>
-                        ↑
-                      </button>
-                      <button type="button" onClick={() => { void moveMilestone(milestone.id, 'down'); }} className={ACTION_BUTTON_CLASS} disabled={milestoneBusy || milestoneIndex === milestones.length - 1}>
-                        ↓
-                      </button>
-                      {!isCurrent && (
-                        <button type="button" onClick={() => { void makeMilestoneCurrent(milestone.id); }} className={ACTION_BUTTON_CLASS} disabled={milestoneBusy}>
-                          Make current
-                        </button>
-                      )}
-                      <button type="button" onClick={() => openMilestoneEdit(milestone)} className={ACTION_BUTTON_CLASS}>
-                        Edit
-                      </button>
-                      <button type="button" onClick={() => { void deleteMilestone(milestone.id); }} className="text-[12px] text-danger hover:text-danger/75 transition-colors disabled:opacity-40" disabled={milestoneBusy}>
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="ml-5 space-y-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="ui-card-meta">State</span>
-                      {MILESTONE_QUICK_STATUSES.map((status) => (
-                        <button
-                          key={`${milestone.id}-${status}`}
-                          type="button"
-                          onClick={() => { void setMilestoneStatus(milestone.id, status); }}
-                          className={milestoneStatusButtonClass(milestone.status === status)}
-                          disabled={milestoneBusy || milestone.status === status}
-                        >
-                          {formatProjectStatus(status)}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="rounded-xl border border-border-subtle bg-base/40 px-4 py-4 space-y-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="ui-card-meta">Tasks for this milestone</p>
-                          <p className="ui-card-meta mt-1">{milestoneTasks.length} {milestoneTasks.length === 1 ? 'task' : 'tasks'}</p>
-                        </div>
-                        <button type="button" onClick={() => openTaskAdd(milestone.id)} className={ACTION_BUTTON_CLASS} disabled={taskBusy}>
-                          + Add task
-                        </button>
-                      </div>
-
-                      {taskEditorIsAnchoredHere && renderTaskEditorForm()}
-
-                      {milestoneTasks.length > 0 ? (
-                        <div className="space-y-0 divide-y divide-border-subtle border-t border-border-subtle">
-                          {milestoneTasks.map((task, taskIndex) => renderTaskCard(task, taskIndex, milestoneTasks.length))}
-                        </div>
-                      ) : !taskEditorIsAnchoredHere ? (
-                        <p className="ui-card-meta">No tasks for this milestone yet.</p>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {(unassignedTasks.length > 0 || (taskEditor?.mode === 'add' && !taskEditor.anchorMilestoneId)) && (
-            <div className="space-y-4 border-t border-border-subtle pt-4" id="project-unassigned-tasks">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="ui-card-meta">Unassigned tasks</p>
-                  <p className="ui-card-meta mt-1">Tasks that are not tied to a milestone yet.</p>
-                </div>
-                <button type="button" onClick={() => openTaskAdd()} className={ACTION_BUTTON_CLASS} disabled={taskBusy}>
-                  + Add task
-                </button>
-              </div>
-
-              {taskEditor?.mode === 'add' && !taskEditor.anchorMilestoneId && renderTaskEditorForm()}
-
-              {unassignedTasks.length > 0 ? (
-                <div className="space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
-                  {unassignedTasks.map((task, taskIndex) => renderTaskCard(task, taskIndex, unassignedTasks.length))}
-                </div>
-              ) : null}
-            </div>
-          )}
-
-          {milestoneError && !milestoneEditor && <p className="text-[12px] text-danger">{milestoneError}</p>}
-          {taskError && !taskEditor && <p className="text-[12px] text-danger max-w-4xl">{taskError}</p>}
-        </div>
-      </DetailSection>
-
-      <DetailSection
-        id="project-brief"
-        title="Project brief"
-        meta={project.brief ? `updated ${timeAgo(project.brief.updatedAt)}` : 'No brief yet'}
-        actions={(
-          <>
-            <button type="button" onClick={() => { void regenerateBrief(); }} className={ACTION_BUTTON_CLASS} disabled={briefBusy}>
-              {briefBusy ? 'Regenerating…' : 'Regenerate brief'}
-            </button>
-            <button type="button" onClick={() => setBriefEditing((value) => !value)} className={ACTION_BUTTON_CLASS} disabled={briefBusy}>
-              {briefEditing ? 'Cancel' : (project.brief ? 'Edit brief' : 'Write brief')}
-            </button>
-          </>
-        )}
-      >
-        <div className="max-w-5xl space-y-4">
-          {briefEditing ? (
-            <form onSubmit={saveBrief} className="space-y-4 border border-border-subtle rounded-xl px-5 py-5">
-              <textarea
-                value={briefContent}
-                onChange={(event) => setBriefContent(event.target.value)}
-                className={`${INPUT_CLASS} min-h-[18rem] resize-y font-mono text-[13px] leading-[1.7]`}
-                spellCheck={false}
-              />
-              {briefError && <p className="text-[12px] text-danger">{briefError}</p>}
-              <div className="flex items-center gap-3">
-                <ToolbarButton type="submit" disabled={briefBusy}>{briefBusy ? 'Saving…' : 'Save brief'}</ToolbarButton>
-              </div>
-            </form>
-          ) : project.brief ? (
-            <div className="ui-markdown max-w-none border-t border-border-subtle pt-4">
-              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{project.brief.content}</ReactMarkdown>
-            </div>
-          ) : (
-            <EmptyState
-              title="No project brief yet."
-              body="Write one manually or regenerate it from the current project state, notes, files, and linked conversations."
-              className="border border-dashed border-border-subtle rounded-xl max-w-3xl"
-            />
-          )}
-        </div>
-      </DetailSection>
-
-      <DetailSection
-        id="project-conversations"
-        title="Linked conversations"
-        meta={`${project.linkedConversations.length} linked`}
-      >
-        <div className="max-w-5xl space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
-          {project.linkedConversations.length === 0 ? (
-            <div className="py-4">
-              <EmptyState
-                title="No linked conversations yet."
-                body="Start a conversation from this project or reference the project inside an existing conversation to make it the cross-conversation through line."
-                className="border border-dashed border-border-subtle rounded-xl max-w-3xl"
-              />
-            </div>
-          ) : project.linkedConversations.map((conversation: ProjectLinkedConversation) => (
-            <article key={conversation.conversationId} className="py-4 space-y-2">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 space-y-1.5">
-                  <a href={`/conversations/${encodeURIComponent(conversation.conversationId)}`} className="text-[15px] font-medium text-accent hover:text-accent/75 transition-colors">
-                    {conversation.title}
-                  </a>
-                  <div className="flex flex-wrap items-center gap-2 text-[12px] text-dim">
-                    <span className="font-mono">{conversation.conversationId}</span>
-                    {conversation.lastActivityAt && <span>updated {timeAgo(conversation.lastActivityAt)}</span>}
-                    {conversation.cwd && <span className="font-mono break-all">{conversation.cwd}</span>}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {conversation.isRunning && <Pill tone="accent">live</Pill>}
-                  {conversation.needsAttention && <Pill tone="warning">attention</Pill>}
-                </div>
-              </div>
-              {conversation.snippet && <p className="text-[13px] leading-relaxed text-secondary">{conversation.snippet}</p>}
-            </article>
-          ))}
-        </div>
+        <ProjectRecordViewer
+          repoRoot={record.repoRoot}
+          summary={record.summary}
+          rawProjectOpen={rawProjectOpen}
+          rawProjectContent={rawProjectContent}
+          rawProjectBusy={rawProjectBusy}
+          rawProjectError={rawProjectError}
+          onRawProjectContentChange={setRawProjectContent}
+          onRawProjectSubmit={saveRawProject}
+          showSummary={false}
+        />
       </DetailSection>
 
       <DetailSection
@@ -1513,54 +1136,15 @@ export function ProjectDetailPanel({
           </button>
         )}
       >
-        <div className="max-w-5xl space-y-5">
-          {noteEditor?.mode === 'add' && renderNoteEditorForm()}
-
-          {project.notes.length === 0 && !noteEditor ? (
-            <EmptyState
-              title="No notes yet."
-              body="Append notes, decisions, questions, or checkpoints so the project keeps useful context between conversations."
-              className="border border-dashed border-border-subtle rounded-xl max-w-3xl"
-            />
-          ) : (
-            <div className="space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
-              {project.notes.map((note) => {
-                const isEditing = noteEditor?.mode === 'edit' && noteEditor.noteId === note.id;
-                if (isEditing) {
-                  return (
-                    <div key={note.id} id={`project-note-${note.id}`} className="py-4 scroll-mt-6">
-                      {renderNoteEditorForm()}
-                    </div>
-                  );
-                }
-
-                return (
-                  <article key={note.id} id={`project-note-${note.id}`} className="py-4 space-y-3 scroll-mt-6">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0 space-y-1.5">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="text-[15px] font-medium text-primary">{note.title}</p>
-                          <Pill tone="muted">{formatProjectStatus(note.kind)}</Pill>
-                          <span className="ui-card-meta">updated {timeAgo(note.updatedAt)}</span>
-                        </div>
-                        {note.body.length > 0 && (
-                          <div className="ui-markdown max-w-none text-[14px]">
-                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{note.body}</ReactMarkdown>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <button type="button" onClick={() => openNoteEdit(note)} className={ACTION_BUTTON_CLASS}>Edit</button>
-                        <button type="button" onClick={() => { void deleteNote(note.id); }} className="text-[12px] text-danger hover:text-danger/75 transition-colors disabled:opacity-40" disabled={noteBusy}>Delete</button>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          )}
-          {noteError && !noteEditor && <p className="text-[12px] text-danger">{noteError}</p>}
-        </div>
+        <ProjectNotesContent
+          notes={project.notes}
+          noteEditor={noteEditor}
+          noteEditorForm={noteEditorForm}
+          noteBusy={noteBusy}
+          noteError={noteError}
+          onEditNote={openNoteEdit}
+          onDeleteNote={(noteId) => { void deleteNote(noteId); }}
+        />
       </DetailSection>
 
       <DetailSection
@@ -1568,98 +1152,15 @@ export function ProjectDetailPanel({
         title="Files"
         meta={`${project.attachmentCount} attachments · ${project.artifactCount} artifacts`}
       >
-        <div className="max-w-5xl space-y-6">
-          <form onSubmit={saveFile} className="space-y-5 border border-border-subtle rounded-xl px-5 py-5">
-            <div className="grid gap-5 xl:grid-cols-[12rem_minmax(0,1fr)]">
-              <div className="space-y-1.5">
-                <label className="ui-card-meta">Kind</label>
-                <select
-                  value={fileUpload.kind}
-                  onChange={(event) => setFileUpload((current) => ({ ...current, kind: event.target.value as 'attachment' | 'artifact' }))}
-                  className={SELECT_CLASS}
-                >
-                  <option value="attachment">Attachment</option>
-                  <option value="artifact">Artifact</option>
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <label className="ui-card-meta">File</label>
-                <input
-                  type="file"
-                  onChange={(event) => setFileUpload((current) => ({ ...current, file: event.target.files?.[0] ?? null, title: current.title || event.target.files?.[0]?.name || '' }))}
-                  className={INPUT_CLASS}
-                />
-              </div>
-            </div>
-            <div className="grid gap-5 xl:grid-cols-2">
-              <div className="space-y-1.5">
-                <label className="ui-card-meta">Title</label>
-                <input
-                  value={fileUpload.title}
-                  onChange={(event) => setFileUpload((current) => ({ ...current, title: event.target.value }))}
-                  className={INPUT_CLASS}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="ui-card-meta">Description</label>
-                <input
-                  value={fileUpload.description}
-                  onChange={(event) => setFileUpload((current) => ({ ...current, description: event.target.value }))}
-                  className={INPUT_CLASS}
-                />
-              </div>
-            </div>
-            {fileError && <p className="text-[12px] text-danger">{fileError}</p>}
-            <div className="flex items-center gap-3">
-              <ToolbarButton type="submit" disabled={fileBusy}>{fileBusy ? 'Uploading…' : 'Add file'}</ToolbarButton>
-            </div>
-          </form>
-
-          <div className="space-y-5">
-            <div className="space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
-              <div className="py-3"><p className="ui-card-meta">Attachments</p></div>
-              {project.attachments.length > 0 ? project.attachments.map((file) => renderFileCard(file)) : (
-                <div className="py-4"><p className="ui-card-meta">No attachments yet.</p></div>
-              )}
-            </div>
-            <div className="space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
-              <div className="py-3"><p className="ui-card-meta">Artifacts</p></div>
-              {project.artifacts.length > 0 ? project.artifacts.map((file) => renderFileCard(file)) : (
-                <div className="py-4"><p className="ui-card-meta">No project artifacts yet.</p></div>
-              )}
-            </div>
-          </div>
-        </div>
+        <ProjectFilesContent
+          uploadForm={fileUploadForm}
+          attachments={project.attachments}
+          artifacts={project.artifacts}
+          fileBusy={fileBusy}
+          onDeleteFile={(file) => { void deleteFile(file); }}
+        />
       </DetailSection>
 
-      <DetailSection
-        id="project-timeline"
-        title="Timeline"
-        meta={`${project.timeline.length} events`}
-      >
-        <div className="max-w-5xl space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
-          {project.timeline.length === 0 ? (
-            <div className="py-4"><p className="ui-card-meta">No timeline entries yet.</p></div>
-          ) : project.timeline.map((entry) => (
-            <article key={entry.id} className="py-4 flex items-start justify-between gap-4">
-              <div className="min-w-0 space-y-1.5">
-                <div className="flex flex-wrap items-center gap-2">
-                  {entry.href ? (
-                    <a href={entry.href} className="text-[14px] font-medium text-accent hover:text-accent/75 transition-colors">
-                      {entry.title}
-                    </a>
-                  ) : (
-                    <p className="text-[14px] font-medium text-primary">{entry.title}</p>
-                  )}
-                  <Pill tone="muted">{formatProjectStatus(entry.kind)}</Pill>
-                </div>
-                {entry.description && <p className="text-[13px] leading-relaxed text-secondary">{entry.description}</p>}
-              </div>
-              <span className="ui-card-meta shrink-0">{timeAgo(entry.createdAt)}</span>
-            </article>
-          ))}
-        </div>
-      </DetailSection>
     </div>
   );
 }

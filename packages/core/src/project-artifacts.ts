@@ -30,6 +30,11 @@ export interface ProjectPlanDocument {
   tasks: ProjectTaskDocument[];
 }
 
+export interface ProjectRequirementsDocument {
+  goal: string;
+  acceptanceCriteria: string[];
+}
+
 export interface ProjectDocument {
   id: string;
   createdAt: string;
@@ -38,10 +43,13 @@ export interface ProjectDocument {
   description: string;
   repoRoot?: string;
   summary: string;
+  requirements: ProjectRequirementsDocument;
   status: ProjectStatus | FlexibleString;
   blockers: string[];
   currentFocus?: string;
   recentProgress: string[];
+  planSummary?: string;
+  completionSummary?: string;
   plan: ProjectPlanDocument;
 }
 
@@ -248,6 +256,20 @@ function parseProjectTaskValue(value: unknown, label: string): ProjectTaskDocume
   };
 }
 
+function formatProjectRequirements(requirements: ProjectRequirementsDocument): Record<string, unknown> {
+  return {
+    goal: assertNonEmptyText(requirements.goal, 'Project requirements.goal'),
+    acceptanceCriteria: normalizeOptionalTextList(requirements.acceptanceCriteria, 'Project requirements.acceptanceCriteria') ?? [],
+  };
+}
+
+function parseProjectRequirements(object: Record<string, unknown>, label: string): ProjectRequirementsDocument {
+  return {
+    goal: readRequiredYamlString(object, 'goal', label),
+    acceptanceCriteria: readOptionalYamlStringArray(object, 'acceptanceCriteria', label) ?? [],
+  };
+}
+
 function formatProjectPlan(plan: ProjectPlanDocument): Record<string, unknown> {
   const currentMilestoneId = normalizeOptionalText(plan.currentMilestoneId, 'Project currentMilestoneId');
   const milestones = plan.milestones.map((milestone, index) => ({
@@ -312,11 +334,16 @@ export function createInitialProject(input: {
     title,
     description,
     ...(repoRoot ? { repoRoot } : {}),
-    summary: 'Project created. Capture the brief, notes, and next steps as the work takes shape.',
+    summary: 'Project created. Capture the durable requirements, plan, and next steps as the work takes shape.',
+    requirements: {
+      goal: description,
+      acceptanceCriteria: [],
+    },
     status: 'created',
     blockers: [],
-    currentFocus: 'Capture the goal and first next step.',
+    currentFocus: 'Capture the first concrete work chunk.',
     recentProgress: [],
+    planSummary: 'Break the work into milestones and tasks once the approach is clear.',
     plan: {
       milestones: [],
       tasks: [],
@@ -328,6 +355,7 @@ export function formatProject(document: ProjectDocument): string {
   const blockers = normalizeOptionalTextList(document.blockers, 'Project blockers') ?? [];
   const recentProgress = normalizeOptionalTextList(document.recentProgress, 'Project recentProgress') ?? [];
   const plan = formatProjectPlan(document.plan);
+  const requirements = formatProjectRequirements(document.requirements);
 
   const output: Record<string, unknown> = {
     id: assertNonEmptyText(document.id, 'Project id'),
@@ -339,12 +367,19 @@ export function formatProject(document: ProjectDocument): string {
       ? { repoRoot: normalizeOptionalText(document.repoRoot, 'Project repoRoot') }
       : {}),
     summary: assertNonEmptyText(document.summary, 'Project summary'),
+    requirements,
     status: assertNonEmptyText(document.status, 'Project status'),
     blockers,
     ...(normalizeOptionalText(document.currentFocus, 'Project currentFocus')
       ? { currentFocus: normalizeOptionalText(document.currentFocus, 'Project currentFocus') }
       : {}),
     recentProgress,
+    ...(normalizeOptionalText(document.planSummary, 'Project planSummary')
+      ? { planSummary: normalizeOptionalText(document.planSummary, 'Project planSummary') }
+      : {}),
+    ...(normalizeOptionalText(document.completionSummary, 'Project completionSummary')
+      ? { completionSummary: normalizeOptionalText(document.completionSummary, 'Project completionSummary') }
+      : {}),
     plan,
   };
 
@@ -378,18 +413,30 @@ export function parseProject(yaml: string): ProjectDocument {
   const currentMilestoneId = readOptionalYamlString(planObject, 'currentMilestoneId', 'Project.plan');
   validateProjectPlan(parsedMilestones, parsedTasks, currentMilestoneId, 'Project.plan');
 
+  const description = readRequiredYamlString(object, 'description', 'Project');
+  const requirementsValue = object.requirements;
+  const requirements = requirementsValue === undefined || requirementsValue === null
+    ? {
+        goal: description,
+        acceptanceCriteria: [],
+      }
+    : parseProjectRequirements(assertPlainObject(requirementsValue, 'Project.requirements'), 'Project.requirements');
+
   return {
     id: readRequiredYamlString(object, 'id', 'Project'),
     createdAt: readRequiredYamlString(object, 'createdAt', 'Project'),
     updatedAt: readRequiredYamlString(object, 'updatedAt', 'Project'),
     title: readRequiredYamlString(object, 'title', 'Project'),
-    description: readRequiredYamlString(object, 'description', 'Project'),
+    description,
     repoRoot: readOptionalYamlString(object, 'repoRoot', 'Project'),
     summary: readRequiredYamlString(object, 'summary', 'Project'),
+    requirements,
     status: readRequiredYamlString(object, 'status', 'Project'),
     blockers: readOptionalYamlStringArray(object, 'blockers', 'Project') ?? [],
     currentFocus: readOptionalYamlString(object, 'currentFocus', 'Project'),
     recentProgress: readOptionalYamlStringArray(object, 'recentProgress', 'Project') ?? [],
+    planSummary: readOptionalYamlString(object, 'planSummary', 'Project'),
+    completionSummary: readOptionalYamlString(object, 'completionSummary', 'Project'),
     plan: {
       currentMilestoneId,
       milestones: parsedMilestones,

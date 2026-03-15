@@ -44,6 +44,7 @@ export function ProjectOverviewPanel({
   const isBlocked = hasMeaningfulBlockers(record.blockers);
   const currentFocus = record.currentFocus?.trim();
   const description = record.description.trim();
+  const goal = record.requirements.goal.trim();
   const projectRepoRoot = record.repoRoot?.trim();
   const recentProgress = record.recentProgress.filter((item) => item.trim().length > 0);
 
@@ -69,7 +70,7 @@ export function ProjectOverviewPanel({
   const visibleTasks = project.tasks.slice(0, 5);
   const hiddenTasks = Math.max(0, project.tasks.length - visibleTasks.length);
 
-  const showOverview = record.summary.trim().length > 0 || !!projectRepoRoot || !!currentFocus || blockers.length > 0 || recentProgress.length > 0;
+  const showOverview = record.summary.trim().length > 0 || goal.length > 0 || !!projectRepoRoot || !!currentFocus || blockers.length > 0 || recentProgress.length > 0;
   const showTasksSection = project.taskCount > 0;
 
   return (
@@ -121,22 +122,29 @@ export function ProjectOverviewPanel({
             </div>
           )}
 
-          {record.summary.trim().length > 0 && (
+          {goal.length > 0 && (
             <div className={projectRepoRoot ? 'border-t border-border-subtle pt-3' : ''}>
-              <p className="ui-card-meta mb-1.5">Summary</p>
+              <p className="ui-card-meta mb-1.5">Goal</p>
+              <p className="ui-card-body">{goal}</p>
+            </div>
+          )}
+
+          {record.summary.trim().length > 0 && (
+            <div className={(projectRepoRoot || goal.length > 0) ? 'border-t border-border-subtle pt-3' : ''}>
+              <p className="ui-card-meta mb-1.5">List summary</p>
               <p className="ui-card-body">{record.summary}</p>
             </div>
           )}
 
           {currentFocus && (
-            <div className={(projectRepoRoot || record.summary.trim().length > 0) ? 'border-t border-border-subtle pt-3' : ''}>
+            <div className={(projectRepoRoot || goal.length > 0 || record.summary.trim().length > 0) ? 'border-t border-border-subtle pt-3' : ''}>
               <p className="ui-card-meta mb-1.5">Current focus</p>
               <p className="ui-card-body">{currentFocus}</p>
             </div>
           )}
 
           {blockers.length > 0 && (
-            <div className={(projectRepoRoot || record.summary.trim().length > 0 || currentFocus) ? 'border-t border-border-subtle pt-3' : ''}>
+            <div className={(projectRepoRoot || goal.length > 0 || record.summary.trim().length > 0 || currentFocus) ? 'border-t border-border-subtle pt-3' : ''}>
               <p className="ui-card-meta mb-1.5">Blocked by</p>
               <ul className="space-y-1.5">
                 {blockers.map((blocker) => (
@@ -147,7 +155,7 @@ export function ProjectOverviewPanel({
           )}
 
           {recentProgress.length > 0 && (
-            <div className={(projectRepoRoot || record.summary.trim().length > 0 || currentFocus || blockers.length > 0) ? 'border-t border-border-subtle pt-3' : ''}>
+            <div className={(projectRepoRoot || goal.length > 0 || record.summary.trim().length > 0 || currentFocus || blockers.length > 0) ? 'border-t border-border-subtle pt-3' : ''}>
               <p className="ui-card-meta mb-2">Recent progress</p>
               <ul className="space-y-1.5">
                 {recentProgress.slice(0, 4).map((item) => (

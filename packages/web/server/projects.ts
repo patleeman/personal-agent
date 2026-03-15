@@ -76,6 +76,10 @@ export interface CreateProjectRecordInput {
   description: string;
   projectRepoRoot?: string | null;
   summary?: string;
+  goal?: string;
+  acceptanceCriteria?: string[];
+  planSummary?: string;
+  completionSummary?: string | null;
   status?: string;
   currentFocus?: string | null;
   blockers?: string[];
@@ -90,6 +94,10 @@ export interface UpdateProjectRecordInput {
   description?: string;
   projectRepoRoot?: string | null;
   summary?: string;
+  goal?: string;
+  acceptanceCriteria?: string[];
+  planSummary?: string | null;
+  completionSummary?: string | null;
   status?: string;
   currentFocus?: string | null;
   currentMilestoneId?: string | null;
@@ -418,6 +426,14 @@ export function createProjectRecord(input: CreateProjectRecordInput): ProjectDet
     description,
     repoRoot: normalizeProjectRepoRoot(input.projectRepoRoot, input.repoRoot),
     summary: readOptionalString(input.summary) ?? project.summary,
+    requirements: {
+      goal: readOptionalString(input.goal) ?? project.requirements.goal,
+      acceptanceCriteria: input.acceptanceCriteria
+        ? readStringList(input.acceptanceCriteria, 'Project acceptanceCriteria')
+        : project.requirements.acceptanceCriteria,
+    },
+    planSummary: readOptionalString(input.planSummary) ?? project.planSummary,
+    completionSummary: readOptionalString(input.completionSummary) ?? project.completionSummary,
     status: readOptionalString(input.status) ?? project.status,
     currentFocus: readOptionalString(input.currentFocus) ?? project.currentFocus,
     blockers: input.blockers ? readStringList(input.blockers, 'Project blockers') : project.blockers,
@@ -438,6 +454,18 @@ export function updateProjectRecord(input: UpdateProjectRecordInput): ProjectDet
     ...(input.description !== undefined ? { description: readRequiredString(input.description, 'Project description') } : {}),
     ...(input.projectRepoRoot !== undefined ? { repoRoot: normalizeProjectRepoRoot(input.projectRepoRoot, input.repoRoot) } : {}),
     ...(input.summary !== undefined ? { summary: readRequiredString(input.summary, 'Project summary') } : {}),
+    ...(input.goal !== undefined || input.acceptanceCriteria !== undefined
+      ? {
+          requirements: {
+            goal: input.goal !== undefined ? readRequiredString(input.goal, 'Project goal') : project.requirements.goal,
+            acceptanceCriteria: input.acceptanceCriteria !== undefined
+              ? readStringList(input.acceptanceCriteria, 'Project acceptanceCriteria')
+              : project.requirements.acceptanceCriteria,
+          },
+        }
+      : {}),
+    ...(input.planSummary !== undefined ? { planSummary: readOptionalString(input.planSummary) } : {}),
+    ...(input.completionSummary !== undefined ? { completionSummary: readOptionalString(input.completionSummary) } : {}),
     ...(input.status !== undefined ? { status: readRequiredString(input.status, 'Project status') } : {}),
     ...(input.currentFocus !== undefined ? { currentFocus: readOptionalString(input.currentFocus) } : {}),
     ...(input.blockers !== undefined ? { blockers: readStringList(input.blockers, 'Project blockers') } : {}),

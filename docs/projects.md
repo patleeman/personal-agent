@@ -59,7 +59,11 @@ A project can store:
 - `id`
 - `title`
 - `description`
-- `summary`
+- `summary` (best used as the compact list / preview summary)
+- `requirements.goal`
+- `requirements.acceptanceCriteria[]`
+- `planSummary` (optional narrative plan)
+- `completionSummary` (optional shipped outcome summary)
 - `status`
 - `repoRoot` (optional)
 - `blockers`
@@ -85,6 +89,12 @@ title: Improve web UI docs
 description: Improve the personal-agent web UI docs and navigation.
 repoRoot: /Users/patrick/workingdir/personal-agent
 summary: Reorganizing docs into a clearer projects-first workflow.
+requirements:
+  goal: Make project pages easier to scan and recover across conversations.
+  acceptanceCriteria:
+    - Requirements, plan, and completion are distinct in the UI.
+    - Linked conversation context is easy to discover.
+planSummary: Reshape the project page around a requirements → plan → completion flow.
 status: in_progress
 blockers: []
 currentFocus: Ship the new project detail experience.
@@ -116,10 +126,14 @@ updatedAt: 2026-03-13T12:00:00.000Z
 title: Investigate rate limit spike
 description: Understand yesterday's API rate limit spike.
 summary: Fresh investigation.
+requirements:
+  goal: Understand what caused yesterday's API rate limit spike.
+  acceptanceCriteria: []
 status: created
 blockers: []
-currentFocus: Capture the goal and first next step.
+currentFocus: Capture the first concrete work chunk.
 recentProgress: []
+planSummary: Break the work into milestones and tasks once the approach is clear.
 plan:
   milestones: []
 ```
@@ -163,15 +177,23 @@ Use them for:
 - reports
 - exports worth keeping with the project
 
-## Project brief
+## Project brief / handoff document
 
 Each project can have a canonical `BRIEF.md`.
 
-This is the best place to keep a high-signal summary that helps future conversations pick the work back up quickly.
+The structured source of truth now lives primarily in `PROJECT.yaml`:
+
+- `requirements.goal`
+- `requirements.acceptanceCriteria[]`
+- `planSummary`
+- `completionSummary`
+- milestones/tasks/current focus/blockers/recent progress
+
+`BRIEF.md` is best treated as the human-readable handoff layer when the structured fields are not enough.
 
 In the web UI you can:
 
-- edit the brief manually
+- edit the handoff document manually
 - regenerate it on demand from current project state, notes, files, and linked conversations
 
 ## Linked conversations
@@ -226,43 +248,34 @@ From the Projects page you can:
 - inspect and edit `PROJECT.yaml`
 - see linked conversations
 - start a new conversation from the project
-- edit or regenerate the project brief
+- edit or regenerate the project handoff doc
 - append notes
 - upload attachments and project artifacts
 - manage optional milestones and tasks
 - view a combined project timeline
 
-### Through the agent skill and project tool
+### Through the project tool
 
-Inside a conversation, durable project editing is primarily guided by the internal `pa-project-hub` skill.
+Inside a conversation, use the `project` tool for normal durable project management.
 
-That skill teaches the agent:
+The tool supports:
 
-- the `PROJECT.yaml` schema
-- the `BRIEF.md` / `notes/` / `attachments/` / `artifacts/` layout
-- which fields are mutable versus derived
-- the portability rule for conversation links
+- project create / get / update / delete
+- current-conversation reference / unreference
+- brief saves
+- note create / update / delete
+- milestone create / update / move / delete
+- task create / update / move / delete
 
-The `project` tool is intentionally tiny.
-
-Use it only for:
-
-- reference / unreference
-
-Use file tools plus the project skill for durable edits to:
-
-- `PROJECT.yaml`
-- `BRIEF.md`
-- notes
-- attachment/artifact entries
+Use direct file edits only when you need low-level manipulation of attachment or artifact entries outside the structured tool surface.
 
 ## Suggested workflow
 
 A good pattern is:
 
 1. create the project once the work spans more than one turn
-2. keep `summary`, `currentFocus`, `blockers`, and `recentProgress` current
-3. keep `BRIEF.md` useful for future restarts
+2. keep `summary`, `requirements`, `planSummary`, `completionSummary`, `currentFocus`, `blockers`, and `recentProgress` current
+3. keep `BRIEF.md` useful as the handoff layer for future restarts
 4. append notes when decisions or context accumulate
 5. upload files that belong with the work
 6. use milestones only when the work genuinely benefits from phases

@@ -119,6 +119,11 @@ export interface ProjectPlan {
   tasks: ProjectTask[];
 }
 
+export interface ProjectRequirements {
+  goal: string;
+  acceptanceCriteria: string[];
+}
+
 export interface ProjectRecord {
   id: string;
   createdAt: string;
@@ -127,10 +132,13 @@ export interface ProjectRecord {
   description: string;
   repoRoot?: string;
   summary: string;
+  requirements: ProjectRequirements;
   status: string;
   blockers: string[];
   currentFocus?: string;
   recentProgress: string[];
+  planSummary?: string;
+  completionSummary?: string;
   plan: ProjectPlan;
 }
 

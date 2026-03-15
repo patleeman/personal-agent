@@ -51,7 +51,7 @@ export function buildMentionItems(input: {
       label: project.id,
       kind: 'project' as const,
       title: project.title,
-      summary: project.summary || project.description,
+      summary: project.summary || project.requirements.goal || project.description,
     })),
     ...input.tasks.map((task) => ({
       id: `@${task.id}`,

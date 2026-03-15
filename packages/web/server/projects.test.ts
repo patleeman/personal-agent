@@ -31,6 +31,7 @@ afterEach(async () => {
 function createTempRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'pa-web-projects-'));
   tempDirs.push(dir);
+  process.env.PERSONAL_AGENT_PROFILES_ROOT = join(dir, 'profiles');
   return dir;
 }
 
@@ -143,6 +144,10 @@ describe('project editing helpers', () => {
       description: 'Build the artifact model',
       projectRepoRoot: '../workspace/artifact-model',
       summary: 'The storage model is taking shape.',
+      goal: 'Build the artifact model and make the project structure easy to inspect.',
+      acceptanceCriteria: ['Project YAML has explicit requirements.', 'The UI exposes the work plan clearly.'],
+      planSummary: 'Define the schema first, then expose it cleanly in the web UI.',
+      completionSummary: 'Not complete yet.',
       status: 'in_progress',
       currentFocus: 'Define PROJECT.yaml.',
       blockers: ['Need to settle task shape'],
@@ -153,6 +158,13 @@ describe('project editing helpers', () => {
     expect(detail.project.description).toBe('Build the artifact model');
     expect(detail.project.repoRoot).toBe(resolve(repoRoot, '../workspace/artifact-model'));
     expect(detail.project.summary).toBe('The storage model is taking shape.');
+    expect(detail.project.requirements.goal).toBe('Build the artifact model and make the project structure easy to inspect.');
+    expect(detail.project.requirements.acceptanceCriteria).toEqual([
+      'Project YAML has explicit requirements.',
+      'The UI exposes the work plan clearly.',
+    ]);
+    expect(detail.project.planSummary).toBe('Define the schema first, then expose it cleanly in the web UI.');
+    expect(detail.project.completionSummary).toBe('Not complete yet.');
     expect(detail.project.status).toBe('in_progress');
     expect(detail.project.currentFocus).toBe('Define PROJECT.yaml.');
     expect(detail.project.blockers).toEqual(['Need to settle task shape']);
@@ -244,6 +256,10 @@ describe('project editing helpers', () => {
       title: 'Durable artifact model',
       description: 'Build the durable artifact model',
       summary: 'PROJECT.yaml is now canonical.',
+      goal: 'Keep the project structure durable and easy to resume.',
+      acceptanceCriteria: ['Structured requirements live in PROJECT.yaml.', 'The current milestone is explicit.'],
+      planSummary: 'Finish the schema migration, then update the UI around it.',
+      completionSummary: 'Migration in progress.',
       currentMilestoneId: 'execute-work',
       blockers: [],
       recentProgress: ['Migrated the project schema'],
@@ -252,6 +268,13 @@ describe('project editing helpers', () => {
     expect(detail.project.title).toBe('Durable artifact model');
     expect(detail.project.description).toBe('Build the durable artifact model');
     expect(detail.project.summary).toBe('PROJECT.yaml is now canonical.');
+    expect(detail.project.requirements.goal).toBe('Keep the project structure durable and easy to resume.');
+    expect(detail.project.requirements.acceptanceCriteria).toEqual([
+      'Structured requirements live in PROJECT.yaml.',
+      'The current milestone is explicit.',
+    ]);
+    expect(detail.project.planSummary).toBe('Finish the schema migration, then update the UI around it.');
+    expect(detail.project.completionSummary).toBe('Migration in progress.');
     expect(detail.project.plan.currentMilestoneId).toBe('execute-work');
     expect(detail.project.recentProgress).toEqual(['Migrated the project schema']);
   });
