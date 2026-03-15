@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import {
@@ -21,7 +21,6 @@ import {
 } from './ProjectDetailForms';
 import {
   ProjectActivityContent,
-  type ProjectActivityItemShape,
   ProjectCompletionContent,
   ProjectFilesContent,
   ProjectHandoffDocContent,
@@ -30,6 +29,28 @@ import {
   ProjectRecordViewer,
   ProjectRequirementsContent,
 } from './ProjectDetailSections';
+import {
+  buildActivityItems,
+  buildTasksByMilestone,
+  emptyFileUploadState,
+  emptyMilestoneForm,
+  emptyNoteForm,
+  emptyTaskForm,
+  milestoneFormFromMilestone,
+  noteFormFromNote,
+  projectFormFromDetail,
+  type FileUploadState,
+  type MilestoneFormState,
+  type NoteFormState,
+  type ProjectFormState,
+  type ProjectMilestoneEditorState,
+  type ProjectNoteEditorState,
+  type ProjectTaskEditorState,
+  splitLines,
+  taskFormFromTask,
+  type TaskFormState,
+  UNASSIGNED_TASK_KEY,
+} from './projectDetailState';
 import { EmptyState, Pill, SectionLabel, ToolbarButton } from './ui';
 
 const ACTION_BUTTON_CLASS = 'text-[12px] text-accent hover:text-accent/70 transition-colors disabled:opacity-40';
@@ -39,7 +60,6 @@ const MILESTONE_STATUSES = ['pending', 'in_progress', 'blocked', 'completed', 'c
 const MILESTONE_QUICK_STATUSES = ['pending', 'in_progress', 'blocked', 'completed'];
 const TASK_STATUSES = ['pending', 'in_progress', 'blocked', 'completed', 'cancelled'];
 const PROJECT_NOTE_KINDS = ['note', 'decision', 'question', 'meeting', 'checkpoint'];
-const UNASSIGNED_TASK_KEY = '__unassigned__';
 
 interface DetailSectionProps {
   id: string;
@@ -47,47 +67,6 @@ interface DetailSectionProps {
   meta?: React.ReactNode;
   actions?: React.ReactNode;
   children: React.ReactNode;
-}
-
-interface ProjectFormState {
-  title: string;
-  description: string;
-  repoRoot: string;
-  summary: string;
-  goal: string;
-  acceptanceCriteria: string;
-  planSummary: string;
-  completionSummary: string;
-  status: string;
-  currentFocus: string;
-  blockers: string;
-  recentProgress: string;
-}
-
-interface MilestoneFormState {
-  title: string;
-  status: string;
-  summary: string;
-  makeCurrent: boolean;
-}
-
-interface TaskFormState {
-  title: string;
-  status: string;
-  milestoneId: string;
-}
-
-interface NoteFormState {
-  title: string;
-  kind: string;
-  body: string;
-}
-
-interface FileUploadState {
-  kind: 'attachment' | 'artifact';
-  title: string;
-  description: string;
-  file: File | null;
 }
 
 function detailSection({ id, title, meta, actions, children }: DetailSectionProps) {
@@ -103,98 +82,6 @@ function detailSection({ id, title, meta, actions, children }: DetailSectionProp
       {children}
     </section>
   );
-}
-
-function projectFormFromDetail(project: ProjectDetail): ProjectFormState {
-  return {
-    title: project.project.title,
-    description: project.project.description,
-    repoRoot: project.project.repoRoot ?? '',
-    summary: project.project.summary,
-    goal: project.project.requirements.goal,
-    acceptanceCriteria: project.project.requirements.acceptanceCriteria.join('\n'),
-    planSummary: project.project.planSummary ?? '',
-    completionSummary: project.project.completionSummary ?? '',
-    status: project.project.status,
-    currentFocus: project.project.currentFocus ?? '',
-    blockers: project.project.blockers.join('\n'),
-    recentProgress: project.project.recentProgress.join('\n'),
-  };
-}
-
-function emptyMilestoneForm(): MilestoneFormState {
-  return {
-    title: '',
-    status: 'pending',
-    summary: '',
-    makeCurrent: false,
-  };
-}
-
-function milestoneFormFromMilestone(milestone: ProjectMilestone, isCurrent: boolean): MilestoneFormState {
-  return {
-    title: milestone.title,
-    status: milestone.status,
-    summary: milestone.summary ?? '',
-    makeCurrent: isCurrent,
-  };
-}
-
-function emptyTaskForm(): TaskFormState {
-  return {
-    title: '',
-    status: 'pending',
-    milestoneId: '',
-  };
-}
-
-function taskFormFromTask(task: ProjectTask): TaskFormState {
-  return {
-    title: task.title,
-    status: task.status,
-    milestoneId: task.milestoneId ?? '',
-  };
-}
-
-function emptyNoteForm(): NoteFormState {
-  return {
-    title: '',
-    kind: 'note',
-    body: '',
-  };
-}
-
-function noteFormFromNote(note: ProjectNote): NoteFormState {
-  return {
-    title: note.title,
-    kind: note.kind,
-    body: note.body,
-  };
-}
-
-function emptyFileUploadState(): FileUploadState {
-  return {
-    kind: 'attachment',
-    title: '',
-    description: '',
-    file: null,
-  };
-}
-
-function splitLines(value: string): string[] {
-  return value
-    .split('\n')
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
-}
-
-function sortTimestamp(value: string | undefined): number {
-  if (!value) {
-    return 0;
-  }
-
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function DetailSection(props: DetailSectionProps) {
@@ -217,15 +104,7 @@ export function ProjectDetailPanel({
   const milestones = record.plan.milestones;
   const currentMilestone = pickCurrentMilestone(record.plan);
   const { done, total, pct } = getPlanProgress(milestones);
-  const tasksByMilestone = new Map<string, ProjectTask[]>();
-
-  project.tasks.forEach((task) => {
-    const milestoneKey = task.milestoneId ?? UNASSIGNED_TASK_KEY;
-    const existing = tasksByMilestone.get(milestoneKey) ?? [];
-    existing.push(task);
-    tasksByMilestone.set(milestoneKey, existing);
-  });
-
+  const tasksByMilestone = useMemo(() => buildTasksByMilestone(project.tasks), [project.tasks]);
   const unassignedTasks = tasksByMilestone.get(UNASSIGNED_TASK_KEY) ?? [];
 
   const [editingProject, setEditingProject] = useState(false);
@@ -233,16 +112,12 @@ export function ProjectDetailPanel({
   const [projectBusy, setProjectBusy] = useState(false);
   const [projectError, setProjectError] = useState<string | null>(null);
 
-  const [milestoneEditor, setMilestoneEditor] = useState<{ mode: 'add' } | { mode: 'edit'; milestoneId: string } | null>(null);
+  const [milestoneEditor, setMilestoneEditor] = useState<ProjectMilestoneEditorState | null>(null);
   const [milestoneForm, setMilestoneForm] = useState<MilestoneFormState>(() => emptyMilestoneForm());
   const [milestoneBusy, setMilestoneBusy] = useState(false);
   const [milestoneError, setMilestoneError] = useState<string | null>(null);
 
-  const [taskEditor, setTaskEditor] = useState<
-    | { mode: 'add'; anchorMilestoneId?: string }
-    | { mode: 'edit'; taskId: string; anchorMilestoneId?: string }
-    | null
-  >(null);
+  const [taskEditor, setTaskEditor] = useState<ProjectTaskEditorState | null>(null);
   const [taskForm, setTaskForm] = useState<TaskFormState>(() => emptyTaskForm());
   const [taskBusy, setTaskBusy] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
@@ -252,7 +127,7 @@ export function ProjectDetailPanel({
   const [briefBusy, setBriefBusy] = useState(false);
   const [briefError, setBriefError] = useState<string | null>(null);
 
-  const [noteEditor, setNoteEditor] = useState<{ mode: 'add' } | { mode: 'edit'; noteId: string } | null>(null);
+  const [noteEditor, setNoteEditor] = useState<ProjectNoteEditorState | null>(null);
   const [noteForm, setNoteForm] = useState<NoteFormState>(() => emptyNoteForm());
   const [noteBusy, setNoteBusy] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
@@ -272,36 +147,13 @@ export function ProjectDetailPanel({
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const projectDocumentSource = briefEditing ? briefContent : (project.brief?.content ?? '');
-  const projectDocument = parseProjectDocument(projectDocumentSource);
+  const projectDocument = useMemo(() => parseProjectDocument(projectDocumentSource), [projectDocumentSource]);
   const goal = record.requirements.goal.trim();
   const acceptanceCriteria = record.requirements.acceptanceCriteria.filter((item) => item.trim().length > 0);
   const requirementsFallbackContent = projectDocument.requirements.trim();
   const planContent = (record.planSummary ?? '').trim() || projectDocument.plan.trim();
   const completionSummaryContent = (record.completionSummary ?? '').trim() || projectDocument.completionSummary.trim();
-  const activityItems: ProjectActivityItemShape[] = [
-    ...project.linkedConversations.map((conversation) => ({
-      id: `conversation:${conversation.conversationId}`,
-      sortAt: sortTimestamp(conversation.lastActivityAt),
-      item: {
-        id: `conversation:${conversation.conversationId}`,
-        kind: 'conversation' as const,
-        conversation,
-      },
-    })),
-    ...project.timeline
-      .filter((entry) => entry.kind !== 'conversation')
-      .map((entry) => ({
-        id: `timeline:${entry.id}`,
-        sortAt: sortTimestamp(entry.createdAt),
-        item: {
-          id: `timeline:${entry.id}`,
-          kind: 'timeline' as const,
-          entry,
-        },
-      })),
-  ]
-    .sort((left, right) => right.sortAt - left.sortAt || left.id.localeCompare(right.id))
-    .map(({ item }) => item);
+  const activityItems = useMemo(() => buildActivityItems(project), [project]);
 
   useEffect(() => {
     if (!editingProject) {

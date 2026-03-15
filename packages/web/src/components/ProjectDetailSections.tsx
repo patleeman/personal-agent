@@ -3,30 +3,13 @@ import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { formatProjectStatus } from '../contextRailProject';
-import type {
-  ProjectBrief,
-  ProjectFile,
-  ProjectLinkedConversation,
-  ProjectNote,
-  ProjectTimelineEntry,
-} from '../types';
+import type { ProjectBrief, ProjectFile, ProjectNote } from '../types';
 import { timeAgo } from '../utils';
+import type { ProjectActivityItemShape } from './projectDetailState';
 import { ProjectFileRow, ProjectNoteRow } from './ProjectDetailForms';
 import { EmptyState, Pill, ToolbarButton } from './ui';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-border-default bg-base px-4 py-3 text-[15px] leading-relaxed text-primary focus:outline-none focus:border-accent/60';
-
-export type ProjectActivityItemShape =
-  | {
-      id: string;
-      kind: 'conversation';
-      conversation: ProjectLinkedConversation;
-    }
-  | {
-      id: string;
-      kind: 'timeline';
-      entry: ProjectTimelineEntry;
-    };
 
 export function ProjectRequirementsContent({
   goal,
