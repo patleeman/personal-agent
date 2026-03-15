@@ -1,7 +1,5 @@
-# Profiles
-profiles/*
-!profiles/shared/
-!profiles/shared/**
+# Profiles / local state accidentally created inside the repo
+profiles/
 
 # Dependencies
 node_modules

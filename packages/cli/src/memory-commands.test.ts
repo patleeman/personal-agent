@@ -26,7 +26,7 @@ function createMemoryRepo(): { repoRoot: string; profilesRoot: string; configPat
   const configPath = join(configDir, 'config.json');
 
   writeFile(configPath, JSON.stringify({ defaultProfile: 'assistant' }));
-  writeFile(join(repoRoot, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+  writeFile(join(repoRoot, 'defaults/agent/AGENTS.md'), '# Shared\n');
   writeFile(join(profilesRoot, 'assistant/agent/AGENTS.md'), '# Assistant\n');
 
   return {

@@ -26,7 +26,7 @@ function writeFile(path: string, content: string): void {
 
 function createTestRepo(stateRoot?: string): string {
   const repo = createTempDir('personal-agent-cli-repo-');
-  writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+  writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
   if (stateRoot) {
     writeFile(join(stateRoot, 'profiles/datadog/agent/AGENTS.md'), '# Datadog\n');

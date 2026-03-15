@@ -28,7 +28,12 @@ A project lives under:
 
 `PROJECT.yaml` is the canonical structured record.
 
-`BRIEF.md` is the durable high-signal brief.
+`BRIEF.md` is the durable high-signal brief / project document.
+Prefer a simple three-part shape when writing it manually:
+
+- `## Requirements` for the goal and acceptance criteria
+- `## Plan` for the work breakdown and approach
+- `## Completion summary` for shipped outcomes and follow-ups
 
 Notes are markdown files in `notes/`.
 

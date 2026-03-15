@@ -28,9 +28,9 @@ function writeFile(path: string, content: string): void {
 function createTestRepo(stateRoot: string = process.env.PERSONAL_AGENT_STATE_ROOT ?? ''): string {
   const repo = createTempDir('personal-agent-cli-repo-');
 
-  writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+  writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
   writeFile(
-    join(repo, 'profiles/shared/agent/settings.json'),
+    join(repo, 'defaults/agent/settings.json'),
     JSON.stringify({
       defaultProvider: 'test-provider',
       defaultModel: 'test-model',

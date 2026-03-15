@@ -76,9 +76,9 @@ describe('CLI main flow integration', () => {
     const fakePiBinDir = createFakePiBinary(argsLogPath);
 
     // Create test profiles
-    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(
-      join(repo, 'profiles/shared/agent/settings.json'),
+      join(repo, 'defaults/agent/settings.json'),
       JSON.stringify({ defaultProvider: 'test', defaultModel: 'model' })
     );
     writeFile(join(stateRoot, 'profiles/datadog/agent/AGENTS.md'), '# Datadog\n');
@@ -111,8 +111,8 @@ describe('CLI main flow integration', () => {
     const fakePiBinDir = createFakePiBinary(argsLogPath);
 
     // Create profiles with different content
-    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared Content\n');
-    writeFile(join(repo, 'profiles/shared/agent/settings.json'), JSON.stringify({ shared: true }));
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared Content\n');
+    writeFile(join(repo, 'defaults/agent/settings.json'), JSON.stringify({ shared: true }));
     writeFile(join(stateRoot, 'profiles/datadog/agent/AGENTS.md'), '# Datadog Content\n');
     writeFile(join(stateRoot, 'profiles/datadog/agent/settings.json'), JSON.stringify({ datadog: true }));
 
@@ -147,7 +147,7 @@ describe('CLI main flow integration', () => {
     const argsLogPath = join(createTempDir('personal-agent-cli-log-'), 'pi-args.log');
     const fakePiBinDir = createFakePiBinary(argsLogPath);
 
-    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
     process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
@@ -172,7 +172,7 @@ describe('CLI main flow integration', () => {
     const argsLogPath = join(createTempDir('personal-agent-cli-log-'), 'pi-args.log');
     const fakePiBinDir = createFakePiBinary(argsLogPath);
 
-    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
     // Create legacy auth
     const legacyAuthDir = join(process.env.HOME || '/tmp', '.pi', 'agent');
@@ -197,9 +197,9 @@ describe('CLI main flow integration', () => {
     const argsLogPath = join(createTempDir('personal-agent-cli-log-'), 'pi-args.log');
     const fakePiBinDir = createFakePiBinary(argsLogPath);
 
-    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(
-      join(repo, 'profiles/shared/agent/settings.json'),
+      join(repo, 'defaults/agent/settings.json'),
       JSON.stringify({
         defaultProvider: 'test',
         defaultModel: 'model',
@@ -231,9 +231,9 @@ describe('CLI main flow integration', () => {
     const argsLogPath = join(createTempDir('personal-agent-cli-log-'), 'pi-args.log');
     const fakePiBinDir = createFakePiBinary(argsLogPath);
 
-    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(
-      join(repo, 'profiles/shared/agent/settings.json'),
+      join(repo, 'defaults/agent/settings.json'),
       JSON.stringify({ defaultProvider: 'test', defaultModel: 'model' })
     );
 

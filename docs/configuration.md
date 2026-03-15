@@ -81,7 +81,7 @@ See [Gateway Guide](./gateway.md).
 
 Profile resources resolve from repo built-ins plus mutable profile homes:
 
-- repo shared defaults from `profiles/shared/agent`
+- repo shared defaults from `defaults/agent`
 - repo built-ins from `skills/`, `extensions/`, and `themes/`
 - mutable profile resources from `~/.local/state/personal-agent/profiles/<profile>/agent`
 
@@ -103,9 +103,10 @@ See [Profiles, Memory, and Skills](./profiles-memory-skills.md).
 
 Profile resources resolve in this order:
 
-1. repo `profiles/shared/agent`
-2. mutable profiles root `~/.local/state/personal-agent/profiles/<selected-profile>/agent`
-3. local overlay (`~/.local/state/personal-agent/config/local` by default)
+1. repo `defaults/agent`
+2. mutable shared profile `~/.local/state/personal-agent/profiles/shared/agent` (when present)
+3. mutable profiles root `~/.local/state/personal-agent/profiles/<selected-profile>/agent`
+4. local overlay (`~/.local/state/personal-agent/config/local` by default)
 
 Higher layers override lower layers where that makes sense.
 
@@ -274,7 +275,7 @@ You can also adjust model, theme, and conversation title settings from the web U
 For most setups:
 
 1. set the default profile with `pa profile use <name>`
-2. keep profile behavior and durable knowledge in `~/.local/state/personal-agent/profiles/**/agent` (with shared defaults in repo `profiles/shared/agent`)
+2. keep profile behavior and durable knowledge in `~/.local/state/personal-agent/profiles/**/agent` (with repo defaults in `defaults/agent` and optional shared overlays in `~/.local/state/personal-agent/profiles/shared/agent`)
 3. keep daemon behavior in `daemon.json`
 4. use `pa gateway setup telegram` for gateway config
 5. keep secrets in 1Password or env vars, not directly in repo files

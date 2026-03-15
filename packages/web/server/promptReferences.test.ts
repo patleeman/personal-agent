@@ -67,7 +67,7 @@ const PROFILES: PromptReferenceProfile[] = [
   {
     id: 'shared',
     source: 'shared',
-    path: '/repo/profiles/shared/agent/AGENTS.md',
+    path: '/repo/defaults/agent/AGENTS.md',
   },
 ];
 

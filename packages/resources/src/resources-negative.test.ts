@@ -55,10 +55,13 @@ describe('resources negative tests', () => {
       expect(() => resolveResourceProfile('test\0profile', { repoRoot: repo })).toThrow();
     });
 
-    it('throws on empty profile name', () => {
+    it('resolves empty profile names as shared when shared defaults exist', () => {
       const repo = createTempDir('personal-agent-resources-');
+      const profilesRoot = createTempProfilesRoot();
+      writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
-      expect(() => resolveResourceProfile('', { repoRoot: repo })).toThrow();
+      const resolved = resolveResourceProfile('', { repoRoot: repo, profilesRoot });
+      expect(resolved.name).toBe('shared');
     });
 
     it('throws on non-existent profile', () => {
@@ -70,9 +73,9 @@ describe('resources negative tests', () => {
     it('handles profile with empty extension directory', () => {
       const repo = createTempDir('personal-agent-resources-');
       const profilesRoot = createTempProfilesRoot();
-      const extensionsDir = join(repo, 'profiles/shared/agent/extensions');
+      const extensionsDir = join(profilesRoot, 'shared/agent/extensions');
       mkdirSync(extensionsDir, { recursive: true });
-      writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+      writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
       const resolved = resolveResourceProfile('shared', {
         repoRoot: repo,
@@ -87,9 +90,9 @@ describe('resources negative tests', () => {
     it('handles profile with empty skills directory', () => {
       const repo = createTempDir('personal-agent-resources-');
       const profilesRoot = createTempProfilesRoot();
-      const skillsDir = join(repo, 'profiles/shared/agent/skills');
+      const skillsDir = join(profilesRoot, 'shared/agent/skills');
       mkdirSync(skillsDir, { recursive: true });
-      writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+      writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
       const resolved = resolveResourceProfile('shared', {
         repoRoot: repo,
@@ -150,7 +153,7 @@ describe('resources negative tests', () => {
       const profilesRoot = createTempProfilesRoot();
       const runtime = createTempDir('personal-agent-runtime-');
 
-      writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+      writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
       const resolved = resolveResourceProfile('shared', {
         repoRoot: repo,
@@ -167,7 +170,7 @@ describe('resources negative tests', () => {
       const profilesRoot = createTempProfilesRoot();
       const runtime = createTempDir('personal-agent-runtime-');
 
-      writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+      writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
       const resolved = resolveResourceProfile('shared', {
         repoRoot: repo,
@@ -184,7 +187,7 @@ describe('resources negative tests', () => {
       const profilesRoot = createTempProfilesRoot();
       const runtime = join(createTempDir('personal-agent-parent-'), 'nested', 'runtime');
 
-      writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+      writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
       const resolved = resolveResourceProfile('shared', {
         repoRoot: repo,
@@ -201,7 +204,7 @@ describe('resources negative tests', () => {
       const profilesRoot = createTempProfilesRoot();
       const runtime = createTempDir('personal-agent-runtime-');
 
-      writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+      writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
       writeFile(join(runtime, 'UNRELATED.md'), 'should be preserved\n');
 
       const resolved = resolveResourceProfile('shared', {
@@ -264,7 +267,7 @@ describe('resources negative tests', () => {
     it('ignores repo-managed non-shared profiles', () => {
       const repo = createTempDir('personal-agent-resources-');
       const profilesRoot = createTempProfilesRoot();
-      writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+      writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
       writeFile(join(repo, 'profiles/datadog/agent/AGENTS.md'), '# Datadog\n');
 
       const profiles = listProfiles({ repoRoot: repo, profilesRoot });
@@ -276,7 +279,7 @@ describe('resources negative tests', () => {
     it('handles profile with no resource directories', () => {
       const repo = createTempDir('personal-agent-resources-');
       const profilesRoot = createTempProfilesRoot();
-      writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+      writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
       const resolved = resolveResourceProfile('shared', {
         repoRoot: repo,
@@ -301,9 +304,9 @@ describe('resources negative tests', () => {
     it('handles multiple extensions', () => {
       const repo = createTempDir('personal-agent-resources-');
       const profilesRoot = createTempProfilesRoot();
-      writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
-      writeFile(join(repo, 'profiles/shared/agent/extensions/ext1/index.ts'), 'export default {}');
-      writeFile(join(repo, 'profiles/shared/agent/extensions/ext2/index.ts'), 'export default {}');
+      writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
+      writeFile(join(profilesRoot, 'shared/agent/extensions/ext1/index.ts'), 'export default {}');
+      writeFile(join(profilesRoot, 'shared/agent/extensions/ext2/index.ts'), 'export default {}');
 
       const resolved = resolveResourceProfile('shared', {
         repoRoot: repo,

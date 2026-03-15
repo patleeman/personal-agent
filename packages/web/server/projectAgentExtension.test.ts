@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,12 +11,11 @@ const tempDirs: string[] = [];
 function createTempRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'pa-project-tool-'));
   tempDirs.push(dir);
-  mkdirSync(join(dir, 'profiles', 'shared', 'agent'), { recursive: true });
-  mkdirSync(join(dir, 'profiles', 'datadog', 'agent'), { recursive: true });
   return dir;
 }
 
 afterEach(async () => {
+  delete process.env.PERSONAL_AGENT_STATE_ROOT;
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
@@ -66,6 +65,7 @@ describe('project agent extension', () => {
   it('references and unreferences a project in the current conversation', async () => {
     const repoRoot = createTempRepo();
     const stateRoot = join(repoRoot, '.state');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     const projectTool = registerProjectTool(repoRoot, stateRoot);
 
     createProjectScaffold({

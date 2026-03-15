@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,8 +11,6 @@ const tempDirs: string[] = [];
 function createTempRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'pa-artifact-tool-'));
   tempDirs.push(dir);
-  mkdirSync(join(dir, 'profiles', 'shared', 'agent'), { recursive: true });
-  mkdirSync(join(dir, 'profiles', 'datadog', 'agent'), { recursive: true });
   return dir;
 }
 

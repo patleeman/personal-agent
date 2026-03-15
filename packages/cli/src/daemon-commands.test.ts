@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runCli } from './index.js';
 
 const originalEnv = process.env;
+const originalCwd = process.cwd();
 const tempDirs: string[] = [];
 
 function createTempDir(prefix: string): string {
@@ -20,7 +21,13 @@ function createTempDir(prefix: string): string {
   return dir;
 }
 
-
+function createFakeDaemonWorkspace(): string {
+  const dir = createTempDir('personal-agent-daemon-workspace-');
+  const entryFile = join(dir, 'packages', 'daemon', 'dist', 'index.js');
+  mkdirSync(join(dir, 'packages', 'daemon', 'dist'), { recursive: true });
+  writeFileSync(entryFile, 'process.exit(0);\n');
+  return dir;
+}
 
 beforeEach(() => {
   process.env = {
@@ -31,6 +38,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  process.chdir(originalCwd);
   process.env = originalEnv;
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   vi.restoreAllMocks();
@@ -134,7 +142,9 @@ describe('daemon command matrix', () => {
   it('handles daemon start subcommand', async () => {
     const stateRoot = createTempDir('personal-agent-cli-state-');
     const daemonDir = join(stateRoot, 'daemon');
+    const workspace = createFakeDaemonWorkspace();
     mkdirSync(daemonDir, { recursive: true });
+    process.chdir(workspace);
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
     const logs: string[] = [];
@@ -169,6 +179,8 @@ describe('daemon command matrix', () => {
 
   it('handles daemon restart subcommand', async () => {
     const stateRoot = createTempDir('personal-agent-cli-state-');
+    const workspace = createFakeDaemonWorkspace();
+    process.chdir(workspace);
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
     const logs: string[] = [];

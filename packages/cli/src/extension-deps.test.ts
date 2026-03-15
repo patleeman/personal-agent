@@ -26,9 +26,9 @@ function writeFile(path: string, content: string): void {
 
 function createTestRepo(): string {
   const repo = createTempDir('personal-agent-cli-repo-');
-  writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+  writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
   writeFile(
-    join(repo, 'profiles/shared/agent/settings.json'),
+    join(repo, 'defaults/agent/settings.json'),
     JSON.stringify({
       defaultProvider: 'test-provider',
       defaultModel: 'test-model',
@@ -80,7 +80,7 @@ describe('extension dependency failure paths', () => {
     const fakePiBinDir = createFakePiBinary(argsLogPath);
 
     // Create extension directory without node_modules
-    const extensionDir = join(repo, 'profiles/shared/agent/extensions/test-ext');
+    const extensionDir = join(repo, 'extensions/test-ext');
     mkdirSync(extensionDir, { recursive: true });
     writeFile(join(extensionDir, 'index.ts'), 'export default {}');
     writeFile(
@@ -127,7 +127,7 @@ exit 1
     const fakePiBinDir = createFakePiBinary(argsLogPath);
 
     // Create extension directory without node_modules
-    const extensionDir = join(repo, 'profiles/shared/agent/extensions/test-ext');
+    const extensionDir = join(repo, 'extensions/test-ext');
     mkdirSync(extensionDir, { recursive: true });
     writeFile(join(extensionDir, 'index.ts'), 'export default {}');
     writeFile(
@@ -175,7 +175,7 @@ exit 0
     const fakePiBinDir = createFakePiBinary(argsLogPath);
 
     // Create extension directory WITH node_modules
-    const extensionDir = join(repo, 'profiles/shared/agent/extensions/test-ext');
+    const extensionDir = join(repo, 'extensions/test-ext');
     mkdirSync(join(extensionDir, 'node_modules'), { recursive: true });
     writeFile(join(extensionDir, 'index.ts'), 'export default {}');
     writeFile(
@@ -211,8 +211,8 @@ exit 0
     const fakePiBinDir = createFakePiBinary(argsLogPath);
 
     // Create multiple extensions without node_modules
-    const ext1Dir = join(repo, 'profiles/shared/agent/extensions/ext1');
-    const ext2Dir = join(repo, 'profiles/shared/agent/extensions/ext2');
+    const ext1Dir = join(repo, 'extensions/ext1');
+    const ext2Dir = join(repo, 'extensions/ext2');
     mkdirSync(ext1Dir, { recursive: true });
     mkdirSync(ext2Dir, { recursive: true });
 

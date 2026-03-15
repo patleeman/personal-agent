@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import { composePromptCatalogDirectory } from './prompt-catalog.js';
 import { homedir } from 'os';
-import { dirname, isAbsolute, join, resolve, sep } from 'path';
+import { dirname, isAbsolute, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -383,6 +383,10 @@ export function getRepoRoot(explicitRepoRoot?: string): string {
   return resolve(value);
 }
 
+export function getRepoDefaultsAgentDir(explicitRepoRoot?: string): string {
+  return join(getRepoRoot(explicitRepoRoot), 'defaults', 'agent');
+}
+
 export function getProfilesRoot(options: ResolveProfileOptions = {}): string {
   const explicit = options.profilesRoot ?? process.env.PERSONAL_AGENT_PROFILES_ROOT;
   if (typeof explicit === 'string' && explicit.trim().length > 0) {
@@ -410,7 +414,10 @@ export function listProfiles(options: ResolveProfileOptions = {}): string[] {
     ...listProfilesInRoot(profilesRoot),
   ]);
 
-  if (existsSync(join(repoRoot, 'profiles', 'shared', 'agent'))) {
+  const repoDefaultsAgentDir = existingDir(getRepoDefaultsAgentDir(repoRoot));
+  const mutableSharedAgentDir = existingDir(join(profilesRoot, 'shared', 'agent'));
+
+  if (repoDefaultsAgentDir || (mutableSharedAgentDir && hasSharedLayerResources(mutableSharedAgentDir))) {
     profiles.add('shared');
   }
 
@@ -531,17 +538,6 @@ function validateProfileName(profileName: string): void {
   }
 }
 
-function assertPathWithinRoot(path: string, root: string, label: string): string {
-  const resolvedPath = resolve(path);
-  const resolvedRoot = resolve(root);
-
-  if (resolvedPath === resolvedRoot || resolvedPath.startsWith(`${resolvedRoot}${sep}`)) {
-    return resolvedPath;
-  }
-
-  throw new Error(`${label} path is outside ${resolvedRoot}: ${resolvedPath}`);
-}
-
 export function resolveResourceProfile(
   name: string,
   options: ResolveProfileOptions = {},
@@ -550,21 +546,29 @@ export function resolveResourceProfile(
   validateProfileName(profileName);
 
   const repoRoot = getRepoRoot(options.repoRoot);
-  const repoProfilesRoot = join(repoRoot, 'profiles');
   const profilesRoot = getProfilesRoot(options);
 
-  const repoSharedAgentDir = assertPathWithinRoot(join(repoProfilesRoot, 'shared', 'agent'), repoProfilesRoot, 'Shared profile');
-  if (!existsSync(repoSharedAgentDir)) {
-    throw new Error(`Shared profile not found: ${repoSharedAgentDir}`);
-  }
-
+  const repoDefaultsAgentDir = existingDir(getRepoDefaultsAgentDir(repoRoot));
   const sharedAgentDirCandidate = existingDir(join(profilesRoot, 'shared', 'agent'));
   const mutableSharedAgentDir = sharedAgentDirCandidate && hasSharedLayerResources(sharedAgentDirCandidate)
     ? sharedAgentDirCandidate
     : undefined;
-  const sharedAgentDir = mutableSharedAgentDir ?? repoSharedAgentDir;
 
-  const layers: ProfileLayer[] = [{ name: 'shared', agentDir: resolve(sharedAgentDir) }];
+  const layers: ProfileLayer[] = [];
+
+  if (repoDefaultsAgentDir) {
+    layers.push({ name: 'defaults', agentDir: repoDefaultsAgentDir });
+  }
+
+  if (mutableSharedAgentDir) {
+    layers.push({ name: 'shared', agentDir: resolve(mutableSharedAgentDir) });
+  }
+
+  if (layers.length === 0) {
+    throw new Error(
+      `Shared defaults not found. Checked ${getRepoDefaultsAgentDir(repoRoot)} and ${join(profilesRoot, 'shared', 'agent')}`,
+    );
+  }
 
   if (profileName !== 'shared') {
     const overlayDir = existingDir(join(profilesRoot, profileName, 'agent'));
@@ -589,17 +593,19 @@ export function resolveResourceProfile(
     .map((layer) => existingFile(join(layer.agentDir, 'SYSTEM.md')))
     .find((file): file is string => file !== undefined);
 
+  const resourceLayers = layers.filter((layer) => layer.name !== 'defaults');
+
   const extensionDirs = dedupe([
-    ...collectLayerDirs(layers, 'extensions'),
+    ...collectLayerDirs(resourceLayers, 'extensions'),
     ...collectRepoInternalExtensionDirs(repoRoot),
   ]);
   const skillDirs = dedupe([
-    ...collectLayerDirs(layers, 'skills'),
+    ...collectLayerDirs(resourceLayers, 'skills'),
     ...collectRepoInternalSkillDirs(repoRoot),
   ]);
-  const promptDirs = collectLayerDirs(layers, 'prompts');
+  const promptDirs = collectLayerDirs(resourceLayers, 'prompts');
   const themeDirs = dedupe([
-    ...collectLayerDirs(layers, 'themes'),
+    ...collectLayerDirs(resourceLayers, 'themes'),
     ...collectRepoInternalThemeDirs(repoRoot),
   ]);
 

@@ -42,7 +42,7 @@ describe('resources profile loader', () => {
   it('lists available profiles', () => {
     const repo = createTempRepo();
     const profilesRoot = createTempProfilesRoot();
-    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(profilesRoot, 'datadog/agent/AGENTS.md'), '# Datadog\n');
 
     const profiles = listProfiles({ repoRoot: repo, profilesRoot });
@@ -51,7 +51,7 @@ describe('resources profile loader', () => {
 
   it('rejects invalid profile names', () => {
     const repo = createTempRepo();
-    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
     expect(() => resolveResourceProfile('../escape', { repoRoot: repo })).toThrow('Invalid profile name');
   });
@@ -62,9 +62,9 @@ describe('resources profile loader', () => {
     const local = mkdtempSync(join(tmpdir(), 'personal-agent-local-'));
     tempDirs.push(local);
 
-    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(repo, 'profiles/shared/agent/extensions/index.ts'), 'export default {}\n');
-    writeFile(join(repo, 'profiles/shared/agent/settings.json'), JSON.stringify({ a: 1, nested: { one: true } }));
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'extensions/index.ts'), 'export default {}\n');
+    writeFile(join(repo, 'defaults/agent/settings.json'), JSON.stringify({ a: 1, nested: { one: true } }));
 
     writeFile(join(profilesRoot, 'datadog/agent/AGENTS.md'), '# Datadog\n');
     writeFile(join(profilesRoot, 'datadog/agent/settings.json'), JSON.stringify({ nested: { two: true } }));
@@ -78,20 +78,19 @@ describe('resources profile loader', () => {
       localProfileDir: local,
     });
 
-    expect(resolved.layers.map((layer) => layer.name)).toEqual(['shared', 'datadog', 'local']);
+    expect(resolved.layers.map((layer) => layer.name)).toEqual(['defaults', 'datadog', 'local']);
     expect(resolved.extensionDirs.length).toBe(1);
     expect(resolved.settingsFiles.length).toBe(3);
     expect(resolved.agentsFiles.length).toBe(3);
   });
 
-  it('falls back to repo shared layer when mutable shared overlay has no shared resources', () => {
+  it('falls back to repo defaults when mutable shared overlay has no shared resources', () => {
     const repo = createTempRepo();
     const profilesRoot = mkdtempSync(join(tmpdir(), 'personal-agent-profiles-'));
     tempDirs.push(profilesRoot);
 
-    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(repo, 'profiles/shared/agent/settings.json'), JSON.stringify({ theme: 'cobalt2' }));
-    writeFile(join(repo, 'profiles/shared/agent/skills/shared-skill/SKILL.md'), '# Shared skill\n');
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'defaults/agent/settings.json'), JSON.stringify({ theme: 'cobalt2' }));
 
     // Tasks-only shared overlays should not shadow canonical shared defaults.
     writeFile(join(profilesRoot, 'shared/agent/tasks/README.md'), '# tasks\n');
@@ -103,23 +102,20 @@ describe('resources profile loader', () => {
       localProfileDir: join(repo, '.local-profile'),
     });
 
-    expect(resolved.layers[0]).toEqual({
-      name: 'shared',
-      agentDir: join(repo, 'profiles/shared/agent'),
-    });
-    expect(resolved.skillDirs).toContain(join(repo, 'profiles/shared/agent/skills'));
-    expect(resolved.settingsFiles).toContain(join(repo, 'profiles/shared/agent/settings.json'));
+    expect(resolved.layers.map((layer) => layer.name)).toEqual(['defaults', 'assistant']);
+    expect(resolved.settingsFiles).toContain(join(repo, 'defaults/agent/settings.json'));
+    expect(resolved.skillDirs).toEqual([]);
   });
 
   it('ignores top-level extension test files', () => {
     const repo = createTempRepo();
     const profilesRoot = createTempProfilesRoot();
 
-    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(repo, 'profiles/shared/agent/extensions/sample.ts'), 'export default {}\n');
-    writeFile(join(repo, 'profiles/shared/agent/extensions/sample.test.ts'), 'export default {}\n');
-    writeFile(join(repo, 'profiles/shared/agent/extensions/sample.spec.ts'), 'export default {}\n');
-    writeFile(join(repo, 'profiles/shared/agent/extensions/nested/index.ts'), 'export default {}\n');
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'extensions/sample.ts'), 'export default {}\n');
+    writeFile(join(repo, 'extensions/sample.test.ts'), 'export default {}\n');
+    writeFile(join(repo, 'extensions/sample.spec.ts'), 'export default {}\n');
+    writeFile(join(repo, 'extensions/nested/index.ts'), 'export default {}\n');
 
     const resolved = resolveResourceProfile('shared', {
       repoRoot: repo,
@@ -128,8 +124,8 @@ describe('resources profile loader', () => {
     });
 
     expect(resolved.extensionEntries).toEqual([
-      join(repo, 'profiles/shared/agent/extensions/nested/index.ts'),
-      join(repo, 'profiles/shared/agent/extensions/sample.ts'),
+      join(repo, 'extensions/nested/index.ts'),
+      join(repo, 'extensions/sample.ts'),
     ]);
   });
 
@@ -137,9 +133,9 @@ describe('resources profile loader', () => {
     const repo = createTempRepo();
     const profilesRoot = createTempProfilesRoot();
 
-    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(repo, 'profiles/shared/agent/extensions/basic/index.ts'), 'export default {}\n');
-    writeFile(join(repo, 'profiles/shared/agent/extensions/basic/package.json'), JSON.stringify({
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'extensions/basic/index.ts'), 'export default {}\n');
+    writeFile(join(repo, 'extensions/basic/package.json'), JSON.stringify({
       name: 'basic',
       version: '1.0.0',
     }));
@@ -152,7 +148,7 @@ describe('resources profile loader', () => {
     const dependencyDirs = getExtensionDependencyDirs(resolved);
 
     expect(dependencyDirs).toEqual([
-      join(repo, 'profiles/shared/agent/extensions/basic'),
+      join(repo, 'extensions/basic'),
     ]);
   });
 
@@ -160,8 +156,8 @@ describe('resources profile loader', () => {
     const repo = createTempRepo();
     const profilesRoot = createTempProfilesRoot();
 
-    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(repo, 'profiles/shared/agent/skills/shared-skill/SKILL.md'), '# Shared Skill\n');
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(profilesRoot, 'shared/agent/skills/shared-skill/SKILL.md'), '# Shared Skill\n');
     writeFile(join(profilesRoot, 'datadog/agent/skills/dd-skill/SKILL.md'), '# Datadog Skill\n');
 
     const resolved = resolveResourceProfile('datadog', {
@@ -170,10 +166,10 @@ describe('resources profile loader', () => {
       localProfileDir: join(repo, '.local-profile'),
     });
 
-    expect(resolved.layers.map((layer) => layer.name)).toEqual(['shared', 'datadog']);
-    expect(resolved.agentsFiles).toEqual([join(repo, 'profiles/shared/agent/AGENTS.md')]);
+    expect(resolved.layers.map((layer) => layer.name)).toEqual(['defaults', 'shared', 'datadog']);
+    expect(resolved.agentsFiles).toEqual([join(repo, 'defaults/agent/AGENTS.md')]);
     expect(resolved.skillDirs).toEqual([
-      join(repo, 'profiles/shared/agent/skills'),
+      join(profilesRoot, 'shared/agent/skills'),
       join(profilesRoot, 'datadog/agent/skills'),
     ]);
 
@@ -184,7 +180,7 @@ describe('resources profile loader', () => {
       .map((entry) => args[entry.index + 1]);
 
     expect(skillArgs).toEqual([
-      join(repo, 'profiles/shared/agent/skills'),
+      join(profilesRoot, 'shared/agent/skills'),
       join(profilesRoot, 'datadog/agent/skills'),
     ]);
   });
@@ -193,8 +189,8 @@ describe('resources profile loader', () => {
     const repo = createTempRepo();
     const profilesRoot = createTempProfilesRoot();
 
-    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(repo, 'profiles/shared/agent/skills/shared-skill/SKILL.md'), '# Shared Skill\n');
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(profilesRoot, 'shared/agent/skills/shared-skill/SKILL.md'), '# Shared Skill\n');
     writeFile(join(repo, 'skills/pa-project-hub/SKILL.md'), '# Internal Skill\n');
 
     const resolved = resolveResourceProfile('shared', {
@@ -204,7 +200,7 @@ describe('resources profile loader', () => {
     });
 
     expect(resolved.skillDirs).toEqual([
-      join(repo, 'profiles/shared/agent/skills'),
+      join(profilesRoot, 'shared/agent/skills'),
       join(repo, 'skills'),
     ]);
 
@@ -215,7 +211,7 @@ describe('resources profile loader', () => {
       .map((entry) => args[entry.index + 1]);
 
     expect(skillArgs).toEqual([
-      join(repo, 'profiles/shared/agent/skills'),
+      join(profilesRoot, 'shared/agent/skills'),
       join(repo, 'skills'),
     ]);
   });
@@ -224,7 +220,7 @@ describe('resources profile loader', () => {
     const repo = createTempRepo();
     const profilesRoot = createTempProfilesRoot();
 
-    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(repo, 'extensions/basic/index.ts'), 'export default {}\n');
     writeFile(join(repo, 'extensions/basic/package.json'), JSON.stringify({ name: 'basic', version: '1.0.0' }));
     writeFile(join(repo, 'themes/cobalt2.json'), '{}\n');
@@ -301,10 +297,10 @@ describe('resources profile loader', () => {
     const runtime = mkdtempSync(join(tmpdir(), 'personal-agent-runtime-'));
     tempDirs.push(runtime);
 
-    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(repo, 'profiles/shared/agent/APPEND_SYSTEM.md'), 'shared append\n');
-    writeFile(join(repo, 'profiles/shared/agent/settings.json'), JSON.stringify({ shared: true }));
-    writeFile(join(repo, 'profiles/shared/agent/models.json'), JSON.stringify({ providers: { a: {} } }));
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'defaults/agent/APPEND_SYSTEM.md'), 'shared append\n');
+    writeFile(join(repo, 'defaults/agent/settings.json'), JSON.stringify({ shared: true }));
+    writeFile(join(repo, 'defaults/agent/models.json'), JSON.stringify({ providers: { a: {} } }));
     writeFile(join(repo, 'prompt-catalog/system/00-role.md'), 'catalog role\n');
 
     writeFile(join(profilesRoot, 'datadog/agent/AGENTS.md'), '# Datadog\n');
@@ -333,9 +329,9 @@ describe('resources profile loader', () => {
       JSON.stringify({ lastChangelogVersion: '0.55.3', runtimeOnly: true }),
     );
 
-    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(
-      join(repo, 'profiles/shared/agent/settings.json'),
+      join(repo, 'defaults/agent/settings.json'),
       JSON.stringify({ theme: 'cobalt2', lastChangelogVersion: '0.52.9' }),
     );
 
@@ -358,7 +354,7 @@ describe('resources profile loader', () => {
     const local = mkdtempSync(join(tmpdir(), 'personal-agent-local-'));
     tempDirs.push(local);
 
-    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(profilesRoot, 'assistant/agent/AGENTS.md'), '# Assistant\n');
     writeFile(
       join(profilesRoot, 'assistant/agent/settings.json'),
@@ -406,7 +402,7 @@ describe('resources profile loader', () => {
     const repo = createTempRepo();
     const profilesRoot = createTempProfilesRoot();
 
-    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(profilesRoot, 'assistant/agent/AGENTS.md'), '# Assistant\n');
     writeFile(
       join(profilesRoot, 'assistant/agent/settings.json'),
@@ -444,9 +440,9 @@ describe('resources profile loader', () => {
     const runtime = mkdtempSync(join(tmpdir(), 'personal-agent-runtime-'));
     tempDirs.push(runtime);
 
-    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(
-      join(repo, 'profiles/shared/agent/settings.json'),
+      join(repo, 'defaults/agent/settings.json'),
       JSON.stringify({ theme: 'cobalt2', lastChangelogVersion: '0.52.9' }),
     );
 
@@ -470,7 +466,7 @@ describe('resources profile loader', () => {
 
     writeFile(join(runtime, 'SYSTEM.md'), 'stale system\n');
 
-    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
     const resolved = resolveResourceProfile('shared', {
       repoRoot: repo,
@@ -485,11 +481,11 @@ describe('resources profile loader', () => {
   it('builds pi args from resource directories', () => {
     const repo = createTempRepo();
     const profilesRoot = createTempProfilesRoot();
-    writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(repo, 'profiles/shared/agent/extensions/index.ts'), 'export default {}\n');
-    writeFile(join(repo, 'profiles/shared/agent/skills/test/SKILL.md'), '# Skill\n');
-    writeFile(join(repo, 'profiles/shared/agent/prompts/review.md'), 'review\n');
-    writeFile(join(repo, 'profiles/shared/agent/themes/theme.json'), '{}\n');
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(profilesRoot, 'shared/agent/extensions/index.ts'), 'export default {}\n');
+    writeFile(join(profilesRoot, 'shared/agent/skills/test/SKILL.md'), '# Skill\n');
+    writeFile(join(profilesRoot, 'shared/agent/prompts/review.md'), 'review\n');
+    writeFile(join(profilesRoot, 'shared/agent/themes/theme.json'), '{}\n');
 
     const resolved = resolveResourceProfile('shared', {
       repoRoot: repo,

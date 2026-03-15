@@ -24,7 +24,7 @@ import {
   startDaemonDetached,
   stopDaemonGracefully,
 } from '@personal-agent/daemon';
-import { getRepoRoot } from '@personal-agent/resources';
+import { getRepoDefaultsAgentDir, getRepoRoot } from '@personal-agent/resources';
 import { bullet, dim, keyValue, section, success, warning } from './ui.js';
 
 const DEFAULT_SYNC_BRANCH = 'main';
@@ -252,7 +252,7 @@ function removeLegacySyncedDefaultProfileConfig(syncRoot: string): void {
 }
 
 function seedSharedProfile(syncProfilesRoot: string, repoRoot: string): void {
-  const sourceSharedAgentDir = join(repoRoot, 'profiles', 'shared', 'agent');
+  const sourceSharedAgentDir = getRepoDefaultsAgentDir(repoRoot);
   if (!existsSync(sourceSharedAgentDir)) {
     return;
   }

@@ -28,6 +28,6 @@ Use profile-local AGENTS.md, skills, and memory docs as the durable memory syste
 - Store reusable workflows and domain knowledge in skills.
 - Store profile-specific briefs, runbooks, specs, and notes under memory/*.md with YAML frontmatter.
 - Keep non-markdown automation state outside memory docs.
-- Do not write durable memory into profiles/shared/agent/AGENTS.md.
+- Do not write durable memory into shared/default AGENTS.md files.
 - Do not use MEMORY.md files as durable memory.
 - Never store secrets, credentials, API keys, tokens, or temporary/session-only notes.

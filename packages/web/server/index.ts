@@ -161,6 +161,7 @@ import {
   writeProfileActivityEntry,
 } from '@personal-agent/core';
 import {
+  getRepoDefaultsAgentDir,
   installPackageSource,
   listProfiles,
   materializeProfileToAgentDir,
@@ -1219,9 +1220,9 @@ function buildProjectTimeline(detail: ProjectDetail): ProjectTimelineEntry[] {
       id: `brief:${detail.project.id}`,
       kind: 'brief',
       createdAt: detail.brief.updatedAt,
-      title: 'Project brief updated',
+      title: 'Project document updated',
       description: detail.brief.content.split('\n').find((line) => line.trim().length > 0)?.trim(),
-      href: '#project-brief',
+      href: '#project-requirements',
     });
   }
 
@@ -5380,7 +5381,6 @@ function inferSkillSource(skillPath: string, profile: string): string {
 
   const sharedSkillDirs = [
     join(getProfilesRoot(), 'shared', 'agent', 'skills'),
-    join(REPO_ROOT, 'profiles', 'shared', 'agent', 'skills'),
     join(REPO_ROOT, 'skills'),
   ];
 
@@ -5530,7 +5530,11 @@ function buildRecentReadUsage(trackedPaths: string[]): Map<string, MemoryUsageSu
 app.get('/api/memory', (_req, res) => {
   try {
     const profile = getCurrentProfile();
-    const sharedPath = join(REPO_ROOT, 'profiles', 'shared', 'agent', 'AGENTS.md');
+    const sharedAgentsCandidates = [
+      join(getProfilesRoot(), 'shared', 'agent', 'AGENTS.md'),
+      join(getRepoDefaultsAgentDir(REPO_ROOT), 'AGENTS.md'),
+    ];
+    const sharedPath = sharedAgentsCandidates.find((candidate) => existsSync(candidate)) ?? sharedAgentsCandidates[0];
     const profilePath = join(getProfilesRoot(), profile, 'agent', 'AGENTS.md');
     const agentsMd: AgentsItem[] = [{
       source: 'shared',

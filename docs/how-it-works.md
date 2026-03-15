@@ -18,7 +18,7 @@ Shared defaults remain repo-managed.
 
 Common shared examples:
 
-- `profiles/shared/agent/settings.json`
+- `defaults/agent/settings.json`
 - `skills/**`
 - `extensions/**`
 - `themes/**`

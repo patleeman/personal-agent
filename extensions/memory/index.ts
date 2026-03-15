@@ -1,5 +1,6 @@
-import { join, relative } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import {
   renderPromptCatalogTemplate,
@@ -60,8 +61,43 @@ function resolveRequestedProfile(): string {
   return 'shared';
 }
 
-function resolveProfileDir(repoRoot: string, profile: string): string {
-  return join(repoRoot, 'profiles', profile, 'agent');
+function expandHomePath(value: string): string {
+  if (value === '~') {
+    return homedir();
+  }
+
+  if (value.startsWith('~/')) {
+    return join(homedir(), value.slice(2));
+  }
+
+  return value;
+}
+
+function getDefaultStateRoot(): string {
+  const explicit = process.env.PERSONAL_AGENT_STATE_ROOT;
+  if (explicit && explicit.trim().length > 0) {
+    return resolve(expandHomePath(explicit.trim()));
+  }
+
+  const xdgStateHome = process.env.XDG_STATE_HOME;
+  if (xdgStateHome && xdgStateHome.trim().length > 0) {
+    return join(resolve(expandHomePath(xdgStateHome.trim())), 'personal-agent');
+  }
+
+  return join(homedir(), '.local', 'state', 'personal-agent');
+}
+
+function resolveProfilesRoot(): string {
+  const explicit = process.env.PERSONAL_AGENT_PROFILES_ROOT;
+  if (explicit && explicit.trim().length > 0) {
+    return resolve(expandHomePath(explicit.trim()));
+  }
+
+  return join(getDefaultStateRoot(), 'profiles');
+}
+
+function resolveProfileDir(profilesRoot: string, profile: string): string {
+  return join(profilesRoot, profile, 'agent');
 }
 
 function toDisplayPath(cwd: string, path: string): string {
@@ -75,14 +111,17 @@ function toDisplayPath(cwd: string, path: string): string {
 
 export function resolveMemoryProfileContext(cwd: string): MemoryProfileContext {
   const repoRoot = resolveRepoRoot();
+  const profilesRoot = resolveProfilesRoot();
   const requestedProfile = resolveRequestedProfile();
-  const requestedProfileDir = resolveProfileDir(repoRoot, requestedProfile);
-  const sharedProfileDir = resolveProfileDir(repoRoot, 'shared');
+  const requestedProfileDir = resolveProfileDir(profilesRoot, requestedProfile);
+  const sharedProfileDir = resolveProfileDir(profilesRoot, 'shared');
 
-  const activeProfile = existsSync(requestedProfileDir) ? requestedProfile : 'shared';
-  const activeProfileDir = activeProfile === requestedProfile
-    ? requestedProfileDir
-    : sharedProfileDir;
+  const activeProfile = requestedProfile === 'shared' || existsSync(requestedProfileDir)
+    ? requestedProfile
+    : 'shared';
+  const activeProfileDir = activeProfile === 'shared'
+    ? sharedProfileDir
+    : requestedProfileDir;
 
   const layers: MemoryProfileLayer[] = [
     { name: 'shared', agentDir: sharedProfileDir },

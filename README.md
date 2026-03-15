@@ -285,7 +285,7 @@ Gateway slash commands include:
 
 Profile resources resolve from:
 
-- `profiles/shared/agent` for repo-managed shared default profile files
+- `defaults/agent` for repo-managed shared default profile files
 - repo built-ins from `skills/`, `extensions/`, and `themes/`
 - `~/.local/state/personal-agent/profiles/<profile>/agent` for mutable non-shared profiles
 

@@ -28,9 +28,9 @@ function createTestRepo(): { repo: string; profilesRoot: string } {
   }
   const profilesRoot = join(stateRoot, 'profiles');
 
-  writeFile(join(repo, 'profiles/shared/agent/AGENTS.md'), '# Shared\n');
+  writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
   writeFile(
-    join(repo, 'profiles/shared/agent/settings.json'),
+    join(repo, 'defaults/agent/settings.json'),
     JSON.stringify({
       defaultProvider: 'test-provider',
       defaultModel: 'test-model',

@@ -14,7 +14,7 @@ const MEMORY_DATA: MemoryData = {
   agentsMd: [
     {
       source: 'shared',
-      path: '/repo/profiles/shared/agent/AGENTS.md',
+      path: '/repo/defaults/agent/AGENTS.md',
       exists: true,
       content: `# Shared\n\n## Role\n- You are a coding assistant.\n\n## Operating Policy\n- Prefer simple implementations.\n- Ask before destructive changes.\n`,
     },

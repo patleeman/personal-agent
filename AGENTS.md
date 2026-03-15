@@ -5,16 +5,16 @@
 
 ## AGENTS ownership model
 
-- Do not use `profiles/shared/agent/AGENTS.md`.
+- Do not use shared/default `AGENTS.md` files for durable behavior.
 - Keep one `AGENTS.md` per non-shared profile at `~/.local/state/personal-agent/profiles/<profile>/agent/AGENTS.md`.
-- This repo should only carry shared defaults under `profiles/shared/agent`; non-shared profile state belongs in the state root/state repo.
+- This repo should only carry shared defaults under `defaults/agent` plus repo-built-in capabilities under `skills/`, `extensions/`, and `themes/`; non-shared profile state belongs in the state root/state repo.
 - Duplicate shared guidance across profile AGENTS files when needed; do not centralize behavior rules in shared AGENTS.
 - Memory and behavior updates should target the active profile's AGENTS path.
 
 ## Profile memory convention
 
 - Each non-shared profile keeps project-specific context under `~/.local/state/personal-agent/profiles/<profile>/agent/memory/`.
-- There is never a shared-profile memory dir (`profiles/shared/agent/memory` should not exist).
+- There is never a shared-profile memory dir (`~/.local/state/personal-agent/profiles/shared/agent/memory` should not exist).
 - Memory docs are available to the agent via normal file tools (`read`, `edit`, `write`).
 - Use memory docs for project-local briefs, runbooks, specs, and notes.
 - Keep memory docs flat at `memory/*.md` (no nested project tree).
