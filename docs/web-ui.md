@@ -248,7 +248,7 @@ You can:
 
 Settings lets you change:
 
-- browser theme
+- browser theme (auto, light, or dark)
 - active profile
 - default model
 - default thinking level

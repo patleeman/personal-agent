@@ -4,7 +4,7 @@ import { api } from '../api';
 import { useApi } from '../hooks';
 import { THINKING_LEVEL_OPTIONS, groupModelsByProvider } from '../modelPreferences';
 import { resetStoredConversationUiState, resetStoredLayoutPreferences } from '../localSettings';
-import { type Theme, useTheme } from '../theme';
+import { type ThemePreference, useTheme } from '../theme';
 import type { ModelState, ProviderAuthSummary, ProviderOAuthLoginState } from '../types';
 import { PageHeader, PageHeading, SectionLabel, ToolbarButton, cx } from '../components/ui';
 
@@ -84,10 +84,12 @@ function ThemeButton({
   value,
   current,
   onSelect,
+  label,
 }: {
-  value: Theme;
-  current: Theme;
-  onSelect: (theme: Theme) => void;
+  value: ThemePreference;
+  current: ThemePreference;
+  onSelect: (theme: ThemePreference) => void;
+  label?: string;
 }) {
   return (
     <button
@@ -96,13 +98,13 @@ function ThemeButton({
       className={cx('ui-segmented-button capitalize', current === value && 'ui-segmented-button-active')}
       aria-pressed={current === value}
     >
-      {value}
+      {label ?? value}
     </button>
   );
 }
 
 export function SettingsPage() {
-  const { theme, setTheme } = useTheme();
+  const { theme, themePreference, setThemePreference } = useTheme();
   const {
     data: profileState,
     loading: profilesLoading,
@@ -536,16 +538,19 @@ export function SettingsPage() {
             <div className="space-y-1">
               <h2 className="text-[15px] font-medium text-primary">Theme</h2>
               <p className="ui-card-meta max-w-2xl">
-                Theme is stored in this browser only. Switch any time without reloading.
+                Theme is stored in this browser only. Choose Auto to follow the OS appearance without reloading.
               </p>
             </div>
 
             <div className="flex items-center gap-3 flex-wrap">
               <div className="ui-segmented-control" role="group" aria-label="Theme selection">
-                <ThemeButton value="light" current={theme} onSelect={setTheme} />
-                <ThemeButton value="dark" current={theme} onSelect={setTheme} />
+                <ThemeButton value="system" current={themePreference} onSelect={setThemePreference} label="auto" />
+                <ThemeButton value="light" current={themePreference} onSelect={setThemePreference} />
+                <ThemeButton value="dark" current={themePreference} onSelect={setThemePreference} />
               </div>
-              <span className="ui-card-meta capitalize">Current theme: {theme}</span>
+              <span className="ui-card-meta">
+                Current theme: {theme}{themePreference === 'system' ? ' (auto)' : ''}
+              </span>
             </div>
           </section>
 
