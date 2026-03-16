@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import {
   resolveActivityReadStatePath,
   resolveConversationAttentionStatePath,
@@ -11,9 +11,10 @@ import {
   resolveProfileConversationLinksDir,
   resolveProfileProjectsDir,
 } from '@personal-agent/core';
+import { resolveDurableRunsRoot } from '@personal-agent/daemon';
 import { logWarn } from './logging.js';
 
-export type AppEventTopic = 'activity' | 'projects' | 'sessions' | 'tasks';
+export type AppEventTopic = 'activity' | 'projects' | 'sessions' | 'tasks' | 'runs';
 
 export type AppEvent =
   | { type: 'connected' }
@@ -81,6 +82,7 @@ function createTopicSignatures(options: AppEventMonitorOptions, profile: string)
   const conversationLinksDir = resolveProfileConversationLinksDir({ profile });
   const conversationArtifactsDir = resolveProfileConversationArtifactsDir({ profile });
   const tasksDir = join(getProfilesRoot(), profile, 'agent', 'tasks');
+  const runsRoot = resolveDurableRunsRoot(dirname(options.taskStateFile));
   const readStateFile = resolveActivityReadStatePath({ profile });
   const conversationAttentionStateFile = resolveConversationAttentionStatePath({ profile });
   const deferredResumeStateFile = resolveDeferredResumeStateFile();
@@ -92,6 +94,7 @@ function createTopicSignatures(options: AppEventMonitorOptions, profile: string)
     projects: `projects:${readPathSnapshot(projectsDir)}|conversation-links:${readPathSnapshot(conversationLinksDir)}`,
     sessions: `sessions:${readPathSnapshot(options.sessionsDir)}|artifacts:${readPathSnapshot(conversationArtifactsDir)}|attention:${readPathSnapshot(conversationAttentionStateFile)}|deferred:${readPathSnapshot(deferredResumeStateFile)}|conversation-links:${readPathSnapshot(conversationLinksDir)}|${activitySignature}`,
     tasks: `tasks:${readPathSnapshot(tasksDir)}|state:${readPathSnapshot(options.taskStateFile)}`,
+    runs: `runs:${readPathSnapshot(runsRoot)}`,
   };
 }
 
@@ -144,7 +147,7 @@ export function startAppEventMonitor(options: AppEventMonitorOptions): void {
     if (lastProfile !== profile) {
       lastProfile = profile;
       lastSignatures = nextSignatures;
-      invalidateAppTopics('activity', 'projects', 'sessions', 'tasks');
+      invalidateAppTopics('activity', 'projects', 'sessions', 'tasks', 'runs');
       return;
     }
 

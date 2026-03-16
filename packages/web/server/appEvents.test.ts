@@ -8,6 +8,7 @@ describe('diffTopicSignatures', () => {
       projects: 'p1',
       sessions: 's1',
       tasks: 't1',
+      runs: 'r1',
     })).toEqual([]);
   });
 
@@ -17,11 +18,13 @@ describe('diffTopicSignatures', () => {
       projects: 'p1',
       sessions: 's1',
       tasks: 't1',
+      runs: 'r1',
     }, {
       activity: 'a2',
       projects: 'p1',
       sessions: 's2',
       tasks: 't1',
-    })).toEqual(['activity', 'sessions']);
+      runs: 'r2',
+    })).toEqual(['activity', 'sessions', 'runs']);
   });
 });

@@ -1502,6 +1502,8 @@ function buildSnapshotEvents(topics: AppEventTopic[]) {
         return { type: 'sessions_snapshot' as const, sessions: listConversationSessionsSnapshot() };
       case 'tasks':
         return { type: 'tasks_snapshot' as const, tasks: listTasksForCurrentProfile() };
+      case 'runs':
+        return null;
       default:
         return null;
     }

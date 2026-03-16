@@ -4023,7 +4023,7 @@ function startWebUiCandidateProcess(release: WebUiReleaseSummary, port: number):
 }
 
 async function stopWebUiCandidateProcess(handle: WebUiCandidateHandle): Promise<void> {
-  if (handle.child.exitCode !== null || handle.child.killed) {
+  if (handle.child.exitCode !== null) {
     return;
   }
 
@@ -4037,7 +4037,7 @@ async function stopWebUiCandidateProcess(handle: WebUiCandidateHandle): Promise<
     new Promise<void>((resolvePromise) => setTimeout(resolvePromise, 2_000)),
   ]);
 
-  if (handle.child.exitCode === null && !handle.child.killed) {
+  if (handle.child.exitCode === null) {
     handle.child.kill('SIGKILL');
   }
 }
