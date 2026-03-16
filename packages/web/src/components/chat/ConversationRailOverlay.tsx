@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent, RefObject } from 'react';
 import type { MessageBlock } from '../../types';
 import { cx } from '../ui';
@@ -44,7 +44,7 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-export function ConversationRail({ messages, scrollContainerRef, onJumpToMessage }: ConversationRailProps) {
+export const ConversationRail = memo(function ConversationRail({ messages, scrollContainerRef, onJumpToMessage }: ConversationRailProps) {
   const turns = useMemo(() => getConversationRailTurns(messages), [messages]);
   const turnsByIndex = useMemo(() => new Map(turns.map((turn) => [turn.index, turn])), [turns]);
 
@@ -405,4 +405,4 @@ export function ConversationRail({ messages, scrollContainerRef, onJumpToMessage
       </div>
     </div>
   );
-}
+});
