@@ -41,9 +41,6 @@ const EMBEDDED_UI_OPTIONS = {
     saveAsImage: false,
     toggleTheme: false,
   },
-  tools: {
-    image: false,
-  },
 } as const;
 
 interface ExcalidrawErrorBoundaryState {
