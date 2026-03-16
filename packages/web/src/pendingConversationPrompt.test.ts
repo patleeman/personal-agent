@@ -3,6 +3,7 @@ import type { StorageLike } from './reloadState';
 import {
   buildPendingConversationPromptStorageKey,
   clearPendingConversationPrompt,
+  consumePendingConversationPrompt,
   persistPendingConversationPrompt,
   readPendingConversationPrompt,
 } from './pendingConversationPrompt';
@@ -61,6 +62,26 @@ describe('pendingConversationPrompt helpers', () => {
 
     clearPendingConversationPrompt('session-in-memory', null);
     expect(readPendingConversationPrompt('session-in-memory', null)).toBeNull();
+  });
+
+  it('consumes pending prompts at most once', () => {
+    const storage = createStorage();
+
+    persistPendingConversationPrompt('session-123', {
+      text: 'hello world',
+      behavior: 'steer',
+      images: [],
+      attachmentRefs: [],
+    }, storage);
+
+    expect(consumePendingConversationPrompt('session-123', storage)).toEqual({
+      text: 'hello world',
+      behavior: 'steer',
+      images: [],
+      attachmentRefs: [],
+    });
+    expect(consumePendingConversationPrompt('session-123', storage)).toBeNull();
+    expect(readPendingConversationPrompt('session-123', storage)).toBeNull();
   });
 
   it('clears pending prompts explicitly', () => {
