@@ -863,9 +863,9 @@ export function ProjectDetailPanel({
       </DetailSection>
 
       <DetailSection
-        id="project-activity"
-        title="Activity"
-        meta={`${activityItems.length} items`}
+        id="project-timeline"
+        title="Timeline"
+        meta={`${activityItems.length} ${activityItems.length === 1 ? 'event' : 'events'}`}
       >
         <ProjectActivityContent items={activityItems} />
       </DetailSection>

@@ -1,4 +1,4 @@
-import type { FormEventHandler, ReactNode } from 'react';
+import { useId, type FormEventHandler, type ReactNode } from 'react';
 import { formatProjectStatus } from '../contextRailProject';
 import type { ProjectFile, ProjectMilestone, ProjectNote, ProjectTask } from '../types';
 import {
@@ -16,6 +16,9 @@ import { Pill, ToolbarButton, cx, type PillTone } from './ui';
 const INPUT_CLASS = 'w-full rounded-xl border border-border-default bg-base px-4 py-3 text-[15px] leading-relaxed text-primary focus:outline-none focus:border-accent/60';
 const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[132px] resize-y`;
 const SELECT_CLASS = `${INPUT_CLASS} pr-10`;
+const FILE_UPLOAD_FIELD_CLASS = 'w-full rounded-none border-0 border-b border-border-default bg-transparent px-0 pb-2.5 pt-1 text-[15px] leading-relaxed text-primary placeholder:text-dim/75 focus:outline-none focus:border-accent/60';
+const FILE_UPLOAD_SELECT_CLASS = `${FILE_UPLOAD_FIELD_CLASS} pr-8`;
+const FILE_PICKER_CLASS = 'block w-full min-w-0 text-[14px] leading-relaxed text-primary focus:outline-none file:mr-4 file:rounded-full file:border file:border-border-subtle file:bg-elevated/65 file:px-3 file:py-1.5 file:text-[12px] file:font-medium file:text-secondary file:transition-colors hover:file:border-border-default hover:file:text-primary';
 const ACTION_BUTTON_CLASS = 'text-[12px] text-accent hover:text-accent/70 transition-colors disabled:opacity-40';
 const STATUS_ACTION_BUTTON_CLASS = 'rounded-full border px-2.5 py-1 text-[11px] font-medium capitalize transition-colors disabled:opacity-40';
 
@@ -638,41 +641,68 @@ export function ProjectFileUploadForm({
   onChange: (patch: Partial<FileUploadState>) => void;
   onSubmit: FormEventHandler<HTMLFormElement>;
 }) {
+  const kindId = useId();
+  const fileId = useId();
+  const titleId = useId();
+  const descriptionId = useId();
+  const fileMeta = value.file
+    ? [formatBytes(value.file.size), value.file.type || null].filter(Boolean).join(' · ')
+    : 'Pick a file to attach to this project.';
+
   return (
-    <form onSubmit={onSubmit} className="space-y-5 border-t border-border-subtle pt-4">
-      <div className="grid gap-5 xl:grid-cols-[12rem_minmax(0,1fr)]">
+    <form onSubmit={onSubmit} className="space-y-4 border-t border-border-subtle pt-4">
+      <div className="grid gap-x-6 gap-y-4 xl:grid-cols-[11rem_minmax(0,1fr)] xl:items-end">
         <div className="space-y-1.5">
-          <label className="ui-card-meta">Kind</label>
-          <select value={value.kind} onChange={(event) => onChange({ kind: event.target.value as 'attachment' | 'artifact' })} className={SELECT_CLASS}>
+          <label htmlFor={kindId} className="ui-card-meta">Kind</label>
+          <select
+            id={kindId}
+            value={value.kind}
+            onChange={(event) => onChange({ kind: event.target.value as 'attachment' | 'artifact' })}
+            className={FILE_UPLOAD_SELECT_CLASS}
+          >
             <option value="attachment">Attachment</option>
             <option value="artifact">Artifact</option>
           </select>
         </div>
         <div className="space-y-1.5">
-          <label className="ui-card-meta">File</label>
-          <input
-            type="file"
-            onChange={(event) => onChange({
-              file: event.target.files?.[0] ?? null,
-              title: value.title || event.target.files?.[0]?.name || '',
-            })}
-            className={INPUT_CLASS}
-          />
+          <label htmlFor={fileId} className="ui-card-meta">File</label>
+          <div className="space-y-1.5 border-b border-border-default pb-2.5">
+            <input
+              id={fileId}
+              type="file"
+              onChange={(event) => onChange({
+                file: event.target.files?.[0] ?? null,
+                title: value.title || event.target.files?.[0]?.name || '',
+              })}
+              className={FILE_PICKER_CLASS}
+            />
+            <p className="ui-card-meta truncate">{fileMeta}</p>
+          </div>
         </div>
       </div>
-      <div className="grid gap-5 xl:grid-cols-2">
+      <div className="grid gap-x-6 gap-y-4 xl:grid-cols-2">
         <div className="space-y-1.5">
-          <label className="ui-card-meta">Title</label>
-          <input value={value.title} onChange={(event) => onChange({ title: event.target.value })} className={INPUT_CLASS} />
+          <label htmlFor={titleId} className="ui-card-meta">Title</label>
+          <input
+            id={titleId}
+            value={value.title}
+            onChange={(event) => onChange({ title: event.target.value })}
+            className={FILE_UPLOAD_FIELD_CLASS}
+          />
         </div>
         <div className="space-y-1.5">
-          <label className="ui-card-meta">Description</label>
-          <input value={value.description} onChange={(event) => onChange({ description: event.target.value })} className={INPUT_CLASS} />
+          <label htmlFor={descriptionId} className="ui-card-meta">Description</label>
+          <input
+            id={descriptionId}
+            value={value.description}
+            onChange={(event) => onChange({ description: event.target.value })}
+            className={FILE_UPLOAD_FIELD_CLASS}
+          />
         </div>
       </div>
       {error && <p className="text-[12px] text-danger">{error}</p>}
       <div className="flex items-center gap-3">
-        <ToolbarButton type="submit" disabled={busy}>{busy ? 'Uploading…' : 'Add file'}</ToolbarButton>
+        <ToolbarButton type="submit" disabled={busy || !value.file}>{busy ? 'Uploading…' : 'Add file'}</ToolbarButton>
       </div>
     </form>
   );
