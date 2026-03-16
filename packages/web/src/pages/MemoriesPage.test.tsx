@@ -1,0 +1,101 @@
+import React from 'react';
+import { renderToString } from 'react-dom/server';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoriesPage } from './MemoriesPage.js';
+import { useApi } from '../hooks';
+
+vi.mock('../hooks', () => ({
+  useApi: vi.fn(),
+}));
+
+(globalThis as typeof globalThis & { React?: typeof React }).React = React;
+
+describe('MemoriesPage', () => {
+  let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+  const originalConsoleError = console.error;
+
+  beforeEach(() => {
+    consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((message?: unknown, ...args: unknown[]) => {
+      if (typeof message === 'string' && message.includes('useLayoutEffect does nothing on the server')) {
+        return;
+      }
+
+      originalConsoleError(message, ...args);
+    });
+  });
+
+  afterEach(() => {
+    consoleErrorSpy.mockRestore();
+    vi.clearAllMocks();
+  });
+
+  it('renders memory docs with the shared list layout and selected row styling', () => {
+    vi.mocked(useApi).mockReturnValue({
+      data: {
+        memories: [
+          {
+            id: 'system-design',
+            title: 'System design notes',
+            summary: 'Guidelines for architecting new services.',
+            tags: ['architecture', 'backend'],
+            path: '/tmp/system-design.md',
+            type: 'reference',
+            status: 'active',
+            updated: '2026-03-16T12:00:00.000Z',
+          },
+          {
+            id: 'writing-style',
+            title: 'Writing style',
+            summary: 'Keep responses concise and direct.',
+            tags: ['communication'],
+            path: '/tmp/writing-style.md',
+            updated: '2026-03-15T08:00:00.000Z',
+          },
+        ],
+      },
+      loading: false,
+      refreshing: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/memories?memory=system-design']}>
+        <Routes>
+          <Route path="/memories" element={<MemoriesPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Search memories');
+    expect(html).toContain('System design notes');
+    expect(html).toContain('Writing style');
+    expect(html).toContain('href="/memories?memory=system-design"');
+    expect(html).toContain('ui-list-row-selected');
+    expect(html).not.toContain('Start convo');
+  });
+
+  it('shows the empty state when there are no memory docs', () => {
+    vi.mocked(useApi).mockReturnValue({
+      data: {
+        memories: [],
+      },
+      loading: false,
+      refreshing: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/memories']}>
+        <Routes>
+          <Route path="/memories" element={<MemoriesPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('No memories yet.');
+    expect(html).toContain('Distill a conversation message to create a durable memory doc.');
+  });
+});

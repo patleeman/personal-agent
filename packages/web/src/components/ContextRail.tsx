@@ -25,8 +25,10 @@ import {
   pickFocusedProjectId,
 } from '../contextRailProject';
 import { useApi } from '../hooks';
+import { useConversations } from '../hooks/useConversations';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { buildCapabilityCards, buildIdentitySummary, buildKnowledgeSections, buildMemoryPageSummary } from '../memoryOverview';
+import { emitMemoriesChanged } from '../memoryDocEvents';
 import { getScheduledTaskBody, isScheduledTaskDetail } from '../scheduledTaskDetail';
 import type { ActivityEntry, DurableRunDetailResult, DurableRunRecord, LiveSessionContext, ProjectDetail, ProjectRecord, ScheduledTaskDetail } from '../types';
 import { formatDate, kindMeta, timeAgo } from '../utils';
@@ -1504,6 +1506,235 @@ function ProjectDetailContext({ id }: { id: string }) {
   );
 }
 
+// ── Managed memory docs ──────────────────────────────────────────────────────
+
+const MANAGED_MEMORY_ID_SEARCH_PARAM = 'memory';
+
+function buildManagedMemorySearch(locationSearch: string, memoryId: string | null): string {
+  const params = new URLSearchParams(locationSearch);
+
+  if (memoryId) {
+    params.set(MANAGED_MEMORY_ID_SEARCH_PARAM, memoryId);
+  } else {
+    params.delete(MANAGED_MEMORY_ID_SEARCH_PARAM);
+  }
+
+  const next = params.toString();
+  return next ? `?${next}` : '';
+}
+
+function MemoryDocContext({ memoryId }: { memoryId: string }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { openSession } = useConversations();
+  const fetcher = useCallback(() => api.memoryDoc(memoryId), [memoryId]);
+  const { data, loading, refreshing, error, refetch } = useApi(fetcher, memoryId);
+  const [draft, setDraft] = useState('');
+  const [savedContent, setSavedContent] = useState('');
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [startBusy, setStartBusy] = useState(false);
+  const [notice, setNotice] = useState<{ tone: 'accent' | 'danger'; text: string } | null>(null);
+
+  const setSelectedMemory = useCallback((nextMemoryId: string | null, replace = false) => {
+    const nextSearch = buildManagedMemorySearch(location.search, nextMemoryId);
+    navigate(`/memories${nextSearch}`, { replace });
+  }, [location.search, navigate]);
+
+  useEffect(() => {
+    if (!data) {
+      return;
+    }
+
+    setDraft(data.content);
+    setSavedContent(data.content);
+  }, [data?.content, data?.memory.id]);
+
+  const dirty = draft !== savedContent;
+  const memory = data?.memory ?? null;
+
+  async function handleSave() {
+    if (!memory || saveBusy || !dirty) {
+      return;
+    }
+
+    setSaveBusy(true);
+    setNotice(null);
+
+    try {
+      const result = await api.saveMemoryDoc(memory.id, draft);
+      setDraft(result.content);
+      setSavedContent(result.content);
+      emitMemoriesChanged();
+      setNotice({ tone: 'accent', text: `Saved @${result.memory.id}.` });
+
+      if (result.memory.id !== memory.id) {
+        setSelectedMemory(result.memory.id, true);
+        return;
+      }
+
+      await refetch({ resetLoading: false });
+    } catch (saveError) {
+      setNotice({ tone: 'danger', text: saveError instanceof Error ? saveError.message : String(saveError) });
+    } finally {
+      setSaveBusy(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!memory || deleteBusy) {
+      return;
+    }
+
+    if (!window.confirm(`Delete memory @${memory.id}? This cannot be undone.`)) {
+      return;
+    }
+
+    setDeleteBusy(true);
+    setNotice(null);
+
+    try {
+      await api.deleteMemoryDoc(memory.id);
+      emitMemoriesChanged();
+      setSelectedMemory(null, true);
+    } catch (deleteError) {
+      setNotice({ tone: 'danger', text: deleteError instanceof Error ? deleteError.message : String(deleteError) });
+      setDeleteBusy(false);
+    }
+  }
+
+  async function handleStartConversation() {
+    if (!memory || startBusy) {
+      return;
+    }
+
+    setStartBusy(true);
+    setNotice(null);
+
+    try {
+      const result = await api.startMemoryConversation(memory.id);
+      openSession(result.id);
+      navigate(`/conversations/${encodeURIComponent(result.id)}`);
+    } catch (startError) {
+      setNotice({ tone: 'danger', text: startError instanceof Error ? startError.message : String(startError) });
+      setStartBusy(false);
+    }
+  }
+
+  if (loading && !data) {
+    return <LoadingState label="Loading memory…" className="px-4 py-4" />;
+  }
+
+  if (error && !data) {
+    return <ErrorState message={`Failed to load memory: ${error}`} className="px-4 py-4" />;
+  }
+
+  if (!memory) {
+    return <div className="px-4 py-4 text-[12px] text-dim">Memory not found.</div>;
+  }
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="shrink-0 space-y-4 border-b border-border-subtle px-4 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="ui-card-title truncate">{memory.title}</p>
+            <p className="ui-card-meta mt-0.5 font-mono truncate" title={`@${memory.id}`}>@{memory.id}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => { void refetch({ resetLoading: false }); }}
+            disabled={refreshing}
+            className="ui-toolbar-button shrink-0"
+          >
+            {refreshing ? 'Refreshing…' : '↻ Refresh'}
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          <div className="ui-detail-row">
+            <span className="ui-detail-label">Path</span>
+            <span className="ui-detail-value break-all font-mono">{memory.path}</span>
+          </div>
+          {memory.updated && (
+            <div className="ui-detail-row">
+              <span className="ui-detail-label">Updated</span>
+              <span className="ui-detail-value">{timeAgo(memory.updated)}</span>
+            </div>
+          )}
+          {memory.type && (
+            <div className="ui-detail-row">
+              <span className="ui-detail-label">Type</span>
+              <span className="ui-detail-value">{memory.type}</span>
+            </div>
+          )}
+          {memory.status && (
+            <div className="ui-detail-row">
+              <span className="ui-detail-label">Status</span>
+              <span className="ui-detail-value">{memory.status}</span>
+            </div>
+          )}
+          {memory.tags.length > 0 && (
+            <div className="ui-detail-row">
+              <span className="ui-detail-label">Tags</span>
+              <span className="ui-detail-value">{memory.tags.join(' · ')}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => { void handleStartConversation(); }}
+            disabled={startBusy || loading}
+            className="ui-toolbar-button text-accent"
+          >
+            {startBusy ? 'Starting…' : 'Start convo'}
+          </button>
+          <button
+            type="button"
+            onClick={() => { void handleSave(); }}
+            disabled={!dirty || saveBusy || loading}
+            className={dirty ? 'ui-toolbar-button text-accent' : 'ui-toolbar-button'}
+          >
+            {saveBusy ? 'Saving…' : 'Save'}
+          </button>
+          <button
+            type="button"
+            onClick={() => { void handleDelete(); }}
+            disabled={deleteBusy || loading}
+            className="ui-toolbar-button text-danger"
+          >
+            {deleteBusy ? 'Deleting…' : 'Delete'}
+          </button>
+          {dirty && !saveBusy && <span className="ui-card-meta">Unsaved changes</span>}
+        </div>
+
+        {notice && (
+          <p className={notice.tone === 'danger' ? 'text-[12px] text-danger' : 'text-[12px] text-accent'}>
+            {notice.text}
+          </p>
+        )}
+      </div>
+
+      <div className="min-h-0 flex-1 px-4 py-4">
+        <textarea
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+              event.preventDefault();
+              void handleSave();
+            }
+          }}
+          className="h-full min-h-[24rem] w-full resize-none rounded-lg border border-border-default bg-base px-3 py-3 font-mono text-[12px] leading-relaxed text-primary outline-none transition-colors focus:border-accent/60"
+          spellCheck={false}
+        />
+      </div>
+    </div>
+  );
+}
+
 // ── Memory file content ───────────────────────────────────────────────────────
 
 function MemoryFileContext({ path }: { path: string }) {
@@ -1747,6 +1978,29 @@ export function ContextRail() {
       <EmptyPrompt text="Select a project to inspect and edit it." />
     </div>
   );
+
+  // Managed memories
+  if (section === 'memories') {
+    const memoryId = new URLSearchParams(location.search).get(MANAGED_MEMORY_ID_SEARCH_PARAM)?.trim() || null;
+
+    if (memoryId) {
+      return (
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <RailHeader label="Memory" sub={`@${memoryId}`} />
+          <div className="flex-1 overflow-y-auto">
+            <MemoryDocContext memoryId={memoryId} />
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex-1 flex flex-col">
+        <RailHeader label="Memory" />
+        <EmptyPrompt text="Select a memory to inspect and edit it." />
+      </div>
+    );
+  }
 
   // Memory
   if (section === 'memory') {
