@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ConversationStatusText } from './ConversationStatusText';
+import { Keycap } from './ui';
 import { api } from '../api';
 import { openCommandPalette } from '../commandPaletteEvents';
 import { useApi } from '../hooks';
@@ -35,7 +36,7 @@ function Ico({ d, size = 16 }: { d: string; size?: number }) {
 
 const PATH = {
   inbox:    'M2.25 13.5h3.86a2.25 2.25 0 0 1 2.012 1.244l.256.512a2.25 2.25 0 0 0 2.013 1.244h3.218a2.25 2.25 0 0 0 2.013-1.244l.256-.512a2.25 2.25 0 0 1 2.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 0 0-2.15-1.588H6.911a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.661Z',
-  archive:  'M20.25 7.5v10.125c0 1.243-1.007 2.25-2.25 2.25H6c-1.243 0-2.25-1.007-2.25-2.25V7.5m16.5 0-2.394-2.992A2.25 2.25 0 0 0 16.099 3.75H7.901a2.25 2.25 0 0 0-1.757.758L3.75 7.5m16.5 0H3.75m5.25 4.5h6',
+  search:   'M21 21l-4.35-4.35m1.6-5.15a6.75 6.75 0 1 1-13.5 0 6.75 6.75 0 0 1 13.5 0Z',
   gateway:  'M7.5 7.5 3.75 12l3.75 4.5m9-9 3.75 4.5-3.75 4.5M20.25 12H3.75',
   daemon:   'M6 4.5h12A1.5 1.5 0 0 1 19.5 6v12a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V6A1.5 1.5 0 0 1 6 4.5Zm0 3.75h12M6 12h12M6 15.75h12',
   sync:     'M4.5 12a7.5 7.5 0 0 1 12.803-5.303M19.5 12a7.5 7.5 0 0 1-12.803 5.303M16.5 3.75v3h-3m-3 10.5h3v3',
@@ -55,6 +56,7 @@ const PATH = {
 const SIDEBAR_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
 const SIDEBAR_PREVIOUS_CHAT_HOTKEY = 'Ctrl+Shift+[';
 const SIDEBAR_NEXT_CHAT_HOTKEY = 'Ctrl+Shift+]';
+const SIDEBAR_SEARCH_HOTKEY = '⌘K';
 
 function normalizeHotkeyKey(key: string): string {
   return key.length === 1 ? key.toLowerCase() : key;
@@ -111,6 +113,7 @@ function TopActionButton({
   icon,
   label,
   badge,
+  shortcut,
   isActive = false,
   title,
   onClick,
@@ -118,6 +121,7 @@ function TopActionButton({
   icon: string;
   label: string;
   badge?: number | string | null;
+  shortcut?: string;
   isActive?: boolean;
   title?: string;
   onClick: () => void;
@@ -140,9 +144,11 @@ function TopActionButton({
         <path d={icon} />
       </svg>
       <span className="flex-1 text-left truncate">{label}</span>
-      {badge != null && (
+      {shortcut ? (
+        <Keycap className="ml-auto shrink-0">{shortcut}</Keycap>
+      ) : badge != null ? (
         <span className="ui-sidebar-nav-badge">{badge}</span>
-      )}
+      ) : null}
     </button>
   );
 }
@@ -560,12 +566,8 @@ export function Sidebar() {
     navigate('/conversations/new');
   }, [navigate]);
 
-  const handleOpenMemories = useCallback(() => {
-    openCommandPalette({ scope: 'memories' });
-  }, []);
-
-  const handleOpenArchived = useCallback(() => {
-    openCommandPalette({ scope: 'archived' });
+  const handleOpenSearch = useCallback(() => {
+    openCommandPalette();
   }, []);
 
   const navigateOpenConversation = useCallback((direction: -1 | 1) => {
@@ -651,16 +653,11 @@ export function Sidebar() {
       <div className="pb-1 space-y-0.5">
         <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={inboxCount} />
         <TopActionButton
-          icon={PATH.memory}
-          label="Search memories"
-          title="Open unified search focused on memories"
-          onClick={handleOpenMemories}
-        />
-        <TopActionButton
-          icon={PATH.archive}
-          label="Search archived"
-          title="Open unified search focused on archived conversations"
-          onClick={handleOpenArchived}
+          icon={PATH.search}
+          label="Search"
+          shortcut={SIDEBAR_SEARCH_HOTKEY}
+          title={`Open unified search (${SIDEBAR_SEARCH_HOTKEY})`}
+          onClick={handleOpenSearch}
         />
         <TopNavItem to="/scheduled" icon={PATH.tasks} label="Scheduled" />
         <TopNavItem to="/projects" icon={PATH.projects} label="Projects" />
