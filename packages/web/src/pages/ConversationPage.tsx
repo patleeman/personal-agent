@@ -24,6 +24,7 @@ import { useAppData, useAppEvents, useLiveTitles } from '../contexts';
 import { filterModelPickerItems } from '../modelPicker';
 import { emitProjectsChanged } from '../projectEvents';
 import { parseDeferredResumeSlashCommand } from '../deferredResumeSlashCommand';
+import { buildDeferredResumeAutoResumeKey } from '../deferredResumeAutoResume';
 import { parseProjectSlashCommand, type ProjectSlashCommand } from '../projectSlashCommand';
 import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../slashMenu';
 import { buildMentionItems, filterMentionItems, resolveMentionItems, type MentionItem } from '../conversationMentions';
@@ -907,6 +908,16 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [savingPreference, setSavingPreference] = useState<'model' | 'thinking' | null>(null);
   const [modelIdx, setModelIdx] = useState(0);
   const noticeTimeoutRef = useRef<number | null>(null);
+  const showNotice = useCallback((tone: 'accent' | 'danger', text: string, durationMs = 2500) => {
+    setNotice({ tone, text });
+    if (noticeTimeoutRef.current !== null) {
+      window.clearTimeout(noticeTimeoutRef.current);
+    }
+    noticeTimeoutRef.current = window.setTimeout(() => {
+      setNotice(null);
+      noticeTimeoutRef.current = null;
+    }, durationMs);
+  }, []);
   const headerPreferenceRef = useRef<HTMLDivElement>(null);
   const headerModelSelectRef = useRef<HTMLSelectElement>(null);
   const headerThinkingSelectRef = useRef<HTMLSelectElement>(null);
@@ -1096,6 +1107,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef   = useRef<HTMLDivElement>(null);
+  const deferredResumeAutoResumeKeyRef = useRef<string | null>(null);
 
   // Derive menu states
   const slashInput = useMemo(() => parseSlashInput(input), [input]);
@@ -1115,11 +1127,25 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     profiles: profileState?.profiles ?? [],
   }), [projects, tasks, memoryData, profileState]);
   const referencedProjectIds = conversationProjects?.relatedProjectIds ?? [];
+  const savedConversationSessionFile = useMemo(() => {
+    if (!id) {
+      return null;
+    }
+
+    return visibleSessionDetail?.meta.file
+      ?? sessions?.find((session) => session.id === id)?.file
+      ?? null;
+  }, [id, sessions, visibleSessionDetail]);
   const orderedDeferredResumes = useMemo(
     () => [...deferredResumes].sort(compareDeferredResumes),
     [deferredResumes],
   );
   const hasReadyDeferredResumes = orderedDeferredResumes.some((resume) => resume.status === 'ready');
+  const deferredResumeAutoResumeKey = useMemo(() => buildDeferredResumeAutoResumeKey({
+    resumes: orderedDeferredResumes,
+    isLiveSession,
+    sessionFile: savedConversationSessionFile,
+  }), [isLiveSession, orderedDeferredResumes, savedConversationSessionFile]);
   const deferredResumeIndicatorText = useMemo(
     () => buildDeferredResumeIndicatorText(orderedDeferredResumes, deferredResumeNowMs),
     [orderedDeferredResumes, deferredResumeNowMs],
@@ -1194,6 +1220,19 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return data.resumes;
   }, [id]);
 
+  const resumeDeferredConversation = useCallback(async () => {
+    if (!savedConversationSessionFile) {
+      throw new Error('Open the saved conversation before continuing deferred work.');
+    }
+
+    await api.resumeSession(savedConversationSessionFile);
+    setConfirmedLive(true);
+    stream.reconnect();
+    window.setTimeout(() => {
+      void refetchDeferredResumes().catch(() => {});
+    }, 200);
+  }, [refetchDeferredResumes, savedConversationSessionFile, stream.reconnect]);
+
   useEffect(() => {
     if (draft || !id) {
       setConversationAttachments([]);
@@ -1214,6 +1253,36 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     void refetchDeferredResumes().catch(() => {});
   }, [id, refetchDeferredResumes, versions.sessions]);
+
+  useEffect(() => {
+    if (!deferredResumeAutoResumeKey) {
+      deferredResumeAutoResumeKeyRef.current = null;
+      return;
+    }
+
+    if (deferredResumeAutoResumeKeyRef.current === deferredResumeAutoResumeKey) {
+      return;
+    }
+
+    deferredResumeAutoResumeKeyRef.current = deferredResumeAutoResumeKey;
+    let cancelled = false;
+
+    void resumeDeferredConversation()
+      .then(() => {
+        if (!cancelled) {
+          showNotice('accent', 'Deferred resume firing…');
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [deferredResumeAutoResumeKey, resumeDeferredConversation, showNotice]);
 
   useEffect(() => {
     if (deferredResumes.length === 0) {
@@ -1509,17 +1578,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const jumpToMessage = useCallback((index: number) => {
     const el = scrollRef.current?.querySelector(`#msg-${index}`);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, []);
-
-  const showNotice = useCallback((tone: 'accent' | 'danger', text: string, durationMs = 2500) => {
-    setNotice({ tone, text });
-    if (noticeTimeoutRef.current !== null) {
-      window.clearTimeout(noticeTimeoutRef.current);
-    }
-    noticeTimeoutRef.current = window.setTimeout(() => {
-      setNotice(null);
-      noticeTimeoutRef.current = null;
-    }, durationMs);
   }, []);
 
   useEffect(() => {
@@ -2071,19 +2129,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    if (!visibleSessionDetail) {
-      showNotice('danger', 'Open the saved conversation before continuing deferred work.', 4000);
-      return;
-    }
-
     try {
-      await api.resumeSession(visibleSessionDetail.meta.file);
-      setConfirmedLive(true);
-      stream.reconnect();
+      await resumeDeferredConversation();
       showNotice('accent', 'Resuming deferred work…');
-      setTimeout(() => {
-        void refetchDeferredResumes().catch(() => {});
-      }, 200);
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     }
@@ -2118,7 +2166,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } finally {
       setResumeConversationBusy(false);
     }
-  }
+  }, [draft, id, navigate, resumeConversationBusy, showNotice, stream.reconnect]);
 
   const saveMemoryFromMessage = useCallback(async (block: MessageBlock, messageIndex: number) => {
     if (draft || !id) {
@@ -2148,7 +2196,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     }
-  }
+  }, [draft, id, refetchMemoryData, showNotice]);
 
   async function removeReferencedProject(projectId: string) {
     if (!id || conversationProjectsBusy) {
@@ -2163,7 +2211,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } finally {
       setConversationProjectsBusy(false);
     }
-  }, [draft, id, navigate, resumeConversationBusy, showNotice, stream.reconnect]);
+  }
 
   async function handleProjectSlashCommand(command: ProjectSlashCommand) {
     try {
@@ -2212,7 +2260,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     }
-  }, [draft, id, refetchMemoryData, showNotice]);
+  }
 
   async function submitComposer(behavior?: 'steer' | 'followUp') {
     const inputSnapshot = input;

@@ -17,7 +17,7 @@ export function createDeferredResumeAgentExtension(): (pi: ExtensionAPI) => void
     pi.registerTool({
       name: 'deferred_resume',
       label: 'Deferred Resume',
-      description: 'Schedule this web conversation to continue later. Due prompts resume the same conversation when it is live, and otherwise surface through durable state until reopened.',
+      description: 'Schedule this web conversation to continue later. Due prompts resume the same conversation when it is live; an open saved conversation in the web UI auto-resumes when the deferred work becomes ready; otherwise the deferred resume surfaces through durable state until reopened.',
       promptSnippet: 'Schedule this same conversation to resume later.',
       promptGuidelines: [
         'Use this tool when you should pause now and continue later after waiting for time to pass or for background work to make progress.',

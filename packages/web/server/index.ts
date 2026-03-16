@@ -1377,9 +1377,9 @@ async function flushLiveDeferredResumes(): Promise<void> {
   processingDeferredResumes = true;
 
   try {
-    // Deferred resumes should only inject prompts into conversations that are already live.
-    // Dormant conversations stay dormant until the user explicitly reopens them, at which
-    // point the normal resume route calls this same flush path again.
+    // Server-side deferred resume delivery only injects prompts into conversations that are
+    // already live. The web client may auto-resume an open saved conversation first, then
+    // call back into this same flush path to deliver the due prompts.
     const liveSessions = getLiveSessions().filter((session) => session.sessionFile);
     if (liveSessions.length === 0) {
       return;
