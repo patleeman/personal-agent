@@ -1,15 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import type { StorageLike } from './reloadState';
 import {
+  buildDraftConversationAttachmentsStorageKey,
   buildDraftConversationComposerStorageKey,
   buildDraftConversationCwdStorageKey,
   buildDraftConversationSessionMeta,
+  clearDraftConversationAttachments,
   clearDraftConversationComposer,
   clearDraftConversationCwd,
   DRAFT_CONVERSATION_ID,
   DRAFT_CONVERSATION_ROUTE,
+  hasDraftConversationAttachments,
+  persistDraftConversationAttachments,
   persistDraftConversationComposer,
   persistDraftConversationCwd,
+  readDraftConversationAttachments,
   readDraftConversationComposer,
   readDraftConversationCwd,
   shouldShowDraftConversationTab,
@@ -28,6 +33,7 @@ describe('draftConversation', () => {
   it('uses dedicated draft storage keys', () => {
     expect(buildDraftConversationComposerStorageKey()).toBe('pa:reload:conversation:draft:composer');
     expect(buildDraftConversationCwdStorageKey()).toBe('pa:reload:conversation:draft:cwd');
+    expect(buildDraftConversationAttachmentsStorageKey()).toBe('pa:reload:conversation:draft:attachments');
   });
 
   it('persists and reads the draft composer text', () => {
@@ -68,10 +74,64 @@ describe('draftConversation', () => {
     expect(storage.getItem(buildDraftConversationCwdStorageKey())).toBeNull();
   });
 
+  it('persists and reads draft attachments', () => {
+    const storage = createStorage();
+
+    persistDraftConversationAttachments({
+      images: [{ mimeType: 'image/png', data: 'abc', name: 'diagram.png' }],
+      drawings: [{
+        localId: 'drawing-1',
+        title: 'Wireframe',
+        sourceData: 'source-data',
+        sourceMimeType: 'application/json',
+        sourceName: 'wireframe.excalidraw',
+        previewData: 'preview-data',
+        previewMimeType: 'image/png',
+        previewName: 'wireframe.png',
+        previewUrl: 'data:image/png;base64,preview-data',
+        scene: { elements: [], appState: {}, files: {} },
+        dirty: true,
+      }],
+    }, storage);
+
+    expect(readDraftConversationAttachments(storage)).toEqual({
+      images: [{ mimeType: 'image/png', data: 'abc', name: 'diagram.png' }],
+      drawings: [{
+        localId: 'drawing-1',
+        title: 'Wireframe',
+        sourceData: 'source-data',
+        sourceMimeType: 'application/json',
+        sourceName: 'wireframe.excalidraw',
+        previewData: 'preview-data',
+        previewMimeType: 'image/png',
+        previewName: 'wireframe.png',
+        previewUrl: 'data:image/png;base64,preview-data',
+        scene: { elements: [], appState: {}, files: {} },
+        dirty: true,
+      }],
+    });
+    expect(hasDraftConversationAttachments(storage)).toBe(true);
+  });
+
+  it('clears stored draft attachments', () => {
+    const storage = createStorage();
+
+    persistDraftConversationAttachments({
+      images: [{ mimeType: 'image/png', data: 'abc' }],
+      drawings: [],
+    }, storage);
+    clearDraftConversationAttachments(storage);
+
+    expect(readDraftConversationAttachments(storage)).toEqual({ images: [], drawings: [] });
+    expect(hasDraftConversationAttachments(storage)).toBe(false);
+    expect(storage.getItem(buildDraftConversationAttachmentsStorageKey())).toBeNull();
+  });
+
   it('shows the draft tab while the draft route is active or has saved draft state', () => {
     expect(shouldShowDraftConversationTab(DRAFT_CONVERSATION_ROUTE, '')).toBe(true);
     expect(shouldShowDraftConversationTab('/inbox', 'Saved draft')).toBe(true);
     expect(shouldShowDraftConversationTab('/inbox', '', '~/workingdir/personal-agent')).toBe(true);
+    expect(shouldShowDraftConversationTab('/inbox', '', '', true)).toBe(true);
     expect(shouldShowDraftConversationTab('/inbox', '   ')).toBe(false);
   });
 

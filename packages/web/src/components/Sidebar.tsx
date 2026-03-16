@@ -12,10 +12,13 @@ import type { ConversationShelf, OpenConversationDropPosition } from '../session
 import type { SessionMeta } from '../types';
 import {
   buildDraftConversationSessionMeta,
+  clearDraftConversationAttachments,
   clearDraftConversationComposer,
   clearDraftConversationCwd,
   DRAFT_CONVERSATION_ID,
   DRAFT_CONVERSATION_ROUTE,
+  DRAFT_CONVERSATION_STATE_CHANGED_EVENT,
+  hasDraftConversationAttachments,
   readDraftConversationComposer,
   readDraftConversationCwd,
   shouldShowDraftConversationTab,
@@ -390,21 +393,31 @@ export function Sidebar() {
   const inboxCount = standaloneUnreadCount + archivedSessions.filter((session) => sessionNeedsAttention(session)).length;
   const [draftComposer, setDraftComposer] = useState(() => readDraftConversationComposer());
   const [draftCwd, setDraftCwd] = useState(() => readDraftConversationCwd());
+  const [draftHasAttachments, setDraftHasAttachments] = useState(() => hasDraftConversationAttachments());
   const draftTab = useMemo(() => {
-    if (!shouldShowDraftConversationTab(location.pathname, draftComposer, draftCwd)) {
+    if (!shouldShowDraftConversationTab(location.pathname, draftComposer, draftCwd, draftHasAttachments)) {
       return null;
     }
 
     return buildDraftConversationSessionMeta(undefined, draftCwd);
-  }, [draftComposer, draftCwd, location.pathname]);
+  }, [draftComposer, draftCwd, draftHasAttachments, location.pathname]);
   const visibleTabs = useMemo(
     () => draftTab ? [...tabs, draftTab] : tabs,
     [draftTab, tabs],
   );
 
   useEffect(() => {
-    setDraftComposer(readDraftConversationComposer());
-    setDraftCwd(readDraftConversationCwd());
+    function syncDraftState() {
+      setDraftComposer(readDraftConversationComposer());
+      setDraftCwd(readDraftConversationCwd());
+      setDraftHasAttachments(hasDraftConversationAttachments());
+    }
+
+    syncDraftState();
+    window.addEventListener(DRAFT_CONVERSATION_STATE_CHANGED_EVENT, syncDraftState);
+    return () => {
+      window.removeEventListener(DRAFT_CONVERSATION_STATE_CHANGED_EVENT, syncDraftState);
+    };
   }, [location.pathname]);
 
   useEffect(() => {
@@ -504,10 +517,12 @@ export function Sidebar() {
   }
 
   function handleCloseDraftTab() {
+    clearDraftConversationAttachments();
     clearDraftConversationComposer();
     clearDraftConversationCwd();
     setDraftComposer('');
     setDraftCwd('');
+    setDraftHasAttachments(false);
 
     if (draggingSessionId === DRAFT_CONVERSATION_ID) {
       clearDragState();
