@@ -274,6 +274,58 @@ describe('runPresentation', () => {
     expect(getRunCategory(backgroundRun)).toBe('background');
   });
 
+  it('links background runs started from a conversation back to that conversation', () => {
+    const sessions: SessionMeta[] = [{
+      id: 'conv-123',
+      file: '/tmp/sessions/conv-123.jsonl',
+      timestamp: '2026-03-12T20:00:00.000Z',
+      cwd: '/repo',
+      cwdSlug: 'repo',
+      model: 'openai/gpt-5',
+      title: 'Watch subagent execution',
+      messageCount: 12,
+    }];
+
+    const run = createRun({
+      manifest: {
+        version: 1,
+        id: 'run-subagent-2026-03-12T20-30-00-000Z-abcd1234',
+        kind: 'background-run',
+        resumePolicy: 'manual',
+        createdAt: '2026-03-12T20:30:00.000Z',
+        spec: {
+          taskSlug: 'subagent',
+          shellCommand: 'pa -p "focused work"',
+        },
+        source: {
+          type: 'tool',
+          id: 'conv-123',
+        },
+      },
+      checkpoint: {
+        version: 1,
+        runId: 'run-subagent-2026-03-12T20-30-00-000Z-abcd1234',
+        updatedAt: '2026-03-12T20:35:00.000Z',
+        step: 'completed',
+        payload: {},
+      },
+    });
+
+    expect(getRunConnections(run, { sessions })).toContainEqual({
+      key: 'conversation:conv-123',
+      label: 'Conversation',
+      value: 'Watch subagent execution',
+      to: '/conversations/conv-123',
+      detail: 'conv-123',
+    });
+
+    expect(getRunPrimaryConnection(run, { sessions })).toMatchObject({
+      label: 'Conversation',
+      to: '/conversations/conv-123',
+    });
+    expect(getRunPrimaryActionLabel(getRunPrimaryConnection(run, { sessions }))).toBe('Open conversation');
+  });
+
   it('prefers completion time for run timing and timeline', () => {
     const run = createRun();
 

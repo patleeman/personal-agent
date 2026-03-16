@@ -132,16 +132,27 @@ export async function getDurableRun(runId: string): Promise<(GetDurableRunResult
   };
 }
 
-export async function getDurableRunLog(runId: string, tail = 120): Promise<{ path: string; log: string } | undefined> {
-  const result = await getDurableRun(runId);
-  if (!result) {
+export async function getDurableRunSnapshot(runId: string, tail = 120): Promise<{
+  detail: GetDurableRunResult & { runsRoot: string };
+  log: { path: string; log: string };
+} | undefined> {
+  const detail = await getDurableRun(runId);
+  if (!detail) {
     return undefined;
   }
 
   return {
-    path: result.run.paths.outputLogPath,
-    log: readTailText(result.run.paths.outputLogPath, tail),
+    detail,
+    log: {
+      path: detail.run.paths.outputLogPath,
+      log: readTailText(detail.run.paths.outputLogPath, tail),
+    },
   };
+}
+
+export async function getDurableRunLog(runId: string, tail = 120): Promise<{ path: string; log: string } | undefined> {
+  const snapshot = await getDurableRunSnapshot(runId, tail);
+  return snapshot?.log;
 }
 
 export async function cancelDurableRun(runId: string): Promise<CancelDurableRunResult> {

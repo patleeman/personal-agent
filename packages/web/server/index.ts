@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, watch, writeFileSync } from 'node:fs';
 import { basename, dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
@@ -111,7 +111,7 @@ import {
 } from './liveSessions.js';
 import { recoverDurableLiveConversations } from './conversationRecovery.js';
 import { createWebLiveConversationRunId, syncWebLiveConversationRun } from './conversationRuns.js';
-import { cancelDurableRun, getDurableRun, getDurableRunLog, listDurableRuns } from './durableRuns.js';
+import { cancelDurableRun, getDurableRun, getDurableRunLog, getDurableRunSnapshot, listDurableRuns } from './durableRuns.js';
 import {
   buildReferencedMemoryDocsContext,
   buildReferencedProfilesContext,
@@ -1491,9 +1491,9 @@ function startConversationRecovery(): void {
 startDeferredResumeLoop();
 startConversationRecovery();
 
-function buildSnapshotEvents(topics: AppEventTopic[]) {
+async function buildSnapshotEvents(topics: AppEventTopic[]) {
   const uniqueTopics = [...new Set(topics)];
-  return uniqueTopics.map((topic) => {
+  const events = await Promise.all(uniqueTopics.map(async (topic) => {
     switch (topic) {
       case 'activity': {
         const snapshot = getActivitySnapshotForCurrentProfile();
@@ -1506,11 +1506,13 @@ function buildSnapshotEvents(topics: AppEventTopic[]) {
       case 'tasks':
         return { type: 'tasks_snapshot' as const, tasks: listTasksForCurrentProfile() };
       case 'runs':
-        return null;
+        return { type: 'runs_snapshot' as const, result: await listDurableRuns() };
       default:
         return null;
     }
-  }).filter((event): event is NonNullable<typeof event> => event !== null);
+  }));
+
+  return events.filter((event): event is NonNullable<typeof event> => event !== null);
 }
 
 const DIST_DIR =
@@ -1545,26 +1547,63 @@ app.get('/api/events', (req, res) => {
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
 
+  let closed = false;
+  let writeQueue = Promise.resolve();
+
   const writeEvent = (event: unknown) => {
+    if (closed) {
+      return;
+    }
+
     res.write(`data: ${JSON.stringify(event)}\n\n`);
   };
 
-  writeEvent({ type: 'connected' });
-  for (const event of buildSnapshotEvents(['activity', 'projects', 'sessions', 'tasks'])) {
-    writeEvent(event);
-  }
+  const enqueueWrite = (task: () => Promise<void> | void) => {
+    writeQueue = writeQueue
+      .then(async () => {
+        if (closed) {
+          return;
+        }
 
-  const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), 15_000);
+        await task();
+      })
+      .catch((error) => {
+        logWarn('app event stream write failed', {
+          message: error instanceof Error ? error.message : String(error),
+        });
+      });
+  };
+
+  const writeSnapshotEvents = async (topics: AppEventTopic[]) => {
+    for (const event of await buildSnapshotEvents(topics)) {
+      writeEvent(event);
+    }
+  };
+
+  writeEvent({ type: 'connected' });
+  enqueueWrite(async () => {
+    await writeSnapshotEvents(['activity', 'projects', 'sessions', 'tasks', 'runs']);
+  });
+
+  const heartbeat = setInterval(() => {
+    if (!closed) {
+      res.write(': heartbeat\n\n');
+    }
+  }, 15_000);
   const unsubscribe = subscribeAppEvents((event) => {
     if (event.type === 'invalidate') {
-      for (const snapshotEvent of buildSnapshotEvents(event.topics)) {
-        writeEvent(snapshotEvent);
-      }
+      enqueueWrite(async () => {
+        await writeSnapshotEvents(event.topics);
+        writeEvent(event);
+      });
+      return;
     }
+
     writeEvent(event);
   });
 
   req.on('close', () => {
+    closed = true;
     clearInterval(heartbeat);
     unsubscribe();
   });
@@ -2792,6 +2831,17 @@ app.get('/api/runs', async (_req, res) => {
   }
 });
 
+function parseRunLogTail(raw: unknown): number {
+  const parsed = typeof raw === 'string' ? Number.parseInt(raw, 10) : undefined;
+  return Number.isFinite(parsed) && (parsed as number) > 0
+    ? Math.min(1000, parsed as number)
+    : 120;
+}
+
+async function readRunStreamSnapshot(runId: string, tail: number) {
+  return (await getDurableRunSnapshot(runId, tail)) ?? null;
+}
+
 app.get('/api/runs/:id', async (req, res) => {
   try {
     const result = await getDurableRun(req.params.id);
@@ -2810,12 +2860,128 @@ app.get('/api/runs/:id', async (req, res) => {
   }
 });
 
+app.get('/api/runs/:id/events', async (req, res) => {
+  const runId = req.params.id;
+  const tail = parseRunLogTail(req.query.tail);
+
+  try {
+    const initial = await readRunStreamSnapshot(runId, tail);
+    if (!initial) {
+      res.status(404).json({ error: 'Run not found' });
+      return;
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const writeEvent = (event: unknown) => {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
+
+    let closed = false;
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    let lastSignature = JSON.stringify(initial);
+
+    writeEvent({ type: 'snapshot', detail: initial.detail, log: initial.log });
+
+    const heartbeat = setInterval(() => {
+      if (!closed) {
+        res.write(': heartbeat\n\n');
+      }
+    }, 15_000);
+
+    const refresh = async () => {
+      try {
+        const next = await readRunStreamSnapshot(runId, tail);
+        if (closed) {
+          return;
+        }
+
+        if (!next) {
+          writeEvent({ type: 'deleted', runId });
+          cleanup();
+          return;
+        }
+
+        const signature = JSON.stringify(next);
+        if (signature === lastSignature) {
+          return;
+        }
+
+        lastSignature = signature;
+        writeEvent({ type: 'snapshot', detail: next.detail, log: next.log });
+      } catch (error) {
+        if (!closed) {
+          writeEvent({ type: 'error', message: error instanceof Error ? error.message : String(error) });
+        }
+      }
+    };
+
+    const scheduleRefresh = () => {
+      if (closed) {
+        return;
+      }
+
+      if (refreshTimer) {
+        clearTimeout(refreshTimer);
+      }
+
+      refreshTimer = setTimeout(() => {
+        refreshTimer = undefined;
+        void refresh();
+      }, 75);
+    };
+
+    const watchTargets = [
+      initial.detail.run.paths.root,
+      initial.detail.run.paths.manifestPath,
+      initial.detail.run.paths.statusPath,
+      initial.detail.run.paths.checkpointPath,
+      initial.detail.run.paths.outputLogPath,
+      initial.detail.run.paths.resultPath,
+      initial.detail.run.paths.eventsPath,
+    ];
+    const watchers = watchTargets.flatMap((target) => {
+      try {
+        return [watch(target, { persistent: false }, () => scheduleRefresh())];
+      } catch {
+        return [];
+      }
+    });
+
+    const cleanup = () => {
+      if (closed) {
+        return;
+      }
+
+      closed = true;
+      clearInterval(heartbeat);
+      if (refreshTimer) {
+        clearTimeout(refreshTimer);
+        refreshTimer = undefined;
+      }
+      for (const watcher of watchers) {
+        watcher.close();
+      }
+      res.end();
+    };
+
+    req.on('close', cleanup);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 app.get('/api/runs/:id/log', async (req, res) => {
   try {
-    const tailRaw = typeof req.query.tail === 'string' ? Number.parseInt(req.query.tail, 10) : undefined;
-    const tail = Number.isFinite(tailRaw) && (tailRaw as number) > 0
-      ? Math.min(1000, tailRaw as number)
-      : 120;
+    const tail = parseRunLogTail(req.query.tail);
 
     const result = await getDurableRunLog(req.params.id, tail);
     if (!result) {

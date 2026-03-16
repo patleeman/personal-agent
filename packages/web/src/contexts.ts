@@ -5,6 +5,7 @@ import { createContext, useContext } from 'react';
 import type {
   ActivitySnapshot,
   AppEventTopic,
+  DurableRunListResult,
   ProjectRecord,
   ScheduledTaskSummary,
   SessionMeta,
@@ -68,10 +69,12 @@ export interface AppDataContextValue {
   projects: ProjectRecord[] | null;
   sessions: SessionMeta[] | null;
   tasks: ScheduledTaskSummary[] | null;
+  runs: DurableRunListResult | null;
   setActivity: (snapshot: ActivitySnapshot) => void;
   setProjects: (projects: ProjectRecord[]) => void;
   setSessions: (sessions: SessionMeta[]) => void;
   setTasks: (tasks: ScheduledTaskSummary[]) => void;
+  setRuns: (runs: DurableRunListResult) => void;
 }
 
 export const AppDataContext = createContext<AppDataContextValue>({
@@ -79,10 +82,12 @@ export const AppDataContext = createContext<AppDataContextValue>({
   projects: null,
   sessions: null,
   tasks: null,
+  runs: null,
   setActivity: () => {},
   setProjects: () => {},
   setSessions: () => {},
   setTasks: () => {},
+  setRuns: () => {},
 });
 
 export function useAppData() {

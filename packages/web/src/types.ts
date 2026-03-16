@@ -638,7 +638,8 @@ export type AppEvent =
   | { type: 'activity_snapshot'; entries: ActivityEntry[]; unreadCount: number }
   | { type: 'projects_snapshot'; projects: ProjectRecord[] }
   | { type: 'sessions_snapshot'; sessions: SessionMeta[] }
-  | { type: 'tasks_snapshot'; tasks: ScheduledTaskSummary[] };
+  | { type: 'tasks_snapshot'; tasks: ScheduledTaskSummary[] }
+  | { type: 'runs_snapshot'; result: DurableRunListResult };
 
 // ── Live session ──────────────────────────────────────────────────────────────
 
@@ -710,6 +711,11 @@ export type SseEvent =
   | { type: 'context_usage';   usage: SessionContextUsage | null }
   | { type: 'stats_update';    tokens: { input: number; output: number; total: number }; cost: number }
   | { type: 'error';           message: string };
+
+export type DurableRunSseEvent =
+  | { type: 'snapshot'; detail: DurableRunDetailResult; log: { path: string; log: string } }
+  | { type: 'deleted'; runId: string }
+  | { type: 'error'; message: string };
 
 // ── Memory browser ────────────────────────────────────────────────────────────
 
