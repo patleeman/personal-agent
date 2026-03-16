@@ -4,7 +4,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 
-import { ensureConversationMaintenanceIndexPath } from './paths.mjs';
+import yaml from 'js-yaml';
+
+import { ensureConversationMaintenanceIndexPath, getStateRoot } from './paths.mjs';
 
 function printUsage() {
   console.error(`Usage:
@@ -52,6 +54,10 @@ function asAbsolute(inputPath) {
   return path.isAbsolute(expanded) ? expanded : path.resolve(process.cwd(), expanded);
 }
 
+function normalizeWhitespace(value) {
+  return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+}
+
 function localDateString(date, timeZone) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone,
@@ -80,7 +86,7 @@ function shiftDate(dateStr, deltaDays) {
   return date.toISOString().slice(0, 10);
 }
 
-async function listJsonlFiles(rootDir) {
+async function listFilesWithSuffix(rootDir, suffix) {
   const files = [];
 
   async function walk(current) {
@@ -101,7 +107,7 @@ async function listJsonlFiles(rootDir) {
           await walk(fullPath);
           return;
         }
-        if (entry.isFile() && entry.name.endsWith('.jsonl')) {
+        if (entry.isFile() && entry.name.endsWith(suffix)) {
           files.push(fullPath);
         }
       }),
@@ -112,9 +118,32 @@ async function listJsonlFiles(rootDir) {
   return files;
 }
 
-async function readSessionHeader(sessionFile) {
+function extractTextFromContent(content) {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (!Array.isArray(content)) {
+    return '';
+  }
+
+  return content
+    .map((item) => {
+      if (typeof item === 'string') {
+        return item;
+      }
+      if (item && typeof item === 'object' && item.type === 'text' && typeof item.text === 'string') {
+        return item.text;
+      }
+      return '';
+    })
+    .join('\n');
+}
+
+async function readSessionMetadata(sessionFile) {
   const content = await fs.readFile(sessionFile, 'utf8');
-  const firstLine = content.split('\n').find((line) => line.trim().length > 0);
+  const lines = content.split('\n');
+  const firstLine = lines.find((line) => line.trim().length > 0);
   if (!firstLine) {
     throw new Error('empty file');
   }
@@ -143,10 +172,88 @@ async function readSessionHeader(sessionFile) {
     throw new Error('invalid session timestamp');
   }
 
+  let firstUserPrompt = '';
+  for (const line of lines) {
+    if (!line.trim()) continue;
+
+    let record;
+    try {
+      record = JSON.parse(line);
+    } catch {
+      continue;
+    }
+
+    if (record?.type !== 'message' || record?.message?.role !== 'user') {
+      continue;
+    }
+
+    firstUserPrompt = normalizeWhitespace(extractTextFromContent(record.message.content));
+    break;
+  }
+
   return {
     sessionId,
     sessionTimestamp: timestamp,
+    firstUserPrompt,
   };
+}
+
+function extractMarkdownBody(raw) {
+  const frontmatterMatch = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/);
+  if (!frontmatterMatch) {
+    return null;
+  }
+
+  return {
+    frontmatter: frontmatterMatch[1],
+    body: frontmatterMatch[2],
+  };
+}
+
+async function loadScheduledTaskPromptIndex(stateRoot) {
+  const profilesRoot = path.join(stateRoot, 'profiles');
+  const taskFiles = await listFilesWithSuffix(profilesRoot, '.task.md');
+  const promptIndex = new Map();
+
+  for (const taskFile of taskFiles) {
+    let raw;
+    try {
+      raw = await fs.readFile(taskFile, 'utf8');
+    } catch {
+      continue;
+    }
+
+    const parsedDoc = extractMarkdownBody(raw);
+    if (!parsedDoc) {
+      continue;
+    }
+
+    let frontmatter;
+    try {
+      frontmatter = yaml.load(parsedDoc.frontmatter);
+    } catch {
+      continue;
+    }
+
+    const normalizedPrompt = normalizeWhitespace(parsedDoc.body);
+    if (!normalizedPrompt) {
+      continue;
+    }
+
+    const inferredTaskId = path.basename(taskFile, '.task.md');
+    const taskId = typeof frontmatter?.id === 'string' && frontmatter.id.trim().length > 0
+      ? frontmatter.id.trim()
+      : inferredTaskId;
+
+    const existing = promptIndex.get(normalizedPrompt) ?? [];
+    existing.push({
+      taskId,
+      taskFile,
+    });
+    promptIndex.set(normalizedPrompt, existing);
+  }
+
+  return promptIndex;
 }
 
 async function loadProcessedIndex(indexPath) {
@@ -223,29 +330,35 @@ async function main() {
     : await ensureConversationMaintenanceIndexPath(profile);
   const indexPath = resolvedIndex.indexPath;
   const sessionsRoot = asAbsolute(args['sessions-root'] ?? '~/.local/state/personal-agent/pi-agent/sessions');
+  const stateRoot = getStateRoot();
 
   const now = new Date();
   const todayLocal = localDateString(now, timezone);
   const windowStart = shiftDate(todayLocal, -(days - 1));
   const windowEnd = todayLocal;
 
-  const sessionFiles = await listJsonlFiles(sessionsRoot);
+  const [sessionFiles, scheduledTaskPromptIndex] = await Promise.all([
+    listFilesWithSuffix(sessionsRoot, '.jsonl'),
+    loadScheduledTaskPromptIndex(stateRoot),
+  ]);
+
   const scanErrors = [];
-  const candidates = [];
+  const rawCandidates = [];
 
   for (const sessionFile of sessionFiles) {
     try {
-      const header = await readSessionHeader(sessionFile);
-      const sessionDateLocal = localDateString(new Date(header.sessionTimestamp), timezone);
+      const metadata = await readSessionMetadata(sessionFile);
+      const sessionDateLocal = localDateString(new Date(metadata.sessionTimestamp), timezone);
       if (sessionDateLocal < windowStart || sessionDateLocal > windowEnd) {
         continue;
       }
 
-      candidates.push({
-        sessionId: header.sessionId,
+      rawCandidates.push({
+        sessionId: metadata.sessionId,
         sessionFile,
-        sessionTimestamp: header.sessionTimestamp,
+        sessionTimestamp: metadata.sessionTimestamp,
         sessionDateLocal,
+        firstUserPrompt: metadata.firstUserPrompt,
       });
     } catch (error) {
       scanErrors.push({
@@ -255,7 +368,33 @@ async function main() {
     }
   }
 
-  candidates.sort(compareByTimestampThenId);
+  rawCandidates.sort(compareByTimestampThenId);
+
+  const excludedScheduledTaskRuns = [];
+  const candidates = [];
+
+  for (const candidate of rawCandidates) {
+    const matchedTasks = scheduledTaskPromptIndex.get(candidate.firstUserPrompt);
+    if (matchedTasks && matchedTasks.length > 0) {
+      excludedScheduledTaskRuns.push({
+        sessionId: candidate.sessionId,
+        sessionFile: candidate.sessionFile,
+        sessionTimestamp: candidate.sessionTimestamp,
+        sessionDateLocal: candidate.sessionDateLocal,
+        firstUserPrompt: candidate.firstUserPrompt,
+        matchedTaskIds: matchedTasks.map((task) => task.taskId),
+        matchedTaskFiles: matchedTasks.map((task) => task.taskFile),
+      });
+      continue;
+    }
+
+    candidates.push({
+      sessionId: candidate.sessionId,
+      sessionFile: candidate.sessionFile,
+      sessionTimestamp: candidate.sessionTimestamp,
+      sessionDateLocal: candidate.sessionDateLocal,
+    });
+  }
 
   const processedIndex = await loadProcessedIndex(indexPath);
   const processedInWindow = [];
@@ -278,6 +417,7 @@ async function main() {
       start: windowStart,
       end: windowEnd,
     },
+    stateRoot,
     sessionsRoot,
     indexPath,
     index: {
@@ -288,11 +428,14 @@ async function main() {
     },
     counts: {
       sessionFilesScanned: sessionFiles.length,
+      rawCandidatesInWindow: rawCandidates.length,
+      excludedScheduledTaskRuns: excludedScheduledTaskRuns.length,
       candidatesInWindow: candidates.length,
       processedInWindow: processedInWindow.length,
       unprocessedInWindow: unprocessed.length,
       scanErrors: scanErrors.length,
     },
+    excludedScheduledTaskRuns,
     unprocessed,
     processedInWindow,
     scanErrors,
