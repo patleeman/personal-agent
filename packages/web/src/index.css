@@ -445,6 +445,7 @@
 
 /* ─── Light theme (default) ───────────────────────────────────────────────── */
 :root {
+  color-scheme: light;
   --color-base:           245 241 235;
   --color-surface:        237 233 226;
   --color-elevated:       229 224 216;
@@ -465,6 +466,7 @@
 
 /* ─── Dark theme ──────────────────────────────────────────────────────────── */
 [data-theme="dark"] {
+  color-scheme: dark;
   /* Backgrounds — warm dark grey, not near-black */
   --color-base:           52  49  43;
   --color-surface:        60  57  51;
