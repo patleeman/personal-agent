@@ -4,6 +4,7 @@ import { ConversationStatusText } from './ConversationStatusText';
 import { Keycap } from './ui';
 import { api } from '../api';
 import { openCommandPalette } from '../commandPaletteEvents';
+import { buildDeferredResumeIndicatorText } from '../deferredResumeIndicator';
 import { useApi } from '../hooks';
 import { useConversations } from '../hooks/useConversations';
 import { useAppData } from '../contexts';
@@ -184,6 +185,7 @@ function OpenTab({
   onDragOver,
   onDrop,
   onDragEnd,
+  nowMs,
 }: {
   session: SessionMeta;
   needsAttention?: boolean;
@@ -200,10 +202,16 @@ function OpenTab({
   onDragOver?: (event: DragEvent<HTMLDivElement>) => void;
   onDrop?: (event: DragEvent<HTMLDivElement>) => void;
   onDragEnd?: (event: DragEvent<HTMLDivElement>) => void;
+  nowMs?: number;
 }) {
   const [hovered, setHovered] = useState(false);
   const location = useLocation();
   const isActive = location.pathname === `/conversations/${session.id}`;
+  const deferredResumes = session.deferredResumes ?? [];
+  const deferredResumeText = deferredResumes.length > 0
+    ? buildDeferredResumeIndicatorText(deferredResumes, nowMs ?? Date.now())
+    : null;
+  const hasReadyDeferredResumes = deferredResumes.some((resume) => resume.status === 'ready');
 
   return (
     <div
@@ -261,6 +269,23 @@ function OpenTab({
               </>
             )}
           </p>
+          {deferredResumeText && (
+            <p
+              className="ui-sidebar-session-meta mt-1 flex items-center gap-1.5 min-w-0"
+              title={`Deferred resume status: ${deferredResumeText}`}
+            >
+              <span className={[
+                'shrink-0',
+                hasReadyDeferredResumes ? 'text-warning' : 'text-accent',
+              ].join(' ')}>
+                <Ico d={PATH.tasks} size={11} />
+              </span>
+              <span className="min-w-0 truncate">
+                <span className="text-secondary">Deferred </span>
+                <span className={hasReadyDeferredResumes ? 'text-warning' : 'text-accent'}>{deferredResumeText}</span>
+              </span>
+            </p>
+          )}
         </div>
 
         <div className="shrink-0 mt-0.5 min-w-[34px] flex items-center justify-end gap-0.5">
@@ -405,6 +430,26 @@ export function Sidebar() {
     () => draftTab ? [...tabs, draftTab] : tabs,
     [draftTab, tabs],
   );
+  const [deferredResumeNowMs, setDeferredResumeNowMs] = useState(() => Date.now());
+  const visibleSessionDeferredResumeCount = useMemo(
+    () => [...pinnedSessions, ...visibleTabs].reduce((count, session) => count + (session.deferredResumes?.length ?? 0), 0),
+    [pinnedSessions, visibleTabs],
+  );
+
+  useEffect(() => {
+    if (visibleSessionDeferredResumeCount === 0) {
+      return;
+    }
+
+    setDeferredResumeNowMs(Date.now());
+    const intervalHandle = window.setInterval(() => {
+      setDeferredResumeNowMs(Date.now());
+    }, 1000);
+
+    return () => {
+      window.clearInterval(intervalHandle);
+    };
+  }, [visibleSessionDeferredResumeCount]);
 
   useEffect(() => {
     function syncDraftState() {
@@ -710,6 +755,7 @@ export function Sidebar() {
                 canDrag
                 isDragging={draggingSessionId === session.id}
                 dropPosition={dropPosition}
+                nowMs={deferredResumeNowMs}
                 actions={[{
                   key: 'unpin',
                   title: 'Move to open conversations',
@@ -758,6 +804,7 @@ export function Sidebar() {
                 canDrag={!isDraftTab}
                 isDragging={!isDraftTab && draggingSessionId === session.id}
                 dropPosition={dropPosition}
+                nowMs={deferredResumeNowMs}
                 actions={isDraftTab ? [{
                   key: 'close',
                   title: 'Close draft',

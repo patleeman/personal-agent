@@ -579,6 +579,7 @@ export interface SessionMeta {
   attentionUnreadMessageCount?: number;
   attentionUnreadActivityCount?: number;
   attentionActivityIds?: string[];
+  deferredResumes?: DeferredResumeSummary[];
 }
 
 export type DisplayBlock =
