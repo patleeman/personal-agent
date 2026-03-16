@@ -2,19 +2,26 @@ import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createProjectScaffold, readProject, writeProject } from '@personal-agent/core';
 import { resolveConversationCwd, resolveRequestedCwd } from './conversationCwd.js';
 
+const originalEnv = process.env;
 const tempDirs: string[] = [];
 
 function createTempRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'pa-web-cwd-'));
   tempDirs.push(dir);
+  process.env.PERSONAL_AGENT_PROFILES_ROOT = join(dir, 'profiles');
   return dir;
 }
 
+beforeEach(() => {
+  process.env = { ...originalEnv };
+});
+
 afterEach(async () => {
+  process.env = originalEnv;
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
