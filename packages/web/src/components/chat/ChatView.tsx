@@ -5,8 +5,10 @@ import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { readArtifactPresentation } from '../../conversationArtifacts';
 import { extractDurableRunIdsFromBlock } from '../../conversationRuns';
+import { looksLikeLocalFilesystemPath } from '../../localPaths';
 import type { MessageBlock } from '../../types';
 import { timeAgo } from '../../utils';
+import { InlineLocalPath } from '../LocalPathActions';
 import { buildChatRenderItems, type TraceClusterSummary, type TraceClusterSummaryCategory, type TraceConversationBlock } from './transcriptItems.js';
 import { Pill, SurfacePanel, cx } from '../ui';
 
@@ -221,6 +223,10 @@ function renderMarkdownText(text: string) {
           code: ({ className, children }) => {
             const content = extractTextContent(children).replace(/\n$/, '');
             const isBlock = content.includes('\n') || Boolean(className?.includes('language-'));
+
+            if (!isBlock && looksLikeLocalFilesystemPath(content)) {
+              return <InlineLocalPath path={content} />;
+            }
 
             if (!isBlock) {
               return <code className="font-mono text-[0.82em] bg-elevated px-1 py-0.5 rounded text-accent">{content}</code>;

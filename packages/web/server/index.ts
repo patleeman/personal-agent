@@ -215,6 +215,7 @@ import {
   uploadProjectFile,
 } from './projectResources.js';
 import { generateProjectBrief } from './projectBriefs.js';
+import { openLocalPathOnHost } from './localPathOpener.js';
 import {
   cancelDeferredResumeForSessionFile,
   listDeferredResumesForSessionFile,
@@ -5464,6 +5465,25 @@ app.post('/api/folder-picker', (req, res) => {
       prompt: 'Choose working directory',
     });
     res.json(result);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.post('/api/local-path/open', (req, res) => {
+  try {
+    const { path } = req.body as { path?: string };
+    if (!path) {
+      res.status(400).json({ error: 'path required' });
+      return;
+    }
+
+    const normalizedPath = openLocalPathOnHost(path);
+    res.json({ ok: true, path: normalizedPath });
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),

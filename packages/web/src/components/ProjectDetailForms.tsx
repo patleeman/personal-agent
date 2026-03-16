@@ -11,6 +11,7 @@ import {
   type TaskFormState,
 } from './projectDetailState';
 import { timeAgo } from '../utils';
+import { LocalPathActions } from './LocalPathActions';
 import { Pill, ToolbarButton, cx, type PillTone } from './ui';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-border-default bg-base px-4 py-3 text-[15px] leading-relaxed text-primary focus:outline-none focus:border-accent/60';
@@ -620,6 +621,7 @@ export function ProjectNoteRow({
           {children}
         </div>
         <div className="flex items-center gap-3 shrink-0">
+          <LocalPathActions path={note.path} />
           <button type="button" onClick={onEdit} className={ACTION_BUTTON_CLASS}>Edit</button>
           <button type="button" onClick={onDelete} className="text-[12px] text-danger hover:text-danger/75 transition-colors disabled:opacity-40" disabled={busy}>Delete</button>
         </div>
@@ -730,9 +732,12 @@ export function ProjectFileRow({
         {file.description && <p className="ui-card-meta break-words">{file.description}</p>}
         <p className="ui-card-meta">updated {timeAgo(file.updatedAt)}</p>
       </div>
-      <button type="button" onClick={onDelete} className="text-[12px] text-danger hover:text-danger/75 transition-colors disabled:opacity-40" disabled={busy}>
-        Delete
-      </button>
+      <div className="flex items-center gap-3 shrink-0">
+        <LocalPathActions path={file.path} />
+        <button type="button" onClick={onDelete} className="text-[12px] text-danger hover:text-danger/75 transition-colors disabled:opacity-40" disabled={busy}>
+          Delete
+        </button>
+      </div>
     </article>
   );
 }
