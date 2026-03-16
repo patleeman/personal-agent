@@ -39,6 +39,7 @@ export interface ProjectDocument {
   id: string;
   createdAt: string;
   updatedAt: string;
+  archivedAt?: string;
   title: string;
   description: string;
   repoRoot?: string;
@@ -361,6 +362,9 @@ export function formatProject(document: ProjectDocument): string {
     id: assertNonEmptyText(document.id, 'Project id'),
     createdAt: assertNonEmptyText(document.createdAt, 'Project createdAt'),
     updatedAt: assertNonEmptyText(document.updatedAt, 'Project updatedAt'),
+    ...(normalizeOptionalText(document.archivedAt, 'Project archivedAt')
+      ? { archivedAt: normalizeOptionalText(document.archivedAt, 'Project archivedAt') }
+      : {}),
     title: assertNonEmptyText(document.title, 'Project title'),
     description: assertNonEmptyText(document.description, 'Project description'),
     ...(normalizeOptionalText(document.repoRoot, 'Project repoRoot')
@@ -426,6 +430,7 @@ export function parseProject(yaml: string): ProjectDocument {
     id: readRequiredYamlString(object, 'id', 'Project'),
     createdAt: readRequiredYamlString(object, 'createdAt', 'Project'),
     updatedAt: readRequiredYamlString(object, 'updatedAt', 'Project'),
+    archivedAt: readOptionalYamlString(object, 'archivedAt', 'Project'),
     title: readRequiredYamlString(object, 'title', 'Project'),
     description,
     repoRoot: readOptionalYamlString(object, 'repoRoot', 'Project'),

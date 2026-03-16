@@ -116,6 +116,13 @@ export interface DeleteProjectRecordResult {
   deletedProjectId: string;
 }
 
+export interface SetProjectArchivedStateInput {
+  repoRoot?: string;
+  profile: string;
+  projectId: string;
+  archived: boolean;
+}
+
 export interface AddProjectMilestoneInput {
   repoRoot?: string;
   profile: string;
@@ -492,6 +499,29 @@ export function deleteProjectRecord(input: DeleteProjectRecordInput): DeleteProj
     ok: true,
     deletedProjectId: input.projectId,
   };
+}
+
+export function setProjectArchivedState(input: SetProjectArchivedStateInput): ProjectDetail {
+  const { paths, project } = readProjectRecord(input);
+  const isArchived = Boolean(project.archivedAt);
+
+  if (input.archived === isArchived) {
+    return readProjectDetailFromProject(input);
+  }
+
+  const archivedAt = input.archived ? nowIso() : undefined;
+  const updatedProject: ProjectDocument = {
+    ...project,
+    updatedAt: archivedAt ?? nowIso(),
+    archivedAt,
+  };
+
+  if (!archivedAt) {
+    delete updatedProject.archivedAt;
+  }
+
+  writeProject(paths.projectFile, updatedProject);
+  return readProjectDetailFromProject(input);
 }
 
 export function addProjectMilestone(input: AddProjectMilestoneInput): ProjectDetail {

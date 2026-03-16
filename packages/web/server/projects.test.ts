@@ -16,6 +16,7 @@ import {
   readProjectDetailFromProject,
   readProjectSource,
   saveProjectSource,
+  setProjectArchivedState,
   sortProjectTasks,
   updateProjectMilestone,
   updateProjectRecord,
@@ -557,6 +558,49 @@ describe('project editing helpers', () => {
 
     expect(result).toEqual({ ok: true, deletedProjectId: 'web-ui' });
     expect(existsSync(paths.projectDir)).toBe(false);
+  });
+
+  it('archives and restores a project without changing its status', () => {
+    const repoRoot = createTempRepo();
+
+    createProjectScaffold({
+      repoRoot,
+      profile: 'datadog',
+      projectId: 'web-ui',
+      title: 'Ship the web UI',
+      description: 'Ship the web UI',
+    });
+
+    let detail = updateProjectRecord({
+      repoRoot,
+      profile: 'datadog',
+      projectId: 'web-ui',
+      status: 'completed',
+      completionSummary: 'Shipped the work.',
+    });
+
+    expect(detail.project.archivedAt).toBeUndefined();
+    expect(detail.project.status).toBe('completed');
+
+    detail = setProjectArchivedState({
+      repoRoot,
+      profile: 'datadog',
+      projectId: 'web-ui',
+      archived: true,
+    });
+
+    expect(detail.project.status).toBe('completed');
+    expect(detail.project.archivedAt).toBeTruthy();
+
+    detail = setProjectArchivedState({
+      repoRoot,
+      profile: 'datadog',
+      projectId: 'web-ui',
+      archived: false,
+    });
+
+    expect(detail.project.status).toBe('completed');
+    expect(detail.project.archivedAt).toBeUndefined();
   });
 
   it('reads and saves raw project yaml', () => {

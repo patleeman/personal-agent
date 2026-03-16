@@ -2,6 +2,8 @@
 
 Projects are the durable home for a piece of ongoing work in `personal-agent`.
 
+A finished project can be archived so it drops out of the active list while keeping its notes, files, brief, and timeline intact.
+
 A project is not just a plan file.
 
 Think of it as a **cross-conversation work hub** that can hold:
@@ -65,6 +67,7 @@ A project can store:
 - `planSummary` (optional narrative plan)
 - `completionSummary` (optional shipped outcome summary)
 - `status`
+- `archivedAt` (optional timestamp used to move finished work out of the active list without deleting it)
 - `repoRoot` (optional)
 - `blockers`
 - `currentFocus`
@@ -246,6 +249,7 @@ From the Projects page you can:
 
 - create a project from a short title plus a longer description
 - inspect and edit `PROJECT.yaml`
+- archive or restore finished projects without deleting their history
 - see linked conversations
 - start a new conversation from the project
 - edit or regenerate the project handoff doc
@@ -260,7 +264,7 @@ Inside a conversation, use the `project` tool for normal durable project managem
 
 The tool supports:
 
-- project create / get / update / delete
+- project create / get / update / delete / archive / unarchive
 - current-conversation reference / unreference
 - brief saves
 - note create / update / delete

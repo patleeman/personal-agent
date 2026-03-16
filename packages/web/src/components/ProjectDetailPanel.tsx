@@ -5,6 +5,7 @@ import {
   formatProjectStatus,
   getPlanProgress,
   hasMeaningfulBlockers,
+  isProjectArchived,
   pickCurrentMilestone,
 } from '../contextRailProject';
 import type { ProjectDetail, ProjectFile, ProjectMilestone, ProjectNote, ProjectTask } from '../types';
@@ -101,6 +102,7 @@ export function ProjectDetailPanel({
   const record = project.project;
   const blockers = record.blockers.filter((blocker) => blocker.trim().length > 0);
   const recentProgress = record.recentProgress.filter((item) => item.trim().length > 0);
+  const archived = isProjectArchived(record);
   const milestones = record.plan.milestones;
   const currentMilestone = pickCurrentMilestone(record.plan);
   const { done, total, pct } = getPlanProgress(milestones);
@@ -143,6 +145,9 @@ export function ProjectDetailPanel({
   const [rawProjectBusy, setRawProjectBusy] = useState(false);
   const [rawProjectError, setRawProjectError] = useState<string | null>(null);
 
+  const [archiveBusy, setArchiveBusy] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -154,6 +159,7 @@ export function ProjectDetailPanel({
   const planContent = (record.planSummary ?? '').trim() || projectDocument.plan.trim();
   const completionSummaryContent = (record.completionSummary ?? '').trim() || projectDocument.completionSummary.trim();
   const activityItems = useMemo(() => buildActivityItems(project), [project]);
+  const topLevelError = archiveError ?? deleteError;
 
   useEffect(() => {
     if (!editingProject) {
@@ -178,6 +184,7 @@ export function ProjectDetailPanel({
     setFileError(null);
     setRawProjectLoaded(false);
     setRawProjectError(null);
+    setArchiveError(null);
     setDeleteError(null);
     if (!rawProjectOpen) {
       setRawProjectContent('');
@@ -457,6 +464,34 @@ export function ProjectDetailPanel({
     }
   }
 
+  async function toggleArchivedState(nextArchived: boolean) {
+    const confirmationMessage = nextArchived
+      ? (record.status === 'completed' || record.status === 'cancelled'
+          ? `Archive project ${record.id}? It will move out of the active project list but remain available.`
+          : `Archive project ${record.id}? It is still marked ${formatProjectStatus(record.status)}.`)
+      : `Restore project ${record.id} to the active project list?`;
+
+    if (!window.confirm(confirmationMessage)) {
+      return;
+    }
+
+    setArchiveBusy(true);
+    setArchiveError(null);
+
+    try {
+      if (nextArchived) {
+        await api.archiveProject(record.id);
+      } else {
+        await api.unarchiveProject(record.id);
+      }
+      onChanged?.();
+    } catch (error) {
+      setArchiveError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setArchiveBusy(false);
+    }
+  }
+
   async function deleteProject() {
     if (!window.confirm(`Delete project ${record.id}? This removes PROJECT.yaml, notes, attachments, and artifacts.`)) {
       return;
@@ -704,14 +739,20 @@ export function ProjectDetailPanel({
                 {record.description}
               </p>
             </div>
-            <ToolbarButton onClick={() => { void startConversationFromProject(); }} disabled={conversationBusy || deleteBusy}>
-              {conversationBusy ? 'Starting…' : 'Start conversation'}
-            </ToolbarButton>
+            <div className="flex items-center gap-2">
+              <ToolbarButton onClick={() => { void toggleArchivedState(!archived); }} disabled={archiveBusy || deleteBusy}>
+                {archiveBusy ? (archived ? 'Restoring…' : 'Archiving…') : (archived ? 'Restore project' : 'Archive project')}
+              </ToolbarButton>
+              <ToolbarButton onClick={() => { void startConversationFromProject(); }} disabled={conversationBusy || deleteBusy}>
+                {conversationBusy ? 'Starting…' : 'Start conversation'}
+              </ToolbarButton>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <Pill tone={hasMeaningfulBlockers(record.blockers) ? 'warning' : 'teal'}>
+            <Pill tone={archived ? 'muted' : hasMeaningfulBlockers(record.blockers) ? 'warning' : 'teal'}>
               {formatProjectStatus(record.status)}
             </Pill>
+            {archived && record.archivedAt && <Pill tone="muted">archived {timeAgo(record.archivedAt)}</Pill>}
             <span className="ui-card-meta">{milestones.length} {milestones.length === 1 ? 'milestone' : 'milestones'}</span>
             <span className="ui-card-meta">{project.taskCount} {project.taskCount === 1 ? 'task' : 'tasks'}</span>
             <span className="ui-card-meta">{project.noteCount} {project.noteCount === 1 ? 'note' : 'notes'}</span>
@@ -719,7 +760,7 @@ export function ProjectDetailPanel({
             <span className="ui-card-meta">{project.artifactCount} artifacts</span>
             <span className="ui-card-meta">{project.linkedConversations.length} {project.linkedConversations.length === 1 ? 'conversation' : 'conversations'}</span>
           </div>
-          {deleteError && <p className="text-[12px] text-danger">{deleteError}</p>}
+          {topLevelError && <p className="text-[12px] text-danger">{topLevelError}</p>}
         </div>
       </section>
 

@@ -10,7 +10,12 @@ import {
   type CommandPaletteSection,
 } from '../commandPalette';
 import { OPEN_COMMAND_PALETTE_EVENT, type OpenCommandPaletteDetail } from '../commandPaletteEvents';
-import { formatProjectStatus, hasMeaningfulBlockers, summarizeProjectPreview } from '../contextRailProject';
+import {
+  formatProjectStatus,
+  hasMeaningfulBlockers,
+  isProjectArchived,
+  summarizeProjectPreview,
+} from '../contextRailProject';
 import { useAppData } from '../contexts';
 import { useConversations } from '../hooks/useConversations';
 import type { MemoryDocItem, ProjectRecord, ScheduledTaskSummary, SessionMeta } from '../types';
@@ -359,12 +364,23 @@ function buildTaskItems(tasks: ScheduledTaskSummary[]): CommandPaletteItem<Comma
 }
 
 function buildProjectItems(projects: ProjectRecord[]): CommandPaletteItem<CommandPaletteAction>[] {
-  const orderedProjects = [...projects].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  const orderedProjects = [...projects].sort((left, right) => {
+    const archivedOrder = Number(isProjectArchived(left)) - Number(isProjectArchived(right));
+    if (archivedOrder !== 0) {
+      return archivedOrder;
+    }
+
+    return right.updatedAt.localeCompare(left.updatedAt);
+  });
 
   return orderedProjects.map((project, index) => {
     const blockers = project.blockers.filter((blocker) => blocker.trim().length > 0);
+    const archived = isProjectArchived(project);
     const metaParts = [formatProjectStatus(project.status), project.id, timeAgo(project.updatedAt)];
-    if (hasMeaningfulBlockers(project.blockers) && blockers[0]) {
+    if (archived && project.archivedAt) {
+      metaParts.push(`archived ${timeAgo(project.archivedAt)}`);
+    }
+    if (!archived && hasMeaningfulBlockers(project.blockers) && blockers[0]) {
       metaParts.push(blockers[0]);
     }
 
@@ -385,6 +401,7 @@ function buildProjectItems(projects: ProjectRecord[]): CommandPaletteItem<Comman
         project.completionSummary ?? '',
         project.status,
         project.currentFocus ?? '',
+        archived ? 'archived' : '',
         ...project.blockers,
         ...project.recentProgress,
       ],

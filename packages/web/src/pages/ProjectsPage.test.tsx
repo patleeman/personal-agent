@@ -85,4 +85,79 @@ describe('ProjectsPage', () => {
     expect(html).toContain('Project.recentProgress[0] must be a string.');
     expect(html).toContain('npm run validate:projects -- --profile assistant');
   });
+
+  it('hides archived projects from the default active list while showing filter counts', () => {
+    vi.mocked(useAppData).mockReturnValue({
+      activity: null,
+      projects: null,
+      sessions: null,
+      tasks: null,
+      setActivity: vi.fn(),
+      setProjects: vi.fn(),
+      setSessions: vi.fn(),
+      setTasks: vi.fn(),
+    });
+
+    vi.mocked(useApi)
+      .mockReturnValueOnce({
+        data: [
+          {
+            id: 'active-project',
+            createdAt: '2026-03-16T10:00:00.000Z',
+            updatedAt: '2026-03-16T12:00:00.000Z',
+            title: 'Active project',
+            description: 'Still being worked on.',
+            summary: 'In progress.',
+            requirements: { goal: 'Ship the work.', acceptanceCriteria: [] },
+            status: 'in_progress',
+            blockers: [],
+            recentProgress: [],
+            plan: { milestones: [], tasks: [] },
+          },
+          {
+            id: 'archived-project',
+            createdAt: '2026-03-10T10:00:00.000Z',
+            updatedAt: '2026-03-12T12:00:00.000Z',
+            archivedAt: '2026-03-15T08:00:00.000Z',
+            title: 'Archived project',
+            description: 'Finished work.',
+            summary: 'Done.',
+            requirements: { goal: 'Keep the record.', acceptanceCriteria: [] },
+            status: 'completed',
+            blockers: [],
+            recentProgress: [],
+            completionSummary: 'Shipped.',
+            plan: { milestones: [], tasks: [] },
+          },
+        ],
+        loading: false,
+        refreshing: false,
+        error: null,
+        refetch: vi.fn(),
+      })
+      .mockReturnValueOnce({
+        data: {
+          profile: 'assistant',
+          invalidProjects: [],
+        },
+        loading: false,
+        refreshing: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/projects']}>
+        <Routes>
+          <Route path="/projects" element={<ProjectsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Active');
+    expect(html).toContain('Archived');
+    expect(html).toContain('Active project');
+    expect(html).not.toContain('Archived project');
+    expect(html).toContain('1<!-- --> archived');
+  });
 });

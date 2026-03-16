@@ -3,6 +3,7 @@ import {
   formatProjectStatus,
   getPlanProgress,
   hasMeaningfulBlockers,
+  isProjectArchived,
   pickCurrentMilestone,
 } from '../contextRailProject';
 import type { ProjectDetail } from '../types';
@@ -41,6 +42,7 @@ export function ProjectOverviewPanel({
   const record = project.project;
   const status = formatProjectStatus(record.status);
   const blockers = record.blockers.filter((blocker) => blocker.trim().length > 0);
+  const isArchived = isProjectArchived(record);
   const isBlocked = hasMeaningfulBlockers(record.blockers);
   const currentFocus = record.currentFocus?.trim();
   const description = record.description.trim();
@@ -80,6 +82,7 @@ export function ProjectOverviewPanel({
           <div className="flex flex-wrap items-center gap-2">
             <Pill tone="muted" mono className="max-w-full truncate" title={record.id}>{record.id}</Pill>
             <span className="ui-card-meta">updated {timeAgo(record.updatedAt)}</span>
+            {record.archivedAt && <span className="ui-card-meta">archived {timeAgo(record.archivedAt)}</span>}
           </div>
           <div className="space-y-1.5">
             <p className="ui-card-title">{record.title}</p>
@@ -105,7 +108,8 @@ export function ProjectOverviewPanel({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Pill tone={isBlocked ? 'warning' : 'teal'}>{status}</Pill>
+        <Pill tone={isArchived ? 'muted' : isBlocked ? 'warning' : 'teal'}>{status}</Pill>
+        {isArchived && <Pill tone="muted">archived</Pill>}
         <Pill tone="muted">{project.taskCount} {project.taskCount === 1 ? 'task' : 'tasks'}</Pill>
         <Pill tone="muted">{remainingMilestones} {remainingMilestones === 1 ? 'milestone left' : 'milestones left'}</Pill>
         <Pill tone="muted">{project.artifactCount} artifacts</Pill>

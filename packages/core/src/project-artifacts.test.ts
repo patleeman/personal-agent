@@ -74,6 +74,7 @@ describe('project artifacts', () => {
       id: 'artifact-model',
       createdAt: '2026-03-10T12:00:00.000Z',
       updatedAt: '2026-03-10T13:00:00.000Z',
+      archivedAt: '2026-03-10T14:00:00.000Z',
       title: 'Durable artifact model',
       description: 'Create a durable artifact model.',
       repoRoot: '/Users/patrick/workingdir/personal-agent',
@@ -107,6 +108,7 @@ describe('project artifacts', () => {
     const yaml = formatProject(document);
     expect(yaml).toContain('title: Durable artifact model');
     expect(yaml).toContain('description: Create a durable artifact model.');
+    expect(yaml).toContain('archivedAt: 2026-03-10T14:00:00.000Z');
     expect(yaml).toContain('repoRoot: /Users/patrick/workingdir/personal-agent');
     expect(yaml).toContain('goal: Create a durable artifact model that stays easy to inspect and edit.');
     expect(yaml).toContain('acceptanceCriteria:');

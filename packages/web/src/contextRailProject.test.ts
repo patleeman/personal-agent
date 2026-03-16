@@ -3,6 +3,7 @@ import {
   formatProjectStatus,
   getPlanProgress,
   hasMeaningfulBlockers,
+  isProjectArchived,
   pickAttachProjectId,
   pickCurrentMilestone,
   pickFocusedProjectId,
@@ -38,6 +39,11 @@ describe('context rail project helpers', () => {
     expect(hasMeaningfulBlockers(['waiting on review'])).toBe(true);
     expect(hasMeaningfulBlockers([])).toBe(false);
     expect(hasMeaningfulBlockers(undefined)).toBe(false);
+  });
+
+  it('detects archived projects from archivedAt', () => {
+    expect(isProjectArchived({ archivedAt: '2026-03-16T12:00:00.000Z' })).toBe(true);
+    expect(isProjectArchived({ archivedAt: undefined })).toBe(false);
   });
 
   it('picks the current milestone from the explicit plan pointer first', () => {

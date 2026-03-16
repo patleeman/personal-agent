@@ -176,6 +176,35 @@ describe('project agent extension', () => {
     );
     expect(fetchedAfterUpdate.content[0]?.text).toContain('summary: Schema settled');
     expect(fetchedAfterUpdate.content[0]?.text).toContain('currentFocus: Implement structured tools.');
+
+    const archived = await projectTool.execute(
+      'tool-6',
+      { action: 'archive', projectId: 'artifact-model' },
+      undefined,
+      undefined,
+      createToolContext(),
+    );
+    expect(archived.isError).not.toBe(true);
+    expect(archived.content[0]?.text).toContain('Archived project @artifact-model');
+
+    const fetchedArchived = await projectTool.execute(
+      'tool-7',
+      { action: 'get', projectId: 'artifact-model' },
+      undefined,
+      undefined,
+      createToolContext(),
+    );
+    expect(fetchedArchived.content[0]?.text).toContain('archivedAt:');
+
+    const restored = await projectTool.execute(
+      'tool-8',
+      { action: 'unarchive', projectId: 'artifact-model' },
+      undefined,
+      undefined,
+      createToolContext(),
+    );
+    expect(restored.isError).not.toBe(true);
+    expect(restored.content[0]?.text).toContain('Restored project @artifact-model');
   });
 
   it('returns an error when referencing a missing project', async () => {
