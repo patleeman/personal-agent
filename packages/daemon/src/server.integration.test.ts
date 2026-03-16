@@ -84,6 +84,37 @@ async function sendRequest(socketPath: string, request: unknown): Promise<Respon
   });
 }
 
+async function sendRequestAndDisconnect(socketPath: string, request: unknown): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const socket = createConnection(socketPath);
+    let settled = false;
+
+    const finish = (callback: () => void) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      callback();
+    };
+
+    socket.on('connect', () => {
+      socket.write(`${JSON.stringify(request)}\n`, () => {
+        finish(() => {
+          socket.destroy();
+          resolve();
+        });
+      });
+    });
+
+    socket.on('error', (error) => {
+      finish(() => {
+        reject(error);
+      });
+    });
+  });
+}
+
 async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void> {
   const startedAt = Date.now();
 
@@ -327,6 +358,35 @@ describe('daemon IPC integration', () => {
     const runsRoot = resolveDurableRunsRoot(resolveDaemonPaths(config.ipc.socketPath).root);
     await waitFor(() => scanDurableRun(runsRoot, runId)?.status?.status === 'cancelled');
     expect(scanDurableRun(runsRoot, runId)?.status?.status).toBe('cancelled');
+  });
+
+  it('remains stable when an IPC client disconnects before a response is written', async () => {
+    daemon = new PersonalAgentDaemon(config);
+    await daemon.start();
+
+    await sendRequestAndDisconnect(socketPath, {
+      id: `req_${randomUUID()}`,
+      type: 'runs.startBackground',
+      input: {
+        taskSlug: 'disconnect-test',
+        cwd: createTempDir('bg-run-disconnect-cwd-'),
+        argv: [process.execPath, '-e', "console.log('disconnect-safe')"],
+        source: {
+          type: 'test',
+          id: 'disconnect-test',
+        },
+      },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    const response = await sendRequest(socketPath, {
+      id: `req_${randomUUID()}`,
+      type: 'ping',
+    });
+
+    expect(response.ok).toBe(true);
+    expect(response.result).toEqual({ pong: true });
   });
 
   it('syncs and lists recoverable web live conversation runs', async () => {

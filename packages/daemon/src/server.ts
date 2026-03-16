@@ -3,7 +3,7 @@ import { createServer, type Server, type Socket } from 'net';
 import { createWriteStream, existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { EventBus } from './event-bus.js';
 import { createDaemonEvent, isDaemonEvent } from './events.js';
-import { parseRequest, serializeResponse, type DaemonRequest } from './ipc-protocol.js';
+import { parseRequest, serializeResponse, type DaemonRequest, type DaemonResponse } from './ipc-protocol.js';
 import { loadDaemonConfig, type DaemonConfig, type LogLevel } from './config.js';
 import { createBuiltinModules, type DaemonModule, type DaemonModuleContext } from './modules/index.js';
 import { ensureDaemonDirectories, resolveDaemonPaths } from './paths.js';
@@ -367,6 +367,10 @@ export class PersonalAgentDaemon {
   private attachConnection(socket: Socket): void {
     let buffer = '';
 
+    socket.on('error', (error) => {
+      this.handleSocketError(error);
+    });
+
     socket.on('data', (chunk: Buffer | string) => {
       buffer += chunk.toString();
 
@@ -384,116 +388,141 @@ export class PersonalAgentDaemon {
     });
   }
 
+  private handleSocketError(error: Error): void {
+    const socketError = error as NodeJS.ErrnoException;
+    if (socketError.code === 'EPIPE' || socketError.code === 'ECONNRESET') {
+      this.log('debug', `ipc client disconnected code=${socketError.code}`);
+      return;
+    }
+
+    this.log('warn', `ipc socket error code=${socketError.code ?? 'UNKNOWN'} message=${error.message}`);
+  }
+
+  private respond(socket: Socket, response: DaemonResponse): void {
+    if (socket.destroyed || !socket.writable) {
+      this.log('debug', `ipc response dropped id=${response.id} reason=socket-not-writable`);
+      return;
+    }
+
+    socket.write(serializeResponse(response));
+  }
+
   private handleLine(socket: Socket, rawLine: string): void {
     try {
       const request = parseRequest(rawLine);
-      void this.handleRequest(socket, request);
+      void this.handleRequest(socket, request).catch((error) => {
+        this.respond(socket, {
+          id: request.id,
+          ok: false,
+          error: (error as Error).message,
+        });
+      });
     } catch (error) {
-      socket.write(serializeResponse({
+      this.respond(socket, {
         id: 'unknown',
         ok: false,
         error: (error as Error).message,
-      }));
+      });
     }
   }
 
   private async handleRequest(socket: Socket, request: DaemonRequest): Promise<void> {
     if (request.type === 'ping') {
-      socket.write(serializeResponse({ id: request.id, ok: true, result: { pong: true } }));
+      this.respond(socket, { id: request.id, ok: true, result: { pong: true } });
       return;
     }
 
     if (request.type === 'status') {
-      socket.write(serializeResponse({ id: request.id, ok: true, result: this.getStatus() }));
+      this.respond(socket, { id: request.id, ok: true, result: this.getStatus() });
       return;
     }
 
     if (request.type === 'notifications.pull') {
-      socket.write(serializeResponse({
+      this.respond(socket, {
         id: request.id,
         ok: true,
         result: {
           notifications: this.pullGatewayNotifications(request.gateway, request.limit),
         },
-      }));
+      });
       return;
     }
 
     if (request.type === 'runs.list') {
-      socket.write(serializeResponse({
+      this.respond(socket, {
         id: request.id,
         ok: true,
         result: this.listDurableRuns(),
-      }));
+      });
       return;
     }
 
     if (request.type === 'runs.get') {
       const result = this.getDurableRun(request.runId);
       if (!result) {
-        socket.write(serializeResponse({
+        this.respond(socket, {
           id: request.id,
           ok: false,
           error: `Run not found: ${request.runId}`,
-        }));
+        });
         return;
       }
 
-      socket.write(serializeResponse({
+      this.respond(socket, {
         id: request.id,
         ok: true,
         result,
-      }));
+      });
       return;
     }
 
     if (request.type === 'runs.startTask') {
-      socket.write(serializeResponse({
+      this.respond(socket, {
         id: request.id,
         ok: true,
         result: await this.startScheduledTaskRun(request.filePath),
-      }));
+      });
       return;
     }
 
     if (request.type === 'runs.startBackground') {
-      socket.write(serializeResponse({
+      this.respond(socket, {
         id: request.id,
         ok: true,
         result: await this.startBackgroundRun(request.input),
-      }));
+      });
       return;
     }
 
     if (request.type === 'runs.cancel') {
-      socket.write(serializeResponse({
+      this.respond(socket, {
         id: request.id,
         ok: true,
         result: await this.cancelBackgroundRun(request.runId),
-      }));
+      });
       return;
     }
 
     if (request.type === 'conversations.sync') {
-      socket.write(serializeResponse({
+      this.respond(socket, {
         id: request.id,
         ok: true,
         result: await this.syncWebLiveConversationRun(request.input),
-      }));
+      });
       return;
     }
 
     if (request.type === 'conversations.recoverable') {
-      socket.write(serializeResponse({
+      this.respond(socket, {
         id: request.id,
         ok: true,
         result: this.listRecoverableWebLiveConversationRuns(),
-      }));
+      });
       return;
     }
 
     if (request.type === 'stop') {
-      socket.write(serializeResponse({ id: request.id, ok: true, result: { stopping: true } }));
+      this.respond(socket, { id: request.id, ok: true, result: { stopping: true } });
       setTimeout(() => {
         void this.stop().then(() => process.exit(0));
       }, 10);
@@ -502,19 +531,19 @@ export class PersonalAgentDaemon {
 
     if (request.type === 'emit') {
       if (!isDaemonEvent(request.event)) {
-        socket.write(serializeResponse({ id: request.id, ok: false, error: 'Invalid event envelope' }));
+        this.respond(socket, { id: request.id, ok: false, error: 'Invalid event envelope' });
         return;
       }
 
       const accepted = this.bus.publish(request.event);
-      socket.write(serializeResponse({
+      this.respond(socket, {
         id: request.id,
         ok: true,
         result: {
           accepted,
           reason: accepted ? undefined : 'event queue is full',
         },
-      }));
+      });
 
       this.log('debug', `event accepted=${accepted} type=${request.event.type} source=${request.event.source}`);
     }
