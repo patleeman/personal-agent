@@ -49,6 +49,14 @@ export function getStateRoot(): string {
     : getDefaultStateRoot();
 }
 
+export function getPiAgentStateDir(stateRoot: string = getStateRoot()): string {
+  return join(stateRoot, 'pi-agent');
+}
+
+export function getPiAgentRuntimeDir(stateRoot: string = getStateRoot()): string {
+  return join(stateRoot, 'pi-agent-runtime');
+}
+
 /**
  * Default config root directory.
  *

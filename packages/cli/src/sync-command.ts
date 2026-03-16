@@ -14,7 +14,7 @@ import {
   writeFileSync,
 } from 'fs';
 import { dirname, join, relative, resolve } from 'path';
-import { getStateRoot } from '@personal-agent/core';
+import { getPiAgentRuntimeDir, getStateRoot } from '@personal-agent/core';
 import {
   emitDaemonEventNonFatal,
   getDaemonConfigFilePath,
@@ -235,7 +235,7 @@ function removeLegacySyncedDefaultProfileConfig(syncRoot: string): void {
 }
 
 function syncRepoGitignore(): string {
-  return `# personal-agent sync repo (managed by pa sync setup)\n\n*\n!.gitignore\n!.gitattributes\n!README.md\n\n# Whitelist durable-sync roots so new files/directories under them sync by default\n!profiles/\n!profiles/**\n\n!pi-agent/\n!pi-agent/**\n\n# Never sync auth/secrets or machine-local runtime bits\n.DS_Store\n**/.DS_Store\npi-agent/auth.json\npi-agent/models.json\npi-agent/settings.json\npi-agent/bin/\npi-agent/session-meta-index.json\n`;
+  return `# personal-agent sync repo (managed by pa sync setup)\n\n*\n!.gitignore\n!.gitattributes\n!README.md\n\n# Whitelist durable-sync roots so new files/directories under them sync by default\n!profiles/\n!profiles/**\n\n!pi-agent/\n!pi-agent/**\n\n# Never sync machine-local runtime leftovers from older releases\n.DS_Store\n**/.DS_Store\npi-agent/AGENTS.md\npi-agent/APPEND_SYSTEM.md\npi-agent/SYSTEM.md\npi-agent/auth.json\npi-agent/models.json\npi-agent/settings.json\npi-agent/bin/\npi-agent/session-meta-index.json\n`;
 }
 
 function syncRepoGitattributes(): string {
@@ -243,7 +243,50 @@ function syncRepoGitattributes(): string {
 }
 
 function syncRepoReadme(): string {
-  return `# personal-agent sync repo\n\nManaged by \`pa sync setup\`.\n\nThis repo tracks durable cross-machine state from sync roots:\n\n- \`profiles/**\`\n- \`pi-agent/**\` (with auth/settings/bin/index exceptions)\n\nMachine-local config (including \`config/config.json\` default profile selection) is intentionally not synced.\n`;
+  return `# personal-agent sync repo\n\nManaged by \`pa sync setup\`.\n\nThis repo tracks durable cross-machine state from sync roots:\n\n- \`profiles/**\`\n- \`pi-agent/**\` (durable sessions/state only)\n\nMachine-local runtime files such as auth, settings, generated prompt materialization, and package bins now live outside the sync repo under the local state root. Machine-local config (including \`config/config.json\` default profile selection) is intentionally not synced.\n`;
+}
+
+function migrateLegacyPiAgentRuntimeArtifacts(stateRoot: string, syncRoot: string): void {
+  const syncedPiAgentDir = join(syncRoot, 'pi-agent');
+  const runtimeAgentDir = getPiAgentRuntimeDir(stateRoot);
+
+  ensureDirectory(runtimeAgentDir);
+
+  for (const relativePath of ['auth.json', 'models.json', 'settings.json', 'session-meta-index.json', 'bin']) {
+    const sourcePath = join(syncedPiAgentDir, relativePath);
+    const sourceStats = lstatSyncSafe(sourcePath);
+    if (!sourceStats) {
+      continue;
+    }
+
+    const targetPath = join(runtimeAgentDir, relativePath);
+    const targetStats = lstatSyncSafe(targetPath);
+
+    if (!targetStats) {
+      try {
+        renameSync(sourcePath, targetPath);
+      } catch {
+        cpSync(sourcePath, targetPath, { recursive: sourceStats.isDirectory(), force: true });
+        rmSync(sourcePath, { force: true, recursive: true });
+      }
+      continue;
+    }
+
+    if (sourceStats.isDirectory() && targetStats.isDirectory()) {
+      cpSync(sourcePath, targetPath, { recursive: true, force: true });
+    }
+
+    rmSync(sourcePath, { force: true, recursive: true });
+  }
+
+  for (const relativePath of ['AGENTS.md', 'APPEND_SYSTEM.md', 'SYSTEM.md']) {
+    const targetPath = join(syncedPiAgentDir, relativePath);
+    if (!lstatSyncSafe(targetPath)) {
+      continue;
+    }
+
+    rmSync(targetPath, { force: true, recursive: true });
+  }
 }
 
 function writeManagedSyncRepoFiles(syncRoot: string): void {
@@ -420,6 +463,7 @@ async function setupSyncCommand(args: string[]): Promise<number> {
   ensureDirectory(syncRoot);
   movePathIntoSyncRoot(stateRoot, syncRoot, 'profiles');
   movePathIntoSyncRoot(stateRoot, syncRoot, 'pi-agent');
+  migrateLegacyPiAgentRuntimeArtifacts(stateRoot, syncRoot);
   const localProfileConfigPath = ensureLocalDefaultProfileConfig(stateRoot, syncRoot);
   removeLegacySyncedDefaultProfileConfig(syncRoot);
   writeManagedSyncRepoFiles(syncRoot);

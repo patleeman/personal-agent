@@ -3,10 +3,10 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync } from 'fs';
-import { mkdtemp, rm, mkdir, chmod } from 'fs/promises';
+import { existsSync, lstatSync, readlinkSync } from 'fs';
+import { mkdtemp, rm, mkdir, chmod, readFile, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { dirname, join, resolve } from 'path';
 import {
   bootstrapState,
   bootstrapStateOrThrow,
@@ -271,7 +271,7 @@ describe('preparePiAgentDir', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  it('creates runtime pi-agent directory and sessions directory', async () => {
+  it('creates a machine-local runtime dir with sessions linked to durable state', async () => {
     const statePaths: RuntimeStatePaths = {
       root: join(tempDir, 'state'),
       auth: join(tempDir, 'state', 'auth'),
@@ -284,8 +284,36 @@ describe('preparePiAgentDir', () => {
       copyLegacyAuth: false,
     });
 
-    expect(result.agentDir).toBe(join(statePaths.root, 'pi-agent'));
-    expect(result.sessionsDir).toBe(join(statePaths.root, 'pi-agent', 'sessions'));
+    expect(result.agentDir).toBe(join(statePaths.root, 'pi-agent-runtime'));
+    expect(result.sessionsDir).toBe(join(statePaths.root, 'pi-agent-runtime', 'sessions'));
     expect(result.copiedLegacyAuth).toBe(false);
+    expect(lstatSync(result.sessionsDir).isSymbolicLink()).toBe(true);
+    expect(resolve(dirname(result.sessionsDir), readlinkSync(result.sessionsDir)))
+      .toBe(join(statePaths.root, 'pi-agent', 'sessions'));
+  });
+
+  it('moves machine-local runtime artifacts out of the durable synced pi-agent dir', async () => {
+    const statePaths: RuntimeStatePaths = {
+      root: join(tempDir, 'state'),
+      auth: join(tempDir, 'state', 'auth'),
+      session: join(tempDir, 'state', 'session'),
+      cache: join(tempDir, 'state', 'cache'),
+    };
+
+    const staleAgentsFile = join(statePaths.root, 'pi-agent', 'AGENTS.md');
+    const staleSettingsFile = join(statePaths.root, 'pi-agent', 'settings.json');
+    const runtimeSettingsFile = join(statePaths.root, 'pi-agent-runtime', 'settings.json');
+    await mkdir(join(statePaths.root, 'pi-agent'), { recursive: true });
+    await writeFile(staleAgentsFile, '# stale\n');
+    await writeFile(staleSettingsFile, '{"theme":"legacy"}\n');
+
+    await preparePiAgentDir({
+      statePaths,
+      copyLegacyAuth: false,
+    });
+
+    expect(existsSync(staleAgentsFile)).toBe(false);
+    expect(existsSync(staleSettingsFile)).toBe(false);
+    expect(await readFile(runtimeSettingsFile, 'utf-8')).toContain('legacy');
   });
 });

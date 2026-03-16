@@ -15,16 +15,16 @@
 
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
-import { getStateRoot } from '@personal-agent/core';
+import { getPiAgentRuntimeDir, getPiAgentStateDir } from '@personal-agent/core';
 import {
   SessionManager,
   type SessionEntry,
 } from '@mariozechner/pi-coding-agent';
 import { readSessionContextUsageFromFile, type SessionContextUsageSnapshot } from './sessionContextUsage.js';
 
-export const DEFAULT_SESSIONS_DIR = join(getStateRoot(), 'pi-agent', 'sessions');
+export const DEFAULT_SESSIONS_DIR = join(getPiAgentStateDir(), 'sessions');
 export const SESSIONS_DIR = DEFAULT_SESSIONS_DIR;
-export const DEFAULT_SESSIONS_INDEX_FILE = join(getStateRoot(), 'pi-agent', 'session-meta-index.json');
+export const DEFAULT_SESSIONS_INDEX_FILE = join(getPiAgentRuntimeDir(), 'session-meta-index.json');
 export const SESSIONS_INDEX_FILE = DEFAULT_SESSIONS_INDEX_FILE;
 
 // ── Raw JSONL types ────────────────────────────────────────────────────────────
@@ -184,8 +184,15 @@ function resolveSessionsDir(): string {
 }
 
 function resolveSessionsIndexFile(): string {
-  const sessionsDir = resolveSessionsDir();
-  return process.env.PA_SESSIONS_INDEX_FILE ?? join(dirname(sessionsDir), 'session-meta-index.json');
+  if (process.env.PA_SESSIONS_INDEX_FILE) {
+    return process.env.PA_SESSIONS_INDEX_FILE;
+  }
+
+  if (process.env.PA_SESSIONS_DIR) {
+    return join(dirname(process.env.PA_SESSIONS_DIR), 'session-meta-index.json');
+  }
+
+  return DEFAULT_SESSIONS_INDEX_FILE;
 }
 
 function parseJsonLine(rawLine: string): RawLine | null {
