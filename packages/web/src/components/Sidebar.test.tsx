@@ -118,4 +118,32 @@ describe('Sidebar', () => {
     expect(html).toContain('Deferred ');
     expect(html).toContain('1 scheduled · next in 58s');
   });
+
+  it('renders new chat below the top nav and above pinned conversations', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/inbox']}>
+        <SseConnectionContext.Provider value={{ status: 'offline' }}>
+          <AppDataContext.Provider value={{
+            activity: { entries: [], unreadCount: 0 },
+            projects: null,
+            sessions: [createSession()],
+            tasks: null,
+            runs: null,
+            setActivity: () => {},
+            setProjects: () => {},
+            setSessions: () => {},
+            setTasks: () => {},
+            setRuns: () => {},
+          }}>
+            <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: () => {} }}>
+              <Sidebar />
+            </LiveTitlesContext.Provider>
+          </AppDataContext.Provider>
+        </SseConnectionContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html.indexOf('Projects')).toBeLessThan(html.indexOf('New chat'));
+    expect(html.indexOf('New chat')).toBeLessThan(html.indexOf('Pinned'));
+  });
 });

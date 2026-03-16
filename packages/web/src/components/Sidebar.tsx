@@ -698,18 +698,6 @@ export function Sidebar() {
         <span className="text-[13px] font-semibold text-primary truncate flex-1">{getSidebarBrandLabel(status?.profile)}</span>
       </div>
 
-      <div className="px-1 pb-2">
-        <button
-          onClick={handleNewConversation}
-          className="ui-sidebar-nav-item"
-          style={{ width: 'calc(100% - 8px)' }}
-          title={`New chat (${SIDEBAR_NEW_CHAT_HOTKEY})`}
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70"><path d="M12 5v14M5 12h14"/></svg>
-          New chat
-        </button>
-      </div>
-
       <div className="pb-1 space-y-0.5">
         <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={inboxCount} />
         <TopActionButton
@@ -724,6 +712,18 @@ export function Sidebar() {
       </div>
 
       <div className="mx-3 border-t border-border-subtle my-2" />
+
+      <div className="px-1 pb-2">
+        <button
+          onClick={handleNewConversation}
+          className="ui-sidebar-nav-item"
+          style={{ width: 'calc(100% - 8px)' }}
+          title={`New chat (${SIDEBAR_NEW_CHAT_HOTKEY})`}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70"><path d="M12 5v14M5 12h14"/></svg>
+          New chat
+        </button>
+      </div>
 
       <div className="flex-1 overflow-y-auto min-h-0 pb-2">
         <SectionHeader
