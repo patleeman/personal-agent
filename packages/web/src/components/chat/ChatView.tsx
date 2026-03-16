@@ -299,6 +299,36 @@ export function renderText(text: string) {
   return renderSkillAwareText(text);
 }
 
+function formatSummaryPreviewLine(line: string) {
+  if (/^#{1,6}\s+/.test(line)) {
+    return line.replace(/^#{1,6}\s+/, '');
+  }
+
+  if (/^[-*+]\s+/.test(line)) {
+    return `• ${line.replace(/^[-*+]\s+/, '')}`;
+  }
+
+  return line;
+}
+
+function buildSummaryPreview(text: string, maxLines: number) {
+  const previewLines: string[] = [];
+
+  for (const rawLine of text.split('\n')) {
+    const trimmed = rawLine.trim();
+    if (trimmed.length === 0) {
+      continue;
+    }
+
+    previewLines.push(formatSummaryPreviewLine(trimmed));
+    if (previewLines.length >= maxLines) {
+      break;
+    }
+  }
+
+  return previewLines.join('\n');
+}
+
 // ── Copy button ───────────────────────────────────────────────────────────────
 
 async function copyTextToClipboard(text: string): Promise<boolean> {
@@ -1127,6 +1157,13 @@ function SummaryMessage({
     ? 'border-warning/25 bg-warning/10 text-warning'
     : 'border-teal/25 bg-teal/10 text-teal';
   const labelClass = isCompaction ? 'text-warning' : 'text-teal';
+  const previewLineCount = 4;
+  const shouldCollapse = isCompaction;
+  const previewText = useMemo(
+    () => (isCompaction ? buildSummaryPreview(block.text, previewLineCount) : ''),
+    [block.text, isCompaction],
+  );
+  const [expanded, setExpanded] = useState(() => !isCompaction);
 
   return (
     <div className="group">
@@ -1143,9 +1180,24 @@ function SummaryMessage({
             </div>
             <p className="text-[12px] leading-relaxed text-secondary">{detail}</p>
             <div className="text-primary">
-              {renderText(block.text)}
+              {shouldCollapse && !expanded ? (
+                <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-primary">{previewText}</p>
+              ) : (
+                renderText(block.text)
+              )}
             </div>
-            <div className="flex items-center justify-end gap-2 pt-0.5">
+            <div className="flex flex-wrap items-center gap-2 pt-0.5">
+              {shouldCollapse && (
+                <button
+                  type="button"
+                  className="ui-action-button text-[11px]"
+                  aria-expanded={expanded}
+                  onClick={() => setExpanded(current => !current)}
+                >
+                  {expanded ? 'Hide summary' : 'Show summary'}
+                </button>
+              )}
+              <span className="flex-1" />
               <MsgActions text={`${block.title}\n\n${block.text}`} />
             </div>
           </div>
