@@ -28,6 +28,7 @@ import type {
   ActivitySnapshot,
   AppEvent,
   AppEventTopic,
+  DurableRunListResult,
   ProjectRecord,
   ScheduledTaskSummary,
   SessionMeta,
@@ -56,6 +57,7 @@ export function App() {
   const [projects, setProjectsState] = useState<ProjectRecord[] | null>(null);
   const [sessions, setSessionsState] = useState<SessionMeta[] | null>(null);
   const [tasks, setTasksState] = useState<ScheduledTaskSummary[] | null>(null);
+  const [runs, setRunsState] = useState<DurableRunListResult | null>(null);
   const openedOnceRef = useRef(false);
 
   const setTitle = useCallback((id: string, title: string) => {
@@ -83,13 +85,18 @@ export function App() {
     setTasksState(items);
   }, []);
 
+  const setRuns = useCallback((result: DurableRunListResult) => {
+    setRunsState(result);
+  }, []);
+
   const bootstrapSnapshots = useCallback(async () => {
     try {
-      const [activityEntries, projectItems, sessionItems, taskItems] = await Promise.all([
+      const [activityEntries, projectItems, sessionItems, taskItems, runResult] = await Promise.all([
         api.activity(),
         api.projects(),
         fetchSessionsSnapshot(),
         api.tasks(),
+        api.runs(),
       ]);
 
       setActivity({
@@ -99,10 +106,11 @@ export function App() {
       setProjects(projectItems);
       setSessions(sessionItems);
       setTasks(taskItems);
+      setRuns(runResult);
     } catch {
       // Ignore bootstrap failures — manual refresh + SSE reconnect remain available.
     }
-  }, [setActivity, setProjects, setSessions, setTasks]);
+  }, [setActivity, setProjects, setRuns, setSessions, setTasks]);
 
   useEffect(() => {
     const es = new EventSource('/api/events');
@@ -143,6 +151,9 @@ export function App() {
         case 'tasks_snapshot':
           setTasks(payload.tasks);
           return;
+        case 'runs_snapshot':
+          setRuns(payload.result);
+          return;
         case 'invalidate':
           setEventVersions((prev) => {
             const next = { ...prev };
@@ -170,12 +181,12 @@ export function App() {
       es.close();
       setSseStatus('offline');
     };
-  }, [bootstrapSnapshots, setActivity, setProjects, setSessions, setTasks, setTitle]);
+  }, [bootstrapSnapshots, setActivity, setProjects, setRuns, setSessions, setTasks, setTitle]);
 
   return (
     <AppEventsContext.Provider value={{ versions: eventVersions }}>
       <SseConnectionContext.Provider value={{ status: sseStatus }}>
-        <AppDataContext.Provider value={{ activity, projects, sessions, tasks, setActivity, setProjects, setSessions, setTasks }}>
+        <AppDataContext.Provider value={{ activity, projects, sessions, tasks, runs, setActivity, setProjects, setSessions, setTasks, setRuns }}>
           <LiveTitlesContext.Provider value={{ titles: titleMap, setTitle }}>
             <ThemeProvider>
               <BrowserRouter>

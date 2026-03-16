@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
-import { useAppData } from '../contexts';
-import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
+import { useAppData, useSseConnection } from '../contexts';
+import { useDurableRunStream } from '../hooks/useDurableRunStream';
 import {
   getRunCategory,
   getRunConnections,
@@ -15,7 +15,7 @@ import {
   type RunCategory,
   type RunPresentationLookups,
 } from '../runPresentation';
-import type { DurableRunDetailResult, DurableRunListResult, DurableRunRecord } from '../types';
+import type { DurableRunDetailResult, DurableRunRecord } from '../types';
 import { formatDate } from '../utils';
 import { EmptyState, ErrorState, LoadingState, PageHeader, PageHeading, ToolbarButton, cx } from '../components/ui';
 
@@ -289,93 +289,50 @@ function RunDetail({
 
 export function RunsPage() {
   const { id: selectedId } = useParams<{ id?: string }>();
-  const { tasks, sessions } = useAppData();
-  const [listResult, setListResult] = useState<DurableRunListResult | null>(null);
-  const [listError, setListError] = useState<string | null>(null);
-  const [loadingList, setLoadingList] = useState(true);
-  const [detail, setDetail] = useState<DurableRunDetailResult | null>(null);
-  const [detailError, setDetailError] = useState<string | null>(null);
-  const [detailLog, setDetailLog] = useState<{ path: string; log: string } | null>(null);
-  const [loadingDetail, setLoadingDetail] = useState(false);
+  const { tasks, sessions, runs, setRuns } = useAppData();
+  const { status: sseStatus } = useSseConnection();
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const [cancellingRunId, setCancellingRunId] = useState<string | null>(null);
   const [filter, setFilter] = useState<RunFilterValue>('all');
 
   const lookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
+  const {
+    detail,
+    log: detailLog,
+    loading: loadingDetail,
+    error: detailError,
+    reconnect: reconnectSelectedRun,
+  } = useDurableRunStream(selectedId ?? null, 120);
 
   const refreshRuns = useCallback(async () => {
-    setLoadingList(true);
     try {
       const next = await api.runs();
-      setListResult(next);
-      setListError(null);
+      setRuns(next);
+      setRefreshError(null);
       return next;
     } catch (error) {
-      setListError(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      setRefreshError(message);
       return null;
-    } finally {
-      setLoadingList(false);
     }
-  }, []);
-
-  const loadDetail = useCallback(async (runId: string) => {
-    setLoadingDetail(true);
-    try {
-      const [nextDetail, nextLog] = await Promise.all([
-        api.durableRun(runId),
-        api.durableRunLog(runId, 120),
-      ]);
-      setDetail(nextDetail);
-      setDetailLog(nextLog);
-      setDetailError(null);
-    } catch (error) {
-      setDetail(null);
-      setDetailLog(null);
-      setDetailError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setLoadingDetail(false);
-    }
-  }, []);
+  }, [setRuns]);
 
   const handleCancelRun = useCallback(async (runId: string) => {
     setCancellingRunId(runId);
     try {
       await api.cancelDurableRun(runId);
       await refreshRuns();
-      await loadDetail(runId);
+      reconnectSelectedRun();
     } catch (error) {
-      setDetailError(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      setRefreshError(message);
     } finally {
       setCancellingRunId(null);
     }
-  }, [loadDetail, refreshRuns]);
+  }, [reconnectSelectedRun, refreshRuns]);
 
-  const refetchRuns = useCallback(async () => {
-    await refreshRuns();
-    if (selectedId) {
-      await loadDetail(selectedId);
-    }
-  }, [loadDetail, refreshRuns, selectedId]);
-
-  useInvalidateOnTopics(['runs'], refetchRuns);
-
-  useEffect(() => {
-    void refreshRuns();
-  }, [refreshRuns]);
-
-  useEffect(() => {
-    if (!selectedId) {
-      setDetail(null);
-      setDetailLog(null);
-      setDetailError(null);
-      setLoadingDetail(false);
-      return;
-    }
-
-    void loadDetail(selectedId);
-  }, [loadDetail, selectedId]);
-
-  const runs = useMemo(() => {
-    const next = [...(listResult?.runs ?? [])];
+  const runRecords = useMemo(() => {
+    const next = [...(runs?.runs ?? [])];
     next.sort((a, b) => {
       const byTime = getRunSortTimestamp(b).localeCompare(getRunSortTimestamp(a));
       if (byTime !== 0) {
@@ -385,10 +342,15 @@ export function RunsPage() {
       return b.runId.localeCompare(a.runId);
     });
     return next;
-  }, [listResult?.runs]);
+  }, [runs]);
+
+  const isLoading = runs === null && sseStatus !== 'offline';
+  const visibleError = runs === null && sseStatus === 'offline'
+    ? refreshError ?? 'Live updates are offline. Use refresh to load the latest executions.'
+    : refreshError;
 
   const filterCounts = useMemo(() => {
-    return runs.reduce<Record<RunCategory, number>>((counts, run) => {
+    return runRecords.reduce<Record<RunCategory, number>>((counts, run) => {
       counts[getRunCategory(run)] += 1;
       return counts;
     }, {
@@ -398,7 +360,7 @@ export function RunsPage() {
       background: 0,
       other: 0,
     });
-  }, [runs]);
+  }, [runRecords]);
 
   const filterOptions = useMemo(() => {
     return RUN_FILTERS.filter((option) => option.value === 'all' || filterCounts[option.value] > 0);
@@ -412,32 +374,32 @@ export function RunsPage() {
 
   const filteredRuns = useMemo(() => {
     if (filter === 'all') {
-      return runs;
+      return runRecords;
     }
 
-    return runs.filter((run) => getRunCategory(run) === filter);
-  }, [filter, runs]);
+    return runRecords.filter((run) => getRunCategory(run) === filter);
+  }, [filter, runRecords]);
 
   const summary = useMemo(() => {
-    const running = runs.filter((run) => {
+    const running = runRecords.filter((run) => {
       const status = run.status?.status;
       return status === 'running' || status === 'recovering';
     }).length;
-    const needsRecovery = runs.filter((run) => run.recoveryAction === 'resume' || run.recoveryAction === 'rerun').length;
-    const issues = runs.filter((run) => run.problems.length > 0 || run.recoveryAction === 'invalid').length;
+    const needsRecovery = runRecords.filter((run) => run.recoveryAction === 'resume' || run.recoveryAction === 'rerun').length;
+    const issues = runRecords.filter((run) => run.problems.length > 0 || run.recoveryAction === 'invalid').length;
 
     return { running, needsRecovery, issues };
-  }, [runs]);
+  }, [runRecords]);
 
   return (
     <div className="flex flex-col h-full">
-      <PageHeader actions={<ToolbarButton onClick={() => { void refreshRuns(); if (selectedId) void loadDetail(selectedId); }}>↻ Refresh</ToolbarButton>}>
+      <PageHeader actions={<ToolbarButton onClick={() => { void refreshRuns(); reconnectSelectedRun(); }}>↻ Refresh</ToolbarButton>}>
         <PageHeading
           title="Executions"
           meta={(
-            listResult && (
+            runs && (
               <>
-                {listResult.summary.total} {listResult.summary.total === 1 ? 'execution' : 'executions'}
+                {runs.summary.total} {runs.summary.total === 1 ? 'execution' : 'executions'}
                 {summary.running > 0 && <span className="ml-2 text-accent">· {summary.running} active</span>}
                 {summary.needsRecovery > 0 && <span className="ml-2 text-warning">· {summary.needsRecovery} recoverable</span>}
                 {summary.issues > 0 && <span className="ml-2 text-danger">· {summary.issues} with issues</span>}
@@ -449,14 +411,14 @@ export function RunsPage() {
       </PageHeader>
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        {loadingList && <LoadingState label="Loading executions…" />}
-        {listError && <ErrorState message={`Failed to load executions: ${listError}`} />}
+        {isLoading && <LoadingState label="Loading executions…" />}
+        {visibleError && <ErrorState message={`Failed to load executions: ${visibleError}`} />}
 
-        {!loadingList && !listError && runs.length > 0 && (
+        {!isLoading && !visibleError && runRecords.length > 0 && (
           <div className="mb-5">
             <div className="ui-segmented-control" role="group" aria-label="Execution filter">
               {filterOptions.map((option) => {
-                const count = option.value === 'all' ? runs.length : filterCounts[option.value];
+                const count = option.value === 'all' ? runRecords.length : filterCounts[option.value];
                 return (
                   <button
                     key={option.value}
@@ -472,7 +434,7 @@ export function RunsPage() {
           </div>
         )}
 
-        {!loadingList && !listError && selectedId && (
+        {!isLoading && !visibleError && selectedId && (
           <RunDetail
             detail={detail}
             log={detailLog}
@@ -484,7 +446,7 @@ export function RunsPage() {
           />
         )}
 
-        {!loadingList && !listError && runs.length === 0 && (
+        {!isLoading && !visibleError && runRecords.length === 0 && (
           <EmptyState
             title="No executions yet."
             body={(
@@ -495,7 +457,7 @@ export function RunsPage() {
           />
         )}
 
-        {!loadingList && !listError && runs.length > 0 && filteredRuns.length === 0 && (
+        {!isLoading && !visibleError && runRecords.length > 0 && filteredRuns.length === 0 && (
           <EmptyState
             title="No executions match this filter."
             body="Try another execution type or switch back to all."
@@ -503,7 +465,7 @@ export function RunsPage() {
           />
         )}
 
-        {!loadingList && !listError && filteredRuns.length > 0 && (
+        {!isLoading && !visibleError && filteredRuns.length > 0 && (
           <div className="space-y-px">
             {filteredRuns.map((run) => (
               <RunRow key={run.runId} run={run} isSelected={run.runId === selectedId} lookups={lookups} />

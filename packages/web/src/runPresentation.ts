@@ -86,19 +86,30 @@ function conversationLabel(run: DurableRunRecord, lookups: RunPresentationLookup
     || sourceType === 'web-live-session'
     || sourceType === 'deferred-resume';
 
-  if (!isConversationRun) {
-    return {};
+  if (isConversationRun) {
+    const conversationId = sourceType === 'web-live-session'
+      ? run.manifest?.source?.id ?? readSpec(run, 'conversationId') ?? readCheckpoint(run, 'conversationId')
+      : readCheckpoint(run, 'conversationId') ?? readSpec(run, 'conversationId');
+    const title = readCheckpoint(run, 'title') ?? sessionById(lookups, conversationId)?.title;
+
+    return {
+      title,
+      conversationId,
+    };
   }
 
-  const conversationId = sourceType === 'web-live-session'
-    ? run.manifest?.source?.id ?? readSpec(run, 'conversationId') ?? readCheckpoint(run, 'conversationId')
-    : readCheckpoint(run, 'conversationId') ?? readSpec(run, 'conversationId');
-  const title = readCheckpoint(run, 'title') ?? sessionById(lookups, conversationId)?.title;
+  if (run.manifest?.kind === 'background-run' && sourceType === 'tool') {
+    const conversationId = run.manifest.source?.id;
+    const session = sessionById(lookups, conversationId);
+    if (session) {
+      return {
+        title: session.title,
+        conversationId: session.id,
+      };
+    }
+  }
 
-  return {
-    title,
-    conversationId,
-  };
+  return {};
 }
 
 export function getRunCategory(run: DurableRunRecord): RunCategory {

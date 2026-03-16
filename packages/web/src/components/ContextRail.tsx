@@ -16,6 +16,7 @@ import { useReloadState } from '../reloadState';
 import {
   getRunConnections,
   getRunHeadline,
+  getRunSortTimestamp,
   getRunTimeline,
   type RunPresentationLookups,
 } from '../runPresentation';
@@ -25,6 +26,7 @@ import {
   pickFocusedProjectId,
 } from '../contextRailProject';
 import { useApi } from '../hooks';
+import { useDurableRunStream } from '../hooks/useDurableRunStream';
 import { useConversations } from '../hooks/useConversations';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { buildCapabilityCards, buildIdentitySummary, buildKnowledgeSections, buildMemoryPageSummary } from '../memoryOverview';
@@ -112,12 +114,15 @@ function ConversationRunContextPanel({ conversationId, runId }: { conversationId
   const location = useLocation();
   const navigate = useNavigate();
   const { tasks, sessions } = useAppData();
-  const [detail, setDetail] = useState<DurableRunDetailResult | null>(null);
-  const [log, setLog] = useState<{ path: string; log: string } | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const lookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
+  const {
+    detail,
+    log,
+    loading,
+    error,
+    reconnect,
+  } = useDurableRunStream(runId, 120);
 
   const closeRun = useCallback(() => {
     navigate({
@@ -125,43 +130,6 @@ function ConversationRunContextPanel({ conversationId, runId }: { conversationId
       search: setConversationRunIdInSearch(location.search, null),
     });
   }, [location.pathname, location.search, navigate]);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [nextDetail, nextLog] = await Promise.all([
-        api.durableRun(runId),
-        api.durableRunLog(runId, 120),
-      ]);
-      setDetail(nextDetail);
-      setLog(nextLog);
-      setError(null);
-    } catch (nextError) {
-      setDetail(null);
-      setLog(null);
-      setError(nextError instanceof Error ? nextError.message : 'Could not load execution.');
-    } finally {
-      setLoading(false);
-    }
-  }, [runId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  useEffect(() => {
-    if (!isRefreshingRun(detail?.run ?? null)) {
-      return;
-    }
-
-    const handle = window.setInterval(() => {
-      void load();
-    }, 2000);
-
-    return () => {
-      window.clearInterval(handle);
-    };
-  }, [detail?.run, load]);
 
   async function handleCancel() {
     if (!detail || cancelling || !canCancelRun(detail.run)) {
@@ -171,9 +139,7 @@ function ConversationRunContextPanel({ conversationId, runId }: { conversationId
     setCancelling(true);
     try {
       await api.cancelDurableRun(detail.run.runId);
-      await load();
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Could not cancel execution.');
+      reconnect();
     } finally {
       setCancelling(false);
     }
@@ -207,7 +173,7 @@ function ConversationRunContextPanel({ conversationId, runId }: { conversationId
           ← Session
         </button>
         <div className="flex items-center gap-1.5">
-          <button type="button" onClick={() => { void load(); }} className="ui-toolbar-button">
+          <button type="button" onClick={reconnect} className="ui-toolbar-button">
             ↻ Refresh
           </button>
           <Link to={`/runs/${encodeURIComponent(runId)}`} className="ui-toolbar-button text-accent" title="Open on the executions page">
@@ -624,6 +590,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const runLookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
   const isSessionRunning = Boolean(sessions?.find((session) => session.id === id)?.isRunning);
   const runMentionsLastFetchedAtRef = useRef(0);
+  const autoExpandedConnectedRunsConversationIdRef = useRef<string | null>(null);
 
   useEffect(() => load(), [load]);
   useEffect(() => {
@@ -632,6 +599,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
 
   useEffect(() => {
     runMentionsLastFetchedAtRef.current = 0;
+    autoExpandedConnectedRunsConversationIdRef.current = null;
   }, [id]);
 
   useEffect(() => {
@@ -700,17 +668,32 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const selectedAttachProject = availableProjects.find((project) => project.id === attachProjectId) ?? null;
   const selectedRunId = getConversationRunIdFromSearch(location.search);
   const currentConversationRunId = createConversationLiveRunId(id);
+  const connectedBackgroundRuns = useMemo(() => {
+    return [...runRecordsById.values()]
+      .filter((run) => run.runId !== currentConversationRunId)
+      .filter((run) => run.manifest?.kind === 'background-run')
+      .filter((run) => getRunConnections(run, runLookups).some((connection) => connection.key === `conversation:${id}`))
+      .sort((left, right) => {
+        const leftActive = isRefreshingRun(left) ? 1 : 0;
+        const rightActive = isRefreshingRun(right) ? 1 : 0;
+        if (leftActive !== rightActive) {
+          return rightActive - leftActive;
+        }
+
+        return getRunSortTimestamp(right).localeCompare(getRunSortTimestamp(left));
+      });
+  }, [currentConversationRunId, id, runLookups, runRecordsById]);
   const visibleRunMentions = useMemo(() => {
     const next: Array<{
       runId: string;
       label: string;
       meta: string;
       selected: boolean;
-      kind: 'conversation' | 'mentioned';
+      kind: 'conversation' | 'connected' | 'mentioned';
     }> = [];
     const seen = new Set<string>();
 
-    const push = (runId: string, label: string, meta: string, kind: 'conversation' | 'mentioned') => {
+    const push = (runId: string, label: string, meta: string, kind: 'conversation' | 'connected' | 'mentioned') => {
       if (seen.has(runId)) {
         return;
       }
@@ -727,6 +710,10 @@ function LiveSessionContextPanel({ id }: { id: string }) {
 
     push(currentConversationRunId, 'Conversation execution', 'Tracks this conversation state and recovery metadata.', 'conversation');
 
+    for (const run of connectedBackgroundRuns) {
+      push(run.runId, run.runId, 'Started from this conversation.', 'connected');
+    }
+
     for (const mention of detectedRunMentions) {
       const mentionMeta = mention.mentionCount > 1
         ? `Mentioned ${mention.mentionCount} times · last seen ${timeAgo(mention.lastSeenAt)}`
@@ -735,7 +722,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     }
 
     return next;
-  }, [currentConversationRunId, detectedRunMentions, selectedRunId]);
+  }, [connectedBackgroundRuns, currentConversationRunId, detectedRunMentions, selectedRunId]);
 
   const visibleRunCards = useMemo(() => {
     return visibleRunMentions.map((mention) => {
@@ -785,21 +772,19 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     return parts.join(' · ');
   }, [activeRunCount, runIssueCount, runsLoading, unresolvedRunCount, visibleRunCards]);
 
-  const shouldPollRuns = visibleRunCards.some(({ record }) => !record || isRefreshingRun(record));
-
   useEffect(() => {
-    if (!shouldPollRuns) {
+    if (runsExpanded || selectedRunId || autoExpandedConnectedRunsConversationIdRef.current === id) {
       return;
     }
 
-    const handle = window.setInterval(() => {
-      void loadRuns();
-    }, 3000);
+    const hasActiveConnectedRun = connectedBackgroundRuns.some((run) => isRefreshingRun(run));
+    if (!hasActiveConnectedRun) {
+      return;
+    }
 
-    return () => {
-      window.clearInterval(handle);
-    };
-  }, [loadRuns, shouldPollRuns]);
+    autoExpandedConnectedRunsConversationIdRef.current = id;
+    setRunsExpanded(true);
+  }, [connectedBackgroundRuns, id, runsExpanded, selectedRunId]);
 
   useEffect(() => {
     const nextFocusedProjectId = pickFocusedProjectId(relatedProjectIds, focusedProjectId);
@@ -1206,6 +1191,9 @@ function LiveSessionContextPanel({ id }: { id: string }) {
                           <p className="truncate text-[12px] font-medium text-primary">{title}</p>
                           {mention.kind === 'conversation' && (
                             <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-dim">session</span>
+                          )}
+                          {mention.kind === 'connected' && (
+                            <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-dim">linked</span>
                           )}
                         </div>
                         <p className="mt-0.5 text-[11px] text-secondary break-words">{summary}</p>
