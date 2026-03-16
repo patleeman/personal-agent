@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm';
 import { formatProjectStatus } from '../contextRailProject';
 import type { ProjectBrief, ProjectFile, ProjectNote } from '../types';
 import { timeAgo } from '../utils';
-import type { ProjectActivityItemShape } from './projectDetailState';
+import { summarizeActivityPreview, type ProjectActivityItemShape } from './projectDetailState';
 import { ProjectFileRow, ProjectNoteRow } from './ProjectDetailForms';
 import { EmptyState, Pill, ToolbarButton } from './ui';
 
@@ -157,70 +157,149 @@ export function ProjectCompletionContent({
   );
 }
 
+const TIMELINE_DAY_FORMAT = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+});
+
+const TIMELINE_TIME_FORMAT = new Intl.DateTimeFormat('en-US', {
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
+function parseTimelineDate(value: string | undefined): Date | null {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatTimelineDay(value: string | undefined): string | null {
+  const parsed = parseTimelineDate(value);
+  return parsed ? TIMELINE_DAY_FORMAT.format(parsed) : null;
+}
+
+function formatTimelineTime(value: string | undefined): string | null {
+  const parsed = parseTimelineDate(value);
+  return parsed ? TIMELINE_TIME_FORMAT.format(parsed) : null;
+}
+
+function timelineTimestamp(item: ProjectActivityItemShape): string | undefined {
+  return item.kind === 'conversation' ? item.conversation.lastActivityAt : item.entry.createdAt;
+}
+
+function timelineMarkerClass(item: ProjectActivityItemShape): string {
+  if (item.kind === 'conversation') {
+    return 'bg-teal';
+  }
+
+  switch (item.entry.kind) {
+    case 'brief':
+      return 'bg-accent';
+    case 'artifact':
+      return 'bg-steel';
+    case 'attachment':
+      return 'bg-secondary';
+    case 'activity':
+      return 'bg-warning';
+    default:
+      return 'bg-border-default';
+  }
+}
+
+function timelinePreview(item: ProjectActivityItemShape): string | undefined {
+  return item.kind === 'conversation'
+    ? summarizeActivityPreview(item.conversation.snippet, 180)
+    : summarizeActivityPreview(item.entry.description, 180);
+}
+
 export function ProjectActivityContent({
   items,
 }: {
   items: ProjectActivityItemShape[];
 }) {
+  if (items.length === 0) {
+    return (
+      <div className="max-w-5xl py-4">
+        <EmptyState
+          title="No project timeline yet."
+          body="Conversations, notes, brief updates, and uploaded resources will collect here as the project moves forward."
+          className="max-w-3xl py-8"
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-5xl space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
-      {items.length === 0 ? (
-        <div className="py-4">
-          <EmptyState
-            title="No project activity yet."
-            body="Conversations, notes, brief updates, and uploaded resources will collect here as the project moves forward."
-            className="max-w-3xl py-8"
-          />
-        </div>
-      ) : items.map((item) => {
-        if (item.kind === 'conversation') {
-          const conversation = item.conversation;
-          return (
-            <article key={item.id} className="py-4 space-y-2">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 space-y-1.5">
+    <div className="max-w-5xl relative">
+      <div className="pointer-events-none absolute bottom-4 left-[7.25rem] top-4 hidden w-px -translate-x-1/2 bg-border-subtle sm:block" aria-hidden="true" />
+      <div>
+        {items.map((item) => {
+          const at = timelineTimestamp(item);
+          const dayLabel = formatTimelineDay(at);
+          const timeLabel = formatTimelineTime(at);
+          const preview = timelinePreview(item);
+
+          if (item.kind === 'conversation') {
+            const conversation = item.conversation;
+            return (
+              <article key={item.id} className="grid gap-2 py-4 sm:grid-cols-[5.5rem_1.5rem_minmax(0,1fr)] sm:gap-4">
+                <div className="hidden pt-0.5 text-right sm:block">
+                  <p className="text-[11px] font-mono text-secondary">{timeLabel ?? '—'}</p>
+                  {dayLabel && <p className="mt-1 text-[11px] text-dim">{dayLabel}</p>}
+                </div>
+                <div className="hidden justify-center sm:flex">
+                  <span className={`relative z-10 mt-1.5 h-3 w-3 rounded-full border-2 border-base ${timelineMarkerClass(item)}`} />
+                </div>
+                <div className="min-w-0 space-y-1.5 pb-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <a href={`/conversations/${encodeURIComponent(conversation.conversationId)}`} className="text-[15px] font-medium text-accent hover:text-accent/75 transition-colors">
                       {conversation.title}
                     </a>
                     <Pill tone="muted">conversation</Pill>
+                    {conversation.isRunning && <Pill tone="accent">live</Pill>}
+                    {conversation.needsAttention && <Pill tone="warning">attention</Pill>}
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 text-[12px] text-dim">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-dim">
                     <span className="font-mono">{conversation.conversationId}</span>
-                    {conversation.lastActivityAt && <span>updated {timeAgo(conversation.lastActivityAt)}</span>}
-                    {conversation.cwd && <span className="font-mono break-all">{conversation.cwd}</span>}
+                    {conversation.lastActivityAt && <span>{timeAgo(conversation.lastActivityAt)}</span>}
                   </div>
+                  {preview && <p className="max-w-3xl text-[13px] leading-relaxed text-secondary">{preview}</p>}
                 </div>
-                <div className="flex items-center gap-2">
-                  {conversation.isRunning && <Pill tone="accent">live</Pill>}
-                  {conversation.needsAttention && <Pill tone="warning">attention</Pill>}
-                </div>
+              </article>
+            );
+          }
+
+          const entry = item.entry;
+          return (
+            <article key={item.id} className="grid gap-2 py-4 sm:grid-cols-[5.5rem_1.5rem_minmax(0,1fr)] sm:gap-4">
+              <div className="hidden pt-0.5 text-right sm:block">
+                <p className="text-[11px] font-mono text-secondary">{timeLabel ?? '—'}</p>
+                {dayLabel && <p className="mt-1 text-[11px] text-dim">{dayLabel}</p>}
               </div>
-              {conversation.snippet && <p className="text-[13px] leading-relaxed text-secondary">{conversation.snippet}</p>}
+              <div className="hidden justify-center sm:flex">
+                <span className={`relative z-10 mt-1.5 h-3 w-3 rounded-full border-2 border-base ${timelineMarkerClass(item)}`} />
+              </div>
+              <div className="min-w-0 space-y-1.5 pb-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  {entry.href ? (
+                    <a href={entry.href} className="text-[14px] font-medium text-accent hover:text-accent/75 transition-colors">
+                      {entry.title}
+                    </a>
+                  ) : (
+                    <p className="text-[14px] font-medium text-primary">{entry.title}</p>
+                  )}
+                  <Pill tone="muted">{formatProjectStatus(entry.kind)}</Pill>
+                </div>
+                <p className="ui-card-meta">{timeAgo(entry.createdAt)}</p>
+                {preview && <p className="max-w-3xl text-[13px] leading-relaxed text-secondary">{preview}</p>}
+              </div>
             </article>
           );
-        }
-
-        const entry = item.entry;
-        return (
-          <article key={item.id} className="py-4 flex items-start justify-between gap-4">
-            <div className="min-w-0 space-y-1.5">
-              <div className="flex flex-wrap items-center gap-2">
-                {entry.href ? (
-                  <a href={entry.href} className="text-[14px] font-medium text-accent hover:text-accent/75 transition-colors">
-                    {entry.title}
-                  </a>
-                ) : (
-                  <p className="text-[14px] font-medium text-primary">{entry.title}</p>
-                )}
-                <Pill tone="muted">{formatProjectStatus(entry.kind)}</Pill>
-              </div>
-              {entry.description && <p className="text-[13px] leading-relaxed text-secondary">{entry.description}</p>}
-            </div>
-            <span className="ui-card-meta shrink-0">{timeAgo(entry.createdAt)}</span>
-          </article>
-        );
-      })}
+        })}
+      </div>
     </div>
   );
 }
@@ -409,26 +488,36 @@ export function ProjectFilesContent({
   onDeleteFile: (file: ProjectFile) => void;
 }) {
   return (
-    <div className="max-w-5xl space-y-6">
+    <div className="max-w-5xl space-y-7">
       {uploadForm}
 
-      <div className="space-y-5">
-        <div className="space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
-          <div className="py-3"><p className="ui-card-meta">Attachments</p></div>
-          {attachments.length > 0 ? attachments.map((file) => (
-            <ProjectFileRow key={file.id} file={file} busy={fileBusy} onDelete={() => onDeleteFile(file)} />
-          )) : (
-            <div className="py-4"><p className="ui-card-meta">No attachments yet.</p></div>
-          )}
+      <div className="space-y-7">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="ui-card-meta">Attachments</p>
+            <p className="ui-card-meta">{attachments.length}</p>
+          </div>
+          <div className="divide-y divide-border-subtle border-t border-border-subtle">
+            {attachments.length > 0 ? attachments.map((file) => (
+              <ProjectFileRow key={file.id} file={file} busy={fileBusy} onDelete={() => onDeleteFile(file)} />
+            )) : (
+              <div className="py-4"><p className="ui-card-meta">No attachments yet.</p></div>
+            )}
+          </div>
         </div>
 
-        <div className="space-y-0 divide-y divide-border-subtle border-y border-border-subtle">
-          <div className="py-3"><p className="ui-card-meta">Artifacts</p></div>
-          {artifacts.length > 0 ? artifacts.map((file) => (
-            <ProjectFileRow key={file.id} file={file} busy={fileBusy} onDelete={() => onDeleteFile(file)} />
-          )) : (
-            <div className="py-4"><p className="ui-card-meta">No project artifacts yet.</p></div>
-          )}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="ui-card-meta">Artifacts</p>
+            <p className="ui-card-meta">{artifacts.length}</p>
+          </div>
+          <div className="divide-y divide-border-subtle border-t border-border-subtle">
+            {artifacts.length > 0 ? artifacts.map((file) => (
+              <ProjectFileRow key={file.id} file={file} busy={fileBusy} onDelete={() => onDeleteFile(file)} />
+            )) : (
+              <div className="py-4"><p className="ui-card-meta">No project artifacts yet.</p></div>
+            )}
+          </div>
         </div>
       </div>
     </div>

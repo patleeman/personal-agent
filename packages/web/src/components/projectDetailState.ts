@@ -168,6 +168,34 @@ function sortTimestamp(value: string | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+export function summarizeActivityPreview(value: string | undefined, maxLength = 160): string | undefined {
+  const normalized = (value ?? '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^>\s?/gm, '')
+    .replace(/^[-*+]\s+/gm, '• ')
+    .replace(/^\d+\.\s+/gm, '')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/_([^_]+)_/g, '$1')
+    .replace(/\n{2,}/g, ' · ')
+    .replace(/\n/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!normalized || normalized.replace(/[·•]/g, '').trim().length === 0) {
+    return undefined;
+  }
+
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+}
+
 export function buildActivityItems(project: ProjectDetail): ProjectActivityItemShape[] {
   return [
     ...project.linkedConversations.map((conversation) => ({
@@ -191,6 +219,14 @@ export function buildActivityItems(project: ProjectDetail): ProjectActivityItemS
         },
       })),
   ]
-    .sort((left, right) => right.sortAt - left.sortAt || left.id.localeCompare(right.id))
+    .sort((left, right) => {
+      const leftMissing = left.sortAt <= 0;
+      const rightMissing = right.sortAt <= 0;
+      if (leftMissing !== rightMissing) {
+        return leftMissing ? 1 : -1;
+      }
+
+      return left.sortAt - right.sortAt || left.id.localeCompare(right.id);
+    })
     .map(({ item }) => item);
 }
