@@ -126,7 +126,7 @@ describe('CLI command flows', () => {
 
     expect(await runCli(['tui', '--', '-p', 'Say ok'])).toBe(0);
 
-    const runtimeAgentsPath = join(stateRoot, 'pi-agent', 'AGENTS.md');
+    const runtimeAgentsPath = join(stateRoot, 'pi-agent-runtime', 'AGENTS.md');
     const runtimeAgents = readFileSync(runtimeAgentsPath, 'utf-8');
     expect(runtimeAgents).toContain('Shared');
     expect(runtimeAgents).toContain('Datadog');
@@ -158,7 +158,7 @@ describe('CLI command flows', () => {
     expect(await runCli(['profile', 'use', 'shared'])).toBe(0);
     expect(await runCli(['tui', '--profile', 'datadog', '--', '-p', 'override test'])).toBe(0);
 
-    const runtimeAgentsPath = join(stateRoot, 'pi-agent', 'AGENTS.md');
+    const runtimeAgentsPath = join(stateRoot, 'pi-agent-runtime', 'AGENTS.md');
     const runtimeAgents = readFileSync(runtimeAgentsPath, 'utf-8');
     expect(runtimeAgents).toContain('Shared');
     expect(runtimeAgents).toContain('Datadog');

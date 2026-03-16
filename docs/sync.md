@@ -18,13 +18,8 @@ The managed sync repo tracks these roots:
 - `pi-agent/**`
 - `config/**` (setup seeds `config/config.json`)
 
-Important exclusions (kept machine-local by `.gitignore`):
-
-- `pi-agent/auth.json`
-- `pi-agent/models.json`
-- `pi-agent/settings.json`
-- `pi-agent/bin/**`
-- `pi-agent/session-meta-index.json`
+Machine-local runtime files are kept outside the sync repo under `~/.local/state/personal-agent/pi-agent-runtime/**`.
+That includes auth, settings, models, generated `AGENTS.md` / `SYSTEM.md` / `APPEND_SYSTEM.md`, `bin/**`, and the session index.
 
 `config/daemon.json`, `config/gateway.json`, and `config/web.json` remain machine-local by default.
 

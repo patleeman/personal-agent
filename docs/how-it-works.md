@@ -37,7 +37,8 @@ By default it is machine-local. If you enable git sync (`pa sync setup`), select
 
 Common examples:
 
-- `~/.local/state/personal-agent/pi-agent/auth.json` (always machine-local)
+- `~/.local/state/personal-agent/pi-agent-runtime/auth.json` (always machine-local)
+- `~/.local/state/personal-agent/pi-agent-runtime/AGENTS.md` (generated runtime prompt materialization, machine-local)
 - `~/.local/state/personal-agent/pi-agent/sessions/**` (synced when sync is enabled)
 - `~/.local/state/personal-agent/daemon/**` (machine-local)
 - `~/.local/state/personal-agent/gateway/**` (machine-local)

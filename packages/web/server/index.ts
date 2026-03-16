@@ -147,6 +147,8 @@ import {
   loadProfileActivityReadState,
   markConversationAttentionRead,
   markConversationAttentionUnread,
+  getPiAgentRuntimeDir,
+  getPiAgentStateDir,
   readConversationAttachmentDownload,
   readMcpCliConfig,
   readProject,
@@ -222,9 +224,9 @@ const PORT = parseInt(process.env.PA_WEB_PORT ?? '3741', 10);
 const DEFAULT_REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? DEFAULT_REPO_ROOT;
 const DEFAULT_WEB_CWD = process.cwd();
-const AGENT_DIR = join(getStateRoot(), 'pi-agent');
+const AGENT_DIR = getPiAgentRuntimeDir();
 const AUTH_FILE = join(AGENT_DIR, 'auth.json');
-const SESSIONS_DIR = join(AGENT_DIR, 'sessions');
+const SESSIONS_DIR = join(getPiAgentStateDir(), 'sessions');
 const TASK_STATE_FILE = join(getStateRoot(), 'daemon', 'task-state.json');
 const PROFILE_CONFIG_FILE = getProfileConfigFilePath();
 const DEFERRED_RESUME_POLL_MS = 3_000;

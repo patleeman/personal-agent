@@ -126,7 +126,7 @@ describe('CLI main flow integration', () => {
     await runCli(['tui', '-p', 'test']);
 
     // Check runtime has shared content
-    const runtimeAgentsPath = join(stateRoot, 'pi-agent', 'AGENTS.md');
+    const runtimeAgentsPath = join(stateRoot, 'pi-agent-runtime', 'AGENTS.md');
     expect(existsSync(runtimeAgentsPath)).toBe(true);
     let agentsContent = readFileSync(runtimeAgentsPath, 'utf-8');
     expect(agentsContent).toContain('Shared Content');
@@ -216,7 +216,7 @@ describe('CLI main flow integration', () => {
 
     expect(await runCli(['tui', '-p', 'theme test'])).toBe(0);
 
-    const runtimeSettingsPath = join(stateRoot, 'pi-agent', 'settings.json');
+    const runtimeSettingsPath = join(stateRoot, 'pi-agent-runtime', 'settings.json');
     const runtimeSettings = JSON.parse(readFileSync(runtimeSettingsPath, 'utf-8')) as Record<string, unknown>;
 
     expect(runtimeSettings.theme).toBe('cobalt2-light');

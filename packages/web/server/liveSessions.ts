@@ -6,7 +6,8 @@
 import { appendFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  getStateRoot,
+  getPiAgentRuntimeDir,
+  getPiAgentStateDir,
 } from '@personal-agent/core';
 import {
   AgentSession,
@@ -33,9 +34,9 @@ import {
 } from './sessions.js';
 import { estimateContextUsageSegments } from './sessionContextUsage.js';
 
-const AGENT_DIR = join(getStateRoot(), 'pi-agent');
+const AGENT_DIR = getPiAgentRuntimeDir();
 const SETTINGS_FILE = join(AGENT_DIR, 'settings.json');
-const SESSIONS_DIR = join(AGENT_DIR, 'sessions');
+const SESSIONS_DIR = join(getPiAgentStateDir(), 'sessions');
 
 export function resolvePersistentSessionDir(cwd: string): string {
   const safePath = `--${cwd.replace(/^[/\\]/, '').replace(/[/\\:]/g, '-')}--`;

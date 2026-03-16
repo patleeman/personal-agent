@@ -249,8 +249,10 @@ The setup command moves syncable state under `<stateRoot>/sync`, configures the 
 Synced roots include:
 
 - `profiles/**`
-- `pi-agent/**` (with machine-local auth/settings/bin/index exclusions)
+- `pi-agent/**` (durable sessions/state only)
 - `config/**` (setup seeds `config/config.json`; daemon/gateway/web config stay machine-local)
+
+Machine-local runtime files such as auth, settings, generated prompt materialization, and `bin/**` live under `pi-agent-runtime/**` and are not synced.
 
 See [Sync Guide](./sync.md).
 

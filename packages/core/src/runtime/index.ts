@@ -9,6 +9,8 @@
 export {
   getDefaultStateRoot,
   getStateRoot,
+  getPiAgentStateDir,
+  getPiAgentRuntimeDir,
   getDefaultConfigRoot,
   getConfigRoot,
   getDefaultProfilesRoot,
