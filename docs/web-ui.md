@@ -137,6 +137,8 @@ The UI supports:
 
 A new draft conversation becomes a live session when you send the first prompt.
 
+If a deferred resume becomes ready while you already have that saved conversation open in the web UI, the page auto-resumes it and delivers the deferred prompt without requiring a manual `continue now` click.
+
 ### Projects
 
 Projects are durable cross-conversation work hubs.

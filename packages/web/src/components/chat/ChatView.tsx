@@ -786,46 +786,44 @@ function TraceClusterBlock({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-start gap-2">
-        <div className="flex-1 min-w-0 space-y-1.5">
-          <button
-            type="button"
-            onClick={() => setPreference((current) => toggleDisclosurePreference(autoOpen, current))}
-            aria-expanded={open}
-            className={panelClassName}
-          >
-            <div className="flex items-center gap-2 text-[12px]">
-              {isActive ? (
-                <span className="h-4 w-4 shrink-0 rounded-full border-[1.5px] border-current border-t-transparent animate-spin text-accent" />
-              ) : (
-                <span className={cx('w-4 shrink-0 text-center text-[11px] select-none', summary.hasError ? 'text-danger' : 'text-dim')}>⋯</span>
-              )}
-              <span className="font-medium text-primary">{title}</span>
-              <span className="text-secondary">· {summary.stepCount} step{summary.stepCount === 1 ? '' : 's'}</span>
-              <span className="flex-1" />
-              {isActive && <span className="text-[10px] uppercase tracking-[0.14em] text-accent/80">live</span>}
-              {durationLabel && !isActive && <span className="text-[11px] text-dim">{durationLabel}</span>}
-              <span className="text-[10px] text-dim">{open ? '▲ hide' : '▼ show'}</span>
-            </div>
-            {summary.categories.length > 0 && (
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                {expandedCategories.map((category) => (
-                  <Pill key={category.key} tone={traceSummaryTone(category)} mono={category.kind === 'tool'}>
-                    {category.label}{category.count > 1 ? ` ×${category.count}` : ''}
-                  </Pill>
-                ))}
-                {remainingCategoryCount > 0 && <span className="text-[11px] text-dim">+{remainingCategoryCount} more</span>}
-              </div>
+      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-2">
+        <button
+          type="button"
+          onClick={() => setPreference((current) => toggleDisclosurePreference(autoOpen, current))}
+          aria-expanded={open}
+          className={panelClassName}
+        >
+          <div className="flex items-center gap-2 text-[12px]">
+            {isActive ? (
+              <span className="h-4 w-4 shrink-0 rounded-full border-[1.5px] border-current border-t-transparent animate-spin text-accent" />
+            ) : (
+              <span className={cx('w-4 shrink-0 text-center text-[11px] select-none', summary.hasError ? 'text-danger' : 'text-dim')}>⋯</span>
             )}
-          </button>
-          <ResumeConversationAction
-            onResume={onResume}
-            busy={resumeBusy}
-            title={resumeTitle}
-            label={resumeLabel}
-            variant="inline"
-          />
-        </div>
+            <span className="font-medium text-primary">{title}</span>
+            <span className="text-secondary">· {summary.stepCount} step{summary.stepCount === 1 ? '' : 's'}</span>
+            <span className="flex-1" />
+            {isActive && <span className="text-[10px] uppercase tracking-[0.14em] text-accent/80">live</span>}
+            {durationLabel && !isActive && <span className="text-[11px] text-dim">{durationLabel}</span>}
+            <span className="text-[10px] text-dim">{open ? '▲ hide' : '▼ show'}</span>
+          </div>
+          {summary.categories.length > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {expandedCategories.map((category) => (
+                <Pill key={category.key} tone={traceSummaryTone(category)} mono={category.kind === 'tool'}>
+                  {category.label}{category.count > 1 ? ` ×${category.count}` : ''}
+                </Pill>
+              ))}
+              {remainingCategoryCount > 0 && <span className="text-[11px] text-dim">+{remainingCategoryCount} more</span>}
+            </div>
+          )}
+        </button>
+        <ResumeConversationAction
+          onResume={onResume}
+          busy={resumeBusy}
+          title={resumeTitle}
+          label={resumeLabel}
+          variant="inline"
+        />
       </div>
 
       {open && (
@@ -933,8 +931,8 @@ function ResumeConversationAction({
     return null;
   }
 
-  const compactClassName = 'shrink-0 text-[11px] font-medium text-accent transition-colors hover:text-accent/80 disabled:cursor-default disabled:text-dim';
-  const inlineClassName = 'inline-flex items-center gap-1.5 rounded-md border border-accent/35 bg-accent/10 px-2.5 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent/15 disabled:cursor-default disabled:border-border-subtle disabled:bg-surface disabled:text-dim';
+  const compactClassName = 'shrink-0 text-[11px] font-medium text-secondary transition-colors hover:text-primary disabled:cursor-default disabled:text-dim';
+  const inlineClassName = 'group inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-secondary transition-colors hover:bg-elevated hover:text-primary disabled:cursor-default disabled:text-dim disabled:hover:bg-transparent sm:self-center';
 
   return (
     <button
@@ -944,7 +942,21 @@ function ResumeConversationAction({
       title={title ?? 'Resume this conversation'}
       className={variant === 'inline' ? inlineClassName : compactClassName}
     >
-      {variant === 'inline' && <span aria-hidden className="text-[12px] leading-none">↻</span>}
+      {variant === 'inline' && (
+        busy ? (
+          <span aria-hidden className="h-3.5 w-3.5 shrink-0 rounded-full border-[1.5px] border-current border-t-transparent animate-spin text-dim" />
+        ) : (
+          <svg
+            aria-hidden
+            viewBox="0 0 16 16"
+            fill="none"
+            className="h-3.5 w-3.5 shrink-0 text-accent/75 transition-colors group-hover:text-accent"
+          >
+            <path d="M12.75 4.75V1.75M12.75 1.75H9.75M12.75 1.75L10.25 4.25" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M12.1 7.1C12.1 9.91665 9.81665 12.2 7 12.2C4.18335 12.2 1.9 9.91665 1.9 7.1C1.9 4.28335 4.18335 2 7 2C8.31638 2 9.5163 2.49883 10.4201 3.31798" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )
+      )}
       {busy ? 'opening…' : label}
     </button>
   );
