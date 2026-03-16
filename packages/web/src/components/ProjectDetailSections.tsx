@@ -1,15 +1,68 @@
-import type { FormEventHandler, ReactNode } from 'react';
+import { Children, isValidElement, type FormEventHandler, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { formatProjectStatus } from '../contextRailProject';
+import { looksLikeLocalFilesystemPath } from '../localPaths';
 import type { ProjectBrief, ProjectFile, ProjectNote } from '../types';
 import { timeAgo } from '../utils';
 import { summarizeActivityPreview, type ProjectActivityItemShape } from './projectDetailState';
+import { InlineLocalPath } from './LocalPathActions';
 import { ProjectFileRow, ProjectNoteRow } from './ProjectDetailForms';
 import { EmptyState, Pill, ToolbarButton } from './ui';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-border-default bg-base px-4 py-3 text-[15px] leading-relaxed text-primary focus:outline-none focus:border-accent/60';
+const INLINE_CODE_CLASS = 'font-mono text-[0.82em] bg-elevated px-1 py-0.5 rounded text-accent';
+
+function extractTextContent(children: ReactNode): string {
+  let text = '';
+
+  Children.forEach(children, (child) => {
+    if (typeof child === 'string' || typeof child === 'number' || typeof child === 'bigint') {
+      text += String(child);
+      return;
+    }
+
+    if (!isValidElement(child)) {
+      return;
+    }
+
+    const props = child.props as { children?: ReactNode };
+    if (props.children !== undefined) {
+      text += extractTextContent(props.children);
+    }
+  });
+
+  return text;
+}
+
+function ProjectMarkdown({ body, className }: { body: string; className?: string }) {
+  return (
+    <div className={className ?? 'ui-markdown max-w-none text-[14px]'}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkBreaks]}
+        components={{
+          code: ({ className: codeClassName, children }) => {
+            const content = extractTextContent(children).replace(/\n$/, '');
+            const isBlock = content.includes('\n') || Boolean(codeClassName?.includes('language-'));
+
+            if (!isBlock && looksLikeLocalFilesystemPath(content)) {
+              return <InlineLocalPath path={content} />;
+            }
+
+            if (!isBlock) {
+              return <code className={INLINE_CODE_CLASS}>{content}</code>;
+            }
+
+            return <code className={codeClassName}>{content}</code>;
+          },
+        }}
+      >
+        {body}
+      </ReactMarkdown>
+    </div>
+  );
+}
 
 export function ProjectRequirementsContent({
   goal,
@@ -337,9 +390,7 @@ export function ProjectHandoffDocContent({
           </div>
         </form>
       ) : brief ? (
-        <div className="ui-markdown max-w-none">
-          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{brief.content}</ReactMarkdown>
-        </div>
+        <ProjectMarkdown body={brief.content} className="ui-markdown max-w-none" />
       ) : (
         <EmptyState
           title="No handoff doc yet."
@@ -458,11 +509,7 @@ export function ProjectNotesContent({
                 onEdit={() => onEditNote(note)}
                 onDelete={() => onDeleteNote(note.id)}
               >
-                {note.body.length > 0 ? (
-                  <div className="ui-markdown max-w-none text-[14px]">
-                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{note.body}</ReactMarkdown>
-                  </div>
-                ) : null}
+                {note.body.length > 0 ? <ProjectMarkdown body={note.body} /> : null}
               </ProjectNoteRow>
             );
           })}

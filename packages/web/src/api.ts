@@ -222,6 +222,8 @@ export const api = {
   // ── Shell run ─────────────────────────────────────────────────────────────
   pickFolder: (cwd?: string) =>
     post<FolderPickerResult>('/folder-picker', { cwd }),
+  openLocalPath: (path: string) =>
+    post<{ ok: boolean; path: string }>('/local-path/open', { path }),
   run: (command: string, cwd?: string) =>
     post<{ output: string; exitCode: number }>('/run', { command, cwd }),
 
