@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAppData } from '../contexts';
+import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import {
   getRunCategory,
   getRunConnections,
@@ -347,6 +348,15 @@ export function RunsPage() {
       setCancellingRunId(null);
     }
   }, [loadDetail, refreshRuns]);
+
+  const refetchRuns = useCallback(async () => {
+    await refreshRuns();
+    if (selectedId) {
+      await loadDetail(selectedId);
+    }
+  }, [loadDetail, refreshRuns, selectedId]);
+
+  useInvalidateOnTopics(['runs'], refetchRuns);
 
   useEffect(() => {
     void refreshRuns();

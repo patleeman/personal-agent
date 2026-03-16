@@ -34,6 +34,7 @@ export const INITIAL_APP_EVENT_VERSIONS: AppEventVersions = {
   projects: 0,
   sessions: 0,
   tasks: 0,
+  runs: 0,
 };
 
 export interface AppEventsContextValue {

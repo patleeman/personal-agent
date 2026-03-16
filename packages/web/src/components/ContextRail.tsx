@@ -625,7 +625,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   useEffect(() => load(), [load]);
   useEffect(() => {
     void loadRuns();
-  }, [id, loadRuns, versions.tasks]);
+  }, [id, loadRuns, versions.runs]);
 
   useEffect(() => {
     runMentionsLastFetchedAtRef.current = 0;
