@@ -18,6 +18,7 @@ import {
   moveProjectMilestone,
   moveProjectTaskRecord,
   readProjectDetailFromProject,
+  setProjectArchivedState,
   updateProjectMilestone,
   updateProjectRecord,
   updateProjectTaskRecord,
@@ -35,6 +36,8 @@ const PROJECT_ACTION_VALUES = [
   'create',
   'update',
   'delete',
+  'archive',
+  'unarchive',
   'reference',
   'unreference',
   'save_brief',
@@ -123,7 +126,8 @@ function formatProjectList(profile: string, projectIds: string[], repoRoot?: str
     `Projects for profile ${profile}:`,
     ...projects.map((project) => {
       const referenced = projectIds.includes(project.id) ? ' [referenced]' : '';
-      return `- @${project.id}${referenced} · ${project.title} · ${project.status}`;
+      const archived = project.archivedAt ? ` · archived:${project.archivedAt}` : '';
+      return `- @${project.id}${referenced} · ${project.title} · ${project.status}${archived}`;
     }),
   ].join('\n');
 }
@@ -137,6 +141,10 @@ function formatProjectDetail(detail: ReturnType<typeof readProjectDetailFromProj
     `summary: ${project.summary}`,
     `description: ${project.description}`,
   ];
+
+  if (project.archivedAt) {
+    lines.push(`archivedAt: ${project.archivedAt}`);
+  }
 
   if (project.currentFocus) {
     lines.push(`currentFocus: ${project.currentFocus}`);
@@ -192,7 +200,7 @@ export function createProjectAgentExtension(options: {
       promptGuidelines: [
         'Use this tool for structured project management instead of hand-editing PROJECT.yaml for normal cases.',
         'Use reference and unreference to manage current conversation ↔ project links.',
-        'Use create/update/get/list for project state, milestone/task actions for plan maintenance, and note/brief actions for durable narrative context.',
+        'Use create/update/get/list/archive/unarchive for project state, milestone/task actions for plan maintenance, and note/brief actions for durable narrative context.',
       ],
       parameters: ProjectToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
@@ -306,6 +314,44 @@ export function createProjectAgentExtension(options: {
                 content: [{ type: 'text' as const, text: `Deleted project @${projectId}.` }],
                 details: {
                   action: 'delete',
+                  profile,
+                  projectId,
+                },
+              };
+            }
+
+            case 'archive': {
+              const projectId = readRequiredString(params.projectId, 'projectId');
+              setProjectArchivedState({
+                repoRoot: options.repoRoot,
+                profile,
+                projectId,
+                archived: true,
+              });
+              invalidateAppTopics('projects');
+              return {
+                content: [{ type: 'text' as const, text: `Archived project @${projectId}.` }],
+                details: {
+                  action: 'archive',
+                  profile,
+                  projectId,
+                },
+              };
+            }
+
+            case 'unarchive': {
+              const projectId = readRequiredString(params.projectId, 'projectId');
+              setProjectArchivedState({
+                repoRoot: options.repoRoot,
+                profile,
+                projectId,
+                archived: false,
+              });
+              invalidateAppTopics('projects');
+              return {
+                content: [{ type: 'text' as const, text: `Restored project @${projectId}.` }],
+                details: {
+                  action: 'unarchive',
                   profile,
                   projectId,
                 },

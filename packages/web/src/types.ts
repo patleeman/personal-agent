@@ -128,6 +128,7 @@ export interface ProjectRecord {
   id: string;
   createdAt: string;
   updatedAt: string;
+  archivedAt?: string;
   title: string;
   description: string;
   repoRoot?: string;

@@ -119,6 +119,8 @@ export const api = {
   }) => patch<ProjectDetail>(`/projects/${encodeURIComponent(id)}`, patchBody),
   deleteProject: (id: string) =>
     del<{ ok: true; deletedProjectId: string }>(`/projects/${encodeURIComponent(id)}`),
+  archiveProject: (id: string) => post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/archive`),
+  unarchiveProject: (id: string) => post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/unarchive`),
   addProjectMilestone: (id: string, input: {
     title: string;
     status: string;

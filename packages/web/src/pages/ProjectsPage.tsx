@@ -1,7 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
-import { formatProjectStatus, hasMeaningfulBlockers, summarizeProjectPreview } from '../contextRailProject';
+import {
+  formatProjectStatus,
+  hasMeaningfulBlockers,
+  isProjectArchived,
+  summarizeProjectPreview,
+} from '../contextRailProject';
 import { useApi } from '../hooks';
 import { useAppData } from '../contexts';
 import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
@@ -19,6 +24,14 @@ const CREATE_PROJECT_SUMMARY_STORAGE_KEY = 'pa:reload:projects:create-summary';
 const CREATE_PROJECT_GOAL_STORAGE_KEY = 'pa:reload:projects:create-goal';
 const CREATE_PROJECT_ACCEPTANCE_CRITERIA_STORAGE_KEY = 'pa:reload:projects:create-acceptance-criteria';
 const CREATE_PROJECT_PLAN_SUMMARY_STORAGE_KEY = 'pa:reload:projects:create-plan-summary';
+
+type ProjectListFilter = 'active' | 'archived' | 'all';
+
+const PROJECT_FILTER_OPTIONS: Array<{ value: ProjectListFilter; label: string }> = [
+  { value: 'active', label: 'Active' },
+  { value: 'archived', label: 'Archived' },
+  { value: 'all', label: 'All' },
+];
 
 function CreateProjectPanel({
   onCreated,
@@ -270,6 +283,33 @@ export function ProjectsPage() {
   const invalidProjects = diagnostics?.invalidProjects ?? [];
   const isLoading = projectSnapshot === null && loading;
   const visibleError = projectSnapshot === null ? error : null;
+  const [filter, setFilter] = useState<ProjectListFilter>('active');
+
+  const projectCounts = useMemo(() => {
+    const items = projects ?? [];
+    const archived = items.filter((project) => isProjectArchived(project)).length;
+    const active = items.length - archived;
+
+    return {
+      all: items.length,
+      active,
+      archived,
+    };
+  }, [projects]);
+
+  const filteredProjects = useMemo(() => {
+    const items = projects ?? [];
+
+    if (filter === 'archived') {
+      return items.filter((project) => isProjectArchived(project));
+    }
+
+    if (filter === 'all') {
+      return items;
+    }
+
+    return items.filter((project) => !isProjectArchived(project));
+  }, [filter, projects]);
 
   const refreshProjects = useCallback(async () => {
     const [nextProjects] = await Promise.all([
@@ -327,7 +367,10 @@ export function ProjectsPage() {
           meta={(
             projects && (
               <>
-                {projects.length} {projects.length === 1 ? 'project' : 'projects'}
+                {projectCounts.all} {projectCounts.all === 1 ? 'project' : 'projects'}
+                {projectCounts.archived > 0 && (
+                  <span className="ml-2 text-secondary">· {projectCounts.archived} archived</span>
+                )}
               </>
             )
           )}
@@ -367,40 +410,84 @@ export function ProjectsPage() {
             )}
 
             {projects && projects.length > 0 && (
-              <div className="space-y-px">
-                {projects.map((project) => {
-                  const status = formatProjectStatus(project.status);
-                  const blockers = project.blockers.filter((blocker) => blocker.trim().length > 0);
-                  const isBlocked = hasMeaningfulBlockers(project.blockers);
-                  const isSelected = project.id === selectedId;
-                  const preview = summarizeProjectPreview(project);
-                  const dotClass = isBlocked ? 'bg-warning' : 'bg-teal';
+              <div className="space-y-4">
+                {projectCounts.archived > 0 && (
+                  <div className="ui-segmented-control" role="group" aria-label="Project filter">
+                    {PROJECT_FILTER_OPTIONS.map((option) => {
+                      const count = projectCounts[option.value];
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setFilter(option.value)}
+                          className={filter === option.value ? 'ui-segmented-button ui-segmented-button-active' : 'ui-segmented-button'}
+                        >
+                          {option.label}
+                          <span className="ml-1 text-dim/70">{count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
 
-                  return (
-                    <ListLinkRow
-                      key={project.id}
-                      to={`/projects/${project.id}`}
-                      selected={isSelected}
-                      leading={<span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${dotClass}`} />}
-                    >
-                      <p className="ui-card-title">{project.title}</p>
-                      <p className="ui-row-summary">{preview}</p>
-                      <div className="flex items-center gap-1.5 flex-wrap ui-card-meta">
-                        <span>{status}</span>
-                        <span className="opacity-40">·</span>
-                        <span className="max-w-[18rem] truncate font-mono" title={project.id}>{project.id}</span>
-                        <span className="opacity-40">·</span>
-                        <span>{timeAgo(project.updatedAt)}</span>
-                        {isBlocked && blockers[0] && (
-                          <>
+                {filteredProjects.length > 0 ? (
+                  <div className="space-y-px">
+                    {filteredProjects.map((project) => {
+                      const status = formatProjectStatus(project.status);
+                      const blockers = project.blockers.filter((blocker) => blocker.trim().length > 0);
+                      const isBlocked = hasMeaningfulBlockers(project.blockers);
+                      const archived = isProjectArchived(project);
+                      const isSelected = project.id === selectedId;
+                      const preview = summarizeProjectPreview(project);
+                      const dotClass = archived ? 'bg-border-default' : isBlocked ? 'bg-warning' : 'bg-teal';
+
+                      return (
+                        <ListLinkRow
+                          key={project.id}
+                          to={`/projects/${project.id}`}
+                          selected={isSelected}
+                          leading={<span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${dotClass}`} />}
+                        >
+                          <p className="ui-card-title">{project.title}</p>
+                          <p className="ui-row-summary">{preview}</p>
+                          <div className="flex items-center gap-1.5 flex-wrap ui-card-meta">
+                            <span>{status}</span>
+                            {archived && project.archivedAt && (
+                              <>
+                                <span className="opacity-40">·</span>
+                                <span>archived {timeAgo(project.archivedAt)}</span>
+                              </>
+                            )}
                             <span className="opacity-40">·</span>
-                            <span className="text-warning">{blockers[0]}</span>
-                          </>
-                        )}
-                      </div>
-                    </ListLinkRow>
-                  );
-                })}
+                            <span className="max-w-[18rem] truncate font-mono" title={project.id}>{project.id}</span>
+                            <span className="opacity-40">·</span>
+                            <span>{timeAgo(project.updatedAt)}</span>
+                            {!archived && isBlocked && blockers[0] && (
+                              <>
+                                <span className="opacity-40">·</span>
+                                <span className="text-warning">{blockers[0]}</span>
+                              </>
+                            )}
+                          </div>
+                        </ListLinkRow>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <EmptyState
+                    title={filter === 'archived' ? 'No archived projects yet.' : filter === 'active' ? 'No active projects.' : 'No projects match this filter.'}
+                    body={filter === 'archived'
+                      ? 'Archive completed or cancelled projects to move them out of the active list without deleting the history.'
+                      : filter === 'active'
+                        ? 'All current projects are archived. Switch to the archived filter to browse finished work.'
+                        : 'Try another project filter.'}
+                    action={filter === 'active' && projectCounts.archived > 0
+                      ? <ToolbarButton onClick={() => setFilter('archived')}>View archived projects</ToolbarButton>
+                      : filter !== 'all'
+                        ? <ToolbarButton onClick={() => setFilter('all')}>Show all projects</ToolbarButton>
+                        : undefined}
+                  />
+                )}
               </div>
             )}
           </div>

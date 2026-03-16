@@ -27,6 +27,10 @@ export function formatProjectStatus(status: string | undefined): string {
   return normalized.length > 0 ? normalized : 'unknown';
 }
 
+export function isProjectArchived(project: Pick<ProjectRecord, 'archivedAt'>): boolean {
+  return Boolean(project.archivedAt?.trim());
+}
+
 export function hasMeaningfulBlockers(blockers: string[] | undefined): boolean {
   return (blockers ?? []).some((blocker) => blocker.trim().length > 0);
 }

@@ -194,6 +194,7 @@ import {
   readProjectDetailFromProject,
   readProjectSource,
   saveProjectSource,
+  setProjectArchivedState,
   updateProjectMilestone,
   updateProjectRecord,
   updateProjectTaskRecord,
@@ -4856,6 +4857,36 @@ app.delete('/api/projects/:id', (req, res) => {
     });
     invalidateAppTopics('projects');
     res.json(result);
+  } catch (error) {
+    res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post('/api/projects/:id/archive', (req, res) => {
+  try {
+    setProjectArchivedState({
+      repoRoot: REPO_ROOT,
+      profile: getCurrentProfile(),
+      projectId: req.params.id,
+      archived: true,
+    });
+    invalidateAppTopics('projects');
+    res.json(readProjectDetailForCurrentProfile(req.params.id));
+  } catch (error) {
+    res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post('/api/projects/:id/unarchive', (req, res) => {
+  try {
+    setProjectArchivedState({
+      repoRoot: REPO_ROOT,
+      profile: getCurrentProfile(),
+      projectId: req.params.id,
+      archived: false,
+    });
+    invalidateAppTopics('projects');
+    res.json(readProjectDetailForCurrentProfile(req.params.id));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }

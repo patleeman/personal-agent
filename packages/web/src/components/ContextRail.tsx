@@ -20,6 +20,7 @@ import {
   type RunPresentationLookups,
 } from '../runPresentation';
 import {
+  isProjectArchived,
   pickAttachProjectId,
   pickFocusedProjectId,
 } from '../contextRailProject';
@@ -692,7 +693,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   }, [id, load]);
 
   const relatedProjectIds = data?.relatedProjectIds ?? [];
-  const availableProjects = allProjects.filter((project) => !relatedProjectIds.includes(project.id));
+  const availableProjects = allProjects.filter((project) => !relatedProjectIds.includes(project.id) && !isProjectArchived(project));
   const availableProjectIds = availableProjects.map((project) => project.id);
   const selectedAttachProject = availableProjects.find((project) => project.id === attachProjectId) ?? null;
   const selectedRunId = getConversationRunIdFromSearch(location.search);
