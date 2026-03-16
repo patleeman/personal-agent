@@ -143,6 +143,7 @@ import {
   listProfileActivityEntries,
   listProjectIds,
   createProjectActivityEntry,
+  listDeferredResumeRecords,
   loadDeferredResumeState,
   loadProfileActivityReadState,
   markConversationAttentionRead,
@@ -218,6 +219,7 @@ import {
   cancelDeferredResumeForSessionFile,
   listDeferredResumesForSessionFile,
   scheduleDeferredResumeForSessionFile,
+  type DeferredResumeSummary,
 } from './deferredResumes.js';
 
 const PORT = parseInt(process.env.PA_WEB_PORT ?? '3741', 10);
@@ -596,12 +598,55 @@ function listUnreadConversationActivityEntries(profile = getCurrentProfile()) {
     }));
 }
 
+function toDeferredResumeSummary(record: {
+  id: string;
+  sessionFile: string;
+  prompt: string;
+  dueAt: string;
+  createdAt: string;
+  attempts: number;
+  status: 'scheduled' | 'ready';
+  readyAt?: string;
+}): DeferredResumeSummary {
+  return {
+    id: record.id,
+    sessionFile: record.sessionFile,
+    prompt: record.prompt,
+    dueAt: record.dueAt,
+    createdAt: record.createdAt,
+    attempts: record.attempts,
+    status: record.status,
+    readyAt: record.readyAt,
+  };
+}
+
+function listDeferredResumeSummariesBySessionFile(): Map<string, DeferredResumeSummary[]> {
+  const summariesBySessionFile = new Map<string, DeferredResumeSummary[]>();
+
+  for (const record of listDeferredResumeRecords(loadDeferredResumeState())) {
+    const summaries = summariesBySessionFile.get(record.sessionFile);
+    const summary = toDeferredResumeSummary(record);
+    if (summaries) {
+      summaries.push(summary);
+      continue;
+    }
+
+    summariesBySessionFile.set(record.sessionFile, [summary]);
+  }
+
+  return summariesBySessionFile;
+}
+
 function decorateSessionsWithAttention<T extends {
   id: string;
   file: string;
   timestamp: string;
   messageCount: number;
-}>(profile: string, sessions: T[]) {
+}>(
+  profile: string,
+  sessions: T[],
+  deferredResumesBySessionFile = listDeferredResumeSummariesBySessionFile(),
+) {
   ensureConversationAttentionBaselines({
     profile,
     conversations: sessions.map((session) => ({
@@ -633,13 +678,15 @@ function decorateSessionsWithAttention<T extends {
       attentionUnreadMessageCount: summary?.unreadMessageCount ?? 0,
       attentionUnreadActivityCount: summary?.unreadActivityCount ?? 0,
       attentionActivityIds: summary?.unreadActivityIds ?? [],
+      deferredResumes: deferredResumesBySessionFile.get(session.file) ?? [],
     };
   });
 }
 
 function listConversationSessionsSnapshot() {
   const profile = getCurrentProfile();
-  const jsonl = decorateSessionsWithAttention(profile, listSessions());
+  const deferredResumesBySessionFile = listDeferredResumeSummariesBySessionFile();
+  const jsonl = decorateSessionsWithAttention(profile, listSessions(), deferredResumesBySessionFile);
   const live = getLiveSessions();
   const liveById = new Map(live.map((entry) => [entry.id, entry]));
   const jsonlIds = new Set(jsonl.map((session) => session.id));
@@ -660,6 +707,7 @@ function listConversationSessionsSnapshot() {
       attentionUnreadMessageCount: 0,
       attentionUnreadActivityCount: 0,
       attentionActivityIds: [],
+      deferredResumes: deferredResumesBySessionFile.get(entry.sessionFile) ?? [],
     }));
 
   return [
