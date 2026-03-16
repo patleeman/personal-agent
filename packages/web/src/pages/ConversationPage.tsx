@@ -30,10 +30,16 @@ import { buildMentionItems, filterMentionItems, resolveMentionItems, type Mentio
 import { buildDeferredResumeIndicatorText, compareDeferredResumes, describeDeferredResumeStatus } from '../deferredResumeIndicator';
 import { buildConversationComposerStorageKey, persistForkPromptDraft, resolveForkEntryForMessage, resolveSessionEntryIdFromBlockId } from '../forking';
 import {
+  beginDraftConversationAttachmentsMutation,
   buildDraftConversationComposerStorageKey,
+  clearDraftConversationAttachments,
   clearDraftConversationCwd,
+  isDraftConversationAttachmentsMutationCurrent,
+  persistDraftConversationAttachments,
   persistDraftConversationComposer,
+  readDraftConversationAttachments,
   readDraftConversationCwd,
+  type DraftConversationDrawingAttachment,
 } from '../draftConversation';
 import {
   consumePendingConversationPrompt,
@@ -45,7 +51,7 @@ import { getConversationResumeState } from '../conversationResume';
 import { resolveConversationComposerSubmitState } from '../conversationComposerSubmit';
 import { useReloadState } from '../reloadState';
 import { ensureConversationTabOpen } from '../sessionTabs';
-import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSceneFromBlob, parseExcalidrawSceneFromSourceData, serializeExcalidrawScene, type ExcalidrawSceneData } from '../excalidrawUtils';
+import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSceneFromBlob, parseExcalidrawSceneFromSourceData, serializeExcalidrawScene } from '../excalidrawUtils';
 
 // ── Model picker ──────────────────────────────────────────────────────────────
 
@@ -503,21 +509,7 @@ async function buildPromptImages(files: File[]): Promise<PromptImageInput[]> {
   return images;
 }
 
-interface ComposerDrawingAttachment {
-  localId: string;
-  title: string;
-  attachmentId?: string;
-  revision?: number;
-  sourceData: string;
-  sourceMimeType: string;
-  sourceName: string;
-  previewData: string;
-  previewMimeType: string;
-  previewName: string;
-  previewUrl: string;
-  scene: ExcalidrawSceneData;
-  dirty: boolean;
-}
+type ComposerDrawingAttachment = DraftConversationDrawingAttachment;
 
 function createComposerDrawingLocalId(): string {
   return `drawing-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -949,21 +941,58 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [composerHistory, setComposerHistory] = useState<string[]>(() => readComposerHistory(composerHistoryScopeId));
   const [composerHistoryIndex, setComposerHistoryIndex] = useState<number | null>(null);
   const composerHistoryDraftRef = useRef('');
+  const draftAttachmentsHydratedRef = useRef(!draft);
+  const lastDraftModeRef = useRef(draft);
 
-  useEffect(() => {
+  if (lastDraftModeRef.current !== draft) {
+    lastDraftModeRef.current = draft;
+    draftAttachmentsHydratedRef.current = false;
+  }
+
+  useLayoutEffect(() => {
     if (!draft) {
       return;
     }
 
-    setAttachments([]);
-    setDrawingAttachments([]);
+    const storedAttachments = readDraftConversationAttachments();
+    setAttachments(storedAttachments.images.map((image, index) => {
+      const extension = fileExtensionForMimeType(image.mimeType);
+      const name = image.name?.trim() || `draft-image-${index + 1}.${extension}`;
+      return base64ToFile(image.data, image.mimeType, name);
+    }));
+    setDrawingAttachments(storedAttachments.drawings);
     setEditingDrawingLocalId(null);
     setDrawingsPickerOpen(false);
     setConversationAttachments([]);
+    setDrawingsError(null);
     setDragOver(false);
     setSlashIdx(0);
     setMentionIdx(0);
+    draftAttachmentsHydratedRef.current = true;
   }, [draft]);
+
+  useEffect(() => {
+    if (!draft || !draftAttachmentsHydratedRef.current) {
+      return;
+    }
+
+    const mutationVersion = beginDraftConversationAttachmentsMutation();
+
+    void buildPromptImages(attachments)
+      .then((images) => {
+        if (!isDraftConversationAttachmentsMutationCurrent(mutationVersion)) {
+          return;
+        }
+
+        persistDraftConversationAttachments({
+          images,
+          drawings: drawingAttachments,
+        });
+      })
+      .catch(() => {
+        // Ignore draft attachment persistence failures.
+      });
+  }, [attachments, draft, drawingAttachments]);
 
   useEffect(() => {
     function handleModifierChange(event: KeyboardEvent) {
@@ -2359,6 +2388,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             images: promptImages,
             attachmentRefs,
           });
+          clearDraftConversationAttachments();
           clearDraftConversationCwd();
           ensureConversationTabOpen(newId);
           navigate(`/conversations/${newId}`, { replace: true });
