@@ -723,22 +723,29 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const { detail: sessionDetail, loading: sessionLoading } = useSessionDetail(id);
   const visibleSessionDetail = sessionDetail?.meta.id === id ? sessionDetail : null;
 
-  // Historical messages from the JSONL snapshot (doesn't update after load)
-  const baseMessages: MessageBlock[] = visibleSessionDetail
-    ? visibleSessionDetail.blocks.map(displayBlockToMessageBlock)
-    : [];
+  // Historical messages from the JSONL snapshot (doesn't update after load).
+  // Memoize the conversion so typing in the composer does not rebuild long transcripts.
+  const baseMessages = useMemo<MessageBlock[]>(() => (
+    visibleSessionDetail
+      ? visibleSessionDetail.blocks.map(displayBlockToMessageBlock)
+      : []
+  ), [visibleSessionDetail]);
 
   // Live sessions hydrate from the SSE snapshot; until that arrives, fall back to
   // JSONL + live deltas only when we have at least one source of blocks.
-  const realMessages: MessageBlock[] | undefined = isLiveSession
-    ? stream.hasSnapshot
-      ? stream.blocks
-      : (baseMessages.length > 0 || stream.blocks.length > 0)
+  const realMessages = useMemo<MessageBlock[] | undefined>(() => {
+    if (isLiveSession) {
+      if (stream.hasSnapshot) {
+        return stream.blocks;
+      }
+
+      return (baseMessages.length > 0 || stream.blocks.length > 0)
         ? [...baseMessages, ...stream.blocks]
-        : undefined
-    : visibleSessionDetail
-      ? baseMessages
-      : undefined;
+        : undefined;
+    }
+
+    return visibleSessionDetail ? baseMessages : undefined;
+  }, [baseMessages, isLiveSession, stream.blocks, stream.hasSnapshot, visibleSessionDetail]);
   const messageCount = realMessages?.length ?? 0;
   const artifactAutoOpenSeededRef = useRef(false);
   const [showTree, setShowTree] = useState(false);
@@ -2082,7 +2089,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
-  async function resumeConversation() {
+  const resumeConversation = useCallback(async () => {
     if (!id || draft || resumeConversationBusy) {
       return;
     }
@@ -2113,7 +2120,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
-  async function saveMemoryFromMessage(block: MessageBlock, messageIndex: number) {
+  const saveMemoryFromMessage = useCallback(async (block: MessageBlock, messageIndex: number) => {
     if (draft || !id) {
       showNotice('danger', 'Distilling memory requires an existing conversation.', 4000);
       return;
@@ -2156,7 +2163,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } finally {
       setConversationProjectsBusy(false);
     }
-  }
+  }, [draft, id, navigate, resumeConversationBusy, showNotice, stream.reconnect]);
 
   async function handleProjectSlashCommand(command: ProjectSlashCommand) {
     try {
@@ -2205,7 +2212,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     }
-  }
+  }, [draft, id, refetchMemoryData, showNotice]);
 
   async function submitComposer(behavior?: 'steer' | 'followUp') {
     const inputSnapshot = input;

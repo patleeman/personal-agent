@@ -1,4 +1,4 @@
-import React, { Children, cloneElement, isValidElement, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import React, { Children, cloneElement, isValidElement, memo, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { parseSkillBlock, type ParsedSkillBlock } from '../../skillBlock';
 import remarkBreaks from 'remark-breaks';
@@ -1229,20 +1229,7 @@ function StreamingIndicator({ label }: { label: string }) {
 
 // ── ChatView ──────────────────────────────────────────────────────────────────
 
-export function ChatView({
-  messages,
-  isStreaming = false,
-  onForkMessage,
-  onCheckpointMessage,
-  onOpenArtifact,
-  activeArtifactId,
-  onOpenRun,
-  activeRunId,
-  onResumeConversation,
-  resumeConversationBusy = false,
-  resumeConversationTitle,
-  resumeConversationLabel = 'resume',
-}: {
+interface ChatViewProps {
   messages: MessageBlock[];
   isStreaming?: boolean;
   onForkMessage?: (messageIndex: number) => Promise<void> | void;
@@ -1255,13 +1242,28 @@ export function ChatView({
   resumeConversationBusy?: boolean;
   resumeConversationTitle?: string | null;
   resumeConversationLabel?: string;
-}) {
+}
+
+export const ChatView = memo(function ChatView({
+  messages,
+  isStreaming = false,
+  onForkMessage,
+  onCheckpointMessage,
+  onOpenArtifact,
+  activeArtifactId,
+  onOpenRun,
+  activeRunId,
+  onResumeConversation,
+  resumeConversationBusy = false,
+  resumeConversationTitle,
+  resumeConversationLabel = 'resume',
+}: ChatViewProps) {
   const renderItems = useMemo(() => buildChatRenderItems(messages), [messages]);
   const streamingStatusLabel = getStreamingStatusLabel(messages, isStreaming);
   const lastBlock = messages[messages.length - 1];
   const showStreamingIndicator = !!streamingStatusLabel && (!lastBlock || lastBlock.type === 'user');
   const shouldUseContentVisibility = renderItems.length >= 120;
-  const contentVisibilityStyle = useMemo(
+  const contentVisibilityStyle = useMemo<React.CSSProperties | undefined>(
     () => (shouldUseContentVisibility ? { contentVisibility: 'auto' } : undefined),
     [shouldUseContentVisibility],
   );
@@ -1373,4 +1375,4 @@ export function ChatView({
       </div>
     </>
   );
-}
+});
