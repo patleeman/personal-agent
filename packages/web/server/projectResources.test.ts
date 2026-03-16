@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createProjectScaffold, resolveProjectPaths } from '@personal-agent/core';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createProjectNoteRecord,
   deleteProjectFileRecord,
@@ -17,15 +17,22 @@ import {
   uploadProjectFile,
 } from './projectResources.js';
 
+const originalEnv = process.env;
 const tempDirs: string[] = [];
 
+beforeEach(() => {
+  process.env = { ...originalEnv };
+});
+
 afterEach(async () => {
+  process.env = originalEnv;
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
 function createTempRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'pa-project-resources-'));
   tempDirs.push(dir);
+  process.env.PERSONAL_AGENT_PROFILES_ROOT = join(dir, 'profiles');
   return dir;
 }
 
