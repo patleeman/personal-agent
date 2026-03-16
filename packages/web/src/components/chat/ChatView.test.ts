@@ -178,8 +178,29 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('data-summary-kind="compaction"');
     expect(html).toContain('Context compacted');
     expect(html).toContain('Older turns were summarized to keep the active context window focused.');
+    expect(html).toContain('Show summary');
+    expect(html).toContain('aria-expanded="false"');
     expect(html).not.toContain('ui-chat-avatar-mark">pa<');
     expect(html).not.toContain('ui-message-card-assistant');
+  });
+
+  it('collapses long compaction summaries to a short preview by default', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'summary',
+        ts: '2026-03-11T18:00:00.000Z',
+        kind: 'compaction',
+        title: 'Compaction summary',
+        text: '## Goal\nFirst item.\nSecond item.\nThird item.\nFourth item.\nFifth item.',
+      }],
+    }));
+
+    expect(html).toContain('Show summary');
+    expect(html).toContain('Goal');
+    expect(html).toContain('First item.');
+    expect(html).toContain('Third item.');
+    expect(html).not.toContain('Fourth item.');
+    expect(html).not.toContain('Fifth item.');
   });
 
   it('renders a resume action for the tail internal-work cluster when recovery is available', () => {
