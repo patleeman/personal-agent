@@ -36,7 +36,7 @@ import {
   readDraftConversationCwd,
 } from '../draftConversation';
 import {
-  clearPendingConversationPrompt,
+  consumePendingConversationPrompt,
   persistPendingConversationPrompt,
   readPendingConversationPrompt,
   type PendingConversationPrompt,
@@ -1560,24 +1560,31 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
+    const claimedInitialPrompt = consumePendingConversationPrompt(id);
+    if (!claimedInitialPrompt) {
+      setPendingInitialPrompt(null);
+      return;
+    }
+
     pendingInitialPromptSessionIdRef.current = id;
     pinnedInitialPromptScrollSessionIdRef.current = id;
+    setPendingInitialPrompt(null);
 
     void stream.send(
-      pendingInitialPrompt.text,
-      pendingInitialPrompt.behavior,
-      pendingInitialPrompt.images,
-      pendingInitialPrompt.attachmentRefs,
+      claimedInitialPrompt.text,
+      claimedInitialPrompt.behavior,
+      claimedInitialPrompt.images,
+      claimedInitialPrompt.attachmentRefs,
     ).then(async () => {
-      clearPendingConversationPrompt(id);
       pendingInitialPromptSessionIdRef.current = null;
-      setPendingInitialPrompt(null);
       await refetchConversationProjects({ resetLoading: false });
       emitConversationProjectsChanged(id);
     }).catch((error) => {
       pendingInitialPromptSessionIdRef.current = null;
       pinnedInitialPromptScrollSessionIdRef.current = null;
-      persistForkPromptDraft(id, pendingInitialPrompt.text);
+      persistPendingConversationPrompt(id, claimedInitialPrompt);
+      setPendingInitialPrompt(claimedInitialPrompt);
+      persistForkPromptDraft(id, claimedInitialPrompt.text);
       console.error('Initial prompt failed:', error);
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     });
