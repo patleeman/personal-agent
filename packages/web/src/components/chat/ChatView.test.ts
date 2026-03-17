@@ -1,4 +1,4 @@
-import { Fragment, createElement } from 'react';
+import React, { Fragment, createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { MessageBlock } from '../../types';
@@ -12,6 +12,8 @@ import {
   shouldAutoOpenTraceCluster,
   toggleDisclosurePreference,
 } from './ChatView.js';
+
+(globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
 describe('chat view streaming disclosure', () => {
   it('auto-opens running tool blocks', () => {
@@ -276,5 +278,17 @@ describe('chat view streaming disclosure', () => {
     expect(html).not.toContain('role="tooltip"');
     expect(html).not.toContain('>Open<');
     expect(html).not.toContain('>Copy<');
+  });
+
+  it('defers content-visibility on the initial render of long conversations', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: Array.from({ length: 130 }, (_, index) => ({
+        type: 'text' as const,
+        ts: `2026-03-11T18:00:${String(index).padStart(2, '0')}.000Z`,
+        text: `Long conversation block ${index + 1}`,
+      })),
+    }));
+
+    expect(html).not.toMatch(/content-visibility/i);
   });
 });

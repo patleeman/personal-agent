@@ -19,6 +19,7 @@ export function displayBlockToMessageBlock(block: DisplayBlock): MessageBlock {
         output: block.output,
         durationMs: block.durationMs,
         details: block.details,
+        outputDeferred: block.outputDeferred,
         ts: block.ts,
         _toolCallId: block.toolCallId,
       };
@@ -32,6 +33,7 @@ export function displayBlockToMessageBlock(block: DisplayBlock): MessageBlock {
         width: block.width,
         height: block.height,
         caption: block.caption,
+        deferred: block.deferred,
         ts: block.ts,
       };
     case 'error':

@@ -1,4 +1,4 @@
-import React, { Children, cloneElement, isValidElement, memo, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import React, { Children, cloneElement, isValidElement, memo, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { parseSkillBlock, type ParsedSkillBlock } from '../../skillBlock';
 import remarkBreaks from 'remark-breaks';
@@ -445,13 +445,24 @@ function ArtifactToolBlock({
   );
 }
 
-function ToolBlock({ block, autoOpen, onOpenArtifact, activeArtifactId, onOpenRun, activeRunId }: {
+function ToolBlock({
+  block,
+  autoOpen,
+  onOpenArtifact,
+  activeArtifactId,
+  onOpenRun,
+  activeRunId,
+  onHydrateMessage,
+  hydratingMessageBlockIds,
+}: {
   block: Extract<MessageBlock, { type: 'tool_use' }>;
   autoOpen: boolean;
   onOpenArtifact?: (artifactId: string) => void;
   activeArtifactId?: string | null;
   onOpenRun?: (runId: string) => void;
   activeRunId?: string | null;
+  onHydrateMessage?: (blockId: string) => Promise<void> | void;
+  hydratingMessageBlockIds?: ReadonlySet<string>;
 }) {
   const [preference, setPreference] = useState<DisclosurePreference>('auto');
   const open = resolveDisclosureOpen(autoOpen, preference);
@@ -474,6 +485,9 @@ function ToolBlock({ block, autoOpen, onOpenArtifact, activeArtifactId, onOpenRu
   const isRunning = block.status === 'running' || !!block.running;
   const isError   = block.status === 'error'   || !!block.error;
   const output    = block.output ?? '';
+  const blockId = block.id?.trim();
+  const outputDeferred = Boolean(block.outputDeferred && blockId && onHydrateMessage);
+  const hydratingDeferredOutput = Boolean(blockId && hydratingMessageBlockIds?.has(blockId));
 
   const preview = block.input.command
     ? String(block.input.command).split('\n')[0].slice(0, 64)
@@ -541,17 +555,31 @@ function ToolBlock({ block, autoOpen, onOpenArtifact, activeArtifactId, onOpenRu
               {JSON.stringify(block.input, null, 2)}
             </pre>
           </div>
-          {(isRunning || output) && (
+          {(isRunning || output || outputDeferred) && (
             <div className={cx('px-3 py-2.5', isRunning && output && 'max-h-40 overflow-y-auto')}>
-              <p className="text-[10px] uppercase tracking-wider opacity-40 mb-1">
-                {isRunning ? 'live output' : `output · ${output.split('\n').length} lines`}
-              </p>
+              <div className="mb-1 flex items-center gap-2">
+                <p className="text-[10px] uppercase tracking-wider opacity-40">
+                  {isRunning ? 'live output' : `output · ${output.split('\n').length} lines`}
+                </p>
+                {outputDeferred && blockId && (
+                  <button
+                    type="button"
+                    onClick={() => { void onHydrateMessage?.(blockId); }}
+                    disabled={hydratingDeferredOutput}
+                    className="ui-action-button text-[10px]"
+                  >
+                    {hydratingDeferredOutput ? 'Loading full output…' : 'Load full output'}
+                  </button>
+                )}
+              </div>
               {output ? (
                 <pre className="whitespace-pre-wrap break-all text-[11px] leading-relaxed opacity-75">
                   {output}
                 </pre>
               ) : isRunning ? (
                 <p className="text-[11px] italic leading-relaxed opacity-55">Waiting for output…</p>
+              ) : outputDeferred ? (
+                <p className="text-[11px] italic leading-relaxed opacity-55">Older tool output is available on demand.</p>
               ) : null}
             </div>
           )}
@@ -766,6 +794,9 @@ function ImagePreview({
   width,
   height,
   maxHeight,
+  deferred = false,
+  loading = false,
+  onLoad,
 }: {
   alt: string;
   src?: string;
@@ -773,6 +804,9 @@ function ImagePreview({
   width?: number;
   height?: number;
   maxHeight: number;
+  deferred?: boolean;
+  loading?: boolean;
+  onLoad?: () => Promise<void> | void;
 }) {
   return (
     <SurfacePanel muted className="overflow-hidden">
@@ -785,7 +819,7 @@ function ImagePreview({
         />
       ) : (
         <div
-          className="w-full bg-elevated flex flex-col items-center justify-center gap-2 text-dim"
+          className="w-full bg-elevated flex flex-col items-center justify-center gap-2 px-4 py-5 text-dim"
           style={{ aspectRatio: `${width ?? 16} / ${height ?? 9}`, maxHeight }}
         >
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4"
@@ -796,6 +830,11 @@ function ImagePreview({
           </svg>
           <span className="text-[11px] font-mono opacity-50">{alt}</span>
           {width && <span className="text-[10px] opacity-35">{width}×{height}</span>}
+          {deferred && onLoad && (
+            <button type="button" onClick={() => { void onLoad(); }} disabled={loading} className="ui-action-button text-[11px]">
+              {loading ? 'Loading image…' : 'Load image'}
+            </button>
+          )}
         </div>
       )}
       {(caption || (!src && alt)) && (
@@ -807,8 +846,32 @@ function ImagePreview({
   );
 }
 
-function ImageBlock({ block }: { block: Extract<MessageBlock, { type: 'image' }> }) {
-  return <ImagePreview alt={block.alt} src={block.src} caption={block.caption} width={block.width} height={block.height} maxHeight={320} />;
+function ImageBlock({
+  block,
+  onHydrateMessage,
+  hydratingMessageBlockIds,
+}: {
+  block: Extract<MessageBlock, { type: 'image' }>;
+  onHydrateMessage?: (blockId: string) => Promise<void> | void;
+  hydratingMessageBlockIds?: ReadonlySet<string>;
+}) {
+  const blockId = block.id?.trim();
+  const canHydrate = Boolean(block.deferred && blockId && onHydrateMessage);
+  const loading = Boolean(blockId && hydratingMessageBlockIds?.has(blockId));
+
+  return (
+    <ImagePreview
+      alt={block.alt}
+      src={block.src}
+      caption={block.caption}
+      width={block.width}
+      height={block.height}
+      maxHeight={320}
+      deferred={block.deferred}
+      loading={loading}
+      onLoad={canHydrate ? () => onHydrateMessage?.(blockId as string) : undefined}
+    />
+  );
 }
 
 function ResumeConversationAction({
@@ -967,9 +1030,13 @@ function MsgActions({
 function UserMessage({
   block,
   onCheckpoint,
+  onHydrateMessage,
+  hydratingMessageBlockIds,
 }: {
   block: Extract<MessageBlock, { type: 'user' }>;
   onCheckpoint?: () => Promise<void> | void;
+  onHydrateMessage?: (blockId: string) => Promise<void> | void;
+  hydratingMessageBlockIds?: ReadonlySet<string>;
 }) {
   const imageCount = block.images?.length ?? 0;
   const actionText = block.text || (imageCount > 0
@@ -985,17 +1052,26 @@ function UserMessage({
         <div className="ui-message-card-user space-y-2">
           {block.images && block.images.length > 0 && (
             <div className="space-y-2">
-              {block.images.map((image, index) => (
-                <ImagePreview
-                  key={`${image.caption ?? image.alt}-${index}`}
-                  alt={image.alt}
-                  src={image.src}
-                  caption={image.caption}
-                  width={image.width}
-                  height={image.height}
-                  maxHeight={280}
-                />
-              ))}
+              {block.images.map((image, index) => {
+                const blockId = block.id?.trim();
+                const loading = Boolean(blockId && hydratingMessageBlockIds?.has(blockId));
+                const canHydrate = Boolean(image.deferred && blockId && onHydrateMessage);
+
+                return (
+                  <ImagePreview
+                    key={`${image.caption ?? image.alt}-${index}`}
+                    alt={image.alt}
+                    src={image.src}
+                    caption={image.caption}
+                    width={image.width}
+                    height={image.height}
+                    maxHeight={280}
+                    deferred={image.deferred}
+                    loading={loading}
+                    onLoad={canHydrate ? () => onHydrateMessage?.(blockId as string) : undefined}
+                  />
+                );
+              })}
             </div>
           )}
           {skillBlock ? (
@@ -1143,6 +1219,8 @@ interface ChatViewProps {
   isStreaming?: boolean;
   onForkMessage?: (messageIndex: number) => Promise<void> | void;
   onCheckpointMessage?: (block: MessageBlock, messageIndex: number) => Promise<void> | void;
+  onHydrateMessage?: (blockId: string) => Promise<void> | void;
+  hydratingMessageBlockIds?: ReadonlySet<string>;
   onOpenArtifact?: (artifactId: string) => void;
   activeArtifactId?: string | null;
   onOpenRun?: (runId: string) => void;
@@ -1159,6 +1237,8 @@ export const ChatView = memo(function ChatView({
   isStreaming = false,
   onForkMessage,
   onCheckpointMessage,
+  onHydrateMessage,
+  hydratingMessageBlockIds,
   onOpenArtifact,
   activeArtifactId,
   onOpenRun,
@@ -1173,9 +1253,28 @@ export const ChatView = memo(function ChatView({
   const lastBlock = messages[messages.length - 1];
   const showStreamingIndicator = !!streamingStatusLabel && (!lastBlock || lastBlock.type === 'user');
   const shouldUseContentVisibility = renderItems.length >= 120;
+  const [contentVisibilityReady, setContentVisibilityReady] = useState(false);
+
+  useEffect(() => {
+    if (!shouldUseContentVisibility) {
+      setContentVisibilityReady(false);
+      return;
+    }
+
+    // Let the transcript fully lay out once before enabling content-visibility.
+    // Initial scroll-to-bottom logic depends on an accurate scrollHeight.
+    const animationFrame = window.requestAnimationFrame(() => {
+      setContentVisibilityReady(true);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+    };
+  }, [shouldUseContentVisibility]);
+
   const contentVisibilityStyle = useMemo<React.CSSProperties | undefined>(
-    () => (shouldUseContentVisibility ? { contentVisibility: 'auto' } : undefined),
-    [shouldUseContentVisibility],
+    () => (shouldUseContentVisibility && contentVisibilityReady ? { contentVisibility: 'auto' } : undefined),
+    [contentVisibilityReady, shouldUseContentVisibility],
   );
 
   function renderMessageBlock(block: MessageBlock, index: number, isTailItem: boolean) {
@@ -1191,7 +1290,14 @@ export const ChatView = memo(function ChatView({
     const el = (() => {
       switch (block.type) {
         case 'user':
-          return <UserMessage block={block} onCheckpoint={onCheckpointMessage ? () => onCheckpointMessage(block, absoluteIndex) : undefined} />;
+          return (
+            <UserMessage
+              block={block}
+              onCheckpoint={onCheckpointMessage ? () => onCheckpointMessage(block, absoluteIndex) : undefined}
+              onHydrateMessage={onHydrateMessage}
+              hydratingMessageBlockIds={hydratingMessageBlockIds}
+            />
+          );
         case 'text':
           return (
             <AssistantMessage
@@ -1214,12 +1320,14 @@ export const ChatView = memo(function ChatView({
               activeArtifactId={activeArtifactId}
               onOpenRun={onOpenRun}
               activeRunId={activeRunId}
+              onHydrateMessage={onHydrateMessage}
+              hydratingMessageBlockIds={hydratingMessageBlockIds}
             />
           );
         case 'subagent':
           return <SubagentBlock block={block} />;
         case 'image':
-          return <ImageBlock block={block} />;
+          return <ImageBlock block={block} onHydrateMessage={onHydrateMessage} hydratingMessageBlockIds={hydratingMessageBlockIds} />;
         case 'error':
           return (
             <ErrorBlock

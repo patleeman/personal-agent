@@ -5,6 +5,7 @@ export interface MessageImage {
   width?: number;
   height?: number;
   caption?: string;
+  deferred?: boolean;
 }
 
 export interface PromptImageInput {
@@ -83,9 +84,9 @@ export type MessageBlock =
   | { type: 'text';      id?: string; ts: string; text: string; streaming?: boolean }
   | { type: 'summary';   id?: string; ts: string; kind: 'compaction' | 'branch'; title: string; text: string }
   | { type: 'thinking';  id?: string; ts: string; text: string }
-  | { type: 'tool_use';  id?: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; running?: boolean; status?: 'running' | 'ok' | 'error'; error?: boolean; _toolCallId?: string; details?: unknown }
+  | { type: 'tool_use';  id?: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; running?: boolean; status?: 'running' | 'ok' | 'error'; error?: boolean; _toolCallId?: string; details?: unknown; outputDeferred?: boolean }
   | { type: 'subagent';  id?: string; ts: string; name: string; prompt: string; status: 'running' | 'complete' | 'failed'; summary?: string }
-  | { type: 'image';     id?: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string }
+  | { type: 'image';     id?: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string; deferred?: boolean }
   | { type: 'error';     id?: string; ts: string; tool?: string; message: string };
 
 export interface ActivityEntry {
@@ -595,8 +596,8 @@ export type DisplayBlock =
   | { type: 'text';     id: string; ts: string; text: string }
   | { type: 'summary';  id: string; ts: string; kind: 'compaction' | 'branch'; title: string; text: string }
   | { type: 'thinking'; id: string; ts: string; text: string }
-  | { type: 'tool_use'; id: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; toolCallId: string; details?: unknown }
-  | { type: 'image';    id: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string }
+  | { type: 'tool_use'; id: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; toolCallId: string; details?: unknown; outputDeferred?: boolean }
+  | { type: 'image';    id: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string; deferred?: boolean }
   | { type: 'error';    id: string; ts: string; tool?: string; message: string };
 
 export type ContextUsageSegmentKey = 'system' | 'user' | 'assistant' | 'tool' | 'summary' | 'other';
@@ -618,6 +619,8 @@ export interface SessionContextUsage {
 export interface SessionDetail {
   meta: SessionMeta;
   blocks: DisplayBlock[];
+  blockOffset: number;
+  totalBlocks: number;
   contextUsage: SessionContextUsage | null;
 }
 
@@ -977,11 +980,21 @@ export interface PackageInstallResult {
   packageInstall: PackageInstallState;
 }
 
+export interface InjectedPromptMessage {
+  customType: string;
+  content: string;
+  display?: boolean;
+  details?: unknown;
+}
+
 export interface ToolsState {
   profile: string;
   cwd: string;
   activeTools: string[];
   tools: AgentToolInfo[];
+  newSessionSystemPrompt: string;
+  newSessionInjectedMessages: InjectedPromptMessage[];
+  newSessionToolDefinitions: AgentToolInfo[];
   dependentCliTools: DependentCliToolState[];
   mcpCli: McpCliState;
   packageInstall: PackageInstallState;

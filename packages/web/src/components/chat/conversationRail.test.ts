@@ -81,6 +81,17 @@ describe('conversation rail turns', () => {
       { index: 0, kind: 'user', label: 'User', snippet: 'First user turn' },
     ]);
   });
+
+  it('can offset marker indexes for windowed transcript slices', () => {
+    const messages: MessageBlock[] = [
+      { type: 'user', ts: '2026-03-10T20:00:00.000Z', text: 'Windowed user turn' },
+      { type: 'text', ts: '2026-03-10T20:00:01.000Z', text: 'Assistant reply' },
+    ];
+
+    expect(getConversationRailTurns(messages, undefined, 12)).toEqual([
+      { index: 12, kind: 'user', label: 'User', snippet: 'Windowed user turn' },
+    ]);
+  });
 });
 
 describe('conversation rail fisheye', () => {

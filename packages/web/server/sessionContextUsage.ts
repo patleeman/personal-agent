@@ -285,11 +285,7 @@ function estimateSessionContextTokens(messages: ContextMessageList): number {
   return estimated;
 }
 
-export function readSessionContextUsageFromFile(filePath: string): SessionContextUsageSnapshot | null {
-  const fileEntries = parseSessionEntries(readFileSync(filePath, 'utf-8')) as FileEntry[];
-  migrateSessionEntries(fileEntries);
-
-  const entries = fileEntries.filter(isSessionEntry);
+export function readSessionContextUsageFromEntries(entries: SessionEntry[]): SessionContextUsageSnapshot | null {
   if (entries.length === 0) {
     return null;
   }
@@ -313,4 +309,11 @@ export function readSessionContextUsageFromFile(filePath: string): SessionContex
     modelId: context.model?.modelId,
     segments: estimateContextUsageSegments(context.messages, tokens),
   };
+}
+
+export function readSessionContextUsageFromFile(filePath: string): SessionContextUsageSnapshot | null {
+  const fileEntries = parseSessionEntries(readFileSync(filePath, 'utf-8')) as FileEntry[];
+  migrateSessionEntries(fileEntries);
+
+  return readSessionContextUsageFromEntries(fileEntries.filter(isSessionEntry));
 }
