@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { api } from '../api';
 import { looksLikeLocalFilesystemPath } from '../localPaths';
 import { cx } from './ui';
@@ -108,9 +108,27 @@ export function InlineLocalPath({
   }
 
   return (
-    <span className={cx('inline-flex items-center gap-2 align-baseline', className)}>
-      <code className={INLINE_CODE_CLASS}>{path}</code>
-      <LocalPathActions path={path} compact className="gap-2" />
+    <span className={cx('group relative inline-flex align-baseline', className)}>
+      <code
+        className={cx(
+          INLINE_CODE_CLASS,
+          'cursor-default transition-colors group-hover:bg-surface group-focus-within:bg-surface',
+        )}
+        title={path}
+      >
+        {path}
+      </code>
+      <span
+        className={cx(
+          'pointer-events-none invisible absolute left-0 top-full z-20 mt-2 whitespace-nowrap opacity-0 translate-y-1 transition-all duration-150',
+          'group-hover:pointer-events-auto group-hover:visible group-hover:opacity-100 group-hover:translate-y-0',
+          'group-focus-within:pointer-events-auto group-focus-within:visible group-focus-within:opacity-100 group-focus-within:translate-y-0',
+        )}
+      >
+        <span className="inline-flex items-center rounded-lg border border-border-subtle bg-base/95 px-2 py-1 shadow-lg backdrop-blur">
+          <LocalPathActions path={path} compact className="gap-2" />
+        </span>
+      </span>
     </span>
   );
 }
