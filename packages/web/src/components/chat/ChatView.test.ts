@@ -244,4 +244,13 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('packages/web/src/pages/ConversationPage.tsx');
     expect(html).not.toContain('[object Object]');
   });
+
+  it('does not attach local path actions to slash commands in inline code', () => {
+    const html = renderToStaticMarkup(createElement(Fragment, null, renderText('Use `/model` before opening `/Users/patrick/notes.md`.')));
+
+    expect(html).toContain('/model');
+    expect(html).toContain('/Users/patrick/notes.md');
+    expect(html.match(/>Open</g)).toHaveLength(1);
+    expect(html.match(/>Copy</g)).toHaveLength(1);
+  });
 });
