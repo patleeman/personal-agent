@@ -59,6 +59,12 @@ interface ActiveBackgroundRunHandle {
   forceKillTimer?: NodeJS.Timeout;
 }
 
+interface IpcSocketTrace {
+  lastRequestId?: string;
+  lastRequestType?: string;
+  lastResponseId?: string;
+}
+
 const LEVELS: Record<LogLevel, number> = {
   debug: 10,
   info: 20,
@@ -165,6 +171,7 @@ export class PersonalAgentDaemon {
   private readonly modules: ModuleRuntime[];
   private readonly pendingGatewayNotifications: GatewayNotification[] = [];
   private readonly activeBackgroundRuns = new Map<string, ActiveBackgroundRunHandle>();
+  private readonly socketTraces = new WeakMap<Socket, IpcSocketTrace>();
 
   private server?: Server;
   private timerHandles: NodeJS.Timeout[] = [];
@@ -366,9 +373,14 @@ export class PersonalAgentDaemon {
 
   private attachConnection(socket: Socket): void {
     let buffer = '';
+    this.socketTraces.set(socket, {});
+
+    socket.on('close', () => {
+      this.socketTraces.delete(socket);
+    });
 
     socket.on('error', (error) => {
-      this.handleSocketError(error);
+      this.handleSocketError(socket, error);
     });
 
     socket.on('data', (chunk: Buffer | string) => {
@@ -388,19 +400,56 @@ export class PersonalAgentDaemon {
     });
   }
 
-  private handleSocketError(error: Error): void {
+  private getSocketTrace(socket: Socket): IpcSocketTrace {
+    const existing = this.socketTraces.get(socket);
+    if (existing) {
+      return existing;
+    }
+
+    const trace: IpcSocketTrace = {};
+    this.socketTraces.set(socket, trace);
+    return trace;
+  }
+
+  private formatSocketTrace(trace: IpcSocketTrace): string {
+    const parts: string[] = [];
+
+    if (trace.lastRequestId) {
+      parts.push(`requestId=${trace.lastRequestId}`);
+    }
+
+    if (trace.lastRequestType) {
+      parts.push(`requestType=${trace.lastRequestType}`);
+    }
+
+    if (trace.lastResponseId) {
+      parts.push(`responseId=${trace.lastResponseId}`);
+    }
+
+    return parts.length > 0 ? ` ${parts.join(' ')}` : '';
+  }
+
+  private handleSocketError(socket: Socket, error: Error): void {
     const socketError = error as NodeJS.ErrnoException;
+    const trace = this.getSocketTrace(socket);
+    const traceSuffix = this.formatSocketTrace(trace);
+
     if (socketError.code === 'EPIPE' || socketError.code === 'ECONNRESET') {
-      this.log('debug', `ipc client disconnected code=${socketError.code}`);
+      const level: LogLevel = trace.lastRequestType || trace.lastResponseId ? 'info' : 'debug';
+      this.log(level, `ipc client disconnected code=${socketError.code}${traceSuffix}`);
       return;
     }
 
-    this.log('warn', `ipc socket error code=${socketError.code ?? 'UNKNOWN'} message=${error.message}`);
+    this.log('warn', `ipc socket error code=${socketError.code ?? 'UNKNOWN'} message=${error.message}${traceSuffix}`);
   }
 
   private respond(socket: Socket, response: DaemonResponse): void {
+    const trace = this.getSocketTrace(socket);
+    trace.lastResponseId = response.id;
+    const traceSuffix = this.formatSocketTrace(trace);
+
     if (socket.destroyed || !socket.writable) {
-      this.log('debug', `ipc response dropped id=${response.id} reason=socket-not-writable`);
+      this.log('debug', `ipc response dropped id=${response.id} reason=socket-not-writable${traceSuffix}`);
       return;
     }
 
@@ -410,6 +459,9 @@ export class PersonalAgentDaemon {
   private handleLine(socket: Socket, rawLine: string): void {
     try {
       const request = parseRequest(rawLine);
+      const trace = this.getSocketTrace(socket);
+      trace.lastRequestId = request.id;
+      trace.lastRequestType = request.type;
       void this.handleRequest(socket, request).catch((error) => {
         this.respond(socket, {
           id: request.id,
