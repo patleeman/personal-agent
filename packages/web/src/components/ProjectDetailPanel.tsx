@@ -671,6 +671,15 @@ export function ProjectDetailPanel({
     }
   }
 
+  function downloadProjectPackage() {
+    const link = document.createElement('a');
+    link.href = `/api/projects/${encodeURIComponent(record.id)}/package`;
+    link.download = '';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
   const taskEditorForm = taskEditor ? (
     <ProjectTaskEditorForm
       editor={taskEditor}
@@ -740,6 +749,9 @@ export function ProjectDetailPanel({
               </p>
             </div>
             <div className="flex items-center gap-2">
+              <ToolbarButton onClick={downloadProjectPackage} disabled={deleteBusy}>
+                Export package
+              </ToolbarButton>
               <ToolbarButton onClick={() => { void toggleArchivedState(!archived); }} disabled={archiveBusy || deleteBusy}>
                 {archiveBusy ? (archived ? 'Restoring…' : 'Archiving…') : (archived ? 'Restore project' : 'Archive project')}
               </ToolbarButton>

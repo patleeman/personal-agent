@@ -16,6 +16,8 @@ vi.mock('@personal-agent/gateway', () => ({
 import {
   writeRestartCompletionInboxEntry,
   writeRestartFailureInboxEntry,
+  writeUpdateCompletionInboxEntry,
+  writeUpdateFailureInboxEntry,
   writeWebUiMarkedBadInboxEntry,
   writeWebUiRollbackInboxEntry,
 } from './restartNotifications.js';
@@ -112,6 +114,71 @@ describe('restart notification inbox entries', () => {
     expect(entries[0]?.entry.details).toContain('- Error: npm run build failed');
     expect(entries[0]?.entry.details).toContain('- Last active slot: blue');
     expect(entries[0]?.entry.details).toContain('- Last active release: rev-old');
+  });
+
+  it('writes an update completion inbox item with blue/green cutover details', () => {
+    const stateRoot = createTempDir('pa-update-notify-state-');
+    const repoRoot = createTempDir('pa-update-notify-repo-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+
+    getWebUiServiceStatusMock.mockReturnValue({
+      url: 'http://127.0.0.1:3741',
+      deployment: {
+        activeSlot: 'blue',
+        activeRelease: {
+          revision: 'rev-777',
+        },
+      },
+    });
+
+    writeUpdateCompletionInboxEntry({
+      profile: 'datadog',
+      repoRoot,
+      requestedAt: '2026-03-13T14:42:36.000Z',
+      daemonStatus: 'restarted (mode: managed service mock-daemon)',
+      webUiStatus: 'blue/green swapped green → blue (rev-777)',
+      restartedGatewayServices: ['telegram'],
+      skippedGatewayServices: [],
+    });
+
+    const entries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.entry.summary).toBe('Application update complete · blue live · rev-777');
+    expect(entries[0]?.entry.details).toContain('Managed application update and web UI blue/green cutover are complete.');
+    expect(entries[0]?.entry.details).toContain('- Active slot: blue');
+    expect(entries[0]?.entry.details).toContain('- Active release: rev-777');
+  });
+
+  it('writes a failure inbox item when application update does not complete', () => {
+    const stateRoot = createTempDir('pa-update-notify-state-');
+    const repoRoot = createTempDir('pa-update-notify-repo-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+
+    getWebUiServiceStatusMock.mockReturnValue({
+      url: 'http://127.0.0.1:3741',
+      deployment: {
+        activeSlot: 'green',
+        activeRelease: {
+          revision: 'rev-before-update',
+        },
+      },
+    });
+
+    writeUpdateFailureInboxEntry({
+      profile: 'datadog',
+      repoRoot,
+      requestedAt: '2026-03-13T14:42:36.000Z',
+      phase: 'pull latest changes from git',
+      error: 'git pull failed',
+    });
+
+    const entries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.entry.summary).toBe('Application update failed');
+    expect(entries[0]?.entry.details).toContain('- Phase: pull latest changes from git');
+    expect(entries[0]?.entry.details).toContain('- Error: git pull failed');
+    expect(entries[0]?.entry.details).toContain('- Last active slot: green');
+    expect(entries[0]?.entry.details).toContain('- Last active release: rev-before-update');
   });
 
   it('writes a rollback inbox item with restored release details', () => {

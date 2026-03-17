@@ -45,7 +45,7 @@ import {
   uninstallWebUiServiceAndReadState,
   writeWebUiConfig,
 } from './webUi.js';
-import { requestApplicationRestart } from './applicationRestart.js';
+import { requestApplicationRestart, requestApplicationUpdate } from './applicationRestart.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from './modelPreferences.js';
 import {
   cancelProviderOAuthLogin,
@@ -218,6 +218,10 @@ import {
   updateProjectNoteRecord,
   uploadProjectFile,
 } from './projectResources.js';
+import {
+  buildProjectSharePackageFileName,
+  exportProjectSharePackage,
+} from './projectPackages.js';
 import { generateProjectBrief } from './projectBriefs.js';
 import { openLocalPathOnHost } from './localPathOpener.js';
 import {
@@ -1864,7 +1868,21 @@ app.post('/api/application/restart', (_req, res) => {
     res.status(202).json(requestApplicationRestart({ repoRoot: REPO_ROOT, profile: getCurrentProfile() }));
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    const status = message.startsWith('Application restart already in progress')
+    const status = message.startsWith('Application restart already in progress') || message.startsWith('Application update already in progress')
+      ? 409
+      : message.startsWith('Managed web UI service is not installed')
+        ? 400
+        : 500;
+    res.status(status).json({ error: message });
+  }
+});
+
+app.post('/api/application/update', (_req, res) => {
+  try {
+    res.status(202).json(requestApplicationUpdate({ repoRoot: REPO_ROOT, profile: getCurrentProfile() }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.startsWith('Application restart already in progress') || message.startsWith('Application update already in progress')
       ? 409
       : message.startsWith('Managed web UI service is not installed')
         ? 400
@@ -5196,6 +5214,26 @@ app.get('/api/projects/diagnostics', (_req, res) => {
 app.get('/api/projects/:id', (req, res) => {
   try {
     res.json(readProjectDetailForCurrentProfile(req.params.id));
+  } catch (error) {
+    res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.get('/api/projects/:id/package', (req, res) => {
+  try {
+    const projectPackage = exportProjectSharePackage({
+      repoRoot: REPO_ROOT,
+      profile: getCurrentProfile(),
+      projectId: req.params.id,
+    });
+    const fileName = buildProjectSharePackageFileName({
+      projectId: projectPackage.source.projectId,
+      exportedAt: projectPackage.exportedAt,
+    });
+
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(`${JSON.stringify(projectPackage, null, 2)}\n`);
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }

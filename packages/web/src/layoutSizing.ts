@@ -7,12 +7,15 @@ export const RAIL_WIDTH_STORAGE_KEYS = {
   conversations: 'pa:rail-width:conversations',
   inbox: 'pa:rail-width:inbox',
   memory: 'pa:rail-width:memory',
+  memories: 'pa:rail-width:memories',
+  tools: 'pa:rail-width:tools',
   default: 'pa:rail-width:default',
 } as const;
 
 export interface RailLayoutPrefs {
   storageKey: string;
-  initialWidth: number;
+  initialWidth?: number;
+  initialMainWidthRatio?: number;
 }
 
 export function clampPanelWidth(width: number, min: number, max: number): number {
@@ -59,6 +62,16 @@ export function getRailLayoutPrefs(pathname: string): RailLayoutPrefs {
         storageKey: RAIL_WIDTH_STORAGE_KEYS.memory,
         initialWidth: 380,
       };
+    case 'memories':
+      return {
+        storageKey: RAIL_WIDTH_STORAGE_KEYS.memories,
+        initialMainWidthRatio: 0.7,
+      };
+    case 'tools':
+      return {
+        storageKey: RAIL_WIDTH_STORAGE_KEYS.tools,
+        initialMainWidthRatio: 0.7,
+      };
     default:
       return {
         storageKey: RAIL_WIDTH_STORAGE_KEYS.default,
@@ -74,6 +87,22 @@ export function getMainViewportWidth(input: {
 }): number {
   const resizeHandleWidth = input.resizeHandleWidth ?? RESIZE_HANDLE_WIDTH;
   return Math.max(0, input.viewportWidth - input.sidebarWidth - (resizeHandleWidth * 2));
+}
+
+export function getRailInitialWidth(input: {
+  pathname: string;
+  viewportWidth: number;
+  sidebarWidth: number;
+  railMinWidth: number;
+  railMaxWidth: number;
+  resizeHandleWidth?: number;
+}): number {
+  const prefs = getRailLayoutPrefs(input.pathname);
+  const initialWidth = prefs.initialMainWidthRatio === undefined
+    ? (prefs.initialWidth ?? input.railMinWidth)
+    : Math.floor(getMainViewportWidth(input) * prefs.initialMainWidthRatio);
+
+  return clampPanelWidth(initialWidth, input.railMinWidth, input.railMaxWidth);
 }
 
 export function getArtifactRailTargetWidth(input: {

@@ -245,11 +245,22 @@ describe('chat view streaming disclosure', () => {
     expect(html).not.toContain('[object Object]');
   });
 
+  it('renders inline local path actions inside a hover card', () => {
+    const html = renderToStaticMarkup(createElement(Fragment, null, renderText('Open `/Users/patrick/notes.md` soon.')));
+
+    expect(html).toContain('/Users/patrick/notes.md');
+    expect(html).toContain('role="tooltip"');
+    expect(html).toContain('Path actions');
+    expect(html.match(/>Open</g)).toHaveLength(1);
+    expect(html.match(/>Copy</g)).toHaveLength(1);
+  });
+
   it('does not attach local path actions to slash commands in inline code', () => {
     const html = renderToStaticMarkup(createElement(Fragment, null, renderText('Use `/model` before opening `/Users/patrick/notes.md`.')));
 
     expect(html).toContain('/model');
     expect(html).toContain('/Users/patrick/notes.md');
+    expect(html).toContain('Path actions');
     expect(html.match(/>Open</g)).toHaveLength(1);
     expect(html.match(/>Copy</g)).toHaveLength(1);
   });

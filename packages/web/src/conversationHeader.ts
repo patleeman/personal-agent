@@ -26,6 +26,22 @@ export function formatContextShareLabel(label: string, value: number, contextWin
   return `${label}: ${pct.toFixed(1)}% of ctx`;
 }
 
+export function formatContextBreakdownLabel(
+  segments: Array<{ label: string; tokens: number }>,
+  contextWindow: number,
+  total: number | null,
+): string {
+  const lines = total === null
+    ? ['Current context usage is unknown right now (common immediately after compaction).']
+    : [`total: ${formatContextUsageLabel(total, contextWindow)}`];
+
+  for (const segment of segments) {
+    lines.push(formatContextShareLabel(segment.label, segment.tokens, contextWindow));
+  }
+
+  return lines.join('\n');
+}
+
 export function getContextUsagePercent(tokens: number | null, contextWindow: number): number | null {
   if (tokens === null || contextWindow <= 0) {
     return null;

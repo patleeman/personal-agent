@@ -130,4 +130,24 @@ describe('ProjectOverviewPanel', () => {
     expect(html).toContain('Tasks');
     expect(html).toContain('unassigned');
   });
+
+  it('uses the inline path hover card in overview markdown sections', () => {
+    const html = renderToString(
+      <MemoryRouter>
+        <ProjectOverviewPanel
+          project={createProjectDetail({
+            brief: {
+              path: '/tmp/sidebar-refresh/BRIEF.md',
+              updatedAt: '2026-03-16T09:30:00.000Z',
+              content: '# Sidebar refresh\n\n## Requirements\n\nUse `/Users/patrick/sidebar-refresh/notes.md` when reviewing copy.',
+            },
+          })}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('/Users/patrick/sidebar-refresh/notes.md');
+    expect(html).toContain('role="tooltip"');
+    expect(html).toContain('Path actions');
+  });
 });

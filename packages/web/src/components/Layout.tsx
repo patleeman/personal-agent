@@ -4,7 +4,7 @@ import { CommandPalette } from './CommandPalette';
 import { ContextRail } from './ContextRail';
 import { Sidebar } from './Sidebar';
 import { getConversationArtifactIdFromSearch } from '../conversationArtifacts';
-import { clampPanelWidth, getArtifactRailTargetWidth, getRailLayoutPrefs, getRailMaxWidth } from '../layoutSizing';
+import { clampPanelWidth, getArtifactRailTargetWidth, getRailInitialWidth, getRailLayoutPrefs, getRailMaxWidth } from '../layoutSizing';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../localSettings';
 
 // ── Resize hook ───────────────────────────────────────────────────────────────
@@ -140,7 +140,6 @@ export function Layout() {
   const location = useLocation();
   const viewportWidth = useViewportWidth();
   const sidebar = useResize({ initial: 224, min: 160, max: 320, storageKey: SIDEBAR_WIDTH_STORAGE_KEY, side: 'left'  });
-  const railPrefs = getRailLayoutPrefs(location.pathname);
   const railMinWidth = 160;
   const railMaxWidth = getRailMaxWidth({
     viewportWidth,
@@ -148,8 +147,16 @@ export function Layout() {
     railMinWidth,
     mainMinWidth: 320,
   });
+  const railPrefs = getRailLayoutPrefs(location.pathname);
+  const railInitialWidth = getRailInitialWidth({
+    pathname: location.pathname,
+    viewportWidth,
+    sidebarWidth: sidebar.width,
+    railMinWidth,
+    railMaxWidth,
+  });
   const rail = useResize({
-    initial: railPrefs.initialWidth,
+    initial: railInitialWidth,
     min: railMinWidth,
     max: railMaxWidth,
     storageKey: railPrefs.storageKey,

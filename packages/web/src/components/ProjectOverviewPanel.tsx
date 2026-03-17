@@ -12,6 +12,7 @@ import {
 import { parseProjectDocument } from '../projectDocument';
 import type { ProjectDetail } from '../types';
 import { timeAgo } from '../utils';
+import { InlineMarkdownCode } from './MarkdownInlineCode';
 import { IconButton, Pill, SurfacePanel, type PillTone } from './ui';
 
 function taskTone(status: string): PillTone {
@@ -55,7 +56,14 @@ function taskPriority(status: string): number {
 function MarkdownSection({ content }: { content: string }) {
   return (
     <div className="ui-markdown max-w-none">
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{content}</ReactMarkdown>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkBreaks]}
+        components={{
+          code: ({ className, children }) => <InlineMarkdownCode className={className}>{children}</InlineMarkdownCode>,
+        }}
+      >
+        {content}
+      </ReactMarkdown>
     </div>
   );
 }

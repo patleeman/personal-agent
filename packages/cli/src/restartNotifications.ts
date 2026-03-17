@@ -23,6 +23,24 @@ export interface RestartFailureInboxEntryInput {
   error: string;
 }
 
+export interface UpdateCompletionInboxEntryInput {
+  profile: string;
+  repoRoot?: string;
+  requestedAt?: string;
+  daemonStatus: string;
+  webUiStatus: string;
+  restartedGatewayServices: string[];
+  skippedGatewayServices: string[];
+}
+
+export interface UpdateFailureInboxEntryInput {
+  profile: string;
+  repoRoot?: string;
+  requestedAt?: string;
+  phase?: string;
+  error: string;
+}
+
 export interface WebUiRollbackInboxEntryInput {
   profile: string;
   repoRoot?: string;
@@ -108,8 +126,8 @@ function writeDeploymentInboxEntry(input: {
   });
 }
 
-function buildRestartSummary(activeSlot?: 'blue' | 'green', revision?: string): string {
-  const parts = ['Application restart complete'];
+function buildApplicationSummary(prefix: string, activeSlot?: 'blue' | 'green', revision?: string): string {
+  const parts = [prefix];
 
   if (activeSlot) {
     parts.push(`${activeSlot} live`);
@@ -122,33 +140,84 @@ function buildRestartSummary(activeSlot?: 'blue' | 'green', revision?: string): 
   return parts.join(' · ');
 }
 
-export function writeRestartCompletionInboxEntry(input: RestartCompletionInboxEntryInput): string {
-  const repoRoot = resolveEffectiveRepoRoot(input.repoRoot);
-  const completedAt = new Date().toISOString();
-  const serviceContext = readWebUiContext(repoRoot);
-
-  const details = [
-    'Managed web UI blue/green cutover is complete.',
+function buildApplicationCompletionDetails(input: {
+  requestedAt?: string;
+  completedAt: string;
+  intro: string;
+  daemonStatus: string;
+  webUiStatus: string;
+  restartedGatewayServices: string[];
+  skippedGatewayServices: string[];
+  activeSlot?: 'blue' | 'green';
+  activeRevision?: string;
+  serviceUrl?: string;
+  serviceInspectionError?: string;
+}): string[] {
+  return [
+    input.intro,
     '',
     `- Requested: ${input.requestedAt ?? 'unknown'}`,
-    `- Completed: ${completedAt}`,
+    `- Completed: ${input.completedAt}`,
     `- Web UI: ${input.webUiStatus}`,
     `- Daemon: ${input.daemonStatus}`,
     `- Gateway services restarted: ${formatList(input.restartedGatewayServices)}`,
     `- Gateway services skipped: ${formatList(input.skippedGatewayServices)}`,
-    serviceContext.activeSlot ? `- Active slot: ${serviceContext.activeSlot}` : undefined,
-    serviceContext.activeRevision ? `- Active release: ${serviceContext.activeRevision}` : undefined,
-    serviceContext.serviceUrl ? `- URL: ${serviceContext.serviceUrl}` : undefined,
-    serviceContext.serviceInspectionError ? `- Service inspection: failed (${serviceContext.serviceInspectionError})` : undefined,
+    input.activeSlot ? `- Active slot: ${input.activeSlot}` : undefined,
+    input.activeRevision ? `- Active release: ${input.activeRevision}` : undefined,
+    input.serviceUrl ? `- URL: ${input.serviceUrl}` : undefined,
+    input.serviceInspectionError ? `- Service inspection: failed (${input.serviceInspectionError})` : undefined,
   ].filter((line): line is string => typeof line === 'string');
+}
+
+function buildApplicationFailureDetails(input: {
+  requestedAt?: string;
+  failedAt: string;
+  intro: string;
+  phase?: string;
+  error: string;
+  activeSlot?: 'blue' | 'green';
+  activeRevision?: string;
+  serviceUrl?: string;
+  serviceInspectionError?: string;
+}): string[] {
+  return [
+    input.intro,
+    '',
+    `- Requested: ${input.requestedAt ?? 'unknown'}`,
+    `- Failed: ${input.failedAt}`,
+    input.phase ? `- Phase: ${input.phase}` : undefined,
+    `- Error: ${input.error}`,
+    input.activeSlot ? `- Last active slot: ${input.activeSlot}` : undefined,
+    input.activeRevision ? `- Last active release: ${input.activeRevision}` : undefined,
+    input.serviceUrl ? `- URL: ${input.serviceUrl}` : undefined,
+    input.serviceInspectionError ? `- Service inspection: failed (${input.serviceInspectionError})` : undefined,
+  ].filter((line): line is string => typeof line === 'string');
+}
+
+export function writeRestartCompletionInboxEntry(input: RestartCompletionInboxEntryInput): string {
+  const repoRoot = resolveEffectiveRepoRoot(input.repoRoot);
+  const completedAt = new Date().toISOString();
+  const serviceContext = readWebUiContext(repoRoot);
 
   return writeDeploymentInboxEntry({
     repoRoot,
     profile: input.profile,
     createdAt: completedAt,
     idPrefix: 'application-restart',
-    summary: buildRestartSummary(serviceContext.activeSlot, serviceContext.activeRevision),
-    details,
+    summary: buildApplicationSummary('Application restart complete', serviceContext.activeSlot, serviceContext.activeRevision),
+    details: buildApplicationCompletionDetails({
+      requestedAt: input.requestedAt,
+      completedAt,
+      intro: 'Managed web UI blue/green cutover is complete.',
+      daemonStatus: input.daemonStatus,
+      webUiStatus: input.webUiStatus,
+      restartedGatewayServices: input.restartedGatewayServices,
+      skippedGatewayServices: input.skippedGatewayServices,
+      activeSlot: serviceContext.activeSlot,
+      activeRevision: serviceContext.activeRevision,
+      serviceUrl: serviceContext.serviceUrl,
+      serviceInspectionError: serviceContext.serviceInspectionError,
+    }),
   });
 }
 
@@ -157,26 +226,75 @@ export function writeRestartFailureInboxEntry(input: RestartFailureInboxEntryInp
   const failedAt = new Date().toISOString();
   const serviceContext = readWebUiContext(repoRoot);
 
-  const details = [
-    'Managed application restart did not complete.',
-    '',
-    `- Requested: ${input.requestedAt ?? 'unknown'}`,
-    `- Failed: ${failedAt}`,
-    input.phase ? `- Phase: ${input.phase}` : undefined,
-    `- Error: ${input.error}`,
-    serviceContext.activeSlot ? `- Last active slot: ${serviceContext.activeSlot}` : undefined,
-    serviceContext.activeRevision ? `- Last active release: ${serviceContext.activeRevision}` : undefined,
-    serviceContext.serviceUrl ? `- URL: ${serviceContext.serviceUrl}` : undefined,
-    serviceContext.serviceInspectionError ? `- Service inspection: failed (${serviceContext.serviceInspectionError})` : undefined,
-  ].filter((line): line is string => typeof line === 'string');
-
   return writeDeploymentInboxEntry({
     repoRoot,
     profile: input.profile,
     createdAt: failedAt,
     idPrefix: 'application-restart-failed',
     summary: 'Application restart failed',
-    details,
+    details: buildApplicationFailureDetails({
+      requestedAt: input.requestedAt,
+      failedAt,
+      intro: 'Managed application restart did not complete.',
+      phase: input.phase,
+      error: input.error,
+      activeSlot: serviceContext.activeSlot,
+      activeRevision: serviceContext.activeRevision,
+      serviceUrl: serviceContext.serviceUrl,
+      serviceInspectionError: serviceContext.serviceInspectionError,
+    }),
+  });
+}
+
+export function writeUpdateCompletionInboxEntry(input: UpdateCompletionInboxEntryInput): string {
+  const repoRoot = resolveEffectiveRepoRoot(input.repoRoot);
+  const completedAt = new Date().toISOString();
+  const serviceContext = readWebUiContext(repoRoot);
+
+  return writeDeploymentInboxEntry({
+    repoRoot,
+    profile: input.profile,
+    createdAt: completedAt,
+    idPrefix: 'application-update',
+    summary: buildApplicationSummary('Application update complete', serviceContext.activeSlot, serviceContext.activeRevision),
+    details: buildApplicationCompletionDetails({
+      requestedAt: input.requestedAt,
+      completedAt,
+      intro: 'Managed application update and web UI blue/green cutover are complete.',
+      daemonStatus: input.daemonStatus,
+      webUiStatus: input.webUiStatus,
+      restartedGatewayServices: input.restartedGatewayServices,
+      skippedGatewayServices: input.skippedGatewayServices,
+      activeSlot: serviceContext.activeSlot,
+      activeRevision: serviceContext.activeRevision,
+      serviceUrl: serviceContext.serviceUrl,
+      serviceInspectionError: serviceContext.serviceInspectionError,
+    }),
+  });
+}
+
+export function writeUpdateFailureInboxEntry(input: UpdateFailureInboxEntryInput): string {
+  const repoRoot = resolveEffectiveRepoRoot(input.repoRoot);
+  const failedAt = new Date().toISOString();
+  const serviceContext = readWebUiContext(repoRoot);
+
+  return writeDeploymentInboxEntry({
+    repoRoot,
+    profile: input.profile,
+    createdAt: failedAt,
+    idPrefix: 'application-update-failed',
+    summary: 'Application update failed',
+    details: buildApplicationFailureDetails({
+      requestedAt: input.requestedAt,
+      failedAt,
+      intro: 'Managed application update did not complete.',
+      phase: input.phase,
+      error: input.error,
+      activeSlot: serviceContext.activeSlot,
+      activeRevision: serviceContext.activeRevision,
+      serviceUrl: serviceContext.serviceUrl,
+      serviceInspectionError: serviceContext.serviceInspectionError,
+    }),
   });
 }
 

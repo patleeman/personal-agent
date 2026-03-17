@@ -66,12 +66,14 @@ The managed service is the recommended way to run the UI when you want it to be 
 It survives terminal closes, restarts automatically, and can be restarted by `pa update`.
 When installed, updates use blue/green staging: the next release is built into the inactive slot, health-checked on a candidate port, then swapped in.
 
-The UI also has a dedicated **Web UI** page for:
+The UI has a dedicated **System** page for:
 
-- managed service status
-- active vs inactive blue/green release info
-- rebuild + restart controls for the full application
-- recent web UI logs
+- consolidated daemon, sync, gateway, and managed web UI status
+- quick visibility into the processes and background services the app depends on
+- `pa restart --rebuild` and `pa update` controls for the full managed application
+- recent log tails for each subsystem
+
+It also keeps an advanced **Web UI** page for service-specific controls like tailscale, blue/green release history, rollback, and mark-bad actions.
 
 ## Logs
 
@@ -173,54 +175,25 @@ You can:
 
 See [Scheduled Tasks](./scheduled-tasks.md).
 
-### Gateway
+### System
 
-The Gateway page shows Telegram state.
+The System page consolidates the status surfaces for the daemon, sync, gateway, and managed web UI.
 
-It surfaces:
+It gives you one place to:
 
-- service status
-- tracked gateway conversations
-- pending durable inbound messages
-- access settings
-- recent logs
+- check whether each service is healthy and running
+- inspect recent log tails for each subsystem
+- jump into the advanced Daemon, Sync, Gateway, or Web UI pages when you need deeper controls
+- run **Update + restart** (`pa update`) or **Restart everything** (`pa restart --rebuild`) for the managed application
 
-You can also:
+The advanced pages still exist for subsystem-specific setup and controls:
 
-- edit saved Telegram gateway settings from the UI
-- store the bot token as either a plain value or an `op://...` 1Password reference
-- install, start, stop, restart, or uninstall the managed gateway service
+- **Gateway** — Telegram settings, access control, service management, tracked conversations, and logs
+- **Daemon** — managed daemon service controls, runtime status, and daemon logs
+- **Sync** — first-time setup, repo configuration, conflict visibility, and manual sync runs
+- **Web UI** — tailscale, blue/green release state, rollback, mark-bad, and advanced web UI service controls
 
-See [Gateway Guide](./gateway.md).
-
-### Daemon
-
-The Daemon page shows background automation status.
-
-It surfaces:
-
-- whether the daemon service is installed and running
-- runtime connection status
-- PID and uptime information
-- recent logs
-
-You can also manage the daemon service from the UI.
-
-See [Daemon and Background Automation](./daemon.md).
-
-### Sync
-
-The Sync page is the UI control surface for git-backed durable-state sync.
-
-It lets you:
-
-- run first-time sync setup (repo URL, branch, mode, optional repo directory)
-- choose **Fresh** for first machine/new remote or **Bootstrap** for additional devices/existing history
-- run sync immediately
-- inspect sync module status, repo status, last run/success/commit, and resolver activity
-- inspect recent sync log lines and conflict/error warnings
-
-See [Sync Guide](./sync.md).
+See [Gateway Guide](./gateway.md), [Daemon and Background Automation](./daemon.md), and [Sync Guide](./sync.md).
 
 ### Memory
 
@@ -243,10 +216,12 @@ See [Profiles, Memory, and Skills](./profiles-memory-skills.md).
 
 The Tools page is the inspection and package-install surface for agent capabilities.
 
+It uses the right-hand detail rail for full inspection views.
+
 You can:
 
 - inspect the tools available to new sessions
-- review tool schemas and parameters
+- review tool schemas and parameters in the detail rail
 - add Pi package sources to any profile or the local overlay
 - inspect dependent CLI tools and configured MCP servers
 
