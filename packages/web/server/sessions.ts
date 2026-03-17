@@ -20,7 +20,10 @@ import {
   SessionManager,
   type SessionEntry,
 } from '@mariozechner/pi-coding-agent';
-import { readSessionContextUsageFromFile, type SessionContextUsageSnapshot } from './sessionContextUsage.js';
+import {
+  readSessionContextUsageFromEntries,
+  type SessionContextUsageSnapshot,
+} from './sessionContextUsage.js';
 
 export const DEFAULT_SESSIONS_DIR = join(getPiAgentStateDir(), 'sessions');
 export const SESSIONS_DIR = DEFAULT_SESSIONS_DIR;
@@ -120,6 +123,8 @@ export interface SessionMeta {
 export interface SessionDetail {
   meta: SessionMeta;
   blocks: DisplayBlock[];
+  blockOffset: number;
+  totalBlocks: number;
   contextUsage: SessionContextUsageSnapshot | null;
 }
 
@@ -145,6 +150,7 @@ interface DisplayImage {
   src?: string;
   mimeType?: string;
   caption?: string;
+  deferred?: boolean;
 }
 
 export type DisplayBlock =
@@ -152,8 +158,8 @@ export type DisplayBlock =
   | { type: 'text';     id: string; ts: string; text: string }
   | { type: 'summary';  id: string; ts: string; kind: 'compaction' | 'branch'; title: string; text: string }
   | { type: 'thinking'; id: string; ts: string; text: string }
-  | { type: 'tool_use'; id: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; toolCallId: string; details?: unknown }
-  | { type: 'image';    id: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string }
+  | { type: 'tool_use'; id: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; toolCallId: string; details?: unknown; outputDeferred?: boolean }
+  | { type: 'image';    id: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string; deferred?: boolean }
   | { type: 'error';    id: string; ts: string; tool?: string; message: string };
 
 interface CachedSessionMeta {
@@ -614,6 +620,52 @@ function buildDisplayBlocksWithEntryAnchors(messages: DisplayMessageEntryLike[])
   const entryAnchorIndexById = new Map<string, number>();
   const blocks = buildDisplayBlocksInternal(messages, entryAnchorIndexById);
   return { blocks, entryAnchorIndexById };
+}
+
+const RECENT_HEAVY_CONTENT_BLOCK_COUNT = 80;
+const DEFERRED_TOOL_OUTPUT_PREVIEW_LENGTH = 600;
+
+function buildDeferredToolOutputPreview(output: string): string {
+  const trimmed = output.trim();
+  if (trimmed.length <= DEFERRED_TOOL_OUTPUT_PREVIEW_LENGTH) {
+    return trimmed;
+  }
+
+  return `${trimmed.slice(0, Math.max(0, DEFERRED_TOOL_OUTPUT_PREVIEW_LENGTH - 1)).trimEnd()}…`;
+}
+
+function deferHeavyBlockContent(blocks: DisplayBlock[], blockOffset: number, totalBlocks: number): DisplayBlock[] {
+  return blocks.map((block, index) => {
+    const absoluteIndex = blockOffset + index;
+    if (absoluteIndex >= Math.max(0, totalBlocks - RECENT_HEAVY_CONTENT_BLOCK_COUNT)) {
+      return block;
+    }
+
+    if (block.type === 'user' && block.images?.some((image) => image.src)) {
+      return {
+        ...block,
+        images: block.images.map((image) => image.src ? { ...image, src: undefined, deferred: true } : image),
+      };
+    }
+
+    if (block.type === 'tool_use' && block.output.trim().length > DEFERRED_TOOL_OUTPUT_PREVIEW_LENGTH) {
+      return {
+        ...block,
+        output: buildDeferredToolOutputPreview(block.output),
+        outputDeferred: true,
+      };
+    }
+
+    if (block.type === 'image' && block.src) {
+      return {
+        ...block,
+        src: undefined,
+        deferred: true,
+      };
+    }
+
+    return block;
+  });
 }
 
 function extractTitleFromMessage(message: RawMessage['message']): string | null {
@@ -1115,23 +1167,53 @@ export function renameStoredSession(sessionId: string, name: string): SessionMet
   return updatedMeta;
 }
 
-export function readSessionBlocksByFile(filePath: string): SessionDetail | null {
+function resolveTailBlockLimit(tailBlocks: number | undefined, totalBlocks: number): number | null {
+  if (!Number.isInteger(tailBlocks) || typeof tailBlocks !== 'number' || tailBlocks <= 0) {
+    return null;
+  }
+
+  return Math.min(tailBlocks, totalBlocks);
+}
+
+export function readSessionBlocksByFile(filePath: string, options?: { tailBlocks?: number }): SessionDetail | null {
   const meta = readCachedSessionMeta(filePath, resolveSessionFileCwdSlug(filePath));
   if (!meta) return null;
 
   const manager = SessionManager.open(meta.file);
-  const entries = buildDisplayMessageEntriesFromSessionEntries(manager.getBranch());
+  const branchEntries = buildDisplayMessageEntriesFromSessionEntries(manager.getBranch());
+  const allBlocks = buildDisplayBlocksFromEntries(branchEntries);
+  const totalBlocks = allBlocks.length;
+  const tailBlockLimit = resolveTailBlockLimit(options?.tailBlocks, totalBlocks);
+  const blockOffset = tailBlockLimit === null ? 0 : Math.max(0, totalBlocks - tailBlockLimit);
+  const slicedBlocks = blockOffset > 0 ? allBlocks.slice(blockOffset) : allBlocks;
+  const blocks = blockOffset > 0
+    ? deferHeavyBlockContent(slicedBlocks, blockOffset, totalBlocks)
+    : slicedBlocks;
 
   return {
     meta,
-    blocks: buildDisplayBlocksFromEntries(entries),
-    contextUsage: readSessionContextUsageFromFile(meta.file),
+    blocks,
+    blockOffset,
+    totalBlocks,
+    contextUsage: readSessionContextUsageFromEntries(manager.getEntries()),
   };
 }
 
-export function readSessionBlocks(sessionId: string): SessionDetail | null {
+export function readSessionBlocks(sessionId: string, options?: { tailBlocks?: number }): SessionDetail | null {
   const meta = resolveSessionMeta(sessionId);
-  return meta ? readSessionBlocksByFile(meta.file) : null;
+  return meta ? readSessionBlocksByFile(meta.file, options) : null;
+}
+
+export function readSessionBlock(sessionId: string, blockId: string): DisplayBlock | null {
+  const meta = resolveSessionMeta(sessionId);
+  if (!meta) {
+    return null;
+  }
+
+  const manager = SessionManager.open(meta.file);
+  const branchEntries = buildDisplayMessageEntriesFromSessionEntries(manager.getBranch());
+  const blocks = buildDisplayBlocksFromEntries(branchEntries);
+  return blocks.find((block) => block.id === blockId) ?? null;
 }
 
 export function readSessionTreeByFile(filePath: string): ConversationTreeSnapshot | null {

@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, un
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { buildDisplayBlocksFromEntries, clearSessionCaches, listSessions, readSessionBlocks, readSessionTree, renameStoredSession } from './sessions.js';
+import { buildDisplayBlocksFromEntries, clearSessionCaches, listSessions, readSessionBlock, readSessionBlocks, readSessionTree, renameStoredSession } from './sessions.js';
 
 const originalEnv = process.env;
 const tempDirs: string[] = [];
@@ -119,6 +119,131 @@ describe('sessions', () => {
     expect(detail?.blocks.filter((block) => block.type === 'text').map((block) => block.text)).toEqual([
       'Loaded without listing first',
     ]);
+  });
+
+  it('can load only the newest tail of conversation blocks for large archived transcripts', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    writeSessionFile({
+      sessionsDir,
+      sessionId: 'session-tail',
+      title: 'Tail block test',
+      assistantTexts: ['Reply 1', 'Reply 2', 'Reply 3', 'Reply 4'],
+    });
+
+    const detail = readSessionBlocks('session-tail', { tailBlocks: 2 });
+    expect(detail).not.toBeNull();
+    expect(detail?.totalBlocks).toBe(5);
+    expect(detail?.blockOffset).toBe(3);
+    expect(detail?.blocks.map((block) => block.type === 'text' ? block.text : block.type)).toEqual([
+      'Reply 3',
+      'Reply 4',
+    ]);
+  });
+
+  it('defers heavy tool output and image payloads in partial archived transcript loads', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    const sessionId = 'session-heavy';
+    const cwdSlug = '--tmp-project--';
+    const dir = join(sessionsDir, cwdSlug);
+    mkdirSync(dir, { recursive: true });
+    const filePath = join(dir, `2026-03-11T12-00-00-000Z_${sessionId}.jsonl`);
+
+    const lines: string[] = [
+      JSON.stringify({ type: 'session', id: sessionId, timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project', version: 3 }),
+      JSON.stringify({ type: 'model_change', id: 'm1', parentId: null, timestamp: '2026-03-11T12:00:00.100Z', modelId: 'test-model' }),
+      JSON.stringify({ type: 'message', id: 'u1', parentId: 'm1', timestamp: '2026-03-11T12:00:01.000Z', message: { role: 'user', content: [{ type: 'text', text: 'warmup' }] } }),
+      JSON.stringify({ type: 'message', id: 'a1', parentId: 'u1', timestamp: '2026-03-11T12:00:02.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'ack' }] } }),
+      JSON.stringify({
+        type: 'message',
+        id: 'u2',
+        parentId: 'a1',
+        timestamp: '2026-03-11T12:00:03.000Z',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'inspect this screenshot' },
+            { type: 'image', data: 'QUJDRA==', mimeType: 'image/png', name: 'diagram.png' },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'a2',
+        parentId: 'u2',
+        timestamp: '2026-03-11T12:00:04.000Z',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'toolCall', id: 'tool-1', name: 'bash', arguments: { command: 'printf heavy' } }],
+        },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 't1',
+        parentId: 'a2',
+        timestamp: '2026-03-11T12:00:05.000Z',
+        message: {
+          role: 'toolResult',
+          toolCallId: 'tool-1',
+          toolName: 'bash',
+          content: [
+            { type: 'text', text: 'x'.repeat(1200) },
+            { type: 'image', data: 'RUZHSA==', mimeType: 'image/png' },
+          ],
+        },
+      }),
+      JSON.stringify({ type: 'message', id: 'a3', parentId: 't1', timestamp: '2026-03-11T12:00:06.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'continuing' }] } }),
+    ];
+
+    let parentId = 'a3';
+    for (let index = 0; index < 45; index += 1) {
+      const userId = `u${index + 10}`;
+      const assistantId = `a${index + 10}`;
+      lines.push(JSON.stringify({
+        type: 'message',
+        id: userId,
+        parentId,
+        timestamp: `2026-03-11T12:01:${String(index).padStart(2, '0')}.000Z`,
+        message: { role: 'user', content: [{ type: 'text', text: `follow-up ${index}` }] },
+      }));
+      lines.push(JSON.stringify({
+        type: 'message',
+        id: assistantId,
+        parentId: userId,
+        timestamp: `2026-03-11T12:02:${String(index).padStart(2, '0')}.000Z`,
+        message: { role: 'assistant', content: [{ type: 'text', text: `answer ${index}` }] },
+      }));
+      parentId = assistantId;
+    }
+
+    writeFileSync(filePath, lines.join('\n') + '\n');
+
+    const detail = readSessionBlocks(sessionId, { tailBlocks: 95 });
+    expect(detail).not.toBeNull();
+    expect(detail?.blockOffset).toBeGreaterThan(0);
+
+    const userBlock = detail?.blocks.find((block) => block.type === 'user' && block.id === 'u2');
+    expect(userBlock).toEqual(expect.objectContaining({ type: 'user' }));
+    expect(userBlock && 'images' in userBlock ? userBlock.images?.[0] : undefined).toEqual(expect.objectContaining({ deferred: true, src: undefined }));
+
+    const toolBlock = detail?.blocks.find((block) => block.type === 'tool_use');
+    expect(toolBlock).toEqual(expect.objectContaining({ type: 'tool_use', outputDeferred: true }));
+    expect(toolBlock && 'output' in toolBlock ? toolBlock.output.endsWith('…') : false).toBe(true);
+
+    const imageBlock = detail?.blocks.find((block) => block.type === 'image');
+    expect(imageBlock).toEqual(expect.objectContaining({ type: 'image', deferred: true, src: undefined }));
+
+    const hydratedToolBlock = toolBlock ? readSessionBlock(sessionId, toolBlock.id) : null;
+    expect(hydratedToolBlock).toEqual(expect.objectContaining({ type: 'tool_use' }));
+    expect(hydratedToolBlock && 'outputDeferred' in hydratedToolBlock ? hydratedToolBlock.outputDeferred : undefined).toBeUndefined();
+    expect(hydratedToolBlock && 'output' in hydratedToolBlock ? hydratedToolBlock.output.length : 0).toBe(1200);
+
+    const hydratedUserBlock = readSessionBlock(sessionId, 'u2');
+    expect(hydratedUserBlock).toEqual(expect.objectContaining({ type: 'user' }));
+    expect(hydratedUserBlock && 'images' in hydratedUserBlock ? hydratedUserBlock.images?.[0]?.src : undefined).toContain('data:image/png;base64,');
   });
 
   it('prefers a persisted session display name over the first user message fallback', () => {

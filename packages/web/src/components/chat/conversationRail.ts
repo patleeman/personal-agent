@@ -150,7 +150,11 @@ export function buildConversationRailSnippet(block: Extract<MessageBlock, { type
   return 'Assistant message';
 }
 
-export function getConversationRailTurns(messages: MessageBlock[], maxLength = DEFAULT_SNIPPET_LIMIT): ConversationRailTurn[] {
+export function getConversationRailTurns(
+  messages: MessageBlock[],
+  maxLength = DEFAULT_SNIPPET_LIMIT,
+  indexOffset = 0,
+): ConversationRailTurn[] {
   const turns: ConversationRailTurn[] = [];
 
   for (const [index, message] of messages.entries()) {
@@ -159,7 +163,7 @@ export function getConversationRailTurns(messages: MessageBlock[], maxLength = D
     }
 
     turns.push({
-      index,
+      index: indexOffset + index,
       kind: 'user',
       label: 'User',
       snippet: buildConversationRailSnippet(message, maxLength),

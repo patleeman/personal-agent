@@ -13,6 +13,7 @@ import {
 
 interface ConversationRailProps {
   messages: MessageBlock[];
+  messageIndexOffset?: number;
   scrollContainerRef: RefObject<HTMLDivElement>;
   onJumpToMessage: (index: number) => void;
 }
@@ -44,8 +45,13 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-export const ConversationRail = memo(function ConversationRail({ messages, scrollContainerRef, onJumpToMessage }: ConversationRailProps) {
-  const turns = useMemo(() => getConversationRailTurns(messages), [messages]);
+export const ConversationRail = memo(function ConversationRail({
+  messages,
+  messageIndexOffset = 0,
+  scrollContainerRef,
+  onJumpToMessage,
+}: ConversationRailProps) {
+  const turns = useMemo(() => getConversationRailTurns(messages, undefined, messageIndexOffset), [messageIndexOffset, messages]);
   const turnsByIndex = useMemo(() => new Map(turns.map((turn) => [turn.index, turn])), [turns]);
 
   const [markers, setMarkers] = useState<MeasuredConversationRailMarker[]>([]);

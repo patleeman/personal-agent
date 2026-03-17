@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync,
 import { basename, dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
-import { listSessions, readSessionBlocks, readSessionSearchText, readSessionTree, renameStoredSession } from './sessions.js';
+import { listSessions, readSessionBlock, readSessionBlocks, readSessionSearchText, readSessionTree, renameStoredSession } from './sessions.js';
 import { invalidateAppTopics, startAppEventMonitor, subscribeAppEvents, type AppEventTopic } from './appEvents.js';
 import { resolveConversationCwd, resolveRequestedCwd } from './conversationCwd.js';
 import { pickFolder } from './folderPicker.js';
@@ -3342,7 +3342,17 @@ app.get('/api/sessions', (_req, res) => {
 
 app.get('/api/sessions/:id', (req, res) => {
   try {
-    const result = readSessionBlocks(req.params.id);
+    const rawTailBlocks = Array.isArray(req.query.tailBlocks) ? req.query.tailBlocks[0] : req.query.tailBlocks;
+    const parsedTailBlocks = typeof rawTailBlocks === 'string'
+      ? Number.parseInt(rawTailBlocks, 10)
+      : typeof rawTailBlocks === 'number'
+        ? rawTailBlocks
+        : undefined;
+    const tailBlocks = Number.isInteger(parsedTailBlocks) && (parsedTailBlocks as number) > 0
+      ? parsedTailBlocks as number
+      : undefined;
+
+    const result = readSessionBlocks(req.params.id, tailBlocks ? { tailBlocks } : undefined);
     if (!result) { res.status(404).json({ error: 'Session not found' }); return; }
     res.json(result);
   } catch (err) {
@@ -3358,6 +3368,20 @@ app.get('/api/sessions/:id/tree', (req, res) => {
   try {
     const result = readSessionTree(req.params.id);
     if (!result) { res.status(404).json({ error: 'Session not found' }); return; }
+    res.json(result);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.get('/api/sessions/:id/blocks/:blockId', (req, res) => {
+  try {
+    const result = readSessionBlock(req.params.id, req.params.blockId);
+    if (!result) { res.status(404).json({ error: 'Session block not found' }); return; }
     res.json(result);
   } catch (err) {
     logError('request handler error', {

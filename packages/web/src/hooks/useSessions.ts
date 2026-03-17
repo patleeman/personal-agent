@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { api } from '../api';
 import type { SessionDetail, SessionMeta } from '../types';
 
 // ── Session list ──────────────────────────────────────────────────────────────
@@ -21,20 +22,46 @@ export function useSessions() {
 
 // ── Session detail ────────────────────────────────────────────────────────────
 
-export function useSessionDetail(sessionId: string | undefined) {
+export function useSessionDetail(sessionId: string | undefined, options?: { tailBlocks?: number }) {
   const [detail, setDetail]   = useState<SessionDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
 
   useEffect(() => {
-    if (!sessionId) return;
+    if (!sessionId) {
+      setDetail(null);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    let cancelled = false;
     setLoading(true);
-    setDetail(null);
-    fetch(`/api/sessions/${sessionId}`)
-      .then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json(); })
-      .then((data: SessionDetail) => { setDetail(data); setLoading(false); })
-      .catch(e => { setError(String(e)); setLoading(false); });
-  }, [sessionId]);
+    setError(null);
+    setDetail((current) => current?.meta.id === sessionId ? current : null);
+
+    api.sessionDetail(sessionId, options)
+      .then((data) => {
+        if (cancelled) {
+          return;
+        }
+
+        setDetail(data);
+        setLoading(false);
+      })
+      .catch((nextError) => {
+        if (cancelled) {
+          return;
+        }
+
+        setError(nextError instanceof Error ? nextError.message : String(nextError));
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [options?.tailBlocks, sessionId]);
 
   return { detail, loading, error };
 }

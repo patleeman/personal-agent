@@ -54,6 +54,10 @@ import { useReloadState } from '../reloadState';
 import { ensureConversationTabOpen } from '../sessionTabs';
 import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSceneFromBlob, parseExcalidrawSceneFromSourceData, serializeExcalidrawScene } from '../excalidrawUtils';
 
+const INITIAL_HISTORICAL_TAIL_BLOCKS = 400;
+const HISTORICAL_TAIL_BLOCKS_STEP = 400;
+const HISTORICAL_TAIL_BLOCKS_JUMP_PADDING = 40;
+
 // ── Model picker ──────────────────────────────────────────────────────────────
 
 function useModels() {
@@ -716,18 +720,61 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   // Session is "live" if SSE connected (has blocks) OR API confirms it
   const isLiveSession = stream.blocks.length > 0 || stream.isStreaming || confirmedLive === true;
+  const [historicalTailBlocks, setHistoricalTailBlocks] = useState(INITIAL_HISTORICAL_TAIL_BLOCKS);
+
+  useEffect(() => {
+    setHistoricalTailBlocks(INITIAL_HISTORICAL_TAIL_BLOCKS);
+  }, [id]);
 
   // ── Existing session data (read-only JSONL) ───────────────────────────────
-  const { detail: sessionDetail, loading: sessionLoading } = useSessionDetail(id);
+  const { detail: sessionDetail, loading: sessionLoading } = useSessionDetail(id, { tailBlocks: historicalTailBlocks });
   const visibleSessionDetail = sessionDetail?.meta.id === id ? sessionDetail : null;
+  const [hydratedHistoricalBlocks, setHydratedHistoricalBlocks] = useState<Record<string, MessageBlock>>({});
+  const [hydratingHistoricalBlockIds, setHydratingHistoricalBlockIds] = useState<string[]>([]);
+  const hydratingHistoricalBlockIdSet = useMemo(
+    () => new Set(hydratingHistoricalBlockIds),
+    [hydratingHistoricalBlockIds],
+  );
+
+  useEffect(() => {
+    setHydratedHistoricalBlocks({});
+    setHydratingHistoricalBlockIds([]);
+  }, [id]);
+
+  const hydrateHistoricalBlock = useCallback(async (blockId: string) => {
+    const normalizedBlockId = blockId.trim();
+    if (!id || normalizedBlockId.length === 0 || hydratingHistoricalBlockIdSet.has(normalizedBlockId)) {
+      return;
+    }
+
+    setHydratingHistoricalBlockIds((current) => current.includes(normalizedBlockId)
+      ? current
+      : [...current, normalizedBlockId]);
+
+    try {
+      const block = await api.sessionBlock(id, normalizedBlockId);
+      const messageBlock = displayBlockToMessageBlock(block);
+      setHydratedHistoricalBlocks((current) => ({
+        ...current,
+        [normalizedBlockId]: messageBlock,
+      }));
+    } catch (error) {
+      console.error('Failed to hydrate historical block', error);
+    } finally {
+      setHydratingHistoricalBlockIds((current) => current.filter((candidate) => candidate !== normalizedBlockId));
+    }
+  }, [hydratingHistoricalBlockIdSet, id]);
 
   // Historical messages from the JSONL snapshot (doesn't update after load).
   // Memoize the conversion so typing in the composer does not rebuild long transcripts.
   const baseMessages = useMemo<MessageBlock[]>(() => (
     visibleSessionDetail
-      ? visibleSessionDetail.blocks.map(displayBlockToMessageBlock)
+      ? visibleSessionDetail.blocks.map((block) => {
+          const hydrated = hydratedHistoricalBlocks[block.id];
+          return hydrated ?? displayBlockToMessageBlock(block);
+        })
       : []
-  ), [visibleSessionDetail]);
+  ), [hydratedHistoricalBlocks, visibleSessionDetail]);
 
   // Live sessions hydrate from the SSE snapshot; until that arrives, fall back to
   // JSONL + live deltas only when we have at least one source of blocks.
@@ -744,6 +791,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     return visibleSessionDetail ? baseMessages : undefined;
   }, [baseMessages, isLiveSession, stream.blocks, stream.hasSnapshot, visibleSessionDetail]);
+  const historicalBlockOffset = visibleSessionDetail?.blockOffset ?? 0;
+  const historicalHasOlderBlocks = historicalBlockOffset > 0;
+  const showHistoricalLoadMore = historicalHasOlderBlocks && !(isLiveSession && stream.hasSnapshot);
+  const messageIndexOffset = isLiveSession && stream.hasSnapshot ? 0 : historicalBlockOffset;
   const messageCount = realMessages?.length ?? 0;
   const artifactAutoOpenSeededRef = useRef(false);
   const [showTree, setShowTree] = useState(false);
@@ -1105,6 +1156,27 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef   = useRef<HTMLDivElement>(null);
   const deferredResumeAutoResumeKeyRef = useRef<string | null>(null);
+  const pendingJumpMessageIndexRef = useRef<number | null>(null);
+
+  const loadOlderMessages = useCallback((targetMessageIndex?: number) => {
+    if (!visibleSessionDetail) {
+      return;
+    }
+
+    const minimumTailBlocks = typeof targetMessageIndex === 'number'
+      ? Math.max(
+          historicalTailBlocks + HISTORICAL_TAIL_BLOCKS_STEP,
+          visibleSessionDetail.totalBlocks - targetMessageIndex + HISTORICAL_TAIL_BLOCKS_JUMP_PADDING,
+        )
+      : historicalTailBlocks + HISTORICAL_TAIL_BLOCKS_STEP;
+    const nextTailBlocks = Math.min(visibleSessionDetail.totalBlocks, minimumTailBlocks);
+
+    if (nextTailBlocks <= historicalTailBlocks) {
+      return;
+    }
+
+    setHistoricalTailBlocks(nextTailBlocks);
+  }, [historicalTailBlocks, visibleSessionDetail]);
 
   // Derive menu states
   const slashInput = useMemo(() => parseSlashInput(input), [input]);
@@ -1574,8 +1646,32 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   // Jump to message by index
   const jumpToMessage = useCallback((index: number) => {
     const el = scrollRef.current?.querySelector(`#msg-${index}`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, []);
+    if (el) {
+      pendingJumpMessageIndexRef.current = null;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    if (index < historicalBlockOffset) {
+      pendingJumpMessageIndexRef.current = index;
+      loadOlderMessages(index);
+    }
+  }, [historicalBlockOffset, loadOlderMessages]);
+
+  useLayoutEffect(() => {
+    const pendingIndex = pendingJumpMessageIndexRef.current;
+    if (pendingIndex === null || pendingIndex < historicalBlockOffset) {
+      return;
+    }
+
+    const el = scrollRef.current?.querySelector(`#msg-${pendingIndex}`);
+    if (!el) {
+      return;
+    }
+
+    pendingJumpMessageIndexRef.current = null;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [historicalBlockOffset, realMessages]);
 
   useEffect(() => {
     if (!isEditingTitle) {
@@ -1708,9 +1804,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
+    const localMessageIndex = messageIndex - messageIndexOffset;
+    if (localMessageIndex < 0 || localMessageIndex >= realMessages.length) {
+      showNotice('danger', 'Load the relevant part of the conversation before branching from it.');
+      return;
+    }
+
     try {
       const liveConversationId = await ensureConversationIsLiveForFork();
-      const clickedBlock = realMessages[messageIndex];
+      const clickedBlock = realMessages[localMessageIndex];
 
       if (clickedBlock?.type === 'text') {
         const entryId = resolveSessionEntryIdFromBlockId(clickedBlock.id);
@@ -1725,7 +1827,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       }
 
       const entries = await api.forkEntries(liveConversationId);
-      const entry = resolveForkEntryForMessage(realMessages, messageIndex, entries);
+      const entry = resolveForkEntryForMessage(realMessages, localMessageIndex, entries);
       if (!entry) {
         throw new Error('No forkable message found for that point in the conversation.');
       }
@@ -1739,7 +1841,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } catch (error) {
       showNotice('danger', `Fork failed: ${(error as Error).message}`);
     }
-  }, [ensureConversationIsLiveForFork, id, navigate, realMessages, showNotice]);
+  }, [ensureConversationIsLiveForFork, id, messageIndexOffset, navigate, realMessages, showNotice]);
 
   function openHeaderPreference(preference: 'model' | 'thinking') {
     setHeaderPreference((current) => current === preference ? null : preference);
@@ -2805,20 +2907,42 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       <div className="relative flex-1 min-h-0">
         <div ref={scrollRef} className="conversation-scroll-shell h-full overflow-y-auto overflow-x-hidden">
           {hasRenderableMessages && realMessages ? (
-            <ChatView
-              messages={realMessages}
-              isStreaming={stream.isStreaming}
-              onCheckpointMessage={id && !stream.isStreaming ? saveMemoryFromMessage : undefined}
-              onForkMessage={id && !stream.isStreaming ? forkConversationFromMessage : undefined}
-              onOpenArtifact={openArtifact}
-              activeArtifactId={selectedArtifactId}
-              onOpenRun={openRun}
-              activeRunId={selectedRunId}
-              onResumeConversation={conversationResumeState.canResume ? resumeConversation : undefined}
-              resumeConversationBusy={resumeConversationBusy}
-              resumeConversationTitle={conversationResumeState.title}
-              resumeConversationLabel={conversationResumeState.actionLabel ?? 'resume'}
-            />
+            <>
+              {showHistoricalLoadMore && visibleSessionDetail && (
+                <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border-subtle bg-surface/90 px-6 py-3 backdrop-blur">
+                  <div className="min-w-0 text-[11px] text-secondary">
+                    Showing the latest <span className="font-medium text-primary">{visibleSessionDetail.blocks.length}</span> of{' '}
+                    <span className="font-medium text-primary">{visibleSessionDetail.totalBlocks}</span> blocks.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => loadOlderMessages()}
+                    disabled={sessionLoading}
+                    className="ui-action-button shrink-0 text-[11px]"
+                  >
+                    {sessionLoading ? 'Loading older…' : `Load ${Math.min(HISTORICAL_TAIL_BLOCKS_STEP, historicalBlockOffset)} older blocks`}
+                  </button>
+                </div>
+              )}
+              <ChatView
+                key={id ?? 'draft-conversation'}
+                messages={realMessages}
+                messageIndexOffset={messageIndexOffset}
+                isStreaming={stream.isStreaming}
+                onCheckpointMessage={id && !stream.isStreaming ? saveMemoryFromMessage : undefined}
+                onForkMessage={id && !stream.isStreaming ? forkConversationFromMessage : undefined}
+                onHydrateMessage={hydrateHistoricalBlock}
+                hydratingMessageBlockIds={hydratingHistoricalBlockIdSet}
+                onOpenArtifact={openArtifact}
+                activeArtifactId={selectedArtifactId}
+                onOpenRun={openRun}
+                activeRunId={selectedRunId}
+                onResumeConversation={conversationResumeState.canResume ? resumeConversation : undefined}
+                resumeConversationBusy={resumeConversationBusy}
+                resumeConversationTitle={conversationResumeState.title}
+                resumeConversationLabel={conversationResumeState.actionLabel ?? 'resume'}
+              />
+            </>
           ) : showConversationLoadingState ? (
             <LoadingState label="Loading session…" className="justify-center h-full" />
           ) : (
@@ -2851,6 +2975,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         {shouldRenderConversationRail && realMessages && (
           <ConversationRail
             messages={realMessages}
+            messageIndexOffset={messageIndexOffset}
             scrollContainerRef={scrollRef}
             onJumpToMessage={jumpToMessage}
           />

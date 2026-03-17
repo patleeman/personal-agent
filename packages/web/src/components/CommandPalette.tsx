@@ -628,6 +628,9 @@ export function CommandPalette() {
     () => archivedSessions.map((session) => session.id),
     [archivedSessions],
   );
+  const shouldIndexArchivedSearch = open
+    && query.trim().length > 0
+    && (scope === 'all' || scope === 'archived');
 
   useEffect(() => {
     if (!open) {
@@ -637,11 +640,20 @@ export function CommandPalette() {
     if (archivedSessionIds.length === 0) {
       setArchivedSearchIndex({});
       setArchivedSearchError(null);
+      setArchivedSearchLoading(false);
       return;
     }
 
-    const missingSessionIds = archivedSessionIds.filter((sessionId) => archivedSearchIndex[sessionId] === undefined);
+    if (!shouldIndexArchivedSearch) {
+      setArchivedSearchLoading(false);
+      return;
+    }
+
+    const missingSessionIds = archivedSessionIds
+      .filter((sessionId) => archivedSearchIndex[sessionId] === undefined)
+      .slice(0, 25);
     if (missingSessionIds.length === 0) {
+      setArchivedSearchLoading(false);
       return;
     }
 
@@ -676,7 +688,7 @@ export function CommandPalette() {
     return () => {
       cancelled = true;
     };
-  }, [archivedSearchIndex, archivedSessionIds, open]);
+  }, [archivedSearchIndex, archivedSessionIds, open, query, scope, shouldIndexArchivedSearch]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -905,10 +917,11 @@ export function CommandPalette() {
                 const itemIndex = runningIndex;
                 const isSelected = itemIndex === cursor;
                 const isBusy = busyItemId === item.id;
-                const isMemoryRow = group.section === 'memories' && item.action.kind === 'startMemory';
+                const action = item.action;
+                const isMemoryRow = group.section === 'memories' && action.kind === 'startMemory';
 
                 if (isMemoryRow) {
-                  const memoryId = item.action.memoryId;
+                  const memoryId = action.memoryId;
 
                   return (
                     <div
