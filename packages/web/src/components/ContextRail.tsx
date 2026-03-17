@@ -31,8 +31,7 @@ import { useConversations } from '../hooks/useConversations';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { buildCapabilityCards, buildIdentitySummary, buildKnowledgeSections, buildMemoryPageSummary } from '../memoryOverview';
 import { emitMemoriesChanged } from '../memoryDocEvents';
-import { getScheduledTaskBody, isScheduledTaskDetail } from '../scheduledTaskDetail';
-import type { ActivityEntry, DurableRunDetailResult, DurableRunRecord, LiveSessionContext, ProjectDetail, ProjectRecord, ScheduledTaskDetail } from '../types';
+import type { ActivityEntry, DurableRunDetailResult, DurableRunRecord, LiveSessionContext, ProjectDetail, ProjectRecord } from '../types';
 import { formatDate, kindMeta, timeAgo } from '../utils';
 import { useAppData, useAppEvents } from '../contexts';
 import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
@@ -41,6 +40,7 @@ import { closeConversationTab, ensureConversationTabOpen } from '../sessionTabs'
 import { ConversationArtifactPanel } from './ConversationArtifactPanel';
 import { ProjectDetailPanel } from './ProjectDetailPanel';
 import { ProjectOverviewPanel } from './ProjectOverviewPanel';
+import { ScheduledTaskCreatePanel, ScheduledTaskPanel } from './ScheduledTaskPanel';
 import { ErrorState, IconButton, LoadingState, Pill, SurfacePanel } from './ui';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1240,148 +1240,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
 
 // ── Task detail ───────────────────────────────────────────────────────────────
 
-function cronHuman(cron: string): string {
-  const parts = cron.trim().split(/\s+/);
-  if (parts.length !== 5) return cron;
-  const [min, hour] = parts;
-  const m = hour.match(/^\*\/(\d+)$/);
-  if (m && min !== '*') return `every ${m[1]}h at :${min.padStart(2,'0')}`;
-  if (hour !== '*' && min !== '*' && !hour.includes('*')) return `daily at ${hour.padStart(2,'0')}:${min.padStart(2,'0')}`;
-  return cron;
-}
-
-function TaskContext({ id }: { id: string }) {
-  const [task, setTask] = useState<ScheduledTaskDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    setLoading(true);
-    setError(null);
-    setTask(null);
-
-    api.taskDetail(id)
-      .then((detail) => {
-        if (cancelled) {
-          return;
-        }
-
-        if (!isScheduledTaskDetail(detail)) {
-          throw new Error('Task details are unavailable.');
-        }
-
-        setTask(detail);
-      })
-      .catch((nextError) => {
-        if (cancelled) {
-          return;
-        }
-
-        setError(nextError instanceof Error ? nextError.message : 'Could not load task details.');
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [id]);
-
-  if (loading) return <LoadingState label="Loading task…" className="px-4 py-4" />;
-  if (error) return <ErrorState message={error} className="px-4 py-4" />;
-  if (!task) return <div className="px-4 py-4 text-[12px] text-dim">Task not found.</div>;
-
-  const body = getScheduledTaskBody(task.fileContent);
-  const lines = body.split('\n');
-  const statusCls = task.running ? 'text-accent' : task.lastStatus === 'success' ? 'text-success' : task.lastStatus === 'failure' ? 'text-danger' : 'text-dim';
-  const statusText = task.running ? 'running' : task.lastStatus ?? 'never run';
-  const scheduleText = task.cron ? cronHuman(task.cron) : null;
-
-  return (
-    <div className="space-y-4 px-4 py-4">
-      <div className="space-y-1">
-        <p className="ui-card-title font-mono">{id}</p>
-        <p className="ui-card-meta">
-          <span className={statusCls}>{statusText}</span>
-          {task.lastRunAt && <><span className="opacity-40 mx-1.5">·</span>last run {timeAgo(task.lastRunAt)}</>}
-          {!task.enabled && <><span className="opacity-40 mx-1.5">·</span>disabled</>}
-        </p>
-      </div>
-
-      <div className="border-t border-border-subtle pt-3">
-        <div className="ui-detail-list">
-          {scheduleText && (
-            <div className="ui-detail-row">
-              <span className="ui-detail-label">schedule</span>
-              <div className="min-w-0">
-                <p className="ui-detail-value">{scheduleText}</p>
-                <p className="ui-card-meta mt-0.5">{task.cron}</p>
-              </div>
-            </div>
-          )}
-          {task.model && (
-            <div className="ui-detail-row">
-              <span className="ui-detail-label">model</span>
-              <p className="ui-detail-value">{task.model.split('/').pop()}</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="border-t border-border-subtle pt-3">
-        <p className="ui-section-label mb-2">Prompt</p>
-        <div className="text-[12px] leading-relaxed text-secondary space-y-1 whitespace-pre-wrap break-words">
-          {lines.map((line, i) => {
-            if (line.startsWith('## ') || line.startsWith('# ')) return <p key={i} className="text-primary font-semibold text-[13px] mt-2">{line.replace(/^#+\s/, '')}</p>;
-            if (line.startsWith('- ') || line.match(/^\d+\. /)) return <p key={i} className="pl-2">{line}</p>;
-            if (line.trim() === '') return <div key={i} className="h-1.5" />;
-            return <p key={i}>{line}</p>;
-          })}
-        </div>
-      </div>
-      <TaskLogSection taskId={id} />
-    </div>
-  );
-}
-
-function TaskLogSection({ taskId }: { taskId: string }) {
-  const [log, setLog]     = useState<string | null>(null);
-  const [logPath, setLogPath] = useState<string | null>(null);
-  const [open, setOpen]   = useState(false);
-  const [loading, setLoading] = useState(false);
-
-  function loadLog() {
-    if (log !== null) { setOpen(o => !o); return; }
-    setLoading(true);
-    fetch(`/api/tasks/${taskId}/log`)
-      .then(r => r.ok ? r.json() as Promise<{ log: string; path: string }> : Promise.reject())
-      .then(d => { setLog(d.log); setLogPath(d.path); setOpen(true); setLoading(false); })
-      .catch(() => { setLog('No log available.'); setOpen(true); setLoading(false); });
-  }
-
-  return (
-    <div className="border-t border-border-subtle pt-3">
-      <button onClick={loadLog} className="text-[11px] text-accent hover:underline flex items-center gap-1.5">
-        {loading ? <span className="animate-spin text-[10px]">⟳</span> : (open ? '▾' : '▸')}
-        Last run log
-      </button>
-      {open && log !== null && (
-        <div className="mt-2">
-          {logPath && <p className="text-[9px] font-mono text-dim/50 truncate mb-1">{logPath.split('/').slice(-1)[0]}</p>}
-          <pre className="text-[10px] font-mono text-secondary whitespace-pre-wrap break-all bg-elevated rounded-lg p-2.5 max-h-64 overflow-y-auto leading-relaxed">
-            {log || '(empty)'}
-          </pre>
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Inbox item detail ─────────────────────────────────────────────────────────
 
 function InboxItemContext({ id }: { id: string }) {
@@ -1894,6 +1752,7 @@ export function ContextRail() {
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
   const selectedRunId = getConversationRunIdFromSearch(location.search);
   const scheduledSection = section === 'scheduled' || section === 'automations' || section === 'tasks';
+  const creatingScheduledTask = scheduledSection && new URLSearchParams(location.search).get('new') === '1';
 
   // Conversations
   if (section === 'conversations' && id && selectedArtifactId) return (
@@ -1922,16 +1781,22 @@ export function ContextRail() {
   );
 
   // Scheduled tasks
+  if (creatingScheduledTask) return (
+    <div className="flex-1 overflow-y-auto flex flex-col">
+      <RailHeader label="Scheduled task" sub="new" />
+      <ScheduledTaskCreatePanel />
+    </div>
+  );
   if (scheduledSection && id) return (
     <div className="flex-1 overflow-y-auto flex flex-col">
       <RailHeader label="Scheduled task" sub={id} />
-      <TaskContext id={id} />
+      <ScheduledTaskPanel id={id} />
     </div>
   );
   if (scheduledSection) return (
     <div className="flex-1 flex flex-col">
       <RailHeader label="Scheduled" />
-      <EmptyPrompt text="Select a scheduled task to see its prompt and schedule." />
+      <EmptyPrompt text="Select a scheduled task or start a new one." />
     </div>
   );
 

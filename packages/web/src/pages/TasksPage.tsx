@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAppData, useSseConnection } from '../contexts';
 import type { ScheduledTaskSummary } from '../types';
+import { formatTaskSchedule } from '../taskSchedule';
 import { timeAgo } from '../utils';
 import { EmptyState, ErrorState, ListLinkRow, LoadingState, PageHeader, PageHeading, ToolbarButton } from '../components/ui';
 
@@ -20,26 +21,6 @@ function statusText(task: ScheduledTaskSummary): { text: string; cls: string } {
   if (task.lastStatus === 'failure') return { text: 'failed', cls: 'text-danger' };
   if (!task.enabled) return { text: 'disabled', cls: 'text-dim' };
   return { text: 'pending', cls: 'text-dim' };
-}
-
-function cronHuman(cron: string): string {
-  const parts = cron.trim().split(/\s+/);
-  if (parts.length !== 5) return cron;
-
-  const [min, hour, dom, month, dow] = parts;
-  if (dom === '*' && month === '*' && dow === '*') {
-    if (hour === '*' && min !== '*') return `every hour at :${min.padStart(2, '0')}`;
-    if (hour !== '*' && min !== '*') {
-      const hourly = hour.match(/^\*\/(\d+)$/);
-      if (hourly) return `every ${hourly[1]}h at :${min.padStart(2, '0')}`;
-      return `daily at ${hour.padStart(2, '0')}:${min.padStart(2, '0')}`;
-    }
-    if (hour === '*' && min === '*') return 'every minute';
-    const minuteStep = min.match(/^\*\/(\d+)$/);
-    if (minuteStep && hour === '*') return `every ${minuteStep[1]} min`;
-  }
-
-  return cron;
 }
 
 function TaskRow({ task, isSelected, onRefetch }: { task: ScheduledTaskSummary; isSelected: boolean; onRefetch: () => void }) {
@@ -133,10 +114,10 @@ function TaskRow({ task, isSelected, onRefetch }: { task: ScheduledTaskSummary; 
             <span className="text-warning">attempt {task.lastAttemptCount}</span>
           </>
         )}
-        {task.cron && (
+        {(task.cron || task.at) && (
           <>
             <span className="opacity-40">·</span>
-            <span>{cronHuman(task.cron)}</span>
+            <span>{formatTaskSchedule(task)}</span>
           </>
         )}
         {task.lastRunAt && (
@@ -157,6 +138,8 @@ function TaskRow({ task, isSelected, onRefetch }: { task: ScheduledTaskSummary; 
 }
 
 export function TasksPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { id: selectedId } = useParams<{ id?: string }>();
   const { tasks, setTasks } = useAppData();
   const { status: sseStatus } = useSseConnection();
@@ -180,10 +163,20 @@ export function TasksPage() {
   }, [setTasks]);
 
   const runningCount = tasks?.filter((task) => task.running).length ?? 0;
+  const showingCreateForm = new URLSearchParams(location.search).get('new') === '1';
+
+  function toggleCreateTask() {
+    navigate(showingCreateForm ? '/scheduled' : '/scheduled?new=1');
+  }
 
   return (
     <div className="flex flex-col h-full">
-      <PageHeader actions={<ToolbarButton onClick={() => { void refreshTasks(); }}>↻ Refresh</ToolbarButton>}>
+      <PageHeader actions={(
+        <>
+          <ToolbarButton onClick={toggleCreateTask}>{showingCreateForm ? 'Close new task' : '+ New task'}</ToolbarButton>
+          <ToolbarButton onClick={() => { void refreshTasks(); }}>↻ Refresh</ToolbarButton>
+        </>
+      )}>
         <PageHeading
           title="Scheduled"
           meta={
@@ -204,14 +197,15 @@ export function TasksPage() {
       <div className="flex-1 overflow-y-auto px-6 py-4">
         {isLoading && <LoadingState label="Loading scheduled tasks…" />}
         {visibleError && <ErrorState message={`Failed to load scheduled tasks: ${visibleError}`} />}
-        {!isLoading && !visibleError && tasks?.length === 0 && (
+        {!isLoading && !visibleError && tasks?.length === 0 && !showingCreateForm && (
           <EmptyState
             title="No scheduled tasks."
             body={
               <>
-                Create a <code className="font-mono text-accent">*.task.md</code> file in your profile&apos;s <code className="font-mono text-secondary">agent/tasks</code> folder.
+                Create a <code className="font-mono text-accent">*.task.md</code> file in your profile&apos;s <code className="font-mono text-secondary">agent/tasks</code> folder, or use the new-task form.
               </>
             }
+            action={<ToolbarButton onClick={toggleCreateTask}>Create task</ToolbarButton>}
           />
         )}
         {!isLoading && tasks && (

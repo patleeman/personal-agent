@@ -233,6 +233,7 @@ export interface ScheduledTaskSummary {
   running: boolean;
   enabled: boolean;
   cron?: string;
+  at?: string;
   prompt: string;
   model?: string;
   lastStatus?: string;
@@ -245,8 +246,13 @@ export interface ScheduledTaskDetail {
   id: string;
   running: boolean;
   enabled: boolean;
+  scheduleType: string;
   cron?: string;
+  at?: string;
   model?: string;
+  cwd?: string;
+  timeoutSeconds?: number;
+  prompt: string;
   lastStatus?: string;
   lastRunAt?: string;
   fileContent: string;

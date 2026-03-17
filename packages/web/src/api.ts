@@ -207,8 +207,27 @@ export const api = {
   tasks: () => get<ScheduledTaskSummary[]>('/tasks'),
   taskDetail: (id: string) =>
     get<ScheduledTaskDetail>(`/tasks/${encodeURIComponent(id)}`),
+  createTask: (input: {
+    taskId: string;
+    enabled: boolean;
+    cron?: string | null;
+    at?: string | null;
+    model?: string | null;
+    cwd?: string | null;
+    timeoutSeconds?: number | null;
+    prompt: string;
+  }) => post<{ ok: boolean; task: ScheduledTaskDetail }>('/tasks', input),
   setTaskEnabled: (id: string, enabled: boolean) =>
-    patch<{ ok: boolean }>(`/tasks/${encodeURIComponent(id)}`, { enabled }),
+    patch<{ ok: boolean; task: ScheduledTaskDetail }>(`/tasks/${encodeURIComponent(id)}`, { enabled }),
+  saveTask: (id: string, input: {
+    enabled: boolean;
+    cron?: string | null;
+    at?: string | null;
+    model?: string | null;
+    cwd?: string | null;
+    timeoutSeconds?: number | null;
+    prompt: string;
+  }) => patch<{ ok: boolean; task: ScheduledTaskDetail }>(`/tasks/${encodeURIComponent(id)}`, input),
   taskLog: (id: string) =>
     get<{ log: string; path: string }>(`/tasks/${encodeURIComponent(id)}/log`),
   runTaskNow: (id: string) =>

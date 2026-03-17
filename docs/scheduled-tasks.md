@@ -147,7 +147,10 @@ Each execution still writes a durable run record, log, and final result under th
 The Scheduled page lets you:
 
 - inspect discovered tasks
+- create a new task from the UI
 - enable or disable a task
+- edit a task from the detail rail with a form
+- adjust common recurring schedules with an interactive schedule builder or fall back to raw cron
 - run a task immediately
 - inspect task status visually
 
