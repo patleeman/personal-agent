@@ -152,7 +152,7 @@ Telegram supports:
 - documents
 - photos
 - voice notes
-- streaming replies
+- typing indicators while generating
 - inline action buttons on replies
 - long-output `.txt` attachment fallback
 - pending message replay after restart or crash

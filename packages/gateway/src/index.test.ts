@@ -1611,7 +1611,7 @@ describe('queued telegram message handler', () => {
     expect(promptCall.prompt).toContain('/tmp/media/sticker.webp');
   });
 
-  it('uses message edits for streaming and sends long responses as text files', async () => {
+  it('does not stream preview edits and sends long responses as text files', async () => {
     const sendMessage = vi.fn(async () => ({ message_id: 321 }));
     const editMessageText = vi.fn(async () => undefined);
     const sendDocument = vi.fn(async () => undefined);
@@ -1640,11 +1640,11 @@ describe('queued telegram message handler', () => {
     handler.handleMessage({ chat: { id: 1 }, text: 'stream please' });
     await handler.waitForIdle('1');
 
-    expect(editMessageText).toHaveBeenCalled();
+    expect(editMessageText).not.toHaveBeenCalled();
     expect(sendDocument).toHaveBeenCalledTimes(1);
   });
 
-  it('uses chunked streaming (not message edits) for group chats', async () => {
+  it('sends only the final response for group chats', async () => {
     const sendMessage = vi.fn(async () => ({ message_id: 410 }));
     const editMessageText = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
@@ -1670,14 +1670,7 @@ describe('queued telegram message handler', () => {
     await handler.waitForIdle('1');
 
     expect(editMessageText).not.toHaveBeenCalled();
-
-    const sentTexts = sendMessage.mock.calls.map((call) => {
-      const args = call as unknown[];
-      return String(args[1] ?? '');
-    });
-
-    expect(sentTexts).toContain('partial output ');
-    expect(sentTexts).toContain('final');
+    expect(sendMessage).toHaveBeenCalledWith(1, 'partial output final');
   });
 
   it('shows a temporary tool acknowledgement and deletes it after completion when enabled', async () => {
@@ -1731,15 +1724,9 @@ describe('queued telegram message handler', () => {
     expect(deleteMessage).toHaveBeenCalledWith(1, 500);
   });
 
-  it('ignores telegram "message is not modified" edit errors', async () => {
+  it('does not attempt telegram preview edits when deltas are emitted', async () => {
     const sendMessage = vi.fn(async () => ({ message_id: 333 }));
-    const editMessageText = vi.fn(async () => {
-      const error = new Error(
-        'ETELEGRAM: 400 Bad Request: message is not modified: specified new message content and reply markup are exactly the same as a current content and reply markup of the message',
-      ) as Error & { response?: { statusCode?: number } };
-      error.response = { statusCode: 400 };
-      throw error;
-    });
+    const editMessageText = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
 
     const runPrompt = vi.fn(async ({ onTextDelta }: { onTextDelta?: (delta: string) => void }) => {
@@ -1762,11 +1749,8 @@ describe('queued telegram message handler', () => {
     handler.handleMessage({ chat: { id: 1 }, text: 'stream unchanged' });
     await handler.waitForIdle('1');
 
-    const sentTexts = sendMessage.mock.calls.map((call) => {
-      const args = call as unknown[];
-      return String(args[1] ?? '');
-    });
-    expect(sentTexts.some((value) => value.includes('message is not modified'))).toBe(false);
+    expect(editMessageText).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledWith(1, 'preview');
   });
 
   it('maps /skill <name> to /skill:<name> before invoking pi', async () => {
@@ -2013,7 +1997,7 @@ describe('queued telegram message handler', () => {
     }
   });
 
-  it('streams telegram responses in chunks before completion', async () => {
+  it('waits for the final telegram response before sending output', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
 
@@ -2044,12 +2028,12 @@ describe('queued telegram message handler', () => {
     handler.handleMessage({ chat: { id: 1 }, text: 'stream this' });
     await new Promise((resolve) => setTimeout(resolve, 10));
 
-    expect(sendMessage).toHaveBeenCalledWith(1, streamedChunk);
+    expect(sendMessage).not.toHaveBeenCalled();
 
     resolveRun?.(`${streamedChunk}${finalTail}`);
     await handler.waitForIdle('1');
 
-    expect(sendMessage).toHaveBeenCalledWith(1, finalTail);
+    expect(sendMessage).toHaveBeenCalledWith(1, `${streamedChunk}${finalTail}`);
   });
 
   it('formats markdown in regular telegram responses using parse mode', async () => {
