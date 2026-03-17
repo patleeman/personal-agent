@@ -55,3 +55,6 @@ export * from './mcp-cli.js';
 
 // Memory doc path + migration exports
 export * from './memory-docs.js';
+
+// Memory doc parsing + CRUD exports
+export * from './memory-store.js';
