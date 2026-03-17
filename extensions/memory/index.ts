@@ -100,6 +100,10 @@ function resolveProfileDir(profilesRoot: string, profile: string): string {
   return join(profilesRoot, profile, 'agent');
 }
 
+function resolveMemoryDir(profilesRoot: string): string {
+  return join(profilesRoot, '_memory');
+}
+
 function toDisplayPath(cwd: string, path: string): string {
   const displayed = relative(cwd, path);
   if (!displayed || displayed.startsWith('..')) {
@@ -145,9 +149,7 @@ export function resolveMemoryProfileContext(cwd: string): MemoryProfileContext {
     activeTasksDir: activeProfile === 'shared'
       ? undefined
       : join(activeProfileDir, 'tasks'),
-    activeMemoryDir: activeProfile === 'shared'
-      ? undefined
-      : join(activeProfileDir, 'memory'),
+    activeMemoryDir: resolveMemoryDir(profilesRoot),
   };
 }
 
@@ -177,12 +179,12 @@ function buildMemoryTemplateVariables(options: {
     : '';
 
   const memorySection = options.activeMemoryDir
-    ? `- Memory dir: ${toDisplayPath(options.cwd, options.activeMemoryDir)}\n- Memory doc template: ${toDisplayPath(options.cwd, join(options.activeMemoryDir, '<doc-id>.md'))}`
-    : '- Memory dir: none (shared profile has no memory dir)';
+    ? `- Global memory dir: ${toDisplayPath(options.cwd, options.activeMemoryDir)}\n- Memory doc template: ${toDisplayPath(options.cwd, join(options.activeMemoryDir, '<doc-id>.md'))}`
+    : '- Global memory dir: unavailable';
 
   const memoryRetrievalSection = options.activeMemoryDir
-    ? `- At task start, apply the active AGENTS policy first, then load only the skills and memory docs relevant to the current request.\n- Retrieval order: AGENTS.md for durable policy/facts, skills for reusable workflows/tactics, memory docs for profile/project context.\n- Prefer targeted retrieval over broad scans; do not read the whole memory directory unless the task genuinely requires it.\n- Prefer \`pa memory list --profile ${options.activeProfile}\` to inventory available memory docs.\n- Prefer \`pa memory find --profile ${options.activeProfile} --text <query>\` and/or \`--tag\`, \`--type\`, \`--status\` to locate relevant docs quickly.\n- Use \`pa memory show <id> --profile ${options.activeProfile}\` to inspect a specific memory doc by id.\n- Use \`pa memory new <id> --profile ${options.activeProfile} ...\` to create a new memory doc with valid frontmatter when needed.\n- Use \`pa memory lint --profile ${options.activeProfile}\` after creating or heavily editing memory docs.`
-    : '- Shared profile has no profile-local memory docs; rely on shared skills and repo docs instead.';
+    ? '- At task start, apply the active AGENTS policy first, then load only the skills and memory docs relevant to the current request.\n- Retrieval order: AGENTS.md for durable policy/facts, skills for reusable workflows/tactics, global memory docs for durable knowledge/context.\n- Prefer targeted retrieval over broad scans; do not read the whole memory directory unless the task genuinely requires it.\n- Prefer \`pa memory list\` to inventory available memory docs.\n- Prefer \`pa memory find --text <query>\` and/or \`--tag\`, \`--type\`, \`--status\` to locate relevant docs quickly.\n- Use \`pa memory show <id>\` to inspect a specific memory doc by id.\n- Use \`pa memory new <id> ...\` to create a new memory doc with valid frontmatter when needed.\n- Use \`pa memory lint\` after creating or heavily editing memory docs.'
+    : '- Global memory docs are unavailable; rely on AGENTS, skills, and repo docs instead.';
 
   const docsDirDisplay = toDisplayPath(options.cwd, join(options.repoRoot, 'docs'));
   const docsIndexDisplay = toDisplayPath(options.cwd, join(options.repoRoot, 'docs', 'README.md'));

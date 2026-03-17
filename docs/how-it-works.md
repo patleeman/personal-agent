@@ -25,9 +25,9 @@ Common repo-managed examples:
 Mutable profile state defaults to the state home:
 
 - `~/.local/state/personal-agent/profiles/<profile>/agent/AGENTS.md`
-- `~/.local/state/personal-agent/profiles/<profile>/agent/memory/*.md`
 - `~/.local/state/personal-agent/profiles/<profile>/agent/tasks/*.task.md`
 - `~/.local/state/personal-agent/profiles/<profile>/agent/projects/<projectId>/PROJECT.yaml`
+- shared global memory docs at `~/.local/state/personal-agent/profiles/_memory/*.md`
 
 ### Local runtime state
 
@@ -107,13 +107,13 @@ See [Projects](./projects.md).
 
 ### Memory
 
-Memory is durable profile knowledge.
+Memory is durable agent knowledge plus profile-specific behavior overlays.
 
 Use it for:
 
-- stable behavior rules in `AGENTS.md`
-- reusable workflows in `skills/`
-- notes, briefs, specs, and references in `memory/*.md`
+- stable behavior rules in profile `AGENTS.md`
+- reusable workflows in profile `skills/`
+- shared durable notes, briefs, specs, and references in `profiles/_memory/*.md`
 
 Memory is not the same as project state.
 
@@ -201,7 +201,7 @@ Think about the system this way:
 
 This is an important rule for agents.
 
-Portable repo-managed files should not store conversation ids or session ids.
+Portable durable files should not store conversation ids or session ids.
 
 That means:
 
@@ -225,7 +225,7 @@ A common workflow looks like this:
 
 1. Start in a conversation through the web UI, TUI, or Telegram.
 2. Create or reference a project if the work is ongoing.
-3. Use profile memory and skills to guide behavior and bring in durable knowledge.
+3. Use the active profile's AGENTS/skills plus shared memory docs to guide behavior and bring in durable knowledge.
 4. If the work should happen later, put it into a scheduled task.
 5. When asynchronous work finishes, the result shows up in the inbox.
 

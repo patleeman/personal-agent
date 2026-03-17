@@ -52,7 +52,7 @@ afterEach(async () => {
 });
 
 describe('memory command', () => {
-  it('lists and shows memory docs from the active profile', async () => {
+  it('lists and shows global memory docs, migrating legacy profile files', async () => {
     const { repoRoot, profilesRoot, configPath } = createMemoryRepo();
 
     writeFile(
@@ -98,15 +98,15 @@ Desktop operational notes.
     expect(listExitCode).toBe(0);
 
     const listPayload = JSON.parse(logs[0] as string) as {
-      profile: string;
       memoryDir: string;
       docs: Array<{ id: string; title: string }>;
       parseErrors: Array<unknown>;
     };
 
-    expect(listPayload.profile).toBe('assistant');
+    expect(listPayload.memoryDir).toBe(join(profilesRoot, '_memory'));
     expect(listPayload.docs.map((doc) => doc.id)).toEqual(['desktop', 'runpod']);
     expect(listPayload.parseErrors).toHaveLength(0);
+    expect(readFileSync(join(profilesRoot, '_memory', 'runpod.md'), 'utf-8')).toContain('id: runpod');
 
     logs.length = 0;
 
@@ -132,7 +132,7 @@ Desktop operational notes.
     const { repoRoot, profilesRoot, configPath } = createMemoryRepo();
 
     writeFile(
-      join(profilesRoot, 'assistant/agent/memory/runpod.md'),
+      join(profilesRoot, '_memory', 'runpod.md'),
       `---
 id: runpod
 title: Runpod Notes
@@ -147,7 +147,7 @@ Runpod operational notes.
     );
 
     writeFile(
-      join(profilesRoot, 'assistant/agent/memory/desktop.md'),
+      join(profilesRoot, '_memory', 'desktop.md'),
       `---
 id: desktop
 title: Desktop Machine Notes
@@ -200,7 +200,7 @@ Desktop operational notes.
     const { repoRoot, profilesRoot, configPath } = createMemoryRepo();
 
     writeFile(
-      join(profilesRoot, 'assistant/agent/memory/runpod.md'),
+      join(profilesRoot, '_memory', 'runpod.md'),
       `---
 id: runpod
 title: Runpod Notes
@@ -215,7 +215,7 @@ Runpod operational notes.
     );
 
     writeFile(
-      join(profilesRoot, 'assistant/agent/memory/duplicate.md'),
+      join(profilesRoot, '_memory', 'duplicate.md'),
       `---
 id: runpod
 title: Duplicate id
@@ -230,7 +230,7 @@ Duplicate memory doc.
     );
 
     writeFile(
-      join(profilesRoot, 'assistant/agent/memory/invalid.md'),
+      join(profilesRoot, '_memory', 'invalid.md'),
       '# Missing frontmatter\n',
     );
 
@@ -300,6 +300,7 @@ Duplicate memory doc.
     };
 
     expect(payload.id).toBe('quick-note');
+    expect(payload.filePath).toBe(join(profilesRoot, '_memory', 'quick-note.md'));
     expect(payload.tags).toEqual(['notes', 'personal']);
     expect(payload.type).toBe('note');
     expect(payload.status).toBe('active');

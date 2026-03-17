@@ -206,7 +206,7 @@ Extensions with `package.json` dependencies are auto-installed on first use.
 
 Built-in extensions in this repo:
 
-- `memory` - Active-profile memory policy (AGENTS.md + skills)
+- `memory` - Active-profile memory policy (AGENTS.md + skills) plus shared global memory-doc guidance
 - `at-autocomplete-performance` - Faster `@` path completion in large repos
 - `deferred-resume` - Resume this same TUI session later after a delay
 - `web-tools` - Web search/integration

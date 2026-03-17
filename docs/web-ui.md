@@ -228,7 +228,8 @@ The Memory page is a user-facing browser for:
 
 - profile `AGENTS.md`
 - skills
-- memory docs
+- shared global memory docs
+- memory distillation work that is still running or needs attention
 
 It is meant to answer:
 
@@ -264,7 +265,7 @@ Switching the active profile affects:
 
 - inbox
 - projects
-- memory
+- the AGENTS/skills lens used around memory
 - gateway state
 - new live sessions
 

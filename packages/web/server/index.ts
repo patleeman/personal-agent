@@ -149,8 +149,10 @@ import {
   loadProfileActivityReadState,
   markConversationAttentionRead,
   markConversationAttentionUnread,
+  getMemoryDocsDir,
   getPiAgentRuntimeDir,
   getPiAgentStateDir,
+  migrateLegacyProfileMemoryDirs,
   readConversationAttachmentDownload,
   readMcpCliConfig,
   readProject,
@@ -544,6 +546,50 @@ async function readConversationMemoryDistillRunState(conversationId: string): Pr
   };
 }
 
+async function listMemoryWorkItems(): Promise<MemoryWorkItem[]> {
+  const sessionsById = new Map(listConversationSessionsSnapshot().map((session) => [session.id, session]));
+  const runs = (await listDurableRuns()).runs
+    .filter((run) => run.manifest?.kind === 'background-run' && run.manifest.source?.type === CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE)
+    .sort((left, right) => {
+      const leftCreatedAt = left.manifest?.createdAt ?? '';
+      const rightCreatedAt = right.manifest?.createdAt ?? '';
+      return rightCreatedAt.localeCompare(leftCreatedAt);
+    });
+
+  const visibleStatuses = new Set([...CONVERSATION_MEMORY_DISTILL_ACTIVE_STATUSES, 'failed', 'interrupted']);
+  const items: MemoryWorkItem[] = [];
+  const seenConversationIds = new Set<string>();
+
+  for (const run of runs) {
+    const conversationId = typeof run.manifest?.source?.id === 'string' ? run.manifest.source.id.trim() : '';
+    if (!conversationId || seenConversationIds.has(conversationId)) {
+      continue;
+    }
+
+    const status = run.status?.status ?? '';
+    if (!visibleStatuses.has(status)) {
+      continue;
+    }
+
+    seenConversationIds.add(conversationId);
+    const session = sessionsById.get(conversationId);
+    const createdAt = run.manifest?.createdAt ?? run.status?.createdAt ?? new Date().toISOString();
+    const updatedAt = run.status?.updatedAt ?? createdAt;
+
+    items.push({
+      conversationId,
+      conversationTitle: session?.title ?? conversationId,
+      runId: run.runId,
+      status,
+      createdAt,
+      updatedAt,
+      ...(run.status?.lastError ? { lastError: run.status.lastError } : {}),
+    });
+  }
+
+  return items;
+}
+
 function loadTaskStateEntries(): TaskRuntimeEntry[] {
   if (!existsSync(TASK_STATE_FILE)) {
     return [];
@@ -857,12 +903,12 @@ interface DistilledConversationMemoryDraft {
 }
 
 interface SaveDistilledConversationMemoryOptions {
-  profile: string;
   title?: string;
   summary?: string;
   tags?: string[];
   sourceConversationTitle?: string;
   sourceCwd?: string;
+  sourceProfile?: string;
   relatedProjectIds: string[];
   snapshot: CheckpointSnapshotBuildResult;
 }
@@ -1248,6 +1294,7 @@ function buildDistilledMemoryMarkdown(input: {
   distilledAt: string;
   sourceConversationTitle?: string;
   sourceCwd?: string;
+  sourceProfile?: string;
   relatedProjectIds: string[];
   anchorPreview: string;
   body: string;
@@ -1275,6 +1322,10 @@ function buildDistilledMemoryMarkdown(input: {
     frontmatterLines.push(`source_cwd: ${toYamlQuotedString(input.sourceCwd)}`);
   }
 
+  if (input.sourceProfile) {
+    frontmatterLines.push(`source_profile: ${toYamlQuotedString(input.sourceProfile)}`);
+  }
+
   if (input.relatedProjectIds.length > 0) {
     frontmatterLines.push('related_project_ids:');
     for (const projectId of input.relatedProjectIds) {
@@ -1288,8 +1339,7 @@ function buildDistilledMemoryMarkdown(input: {
 }
 
 function saveDistilledConversationMemory(options: SaveDistilledConversationMemoryOptions): MemoryDocItem {
-  const memoryDir = join(getProfilesRoot(), options.profile, 'agent', 'memory');
-  mkdirSync(memoryDir, { recursive: true });
+  const memoryDir = ensureMemoryDocsDir();
 
   const draft = deriveDistilledConversationMemoryDraft(options);
   const id = allocateDistilledMemoryId(memoryDir, draft.title);
@@ -1306,6 +1356,7 @@ function saveDistilledConversationMemory(options: SaveDistilledConversationMemor
     distilledAt,
     sourceConversationTitle: options.sourceConversationTitle,
     sourceCwd: options.sourceCwd,
+    sourceProfile: options.sourceProfile,
     relatedProjectIds: options.relatedProjectIds,
     anchorPreview: normalizeDistilledText(options.snapshot.anchor.preview, 180),
     body: draft.body,
@@ -3328,10 +3379,11 @@ app.post('/api/sessions/search-index', (req, res) => {
 
 // ── Conversation memories ────────────────────────────────────────────────────
 
-app.get('/api/memories', (_req, res) => {
+app.get('/api/memories', async (_req, res) => {
   try {
     res.json({
-      memories: listMemoryDocsForCurrentProfile({ includeSearchText: true }),
+      memories: listMemoryDocs({ includeSearchText: true }),
+      memoryQueue: await listMemoryWorkItems(),
     });
   } catch (err) {
     logError('request handler error', {
@@ -3370,12 +3422,6 @@ app.get('/api/memories/:memoryId', (req, res) => {
 
 app.post('/api/memories/:memoryId', (req, res) => {
   try {
-    const profile = getCurrentProfile();
-    if (profile === 'shared') {
-      res.status(400).json({ error: 'Shared profile does not support profile-local memory docs.' });
-      return;
-    }
-
     const memory = findMemoryDocById(req.params.memoryId);
     if (!memory) {
       res.status(404).json({ error: 'Memory not found.' });
@@ -3389,7 +3435,7 @@ app.post('/api/memories/:memoryId', (req, res) => {
     }
 
     writeFileSync(memory.path, content, 'utf-8');
-    const refreshed = listMemoryDocsForCurrentProfile({ includeSearchText: true }).find((entry) => entry.path === memory.path) ?? memory;
+    const refreshed = listMemoryDocs({ includeSearchText: true }).find((entry) => entry.path === memory.path) ?? memory;
 
     res.json({
       memory: refreshed,
@@ -3406,12 +3452,6 @@ app.post('/api/memories/:memoryId', (req, res) => {
 
 app.delete('/api/memories/:memoryId', (req, res) => {
   try {
-    const profile = getCurrentProfile();
-    if (profile === 'shared') {
-      res.status(400).json({ error: 'Shared profile does not support profile-local memory docs.' });
-      return;
-    }
-
     const memory = findMemoryDocById(req.params.memoryId);
     if (!memory) {
       res.status(404).json({ error: 'Memory not found.' });
@@ -3452,11 +3492,6 @@ app.get('/api/conversations/:id/memories/status', async (req, res) => {
 app.post('/api/conversations/:id/memories', async (req, res) => {
   try {
     const profile = getCurrentProfile();
-    if (profile === 'shared') {
-      res.status(400).json({ error: 'Shared profile does not support profile-local memory docs.' });
-      return;
-    }
-
     const conversationId = req.params.id;
     const sessionFile = resolveConversationSessionFile(conversationId);
     if (!sessionFile || !existsSync(sessionFile)) {
@@ -3562,11 +3597,6 @@ app.post('/api/conversations/:id/memories/distill-now', (req, res) => {
     : currentProfile;
 
   try {
-    if (profile === 'shared') {
-      res.status(400).json({ error: 'Shared profile does not support profile-local memory docs.' });
-      return;
-    }
-
     if (liveRegistry.get(conversationId)?.session.isStreaming) {
       res.status(409).json({ error: 'Stop the current response before distilling memory.' });
       return;
@@ -3586,12 +3616,12 @@ app.post('/api/conversations/:id/memories/distill-now', (req, res) => {
     })?.relatedProjectIds ?? [];
 
     const memory = saveDistilledConversationMemory({
-      profile,
       title,
       summary,
       tags,
       sourceConversationTitle: sourceSession?.title,
       sourceCwd: sourceSession?.cwd,
+      sourceProfile: profile,
       relatedProjectIds,
       snapshot,
     });
@@ -3656,7 +3686,7 @@ app.post('/api/memories/:memoryId/start', async (req, res) => {
   try {
     const profile = getCurrentProfile();
     const memoryId = req.params.memoryId;
-    const memory = listMemoryDocsForCurrentProfile().find((entry) => entry.id === memoryId);
+    const memory = listMemoryDocs().find((entry) => entry.id === memoryId);
 
     if (!memory) {
       res.status(404).json({ error: 'Memory not found.' });
@@ -4191,7 +4221,7 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
 
     const currentProfile = getCurrentProfile();
     const tasks = listTasksForCurrentProfile();
-    const memoryDocs = listMemoryDocsForCurrentProfile();
+    const memoryDocs = listMemoryDocs();
     const skills = listSkillsForCurrentProfile();
     const profileAgents = listProfileAgentItems().map((item) => ({
       id: item.source,
@@ -5738,6 +5768,16 @@ interface MemoryDocItem extends MemoryUsageSummary {
   searchText?: string;
 }
 
+interface MemoryWorkItem {
+  conversationId: string;
+  conversationTitle: string;
+  runId: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  lastError?: string;
+}
+
 interface AgentsItem {
   source: string;
   path: string;
@@ -5809,17 +5849,27 @@ function extractMemorySearchText(filePath: string, maxCharacters = 16_000): stri
   }
 }
 
-function listMemoryDocsForCurrentProfile(options: { includeSearchText?: boolean } = {}): MemoryDocItem[] {
-  const includeSearchText = options.includeSearchText === true;
-  const profile = getCurrentProfile();
-  const memoryDocs: MemoryDocItem[] = [];
-  const memDir = join(getProfilesRoot(), profile, 'agent', 'memory');
-  if (!existsSync(memDir)) {
-    return memoryDocs;
+let memoryMigrationAttempted = false;
+
+function ensureMemoryDocsDir(): string {
+  const profilesRoot = getProfilesRoot();
+  if (!memoryMigrationAttempted) {
+    migrateLegacyProfileMemoryDirs({ profilesRoot });
+    memoryMigrationAttempted = true;
   }
 
-  for (const file of readdirSync(memDir).filter((name) => name.endsWith('.md'))) {
-    const filePath = join(memDir, file);
+  const memoryDir = getMemoryDocsDir({ profilesRoot });
+  mkdirSync(memoryDir, { recursive: true });
+  return memoryDir;
+}
+
+function listMemoryDocs(options: { includeSearchText?: boolean } = {}): MemoryDocItem[] {
+  const includeSearchText = options.includeSearchText === true;
+  const memoryDocs: MemoryDocItem[] = [];
+  const memoryDir = ensureMemoryDocsDir();
+
+  for (const file of readdirSync(memoryDir).filter((name) => name.endsWith('.md'))) {
+    const filePath = join(memoryDir, file);
     const fm = parseFrontmatter(filePath);
     const id = file.replace(/\.md$/, '');
     const tags = fm.tags;
@@ -5858,7 +5908,7 @@ function findMemoryDocById(memoryId: string, options: { includeSearchText?: bool
     return null;
   }
 
-  const memoryDocs = listMemoryDocsForCurrentProfile(options);
+  const memoryDocs = listMemoryDocs(options);
   return memoryDocs.find((entry) => entry.id === normalizedId) ?? null;
 }
 
@@ -6049,7 +6099,7 @@ app.get('/api/memory', (_req, res) => {
     }
 
     const skills = listSkillsForCurrentProfile();
-    const memoryDocs = listMemoryDocsForCurrentProfile();
+    const memoryDocs = listMemoryDocs();
 
     const usageByPath = buildRecentReadUsage([
       ...skills.map((item) => item.path),
@@ -6092,7 +6142,14 @@ app.get('/api/memory/file', (req, res) => {
   try {
     const filePath = req.query.path as string;
     if (!filePath) { res.status(400).json({ error: 'path required' }); return; }
-    if (!filePath.startsWith(REPO_ROOT) || !filePath.endsWith('.md')) {
+
+    const profilesRoot = getProfilesRoot();
+    const allowed = filePath.endsWith('.md') && (
+      pathIsWithin(filePath, REPO_ROOT)
+      || pathIsWithin(filePath, profilesRoot)
+    );
+
+    if (!allowed) {
       res.status(403).json({ error: 'Access denied' }); return;
     }
     if (!existsSync(filePath)) { res.status(404).json({ error: 'File not found' }); return; }
@@ -6111,7 +6168,14 @@ app.post('/api/memory/file', (req, res) => {
   try {
     const { path: filePath, content } = req.body as { path: string; content: string };
     if (!filePath || content === undefined) { res.status(400).json({ error: 'path and content required' }); return; }
-    if (!filePath.startsWith(REPO_ROOT) || !filePath.endsWith('.md')) {
+
+    const profilesRoot = getProfilesRoot();
+    const allowed = filePath.endsWith('.md') && (
+      pathIsWithin(filePath, REPO_ROOT)
+      || pathIsWithin(filePath, profilesRoot)
+    );
+
+    if (!allowed) {
       res.status(403).json({ error: 'Access denied' }); return;
     }
     writeFileSync(filePath, content, 'utf-8');

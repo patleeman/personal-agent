@@ -4683,7 +4683,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     {
       name: 'memory',
       usage: 'memory [list|find|show|new|lint|help] [args...]',
-      description: 'Inspect profile memory docs',
+      description: 'Inspect global memory docs',
       disableBuiltInHelp: true,
       run: memoryCommand,
     },

@@ -93,11 +93,12 @@ Common files:
 - `models.json`
 - `AGENTS.md`
 - `skills/`
-- `memory/`
 - `tasks/`
 - `projects/`
 - `themes/`
 - `extensions/`
+
+Shared global memory docs live at `~/.local/state/personal-agent/profiles/_memory/*.md`.
 
 See [Profiles, Memory, and Skills](./profiles-memory-skills.md).
 
@@ -145,9 +146,9 @@ Canonical state-home layout:
 ~/.local/state/personal-agent/
 ├── sync/                      # git-synced durable state
 │   ├── profiles/
+│   │   ├── _memory/
 │   │   └── <profile>/agent/
 │   │       ├── projects/
-│   │       ├── memory/
 │   │       ├── tasks/
 │   │       └── activity/
 │   ├── pi-agent/
@@ -279,7 +280,7 @@ You can also adjust model, theme, and conversation title settings from the web U
 For most setups:
 
 1. set the default profile with `pa profile use <name>`
-2. keep profile behavior and durable knowledge in `~/.local/state/personal-agent/profiles/**/agent` (with repo defaults in `defaults/agent` and optional shared overlays in `~/.local/state/personal-agent/profiles/shared/agent`)
+2. keep profile behavior in `~/.local/state/personal-agent/profiles/**/agent` and shared durable knowledge in `~/.local/state/personal-agent/profiles/_memory/*.md` (with repo defaults in `defaults/agent` and optional shared overlays in `~/.local/state/personal-agent/profiles/shared/agent`)
 3. keep daemon behavior in `daemon.json`
 4. use `pa gateway setup telegram` for gateway config
 5. keep secrets in 1Password or env vars, not directly in repo files

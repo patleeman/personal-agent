@@ -53,6 +53,7 @@ describe('MemoriesPage', () => {
             updated: '2026-03-15T08:00:00.000Z',
           },
         ],
+        memoryQueue: [],
       },
       loading: false,
       refreshing: false,
@@ -76,10 +77,44 @@ describe('MemoriesPage', () => {
     expect(html).not.toContain('Start convo');
   });
 
+  it('shows active distillation work in the memory queue', () => {
+    vi.mocked(useApi).mockReturnValue({
+      data: {
+        memories: [],
+        memoryQueue: [{
+          conversationId: 'conv-123',
+          conversationTitle: 'Refactor memory pipeline',
+          runId: 'run-123',
+          status: 'running',
+          createdAt: '2026-03-17T12:00:00.000Z',
+          updatedAt: '2026-03-17T12:05:00.000Z',
+        }],
+      },
+      loading: false,
+      refreshing: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/memories']}>
+        <Routes>
+          <Route path="/memories" element={<MemoriesPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Memory work queue');
+    expect(html).toContain('Refactor memory pipeline');
+    expect(html).toContain('run-123');
+    expect(html).toContain('/conversations/conv-123');
+  });
+
   it('shows the empty state when there are no memory docs', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         memories: [],
+        memoryQueue: [],
       },
       loading: false,
       refreshing: false,

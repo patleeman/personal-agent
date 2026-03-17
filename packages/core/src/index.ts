@@ -52,3 +52,6 @@ export * from './cli-binary.js';
 
 // MCP CLI integration exports
 export * from './mcp-cli.js';
+
+// Memory doc path + migration exports
+export * from './memory-docs.js';

@@ -39,7 +39,7 @@ const MEMORY_DOCS: PromptReferenceMemoryDoc[] = [
     title: 'Project State Model',
     summary: 'How projects are represented in durable artifacts.',
     tags: ['architecture', 'projects'],
-    path: '/repo/profiles/datadog/agent/memory/project-state-model.md',
+    path: '/state/profiles/_memory/project-state-model.md',
     updated: '2026-03-11',
   },
 ];

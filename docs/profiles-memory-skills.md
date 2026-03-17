@@ -1,8 +1,8 @@
 # Profiles, Memory, and Skills
 
-Profiles are how `personal-agent` changes behavior, memory, defaults, and reusable capabilities.
+Profiles are how `personal-agent` changes behavior, prompting, defaults, and reusable capabilities around a shared global memory store.
 
-A profile is not just a name. It is the durable resource bundle the agent runs with.
+A profile is not just a name. It is the durable resource bundle the agent runs with, even though memory docs themselves are shared globally.
 
 ## The layer model
 
@@ -39,10 +39,13 @@ A profile layer can contain:
 
 Non-shared profiles can also keep durable profile state in:
 
-- `memory/*.md`
 - `tasks/*.task.md`
 - `projects/<projectId>/PROJECT.yaml`
 - `activity/*.md`
+
+Shared global memory docs live alongside profiles at:
+
+- `~/.local/state/personal-agent/profiles/_memory/*.md`
 
 ## Example layout
 
@@ -56,6 +59,7 @@ Non-shared profiles can also keep durable profile state in:
 
 ~/.local/state/personal-agent/
 └── profiles/
+    ├── _memory/
     ├── shared/
     │   └── agent/
     │       ├── settings.json
@@ -68,7 +72,6 @@ Non-shared profiles can also keep durable profile state in:
         └── agent/
             ├── AGENTS.md
             ├── settings.json
-            ├── memory/
             ├── tasks/
             ├── projects/
             └── activity/
@@ -80,7 +83,7 @@ Non-shared profiles can also keep durable profile state in:
 | --- | --- |
 | `AGENTS.md` | durable role, behavior rules, and operating policy |
 | `skills/` | reusable workflows or domain-specific capabilities |
-| `memory/*.md` | durable notes, briefs, specs, references, and learned patterns |
+| `profiles/_memory/*.md` | shared durable notes, briefs, specs, references, and learned patterns |
 | `tasks/*.task.md` | scheduled automation |
 | `projects/` | long-running tracked work |
 | `activity/` | inbox items created by the system or by explicit inbox commands |
@@ -124,9 +127,9 @@ Skills show up in the Memory page and can also be invoked from supported interfa
 
 ## Memory docs: durable notes and references
 
-Memory docs live under:
+Memory docs live under the shared global store:
 
-- `~/.local/state/personal-agent/profiles/<profile>/agent/memory/*.md`
+- `~/.local/state/personal-agent/profiles/_memory/*.md`
 
 They are flat Markdown files with YAML frontmatter.
 
@@ -176,12 +179,13 @@ Use memory docs for:
 
 Important convention:
 
-- `shared` is for common resources
-- non-shared profiles are where durable profile-local memory lives
+- `shared` is for common profile resources
+- non-shared profiles are where profile-local `AGENTS.md`, skills, tasks, projects, and activity live
+- durable memory docs live in the shared global memory store at `profiles/_memory/`
 
 In particular:
 
-- there is no shared `memory/` directory
+- there is no shared-profile `memory/` directory
 - profile-local `AGENTS.md` should live with the active non-shared profile
 
 ## Memory vs project vs inbox
@@ -238,11 +242,11 @@ It can contain the same kinds of runtime resources as a profile layer, such as:
 
 ## Important boundary for agents
 
-Do not store conversation ids or session ids in repo-managed profile files.
+Do not store conversation ids or session ids in portable durable files.
 
 That includes:
 
-- memory docs
+- global memory docs
 - project files
 - activity frontmatter
 - any profile-local schema meant to be portable

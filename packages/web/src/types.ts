@@ -765,6 +765,16 @@ export interface MemoryDocDetail {
   content: string;
 }
 
+export interface MemoryWorkItem {
+  conversationId: string;
+  conversationTitle: string;
+  runId: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  lastError?: string;
+}
+
 export interface MemoryData {
   profile: string;
   agentsMd: MemoryAgentsItem[];
