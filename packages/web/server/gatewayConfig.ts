@@ -14,6 +14,7 @@ export interface GatewayTokenSummary {
 
 export interface GatewayConfigUpdateInput {
   profile: string;
+  defaultModel?: string;
   token?: string;
   clearToken?: boolean;
   allowlistChatIds: string[];
@@ -27,6 +28,7 @@ export interface GatewayConfigUpdateInput {
 
 const GATEWAY_ENV_OVERRIDE_KEYS = [
   'PERSONAL_AGENT_PROFILE',
+  'PERSONAL_AGENT_GATEWAY_DEFAULT_MODEL',
   'TELEGRAM_BOT_TOKEN',
   'PERSONAL_AGENT_TELEGRAM_ALLOWLIST',
   'PERSONAL_AGENT_TELEGRAM_ALLOWED_USER_IDS',
@@ -48,6 +50,20 @@ function normalizeOptionalString(value: unknown): string | undefined {
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function parseOptionalModelReference(value: unknown, fieldName: string): string | undefined {
+  const normalized = normalizeOptionalString(value);
+  if (!normalized) {
+    return undefined;
+  }
+
+  const separatorIndex = normalized.indexOf('/');
+  if (separatorIndex <= 0 || separatorIndex >= normalized.length - 1) {
+    throw new Error(`${fieldName} must use format provider/model`);
+  }
+
+  return normalized;
 }
 
 function parseRequiredBoolean(value: unknown, fieldName: string): boolean {
@@ -155,6 +171,7 @@ export function parseGatewayConfigUpdateInput(value: unknown): GatewayConfigUpda
 
   return {
     profile,
+    defaultModel: parseOptionalModelReference(value.defaultModel, 'defaultModel'),
     token: normalizeOptionalString(value.token),
     clearToken: value.clearToken === true,
     allowlistChatIds: parseRequiredStringArray(value.allowlistChatIds, 'allowlistChatIds'),
@@ -193,6 +210,7 @@ export function buildGatewayStoredConfig(
   return {
     ...current,
     profile: input.profile,
+    defaultModel: input.defaultModel,
     telegram: hasTelegramStoredConfig(telegram) ? telegram : undefined,
   };
 }

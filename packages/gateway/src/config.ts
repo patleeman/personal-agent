@@ -15,6 +15,7 @@ export interface TelegramStoredConfig {
 
 export interface GatewayStoredConfig {
   profile?: string;
+  defaultModel?: string;
   telegram?: TelegramStoredConfig;
 }
 
@@ -24,6 +25,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function toOptionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+}
+
+function toOptionalModelRef(value: unknown): string | undefined {
+  const normalized = toOptionalString(value);
+  if (!normalized) {
+    return undefined;
+  }
+
+  const separatorIndex = normalized.indexOf('/');
+  if (separatorIndex <= 0 || separatorIndex >= normalized.length - 1) {
+    return undefined;
+  }
+
+  return normalized;
 }
 
 function toOptionalStringArray(value: unknown): string[] | undefined {
@@ -119,6 +134,7 @@ export function readGatewayConfig(): GatewayStoredConfig {
 
     return {
       profile: toOptionalString(parsed.profile),
+      defaultModel: toOptionalModelRef(parsed.defaultModel),
       telegram: sanitizeTelegram(parsed.telegram),
     };
   } catch {

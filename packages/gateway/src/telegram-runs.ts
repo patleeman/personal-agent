@@ -267,7 +267,7 @@ function normalizeGatewayTerminalOutput(value: string): string {
     .trim();
 }
 
-function resolveGatewayCliEntryPath(): string | undefined {
+export function resolveGatewayCliEntryPath(): string | undefined {
   const gatewayModulePath = fileURLToPath(import.meta.url);
   const candidate = resolve(dirname(gatewayModulePath), '../../cli/dist/index.js');
   return existsSync(candidate) ? candidate : undefined;

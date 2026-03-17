@@ -115,6 +115,7 @@ interface GatewayAccessSummary {
   tokenConfigured: boolean;
   tokenSource: GatewayTokenSource;
   tokenPreview?: string;
+  defaultModel?: string;
   allowlistChatIds: string[];
   allowedUserIds: string[];
   blockedUserIds: string[];
@@ -761,6 +762,7 @@ export function readGatewayState(currentProfile: string): GatewayStateSnapshot {
       tokenConfigured: tokenSummary.configured,
       tokenSource: tokenSummary.source,
       tokenPreview: tokenSummary.preview,
+      defaultModel: stored.defaultModel,
       allowlistChatIds: telegram.allowlist ?? [],
       allowedUserIds: telegram.allowedUserIds ?? [],
       blockedUserIds: telegram.blockedUserIds ?? [],

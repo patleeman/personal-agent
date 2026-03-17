@@ -12,7 +12,6 @@ import {
 } from 'fs';
 import { basename, dirname, extname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { spawnSync } from 'child_process';
 import TelegramBot from 'node-telegram-bot-api';
 import {
   DefaultResourceLoader,
@@ -23,22 +22,29 @@ import {
 } from '@mariozechner/pi-coding-agent';
 import {
   bootstrapStateOrThrow,
+  loadDeferredResumeState,
   preparePiAgentDir,
+  readSessionConversationId,
+  removeDeferredResume,
   resolveStatePaths,
+  saveDeferredResumeState,
   validateStatePathsOutsideRepo,
 } from '@personal-agent/core';
 import {
-  getExtensionDependencyDirs,
   materializeProfileToAgentDir,
   mergeJsonFiles,
   resolveResourceProfile,
 } from '@personal-agent/resources';
 import {
+  completeDeferredResumeConversationRun,
   emitDaemonEventNonFatal,
+  getDurableRun,
   loadDaemonConfig,
   parseTaskDefinition,
+  pingDaemon,
   pullGatewayNotifications,
   resolveDaemonPaths,
+  startBackgroundRun,
   startDaemonDetached,
   type GatewayNotification,
   type ParsedTaskDefinition,
@@ -62,9 +68,14 @@ import {
 } from './cli-helpers.js';
 import { setGatewayExtensionRuntimeContext } from './extensions/runtime-context.js';
 import {
+  createGatewayCoordinatorTools,
+  GATEWAY_DELEGATE_SOURCE_TYPE,
+} from './coordinator-tools.js';
+import {
   buildTelegramRunCliArgs,
   parseTelegramRunRequest,
   parseRunCliOutput,
+  resolveGatewayCliEntryPath,
   runGatewayRunCli,
   runTelegramRunCommand,
   type TelegramRunNotifyMode,
@@ -182,6 +193,7 @@ export interface PiJsonEvent {
 export interface TelegramBridgeConfig {
   token: string;
   profile: string;
+  defaultModel?: string;
   allowlist: Set<string>;
   allowedUserIds?: Set<string>;
   blockedUserIds?: Set<string>;
@@ -657,6 +669,7 @@ export type GatewayProvider = 'telegram';
 
 type ResolvedProfile = ReturnType<typeof resolveResourceProfile>;
 type PiAgentSession = Awaited<ReturnType<typeof createAgentSession>>['session'];
+type GatewayCustomTools = NonNullable<Parameters<typeof createAgentSession>[0]>['customTools'];
 
 interface PreparedGatewayRuntime {
   resolvedProfile: ResolvedProfile;
@@ -2424,21 +2437,6 @@ function buildPromptFromTelegramMedia(
   };
 }
 
-function getProfileDefaultModel(profile: ResolvedProfile): string | undefined {
-  const settings = profile.settingsFiles.length > 0
-    ? mergeJsonFiles(profile.settingsFiles)
-    : {};
-
-  const provider = settings.defaultProvider;
-  const model = settings.defaultModel;
-
-  if (typeof provider === 'string' && typeof model === 'string') {
-    return `${provider}/${model}`;
-  }
-
-  return undefined;
-}
-
 function resolveGatewayExtensionPaths(): string[] {
   const moduleDir = dirname(fileURLToPath(import.meta.url));
   const extensionNames = ['gateway-context'];
@@ -2461,25 +2459,64 @@ function resolveGatewayExtensionPaths(): string[] {
   return resolved;
 }
 
-function buildGatewayExtensionEntries(profile: ResolvedProfile): string[] {
-  const merged = [...profile.extensionEntries];
-
-  for (const extensionPath of resolveGatewayExtensionPaths()) {
-    if (!merged.includes(extensionPath)) {
-      merged.push(extensionPath);
-    }
-  }
-
-  return merged;
+function buildGatewayExtensionEntries(): string[] {
+  return resolveGatewayExtensionPaths();
 }
 
-function buildGatewaySettingsManager(profile: ResolvedProfile, cwd: string, agentDir: string): SettingsManager {
+function resolveGatewayConfiguredDefaultModel(
+  profile: ResolvedProfile,
+  gatewayDefaultModel?: string,
+): string | undefined {
+  const explicit = gatewayDefaultModel?.trim();
+  if (explicit && explicit.length > 0) {
+    return explicit;
+  }
+
+  const settings = profile.settingsFiles.length > 0
+    ? mergeJsonFiles(profile.settingsFiles)
+    : {};
+
+  const provider = typeof settings.defaultProvider === 'string'
+    ? settings.defaultProvider.trim()
+    : '';
+  const model = typeof settings.defaultModel === 'string'
+    ? settings.defaultModel.trim()
+    : '';
+
+  if (model.includes('/')) {
+    return model;
+  }
+
+  if (provider.length > 0 && model.length > 0) {
+    return `${provider}/${model}`;
+  }
+
+  return undefined;
+}
+
+function buildGatewaySettingsManager(
+  profile: ResolvedProfile,
+  cwd: string,
+  agentDir: string,
+  gatewayDefaultModel?: string,
+): SettingsManager {
   const settingsManager = SettingsManager.create(cwd, agentDir);
 
-  if (profile.skillDirs.length > 0) {
-    settingsManager.applyOverrides({
-      skills: profile.skillDirs,
-    });
+  settingsManager.applyOverrides({
+    packages: [],
+    extensions: [],
+    skills: profile.skillDirs,
+  });
+
+  const configuredDefaultModel = resolveGatewayConfiguredDefaultModel(profile, gatewayDefaultModel);
+  if (configuredDefaultModel) {
+    const parsed = parseModelReference(configuredDefaultModel);
+    if (parsed) {
+      settingsManager.applyOverrides({
+        defaultProvider: parsed.provider,
+        defaultModel: parsed.modelId,
+      });
+    }
   }
 
   return settingsManager;
@@ -2504,8 +2541,15 @@ async function createGatewayAgentSession(options: {
   sessionFile: string;
   provider?: 'telegram';
   conversationId?: string;
+  gatewayDefaultModel?: string;
+  customTools?: GatewayCustomTools;
 }): Promise<PiAgentSession> {
-  const settingsManager = buildGatewaySettingsManager(options.profile, options.cwd, options.agentDir);
+  const settingsManager = buildGatewaySettingsManager(
+    options.profile,
+    options.cwd,
+    options.agentDir,
+    options.gatewayDefaultModel,
+  );
   const eventBus = createEventBus();
 
   const resourceLoader = new DefaultResourceLoader({
@@ -2513,7 +2557,7 @@ async function createGatewayAgentSession(options: {
     agentDir: options.agentDir,
     settingsManager,
     eventBus,
-    additionalExtensionPaths: buildGatewayExtensionEntries(options.profile),
+    additionalExtensionPaths: buildGatewayExtensionEntries(),
     additionalPromptTemplatePaths: options.profile.promptEntries,
   });
 
@@ -2533,6 +2577,8 @@ async function createGatewayAgentSession(options: {
     sessionManager,
     settingsManager,
     resourceLoader,
+    tools: [],
+    customTools: options.customTools,
   });
 
   for (const { path, error } of extensionsResult.errors) {
@@ -2653,22 +2699,6 @@ async function listPiModels(options: {
     return models;
   } finally {
     session.dispose();
-  }
-}
-
-function ensureExtensionDependencies(profile: ResolvedProfile): void {
-  const dependencyDirs = getExtensionDependencyDirs(profile);
-  const missingDirs = dependencyDirs.filter((dir) => !existsSync(join(dir, 'node_modules')));
-
-  for (const dir of missingDirs) {
-    const result = spawnSync('npm', ['install', '--silent', '--no-package-lock'], {
-      cwd: dir,
-      stdio: 'inherit',
-    });
-
-    if (result.error || result.status !== 0) {
-      throw new Error(`Failed to install extension dependencies in ${dir}`);
-    }
   }
 }
 
@@ -2812,6 +2842,8 @@ interface PersistentConversationControllerOptions {
   agentDir: string;
   cwd: string;
   sessionFile: string;
+  gatewayDefaultModel?: string;
+  customTools?: GatewayCustomTools;
 }
 
 interface ActiveConversationRun {
@@ -2864,6 +2896,8 @@ class PersistentConversationController implements GatewayConversationController 
   private readonly agentDir: string;
   private readonly cwd: string;
   private readonly initialSessionFile: string;
+  private readonly gatewayDefaultModel?: string;
+  private readonly customTools?: GatewayCustomTools;
 
   private session?: PiAgentSession;
   private sessionPromise?: Promise<PiAgentSession>;
@@ -2880,6 +2914,8 @@ class PersistentConversationController implements GatewayConversationController 
     this.agentDir = options.agentDir;
     this.cwd = options.cwd;
     this.initialSessionFile = options.sessionFile;
+    this.gatewayDefaultModel = options.gatewayDefaultModel;
+    this.customTools = options.customTools;
   }
 
   async submitPrompt(input: RunPromptFnInput): Promise<ConversationSubmitResult> {
@@ -3225,6 +3261,8 @@ class PersistentConversationController implements GatewayConversationController 
       sessionFile: this.initialSessionFile,
       provider: this.provider,
       conversationId: this.conversationId,
+      gatewayDefaultModel: this.gatewayDefaultModel,
+      customTools: this.customTools,
     }).then((session) => {
       this.session = session;
       this.unsubscribe = session.subscribe((event) => {
@@ -3381,7 +3419,6 @@ async function prepareGatewayRuntime(profileName: string): Promise<PreparedGatew
   });
 
   materializeProfileToAgentDir(resolvedProfile, runtime.agentDir);
-  ensureExtensionDependencies(resolvedProfile);
 
   const runtimeBinDir = join(runtime.agentDir, 'bin');
   const pathEntries = (process.env.PATH ?? '').split(':').filter((entry) => entry.length > 0);
@@ -5730,6 +5767,8 @@ async function processTelegramMessage(
     state.recentMessageIdsByConversation.delete(conversationId);
     state.lastPromptByConversation.delete(conversationId);
     state.awaitingFollowUpByConversation.delete(conversationId);
+    options.modelCommands?.activeModelsByConversation.delete(conversationId);
+    options.modelCommands?.pendingSelectionsByConversation.delete(conversationId);
 
     const shouldClearRecentMessagesOnNew = options.clearRecentMessagesOnNew ?? true;
     const clearResult = shouldClearRecentMessagesOnNew
@@ -5831,6 +5870,7 @@ async function processTelegramMessage(
       `profile=${options.profileName}
 agentDir=${options.agentDir}
 session=${sessionFile}
+mode=coordinator
 model=${model}`,
     );
     return completedMessageProcessingResult();
@@ -6781,6 +6821,14 @@ async function createTelegramConfigFromEnv(): Promise<TelegramBridgeConfig> {
 
   const profile = process.env.PERSONAL_AGENT_PROFILE || stored.profile || 'shared';
 
+  const configuredDefaultModel = process.env.PERSONAL_AGENT_GATEWAY_DEFAULT_MODEL?.trim().length
+    ? process.env.PERSONAL_AGENT_GATEWAY_DEFAULT_MODEL.trim()
+    : stored.defaultModel;
+
+  if (configuredDefaultModel && !configuredDefaultModel.includes('/')) {
+    throw new Error('PERSONAL_AGENT_GATEWAY_DEFAULT_MODEL (or gateway.defaultModel) must use format provider/model.');
+  }
+
   const allowlistFromEnv = parseAllowlist(resolveConfiguredValue(
     process.env.PERSONAL_AGENT_TELEGRAM_ALLOWLIST,
     { fieldName: 'PERSONAL_AGENT_TELEGRAM_ALLOWLIST' },
@@ -6842,6 +6890,7 @@ async function createTelegramConfigFromEnv(): Promise<TelegramBridgeConfig> {
   return {
     token,
     profile,
+    defaultModel: configuredDefaultModel,
     allowlist,
     allowedUserIds,
     blockedUserIds,
@@ -7480,6 +7529,108 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     return true;
   };
 
+  interface GatewayDelegateWatch {
+    runId: string;
+    conversationId: string;
+    chatId: number;
+    messageThreadId?: number;
+    taskSlug: string;
+    taskPrompt: string;
+    notifyMode: 'none' | 'message' | 'resume';
+    logPath?: string;
+    startedAt: string;
+  }
+
+  const delegateWatches = new Map<string, GatewayDelegateWatch>();
+  let delegateWatchPollInFlight = false;
+
+  const buildDelegateCompletionMessage = async (watch: GatewayDelegateWatch): Promise<string> => {
+    const run = await getDurableRun(watch.runId);
+    const status = run?.run.status?.status ?? 'unknown';
+    const logText = readRunLogTail(watch.logPath, 20).trim();
+
+    const lines = [
+      `Delegated run finished: ${watch.runId}`,
+      `task=${watch.taskSlug}`,
+      `status=${status}`,
+    ];
+
+    if (watch.logPath) {
+      lines.push(`log=${watch.logPath}`);
+    }
+
+    if (logText) {
+      lines.push('', 'Recent log tail:', logText);
+    }
+
+    return lines.join('\n');
+  };
+
+  const buildDelegateFollowUpPrompt = async (watch: GatewayDelegateWatch): Promise<string> => {
+    const run = await getDurableRun(watch.runId);
+    const status = run?.run.status?.status ?? 'unknown';
+    const logText = readRunLogTail(watch.logPath, 60).trim() || '(empty log)';
+
+    return [
+      `Delegated run ${watch.runId} has finished.`,
+      `taskSlug=${watch.taskSlug}`,
+      `status=${status}`,
+      '',
+      'Original delegated task:',
+      watch.taskPrompt,
+      '',
+      'Recent log tail:',
+      logText,
+      '',
+      'Use delegate get/logs if you need more detail. Then summarize the outcome for the user and continue with the next concrete step.',
+    ].join('\n');
+  };
+
+  const finalizeDelegateWatch = async (watch: GatewayDelegateWatch): Promise<void> => {
+    const completionMessage = await buildDelegateCompletionMessage(watch);
+
+    if (watch.notifyMode === 'message') {
+      await sendTelegramMessageToConversation(watch.chatId, watch.messageThreadId, completionMessage);
+      return;
+    }
+
+    if (watch.notifyMode === 'resume') {
+      const followUpPrompt = await buildDelegateFollowUpPrompt(watch);
+      const resumed = dispatchSyntheticTelegramFollowUp(watch.conversationId, followUpPrompt);
+      if (!resumed) {
+        await sendTelegramMessageToConversation(
+          watch.chatId,
+          watch.messageThreadId,
+          `${completionMessage}\n\nUnable to auto-resume. Reply in this conversation to continue.`,
+        );
+      }
+    }
+  };
+
+  const pollDelegateWatches = async (): Promise<void> => {
+    if (delegateWatchPollInFlight || delegateWatches.size === 0) {
+      return;
+    }
+
+    delegateWatchPollInFlight = true;
+
+    try {
+      for (const [runId, watch] of [...delegateWatches.entries()]) {
+        const result = await getDurableRun(runId).catch(() => null);
+        const status = result?.run.status?.status;
+
+        if (status !== 'completed' && status !== 'failed' && status !== 'cancelled') {
+          continue;
+        }
+
+        delegateWatches.delete(runId);
+        await finalizeDelegateWatch(watch);
+      }
+    } finally {
+      delegateWatchPollInFlight = false;
+    }
+  };
+
   const pickMoreVerboseNotifyMode = (
     left: TelegramRunNotifyMode,
     right: TelegramRunNotifyMode,
@@ -7512,6 +7663,80 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     text,
     toThreadedMessageOptions(messageThreadId),
   );
+
+  const resolveTelegramConversationIdForSessionFile = (sessionFile: string): string | undefined => {
+    for (const [conversationId, boundSessionFile] of telegramConversationSessionBindings.entries()) {
+      if (boundSessionFile === sessionFile) {
+        return conversationId;
+      }
+    }
+
+    for (const binding of telegramWorkTopicBindings.values()) {
+      if (binding.sessionFile === sessionFile) {
+        return binding.workConversationId;
+      }
+    }
+
+    return parseTelegramConversationFromSessionFileName(basename(sessionFile))?.conversationId;
+  };
+
+  const flushReadyDeferredResumesForGateway = async (): Promise<void> => {
+    const deferredState = loadDeferredResumeState();
+    let changed = false;
+
+    for (const [resumeId, record] of Object.entries(deferredState.resumes)) {
+      if (record.status !== 'ready') {
+        continue;
+      }
+
+      const conversationId = resolveTelegramConversationIdForSessionFile(record.sessionFile);
+      if (!conversationId) {
+        continue;
+      }
+
+      const parsedConversation = parseTelegramConversationId(conversationId);
+      const chatId = parsedConversation ? Number(parsedConversation.chatId) : undefined;
+      const messageThreadId = parsedConversation?.messageThreadId;
+
+      try {
+        const resumed = dispatchSyntheticTelegramFollowUp(conversationId, record.prompt);
+
+        if (!resumed) {
+          if (typeof chatId !== 'number' || !Number.isFinite(chatId)) {
+            continue;
+          }
+
+          await sendTelegramMessageToConversation(
+            chatId,
+            messageThreadId,
+            `Deferred follow-up due:\n\n${record.prompt}`,
+          );
+        }
+
+        removeDeferredResume(deferredState, resumeId);
+        changed = true;
+        await completeDeferredResumeConversationRun({
+          daemonRoot: resolveDaemonPaths(loadDaemonConfig().ipc.socketPath).root,
+          deferredResumeId: record.id,
+          sessionFile: record.sessionFile,
+          prompt: record.prompt,
+          dueAt: record.dueAt,
+          createdAt: record.createdAt,
+          readyAt: record.readyAt,
+          completedAt: new Date().toISOString(),
+          conversationId: readSessionConversationId(record.sessionFile),
+        });
+      } catch (error) {
+        console.warn(gatewayWarning(
+          `Failed to deliver deferred resume ${record.id}: ${(error as Error).message}`,
+        ));
+      }
+    }
+
+    if (changed) {
+      saveDeferredResumeState(deferredState);
+    }
+  };
 
   const updateTelegramMessageInConversation = async (
     chatId: number,
@@ -7772,6 +7997,20 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
   }, 5000);
   runWatchPollHandle.unref();
 
+  const delegateWatchPollHandle = setInterval(() => {
+    void pollDelegateWatches().catch((error) => {
+      console.warn(gatewayWarning(`Failed to poll delegated runs: ${(error as Error).message}`));
+    });
+  }, 5000);
+  delegateWatchPollHandle.unref();
+
+  const deferredResumePollHandle = setInterval(() => {
+    void flushReadyDeferredResumesForGateway().catch((error) => {
+      console.warn(gatewayWarning(`Failed to flush deferred resumes: ${(error as Error).message}`));
+    });
+  }, 5000);
+  deferredResumePollHandle.unref();
+
   const handleRunCommand: HandleTelegramRunCommandFn = async ({ args }) =>
     runTelegramRunCommand({
       args,
@@ -8023,6 +8262,96 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     return sourceReplyLines.join('\n');
   };
 
+  const ensureDaemonAvailableForDelegates = async (): Promise<void> => {
+    if (await pingDaemon()) {
+      return;
+    }
+
+    await startDaemonDetached();
+
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      if (await pingDaemon()) {
+        return;
+      }
+
+      await delay(250);
+    }
+
+    throw new Error('Daemon did not become available. Start it with: pa daemon start');
+  };
+
+  const startDelegatedAgentRun = async (input: {
+    conversationId: string;
+    taskSlug: string;
+    taskPrompt: string;
+    workerPrompt: string;
+    cwd: string;
+    model?: string;
+    notifyMode: 'none' | 'message' | 'resume';
+  }): Promise<{ runId: string; logPath?: string }> => {
+    const parsedConversation = parseTelegramConversationId(input.conversationId);
+    if (!parsedConversation) {
+      throw new Error(`Invalid gateway conversation id: ${input.conversationId}`);
+    }
+
+    const chatId = Number(parsedConversation.chatId);
+    if (!Number.isFinite(chatId)) {
+      throw new Error(`Invalid telegram chat id: ${parsedConversation.chatId}`);
+    }
+
+    const cliEntryPath = resolveGatewayCliEntryPath();
+    const argv = cliEntryPath
+      ? [process.execPath, cliEntryPath]
+      : ['pa'];
+
+    argv.push('--plain', '--profile', effectiveConfig.profile, '--no-session');
+
+    if (input.model) {
+      argv.push('--model', input.model);
+    }
+
+    argv.push('-p', input.workerPrompt);
+
+    await ensureDaemonAvailableForDelegates();
+    const result = await startBackgroundRun({
+      taskSlug: input.taskSlug,
+      cwd: input.cwd,
+      argv,
+      source: {
+        type: GATEWAY_DELEGATE_SOURCE_TYPE,
+        id: input.conversationId,
+      },
+    });
+
+    if (!result.accepted) {
+      throw new Error(result.reason ?? `Could not start delegated run for ${input.taskSlug}.`);
+    }
+
+    delegateWatches.set(result.runId, {
+      runId: result.runId,
+      conversationId: input.conversationId,
+      chatId,
+      messageThreadId: parsedConversation.messageThreadId,
+      taskSlug: input.taskSlug,
+      taskPrompt: input.taskPrompt,
+      notifyMode: input.notifyMode,
+      logPath: result.logPath,
+      startedAt: new Date().toISOString(),
+    });
+
+    void pollDelegateWatches();
+
+    return {
+      runId: result.runId,
+      logPath: result.logPath,
+    };
+  };
+
+  const coordinatorTools = createGatewayCoordinatorTools({
+    profileName: effectiveConfig.profile,
+    startDelegateRun: startDelegatedAgentRun,
+  });
+
   const discoveredHelp = await discoverPiHelpFromPi({
     profile: resolvedProfile,
     agentDir: runtime.agentDir,
@@ -8067,7 +8396,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     }),
     activeModelsByConversation: new Map(),
     pendingSelectionsByConversation: new Map(),
-    defaultModel: getProfileDefaultModel(resolvedProfile),
+    defaultModel: resolveGatewayConfiguredDefaultModel(resolvedProfile, effectiveConfig.defaultModel),
   };
 
   try {
@@ -8216,6 +8545,8 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
       agentDir: runtime.agentDir,
       cwd: effectiveConfig.workingDirectory,
       sessionFile,
+      gatewayDefaultModel: effectiveConfig.defaultModel,
+      customTools: coordinatorTools,
     }),
   });
 
@@ -8527,10 +8858,14 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
   console.log(gatewayKeyValue('Allowed users', allowedUsersSummary.length > 0 ? allowedUsersSummary : '(none)'));
   console.log(gatewayKeyValue('Blocked users', blockedUsersSummary.length > 0 ? blockedUsersSummary : '(none)'));
   console.log(gatewayKeyValue('Working directory', effectiveConfig.workingDirectory));
+  console.log(gatewayKeyValue('Mode', 'coordinator'));
+  if (effectiveConfig.defaultModel) {
+    console.log(gatewayKeyValue('Default model', effectiveConfig.defaultModel));
+  }
   console.log(gatewayKeyValue('Tool activity stream', toolActivityStream ? 'enabled' : 'disabled'));
   console.log(gatewayKeyValue('Clear recent messages on /new', effectiveConfig.clearRecentMessagesOnNew ? 'enabled' : 'disabled'));
   console.log(gatewayKeyValue('Registered commands', telegramCommands.length));
-  logSystem('telegram', `Bridge started for profile=${effectiveConfig.profile}`);
+  logSystem('telegram', `Bridge started for profile=${effectiveConfig.profile} mode=coordinator`);
 }
 
 async function ensureDaemonRunningForGatewayStartup(): Promise<void> {

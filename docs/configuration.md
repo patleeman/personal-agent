@@ -68,6 +68,8 @@ pa gateway setup telegram
 
 Use it for:
 
+- gateway profile
+- gateway default model
 - Telegram token
 - allowlisted chats
 - allowed user ids

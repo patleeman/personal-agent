@@ -346,6 +346,18 @@ export async function runGatewaySetup(provider?: GatewayProvider): Promise<void>
     const profileDefault = current.profile ?? 'shared';
     const profile = await promptWithDefault(prompt.ask, 'Profile', profileDefault);
 
+    const defaultModelDefault = current.defaultModel ?? '';
+    const defaultModelInput = defaultModelDefault.length > 0
+      ? await promptWithDefault(prompt.ask, 'Default gateway model (provider/model)', defaultModelDefault)
+      : await prompt.ask('Default gateway model (provider/model, optional): ');
+    const defaultModel = defaultModelInput.trim().length > 0
+      ? defaultModelInput.trim()
+      : undefined;
+
+    if (defaultModel && !defaultModel.includes('/')) {
+      throw new Error('Default gateway model must use format provider/model.');
+    }
+
     const existingProviderConfig: TelegramStoredConfig | undefined = current.telegram;
 
     let resolvedToken = existingProviderConfig?.token;
@@ -415,6 +427,7 @@ export async function runGatewaySetup(provider?: GatewayProvider): Promise<void>
     const updated: GatewayStoredConfig = {
       ...current,
       profile,
+      defaultModel,
     };
 
     updated.telegram = {
