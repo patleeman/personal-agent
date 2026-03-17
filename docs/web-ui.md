@@ -165,7 +165,10 @@ You can:
 
 - see discovered tasks
 - see current status and recent runs
+- create a new task from the page header / detail rail flow
 - enable or disable a task
+- edit task settings and prompt from the detail rail
+- use a simple recurring-schedule builder for common cron patterns, with raw cron still available when needed
 - run a task immediately
 
 See [Scheduled Tasks](./scheduled-tasks.md).

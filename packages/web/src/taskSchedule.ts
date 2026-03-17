@@ -1,0 +1,379 @@
+export const WEEKDAY_OPTIONS = [
+  { value: 0, shortLabel: 'Sun', longLabel: 'Sunday' },
+  { value: 1, shortLabel: 'Mon', longLabel: 'Monday' },
+  { value: 2, shortLabel: 'Tue', longLabel: 'Tuesday' },
+  { value: 3, shortLabel: 'Wed', longLabel: 'Wednesday' },
+  { value: 4, shortLabel: 'Thu', longLabel: 'Thursday' },
+  { value: 5, shortLabel: 'Fri', longLabel: 'Friday' },
+  { value: 6, shortLabel: 'Sat', longLabel: 'Saturday' },
+] as const;
+
+export type EasyTaskCadence = 'hourly' | 'interval' | 'daily' | 'weekdays' | 'weekly' | 'monthly';
+
+export interface EasyTaskSchedule {
+  cadence: EasyTaskCadence;
+  minute: number;
+  hour: number;
+  intervalHours: number;
+  weekdays: number[];
+  dayOfMonth: number;
+}
+
+export interface CronEditorState {
+  mode: 'builder' | 'raw';
+  builder: EasyTaskSchedule;
+  rawCron: string;
+  supported: boolean;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, Math.floor(value)));
+}
+
+function pad2(value: number): string {
+  return String(value).padStart(2, '0');
+}
+
+function parseNumberField(value: string, min: number, max: number): number | null {
+  if (!/^\d+$/.test(value)) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function normalizeWeekday(value: number): number {
+  return value === 7 ? 0 : value;
+}
+
+function sortUniqueWeekdays(values: number[]): number[] {
+  return [...new Set(values.map(normalizeWeekday))].sort((left, right) => left - right);
+}
+
+function serializeWeekdays(values: number[]): string {
+  const normalized = sortUniqueWeekdays(values).filter((value) => value >= 0 && value <= 6);
+  if (normalized.length === 0) {
+    return '1';
+  }
+
+  const isWeekdays = normalized.length === 5 && normalized.every((value, index) => value === index + 1);
+  if (isWeekdays) {
+    return '1-5';
+  }
+
+  return normalized.join(',');
+}
+
+function parseWeekdayField(field: string): number[] | null {
+  const values: number[] = [];
+
+  for (const segment of field.split(',')) {
+    const trimmed = segment.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    const rangeMatch = trimmed.match(/^(\d+)-(\d+)$/);
+    if (rangeMatch) {
+      const start = parseNumberField(rangeMatch[1] ?? '', 0, 7);
+      const end = parseNumberField(rangeMatch[2] ?? '', 0, 7);
+      if (start === null || end === null || end < start) {
+        return null;
+      }
+
+      for (let current = start; current <= end; current += 1) {
+        values.push(normalizeWeekday(current));
+      }
+      continue;
+    }
+
+    const day = parseNumberField(trimmed, 0, 7);
+    if (day === null) {
+      return null;
+    }
+
+    values.push(normalizeWeekday(day));
+  }
+
+  return sortUniqueWeekdays(values);
+}
+
+function formatTime(hour: number, minute: number): string {
+  return `${pad2(hour)}:${pad2(minute)}`;
+}
+
+function formatWeekdayList(values: number[]): string {
+  const labels = sortUniqueWeekdays(values)
+    .map((value) => WEEKDAY_OPTIONS.find((option) => option.value === value)?.shortLabel)
+    .filter((value): value is NonNullable<(typeof WEEKDAY_OPTIONS)[number]['shortLabel']> => value !== undefined);
+
+  if (labels.length === 0) {
+    return 'Mon';
+  }
+
+  return labels.join(', ');
+}
+
+export function createDefaultEasyTaskSchedule(): EasyTaskSchedule {
+  return {
+    cadence: 'daily',
+    minute: 0,
+    hour: 9,
+    intervalHours: 4,
+    weekdays: [1],
+    dayOfMonth: 1,
+  };
+}
+
+export function parseCronToEasyTaskSchedule(cron: string): EasyTaskSchedule | null {
+  const parts = cron.trim().split(/\s+/);
+  if (parts.length !== 5) {
+    return null;
+  }
+
+  const [minuteField, hourField, dayOfMonthField, monthField, dayOfWeekField] = parts;
+  const minute = parseNumberField(minuteField ?? '', 0, 59);
+  if (minute === null) {
+    return null;
+  }
+
+  if (dayOfMonthField === '*' && monthField === '*' && dayOfWeekField === '*') {
+    if (hourField === '*') {
+      return {
+        cadence: 'hourly',
+        minute,
+        hour: 0,
+        intervalHours: 1,
+        weekdays: [1],
+        dayOfMonth: 1,
+      };
+    }
+
+    const intervalMatch = hourField?.match(/^\*\/(\d+)$/);
+    if (intervalMatch) {
+      const intervalHours = parseNumberField(intervalMatch[1] ?? '', 1, 23);
+      if (intervalHours === null) {
+        return null;
+      }
+
+      return {
+        cadence: 'interval',
+        minute,
+        hour: 0,
+        intervalHours,
+        weekdays: [1],
+        dayOfMonth: 1,
+      };
+    }
+
+    const hour = parseNumberField(hourField ?? '', 0, 23);
+    if (hour === null) {
+      return null;
+    }
+
+    return {
+      cadence: 'daily',
+      minute,
+      hour,
+      intervalHours: 4,
+      weekdays: [1],
+      dayOfMonth: 1,
+    };
+  }
+
+  if (dayOfMonthField === '*' && monthField === '*') {
+    const hour = parseNumberField(hourField ?? '', 0, 23);
+    if (hour === null) {
+      return null;
+    }
+
+    if (dayOfWeekField === '1-5') {
+      return {
+        cadence: 'weekdays',
+        minute,
+        hour,
+        intervalHours: 4,
+        weekdays: [1, 2, 3, 4, 5],
+        dayOfMonth: 1,
+      };
+    }
+
+    const weekdays = parseWeekdayField(dayOfWeekField ?? '');
+    if (!weekdays || weekdays.length === 0) {
+      return null;
+    }
+
+    return {
+      cadence: 'weekly',
+      minute,
+      hour,
+      intervalHours: 4,
+      weekdays,
+      dayOfMonth: 1,
+    };
+  }
+
+  if (monthField === '*' && dayOfWeekField === '*') {
+    const hour = parseNumberField(hourField ?? '', 0, 23);
+    const dayOfMonth = parseNumberField(dayOfMonthField ?? '', 1, 31);
+    if (hour === null || dayOfMonth === null) {
+      return null;
+    }
+
+    return {
+      cadence: 'monthly',
+      minute,
+      hour,
+      intervalHours: 4,
+      weekdays: [1],
+      dayOfMonth,
+    };
+  }
+
+  return null;
+}
+
+export function createCronEditorState(cron?: string): CronEditorState {
+  const rawCron = cron?.trim() ?? '';
+  if (!rawCron) {
+    return {
+      mode: 'builder',
+      builder: createDefaultEasyTaskSchedule(),
+      rawCron: '',
+      supported: true,
+    };
+  }
+
+  const builder = parseCronToEasyTaskSchedule(rawCron);
+  return {
+    mode: builder ? 'builder' : 'raw',
+    builder: builder ?? createDefaultEasyTaskSchedule(),
+    rawCron,
+    supported: Boolean(builder),
+  };
+}
+
+export function buildCronFromEasyTaskSchedule(schedule: EasyTaskSchedule): string {
+  const minute = clamp(schedule.minute, 0, 59);
+  const hour = clamp(schedule.hour, 0, 23);
+  const intervalHours = clamp(schedule.intervalHours, 1, 23);
+  const dayOfMonth = clamp(schedule.dayOfMonth, 1, 31);
+
+  switch (schedule.cadence) {
+    case 'hourly':
+      return `${minute} * * * *`;
+    case 'interval':
+      return `${minute} */${intervalHours} * * *`;
+    case 'daily':
+      return `${minute} ${hour} * * *`;
+    case 'weekdays':
+      return `${minute} ${hour} * * 1-5`;
+    case 'weekly':
+      return `${minute} ${hour} * * ${serializeWeekdays(schedule.weekdays)}`;
+    case 'monthly':
+      return `${minute} ${hour} ${dayOfMonth} * *`;
+    default:
+      return `${minute} ${hour} * * *`;
+  }
+}
+
+export function humanizeCronExpression(cron: string): string {
+  const parsed = parseCronToEasyTaskSchedule(cron);
+  if (!parsed) {
+    return cron;
+  }
+
+  switch (parsed.cadence) {
+    case 'hourly':
+      return `every hour at :${pad2(parsed.minute)}`;
+    case 'interval':
+      return `every ${parsed.intervalHours}h at :${pad2(parsed.minute)}`;
+    case 'daily':
+      return `daily at ${formatTime(parsed.hour, parsed.minute)}`;
+    case 'weekdays':
+      return `weekdays at ${formatTime(parsed.hour, parsed.minute)}`;
+    case 'weekly':
+      return `${formatWeekdayList(parsed.weekdays)} at ${formatTime(parsed.hour, parsed.minute)}`;
+    case 'monthly':
+      return `day ${parsed.dayOfMonth} at ${formatTime(parsed.hour, parsed.minute)}`;
+    default:
+      return cron;
+  }
+}
+
+export function formatOneTimeTimestamp(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date);
+}
+
+export function formatTaskSchedule(task: { cron?: string; at?: string }): string {
+  if (task.at) {
+    return `once on ${formatOneTimeTimestamp(task.at)}`;
+  }
+
+  if (task.cron) {
+    return humanizeCronExpression(task.cron);
+  }
+
+  return 'unscheduled';
+}
+
+export function formatTimeInputValue(hour: number, minute: number): string {
+  return formatTime(clamp(hour, 0, 23), clamp(minute, 0, 59));
+}
+
+export function parseTimeInputValue(value: string): { hour: number; minute: number } | null {
+  const match = value.match(/^(\d{2}):(\d{2})$/);
+  if (!match) {
+    return null;
+  }
+
+  const hour = parseNumberField(match[1] ?? '', 0, 23);
+  const minute = parseNumberField(match[2] ?? '', 0, 59);
+  if (hour === null || minute === null) {
+    return null;
+  }
+
+  return { hour, minute };
+}
+
+export function toDateTimeLocalValue(value?: string): string {
+  if (!value) {
+    return '';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+
+export function fromDateTimeLocalValue(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const date = new Date(trimmed);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toISOString();
+}

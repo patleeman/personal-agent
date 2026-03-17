@@ -74,6 +74,7 @@ import {
 } from './profilePreferences.js';
 import { syncDaemonTaskScopeToProfile } from './daemonProfileSync.js';
 import {
+  buildScheduledTaskMarkdown,
   readScheduledTaskFileMetadata,
   taskBelongsToProfile,
   type TaskRuntimeEntry,
@@ -180,6 +181,7 @@ import {
   markDeferredResumeConversationRunReady,
   markDeferredResumeConversationRunRetryScheduled,
   parsePendingOperation,
+  parseTaskDefinition,
   resolveDaemonPaths,
   startScheduledTaskRun,
   startBackgroundRun,
@@ -551,34 +553,129 @@ function loadTaskStateEntries(): TaskRuntimeEntry[] {
   return Object.values(taskState.tasks ?? {}) as TaskRuntimeEntry[];
 }
 
+function taskDirForProfile(profile: string): string {
+  return join(getProfilesRoot(), profile, 'agent', 'tasks');
+}
+
+function listTaskDefinitionFiles(taskDir: string): string[] {
+  if (!existsSync(taskDir)) {
+    return [];
+  }
+
+  const output: string[] = [];
+  const stack = [taskDir];
+
+  while (stack.length > 0) {
+    const current = stack.pop() as string;
+    const entries = readdirSync(current, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+        continue;
+      }
+
+      if (entry.isFile() && entry.name.endsWith('.task.md')) {
+        output.push(fullPath);
+      }
+    }
+  }
+
+  output.sort();
+  return output;
+}
+
 function findCurrentProfileTaskEntry(taskId: string): TaskRuntimeEntry | undefined {
   const currentProfile = getCurrentProfile();
-  return loadTaskStateEntries().find((task) => task.id === taskId && taskBelongsToProfile(task, currentProfile));
+  const runtimeEntries = loadTaskStateEntries().filter((task) => taskBelongsToProfile(task, currentProfile));
+  const matchedRuntime = runtimeEntries.find((task) => task.id === taskId);
+  if (matchedRuntime) {
+    return matchedRuntime;
+  }
+
+  for (const filePath of listTaskDefinitionFiles(taskDirForProfile(currentProfile))) {
+    try {
+      const metadata = readScheduledTaskFileMetadata(filePath);
+      if (metadata.id !== taskId) {
+        continue;
+      }
+
+      return {
+        id: metadata.id,
+        filePath,
+        scheduleType: metadata.scheduleType,
+        running: false,
+      };
+    } catch {
+      continue;
+    }
+  }
+
+  return undefined;
 }
 
 function listTasksForCurrentProfile() {
   const currentProfile = getCurrentProfile();
+  const runtimeEntries = loadTaskStateEntries().filter((task) => taskBelongsToProfile(task, currentProfile));
+  const runtimeByFilePath = new Map(runtimeEntries.map((task) => [task.filePath, task]));
+  const runtimeById = new Map(runtimeEntries.map((task) => [task.id, task]));
+  const tasks = listTaskDefinitionFiles(taskDirForProfile(currentProfile)).flatMap((filePath) => {
+    try {
+      const metadata = readScheduledTaskFileMetadata(filePath);
+      const runtime = runtimeByFilePath.get(filePath) ?? runtimeById.get(metadata.id);
+      return [{
+        id: metadata.id,
+        filePath,
+        scheduleType: metadata.scheduleType,
+        running: runtime?.running ?? false,
+        enabled: metadata.enabled,
+        cron: metadata.cron,
+        at: metadata.at,
+        prompt: metadata.prompt,
+        model: metadata.model,
+        lastStatus: runtime?.lastStatus,
+        lastRunAt: runtime?.lastRunAt,
+        lastSuccessAt: runtime?.lastSuccessAt,
+        lastAttemptCount: runtime?.lastAttemptCount,
+      }];
+    } catch {
+      return [];
+    }
+  });
 
-  return loadTaskStateEntries()
-    .filter((task) => taskBelongsToProfile(task, currentProfile))
-    .map((task) => {
-      try {
-        const metadata = readScheduledTaskFileMetadata(task.filePath);
-        return {
-          ...task,
-          enabled: metadata.enabled,
-          cron: metadata.cron,
-          prompt: metadata.prompt,
-          model: metadata.model,
-        };
-      } catch {
-        return {
-          ...task,
-          enabled: true,
-          prompt: '',
-        };
-      }
-    });
+  tasks.sort((left, right) => left.id.localeCompare(right.id) || left.filePath.localeCompare(right.filePath));
+  return tasks;
+}
+
+function readRequiredTaskId(value: unknown): string {
+  const normalized = typeof value === 'string' ? value.trim() : '';
+  if (!normalized) {
+    throw new Error('taskId is required.');
+  }
+
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(normalized)) {
+    throw new Error('taskId must use only letters, numbers, hyphens, or underscores.');
+  }
+
+  return normalized;
+}
+
+function buildTaskDetailResponse(entry: TaskRuntimeEntry) {
+  const metadata = readScheduledTaskFileMetadata(entry.filePath);
+  return {
+    ...entry,
+    id: metadata.id,
+    scheduleType: metadata.scheduleType,
+    enabled: metadata.enabled,
+    cron: metadata.cron,
+    at: metadata.at,
+    model: metadata.model,
+    cwd: metadata.cwd,
+    timeoutSeconds: metadata.timeoutSeconds,
+    prompt: metadata.promptBody,
+    fileContent: metadata.fileContent,
+  };
 }
 
 function getSessionLastActivityAt(sessionFile: string, fallback: string): string {
@@ -2777,21 +2874,120 @@ app.get('/api/tasks', (_req, res) => {
   }
 });
 
+app.post('/api/tasks', (req, res) => {
+  try {
+    const body = req.body as {
+      taskId?: string;
+      enabled?: boolean;
+      cron?: string | null;
+      at?: string | null;
+      model?: string | null;
+      cwd?: string | null;
+      timeoutSeconds?: number | null;
+      prompt?: string;
+    };
+    const profile = getCurrentProfile();
+    const taskId = readRequiredTaskId(body.taskId);
+    const filePath = join(taskDirForProfile(profile), `${taskId}.task.md`);
+
+    if (existsSync(filePath) || listTasksForCurrentProfile().some((task) => task.id === taskId)) {
+      res.status(409).json({ error: `Task already exists: ${taskId}` });
+      return;
+    }
+
+    const content = buildScheduledTaskMarkdown({
+      taskId,
+      profile,
+      enabled: body.enabled ?? true,
+      cron: body.cron,
+      at: body.at,
+      model: body.model,
+      cwd: body.cwd,
+      timeoutSeconds: body.timeoutSeconds,
+      prompt: body.prompt ?? '',
+    });
+
+    parseTaskDefinition({
+      filePath,
+      rawContent: content,
+      defaultTimeoutSeconds: loadDaemonConfig().modules.tasks.defaultTimeoutSeconds,
+    });
+
+    mkdirSync(dirname(filePath), { recursive: true });
+    writeFileSync(filePath, content, 'utf-8');
+    invalidateAppTopics('tasks');
+    res.status(201).json({
+      ok: true,
+      task: buildTaskDetailResponse({
+        id: taskId,
+        filePath,
+        scheduleType: body.at ? 'at' : 'cron',
+        running: false,
+      }),
+    });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 app.patch('/api/tasks/:id', (req, res) => {
   try {
-    const { enabled } = req.body as { enabled: boolean };
+    const body = req.body as {
+      enabled?: boolean;
+      cron?: string | null;
+      at?: string | null;
+      model?: string | null;
+      cwd?: string | null;
+      timeoutSeconds?: number | null;
+      prompt?: string;
+    };
     const entry = findCurrentProfileTaskEntry(req.params.id);
     if (!entry) { res.status(404).json({ error: 'Task not found' }); return; }
 
-    let content = readFileSync(entry.filePath, 'utf-8');
-    if (/enabled:\s*(true|false)/.test(content)) {
-      content = content.replace(/enabled:\s*(true|false)/, `enabled: ${enabled}`);
-    } else {
-      content = content.replace(/^---\n/, `---\nenabled: ${enabled}\n`);
+    const requestedKeys = Object.keys(body).filter((key) => body[key as keyof typeof body] !== undefined);
+    const enabled = body.enabled;
+    const toggleOnly = requestedKeys.length === 1 && requestedKeys[0] === 'enabled' && typeof enabled === 'boolean';
+
+    if (toggleOnly) {
+      let content = readFileSync(entry.filePath, 'utf-8');
+      if (/enabled:\s*(true|false)/.test(content)) {
+        content = content.replace(/enabled:\s*(true|false)/, `enabled: ${enabled}`);
+      } else {
+        content = content.replace(/^---\n/, `---\nenabled: ${enabled}\n`);
+      }
+      writeFileSync(entry.filePath, content, 'utf-8');
+      invalidateAppTopics('tasks');
+      res.json({ ok: true, task: buildTaskDetailResponse(entry) });
+      return;
     }
-    writeFileSync(entry.filePath, content, 'utf-8');
+
+    const metadata = readScheduledTaskFileMetadata(entry.filePath);
+    const nextContent = buildScheduledTaskMarkdown({
+      taskId: entry.id,
+      profile: metadata.profile ?? getCurrentProfile(),
+      enabled: body.enabled ?? metadata.enabled,
+      cron: body.cron !== undefined ? body.cron : metadata.cron,
+      at: body.at !== undefined ? body.at : metadata.at,
+      model: body.model !== undefined ? body.model : metadata.model,
+      cwd: body.cwd !== undefined ? body.cwd : metadata.cwd,
+      timeoutSeconds: body.timeoutSeconds !== undefined ? body.timeoutSeconds : metadata.timeoutSeconds,
+      prompt: body.prompt ?? metadata.promptBody,
+      output: metadata.output,
+    });
+
+    parseTaskDefinition({
+      filePath: entry.filePath,
+      rawContent: nextContent,
+      defaultTimeoutSeconds: loadDaemonConfig().modules.tasks.defaultTimeoutSeconds,
+    });
+
+    writeFileSync(entry.filePath, nextContent, 'utf-8');
     invalidateAppTopics('tasks');
-    res.json({ ok: true });
+    res.json({ ok: true, task: buildTaskDetailResponse(entry) });
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -2823,14 +3019,7 @@ app.get('/api/tasks/:id', (req, res) => {
     const entry = findCurrentProfileTaskEntry(req.params.id);
     if (!entry) { res.status(404).json({ error: 'Task not found' }); return; }
 
-    const metadata = readScheduledTaskFileMetadata(entry.filePath);
-    res.json({
-      ...entry,
-      enabled: metadata.enabled,
-      cron: metadata.cron,
-      model: metadata.model,
-      fileContent: metadata.fileContent,
-    });
+    res.json(buildTaskDetailResponse(entry));
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),

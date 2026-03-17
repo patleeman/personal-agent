@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  buildScheduledTaskMarkdown,
   inferTaskProfileFromFilePath,
   readScheduledTaskFileMetadata,
   taskBelongsToProfile,
@@ -27,21 +28,44 @@ describe('scheduledTasks', () => {
     expect(inferTaskProfileFromFilePath('/repo/custom/daily.task.md')).toBeUndefined();
   });
 
-  it('reads simple scheduled-task metadata from the file', () => {
+  it('reads canonical scheduled-task metadata from the file', () => {
     const dir = createTempDir();
     const filePath = join(dir, 'demo.task.md');
 
     writeFileSync(filePath, `---\nenabled: false\ncron: "0 9 * * *"\nprofile: "assistant"\nmodel: "openai-codex/gpt-5.4"\ncwd: "~/agent-workspace"\n---\nSummarize the last run.\nInclude the top blockers.\n`);
 
     expect(readScheduledTaskFileMetadata(filePath)).toEqual({
+      id: 'demo',
       fileContent: expect.any(String),
       enabled: false,
+      scheduleType: 'cron',
       cron: '0 9 * * *',
+      at: undefined,
       profile: 'assistant',
       model: 'openai-codex/gpt-5.4',
-      cwd: '~/agent-workspace',
+      cwd: expect.stringContaining('agent-workspace'),
+      timeoutSeconds: 1800,
       prompt: 'Summarize the last run.',
+      promptBody: 'Summarize the last run.\nInclude the top blockers.',
+      output: undefined,
     });
+  });
+
+  it('builds canonical task markdown for recurring tasks', () => {
+    expect(buildScheduledTaskMarkdown({
+      taskId: 'daily-status',
+      profile: 'assistant',
+      enabled: true,
+      cron: '11 */4 * * *',
+      model: 'openai-codex/gpt-5.4',
+      cwd: '~/agent-workspace',
+      timeoutSeconds: 900,
+      prompt: 'Run maintenance.',
+      output: {
+        when: 'success',
+        targets: [{ gateway: 'telegram', chatId: '123', messageThreadId: 45 }],
+      },
+    })).toBe(`---\nid: "daily-status"\nenabled: true\ncron: "11 */4 * * *"\nprofile: "assistant"\nmodel: "openai-codex/gpt-5.4"\ncwd: "~/agent-workspace"\ntimeoutSeconds: 900\noutput:\n  when: success\n  targets:\n    - gateway: telegram\n      chatId: "123"\n      messageThreadId: 45\n---\nRun maintenance.\n`);
   });
 
   it('filters repo-managed tasks by the current profile', () => {
