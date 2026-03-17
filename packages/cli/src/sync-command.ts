@@ -14,7 +14,11 @@ import {
   writeFileSync,
 } from 'fs';
 import { dirname, join, relative, resolve } from 'path';
-import { getPiAgentRuntimeDir, getStateRoot } from '@personal-agent/core';
+import {
+  getPiAgentRuntimeDir,
+  getStateRoot,
+  mergeConversationAttentionStateDocuments,
+} from '@personal-agent/core';
 import {
   emitDaemonEventNonFatal,
   getDaemonConfigFilePath,
@@ -29,6 +33,7 @@ import { bullet, dim, keyValue, section, success, warning } from './ui.js';
 const DEFAULT_SYNC_BRANCH = 'main';
 const DEFAULT_SYNC_REMOTE = 'origin';
 const DEFAULT_PROFILE_CONFIG_JSON = '{\n  "defaultProfile": "shared"\n}\n';
+const CONVERSATION_ATTENTION_MERGE_DRIVER = 'personal-agent-conversation-attention';
 
 function syncUsageText(): string {
   return 'Usage: pa sync [status|run|setup|help] [args...]';
@@ -44,6 +49,10 @@ function syncStatusUsageText(): string {
 
 function syncRunUsageText(): string {
   return 'Usage: pa sync run';
+}
+
+function syncMergeConversationAttentionUsageText(): string {
+  return 'Usage: pa sync merge-conversation-attention <base-file> <current-file> <other-file>';
 }
 
 function isCliHelpToken(value: string | undefined): boolean {
@@ -76,6 +85,39 @@ function parseNumber(value: unknown, fallback: number): number {
   }
 
   return fallback;
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'"'"'`)}'`;
+}
+
+function resolveCurrentCliEntrypoint(): string {
+  const entrypoint = toOptionalString(process.argv[1]);
+  if (!entrypoint) {
+    throw new Error('Unable to resolve the current CLI entrypoint for sync merge driver setup.');
+  }
+
+  return resolve(entrypoint);
+}
+
+function buildConversationAttentionMergeDriverCommand(): string {
+  return [
+    shellQuote(process.execPath),
+    shellQuote(resolveCurrentCliEntrypoint()),
+    'sync',
+    'merge-conversation-attention',
+    '%O',
+    '%A',
+    '%B',
+  ].join(' ');
+}
+
+function readJsonFileIfExists(path: string): unknown | undefined {
+  if (!existsSync(path)) {
+    return undefined;
+  }
+
+  return JSON.parse(readFileSync(path, 'utf-8')) as unknown;
 }
 
 function runGit(repoDir: string, args: string[], allowFailure = false): { code: number; stdout: string; stderr: string } {
@@ -238,12 +280,25 @@ function syncRepoGitignore(): string {
   return `# personal-agent sync repo (managed by pa sync setup)\n\n*\n!.gitignore\n!.gitattributes\n!README.md\n\n# Whitelist durable-sync roots so new files/directories under them sync by default\n!profiles/\n!profiles/**\n\n!pi-agent/\n!pi-agent/**\n\n# Never sync machine-local runtime leftovers from older releases\n.DS_Store\n**/.DS_Store\npi-agent/AGENTS.md\npi-agent/APPEND_SYSTEM.md\npi-agent/SYSTEM.md\npi-agent/auth.json\npi-agent/models.json\npi-agent/settings.json\npi-agent/bin/\npi-agent/session-meta-index.json\n`;
 }
 
-function syncRepoGitattributes(): string {
-  return `* text=auto\n\n# Append-only session JSONL transcripts merge best with union\npi-agent/sessions/**/*.jsonl text eol=lf merge=union\n`;
+export function syncRepoGitattributes(): string {
+  return `* text=auto\n\n# Append-only session JSONL transcripts merge best with union\npi-agent/sessions/**/*.jsonl text eol=lf merge=union\n\n# Conversation attention state should merge by per-conversation max/union semantics\npi-agent/state/conversation-attention/*.json text eol=lf merge=${CONVERSATION_ATTENTION_MERGE_DRIVER}\n`;
+}
+
+function configureManagedMergeDrivers(syncRoot: string): void {
+  runGit(syncRoot, [
+    'config',
+    `merge.${CONVERSATION_ATTENTION_MERGE_DRIVER}.name`,
+    'personal-agent conversation attention merge',
+  ]);
+  runGit(syncRoot, [
+    'config',
+    `merge.${CONVERSATION_ATTENTION_MERGE_DRIVER}.driver`,
+    buildConversationAttentionMergeDriverCommand(),
+  ]);
 }
 
 function syncRepoReadme(): string {
-  return `# personal-agent sync repo\n\nManaged by \`pa sync setup\`.\n\nThis repo tracks durable cross-machine state from sync roots:\n\n- \`profiles/**\`\n- \`pi-agent/**\` (durable sessions/state only)\n\nMachine-local runtime files such as auth, settings, generated prompt materialization, and package bins now live outside the sync repo under the local state root. Machine-local config (including \`config/config.json\` default profile selection) is intentionally not synced.\n`;
+  return `# personal-agent sync repo\n\nManaged by \`pa sync setup\`.\n\nThis repo tracks durable cross-machine state from sync roots:\n\n- \`profiles/**\`\n- \`pi-agent/**\` (durable sessions/state only)\n\nBuilt-in merge handling is configured for:\n\n- append-only session transcripts under \`pi-agent/sessions/**/*.jsonl\`\n- conversation attention state under \`pi-agent/state/conversation-attention/*.json\`\n\nMachine-local runtime files such as auth, settings, generated prompt materialization, and package bins now live outside the sync repo under the local state root. Machine-local config (including \`config/config.json\` default profile selection) is intentionally not synced.\n`;
 }
 
 function migrateLegacyPiAgentRuntimeArtifacts(stateRoot: string, syncRoot: string): void {
@@ -469,6 +524,7 @@ async function setupSyncCommand(args: string[]): Promise<number> {
   writeManagedSyncRepoFiles(syncRoot);
 
   ensureGitRepo(syncRoot, parsed.branch);
+  configureManagedMergeDrivers(syncRoot);
   configureRemote(syncRoot, parsed.repoUrl, DEFAULT_SYNC_REMOTE);
 
   if (parsed.mode === 'bootstrap') {
@@ -613,6 +669,24 @@ async function syncRunCommand(args: string[]): Promise<number> {
   return 0;
 }
 
+export async function mergeConversationAttentionFilesCommand(args: string[]): Promise<number> {
+  if (args.length !== 3 || args.some((arg) => isCliHelpToken(arg))) {
+    throw new Error(syncMergeConversationAttentionUsageText());
+  }
+
+  const [basePath, currentPath, otherPath] = args.map((arg) => resolve(arg));
+  const merged = mergeConversationAttentionStateDocuments({
+    documents: [
+      readJsonFileIfExists(basePath),
+      readJsonFileIfExists(currentPath),
+      readJsonFileIfExists(otherPath),
+    ],
+  });
+
+  writeFileSync(currentPath, `${JSON.stringify(merged, null, 2)}\n`);
+  return 0;
+}
+
 function printSyncHelp(): void {
   console.log(section('Sync commands'));
   console.log('');
@@ -651,6 +725,10 @@ export async function syncCommand(args: string[]): Promise<number> {
 
   if (subcommand === 'run') {
     return syncRunCommand(rest);
+  }
+
+  if (subcommand === 'merge-conversation-attention') {
+    return mergeConversationAttentionFilesCommand(rest);
   }
 
   throw new Error(syncUsageText());
