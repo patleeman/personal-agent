@@ -622,6 +622,37 @@ function buildDisplayBlocksWithEntryAnchors(messages: DisplayMessageEntryLike[])
   return { blocks, entryAnchorIndexById };
 }
 
+function buildSessionUserImagePath(sessionId: string, blockId: string, imageIndex: number): string {
+  return `/api/sessions/${encodeURIComponent(sessionId)}/blocks/${encodeURIComponent(blockId)}/images/${imageIndex}`;
+}
+
+function buildSessionBlockImagePath(sessionId: string, blockId: string): string {
+  return `/api/sessions/${encodeURIComponent(sessionId)}/blocks/${encodeURIComponent(blockId)}/image`;
+}
+
+function decorateSessionAssetUrls(blocks: DisplayBlock[], sessionId: string): DisplayBlock[] {
+  return blocks.map((block) => {
+    if (block.type === 'user' && block.images?.length) {
+      return {
+        ...block,
+        images: block.images.map((image, imageIndex) => ({
+          ...image,
+          src: buildSessionUserImagePath(sessionId, block.id, imageIndex),
+        })),
+      };
+    }
+
+    if (block.type === 'image') {
+      return {
+        ...block,
+        src: buildSessionBlockImagePath(sessionId, block.id),
+      };
+    }
+
+    return block;
+  });
+}
+
 const RECENT_HEAVY_CONTENT_BLOCK_COUNT = 80;
 const DEFERRED_TOOL_OUTPUT_PREVIEW_LENGTH = 600;
 
@@ -1181,7 +1212,7 @@ export function readSessionBlocksByFile(filePath: string, options?: { tailBlocks
 
   const manager = SessionManager.open(meta.file);
   const branchEntries = buildDisplayMessageEntriesFromSessionEntries(manager.getBranch());
-  const allBlocks = buildDisplayBlocksFromEntries(branchEntries);
+  const allBlocks = decorateSessionAssetUrls(buildDisplayBlocksFromEntries(branchEntries), meta.id);
   const totalBlocks = allBlocks.length;
   const tailBlockLimit = resolveTailBlockLimit(options?.tailBlocks, totalBlocks);
   const blockOffset = tailBlockLimit === null ? 0 : Math.max(0, totalBlocks - tailBlockLimit);
@@ -1212,8 +1243,65 @@ export function readSessionBlock(sessionId: string, blockId: string): DisplayBlo
 
   const manager = SessionManager.open(meta.file);
   const branchEntries = buildDisplayMessageEntriesFromSessionEntries(manager.getBranch());
-  const blocks = buildDisplayBlocksFromEntries(branchEntries);
+  const blocks = decorateSessionAssetUrls(buildDisplayBlocksFromEntries(branchEntries), sessionId);
   return blocks.find((block) => block.id === blockId) ?? null;
+}
+
+function buildSessionImageAsset(block: RawContentBlock): { mimeType: string; data: Buffer; fileName?: string } | null {
+  const mimeType = imageMimeType(block);
+  if (!mimeType || !block.data) {
+    return null;
+  }
+
+  return {
+    mimeType,
+    data: Buffer.from(block.data, 'base64'),
+    fileName: typeof block.name === 'string' && block.name.trim().length > 0 ? block.name.trim() : undefined,
+  };
+}
+
+export function readSessionImageAsset(
+  sessionId: string,
+  blockId: string,
+  imageIndex?: number,
+): { mimeType: string; data: Buffer; fileName?: string } | null {
+  const meta = resolveSessionMeta(sessionId);
+  if (!meta) {
+    return null;
+  }
+
+  const manager = SessionManager.open(meta.file);
+  for (const entry of manager.getBranch()) {
+    if (entry.type !== 'message') {
+      continue;
+    }
+
+    const contentBlocks = normalizeContent('content' in entry.message ? entry.message.content : undefined);
+    if (entry.message.role === 'user' && entry.id === blockId) {
+      if (!Number.isInteger(imageIndex) || typeof imageIndex !== 'number' || imageIndex < 0) {
+        return null;
+      }
+
+      const images = contentBlocks.filter((block) => block.type === 'image');
+      const image = images[imageIndex];
+      return image ? buildSessionImageAsset(image) : null;
+    }
+
+    if (entry.message.role !== 'toolResult') {
+      continue;
+    }
+
+    const images = contentBlocks.filter((block) => block.type === 'image');
+    for (const [candidateIndex, image] of images.entries()) {
+      if (`${entry.id}-i${candidateIndex}` !== blockId) {
+        continue;
+      }
+
+      return buildSessionImageAsset(image);
+    }
+  }
+
+  return null;
 }
 
 export function readSessionTreeByFile(filePath: string): ConversationTreeSnapshot | null {

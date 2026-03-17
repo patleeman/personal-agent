@@ -708,7 +708,7 @@ export interface LiveSessionMeta {
 // ── SSE events from /api/live-sessions/:id/events ────────────────────────────
 
 export type SseEvent =
-  | { type: 'snapshot';        blocks: DisplayBlock[] }
+  | { type: 'snapshot';        blocks: DisplayBlock[]; blockOffset: number; totalBlocks: number }
   | { type: 'agent_start' }
   | { type: 'agent_end' }
   | { type: 'turn_end' }

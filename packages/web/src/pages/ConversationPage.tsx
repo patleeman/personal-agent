@@ -57,6 +57,9 @@ import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSce
 const INITIAL_HISTORICAL_TAIL_BLOCKS = 400;
 const HISTORICAL_TAIL_BLOCKS_STEP = 400;
 const HISTORICAL_TAIL_BLOCKS_JUMP_PADDING = 40;
+const MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS = 1200;
+const HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX = 1400;
+const HISTORICAL_BACKGROUND_PREFETCH_DELAY_MS = 800;
 
 // ── Model picker ──────────────────────────────────────────────────────────────
 
@@ -702,8 +705,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   // We use a confirmed-live flag only for lightweight session-state labeling.
   const [confirmedLive, setConfirmedLive] = useState<boolean | null>(null);
 
+  const [historicalTailBlocks, setHistoricalTailBlocks] = useState(INITIAL_HISTORICAL_TAIL_BLOCKS);
+
   // ── Pi SDK stream — attempt connection immediately for all sessions ───────
-  const stream = useSessionStream(id ?? null);
+  const stream = useSessionStream(id ?? null, { tailBlocks: historicalTailBlocks });
 
   // Confirm live status via API (for session-state labeling, not for stream)
   useEffect(() => {
@@ -720,10 +725,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   // Session is "live" if SSE connected (has blocks) OR API confirms it
   const isLiveSession = stream.blocks.length > 0 || stream.isStreaming || confirmedLive === true;
-  const [historicalTailBlocks, setHistoricalTailBlocks] = useState(INITIAL_HISTORICAL_TAIL_BLOCKS);
 
   useEffect(() => {
     setHistoricalTailBlocks(INITIAL_HISTORICAL_TAIL_BLOCKS);
+    pendingPrependRestoreRef.current = null;
   }, [id]);
 
   // ── Existing session data (read-only JSONL) ───────────────────────────────
@@ -739,6 +744,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   useEffect(() => {
     setHydratedHistoricalBlocks({});
     setHydratingHistoricalBlockIds([]);
+    setRequestedFocusMessageIndex(null);
+    pendingJumpMessageIndexRef.current = null;
   }, [id]);
 
   const hydrateHistoricalBlock = useCallback(async (blockId: string) => {
@@ -775,26 +782,37 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         })
       : []
   ), [hydratedHistoricalBlocks, visibleSessionDetail]);
+  const visibleStreamBlocks = useMemo<MessageBlock[]>(() => (
+    stream.blocks.map((block) => {
+      const normalizedId = block.id?.trim();
+      return normalizedId ? (hydratedHistoricalBlocks[normalizedId] ?? block) : block;
+    })
+  ), [hydratedHistoricalBlocks, stream.blocks]);
 
   // Live sessions hydrate from the SSE snapshot; until that arrives, fall back to
   // JSONL + live deltas only when we have at least one source of blocks.
   const realMessages = useMemo<MessageBlock[] | undefined>(() => {
     if (isLiveSession) {
       if (stream.hasSnapshot) {
-        return stream.blocks;
+        return visibleStreamBlocks;
       }
 
-      return (baseMessages.length > 0 || stream.blocks.length > 0)
-        ? [...baseMessages, ...stream.blocks]
+      return (baseMessages.length > 0 || visibleStreamBlocks.length > 0)
+        ? [...baseMessages, ...visibleStreamBlocks]
         : undefined;
     }
 
     return visibleSessionDetail ? baseMessages : undefined;
-  }, [baseMessages, isLiveSession, stream.blocks, stream.hasSnapshot, visibleSessionDetail]);
-  const historicalBlockOffset = visibleSessionDetail?.blockOffset ?? 0;
+  }, [baseMessages, isLiveSession, stream.hasSnapshot, visibleSessionDetail, visibleStreamBlocks]);
+  const historicalBlockOffset = stream.hasSnapshot
+    ? stream.blockOffset
+    : (visibleSessionDetail?.blockOffset ?? 0);
+  const historicalTotalBlocks = stream.hasSnapshot
+    ? stream.totalBlocks
+    : (visibleSessionDetail?.totalBlocks ?? realMessages?.length ?? 0);
   const historicalHasOlderBlocks = historicalBlockOffset > 0;
-  const showHistoricalLoadMore = historicalHasOlderBlocks && !(isLiveSession && stream.hasSnapshot);
-  const messageIndexOffset = isLiveSession && stream.hasSnapshot ? 0 : historicalBlockOffset;
+  const showHistoricalLoadMore = historicalHasOlderBlocks;
+  const messageIndexOffset = historicalBlockOffset;
   const messageCount = realMessages?.length ?? 0;
   const artifactAutoOpenSeededRef = useRef(false);
   const [showTree, setShowTree] = useState(false);
@@ -1157,26 +1175,45 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const scrollRef   = useRef<HTMLDivElement>(null);
   const deferredResumeAutoResumeKeyRef = useRef<string | null>(null);
   const pendingJumpMessageIndexRef = useRef<number | null>(null);
+  const [requestedFocusMessageIndex, setRequestedFocusMessageIndex] = useState<number | null>(null);
+  const pendingPrependRestoreRef = useRef<{
+    sessionId: string;
+    scrollHeight: number;
+    scrollTop: number;
+  } | null>(null);
 
-  const loadOlderMessages = useCallback((targetMessageIndex?: number) => {
-    if (!visibleSessionDetail) {
+  const loadOlderMessages = useCallback((targetMessageIndex?: number, options?: { automatic?: boolean }) => {
+    if (!id || sessionLoading || historicalTotalBlocks <= 0) {
+      return;
+    }
+
+    if (options?.automatic && historicalTailBlocks >= Math.min(historicalTotalBlocks, MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS)) {
       return;
     }
 
     const minimumTailBlocks = typeof targetMessageIndex === 'number'
       ? Math.max(
           historicalTailBlocks + HISTORICAL_TAIL_BLOCKS_STEP,
-          visibleSessionDetail.totalBlocks - targetMessageIndex + HISTORICAL_TAIL_BLOCKS_JUMP_PADDING,
+          historicalTotalBlocks - targetMessageIndex + HISTORICAL_TAIL_BLOCKS_JUMP_PADDING,
         )
       : historicalTailBlocks + HISTORICAL_TAIL_BLOCKS_STEP;
-    const nextTailBlocks = Math.min(visibleSessionDetail.totalBlocks, minimumTailBlocks);
+    const nextTailBlocks = Math.min(historicalTotalBlocks, minimumTailBlocks);
 
     if (nextTailBlocks <= historicalTailBlocks) {
       return;
     }
 
+    const scrollEl = scrollRef.current;
+    if (scrollEl && targetMessageIndex === undefined) {
+      pendingPrependRestoreRef.current = {
+        sessionId: id,
+        scrollHeight: scrollEl.scrollHeight,
+        scrollTop: scrollEl.scrollTop,
+      };
+    }
+
     setHistoricalTailBlocks(nextTailBlocks);
-  }, [historicalTailBlocks, visibleSessionDetail]);
+  }, [historicalTailBlocks, historicalTotalBlocks, id, sessionLoading]);
 
   // Derive menu states
   const slashInput = useMemo(() => parseSlashInput(input), [input]);
@@ -1499,12 +1536,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
+
     setAtBottom(isConversationScrolledToBottom({
       scrollHeight: el.scrollHeight,
       scrollTop: el.scrollTop,
       clientHeight: el.clientHeight,
     }));
-  }, []);
+
+    if (historicalHasOlderBlocks && !sessionLoading && el.scrollTop <= HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX) {
+      loadOlderMessages();
+    }
+  }, [historicalHasOlderBlocks, loadOlderMessages, sessionLoading]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -1531,6 +1573,40 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       clientHeight: el.clientHeight,
     }));
   }, [id, messageCount]);
+
+  useLayoutEffect(() => {
+    const pendingRestore = pendingPrependRestoreRef.current;
+    if (!pendingRestore || !id || pendingRestore.sessionId !== id || pendingJumpMessageIndexRef.current !== null) {
+      return;
+    }
+
+    const el = scrollRef.current;
+    if (!el) {
+      return;
+    }
+
+    const delta = el.scrollHeight - pendingRestore.scrollHeight;
+    el.scrollTop = pendingRestore.scrollTop + Math.max(0, delta);
+    pendingPrependRestoreRef.current = null;
+  }, [historicalBlockOffset, id, realMessages]);
+
+  useEffect(() => {
+    if (!id || sessionLoading || !historicalHasOlderBlocks || historicalTailBlocks >= Math.min(historicalTotalBlocks, MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS)) {
+      return;
+    }
+
+    if (isLiveSession && stream.isStreaming) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      loadOlderMessages(undefined, { automatic: true });
+    }, HISTORICAL_BACKGROUND_PREFETCH_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [historicalHasOlderBlocks, historicalTailBlocks, historicalTotalBlocks, id, isLiveSession, loadOlderMessages, sessionLoading, stream.isStreaming]);
 
   // Scroll to the newest message once per conversation after its content loads.
   // We key this by session id so fork/navigation lands at the bottom even if the
@@ -1648,12 +1724,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     const el = scrollRef.current?.querySelector(`#msg-${index}`);
     if (el) {
       pendingJumpMessageIndexRef.current = null;
+      setRequestedFocusMessageIndex(null);
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
 
+    pendingJumpMessageIndexRef.current = index;
+    setRequestedFocusMessageIndex(index);
     if (index < historicalBlockOffset) {
-      pendingJumpMessageIndexRef.current = index;
       loadOlderMessages(index);
     }
   }, [historicalBlockOffset, loadOlderMessages]);
@@ -1670,6 +1748,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     pendingJumpMessageIndexRef.current = null;
+    setRequestedFocusMessageIndex(null);
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [historicalBlockOffset, realMessages]);
 
@@ -2908,11 +2987,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         <div ref={scrollRef} className="conversation-scroll-shell h-full overflow-y-auto overflow-x-hidden">
           {hasRenderableMessages && realMessages ? (
             <>
-              {showHistoricalLoadMore && visibleSessionDetail && (
+              {showHistoricalLoadMore && (
                 <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border-subtle bg-surface/90 px-6 py-3 backdrop-blur">
                   <div className="min-w-0 text-[11px] text-secondary">
-                    Showing the latest <span className="font-medium text-primary">{visibleSessionDetail.blocks.length}</span> of{' '}
-                    <span className="font-medium text-primary">{visibleSessionDetail.totalBlocks}</span> blocks.
+                    Showing the latest <span className="font-medium text-primary">{realMessages.length}</span> of{' '}
+                    <span className="font-medium text-primary">{historicalTotalBlocks}</span> blocks.
                   </div>
                   <button
                     type="button"
@@ -2928,6 +3007,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 key={id ?? 'draft-conversation'}
                 messages={realMessages}
                 messageIndexOffset={messageIndexOffset}
+                scrollContainerRef={scrollRef}
+                focusMessageIndex={requestedFocusMessageIndex}
                 isStreaming={stream.isStreaming}
                 onCheckpointMessage={id && !stream.isStreaming ? saveMemoryFromMessage : undefined}
                 onForkMessage={id && !stream.isStreaming ? forkConversationFromMessage : undefined}

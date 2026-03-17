@@ -614,7 +614,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     runMentionsLastFetchedAtRef.current = now;
     let cancelled = false;
 
-    api.sessionDetail(id)
+    api.sessionDetail(id, { tailBlocks: 400 })
       .then((detail) => {
         if (cancelled) {
           return;
