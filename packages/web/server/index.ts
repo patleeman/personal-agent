@@ -85,6 +85,7 @@ import { createDeferredResumeAgentExtension } from './deferredResumeAgentExtensi
 import { createScheduledTaskAgentExtension } from './scheduledTaskAgentExtension.js';
 import { createActivityAgentExtension } from './activityAgentExtension.js';
 import { createRunAgentExtension } from './runAgentExtension.js';
+import { createMemoryAgentExtension } from './memoryAgentExtension.js';
 import {
   createSession,
   createSessionFromExisting,
@@ -364,6 +365,7 @@ function buildLiveSessionExtensionFactories() {
       getCurrentProfile,
     }),
     createRunAgentExtension(),
+    createMemoryAgentExtension(),
     createArtifactAgentExtension({
       stateRoot: getStateRoot(),
       getCurrentProfile,
