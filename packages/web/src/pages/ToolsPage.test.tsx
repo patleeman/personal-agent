@@ -51,6 +51,22 @@ describe('ToolsPage', () => {
               },
             },
           ],
+          newSessionSystemPrompt: 'You are an expert coding assistant.',
+          newSessionInjectedMessages: [],
+          newSessionToolDefinitions: [
+            {
+              name: 'project',
+              description: 'Inspect and update durable projects.',
+              active: true,
+              parameters: {
+                type: 'object',
+                properties: {
+                  action: { type: 'string', description: 'Action to perform.' },
+                },
+                required: ['action'],
+              },
+            },
+          ],
           dependentCliTools: [],
           mcpCli: {
             binary: { available: false, command: 'mcp-cli' },
@@ -115,6 +131,7 @@ describe('ToolsPage', () => {
     expect(html).toContain('href="/tools?inspect=skill&amp;path=%2Ftmp%2FSKILL.md"');
     expect(html).toContain('href="/tools?inspect=tool&amp;name=project"');
     expect(html).toContain('ui-list-row-selected');
+    expect(html).toContain('Brand-new conversation prompt');
     expect(html).toContain('Install package sources');
   });
 });

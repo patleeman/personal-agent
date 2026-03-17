@@ -15,8 +15,10 @@ import { buildToolsSearch, getToolsSelectionKey, parseToolsSelection, type Tools
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50';
 const ACTION_BUTTON_CLASS = 'inline-flex items-center rounded-lg border border-border-subtle bg-base px-3 py-1.5 text-[12px] font-medium text-primary transition-colors hover:bg-surface disabled:opacity-50';
+const PROMPT_TEXTAREA_CLASS = 'min-h-[24rem] w-full resize-y rounded-lg border border-border-default bg-base px-3 py-3 font-mono text-[12px] leading-relaxed text-primary outline-none transition-colors focus:border-accent/60';
 
 type ToolFilter = 'active' | 'all' | 'inactive';
+type PromptInspectorView = 'prompt' | 'messages' | 'tools';
 
 function getToolParameters(tool: Pick<AgentToolInfo, 'parameters'>): Array<{ name: string; required: boolean }> {
   const properties = tool.parameters.properties ?? {};
@@ -213,6 +215,8 @@ export function ToolsPage() {
   const [installingPackage, setInstallingPackage] = useState(false);
   const [installMessage, setInstallMessage] = useState<string | null>(null);
   const [installError, setInstallError] = useState<string | null>(null);
+  const [promptInspectorView, setPromptInspectorView] = useState<PromptInspectorView>('prompt');
+  const [copiedPromptInspectorView, setCopiedPromptInspectorView] = useState<PromptInspectorView | null>(null);
 
   const currentSelection = useMemo(() => parseToolsSelection(location.search), [location.search]);
 
@@ -241,6 +245,22 @@ export function ToolsPage() {
     ?? packageInstall.profileTargets.find((target) => target.current)
     ?? packageInstall.profileTargets[0]
     ?? null;
+  const newSessionSystemPrompt = toolsState?.newSessionSystemPrompt ?? '';
+  const newSessionInjectedMessages = toolsState?.newSessionInjectedMessages ?? [];
+  const newSessionToolDefinitions = toolsState?.newSessionToolDefinitions ?? [];
+  const newSessionInjectedMessagesJson = useMemo(
+    () => JSON.stringify(newSessionInjectedMessages, null, 2),
+    [newSessionInjectedMessages],
+  );
+  const newSessionToolDefinitionsJson = useMemo(
+    () => JSON.stringify(newSessionToolDefinitions, null, 2),
+    [newSessionToolDefinitions],
+  );
+  const promptInspectorValue = promptInspectorView === 'prompt'
+    ? newSessionSystemPrompt
+    : promptInspectorView === 'messages'
+      ? newSessionInjectedMessagesJson
+      : newSessionToolDefinitionsJson;
   const availableAgentsInstructions = memoryData?.agentsMd.filter((item) => item.exists) ?? [];
   const availableSkills = useMemo(() => {
     if (!memoryData) {
@@ -282,6 +302,18 @@ export function ToolsPage() {
       return toolMatchesQuery(tool, toolQuery);
     });
   }, [toolFilter, toolQuery, toolsState?.tools]);
+
+  async function handleCopyPromptInspector() {
+    if (!promptInspectorValue || typeof navigator === 'undefined' || !navigator.clipboard) {
+      return;
+    }
+
+    await navigator.clipboard.writeText(promptInspectorValue);
+    setCopiedPromptInspectorView(promptInspectorView);
+    window.setTimeout(() => {
+      setCopiedPromptInspectorView((current) => current === promptInspectorView ? null : current);
+    }, 1200);
+  }
 
   async function handleInstallPackage() {
     const trimmedSource = packageSource.trim();
@@ -404,6 +436,77 @@ export function ToolsPage() {
                     </div>
                   )}
                 </div>
+              </div>
+            ) : null}
+          </section>
+
+          <section className="space-y-4 border-t border-border-subtle pt-6">
+            <SectionLabel label="New session request" />
+
+            <div className="space-y-1">
+              <h2 className="text-[15px] font-medium text-primary">Brand-new conversation prompt</h2>
+              <p className="ui-card-meta max-w-2xl">
+                Inspect the fully rendered first-turn system prompt for a new live session in this workspace. The active tool schemas and any extension-injected pre-turn messages are included here too.
+              </p>
+            </div>
+
+            {loading && !toolsState ? (
+              <p className="ui-card-meta">Loading rendered prompt…</p>
+            ) : error && !toolsState ? (
+              <p className="text-[12px] text-danger">Failed to load rendered prompt: {error}</p>
+            ) : toolsState ? (
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <p className="ui-card-meta">
+                    {newSessionSystemPrompt.length.toLocaleString()} prompt chars · {newSessionInjectedMessages.length} injected {newSessionInjectedMessages.length === 1 ? 'message' : 'messages'} · {newSessionToolDefinitions.length} active tool definitions
+                  </p>
+                  <p className="ui-card-meta max-w-2xl">
+                    Computed with a neutral first turn so runtime prompt extensions are applied without needing a real user prompt.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="ui-segmented-control" role="group" aria-label="Prompt inspector view">
+                    {([
+                      ['prompt', 'System prompt'],
+                      ['messages', 'Injected messages'],
+                      ['tools', 'Tool definitions'],
+                    ] as const).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={cx('ui-segmented-button', promptInspectorView === value && 'ui-segmented-button-active')}
+                        aria-pressed={promptInspectorView === value}
+                        onClick={() => setPromptInspectorView(value)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    className={ACTION_BUTTON_CLASS}
+                    onClick={() => { void handleCopyPromptInspector(); }}
+                    disabled={promptInspectorValue.length === 0}
+                  >
+                    {copiedPromptInspectorView === promptInspectorView
+                      ? 'Copied'
+                      : promptInspectorView === 'prompt'
+                        ? 'Copy prompt'
+                        : promptInspectorView === 'messages'
+                          ? 'Copy messages'
+                          : 'Copy tool JSON'}
+                  </button>
+                </div>
+
+                <textarea
+                  readOnly
+                  spellCheck={false}
+                  value={promptInspectorValue}
+                  className={PROMPT_TEXTAREA_CLASS}
+                  aria-label="Brand-new session request inspector"
+                />
               </div>
             ) : null}
           </section>
