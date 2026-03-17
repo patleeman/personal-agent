@@ -640,8 +640,6 @@ const TELEGRAM_CLEAR_SWEEP_MESSAGE_LIMIT = 400;
 const TELEGRAM_CLEAR_SWEEP_MESSAGE_LIMIT_ALL = 5000;
 const TELEGRAM_DELETE_MESSAGES_CHUNK_SIZE = 100;
 const TELEGRAM_MAX_MESSAGE_CHARS = 3900;
-const TELEGRAM_STREAMING_EDIT_PREVIEW_MAX_CHARS = 3200;
-const TELEGRAM_STREAMING_EDIT_INTERVAL_MS = 2500;
 const TELEGRAM_LONG_OUTPUT_FILE_THRESHOLD_CHARS = 12_000;
 const TELEGRAM_MAX_AUTO_ATTACHMENTS = 3;
 const TELEGRAM_MAX_ATTACHMENT_BYTES = 45 * 1024 * 1024;
@@ -650,8 +648,6 @@ const STOPPED_ACTIVE_REQUEST_MESSAGE = 'Stopped active request.';
 const NO_ACTIVE_REQUEST_MESSAGE = 'No active request to stop.';
 const STEERING_ACTIVE_REQUEST_MESSAGE = 'Steering current response...';
 const FOLLOWUP_QUEUED_MESSAGE = 'Queued as follow-up.';
-const STREAMING_FLUSH_TARGET_CHARS = 700;
-const STREAMING_FLUSH_MIN_CHARS = 250;
 
 function gatewaySuccess(message: string): string {
   return `✓ ${message}`;
@@ -3861,247 +3857,22 @@ async function deliverTelegramFinalResponse(options: DeliverTelegramFinalRespons
   );
 }
 
-function buildTelegramStreamingPreviewText(text: string): string {
-  if (text.length <= TELEGRAM_STREAMING_EDIT_PREVIEW_MAX_CHARS) {
-    return text;
-  }
-
-  const truncated = text.slice(0, TELEGRAM_STREAMING_EDIT_PREVIEW_MAX_CHARS);
-  return `${truncated}\n\n…`;
-}
-
-function findStreamingFlushLength(text: string): number {
-  if (text.length < STREAMING_FLUSH_TARGET_CHARS) {
-    return 0;
-  }
-
-  const limit = Math.min(text.length, TELEGRAM_MAX_MESSAGE_CHARS);
-  const candidate = text.slice(0, limit);
-
-  const boundaryCandidates = [
-    candidate.lastIndexOf('\n\n') + 2,
-    candidate.lastIndexOf('\n') + 1,
-    candidate.lastIndexOf('. ') + 2,
-    candidate.lastIndexOf('! ') + 2,
-    candidate.lastIndexOf('? ') + 2,
-    candidate.lastIndexOf(' ') + 1,
-  ];
-
-  for (const boundary of boundaryCandidates) {
-    if (boundary >= STREAMING_FLUSH_MIN_CHARS) {
-      return boundary;
-    }
-  }
-
-  return limit;
-}
-
-function createResponseChunkStreamer(sendMessage: SendTextFn): ResponseChunkStreamer {
-  let buffered = '';
-  let streamedOutput = '';
-  let sawDelta = false;
-  let sendError: Error | undefined;
-  let sendChain: Promise<void> = Promise.resolve();
-
-  const queueSend = (text: string): void => {
-    if (text.length === 0) {
-      return;
-    }
-
-    sendChain = sendChain
-      .then(async () => {
-        if (sendError) {
-          return;
-        }
-
-        await sendLongText(sendMessage, text);
-      })
-      .catch((error) => {
-        sendError = toError(error);
-      });
-  };
-
-  const flushBuffered = (force: boolean): void => {
-    while (buffered.length > 0) {
-      const flushLength = force
-        ? Math.min(buffered.length, TELEGRAM_MAX_MESSAGE_CHARS)
-        : findStreamingFlushLength(buffered);
-
-      if (flushLength <= 0) {
-        return;
-      }
-
-      const chunk = buffered.slice(0, flushLength);
-      buffered = buffered.slice(flushLength);
-      queueSend(chunk);
-    }
-  };
-
+function createTelegramFinalResponseStreamer(
+  options: Omit<DeliverTelegramFinalResponseOptions, 'finalOutput' | 'previewMessageId'>,
+): ResponseChunkStreamer {
   return {
-    pushDelta: (delta: string): void => {
-      if (delta.length === 0) {
-        return;
-      }
-
-      sawDelta = true;
-      streamedOutput += delta;
-      buffered += delta;
-      flushBuffered(false);
+    pushDelta: () => {
+      // Telegram response streaming is intentionally disabled.
     },
-
     finalize: async (finalOutput: string): Promise<void> => {
-      if (!sawDelta) {
-        const fallback = finalOutput.length > 0 ? finalOutput : '(no output)';
-        queueSend(fallback);
-      } else {
-        flushBuffered(true);
-
-        if (finalOutput.length > 0) {
-          let suffix = '';
-
-          if (finalOutput.startsWith(streamedOutput)) {
-            suffix = finalOutput.slice(streamedOutput.length);
-          } else if (
-            streamedOutput.startsWith(finalOutput)
-            || streamedOutput.trim() === finalOutput.trim()
-          ) {
-            suffix = '';
-          } else if (streamedOutput.length === 0) {
-            suffix = finalOutput;
-          }
-
-          if (suffix.length > 0) {
-            queueSend(suffix);
-          }
-        }
-      }
-
-      await sendChain;
-      if (sendError) {
-        throw sendError;
-      }
-    },
-  };
-}
-
-interface TelegramResponseChunkStreamerOptions {
-  chatId: number;
-  workingDirectory: string;
-  sendMessage: SendMessageFn;
-  editMessageText?: EditMessageTextFn;
-  sendDocument?: SendDocumentFn;
-  sendPhoto?: SendPhotoFn;
-  outputDir?: string;
-}
-
-function createTelegramResponseChunkStreamer(options: TelegramResponseChunkStreamerOptions): ResponseChunkStreamer {
-  let streamedOutput = '';
-  let sawDelta = false;
-  let previewMessageId: number | undefined;
-  let sendError: Error | undefined;
-  let sendChain: Promise<void> = Promise.resolve();
-  let lastPreviewText = '';
-  let lastPreviewEditAt = 0;
-
-  const queue = (task: () => Promise<void>): void => {
-    sendChain = sendChain
-      .then(async () => {
-        if (sendError) {
-          return;
-        }
-
-        await task();
-      })
-      .catch((error) => {
-        sendError = toError(error);
-      });
-  };
-
-  const ensurePreviewMessage = (): void => {
-    if (!options.editMessageText || previewMessageId !== undefined) {
-      return;
-    }
-
-    queue(async () => {
-      if (previewMessageId !== undefined) {
-        return;
-      }
-
-      const sent = await sendTelegramFormattedMessage(options.sendMessage, options.chatId, '…');
-      const sentMessageId = toTelegramSentMessageId(sent);
-      if (typeof sentMessageId === 'number') {
-        previewMessageId = sentMessageId;
-      }
-    });
-  };
-
-  const flushPreview = (force: boolean): void => {
-    if (!options.editMessageText) {
-      return;
-    }
-
-    if (!force && Date.now() - lastPreviewEditAt < TELEGRAM_STREAMING_EDIT_INTERVAL_MS) {
-      return;
-    }
-
-    const previewText = buildTelegramStreamingPreviewText(streamedOutput);
-    if (previewText.length === 0 || previewText === lastPreviewText) {
-      return;
-    }
-
-    ensurePreviewMessage();
-
-    queue(async () => {
-      if (!options.editMessageText || previewMessageId === undefined) {
-        return;
-      }
-
-      await editTelegramFormattedMessage(
-        options.editMessageText,
-        options.chatId,
-        previewMessageId,
-        previewText,
-      );
-
-      lastPreviewText = previewText;
-      lastPreviewEditAt = Date.now();
-    });
-  };
-
-  return {
-    pushDelta: (delta: string): void => {
-      if (delta.length === 0) {
-        return;
-      }
-
-      sawDelta = true;
-      streamedOutput += delta;
-      flushPreview(false);
-    },
-
-    finalize: async (finalOutput: string): Promise<void> => {
-      if (!sawDelta) {
-        streamedOutput = finalOutput.length > 0 ? finalOutput : '(no output)';
-      } else if (finalOutput.length > 0) {
-        streamedOutput = finalOutput;
-      }
-
-      flushPreview(true);
-      await sendChain;
-
-      if (sendError) {
-        throw sendError;
-      }
-
       await deliverTelegramFinalResponse({
         chatId: options.chatId,
-        finalOutput: streamedOutput,
+        finalOutput,
         workingDirectory: options.workingDirectory,
         sendMessage: options.sendMessage,
         editMessageText: options.editMessageText,
         sendDocument: options.sendDocument,
         sendPhoto: options.sendPhoto,
-        previewMessageId,
         outputDir: options.outputDir,
       });
     },
@@ -6423,22 +6194,15 @@ model=${model}`,
     options.createConversationController,
   );
 
-  const shouldStreamWithMessageEdits = options.editMessageText
-    && message.chat.type !== 'group'
-    && message.chat.type !== 'supergroup';
-
-  const responseStreamer = shouldStreamWithMessageEdits
-    ? createTelegramResponseChunkStreamer({
-      chatId: message.chat.id,
-      workingDirectory: options.workingDirectory,
-      sendMessage: sendMessageWithConversationThread,
-      editMessageText: options.editMessageText,
-      sendDocument: sendDocumentWithConversationThread,
-      sendPhoto: sendPhotoWithConversationThread,
-      outputDir: options.telegramExportDir,
-    })
-    : createResponseChunkStreamer((chunk) =>
-      sendFormattedMessageToConversation(chunk));
+  const responseStreamer = createTelegramFinalResponseStreamer({
+    chatId: message.chat.id,
+    workingDirectory: options.workingDirectory,
+    sendMessage: sendMessageWithConversationThread,
+    editMessageText: options.editMessageText,
+    sendDocument: sendDocumentWithConversationThread,
+    sendPhoto: sendPhotoWithConversationThread,
+    outputDir: options.telegramExportDir,
+  });
 
   const toolActivityStreamer = createTelegramToolActivityStreamer({
     chatId: message.chat.id,
@@ -6454,9 +6218,6 @@ model=${model}`,
     cwd: options.workingDirectory,
     model: options.modelCommands?.activeModelsByConversation.get(conversationId),
     images: promptImages,
-    onTextDelta: (delta) => {
-      responseStreamer.pushDelta(delta);
-    },
     onToolActivity: (event) => {
       toolActivityStreamer.push(event);
     },
