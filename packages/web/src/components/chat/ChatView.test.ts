@@ -107,8 +107,8 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('<table');
     expect(html).toContain('<pre');
     expect(html).toContain('href="https://example.com"');
-    expect(html).toContain('Copy code block');
-    expect(html.match(/ui-markdown-code-copy/g)).toHaveLength(1);
+    expect(html).not.toContain('Copy code block');
+    expect(html).not.toContain('ui-markdown-code-copy');
   });
 
   it('renders project mentions as pills inside markdown text', () => {
@@ -139,6 +139,20 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('<ul');
     expect(html).toContain('<strong>One</strong>');
     expect(html).toContain('<code');
+  });
+
+  it('uses absolute message ids when a transcript window starts mid-conversation', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'text',
+        ts: '2026-03-11T18:00:00.000Z',
+        text: 'Windowed conversation block',
+      }],
+      messageIndexOffset: 7,
+    }));
+
+    expect(html).toContain('id="msg-7"');
+    expect(html).toContain('data-message-index="7"');
   });
 
   it('renders skill invocations as disclosure cards instead of raw wrapper markup', () => {
@@ -245,23 +259,22 @@ describe('chat view streaming disclosure', () => {
     expect(html).not.toContain('[object Object]');
   });
 
-  it('renders inline local path actions inside a hover card', () => {
+  it('renders local paths as plain inline code without path actions', () => {
     const html = renderToStaticMarkup(createElement(Fragment, null, renderText('Open `/Users/patrick/notes.md` soon.')));
 
     expect(html).toContain('/Users/patrick/notes.md');
-    expect(html).toContain('role="tooltip"');
-    expect(html).toContain('Path actions');
-    expect(html.match(/>Open</g)).toHaveLength(1);
-    expect(html.match(/>Copy</g)).toHaveLength(1);
+    expect(html).not.toContain('role="tooltip"');
+    expect(html).not.toContain('>Open<');
+    expect(html).not.toContain('>Copy<');
   });
 
-  it('does not attach local path actions to slash commands in inline code', () => {
+  it('renders slash commands as plain inline code without actions', () => {
     const html = renderToStaticMarkup(createElement(Fragment, null, renderText('Use `/model` before opening `/Users/patrick/notes.md`.')));
 
     expect(html).toContain('/model');
     expect(html).toContain('/Users/patrick/notes.md');
-    expect(html).toContain('Path actions');
-    expect(html.match(/>Open</g)).toHaveLength(1);
-    expect(html.match(/>Copy</g)).toHaveLength(1);
+    expect(html).not.toContain('role="tooltip"');
+    expect(html).not.toContain('>Open<');
+    expect(html).not.toContain('>Copy<');
   });
 });

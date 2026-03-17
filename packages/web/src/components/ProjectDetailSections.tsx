@@ -1,4 +1,4 @@
-import { type FormEventHandler } from 'react';
+import { type FormEventHandler, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';

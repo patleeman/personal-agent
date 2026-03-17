@@ -131,7 +131,7 @@ describe('ProjectOverviewPanel', () => {
     expect(html).toContain('unassigned');
   });
 
-  it('uses the inline path hover card in overview markdown sections', () => {
+  it('renders inline paths in overview markdown as plain code', () => {
     const html = renderToString(
       <MemoryRouter>
         <ProjectOverviewPanel
@@ -147,7 +147,8 @@ describe('ProjectOverviewPanel', () => {
     );
 
     expect(html).toContain('/Users/patrick/sidebar-refresh/notes.md');
-    expect(html).toContain('role="tooltip"');
-    expect(html).toContain('Path actions');
+    expect(html).not.toContain('role="tooltip"');
+    expect(html).not.toContain('>Open<');
+    expect(html).not.toContain('>Copy<');
   });
 });

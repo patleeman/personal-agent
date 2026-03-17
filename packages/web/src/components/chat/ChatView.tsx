@@ -148,13 +148,6 @@ function MarkdownCodeBlock({ children }: { children: ReactNode }) {
 
   return (
     <div className="ui-markdown-code-block">
-      <CopyBtn
-        text={content}
-        className="ui-markdown-code-copy"
-        label="⎘"
-        copiedLabel="✓"
-        title="Copy code block"
-      />
       <pre>
         <code className={className}>{content}</code>
       </pre>
@@ -297,61 +290,6 @@ function buildSummaryPreview(text: string, maxLines: number) {
   }
 
   return previewLines.join('\n');
-}
-
-// ── Copy button ───────────────────────────────────────────────────────────────
-
-async function copyTextToClipboard(text: string): Promise<boolean> {
-  if (typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') {
-    return false;
-  }
-
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function CopyBtn({
-  text,
-  small,
-  label,
-  copiedLabel,
-  title,
-  className,
-}: {
-  text: string;
-  small?: boolean;
-  label?: string;
-  copiedLabel?: string;
-  title?: string;
-  className?: string;
-}) {
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    const didCopy = await copyTextToClipboard(text);
-    if (!didCopy) {
-      return;
-    }
-
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={() => { void copy(); }}
-      className={cx('ui-action-button', small ? 'text-[10px]' : 'text-[11px]', className)}
-      title={title ?? 'Copy'}
-      aria-label={title ?? 'Copy'}
-    >
-      {copied ? (copiedLabel ?? '✓') : (label ?? '⎘')}
-    </button>
-  );
 }
 
 // ── Tool icon & color ─────────────────────────────────────────────────────────
@@ -567,12 +505,7 @@ function ToolBlock({ block, autoOpen, onOpenArtifact, activeArtifactId, onOpenRu
             <span className="shrink-0 text-[10px] opacity-60 ml-2">running…</span>
             <span className="shrink-0 opacity-30 text-[10px]">{open ? '▲' : '▼'}</span>
           </>
-        ) : (
-          <>
-            <CopyBtn text={output} small />
-            <span className="shrink-0 opacity-30 text-[10px]">{open ? '▲' : '▼'}</span>
-          </>
-        )}
+        ) : <span className="shrink-0 opacity-30 text-[10px]">{open ? '▲' : '▼'}</span>}
       </button>
 
       {runIds.length > 0 && (
@@ -1005,7 +938,6 @@ function MsgActions({
 
   return (
     <div className={`flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${isUser ? 'justify-start' : 'justify-end'}`}>
-      <CopyBtn text={text} small />
       {onCheckpoint && (
         <button
           onClick={() => { void handleCheckpoint(); }}
@@ -1207,6 +1139,7 @@ function StreamingIndicator({ label }: { label: string }) {
 
 interface ChatViewProps {
   messages: MessageBlock[];
+  messageIndexOffset?: number;
   isStreaming?: boolean;
   onForkMessage?: (messageIndex: number) => Promise<void> | void;
   onCheckpointMessage?: (block: MessageBlock, messageIndex: number) => Promise<void> | void;
@@ -1222,6 +1155,7 @@ interface ChatViewProps {
 
 export const ChatView = memo(function ChatView({
   messages,
+  messageIndexOffset = 0,
   isStreaming = false,
   onForkMessage,
   onCheckpointMessage,
@@ -1250,20 +1184,21 @@ export const ChatView = memo(function ChatView({
       : block.type === 'text'
         ? 'assistant'
         : undefined;
+    const absoluteIndex = messageIndexOffset + index;
     const autoOpen = shouldAutoOpenConversationBlock(block, index, messages.length, isStreaming);
     const showStreamingCursor = isStreaming && block.type === 'text' && index === messages.length - 1;
 
     const el = (() => {
       switch (block.type) {
         case 'user':
-          return <UserMessage block={block} onCheckpoint={onCheckpointMessage ? () => onCheckpointMessage(block, index) : undefined} />;
+          return <UserMessage block={block} onCheckpoint={onCheckpointMessage ? () => onCheckpointMessage(block, absoluteIndex) : undefined} />;
         case 'text':
           return (
             <AssistantMessage
               block={block}
               showCursor={showStreamingCursor}
-              onCheckpoint={onCheckpointMessage ? () => onCheckpointMessage(block, index) : undefined}
-              onFork={onForkMessage ? () => onForkMessage(index) : undefined}
+              onCheckpoint={onCheckpointMessage ? () => onCheckpointMessage(block, absoluteIndex) : undefined}
+              onFork={onForkMessage ? () => onForkMessage(absoluteIndex) : undefined}
             />
           );
         case 'summary':
@@ -1302,9 +1237,9 @@ export const ChatView = memo(function ChatView({
 
     return el ? (
       <div
-        key={index}
-        id={`msg-${index}`}
-        data-message-index={index}
+        key={absoluteIndex}
+        id={`msg-${absoluteIndex}`}
+        data-message-index={absoluteIndex}
         data-conversation-rail-kind={markerKind}
         style={contentVisibilityStyle}
       >
@@ -1324,10 +1259,11 @@ export const ChatView = memo(function ChatView({
             const live = isStreaming && isTailItem;
 
             return (
-              <div key={`trace-${item.startIndex}-${item.endIndex}`} style={contentVisibilityStyle}>
-                {item.blocks.map((_, offset) => (
-                  <span key={`anchor-${item.startIndex + offset}`} id={`msg-${item.startIndex + offset}`} className="block h-0 overflow-hidden" aria-hidden />
-                ))}
+              <div key={`trace-${messageIndexOffset + item.startIndex}-${messageIndexOffset + item.endIndex}`} style={contentVisibilityStyle}>
+                {item.blocks.map((_, offset) => {
+                  const absoluteIndex = messageIndexOffset + item.startIndex + offset;
+                  return <span key={`anchor-${absoluteIndex}`} id={`msg-${absoluteIndex}`} className="block h-0 overflow-hidden" aria-hidden />;
+                })}
                 <TraceClusterBlock
                   blocks={item.blocks}
                   summary={item.summary}
