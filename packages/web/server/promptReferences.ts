@@ -50,6 +50,15 @@ function appendUnique(target: string[], seen: Set<string>, value: string) {
   target.push(value);
 }
 
+function toDisplayPath(repoRoot: string, path: string): string {
+  const displayed = relative(repoRoot, path).replace(/\\/g, '/');
+  if (!displayed || displayed.startsWith('..')) {
+    return path;
+  }
+
+  return displayed;
+}
+
 export function extractMentionIds(text: string): string[] {
   const matches = text.match(/@[a-zA-Z0-9][a-zA-Z0-9-_]*/g) ?? [];
   const result: string[] = [];
@@ -140,7 +149,7 @@ export function buildReferencedTasksContext(tasks: PromptReferenceTask[], repoRo
     ...tasks.map((task) => {
       const lines = [
         `- @${task.id}`,
-        `  path: ${relative(repoRoot, task.filePath)}`,
+        `  path: ${toDisplayPath(repoRoot, task.filePath)}`,
       ];
 
       if (task.cron) {
@@ -175,7 +184,7 @@ export function buildReferencedMemoryDocsContext(memoryDocs: PromptReferenceMemo
     ...memoryDocs.map((doc) => {
       const lines = [
         `- @${doc.id}: ${doc.title}`,
-        `  path: ${relative(repoRoot, doc.path)}`,
+        `  path: ${toDisplayPath(repoRoot, doc.path)}`,
       ];
 
       if (doc.summary) {
@@ -200,7 +209,7 @@ export function buildReferencedSkillsContext(skills: PromptReferenceSkill[], rep
     ...skills.map((skill) => {
       const lines = [
         `- @${skill.name}`,
-        `  path: ${relative(repoRoot, skill.path)}`,
+        `  path: ${toDisplayPath(repoRoot, skill.path)}`,
         `  source: ${skill.source}`,
       ];
 
@@ -219,7 +228,7 @@ export function buildReferencedProfilesContext(profiles: PromptReferenceProfile[
     'Referenced profile instructions:',
     ...profiles.map((profile) => [
       `- @${profile.id}: ${profile.id} profile`,
-      `  path: ${relative(repoRoot, profile.path)}`,
+      `  path: ${toDisplayPath(repoRoot, profile.path)}`,
       `  source: ${profile.source}`,
     ].join('\n')),
     'These are active profile instructions. Read them when the user refers to profile behavior, durable preferences, or operating constraints.',

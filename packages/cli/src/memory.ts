@@ -1,8 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { basename, join } from 'path';
 import { parseDocument } from 'yaml';
-import { resolveResourceProfile } from '@personal-agent/resources';
-import { readConfig } from './config.js';
+import { getMemoryDocsDir, getProfilesRoot, migrateLegacyProfileMemoryDirs } from '@personal-agent/core';
 import { bullet, dim, formatHint, keyValue, section, success, warning } from './ui.js';
 
 const MEMORY_FRONTMATTER_DELIMITER = '---';
@@ -31,12 +30,7 @@ interface MemoryFrontmatterSection {
 }
 
 interface ResolvedMemoryContext {
-  profileName: string;
-  memoryDir?: string;
-}
-
-function resolveProfileName(): string {
-  return readConfig().defaultProfile;
+  memoryDir: string;
 }
 
 function memoryUsageText(): string {
@@ -44,23 +38,23 @@ function memoryUsageText(): string {
 }
 
 function memoryListUsageText(): string {
-  return 'Usage: pa memory list [--profile <name>] [--json]';
+  return 'Usage: pa memory list [--json]';
 }
 
 function memoryFindUsageText(): string {
-  return 'Usage: pa memory find [--profile <name>] [--tag <tag>] [--type <type>] [--status <status>] [--text <query>] [--json]';
+  return 'Usage: pa memory find [--tag <tag>] [--type <type>] [--status <status>] [--text <query>] [--json]';
 }
 
 function memoryShowUsageText(): string {
-  return 'Usage: pa memory show <id> [--profile <name>] [--json]';
+  return 'Usage: pa memory show <id> [--json]';
 }
 
 function memoryNewUsageText(): string {
-  return 'Usage: pa memory new <id> --title <title> --summary <summary> --tags <tag1,tag2> [--type <type>] [--status <status>] [--profile <name>] [--force] [--json]';
+  return 'Usage: pa memory new <id> --title <title> --summary <summary> --tags <tag1,tag2> [--type <type>] [--status <status>] [--force] [--json]';
 }
 
 function memoryLintUsageText(): string {
-  return 'Usage: pa memory lint [--profile <name>] [--json]';
+  return 'Usage: pa memory lint [--json]';
 }
 
 function isMemoryRecord(value: unknown): value is Record<string, unknown> {
@@ -270,63 +264,13 @@ function loadMemoryDocs(memoryDir: string): {
   };
 }
 
-function resolveMemoryContext(profileName: string): ResolvedMemoryContext {
-  const resolvedProfile = resolveResourceProfile(profileName);
-
-  if (resolvedProfile.name === 'shared') {
-    return {
-      profileName: resolvedProfile.name,
-      memoryDir: undefined,
-    };
-  }
-
-  const profileLayer = [...resolvedProfile.layers]
-    .reverse()
-    .find((layer) => layer.name === resolvedProfile.name);
-
-  const profileAgentDir = profileLayer?.agentDir ?? join(resolvedProfile.profilesRoot, resolvedProfile.name, 'agent');
+function resolveMemoryContext(): ResolvedMemoryContext {
+  const profilesRoot = getProfilesRoot();
+  migrateLegacyProfileMemoryDirs({ profilesRoot });
 
   return {
-    profileName: resolvedProfile.name,
-    memoryDir: join(profileAgentDir, 'memory'),
+    memoryDir: getMemoryDocsDir({ profilesRoot }),
   };
-}
-
-function parseMemoryProfileOption(
-  args: string[],
-  index: number,
-  usage: string,
-): { profileName: string; nextIndex: number } {
-  const arg = args[index];
-  if (!arg) {
-    throw new Error(usage);
-  }
-
-  if (arg === '--profile') {
-    const value = args[index + 1];
-    if (!value || value.startsWith('-')) {
-      throw new Error(usage);
-    }
-
-    return {
-      profileName: value,
-      nextIndex: index + 1,
-    };
-  }
-
-  if (arg.startsWith('--profile=')) {
-    const value = arg.slice('--profile='.length).trim();
-    if (value.length === 0) {
-      throw new Error(usage);
-    }
-
-    return {
-      profileName: value,
-      nextIndex: index,
-    };
-  }
-
-  throw new Error(usage);
 }
 
 function formatMemoryTags(tags: string[]): string {
@@ -436,20 +380,18 @@ function printMemoryHelp(): void {
   console.log(`Usage: pa memory [list|find|show|new|lint|help]
 
 Commands:
-  list [--profile <name>] [--json]
-                           List parsed memory docs for one profile
-  find [--profile <name>] [--tag <tag>] [--type <type>] [--status <status>] [--text <query>] [--json]
-                           Filter memory docs by metadata fields
-  show <id> [--profile <name>] [--json]
+  list [--json]
+                           List parsed global memory docs
+  find [--tag <tag>] [--type <type>] [--status <status>] [--text <query>] [--json]
+                           Filter global memory docs by metadata fields
+  show <id> [--json]
                            Show one memory doc and metadata
-  new <id> --title <title> --summary <summary> --tags <tag1,tag2> [--type <type>] [--status <status>] [--profile <name>] [--force] [--json]
-                           Create a new memory doc template with YAML frontmatter
-  lint [--profile <name>] [--json]
-                           Validate memory doc frontmatter and duplicate ids
+  new <id> --title <title> --summary <summary> --tags <tag1,tag2> [--type <type>] [--status <status>] [--force] [--json]
+                           Create a new global memory doc template with YAML frontmatter
+  lint [--json]
+                           Validate global memory doc frontmatter and duplicate ids
   help                     Show memory help
 `);
-
-  console.log(keyValue('Default profile', resolveProfileName()));
 }
 
 export async function memoryCommand(args: string[]): Promise<number> {
@@ -470,7 +412,6 @@ export async function memoryCommand(args: string[]): Promise<number> {
   }
 
   if (subcommand === 'list') {
-    let profileName = resolveProfileName();
     let jsonMode = false;
 
     for (let index = 0; index < rest.length; index += 1) {
@@ -481,22 +422,14 @@ export async function memoryCommand(args: string[]): Promise<number> {
         continue;
       }
 
-      if (arg === '--profile' || arg.startsWith('--profile=')) {
-        const parsed = parseMemoryProfileOption(rest, index, memoryListUsageText());
-        profileName = parsed.profileName;
-        index = parsed.nextIndex;
-        continue;
-      }
-
       throw new Error(memoryListUsageText());
     }
 
-    const context = resolveMemoryContext(profileName);
-    const loaded = context.memoryDir ? loadMemoryDocs(context.memoryDir) : { docs: [], parseErrors: [] };
+    const context = resolveMemoryContext();
+    const loaded = loadMemoryDocs(context.memoryDir);
 
     const payload = {
-      profile: context.profileName,
-      memoryDir: context.memoryDir ?? null,
+      memoryDir: context.memoryDir,
       docs: loaded.docs,
       parseErrors: loaded.parseErrors,
     };
@@ -506,13 +439,10 @@ export async function memoryCommand(args: string[]): Promise<number> {
       return loaded.parseErrors.length > 0 ? 1 : 0;
     }
 
-    console.log(section('Profile memory docs'));
-    console.log(keyValue('Profile', context.profileName));
-    console.log(keyValue('Memory dir', context.memoryDir ?? 'none (shared profile has no memory dir)'));
+    console.log(section('Memory docs'));
+    console.log(keyValue('Memory dir', context.memoryDir));
 
-    if (!context.memoryDir) {
-      console.log(dim('Shared profile does not have a profile-local memory directory.'));
-    } else if (loaded.docs.length === 0) {
+    if (loaded.docs.length === 0) {
       console.log(dim('No memory docs found.'));
     }
 
@@ -539,7 +469,6 @@ export async function memoryCommand(args: string[]): Promise<number> {
   }
 
   if (subcommand === 'find') {
-    let profileName = resolveProfileName();
     let jsonMode = false;
     let typeFilter: string | undefined;
     let statusFilter: string | undefined;
@@ -551,13 +480,6 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
       if (arg === '--json') {
         jsonMode = true;
-        continue;
-      }
-
-      if (arg === '--profile' || arg.startsWith('--profile=')) {
-        const parsed = parseMemoryProfileOption(rest, index, memoryFindUsageText());
-        profileName = parsed.profileName;
-        index = parsed.nextIndex;
         continue;
       }
 
@@ -648,8 +570,8 @@ export async function memoryCommand(args: string[]): Promise<number> {
       throw new Error(memoryFindUsageText());
     }
 
-    const context = resolveMemoryContext(profileName);
-    const loaded = context.memoryDir ? loadMemoryDocs(context.memoryDir) : { docs: [], parseErrors: [] };
+    const context = resolveMemoryContext();
+    const loaded = loadMemoryDocs(context.memoryDir);
 
     const filteredDocs = loaded.docs.filter((doc) => {
       if (tagFilters.length > 0) {
@@ -680,8 +602,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
     });
 
     const payload = {
-      profile: context.profileName,
-      memoryDir: context.memoryDir ?? null,
+      memoryDir: context.memoryDir,
       filters: {
         tags: tagFilters,
         type: typeFilter ?? null,
@@ -698,16 +619,13 @@ export async function memoryCommand(args: string[]): Promise<number> {
     }
 
     console.log(section('Memory doc search'));
-    console.log(keyValue('Profile', context.profileName));
-    console.log(keyValue('Memory dir', context.memoryDir ?? 'none (shared profile has no memory dir)'));
+    console.log(keyValue('Memory dir', context.memoryDir));
     console.log(keyValue('Tag filters', tagFilters.length > 0 ? tagFilters.join(', ') : 'none'));
     console.log(keyValue('Type filter', typeFilter ?? 'none'));
     console.log(keyValue('Status filter', statusFilter ?? 'none'));
     console.log(keyValue('Text filter', textFilter ?? 'none'));
 
-    if (!context.memoryDir) {
-      console.log(dim('Shared profile does not have a profile-local memory directory.'));
-    } else if (filteredDocs.length === 0) {
+    if (filteredDocs.length === 0) {
       console.log(dim('No memory docs matched the supplied filters.'));
     }
 
@@ -734,7 +652,6 @@ export async function memoryCommand(args: string[]): Promise<number> {
   }
 
   if (subcommand === 'show') {
-    let profileName = resolveProfileName();
     let jsonMode = false;
     const positional: string[] = [];
 
@@ -743,13 +660,6 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
       if (arg === '--json') {
         jsonMode = true;
-        continue;
-      }
-
-      if (arg === '--profile' || arg.startsWith('--profile=')) {
-        const parsed = parseMemoryProfileOption(rest, index, memoryShowUsageText());
-        profileName = parsed.profileName;
-        index = parsed.nextIndex;
         continue;
       }
 
@@ -764,17 +674,11 @@ export async function memoryCommand(args: string[]): Promise<number> {
       throw new Error(memoryShowUsageText());
     }
 
-    const context = resolveMemoryContext(profileName);
-
-    if (!context.memoryDir) {
-      throw new Error('Shared profile has no profile-local memory directory');
-    }
-
+    const context = resolveMemoryContext();
     const loaded = loadMemoryDocs(context.memoryDir);
     const doc = resolveMemoryDocById(loaded.docs, positional[0] as string);
 
     const payload = {
-      profile: context.profileName,
       memoryDir: context.memoryDir,
       doc,
       parseErrors: loaded.parseErrors,
@@ -786,7 +690,6 @@ export async function memoryCommand(args: string[]): Promise<number> {
     }
 
     console.log(section(`Memory doc: ${doc.id}`));
-    console.log(keyValue('Profile', context.profileName));
     console.log(keyValue('Title', doc.title));
     console.log(keyValue('Type', doc.type));
     console.log(keyValue('Status', doc.status));
@@ -811,7 +714,6 @@ export async function memoryCommand(args: string[]): Promise<number> {
   }
 
   if (subcommand === 'new') {
-    let profileName = resolveProfileName();
     let jsonMode = false;
     let force = false;
     let title: string | undefined;
@@ -831,13 +733,6 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
       if (arg === '--force') {
         force = true;
-        continue;
-      }
-
-      if (arg === '--profile' || arg.startsWith('--profile=')) {
-        const parsed = parseMemoryProfileOption(rest, index, memoryNewUsageText());
-        profileName = parsed.profileName;
-        index = parsed.nextIndex;
         continue;
       }
 
@@ -979,11 +874,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
       throw new Error(memoryNewUsageText());
     }
 
-    const context = resolveMemoryContext(profileName);
-    if (!context.memoryDir) {
-      throw new Error('Shared profile has no profile-local memory directory');
-    }
-
+    const context = resolveMemoryContext();
     mkdirSync(context.memoryDir, { recursive: true });
 
     const targetPath = join(context.memoryDir, `${id}.md`);
@@ -1015,7 +906,6 @@ export async function memoryCommand(args: string[]): Promise<number> {
     writeFileSync(targetPath, content, 'utf-8');
 
     const payload = {
-      profile: context.profileName,
       memoryDir: context.memoryDir,
       filePath: targetPath,
       id,
@@ -1034,7 +924,6 @@ export async function memoryCommand(args: string[]): Promise<number> {
     }
 
     console.log(section(`Memory doc ${targetExists ? 'updated' : 'created'}`));
-    console.log(keyValue('Profile', context.profileName));
     console.log(keyValue('ID', id));
     console.log(keyValue('File', targetPath));
     console.log(keyValue('Type', type));
@@ -1049,7 +938,6 @@ export async function memoryCommand(args: string[]): Promise<number> {
   }
 
   if (subcommand === 'lint') {
-    let profileName = resolveProfileName();
     let jsonMode = false;
 
     for (let index = 0; index < rest.length; index += 1) {
@@ -1060,23 +948,15 @@ export async function memoryCommand(args: string[]): Promise<number> {
         continue;
       }
 
-      if (arg === '--profile' || arg.startsWith('--profile=')) {
-        const parsed = parseMemoryProfileOption(rest, index, memoryLintUsageText());
-        profileName = parsed.profileName;
-        index = parsed.nextIndex;
-        continue;
-      }
-
       throw new Error(memoryLintUsageText());
     }
 
-    const context = resolveMemoryContext(profileName);
-    const loaded = context.memoryDir ? loadMemoryDocs(context.memoryDir) : { docs: [], parseErrors: [] };
+    const context = resolveMemoryContext();
+    const loaded = loadMemoryDocs(context.memoryDir);
     const duplicates = collectDuplicateMemoryDocIds(loaded.docs);
 
     const payload = {
-      profile: context.profileName,
-      memoryDir: context.memoryDir ?? null,
+      memoryDir: context.memoryDir,
       checked: loaded.docs.length + loaded.parseErrors.length,
       validDocs: loaded.docs.length,
       parseErrors: loaded.parseErrors,
@@ -1091,16 +971,10 @@ export async function memoryCommand(args: string[]): Promise<number> {
     }
 
     console.log(section('Memory validation'));
-    console.log(keyValue('Profile', context.profileName));
-    console.log(keyValue('Memory dir', context.memoryDir ?? 'none (shared profile has no memory dir)'));
+    console.log(keyValue('Memory dir', context.memoryDir));
     console.log(keyValue('Docs parsed', loaded.docs.length));
     console.log(keyValue('Parse errors', loaded.parseErrors.length));
     console.log(keyValue('Duplicate ids', duplicates.length));
-
-    if (!context.memoryDir) {
-      console.log(dim('Shared profile does not have a profile-local memory directory.'));
-      return 0;
-    }
 
     if (loaded.parseErrors.length === 0 && duplicates.length === 0) {
       console.log('');

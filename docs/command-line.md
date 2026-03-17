@@ -198,7 +198,7 @@ See [Web UI Guide](./web-ui.md).
 
 ### `pa memory [list|find|show|new|lint]`
 
-Work with profile memory docs.
+Work with the shared global memory docs store.
 
 Examples:
 

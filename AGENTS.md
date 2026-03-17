@@ -11,17 +11,17 @@
 - Duplicate shared guidance across profile AGENTS files when needed; do not centralize behavior rules in shared AGENTS.
 - Memory and behavior updates should target the active profile's AGENTS path.
 
-## Profile memory convention
+## Global memory convention
 
-- Each non-shared profile keeps project-specific context under `~/.local/state/personal-agent/profiles/<profile>/agent/memory/`.
+- Durable memory docs live in the shared global store at `~/.local/state/personal-agent/profiles/_memory/`.
 - There is never a shared-profile memory dir (`~/.local/state/personal-agent/profiles/shared/agent/memory` should not exist).
 - Memory docs are available to the agent via normal file tools (`read`, `edit`, `write`).
-- Use memory docs for project-local briefs, runbooks, specs, and notes.
-- Keep memory docs flat at `memory/*.md` (no nested project tree).
+- Use memory docs for durable briefs, runbooks, specs, and notes that should be reusable across profile contexts.
+- Keep memory docs flat at `profiles/_memory/*.md` (no nested project tree).
 - Every memory doc must include YAML frontmatter with at least: `id`, `title`, `summary`, `tags`, `updated`.
 - Use `pa memory list/find/show/new/lint` for discovery, creation, and validation.
-- Keep non-markdown automation state outside memory (for example `agent/state/...`).
-- Keep reusable cross-project workflows in profile `skills/` dirs under the state root; keep durable behavior/preferences in `AGENTS.md`.
+- Keep non-markdown automation state outside memory.
+- Keep reusable cross-project workflows in profile `skills/` dirs under the state root; keep durable behavior/preferences in profile `AGENTS.md` files.
 
 ## Conversation locality boundary
 

@@ -9,5 +9,5 @@ Additional rules:
 - Use CLI discovery first, then use the read tool on the exact file before editing.
 - Keep AGENTS.md high-level: user facts, durable role constraints, and broad operating policies.
 - Use skills for reusable workflows and tool/version-specific runbooks.
-- Store profile-specific briefs, runbooks, specs, and notes under memory/*.md with YAML frontmatter.
+- Store durable briefs, runbooks, specs, and notes under the global memory docs store with YAML frontmatter.
 - Read the workflow-learn-skill and workflow-skill-creator skills when creating new skills.

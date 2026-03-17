@@ -58,19 +58,19 @@ describe('memory extension', () => {
 
     expect(result?.systemPrompt).toContain('MEMORY_POLICY');
     expect(result?.systemPrompt).toContain('- active_profile: datadog');
-    expect(result?.systemPrompt).toContain('Profile memory write targets (edit these locations directly):');
+    expect(result?.systemPrompt).toContain('Profile + memory write targets (edit these locations directly):');
     expect(result?.systemPrompt).toContain(`- AGENTS.md edit target: ${join(stateRoot, 'profiles', 'datadog', 'agent', 'AGENTS.md')}`);
     expect(result?.systemPrompt).toContain(`- Skills dir: ${join(stateRoot, 'profiles', 'datadog', 'agent', 'skills')}`);
     expect(result?.systemPrompt).toContain(`- Scheduled tasks dir: ${join(stateRoot, 'profiles', 'datadog', 'agent', 'tasks')}`);
-    expect(result?.systemPrompt).toContain(`- Memory dir: ${join(stateRoot, 'profiles', 'datadog', 'agent', 'memory')}`);
-    expect(result?.systemPrompt).toContain('Use profile-local AGENTS.md, skills, and memory docs as the durable memory system.');
+    expect(result?.systemPrompt).toContain(`- Global memory dir: ${join(stateRoot, 'profiles', '_memory')}`);
+    expect(result?.systemPrompt).toContain('Use active-profile AGENTS.md + skills and the shared global memory docs as the durable memory system.');
     expect(result?.systemPrompt).not.toContain('pa memory list --profile datadog');
     expect(result?.message?.customType).toBe('memory-operations-reminder');
     expect(result?.message?.display).toBe(false);
     expect(result?.message?.content).toContain('SYSTEM_REMINDER: This request touches durable memory or profile behavior.');
-    expect(result?.message?.content).toContain('pa memory list --profile datadog');
-    expect(result?.message?.content).toContain('pa memory find --profile datadog --text <query>');
-    expect(result?.message?.content).toContain('pa memory show <id> --profile datadog');
+    expect(result?.message?.content).toContain('pa memory list');
+    expect(result?.message?.content).toContain('pa memory find --text <query>');
+    expect(result?.message?.content).toContain('pa memory show <id>');
     expect(result?.message?.content).toContain('Use the active profile targets already present in system context.');
   });
 
@@ -108,9 +108,9 @@ describe('memory extension', () => {
     expect(result?.systemPrompt).toContain('requested profile was missing');
     expect(result?.systemPrompt).toContain('- AGENTS.md edit target: none (shared profile does not use AGENTS.md)');
     expect(result?.systemPrompt).toContain('- Scheduled tasks dir: none (shared profile does not use profile task dir)');
-    expect(result?.systemPrompt).toContain('- Memory dir: none (shared profile has no memory dir)');
+    expect(result?.systemPrompt).toContain(`- Global memory dir: ${join(stateRoot, 'profiles', '_memory')}`);
     expect(result?.systemPrompt).not.toContain('pa memory list --profile shared');
-    expect(result?.message?.content).toContain('Shared profile has no profile-local memory docs');
+    expect(result?.message?.content).toContain('pa memory list');
   });
 
   it('does not inject memory policy for slash commands or empty prompts', async () => {
@@ -202,6 +202,6 @@ describe('memory extension', () => {
     expect(context.activeProfile).toBe('datadog');
     expect(context.layers.map((layer) => layer.name)).toEqual(['shared', 'datadog']);
     expect(context.activeAgentsFile).toBe(join(stateRoot, 'profiles', 'datadog', 'agent', 'AGENTS.md'));
-    expect(context.activeMemoryDir).toBe(join(stateRoot, 'profiles', 'datadog', 'agent', 'memory'));
+    expect(context.activeMemoryDir).toBe(join(stateRoot, 'profiles', '_memory'));
   });
 });

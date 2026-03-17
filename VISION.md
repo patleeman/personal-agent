@@ -99,7 +99,7 @@ Examples:
 - home
 - research
 
-The current expectation is that a machine usually has one dominant active profile, even if the system can technically support multiple profiles. The single agent should still have a shared core identity, with profile-specific memory, tools, behavior, and routing layered on top.
+The current expectation is that a machine usually has one dominant active profile, even if the system can technically support multiple profiles. The single agent should still have a shared core identity, with shared global memory plus profile-specific tools, behavior, and routing layered on top.
 
 ### 4. Conversations are the primary user experience
 
@@ -613,7 +613,7 @@ Potential non-goals and boundaries:
 - Profiles primarily represent domain/context rather than device or UI surface.
 - The agent should have a global core identity, with profile-specific identity appended on top.
 - In practice, profiles will usually be set per machine rather than switched frequently.
-- Durable memory should be profile-dependent and grounded in `AGENTS.md`, skills, and memory files, with useful information extracted from conversations.
+- Durable memory should be shared global knowledge grounded in shared memory files, with active-profile `AGENTS.md` + skills layered on top and useful information extracted from conversations.
 - Memory curation should be tight and ongoing, with agent-driven review to deduplicate and reorganize information over time.
 - Patrick strongly values the Pi chat-thread paradigm, including rewind and fork.
 - Conversations are the main interaction model and should not all be forced into tasks.
