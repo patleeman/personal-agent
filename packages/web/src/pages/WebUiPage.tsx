@@ -425,7 +425,7 @@ export function WebUiPage() {
               onClick={() => { void handleApplicationRestart(); }}
               disabled={busy || !data?.service.installed}
             >
-              {applicationRestarting ? 'Restart requested…' : 'Restart service'}
+              {applicationRestarting ? 'Restart requested…' : 'Restart everything'}
             </ToolbarButton>
             <ToolbarButton
               onClick={() => {
@@ -531,10 +531,10 @@ export function WebUiPage() {
             </section>
 
             <section className="space-y-4 border-t border-border-subtle pt-6">
-              <SectionLabel label="Restart service" />
+              <SectionLabel label="Restart everything" />
               <div className="space-y-2 max-w-3xl">
                 <p className="ui-card-meta">
-                  The restart action above rebuilds repo packages, restarts the daemon and installed gateway services,
+                  The restart-everything action above rebuilds repo packages, restarts the daemon and installed gateway services,
                   and blue/green redeploys the managed web UI. This matches the restart phase of <code>pa update</code>
                   without pulling git changes. When the new slot is live, the active profile gets an unread Inbox item.
                 </p>

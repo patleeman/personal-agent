@@ -258,6 +258,23 @@ From the Projects page you can:
 - manage optional milestones and tasks
 - view a combined project timeline
 
+### Exporting a share package
+
+From the project detail page in the web UI, click **Export package**.
+
+That downloads a single `*.pa-project.json` file containing:
+
+- the structured project record from `PROJECT.yaml`
+- `BRIEF.md`
+- notes
+- attachments and project artifacts (base64-encoded)
+- related inbox activity for the project
+- linked conversation transcripts
+
+The export intentionally omits structured machine-local fields such as project repo roots, download URLs, and session file paths so the package is easier to share.
+
+Conversation and tool output text is still included verbatim, so review the package before sending it externally.
+
 ### Through the project tool
 
 Inside a conversation, use the `project` tool for normal durable project management.

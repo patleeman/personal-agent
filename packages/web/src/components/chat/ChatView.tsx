@@ -5,10 +5,9 @@ import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { readArtifactPresentation } from '../../conversationArtifacts';
 import { extractDurableRunIdsFromBlock } from '../../conversationRuns';
-import { looksLikeLocalFilesystemPath } from '../../localPaths';
 import type { MessageBlock } from '../../types';
 import { timeAgo } from '../../utils';
-import { InlineLocalPath } from '../LocalPathActions';
+import { extractMarkdownTextContent, InlineMarkdownCode } from '../MarkdownInlineCode';
 import { buildChatRenderItems, type TraceClusterSummary, type TraceClusterSummaryCategory, type TraceConversationBlock } from './transcriptItems.js';
 import { Pill, SurfacePanel, cx } from '../ui';
 
@@ -75,28 +74,6 @@ function getMarkdownTagName(node: ReactNode): string | null {
   return typeof node.type === 'string' ? node.type : null;
 }
 
-function extractTextContent(children: ReactNode): string {
-  let text = '';
-
-  Children.forEach(children, child => {
-    if (typeof child === 'string' || typeof child === 'number' || typeof child === 'bigint') {
-      text += String(child);
-      return;
-    }
-
-    if (!isValidElement(child)) {
-      return;
-    }
-
-    const props = child.props as { children?: ReactNode };
-    if (props.children !== undefined) {
-      text += extractTextContent(props.children);
-    }
-  });
-
-  return text;
-}
-
 function findMarkdownCodeElement(node: ReactNode): ReactElement<{ className?: string; children?: ReactNode }> | null {
   if (!isValidElement(node)) {
     return null;
@@ -131,11 +108,11 @@ function extractMarkdownCodeBlock(children: ReactNode): { className?: string; co
     const props = codeElement.props as { className?: string; children?: ReactNode };
     return {
       className: props.className,
-      content: extractTextContent(props.children).replace(/\n$/, ''),
+      content: extractMarkdownTextContent(props.children).replace(/\n$/, ''),
     };
   }
 
-  return { content: extractTextContent(children).replace(/\n$/, '') };
+  return { content: extractMarkdownTextContent(children).replace(/\n$/, '') };
 }
 
 function renderChildrenWithMentions(children: ReactNode): ReactNode {
@@ -220,20 +197,7 @@ function renderMarkdownText(text: string) {
             </div>
           ),
           pre: ({ children }) => <MarkdownCodeBlock>{children}</MarkdownCodeBlock>,
-          code: ({ className, children }) => {
-            const content = extractTextContent(children).replace(/\n$/, '');
-            const isBlock = content.includes('\n') || Boolean(className?.includes('language-'));
-
-            if (!isBlock && looksLikeLocalFilesystemPath(content)) {
-              return <InlineLocalPath path={content} />;
-            }
-
-            if (!isBlock) {
-              return <code className="font-mono text-[0.82em] bg-elevated px-1 py-0.5 rounded text-accent">{content}</code>;
-            }
-
-            return <code className={className}>{content}</code>;
-          },
+          code: ({ className, children }) => <InlineMarkdownCode className={className}>{children}</InlineMarkdownCode>,
           img: ({ src, alt, title }) => src
             ? <img src={src} alt={alt ?? ''} title={title} loading="lazy" />
             : <span className="text-dim">{alt ?? 'image'}</span>,

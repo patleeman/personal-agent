@@ -92,6 +92,8 @@ import { readConfig, setDefaultProfile } from './config.js';
 import {
   writeRestartCompletionInboxEntry,
   writeRestartFailureInboxEntry,
+  writeUpdateCompletionInboxEntry,
+  writeUpdateFailureInboxEntry,
   writeWebUiMarkedBadInboxEntry,
   writeWebUiRollbackInboxEntry,
 } from './restartNotifications.js';
@@ -1993,81 +1995,131 @@ async function updateCommand(args: string[]): Promise<number> {
   const options = parseUpdateOptions(args);
 
   const repoRoot = getRepoRoot();
-  const pullSpinner = spinner('Pulling latest changes from git');
-  pullSpinner.start();
-
-  let gitOutput = '';
+  let currentPhase = 'pull latest changes from git';
 
   try {
-    gitOutput = pullLatestFromGit(repoRoot);
-    pullSpinner.succeed('Git repository updated');
-  } catch (error) {
-    pullSpinner.fail('Unable to update repository');
-    throw error;
-  }
+    const pullSpinner = spinner('Pulling latest changes from git');
+    pullSpinner.start();
 
-  if (gitOutput.length > 0) {
-    console.log(dim(gitOutput));
-  }
-
-  let piOutput = '';
-  let piVersion = '';
-  let piUpdated = false;
-
-  if (!options.repoOnly) {
-    const piSpinner = spinner(`Syncing repo-local pi to latest (${PI_PACKAGE_NAME})`);
-    piSpinner.start();
+    let gitOutput = '';
 
     try {
-      const piUpdateResult = updateRepoPiPackage(repoRoot);
-      piOutput = piUpdateResult.output;
-      piVersion = piUpdateResult.version;
-      piUpdated = true;
-      piSpinner.succeed(`Synced repo-local pi to latest (${piVersion})`);
+      gitOutput = pullLatestFromGit(repoRoot);
+      pullSpinner.succeed('Git repository updated');
     } catch (error) {
-      piSpinner.fail('Unable to sync repo-local pi to latest');
+      pullSpinner.fail('Unable to update repository');
       throw error;
     }
 
-    if (piOutput.length > 0) {
-      console.log(dim(piOutput));
+    if (gitOutput.length > 0) {
+      console.log(dim(gitOutput));
     }
-  }
 
-  const buildSpinner = spinner('Rebuilding personal-agent packages');
-  buildSpinner.start();
+    let piOutput = '';
+    let piVersion = '';
+    let piUpdated = false;
 
-  let buildOutput = '';
+    if (!options.repoOnly) {
+      currentPhase = `sync repo-local pi to latest (${PI_PACKAGE_NAME})`;
+      const piSpinner = spinner(`Syncing repo-local pi to latest (${PI_PACKAGE_NAME})`);
+      piSpinner.start();
 
-  try {
-    buildOutput = rebuildRepoPackages(repoRoot);
-    buildSpinner.succeed('Rebuilt personal-agent packages');
+      try {
+        const piUpdateResult = updateRepoPiPackage(repoRoot);
+        piOutput = piUpdateResult.output;
+        piVersion = piUpdateResult.version;
+        piUpdated = true;
+        piSpinner.succeed(`Synced repo-local pi to latest (${piVersion})`);
+      } catch (error) {
+        piSpinner.fail('Unable to sync repo-local pi to latest');
+        throw error;
+      }
+
+      if (piOutput.length > 0) {
+        console.log(dim(piOutput));
+      }
+    }
+
+    currentPhase = 'rebuild packages';
+    const buildSpinner = spinner('Rebuilding personal-agent packages');
+    buildSpinner.start();
+
+    let buildOutput = '';
+
+    try {
+      buildOutput = rebuildRepoPackages(repoRoot);
+      buildSpinner.succeed('Rebuilt personal-agent packages');
+    } catch (error) {
+      buildSpinner.fail('Unable to rebuild personal-agent packages');
+      throw error;
+    }
+
+    if (buildOutput.length > 0) {
+      console.log(dim(buildOutput));
+    }
+
+    currentPhase = 'restart background services';
+    const summary = await restartBackgroundServices({
+      webUiStrategy: 'blue-green',
+      repoRoot,
+      webUiPort: getWebUiServiceOptions({ repoRoot }).port,
+    });
+
+    console.log('');
+    console.log(section('Update summary'));
+    console.log(keyValue('repository', repoRoot));
+    console.log(keyValue('pi package', options.repoOnly ? 'skipped (--repo-only)' : (piUpdated ? `repo-local (${piVersion})` : 'unknown')));
+    console.log(keyValue('build', 'repo packages rebuilt'));
+    console.log(keyValue('daemon', summary.daemonStatus));
+    console.log(keyValue('web ui', summary.webUiStatus));
+    console.log(keyValue('gateway services restarted', summary.restartedGatewayServices.length > 0 ? summary.restartedGatewayServices.join(', ') : 'none'));
+    console.log(keyValue('gateway services skipped', summary.skippedGatewayServices.length > 0 ? summary.skippedGatewayServices.join(', ') : 'none'));
+
+    if (
+      process.env.PERSONAL_AGENT_UPDATE_NOTIFY_INBOX === '1'
+      && summary.webUiStatus.startsWith('blue/green')
+    ) {
+      const profile = process.env.PERSONAL_AGENT_UPDATE_NOTIFY_PROFILE?.trim();
+
+      if (profile) {
+        try {
+          writeUpdateCompletionInboxEntry({
+            profile,
+            repoRoot,
+            requestedAt: process.env.PERSONAL_AGENT_UPDATE_REQUESTED_AT,
+            daemonStatus: summary.daemonStatus,
+            webUiStatus: summary.webUiStatus,
+            restartedGatewayServices: summary.restartedGatewayServices,
+            skippedGatewayServices: summary.skippedGatewayServices,
+          });
+        } catch (error) {
+          console.log(`  ${warning(`Unable to write update completion inbox entry: ${(error as Error).message}`)}`);
+        }
+      }
+    }
+
+    return 0;
   } catch (error) {
-    buildSpinner.fail('Unable to rebuild personal-agent packages');
+    if (process.env.PERSONAL_AGENT_UPDATE_NOTIFY_INBOX === '1') {
+      const profile = process.env.PERSONAL_AGENT_UPDATE_NOTIFY_PROFILE?.trim();
+
+      if (profile) {
+        try {
+          writeUpdateFailureInboxEntry({
+            profile,
+            repoRoot,
+            requestedAt: process.env.PERSONAL_AGENT_UPDATE_REQUESTED_AT,
+            phase: currentPhase,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        } catch (writeError) {
+          console.log(`  ${warning(`Unable to write update failure inbox entry: ${(writeError as Error).message}`)}`);
+        }
+      }
+    }
+
     throw error;
   }
-
-  if (buildOutput.length > 0) {
-    console.log(dim(buildOutput));
-  }
-
-  const summary = await restartBackgroundServices({
-    webUiStrategy: 'blue-green',
-    repoRoot,
-    webUiPort: getWebUiServiceOptions({ repoRoot }).port,
-  });
-
-  console.log('');
-  console.log(section('Update summary'));
-  console.log(keyValue('repository', repoRoot));
-  console.log(keyValue('pi package', options.repoOnly ? 'skipped (--repo-only)' : (piUpdated ? `repo-local (${piVersion})` : 'unknown')));
-  console.log(keyValue('build', 'repo packages rebuilt'));
-  console.log(keyValue('daemon', summary.daemonStatus));
-  console.log(keyValue('web ui', summary.webUiStatus));
-  console.log(keyValue('gateway services restarted', summary.restartedGatewayServices.length > 0 ? summary.restartedGatewayServices.join(', ') : 'none'));
-  console.log(keyValue('gateway services skipped', summary.skippedGatewayServices.length > 0 ? summary.skippedGatewayServices.join(', ') : 'none'));
-
-  return 0;
 }
 
 interface TaskParseError {

@@ -41,6 +41,7 @@ import { ConversationArtifactPanel } from './ConversationArtifactPanel';
 import { ProjectDetailPanel } from './ProjectDetailPanel';
 import { ProjectOverviewPanel } from './ProjectOverviewPanel';
 import { ScheduledTaskCreatePanel, ScheduledTaskPanel } from './ScheduledTaskPanel';
+import { ToolsContextPanel } from './ToolsContextPanel';
 import { ErrorState, IconButton, LoadingState, Pill, SurfacePanel } from './ui';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1851,6 +1852,18 @@ export function ContextRail() {
       <div className="flex-1 flex flex-col">
         <RailHeader label="Memory" />
         <EmptyPrompt text="Select a memory to inspect and edit it." />
+      </div>
+    );
+  }
+
+  // Tools
+  if (section === 'tools') {
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <RailHeader label="Tools" />
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <ToolsContextPanel />
+        </div>
       </div>
     );
   }

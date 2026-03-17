@@ -9,6 +9,7 @@ import { DaemonPage } from './pages/DaemonPage';
 import { SyncPage } from './pages/SyncPage';
 import { InboxPage } from './pages/InboxPage';
 import { RunsPage } from './pages/RunsPage';
+import { SystemPage } from './pages/SystemPage';
 import { WebUiPage } from './pages/WebUiPage';
 
 import { ProjectsPage } from './pages/ProjectsPage';
@@ -197,6 +198,7 @@ export function App() {
                     <Route path="conversations/:id" element={<ConversationPage />} />
                     <Route path="inbox" element={<InboxPage />} />
                     <Route path="inbox/:id" element={<InboxPage />} />
+                    <Route path="system" element={<SystemPage />} />
                     <Route path="gateway" element={<GatewayPage />} />
                     <Route path="daemon" element={<DaemonPage />} />
                     <Route path="sync" element={<SyncPage />} />

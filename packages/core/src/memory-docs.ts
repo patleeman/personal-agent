@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync } from 'fs';
 import { basename, join, resolve } from 'path';
 import { getProfilesRoot } from './runtime/paths.js';
 
@@ -48,6 +48,18 @@ function removeDirIfEmpty(path: string): void {
   rmSync(path, { recursive: true, force: true });
 }
 
+function resolveMigrationConflictBackupPath(filePath: string): string {
+  let candidate = `${filePath}.migration-conflict.bak`;
+  let suffix = 2;
+
+  while (existsSync(candidate)) {
+    candidate = `${filePath}.migration-conflict.${suffix}.bak`;
+    suffix += 1;
+  }
+
+  return candidate;
+}
+
 export function migrateLegacyProfileMemoryDirs(options: ResolveMemoryDocsOptions = {}): LegacyMemoryMigrationResult {
   const profilesRoot = resolveProfilesRootForMemory(options);
   const memoryDir = getMemoryDocsDir({ profilesRoot });
@@ -76,7 +88,16 @@ export function migrateLegacyProfileMemoryDirs(options: ResolveMemoryDocsOptions
       }
 
       if (existsSync(targetPath)) {
-        throw new Error(`Cannot migrate legacy memory doc ${filePath} -> ${targetPath}: target already exists`);
+        const legacyContent = readFileSync(filePath, 'utf-8');
+        const targetContent = readFileSync(targetPath, 'utf-8');
+
+        if (legacyContent === targetContent) {
+          rmSync(filePath, { force: true });
+          continue;
+        }
+
+        renameSync(filePath, resolveMigrationConflictBackupPath(filePath));
+        continue;
       }
 
       renameSync(filePath, targetPath);

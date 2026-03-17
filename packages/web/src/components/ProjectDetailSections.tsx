@@ -1,40 +1,16 @@
-import { Children, isValidElement, type FormEventHandler, type ReactNode } from 'react';
+import { type FormEventHandler } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { formatProjectStatus } from '../contextRailProject';
-import { looksLikeLocalFilesystemPath } from '../localPaths';
 import type { ProjectBrief, ProjectFile, ProjectNote } from '../types';
 import { timeAgo } from '../utils';
+import { InlineMarkdownCode } from './MarkdownInlineCode';
 import { summarizeActivityPreview, type ProjectActivityItemShape } from './projectDetailState';
-import { InlineLocalPath } from './LocalPathActions';
 import { ProjectFileRow, ProjectNoteRow } from './ProjectDetailForms';
 import { EmptyState, Pill, ToolbarButton } from './ui';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-border-default bg-base px-4 py-3 text-[15px] leading-relaxed text-primary focus:outline-none focus:border-accent/60';
-const INLINE_CODE_CLASS = 'font-mono text-[0.82em] bg-elevated px-1 py-0.5 rounded text-accent';
-
-function extractTextContent(children: ReactNode): string {
-  let text = '';
-
-  Children.forEach(children, (child) => {
-    if (typeof child === 'string' || typeof child === 'number' || typeof child === 'bigint') {
-      text += String(child);
-      return;
-    }
-
-    if (!isValidElement(child)) {
-      return;
-    }
-
-    const props = child.props as { children?: ReactNode };
-    if (props.children !== undefined) {
-      text += extractTextContent(props.children);
-    }
-  });
-
-  return text;
-}
 
 function ProjectMarkdown({ body, className }: { body: string; className?: string }) {
   return (
@@ -42,20 +18,7 @@ function ProjectMarkdown({ body, className }: { body: string; className?: string
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks]}
         components={{
-          code: ({ className: codeClassName, children }) => {
-            const content = extractTextContent(children).replace(/\n$/, '');
-            const isBlock = content.includes('\n') || Boolean(codeClassName?.includes('language-'));
-
-            if (!isBlock && looksLikeLocalFilesystemPath(content)) {
-              return <InlineLocalPath path={content} />;
-            }
-
-            if (!isBlock) {
-              return <code className={INLINE_CODE_CLASS}>{content}</code>;
-            }
-
-            return <code className={codeClassName}>{content}</code>;
-          },
+          code: ({ className: codeClassName, children }) => <InlineMarkdownCode className={codeClassName}>{children}</InlineMarkdownCode>,
         }}
       >
         {body}
@@ -78,14 +41,10 @@ export function ProjectRequirementsContent({
       {goal.length > 0 ? (
         <div className="space-y-1.5">
           <p className="ui-card-meta">Goal</p>
-          <div className="ui-markdown max-w-none">
-            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{goal}</ReactMarkdown>
-          </div>
+          <ProjectMarkdown body={goal} className="ui-markdown max-w-none" />
         </div>
       ) : fallbackContent.length > 0 ? (
-        <div className="ui-markdown max-w-none">
-          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{fallbackContent}</ReactMarkdown>
-        </div>
+        <ProjectMarkdown body={fallbackContent} className="ui-markdown max-w-none" />
       ) : (
         <EmptyState
           title="No requirements yet."
@@ -127,9 +86,7 @@ export function ProjectPlanOverview({
   return (
     <>
       {planContent.length > 0 && (
-        <div className="ui-markdown max-w-none">
-          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{planContent}</ReactMarkdown>
-        </div>
+        <ProjectMarkdown body={planContent} className="ui-markdown max-w-none" />
       )}
 
       {(currentFocus || blockers.length > 0 || recentProgress.length > 0) && (
@@ -190,9 +147,7 @@ export function ProjectCompletionContent({
   if (content.length > 0) {
     return (
       <div className="max-w-5xl space-y-5">
-        <div className="ui-markdown max-w-none">
-          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{content}</ReactMarkdown>
-        </div>
+        <ProjectMarkdown body={content} className="ui-markdown max-w-none" />
       </div>
     );
   }

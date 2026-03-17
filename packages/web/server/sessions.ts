@@ -114,6 +114,7 @@ export interface SessionMeta {
   title: string;         // session display name or derived fallback title
   messageCount: number;
   isRunning?: boolean;
+  lastActivityAt?: string;
 }
 
 export interface SessionDetail {

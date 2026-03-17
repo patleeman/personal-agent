@@ -14,7 +14,7 @@ import { api } from '../api';
 import { appendComposerHistory, readComposerHistory } from '../composerHistory';
 import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversationArtifacts';
 import { createConversationLiveRunId, getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversationRuns';
-import { formatContextShareLabel, formatContextUsageLabel, formatContextWindowLabel, formatLiveSessionLabel, formatThinkingLevelLabel, getContextUsagePercent } from '../conversationHeader';
+import { formatContextBreakdownLabel, formatContextUsageLabel, formatContextWindowLabel, formatLiveSessionLabel, formatThinkingLevelLabel } from '../conversationHeader';
 import { isConversationScrolledToBottom, shouldShowScrollToBottomControl } from '../conversationScroll';
 import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE } from '../conversationTitle';
 import { emitConversationProjectsChanged, CONVERSATION_PROJECTS_CHANGED_EVENT } from '../conversationProjectEvents';
@@ -266,10 +266,9 @@ function ContextBar({
     .map((segment) => ({
       ...segment,
       className: CONTEXT_SEGMENT_STYLES[segment.key] ?? 'bg-border-default/60',
-      title: formatContextShareLabel(segment.label, segment.tokens, win),
     }));
   const total = tokens?.total ?? segments.reduce((sum, segment) => sum + segment.tokens, 0);
-  const pct = getContextUsagePercent(total, win);
+  const contextBreakdownTitle = formatContextBreakdownLabel(segments, win, total);
   const w = (n: number) => `${Math.max(0, Math.min(100, (n / win) * 100))}%`;
   const thinkingLabel = formatThinkingLevelLabel(thinkingLevel);
   const segmentTotal = segments.reduce((sum, segment) => sum + segment.tokens, 0);
@@ -333,9 +332,7 @@ function ContextBar({
           <span className="uppercase tracking-[0.14em] text-dim/65">context</span>
           <span
             className="h-2 w-20 shrink-0 overflow-hidden rounded-full border border-border-default/70 bg-surface shadow-[inset_0_1px_1px_rgba(0,0,0,0.18)]"
-            title={total === null
-              ? 'Current context usage is unknown right now (common immediately after compaction).'
-              : `${pct?.toFixed(1) ?? '0.0'}% of ${formatContextWindowLabel(win)} context window`}
+            title={contextBreakdownTitle}
           >
             {total !== null ? (
               <span className="flex h-full min-w-0 overflow-hidden rounded-full" style={{ width: filledWidth }}>
@@ -344,7 +341,7 @@ function ContextBar({
                     key={segment.key}
                     className={`h-full ${segment.className} ${index === 0 ? 'rounded-l-full' : ''} ${index === segments.length - 1 ? 'rounded-r-full' : ''}`}
                     style={{ flexGrow: segment.tokens, flexBasis: 0, minWidth: '2px' }}
-                    title={segment.title}
+                    title={contextBreakdownTitle}
                   />
                 )) : (
                   <span className="h-full w-full rounded-full bg-accent/95" />

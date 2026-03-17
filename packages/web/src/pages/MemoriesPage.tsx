@@ -148,6 +148,7 @@ export function MemoriesPage() {
   return (
     <div className="flex h-full flex-col">
       <PageHeader
+        className="flex-wrap items-start gap-y-3"
         actions={(
           <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); }} disabled={refreshing}>
             {refreshing ? 'Refreshing…' : '↻ Refresh'}
@@ -222,7 +223,7 @@ export function MemoriesPage() {
                     {query.trim()
                       ? `Showing ${filteredMemories.length} of ${memories.length}.`
                       : `Showing ${memories.length} memories.`}
-                    {' '}Select a memory to inspect it in the right rail.
+                    {' '}Select a memory to inspect it in the right panel.
                   </p>
                 </div>
 

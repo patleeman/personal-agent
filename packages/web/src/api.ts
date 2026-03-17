@@ -71,6 +71,7 @@ export const api = {
   }) => post<SyncState>('/sync/setup', input),
   webUiState:   () => get<WebUiState>('/web-ui/state'),
   restartApplication: () => post<ApplicationRestartRequestResult>('/application/restart'),
+  updateApplication: () => post<ApplicationRestartRequestResult>('/application/update'),
   installWebUiService: () => post<WebUiState>('/web-ui/service/install'),
   startWebUiService: () => post<WebUiState>('/web-ui/service/start'),
   restartWebUiService: () => post<WebUiState>('/web-ui/service/restart'),

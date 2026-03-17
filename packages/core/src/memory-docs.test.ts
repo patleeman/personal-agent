@@ -50,16 +50,35 @@ describe('memory docs paths', () => {
     expect(readFileSync(join(profilesRoot, '_memory', 'infra.md'), 'utf-8')).toContain('id: infra');
   });
 
-  it('fails migration when a target memory file already exists', () => {
+  it('removes legacy duplicates when the global target already exists with the same content', () => {
     const profilesRoot = createTempProfilesRoot();
     const legacyPath = join(profilesRoot, 'assistant', 'agent', 'memory', 'runpod.md');
     const targetPath = join(profilesRoot, '_memory', 'runpod.md');
 
+    writeFile(legacyPath, 'same');
+    writeFile(targetPath, 'same');
+
+    const result = migrateLegacyProfileMemoryDirs({ profilesRoot });
+
+    expect(result.migratedFiles).toEqual([]);
+    expect(existsSync(legacyPath)).toBe(false);
+    expect(readFileSync(targetPath, 'utf-8')).toBe('same');
+  });
+
+  it('preserves differing legacy files as backups when the global target already exists', () => {
+    const profilesRoot = createTempProfilesRoot();
+    const legacyPath = join(profilesRoot, 'assistant', 'agent', 'memory', 'runpod.md');
+    const targetPath = join(profilesRoot, '_memory', 'runpod.md');
+    const backupPath = `${legacyPath}.migration-conflict.bak`;
+
     writeFile(legacyPath, 'legacy');
     writeFile(targetPath, 'existing');
 
-    expect(() => migrateLegacyProfileMemoryDirs({ profilesRoot })).toThrow(`target already exists`);
+    const result = migrateLegacyProfileMemoryDirs({ profilesRoot });
+
+    expect(result.migratedFiles).toEqual([]);
+    expect(existsSync(legacyPath)).toBe(false);
     expect(readFileSync(targetPath, 'utf-8')).toBe('existing');
-    expect(readFileSync(legacyPath, 'utf-8')).toBe('legacy');
+    expect(readFileSync(backupPath, 'utf-8')).toBe('legacy');
   });
 });

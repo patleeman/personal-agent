@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clampPanelWidth, getArtifactRailTargetWidth, getRailLayoutPrefs, getRailMaxWidth } from './layoutSizing.js';
+import { clampPanelWidth, getArtifactRailTargetWidth, getRailInitialWidth, getRailLayoutPrefs, getRailMaxWidth } from './layoutSizing.js';
 
 describe('layout sizing helpers', () => {
   it('clamps panel width to the provided bounds', () => {
@@ -29,6 +29,34 @@ describe('layout sizing helpers', () => {
       storageKey: 'pa:rail-width:scheduled',
       initialWidth: 380,
     });
+
+    expect(getRailLayoutPrefs('/memories')).toEqual({
+      storageKey: 'pa:rail-width:memories',
+      initialMainWidthRatio: 0.7,
+    });
+
+    expect(getRailLayoutPrefs('/tools')).toEqual({
+      storageKey: 'pa:rail-width:tools',
+      initialMainWidthRatio: 0.7,
+    });
+  });
+
+  it('derives 70% initial rails for tools and managed memories', () => {
+    expect(getRailInitialWidth({
+      pathname: '/tools',
+      viewportWidth: 1600,
+      sidebarWidth: 224,
+      railMinWidth: 160,
+      railMaxWidth: 1046,
+    })).toBe(956);
+
+    expect(getRailInitialWidth({
+      pathname: '/memories',
+      viewportWidth: 700,
+      sidebarWidth: 224,
+      railMinWidth: 160,
+      railMaxWidth: 160,
+    })).toBe(160);
   });
 
   it('computes the 50% artifact rail target from the main viewport width', () => {

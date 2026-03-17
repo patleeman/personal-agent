@@ -14,7 +14,10 @@ import { getWebUiServiceStatus } from '@personal-agent/gateway';
 
 const RESTART_LOCK_MAX_AGE_MS = 30 * 60 * 1000;
 
-interface ApplicationRestartLock {
+type ApplicationCommand = 'restart' | 'update';
+
+interface ApplicationCommandLock {
+  action?: ApplicationCommand;
   pid?: number;
   requestedAt?: string;
   repoRoot?: string;
@@ -23,14 +26,17 @@ interface ApplicationRestartLock {
   command?: string[];
 }
 
-export interface ApplicationRestartRequestResult {
+export interface ApplicationCommandRequestResult {
   accepted: true;
+  action: ApplicationCommand;
   message: string;
   requestedAt: string;
   logFile: string;
 }
 
-function resolveApplicationRestartLockFile(): string {
+export type ApplicationRestartRequestResult = ApplicationCommandRequestResult;
+
+function resolveApplicationCommandLockFile(): string {
   return join(getStateRoot(), 'web', 'app-restart.lock.json');
 }
 
@@ -42,13 +48,13 @@ function resolveCliEntryFile(repoRoot: string): string {
   return join(resolve(repoRoot), 'packages', 'cli', 'dist', 'index.js');
 }
 
-function readApplicationRestartLock(filePath: string): ApplicationRestartLock | undefined {
+function readApplicationCommandLock(filePath: string): ApplicationCommandLock | undefined {
   if (!existsSync(filePath)) {
     return undefined;
   }
 
   try {
-    return JSON.parse(readFileSync(filePath, 'utf-8')) as ApplicationRestartLock;
+    return JSON.parse(readFileSync(filePath, 'utf-8')) as ApplicationCommandLock;
   } catch {
     return undefined;
   }
@@ -67,8 +73,48 @@ function isProcessRunning(pid: number | undefined): boolean {
   }
 }
 
-function ensureApplicationRestartNotRunning(lockFile: string): void {
-  const current = readApplicationRestartLock(lockFile);
+function commandLabel(action: ApplicationCommand): string {
+  return action === 'update' ? 'update' : 'restart';
+}
+
+function buildCliCommand(action: ApplicationCommand, cliEntryFile: string): string[] {
+  if (action === 'update') {
+    return [process.execPath, cliEntryFile, 'update'];
+  }
+
+  return [process.execPath, cliEntryFile, 'restart', '--rebuild'];
+}
+
+function buildRequestMessage(action: ApplicationCommand): string {
+  if (action === 'update') {
+    return 'Application update requested. Pulling latest changes, rebuilding packages, and restarting background services.';
+  }
+
+  return 'Application restart requested. Rebuilding packages and restarting background services.';
+}
+
+function buildNotificationEnv(input: {
+  action: ApplicationCommand;
+  profile: string;
+  requestedAt: string;
+}): Record<string, string> {
+  if (input.action === 'update') {
+    return {
+      PERSONAL_AGENT_UPDATE_NOTIFY_INBOX: '1',
+      PERSONAL_AGENT_UPDATE_NOTIFY_PROFILE: input.profile,
+      PERSONAL_AGENT_UPDATE_REQUESTED_AT: input.requestedAt,
+    };
+  }
+
+  return {
+    PERSONAL_AGENT_RESTART_NOTIFY_INBOX: '1',
+    PERSONAL_AGENT_RESTART_NOTIFY_PROFILE: input.profile,
+    PERSONAL_AGENT_RESTART_REQUESTED_AT: input.requestedAt,
+  };
+}
+
+function ensureApplicationCommandNotRunning(lockFile: string): void {
+  const current = readApplicationCommandLock(lockFile);
   if (!current) {
     if (existsSync(lockFile)) {
       rmSync(lockFile, { force: true });
@@ -85,20 +131,22 @@ function ensureApplicationRestartNotRunning(lockFile: string): void {
 
   if (isProcessRunning(current.pid) && !staleByAge) {
     const suffix = current.requestedAt ? ` (${current.requestedAt})` : '';
-    throw new Error(`Application restart already in progress${suffix}.`);
+    const currentAction = current.action === 'update' ? 'update' : 'restart';
+    throw new Error(`Application ${currentAction} already in progress${suffix}.`);
   }
 
   rmSync(lockFile, { force: true });
 }
 
-export function requestApplicationRestart(input: {
+function requestApplicationCommand(input: {
   repoRoot: string;
   profile: string;
-}): ApplicationRestartRequestResult {
+  action: ApplicationCommand;
+}): ApplicationCommandRequestResult {
   const repoRoot = resolve(input.repoRoot);
   const profile = input.profile.trim();
   if (profile.length === 0) {
-    throw new Error('Application restart requires a profile.');
+    throw new Error(`Application ${commandLabel(input.action)} requires a profile.`);
   }
 
   const webUiStatus = getWebUiServiceStatus({ repoRoot });
@@ -114,17 +162,24 @@ export function requestApplicationRestart(input: {
     throw new Error(`CLI entrypoint is not built: ${cliEntryFile}`);
   }
 
-  const lockFile = resolveApplicationRestartLockFile();
+  const lockFile = resolveApplicationCommandLockFile();
   mkdirSync(dirname(lockFile), { recursive: true });
-  ensureApplicationRestartNotRunning(lockFile);
+  ensureApplicationCommandNotRunning(lockFile);
 
   const logFile = webUiStatus.logFile ?? resolveDefaultWebUiLogFile();
   mkdirSync(dirname(logFile), { recursive: true });
 
   const requestedAt = new Date().toISOString();
-  const command = [process.execPath, cliEntryFile, 'restart', '--rebuild'];
+  const command = buildCliCommand(input.action, cliEntryFile);
 
-  writeFileSync(lockFile, `${JSON.stringify({ requestedAt, repoRoot, profile, port: webUiStatus.port, command }, null, 2)}\n`, {
+  writeFileSync(lockFile, `${JSON.stringify({
+    action: input.action,
+    requestedAt,
+    repoRoot,
+    profile,
+    port: webUiStatus.port,
+    command,
+  }, null, 2)}\n`, {
     flag: 'wx',
   });
 
@@ -132,26 +187,29 @@ export function requestApplicationRestart(input: {
 
   try {
     logFd = openSync(logFile, 'a');
-    const child = spawn(process.execPath, [cliEntryFile, 'restart', '--rebuild'], {
+    const child = spawn(process.execPath, command.slice(1), {
       cwd: repoRoot,
       detached: true,
       stdio: ['ignore', logFd, logFd],
       env: {
         ...process.env,
         PERSONAL_AGENT_REPO_ROOT: repoRoot,
-        PERSONAL_AGENT_RESTART_NOTIFY_INBOX: '1',
-        PERSONAL_AGENT_RESTART_NOTIFY_PROFILE: profile,
-        PERSONAL_AGENT_RESTART_REQUESTED_AT: requestedAt,
+        ...buildNotificationEnv({
+          action: input.action,
+          profile,
+          requestedAt,
+        }),
       },
     });
 
     if (!Number.isInteger(child.pid) || (child.pid as number) <= 0) {
-      throw new Error('Detached restart process did not return a valid pid.');
+      throw new Error(`Detached ${commandLabel(input.action)} process did not return a valid pid.`);
     }
 
     child.unref();
 
     writeFileSync(lockFile, `${JSON.stringify({
+      action: input.action,
       pid: child.pid,
       requestedAt,
       repoRoot,
@@ -170,8 +228,29 @@ export function requestApplicationRestart(input: {
 
   return {
     accepted: true,
-    message: 'Application restart requested. Rebuilding packages and restarting background services.',
+    action: input.action,
+    message: buildRequestMessage(input.action),
     requestedAt,
     logFile,
   };
+}
+
+export function requestApplicationRestart(input: {
+  repoRoot: string;
+  profile: string;
+}): ApplicationCommandRequestResult {
+  return requestApplicationCommand({
+    ...input,
+    action: 'restart',
+  });
+}
+
+export function requestApplicationUpdate(input: {
+  repoRoot: string;
+  profile: string;
+}): ApplicationCommandRequestResult {
+  return requestApplicationCommand({
+    ...input,
+    action: 'update',
+  });
 }

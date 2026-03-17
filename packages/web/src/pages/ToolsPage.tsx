@@ -1,110 +1,32 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { api } from '../api';
-import { PageHeader, PageHeading, SectionLabel, ToolbarButton, cx } from '../components/ui';
+import { EmptyState, ListLinkRow, PageHeader, PageHeading, SectionLabel, ToolbarButton, cx } from '../components/ui';
 import { useApi } from '../hooks';
 import type {
   AgentToolInfo,
   CliBinaryState,
   DependentCliToolState,
-  McpCliServerDetail,
-  McpCliToolDetail,
+  McpCliServerConfig,
   PackageSourceTargetState,
   ProfilePackageSourceTargetState,
-  ToolParameterSchema,
 } from '../types';
+import { buildToolsSearch, getToolsSelectionKey, parseToolsSelection, type ToolsRailSelection } from '../toolsSelection';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50';
 const ACTION_BUTTON_CLASS = 'inline-flex items-center rounded-lg border border-border-subtle bg-base px-3 py-1.5 text-[12px] font-medium text-primary transition-colors hover:bg-surface disabled:opacity-50';
-const LINK_BUTTON_CLASS = 'font-mono text-[12px] text-accent hover:text-accent/80';
 
-function formatSchemaValue(value: unknown): string {
-  if (typeof value === 'string') {
-    return value;
-  }
+type ToolFilter = 'active' | 'all' | 'inactive';
 
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-
-  if (value === null) {
-    return 'null';
-  }
-
-  return JSON.stringify(value);
-}
-
-function getSchemaAllowedValues(schema: ToolParameterSchema | undefined): string | null {
-  if (!schema) {
-    return null;
-  }
-
-  if (Array.isArray(schema.enum) && schema.enum.length > 0) {
-    return schema.enum.map(formatSchemaValue).join(', ');
-  }
-
-  const variants = [
-    ...(Array.isArray(schema.anyOf) ? schema.anyOf : []),
-    ...(Array.isArray(schema.oneOf) ? schema.oneOf : []),
-  ];
-  const constValues = variants
-    .map((variant) => variant?.const)
-    .filter((value) => value !== undefined);
-
-  return constValues.length > 0 ? constValues.map(formatSchemaValue).join(', ') : null;
-}
-
-function getSchemaTypeLabel(schema: ToolParameterSchema | undefined): string {
-  if (!schema) {
-    return 'value';
-  }
-
-  if (schema.type === 'array') {
-    const itemType = schema.items ? getSchemaTypeLabel(schema.items) : 'value';
-    return `array<${itemType}>`;
-  }
-
-  if (typeof schema.type === 'string' && schema.type.length > 0) {
-    return schema.type;
-  }
-
-  const variants = [
-    ...(Array.isArray(schema.anyOf) ? schema.anyOf : []),
-    ...(Array.isArray(schema.oneOf) ? schema.oneOf : []),
-  ];
-  if (variants.length > 0) {
-    const types = [...new Set(variants.map((variant) => getSchemaTypeLabel(variant)).filter(Boolean))];
-    return types.join(' | ');
-  }
-
-  if (schema.properties) {
-    return 'object';
-  }
-
-  if (schema.const !== undefined) {
-    return typeof schema.const;
-  }
-
-  return 'value';
-}
-
-function getToolParameters(tool: Pick<AgentToolInfo, 'parameters'>): Array<{ name: string; schema: ToolParameterSchema; required: boolean }> {
+function getToolParameters(tool: Pick<AgentToolInfo, 'parameters'>): Array<{ name: string; required: boolean }> {
   const properties = tool.parameters.properties ?? {};
   const required = new Set(tool.parameters.required ?? []);
 
-  return Object.entries(properties).map(([name, schema]) => ({
+  return Object.keys(properties).map((name) => ({
     name,
-    schema,
     required: required.has(name),
   }));
 }
-
-interface Loadable<T> {
-  loading: boolean;
-  error: string | null;
-  data?: T;
-}
-
-type ToolFilter = 'active' | 'all' | 'inactive';
 
 function summarizeDescription(description: string): string {
   const trimmed = description.trim();
@@ -143,7 +65,7 @@ function toolMatchesQuery(tool: AgentToolInfo, query: string): boolean {
   const haystacks = [
     tool.name,
     tool.description,
-    ...getToolParameters(tool).flatMap((parameter) => [parameter.name, parameter.schema.description ?? '']),
+    ...getToolParameters(tool).map((parameter) => parameter.name),
   ];
 
   return haystacks.some((value) => value.toLowerCase().includes(normalizedQuery));
@@ -155,42 +77,120 @@ function summarizeCliBinary(binary: CliBinaryState): string {
     : `Unavailable${binary.error ? ` · ${binary.error}` : ''}`;
 }
 
-function PackageTargetBlock({
+function commandLineForServer(server: McpCliServerConfig): string {
+  return [server.command, ...server.args].filter(Boolean).join(' ');
+}
+
+function packageSourceCountLabel(count: number): string {
+  return `${count} package ${count === 1 ? 'source' : 'sources'}`;
+}
+
+function selectionKey(selection: ToolsRailSelection | null): string | null {
+  return getToolsSelectionKey(selection);
+}
+
+function toolRowSelection(locationSearch: string, selection: ToolsRailSelection | null): string {
+  const nextSearch = buildToolsSearch(locationSearch, selection);
+  return `/tools${nextSearch}`;
+}
+
+function selectionMatches(current: ToolsRailSelection | null, candidate: ToolsRailSelection): boolean {
+  return selectionKey(current) === selectionKey(candidate);
+}
+
+function dotClass(active: boolean): string {
+  return active ? 'bg-accent' : 'bg-border-default';
+}
+
+function PackageTargetRow({
   title,
   description,
-  state,
+  target,
+  locationSearch,
+  currentSelection,
 }: {
   title: string;
   description: string;
-  state: PackageSourceTargetState;
+  target: ProfilePackageSourceTargetState | PackageSourceTargetState;
+  locationSearch: string;
+  currentSelection: ToolsRailSelection | null;
 }) {
-  return (
-    <div className="space-y-3 min-w-0">
-      <div className="space-y-1">
-        <h3 className="text-[14px] font-medium text-primary">{title}</h3>
-        <p className="ui-card-meta max-w-2xl">{description}</p>
-        <p className="break-all font-mono text-[12px] leading-relaxed text-primary">{state.settingsPath}</p>
-      </div>
+  const selection: ToolsRailSelection = target.target === 'profile'
+    ? { kind: 'package-target', target: 'profile', profileName: 'profileName' in target ? target.profileName : undefined }
+    : { kind: 'package-target', target: 'local' };
 
-      {state.packages.length === 0 ? (
-        <p className="ui-card-meta">No package sources configured.</p>
-      ) : (
-        <div>
-          {state.packages.map((entry, index) => (
-            <div key={`${state.target}:${entry.source}`} className={cx('space-y-1 py-3', index > 0 && 'border-t border-border-subtle')}>
-              <p className="break-all font-mono text-[12px] leading-relaxed text-primary">{entry.source}</p>
-              <p className="ui-card-meta">
-                {entry.filtered ? 'Filtered package config' : 'Package source'}
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+  return (
+    <ListLinkRow
+      to={toolRowSelection(locationSearch, selection)}
+      selected={selectionMatches(currentSelection, selection)}
+      leading={<span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-teal" />}
+    >
+      <p className="ui-row-title">{title}</p>
+      <p className="ui-row-summary">{description}</p>
+      <p className="ui-row-meta break-words">
+        {packageSourceCountLabel(target.packages.length)}
+        {target.settingsPath ? ` · ${target.settingsPath}` : ''}
+      </p>
+    </ListLinkRow>
+  );
+}
+
+function CliRow({
+  tool,
+  locationSearch,
+  currentSelection,
+}: {
+  tool: DependentCliToolState;
+  locationSearch: string;
+  currentSelection: ToolsRailSelection | null;
+}) {
+  const selection: ToolsRailSelection = { kind: 'cli', id: tool.id };
+
+  return (
+    <ListLinkRow
+      to={toolRowSelection(locationSearch, selection)}
+      selected={selectionMatches(currentSelection, selection)}
+      leading={<span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${tool.binary.available ? 'bg-accent' : 'bg-warning'}`} />}
+    >
+      <p className="ui-row-title">{tool.name}</p>
+      <p className="ui-row-summary">{tool.description}</p>
+      <p className="ui-row-meta break-words">
+        {tool.binary.command} · {summarizeCliBinary(tool.binary)}
+        {tool.usedBy.length > 0 ? ` · used by ${tool.usedBy.join(' · ')}` : ''}
+      </p>
+    </ListLinkRow>
+  );
+}
+
+function McpServerRow({
+  server,
+  locationSearch,
+  currentSelection,
+}: {
+  server: McpCliServerConfig;
+  locationSearch: string;
+  currentSelection: ToolsRailSelection | null;
+}) {
+  const selection: ToolsRailSelection = { kind: 'mcp-server', server: server.name };
+  const commandLine = commandLineForServer(server);
+
+  return (
+    <ListLinkRow
+      to={toolRowSelection(locationSearch, selection)}
+      selected={selectionMatches(currentSelection, selection)}
+      leading={<span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-teal" />}
+    >
+      <p className="ui-row-title font-mono">{server.name}</p>
+      <p className="ui-row-summary break-words">{server.url ?? commandLine ?? 'Configured MCP server'}</p>
+      <p className="ui-row-meta break-words">
+        {server.cwd ? `cwd ${server.cwd}` : 'Inspect to load reported tools'}
+      </p>
+    </ListLinkRow>
   );
 }
 
 export function ToolsPage() {
+  const location = useLocation();
   const {
     data: toolsState,
     loading,
@@ -201,20 +201,20 @@ export function ToolsPage() {
   const {
     data: memoryData,
     loading: memoryLoading,
+    refreshing: memoryRefreshing,
     error: memoryError,
     refetch: refetchMemory,
   } = useApi(api.memory);
-  const [serverDetails, setServerDetails] = useState<Record<string, Loadable<McpCliServerDetail>>>({});
-  const [toolDetails, setToolDetails] = useState<Record<string, Loadable<McpCliToolDetail>>>({});
   const [toolFilter, setToolFilter] = useState<ToolFilter>('active');
   const [toolQuery, setToolQuery] = useState('');
-  const [expandedTools, setExpandedTools] = useState<string[]>([]);
   const [packageSource, setPackageSource] = useState('');
   const [packageTarget, setPackageTarget] = useState<'profile' | 'local'>('profile');
   const [selectedProfileName, setSelectedProfileName] = useState('');
   const [installingPackage, setInstallingPackage] = useState(false);
   const [installMessage, setInstallMessage] = useState<string | null>(null);
   const [installError, setInstallError] = useState<string | null>(null);
+
+  const currentSelection = useMemo(() => parseToolsSelection(location.search), [location.search]);
 
   const pageMeta = toolsState
     ? `${toolsState.tools.length} tools · ${toolsState.activeTools.length} active by default · profile ${toolsState.profile}`
@@ -229,7 +229,7 @@ export function ToolsPage() {
     configPath: '',
     configExists: false,
     searchedPaths: [] as string[],
-    servers: [],
+    servers: [] as McpCliServerConfig[],
   };
   const hasMcpCliMetadata = Boolean(toolsState?.mcpCli);
   const packageInstall = toolsState?.packageInstall ?? {
@@ -283,55 +283,6 @@ export function ToolsPage() {
     });
   }, [toolFilter, toolQuery, toolsState?.tools]);
 
-  function toggleExpandedTool(toolName: string) {
-    setExpandedTools((current) => (
-      current.includes(toolName)
-        ? current.filter((name) => name !== toolName)
-        : [...current, toolName]
-    ));
-  }
-
-  async function loadServer(server: string) {
-    setServerDetails((current) => ({
-      ...current,
-      [server]: { loading: true, error: null, data: current[server]?.data },
-    }));
-
-    try {
-      const data = await api.mcpCliServer(server);
-      setServerDetails((current) => ({
-        ...current,
-        [server]: { loading: false, error: null, data },
-      }));
-    } catch (loadError) {
-      setServerDetails((current) => ({
-        ...current,
-        [server]: { loading: false, error: loadError instanceof Error ? loadError.message : String(loadError), data: current[server]?.data },
-      }));
-    }
-  }
-
-  async function loadTool(server: string, tool: string) {
-    const key = `${server}/${tool}`;
-    setToolDetails((current) => ({
-      ...current,
-      [key]: { loading: true, error: null, data: current[key]?.data },
-    }));
-
-    try {
-      const data = await api.mcpCliTool(server, tool);
-      setToolDetails((current) => ({
-        ...current,
-        [key]: { loading: false, error: null, data },
-      }));
-    } catch (loadError) {
-      setToolDetails((current) => ({
-        ...current,
-        [key]: { loading: false, error: loadError instanceof Error ? loadError.message : String(loadError), data: current[key]?.data },
-      }));
-    }
-  }
-
   async function handleInstallPackage() {
     const trimmedSource = packageSource.trim();
     if (!trimmedSource || installingPackage) {
@@ -374,7 +325,10 @@ export function ToolsPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <PageHeader actions={<ToolbarButton onClick={() => { void Promise.all([refetch({ resetLoading: false }), refetchMemory({ resetLoading: false })]); }} disabled={refreshing}>↻ Refresh</ToolbarButton>}>
+      <PageHeader
+        className="flex-wrap items-start gap-y-3"
+        actions={<ToolbarButton onClick={() => { void Promise.all([refetch({ resetLoading: false }), refetchMemory({ resetLoading: false })]); }} disabled={refreshing || memoryRefreshing}>↻ Refresh</ToolbarButton>}
+      >
         <PageHeading
           title="Tools"
           meta={pageMeta}
@@ -382,14 +336,14 @@ export function ToolsPage() {
       </PageHeader>
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        <div className="max-w-5xl space-y-8 pb-6">
+        <div className="max-w-3xl space-y-8 pb-6">
           <section className="space-y-5">
             <SectionLabel label="Agent instructions" />
 
             <div className="space-y-1">
               <h2 className="text-[15px] font-medium text-primary">AGENTS.md and skills</h2>
-              <p className="ui-card-meta max-w-3xl">
-                Durable profile instructions and reusable skills live here. This replaces the old memory page sections for identity and capabilities.
+              <p className="ui-card-meta max-w-2xl">
+                Durable profile instructions and reusable skills live here. Select an item to inspect its contents in the right panel.
               </p>
             </div>
 
@@ -404,13 +358,23 @@ export function ToolsPage() {
                   {availableAgentsInstructions.length === 0 ? (
                     <p className="ui-card-meta">No AGENTS.md files found for the active profile stack.</p>
                   ) : (
-                    <div>
-                      {availableAgentsInstructions.map((item, index) => (
-                        <div key={`${item.source}:${item.path}`} className={cx('space-y-1 py-3', index > 0 && 'border-t border-border-subtle')}>
-                          <p className="text-[13px] text-primary">{item.source}</p>
-                          <p className="break-all font-mono text-[12px] leading-relaxed text-primary">{item.path}</p>
-                        </div>
-                      ))}
+                    <div className="space-y-px">
+                      {availableAgentsInstructions.map((item) => {
+                        const selection: ToolsRailSelection = { kind: 'agents', path: item.path };
+
+                        return (
+                          <ListLinkRow
+                            key={`${item.source}:${item.path}`}
+                            to={toolRowSelection(location.search, selection)}
+                            selected={selectionMatches(currentSelection, selection)}
+                            leading={<span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-accent" />}
+                          >
+                            <p className="ui-row-title">{item.source}</p>
+                            <p className="ui-row-summary">Profile instructions and durable operating policy.</p>
+                            <p className="ui-row-meta break-words">{item.path}</p>
+                          </ListLinkRow>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -420,17 +384,23 @@ export function ToolsPage() {
                   {availableSkills.length === 0 ? (
                     <p className="ui-card-meta">No skills are available in the active profile layers.</p>
                   ) : (
-                    <div>
-                      {availableSkills.map((skill, index) => (
-                        <div key={`${skill.source}:${skill.name}:${skill.path}`} className={cx('space-y-1 py-3', index > 0 && 'border-t border-border-subtle')}>
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                            <p className="font-mono text-[12px] text-primary">{skill.name}</p>
-                            <span className="ui-card-meta">source {skill.source}</span>
-                          </div>
-                          <p className="text-[13px] text-primary/90">{skill.description || 'No description provided.'}</p>
-                          <p className="break-all font-mono text-[12px] leading-relaxed text-primary">{skill.path}</p>
-                        </div>
-                      ))}
+                    <div className="space-y-px">
+                      {availableSkills.map((skill) => {
+                        const selection: ToolsRailSelection = { kind: 'skill', path: skill.path };
+
+                        return (
+                          <ListLinkRow
+                            key={`${skill.source}:${skill.name}:${skill.path}`}
+                            to={toolRowSelection(location.search, selection)}
+                            selected={selectionMatches(currentSelection, selection)}
+                            leading={<span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${skill.usedInLastSession ? 'bg-accent' : 'bg-teal'}`} />}
+                          >
+                            <p className="ui-row-title font-mono">{skill.name}</p>
+                            <p className="ui-row-summary">{skill.description || 'No description provided.'}</p>
+                            <p className="ui-row-meta break-words">source {skill.source} · {skill.path}</p>
+                          </ListLinkRow>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -443,8 +413,8 @@ export function ToolsPage() {
 
             <div className="space-y-1">
               <h2 className="text-[15px] font-medium text-primary">Available tools</h2>
-              <p className="ui-card-meta max-w-3xl">
-                Inspect the tools available to new live sessions in this workspace, including descriptions and parameter schemas.
+              <p className="ui-card-meta max-w-2xl">
+                Inspect the tools available to new live sessions in this workspace. Select a tool to inspect its full schema and parameter descriptions in the right panel.
               </p>
             </div>
 
@@ -463,8 +433,8 @@ export function ToolsPage() {
                   </p>
                 </div>
 
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                  <div className="min-w-0 flex-1 space-y-1">
+                <div className="space-y-3">
+                  <div className="min-w-0 space-y-1">
                     <label htmlFor="tools-query" className="ui-card-meta">Search tools</label>
                     <input
                       id="tools-query"
@@ -503,84 +473,38 @@ export function ToolsPage() {
                   {toolQuery.trim() ? ` · matching “${toolQuery.trim()}”` : ''}
                 </p>
 
-                <div>
-                  {filteredTools.length === 0 ? (
-                    <p className="ui-card-meta py-3">No tools match the current filter.</p>
-                  ) : filteredTools.map((tool, index) => {
-                    const parameters = getToolParameters(tool);
-                    const expanded = expandedTools.includes(tool.name);
+                {filteredTools.length === 0 ? (
+                  <EmptyState
+                    title="No tools match"
+                    body="Try a broader search or a different filter."
+                  />
+                ) : (
+                  <div className="space-y-px">
+                    {filteredTools.map((tool) => {
+                      const selection: ToolsRailSelection = { kind: 'tool', name: tool.name };
+                      const parameters = getToolParameters(tool);
 
-                    return (
-                      <div
-                        key={tool.name}
-                        className={cx('space-y-3 py-4', index > 0 && 'border-t border-border-subtle')}
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1 space-y-1">
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                              <h3 className="font-mono text-[13px] font-medium text-primary">{tool.name}</h3>
-                              <span className="ui-card-meta">{tool.active ? 'active by default' : 'available but inactive by default'}</span>
-                              <span className="ui-card-meta">{parameters.length} {parameters.length === 1 ? 'parameter' : 'parameters'}</span>
-                            </div>
-                            <p className="max-w-4xl text-[13px] leading-relaxed text-primary/90">{summarizeDescription(tool.description)}</p>
-                            <p className="ui-card-meta">{summarizeParameters(tool)}</p>
-                          </div>
-
-                          <button
-                            type="button"
-                            className={ACTION_BUTTON_CLASS}
-                            onClick={() => toggleExpandedTool(tool.name)}
-                          >
-                            {expanded ? 'Hide details' : 'Show details'}
-                          </button>
-                        </div>
-
-                        {expanded && (
-                          <div className="space-y-3">
-                            <p className="max-w-4xl text-[13px] leading-relaxed text-primary/90">{tool.description}</p>
-
-                            {parameters.length > 0 ? (
-                              <div className="space-y-2">
-                                {parameters.map((parameter) => {
-                                  const allowedValues = getSchemaAllowedValues(parameter.schema);
-                                  const typeLabel = getSchemaTypeLabel(parameter.schema);
-
-                                  return (
-                                    <div
-                                      key={parameter.name}
-                                      className="grid gap-x-4 gap-y-1 sm:grid-cols-[minmax(0,12rem)_minmax(0,14rem)_1fr]"
-                                    >
-                                      <div className="flex min-w-0 items-center gap-2">
-                                        <span className="break-all font-mono text-[12px] text-primary">{parameter.name}</span>
-                                        <span className="ui-card-meta">{parameter.required ? 'required' : 'optional'}</span>
-                                      </div>
-                                      <div className="ui-card-meta break-words">
-                                        {typeLabel}
-                                        {allowedValues ? ` · ${allowedValues}` : ''}
-                                      </div>
-                                      <div className="ui-card-meta break-words">
-                                        {parameter.schema.description ?? 'No description.'}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <p className="ui-card-meta">No parameters.</p>
-                            )}
-
-                            <details>
-                              <summary className="ui-card-meta cursor-pointer select-none">Show raw schema</summary>
-                              <pre className="mt-2 overflow-x-auto rounded-lg bg-surface/70 px-3 py-2 text-[11px] leading-relaxed text-secondary">
-                                {JSON.stringify(tool.parameters, null, 2)}
-                              </pre>
-                            </details>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                      return (
+                        <ListLinkRow
+                          key={tool.name}
+                          to={toolRowSelection(location.search, selection)}
+                          selected={selectionMatches(currentSelection, selection)}
+                          leading={<span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dotClass(tool.active)}`} />}
+                        >
+                          <p className="ui-row-title font-mono">{tool.name}</p>
+                          <p className="ui-row-summary">{summarizeDescription(tool.description)}</p>
+                          <p className="ui-row-meta break-words">
+                            {tool.active ? 'active by default' : 'available but inactive by default'}
+                            {' · '}
+                            {parameters.length} {parameters.length === 1 ? 'parameter' : 'parameters'}
+                            {' · '}
+                            {summarizeParameters(tool)}
+                          </p>
+                        </ListLinkRow>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             ) : null}
           </section>
@@ -590,14 +514,14 @@ export function ToolsPage() {
 
             <div className="space-y-1">
               <h2 className="text-[15px] font-medium text-primary">Install package sources</h2>
-              <p className="ui-card-meta max-w-3xl">
+              <p className="ui-card-meta max-w-2xl">
                 Add npm, git, GitHub, or local Pi package sources to durable <code>pa</code> settings without leaving the UI. New <code>pa</code> sessions will load newly installed packages.
               </p>
             </div>
 
             {!toolsState ? null : (
-              <div className="grid gap-8 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-                <div className="space-y-4 min-w-0">
+              <div className="space-y-6">
+                <div className="space-y-4">
                   <div className="space-y-1">
                     <label htmlFor="package-source" className="ui-card-meta">Package source</label>
                     <input
@@ -676,24 +600,29 @@ export function ToolsPage() {
                   {installError && <p className="text-[12px] text-danger">{installError}</p>}
                 </div>
 
-                <div className="grid gap-8 lg:grid-cols-2">
-                  {selectedProfileTarget ? (
-                    <PackageTargetBlock
-                      title={`Profile · ${selectedProfileTarget.profileName}${selectedProfileTarget.current ? ' (active)' : ''}`}
-                      description="Package sources saved into a profile travel with the repo and become defaults for that profile on every machine."
-                      state={selectedProfileTarget}
-                    />
-                  ) : (
-                    <div className="space-y-2 min-w-0">
-                      <h3 className="text-[14px] font-medium text-primary">Profile</h3>
+                <div className="space-y-2 border-t border-border-subtle pt-5">
+                  <h3 className="text-[13px] font-medium text-primary">Current package targets</h3>
+                  <p className="ui-card-meta max-w-2xl">Select a target to inspect its settings file and configured sources in the right panel.</p>
+                  <div className="space-y-px">
+                    {selectedProfileTarget ? (
+                      <PackageTargetRow
+                        title={`Profile · ${selectedProfileTarget.profileName}${selectedProfileTarget.current ? ' (active)' : ''}`}
+                        description="Package sources saved into a profile travel with the repo and become defaults for that profile on every machine."
+                        target={selectedProfileTarget}
+                        locationSearch={location.search}
+                        currentSelection={currentSelection}
+                      />
+                    ) : (
                       <p className="ui-card-meta">No profile settings are available.</p>
-                    </div>
-                  )}
-                  <PackageTargetBlock
-                    title="Local overlay"
-                    description="Machine-local package sources stay outside the repo. Use this for personal experiments or tools that should not be committed."
-                    state={packageInstall.localTarget}
-                  />
+                    )}
+                    <PackageTargetRow
+                      title="Local overlay"
+                      description="Machine-local package sources stay outside the repo. Use this for personal experiments or tools that should not be committed."
+                      target={packageInstall.localTarget}
+                      locationSearch={location.search}
+                      currentSelection={currentSelection}
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -704,8 +633,8 @@ export function ToolsPage() {
 
             <div className="space-y-1">
               <h2 className="text-[15px] font-medium text-primary">Dependent CLI tools</h2>
-              <p className="ui-card-meta max-w-3xl">
-                Some runtime features depend on host-installed CLIs. Check availability here when tools rely on local binaries such as 1Password secret resolution.
+              <p className="ui-card-meta max-w-2xl">
+                Some runtime features depend on host-installed CLIs. Select a dependency or MCP server to inspect it in the right panel.
               </p>
             </div>
 
@@ -714,32 +643,21 @@ export function ToolsPage() {
                 {dependentCliTools.length === 0 ? (
                   <p className="ui-card-meta">No dependent CLI tools are declared for this workspace.</p>
                 ) : (
-                  <div>
-                    {dependentCliTools.map((tool: DependentCliToolState, index) => (
-                      <div key={tool.id} className={cx('space-y-2 py-4', index > 0 && 'border-t border-border-subtle')}>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                          <h3 className="text-[14px] font-medium text-primary">{tool.name}</h3>
-                          <span className="font-mono text-[12px] text-primary">{tool.binary.command}</span>
-                          <span className="ui-card-meta">{summarizeCliBinary(tool.binary)}</span>
-                        </div>
-                        <p className="max-w-4xl text-[13px] leading-relaxed text-primary/90">{tool.description}</p>
-                        {tool.binary.path && (
-                          <p className="break-all font-mono text-[12px] leading-relaxed text-primary">{tool.binary.path}</p>
-                        )}
-                        {tool.configuredBy && (
-                          <p className="ui-card-meta">Command override: {tool.configuredBy}</p>
-                        )}
-                        {tool.usedBy.length > 0 && (
-                          <p className="ui-card-meta">Used by {tool.usedBy.join(' · ')}</p>
-                        )}
-                      </div>
+                  <div className="space-y-px">
+                    {dependentCliTools.map((tool) => (
+                      <CliRow
+                        key={tool.id}
+                        tool={tool}
+                        locationSearch={location.search}
+                        currentSelection={currentSelection}
+                      />
                     ))}
                   </div>
                 )}
 
                 <div className="space-y-1 border-t border-border-subtle pt-6">
                   <h2 className="text-[15px] font-medium text-primary">mcp-cli</h2>
-                  <p className="ui-card-meta max-w-3xl">
+                  <p className="ui-card-meta max-w-2xl">
                     Browse configured MCP servers from your local mcp-cli config. This is an inspection surface only — the agent can use these via the bash tool by running mcp-cli directly. Inspecting a server or tool may trigger OAuth in the browser on first use.
                   </p>
                 </div>
@@ -766,141 +684,15 @@ export function ToolsPage() {
                 ) : mcpCli.servers.length === 0 ? (
                   <p className="ui-card-meta">No MCP servers are configured in the current mcp_servers.json.</p>
                 ) : (
-                  <div>
-                    {mcpCli.servers.map((server, index) => {
-                      const serverState = serverDetails[server.name];
-                      const commandLine = [server.command, ...server.args].filter(Boolean).join(' ');
-
-                      return (
-                        <div key={server.name} className={cx('space-y-3 py-4', index > 0 && 'border-t border-border-subtle')}>
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div className="min-w-0 space-y-1">
-                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                                <h3 className="font-mono text-[13px] font-medium text-primary">{server.name}</h3>
-                                {server.url && <span className="ui-card-meta break-all">{server.url}</span>}
-                              </div>
-                              {commandLine && <p className="break-all font-mono text-[12px] leading-relaxed text-primary">{commandLine}</p>}
-                              {server.cwd && <p className="break-all font-mono text-[12px] leading-relaxed text-primary">cwd {server.cwd}</p>}
-                            </div>
-
-                            <button
-                              type="button"
-                              className={ACTION_BUTTON_CLASS}
-                              onClick={() => { void loadServer(server.name); }}
-                              disabled={serverState?.loading}
-                            >
-                              {serverState?.loading ? 'Inspecting…' : serverState?.data ? 'Refresh tools' : 'Inspect tools'}
-                            </button>
-                          </div>
-
-                          {serverState?.error && (
-                            <p className="text-[12px] text-danger">{serverState.error}</p>
-                          )}
-
-                          {serverState?.data && (
-                            <div className="space-y-3">
-                              <p className="ui-card-meta">
-                                {serverState.data.toolCount ?? serverState.data.tools.length} reported tools
-                                {serverState.data.transport ? ` · ${serverState.data.transport}` : ''}
-                              </p>
-
-                              {serverState.data.tools.length > 0 ? (
-                                <div className="flex flex-wrap gap-x-3 gap-y-2">
-                                  {serverState.data.tools.map((tool) => {
-                                    const key = `${server.name}/${tool.name}`;
-                                    const toolState = toolDetails[key];
-                                    const active = Boolean(toolState?.data);
-
-                                    return (
-                                      <button
-                                        key={tool.name}
-                                        type="button"
-                                        className={cx(LINK_BUTTON_CLASS, active && 'underline underline-offset-4')}
-                                        onClick={() => { void loadTool(server.name, tool.name); }}
-                                        disabled={toolState?.loading}
-                                      >
-                                        {toolState?.loading ? `Loading ${tool.name}…` : tool.name}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-                              ) : (
-                                <p className="ui-card-meta">No tools returned.</p>
-                              )}
-
-                              {Object.entries(toolDetails)
-                                .filter(([key, state]) => key.startsWith(`${server.name}/`) && state.data)
-                                .map(([key, state]) => {
-                                  const toolDetail = state.data!;
-                                  const parameters = getToolParameters({ parameters: toolDetail.schema ?? {} });
-
-                                  return (
-                                    <div key={key} className="space-y-3 border-t border-border-subtle pt-3">
-                                      <div className="space-y-1">
-                                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                                          <h4 className="font-mono text-[13px] font-medium text-primary">{toolDetail.tool}</h4>
-                                          <span className="ui-card-meta">{parameters.length} {parameters.length === 1 ? 'parameter' : 'parameters'}</span>
-                                        </div>
-                                        {toolDetail.description && <p className="max-w-4xl text-[13px] leading-relaxed text-primary/90">{toolDetail.description}</p>}
-                                      </div>
-
-                                      {parameters.length > 0 ? (
-                                        <div className="space-y-2">
-                                          {parameters.map((parameter) => {
-                                            const allowedValues = getSchemaAllowedValues(parameter.schema);
-                                            const typeLabel = getSchemaTypeLabel(parameter.schema);
-
-                                            return (
-                                              <div
-                                                key={parameter.name}
-                                                className="grid gap-x-4 gap-y-1 sm:grid-cols-[minmax(0,12rem)_minmax(0,14rem)_1fr]"
-                                              >
-                                                <div className="flex min-w-0 items-center gap-2">
-                                                  <span className="break-all font-mono text-[12px] text-primary">{parameter.name}</span>
-                                                  <span className="ui-card-meta">{parameter.required ? 'required' : 'optional'}</span>
-                                                </div>
-                                                <div className="ui-card-meta break-words">
-                                                  {typeLabel}
-                                                  {allowedValues ? ` · ${allowedValues}` : ''}
-                                                </div>
-                                                <div className="ui-card-meta break-words">
-                                                  {parameter.schema.description ?? 'No description.'}
-                                                </div>
-                                              </div>
-                                            );
-                                          })}
-                                        </div>
-                                      ) : (
-                                        <p className="ui-card-meta">No top-level parameters.</p>
-                                      )}
-
-                                      <details>
-                                        <summary className="ui-card-meta cursor-pointer select-none">Show raw schema</summary>
-                                        <pre className="mt-2 overflow-x-auto rounded-lg bg-surface/70 px-3 py-2 text-[11px] leading-relaxed text-secondary">
-                                          {JSON.stringify(toolDetail.schema ?? {}, null, 2)}
-                                        </pre>
-                                      </details>
-                                    </div>
-                                  );
-                                })}
-
-                              {Object.entries(toolDetails)
-                                .filter(([key, state]) => key.startsWith(`${server.name}/`) && state.error)
-                                .map(([key, state]) => (
-                                  <p key={key} className="text-[12px] text-danger">{state.error}</p>
-                                ))}
-
-                              <details>
-                                <summary className="ui-card-meta cursor-pointer select-none">Show raw server output</summary>
-                                <pre className="mt-2 overflow-x-auto rounded-lg bg-surface/70 px-3 py-2 text-[11px] leading-relaxed text-secondary">
-                                  {serverState.data.rawOutput}
-                                </pre>
-                              </details>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                  <div className="space-y-px">
+                    {mcpCli.servers.map((server) => (
+                      <McpServerRow
+                        key={server.name}
+                        server={server}
+                        locationSearch={location.search}
+                        currentSelection={currentSelection}
+                      />
+                    ))}
                   </div>
                 )}
               </div>
