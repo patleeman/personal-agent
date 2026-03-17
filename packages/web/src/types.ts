@@ -353,6 +353,7 @@ export interface GatewayAccessSummary {
   tokenConfigured: boolean;
   tokenSource: GatewayTokenSource;
   tokenPreview?: string;
+  defaultModel?: string;
   allowlistChatIds: string[];
   allowedUserIds: string[];
   blockedUserIds: string[];
@@ -420,6 +421,7 @@ export interface GatewayState {
 
 export interface GatewayConfigUpdateInput {
   profile: string;
+  defaultModel?: string;
   token?: string;
   clearToken?: boolean;
   allowlistChatIds: string[];

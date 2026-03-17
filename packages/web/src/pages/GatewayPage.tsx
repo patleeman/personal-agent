@@ -19,6 +19,7 @@ const CHECKBOX_CLASS = 'h-4 w-4 rounded border-border-default bg-base text-accen
 
 interface GatewayConfigDraft {
   profile: string;
+  defaultModel: string;
   token: string;
   clearToken: boolean;
   allowlistText: string;
@@ -91,6 +92,7 @@ function parseListInput(value: string): string[] {
 function buildConfigDraft(data: GatewayState): GatewayConfigDraft {
   return {
     profile: data.configuredProfile,
+    defaultModel: data.access.defaultModel ?? '',
     token: data.access.tokenSource === 'one-password' ? data.access.tokenPreview ?? '' : '',
     clearToken: false,
     allowlistText: formatListInput(data.access.allowlistChatIds),
@@ -109,6 +111,7 @@ function draftsEqual(left: GatewayConfigDraft | null, right: GatewayConfigDraft 
   }
 
   return left.profile === right.profile
+    && left.defaultModel === right.defaultModel
     && left.token === right.token
     && left.clearToken === right.clearToken
     && left.allowlistText === right.allowlistText
@@ -429,6 +432,12 @@ export function GatewayPage() {
       return;
     }
 
+    const defaultModelRaw = configDraft.defaultModel.trim();
+    if (defaultModelRaw.length > 0 && !defaultModelRaw.includes('/')) {
+      setActionError('Default model must use format provider/model.');
+      return;
+    }
+
     const pendingLimitRaw = configDraft.maxPendingPerChat.trim();
     let maxPendingPerChat: number | null = null;
     if (pendingLimitRaw.length > 0) {
@@ -442,6 +451,7 @@ export function GatewayPage() {
 
     const payload: GatewayConfigUpdateInput = {
       profile: configDraft.profile,
+      defaultModel: configDraft.defaultModel.trim() || undefined,
       token: configDraft.clearToken ? undefined : (configDraft.token.trim() || undefined),
       clearToken: configDraft.clearToken,
       allowlistChatIds: parseListInput(configDraft.allowlistText),
@@ -571,6 +581,11 @@ export function GatewayPage() {
                 <StatBlock label="Work topics" value={String(workTopicCount)} meta={pluralize(data.conversations.length, 'tracked conversation')} />
                 <StatBlock label="Allowlisted chats" value={String(data.access.allowlistChatIds.length)} meta={pluralize(data.access.allowedUserIds.length, 'allowed user')} />
                 <StatBlock label="Blocked users" value={String(data.access.blockedUserIds.length)} meta={tokenMeta} valueClassName={data.access.tokenConfigured ? undefined : 'text-danger'} />
+                <StatBlock
+                  label="Default model"
+                  value={data.access.defaultModel ?? 'profile default'}
+                  meta="Gateway runs in coordinator mode and delegates substantive work."
+                />
                 <StatBlock label="Working directory" value={basenameLabel(data.access.workingDirectory ?? '')} meta={shortPath(data.access.workingDirectory)} />
                 <StatBlock
                   label="Pending limit"
@@ -599,7 +614,7 @@ export function GatewayPage() {
               </div>
 
               <form onSubmit={handleSaveConfig} className="max-w-5xl space-y-5">
-                <div className="grid gap-6 lg:grid-cols-2">
+                <div className="grid gap-6 lg:grid-cols-3">
                   <div className="space-y-1.5 min-w-0">
                     <label className="ui-card-meta" htmlFor="gateway-profile">Profile</label>
                     <select
@@ -617,6 +632,20 @@ export function GatewayPage() {
                   </div>
 
                   <div className="space-y-1.5 min-w-0">
+                    <label className="ui-card-meta" htmlFor="gateway-default-model">Default gateway model</label>
+                    <input
+                      id="gateway-default-model"
+                      value={configDraft.defaultModel}
+                      onChange={(event) => updateConfigDraft({ defaultModel: event.target.value })}
+                      disabled={savingConfig}
+                      className={INPUT_CLASS}
+                      placeholder="provider/model (for example openai/gpt-5.4)"
+                      spellCheck={false}
+                    />
+                    <p className="ui-card-meta">Leave blank to fall back to the profile default model.</p>
+                  </div>
+
+                  <div className="space-y-1.5 min-w-0">
                     <label className="ui-card-meta" htmlFor="gateway-working-directory">Working directory</label>
                     <input
                       id="gateway-working-directory"
@@ -626,7 +655,7 @@ export function GatewayPage() {
                       className={INPUT_CLASS}
                       placeholder="Defaults to the current process cwd if left blank"
                     />
-                    <p className="ui-card-meta break-all">Used for /run commands and attachment exports.</p>
+                    <p className="ui-card-meta break-all">Used for delegated runs, /run commands, and attachment exports.</p>
                   </div>
                 </div>
 

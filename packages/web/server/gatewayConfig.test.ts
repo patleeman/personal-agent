@@ -49,6 +49,7 @@ describe('parseGatewayConfigUpdateInput', () => {
   it('normalizes and validates gateway config form input', () => {
     expect(parseGatewayConfigUpdateInput({
       profile: ' assistant ',
+      defaultModel: ' openai/gpt-5.4 ',
       token: ' op://Assistant/Telegram/token ',
       allowlistChatIds: [' 123 ', '456', '123', ''],
       allowedUserIds: [' 42 '],
@@ -59,6 +60,7 @@ describe('parseGatewayConfigUpdateInput', () => {
       clearRecentMessagesOnNew: false,
     })).toEqual({
       profile: 'assistant',
+      defaultModel: 'openai/gpt-5.4',
       token: 'op://Assistant/Telegram/token',
       clearToken: false,
       allowlistChatIds: ['123', '456'],
@@ -69,6 +71,18 @@ describe('parseGatewayConfigUpdateInput', () => {
       toolActivityStream: true,
       clearRecentMessagesOnNew: false,
     });
+  });
+
+  it('rejects invalid model refs', () => {
+    expect(() => parseGatewayConfigUpdateInput({
+      profile: 'shared',
+      defaultModel: 'gpt-5.4',
+      allowlistChatIds: [],
+      allowedUserIds: [],
+      blockedUserIds: [],
+      toolActivityStream: false,
+      clearRecentMessagesOnNew: true,
+    })).toThrow('defaultModel must use format provider/model');
   });
 
   it('rejects invalid numeric inputs', () => {
@@ -88,6 +102,7 @@ describe('buildGatewayStoredConfig', () => {
   it('keeps the existing token when the draft leaves it blank', () => {
     expect(buildGatewayStoredConfig({
       profile: 'shared',
+      defaultModel: 'anthropic/claude-sonnet-4-6',
       telegram: {
         token: 'stored-token',
         allowlist: ['1'],
@@ -96,6 +111,7 @@ describe('buildGatewayStoredConfig', () => {
       },
     }, {
       profile: 'assistant',
+      defaultModel: 'openai/gpt-5.4',
       allowlistChatIds: ['2'],
       allowedUserIds: ['42'],
       blockedUserIds: [],
@@ -105,6 +121,7 @@ describe('buildGatewayStoredConfig', () => {
       clearRecentMessagesOnNew: false,
     })).toEqual({
       profile: 'assistant',
+      defaultModel: 'openai/gpt-5.4',
       telegram: {
         token: 'stored-token',
         allowlist: ['2'],
@@ -121,6 +138,7 @@ describe('buildGatewayStoredConfig', () => {
   it('clears the saved token when requested explicitly', () => {
     expect(buildGatewayStoredConfig({
       profile: 'shared',
+      defaultModel: 'openai/gpt-5.4',
       telegram: {
         token: 'stored-token',
         toolActivityStream: false,
@@ -136,6 +154,7 @@ describe('buildGatewayStoredConfig', () => {
       clearRecentMessagesOnNew: true,
     })).toEqual({
       profile: 'shared',
+      defaultModel: undefined,
       telegram: {
         token: undefined,
         allowlist: undefined,

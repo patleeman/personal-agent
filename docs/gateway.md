@@ -6,7 +6,9 @@ Current provider:
 
 - Telegram
 
-The gateway is not a separate agent. It uses the same profile, memory, projects, daemon integration, and durable state model.
+The gateway is not a separate profile, but it now runs as a lightweight coordinator lane.
+
+It uses the same profile, memory, tasks, and durable state model, while delegating substantive work to background agent runs instead of doing heavy work inline.
 
 ## Why use the gateway
 
@@ -75,6 +77,7 @@ Per-setting precedence:
 Examples:
 
 - profile: `PERSONAL_AGENT_PROFILE` → `gateway.json.profile` → `shared`
+- default model: `PERSONAL_AGENT_GATEWAY_DEFAULT_MODEL` → `gateway.json.defaultModel` → profile default model
 - Telegram token: `TELEGRAM_BOT_TOKEN` → `gateway.json.telegram.token`
 
 ## Required Telegram setup
@@ -89,6 +92,7 @@ Strongly recommended:
 
 Optional:
 
+- `PERSONAL_AGENT_GATEWAY_DEFAULT_MODEL`
 - `PERSONAL_AGENT_TELEGRAM_ALLOWLIST`
 - `PERSONAL_AGENT_TELEGRAM_BLOCKED_USER_IDS`
 - `PERSONAL_AGENT_TELEGRAM_CWD`
@@ -126,6 +130,19 @@ Useful consequences:
 - `/new` resets the current session binding
 - `/resume` can switch the chat to a saved conversation
 - forked work can be routed into separate topics
+
+## Coordinator mode
+
+The gateway agent is intentionally lightweight.
+
+Practical behavior:
+
+- it defaults to a gateway-specific model when configured
+- it keeps direct inline work short
+- it delegates substantive work to durable background agent runs
+- it exposes only coordinator-style tools to the model: delegate, scheduled tasks, and deferred resume
+
+This keeps Telegram responsive while heavier work happens in separate worker runs.
 
 ## What the gateway can do
 
@@ -244,7 +261,7 @@ The web UI has a Gateway page that shows:
 
 It can also:
 
-- edit the saved gateway profile and Telegram access settings
+- edit the saved gateway profile, default model, and Telegram access settings
 - save the Telegram bot token directly in `gateway.json`
 - save `op://...` 1Password references for the bot token and supported Telegram list settings
 - open a gateway-backed conversation into the normal web conversation view

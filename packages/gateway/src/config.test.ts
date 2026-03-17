@@ -45,6 +45,7 @@ describe('gateway config', () => {
 
     writeFileSync(file, JSON.stringify({
       profile: 'shared',
+      defaultModel: 'openai/gpt-5.4',
       telegram: {
         token: '  token  ',
         allowlist: [' 1 ', '', 2],
@@ -58,6 +59,7 @@ describe('gateway config', () => {
 
     expect(readGatewayConfig()).toEqual({
       profile: 'shared',
+      defaultModel: 'openai/gpt-5.4',
       telegram: {
         token: '  token  ',
         allowlist: ['1'],
@@ -75,9 +77,10 @@ describe('gateway config', () => {
     const file = join(tempDir('pa-gateway-'), 'gateway.json');
     process.env.PERSONAL_AGENT_GATEWAY_CONFIG_FILE = file;
 
-    writeGatewayConfig({ profile: 'assistant', telegram: { token: 'x', allowlist: ['1'] } });
+    writeGatewayConfig({ profile: 'assistant', defaultModel: 'openai/gpt-5.4', telegram: { token: 'x', allowlist: ['1'] } });
 
-    const saved = JSON.parse(readFileSync(file, 'utf-8')) as { profile: string };
+    const saved = JSON.parse(readFileSync(file, 'utf-8')) as { profile: string; defaultModel?: string };
     expect(saved.profile).toBe('assistant');
+    expect(saved.defaultModel).toBe('openai/gpt-5.4');
   });
 });
