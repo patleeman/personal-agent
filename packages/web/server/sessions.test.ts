@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, un
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { buildDisplayBlocksFromEntries, clearSessionCaches, listSessions, readSessionBlock, readSessionBlocks, readSessionTree, renameStoredSession } from './sessions.js';
+import { buildDisplayBlocksFromEntries, clearSessionCaches, listSessions, readSessionBlock, readSessionBlocks, readSessionImageAsset, readSessionTree, renameStoredSession } from './sessions.js';
 
 const originalEnv = process.env;
 const tempDirs: string[] = [];
@@ -142,6 +142,73 @@ describe('sessions', () => {
     ]);
   });
 
+  it('serves persisted session images through routes instead of inline data urls', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    const dir = join(sessionsDir, '--tmp-project--');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, '2026-03-11T12-00-00-000Z_session-images.jsonl'), [
+      JSON.stringify({ type: 'session', id: 'session-images', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
+      JSON.stringify({ type: 'model_change', modelId: 'test-model' }),
+      JSON.stringify({
+        type: 'message',
+        id: 'session-images-user-1',
+        parentId: null,
+        timestamp: '2026-03-11T12:00:00.000Z',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Here is an image' },
+            { type: 'image', data: 'aGVsbG8=', mimeType: 'image/png', name: 'hello.png' },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'session-images-tool-1',
+        parentId: 'session-images-user-1',
+        timestamp: '2026-03-11T12:00:01.000Z',
+        message: {
+          role: 'toolResult',
+          toolCallId: 'tool-1',
+          toolName: 'render',
+          content: [
+            { type: 'image', data: 'aGVsbG8=', mimeType: 'image/png', name: 'result.png' },
+          ],
+        },
+      }),
+    ].join('\n') + '\n');
+
+    const detail = readSessionBlocks('session-images');
+    const userBlock = detail?.blocks.find((block) => block.type === 'user');
+    const imageBlock = detail?.blocks.find((block) => block.type === 'image');
+    expect(userBlock).toEqual(expect.objectContaining({
+      type: 'user',
+      images: [expect.objectContaining({ src: `/api/sessions/session-images/blocks/${userBlock?.id}/images/0` })],
+    }));
+    expect(imageBlock).toEqual(expect.objectContaining({
+      type: 'image',
+      src: `/api/sessions/session-images/blocks/${imageBlock?.id}/image`,
+    }));
+
+    expect(imageBlock ? readSessionBlock('session-images', imageBlock.id) : null).toEqual(expect.objectContaining({
+      type: 'image',
+      src: `/api/sessions/session-images/blocks/${imageBlock?.id}/image`,
+    }));
+
+    expect(userBlock ? readSessionImageAsset('session-images', userBlock.id, 0) : null).toEqual(expect.objectContaining({
+      mimeType: 'image/png',
+      fileName: 'hello.png',
+      data: Buffer.from('aGVsbG8=', 'base64'),
+    }));
+    expect(imageBlock ? readSessionImageAsset('session-images', imageBlock.id) : null).toEqual(expect.objectContaining({
+      mimeType: 'image/png',
+      fileName: 'result.png',
+      data: Buffer.from('aGVsbG8=', 'base64'),
+    }));
+  });
+
   it('defers heavy tool output and image payloads in partial archived transcript loads', () => {
     const sessionsDir = createTempSessionsDir();
     configureSessionEnv(sessionsDir);
@@ -225,7 +292,7 @@ describe('sessions', () => {
     expect(detail).not.toBeNull();
     expect(detail?.blockOffset).toBeGreaterThan(0);
 
-    const userBlock = detail?.blocks.find((block) => block.type === 'user' && block.id === 'u2');
+    const userBlock = detail?.blocks.find((block) => block.type === 'user' && block.text === 'inspect this screenshot');
     expect(userBlock).toEqual(expect.objectContaining({ type: 'user' }));
     expect(userBlock && 'images' in userBlock ? userBlock.images?.[0] : undefined).toEqual(expect.objectContaining({ deferred: true, src: undefined }));
 
@@ -241,9 +308,10 @@ describe('sessions', () => {
     expect(hydratedToolBlock && 'outputDeferred' in hydratedToolBlock ? hydratedToolBlock.outputDeferred : undefined).toBeUndefined();
     expect(hydratedToolBlock && 'output' in hydratedToolBlock ? hydratedToolBlock.output.length : 0).toBe(1200);
 
-    const hydratedUserBlock = readSessionBlock(sessionId, 'u2');
+    const hydratedUserBlock = userBlock ? readSessionBlock(sessionId, userBlock.id) : null;
     expect(hydratedUserBlock).toEqual(expect.objectContaining({ type: 'user' }));
-    expect(hydratedUserBlock && 'images' in hydratedUserBlock ? hydratedUserBlock.images?.[0]?.src : undefined).toContain('data:image/png;base64,');
+    expect(hydratedUserBlock && 'images' in hydratedUserBlock ? hydratedUserBlock.images?.[0]?.src : undefined)
+      .toBe(`/api/sessions/${sessionId}/blocks/${userBlock?.id}/images/0`);
   });
 
   it('prefers a persisted session display name over the first user message fallback', () => {

@@ -9,6 +9,8 @@ import { displayBlockToMessageBlock } from '../messageBlocks';
 
 export interface StreamState {
   blocks: MessageBlock[];
+  blockOffset: number;
+  totalBlocks: number;
   hasSnapshot: boolean;
   isStreaming: boolean;
   error: string | null;
@@ -21,6 +23,8 @@ export interface StreamState {
 
 export const INITIAL_STREAM_STATE: StreamState = {
   blocks: [],
+  blockOffset: 0,
+  totalBlocks: 0,
   hasSnapshot: false,
   isStreaming: false,
   error: null,
@@ -39,7 +43,7 @@ export function selectVisibleStreamState(
   return stateSessionId === requestedSessionId ? state : INITIAL_STREAM_STATE;
 }
 
-export function useSessionStream(sessionId: string | null) {
+export function useSessionStream(sessionId: string | null, options?: { tailBlocks?: number }) {
   const [state, setState] = useState<StreamState>(INITIAL_STREAM_STATE);
   const [connectVersion, setConnectVersion] = useState(0);
   // Mutable refs to avoid stale closures in the SSE handler
@@ -107,7 +111,12 @@ export function useSessionStream(sessionId: string | null) {
     let closed = false;
 
     function connect() {
-      es = new EventSource(`/api/live-sessions/${sessionId}/events`);
+      const params = new URLSearchParams();
+      if (typeof options?.tailBlocks === 'number' && Number.isInteger(options.tailBlocks) && options.tailBlocks > 0) {
+        params.set('tailBlocks', String(options.tailBlocks));
+      }
+      const query = params.toString();
+      es = new EventSource(`/api/live-sessions/${sessionId}/events${query ? `?${query}` : ''}`);
 
       es.onmessage = (e: MessageEvent<string>) => {
         if (closed) return;
@@ -136,7 +145,7 @@ export function useSessionStream(sessionId: string | null) {
       closed = true;
       es?.close();
     };
-  }, [connectVersion, sessionId]);
+  }, [connectVersion, options?.tailBlocks, sessionId]);
 
   const visibleState = selectVisibleStreamState(state, stateSessionIdRef.current, sessionId);
 
@@ -157,7 +166,14 @@ function applyEvent(
     case 'snapshot': {
       const snapshotBlocks = event.blocks.map(displayBlockToMessageBlock);
       blocksRef.current = snapshotBlocks;
-      return { ...prev, blocks: snapshotBlocks, hasSnapshot: true, error: null };
+      return {
+        ...prev,
+        blocks: snapshotBlocks,
+        blockOffset: event.blockOffset,
+        totalBlocks: event.totalBlocks,
+        hasSnapshot: true,
+        error: null,
+      };
     }
 
     case 'agent_start': {
@@ -177,15 +193,18 @@ function applyEvent(
       const last = blocks[blocks.length - 1];
       const lastImageCount = last?.type === 'user' ? last.images?.length ?? 0 : -1;
       const nextImageCount = nextBlock.type === 'user' ? nextBlock.images?.length ?? 0 : -1;
+      const sameUserBlock = last?.type === 'user' && nextBlock.type === 'user'
+        && last.text === nextBlock.text
+        && lastImageCount === nextImageCount;
 
-      if (last?.type === 'user' && last.text === nextBlock.text && lastImageCount === nextImageCount) {
+      if (sameUserBlock) {
         blocks[blocks.length - 1] = nextBlock;
       } else {
         blocks.push(nextBlock);
       }
 
       blocksRef.current = blocks;
-      return { ...prev, blocks };
+      return { ...prev, blocks, totalBlocks: Math.max(prev.totalBlocks, prev.blockOffset + blocks.length) };
     }
 
     case 'queue_state':
@@ -199,7 +218,7 @@ function applyEvent(
         blocks.push({ type: 'text', text: event.delta, ts: new Date().toISOString() });
       }
       blocksRef.current = blocks;
-      return { ...prev, blocks };
+      return { ...prev, blocks, totalBlocks: Math.max(prev.totalBlocks, prev.blockOffset + blocks.length) };
     }
 
     case 'thinking_delta': {
@@ -207,10 +226,10 @@ function applyEvent(
       if (last?.type === 'thinking') {
         blocks[blocks.length - 1] = { ...last, text: last.text + event.delta };
       } else {
-        blocks.push({ type: 'thinking', text: event.delta, ts: new Date().toISOString(), collapsed: false });
+        blocks.push({ type: 'thinking', text: event.delta, ts: new Date().toISOString() });
       }
       blocksRef.current = blocks;
-      return { ...prev, blocks };
+      return { ...prev, blocks, totalBlocks: Math.max(prev.totalBlocks, prev.blockOffset + blocks.length) };
     }
 
     case 'tool_start': {
@@ -225,7 +244,7 @@ function applyEvent(
         _toolCallId: event.toolCallId,
       } as MessageBlock & { _toolCallId: string });
       blocksRef.current = blocks;
-      return { ...prev, blocks };
+      return { ...prev, blocks, totalBlocks: Math.max(prev.totalBlocks, prev.blockOffset + blocks.length) };
     }
 
     case 'tool_update': {
@@ -241,7 +260,7 @@ function applyEvent(
         blocks[idx] = { ...b, output: (b.output ?? '') + partial };
       }
       blocksRef.current = blocks;
-      return { ...prev, blocks };
+      return { ...prev, blocks, totalBlocks: Math.max(prev.totalBlocks, prev.blockOffset + blocks.length) };
     }
 
     case 'tool_end': {
@@ -259,7 +278,7 @@ function applyEvent(
         };
       }
       blocksRef.current = blocks;
-      return { ...prev, blocks };
+      return { ...prev, blocks, totalBlocks: Math.max(prev.totalBlocks, prev.blockOffset + blocks.length) };
     }
 
     case 'title_update':
@@ -274,7 +293,13 @@ function applyEvent(
     case 'error': {
       blocks.push({ type: 'error', message: event.message, ts: new Date().toISOString() });
       blocksRef.current = blocks;
-      return { ...prev, blocks, isStreaming: false, error: event.message };
+      return {
+        ...prev,
+        blocks,
+        totalBlocks: Math.max(prev.totalBlocks, prev.blockOffset + blocks.length),
+        isStreaming: false,
+        error: event.message,
+      };
     }
 
     default:

@@ -1,4 +1,4 @@
-import React, { Children, cloneElement, isValidElement, memo, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import React, { Children, cloneElement, isValidElement, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type ReactNode, type RefObject } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { parseSkillBlock, type ParsedSkillBlock } from '../../skillBlock';
 import remarkBreaks from 'remark-breaks';
@@ -8,7 +8,7 @@ import { extractDurableRunIdsFromBlock } from '../../conversationRuns';
 import type { MessageBlock } from '../../types';
 import { timeAgo } from '../../utils';
 import { extractMarkdownTextContent, InlineMarkdownCode } from '../MarkdownInlineCode';
-import { buildChatRenderItems, type TraceClusterSummary, type TraceClusterSummaryCategory, type TraceConversationBlock } from './transcriptItems.js';
+import { buildChatRenderItems, type ChatRenderItem, type TraceClusterSummary, type TraceClusterSummaryCategory, type TraceConversationBlock } from './transcriptItems.js';
 import { Pill, SurfacePanel, cx } from '../ui';
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────
@@ -960,12 +960,10 @@ function ErrorBlock({
 // ── Message actions ───────────────────────────────────────────────────────────
 
 function MsgActions({
-  text,
   isUser,
   onFork,
   onCheckpoint,
 }: {
-  text: string;
   isUser?: boolean;
   onFork?: () => Promise<void> | void;
   onCheckpoint?: () => Promise<void> | void;
@@ -1038,16 +1036,12 @@ function UserMessage({
   onHydrateMessage?: (blockId: string) => Promise<void> | void;
   hydratingMessageBlockIds?: ReadonlySet<string>;
 }) {
-  const imageCount = block.images?.length ?? 0;
-  const actionText = block.text || (imageCount > 0
-    ? `[${imageCount} image attachment${imageCount === 1 ? '' : 's'}]`
-    : '');
   const hasText = block.text.trim().length > 0;
   const skillBlock = hasText ? parseSkillBlock(block.text) : null;
 
   return (
     <div className="group flex flex-col items-end gap-1.5">
-      <MsgActions text={actionText} isUser onCheckpoint={onCheckpoint} />
+      <MsgActions isUser onCheckpoint={onCheckpoint} />
       <div className="max-w-[86%]">
         <div className="ui-message-card-user space-y-2">
           {block.images && block.images.length > 0 && (
@@ -1123,7 +1117,7 @@ function AssistantMessage({
         </div>
         <div className="flex items-center gap-2 pt-0.5">
           <p className="ui-message-meta">{timeAgo(block.ts)}</p>
-          <MsgActions text={block.text} onCheckpoint={onCheckpoint} onFork={onFork} />
+          <MsgActions onCheckpoint={onCheckpoint} onFork={onFork} />
         </div>
       </div>
     </div>
@@ -1188,7 +1182,7 @@ function SummaryMessage({
                 </button>
               )}
               <span className="flex-1" />
-              <MsgActions text={`${block.title}\n\n${block.text}`} />
+              <MsgActions />
             </div>
           </div>
         </div>
@@ -1211,11 +1205,130 @@ function StreamingIndicator({ label }: { label: string }) {
   );
 }
 
+const CHAT_WINDOWING_THRESHOLD = 500;
+const CHAT_WINDOWING_CHUNK_SIZE = 80;
+const CHAT_WINDOWING_OVERSCAN_CHUNKS = 2;
+const CHAT_WINDOWING_FALLBACK_SPAN_HEIGHT = 96;
+
+interface ChatRenderChunk {
+  key: string;
+  items: ChatRenderItem[];
+  startItemIndex: number;
+  endItemIndex: number;
+  startMessageIndex: number;
+  endMessageIndex: number;
+  spanCount: number;
+}
+
+function getChatRenderItemAbsoluteRange(item: ChatRenderItem, messageIndexOffset: number): { start: number; end: number } {
+  if (item.type === 'trace_cluster') {
+    return {
+      start: messageIndexOffset + item.startIndex,
+      end: messageIndexOffset + item.endIndex,
+    };
+  }
+
+  return {
+    start: messageIndexOffset + item.index,
+    end: messageIndexOffset + item.index,
+  };
+}
+
+function buildChatRenderChunks(renderItems: ChatRenderItem[], messageIndexOffset: number): ChatRenderChunk[] {
+  const chunks: ChatRenderChunk[] = [];
+
+  for (let startItemIndex = 0; startItemIndex < renderItems.length; startItemIndex += CHAT_WINDOWING_CHUNK_SIZE) {
+    const items = renderItems.slice(startItemIndex, startItemIndex + CHAT_WINDOWING_CHUNK_SIZE);
+    const startRange = getChatRenderItemAbsoluteRange(items[0], messageIndexOffset);
+    const endRange = getChatRenderItemAbsoluteRange(items[items.length - 1], messageIndexOffset);
+    const spanCount = items.reduce((count, item) => {
+      const range = getChatRenderItemAbsoluteRange(item, messageIndexOffset);
+      return count + (range.end - range.start + 1);
+    }, 0);
+    chunks.push({
+      key: `${startRange.start}-${endRange.end}-${items.length}`,
+      items,
+      startItemIndex,
+      endItemIndex: startItemIndex + items.length - 1,
+      startMessageIndex: startRange.start,
+      endMessageIndex: endRange.end,
+      spanCount,
+    });
+  }
+
+  return chunks;
+}
+
+function resolveChunkIndexForOffset(offset: number, chunkTops: number[], chunkHeights: number[]): number {
+  for (let index = 0; index < chunkTops.length; index += 1) {
+    if (offset < chunkTops[index] + chunkHeights[index]) {
+      return index;
+    }
+  }
+
+  return Math.max(0, chunkTops.length - 1);
+}
+
+function formatWindowingCount(value: number): string {
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}m`;
+  }
+
+  if (value >= 1_000) {
+    return `${(value / 1_000).toFixed(value >= 10_000 ? 0 : 1)}k`;
+  }
+
+  return String(value);
+}
+
+function WindowedChatChunk({
+  chunk,
+  renderItem,
+  onHeightChange,
+  includeTrailingGap,
+}: {
+  chunk: ChatRenderChunk;
+  renderItem: (item: ChatRenderItem, itemIndex: number) => ReactNode;
+  onHeightChange: (chunkKey: string, height: number) => void;
+  includeTrailingGap: boolean;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) {
+      return;
+    }
+
+    const measure = () => {
+      onHeightChange(chunk.key, element.getBoundingClientRect().height);
+    };
+
+    measure();
+    const observer = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => measure())
+      : null;
+    observer?.observe(element);
+
+    return () => {
+      observer?.disconnect();
+    };
+  }, [chunk.key, includeTrailingGap, onHeightChange]);
+
+  return (
+    <div ref={ref} className={includeTrailingGap ? 'space-y-4 pb-4' : 'space-y-4'}>
+      {chunk.items.map((item, itemIndex) => renderItem(item, chunk.startItemIndex + itemIndex))}
+    </div>
+  );
+}
+
 // ── ChatView ──────────────────────────────────────────────────────────────────
 
 interface ChatViewProps {
   messages: MessageBlock[];
   messageIndexOffset?: number;
+  scrollContainerRef?: RefObject<HTMLDivElement>;
+  focusMessageIndex?: number | null;
   isStreaming?: boolean;
   onForkMessage?: (messageIndex: number) => Promise<void> | void;
   onCheckpointMessage?: (block: MessageBlock, messageIndex: number) => Promise<void> | void;
@@ -1234,6 +1347,8 @@ interface ChatViewProps {
 export const ChatView = memo(function ChatView({
   messages,
   messageIndexOffset = 0,
+  scrollContainerRef,
+  focusMessageIndex = null,
   isStreaming = false,
   onForkMessage,
   onCheckpointMessage,
@@ -1277,15 +1392,131 @@ export const ChatView = memo(function ChatView({
     [contentVisibilityReady, shouldUseContentVisibility],
   );
 
-  function renderMessageBlock(block: MessageBlock, index: number, isTailItem: boolean) {
+  const shouldWindowTranscript = Boolean(scrollContainerRef) && renderItems.length >= CHAT_WINDOWING_THRESHOLD;
+  const renderChunks = useMemo(
+    () => (shouldWindowTranscript ? buildChatRenderChunks(renderItems, messageIndexOffset) : []),
+    [messageIndexOffset, renderItems, shouldWindowTranscript],
+  );
+  const [viewport, setViewport] = useState<{ scrollTop: number; clientHeight: number } | null>(null);
+  const [chunkHeights, setChunkHeights] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!shouldWindowTranscript) {
+      setViewport(null);
+      return;
+    }
+
+    const scrollEl = scrollContainerRef?.current;
+    if (!scrollEl) {
+      return;
+    }
+
+    let frame = 0;
+    const sync = () => {
+      frame = 0;
+      const next = {
+        scrollTop: scrollEl.scrollTop,
+        clientHeight: scrollEl.clientHeight,
+      };
+      setViewport((current) => (
+        current && current.scrollTop === next.scrollTop && current.clientHeight === next.clientHeight
+          ? current
+          : next
+      ));
+    };
+    const scheduleSync = () => {
+      if (frame !== 0) {
+        return;
+      }
+
+      frame = window.requestAnimationFrame(sync);
+    };
+
+    scheduleSync();
+    scrollEl.addEventListener('scroll', scheduleSync, { passive: true });
+    window.addEventListener('resize', scheduleSync);
+
+    return () => {
+      scrollEl.removeEventListener('scroll', scheduleSync);
+      window.removeEventListener('resize', scheduleSync);
+      if (frame !== 0) {
+        window.cancelAnimationFrame(frame);
+      }
+    };
+  }, [shouldWindowTranscript, scrollContainerRef]);
+
+  const averageSpanHeight = useMemo(() => {
+    const measurements = renderChunks
+      .map((chunk) => ({ height: chunkHeights[chunk.key], spanCount: chunk.spanCount }))
+      .filter((entry): entry is { height: number; spanCount: number } => typeof entry.height === 'number' && entry.height > 0 && entry.spanCount > 0);
+
+    if (measurements.length === 0) {
+      return CHAT_WINDOWING_FALLBACK_SPAN_HEIGHT;
+    }
+
+    const totalHeight = measurements.reduce((sum, entry) => sum + entry.height, 0);
+    const totalSpans = measurements.reduce((sum, entry) => sum + entry.spanCount, 0);
+    return totalSpans > 0 ? totalHeight / totalSpans : CHAT_WINDOWING_FALLBACK_SPAN_HEIGHT;
+  }, [chunkHeights, renderChunks]);
+
+  const chunkLayouts = useMemo(() => {
+    let top = 0;
+    return renderChunks.map((chunk) => {
+      const estimatedHeight = Math.max(1, chunk.spanCount * averageSpanHeight);
+      const height = chunkHeights[chunk.key] ?? estimatedHeight;
+      const layout = {
+        ...chunk,
+        top,
+        height,
+        bottom: top + height,
+      };
+      top += height;
+      return layout;
+    });
+  }, [averageSpanHeight, chunkHeights, renderChunks]);
+
+  const updateChunkHeight = useCallback((chunkKey: string, height: number) => {
+    setChunkHeights((current) => (current[chunkKey] === height ? current : { ...current, [chunkKey]: height }));
+  }, []);
+
+  const renderChatItem = useCallback((item: ChatRenderItem, itemIndex: number) => {
+    const isTailItem = itemIndex === renderItems.length - 1;
+
+    if (item.type === 'trace_cluster') {
+      const live = isStreaming && isTailItem;
+
+      return (
+        <div key={`trace-${messageIndexOffset + item.startIndex}-${messageIndexOffset + item.endIndex}`} style={contentVisibilityStyle}>
+          {item.blocks.map((_, offset) => {
+            const absoluteIndex = messageIndexOffset + item.startIndex + offset;
+            return <span key={`anchor-${absoluteIndex}`} id={`msg-${absoluteIndex}`} className="block h-0 overflow-hidden" aria-hidden />;
+          })}
+          <TraceClusterBlock
+            blocks={item.blocks}
+            summary={item.summary}
+            live={live}
+            onOpenArtifact={onOpenArtifact}
+            activeArtifactId={activeArtifactId}
+            onOpenRun={onOpenRun}
+            activeRunId={activeRunId}
+            onResume={isTailItem ? onResumeConversation : undefined}
+            resumeBusy={resumeConversationBusy}
+            resumeTitle={resumeConversationTitle}
+            resumeLabel={resumeConversationLabel}
+          />
+        </div>
+      );
+    }
+
+    const block = item.block;
     const markerKind = block.type === 'user'
       ? 'user'
       : block.type === 'text'
         ? 'assistant'
         : undefined;
-    const absoluteIndex = messageIndexOffset + index;
-    const autoOpen = shouldAutoOpenConversationBlock(block, index, messages.length, isStreaming);
-    const showStreamingCursor = isStreaming && block.type === 'text' && index === messages.length - 1;
+    const absoluteIndex = messageIndexOffset + item.index;
+    const autoOpen = shouldAutoOpenConversationBlock(block, item.index, messages.length, isStreaming);
+    const showStreamingCursor = isStreaming && block.type === 'text' && item.index === messages.length - 1;
 
     const el = (() => {
       switch (block.type) {
@@ -1354,44 +1585,102 @@ export const ChatView = memo(function ChatView({
         {el}
       </div>
     ) : null;
-  }
+  }, [activeArtifactId, activeRunId, contentVisibilityStyle, hydratingMessageBlockIds, isStreaming, messageIndexOffset, messages.length, onCheckpointMessage, onForkMessage, onHydrateMessage, onOpenArtifact, onOpenRun, onResumeConversation, renderItems.length, resumeConversationBusy, resumeConversationLabel, resumeConversationTitle]);
+
+  const visibleChunkRange = useMemo(() => {
+    if (!shouldWindowTranscript || chunkLayouts.length === 0) {
+      return null;
+    }
+
+    const totalHeight = chunkLayouts[chunkLayouts.length - 1]?.bottom ?? 0;
+    const tops = chunkLayouts.map((chunk) => chunk.top);
+    const heights = chunkLayouts.map((chunk) => chunk.height);
+    const focusChunkIndex = focusMessageIndex === null
+      ? -1
+      : chunkLayouts.findIndex((chunk) => focusMessageIndex >= chunk.startMessageIndex && focusMessageIndex <= chunk.endMessageIndex);
+
+    let startChunkIndex: number;
+    let endChunkIndex: number;
+
+    if (viewport === null) {
+      const anchorChunkIndex = focusChunkIndex >= 0 ? focusChunkIndex : chunkLayouts.length - 1;
+      startChunkIndex = Math.max(0, anchorChunkIndex - CHAT_WINDOWING_OVERSCAN_CHUNKS);
+      endChunkIndex = Math.min(chunkLayouts.length - 1, anchorChunkIndex + CHAT_WINDOWING_OVERSCAN_CHUNKS);
+    } else {
+      const viewportTop = Math.max(0, viewport.scrollTop);
+      const viewportBottom = viewportTop + Math.max(1, viewport.clientHeight);
+      const firstVisibleChunkIndex = resolveChunkIndexForOffset(viewportTop, tops, heights);
+      const lastVisibleChunkIndex = resolveChunkIndexForOffset(viewportBottom, tops, heights);
+      startChunkIndex = Math.max(0, firstVisibleChunkIndex - CHAT_WINDOWING_OVERSCAN_CHUNKS);
+      endChunkIndex = Math.min(chunkLayouts.length - 1, lastVisibleChunkIndex + CHAT_WINDOWING_OVERSCAN_CHUNKS);
+
+      if (focusChunkIndex >= 0 && (focusChunkIndex < startChunkIndex || focusChunkIndex > endChunkIndex)) {
+        startChunkIndex = Math.max(0, focusChunkIndex - CHAT_WINDOWING_OVERSCAN_CHUNKS);
+        endChunkIndex = Math.min(chunkLayouts.length - 1, focusChunkIndex + CHAT_WINDOWING_OVERSCAN_CHUNKS);
+      }
+    }
+
+    const topSpacerHeight = startChunkIndex > 0 ? chunkLayouts[startChunkIndex].top : 0;
+    const bottomSpacerHeight = endChunkIndex < chunkLayouts.length - 1
+      ? Math.max(0, totalHeight - chunkLayouts[endChunkIndex].bottom)
+      : 0;
+
+    return {
+      chunks: chunkLayouts.slice(startChunkIndex, endChunkIndex + 1),
+      topSpacerHeight,
+      bottomSpacerHeight,
+    };
+  }, [chunkLayouts, focusMessageIndex, shouldWindowTranscript, viewport]);
+
+  const fullTranscript = (
+    <div className="space-y-4">
+      {renderItems.map((item, itemIndex) => renderChatItem(item, itemIndex))}
+    </div>
+  );
+
+  const windowedTranscript = visibleChunkRange ? (
+    <>
+      {visibleChunkRange.topSpacerHeight > 0 && <div style={{ height: visibleChunkRange.topSpacerHeight }} aria-hidden />}
+      {visibleChunkRange.chunks.map((chunk) => (
+        <WindowedChatChunk
+          key={chunk.key}
+          chunk={chunk}
+          renderItem={renderChatItem}
+          onHeightChange={updateChunkHeight}
+          includeTrailingGap={chunk.endItemIndex < renderItems.length - 1 || showStreamingIndicator}
+        />
+      ))}
+      {visibleChunkRange.bottomSpacerHeight > 0 && <div style={{ height: visibleChunkRange.bottomSpacerHeight }} aria-hidden />}
+    </>
+  ) : fullTranscript;
+  const mountedMessageCount = visibleChunkRange
+    ? visibleChunkRange.chunks.reduce((sum, chunk) => sum + chunk.spanCount, 0)
+    : messages.length;
+  const mountedChunkCount = visibleChunkRange?.chunks.length ?? renderChunks.length;
+  const windowingBadge = shouldWindowTranscript ? (
+    <div className="sticky top-3 z-10 mb-3 flex justify-end pointer-events-none">
+      <div className="inline-flex min-h-[2rem] items-center gap-2 rounded-lg border border-border-subtle bg-surface/88 px-3 py-1.5 text-[10px] text-secondary shadow-sm backdrop-blur">
+        <span className="font-medium uppercase tracking-[0.16em] text-primary/85">windowing</span>
+        <span>{formatWindowingCount(messages.length)} loaded</span>
+        <span className="text-dim">·</span>
+        <span>{formatWindowingCount(mountedMessageCount)} mounted</span>
+        <span className="text-dim">·</span>
+        <span>{mountedChunkCount}/{renderChunks.length} chunks</span>
+      </div>
+    </div>
+  ) : null;
 
   return (
     <>
       <style>{`@keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
-      <div className="space-y-4 pl-6 pr-10 py-5">
-        {renderItems.map((item, itemIndex) => {
-          const isTailItem = itemIndex === renderItems.length - 1;
-
-          if (item.type === 'trace_cluster') {
-            const live = isStreaming && isTailItem;
-
-            return (
-              <div key={`trace-${messageIndexOffset + item.startIndex}-${messageIndexOffset + item.endIndex}`} style={contentVisibilityStyle}>
-                {item.blocks.map((_, offset) => {
-                  const absoluteIndex = messageIndexOffset + item.startIndex + offset;
-                  return <span key={`anchor-${absoluteIndex}`} id={`msg-${absoluteIndex}`} className="block h-0 overflow-hidden" aria-hidden />;
-                })}
-                <TraceClusterBlock
-                  blocks={item.blocks}
-                  summary={item.summary}
-                  live={live}
-                  onOpenArtifact={onOpenArtifact}
-                  activeArtifactId={activeArtifactId}
-                  onOpenRun={onOpenRun}
-                  activeRunId={activeRunId}
-                  onResume={isTailItem ? onResumeConversation : undefined}
-                  resumeBusy={resumeConversationBusy}
-                  resumeTitle={resumeConversationTitle}
-                  resumeLabel={resumeConversationLabel}
-                />
-              </div>
-            );
-          }
-
-          return renderMessageBlock(item.block, item.index, isTailItem);
-        })}
-        {showStreamingIndicator && <StreamingIndicator label={streamingStatusLabel ?? 'Working…'} />}
+      <div className="pl-6 pr-10 py-5">
+        {windowingBadge}
+        {shouldWindowTranscript ? windowedTranscript : fullTranscript}
+        {showStreamingIndicator && (
+          <div className={shouldWindowTranscript && visibleChunkRange?.chunks.length ? '' : 'mt-4'}>
+            <StreamingIndicator label={streamingStatusLabel ?? 'Working…'} />
+          </div>
+        )}
       </div>
     </>
   );

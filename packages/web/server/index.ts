@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync,
 import { basename, dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
-import { listSessions, readSessionBlock, readSessionBlocks, readSessionSearchText, readSessionTree, renameStoredSession } from './sessions.js';
+import { listSessions, readSessionBlock, readSessionBlocks, readSessionImageAsset, readSessionSearchText, readSessionTree, renameStoredSession } from './sessions.js';
 import { invalidateAppTopics, startAppEventMonitor, subscribeAppEvents, type AppEventTopic } from './appEvents.js';
 import { resolveConversationCwd, resolveRequestedCwd } from './conversationCwd.js';
 import { pickFolder } from './folderPicker.js';
@@ -3378,6 +3378,45 @@ app.get('/api/sessions/:id/tree', (req, res) => {
   }
 });
 
+app.get('/api/sessions/:id/blocks/:blockId/image', (req, res) => {
+  try {
+    const asset = readSessionImageAsset(req.params.id, req.params.blockId);
+    if (!asset) { res.status(404).json({ error: 'Session image not found' }); return; }
+    if (asset.fileName) {
+      res.setHeader('Content-Disposition', `inline; filename=${JSON.stringify(asset.fileName)}`);
+    }
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.type(asset.mimeType);
+    res.send(asset.data);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.get('/api/sessions/:id/blocks/:blockId/images/:imageIndex', (req, res) => {
+  try {
+    const imageIndex = Number.parseInt(req.params.imageIndex, 10);
+    const asset = readSessionImageAsset(req.params.id, req.params.blockId, imageIndex);
+    if (!asset) { res.status(404).json({ error: 'Session image not found' }); return; }
+    if (asset.fileName) {
+      res.setHeader('Content-Disposition', `inline; filename=${JSON.stringify(asset.fileName)}`);
+    }
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.type(asset.mimeType);
+    res.send(asset.data);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 app.get('/api/sessions/:id/blocks/:blockId', (req, res) => {
   try {
     const result = readSessionBlock(req.params.id, req.params.blockId);
@@ -4071,6 +4110,16 @@ app.get('/api/live-sessions/:id/events', (req, res) => {
   const { id } = req.params;
   if (!isLive(id)) { res.status(404).json({ error: 'Not a live session' }); return; }
 
+  const rawTailBlocks = Array.isArray(req.query.tailBlocks) ? req.query.tailBlocks[0] : req.query.tailBlocks;
+  const parsedTailBlocks = typeof rawTailBlocks === 'string'
+    ? Number.parseInt(rawTailBlocks, 10)
+    : typeof rawTailBlocks === 'number'
+      ? rawTailBlocks
+      : undefined;
+  const tailBlocks = Number.isInteger(parsedTailBlocks) && (parsedTailBlocks as number) > 0
+    ? parsedTailBlocks as number
+    : undefined;
+
   res.setHeader('Content-Type',  'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection',    'keep-alive');
@@ -4082,7 +4131,7 @@ app.get('/api/live-sessions/:id/events', (req, res) => {
 
   const unsubscribe = subscribe(id, (event) => {
     res.write(`data: ${JSON.stringify(event)}\n\n`);
-  });
+  }, tailBlocks ? { tailBlocks } : undefined);
 
   req.on('close', () => {
     clearInterval(heartbeat);

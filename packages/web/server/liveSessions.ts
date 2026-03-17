@@ -60,7 +60,7 @@ export interface LiveContextUsage {
 }
 
 export type SseEvent =
-  | { type: 'snapshot';        blocks: DisplayBlock[] }
+  | { type: 'snapshot';        blocks: DisplayBlock[]; blockOffset: number; totalBlocks: number }
   | { type: 'agent_start' }
   | { type: 'agent_end' }
   | { type: 'turn_end' }
@@ -85,11 +85,16 @@ export interface PromptImageAttachment {
 
 // ── Internal entry ────────────────────────────────────────────────────────────
 
+interface LiveListener {
+  send: (event: SseEvent) => void;
+  tailBlocks?: number;
+}
+
 interface LiveEntry {
   sessionId: string;
   session: AgentSession;
   cwd: string;
-  listeners: Set<(e: SseEvent) => void>;
+  listeners: Set<LiveListener>;
   title: string;
   autoTitleRequested: boolean;
   lastContextUsageJson: string | null;
@@ -543,30 +548,58 @@ function mergeConversationHistoryBlocks(persistedBlocks: DisplayBlock[], liveBlo
   return merged;
 }
 
-function buildLiveSnapshotBlocks(entry: LiveEntry): DisplayBlock[] {
+const DEFAULT_LIVE_SNAPSHOT_TAIL_BLOCKS = 400;
+
+function buildLiveSnapshot(entry: LiveEntry, tailBlocks?: number): {
+  blocks: DisplayBlock[];
+  blockOffset: number;
+  totalBlocks: number;
+} {
   const liveBlocks = buildLiveStateBlocks(entry.session);
   const sessionFile = entry.session.sessionFile?.trim();
   if (!sessionFile || !existsSync(sessionFile)) {
-    return liveBlocks;
+    return {
+      blocks: liveBlocks,
+      blockOffset: 0,
+      totalBlocks: liveBlocks.length,
+    };
   }
 
-  const persistedBlocks = readSessionBlocksByFile(sessionFile)?.blocks ?? [];
-  if (persistedBlocks.length === 0) {
-    return liveBlocks;
+  const persisted = readSessionBlocksByFile(sessionFile, { tailBlocks: tailBlocks ?? DEFAULT_LIVE_SNAPSHOT_TAIL_BLOCKS });
+  if (!persisted || persisted.blocks.length === 0) {
+    return {
+      blocks: liveBlocks,
+      blockOffset: 0,
+      totalBlocks: liveBlocks.length,
+    };
   }
 
   // session.state.messages is the *current context window*, not a chronological display transcript.
   // After compaction it can reorder blocks as: summary → pre-compaction tail → post-compaction tail.
   // For idle live sessions we should render the durable transcript from disk exactly as persisted.
   if (!entry.session.isStreaming) {
-    return persistedBlocks;
+    return {
+      blocks: persisted.blocks,
+      blockOffset: persisted.blockOffset,
+      totalBlocks: persisted.totalBlocks,
+    };
   }
 
-  return mergeConversationHistoryBlocks(persistedBlocks, liveBlocks);
+  const blocks = mergeConversationHistoryBlocks(persisted.blocks, liveBlocks);
+  return {
+    blocks,
+    blockOffset: persisted.blockOffset,
+    totalBlocks: persisted.blockOffset + blocks.length,
+  };
 }
 
 function broadcastSnapshot(entry: LiveEntry): void {
-  broadcast(entry, { type: 'snapshot', blocks: buildLiveSnapshotBlocks(entry) });
+  for (const listener of entry.listeners) {
+    listener.send({
+      type: 'snapshot',
+      ...buildLiveSnapshot(entry, listener.tailBlocks),
+    });
+  }
 }
 
 function broadcastTitle(entry: LiveEntry): void {
@@ -872,7 +905,9 @@ export function toSse(event: AgentSessionEvent): SseEvent | null {
 }
 
 function broadcast(entry: LiveEntry, event: SseEvent) {
-  for (const fn of entry.listeners) fn(event);
+  for (const listener of entry.listeners) {
+    listener.send(event);
+  }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -902,6 +937,54 @@ export function getAvailableModels() {
   }));
 }
 
+const NEW_SESSION_PROMPT_PROBE = 'hello';
+
+interface BeforeAgentStartProbeMessage {
+  customType: string;
+  content: string;
+  display?: boolean;
+  details?: unknown;
+}
+
+interface BeforeAgentStartProbeRunner {
+  emitBeforeAgentStart: (
+    prompt: string,
+    images: unknown[] | undefined,
+    systemPrompt: string,
+  ) => Promise<{
+    messages?: BeforeAgentStartProbeMessage[];
+    systemPrompt?: string;
+  } | undefined>;
+}
+
+async function inspectNewSessionRequest(session: AgentSession): Promise<{
+  newSessionSystemPrompt: string;
+  newSessionInjectedMessages: BeforeAgentStartProbeMessage[];
+  newSessionToolDefinitions: Array<{
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+    active: true;
+  }>;
+}> {
+  const baseSystemPrompt = session.systemPrompt;
+  const extensionRunner = (session as unknown as { _extensionRunner?: BeforeAgentStartProbeRunner })._extensionRunner;
+  const beforeAgentStartResult = extensionRunner
+    ? await extensionRunner.emitBeforeAgentStart(NEW_SESSION_PROMPT_PROBE, undefined, baseSystemPrompt)
+    : undefined;
+
+  return {
+    newSessionSystemPrompt: beforeAgentStartResult?.systemPrompt ?? baseSystemPrompt,
+    newSessionInjectedMessages: beforeAgentStartResult?.messages ?? [],
+    newSessionToolDefinitions: session.state.tools.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters as Record<string, unknown>,
+      active: true as const,
+    })),
+  };
+}
+
 export async function inspectAvailableTools(
   cwd: string,
   options: LiveSessionLoaderOptions = {},
@@ -913,6 +996,14 @@ export async function inspectAvailableTools(
     description: string;
     parameters: Record<string, unknown>;
     active: boolean;
+  }>;
+  newSessionSystemPrompt: string;
+  newSessionInjectedMessages: BeforeAgentStartProbeMessage[];
+  newSessionToolDefinitions: Array<{
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+    active: true;
   }>;
 }> {
   const auth = makeAuth();
@@ -943,11 +1034,13 @@ export async function inspectAvailableTools(
 
         return left.name.localeCompare(right.name);
       });
+    const newSessionRequest = await inspectNewSessionRequest(session);
 
     return {
       cwd,
       activeTools,
       tools,
+      ...newSessionRequest,
     };
   } finally {
     session.dispose();
@@ -1073,12 +1166,18 @@ export async function resumeSession(
 export function subscribe(
   sessionId: string,
   listener: (e: SseEvent) => void,
+  options?: { tailBlocks?: number },
 ): (() => void) | null {
   const entry = registry.get(sessionId);
   if (!entry) return null;
-  entry.listeners.add(listener);
 
-  listener({ type: 'snapshot', blocks: buildLiveSnapshotBlocks(entry) });
+  const subscription: LiveListener = {
+    send: listener,
+    tailBlocks: options?.tailBlocks,
+  };
+  entry.listeners.add(subscription);
+
+  listener({ type: 'snapshot', ...buildLiveSnapshot(entry, options?.tailBlocks) });
   const title = resolveEntryTitle(entry);
   if (title) {
     listener({ type: 'title_update', title });
@@ -1089,7 +1188,7 @@ export function subscribe(
     listener({ type: 'agent_start' });
   }
 
-  return () => entry.listeners.delete(listener);
+  return () => entry.listeners.delete(subscription);
 }
 
 /** Queue hidden context for the next turn of a live session. */
