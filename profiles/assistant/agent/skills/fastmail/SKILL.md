@@ -19,8 +19,8 @@ export FASTMAIL_USERNAME="you@example.com"
 # Set to concrete value, or an op:// reference for IMAP scripts.
 export FASTMAIL_APP_PASSWORD="<fastmail-app-password>"
 # 1Password examples:
-# export FASTMAIL_APP_PASSWORD="$(op --cache=false read op://Assistant/FASTMAIL_API_KEY/password)"
-# export FASTMAIL_APP_PASSWORD_OP_REF="op://Assistant/FASTMAIL_API_KEY/password"
+# export FASTMAIL_APP_PASSWORD="$(op --cache=false read op://Assistant/FASTMAIL_APP_PASSWORD/password)"
+# export FASTMAIL_APP_PASSWORD_OP_REF="op://Assistant/FASTMAIL_APP_PASSWORD/password"
 
 export FASTMAIL_CALENDAR_URL="<calendar-url-from-fastmail-export>"
 
@@ -128,6 +128,7 @@ PY
 
 - Calendar access is via **CalDAV**.
 - Mailbox/email queries now use **IMAP** (no JMAP token required).
+- Fastmail automation in this profile should authenticate with the app password (`FASTMAIL_APP_PASSWORD` / `FASTMAIL_APP_PASSWORD_OP_REF`).
 - IMAP scripts fail fast on stalled 1Password reads (`FASTMAIL_OP_READ_TIMEOUT_SECONDS`) and socket timeouts (`FASTMAIL_IMAP_TIMEOUT_SECONDS`).
 - CalDAV scripts honor `FASTMAIL_CURL_CONNECT_TIMEOUT_SECONDS` and `FASTMAIL_CURL_MAX_TIME_SECONDS`.
 - Keep credentials in env vars or a secret manager.
