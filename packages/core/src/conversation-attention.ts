@@ -119,6 +119,60 @@ function normalizeRecord(value: unknown, fallbackConversationId?: string): Conve
   };
 }
 
+function normalizeDocument(value: unknown, fallbackProfile?: string): ConversationAttentionStateDocument | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const document = value as Partial<ConversationAttentionStateDocument>;
+  const profile = typeof document.profile === 'string'
+    ? document.profile.trim()
+    : fallbackProfile?.trim() ?? '';
+
+  if (document.version !== 1 || profile.length === 0 || !document.conversations || typeof document.conversations !== 'object') {
+    return null;
+  }
+
+  validateProfileName(profile);
+
+  const conversations: Record<string, ConversationAttentionRecord> = {};
+  for (const [conversationId, record] of Object.entries(document.conversations)) {
+    const normalized = normalizeRecord(record, conversationId);
+    if (!normalized) {
+      continue;
+    }
+
+    conversations[normalized.conversationId] = normalized;
+  }
+
+  return {
+    version: 1,
+    profile,
+    conversations: sortConversationIds(conversations),
+  };
+}
+
+function mergeRecord(
+  left: ConversationAttentionRecord,
+  right: ConversationAttentionRecord,
+): ConversationAttentionRecord {
+  if (left.conversationId !== right.conversationId) {
+    throw new Error('Cannot merge conversation attention records with different conversation ids.');
+  }
+
+  const readAt = left.readAt >= right.readAt ? left.readAt : right.readAt;
+  const newestUpdatedAt = left.updatedAt >= right.updatedAt ? left.updatedAt : right.updatedAt;
+  const updatedAt = newestUpdatedAt >= readAt ? newestUpdatedAt : readAt;
+
+  return {
+    conversationId: left.conversationId,
+    acknowledgedMessageCount: Math.max(left.acknowledgedMessageCount, right.acknowledgedMessageCount),
+    readAt,
+    updatedAt,
+    ...(left.forcedUnread || right.forcedUnread ? { forcedUnread: true } : {}),
+  };
+}
+
 function sortConversationIds(conversations: Record<string, ConversationAttentionRecord>): Record<string, ConversationAttentionRecord> {
   return Object.fromEntries(
     Object.entries(conversations)
@@ -199,6 +253,56 @@ export function saveConversationAttentionState(options: {
     conversations: sortConversationIds(conversations),
   }, null, 2) + '\n');
   return path;
+}
+
+export function mergeConversationAttentionStateDocuments(options: {
+  profile?: string;
+  documents: unknown[];
+}): ConversationAttentionStateDocument {
+  const explicitProfile = options.profile?.trim();
+  if (explicitProfile) {
+    validateProfileName(explicitProfile);
+  }
+
+  const documents = options.documents
+    .map((document) => normalizeDocument(document, explicitProfile))
+    .filter((document): document is ConversationAttentionStateDocument => document !== null);
+
+  const profiles = new Set(documents.map((document) => document.profile));
+  if (explicitProfile) {
+    profiles.add(explicitProfile);
+  }
+
+  if (profiles.size === 0) {
+    throw new Error('No valid conversation attention documents were provided to merge.');
+  }
+
+  if (profiles.size > 1) {
+    throw new Error(`Cannot merge conversation attention documents with different profiles: ${Array.from(profiles).join(', ')}`);
+  }
+
+  const profile = Array.from(profiles)[0] as string;
+  const conversations: Record<string, ConversationAttentionRecord> = {};
+
+  for (const document of documents) {
+    for (const [conversationId, record] of Object.entries(document.conversations)) {
+      const normalized = normalizeRecord(record, conversationId);
+      if (!normalized) {
+        continue;
+      }
+
+      const existing = conversations[normalized.conversationId];
+      conversations[normalized.conversationId] = existing
+        ? mergeRecord(existing, normalized)
+        : normalized;
+    }
+  }
+
+  return {
+    version: 1,
+    profile,
+    conversations: sortConversationIds(conversations),
+  };
 }
 
 export function ensureConversationAttentionBaselines(options: {

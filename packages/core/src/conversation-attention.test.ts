@@ -8,6 +8,7 @@ import {
   loadConversationAttentionState,
   markConversationAttentionRead,
   markConversationAttentionUnread,
+  mergeConversationAttentionStateDocuments,
   resolveConversationAttentionStatePath,
   summarizeConversationAttention,
 } from './conversation-attention.js';
@@ -97,6 +98,95 @@ describe('conversation attention storage', () => {
         readAt: '2026-03-12T12:10:00.000Z',
         updatedAt: '2026-03-12T12:10:00.000Z',
       });
+  });
+});
+
+describe('conversation attention merges', () => {
+  it('merges conversation records by conversation id and preserves newer attention state', () => {
+    const merged = mergeConversationAttentionStateDocuments({
+      documents: [
+        {
+          version: 1,
+          profile: 'assistant',
+          conversations: {
+            'conv-123': {
+              conversationId: 'conv-123',
+              acknowledgedMessageCount: 5,
+              readAt: '2026-03-12T12:05:00.000Z',
+              updatedAt: '2026-03-12T12:05:00.000Z',
+            },
+            'conv-456': {
+              conversationId: 'conv-456',
+              acknowledgedMessageCount: 1,
+              readAt: '1970-01-01T00:00:00.000Z',
+              updatedAt: '2026-03-12T12:00:00.000Z',
+            },
+          },
+        },
+        {
+          version: 1,
+          profile: 'assistant',
+          conversations: {
+            'conv-123': {
+              conversationId: 'conv-123',
+              acknowledgedMessageCount: 9,
+              readAt: '1970-01-01T00:00:00.000Z',
+              updatedAt: '2026-03-12T12:09:00.000Z',
+            },
+            'conv-789': {
+              conversationId: 'conv-789',
+              acknowledgedMessageCount: 2,
+              readAt: '1970-01-01T00:00:00.000Z',
+              updatedAt: '2026-03-12T12:06:00.000Z',
+              forcedUnread: true,
+            },
+          },
+        },
+      ],
+    });
+
+    expect(merged).toEqual({
+      version: 1,
+      profile: 'assistant',
+      conversations: {
+        'conv-123': {
+          conversationId: 'conv-123',
+          acknowledgedMessageCount: 9,
+          readAt: '2026-03-12T12:05:00.000Z',
+          updatedAt: '2026-03-12T12:09:00.000Z',
+        },
+        'conv-456': {
+          conversationId: 'conv-456',
+          acknowledgedMessageCount: 1,
+          readAt: '1970-01-01T00:00:00.000Z',
+          updatedAt: '2026-03-12T12:00:00.000Z',
+        },
+        'conv-789': {
+          conversationId: 'conv-789',
+          acknowledgedMessageCount: 2,
+          readAt: '1970-01-01T00:00:00.000Z',
+          updatedAt: '2026-03-12T12:06:00.000Z',
+          forcedUnread: true,
+        },
+      },
+    });
+  });
+
+  it('rejects merges across different profiles', () => {
+    expect(() => mergeConversationAttentionStateDocuments({
+      documents: [
+        {
+          version: 1,
+          profile: 'assistant',
+          conversations: {},
+        },
+        {
+          version: 1,
+          profile: 'datadog',
+          conversations: {},
+        },
+      ],
+    })).toThrow('different profiles');
   });
 });
 
