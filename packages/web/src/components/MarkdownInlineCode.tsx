@@ -1,6 +1,4 @@
 import { Children, isValidElement, type ReactNode } from 'react';
-import { looksLikeLocalFilesystemPath } from '../localPaths';
-import { InlineLocalPath } from './LocalPathActions';
 
 const DEFAULT_INLINE_CODE_CLASS = 'font-mono text-[0.82em] bg-elevated px-1 py-0.5 rounded text-accent';
 
@@ -37,10 +35,6 @@ export function InlineMarkdownCode({
 }) {
   const content = extractMarkdownTextContent(children).replace(/\n$/, '');
   const isBlock = content.includes('\n') || Boolean(className?.includes('language-'));
-
-  if (!isBlock && looksLikeLocalFilesystemPath(content)) {
-    return <InlineLocalPath path={content} />;
-  }
 
   if (!isBlock) {
     return <code className={inlineCodeClassName}>{content}</code>;

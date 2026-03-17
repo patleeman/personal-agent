@@ -83,7 +83,15 @@ export const api = {
   activity:     () => get<ActivityEntry[]>('/activity'),
   activityById: (id: string) => get<ActivityEntry>(`/activity/${encodeURIComponent(id)}`),
   sessions:     () => get<SessionMeta[]>('/sessions'),
-  sessionDetail: (id: string) => get<SessionDetail>(`/sessions/${encodeURIComponent(id)}`),
+  sessionDetail: (id: string, options?: { tailBlocks?: number }) => {
+    const params = new URLSearchParams();
+    if (typeof options?.tailBlocks === 'number' && Number.isInteger(options.tailBlocks) && options.tailBlocks > 0) {
+      params.set('tailBlocks', String(options.tailBlocks));
+    }
+
+    const query = params.toString();
+    return get<SessionDetail>(`/sessions/${encodeURIComponent(id)}${query ? `?${query}` : ''}`);
+  },
   sessionTree: (id: string) => get<ConversationTreeSnapshot>(`/sessions/${encodeURIComponent(id)}/tree`),
   sessionSearchIndex: (sessionIds: string[]) => post<{ index: Record<string, string> }>('/sessions/search-index', { sessionIds }),
   projects:     () => get<ProjectRecord[]>('/projects'),
@@ -242,8 +250,6 @@ export const api = {
   // ── Shell run ─────────────────────────────────────────────────────────────
   pickFolder: (cwd?: string) =>
     post<FolderPickerResult>('/folder-picker', { cwd }),
-  openLocalPath: (path: string) =>
-    post<{ ok: boolean; path: string }>('/local-path/open', { path }),
   run: (command: string, cwd?: string) =>
     post<{ output: string; exitCode: number }>('/run', { command, cwd }),
 
