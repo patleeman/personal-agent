@@ -963,14 +963,17 @@ function MsgActions({
   isUser,
   copyText,
   onFork,
+  onRewind,
   onCheckpoint,
 }: {
   isUser?: boolean;
   copyText?: string;
   onFork?: () => Promise<void> | void;
+  onRewind?: () => Promise<void> | void;
   onCheckpoint?: () => Promise<void> | void;
 }) {
   const [isForking, setIsForking] = useState(false);
+  const [isRewinding, setIsRewinding] = useState(false);
   const [isSavingCheckpoint, setIsSavingCheckpoint] = useState(false);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
   const copyResetTimeoutRef = useRef<number | null>(null);
@@ -1004,6 +1007,19 @@ function MsgActions({
       await onFork();
     } finally {
       setIsForking(false);
+    }
+  }
+
+  async function handleRewind() {
+    if (!onRewind || isRewinding) {
+      return;
+    }
+
+    try {
+      setIsRewinding(true);
+      await onRewind();
+    } finally {
+      setIsRewinding(false);
     }
   }
 
@@ -1061,6 +1077,17 @@ function MsgActions({
           {copyState === 'copied' ? '⎘ copied' : copyState === 'failed' ? '⎘ copy failed' : '⎘ copy'}
         </button>
       )}
+      {onRewind && (
+        <button
+          type="button"
+          onClick={() => { void handleRewind(); }}
+          className={cx('ui-action-button', isRewinding && 'text-accent')}
+          title={isUser ? 'Rewind into a new conversation from this prompt' : 'Rewind into a new conversation from the prompt that led here'}
+          disabled={isRewinding}
+        >
+          {isRewinding ? '↩ rewinding…' : '↩ rewind'}
+        </button>
+      )}
       {!isUser && onFork && (
         <button
           type="button"
@@ -1081,11 +1108,13 @@ function MsgActions({
 function UserMessage({
   block,
   onCheckpoint,
+  onRewind,
   onHydrateMessage,
   hydratingMessageBlockIds,
 }: {
   block: Extract<MessageBlock, { type: 'user' }>;
   onCheckpoint?: () => Promise<void> | void;
+  onRewind?: () => Promise<void> | void;
   onHydrateMessage?: (blockId: string) => Promise<void> | void;
   hydratingMessageBlockIds?: ReadonlySet<string>;
 }) {
@@ -1094,7 +1123,7 @@ function UserMessage({
 
   return (
     <div className="group flex flex-col items-end gap-1.5">
-      <MsgActions isUser onCheckpoint={onCheckpoint} />
+      <MsgActions isUser onCheckpoint={onCheckpoint} onRewind={onRewind} />
       <div className="max-w-[86%]">
         <div className="ui-message-card-user space-y-2">
           {block.images && block.images.length > 0 && (
@@ -1143,11 +1172,13 @@ function UserMessage({
 function AssistantMessage({
   block,
   onFork,
+  onRewind,
   onCheckpoint,
   showCursor = false,
 }: {
   block: Extract<MessageBlock, { type: 'text' }>;
   onFork?: () => Promise<void> | void;
+  onRewind?: () => Promise<void> | void;
   onCheckpoint?: () => Promise<void> | void;
   showCursor?: boolean;
 }) {
@@ -1170,7 +1201,7 @@ function AssistantMessage({
         </div>
         <div className="flex items-center gap-2 pt-0.5">
           <p className="ui-message-meta">{timeAgo(block.ts)}</p>
-          <MsgActions copyText={block.text} onCheckpoint={onCheckpoint} onFork={onFork} />
+          <MsgActions copyText={block.text} onCheckpoint={onCheckpoint} onRewind={onRewind} onFork={onFork} />
         </div>
       </div>
     </div>
@@ -1384,6 +1415,7 @@ interface ChatViewProps {
   focusMessageIndex?: number | null;
   isStreaming?: boolean;
   onForkMessage?: (messageIndex: number) => Promise<void> | void;
+  onRewindMessage?: (messageIndex: number) => Promise<void> | void;
   onCheckpointMessage?: (block: MessageBlock, messageIndex: number) => Promise<void> | void;
   onHydrateMessage?: (blockId: string) => Promise<void> | void;
   hydratingMessageBlockIds?: ReadonlySet<string>;
@@ -1404,6 +1436,7 @@ export const ChatView = memo(function ChatView({
   focusMessageIndex = null,
   isStreaming = false,
   onForkMessage,
+  onRewindMessage,
   onCheckpointMessage,
   onHydrateMessage,
   hydratingMessageBlockIds,
@@ -1578,6 +1611,7 @@ export const ChatView = memo(function ChatView({
             <UserMessage
               block={block}
               onCheckpoint={onCheckpointMessage ? () => onCheckpointMessage(block, absoluteIndex) : undefined}
+              onRewind={onRewindMessage ? () => onRewindMessage(absoluteIndex) : undefined}
               onHydrateMessage={onHydrateMessage}
               hydratingMessageBlockIds={hydratingMessageBlockIds}
             />
@@ -1588,6 +1622,7 @@ export const ChatView = memo(function ChatView({
               block={block}
               showCursor={showStreamingCursor}
               onCheckpoint={onCheckpointMessage ? () => onCheckpointMessage(block, absoluteIndex) : undefined}
+              onRewind={onRewindMessage ? () => onRewindMessage(absoluteIndex) : undefined}
               onFork={onForkMessage ? () => onForkMessage(absoluteIndex) : undefined}
             />
           );
@@ -1638,7 +1673,7 @@ export const ChatView = memo(function ChatView({
         {el}
       </div>
     ) : null;
-  }, [activeArtifactId, activeRunId, contentVisibilityStyle, hydratingMessageBlockIds, isStreaming, messageIndexOffset, messages.length, onCheckpointMessage, onForkMessage, onHydrateMessage, onOpenArtifact, onOpenRun, onResumeConversation, renderItems.length, resumeConversationBusy, resumeConversationLabel, resumeConversationTitle]);
+  }, [activeArtifactId, activeRunId, contentVisibilityStyle, hydratingMessageBlockIds, isStreaming, messageIndexOffset, messages.length, onCheckpointMessage, onForkMessage, onHydrateMessage, onOpenArtifact, onOpenRun, onResumeConversation, onRewindMessage, renderItems.length, resumeConversationBusy, resumeConversationLabel, resumeConversationTitle]);
 
   const visibleChunkRange = useMemo(() => {
     if (!shouldWindowTranscript || chunkLayouts.length === 0) {

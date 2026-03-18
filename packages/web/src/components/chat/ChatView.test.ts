@@ -143,6 +143,34 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('<code');
   });
 
+  it('renders a rewind action for user messages when rewinding is available', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'user',
+        ts: '2026-03-11T18:00:00.000Z',
+        text: 'Try a different approach',
+      }],
+      onRewindMessage: () => undefined,
+    }));
+
+    expect(html).toContain('↩ rewind');
+  });
+
+  it('renders rewind and fork actions for assistant messages when both are available', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'text',
+        ts: '2026-03-11T18:00:00.000Z',
+        text: 'Assistant output to branch from',
+      }],
+      onRewindMessage: () => undefined,
+      onForkMessage: () => undefined,
+    }));
+
+    expect(html).toContain('↩ rewind');
+    expect(html).toContain('⑂ fork');
+  });
+
   it('renders a copy action for assistant messages', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: [{
