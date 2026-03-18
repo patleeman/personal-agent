@@ -65,6 +65,8 @@ const HISTORICAL_TAIL_BLOCKS_JUMP_PADDING = 40;
 const MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS = 1200;
 const HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX = 1400;
 const HISTORICAL_BACKGROUND_PREFETCH_DELAY_MS = 800;
+const INITIAL_SCROLL_STABLE_FRAME_COUNT = 2;
+const INITIAL_SCROLL_MAX_FRAMES = 45;
 const MAX_CONVERSATION_RAIL_BLOCKS = 240;
 
 // ── Model picker ──────────────────────────────────────────────────────────────
@@ -1638,12 +1640,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     };
   }, [historicalHasOlderBlocks, historicalTailBlocks, historicalTotalBlocks, id, isLiveSession, loadOlderMessages, sessionLoading, stream.isStreaming]);
 
-  // Scroll to the newest message once per conversation after its content loads.
-  // We key this by session id so fork/navigation lands at the bottom even if the
-  // previous conversation briefly remains rendered during route transition.
+  // Scroll to the newest message once per conversation after the transcript has
+  // finished its initial render pass. Long conversations can keep adjusting
+  // scrollHeight for a few frames while windowing/chunk measurements settle.
   const initialScrollSessionIdRef = useRef<string | null>(null);
   useLayoutEffect(() => {
-    if (!id || !realMessages?.length || !scrollRef.current) {
+    if (!id || !realMessages?.length || !scrollRef.current || sessionLoading) {
       return;
     }
 
@@ -1652,21 +1654,41 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     const el = scrollRef.current;
-    const scrollToBottom = () => {
-      el.scrollTop = el.scrollHeight;
+    let animationFrame = 0;
+    let lastScrollHeight = -1;
+    let stableFrames = 0;
+    let frameCount = 0;
+
+    const settleScroll = () => {
+      animationFrame = 0;
+      const nextScrollHeight = el.scrollHeight;
+      el.scrollTop = nextScrollHeight;
       setAtBottom(true);
+      frameCount += 1;
+
+      if (nextScrollHeight === lastScrollHeight) {
+        stableFrames += 1;
+      } else {
+        lastScrollHeight = nextScrollHeight;
+        stableFrames = 0;
+      }
+
+      if (stableFrames >= INITIAL_SCROLL_STABLE_FRAME_COUNT || frameCount >= INITIAL_SCROLL_MAX_FRAMES) {
+        initialScrollSessionIdRef.current = id;
+        return;
+      }
+
+      animationFrame = window.requestAnimationFrame(settleScroll);
     };
 
-    scrollToBottom();
-    const animationFrame = window.requestAnimationFrame(scrollToBottom);
-    const timeoutId = window.setTimeout(scrollToBottom, 50);
-    initialScrollSessionIdRef.current = id;
+    settleScroll();
 
     return () => {
-      window.cancelAnimationFrame(animationFrame);
-      window.clearTimeout(timeoutId);
+      if (animationFrame !== 0) {
+        window.cancelAnimationFrame(animationFrame);
+      }
     };
-  }, [id, realMessages]);
+  }, [id, realMessages, sessionLoading]);
 
   // Esc aborts an active run. Esc+Esc still opens the tree when idle.
   useEffect(() => {
