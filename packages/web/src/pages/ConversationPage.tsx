@@ -24,6 +24,7 @@ import { emitProjectsChanged } from '../projectEvents';
 import { parseDeferredResumeSlashCommand } from '../deferredResumeSlashCommand';
 import { buildDeferredResumeAutoResumeKey } from '../deferredResumeAutoResume';
 import { parseProjectSlashCommand, type ProjectSlashCommand } from '../projectSlashCommand';
+import { parseConversationSlashCommand, type ConversationSlashCommand } from '../conversationSlashCommand';
 import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../slashMenu';
 import { buildMentionItems, filterMentionItems, resolveMentionItems, type MentionItem } from '../conversationMentions';
 import { buildDeferredResumeIndicatorText, compareDeferredResumes, describeDeferredResumeStatus } from '../deferredResumeIndicator';
@@ -32,7 +33,9 @@ import {
   beginDraftConversationAttachmentsMutation,
   buildDraftConversationComposerStorageKey,
   clearDraftConversationAttachments,
+  clearDraftConversationComposer,
   clearDraftConversationCwd,
+  DRAFT_CONVERSATION_ROUTE,
   isDraftConversationAttachmentsMutationCurrent,
   persistDraftConversationAttachments,
   persistDraftConversationComposer,
@@ -1242,15 +1245,16 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     profiles: profileState?.profiles ?? [],
   }), [projects, tasks, memoryData, profileState]);
   const referencedProjectIds = conversationProjects?.relatedProjectIds ?? [];
-  const savedConversationSessionFile = useMemo(() => {
+  const currentSessionMeta = useMemo(() => {
     if (!id) {
       return null;
     }
 
-    return visibleSessionDetail?.meta.file
-      ?? sessions?.find((session) => session.id === id)?.file
+    return visibleSessionDetail?.meta
+      ?? sessions?.find((session) => session.id === id)
       ?? null;
   }, [id, sessions, visibleSessionDetail]);
+  const savedConversationSessionFile = currentSessionMeta?.file ?? null;
   const orderedDeferredResumes = useMemo(
     () => [...deferredResumes].sort(compareDeferredResumes),
     [deferredResumes],
@@ -1266,6 +1270,20 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     [orderedDeferredResumes, deferredResumeNowMs],
   );
   const lastConversationMessage = realMessages?.[realMessages.length - 1] ?? null;
+  const lastCopyableAgentText = useMemo(() => {
+    if (!realMessages) {
+      return null;
+    }
+
+    for (let index = realMessages.length - 1; index >= 0; index -= 1) {
+      const block = realMessages[index];
+      if ((block.type === 'text' || block.type === 'summary') && block.text.trim().length > 0) {
+        return block.text;
+      }
+    }
+
+    return null;
+  }, [realMessages]);
   const conversationResumeState = useMemo(() => getConversationResumeState({
     run: conversationRun,
     isLiveSession,
@@ -1848,26 +1866,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    setTitleSaving(true);
-    try {
-      const result = await api.renameConversation(id, nextTitle);
-      setTitleOverride(result.title);
-      if (isLiveSession) {
-        pushTitle(id, result.title);
-      }
-      if (sessions) {
-        setSessions(sessions.map((session) => (
-          session.id === id ? { ...session, title: result.title } : session
-        )));
-      }
-      setIsEditingTitle(false);
-      showNotice('accent', 'Conversation renamed.');
-    } catch (error) {
-      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-    } finally {
-      setTitleSaving(false);
-    }
-  }, [draft, id, isLiveSession, pushTitle, sessions, setSessions, showNotice, titleDraft]);
+    await renameConversationTo(nextTitle);
+  }, [draft, id, renameConversationTo, showNotice, titleDraft]);
 
   useEffect(() => {
     if (draft || !id || !pendingInitialPrompt || !stream.hasSnapshot) {
@@ -1917,7 +1917,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     showNotice,
   ]);
 
-  const ensureConversationIsLiveForFork = useCallback(async () => {
+  const ensureConversationIsLive = useCallback(async (actionDescription = 'continue') => {
     if (!id) {
       throw new Error('Conversation unavailable.');
     }
@@ -1926,18 +1926,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return id;
     }
 
-    const sessionFile = visibleSessionDetail?.meta.file
-      ?? sessions?.find((session) => session.id === id)?.file;
-
-    if (!sessionFile) {
-      throw new Error('This conversation cannot be forked because its session file is unavailable.');
+    if (!savedConversationSessionFile) {
+      throw new Error(`This conversation cannot ${actionDescription} because its session file is unavailable.`);
     }
 
-    const resumed = await api.resumeSession(sessionFile);
+    const resumed = await api.resumeSession(savedConversationSessionFile);
     setConfirmedLive(true);
     stream.reconnect();
     return resumed.id;
-  }, [id, isLiveSession, sessions, stream, visibleSessionDetail]);
+  }, [id, isLiveSession, savedConversationSessionFile, stream]);
 
   const rewindConversationFromMessage = useCallback(async (messageIndex: number) => {
     if (!id || !realMessages) {
@@ -1951,7 +1948,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     try {
-      const liveConversationId = await ensureConversationIsLiveForFork();
+      const liveConversationId = await ensureConversationIsLive('be rewound');
       const entries = await api.forkEntries(liveConversationId);
       const entry = resolveForkEntryForMessage(realMessages, localMessageIndex, entries);
       if (!entry) {
@@ -1967,7 +1964,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } catch (error) {
       showNotice('danger', `Rewind failed: ${(error as Error).message}`);
     }
-  }, [ensureConversationIsLiveForFork, id, messageIndexOffset, navigate, realMessages, showNotice]);
+  }, [ensureConversationIsLive, id, messageIndexOffset, navigate, realMessages, showNotice]);
 
   const forkConversationFromMessage = useCallback(async (messageIndex: number) => {
     if (!id || !realMessages) {
@@ -1987,7 +1984,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     try {
-      const liveConversationId = await ensureConversationIsLiveForFork();
+      const liveConversationId = await ensureConversationIsLive('be forked');
       const entryId = resolveSessionEntryIdFromBlockId(clickedBlock.id);
       if (!entryId) {
         throw new Error('Unable to resolve the selected assistant message for branching.');
@@ -1999,7 +1996,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } catch (error) {
       showNotice('danger', `Fork failed: ${(error as Error).message}`);
     }
-  }, [ensureConversationIsLiveForFork, id, messageIndexOffset, navigate, realMessages, rewindConversationFromMessage, showNotice]);
+  }, [ensureConversationIsLive, id, messageIndexOffset, navigate, realMessages, rewindConversationFromMessage, showNotice]);
 
   function openHeaderPreference(preference: 'model' | 'thinking') {
     setHeaderPreference((current) => current === preference ? null : preference);
@@ -2058,22 +2055,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     const { id: newId } = await api.createLiveSession(cwd);
     ensureConversationTabOpen(newId);
     navigate(`/conversations/${newId}`);
-  }
-
-  // /run <cmd> — run a shell command and show output as a system message
-  async function handleRun(command: string) {
-    if (!command.trim()) return;
-    if (isLiveSession) {
-      // Let the agent run it with its bash tool
-      stream.send(`Run this shell command and show me the output:\n\`\`\`\n${command}\n\`\`\``);
-    }
-  }
-
-  // Generic send-to-agent helper for slash shortcut commands
-  function sendToAgent(text: string, images?: PromptImageInput[]) {
-    if (isLiveSession && (text.trim() || (images?.length ?? 0) > 0)) {
-      stream.send(text, undefined, images);
-    }
   }
 
   function addImageAttachments(files: File[]) {
@@ -2519,6 +2500,231 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
+  async function renameConversationTo(nextTitle: string) {
+    if (draft || !id) {
+      showNotice('danger', 'Renaming requires an existing conversation.', 4000);
+      return;
+    }
+
+    setTitleSaving(true);
+    try {
+      const result = await api.renameConversation(id, nextTitle);
+      setTitleOverride(result.title);
+      if (isLiveSession) {
+        pushTitle(id, result.title);
+      }
+      if (sessions) {
+        setSessions(sessions.map((session) => (
+          session.id === id ? { ...session, title: result.title } : session
+        )));
+      }
+      setIsEditingTitle(false);
+      showNotice('accent', 'Conversation renamed.');
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    } finally {
+      setTitleSaving(false);
+    }
+  }
+
+  function resetDraftConversationState() {
+    clearDraftConversationAttachments();
+    clearDraftConversationComposer();
+    clearDraftConversationCwd();
+    setInput('');
+    setAttachments([]);
+    setDrawingAttachments([]);
+    setDrawingsError(null);
+  }
+
+  function startNewConversation() {
+    resetDraftConversationState();
+    if (location.pathname !== DRAFT_CONVERSATION_ROUTE) {
+      navigate(DRAFT_CONVERSATION_ROUTE);
+    }
+  }
+
+  function showSessionSummary() {
+    const cwd = draft
+      ? (readDraftConversationCwd().trim() || 'unset cwd')
+      : (currentSessionMeta?.cwd ?? 'unknown cwd');
+    const modelLabel = currentModel || model || 'unknown model';
+    const details = [
+      draft ? 'Draft conversation' : title,
+      isLiveSession ? 'active session' : null,
+      modelLabel,
+      cwd,
+      `${messageCount} ${messageCount === 1 ? 'block' : 'blocks'}`,
+      sessionTokens ? formatContextUsageLabel(sessionTokens.total, sessionTokens.contextWindow) : null,
+      referencedProjectIds.length > 0 ? `${referencedProjectIds.length} referenced project${referencedProjectIds.length === 1 ? '' : 's'}` : null,
+    ].filter((value): value is string => Boolean(value));
+
+    showNotice('accent', details.join(' · '), 5000);
+  }
+
+  async function copyLastAgentMessage() {
+    if (!lastCopyableAgentText) {
+      showNotice('danger', 'No assistant message is available to copy right now.', 4000);
+      return;
+    }
+
+    if (typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') {
+      showNotice('danger', 'Clipboard access is unavailable in this browser.', 4000);
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(lastCopyableAgentText);
+      showNotice('accent', 'Copied the last assistant message.');
+    } catch {
+      showNotice('danger', 'Copy to clipboard failed.', 4000);
+    }
+  }
+
+  async function executeConversationSlashCommand(command: ConversationSlashCommand): Promise<{ kind: 'handled' } | { kind: 'send'; text: string }> {
+    switch (command.action) {
+      case 'clear':
+        setInput('');
+        setAttachments([]);
+        setDrawingAttachments([]);
+        setDrawingsError(null);
+        if (!draft) {
+          await handleClear();
+        }
+        return { kind: 'handled' };
+      case 'compact': {
+        if (draft) {
+          showNotice('danger', 'Compaction requires an existing conversation.', 4000);
+          return { kind: 'handled' };
+        }
+
+        setInput('');
+        try {
+          const liveConversationId = await ensureConversationIsLive('be compacted');
+          await api.compactSession(liveConversationId, command.customInstructions);
+          showNotice('accent', 'Context compacted.');
+        } catch (error) {
+          showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+        }
+        return { kind: 'handled' };
+      }
+      case 'copy':
+        setInput('');
+        await copyLastAgentMessage();
+        return { kind: 'handled' };
+      case 'draw':
+        setInput('');
+        openDrawingEditor();
+        return { kind: 'handled' };
+      case 'drawings':
+        setInput('');
+        if (!id) {
+          showNotice('danger', 'Saved drawings are only available in existing conversations.', 4000);
+        } else {
+          setDrawingsPickerOpen(true);
+        }
+        return { kind: 'handled' };
+      case 'export': {
+        if (draft) {
+          showNotice('danger', 'Export requires an existing conversation.', 4000);
+          return { kind: 'handled' };
+        }
+
+        setInput('');
+        try {
+          const liveConversationId = await ensureConversationIsLive('be exported');
+          const result = await api.exportSession(liveConversationId, command.outputPath);
+          showNotice('accent', `Exported session HTML to ${result.path}`, 5000);
+        } catch (error) {
+          showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+        }
+        return { kind: 'handled' };
+      }
+      case 'fork':
+        setInput('');
+        if (!id) {
+          showNotice('danger', 'Forking requires an existing conversation.', 4000);
+          return { kind: 'handled' };
+        }
+        try {
+          const liveConversationId = await ensureConversationIsLive('be forked');
+          const entries = await api.forkEntries(liveConversationId);
+          const entry = entries[entries.length - 1];
+          if (!entry) {
+            showNotice('danger', 'No forkable messages yet.', 4000);
+            return { kind: 'handled' };
+          }
+
+          const { newSessionId } = await api.forkSession(liveConversationId, entry.entryId, { preserveSource: true });
+          persistForkPromptDraft(newSessionId, entry.text);
+          ensureConversationTabOpen(newSessionId);
+          navigate(`/conversations/${newSessionId}`);
+        } catch (error) {
+          showNotice('danger', `Fork failed: ${error instanceof Error ? error.message : String(error)}`, 4000);
+        }
+        return { kind: 'handled' };
+      case 'image':
+        setInput('');
+        openFilePicker();
+        return { kind: 'handled' };
+      case 'name':
+        setInput('');
+        if (command.name) {
+          await renameConversationTo(command.name);
+        } else {
+          beginTitleEdit();
+        }
+        return { kind: 'handled' };
+      case 'new':
+        startNewConversation();
+        return { kind: 'handled' };
+      case 'reload': {
+        if (draft) {
+          showNotice('danger', 'Reload requires an existing conversation.', 4000);
+          return { kind: 'handled' };
+        }
+
+        setInput('');
+        try {
+          const liveConversationId = await ensureConversationIsLive('reload its resources');
+          await api.reloadSession(liveConversationId);
+          showNotice('accent', 'Session resources reloaded.');
+        } catch (error) {
+          showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+        }
+        return { kind: 'handled' };
+      }
+      case 'run':
+        return {
+          kind: 'send',
+          text: `Run this shell command and show me the output:\n\`\`\`\n${command.command}\n\`\`\``,
+        };
+      case 'search':
+        return { kind: 'send', text: `Search the web for: ${command.query}` };
+      case 'session':
+        setInput('');
+        showSessionSummary();
+        return { kind: 'handled' };
+      case 'summarize':
+        return { kind: 'send', text: 'Summarize our conversation so far concisely.' };
+      case 'think':
+        return {
+          kind: 'send',
+          text: command.topic
+            ? `Think step-by-step about: ${command.topic}`
+            : 'Think step-by-step about our conversation so far and share your reasoning.',
+        };
+      case 'tree':
+        setInput('');
+        if (!id || draft) {
+          showNotice('danger', 'Branch navigation is only available for existing conversations.', 4000);
+        } else {
+          setShowTree(true);
+        }
+        return { kind: 'handled' };
+    }
+  }
+
   async function submitComposer(behavior?: 'steer' | 'followUp') {
     const inputSnapshot = input;
     const text = inputSnapshot.trim();
@@ -2528,6 +2734,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
+    let slashTextToSend: string | null = null;
     if (pendingImageAttachments.length === 0 && pendingDrawingAttachments.length === 0) {
       const projectSlash = parseProjectSlashCommand(text);
       if (projectSlash) {
@@ -2553,120 +2760,37 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         }
         return;
       }
+
+      const conversationSlash = parseConversationSlashCommand(text);
+      if (conversationSlash) {
+        if (conversationSlash.kind === 'invalid') {
+          showNotice('danger', conversationSlash.message, 4000);
+          return;
+        }
+
+        if (!['run', 'search', 'summarize', 'think'].includes(conversationSlash.command.action)) {
+          rememberComposerInput(inputSnapshot);
+        }
+
+        const slashResult = await executeConversationSlashCommand(conversationSlash.command);
+        if (slashResult.kind === 'handled') {
+          return;
+        }
+
+        slashTextToSend = slashResult.text;
+      }
     }
 
     try {
       const filePromptImages = await buildPromptImages(pendingImageAttachments);
       const drawingPromptImages = pendingDrawingAttachments.map((drawing) => drawingAttachmentToPromptImage(drawing));
       const promptImages = [...filePromptImages, ...drawingPromptImages];
-      let textToSend = text;
+      const textToSend = slashTextToSend ?? text;
 
       setInput('');
       setAttachments([]);
       setDrawingAttachments([]);
       setDrawingsError(null);
-
-      if (promptImages.length === 0) {
-        if (text === '/clear') {
-          if (draft) {
-            return;
-          }
-
-          await handleClear();
-          return;
-        }
-
-        if (text === '/image') {
-          openFilePicker();
-          return;
-        }
-
-        if (text === '/draw') {
-          openDrawingEditor();
-          return;
-        }
-
-        if (text === '/drawings') {
-          if (!id) {
-            showNotice('danger', 'Saved drawings are only available in existing conversations.', 4000);
-            return;
-          }
-
-          setDrawingsPickerOpen(true);
-          return;
-        }
-
-        if (text.startsWith('/run ')) {
-          if (draft) {
-            textToSend = `Run this shell command and show me the output:\n\`\`\`\n${text.slice(5)}\n\`\`\``;
-          } else {
-            rememberComposerInput(inputSnapshot);
-            await handleRun(text.slice(5));
-            return;
-          }
-        }
-
-        if (text.startsWith('/search ')) {
-          if (draft) {
-            textToSend = `Search the web for: ${text.slice(8)}`;
-          } else {
-            rememberComposerInput(inputSnapshot);
-            sendToAgent(`Search the web for: ${text.slice(8)}`);
-            return;
-          }
-        }
-
-        if (text === '/summarize') {
-          if (draft) {
-            textToSend = 'Summarize our conversation so far concisely.';
-          } else {
-            rememberComposerInput(inputSnapshot);
-            sendToAgent('Summarize our conversation so far concisely.');
-            return;
-          }
-        }
-
-        if (text === '/think') {
-          if (draft) {
-            textToSend = 'Think step-by-step about our conversation so far and share your reasoning.';
-          } else {
-            rememberComposerInput(inputSnapshot);
-            sendToAgent('Think step-by-step about our conversation so far and share your reasoning.');
-            return;
-          }
-        }
-
-        if (text.startsWith('/think ')) {
-          if (draft) {
-            textToSend = `Think step-by-step about: ${text.slice(7)}`;
-          } else {
-            rememberComposerInput(inputSnapshot);
-            sendToAgent(`Think step-by-step about: ${text.slice(7)}`);
-            return;
-          }
-        }
-
-        if (text === '/fork' && id) {
-          try {
-            rememberComposerInput(inputSnapshot);
-            const liveConversationId = await ensureConversationIsLiveForFork();
-            const entries = await api.forkEntries(liveConversationId);
-            if (entries.length === 0) {
-              sendToAgent('(No forkable messages yet)');
-              return;
-            }
-
-            const entry = entries[entries.length - 1];
-            const { newSessionId } = await api.forkSession(liveConversationId, entry.entryId, { preserveSource: true });
-            persistForkPromptDraft(newSessionId, entry.text);
-            ensureConversationTabOpen(newSessionId);
-            navigate(`/conversations/${newSessionId}`);
-          } catch (error) {
-            console.error('Fork failed:', error);
-          }
-          return;
-        }
-      }
 
       const requestedBehavior = behavior ?? (isLiveSession && stream.isStreaming ? 'steer' : undefined);
       const queuedBehavior = normalizeConversationComposerBehavior(requestedBehavior, stream.isStreaming);
@@ -2863,26 +2987,23 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       if (e.key === 'ArrowUp')   { e.preventDefault(); showSlash ? setSlashIdx(i => Math.max(0, i - 1)) : setMentionIdx(i => Math.max(0, i - 1)); return; }
       if (e.key === 'Escape')    { e.preventDefault(); setInput(''); return; }
       if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
+        if (showSlash && e.key === 'Enter') {
+          const exactConversationSlash = parseConversationSlashCommand(input.trim());
+          if (exactConversationSlash) {
+            e.preventDefault();
+            await submitComposer();
+            return;
+          }
+        }
+
         e.preventDefault();
         if (showSlash) {
           const sel = slashItems[slashIdx % (slashItems.length || 1)];
           if (sel) {
-            if (sel.displayCmd === '/image') {
-              setInput('');
+            const parsedSelectedSlash = parseConversationSlashCommand(sel.displayCmd.trim());
+            if (parsedSelectedSlash?.kind === 'command') {
               setSlashIdx(0);
-              openFilePicker();
-            } else if (sel.displayCmd === '/draw') {
-              setInput('');
-              setSlashIdx(0);
-              openDrawingEditor();
-            } else if (sel.displayCmd === '/drawings') {
-              setInput('');
-              setSlashIdx(0);
-              if (!id) {
-                showNotice('danger', 'Saved drawings are only available in existing conversations.', 4000);
-              } else {
-                openDrawingsPicker();
-              }
+              await executeConversationSlashCommand(parsedSelectedSlash.command);
             } else {
               setInput(sel.insertText);
               setSlashIdx(0);
@@ -3199,56 +3320,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         <div className="relative">
           {showSlash   && <SlashMenu items={slashItems} idx={slashIdx} onSelect={(item) => {
             const c = item.displayCmd.trim();
-            if (c === '/tree')       { setInput(''); setShowTree(true); return; }
-            if (c === '/clear')      { setInput(''); setAttachments([]); setDrawingAttachments([]); if (!draft) { void handleClear(); } return; }
-            if (c === '/image')      { setInput(''); openFilePicker(); return; }
-            if (c === '/draw')       { setInput(''); openDrawingEditor(); return; }
-            if (c === '/drawings')   {
-              setInput('');
-              if (!id) {
-                showNotice('danger', 'Saved drawings are only available in existing conversations.', 4000);
-              } else {
-                setDrawingsPickerOpen(true);
-              }
-              return;
-            }
-            if (c === '/summarize')  {
-              if (draft) {
-                setInput('/summarize');
-                setSlashIdx(0);
-                textareaRef.current?.focus();
-              } else {
-                setInput('');
-                sendToAgent('Summarize our conversation so far concisely.');
-              }
-              return;
-            }
-            if (c === '/think')      {
-              if (draft) {
-                setInput('/think');
-                setSlashIdx(0);
-                textareaRef.current?.focus();
-              } else {
-                setInput('');
-                sendToAgent('Think step-by-step about our conversation so far and share your reasoning.');
-              }
-              return;
-            }
-            if (c === '/fork' && id) {
-              setInput('');
-              void ensureConversationIsLiveForFork()
-                .then((liveConversationId) => api.forkEntries(liveConversationId).then((entries) => ({ liveConversationId, entries })))
-                .then(({ liveConversationId, entries }) => {
-                  const entry = entries[entries.length - 1];
-                  if (!entry) return;
-                  return api.forkSession(liveConversationId, entry.entryId, { preserveSource: true })
-                    .then(({ newSessionId }) => {
-                      persistForkPromptDraft(newSessionId, entry.text);
-                      ensureConversationTabOpen(newSessionId);
-                      navigate(`/conversations/${newSessionId}`);
-                    });
-                })
-                .catch(console.error);
+            const parsedConversationSlash = parseConversationSlashCommand(c);
+            if (parsedConversationSlash?.kind === 'command') {
+              setSlashIdx(0);
+              void executeConversationSlashCommand(parsedConversationSlash.command);
               return;
             }
             setInput(item.insertText); setSlashIdx(0); textareaRef.current?.focus();
