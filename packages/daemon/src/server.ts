@@ -1,6 +1,8 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { createServer, type Server, type Socket } from 'net';
 import { createWriteStream, existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { join } from 'path';
+import { getPiAgentStateDir } from '@personal-agent/core';
 import { EventBus } from './event-bus.js';
 import { createDaemonEvent, isDaemonEvent } from './events.js';
 import { parseRequest, serializeResponse, type DaemonRequest, type DaemonResponse } from './ipc-protocol.js';
@@ -74,9 +76,83 @@ const LEVELS: Record<LogLevel, number> = {
 
 const DEFAULT_NOTIFICATION_PULL_LIMIT = 20;
 const MAX_NOTIFICATION_PULL_LIMIT = 100;
+const BACKGROUND_RUN_SESSIONS_DIR_NAME = '__runs';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function looksLikePaCommand(binary: string | undefined): boolean {
+  const normalized = binary?.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  return normalized === 'pa'
+    || normalized.endsWith('/pa')
+    || normalized.endsWith('\\pa')
+    || normalized === 'pa.cmd'
+    || normalized.endsWith('/pa.cmd')
+    || normalized.endsWith('\\pa.cmd');
+}
+
+function hasExplicitSessionOverride(argv: string[] | undefined): boolean {
+  if (!argv) {
+    return false;
+  }
+
+  return argv.some((arg) => (
+    arg === '--no-session'
+    || arg === '--session'
+    || arg.startsWith('--session=')
+    || arg === '--session-dir'
+    || arg.startsWith('--session-dir=')
+    || arg === '--resume'
+    || arg === '--continue'
+  ));
+}
+
+function quoteShellArg(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function resolveBackgroundRunSessionDir(runId: string): string {
+  return join(getPiAgentStateDir(), 'sessions', BACKGROUND_RUN_SESSIONS_DIR_NAME, runId);
+}
+
+function appendBackgroundRunSessionDir(input: StartBackgroundRunInput, runId: string): {
+  argv?: string[];
+  shellCommand?: string;
+} {
+  const sessionDir = resolveBackgroundRunSessionDir(runId);
+
+  if (input.argv && input.argv.length > 0) {
+    if (!looksLikePaCommand(input.argv[0]) || hasExplicitSessionOverride(input.argv.slice(1))) {
+      return { argv: input.argv };
+    }
+
+    return {
+      argv: [...input.argv, '--session-dir', sessionDir],
+    };
+  }
+
+  const shellCommand = input.shellCommand;
+  if (!shellCommand) {
+    return {};
+  }
+
+  const trimmedCommand = shellCommand.trim();
+  if (!/^pa(?:\s|$)/.test(trimmedCommand)) {
+    return { shellCommand };
+  }
+
+  if (/--no-session\b|--resume\b|--continue\b|--session(?:=|\s)|--session-dir(?:=|\s)/.test(trimmedCommand)) {
+    return { shellCommand };
+  }
+
+  return {
+    shellCommand: `${shellCommand} --session-dir ${quoteShellArg(sessionDir)}`,
+  };
 }
 
 function isGatewayProvider(value: unknown): value is GatewayNotificationProvider {
@@ -664,14 +740,15 @@ export class PersonalAgentDaemon {
     const record = await createBackgroundRunRecord(this.runsRoot, input);
     const startedAt = new Date().toISOString();
     const outputStream = createWriteStream(record.paths.outputLogPath, { flags: 'a', encoding: 'utf-8' });
+    const spawnInput = appendBackgroundRunSessionDir(input, record.runId);
 
-    const child = input.argv
-      ? spawn(input.argv[0] as string, input.argv.slice(1), {
+    const child = spawnInput.argv
+      ? spawn(spawnInput.argv[0] as string, spawnInput.argv.slice(1), {
           cwd: input.cwd,
           env: process.env,
           stdio: ['ignore', 'pipe', 'pipe'],
         })
-      : spawn('sh', ['-lc', input.shellCommand as string], {
+      : spawn('sh', ['-lc', spawnInput.shellCommand as string], {
           cwd: input.cwd,
           env: process.env,
           stdio: ['ignore', 'pipe', 'pipe'],

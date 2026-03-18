@@ -35,6 +35,7 @@ function writeSessionFile(options: {
   title?: string;
   assistantTexts?: string[];
   sessionName?: string;
+  parentSession?: string;
 }): string {
   const cwdSlug = options.cwdSlug ?? '--tmp-project--';
   const fileName = options.fileName ?? `2026-03-11T12-00-00-000Z_${options.sessionId}.jsonl`;
@@ -50,7 +51,13 @@ function writeSessionFile(options: {
     : `${options.sessionId}-user-1`;
 
   const lines = [
-    JSON.stringify({ type: 'session', id: options.sessionId, timestamp, cwd }),
+    JSON.stringify({
+      type: 'session',
+      id: options.sessionId,
+      timestamp,
+      cwd,
+      ...(options.parentSession ? { parentSession: options.parentSession } : {}),
+    }),
     JSON.stringify({ type: 'model_change', modelId: options.modelId ?? 'test-model' }),
     JSON.stringify({
       type: 'message',
@@ -478,6 +485,36 @@ describe('sessions', () => {
     expect(readSessionBlocks('session-root')?.blocks.filter((block) => block.type === 'text').map((block) => block.text)).toEqual([
       'Root reply',
     ]);
+  });
+
+  it('records parent session ids and source run ids for nested session lineage', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    const parentSessionFile = writeSessionFile({
+      sessionsDir,
+      sessionId: 'parent-session',
+      title: 'Parent session',
+      assistantTexts: ['Parent reply'],
+    });
+
+    writeSessionFile({
+      sessionsDir,
+      cwdSlug: '__runs/run-subagent-123',
+      sessionId: 'child-session',
+      title: 'Child session',
+      assistantTexts: ['Child reply'],
+      parentSession: parentSessionFile,
+    });
+
+    expect(listSessions()).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'child-session',
+        parentSessionFile,
+        parentSessionId: 'parent-session',
+        sourceRunId: 'run-subagent-123',
+      }),
+    ]));
   });
 
   it('refreshes persisted metadata after a restart when the file changes', () => {

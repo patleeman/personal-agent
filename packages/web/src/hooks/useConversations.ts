@@ -8,7 +8,7 @@
  * × on an open tab calls closeSession() → removed from openIds → back to the archive.
  * Pinning removes a conversation from openIds and keeps it in the pinned shelf instead.
  */
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { LiveTitlesContext, useAppData, useSseConnection } from '../contexts';
 import { NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversationTitle';
@@ -32,6 +32,7 @@ import {
   unpinConversationTab,
 } from '../sessionTabs';
 import type { SessionMeta } from '../types';
+import { resolveSessionLineageAutoOpen } from '../sessionLineage';
 
 async function fetchSessionsSnapshot(): Promise<SessionMeta[]> {
   const [jsonl, live] = await Promise.all([api.sessions(), api.liveSessions()]);
@@ -55,8 +56,10 @@ export function useConversations() {
   const [openIds, setOpenIds] = useState(() => readOpenSessionIds());
   const [pinnedIds, setPinnedIds] = useState(() => readPinnedSessionIds());
   const { titles: liveTitles } = useContext(LiveTitlesContext);
-  const { sessions, setSessions } = useAppData();
+  const { sessions, runs, setSessions } = useAppData();
   const { status: sseStatus } = useSseConnection();
+  const knownSessionIdsRef = useRef<string[] | null>(null);
+  const pendingChildSessionIdsRef = useRef<string[]>([]);
 
   useEffect(() => {
     function handleConversationLayoutChanged() {
@@ -145,6 +148,46 @@ export function useConversations() {
     const nextLayout = moveConversationTab(sessionId, targetSection, targetSessionId, position);
     applyLayoutState(nextLayout, { setOpenIds, setPinnedIds });
   }, []);
+
+  const runsById = useMemo(
+    () => new Map((runs?.runs ?? []).map((run) => [run.runId, run] as const)),
+    [runs],
+  );
+
+  useEffect(() => {
+    if (!sessions) {
+      return;
+    }
+
+    const currentSessionIds = sessions.map((session) => session.id);
+    if (knownSessionIdsRef.current === null) {
+      knownSessionIdsRef.current = currentSessionIds;
+      pendingChildSessionIdsRef.current = [];
+      return;
+    }
+
+    const result = resolveSessionLineageAutoOpen({
+      sessions,
+      runsById,
+      openIds,
+      pinnedIds,
+      knownSessionIds: knownSessionIdsRef.current,
+      pendingSessionIds: pendingChildSessionIdsRef.current,
+    });
+
+    knownSessionIdsRef.current = result.nextKnownSessionIds;
+    pendingChildSessionIdsRef.current = result.nextPendingSessionIds;
+
+    if (!result.changed) {
+      return;
+    }
+
+    const nextLayout = replaceConversationLayout({
+      sessionIds: result.nextOpenIds,
+      pinnedSessionIds: result.nextPinnedIds,
+    });
+    applyLayoutState(nextLayout, { setOpenIds, setPinnedIds });
+  }, [openIds, pinnedIds, runsById, sessions]);
 
   const withTitles = (sessions ?? []).map((session) => {
     const liveTitle = normalizeConversationTitle(liveTitles.get(session.id));

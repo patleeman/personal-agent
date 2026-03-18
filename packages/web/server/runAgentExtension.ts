@@ -135,6 +135,7 @@ export function createRunAgentExtension(): (pi: ExtensionAPI) => void {
               const command = readRequiredString(params.command, 'command');
               const cwd = readRequiredString(params.cwd ?? ctx.cwd, 'cwd');
               const conversationId = ctx.sessionManager.getSessionId();
+              const conversationFile = ctx.sessionManager.getSessionFile();
 
               await ensureDaemonAvailable();
               const result = await startBackgroundRun({
@@ -144,6 +145,7 @@ export function createRunAgentExtension(): (pi: ExtensionAPI) => void {
                 source: {
                   type: 'tool',
                   id: conversationId,
+                  ...(conversationFile ? { filePath: conversationFile } : {}),
                 },
               });
 

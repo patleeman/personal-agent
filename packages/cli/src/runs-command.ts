@@ -97,6 +97,24 @@ async function ensureDaemonAvailable(): Promise<void> {
   throw new Error('Daemon did not become available. Start it with: pa daemon start');
 }
 
+function readBackgroundRunSource(taskSlug: string): { type: string; id?: string; filePath?: string } {
+  const conversationId = process.env.PERSONAL_AGENT_SOURCE_CONVERSATION_ID?.trim();
+  const sessionFile = process.env.PERSONAL_AGENT_SOURCE_SESSION_FILE?.trim();
+
+  if (conversationId) {
+    return {
+      type: 'tool',
+      id: conversationId,
+      ...(sessionFile ? { filePath: sessionFile } : {}),
+    };
+  }
+
+  return {
+    type: 'cli',
+    id: taskSlug,
+  };
+}
+
 function printRunsHelp(): void {
   console.log(section('Runs commands'));
   console.log('');
@@ -350,14 +368,12 @@ export async function runsCommand(args: string[]): Promise<number> {
     }
 
     await ensureDaemonAvailable();
+    const taskSlug = positional[0] as string;
     const result = await startBackgroundRun({
-      taskSlug: positional[0] as string,
+      taskSlug,
       cwd,
       argv: commandArgs,
-      source: {
-        type: 'cli',
-        id: positional[0] as string,
-      },
+      source: readBackgroundRunSource(taskSlug),
     });
 
     if (!result.accepted) {
