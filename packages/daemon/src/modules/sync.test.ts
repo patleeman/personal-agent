@@ -248,10 +248,12 @@ describe('sync module', () => {
     const fakeBin = join(stateRoot, 'bin');
     mkdirSync(fakeBin, { recursive: true });
     const fakePa = join(fakeBin, 'pa');
+    const argsFile = join(stateRoot, 'error-resolver-args.txt');
     writeFileSync(
       fakePa,
       [
         '#!/bin/sh',
+        `printf '%s\n' "$@" > ${JSON.stringify(argsFile)}`,
         'echo "Durable run started"',
         'echo "Run run_sync_error_123"',
         'echo "Inspect pa runs show run_sync_error_123"',
@@ -281,6 +283,14 @@ describe('sync module', () => {
       const status = module.getStatus?.() as Record<string, unknown>;
       expect(status.lastErrorResolverStartedAt).toBeTypeOf('string');
       expect(String(status.lastErrorResolverResult ?? '')).toContain('run_sync_error_123');
+
+      const resolverArgs = readFileSync(argsFile, 'utf-8');
+      expect(resolverArgs).toContain('PERSONAL_AGENT_STATE_ROOT=');
+      expect(resolverArgs).toContain('conversation-maintenance/assistant/sync-maintenance-state');
+      expect(resolverArgs).toContain('PERSONAL_AGENT_PROFILES_ROOT=');
+      expect(resolverArgs).toContain('--profile');
+      expect(resolverArgs).toContain('assistant');
+      expect(resolverArgs).toContain('-p');
     } finally {
       process.env.PATH = previousPath;
     }
@@ -313,10 +323,12 @@ describe('sync module', () => {
     const fakeBin = join(stateRoot, 'bin');
     mkdirSync(fakeBin, { recursive: true });
     const fakePa = join(fakeBin, 'pa');
+    const argsFile = join(stateRoot, 'conflict-resolver-args.txt');
     writeFileSync(
       fakePa,
       [
         '#!/bin/sh',
+        `printf '%s\n' "$@" > ${JSON.stringify(argsFile)}`,
         'echo "Durable run started"',
         'echo "Run run_sync_resolver_123"',
         'echo "Inspect pa runs show run_sync_resolver_123"',
@@ -345,6 +357,14 @@ describe('sync module', () => {
       const status = module.getStatus?.() as Record<string, unknown>;
       expect(status.lastResolverStartedAt).toBeTypeOf('string');
       expect(String(status.lastResolverResult ?? '')).toContain('run_sync_resolver_123');
+
+      const resolverArgs = readFileSync(argsFile, 'utf-8');
+      expect(resolverArgs).toContain('PERSONAL_AGENT_STATE_ROOT=');
+      expect(resolverArgs).toContain('conversation-maintenance/assistant/sync-maintenance-state');
+      expect(resolverArgs).toContain('PERSONAL_AGENT_PROFILES_ROOT=');
+      expect(resolverArgs).toContain('--profile');
+      expect(resolverArgs).toContain('assistant');
+      expect(resolverArgs).toContain('-p');
     } finally {
       process.env.PATH = previousPath;
     }

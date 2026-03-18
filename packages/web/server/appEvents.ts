@@ -11,7 +11,7 @@ import {
   resolveProfileConversationLinksDir,
   resolveProfileProjectsDir,
 } from '@personal-agent/core';
-import { resolveDurableRunsRoot } from '@personal-agent/daemon';
+import { loadDaemonConfig, resolveDaemonPaths, resolveDurableRunsRoot } from '@personal-agent/daemon';
 import { logWarn } from './logging.js';
 
 export type AppEventTopic = 'activity' | 'projects' | 'sessions' | 'tasks' | 'runs';
@@ -76,18 +76,32 @@ function readPathSnapshot(path: string): string {
 }
 
 function createTopicSignatures(options: AppEventMonitorOptions, profile: string): TopicSignatures {
-  const activityDir = resolveProfileActivityDir({ profile });
-  const activityConversationLinksDir = resolveProfileActivityConversationLinksDir({ profile });
+  const daemonRoot = resolveDaemonPaths(loadDaemonConfig().ipc.socketPath).root;
+  const activityDirs = [
+    resolveProfileActivityDir({ profile }),
+    resolveProfileActivityDir({ stateRoot: daemonRoot, profile }),
+  ];
+  const activityConversationLinksDirs = [
+    resolveProfileActivityConversationLinksDir({ profile }),
+    resolveProfileActivityConversationLinksDir({ stateRoot: daemonRoot, profile }),
+  ];
+  const readStateFiles = [
+    resolveActivityReadStatePath({ profile }),
+    resolveActivityReadStatePath({ stateRoot: daemonRoot, profile }),
+  ];
   const projectsDir = resolveProfileProjectsDir({ repoRoot: options.repoRoot, profile });
   const conversationLinksDir = resolveProfileConversationLinksDir({ profile });
   const conversationArtifactsDir = resolveProfileConversationArtifactsDir({ profile });
   const tasksDir = join(getProfilesRoot(), profile, 'agent', 'tasks');
   const runsRoot = resolveDurableRunsRoot(dirname(options.taskStateFile));
-  const readStateFile = resolveActivityReadStatePath({ profile });
   const conversationAttentionStateFile = resolveConversationAttentionStatePath({ profile });
   const deferredResumeStateFile = resolveDeferredResumeStateFile();
 
-  const activitySignature = `activity:${readPathSnapshot(activityDir)}|links:${readPathSnapshot(activityConversationLinksDir)}|read:${readPathSnapshot(readStateFile)}`;
+  const activitySignature = [
+    ...activityDirs.map((path, index) => `activity${index}:${readPathSnapshot(path)}`),
+    ...activityConversationLinksDirs.map((path, index) => `links${index}:${readPathSnapshot(path)}`),
+    ...readStateFiles.map((path, index) => `read${index}:${readPathSnapshot(path)}`),
+  ].join('|');
 
   return {
     activity: activitySignature,
