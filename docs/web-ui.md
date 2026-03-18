@@ -183,6 +183,7 @@ It gives you one place to:
 
 - check whether each service is healthy and running
 - inspect recent log tails for each subsystem
+- run per-subsystem actions directly from the page (restart Web UI / daemon / gateway, or trigger sync now)
 - jump into the advanced Daemon, Sync, Gateway, or Web UI pages when you need deeper controls
 - run **Update + restart** (`pa update`) or **Restart everything** (`pa restart --rebuild`) for the managed application
 
