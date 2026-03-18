@@ -531,6 +531,187 @@ describe('live session subscriptions', () => {
     expect(blocks).toHaveLength(11);
   });
 
+  it('ignores replayed live context before the matched suffix', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
+    tempDirs.push(dir);
+    const sessionFile = join(dir, 'session-replayed-context.jsonl');
+    writeFileSync(sessionFile, [
+      JSON.stringify({ type: 'session', id: 'session-replayed-context', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
+      JSON.stringify({
+        type: 'message',
+        id: 'user-1',
+        parentId: null,
+        timestamp: '2026-03-13T18:00:01.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'First prompt' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-1',
+        parentId: 'user-1',
+        timestamp: '2026-03-13T18:00:02.000Z',
+        message: { role: 'assistant', content: [{ type: 'thinking', thinking: 'Inspect the first issue' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-2',
+        parentId: 'assistant-1',
+        timestamp: '2026-03-13T18:00:03.000Z',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'toolCall', id: 'tool-a', name: 'bash', arguments: { command: 'echo first' } }],
+        },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'tool-result-1',
+        parentId: 'assistant-2',
+        timestamp: '2026-03-13T18:00:03.500Z',
+        message: {
+          role: 'toolResult',
+          toolCallId: 'tool-a',
+          toolName: 'bash',
+          content: [{ type: 'text', text: 'first output' }],
+        },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-3',
+        parentId: 'tool-result-1',
+        timestamp: '2026-03-13T18:00:04.000Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'First done' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'user-2',
+        parentId: 'assistant-3',
+        timestamp: '2026-03-13T18:00:05.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Second prompt' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-4',
+        parentId: 'user-2',
+        timestamp: '2026-03-13T18:00:06.000Z',
+        message: { role: 'assistant', content: [{ type: 'thinking', thinking: 'Inspect the second issue' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-5',
+        parentId: 'assistant-4',
+        timestamp: '2026-03-13T18:00:07.000Z',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'toolCall', id: 'tool-b', name: 'read', arguments: { path: 'README.md' } }],
+        },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'tool-result-2',
+        parentId: 'assistant-5',
+        timestamp: '2026-03-13T18:00:07.500Z',
+        message: {
+          role: 'toolResult',
+          toolCallId: 'tool-b',
+          toolName: 'read',
+          content: [{ type: 'text', text: 'second output' }],
+        },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-6',
+        parentId: 'tool-result-2',
+        timestamp: '2026-03-13T18:00:08.000Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Second done' }] },
+      }),
+      '',
+    ].join('\n'));
+
+    setLiveEntry('session-replayed-context', {
+      sessionId: 'session-replayed-context',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Replay merge guard',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        sessionFile,
+        state: {
+          messages: [
+            {
+              role: 'user',
+              content: [{ type: 'text', text: 'First prompt' }],
+              timestamp: '2026-03-13T19:00:01.000Z',
+            },
+            {
+              role: 'assistant',
+              content: [{ type: 'thinking', thinking: 'Inspect the first issue' }],
+              timestamp: '2026-03-13T19:00:02.000Z',
+            },
+            {
+              role: 'assistant',
+              content: [{ type: 'text', text: 'First done' }],
+              timestamp: '2026-03-13T19:00:03.000Z',
+            },
+            {
+              role: 'user',
+              content: [{ type: 'text', text: 'Second prompt' }],
+              timestamp: '2026-03-13T19:00:04.000Z',
+            },
+            {
+              role: 'assistant',
+              content: [{ type: 'text', text: 'Second done' }],
+              timestamp: '2026-03-13T19:00:05.000Z',
+            },
+            {
+              role: 'assistant',
+              content: [{ type: 'toolCall', id: 'tool-b', name: 'read', arguments: { path: 'README.md' } }],
+              timestamp: '2026-03-13T18:00:07.100Z',
+            },
+            {
+              role: 'toolResult',
+              toolCallId: 'tool-b',
+              toolName: 'read',
+              content: [{ type: 'text', text: 'second output' }],
+              timestamp: '2026-03-13T18:00:07.600Z',
+            },
+          ],
+          streamMessage: {
+            role: 'assistant',
+            content: [{ type: 'thinking', thinking: 'Plan the next fix' }],
+            timestamp: '2026-03-13T19:00:06.000Z',
+          },
+        },
+        getContextUsage: () => null,
+        isStreaming: true,
+      },
+    });
+
+    const events: SseEvent[] = [];
+    subscribe('session-replayed-context', (event) => {
+      events.push(event);
+    });
+
+    expect(events[0]?.type).toBe('snapshot');
+    if (events[0]?.type !== 'snapshot') {
+      return;
+    }
+
+    const blocks = events[0].blocks;
+    expect(blocks.filter((block) => block.type === 'user' && block.text === 'First prompt')).toHaveLength(1);
+    expect(blocks.filter((block) => block.type === 'user' && block.text === 'Second prompt')).toHaveLength(1);
+    expect(blocks.filter((block) => block.type === 'text' && block.text === 'First done')).toHaveLength(1);
+    expect(blocks.filter((block) => block.type === 'text' && block.text === 'Second done')).toHaveLength(1);
+    expect(blocks.filter((block): block is Extract<(typeof blocks)[number], { type: 'tool_use' }> => (
+      block.type === 'tool_use' && block.toolCallId === 'tool-b' && block.output === 'second output'
+    ))).toHaveLength(1);
+    expect(blocks.at(-1)).toMatchObject({
+      type: 'thinking',
+      text: 'Plan the next fix',
+    });
+    expect(blocks).toHaveLength(9);
+  });
+
   it('includes compaction summaries in the live snapshot', () => {
     setLiveEntry('session-summary', {
       sessionId: 'session-summary',

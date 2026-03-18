@@ -479,6 +479,41 @@ function mergeIdentityKey(block: DisplayBlock): string | null {
   }
 }
 
+function parseDisplayBlockTimestampMs(block: DisplayBlock): number | null {
+  const ms = Date.parse(block.ts);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function mergePersistedIdentityBlock(existing: DisplayBlock, liveBlock: DisplayBlock): DisplayBlock {
+  if (existing.type !== liveBlock.type) {
+    return liveBlock;
+  }
+
+  if (existing.type === 'summary' && liveBlock.type === 'summary') {
+    return existing;
+  }
+
+  if (existing.type === 'tool_use' && liveBlock.type === 'tool_use') {
+    const liveHasOutput = liveBlock.output.trim().length > 0;
+    const existingHasOutput = existing.output.trim().length > 0;
+
+    if (!liveHasOutput && existingHasOutput && liveBlock.durationMs === undefined && liveBlock.details === undefined) {
+      return existing;
+    }
+
+    return {
+      ...existing,
+      ...liveBlock,
+      output: liveHasOutput ? liveBlock.output : existing.output,
+      durationMs: liveBlock.durationMs ?? existing.durationMs,
+      details: liveBlock.details ?? existing.details,
+      outputDeferred: liveBlock.outputDeferred ?? existing.outputDeferred,
+    };
+  }
+
+  return liveBlock;
+}
+
 // Live session state only contains the currently-kept context window after compaction.
 // Merge it with the persisted snapshot so reconnects/navigation preserve any durable-only blocks while
 // still converging on the compacted view once summaries are present.
@@ -513,6 +548,8 @@ function mergeConversationHistoryBlocks(persistedBlocks: DisplayBlock[], liveBlo
   const merged = [...persistedBlocks];
   const seenFingerprints = new Set(persistedFingerprints);
   const mergedIndexByIdentity = new Map<string, number>();
+  const latestPersistedTimestampMs = parseDisplayBlockTimestampMs(persistedBlocks[persistedBlocks.length - 1]);
+  let lastMatchedLiveIndex = -1;
 
   for (const [index, block] of merged.entries()) {
     const identityKey = mergeIdentityKey(block);
@@ -521,13 +558,36 @@ function mergeConversationHistoryBlocks(persistedBlocks: DisplayBlock[], liveBlo
     }
   }
 
-  for (const liveBlock of liveBlocks) {
+  for (const [liveIndex, liveBlock] of liveBlocks.entries()) {
     const identityKey = mergeIdentityKey(liveBlock);
     if (identityKey) {
       const existingIndex = mergedIndexByIdentity.get(identityKey);
       if (existingIndex !== undefined) {
-        merged[existingIndex] = liveBlock;
-        seenFingerprints.add(fingerprintDisplayBlock(liveBlock));
+        const mergedBlock = mergePersistedIdentityBlock(merged[existingIndex], liveBlock);
+        merged[existingIndex] = mergedBlock;
+        seenFingerprints.add(fingerprintDisplayBlock(mergedBlock));
+        lastMatchedLiveIndex = liveIndex;
+        continue;
+      }
+    }
+
+    const fingerprint = fingerprintDisplayBlock(liveBlock);
+    if (seenFingerprints.has(fingerprint)) {
+      lastMatchedLiveIndex = liveIndex;
+    }
+  }
+
+  const appendStartIndex = lastMatchedLiveIndex >= 0 ? lastMatchedLiveIndex + 1 : 0;
+
+  for (let liveIndex = appendStartIndex; liveIndex < liveBlocks.length; liveIndex += 1) {
+    const liveBlock = liveBlocks[liveIndex];
+    const identityKey = mergeIdentityKey(liveBlock);
+    if (identityKey) {
+      const existingIndex = mergedIndexByIdentity.get(identityKey);
+      if (existingIndex !== undefined) {
+        const mergedBlock = mergePersistedIdentityBlock(merged[existingIndex], liveBlock);
+        merged[existingIndex] = mergedBlock;
+        seenFingerprints.add(fingerprintDisplayBlock(mergedBlock));
         continue;
       }
     }
@@ -535,6 +595,13 @@ function mergeConversationHistoryBlocks(persistedBlocks: DisplayBlock[], liveBlo
     const fingerprint = fingerprintDisplayBlock(liveBlock);
     if (seenFingerprints.has(fingerprint)) {
       continue;
+    }
+
+    if (latestPersistedTimestampMs !== null) {
+      const liveTimestampMs = parseDisplayBlockTimestampMs(liveBlock);
+      if (liveTimestampMs !== null && liveTimestampMs < latestPersistedTimestampMs) {
+        continue;
+      }
     }
 
     merged.push(liveBlock);
