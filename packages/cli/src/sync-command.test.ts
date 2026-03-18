@@ -102,3 +102,110 @@ describe('sync conversation attention merge command', () => {
     );
   });
 });
+
+describe('sync deferred resumes merge command', () => {
+  it('merges base/current/other files into the current file', async () => {
+    const dir = createTempDir('personal-agent-sync-deferred-merge-');
+    const basePath = join(dir, 'base.json');
+    const currentPath = join(dir, 'current.json');
+    const otherPath = join(dir, 'other.json');
+
+    writeFileSync(basePath, `${JSON.stringify({
+      version: 2,
+      resumes: {
+        'resume-1': {
+          id: 'resume-1',
+          sessionFile: '/tmp/sessions/current.jsonl',
+          prompt: 'continue',
+          dueAt: '2026-03-12T12:00:00.000Z',
+          createdAt: '2026-03-12T11:55:00.000Z',
+          attempts: 0,
+          status: 'scheduled',
+        },
+      },
+    }, null, 2)}
+`);
+
+    writeFileSync(currentPath, `${JSON.stringify({
+      version: 2,
+      resumes: {
+        'resume-1': {
+          id: 'resume-1',
+          sessionFile: '/tmp/sessions/current.jsonl',
+          prompt: 'continue',
+          dueAt: '2026-03-12T12:00:00.000Z',
+          createdAt: '2026-03-12T11:55:00.000Z',
+          attempts: 0,
+          status: 'ready',
+          readyAt: '2026-03-12T12:00:30.000Z',
+        },
+      },
+    }, null, 2)}
+`);
+
+    writeFileSync(otherPath, `${JSON.stringify({
+      version: 2,
+      resumes: {
+        'resume-1': {
+          id: 'resume-1',
+          sessionFile: '/tmp/sessions/current.jsonl',
+          prompt: 'continue later',
+          dueAt: '2026-03-12T12:05:00.000Z',
+          createdAt: '2026-03-12T11:55:00.000Z',
+          attempts: 1,
+          status: 'scheduled',
+        },
+        'resume-2': {
+          id: 'resume-2',
+          sessionFile: '/tmp/sessions/other.jsonl',
+          prompt: 'follow up',
+          dueAt: '2026-03-12T13:00:00.000Z',
+          createdAt: '2026-03-12T12:50:00.000Z',
+          attempts: 0,
+          status: 'scheduled',
+        },
+      },
+    }, null, 2)}
+`);
+
+    const exitCode = await runCli([
+      'sync',
+      'merge-deferred-resumes',
+      basePath,
+      currentPath,
+      otherPath,
+    ]);
+
+    expect(exitCode).toBe(0);
+
+    expect(JSON.parse(readFileSync(currentPath, 'utf-8'))).toEqual({
+      version: 2,
+      resumes: {
+        'resume-1': {
+          id: 'resume-1',
+          sessionFile: '/tmp/sessions/current.jsonl',
+          prompt: 'continue later',
+          dueAt: '2026-03-12T12:05:00.000Z',
+          createdAt: '2026-03-12T11:55:00.000Z',
+          attempts: 1,
+          status: 'scheduled',
+        },
+        'resume-2': {
+          id: 'resume-2',
+          sessionFile: '/tmp/sessions/other.jsonl',
+          prompt: 'follow up',
+          dueAt: '2026-03-12T13:00:00.000Z',
+          createdAt: '2026-03-12T12:50:00.000Z',
+          attempts: 0,
+          status: 'scheduled',
+        },
+      },
+    });
+  });
+
+  it('declares the managed gitattributes rule for deferred resume state', () => {
+    expect(syncRepoGitattributes()).toContain(
+      'pi-agent/deferred-resumes-state.json text eol=lf merge=personal-agent-deferred-resumes',
+    );
+  });
+});

@@ -1,11 +1,11 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAppData, useSseConnection } from '../contexts';
 import { useConversations } from '../hooks/useConversations';
 import { sessionNeedsAttention } from '../sessionIndicators';
 import { kindMeta, timeAgo } from '../utils';
-import { EmptyState, ErrorState, ListLinkRow, LoadingState, PageHeader, PageHeading, ToolbarButton } from '../components/ui';
+import { EmptyState, ErrorState, ListLinkRow, LoadingState, PageHeader, PageHeading, ToolbarButton, cx } from '../components/ui';
 import type { ActivityEntry, SessionMeta } from '../types';
 
 type InboxSurfaceItem =
@@ -40,7 +40,17 @@ function buildConversationReason(session: SessionMeta): string {
   return parts.join(' · ') || 'needs attention';
 }
 
+function pickActivityConversationId(entry: Pick<ActivityEntry, 'relatedConversationIds'>): string | null {
+  const relatedConversationIds = (entry.relatedConversationIds ?? [])
+    .filter((conversationId): conversationId is string => typeof conversationId === 'string' && conversationId.trim().length > 0);
+
+  return relatedConversationIds.length > 0
+    ? relatedConversationIds[relatedConversationIds.length - 1] ?? null
+    : null;
+}
+
 export function InboxPage() {
+  const navigate = useNavigate();
   const { id: selectedId } = useParams<{ id?: string }>();
   const { activity, setActivity } = useAppData();
   const { status: sseStatus } = useSseConnection();
@@ -48,6 +58,8 @@ export function InboxPage() {
   const [filter, setFilter] = useState<'all' | 'unread'>('unread');
   const [markingAll, setMarkingAll] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [startingActivityId, setStartingActivityId] = useState<string | null>(null);
 
   const standaloneActivities = useMemo(() => {
     const knownConversationIds = new Set([...tabs, ...archivedSessions].map((session) => session.id));
@@ -136,6 +148,31 @@ export function InboxPage() {
     }
   }, [allItems.length, attentionConversations, refreshInbox, standaloneActivities]);
 
+  const openActivityConversation = useCallback((conversationId: string) => {
+    setActionError(null);
+    openSession(conversationId);
+    navigate(`/conversations/${encodeURIComponent(conversationId)}`);
+  }, [navigate, openSession]);
+
+  const handleActivityAction = useCallback(async (entry: ActivityEntry) => {
+    const linkedConversationId = pickActivityConversationId(entry);
+    if (linkedConversationId) {
+      openActivityConversation(linkedConversationId);
+      return;
+    }
+
+    setActionError(null);
+    setStartingActivityId(entry.id);
+    try {
+      const result = await api.startActivityConversation(entry.id);
+      openSession(result.id);
+      navigate(`/conversations/${encodeURIComponent(result.id)}`);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+      setStartingActivityId(null);
+    }
+  }, [navigate, openActivityConversation, openSession]);
+
   return (
     <div className="flex flex-col h-full">
       <PageHeader
@@ -184,6 +221,7 @@ export function InboxPage() {
 
       {isLoading && <LoadingState label="Loading inbox…" className="px-6" />}
       {visibleError && <ErrorState message={`Failed to load inbox: ${visibleError}`} className="px-6" />}
+      {actionError && <ErrorState message={actionError} className="px-6" />}
 
       {!isLoading && !visibleError && allItems.length === 0 && (
         <EmptyState
@@ -217,6 +255,7 @@ export function InboxPage() {
                     to={`/conversations/${item.session.id}`}
                     onClick={() => openSession(item.session.id)}
                     leading={<span className="mt-1.5 w-2 h-2 rounded-full shrink-0 transition-all bg-warning" />}
+                    trailing={<span className="shrink-0 self-center text-[10px] uppercase tracking-[0.14em] text-warning" title="Open the conversation that needs attention">open</span>}
                   >
                     <p className="ui-row-title">{item.session.title}</p>
                     <p className="ui-row-meta">
@@ -236,22 +275,40 @@ export function InboxPage() {
               const leadingClass = item.entry.read
                 ? 'mt-1.5 w-2 h-2 rounded-full shrink-0 transition-all border border-border-default bg-transparent'
                 : `mt-1.5 w-2 h-2 rounded-full shrink-0 transition-all ${meta.dot}`;
+              const linkedConversationId = pickActivityConversationId(item.entry);
+              const isStarting = startingActivityId === item.entry.id;
 
               return (
-                <ListLinkRow
+                <div
                   key={item.key}
-                  to={`/inbox/${item.entry.id}`}
-                  selected={isSelected}
-                  leading={<span className={leadingClass} />}
-                  trailing={!item.entry.read && <span className="shrink-0 self-center w-1.5 h-1.5 rounded-full bg-accent" />}
+                  className={cx('group', 'ui-list-row', isSelected ? 'ui-list-row-selected' : 'ui-list-row-hover')}
                 >
-                  <p className={titleClass}>{item.entry.summary}</p>
-                  <p className="ui-row-meta">
-                    <span className={meta.color}>{meta.label}</span>
-                    <span className="opacity-40 mx-1.5">·</span>
-                    {timeAgo(item.entry.createdAt)}
-                  </p>
-                </ListLinkRow>
+                  <Link to={`/inbox/${item.entry.id}`} className="min-w-0 flex flex-1 items-start gap-4">
+                    <span className={leadingClass} />
+                    <div className="flex-1 min-w-0">
+                      <p className={titleClass}>{item.entry.summary}</p>
+                      <p className="ui-row-meta">
+                        <span className={meta.color}>{meta.label}</span>
+                        <span className="opacity-40 mx-1.5">·</span>
+                        {timeAgo(item.entry.createdAt)}
+                      </p>
+                    </div>
+                  </Link>
+                  <div className="shrink-0 self-center flex items-center gap-3">
+                    {!item.entry.read && <span className="w-1.5 h-1.5 rounded-full bg-accent" />}
+                    <button
+                      type="button"
+                      onClick={() => { void handleActivityAction(item.entry); }}
+                      disabled={isStarting}
+                      className="ui-action-button text-[11px]"
+                      title={linkedConversationId
+                        ? 'Open the linked conversation for this inbox item'
+                        : 'Start a new conversation from this inbox item'}
+                    >
+                      {isStarting ? 'starting…' : linkedConversationId ? 'open' : 'start'}
+                    </button>
+                  </div>
+                </div>
               );
             })}
           </div>

@@ -1,10 +1,14 @@
 export const EXCALIDRAW_SOURCE_MIME_TYPE = 'application/vnd.excalidraw+json';
 export const EXCALIDRAW_PREVIEW_MIME_TYPE = 'image/png';
 
+type ExcalidrawElements = Parameters<typeof import('@excalidraw/excalidraw').serializeAsJSON>[0];
+type ExcalidrawAppState = Parameters<typeof import('@excalidraw/excalidraw').serializeAsJSON>[1];
+type ExcalidrawFiles = Parameters<typeof import('@excalidraw/excalidraw').serializeAsJSON>[2];
+
 export interface ExcalidrawSceneData {
-  elements: readonly unknown[];
-  appState: Record<string, unknown>;
-  files: Record<string, unknown>;
+  elements: ExcalidrawElements;
+  appState: ExcalidrawAppState;
+  files: ExcalidrawFiles;
 }
 
 export interface SerializedExcalidrawScene {
@@ -15,39 +19,19 @@ export interface SerializedExcalidrawScene {
   previewUrl: string;
 }
 
-interface ExcalidrawModule {
-  loadFromBlob: (
-    blob: Blob,
-    localAppState: Record<string, unknown> | null,
-    localElements: readonly unknown[] | null,
-  ) => Promise<unknown>;
-  serializeAsJSON: (
-    elements: readonly unknown[],
-    appState: Record<string, unknown>,
-    files: Record<string, unknown>,
-    type: 'local' | 'database',
-  ) => string;
-  exportToBlob: (input: {
-    elements: readonly unknown[];
-    appState: Record<string, unknown>;
-    files: Record<string, unknown>;
-    mimeType?: string;
-    exportPadding?: number;
-  }) => Promise<Blob>;
-}
+type ExcalidrawModule = Pick<typeof import('@excalidraw/excalidraw'), 'loadFromBlob' | 'serializeAsJSON' | 'exportToBlob'>;
 
 let excalidrawModulePromise: Promise<ExcalidrawModule> | null = null;
 
 async function loadExcalidrawModule(): Promise<ExcalidrawModule> {
-  if (!excalidrawModulePromise) {
-    excalidrawModulePromise = import('@excalidraw/excalidraw').then((module) => ({
-      loadFromBlob: module.loadFromBlob,
-      serializeAsJSON: module.serializeAsJSON,
-      exportToBlob: module.exportToBlob,
-    }));
-  }
+  const modulePromise = excalidrawModulePromise ?? import('@excalidraw/excalidraw').then((module) => ({
+    loadFromBlob: module.loadFromBlob,
+    serializeAsJSON: module.serializeAsJSON,
+    exportToBlob: module.exportToBlob,
+  }));
 
-  return excalidrawModulePromise;
+  excalidrawModulePromise = modulePromise;
+  return modulePromise;
 }
 
 function normalizeSceneData(value: unknown): ExcalidrawSceneData {
@@ -56,24 +40,20 @@ function normalizeSceneData(value: unknown): ExcalidrawSceneData {
       elements: [],
       appState: {},
       files: {},
-    };
+    } as ExcalidrawSceneData;
   }
 
-  const parsed = value as {
-    elements?: unknown;
-    appState?: unknown;
-    files?: unknown;
-  };
+  const parsed = value as Partial<ExcalidrawSceneData>;
 
   return {
     elements: Array.isArray(parsed.elements) ? parsed.elements : [],
     appState: parsed.appState && typeof parsed.appState === 'object' && !Array.isArray(parsed.appState)
-      ? parsed.appState as Record<string, unknown>
+      ? parsed.appState
       : {},
     files: parsed.files && typeof parsed.files === 'object' && !Array.isArray(parsed.files)
-      ? parsed.files as Record<string, unknown>
+      ? parsed.files
       : {},
-  };
+  } as ExcalidrawSceneData;
 }
 
 function encodeUtf8ToBase64(value: string): string {
