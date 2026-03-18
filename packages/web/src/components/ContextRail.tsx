@@ -121,7 +121,7 @@ function isRefreshingRun(detail: DurableRunDetailResult['run'] | null | undefine
   return status === 'queued' || status === 'waiting' || status === 'running' || status === 'recovering';
 }
 
-function ConversationRunContextPanel({ conversationId, runId }: { conversationId: string; runId: string }) {
+function RunContextPanel({ conversationId, runId }: { conversationId?: string; runId: string }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { tasks, sessions } = useAppData();
@@ -136,11 +136,15 @@ function ConversationRunContextPanel({ conversationId, runId }: { conversationId
   } = useDurableRunStream(runId, 120);
 
   const closeRun = useCallback(() => {
+    if (!conversationId) {
+      return;
+    }
+
     navigate({
       pathname: location.pathname,
       search: setConversationRunIdInSearch(location.search, null),
     });
-  }, [location.pathname, location.search, navigate]);
+  }, [conversationId, location.pathname, location.search, navigate]);
 
   async function handleCancel() {
     if (!detail || cancelling || !canCancelRun(detail.run)) {
@@ -175,22 +179,27 @@ function ConversationRunContextPanel({ conversationId, runId }: { conversationId
   const timeline = getRunTimeline(run);
   const showRecovery = run.recoveryAction !== 'none';
   const cancelable = canCancelRun(run);
-  const closeSearch = setConversationRunIdInSearch(location.search, null);
-  const currentConversationPath = `/conversations/${encodeURIComponent(conversationId)}`;
+  const closeSearch = conversationId ? setConversationRunIdInSearch(location.search, null) : '';
+  const currentConversationPath = conversationId ? `/conversations/${encodeURIComponent(conversationId)}` : null;
+  const showConversationChrome = Boolean(conversationId);
 
   return (
     <div className="space-y-4 px-4 py-4 overflow-y-auto">
-      <div className="flex items-center justify-between gap-2">
-        <button type="button" onClick={closeRun} className="ui-toolbar-button">
-          ← Conversation
-        </button>
+      <div className={showConversationChrome ? 'flex items-center justify-between gap-2' : 'flex items-center justify-end gap-1.5'}>
+        {showConversationChrome && (
+          <button type="button" onClick={closeRun} className="ui-toolbar-button">
+            ← Conversation
+          </button>
+        )}
         <div className="flex items-center gap-1.5">
           <button type="button" onClick={reconnect} className="ui-toolbar-button">
             ↻ Refresh
           </button>
-          <Link to={`/runs/${encodeURIComponent(runId)}`} className="ui-toolbar-button text-accent" title="Open on the Agent Runs page">
-            Full page
-          </Link>
+          {showConversationChrome && (
+            <Link to={`/runs/${encodeURIComponent(runId)}`} className="ui-toolbar-button text-accent" title="Open on the Agent Runs page">
+              Full page
+            </Link>
+          )}
         </div>
       </div>
 
@@ -224,11 +233,15 @@ function ConversationRunContextPanel({ conversationId, runId }: { conversationId
           <p className="ui-section-label mb-2">Connected to</p>
           <div className="space-y-2">
             {connections.map((connection) => {
-              const isCurrentConversationConnection = connection.label.startsWith('Conversation')
+              const isCurrentConversationConnection = currentConversationPath !== null
+                && connection.label.startsWith('Conversation')
                 && connection.to === currentConversationPath;
               const detailText = isCurrentConversationConnection
                 ? ['Current conversation', connection.detail].filter((value): value is string => typeof value === 'string' && value.length > 0).join(' · ')
                 : connection.detail;
+              const connectionHref = connection.to
+                ? connection.to + (showConversationChrome && connection.label.startsWith('Conversation') ? closeSearch : '')
+                : null;
 
               return (
                 <div key={connection.key} className="space-y-0.5">
@@ -242,8 +255,8 @@ function ConversationRunContextPanel({ conversationId, runId }: { conversationId
                     >
                       {connection.value}
                     </button>
-                  ) : connection.to ? (
-                    <Link to={connection.to + (connection.label.startsWith('Conversation') ? closeSearch : '')} className="text-[13px] text-accent hover:underline break-all">
+                  ) : connectionHref ? (
+                    <Link to={connectionHref} className="text-[13px] text-accent hover:underline break-all">
                       {connection.value}
                     </Link>
                   ) : (
@@ -2031,7 +2044,7 @@ export function ContextRail() {
   if (section === 'conversations' && id && selectedRunId) return (
     <div className="flex-1 overflow-hidden flex flex-col">
       <RailHeader label="Run" sub={selectedRunId} />
-      <ConversationRunContextPanel conversationId={id} runId={selectedRunId} />
+      <RunContextPanel conversationId={id} runId={selectedRunId} />
     </div>
   );
   if (section === 'conversations' && id) return (
@@ -2058,6 +2071,20 @@ export function ContextRail() {
     <div className="flex-1 flex flex-col">
       <RailHeader label="Scheduled" />
       <EmptyPrompt text="Select a scheduled task or start a new one." />
+    </div>
+  );
+
+  // Agent runs
+  if (section === 'runs' && id) return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <RailHeader label="Run" sub={id} />
+      <RunContextPanel runId={id} />
+    </div>
+  );
+  if (section === 'runs') return (
+    <div className="flex-1 flex flex-col">
+      <RailHeader label="Run" />
+      <EmptyPrompt text="Select a run to inspect it here." />
     </div>
   );
 
