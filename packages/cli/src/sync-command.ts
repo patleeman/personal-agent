@@ -18,6 +18,7 @@ import {
   getPiAgentRuntimeDir,
   getStateRoot,
   mergeConversationAttentionStateDocuments,
+  mergeDeferredResumeStateDocuments,
 } from '@personal-agent/core';
 import {
   emitDaemonEventNonFatal,
@@ -34,6 +35,7 @@ const DEFAULT_SYNC_BRANCH = 'main';
 const DEFAULT_SYNC_REMOTE = 'origin';
 const DEFAULT_PROFILE_CONFIG_JSON = '{\n  "defaultProfile": "shared"\n}\n';
 const CONVERSATION_ATTENTION_MERGE_DRIVER = 'personal-agent-conversation-attention';
+const DEFERRED_RESUMES_MERGE_DRIVER = 'personal-agent-deferred-resumes';
 
 function syncUsageText(): string {
   return 'Usage: pa sync [status|run|setup|help] [args...]';
@@ -53,6 +55,10 @@ function syncRunUsageText(): string {
 
 function syncMergeConversationAttentionUsageText(): string {
   return 'Usage: pa sync merge-conversation-attention <base-file> <current-file> <other-file>';
+}
+
+function syncMergeDeferredResumesUsageText(): string {
+  return 'Usage: pa sync merge-deferred-resumes <base-file> <current-file> <other-file>';
 }
 
 function isCliHelpToken(value: string | undefined): boolean {
@@ -106,6 +112,18 @@ function buildConversationAttentionMergeDriverCommand(): string {
     shellQuote(resolveCurrentCliEntrypoint()),
     'sync',
     'merge-conversation-attention',
+    '%O',
+    '%A',
+    '%B',
+  ].join(' ');
+}
+
+function buildDeferredResumesMergeDriverCommand(): string {
+  return [
+    shellQuote(process.execPath),
+    shellQuote(resolveCurrentCliEntrypoint()),
+    'sync',
+    'merge-deferred-resumes',
     '%O',
     '%A',
     '%B',
@@ -281,7 +299,7 @@ function syncRepoGitignore(): string {
 }
 
 export function syncRepoGitattributes(): string {
-  return `* text=auto\n\n# Append-only session JSONL transcripts merge best with union\npi-agent/sessions/**/*.jsonl text eol=lf merge=union\n\n# Conversation attention state should merge by per-conversation max/union semantics\npi-agent/state/conversation-attention/*.json text eol=lf merge=${CONVERSATION_ATTENTION_MERGE_DRIVER}\n`;
+  return `* text=auto\n\n# Append-only session JSONL transcripts merge best with union\npi-agent/sessions/**/*.jsonl text eol=lf merge=union\n\n# Conversation attention state should merge by per-conversation max/union semantics\npi-agent/state/conversation-attention/*.json text eol=lf merge=${CONVERSATION_ATTENTION_MERGE_DRIVER}\n\n# Deferred resume state should merge by resume id while preserving latest retry state\npi-agent/deferred-resumes-state.json text eol=lf merge=${DEFERRED_RESUMES_MERGE_DRIVER}\n`;
 }
 
 function configureManagedMergeDrivers(syncRoot: string): void {
@@ -295,10 +313,20 @@ function configureManagedMergeDrivers(syncRoot: string): void {
     `merge.${CONVERSATION_ATTENTION_MERGE_DRIVER}.driver`,
     buildConversationAttentionMergeDriverCommand(),
   ]);
+  runGit(syncRoot, [
+    'config',
+    `merge.${DEFERRED_RESUMES_MERGE_DRIVER}.name`,
+    'personal-agent deferred resumes merge',
+  ]);
+  runGit(syncRoot, [
+    'config',
+    `merge.${DEFERRED_RESUMES_MERGE_DRIVER}.driver`,
+    buildDeferredResumesMergeDriverCommand(),
+  ]);
 }
 
 function syncRepoReadme(): string {
-  return `# personal-agent sync repo\n\nManaged by \`pa sync setup\`.\n\nThis repo tracks durable cross-machine state from sync roots:\n\n- \`profiles/**\`\n- \`pi-agent/**\` (durable sessions/state only)\n\nBuilt-in merge handling is configured for:\n\n- append-only session transcripts under \`pi-agent/sessions/**/*.jsonl\`\n- conversation attention state under \`pi-agent/state/conversation-attention/*.json\`\n\nMachine-local runtime files such as auth, settings, generated prompt materialization, and package bins now live outside the sync repo under the local state root. Machine-local config (including \`config/config.json\` default profile selection) is intentionally not synced.\n`;
+  return `# personal-agent sync repo\n\nManaged by \`pa sync setup\`.\n\nThis repo tracks durable cross-machine state from sync roots:\n\n- \`profiles/**\`\n- \`pi-agent/**\` (durable sessions/state only)\n\nBuilt-in merge handling is configured for:\n\n- append-only session transcripts under \`pi-agent/sessions/**/*.jsonl\`\n- conversation attention state under \`pi-agent/state/conversation-attention/*.json\`\n- deferred resume state under \`pi-agent/deferred-resumes-state.json\`\n\nMachine-local runtime files such as auth, settings, generated prompt materialization, and package bins now live outside the sync repo under the local state root. Machine-local config (including \`config/config.json\` default profile selection) is intentionally not synced.\n`;
 }
 
 function migrateLegacyPiAgentRuntimeArtifacts(stateRoot: string, syncRoot: string): void {
@@ -687,6 +715,24 @@ export async function mergeConversationAttentionFilesCommand(args: string[]): Pr
   return 0;
 }
 
+export async function mergeDeferredResumesFilesCommand(args: string[]): Promise<number> {
+  if (args.length !== 3 || args.some((arg) => isCliHelpToken(arg))) {
+    throw new Error(syncMergeDeferredResumesUsageText());
+  }
+
+  const [basePath, currentPath, otherPath] = args.map((arg) => resolve(arg));
+  const merged = mergeDeferredResumeStateDocuments({
+    documents: [
+      readJsonFileIfExists(basePath),
+      readJsonFileIfExists(currentPath),
+      readJsonFileIfExists(otherPath),
+    ],
+  });
+
+  writeFileSync(currentPath, `${JSON.stringify(merged, null, 2)}\n`);
+  return 0;
+}
+
 function printSyncHelp(): void {
   console.log(section('Sync commands'));
   console.log('');
@@ -729,6 +775,10 @@ export async function syncCommand(args: string[]): Promise<number> {
 
   if (subcommand === 'merge-conversation-attention') {
     return mergeConversationAttentionFilesCommand(rest);
+  }
+
+  if (subcommand === 'merge-deferred-resumes') {
+    return mergeDeferredResumesFilesCommand(rest);
   }
 
   throw new Error(syncUsageText());

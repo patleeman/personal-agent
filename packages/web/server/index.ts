@@ -494,6 +494,31 @@ function createInboxActivityId(prefix: string): string {
   return `${prefix}-${timestamp}-${suffix}`;
 }
 
+function buildInboxActivityConversationContext(entry: ActivityEntryWithConversationLinks): string {
+  const lines = [
+    'Inbox activity context for this conversation:',
+    `- activity id: ${entry.id}`,
+    `- kind: ${entry.kind}`,
+    `- created at: ${entry.createdAt}`,
+    `- summary: ${entry.summary}`,
+  ];
+
+  if (entry.notificationState) {
+    lines.push(`- notification state: ${entry.notificationState}`);
+  }
+
+  if (entry.relatedProjectIds && entry.relatedProjectIds.length > 0) {
+    lines.push(`- related projects: ${entry.relatedProjectIds.join(', ')}`);
+  }
+
+  if (entry.details && entry.details.trim().length > 0) {
+    lines.push('', 'Details:', entry.details.trim());
+  }
+
+  lines.push('', 'Use this inbox item as durable context for follow-up in this conversation.');
+  return lines.join('\n');
+}
+
 function writeConversationMemoryDistillActivity(options: {
   profile: string;
   conversationId: string;
@@ -2216,6 +2241,72 @@ app.get('/api/activity/:id', (req, res) => {
     if (!match) { res.status(404).json({ error: 'Not found' }); return; }
     const read = loadReadState(profile);
     res.json({ ...attachActivityConversationLinks(profile, match.entry), read: read.has(match.entry.id) });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/activity/:id/start', async (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile });
+    const match = entries.find(({ entry }) => entry.id === req.params.id);
+
+    if (!match) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    const entry = attachActivityConversationLinks(profile, match.entry);
+    const requestedRelatedProjectIds = Array.isArray(entry.relatedProjectIds)
+      ? entry.relatedProjectIds.filter((projectId): projectId is string => typeof projectId === 'string' && projectId.trim().length > 0)
+      : [];
+    const availableProjectIds = new Set(listProjectIds({ repoRoot: REPO_ROOT, profile }));
+    const relatedProjectIds = requestedRelatedProjectIds.filter((projectId) => availableProjectIds.has(projectId));
+    const cwd = resolveConversationCwd({
+      repoRoot: REPO_ROOT,
+      profile,
+      defaultCwd: getDefaultWebCwd(),
+      referencedProjectIds: relatedProjectIds,
+    });
+    const result = await createSession(cwd, {
+      ...buildLiveSessionResourceOptions(),
+      extensionFactories: buildLiveSessionExtensionFactories(),
+    });
+
+    if (relatedProjectIds.length > 0) {
+      setConversationProjectLinks({
+        profile,
+        conversationId: result.id,
+        relatedProjectIds,
+      });
+    }
+
+    const relatedConversationIds = [...new Set([...(entry.relatedConversationIds ?? []), result.id])];
+    setActivityConversationLinks({
+      profile,
+      activityId: entry.id,
+      relatedConversationIds,
+    });
+
+    await queuePromptContext(result.id, 'referenced_context', buildInboxActivityConversationContext({
+      ...entry,
+      relatedProjectIds,
+      relatedConversationIds,
+    }));
+
+    invalidateAppTopics('activity', 'projects', 'sessions');
+    res.json({
+      activityId: entry.id,
+      id: result.id,
+      sessionFile: result.sessionFile,
+      cwd,
+      relatedConversationIds,
+    });
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),

@@ -534,6 +534,7 @@ export function ConversationTree({ tree, loading = false, onJump, onClose, onFor
             const isCursor = visibleIndex === cursor;
             const isSelectable = entry.selectable;
             const prefix = buildPrefix(entry, layout.multipleRoots);
+            const forkBlockIndex = entry.label === 'user' && entry.onActivePath ? entry.blockIndex : null;
             return (
               <button
                 key={entry.id}
@@ -562,11 +563,11 @@ export function ConversationTree({ tree, loading = false, onJump, onClose, onFor
                   {entry.preview}
                 </span>
 
-                {onFork && entry.label === 'user' && entry.onActivePath && entry.blockIndex != null && (
+                {onFork && forkBlockIndex != null && (
                   <button
                     onClick={(event) => {
                       event.stopPropagation();
-                      onFork(entry.blockIndex);
+                      onFork(forkBlockIndex);
                       onClose();
                     }}
                     title="Fork into a new conversation from here"

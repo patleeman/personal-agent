@@ -9,6 +9,7 @@ import {
   getDueScheduledSessionDeferredResumeEntries,
   getReadySessionDeferredResumeEntries,
   loadDeferredResumeState,
+  mergeDeferredResumeStateDocuments,
   parseDeferredResumeDelayMs,
   readSessionConversationId,
   removeDeferredResume,
@@ -127,6 +128,89 @@ describe('deferred resume state', () => {
 
     expect(persisted.version).toBe(2);
     expect(persisted.resumes['resume-1']?.status).toBe('scheduled');
+  });
+
+  it('merges deferred resume documents by union and latest retry state', () => {
+    const merged = mergeDeferredResumeStateDocuments({
+      documents: [
+        {
+          version: 2,
+          resumes: {
+            'resume-1': {
+              id: 'resume-1',
+              sessionFile: '/tmp/sessions/current.jsonl',
+              prompt: 'continue',
+              dueAt: '2026-03-08T12:00:00.000Z',
+              createdAt: '2026-03-08T11:50:00.000Z',
+              attempts: 0,
+              status: 'scheduled',
+            },
+          },
+        },
+        {
+          version: 2,
+          resumes: {
+            'resume-1': {
+              id: 'resume-1',
+              sessionFile: '/tmp/sessions/current.jsonl',
+              prompt: 'continue',
+              dueAt: '2026-03-08T12:00:00.000Z',
+              createdAt: '2026-03-08T11:50:00.000Z',
+              attempts: 0,
+              status: 'ready',
+              readyAt: '2026-03-08T12:00:30.000Z',
+            },
+          },
+        },
+        {
+          version: 2,
+          resumes: {
+            'resume-1': {
+              id: 'resume-1',
+              sessionFile: '/tmp/sessions/current.jsonl',
+              prompt: 'continue later',
+              dueAt: '2026-03-08T12:05:00.000Z',
+              createdAt: '2026-03-08T11:50:00.000Z',
+              attempts: 1,
+              status: 'scheduled',
+            },
+            'resume-2': {
+              id: 'resume-2',
+              sessionFile: '/tmp/sessions/other.jsonl',
+              prompt: 'follow up',
+              dueAt: '2026-03-08T13:00:00.000Z',
+              createdAt: '2026-03-08T12:55:00.000Z',
+              attempts: 0,
+              status: 'scheduled',
+            },
+          },
+        },
+      ],
+    });
+
+    expect(merged).toEqual({
+      version: 2,
+      resumes: {
+        'resume-1': {
+          id: 'resume-1',
+          sessionFile: '/tmp/sessions/current.jsonl',
+          prompt: 'continue later',
+          dueAt: '2026-03-08T12:05:00.000Z',
+          createdAt: '2026-03-08T11:50:00.000Z',
+          attempts: 1,
+          status: 'scheduled',
+        },
+        'resume-2': {
+          id: 'resume-2',
+          sessionFile: '/tmp/sessions/other.jsonl',
+          prompt: 'follow up',
+          dueAt: '2026-03-08T13:00:00.000Z',
+          createdAt: '2026-03-08T12:55:00.000Z',
+          attempts: 0,
+          status: 'scheduled',
+        },
+      },
+    });
   });
 });
 

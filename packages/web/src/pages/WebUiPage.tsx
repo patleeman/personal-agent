@@ -393,10 +393,11 @@ export function WebUiPage() {
         ? 'Stop service'
         : 'Start service';
   const normalizedResumeFallbackPromptDraft = resumeFallbackPromptDraft.trim();
-  const resumeFallbackPromptDirty = Boolean(data) && (
+  const savedResumeFallbackPrompt = data?.service.resumeFallbackPrompt;
+  const resumeFallbackPromptDirty = savedResumeFallbackPrompt !== undefined && (
     normalizedResumeFallbackPromptDraft.length === 0
-      ? data.service.resumeFallbackPrompt !== DEFAULT_RESUME_FALLBACK_PROMPT
-      : normalizedResumeFallbackPromptDraft !== data.service.resumeFallbackPrompt
+      ? savedResumeFallbackPrompt !== DEFAULT_RESUME_FALLBACK_PROMPT
+      : normalizedResumeFallbackPromptDraft !== savedResumeFallbackPrompt
   );
 
   return (

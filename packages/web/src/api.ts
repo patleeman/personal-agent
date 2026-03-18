@@ -266,6 +266,8 @@ export const api = {
   activityCount: () => get<{ count: number }>('/activity/count'),
   markActivityRead: (id: string, read = true) =>
     patch<{ ok: boolean }>(`/activity/${encodeURIComponent(id)}`, { read }),
+  startActivityConversation: (id: string) =>
+    post<{ activityId: string; id: string; sessionFile: string; cwd: string; relatedConversationIds: string[] }>(`/activity/${encodeURIComponent(id)}/start`),
   markConversationAttentionRead: (id: string, read = true) =>
     patch<{ ok: boolean }>(`/conversations/${encodeURIComponent(id)}/attention`, { read }),
 

@@ -1272,39 +1272,122 @@ function LiveSessionContextPanel({ id }: { id: string }) {
 
 // ── Inbox item detail ─────────────────────────────────────────────────────────
 
+function pickInboxItemConversationId(entry: Pick<ActivityEntry, 'relatedConversationIds'>): string | null {
+  const relatedConversationIds = (entry.relatedConversationIds ?? [])
+    .filter((conversationId): conversationId is string => typeof conversationId === 'string' && conversationId.trim().length > 0);
+
+  return relatedConversationIds.length > 0
+    ? relatedConversationIds[relatedConversationIds.length - 1] ?? null
+    : null;
+}
+
 function InboxItemContext({ id }: { id: string }) {
+  const navigate = useNavigate();
+  const { openSession } = useConversations();
   const [entry, setEntry] = useState<ActivityEntry | null>(null);
   const [loading, setLoading] = useState(true);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     setLoading(true);
-    fetch(`/api/activity/${encodeURIComponent(id)}`)
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then((d: ActivityEntry & { read?: boolean }) => {
-        setEntry(d);
+    setActionBusy(false);
+    setActionError(null);
+
+    api.activityById(id)
+      .then((nextEntry) => {
+        if (cancelled) {
+          return;
+        }
+
+        setEntry(nextEntry);
         setLoading(false);
-        // Mark as read when detail opens
-        if (!d.read) {
-          void fetch(`/api/activity/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ read: true }) });
+
+        if (!nextEntry.read) {
+          void api.markActivityRead(id).catch(() => {
+            // Ignore optimistic read-state failures; refresh can recover.
+          });
         }
       })
-      .catch(() => setLoading(false));
+      .catch(() => {
+        if (!cancelled) {
+          setEntry(null);
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
   if (loading) return <div className="px-4 py-4 text-[12px] text-dim animate-pulse">Loading…</div>;
-  if (!entry)  return <div className="px-4 py-4 text-[12px] text-dim">Not found.</div>;
+  if (!entry) return <div className="px-4 py-4 text-[12px] text-dim">Not found.</div>;
 
   const meta = kindMeta(entry.kind);
+  const primaryConversationId = pickInboxItemConversationId(entry);
+  const relatedConversationIds = [...(entry.relatedConversationIds ?? [])].reverse();
+
+  function openConversation(conversationId: string) {
+    setActionError(null);
+    openSession(conversationId);
+    navigate(`/conversations/${encodeURIComponent(conversationId)}`);
+  }
+
+  async function handlePrimaryAction() {
+    if (actionBusy) {
+      return;
+    }
+
+    if (primaryConversationId) {
+      openConversation(primaryConversationId);
+      return;
+    }
+
+    const currentEntry = entry;
+    if (!currentEntry) {
+      return;
+    }
+
+    setActionBusy(true);
+    setActionError(null);
+
+    try {
+      const result = await api.startActivityConversation(currentEntry.id);
+      openSession(result.id);
+      navigate(`/conversations/${encodeURIComponent(result.id)}`);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+      setActionBusy(false);
+    }
+  }
 
   return (
     <div className="px-4 py-4 space-y-4 overflow-y-auto">
-      <div className="space-y-1">
-        <p className="ui-card-title">{entry.summary}</p>
-        <p className="ui-card-meta">
-          <span className={meta.color}>{meta.label}</span>
-          <span className="opacity-40 mx-1.5">·</span>
-          {formatDate(entry.createdAt)}
-        </p>
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <p className="ui-card-title">{entry.summary}</p>
+          <p className="ui-card-meta">
+            <span className={meta.color}>{meta.label}</span>
+            <span className="opacity-40 mx-1.5">·</span>
+            {formatDate(entry.createdAt)}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => { void handlePrimaryAction(); }}
+            disabled={actionBusy}
+            className="ui-toolbar-button text-accent"
+          >
+            {primaryConversationId ? 'Open conversation' : (actionBusy ? 'Starting…' : 'Start conversation')}
+          </button>
+        </div>
+
+        {actionError && <p className="text-[12px] text-danger">{actionError}</p>}
       </div>
 
       {entry.details && (
@@ -1316,15 +1399,36 @@ function InboxItemContext({ id }: { id: string }) {
         </div>
       )}
 
-      {entry.relatedProjectIds && entry.relatedProjectIds.length > 0 && (
+      {(relatedConversationIds.length > 0 || (entry.relatedProjectIds && entry.relatedProjectIds.length > 0)) && (
         <div className="border-t border-border-subtle pt-3">
           <p className="ui-section-label mb-2">Related</p>
-          <div className="space-y-1.5">
-            {entry.relatedProjectIds.map((wsId) => (
-              <Link key={wsId} to={`/projects/${wsId}`} className="ui-card-meta font-mono text-accent hover:text-accent/80">
-                {wsId}
-              </Link>
-            ))}
+          <div className="space-y-3">
+            {relatedConversationIds.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-[11px] uppercase tracking-[0.12em] text-dim">Conversations</p>
+                {relatedConversationIds.map((conversationId) => (
+                  <Link
+                    key={conversationId}
+                    to={`/conversations/${conversationId}`}
+                    onClick={() => openSession(conversationId)}
+                    className="ui-card-meta font-mono text-accent hover:text-accent/80"
+                  >
+                    {conversationId}
+                  </Link>
+                ))}
+              </div>
+            )}
+
+            {entry.relatedProjectIds && entry.relatedProjectIds.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-[11px] uppercase tracking-[0.12em] text-dim">Projects</p>
+                {entry.relatedProjectIds.map((projectId) => (
+                  <Link key={projectId} to={`/projects/${projectId}`} className="ui-card-meta font-mono text-accent hover:text-accent/80">
+                    {projectId}
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
