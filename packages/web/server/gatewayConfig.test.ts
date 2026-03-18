@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildGatewayStoredConfig,
-  listGatewayEnvOverrideKeys,
   parseGatewayConfigUpdateInput,
   summarizeGatewayToken,
 } from './gatewayConfig.js';
@@ -28,20 +27,6 @@ describe('summarizeGatewayToken', () => {
       source: 'one-password',
       preview: 'op://Assistant/Telegram/token',
     });
-  });
-});
-
-describe('listGatewayEnvOverrideKeys', () => {
-  it('returns only configured gateway override keys', () => {
-    expect(listGatewayEnvOverrideKeys({
-      PATH: '/usr/bin',
-      TELEGRAM_BOT_TOKEN: 'token',
-      PERSONAL_AGENT_TELEGRAM_ALLOWLIST: '1,2',
-      PERSONAL_AGENT_TELEGRAM_CWD: '   ',
-    })).toEqual([
-      'TELEGRAM_BOT_TOKEN',
-      'PERSONAL_AGENT_TELEGRAM_ALLOWLIST',
-    ]);
   });
 });
 

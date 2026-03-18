@@ -219,9 +219,8 @@ See `docs/skills-and-capabilities.md` for a user-facing overview of skills and r
 
 Gateway sessions automatically append a gateway-specific runtime block to the system prompt so the agent is aware of chat-gateway constraints, commands, provider capabilities, and concise chat-style response rules.
 
-Shared optional env vars:
+Optional runtime env vars:
 
-- `PERSONAL_AGENT_PROFILE` (default: `shared`)
 - `PERSONAL_AGENT_PI_TIMEOUT_MS` (default: `1800000` / 30 minutes, set `0` to disable timeout)
 
 If you use `op://...` references for secrets, ensure 1Password CLI (`op`) is installed and authenticated (service-account flow: `OP_SERVICE_ACCOUNT_TOKEN`).
@@ -236,20 +235,26 @@ When both `themeDark` and `themeLight` are set, `pa` selects one on launch and w
 
 ### Telegram
 
-Required configuration (via setup or env vars):
+Required saved configuration (via `pa gateway telegram setup` or the web UI Gateway page):
 
-- `TELEGRAM_BOT_TOKEN`
-- `PERSONAL_AGENT_TELEGRAM_ALLOWLIST` (comma-separated chat IDs)
+- Telegram bot token
+- at least one allowed Telegram user ID or allowlisted chat ID
 
-`TELEGRAM_BOT_TOKEN` and allowlist values may be plain strings or `op://...` 1Password references.
+Saved token and list values may be plain strings or `op://...` 1Password references.
 
-Optional:
+Optional saved settings:
 
-- `PERSONAL_AGENT_TELEGRAM_CWD` (working directory for Pi calls)
-- `PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT` (default: `20`)
+- gateway profile
+- default gateway model
+- blocked Telegram user IDs
+- working directory for Pi calls
+- max pending messages per conversation
+- clear recent tracked messages when `/new` is used
+
+Optional runtime env vars:
+
 - `PERSONAL_AGENT_TELEGRAM_RETRY_ATTEMPTS` (default: `3`)
 - `PERSONAL_AGENT_TELEGRAM_RETRY_BASE_DELAY_MS` (default: `300`)
-- `PERSONAL_AGENT_TELEGRAM_CLEAR_RECENT_MESSAGES_ON_NEW` (default: `true`)
 
 Telegram gateway supports:
 

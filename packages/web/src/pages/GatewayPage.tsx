@@ -606,11 +606,6 @@ export function GatewayPage() {
                 <p className="ui-card-meta max-w-3xl">
                   These fields write to {shortPath(data.configFilePath)}. Token and list fields accept saved values directly, including op:// 1Password references where supported by the gateway. 1Password resolution still depends on the local `op` CLI and its auth context. If the managed gateway service is already running, restart it after saving.
                 </p>
-                {data.envOverrideKeys.length > 0 && (
-                  <p className="ui-card-meta max-w-3xl">
-                    Active environment overrides: {data.envOverrideKeys.join(', ')}.
-                  </p>
-                )}
               </div>
 
               <form onSubmit={handleSaveConfig} className="max-w-5xl space-y-5">
@@ -628,7 +623,7 @@ export function GatewayPage() {
                         <option key={profile} value={profile}>{profile}</option>
                       ))}
                     </select>
-                    <p className="ui-card-meta">This is the profile the gateway reads when no PERSONAL_AGENT_PROFILE override is set.</p>
+                    <p className="ui-card-meta">This is the profile the gateway uses.</p>
                   </div>
 
                   <div className="space-y-1.5 min-w-0">

@@ -184,6 +184,8 @@ afterEach(() => {
 describe('gateway service management', () => {
   it('installs launchd services and writes manifests with environment passthrough', () => {
     setPlatform('darwin');
+    process.env.PERSONAL_AGENT_PROFILE = 'assistant';
+    process.env.PERSONAL_AGENT_GATEWAY_DEFAULT_MODEL = 'openai/gpt-5.4';
 
     const info = installGatewayService('telegram');
 
@@ -206,6 +208,8 @@ describe('gateway service management', () => {
     expect(manifestContent).toContain('PERSONAL_AGENT_GATEWAY_PROVIDER');
     expect(manifestContent).toContain('OP_SERVICE_ACCOUNT_TOKEN');
     expect(manifestContent).toContain('/work/telegram');
+    expect(manifestContent).not.toContain('PERSONAL_AGENT_PROFILE');
+    expect(manifestContent).not.toContain('PERSONAL_AGENT_GATEWAY_DEFAULT_MODEL');
 
     const executed = mocks.spawnSync.mock.calls.map((call) => `${call[0]} ${(call[1] as string[]).join(' ')}`);
     expect(executed).toContain('launchctl bootstrap gui/501 /Users/tester/Library/LaunchAgents/io.personal-agent.daemon.plist');

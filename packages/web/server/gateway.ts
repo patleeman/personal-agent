@@ -21,7 +21,6 @@ import {
 } from '@personal-agent/gateway';
 import {
   buildGatewayStoredConfig,
-  listGatewayEnvOverrideKeys,
   readGatewayConfigFilePath,
   summarizeGatewayToken,
   type GatewayConfigUpdateInput,
@@ -719,16 +718,10 @@ export function readGatewayState(currentProfile: string): GatewayStateSnapshot {
   const pendingMessages = loadTelegramPendingMessages(telegramPendingDir);
   const warnings: string[] = [];
   const configFilePath = readGatewayConfigFilePath();
-  const envOverrideKeys = listGatewayEnvOverrideKeys();
+  const envOverrideKeys: string[] = [];
   const tokenSummary = summarizeGatewayToken(telegram.token);
-  const effectiveTokenConfigured = tokenSummary.configured || envOverrideKeys.includes('TELEGRAM_BOT_TOKEN');
-  const effectiveProfile = process.env.PERSONAL_AGENT_PROFILE?.trim() || configuredProfile;
-
-  if (envOverrideKeys.length > 0) {
-    warnings.push(
-      `Gateway environment overrides are active: ${envOverrideKeys.join(', ')}. They take precedence over saved web UI settings.`,
-    );
-  }
+  const effectiveTokenConfigured = tokenSummary.configured;
+  const effectiveProfile = configuredProfile;
 
   if (!effectiveTokenConfigured) {
     warnings.push('Telegram bot token is not configured. Save it below or run `pa gateway telegram setup`.');
