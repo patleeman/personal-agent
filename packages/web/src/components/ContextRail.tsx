@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversationArtifacts';
@@ -37,12 +37,22 @@ import { useAppData, useAppEvents } from '../contexts';
 import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
 import { CONVERSATION_PROJECTS_CHANGED_EVENT, emitConversationProjectsChanged } from '../conversationProjectEvents';
 import { closeConversationTab, ensureConversationTabOpen } from '../sessionTabs';
-import { ConversationArtifactPanel } from './ConversationArtifactPanel';
-import { ProjectDetailPanel } from './ProjectDetailPanel';
-import { ProjectOverviewPanel } from './ProjectOverviewPanel';
-import { ScheduledTaskCreatePanel, ScheduledTaskPanel } from './ScheduledTaskPanel';
-import { ToolsContextPanel } from './ToolsContextPanel';
 import { ErrorState, IconButton, LoadingState, Pill, SurfacePanel } from './ui';
+
+const ConversationArtifactPanel = lazy(() => import('./ConversationArtifactPanel').then((module) => ({ default: module.ConversationArtifactPanel })));
+const ProjectDetailPanel = lazy(() => import('./ProjectDetailPanel').then((module) => ({ default: module.ProjectDetailPanel })));
+const ProjectOverviewPanel = lazy(() => import('./ProjectOverviewPanel').then((module) => ({ default: module.ProjectOverviewPanel })));
+const ScheduledTaskCreatePanel = lazy(() => import('./ScheduledTaskPanel').then((module) => ({ default: module.ScheduledTaskCreatePanel })));
+const ScheduledTaskPanel = lazy(() => import('./ScheduledTaskPanel').then((module) => ({ default: module.ScheduledTaskPanel })));
+const ToolsContextPanel = lazy(() => import('./ToolsContextPanel').then((module) => ({ default: module.ToolsContextPanel })));
+
+function suspendRailPanel(element: React.ReactNode, label = 'Loading…') {
+  return (
+    <Suspense fallback={<LoadingState label={label} className="justify-center h-full" />}>
+      {element}
+    </Suspense>
+  );
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -147,7 +157,7 @@ function ConversationRunContextPanel({ conversationId, runId }: { conversationId
   }
 
   if (loading && !detail) {
-    return <LoadingState label="Loading execution…" className="px-4 py-4" />;
+    return <LoadingState label="Loading run…" className="px-4 py-4" />;
   }
 
   if (error && !detail) {
@@ -155,7 +165,7 @@ function ConversationRunContextPanel({ conversationId, runId }: { conversationId
   }
 
   if (!detail) {
-    return <div className="px-4 py-4 text-[12px] text-dim">Execution not found.</div>;
+    return <div className="px-4 py-4 text-[12px] text-dim">Run not found.</div>;
   }
 
   const run = detail.run;
@@ -178,7 +188,7 @@ function ConversationRunContextPanel({ conversationId, runId }: { conversationId
           <button type="button" onClick={reconnect} className="ui-toolbar-button">
             ↻ Refresh
           </button>
-          <Link to={`/runs/${encodeURIComponent(runId)}`} className="ui-toolbar-button text-accent" title="Open on the executions page">
+          <Link to={`/runs/${encodeURIComponent(runId)}`} className="ui-toolbar-button text-accent" title="Open on the Agent Runs page">
             Full page
           </Link>
         </div>
@@ -202,7 +212,7 @@ function ConversationRunContextPanel({ conversationId, runId }: { conversationId
 
       {cancelable && (
         <div className="flex items-center justify-between gap-2 rounded-lg border border-border-subtle bg-surface px-3 py-2.5">
-          <p className="text-[12px] text-secondary">This background execution can still be cancelled.</p>
+          <p className="text-[12px] text-secondary">This background run can still be cancelled.</p>
           <button type="button" onClick={() => { void handleCancel(); }} disabled={cancelling} className="ui-toolbar-button text-danger">
             {cancelling ? 'Cancelling…' : 'Cancel'}
           </button>
@@ -263,7 +273,7 @@ function ConversationRunContextPanel({ conversationId, runId }: { conversationId
 
       <div className="border-t border-border-subtle pt-3 grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
-          <p className="ui-section-label">Execution state</p>
+          <p className="ui-section-label">Run state</p>
           <p className="text-[13px] text-primary">{run.manifest?.kind ?? 'unknown kind'}</p>
           {run.manifest?.resumePolicy && <p className="text-[12px] text-secondary">resume policy {run.manifest.resumePolicy}</p>}
           {run.manifest?.source?.type && <p className="text-[12px] text-secondary">source {run.manifest.source.type}</p>}
@@ -325,12 +335,13 @@ function LinkedProjectOverviewPanel({
   onRemove?: () => void;
   removeDisabled?: boolean;
 }) {
-  return (
+  return suspendRailPanel(
     <ProjectOverviewPanel
       project={project}
       onRemove={onRemove}
       removeDisabled={removeDisabled}
-    />
+    />,
+    'Loading project…',
   );
 }
 
@@ -727,7 +738,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
       });
     };
 
-    push(currentConversationRunId, 'Conversation execution', 'Tracks this conversation state and recovery metadata.', 'conversation');
+    push(currentConversationRunId, 'Conversation run', 'Tracks this conversation state and recovery metadata.', 'conversation');
 
     for (const run of connectedBackgroundRuns) {
       push(run.runId, run.runId, 'Started from this conversation.', 'connected');
@@ -1356,7 +1367,7 @@ function ProjectDetailContext({ id }: { id: string }) {
   if (error) return <div className="px-4 py-4 text-[12px] text-dim">Project not found.</div>;
   if (!project) return <div className="px-4 py-4 text-[12px] text-dim">Project not found.</div>;
 
-  return (
+  return suspendRailPanel(
     <ProjectDetailPanel
       project={project}
       onChanged={() => {
@@ -1367,7 +1378,8 @@ function ProjectDetailContext({ id }: { id: string }) {
         navigate('/projects');
         emitProjectsChanged();
       }}
-    />
+    />,
+    'Loading project…',
   );
 }
 
@@ -1537,6 +1549,38 @@ function MemoryDocContext({ memoryId }: { memoryId: string }) {
             <div className="ui-detail-row">
               <span className="ui-detail-label">Status</span>
               <span className="ui-detail-value">{memory.status}</span>
+            </div>
+          )}
+          {memory.area && (
+            <div className="ui-detail-row">
+              <span className="ui-detail-label">Area</span>
+              <span className="ui-detail-value">{memory.area}</span>
+            </div>
+          )}
+          {memory.role && (
+            <div className="ui-detail-row">
+              <span className="ui-detail-label">Role</span>
+              <span className="ui-detail-value">{memory.role}</span>
+            </div>
+          )}
+          {memory.parent && (
+            <div className="ui-detail-row">
+              <span className="ui-detail-label">Parent</span>
+              <Link to={`/memories${buildManagedMemorySearch(location.search, memory.parent)}`} className="ui-detail-value text-accent hover:underline">
+                @{memory.parent}
+              </Link>
+            </div>
+          )}
+          {(memory.related?.length ?? 0) > 0 && (
+            <div className="ui-detail-row items-start">
+              <span className="ui-detail-label">Related</span>
+              <span className="ui-detail-value flex flex-wrap gap-x-2 gap-y-1">
+                {(memory.related ?? []).map((relatedId) => (
+                  <Link key={relatedId} to={`/memories${buildManagedMemorySearch(location.search, relatedId)}`} className="text-accent hover:underline">
+                    @{relatedId}
+                  </Link>
+                ))}
+              </span>
             </div>
           )}
           {memory.tags.length > 0 && (
@@ -1777,7 +1821,10 @@ export function ContextRail() {
   if (section === 'conversations' && id && selectedArtifactId) return (
     <div className="flex-1 overflow-hidden flex flex-col">
       <RailHeader label="Artifact" sub={selectedArtifactId} />
-      <ConversationArtifactPanel conversationId={id} artifactId={selectedArtifactId} />
+      {suspendRailPanel(
+        <ConversationArtifactPanel conversationId={id} artifactId={selectedArtifactId} />,
+        'Loading artifact…',
+      )}
     </div>
   );
   if (section === 'conversations' && id === DRAFT_CONVERSATION_ID) return (
@@ -1788,7 +1835,7 @@ export function ContextRail() {
   );
   if (section === 'conversations' && id && selectedRunId) return (
     <div className="flex-1 overflow-hidden flex flex-col">
-      <RailHeader label="Execution" sub={selectedRunId} />
+      <RailHeader label="Run" sub={selectedRunId} />
       <ConversationRunContextPanel conversationId={id} runId={selectedRunId} />
     </div>
   );
@@ -1803,13 +1850,13 @@ export function ContextRail() {
   if (creatingScheduledTask) return (
     <div className="flex-1 overflow-y-auto flex flex-col">
       <RailHeader label="Scheduled task" sub="new" />
-      <ScheduledTaskCreatePanel />
+      {suspendRailPanel(<ScheduledTaskCreatePanel />, 'Loading task editor…')}
     </div>
   );
   if (scheduledSection && id) return (
     <div className="flex-1 overflow-y-auto flex flex-col">
       <RailHeader label="Scheduled task" sub={id} />
-      <ScheduledTaskPanel id={id} />
+      {suspendRailPanel(<ScheduledTaskPanel id={id} />, 'Loading scheduled task…')}
     </div>
   );
   if (scheduledSection) return (
@@ -1880,7 +1927,7 @@ export function ContextRail() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <RailHeader label="Tools" />
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <ToolsContextPanel />
+          {suspendRailPanel(<ToolsContextPanel />, 'Loading tools…')}
         </div>
       </div>
     );

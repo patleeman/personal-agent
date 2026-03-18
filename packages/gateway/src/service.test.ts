@@ -218,11 +218,11 @@ describe('gateway service management', () => {
     const manifestPath = '/Users/tester/Library/LaunchAgents/io.personal-agent.web-ui.plist';
     setInstalled(manifestPath, true);
 
-    mocks.spawnSync
-      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
-      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
-      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
-      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' });
+    mocks.spawnSync.mockReturnValue({
+      status: 0,
+      stdout: 'state = running\npid = 123\n',
+      stderr: '',
+    });
 
     const status = getWebUiServiceStatus({ repoRoot: '/repo/personal-agent', port: 3741 });
     expect(status).toMatchObject({ installed: true, running: true, url: 'http://localhost:3741' });
@@ -327,8 +327,8 @@ describe('gateway service management', () => {
     const manifestPath = '/Users/tester/Library/LaunchAgents/io.personal-agent.gateway.telegram.plist';
     setInstalled(manifestPath, true);
 
-    mocks.spawnSync.mockReturnValueOnce({ status: 0, stdout: 'ok', stderr: '' });
-    mocks.spawnSync.mockReturnValueOnce({ status: 0, stdout: 'ok', stderr: '' });
+    mocks.spawnSync.mockReturnValueOnce({ status: 0, stdout: 'state = running\npid = 456\n', stderr: '' });
+    mocks.spawnSync.mockReturnValueOnce({ status: 1, stdout: '', stderr: 'not found' });
 
     const status = getGatewayServiceStatus('telegram');
 
@@ -339,6 +339,23 @@ describe('gateway service management', () => {
       daemonService: {
         installed: false,
       },
+    });
+  });
+
+  it('reports launchd gateway service as not running when launchctl says not running', () => {
+    setPlatform('darwin');
+
+    const manifestPath = '/Users/tester/Library/LaunchAgents/io.personal-agent.gateway.telegram.plist';
+    setInstalled(manifestPath, true);
+
+    mocks.spawnSync.mockReturnValueOnce({ status: 0, stdout: 'state = not running\nlast exit code = 1\n', stderr: '' });
+    mocks.spawnSync.mockReturnValueOnce({ status: 0, stdout: 'state = running\npid = 789\n', stderr: '' });
+
+    const status = getGatewayServiceStatus('telegram');
+
+    expect(status).toMatchObject({
+      installed: true,
+      running: false,
     });
   });
 
@@ -358,15 +375,11 @@ describe('gateway service management', () => {
     const manifestPath = '/Users/tester/Library/LaunchAgents/io.personal-agent.gateway.telegram.plist';
     setInstalled(manifestPath, true);
 
-    mocks.spawnSync
-      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
-      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
-      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
-      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
-      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
-      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
-      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
-      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' });
+    mocks.spawnSync.mockReturnValue({
+      status: 0,
+      stdout: 'state = running\npid = 123\n',
+      stderr: '',
+    });
 
     const status = restartGatewayServiceIfInstalled('telegram');
 

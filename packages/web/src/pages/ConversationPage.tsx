@@ -1,10 +1,8 @@
-import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, type RefObject } from 'react';
+import { Suspense, lazy, useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, type RefObject } from 'react';
 import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import { ChatView } from '../components/chat/ChatView';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
-import { ConversationTree } from '../components/ConversationTree';
-import { ConversationDrawingsPickerModal } from '../components/ConversationDrawingsPickerModal';
-import { ExcalidrawEditorModal, type ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
+import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
 import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput } from '../types';
 import { useApi } from '../hooks';
@@ -53,6 +51,10 @@ import { resolveConversationComposerSubmitState } from '../conversationComposerS
 import { useReloadState } from '../reloadState';
 import { ensureConversationTabOpen } from '../sessionTabs';
 import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSceneFromBlob, parseExcalidrawSceneFromSourceData, serializeExcalidrawScene } from '../excalidrawUtils';
+
+const ConversationTree = lazy(() => import('../components/ConversationTree').then((module) => ({ default: module.ConversationTree })));
+const ConversationDrawingsPickerModal = lazy(() => import('../components/ConversationDrawingsPickerModal').then((module) => ({ default: module.ConversationDrawingsPickerModal })));
+const ExcalidrawEditorModal = lazy(() => import('../components/ExcalidrawEditorModal').then((module) => ({ default: module.ExcalidrawEditorModal })));
 
 const INITIAL_HISTORICAL_TAIL_BLOCKS = 400;
 const HISTORICAL_TAIL_BLOCKS_STEP = 400;
@@ -3417,39 +3419,45 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       </div>
 
       {editingDrawingLocalId && (
-        <ExcalidrawEditorModal
-          key={editingDrawingLocalId}
-          initialTitle={editingDrawingAttachment?.title ?? 'Drawing'}
-          initialScene={editingDrawingAttachment?.scene ?? null}
-          saveLabel={editingDrawingAttachment ? 'Update drawing' : 'Save drawing'}
-          onSave={saveDrawingFromEditor}
-          onClose={closeDrawingEditor}
-        />
+        <Suspense fallback={null}>
+          <ExcalidrawEditorModal
+            key={editingDrawingLocalId}
+            initialTitle={editingDrawingAttachment?.title ?? 'Drawing'}
+            initialScene={editingDrawingAttachment?.scene ?? null}
+            saveLabel={editingDrawingAttachment ? 'Update drawing' : 'Save drawing'}
+            onSave={saveDrawingFromEditor}
+            onClose={closeDrawingEditor}
+          />
+        </Suspense>
       )}
 
       {drawingsPickerOpen && id && (
-        <ConversationDrawingsPickerModal
-          attachments={conversationAttachments}
-          onLoadAttachment={async (attachmentId) => {
-            const detail = await api.conversationAttachment(id, attachmentId);
-            return detail.attachment;
-          }}
-          onAttach={(selection) => { void attachSavedDrawing(selection); }}
-          onClose={() => setDrawingsPickerOpen(false)}
-        />
+        <Suspense fallback={null}>
+          <ConversationDrawingsPickerModal
+            attachments={conversationAttachments}
+            onLoadAttachment={async (attachmentId) => {
+              const detail = await api.conversationAttachment(id, attachmentId);
+              return detail.attachment;
+            }}
+            onAttach={(selection) => { void attachSavedDrawing(selection); }}
+            onClose={() => setDrawingsPickerOpen(false)}
+          />
+        </Suspense>
       )}
 
       {/* Session tree overlay */}
       {showTree && (
-        <ConversationTree
-          tree={treeSnapshot?.roots ?? []}
-          loading={treeLoading}
-          onJump={jumpToMessage}
-          onClose={() => setShowTree(false)}
-          onFork={id && !stream.isStreaming && Boolean(realMessages) ? (blockIdx) => {
-            void forkConversationFromMessage(blockIdx);
-          } : undefined}
-        />
+        <Suspense fallback={null}>
+          <ConversationTree
+            tree={treeSnapshot?.roots ?? []}
+            loading={treeLoading}
+            onJump={jumpToMessage}
+            onClose={() => setShowTree(false)}
+            onFork={id && !stream.isStreaming && Boolean(realMessages) ? (blockIdx) => {
+              void forkConversationFromMessage(blockIdx);
+            } : undefined}
+          />
+        </Suspense>
       )}
     </div>
   );

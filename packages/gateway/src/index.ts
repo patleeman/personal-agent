@@ -691,6 +691,14 @@ function toTelegramUserIdString(value: number | undefined): string | undefined {
   return Number.isSafeInteger(parsed) ? String(parsed) : undefined;
 }
 
+function toTelegramChatIdString(value: unknown): string | undefined {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
+    return undefined;
+  }
+
+  return String(value);
+}
+
 function buildTelegramConversationId(chatId: string, messageThreadId: number | undefined): string {
   if (messageThreadId === undefined) {
     return chatId;
@@ -4297,7 +4305,7 @@ function sanitizeTelegramPendingToken(token: string): string {
 
 function createTelegramPendingMessageId(message: TelegramMessageLike): string {
   const timestampToken = new Date().toISOString().replace(/[:.]/g, '-');
-  const chatToken = sanitizeTelegramPendingToken(String(message.chat.id));
+  const chatToken = sanitizeTelegramPendingToken(toTelegramChatIdString(message.chat.id) ?? 'invalid-chat');
   const messageToken = typeof message.message_id === 'number'
     ? String(message.message_id)
     : `nomsg-${Math.floor(Math.random() * 1_000_000_000)}`;
@@ -4313,7 +4321,7 @@ function isTelegramMessageLike(value: unknown): value is TelegramMessageLike {
 
   const candidate = value as Record<string, unknown>;
   const chat = candidate.chat as Record<string, unknown> | undefined;
-  if (!chat || typeof chat.id !== 'number') {
+  if (!chat || !toTelegramChatIdString(chat.id)) {
     return false;
   }
 
@@ -6440,7 +6448,13 @@ export function createQueuedTelegramMessageHandler(
     pendingMessageId?: string,
     bypassPendingLimit = false,
   ): boolean => {
-    const chatId = String(message.chat.id);
+    const chatId = toTelegramChatIdString(message.chat.id);
+    if (!chatId) {
+      console.warn(gatewayWarning('Dropping telegram message with invalid chat id.'));
+      acknowledgePendingMessage(pendingMessageId);
+      return false;
+    }
+
     const messageThreadId = normalizeTelegramMessageThreadId(message.message_thread_id);
     const conversationId = buildTelegramConversationId(chatId, messageThreadId);
 
@@ -6511,7 +6525,12 @@ export function createQueuedTelegramMessageHandler(
 
   return {
     handleMessage(message: TelegramMessageLike): void {
-      const chatId = String(message.chat.id);
+      const chatId = toTelegramChatIdString(message.chat.id);
+      if (!chatId) {
+        console.warn(gatewayWarning('Dropping telegram message with invalid chat id.'));
+        return;
+      }
+
       let pendingMessageId: string | undefined;
 
       if (durableInboxDir) {

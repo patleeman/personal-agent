@@ -1908,6 +1908,37 @@ describe('queued telegram message handler', () => {
     }
   });
 
+  it('drops telegram messages with invalid chat ids before durable storage', async () => {
+    const durableInboxDir = createTempDir('gateway-telegram-invalid-chat-');
+
+    try {
+      const sendMessage = vi.fn(async () => undefined);
+      const sendChatAction = vi.fn(async () => undefined);
+      const runPrompt = vi.fn(async ({ prompt }: { prompt: string }) => `reply:${prompt}`);
+
+      const handler = createQueuedTelegramMessageHandler({
+        allowlist: new Set(['1']),
+        profileName: 'shared',
+        agentDir: '/tmp/agent',
+        telegramSessionDir: '/tmp/sessions',
+        workingDirectory: '/tmp/work',
+        sendMessage,
+        sendChatAction,
+        durableInboxDir,
+        createConversationController: createTestConversationControllerFactory(runPrompt),
+      });
+
+      handler.handleMessage({ chat: { id: Number.NaN }, message_id: 303, text: 'hello' });
+      handler.handleMessage({ chat: { id: 1.5 }, message_id: 304, text: 'hello again' });
+      await handler.waitForIdle();
+
+      expect(runPrompt).not.toHaveBeenCalled();
+      expect(readdirSync(durableInboxDir)).toHaveLength(0);
+    } finally {
+      rmSync(durableInboxDir, { recursive: true, force: true });
+    }
+  });
+
   it('replays pending durable telegram messages on startup', async () => {
     const durableInboxDir = createTempDir('gateway-telegram-replay-');
 
