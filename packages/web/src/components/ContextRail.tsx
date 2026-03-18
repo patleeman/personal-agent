@@ -38,6 +38,7 @@ import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
 import { CONVERSATION_PROJECTS_CHANGED_EVENT, emitConversationProjectsChanged } from '../conversationProjectEvents';
 import { closeConversationTab, ensureConversationTabOpen } from '../sessionTabs';
 import { ErrorState, IconButton, LoadingState, Pill, SurfacePanel } from './ui';
+import { ConversationAutomationPanel } from './ConversationAutomationPanel';
 
 const ConversationArtifactPanel = lazy(() => import('./ConversationArtifactPanel').then((module) => ({ default: module.ConversationArtifactPanel })));
 const ProjectDetailPanel = lazy(() => import('./ProjectDetailPanel').then((module) => ({ default: module.ProjectDetailPanel })));
@@ -1187,6 +1188,10 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         </div>
       </Section>
 
+      <Section title="Automation">
+        <ConversationAutomationPanel conversationId={id} />
+      </Section>
+
       <Section title="Runs">
         <div className="space-y-2.5">
           <button
@@ -1466,14 +1471,23 @@ function InboxItemContext({ id }: { id: string }) {
 
 // ── Project detail ───────────────────────────────────────────────────────────
 
+const VIEW_PROFILE_SEARCH_PARAM = 'viewProfile';
+
 function ProjectDetailContext({ id }: { id: string }) {
   const navigate = useNavigate();
-  const fetcher = useCallback(() => api.projectById(id), [id]);
-  const { data: project, loading, error, refetch } = useApi(fetcher, id);
+  const location = useLocation();
+  const viewProfile = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const value = params.get(VIEW_PROFILE_SEARCH_PARAM)?.trim();
+    return value && value !== 'all' ? value : undefined;
+  }, [location.search]);
+  const fetcher = useCallback(() => api.projectById(id, viewProfile ? { profile: viewProfile } : undefined), [id, viewProfile]);
+  const { data: project, loading, error, refetch } = useApi(fetcher, `${id}:${viewProfile ?? ''}`);
+  const { data: profileState } = useApi(api.profiles);
 
   useEffect(() => {
     function handleProjectChanged() {
-      refetch();
+      void refetch({ resetLoading: false });
     }
 
     window.addEventListener(PROJECTS_CHANGED_EVENT, handleProjectChanged);
@@ -1484,15 +1498,18 @@ function ProjectDetailContext({ id }: { id: string }) {
   if (error) return <div className="px-4 py-4 text-[12px] text-dim">Project not found.</div>;
   if (!project) return <div className="px-4 py-4 text-[12px] text-dim">Project not found.</div>;
 
+  const nextSearch = viewProfile ? `?${VIEW_PROFILE_SEARCH_PARAM}=${encodeURIComponent(viewProfile)}` : '';
+
   return suspendRailPanel(
     <ProjectDetailPanel
       project={project}
+      activeProfile={profileState?.currentProfile}
       onChanged={() => {
-        void refetch();
+        void refetch({ resetLoading: false });
         emitProjectsChanged();
       }}
       onDeleted={() => {
-        navigate('/projects');
+        navigate(`/projects${nextSearch}`);
         emitProjectsChanged();
       }}
     />,

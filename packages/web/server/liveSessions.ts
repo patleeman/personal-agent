@@ -25,6 +25,15 @@ import {
   generateConversationTitle,
   hasAssistantTitleSourceMessage,
 } from './conversationAutoTitle.js';
+import {
+  buildConversationAutomationSkillPrompt,
+  getConversationAutomationState,
+  writeConversationAutomationState,
+  type ConversationAutomationDocument,
+  type ConversationAutomationJudgeStep,
+  type ConversationAutomationSkillStep,
+} from './conversationAutomation.js';
+import { runConversationAutomationJudge } from './conversationAutomationJudge.js';
 import { syncWebLiveConversationRun, type WebLiveConversationRunState } from './conversationRuns.js';
 import {
   buildDisplayBlocksFromEntries,
@@ -100,12 +109,14 @@ interface LiveEntry {
   autoTitleRequested: boolean;
   lastContextUsageJson: string | null;
   lastQueueStateJson: string | null;
+  currentTurnError?: string | null;
   lastDurableRunState?: WebLiveConversationRunState;
   contextUsageTimer?: ReturnType<typeof setTimeout>;
 }
 
 export const registry = new Map<string, LiveEntry>();
 const toolTimings = new Map<string, number>(); // toolCallId → start ms
+const automationProcessingSessions = new Set<string>();
 
 export function reloadAllLiveSessionAuth(): number {
   let reloadedCount = 0;
@@ -774,6 +785,230 @@ async function syncDurableConversationRun(
   }
 }
 
+function resolveConversationAutomationProfile(): string {
+  return resolveLiveSessionProfile() ?? 'shared';
+}
+
+function saveConversationAutomation(entry: LiveEntry, document: ConversationAutomationDocument): ConversationAutomationDocument {
+  const saved = writeConversationAutomationState({
+    profile: resolveConversationAutomationProfile(),
+    document,
+  });
+  invalidateAppTopics('sessions');
+  return saved;
+}
+
+function clearConversationAutomationStepRuntime(step: ConversationAutomationSkillStep | ConversationAutomationJudgeStep): void {
+  delete step.startedAt;
+  delete step.completedAt;
+  delete step.resultReason;
+  delete step.resultConfidence;
+}
+
+function maybeFinalizeConversationAutomationSkillStep(
+  entry: LiveEntry,
+  document: ConversationAutomationDocument,
+  finishedAt: string,
+): ConversationAutomationDocument {
+  const activeStepId = document.activeStepId?.trim();
+  if (!activeStepId) {
+    return document;
+  }
+
+  const step = document.steps.find((candidate): candidate is ConversationAutomationSkillStep => candidate.id === activeStepId && candidate.kind === 'skill');
+  if (!step) {
+    return {
+      ...document,
+      activeStepId: undefined,
+      updatedAt: finishedAt,
+    };
+  }
+
+  const failure = entry.currentTurnError?.trim();
+  step.status = failure ? 'failed' : 'completed';
+  step.updatedAt = finishedAt;
+  step.completedAt = finishedAt;
+  step.resultReason = failure ? failure : 'Follow-up turn completed.';
+  document.activeStepId = undefined;
+  document.updatedAt = finishedAt;
+  if (failure) {
+    document.paused = true;
+  }
+
+  return document;
+}
+
+function interruptConversationAutomationStep(
+  document: ConversationAutomationDocument,
+  reason: string,
+  finishedAt: string,
+): ConversationAutomationDocument {
+  const activeStepId = document.activeStepId?.trim();
+  if (!activeStepId) {
+    return document;
+  }
+
+  const step = document.steps.find((candidate) => candidate.id === activeStepId);
+  if (!step) {
+    return {
+      ...document,
+      activeStepId: undefined,
+      updatedAt: finishedAt,
+      paused: true,
+    };
+  }
+
+  step.status = 'failed';
+  step.updatedAt = finishedAt;
+  step.completedAt = finishedAt;
+  step.resultReason = reason;
+  document.activeStepId = undefined;
+  document.updatedAt = finishedAt;
+  document.paused = true;
+  return document;
+}
+
+function hasPendingConversationAutomationStep(document: ConversationAutomationDocument): boolean {
+  return document.steps.some((step) => step.status === 'pending');
+}
+
+function finalizeConversationAutomationIfDone(document: ConversationAutomationDocument, updatedAt: string): ConversationAutomationDocument {
+  if (!document.activeStepId && !hasPendingConversationAutomationStep(document)) {
+    document.paused = true;
+    document.updatedAt = updatedAt;
+  }
+
+  return document;
+}
+
+export async function kickConversationAutomation(
+  sessionId: string,
+  trigger: 'manual' | 'turn_end' = 'manual',
+): Promise<void> {
+  const entry = registry.get(sessionId);
+  if (!entry || entry.session.isStreaming || automationProcessingSessions.has(sessionId)) {
+    return;
+  }
+
+  automationProcessingSessions.add(sessionId);
+  try {
+    let document = getConversationAutomationState({
+      profile: resolveConversationAutomationProfile(),
+      conversationId: sessionId,
+    });
+
+    if (trigger === 'manual' && document.activeStepId) {
+      document = interruptConversationAutomationStep(
+        document,
+        'Conversation automation was interrupted before the step completed.',
+        new Date().toISOString(),
+      );
+      document = finalizeConversationAutomationIfDone(document, document.updatedAt);
+      document = saveConversationAutomation(entry, document);
+      entry.currentTurnError = null;
+    }
+
+    if (trigger === 'turn_end' && document.activeStepId) {
+      document = maybeFinalizeConversationAutomationSkillStep(entry, document, new Date().toISOString());
+      document = finalizeConversationAutomationIfDone(document, document.updatedAt);
+      document = saveConversationAutomation(entry, document);
+      entry.currentTurnError = null;
+    }
+
+    while (!entry.session.isStreaming && !document.paused) {
+      const nextStep = document.steps.find((step) => step.status === 'pending');
+      if (!nextStep) {
+        document = finalizeConversationAutomationIfDone(document, new Date().toISOString());
+        saveConversationAutomation(entry, document);
+        break;
+      }
+
+      if (nextStep.kind === 'judge') {
+        const startedAt = new Date().toISOString();
+        clearConversationAutomationStepRuntime(nextStep);
+        nextStep.status = 'running';
+        nextStep.startedAt = startedAt;
+        nextStep.updatedAt = startedAt;
+        document.activeStepId = nextStep.id;
+        document.updatedAt = startedAt;
+        document = saveConversationAutomation(entry, document);
+
+        try {
+          const result = await runConversationAutomationJudge({
+            prompt: nextStep.prompt,
+            messages: getSessionMessages(entry.session),
+            modelRegistry: entry.session.modelRegistry,
+            settingsFile: SETTINGS_FILE,
+          });
+
+          const completedAt = new Date().toISOString();
+          nextStep.status = result.pass ? 'completed' : 'failed';
+          nextStep.updatedAt = completedAt;
+          nextStep.completedAt = completedAt;
+          nextStep.resultReason = result.reason;
+          if (result.confidence !== null) {
+            nextStep.resultConfidence = result.confidence;
+          } else {
+            delete nextStep.resultConfidence;
+          }
+          document.activeStepId = undefined;
+          document.updatedAt = completedAt;
+          if (!result.pass) {
+            document.paused = true;
+          }
+          document = finalizeConversationAutomationIfDone(document, completedAt);
+          document = saveConversationAutomation(entry, document);
+          if (!result.pass) {
+            break;
+          }
+          continue;
+        } catch (error) {
+          const failedAt = new Date().toISOString();
+          nextStep.status = 'failed';
+          nextStep.updatedAt = failedAt;
+          nextStep.completedAt = failedAt;
+          nextStep.resultReason = error instanceof Error ? error.message : String(error);
+          delete nextStep.resultConfidence;
+          document.activeStepId = undefined;
+          document.updatedAt = failedAt;
+          document.paused = true;
+          document = finalizeConversationAutomationIfDone(document, failedAt);
+          saveConversationAutomation(entry, document);
+          break;
+        }
+      }
+
+      const startedAt = new Date().toISOString();
+      clearConversationAutomationStepRuntime(nextStep);
+      nextStep.status = 'running';
+      nextStep.startedAt = startedAt;
+      nextStep.updatedAt = startedAt;
+      document.activeStepId = nextStep.id;
+      document.updatedAt = startedAt;
+      document = saveConversationAutomation(entry, document);
+
+      try {
+        entry.currentTurnError = null;
+        await promptSession(sessionId, buildConversationAutomationSkillPrompt(nextStep), 'followUp');
+      } catch (error) {
+        const failedAt = new Date().toISOString();
+        nextStep.status = 'failed';
+        nextStep.updatedAt = failedAt;
+        nextStep.completedAt = failedAt;
+        nextStep.resultReason = error instanceof Error ? error.message : String(error);
+        document.activeStepId = undefined;
+        document.updatedAt = failedAt;
+        document.paused = true;
+        document = finalizeConversationAutomationIfDone(document, failedAt);
+        saveConversationAutomation(entry, document);
+      }
+      break;
+    }
+  } finally {
+    automationProcessingSessions.delete(sessionId);
+  }
+}
+
 function maybeAutoTitleConversation(entry: LiveEntry): void {
   if (entry.autoTitleRequested) {
     return;
@@ -885,6 +1120,7 @@ function wireSession(
     autoTitleRequested: options.autoTitleRequested ?? false,
     lastContextUsageJson: null,
     lastQueueStateJson: null,
+    currentTurnError: null,
   };
   registry.set(id, entry);
   invalidateAppTopics('sessions');
@@ -895,6 +1131,7 @@ function wireSession(
     if (event.type === 'turn_end') {
       maybeAutoTitleConversation(entry);
       void syncDurableConversationRun(entry, 'waiting');
+      void kickConversationAutomation(entry.sessionId, 'turn_end');
     }
 
     if (event.type === 'agent_start' || event.type === 'message_update' || event.type === 'tool_execution_start' || event.type === 'tool_execution_update' || event.type === 'tool_execution_end') {
@@ -902,11 +1139,19 @@ function wireSession(
     }
 
     if (event.type === 'agent_start') {
+      entry.currentTurnError = null;
       void syncDurableConversationRun(entry, 'running');
     }
 
     if (event.type === 'agent_end') {
       void syncDurableConversationRun(entry, 'waiting');
+    }
+
+    if (event.type === 'message_end' && event.message.role === 'assistant') {
+      const errorMessage = getAssistantErrorDisplayMessage(event.message);
+      if (errorMessage) {
+        entry.currentTurnError = errorMessage;
+      }
     }
 
     if (event.type === 'message_start' && event.message.role === 'user') {
@@ -948,6 +1193,8 @@ function wireSession(
       broadcast(entry, sse);
     }
   });
+
+  void kickConversationAutomation(id);
 
   return entry;
 }
@@ -1122,7 +1369,7 @@ export async function inspectAvailableTools(
   const resourceLoader = await makeLoader(cwd, options);
   const { session } = await createAgentSession({
     cwd,
-    agentDir: AGENT_DIR,
+    agentDir: options.agentDir ?? AGENT_DIR,
     authStorage: auth,
     modelRegistry: makeRegistry(auth),
     resourceLoader,
@@ -1172,6 +1419,7 @@ export function getSessionContextUsage(sessionId: string): LiveContextUsage | nu
 }
 
 interface LiveSessionLoaderOptions {
+  agentDir?: string;
   extensionFactories?: ExtensionFactory[];
   additionalExtensionPaths?: string[];
   additionalSkillPaths?: string[];
@@ -1182,7 +1430,7 @@ interface LiveSessionLoaderOptions {
 async function makeLoader(cwd: string, options: LiveSessionLoaderOptions = {}) {
   const loader = new DefaultResourceLoader({
     cwd,
-    agentDir: AGENT_DIR,
+    agentDir: options.agentDir ?? AGENT_DIR,
     extensionFactories: options.extensionFactories,
     additionalExtensionPaths: options.additionalExtensionPaths,
     additionalSkillPaths: options.additionalSkillPaths,
@@ -1203,7 +1451,7 @@ export async function createSession(
   const sessionManager = SessionManager.create(cwd, resolvePersistentSessionDir(cwd));
   const { session } = await createAgentSession({
     cwd,
-    agentDir: AGENT_DIR,
+    agentDir: options.agentDir ?? AGENT_DIR,
     authStorage: auth,
     modelRegistry: makeRegistry(auth),
     resourceLoader,
@@ -1230,7 +1478,7 @@ export async function createSessionFromExisting(
   const sessionManager = SessionManager.forkFrom(sessionFile, cwd, resolvePersistentSessionDir(cwd));
   const { session } = await createAgentSession({
     cwd,
-    agentDir: AGENT_DIR,
+    agentDir: options.agentDir ?? AGENT_DIR,
     authStorage: auth,
     modelRegistry: makeRegistry(auth),
     resourceLoader,
@@ -1262,7 +1510,7 @@ export async function resumeSession(
   const resourceLoader = await makeLoader(cwd, options);
   const { session } = await createAgentSession({
     cwd,
-    agentDir: AGENT_DIR,
+    agentDir: options.agentDir ?? AGENT_DIR,
     authStorage: auth,
     modelRegistry: makeRegistry(auth),
     resourceLoader,
@@ -1523,7 +1771,7 @@ export async function forkSession(
   try {
     const { session } = await createAgentSession({
       cwd: entry.cwd,
-      agentDir: AGENT_DIR,
+      agentDir: options.agentDir ?? AGENT_DIR,
       authStorage: auth,
       modelRegistry: makeRegistry(auth),
       resourceLoader,

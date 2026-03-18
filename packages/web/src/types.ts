@@ -127,6 +127,7 @@ export interface ProjectRequirements {
 
 export interface ProjectRecord {
   id: string;
+  profile?: string;
   createdAt: string;
   updatedAt: string;
   archivedAt?: string;
@@ -146,6 +147,7 @@ export interface ProjectRecord {
 
 export interface InvalidProjectRecord {
   projectId: string;
+  profile?: string;
   path: string;
   error: string;
 }
@@ -213,6 +215,7 @@ export interface ProjectTimelineEntry {
 }
 
 export interface ProjectDetail {
+  profile: string;
   project: ProjectRecord;
   taskCount: number;
   noteCount: number;
@@ -876,6 +879,60 @@ export interface ConversationTitleSettingsState {
   enabled: boolean;
   currentModel: string;
   effectiveModel: string;
+}
+
+export interface ConversationAutomationJudgeSettingsState {
+  currentModel: string;
+  effectiveModel: string;
+  systemPrompt: string;
+  usingDefaultSystemPrompt: boolean;
+}
+
+export type ConversationAutomationStepStatus = 'pending' | 'running' | 'completed' | 'failed';
+
+export type ConversationAutomationStep = {
+  id: string;
+  kind: 'skill' | 'judge';
+  label: string;
+  status: ConversationAutomationStepStatus;
+  createdAt: string;
+  updatedAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  resultReason?: string;
+  resultConfidence?: number;
+} & (
+  | {
+      kind: 'skill';
+      skillName: string;
+      skillArgs?: string;
+    }
+  | {
+      kind: 'judge';
+      prompt: string;
+    }
+);
+
+export interface ConversationAutomationState {
+  conversationId: string;
+  paused: boolean;
+  activeStepId: string | null;
+  updatedAt: string;
+  steps: ConversationAutomationStep[];
+}
+
+export interface ConversationAutomationSkillInfo {
+  name: string;
+  description: string;
+  source: string;
+}
+
+export interface ConversationAutomationResponse {
+  conversationId: string;
+  live: boolean;
+  automation: ConversationAutomationState;
+  skills: ConversationAutomationSkillInfo[];
+  judge: ConversationAutomationJudgeSettingsState;
 }
 
 export interface ProfileState {

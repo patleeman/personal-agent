@@ -1,5 +1,6 @@
 import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, watch, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, watch, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
@@ -106,6 +107,7 @@ import {
   promptSession,
   restoreQueuedMessage,
   queuePromptContext,
+  kickConversationAutomation,
   compactSession,
   reloadSessionResources,
   reloadAllLiveSessionAuth,
@@ -118,6 +120,18 @@ import {
   registry as liveRegistry,
 } from './liveSessions.js';
 import { recoverDurableLiveConversations } from './conversationRecovery.js';
+import {
+  createConversationAutomationJudgeStep,
+  createConversationAutomationSkillStep,
+  getConversationAutomationState,
+  moveConversationAutomationStep,
+  resetConversationAutomationFromStep,
+  writeConversationAutomationState,
+} from './conversationAutomation.js';
+import {
+  readSavedConversationAutomationJudgePreferences,
+  writeSavedConversationAutomationJudgePreferences,
+} from './conversationAutomationJudge.js';
 import { createWebLiveConversationRunId, syncWebLiveConversationRun } from './conversationRuns.js';
 import { cancelDurableRun, getDurableRun, getDurableRunLog, getDurableRunSnapshot, listDurableRuns } from './durableRuns.js';
 import {
@@ -207,6 +221,7 @@ import {
   updateProjectMilestone,
   updateProjectRecord,
   updateProjectTaskRecord,
+  type InvalidProjectRecord,
   type ProjectDetail,
   type ProjectLinkedConversation,
   type ProjectTimelineEntry,
@@ -260,11 +275,36 @@ function getDefaultWebCwd(): string {
 
 installProcessLogging();
 
+const VIEW_PROFILE_QUERY_PARAM = 'viewProfile';
+
 function listAvailableProfiles(): string[] {
   return listProfiles({
     repoRoot: REPO_ROOT,
     profilesRoot: getProfilesRoot(),
   });
+}
+
+function resolveRequestedProfileFromQuery(
+  req: express.Request,
+  options: { allowAll?: boolean } = {},
+): string | 'all' {
+  const requestedProfile = typeof req.query[VIEW_PROFILE_QUERY_PARAM] === 'string'
+    ? req.query[VIEW_PROFILE_QUERY_PARAM].trim()
+    : '';
+
+  if (!requestedProfile) {
+    return getCurrentProfile();
+  }
+
+  if (options.allowAll && requestedProfile === 'all') {
+    return 'all';
+  }
+
+  if (!listAvailableProfiles().includes(requestedProfile)) {
+    throw new Error(`Unknown profile: ${requestedProfile}`);
+  }
+
+  return requestedProfile;
 }
 
 function applyProfileEnvironment(profile: string): void {
@@ -299,6 +339,7 @@ async function syncDaemonTaskScopeForProfile(profile: string): Promise<void> {
       try {
         writeInternalAttentionEntry({
           repoRoot: REPO_ROOT,
+          stateRoot: resolveDaemonRoot(),
           profile,
           kind: 'service',
           summary: 'Daemon restarted for the active profile.',
@@ -382,8 +423,8 @@ function buildLiveSessionExtensionFactories() {
   ];
 }
 
-function buildLiveSessionResourceOptions() {
-  const resolved = resolveResourceProfile(getCurrentProfile(), {
+function buildLiveSessionResourceOptions(profile = getCurrentProfile()) {
+  const resolved = resolveResourceProfile(profile, {
     repoRoot: REPO_ROOT,
     profilesRoot: getProfilesRoot(),
   });
@@ -394,6 +435,19 @@ function buildLiveSessionResourceOptions() {
     additionalPromptTemplatePaths: resolved.promptEntries,
     additionalThemePaths: resolved.themeEntries,
   };
+}
+
+function withTemporaryProfileAgentDir<T>(profile: string, run: (agentDir: string) => Promise<T>): Promise<T> {
+  const resolved = resolveResourceProfile(profile, {
+    repoRoot: REPO_ROOT,
+    profilesRoot: getProfilesRoot(),
+  });
+  const agentDir = mkdtempSync(join(tmpdir(), 'pa-web-profile-inspect-'));
+  materializeProfileToAgentDir(resolved, agentDir);
+
+  return run(agentDir).finally(() => {
+    rmSync(agentDir, { recursive: true, force: true });
+  });
 }
 
 function buildPackageInstallState(profile = getCurrentProfile()) {
@@ -418,13 +472,21 @@ function buildPackageInstallState(profile = getCurrentProfile()) {
 
 // ── Activity read-state ───────────────────────────────────────────────────────
 // Stored as a simple JSON set alongside activity files.
-function loadReadState(profile = getCurrentProfile()): Set<string> {
-  return loadProfileActivityReadState({ repoRoot: REPO_ROOT, profile });
+function listActivityStateRoots(): Array<string | undefined> {
+  try {
+    return [undefined, resolveDaemonRoot()];
+  } catch {
+    return [undefined];
+  }
 }
 
-function saveReadState(ids: Set<string>, profile = getCurrentProfile()) {
+function loadReadState(stateRoot: string | undefined, profile = getCurrentProfile()): Set<string> {
+  return loadProfileActivityReadState({ repoRoot: REPO_ROOT, stateRoot, profile });
+}
+
+function saveReadState(ids: Set<string>, stateRoot: string | undefined, profile = getCurrentProfile()) {
   try {
-    saveProfileActivityReadState({ repoRoot: REPO_ROOT, profile, ids });
+    saveProfileActivityReadState({ repoRoot: REPO_ROOT, stateRoot, profile, ids });
   } catch { /* ignore */ }
 }
 
@@ -449,11 +511,30 @@ type ActivityEntryWithConversationLinks = ReturnType<typeof listProfileActivityE
   relatedConversationIds?: string[];
 };
 
+type ActivityRecord = {
+  stateRoot?: string;
+  entry: ActivityEntryWithConversationLinks;
+  read: boolean;
+};
+
+type ActivityListEntry = ActivityEntryWithConversationLinks & {
+  read: boolean;
+};
+
+type ProjectDetailWithProfile = ProjectDetail & {
+  profile: string;
+  project: ProjectDetail['project'] & {
+    profile: string;
+  };
+};
+
 function attachActivityConversationLinks(
   profile: string,
   entry: ReturnType<typeof listProfileActivityEntries>[number]['entry'],
+  stateRoot?: string,
 ): ActivityEntryWithConversationLinks {
   const relatedConversationIds = getActivityConversationLink({
+    stateRoot,
     profile,
     activityId: entry.id,
   })?.relatedConversationIds;
@@ -468,14 +549,85 @@ function attachActivityConversationLinks(
   };
 }
 
-function listActivityForCurrentProfile() {
-  const profile = getCurrentProfile();
-  const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile });
-  const read = loadReadState(profile);
-  return entries.map(({ entry }) => ({
-    ...attachActivityConversationLinks(profile, entry),
-    read: read.has(entry.id),
+function listActivityRecordsForProfile(profile = getCurrentProfile()): ActivityRecord[] {
+  const records: ActivityRecord[] = [];
+
+  for (const stateRoot of listActivityStateRoots()) {
+    const readState = loadReadState(stateRoot, profile);
+    const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, stateRoot, profile });
+
+    for (const { entry } of entries) {
+      records.push({
+        stateRoot,
+        entry: attachActivityConversationLinks(profile, entry, stateRoot),
+        read: readState.has(entry.id),
+      });
+    }
+  }
+
+  records.sort((left, right) => {
+    const timestampCompare = right.entry.createdAt.localeCompare(left.entry.createdAt);
+    if (timestampCompare !== 0) {
+      return timestampCompare;
+    }
+
+    if (left.stateRoot !== right.stateRoot) {
+      return left.stateRoot ? 1 : -1;
+    }
+
+    return right.entry.id.localeCompare(left.entry.id);
+  });
+
+  const deduped: ActivityRecord[] = [];
+  const seenIds = new Set<string>();
+
+  for (const record of records) {
+    if (seenIds.has(record.entry.id)) {
+      continue;
+    }
+
+    seenIds.add(record.entry.id);
+    deduped.push(record);
+  }
+
+  return deduped;
+}
+
+function listActivityForProfile(profile = getCurrentProfile()): ActivityListEntry[] {
+  return listActivityRecordsForProfile(profile).map(({ entry, read }) => ({
+    ...entry,
+    read,
   }));
+}
+
+function findActivityRecord(profile: string, activityId: string): ActivityRecord | undefined {
+  return listActivityRecordsForProfile(profile).find((record) => record.entry.id === activityId);
+}
+
+function markActivityReadState(profile: string, activityId: string, read: boolean): boolean {
+  let changed = false;
+
+  for (const stateRoot of listActivityStateRoots()) {
+    const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, stateRoot, profile });
+    if (!entries.some(({ entry }) => entry.id === activityId)) {
+      continue;
+    }
+
+    const state = loadReadState(stateRoot, profile);
+    if (read) {
+      state.add(activityId);
+    } else {
+      state.delete(activityId);
+    }
+    saveReadState(state, stateRoot, profile);
+    changed = true;
+  }
+
+  return changed;
+}
+
+function listActivityForCurrentProfile() {
+  return listActivityForProfile(getCurrentProfile());
 }
 
 function getActivitySnapshotForCurrentProfile() {
@@ -772,19 +924,12 @@ function getSessionLastActivityAt(sessionFile: string, fallback: string): string
 }
 
 function listUnreadConversationActivityEntries(profile = getCurrentProfile()) {
-  const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile });
-  const read = loadReadState(profile);
-
-  return entries
-    .map(({ entry }) => ({
-      ...attachActivityConversationLinks(profile, entry),
-      read: read.has(entry.id),
-    }))
-    .filter((entry) => !entry.read && entry.relatedConversationIds && entry.relatedConversationIds.length > 0)
-    .map((entry) => ({
-      id: entry.id,
-      createdAt: entry.createdAt,
-      relatedConversationIds: entry.relatedConversationIds ?? [],
+  return listActivityRecordsForProfile(profile)
+    .filter((record) => !record.read && record.entry.relatedConversationIds && record.entry.relatedConversationIds.length > 0)
+    .map((record) => ({
+      id: record.entry.id,
+      createdAt: record.entry.createdAt,
+      relatedConversationIds: record.entry.relatedConversationIds ?? [],
     }));
 }
 
@@ -1351,8 +1496,7 @@ function summarizeProjectConversationSnippet(conversationId: string): string | u
   return undefined;
 }
 
-function listLinkedProjectConversations(projectId: string): ProjectLinkedConversation[] {
-  const profile = getCurrentProfile();
+function listLinkedProjectConversations(projectId: string, profile = getCurrentProfile()): ProjectLinkedConversation[] {
   const sessionById = new Map(listConversationSessionsSnapshot().map((session) => [session.id, session]));
 
   return listConversationProjectLinks({ profile })
@@ -1373,8 +1517,8 @@ function listLinkedProjectConversations(projectId: string): ProjectLinkedConvers
     .sort((left, right) => (right.lastActivityAt ?? '').localeCompare(left.lastActivityAt ?? ''));
 }
 
-function buildProjectTimeline(detail: ProjectDetail): ProjectTimelineEntry[] {
-  const activityEntries = listActivityForCurrentProfile()
+function buildProjectTimeline(detail: ProjectDetail, profile = getCurrentProfile()): ProjectTimelineEntry[] {
+  const activityEntries = listActivityForProfile(profile)
     .filter((entry) => (entry.relatedProjectIds ?? []).includes(detail.project.id));
 
   const timeline: ProjectTimelineEntry[] = [];
@@ -1450,20 +1594,42 @@ function buildProjectTimeline(detail: ProjectDetail): ProjectTimelineEntry[] {
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
-function readProjectDetailForCurrentProfile(projectId: string): ProjectDetail {
+function applyProjectProfile<T extends { downloadPath: string }>(items: T[], profile: string): T[] {
+  return items.map((item) => ({
+    ...item,
+    downloadPath: `${item.downloadPath}?${VIEW_PROFILE_QUERY_PARAM}=${encodeURIComponent(profile)}`,
+  }));
+}
+
+function annotateProjectRecord(project: ProjectDetail['project'], profile: string): ProjectDetailWithProfile['project'] {
+  return {
+    ...project,
+    profile,
+  };
+}
+
+function readProjectDetailForProfile(projectId: string, profile = getCurrentProfile()): ProjectDetailWithProfile {
   const detail = readProjectDetailFromProject({
     repoRoot: REPO_ROOT,
-    profile: getCurrentProfile(),
+    profile,
     projectId,
   });
-  const linkedConversations = listLinkedProjectConversations(projectId);
-  const enriched: ProjectDetail = {
+  const linkedConversations = listLinkedProjectConversations(projectId, profile);
+  const enriched: ProjectDetailWithProfile = {
     ...detail,
+    profile,
+    project: annotateProjectRecord(detail.project, profile),
+    attachments: applyProjectProfile(detail.attachments, profile),
+    artifacts: applyProjectProfile(detail.artifacts, profile),
     linkedConversations,
     timeline: [],
   };
-  enriched.timeline = buildProjectTimeline(enriched);
+  enriched.timeline = buildProjectTimeline(enriched, profile);
   return enriched;
+}
+
+function readProjectDetailForCurrentProfile(projectId: string): ProjectDetailWithProfile {
+  return readProjectDetailForProfile(projectId, getCurrentProfile());
 }
 
 let processingDeferredResumes = false;
@@ -1688,6 +1854,7 @@ startAppEventMonitor({
 
 createServiceAttentionMonitor({
   repoRoot: REPO_ROOT,
+  stateRoot: resolveDaemonRoot(),
   getCurrentProfile,
   readDaemonState,
   readGatewayState,
@@ -1799,7 +1966,7 @@ app.patch('/api/profiles/current', async (req, res) => {
 app.get('/api/status', (_req, res) => {
   try {
     const profile = getCurrentProfile();
-    const activities = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile });
+    const activities = listActivityForProfile(profile);
     const projectIds = listProjectIds({ repoRoot: REPO_ROOT, profile });
     res.json({
       profile,
@@ -2131,6 +2298,7 @@ app.post('/api/web-ui/service/rollback', (req, res) => {
     try {
       writeInternalAttentionEntry({
         repoRoot: REPO_ROOT,
+        stateRoot: resolveDaemonRoot(),
         profile: getCurrentProfile(),
         kind: 'deployment',
         summary: 'Web UI rollback complete.',
@@ -2167,6 +2335,7 @@ app.post('/api/web-ui/service/mark-bad', (req, res) => {
     try {
       writeInternalAttentionEntry({
         repoRoot: REPO_ROOT,
+        stateRoot: resolveDaemonRoot(),
         profile: getCurrentProfile(),
         kind: 'deployment',
         summary: 'Web UI release marked bad.',
@@ -2242,11 +2411,9 @@ app.get('/api/activity/count', (_req, res) => {
 app.get('/api/activity/:id', (req, res) => {
   try {
     const profile = getCurrentProfile();
-    const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile });
-    const match = entries.find(({ entry }) => entry.id === req.params.id);
+    const match = findActivityRecord(profile, req.params.id);
     if (!match) { res.status(404).json({ error: 'Not found' }); return; }
-    const read = loadReadState(profile);
-    res.json({ ...attachActivityConversationLinks(profile, match.entry), read: read.has(match.entry.id) });
+    res.json({ ...match.entry, read: match.read });
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -2259,15 +2426,14 @@ app.get('/api/activity/:id', (req, res) => {
 app.post('/api/activity/:id/start', async (req, res) => {
   try {
     const profile = getCurrentProfile();
-    const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile });
-    const match = entries.find(({ entry }) => entry.id === req.params.id);
+    const match = findActivityRecord(profile, req.params.id);
 
     if (!match) {
       res.status(404).json({ error: 'Not found' });
       return;
     }
 
-    const entry = attachActivityConversationLinks(profile, match.entry);
+    const entry = match.entry;
     const requestedRelatedProjectIds = Array.isArray(entry.relatedProjectIds)
       ? entry.relatedProjectIds.filter((projectId): projectId is string => typeof projectId === 'string' && projectId.trim().length > 0)
       : [];
@@ -2294,6 +2460,7 @@ app.post('/api/activity/:id/start', async (req, res) => {
 
     const relatedConversationIds = [...new Set([...(entry.relatedConversationIds ?? []), result.id])];
     setActivityConversationLinks({
+      stateRoot: match.stateRoot,
       profile,
       activityId: entry.id,
       relatedConversationIds,
@@ -2328,9 +2495,11 @@ app.patch('/api/activity/:id', (req, res) => {
     const profile = getCurrentProfile();
     const { id } = req.params;
     const { read } = req.body as { read?: boolean };
-    const state = loadReadState(profile);
-    if (read === false) state.delete(id); else state.add(id);
-    saveReadState(state, profile);
+    const changed = markActivityReadState(profile, id, read !== false);
+    if (!changed) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
     invalidateAppTopics('activity');
     res.json({ ok: true });
   } catch (err) {
@@ -2390,6 +2559,62 @@ function listAvailableThemeIds(): string[] {
   } catch {
     return [];
   }
+}
+
+function buildConversationAutomationResponse(conversationId: string) {
+  const profile = getCurrentProfile();
+  const automation = getConversationAutomationState({
+    profile,
+    conversationId,
+  });
+  const skills = listSkillsForCurrentProfile().map((skill) => ({
+    name: skill.name,
+    description: skill.description,
+    source: skill.source,
+  }));
+  const judge = readSavedConversationAutomationJudgePreferences(SETTINGS_FILE);
+
+  return {
+    conversationId,
+    live: liveRegistry.has(conversationId),
+    automation: {
+      conversationId: automation.conversationId,
+      paused: automation.paused,
+      activeStepId: automation.activeStepId ?? null,
+      updatedAt: automation.updatedAt,
+      steps: automation.steps.map((step) => ({
+        id: step.id,
+        kind: step.kind,
+        label: step.label,
+        status: step.status,
+        createdAt: step.createdAt,
+        updatedAt: step.updatedAt,
+        ...(step.startedAt ? { startedAt: step.startedAt } : {}),
+        ...(step.completedAt ? { completedAt: step.completedAt } : {}),
+        ...(step.resultReason ? { resultReason: step.resultReason } : {}),
+        ...(typeof step.resultConfidence === 'number' ? { resultConfidence: step.resultConfidence } : {}),
+        ...(step.kind === 'skill'
+          ? {
+              skillName: step.skillName,
+              ...(step.skillArgs ? { skillArgs: step.skillArgs } : {}),
+            }
+          : {
+              prompt: step.prompt,
+            }),
+      })),
+    },
+    skills,
+    judge,
+  };
+}
+
+function saveConversationAutomationDocument(document: Parameters<typeof writeConversationAutomationState>[0]['document']) {
+  const saved = writeConversationAutomationState({
+    profile: getCurrentProfile(),
+    document,
+  });
+  invalidateAppTopics('sessions');
+  return saved;
 }
 
 app.get('/api/models', (_req, res) => {
@@ -2670,13 +2895,49 @@ app.patch('/api/conversation-titles/settings', (req, res) => {
   }
 });
 
-app.get('/api/tools', async (_req, res) => {
+app.get('/api/conversation-automation/settings', (_req, res) => {
   try {
-    const profile = getCurrentProfile();
-    const details = await inspectAvailableTools(REPO_ROOT, {
-      ...buildLiveSessionResourceOptions(),
-      extensionFactories: buildLiveSessionExtensionFactories(),
+    res.json(readSavedConversationAutomationJudgePreferences(SETTINGS_FILE));
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
     });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.patch('/api/conversation-automation/settings', (req, res) => {
+  try {
+    const { model, systemPrompt } = req.body as { model?: string | null; systemPrompt?: string | null };
+    if (typeof model !== 'string' && model !== null && typeof systemPrompt !== 'string' && systemPrompt !== null) {
+      res.status(400).json({ error: 'model or systemPrompt required' });
+      return;
+    }
+
+    const saved = persistSettingsWrite(
+      (settingsFile) => writeSavedConversationAutomationJudgePreferences({ model, systemPrompt }, settingsFile),
+      { runtimeSettingsFile: SETTINGS_FILE },
+    );
+
+    res.json(saved);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.get('/api/tools', async (req, res) => {
+  try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
+    const details = await withTemporaryProfileAgentDir(profile, async (agentDir) => inspectAvailableTools(REPO_ROOT, {
+      ...buildLiveSessionResourceOptions(profile),
+      agentDir,
+      extensionFactories: buildLiveSessionExtensionFactories(),
+    }));
     const mcpCliBinary = inspectCliBinary({ command: 'mcp-cli', cwd: REPO_ROOT });
     const mcpCliConfig = readMcpCliConfig({ cwd: REPO_ROOT });
     const onePasswordCommand = process.env.PERSONAL_AGENT_OP_BIN?.trim() || 'op';
@@ -2702,14 +2963,15 @@ app.get('/api/tools', async (_req, res) => {
         searchedPaths: mcpCliConfig.searchedPaths,
         servers: mcpCliConfig.servers,
       },
-      packageInstall: buildPackageInstallState(profile),
+      packageInstall: buildPackageInstallState(),
     });
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
+      message,
       stack: err instanceof Error ? err.stack : undefined,
     });
-    res.status(500).json({ error: String(err) });
+    res.status(message.startsWith('Unknown profile:') ? 400 : 500).json({ error: message });
   }
 });
 
@@ -4734,6 +4996,231 @@ app.get('/api/live-sessions/:id/context', (req, res) => {
   });
 });
 
+app.get('/api/conversations/:id/automation', (req, res) => {
+  try {
+    res.json(buildConversationAutomationResponse(req.params.id));
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.patch('/api/conversations/:id/automation', async (req, res) => {
+  try {
+    const { paused } = req.body as { paused?: boolean };
+    if (typeof paused !== 'boolean') {
+      res.status(400).json({ error: 'paused required' });
+      return;
+    }
+
+    const document = getConversationAutomationState({
+      profile: getCurrentProfile(),
+      conversationId: req.params.id,
+    });
+    document.paused = paused;
+    document.updatedAt = new Date().toISOString();
+    saveConversationAutomationDocument(document);
+
+    if (!paused) {
+      await kickConversationAutomation(req.params.id);
+    }
+
+    res.json(buildConversationAutomationResponse(req.params.id));
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/conversations/:id/automation/steps', async (req, res) => {
+  try {
+    const body = req.body as {
+      kind?: 'skill' | 'judge';
+      skillName?: string;
+      skillArgs?: string;
+      label?: string;
+      prompt?: string;
+    };
+
+    if (body.kind !== 'skill' && body.kind !== 'judge') {
+      res.status(400).json({ error: 'kind must be skill or judge' });
+      return;
+    }
+
+    const document = getConversationAutomationState({
+      profile: getCurrentProfile(),
+      conversationId: req.params.id,
+    });
+
+    if (body.kind === 'skill') {
+      const skillName = body.skillName?.trim() ?? '';
+      if (!skillName) {
+        res.status(400).json({ error: 'skillName required' });
+        return;
+      }
+
+      const skillNames = new Set(listSkillsForCurrentProfile().map((skill) => skill.name));
+      if (!skillNames.has(skillName)) {
+        res.status(400).json({ error: `Unknown skill: ${skillName}` });
+        return;
+      }
+
+      document.steps.push(createConversationAutomationSkillStep({
+        skillName,
+        label: body.label,
+        skillArgs: body.skillArgs,
+      }));
+    } else {
+      const prompt = body.prompt?.trim() ?? '';
+      if (!prompt) {
+        res.status(400).json({ error: 'prompt required' });
+        return;
+      }
+
+      document.steps.push(createConversationAutomationJudgeStep({
+        label: body.label,
+        prompt,
+      }));
+    }
+
+    document.updatedAt = new Date().toISOString();
+    saveConversationAutomationDocument(document);
+
+    if (!document.paused) {
+      await kickConversationAutomation(req.params.id);
+    }
+
+    res.status(201).json(buildConversationAutomationResponse(req.params.id));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: message });
+  }
+});
+
+app.post('/api/conversations/:id/automation/steps/:stepId/move', async (req, res) => {
+  try {
+    const { direction } = req.body as { direction?: 'up' | 'down' };
+    if (direction !== 'up' && direction !== 'down') {
+      res.status(400).json({ error: 'direction must be up or down' });
+      return;
+    }
+
+    const document = getConversationAutomationState({
+      profile: getCurrentProfile(),
+      conversationId: req.params.id,
+    });
+    const step = document.steps.find((candidate) => candidate.id === req.params.stepId);
+    if (!step) {
+      res.status(404).json({ error: 'Automation step not found' });
+      return;
+    }
+    if (step.status === 'running') {
+      res.status(409).json({ error: 'Running automation steps cannot be moved' });
+      return;
+    }
+
+    saveConversationAutomationDocument(moveConversationAutomationStep(document, req.params.stepId, direction));
+
+    if (!document.paused) {
+      await kickConversationAutomation(req.params.id);
+    }
+
+    res.json(buildConversationAutomationResponse(req.params.id));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: message });
+  }
+});
+
+app.post('/api/conversations/:id/automation/steps/:stepId/reset', async (req, res) => {
+  try {
+    const { resume } = req.body as { resume?: boolean };
+    const document = getConversationAutomationState({
+      profile: getCurrentProfile(),
+      conversationId: req.params.id,
+    });
+    const step = document.steps.find((candidate) => candidate.id === req.params.stepId);
+    if (!step) {
+      res.status(404).json({ error: 'Automation step not found' });
+      return;
+    }
+    if (step.status === 'running') {
+      res.status(409).json({ error: 'Running automation steps cannot be reset' });
+      return;
+    }
+
+    saveConversationAutomationDocument(resetConversationAutomationFromStep(document, req.params.stepId, {
+      paused: typeof resume === 'boolean' ? !resume : document.paused,
+    }));
+
+    if (resume) {
+      await kickConversationAutomation(req.params.id);
+    }
+
+    res.json(buildConversationAutomationResponse(req.params.id));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: message });
+  }
+});
+
+app.delete('/api/conversations/:id/automation/steps/:stepId', async (req, res) => {
+  try {
+    const document = getConversationAutomationState({
+      profile: getCurrentProfile(),
+      conversationId: req.params.id,
+    });
+    const step = document.steps.find((candidate) => candidate.id === req.params.stepId);
+    if (!step) {
+      res.status(404).json({ error: 'Automation step not found' });
+      return;
+    }
+    if (step.status === 'running') {
+      res.status(409).json({ error: 'Running automation steps cannot be deleted' });
+      return;
+    }
+
+    document.steps = document.steps.filter((candidate) => candidate.id !== req.params.stepId);
+    document.updatedAt = new Date().toISOString();
+    if (document.steps.length === 0) {
+      document.paused = true;
+      document.activeStepId = undefined;
+    }
+    saveConversationAutomationDocument(document);
+
+    if (!document.paused) {
+      await kickConversationAutomation(req.params.id);
+    }
+
+    res.json(buildConversationAutomationResponse(req.params.id));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: message });
+  }
+});
+
 app.patch('/api/conversations/:id/title', (req, res) => {
   try {
     const { name } = req.body as { name?: string };
@@ -5372,15 +5859,42 @@ app.delete('/api/live-sessions/:id', (req, res) => {
 
 // ── Projects ─────────────────────────────────────────────────────────────────
 
-function readProjectIndexForCurrentProfile() {
+function readProjectIndexForProfile(profile = getCurrentProfile()) {
   return listProjectIndex({
     repoRoot: REPO_ROOT,
-    profile: getCurrentProfile(),
+    profile,
   });
 }
 
+function readProjectIndexForSelection(profile: string | 'all') {
+  if (profile !== 'all') {
+    const index = readProjectIndexForProfile(profile);
+    return {
+      profile,
+      projects: index.projects.map((project) => ({ ...project, profile })),
+      invalidProjects: index.invalidProjects.map((project) => ({ ...project, profile })),
+    };
+  }
+
+  const projects: Array<ReturnType<typeof annotateProjectRecord>> = [];
+  const invalidProjects: InvalidProjectRecord[] = [];
+
+  for (const availableProfile of listAvailableProfiles()) {
+    const index = readProjectIndexForProfile(availableProfile);
+    projects.push(...index.projects.map((project) => ({ ...project, profile: availableProfile })));
+    invalidProjects.push(...index.invalidProjects.map((project) => ({ ...project, profile: availableProfile })));
+  }
+
+  projects.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  return {
+    profile,
+    projects,
+    invalidProjects,
+  };
+}
+
 function listProjectsForCurrentProfile() {
-  return readProjectIndexForCurrentProfile().projects;
+  return readProjectIndexForSelection(getCurrentProfile()).projects;
 }
 
 function projectErrorStatus(error: unknown): number {
@@ -5388,40 +5902,44 @@ function projectErrorStatus(error: unknown): number {
   return /not found/i.test(message) ? 404 : 400;
 }
 
-app.get('/api/projects', (_req, res) => {
+app.get('/api/projects', (req, res) => {
   try {
-    const index = readProjectIndexForCurrentProfile();
+    const profile = resolveRequestedProfileFromQuery(req, { allowAll: true });
+    const index = readProjectIndexForSelection(profile);
     res.set('X-Personal-Agent-Project-Warning-Count', String(index.invalidProjects.length));
     res.json(index.projects);
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
+      message,
       stack: err instanceof Error ? err.stack : undefined,
     });
-    res.status(500).json({ error: String(err) });
+    res.status(message.startsWith('Unknown profile:') ? 400 : 500).json({ error: message });
   }
 });
 
-app.get('/api/projects/diagnostics', (_req, res) => {
+app.get('/api/projects/diagnostics', (req, res) => {
   try {
-    const profile = getCurrentProfile();
-    const index = readProjectIndexForCurrentProfile();
+    const profile = resolveRequestedProfileFromQuery(req, { allowAll: true });
+    const index = readProjectIndexForSelection(profile);
     res.json({
       profile,
       invalidProjects: index.invalidProjects,
     });
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
+      message,
       stack: err instanceof Error ? err.stack : undefined,
     });
-    res.status(500).json({ error: String(err) });
+    res.status(message.startsWith('Unknown profile:') ? 400 : 500).json({ error: message });
   }
 });
 
 app.get('/api/projects/:id', (req, res) => {
   try {
-    res.json(readProjectDetailForCurrentProfile(req.params.id));
+    const profile = resolveRequestedProfileFromQuery(req) as string;
+    res.json(readProjectDetailForProfile(req.params.id, profile));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -5429,9 +5947,10 @@ app.get('/api/projects/:id', (req, res) => {
 
 app.get('/api/projects/:id/package', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     const projectPackage = exportProjectSharePackage({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
     });
     const fileName = buildProjectSharePackageFileName({
@@ -5449,6 +5968,7 @@ app.get('/api/projects/:id/package', (req, res) => {
 
 app.post('/api/projects', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     const body = req.body as {
       title?: string;
       description?: string;
@@ -5466,7 +5986,7 @@ app.post('/api/projects', (req, res) => {
 
     const detail = createProjectRecord({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       title: body.title ?? '',
       description: body.description ?? '',
       projectRepoRoot: body.repoRoot,
@@ -5481,7 +6001,7 @@ app.post('/api/projects', (req, res) => {
       recentProgress: body.recentProgress,
     });
     invalidateAppTopics('projects');
-    res.status(201).json(readProjectDetailForCurrentProfile(detail.project.id));
+    res.status(201).json(readProjectDetailForProfile(detail.project.id, profile));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -5489,6 +6009,7 @@ app.post('/api/projects', (req, res) => {
 
 app.patch('/api/projects/:id', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     const body = req.body as {
       title?: string;
       description?: string;
@@ -5507,7 +6028,7 @@ app.patch('/api/projects/:id', (req, res) => {
 
     updateProjectRecord({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
       title: body.title,
       description: body.description,
@@ -5524,7 +6045,7 @@ app.patch('/api/projects/:id', (req, res) => {
       recentProgress: body.recentProgress,
     });
     invalidateAppTopics('projects');
-    res.json(readProjectDetailForCurrentProfile(req.params.id));
+    res.json(readProjectDetailForProfile(req.params.id, profile));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -5532,9 +6053,10 @@ app.patch('/api/projects/:id', (req, res) => {
 
 app.delete('/api/projects/:id', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     const result = deleteProjectRecord({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
     });
     invalidateAppTopics('projects');
@@ -5546,14 +6068,15 @@ app.delete('/api/projects/:id', (req, res) => {
 
 app.post('/api/projects/:id/archive', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     setProjectArchivedState({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
       archived: true,
     });
     invalidateAppTopics('projects');
-    res.json(readProjectDetailForCurrentProfile(req.params.id));
+    res.json(readProjectDetailForProfile(req.params.id, profile));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -5561,14 +6084,15 @@ app.post('/api/projects/:id/archive', (req, res) => {
 
 app.post('/api/projects/:id/unarchive', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     setProjectArchivedState({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
       archived: false,
     });
     invalidateAppTopics('projects');
-    res.json(readProjectDetailForCurrentProfile(req.params.id));
+    res.json(readProjectDetailForProfile(req.params.id, profile));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -5576,15 +6100,16 @@ app.post('/api/projects/:id/unarchive', (req, res) => {
 
 app.post('/api/projects/:id/brief', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     const body = req.body as { content?: string };
     saveProjectBrief({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
       content: body.content ?? '',
     });
     invalidateAppTopics('projects');
-    res.json(readProjectDetailForCurrentProfile(req.params.id));
+    res.json(readProjectDetailForProfile(req.params.id, profile));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -5592,22 +6117,23 @@ app.post('/api/projects/:id/brief', (req, res) => {
 
 app.post('/api/projects/:id/brief/regenerate', async (req, res) => {
   try {
-    const detail = readProjectDetailForCurrentProfile(req.params.id);
+    const profile = resolveRequestedProfileFromQuery(req) as string;
+    const detail = readProjectDetailForProfile(req.params.id, profile);
     const brief = await generateProjectBrief({
       detail,
       linkedConversations: detail.linkedConversations,
-      activityEntries: listActivityForCurrentProfile().filter((entry) => (entry.relatedProjectIds ?? []).includes(req.params.id)),
+      activityEntries: listActivityForProfile(profile).filter((entry) => (entry.relatedProjectIds ?? []).includes(req.params.id)),
       settingsFile: SETTINGS_FILE,
       authFile: AUTH_FILE,
     });
     saveProjectBrief({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
       content: brief,
     });
     invalidateAppTopics('projects');
-    res.json(readProjectDetailForCurrentProfile(req.params.id));
+    res.json(readProjectDetailForProfile(req.params.id, profile));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -5615,17 +6141,18 @@ app.post('/api/projects/:id/brief/regenerate', async (req, res) => {
 
 app.post('/api/projects/:id/notes', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     const body = req.body as { title?: string; kind?: string; body?: string };
     createProjectNoteRecord({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
       title: body.title ?? '',
       kind: body.kind ?? 'note',
       body: body.body,
     });
     invalidateAppTopics('projects');
-    res.status(201).json(readProjectDetailForCurrentProfile(req.params.id));
+    res.status(201).json(readProjectDetailForProfile(req.params.id, profile));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -5633,10 +6160,11 @@ app.post('/api/projects/:id/notes', (req, res) => {
 
 app.patch('/api/projects/:id/notes/:noteId', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     const body = req.body as { title?: string; kind?: string; body?: string };
     updateProjectNoteRecord({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
       noteId: req.params.noteId,
       title: body.title,
@@ -5644,7 +6172,7 @@ app.patch('/api/projects/:id/notes/:noteId', (req, res) => {
       body: body.body,
     });
     invalidateAppTopics('projects');
-    res.json(readProjectDetailForCurrentProfile(req.params.id));
+    res.json(readProjectDetailForProfile(req.params.id, profile));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -5652,14 +6180,15 @@ app.patch('/api/projects/:id/notes/:noteId', (req, res) => {
 
 app.delete('/api/projects/:id/notes/:noteId', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     deleteProjectNoteRecord({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
       noteId: req.params.noteId,
     });
     invalidateAppTopics('projects');
-    res.json(readProjectDetailForCurrentProfile(req.params.id));
+    res.json(readProjectDetailForProfile(req.params.id, profile));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -5667,6 +6196,7 @@ app.delete('/api/projects/:id/notes/:noteId', (req, res) => {
 
 app.post('/api/projects/:id/files', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     const body = req.body as {
       kind?: 'attachment' | 'artifact';
       name?: string;
@@ -5677,7 +6207,7 @@ app.post('/api/projects/:id/files', (req, res) => {
     };
     uploadProjectFile({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
       kind: body.kind ?? 'attachment',
       name: body.name ?? '',
@@ -5687,7 +6217,7 @@ app.post('/api/projects/:id/files', (req, res) => {
       data: body.data ?? '',
     });
     invalidateAppTopics('projects');
-    res.status(201).json(readProjectDetailForCurrentProfile(req.params.id));
+    res.status(201).json(readProjectDetailForProfile(req.params.id, profile));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -5695,9 +6225,10 @@ app.post('/api/projects/:id/files', (req, res) => {
 
 app.get('/api/projects/:id/files/:kind/:fileId/download', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     const download = readProjectFileDownload({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
       kind: req.params.kind === 'artifact' ? 'artifact' : 'attachment',
       fileId: req.params.fileId,
@@ -5714,15 +6245,16 @@ app.get('/api/projects/:id/files/:kind/:fileId/download', (req, res) => {
 
 app.delete('/api/projects/:id/files/:kind/:fileId', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     deleteProjectFileRecord({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
       kind: req.params.kind === 'artifact' ? 'artifact' : 'attachment',
       fileId: req.params.fileId,
     });
     invalidateAppTopics('projects');
-    res.json(readProjectDetailForCurrentProfile(req.params.id));
+    res.json(readProjectDetailForProfile(req.params.id, profile));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -5730,6 +6262,7 @@ app.delete('/api/projects/:id/files/:kind/:fileId', (req, res) => {
 
 app.post('/api/projects/:id/milestones', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     const body = req.body as {
       title?: string;
       status?: string;
@@ -5739,7 +6272,7 @@ app.post('/api/projects/:id/milestones', (req, res) => {
 
     addProjectMilestone({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
       title: body.title ?? '',
       status: body.status ?? '',
@@ -5747,7 +6280,7 @@ app.post('/api/projects/:id/milestones', (req, res) => {
       makeCurrent: body.makeCurrent,
     });
     invalidateAppTopics('projects');
-    res.status(201).json(readProjectDetailForCurrentProfile(req.params.id));
+    res.status(201).json(readProjectDetailForProfile(req.params.id, profile));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -5755,6 +6288,7 @@ app.post('/api/projects/:id/milestones', (req, res) => {
 
 app.patch('/api/projects/:id/milestones/:milestoneId', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     const body = req.body as {
       title?: string;
       status?: string;
@@ -5764,7 +6298,7 @@ app.patch('/api/projects/:id/milestones/:milestoneId', (req, res) => {
 
     updateProjectMilestone({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
       milestoneId: req.params.milestoneId,
       title: body.title,
@@ -5773,7 +6307,7 @@ app.patch('/api/projects/:id/milestones/:milestoneId', (req, res) => {
       makeCurrent: body.makeCurrent,
     });
     invalidateAppTopics('projects');
-    res.json(readProjectDetailForCurrentProfile(req.params.id));
+    res.json(readProjectDetailForProfile(req.params.id, profile));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -5781,6 +6315,7 @@ app.patch('/api/projects/:id/milestones/:milestoneId', (req, res) => {
 
 app.post('/api/projects/:id/tasks', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     const body = req.body as {
       title?: string;
       status?: string;
@@ -5789,14 +6324,14 @@ app.post('/api/projects/:id/tasks', (req, res) => {
 
     createProjectTaskRecord({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
       title: body.title ?? '',
       status: body.status ?? '',
       milestoneId: body.milestoneId,
     });
     invalidateAppTopics('projects');
-    res.status(201).json(readProjectDetailForCurrentProfile(req.params.id));
+    res.status(201).json(readProjectDetailForProfile(req.params.id, profile));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -5804,6 +6339,7 @@ app.post('/api/projects/:id/tasks', (req, res) => {
 
 app.patch('/api/projects/:id/tasks/:taskId', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     const body = req.body as {
       title?: string;
       status?: string;
@@ -5812,7 +6348,7 @@ app.patch('/api/projects/:id/tasks/:taskId', (req, res) => {
 
     updateProjectTaskRecord({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
       taskId: req.params.taskId,
       title: body.title,
@@ -5820,7 +6356,7 @@ app.patch('/api/projects/:id/tasks/:taskId', (req, res) => {
       milestoneId: body.milestoneId,
     });
     invalidateAppTopics('projects');
-    res.json(readProjectDetailForCurrentProfile(req.params.id));
+    res.json(readProjectDetailForProfile(req.params.id, profile));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -5828,14 +6364,15 @@ app.patch('/api/projects/:id/tasks/:taskId', (req, res) => {
 
 app.delete('/api/projects/:id/milestones/:milestoneId', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     deleteProjectMilestone({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
       milestoneId: req.params.milestoneId,
     });
     invalidateAppTopics('projects');
-    res.json(readProjectDetailForCurrentProfile(req.params.id));
+    res.json(readProjectDetailForProfile(req.params.id, profile));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -5843,17 +6380,18 @@ app.delete('/api/projects/:id/milestones/:milestoneId', (req, res) => {
 
 app.post('/api/projects/:id/milestones/:milestoneId/move', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     const body = req.body as { direction?: 'up' | 'down' };
 
     moveProjectMilestone({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
       milestoneId: req.params.milestoneId,
       direction: body.direction ?? 'up',
     });
     invalidateAppTopics('projects');
-    res.json(readProjectDetailForCurrentProfile(req.params.id));
+    res.json(readProjectDetailForProfile(req.params.id, profile));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -5861,14 +6399,15 @@ app.post('/api/projects/:id/milestones/:milestoneId/move', (req, res) => {
 
 app.delete('/api/projects/:id/tasks/:taskId', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     deleteProjectTaskRecord({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
       taskId: req.params.taskId,
     });
     invalidateAppTopics('projects');
-    res.json(readProjectDetailForCurrentProfile(req.params.id));
+    res.json(readProjectDetailForProfile(req.params.id, profile));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -5876,17 +6415,18 @@ app.delete('/api/projects/:id/tasks/:taskId', (req, res) => {
 
 app.post('/api/projects/:id/tasks/:taskId/move', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     const body = req.body as { direction?: 'up' | 'down' };
 
     moveProjectTaskRecord({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
       taskId: req.params.taskId,
       direction: body.direction ?? 'up',
     });
     invalidateAppTopics('projects');
-    res.json(readProjectDetailForCurrentProfile(req.params.id));
+    res.json(readProjectDetailForProfile(req.params.id, profile));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -5894,9 +6434,10 @@ app.post('/api/projects/:id/tasks/:taskId/move', (req, res) => {
 
 app.get('/api/projects/:id/source', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     res.json(readProjectSource({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
     }));
   } catch (error) {
@@ -5906,15 +6447,16 @@ app.get('/api/projects/:id/source', (req, res) => {
 
 app.post('/api/projects/:id/source', (req, res) => {
   try {
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     const body = req.body as { content?: string };
     saveProjectSource({
       repoRoot: REPO_ROOT,
-      profile: getCurrentProfile(),
+      profile,
       projectId: req.params.id,
       content: body.content ?? '',
     });
     invalidateAppTopics('projects');
-    res.json(readProjectDetailForCurrentProfile(req.params.id));
+    res.json(readProjectDetailForProfile(req.params.id, profile));
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
   }
@@ -6207,8 +6749,7 @@ function inferSkillSource(skillPath: string, profile: string): string {
   return 'shared';
 }
 
-function listSkillsForCurrentProfile(): SkillItem[] {
-  const profile = getCurrentProfile();
+function listSkillsForProfile(profile = getCurrentProfile()): SkillItem[] {
   const resolved = resolveResourceProfile(profile, {
     repoRoot: REPO_ROOT,
     profilesRoot: getProfilesRoot(),
@@ -6247,6 +6788,10 @@ function listSkillsForCurrentProfile(): SkillItem[] {
   }
 
   return skills;
+}
+
+function listSkillsForCurrentProfile(): SkillItem[] {
+  return listSkillsForProfile(getCurrentProfile());
 }
 
 function listProfileAgentItems(): AgentsItem[] {
@@ -6343,9 +6888,9 @@ function buildRecentReadUsage(trackedPaths: string[]): Map<string, MemoryUsageSu
   return usageMap;
 }
 
-app.get('/api/memory', (_req, res) => {
+app.get('/api/memory', (req, res) => {
   try {
-    const profile = getCurrentProfile();
+    const profile = resolveRequestedProfileFromQuery(req) as string;
     const sharedAgentsCandidates = [
       join(getProfilesRoot(), 'shared', 'agent', 'AGENTS.md'),
       join(getRepoDefaultsAgentDir(REPO_ROOT), 'AGENTS.md'),
@@ -6367,7 +6912,7 @@ app.get('/api/memory', (_req, res) => {
       });
     }
 
-    const skills = listSkillsForCurrentProfile();
+    const skills = listSkillsForProfile(profile);
     const memoryDocs = listMemoryDocs();
 
     const usageByPath = buildRecentReadUsage([
@@ -6399,11 +6944,12 @@ app.get('/api/memory', (_req, res) => {
 
     res.json({ profile, agentsMd, skills, memoryDocs });
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
+      message,
       stack: err instanceof Error ? err.stack : undefined,
     });
-    res.status(500).json({ error: String(err) });
+    res.status(message.startsWith('Unknown profile:') ? 400 : 500).json({ error: message });
   }
 });
 
