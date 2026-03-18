@@ -143,6 +143,18 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('<code');
   });
 
+  it('renders a copy action for assistant messages', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'text',
+        ts: '2026-03-11T18:00:00.000Z',
+        text: 'Assistant output to copy',
+      }],
+    }));
+
+    expect(html).toContain('⎘ copy');
+  });
+
   it('uses absolute message ids when a transcript window starts mid-conversation', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: [{
