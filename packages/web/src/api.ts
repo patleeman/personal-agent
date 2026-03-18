@@ -1,4 +1,4 @@
-import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationCwdChangeResult, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, MemoryWorkItem, MergeMemoryDocResult, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectDiagnostics, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SyncState, ToolsState, WebUiState } from './types';
+import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationJudgeSettingsState, ConversationAutomationResponse, ConversationCwdChangeResult, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, MemoryWorkItem, MergeMemoryDocResult, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectDiagnostics, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SyncState, ToolsState, WebUiState } from './types';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch('/api' + path);
@@ -43,6 +43,15 @@ async function readApiError(res: Response): Promise<string> {
   }
 
   return `${res.status} ${res.statusText}`;
+}
+
+function withViewProfile(path: string, profile?: string): string {
+  if (!profile) {
+    return path;
+  }
+
+  const separator = path.includes('?') ? '&' : '?';
+  return `${path}${separator}viewProfile=${encodeURIComponent(profile)}`;
 }
 
 export const api = {
@@ -95,9 +104,9 @@ export const api = {
   sessionTree: (id: string) => get<ConversationTreeSnapshot>(`/sessions/${encodeURIComponent(id)}/tree`),
   sessionBlock: (id: string, blockId: string) => get<DisplayBlock>(`/sessions/${encodeURIComponent(id)}/blocks/${encodeURIComponent(blockId)}`),
   sessionSearchIndex: (sessionIds: string[]) => post<{ index: Record<string, string> }>('/sessions/search-index', { sessionIds }),
-  projects:     () => get<ProjectRecord[]>('/projects'),
-  projectDiagnostics: () => get<ProjectDiagnostics>('/projects/diagnostics'),
-  projectById:  (id: string) => get<ProjectDetail>(`/projects/${encodeURIComponent(id)}`),
+  projects:     (options?: { profile?: string }) => get<ProjectRecord[]>(withViewProfile('/projects', options?.profile)),
+  projectDiagnostics: (options?: { profile?: string }) => get<ProjectDiagnostics>(withViewProfile('/projects/diagnostics', options?.profile)),
+  projectById:  (id: string, options?: { profile?: string }) => get<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}`, options?.profile)),
   createProject: (input: {
     title: string;
     description: string;
@@ -111,7 +120,7 @@ export const api = {
     currentFocus?: string | null;
     blockers?: string[];
     recentProgress?: string[];
-  }) => post<ProjectDetail>('/projects', input),
+  }, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile('/projects', options?.profile), input),
   updateProject: (id: string, patchBody: {
     title?: string;
     description?: string;
@@ -126,50 +135,50 @@ export const api = {
     currentMilestoneId?: string | null;
     blockers?: string[];
     recentProgress?: string[];
-  }) => patch<ProjectDetail>(`/projects/${encodeURIComponent(id)}`, patchBody),
-  deleteProject: (id: string) =>
-    del<{ ok: true; deletedProjectId: string }>(`/projects/${encodeURIComponent(id)}`),
-  archiveProject: (id: string) => post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/archive`),
-  unarchiveProject: (id: string) => post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/unarchive`),
+  }, options?: { profile?: string }) => patch<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}`, options?.profile), patchBody),
+  deleteProject: (id: string, options?: { profile?: string }) =>
+    del<{ ok: true; deletedProjectId: string }>(withViewProfile(`/projects/${encodeURIComponent(id)}`, options?.profile)),
+  archiveProject: (id: string, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/archive`, options?.profile)),
+  unarchiveProject: (id: string, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/unarchive`, options?.profile)),
   addProjectMilestone: (id: string, input: {
     title: string;
     status: string;
     summary?: string;
     makeCurrent?: boolean;
-  }) => post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/milestones`, input),
+  }, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/milestones`, options?.profile), input),
   updateProjectMilestone: (id: string, milestoneId: string, patchBody: {
     title?: string;
     status?: string;
     summary?: string | null;
     makeCurrent?: boolean;
-  }) => patch<ProjectDetail>(`/projects/${encodeURIComponent(id)}/milestones/${encodeURIComponent(milestoneId)}`, patchBody),
-  deleteProjectMilestone: (id: string, milestoneId: string) =>
-    del<ProjectDetail>(`/projects/${encodeURIComponent(id)}/milestones/${encodeURIComponent(milestoneId)}`),
-  moveProjectMilestone: (id: string, milestoneId: string, direction: 'up' | 'down') =>
-    post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/milestones/${encodeURIComponent(milestoneId)}/move`, { direction }),
+  }, options?: { profile?: string }) => patch<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/milestones/${encodeURIComponent(milestoneId)}`, options?.profile), patchBody),
+  deleteProjectMilestone: (id: string, milestoneId: string, options?: { profile?: string }) =>
+    del<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/milestones/${encodeURIComponent(milestoneId)}`, options?.profile)),
+  moveProjectMilestone: (id: string, milestoneId: string, direction: 'up' | 'down', options?: { profile?: string }) =>
+    post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/milestones/${encodeURIComponent(milestoneId)}/move`, options?.profile), { direction }),
   createProjectTask: (id: string, input: {
     title: string;
     status: string;
     milestoneId?: string | null;
-  }) => post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/tasks`, input),
+  }, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/tasks`, options?.profile), input),
   updateProjectTask: (id: string, taskId: string, patchBody: {
     title?: string;
     status?: string;
     milestoneId?: string | null;
-  }) => patch<ProjectDetail>(`/projects/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}`, patchBody),
-  deleteProjectTask: (id: string, taskId: string) =>
-    del<ProjectDetail>(`/projects/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}`),
-  moveProjectTask: (id: string, taskId: string, direction: 'up' | 'down') =>
-    post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}/move`, { direction }),
-  projectSource: (id: string) => get<{ path: string; content: string }>(`/projects/${encodeURIComponent(id)}/source`),
-  saveProjectSource: (id: string, content: string) => post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/source`, { content }),
-  saveProjectBrief: (id: string, content: string) => post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/brief`, { content }),
-  regenerateProjectBrief: (id: string) => post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/brief/regenerate`, {}),
-  createProjectNote: (id: string, input: { title: string; kind: string; body?: string }) => post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/notes`, input),
-  updateProjectNote: (id: string, noteId: string, input: { title?: string; kind?: string; body?: string }) =>
-    patch<ProjectDetail>(`/projects/${encodeURIComponent(id)}/notes/${encodeURIComponent(noteId)}`, input),
-  deleteProjectNote: (id: string, noteId: string) =>
-    del<ProjectDetail>(`/projects/${encodeURIComponent(id)}/notes/${encodeURIComponent(noteId)}`),
+  }, options?: { profile?: string }) => patch<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}`, options?.profile), patchBody),
+  deleteProjectTask: (id: string, taskId: string, options?: { profile?: string }) =>
+    del<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}`, options?.profile)),
+  moveProjectTask: (id: string, taskId: string, direction: 'up' | 'down', options?: { profile?: string }) =>
+    post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/tasks/${encodeURIComponent(taskId)}/move`, options?.profile), { direction }),
+  projectSource: (id: string, options?: { profile?: string }) => get<{ path: string; content: string }>(withViewProfile(`/projects/${encodeURIComponent(id)}/source`, options?.profile)),
+  saveProjectSource: (id: string, content: string, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/source`, options?.profile), { content }),
+  saveProjectBrief: (id: string, content: string, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/brief`, options?.profile), { content }),
+  regenerateProjectBrief: (id: string, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/brief/regenerate`, options?.profile), {}),
+  createProjectNote: (id: string, input: { title: string; kind: string; body?: string }, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/notes`, options?.profile), input),
+  updateProjectNote: (id: string, noteId: string, input: { title?: string; kind?: string; body?: string }, options?: { profile?: string }) =>
+    patch<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/notes/${encodeURIComponent(noteId)}`, options?.profile), input),
+  deleteProjectNote: (id: string, noteId: string, options?: { profile?: string }) =>
+    del<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/notes/${encodeURIComponent(noteId)}`, options?.profile)),
   uploadProjectFile: (id: string, input: {
     kind: 'attachment' | 'artifact';
     name: string;
@@ -177,16 +186,16 @@ export const api = {
     title?: string;
     description?: string;
     data: string;
-  }) => post<ProjectDetail>(`/projects/${encodeURIComponent(id)}/files`, input),
-  deleteProjectFile: (id: string, kind: 'attachment' | 'artifact', fileId: string) =>
-    del<ProjectDetail>(`/projects/${encodeURIComponent(id)}/files/${kind}/${encodeURIComponent(fileId)}`),
+  }, options?: { profile?: string }) => post<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/files`, options?.profile), input),
+  deleteProjectFile: (id: string, kind: 'attachment' | 'artifact', fileId: string, options?: { profile?: string }) =>
+    del<ProjectDetail>(withViewProfile(`/projects/${encodeURIComponent(id)}/files/${kind}/${encodeURIComponent(fileId)}`, options?.profile)),
   profiles:     () => get<ProfileState>('/profiles'),
   setCurrentProfile: (profile: string) => patch<{ ok: boolean; currentProfile: string }>('/profiles/current', { profile }),
 
   // ── Models ────────────────────────────────────────────────────────────────
   models: () => get<ModelState>('/models'),
   defaultCwd: () => get<DefaultCwdState>('/default-cwd'),
-  tools: () => get<ToolsState>('/tools'),
+  tools: (options?: { profile?: string }) => get<ToolsState>(withViewProfile('/tools', options?.profile)),
   installPackageSource: (input: { source: string; target: 'profile' | 'local'; profileName?: string }) =>
     post<PackageInstallResult>('/tools/packages/install', input),
   mcpCliServer: (server: string) => get<McpCliServerDetail>(`/tools/mcp/servers/${encodeURIComponent(server)}`),
@@ -212,6 +221,9 @@ export const api = {
   conversationTitleSettings: () => get<ConversationTitleSettingsState>('/conversation-titles/settings'),
   updateConversationTitleSettings: (input: { enabled?: boolean; model?: string | null }) =>
     patch<ConversationTitleSettingsState>('/conversation-titles/settings', input),
+  conversationAutomationJudgeSettings: () => get<ConversationAutomationJudgeSettingsState>('/conversation-automation/settings'),
+  updateConversationAutomationJudgeSettings: (input: { model?: string | null; systemPrompt?: string | null }) =>
+    patch<ConversationAutomationJudgeSettingsState>('/conversation-automation/settings', input),
   openConversationTabs: () => get<{ sessionIds: string[]; pinnedSessionIds: string[] }>('/web-ui/open-conversations'),
   setOpenConversationTabs: (sessionIds: string[], pinnedSessionIds: string[] = []) =>
     patch<{ ok: boolean; sessionIds: string[]; pinnedSessionIds: string[] }>('/web-ui/open-conversations', { sessionIds, pinnedSessionIds }),
@@ -258,7 +270,7 @@ export const api = {
     post<{ output: string; exitCode: number }>('/run', { command, cwd }),
 
   // ── Memory browser ────────────────────────────────────────────────────────
-  memory:         () => get<MemoryData>('/memory'),
+  memory:         (options?: { profile?: string }) => get<MemoryData>(withViewProfile('/memory', options?.profile)),
   memoryFile:     (path: string) => get<{ content: string; path: string }>(`/memory/file?path=${encodeURIComponent(path)}`),
   memoryFileSave: (path: string, content: string) => post<{ ok: boolean }>('/memory/file', { path, content }),
 
@@ -275,6 +287,22 @@ export const api = {
   liveSessions: () => get<LiveSessionMeta[]>('/live-sessions'),
   liveSession: (id: string) => get<LiveSessionMeta & { live: boolean }>(`/live-sessions/${id}`),
   liveSessionContext: (id: string) => get<LiveSessionContext>(`/live-sessions/${id}/context`),
+  conversationAutomation: (id: string) => get<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation`),
+  updateConversationAutomation: (id: string, input: { paused: boolean }) =>
+    patch<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation`, input),
+  addConversationAutomationStep: (id: string, input: {
+    kind: 'skill' | 'judge';
+    skillName?: string;
+    skillArgs?: string;
+    label?: string;
+    prompt?: string;
+  }) => post<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation/steps`, input),
+  moveConversationAutomationStep: (id: string, stepId: string, direction: 'up' | 'down') =>
+    post<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation/steps/${encodeURIComponent(stepId)}/move`, { direction }),
+  resetConversationAutomationStep: (id: string, stepId: string, resume = false) =>
+    post<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation/steps/${encodeURIComponent(stepId)}/reset`, { resume }),
+  deleteConversationAutomationStep: (id: string, stepId: string) =>
+    del<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation/steps/${encodeURIComponent(stepId)}`),
   liveSessionContextUsage: (id: string) => get<SessionContextUsage>(`/live-sessions/${encodeURIComponent(id)}/context-usage`),
   conversationArtifacts: (id: string) => get<{ conversationId: string; artifacts: ConversationArtifactSummary[] }>(`/conversations/${encodeURIComponent(id)}/artifacts`),
   conversationArtifact: (id: string, artifactId: string) => get<{ conversationId: string; artifact: ConversationArtifactRecord }>(`/conversations/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(artifactId)}`),
