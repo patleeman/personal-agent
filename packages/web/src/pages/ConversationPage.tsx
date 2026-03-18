@@ -65,6 +65,7 @@ const HISTORICAL_TAIL_BLOCKS_JUMP_PADDING = 40;
 const MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS = 1200;
 const HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX = 1400;
 const HISTORICAL_BACKGROUND_PREFETCH_DELAY_MS = 800;
+const MAX_CONVERSATION_RAIL_BLOCKS = 240;
 
 // ── Model picker ──────────────────────────────────────────────────────────────
 
@@ -1176,6 +1177,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [deferredResumeNowMs, setDeferredResumeNowMs] = useState(() => Date.now());
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const composerResizeFrameRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef   = useRef<HTMLDivElement>(null);
   const deferredResumeAutoResumeKeyRef = useRef<string | null>(null);
@@ -1410,13 +1412,28 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     };
   }, [deferredResumes.length]);
 
-  // Auto-resize textarea
-  const resize = useCallback(() => {
+  // Auto-resize textarea. Schedule the measurement once per frame so typing
+  // does not force multiple synchronous layouts against a large transcript.
+  const resizeComposer = useCallback(() => {
     const el = textareaRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
+
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, []);
+
+  const scheduleComposerResize = useCallback(() => {
+    if (typeof window === 'undefined' || composerResizeFrameRef.current !== null) {
+      return;
+    }
+
+    composerResizeFrameRef.current = window.requestAnimationFrame(() => {
+      composerResizeFrameRef.current = null;
+      resizeComposer();
+    });
+  }, [resizeComposer]);
 
   const rememberComposerInput = useCallback((value: string, scopeId: string | null = composerHistoryScopeId) => {
     const nextHistory = appendComposerHistory(scopeId, value);
@@ -1435,9 +1452,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       const end = el.value.length;
       el.focus();
       el.setSelectionRange(end, end);
-      resize();
     });
-  }, [resize]);
+  }, []);
 
   const navigateComposerHistory = useCallback((direction: 'older' | 'newer') => {
     if (composerHistory.length === 0) {
@@ -1478,7 +1494,16 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return true;
   }, [composerHistory, composerHistoryIndex, input, moveComposerCaretToEnd, setInput]);
 
-  useEffect(() => { resize(); }, [input, resize]);
+  useLayoutEffect(() => {
+    scheduleComposerResize();
+  }, [input, scheduleComposerResize]);
+
+  useEffect(() => () => {
+    if (composerResizeFrameRef.current !== null) {
+      window.cancelAnimationFrame(composerResizeFrameRef.current);
+      composerResizeFrameRef.current = null;
+    }
+  }, []);
 
   useEffect(() => { setSlashIdx(0); }, [slashQuery]);
   useEffect(() => { setModelIdx(0); }, [modelQuery]);
@@ -2874,10 +2899,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const composerSubmit = resolveConversationComposerSubmitState(stream.isStreaming, composerAltHeld);
   const showScrollToBottomControl = shouldShowScrollToBottomControl(messageCount, atBottom);
   const hasRenderableMessages = (realMessages?.length ?? 0) > 0;
-  // Skip rail overlay in very large transcripts to avoid expensive marker re-measurement while streaming.
+  // Keep the rail off once transcripts are large enough to trigger windowing.
+  // The rail continuously re-measures mounted message markers, which makes
+  // composer-driven layout work scale with transcript size.
   const shouldRenderConversationRail = hasRenderableMessages
     && Boolean(realMessages)
-    && (realMessages?.length ?? 0) <= 1200;
+    && (realMessages?.length ?? 0) <= MAX_CONVERSATION_RAIL_BLOCKS;
   const editingDrawingAttachment = useMemo(() => {
     if (!editingDrawingLocalId || editingDrawingLocalId === '__new__') {
       return null;
@@ -2891,6 +2918,121 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     && stream.blocks.length === 0;
   const showConversationLoadingState = !hasRenderableMessages
     && (sessionLoading || hydratingLiveConversation);
+
+  const transcriptPane = useMemo(() => (
+    <div className="relative flex-1 min-h-0">
+      <div ref={scrollRef} className="conversation-scroll-shell h-full overflow-y-auto overflow-x-hidden">
+        {hasRenderableMessages && realMessages ? (
+          <>
+            {showHistoricalLoadMore && (
+              <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border-subtle bg-surface/90 px-6 py-3 backdrop-blur">
+                <div className="min-w-0 text-[11px] text-secondary">
+                  Showing the latest <span className="font-medium text-primary">{realMessages.length}</span> of{' '}
+                  <span className="font-medium text-primary">{historicalTotalBlocks}</span> blocks.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => loadOlderMessages()}
+                  disabled={sessionLoading}
+                  className="ui-action-button shrink-0 text-[11px]"
+                >
+                  {sessionLoading ? 'Loading older…' : `Load ${Math.min(HISTORICAL_TAIL_BLOCKS_STEP, historicalBlockOffset)} older blocks`}
+                </button>
+              </div>
+            )}
+            <ChatView
+              key={id ?? 'draft-conversation'}
+              messages={realMessages}
+              messageIndexOffset={messageIndexOffset}
+              scrollContainerRef={scrollRef}
+              focusMessageIndex={requestedFocusMessageIndex}
+              isStreaming={stream.isStreaming}
+              onCheckpointMessage={id && !stream.isStreaming ? saveMemoryFromMessage : undefined}
+              onForkMessage={id && !stream.isStreaming ? forkConversationFromMessage : undefined}
+              onHydrateMessage={hydrateHistoricalBlock}
+              hydratingMessageBlockIds={hydratingHistoricalBlockIdSet}
+              onOpenArtifact={openArtifact}
+              activeArtifactId={selectedArtifactId}
+              onOpenRun={openRun}
+              activeRunId={selectedRunId}
+              onResumeConversation={conversationResumeState.canResume ? resumeConversation : undefined}
+              resumeConversationBusy={resumeConversationBusy}
+              resumeConversationTitle={conversationResumeState.title}
+              resumeConversationLabel={conversationResumeState.actionLabel ?? 'resume'}
+            />
+          </>
+        ) : showConversationLoadingState ? (
+          <LoadingState label="Loading session…" className="justify-center h-full" />
+        ) : (
+          <EmptyState
+            className="h-full flex flex-col justify-center px-8"
+            icon={(
+              <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center mx-auto">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-accent">
+                  <path d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 0 1-.825-.242m9.345-8.334a2.126 2.126 0 0 0-.476-.095 48.64 48.64 0 0 0-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0 0 11.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" />
+                </svg>
+              </div>
+            )}
+            title={draft ? NEW_CONVERSATION_TITLE : title}
+            body={draft
+              ? 'Start typing to create a conversation. You can set its initial working directory in the right rail, use the saved default from Settings, or let a single referenced project repo root pick it automatically.'
+              : isLiveSession
+                ? 'This conversation is live but has no messages yet. Send a prompt to get started.'
+                : 'Start a Pi session to populate this conversation.'}
+          />
+        )}
+        {showScrollToBottomControl && (
+          <button
+            onClick={() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })}
+            className="sticky bottom-4 left-1/2 -translate-x-1/2 ui-pill ui-pill-muted shadow-md"
+          >
+            ↓ scroll to bottom
+          </button>
+        )}
+      </div>
+      {shouldRenderConversationRail && realMessages && (
+        <ConversationRail
+          messages={realMessages}
+          messageIndexOffset={messageIndexOffset}
+          scrollContainerRef={scrollRef}
+          onJumpToMessage={jumpToMessage}
+        />
+      )}
+    </div>
+  ), [
+    conversationResumeState.actionLabel,
+    conversationResumeState.canResume,
+    conversationResumeState.title,
+    draft,
+    forkConversationFromMessage,
+    hasRenderableMessages,
+    historicalBlockOffset,
+    historicalTotalBlocks,
+    hydrateHistoricalBlock,
+    hydratingHistoricalBlockIdSet,
+    id,
+    isLiveSession,
+    jumpToMessage,
+    loadOlderMessages,
+    messageIndexOffset,
+    openArtifact,
+    openRun,
+    realMessages,
+    requestedFocusMessageIndex,
+    resumeConversation,
+    resumeConversationBusy,
+    saveMemoryFromMessage,
+    selectedArtifactId,
+    selectedRunId,
+    sessionLoading,
+    shouldRenderConversationRail,
+    showConversationLoadingState,
+    showHistoricalLoadMore,
+    showScrollToBottomControl,
+    stream.isStreaming,
+    title,
+  ]);
+
 
   return (
     <div className="flex flex-col h-full">
@@ -2998,85 +3140,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       </PageHeader>
 
       {/* Messages */}
-      <div className="relative flex-1 min-h-0">
-        <div ref={scrollRef} className="conversation-scroll-shell h-full overflow-y-auto overflow-x-hidden">
-          {hasRenderableMessages && realMessages ? (
-            <>
-              {showHistoricalLoadMore && (
-                <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border-subtle bg-surface/90 px-6 py-3 backdrop-blur">
-                  <div className="min-w-0 text-[11px] text-secondary">
-                    Showing the latest <span className="font-medium text-primary">{realMessages.length}</span> of{' '}
-                    <span className="font-medium text-primary">{historicalTotalBlocks}</span> blocks.
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => loadOlderMessages()}
-                    disabled={sessionLoading}
-                    className="ui-action-button shrink-0 text-[11px]"
-                  >
-                    {sessionLoading ? 'Loading older…' : `Load ${Math.min(HISTORICAL_TAIL_BLOCKS_STEP, historicalBlockOffset)} older blocks`}
-                  </button>
-                </div>
-              )}
-              <ChatView
-                key={id ?? 'draft-conversation'}
-                messages={realMessages}
-                messageIndexOffset={messageIndexOffset}
-                scrollContainerRef={scrollRef}
-                focusMessageIndex={requestedFocusMessageIndex}
-                isStreaming={stream.isStreaming}
-                onCheckpointMessage={id && !stream.isStreaming ? saveMemoryFromMessage : undefined}
-                onForkMessage={id && !stream.isStreaming ? forkConversationFromMessage : undefined}
-                onHydrateMessage={hydrateHistoricalBlock}
-                hydratingMessageBlockIds={hydratingHistoricalBlockIdSet}
-                onOpenArtifact={openArtifact}
-                activeArtifactId={selectedArtifactId}
-                onOpenRun={openRun}
-                activeRunId={selectedRunId}
-                onResumeConversation={conversationResumeState.canResume ? resumeConversation : undefined}
-                resumeConversationBusy={resumeConversationBusy}
-                resumeConversationTitle={conversationResumeState.title}
-                resumeConversationLabel={conversationResumeState.actionLabel ?? 'resume'}
-              />
-            </>
-          ) : showConversationLoadingState ? (
-            <LoadingState label="Loading session…" className="justify-center h-full" />
-          ) : (
-            <EmptyState
-              className="h-full flex flex-col justify-center px-8"
-              icon={(
-                <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center mx-auto">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-accent">
-                    <path d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 0 1-.825-.242m9.345-8.334a2.126 2.126 0 0 0-.476-.095 48.64 48.64 0 0 0-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0 0 11.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" />
-                  </svg>
-                </div>
-              )}
-              title={draft ? NEW_CONVERSATION_TITLE : title}
-              body={draft
-                ? 'Start typing to create a conversation. You can set its initial working directory in the right rail, use the saved default from Settings, or let a single referenced project repo root pick it automatically.'
-                : isLiveSession
-                  ? 'This conversation is live but has no messages yet. Send a prompt to get started.'
-                  : 'Start a Pi session to populate this conversation.'}
-            />
-          )}
-          {showScrollToBottomControl && (
-            <button
-              onClick={() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })}
-              className="sticky bottom-4 left-1/2 -translate-x-1/2 ui-pill ui-pill-muted shadow-md"
-            >
-              ↓ scroll to bottom
-            </button>
-          )}
-        </div>
-        {shouldRenderConversationRail && realMessages && (
-          <ConversationRail
-            messages={realMessages}
-            messageIndexOffset={messageIndexOffset}
-            scrollContainerRef={scrollRef}
-            onJumpToMessage={jumpToMessage}
-          />
-        )}
-      </div>
+      {transcriptPane}
 
       {/* Input area */}
       <div
@@ -3400,7 +3464,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               <textarea
                 ref={textareaRef}
                 value={input}
-                onChange={e => { setInput(e.target.value); setSlashIdx(0); setMentionIdx(0); resize(); }}
+                onChange={e => { setInput(e.target.value); setSlashIdx(0); setMentionIdx(0); }}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
                 rows={1}
