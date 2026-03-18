@@ -78,6 +78,9 @@ export function ProjectOverviewPanel({
   removeDisabled?: boolean;
 }) {
   const record = project.project;
+  const projectHref = record.profile
+    ? `/projects/${record.id}?viewProfile=${encodeURIComponent(record.profile)}`
+    : `/projects/${record.id}`;
   const status = formatProjectStatus(record.status);
   const blockers = record.blockers.filter((blocker) => blocker.trim().length > 0);
   const acceptanceCriteria = record.requirements.acceptanceCriteria.filter((item) => item.trim().length > 0);
@@ -155,7 +158,7 @@ export function ProjectOverviewPanel({
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Link to={`/projects/${record.id}`} className="ui-action-button text-accent hover:text-accent/80">
+            <Link to={projectHref} className="ui-action-button text-accent hover:text-accent/80">
               open project
             </Link>
             {onRemove && (

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import {
   formatProjectStatus,
@@ -24,6 +24,7 @@ const CREATE_PROJECT_SUMMARY_STORAGE_KEY = 'pa:reload:projects:create-summary';
 const CREATE_PROJECT_GOAL_STORAGE_KEY = 'pa:reload:projects:create-goal';
 const CREATE_PROJECT_ACCEPTANCE_CRITERIA_STORAGE_KEY = 'pa:reload:projects:create-acceptance-criteria';
 const CREATE_PROJECT_PLAN_SUMMARY_STORAGE_KEY = 'pa:reload:projects:create-plan-summary';
+const VIEW_PROFILE_QUERY_PARAM = 'viewProfile';
 
 type ProjectListFilter = 'active' | 'archived' | 'all';
 
@@ -34,9 +35,11 @@ const PROJECT_FILTER_OPTIONS: Array<{ value: ProjectListFilter; label: string }>
 ];
 
 function CreateProjectPanel({
+  profile,
   onCreated,
   onCancel,
 }: {
+  profile: string;
   onCreated: (projectId: string) => void;
   onCancel: () => void;
 }) {
@@ -106,7 +109,7 @@ function CreateProjectPanel({
           .map((item) => item.trim())
           .filter((item) => item.length > 0),
         planSummary: planSummary.trim() || undefined,
-      });
+      }, { profile });
       clearTitle();
       clearDescription();
       clearRepoRoot();
@@ -227,13 +230,15 @@ function ProjectDiagnosticsPanel({
   invalidProjects,
 }: {
   profile: string;
-  invalidProjects: Array<{ projectId: string; path: string; error: string }>;
+  invalidProjects: Array<{ projectId: string; profile?: string; path: string; error: string }>;
 }) {
   if (invalidProjects.length === 0) {
     return null;
   }
 
-  const validatorCommand = `npm run validate:projects -- --profile ${profile}`;
+  const validatorCommand = profile === 'all'
+    ? null
+    : `npm run validate:projects -- --profile ${profile}`;
 
   return (
     <div className="space-y-3">
@@ -241,17 +246,22 @@ function ProjectDiagnosticsPanel({
         <p className="text-[13px] text-danger">
           {invalidProjects.length} {invalidProjects.length === 1 ? 'project file could not be loaded.' : 'project files could not be loaded.'}
         </p>
-        <p className="ui-card-meta">
-          Fix the invalid YAML or run{' '}
-          <span className="font-mono text-primary">{validatorCommand}</span>
-          {' '}to inspect all project files for this profile.
-        </p>
+        {validatorCommand ? (
+          <p className="ui-card-meta">
+            Fix the invalid YAML or run{' '}
+            <span className="font-mono text-primary">{validatorCommand}</span>
+            {' '}to inspect all project files for this profile.
+          </p>
+        ) : (
+          <p className="ui-card-meta">Fix the invalid YAML in the listed profile before it will appear in the combined project view.</p>
+        )}
       </div>
 
       <div className="space-y-3">
         {invalidProjects.map((issue) => (
-          <div key={issue.projectId} className="space-y-0.5">
+          <div key={`${issue.profile ?? profile}:${issue.projectId}`} className="space-y-0.5">
             <p className="font-mono text-[12px] text-danger">{issue.projectId}</p>
+            {issue.profile && <p className="ui-card-meta">profile {issue.profile}</p>}
             <p className="text-[12px] text-danger/85">{issue.error}</p>
             <p className="ui-card-meta break-all font-mono">{issue.path}</p>
           </div>
@@ -263,6 +273,7 @@ function ProjectDiagnosticsPanel({
 
 export function ProjectsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id: selectedId } = useParams<{ id?: string }>();
   const createFormStorageKey = selectedId ? null : CREATE_PROJECT_OPEN_STORAGE_KEY;
   const [showCreateForm, setShowCreateForm] = useReloadState<boolean>({
@@ -270,20 +281,61 @@ export function ProjectsPage() {
     initialValue: false,
     shouldPersist: (value) => value,
   });
-  const { data, loading, error, refetch } = useApi(api.projects);
+  const [filter, setFilter] = useState<ProjectListFilter>('active');
+  const { data: profileState, error: profilesError } = useApi(api.profiles);
+  const requestedViewProfile = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const value = params.get(VIEW_PROFILE_QUERY_PARAM)?.trim();
+    return value && value.length > 0 ? value : null;
+  }, [location.search]);
+  const effectiveViewProfile = useMemo(() => {
+    if (requestedViewProfile === 'all') {
+      return 'all' as const;
+    }
+
+    if (!profileState) {
+      return undefined;
+    }
+
+    if (requestedViewProfile && profileState.profiles.includes(requestedViewProfile)) {
+      return requestedViewProfile;
+    }
+
+    return profileState.currentProfile;
+  }, [profileState, requestedViewProfile]);
+  const projectsFetcher = useCallback(
+    () => api.projects(effectiveViewProfile ? { profile: effectiveViewProfile } : undefined),
+    [effectiveViewProfile],
+  );
+  const diagnosticsFetcher = useCallback(
+    () => api.projectDiagnostics(effectiveViewProfile ? { profile: effectiveViewProfile } : undefined),
+    [effectiveViewProfile],
+  );
+  const { data, loading, error, refetch } = useApi(projectsFetcher, effectiveViewProfile ? `projects:${effectiveViewProfile}` : 'projects');
   const {
     data: diagnostics,
     loading: diagnosticsLoading,
     error: diagnosticsError,
     refetch: refetchDiagnostics,
-  } = useApi(api.projectDiagnostics);
+  } = useApi(diagnosticsFetcher, effectiveViewProfile ? `project-diagnostics:${effectiveViewProfile}` : 'project-diagnostics');
   const { projects: projectSnapshot, setProjects } = useAppData();
 
-  const projects = projectSnapshot ?? data ?? null;
+  const currentProfile = profileState?.currentProfile ?? null;
+  const usingCurrentProfileSnapshot = Boolean(
+    currentProfile
+    && effectiveViewProfile
+    && effectiveViewProfile !== 'all'
+    && effectiveViewProfile === currentProfile,
+  );
+  const projects = usingCurrentProfileSnapshot ? (projectSnapshot ?? data ?? null) : data ?? null;
   const invalidProjects = diagnostics?.invalidProjects ?? [];
-  const isLoading = projectSnapshot === null && loading;
-  const visibleError = projectSnapshot === null ? error : null;
-  const [filter, setFilter] = useState<ProjectListFilter>('active');
+  const isLoading = (usingCurrentProfileSnapshot ? projectSnapshot === null : data === null) && loading;
+  const visibleError = (usingCurrentProfileSnapshot ? projectSnapshot === null : data === null) ? error : null;
+  const viewProfileLabel = effectiveViewProfile === 'all'
+    ? 'all profiles'
+    : effectiveViewProfile
+      ? `profile ${effectiveViewProfile}`
+      : 'projects';
 
   const projectCounts = useMemo(() => {
     const items = projects ?? [];
@@ -311,18 +363,25 @@ export function ProjectsPage() {
     return items.filter((project) => !isProjectArchived(project));
   }, [filter, projects]);
 
+  const buildProjectsHref = useCallback((profile: string | 'all', projectId?: string) => {
+    const params = new URLSearchParams();
+    params.set(VIEW_PROFILE_QUERY_PARAM, profile);
+    const search = `?${params.toString()}`;
+    return projectId ? `/projects/${projectId}${search}` : `/projects${search}`;
+  }, []);
+
   const refreshProjects = useCallback(async () => {
     const [nextProjects] = await Promise.all([
-      refetch(),
-      refetchDiagnostics({ resetLoading: false }),
+      projectsFetcher(),
+      diagnosticsFetcher(),
     ]);
 
-    if (nextProjects) {
+    if (nextProjects && usingCurrentProfileSnapshot) {
       setProjects(nextProjects);
     }
 
     return nextProjects;
-  }, [refetch, refetchDiagnostics, setProjects]);
+  }, [diagnosticsFetcher, projectsFetcher, setProjects, usingCurrentProfileSnapshot]);
 
   useEffect(() => {
     function handleProjectsChanged() {
@@ -333,21 +392,53 @@ export function ProjectsPage() {
     return () => window.removeEventListener(PROJECTS_CHANGED_EVENT, handleProjectsChanged);
   }, [refreshProjects]);
 
+  function setViewProfile(nextProfile: string | 'all') {
+    setShowCreateForm(false);
+    navigate(buildProjectsHref(nextProfile));
+  }
+
   function openCreateForm() {
-    navigate('/projects');
+    const createProfile = effectiveViewProfile && effectiveViewProfile !== 'all'
+      ? effectiveViewProfile
+      : currentProfile;
+
+    if (!createProfile) {
+      return;
+    }
+
+    navigate(buildProjectsHref(createProfile));
     setShowCreateForm(true);
   }
 
   function handleCreated(projectId: string) {
+    const createProfile = effectiveViewProfile && effectiveViewProfile !== 'all'
+      ? effectiveViewProfile
+      : currentProfile;
     setShowCreateForm(false);
-    navigate(`/projects/${projectId}`);
+    navigate(createProfile ? buildProjectsHref(createProfile, projectId) : `/projects/${projectId}`);
   }
 
   return (
     <div className="flex flex-col h-full">
       <PageHeader
+        className="flex-wrap items-start gap-y-3"
         actions={(
           <>
+            {profileState && (
+              <label className="flex items-center gap-2">
+                <span className="ui-card-meta">View</span>
+                <select
+                  value={effectiveViewProfile ?? profileState.currentProfile}
+                  onChange={(event) => setViewProfile(event.target.value === 'all' ? 'all' : event.target.value)}
+                  className={`${INPUT_CLASS} min-w-[12rem] py-1.5`}
+                >
+                  <option value="all">All profiles</option>
+                  {profileState.profiles.map((profile) => (
+                    <option key={profile} value={profile}>{profile}</option>
+                  ))}
+                </select>
+              </label>
+            )}
             <ToolbarButton onClick={() => {
               if (showCreateForm) {
                 setShowCreateForm(false);
@@ -355,7 +446,7 @@ export function ProjectsPage() {
               }
 
               openCreateForm();
-            }}>
+            }} disabled={!currentProfile && effectiveViewProfile !== 'all'}>
               {showCreateForm ? 'Close new project' : '+ New project'}
             </ToolbarButton>
             <ToolbarButton onClick={() => { void refreshProjects(); }}>↻ Refresh</ToolbarButton>
@@ -364,35 +455,32 @@ export function ProjectsPage() {
       >
         <PageHeading
           title="Projects"
-          meta={(
-            projects && (
-              <>
-                {projectCounts.all} {projectCounts.all === 1 ? 'project' : 'projects'}
-                {projectCounts.archived > 0 && (
-                  <span className="ml-2 text-secondary">· {projectCounts.archived} archived</span>
-                )}
-              </>
-            )
-          )}
+          meta={projects
+            ? `${projectCounts.all} ${projectCounts.all === 1 ? 'project' : 'projects'}${projectCounts.archived > 0 ? ` · ${projectCounts.archived} archived` : ''} · ${viewProfileLabel}`
+            : `Browse durable work hubs across ${viewProfileLabel}.`}
         />
       </PageHeader>
 
       <div className="flex-1 px-6 py-4">
+        {profilesError && <p className="mb-4 text-[12px] text-danger/80">Failed to load profiles: {profilesError}</p>}
         {isLoading && <LoadingState label="Loading projects…" />}
         {visibleError && <ErrorState message={`Failed to load projects: ${visibleError}`} />}
 
         {!isLoading && !visibleError && !diagnosticsLoading && projects?.length === 0 && invalidProjects.length === 0 && !diagnosticsError && !showCreateForm && (
           <EmptyState
             title="No projects yet."
-            body="Projects track ongoing work, milestones, and tasks."
+            body={effectiveViewProfile === 'all'
+              ? 'No projects exist in any profile yet.'
+              : `Projects track ongoing work, milestones, and tasks for profile ${effectiveViewProfile ?? currentProfile ?? 'current'}.`}
             action={<ToolbarButton onClick={openCreateForm}>Create project</ToolbarButton>}
           />
         )}
 
         {!isLoading && !visibleError && (showCreateForm || diagnosticsError !== null || invalidProjects.length > 0 || (projects && projects.length > 0)) && (
           <div className="space-y-6">
-            {showCreateForm && (
+            {showCreateForm && effectiveViewProfile && effectiveViewProfile !== 'all' && (
               <CreateProjectPanel
+                profile={effectiveViewProfile}
                 onCreated={handleCreated}
                 onCancel={() => setShowCreateForm(false)}
               />
@@ -411,24 +499,29 @@ export function ProjectsPage() {
 
             {projects && projects.length > 0 && (
               <div className="space-y-4">
-                {projectCounts.archived > 0 && (
-                  <div className="ui-segmented-control" role="group" aria-label="Project filter">
-                    {PROJECT_FILTER_OPTIONS.map((option) => {
-                      const count = projectCounts[option.value];
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() => setFilter(option.value)}
-                          className={filter === option.value ? 'ui-segmented-button ui-segmented-button-active' : 'ui-segmented-button'}
-                        >
-                          {option.label}
-                          <span className="ml-1 text-dim/70">{count}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                <div className="flex flex-wrap items-center gap-3">
+                  {projectCounts.archived > 0 && (
+                    <div className="ui-segmented-control" role="group" aria-label="Project filter">
+                      {PROJECT_FILTER_OPTIONS.map((option) => {
+                        const count = projectCounts[option.value];
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setFilter(option.value)}
+                            className={filter === option.value ? 'ui-segmented-button ui-segmented-button-active' : 'ui-segmented-button'}
+                          >
+                            {option.label}
+                            <span className="ml-1 text-dim/70">{count}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {effectiveViewProfile === 'all' && (
+                    <p className="ui-card-meta">Selecting a project jumps into that project&apos;s profile view.</p>
+                  )}
+                </div>
 
                 {filteredProjects.length > 0 ? (
                   <div className="space-y-px">
@@ -437,14 +530,15 @@ export function ProjectsPage() {
                       const blockers = project.blockers.filter((blocker) => blocker.trim().length > 0);
                       const isBlocked = hasMeaningfulBlockers(project.blockers);
                       const archived = isProjectArchived(project);
-                      const isSelected = project.id === selectedId;
+                      const detailProfile = effectiveViewProfile === 'all' ? (project.profile ?? currentProfile ?? 'shared') : (effectiveViewProfile ?? currentProfile ?? 'shared');
+                      const isSelected = project.id === selectedId && detailProfile === effectiveViewProfile;
                       const preview = summarizeProjectPreview(project);
                       const dotClass = archived ? 'bg-border-default' : isBlocked ? 'bg-warning' : 'bg-teal';
 
                       return (
                         <ListLinkRow
-                          key={project.id}
-                          to={`/projects/${project.id}`}
+                          key={`${project.profile ?? detailProfile}:${project.id}`}
+                          to={buildProjectsHref(detailProfile, project.id)}
                           selected={isSelected}
                           leading={<span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${dotClass}`} />}
                         >
@@ -452,6 +546,12 @@ export function ProjectsPage() {
                           <p className="ui-row-summary">{preview}</p>
                           <div className="flex items-center gap-1.5 flex-wrap ui-card-meta">
                             <span>{status}</span>
+                            {effectiveViewProfile === 'all' && project.profile && (
+                              <>
+                                <span className="opacity-40">·</span>
+                                <span>profile {project.profile}</span>
+                              </>
+                            )}
                             {archived && project.archivedAt && (
                               <>
                                 <span className="opacity-40">·</span>

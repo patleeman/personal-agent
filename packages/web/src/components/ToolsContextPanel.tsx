@@ -16,6 +16,8 @@ import type {
 import { buildToolsSearch, parseToolsSelection, type ToolsRailSelection } from '../toolsSelection';
 import { ErrorState, LoadingState, ToolbarButton } from './ui';
 
+const VIEW_PROFILE_SEARCH_PARAM = 'viewProfile';
+
 function formatSchemaValue(value: unknown): string {
   if (typeof value === 'string') {
     return value;
@@ -564,16 +566,21 @@ export function ToolsContextPanel() {
   const location = useLocation();
   const navigate = useNavigate();
   const selection = useMemo(() => parseToolsSelection(location.search), [location.search]);
+  const viewProfile = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const value = params.get(VIEW_PROFILE_SEARCH_PARAM)?.trim();
+    return value && value.length > 0 ? value : undefined;
+  }, [location.search]);
   const {
     data: toolsState,
     loading: toolsLoading,
     error: toolsError,
-  } = useApi(api.tools);
+  } = useApi(() => api.tools(viewProfile ? { profile: viewProfile } : undefined), `tools-context:${viewProfile ?? 'current'}`);
   const {
     data: memoryData,
     loading: memoryLoading,
     error: memoryError,
-  } = useApi(api.memory);
+  } = useApi(() => api.memory(viewProfile ? { profile: viewProfile } : undefined), `tools-memory-context:${viewProfile ?? 'current'}`);
 
   const handleSelect = useCallback((nextSelection: ToolsRailSelection | null) => {
     navigate(`/tools${buildToolsSearch(location.search, nextSelection)}`);
