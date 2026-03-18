@@ -1205,7 +1205,7 @@ function StreamingIndicator({ label }: { label: string }) {
   );
 }
 
-const CHAT_WINDOWING_THRESHOLD = 500;
+const CHAT_WINDOWING_THRESHOLD = 240;
 const CHAT_WINDOWING_CHUNK_SIZE = 80;
 const CHAT_WINDOWING_OVERSCAN_CHUNKS = 2;
 const CHAT_WINDOWING_FALLBACK_SPAN_HEIGHT = 96;
