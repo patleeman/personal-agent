@@ -6,12 +6,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ensureSessionFileExists,
   getLiveSessions,
+  isPlaceholderConversationTitle,
   patchSessionManagerPersistence,
   promptSession,
   registry,
   reloadAllLiveSessionAuth,
   renameSession,
   resolvePersistentSessionDir,
+  resolveStableSessionTitle,
   restoreQueuedMessage,
   subscribe,
   toSse,
@@ -111,6 +113,46 @@ describe('reloadAllLiveSessionAuth', () => {
     expect(reloadAllLiveSessionAuth()).toBe(2);
     expect(firstReload).toHaveBeenCalledTimes(1);
     expect(secondReload).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('conversation titles', () => {
+  it('treats the default new conversation label as a placeholder', () => {
+    expect(isPlaceholderConversationTitle('New Conversation')).toBe(true);
+    expect(isPlaceholderConversationTitle(' (new conversation) ')).toBe(true);
+    expect(isPlaceholderConversationTitle('Actual title')).toBe(false);
+  });
+
+  it('ignores placeholder persisted titles until a real title exists', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
+    tempDirs.push(dir);
+    const sessionFile = join(dir, 'session-title.jsonl');
+
+    writeFileSync(sessionFile, `${JSON.stringify({
+      type: 'session',
+      id: 'session-title',
+      timestamp: '2026-03-18T00:00:00.000Z',
+      cwd: '/tmp/workspace',
+    })}\n`);
+
+    expect(resolveStableSessionTitle({
+      sessionFile,
+      state: {
+        messages: [],
+      },
+    } as unknown as LiveRegistryEntry['session'])).toBe('');
+
+    expect(resolveStableSessionTitle({
+      sessionFile,
+      state: {
+        messages: [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: 'Use the first prompt while the agent is running.' }],
+          },
+        ],
+      },
+    } as unknown as LiveRegistryEntry['session'])).toBe('Use the first prompt while the agent is running.');
   });
 });
 

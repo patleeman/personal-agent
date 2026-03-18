@@ -264,7 +264,12 @@ function buildFallbackTitleFromContent(content: unknown): string {
   return formatConversationTitle(text, imageCount);
 }
 
-function resolveStableSessionTitle(session: AgentSession): string {
+export function isPlaceholderConversationTitle(title: string | null | undefined): boolean {
+  const normalized = title?.trim().toLowerCase();
+  return !normalized || normalized === 'new conversation' || normalized === '(new conversation)';
+}
+
+export function resolveStableSessionTitle(session: AgentSession): string {
   const sessionName = session.sessionName?.trim();
   if (sessionName) {
     return sessionName;
@@ -273,7 +278,7 @@ function resolveStableSessionTitle(session: AgentSession): string {
   const sessionFile = session.sessionFile?.trim();
   if (sessionFile) {
     const persistedTitle = readSessionMetaByFile(sessionFile)?.title?.trim();
-    if (persistedTitle) {
+    if (persistedTitle && !isPlaceholderConversationTitle(persistedTitle)) {
       return persistedTitle;
     }
   }
@@ -905,7 +910,7 @@ function wireSession(
     }
 
     if (event.type === 'message_start' && event.message.role === 'user') {
-      if (!entry.session.sessionName?.trim() && !entry.title.trim()) {
+      if (!entry.session.sessionName?.trim() && isPlaceholderConversationTitle(entry.title)) {
         const fallbackTitle = buildFallbackTitleFromContent(event.message.content);
         if (fallbackTitle) {
           entry.title = fallbackTitle;
