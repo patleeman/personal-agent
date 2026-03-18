@@ -87,16 +87,17 @@ async function runDistillation(args: ParsedArgs): Promise<void> {
     throw new Error(`Distillation request failed (${response.status}): ${responseText}`);
   }
 
-  let parsed: { memory?: { id?: string; title?: string } } | null = null;
+  let parsed: { memory?: { id?: string; title?: string }; disposition?: string } | null = null;
   try {
-    parsed = JSON.parse(responseText) as { memory?: { id?: string; title?: string } };
+    parsed = JSON.parse(responseText) as { memory?: { id?: string; title?: string }; disposition?: string };
   } catch {
     parsed = null;
   }
 
+  const disposition = parsed?.disposition ?? 'unknown';
   const memoryId = parsed?.memory?.id ?? '(unknown)';
   const memoryTitle = parsed?.memory?.title ?? '(untitled)';
-  console.log(`distill completed memoryId=${memoryId} title=${memoryTitle}`);
+  console.log(`distill completed disposition=${disposition} memoryId=${memoryId} title=${memoryTitle}`);
 }
 
 export async function runDistillConversationMemoryCli(argv: string[] = process.argv.slice(2)): Promise<number> {

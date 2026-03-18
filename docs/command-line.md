@@ -204,9 +204,9 @@ Examples:
 
 ```bash
 pa memory list
-pa memory find --tag notes
+pa memory find --tag notes --area personal-agent --role canonical
 pa memory show quick-note
-pa memory new quick-note --title "Quick note" --summary "Why this exists" --tags notes
+pa memory new memory-index   --title "Memory index"   --summary "Top-level memory table of contents"   --tags memory,index   --type index   --area memory   --role hub
 pa memory lint
 ```
 

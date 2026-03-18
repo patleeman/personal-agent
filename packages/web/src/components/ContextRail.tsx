@@ -1411,6 +1411,7 @@ function MemoryDocContext({ memoryId }: { memoryId: string }) {
   const [saveBusy, setSaveBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [startBusy, setStartBusy] = useState(false);
+  const [mergeBusy, setMergeBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: 'accent' | 'danger'; text: string } | null>(null);
 
   const setSelectedMemory = useCallback((nextMemoryId: string | null, replace = false) => {
@@ -1429,6 +1430,14 @@ function MemoryDocContext({ memoryId }: { memoryId: string }) {
 
   const dirty = draft !== savedContent;
   const memory = data?.memory ?? null;
+  const mergeCandidateIds = useMemo(() => {
+    if (!memory || memory.role?.trim().toLowerCase() !== 'capture') {
+      return [] as string[];
+    }
+
+    return [...new Set((memory.related ?? []).filter((relatedId) => relatedId !== memory.id))];
+  }, [memory]);
+  const canMergeCapture = memory?.role?.trim().toLowerCase() === 'capture';
 
   async function handleSave() {
     if (!memory || saveBusy || !dirty) {
@@ -1496,6 +1505,52 @@ function MemoryDocContext({ memoryId }: { memoryId: string }) {
       setNotice({ tone: 'danger', text: startError instanceof Error ? startError.message : String(startError) });
       setStartBusy(false);
     }
+  }
+
+  async function handleMerge(targetMemoryId: string) {
+    if (!memory || mergeBusy) {
+      return;
+    }
+
+    const normalizedTargetMemoryId = targetMemoryId.trim();
+    if (!normalizedTargetMemoryId) {
+      return;
+    }
+
+    if (dirty) {
+      setNotice({ tone: 'danger', text: 'Save this capture before merging it.' });
+      return;
+    }
+
+    if (!window.confirm(`Merge capture @${memory.id} into canonical @${normalizedTargetMemoryId}? This appends the capture into the canonical doc and deletes the capture file.`)) {
+      return;
+    }
+
+    setMergeBusy(true);
+    setNotice(null);
+
+    try {
+      const result = await api.mergeMemoryDoc(memory.id, normalizedTargetMemoryId);
+      emitMemoriesChanged();
+      setSelectedMemory(result.memory.id, true);
+    } catch (mergeError) {
+      setNotice({ tone: 'danger', text: mergeError instanceof Error ? mergeError.message : String(mergeError) });
+      setMergeBusy(false);
+    }
+  }
+
+  function handleManualMerge() {
+    if (!memory || mergeBusy) {
+      return;
+    }
+
+    const suggestedTarget = mergeCandidateIds[0] ?? '';
+    const targetMemoryId = window.prompt('Merge this capture into which canonical memory id?', suggestedTarget)?.trim();
+    if (!targetMemoryId) {
+      return;
+    }
+
+    void handleMerge(targetMemoryId);
   }
 
   if (loading && !data) {
@@ -1591,11 +1646,47 @@ function MemoryDocContext({ memoryId }: { memoryId: string }) {
           )}
         </div>
 
+        {canMergeCapture && (
+          <div className="space-y-2 border-t border-border-subtle pt-4">
+            <div className="space-y-1">
+              <p className="ui-section-label">Merge capture</p>
+              <p className="ui-card-meta">
+                Merge this capture into a canonical memory once it has been reviewed and cleaned up.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {mergeCandidateIds.map((targetMemoryId) => (
+                <button
+                  key={targetMemoryId}
+                  type="button"
+                  onClick={() => { void handleMerge(targetMemoryId); }}
+                  disabled={mergeBusy || loading || dirty}
+                  className="ui-toolbar-button text-accent"
+                >
+                  {mergeBusy ? 'Merging…' : `Merge into @${targetMemoryId}`}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={handleManualMerge}
+                disabled={mergeBusy || loading || dirty}
+                className="ui-toolbar-button"
+              >
+                {mergeBusy ? 'Merging…' : 'Merge into…'}
+              </button>
+            </div>
+            {mergeCandidateIds.length === 0 && !dirty && (
+              <p className="ui-card-meta">No merge targets suggested yet. Use “Merge into…” to pick a canonical doc manually.</p>
+            )}
+            {dirty && <p className="ui-card-meta">Save changes before merging this capture.</p>}
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
             onClick={() => { void handleStartConversation(); }}
-            disabled={startBusy || loading}
+            disabled={startBusy || mergeBusy || loading}
             className="ui-toolbar-button text-accent"
           >
             {startBusy ? 'Starting…' : 'Start convo'}
@@ -1603,7 +1694,7 @@ function MemoryDocContext({ memoryId }: { memoryId: string }) {
           <button
             type="button"
             onClick={() => { void handleSave(); }}
-            disabled={!dirty || saveBusy || loading}
+            disabled={!dirty || saveBusy || mergeBusy || loading}
             className={dirty ? 'ui-toolbar-button text-accent' : 'ui-toolbar-button'}
           >
             {saveBusy ? 'Saving…' : 'Save'}
@@ -1611,7 +1702,7 @@ function MemoryDocContext({ memoryId }: { memoryId: string }) {
           <button
             type="button"
             onClick={() => { void handleDelete(); }}
-            disabled={deleteBusy || loading}
+            disabled={deleteBusy || mergeBusy || loading}
             className="ui-toolbar-button text-danger"
           >
             {deleteBusy ? 'Deleting…' : 'Delete'}

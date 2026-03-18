@@ -19,6 +19,10 @@ export interface ParsedMemoryDoc {
   summary: string;
   type: string;
   status: string;
+  area?: string;
+  role?: string;
+  parent?: string;
+  related: string[];
   tags: string[];
   updated: string;
   body: string;
@@ -39,6 +43,9 @@ export interface FindMemoryDocsFilters {
   tags?: string[];
   type?: string;
   status?: string;
+  area?: string;
+  role?: string;
+  parent?: string;
   text?: string;
 }
 
@@ -54,6 +61,10 @@ export interface CreateMemoryDocInput {
   tags: string[];
   type?: string;
   status?: string;
+  area?: string;
+  role?: string;
+  parent?: string;
+  related?: string[];
   updated?: string;
   force?: boolean;
 }
@@ -66,9 +77,21 @@ export interface CreateMemoryDocResult {
   summary: string;
   type: string;
   status: string;
+  area?: string;
+  role?: string;
+  parent?: string;
+  related: string[];
   tags: string[];
   updated: string;
   overwritten: boolean;
+}
+
+export interface MemoryDocReferenceError {
+  filePath: string;
+  id: string;
+  field: 'parent' | 'related';
+  targetId: string;
+  error: string;
 }
 
 export interface LintMemoryDocsResult {
@@ -77,6 +100,7 @@ export interface LintMemoryDocsResult {
   validDocs: number;
   parseErrors: MemoryDocParseError[];
   duplicateIds: MemoryDocDuplicateId[];
+  referenceErrors: MemoryDocReferenceError[];
 }
 
 function resolveMemoryContext(options: ResolveMemoryDocsOptions = {}): { memoryDir: string } {
@@ -181,6 +205,32 @@ function readOptionalMemoryString(attributes: Record<string, unknown>, key: stri
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function readOptionalMemoryStringArray(attributes: Record<string, unknown>, key: string): string[] {
+  const rawValues = getMemoryAttribute(attributes, key);
+  if (rawValues === undefined || rawValues === null) {
+    return [];
+  }
+
+  if (!Array.isArray(rawValues)) {
+    throw new Error(`Frontmatter key ${key} must be a string array`);
+  }
+
+  const values = rawValues.map((value) => {
+    if (typeof value !== 'string') {
+      throw new Error(`Frontmatter key ${key} must be a string array`);
+    }
+
+    const trimmed = value.trim();
+    if (trimmed.length === 0) {
+      throw new Error(`Frontmatter key ${key} must not include empty values`);
+    }
+
+    return trimmed;
+  });
+
+  return [...new Set(values)];
+}
+
 function readRequiredMemoryTags(attributes: Record<string, unknown>): string[] {
   const rawTags = getMemoryAttribute(attributes, 'tags');
   if (!Array.isArray(rawTags)) {
@@ -230,6 +280,23 @@ function parseMemoryDoc(filePath: string, rawContent: string): ParsedMemoryDoc {
   const updated = readRequiredMemoryString(attributes, 'updated');
   validateMemoryUpdated(updated);
 
+  const area = readOptionalMemoryString(attributes, 'area');
+  if (area) {
+    validateMemoryDocId(area);
+  }
+
+  const role = readOptionalMemoryString(attributes, 'role');
+
+  const parent = readOptionalMemoryString(attributes, 'parent');
+  if (parent) {
+    validateMemoryDocId(parent);
+  }
+
+  const related = readOptionalMemoryStringArray(attributes, 'related');
+  for (const relatedId of related) {
+    validateMemoryDocId(relatedId);
+  }
+
   const body = section.body.trim();
   if (body.length === 0) {
     throw new Error('Memory markdown body must not be empty');
@@ -243,6 +310,10 @@ function parseMemoryDoc(filePath: string, rawContent: string): ParsedMemoryDoc {
     summary: readRequiredMemoryString(attributes, 'summary'),
     type: readOptionalMemoryString(attributes, 'type') ?? 'note',
     status: readOptionalMemoryString(attributes, 'status') ?? 'active',
+    ...(area ? { area } : {}),
+    ...(role ? { role } : {}),
+    ...(parent ? { parent } : {}),
+    related,
     tags: readRequiredMemoryTags(attributes),
     updated,
     body,
@@ -325,12 +396,72 @@ export function collectDuplicateMemoryDocIds(docs: ParsedMemoryDoc[]): MemoryDoc
   return duplicates;
 }
 
+export function collectMemoryDocReferenceErrors(docs: ParsedMemoryDoc[]): MemoryDocReferenceError[] {
+  const ids = new Set(docs.map((doc) => doc.id));
+  const errors: MemoryDocReferenceError[] = [];
+
+  for (const doc of docs) {
+    if (doc.parent) {
+      if (doc.parent === doc.id) {
+        errors.push({
+          filePath: doc.filePath,
+          id: doc.id,
+          field: 'parent',
+          targetId: doc.parent,
+          error: 'parent must not reference the same memory doc',
+        });
+      } else if (!ids.has(doc.parent)) {
+        errors.push({
+          filePath: doc.filePath,
+          id: doc.id,
+          field: 'parent',
+          targetId: doc.parent,
+          error: 'parent does not match any memory doc id',
+        });
+      }
+    }
+
+    for (const relatedId of doc.related) {
+      if (relatedId === doc.id) {
+        errors.push({
+          filePath: doc.filePath,
+          id: doc.id,
+          field: 'related',
+          targetId: relatedId,
+          error: 'related must not reference the same memory doc',
+        });
+        continue;
+      }
+
+      if (!ids.has(relatedId)) {
+        errors.push({
+          filePath: doc.filePath,
+          id: doc.id,
+          field: 'related',
+          targetId: relatedId,
+          error: 'related does not match any memory doc id',
+        });
+      }
+    }
+  }
+
+  errors.sort((left, right) => left.id.localeCompare(right.id)
+    || left.field.localeCompare(right.field)
+    || left.targetId.localeCompare(right.targetId)
+    || left.filePath.localeCompare(right.filePath));
+
+  return errors;
+}
+
 export function filterMemoryDocs(docs: ParsedMemoryDoc[], filters: FindMemoryDocsFilters = {}): ParsedMemoryDoc[] {
   const tagFilters = (filters.tags ?? [])
     .map((tag) => tag.trim().toLowerCase())
     .filter((tag) => tag.length > 0);
   const typeFilter = filters.type?.trim().toLowerCase();
   const statusFilter = filters.status?.trim().toLowerCase();
+  const areaFilter = filters.area?.trim().toLowerCase();
+  const roleFilter = filters.role?.trim().toLowerCase();
+  const parentFilter = filters.parent?.trim().toLowerCase();
   const textFilter = filters.text?.trim().toLowerCase();
 
   return docs.filter((doc) => {
@@ -351,8 +482,34 @@ export function filterMemoryDocs(docs: ParsedMemoryDoc[], filters: FindMemoryDoc
       return false;
     }
 
+    if (areaFilter && doc.area?.toLowerCase() !== areaFilter) {
+      return false;
+    }
+
+    if (roleFilter && doc.role?.toLowerCase() !== roleFilter) {
+      return false;
+    }
+
+    if (parentFilter && doc.parent?.toLowerCase() !== parentFilter) {
+      return false;
+    }
+
     if (textFilter) {
-      const haystack = [doc.id, doc.title, doc.summary, ...doc.tags].join(' ').toLowerCase();
+      const haystack = [
+        doc.id,
+        doc.title,
+        doc.summary,
+        doc.type,
+        doc.status,
+        doc.area,
+        doc.role,
+        doc.parent,
+        ...doc.related,
+        ...doc.tags,
+      ]
+        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        .join(' ')
+        .toLowerCase();
       if (!haystack.includes(textFilter)) {
         return false;
       }
@@ -391,28 +548,48 @@ export function buildMemoryDocTemplate(options: {
   summary: string;
   type: string;
   status: string;
+  area?: string;
+  role?: string;
+  parent?: string;
+  related: string[];
   tags: string[];
   updated: string;
 }): string {
-  const tagLines = options.tags.map((tag) => `  - ${toYamlQuotedString(tag)}`).join('\n');
+  const lines = [
+    '---',
+    `id: ${options.id}`,
+    `title: ${toYamlQuotedString(options.title)}`,
+    `summary: ${toYamlQuotedString(options.summary)}`,
+    `type: ${toYamlQuotedString(options.type)}`,
+    `status: ${toYamlQuotedString(options.status)}`,
+  ];
 
-  return `---
-id: ${options.id}
-title: ${toYamlQuotedString(options.title)}
-summary: ${toYamlQuotedString(options.summary)}
-type: ${toYamlQuotedString(options.type)}
-status: ${toYamlQuotedString(options.status)}
-tags:
-${tagLines}
-updated: ${options.updated}
----
+  if (options.area) {
+    lines.push(`area: ${options.area}`);
+  }
 
-# ${options.title}
+  if (options.role) {
+    lines.push(`role: ${toYamlQuotedString(options.role)}`);
+  }
 
-${options.summary}
+  if (options.parent) {
+    lines.push(`parent: ${options.parent}`);
+  }
 
-TODO: add details.
-`;
+  if (options.related.length > 0) {
+    lines.push('related:');
+    for (const relatedId of options.related) {
+      lines.push(`  - ${toYamlQuotedString(relatedId)}`);
+    }
+  }
+
+  lines.push('tags:');
+  for (const tag of options.tags) {
+    lines.push(`  - ${toYamlQuotedString(tag)}`);
+  }
+
+  lines.push(`updated: ${options.updated}`, '---', '', `# ${options.title}`, '', options.summary, '', 'TODO: add details.', '');
+  return `${lines.join('\n')}`;
 }
 
 export function createMemoryDoc(input: CreateMemoryDocInput, options: ResolveMemoryDocsOptions = {}): CreateMemoryDocResult {
@@ -436,6 +613,23 @@ export function createMemoryDoc(input: CreateMemoryDocInput, options: ResolveMem
 
   const type = input.type?.trim() || 'note';
   const status = input.status?.trim() || 'active';
+  const area = input.area?.trim();
+  if (area) {
+    validateMemoryDocId(area);
+  }
+
+  const role = input.role?.trim() || undefined;
+
+  const parent = input.parent?.trim();
+  if (parent) {
+    validateMemoryDocId(parent);
+  }
+
+  const related = [...new Set((input.related ?? []).map((value) => value.trim()).filter((value) => value.length > 0))];
+  for (const relatedId of related) {
+    validateMemoryDocId(relatedId);
+  }
+
   const updated = input.updated?.trim() || currentDateYyyyMmDd();
   validateMemoryUpdated(updated);
 
@@ -463,6 +657,10 @@ export function createMemoryDoc(input: CreateMemoryDocInput, options: ResolveMem
     summary,
     type,
     status,
+    ...(area ? { area } : {}),
+    ...(role ? { role } : {}),
+    ...(parent ? { parent } : {}),
+    related,
     tags,
     updated,
   });
@@ -477,6 +675,10 @@ export function createMemoryDoc(input: CreateMemoryDocInput, options: ResolveMem
     summary,
     type,
     status,
+    ...(area ? { area } : {}),
+    ...(role ? { role } : {}),
+    ...(parent ? { parent } : {}),
+    related,
     tags,
     updated,
     overwritten: targetExists,
@@ -486,6 +688,7 @@ export function createMemoryDoc(input: CreateMemoryDocInput, options: ResolveMem
 export function lintMemoryDocs(options: ResolveMemoryDocsOptions = {}): LintMemoryDocsResult {
   const loaded = loadMemoryDocs(options);
   const duplicates = collectDuplicateMemoryDocIds(loaded.docs);
+  const referenceErrors = collectMemoryDocReferenceErrors(loaded.docs);
 
   return {
     memoryDir: loaded.memoryDir,
@@ -493,5 +696,6 @@ export function lintMemoryDocs(options: ResolveMemoryDocsOptions = {}): LintMemo
     validDocs: loaded.docs.length,
     parseErrors: loaded.parseErrors,
     duplicateIds: duplicates,
+    referenceErrors,
   };
 }
