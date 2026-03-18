@@ -232,6 +232,7 @@ function readBackgroundRunInput(value: unknown): StartBackgroundRunRequestInput 
           source: {
             type: readRequiredString(value.source.type, 'runs.startBackground source.type'),
             ...(readOptionalString(value.source.id) ? { id: readOptionalString(value.source.id) } : {}),
+            ...(readOptionalString(value.source.filePath) ? { filePath: readOptionalString(value.source.filePath) } : {}),
           },
         }
       : {}),

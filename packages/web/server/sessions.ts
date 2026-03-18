@@ -14,7 +14,7 @@
  */
 
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 import { getPiAgentRuntimeDir, getPiAgentStateDir } from '@personal-agent/core';
 import {
   SessionManager,
@@ -38,6 +38,7 @@ interface RawSessionRecord {
   timestamp: string;
   cwd: string;
   version?: number;
+  parentSession?: string;
 }
 
 interface RawModelChange {
@@ -118,6 +119,9 @@ export interface SessionMeta {
   messageCount: number;
   isRunning?: boolean;
   lastActivityAt?: string;
+  parentSessionFile?: string;
+  parentSessionId?: string;
+  sourceRunId?: string;
 }
 
 export interface SessionDetail {
@@ -749,6 +753,41 @@ function getFileSignature(filePath: string): string | null {
   }
 }
 
+function normalizeOptionalPath(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+  return normalized && normalized.length > 0 ? normalized : undefined;
+}
+
+function readSourceRunIdFromSessionFilePath(filePath: string): string | undefined {
+  const sessionsDir = resolveSessionsDir();
+  const relativePath = relative(sessionsDir, filePath).replace(/\\/g, '/');
+  const segments = relativePath.split('/').filter((segment) => segment.length > 0);
+  if (segments.length < 3 || segments[0] !== '__runs') {
+    return undefined;
+  }
+
+  return segments[1];
+}
+
+function decorateSessionParentIds(metas: SessionMeta[]): SessionMeta[] {
+  const sessionIdByFile = new Map(metas.map((meta) => [meta.file, meta.id] as const));
+
+  return metas.map((meta) => {
+    const parentSessionFile = normalizeOptionalPath(meta.parentSessionFile);
+    const parentSessionId = parentSessionFile ? sessionIdByFile.get(parentSessionFile) : undefined;
+
+    if (meta.parentSessionFile === parentSessionFile && meta.parentSessionId === parentSessionId) {
+      return meta;
+    }
+
+    return {
+      ...meta,
+      ...(parentSessionFile ? { parentSessionFile } : {}),
+      ...(parentSessionId ? { parentSessionId } : {}),
+    };
+  });
+}
+
 function readSessionMetaFromFile(filePath: string, cwdSlug: string): SessionMeta | null {
   const raw = readFileSync(filePath, 'utf-8');
   let sessionRecord: RawSessionRecord | null = null;
@@ -800,6 +839,9 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): SessionMeta
     return null;
   }
 
+  const parentSessionFile = normalizeOptionalPath(sessionRecord.parentSession);
+  const sourceRunId = readSourceRunIdFromSessionFilePath(filePath);
+
   return {
     id: sessionRecord.id,
     file: filePath,
@@ -809,6 +851,8 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): SessionMeta
     model,
     title: (sawSessionInfo ? namedTitle : null) ?? fallbackTitle ?? 'New Conversation',
     messageCount,
+    ...(parentSessionFile ? { parentSessionFile } : {}),
+    ...(sourceRunId ? { sourceRunId } : {}),
   };
 }
 
@@ -944,32 +988,36 @@ function resolveSessionFileCwdSlug(filePath: string): string {
 
 function listSessionFiles(sessionsDir: string): Array<{ filePath: string; cwdSlug: string }> {
   const files: Array<{ filePath: string; cwdSlug: string }> = [];
+  const pendingDirs = [sessionsDir];
 
-  for (const entryName of readdirSync(sessionsDir)) {
-    const entryPath = join(sessionsDir, entryName);
+  while (pendingDirs.length > 0) {
+    const currentDir = pendingDirs.pop() as string;
+    let entryNames: string[];
 
     try {
-      const stats = statSync(entryPath);
-      if (stats.isFile()) {
-        if (entryName.endsWith('.jsonl')) {
-          files.push({ filePath: entryPath, cwdSlug: '' });
-        }
-        continue;
-      }
+      entryNames = readdirSync(currentDir);
+    } catch {
+      continue;
+    }
 
-      if (!stats.isDirectory()) {
-        continue;
-      }
+    for (const entryName of entryNames) {
+      const entryPath = join(currentDir, entryName);
 
-      for (const fileName of readdirSync(entryPath)) {
-        if (!fileName.endsWith('.jsonl')) {
+      try {
+        const stats = statSync(entryPath);
+        if (stats.isFile()) {
+          if (entryName.endsWith('.jsonl')) {
+            files.push({ filePath: entryPath, cwdSlug: resolveSessionFileCwdSlug(entryPath) });
+          }
           continue;
         }
 
-        files.push({ filePath: join(entryPath, fileName), cwdSlug: entryName });
+        if (stats.isDirectory()) {
+          pendingDirs.push(entryPath);
+        }
+      } catch {
+        continue;
       }
-    } catch {
-      continue;
     }
   }
 
@@ -1033,8 +1081,9 @@ function scanSessionMetas(): SessionMeta[] {
 
   sessionFileById = nextSessionFileById;
   metas.sort((left, right) => right.timestamp.localeCompare(left.timestamp));
+  const decoratedMetas = decorateSessionParentIds(metas);
   persistSessionIndex();
-  return metas;
+  return decoratedMetas;
 }
 
 function resolveSessionMeta(sessionId: string): SessionMeta | null {
@@ -1042,7 +1091,7 @@ function resolveSessionMeta(sessionId: string): SessionMeta | null {
 
   const cachedFilePath = sessionFileById.get(sessionId);
   if (cachedFilePath) {
-    const cachedMeta = readCachedSessionMeta(cachedFilePath, resolveSessionFileCwdSlug(cachedFilePath));
+    const cachedMeta = readSessionMetaByFile(cachedFilePath);
     if (cachedMeta?.id === sessionId) {
       return cachedMeta;
     }
@@ -1173,7 +1222,22 @@ export function readSessionSearchText(sessionId: string, maxCharacters = 12_000)
 }
 
 export function readSessionMetaByFile(filePath: string): SessionMeta | null {
-  return readCachedSessionMeta(filePath, resolveSessionFileCwdSlug(filePath));
+  const meta = readCachedSessionMeta(filePath, resolveSessionFileCwdSlug(filePath));
+  if (!meta) {
+    return null;
+  }
+
+  const parentSessionFile = normalizeOptionalPath(meta.parentSessionFile);
+  const parentSessionId = parentSessionFile ? sessionFileById.get(parentSessionFile) : undefined;
+  if (meta.parentSessionFile === parentSessionFile && meta.parentSessionId === parentSessionId) {
+    return meta;
+  }
+
+  return {
+    ...meta,
+    ...(parentSessionFile ? { parentSessionFile } : {}),
+    ...(parentSessionId ? { parentSessionId } : {}),
+  };
 }
 
 export function renameStoredSession(sessionId: string, name: string): SessionMeta {
@@ -1189,7 +1253,7 @@ export function renameStoredSession(sessionId: string, name: string): SessionMet
 
   appendFileSync(meta.file, `${buildSessionInfoRecord(normalizedName)}\n`);
 
-  const updatedMeta = readCachedSessionMeta(meta.file, resolveSessionFileCwdSlug(meta.file));
+  const updatedMeta = readSessionMetaByFile(meta.file);
   if (!updatedMeta) {
     throw new Error(`Conversation ${sessionId} could not be reloaded after renaming.`);
   }

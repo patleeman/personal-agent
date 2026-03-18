@@ -16,8 +16,10 @@ import {
   ModelRegistry,
   SessionManager,
   createAgentSession,
+  createBashTool,
   type AgentSessionEvent,
   type ExtensionFactory,
+  type Tool,
 } from '@mariozechner/pi-coding-agent';
 import { invalidateAppTopics, publishAppEvent } from './appEvents.js';
 import {
@@ -130,6 +132,38 @@ function makeAuth() {
 
 function makeRegistry(auth: AuthStorage) {
   return new ModelRegistry(auth);
+}
+
+interface ToolPatchableSession extends AgentSession {
+  _baseToolRegistry?: Map<string, Tool>;
+  _refreshToolRegistry?: (options?: {
+    activeToolNames?: string[];
+    includeAllExtensionTools?: boolean;
+  }) => void;
+}
+
+function patchConversationBashTool(session: AgentSession, cwd: string, conversationId: string, sessionFile?: string): void {
+  const patchableSession = session as ToolPatchableSession;
+  if (!(patchableSession._baseToolRegistry instanceof Map) || typeof patchableSession._refreshToolRegistry !== 'function') {
+    return;
+  }
+
+  patchableSession._baseToolRegistry.set('bash', createBashTool(cwd, {
+    commandPrefix: session.settingsManager.getShellCommandPrefix(),
+    spawnHook: (context) => ({
+      ...context,
+      env: {
+        ...context.env,
+        PERSONAL_AGENT_SOURCE_CONVERSATION_ID: conversationId,
+        ...(sessionFile ? { PERSONAL_AGENT_SOURCE_SESSION_FILE: sessionFile } : {}),
+      },
+    }),
+  }));
+
+  patchableSession._refreshToolRegistry({
+    activeToolNames: session.getActiveToolNames(),
+    includeAllExtensionTools: true,
+  });
 }
 
 interface PersistableSessionManager {
@@ -1153,17 +1187,19 @@ export async function createSession(
   cwd: string,
   options: LiveSessionLoaderOptions = {},
 ): Promise<{ id: string; sessionFile: string }> {
-  const auth         = makeAuth();
+  const auth = makeAuth();
   const resourceLoader = await makeLoader(cwd, options);
-  const { session }  = await createAgentSession({
+  const sessionManager = SessionManager.create(cwd, resolvePersistentSessionDir(cwd));
+  const { session } = await createAgentSession({
     cwd,
-    agentDir:      AGENT_DIR,
-    authStorage:   auth,
+    agentDir: AGENT_DIR,
+    authStorage: auth,
     modelRegistry: makeRegistry(auth),
     resourceLoader,
-    sessionManager: SessionManager.create(cwd, resolvePersistentSessionDir(cwd)),
+    sessionManager,
   });
 
+  patchConversationBashTool(session, cwd, session.sessionId, session.sessionFile);
   patchSessionManagerPersistence(session.sessionManager);
   ensureSessionFileExists(session.sessionManager);
 
@@ -1180,15 +1216,17 @@ export async function createSessionFromExisting(
 ): Promise<{ id: string; sessionFile: string }> {
   const auth = makeAuth();
   const resourceLoader = await makeLoader(cwd, options);
+  const sessionManager = SessionManager.forkFrom(sessionFile, cwd, resolvePersistentSessionDir(cwd));
   const { session } = await createAgentSession({
     cwd,
     agentDir: AGENT_DIR,
     authStorage: auth,
     modelRegistry: makeRegistry(auth),
     resourceLoader,
-    sessionManager: SessionManager.forkFrom(sessionFile, cwd, resolvePersistentSessionDir(cwd)),
+    sessionManager,
   });
 
+  patchConversationBashTool(session, cwd, session.sessionId, session.sessionFile);
   patchSessionManagerPersistence(session.sessionManager);
   ensureSessionFileExists(session.sessionManager);
 
@@ -1220,6 +1258,7 @@ export async function resumeSession(
     sessionManager,
   });
 
+  patchConversationBashTool(session, cwd, session.sessionId, session.sessionFile);
   patchSessionManagerPersistence(session.sessionManager);
 
   const id = session.sessionId;
@@ -1466,6 +1505,7 @@ export async function forkSession(
 
   const auth = makeAuth();
   const resourceLoader = await makeLoader(entry.cwd, options);
+  const sessionManager = SessionManager.open(sourceSessionFile);
   let forkedSession: AgentSession | null = null;
 
   try {
@@ -1475,10 +1515,11 @@ export async function forkSession(
       authStorage: auth,
       modelRegistry: makeRegistry(auth),
       resourceLoader,
-      sessionManager: SessionManager.open(sourceSessionFile),
+      sessionManager,
     });
 
     forkedSession = session;
+    patchConversationBashTool(forkedSession, entry.cwd, forkedSession.sessionId, forkedSession.sessionFile);
     patchSessionManagerPersistence(forkedSession.sessionManager);
 
     const { cancelled } = await forkedSession.fork(entryId);

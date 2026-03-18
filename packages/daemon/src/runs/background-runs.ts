@@ -32,6 +32,7 @@ export interface StartBackgroundRunInput {
   source?: {
     type: string;
     id?: string;
+    filePath?: string;
   };
   notification?: BackgroundRunNotificationSpec;
   createdAt?: string;
@@ -151,6 +152,7 @@ export async function createBackgroundRunRecord(
       ? {
         type: input.source.type,
         ...(input.source.id ? { id: input.source.id } : {}),
+        ...(input.source.filePath ? { filePath: input.source.filePath } : {}),
       }
       : {
         type: 'background-run',

@@ -112,6 +112,7 @@ export interface StartBackgroundRunRequestInput {
   source?: {
     type: string;
     id?: string;
+    filePath?: string;
   };
   notification?: BackgroundRunNotificationSpec;
 }

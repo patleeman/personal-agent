@@ -26,6 +26,7 @@ import {
 } from '../draftConversation';
 import { getSidebarBrandLabel } from '../sidebarBrand';
 import { timeAgo } from '../utils';
+import { buildNestedSessionRows } from '../sessionLineage';
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 
@@ -181,6 +182,8 @@ function OpenTab({
   canDrag,
   isDragging,
   dropPosition,
+  depth = 0,
+  nestedUnderTitle,
   actions = [],
   onDragStart,
   onDragOver,
@@ -193,6 +196,8 @@ function OpenTab({
   canDrag: boolean;
   isDragging?: boolean;
   dropPosition?: OpenConversationDropPosition | null;
+  depth?: number;
+  nestedUnderTitle?: string;
   actions?: Array<{
     key: string;
     title: string;
@@ -213,10 +218,15 @@ function OpenTab({
     ? buildDeferredResumeIndicatorText(deferredResumes, nowMs ?? Date.now())
     : null;
   const hasReadyDeferredResumes = deferredResumes.some((resume) => resume.status === 'ready');
+  const title = [
+    depth > 0 && nestedUnderTitle ? `Nested under ${nestedUnderTitle}` : undefined,
+    canDrag ? 'Drag to move' : undefined,
+  ].filter((value): value is string => Boolean(value)).join(' · ') || undefined;
 
   return (
     <div
       className="relative"
+      style={depth > 0 ? { paddingLeft: `${depth * 14}px` } : undefined}
       draggable={canDrag}
       onDragStart={canDrag ? onDragStart : undefined}
       onDragOver={canDrag ? onDragOver : undefined}
@@ -243,7 +253,7 @@ function OpenTab({
         ].filter(Boolean).join(' ')}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        title={canDrag ? 'Drag to move' : undefined}
+        title={title}
       >
         <span
           aria-hidden="true"
@@ -254,7 +264,7 @@ function OpenTab({
         />
 
         <div className="flex-1 min-w-0">
-          <p className="ui-row-title truncate">{session.title}</p>
+          <p className="ui-row-title truncate">{depth > 0 ? `↳ ${session.title}` : session.title}</p>
           <p className="ui-sidebar-session-meta flex items-center gap-1.5 min-w-0">
             <span className="shrink-0">{timeAgo(session.timestamp)}</span>
             <span className="shrink-0 opacity-40">·</span>
@@ -383,7 +393,7 @@ function SidebarFooter() {
 export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { activity } = useAppData();
+  const { activity, runs } = useAppData();
   const { data: status } = useApi(api.status);
   const {
     pinnedSessions,
@@ -432,6 +442,26 @@ export function Sidebar() {
   const visibleTabs = useMemo(
     () => draftTab ? [...tabs, draftTab] : tabs,
     [draftTab, tabs],
+  );
+  const runsById = useMemo(
+    () => new Map((runs?.runs ?? []).map((run) => [run.runId, run] as const)),
+    [runs],
+  );
+  const pinnedSessionRows = useMemo(
+    () => buildNestedSessionRows(pinnedSessions, runsById),
+    [pinnedSessions, runsById],
+  );
+  const openSessionRows = useMemo(
+    () => buildNestedSessionRows(visibleTabs, runsById),
+    [runsById, visibleTabs],
+  );
+  const pinnedSessionsById = useMemo(
+    () => new Map(pinnedSessions.map((session) => [session.id, session] as const)),
+    [pinnedSessions],
+  );
+  const openSessionsById = useMemo(
+    () => new Map(visibleTabs.map((session) => [session.id, session] as const)),
+    [visibleTabs],
   );
   const [deferredResumeNowMs, setDeferredResumeNowMs] = useState(() => Date.now());
   const visibleSessionDeferredResumeCount = useMemo(
@@ -745,19 +775,23 @@ export function Sidebar() {
               onDrop={(event) => handleEmptyShelfDrop('pinned', event)}
             />
           )}
-          {pinnedSessions.map((session) => {
-            const dropPosition = dropTarget?.section === 'pinned' && dropTarget.sessionId === session.id && draggingSessionId !== session.id
+          {pinnedSessionRows.map(({ session, depth, parentSessionId }) => {
+            const canDrag = depth === 0;
+            const dropPosition = canDrag && dropTarget?.section === 'pinned' && dropTarget.sessionId === session.id && draggingSessionId !== session.id
               ? dropTarget.position
               : null;
+            const nestedUnderTitle = parentSessionId ? pinnedSessionsById.get(parentSessionId)?.title : undefined;
 
             return (
               <OpenTab
                 key={session.id}
                 session={session}
                 needsAttention={attentionIds.has(session.id)}
-                canDrag
-                isDragging={draggingSessionId === session.id}
+                canDrag={canDrag}
+                isDragging={canDrag && draggingSessionId === session.id}
                 dropPosition={dropPosition}
+                depth={depth}
+                nestedUnderTitle={nestedUnderTitle}
                 nowMs={deferredResumeNowMs}
                 actions={[{
                   key: 'unpin',
@@ -765,10 +799,10 @@ export function Sidebar() {
                   icon: PATH.unpin,
                   onClick: () => handleUnpinConversation(session.id),
                 }]}
-                onDragStart={(event) => handleTabDragStart('pinned', session.id, event)}
-                onDragOver={(event) => handleTabDragOver('pinned', session.id, event)}
-                onDrop={(event) => handleTabDrop('pinned', session.id, event)}
-                onDragEnd={() => clearDragState()}
+                onDragStart={canDrag ? (event) => handleTabDragStart('pinned', session.id, event) : undefined}
+                onDragOver={canDrag ? (event) => handleTabDragOver('pinned', session.id, event) : undefined}
+                onDrop={canDrag ? (event) => handleTabDrop('pinned', session.id, event) : undefined}
+                onDragEnd={canDrag ? () => clearDragState() : undefined}
               />
             );
           })}
@@ -793,20 +827,24 @@ export function Sidebar() {
               No open conversations yet.
             </p>
           )}
-          {visibleTabs.map((session) => {
+          {openSessionRows.map(({ session, depth, parentSessionId }) => {
             const isDraftTab = session.id === DRAFT_CONVERSATION_ID;
-            const dropPosition = !isDraftTab && dropTarget?.section === 'open' && dropTarget.sessionId === session.id && draggingSessionId !== session.id
+            const canDrag = !isDraftTab && depth === 0;
+            const dropPosition = canDrag && dropTarget?.section === 'open' && dropTarget.sessionId === session.id && draggingSessionId !== session.id
               ? dropTarget.position
               : null;
+            const nestedUnderTitle = parentSessionId ? openSessionsById.get(parentSessionId)?.title : undefined;
 
             return (
               <OpenTab
                 key={session.id}
                 session={session}
                 needsAttention={!isDraftTab && attentionIds.has(session.id)}
-                canDrag={!isDraftTab}
-                isDragging={!isDraftTab && draggingSessionId === session.id}
+                canDrag={canDrag}
+                isDragging={canDrag && draggingSessionId === session.id}
                 dropPosition={dropPosition}
+                depth={depth}
+                nestedUnderTitle={nestedUnderTitle}
                 nowMs={deferredResumeNowMs}
                 actions={isDraftTab ? [{
                   key: 'close',
@@ -824,10 +862,10 @@ export function Sidebar() {
                   icon: PATH.close,
                   onClick: () => handleCloseTab(session.id),
                 }]}
-                onDragStart={isDraftTab ? undefined : (event) => handleTabDragStart('open', session.id, event)}
-                onDragOver={isDraftTab ? undefined : (event) => handleTabDragOver('open', session.id, event)}
-                onDrop={isDraftTab ? undefined : (event) => handleTabDrop('open', session.id, event)}
-                onDragEnd={isDraftTab ? undefined : () => clearDragState()}
+                onDragStart={canDrag ? (event) => handleTabDragStart('open', session.id, event) : undefined}
+                onDragOver={canDrag ? (event) => handleTabDragOver('open', session.id, event) : undefined}
+                onDrop={canDrag ? (event) => handleTabDrop('open', session.id, event) : undefined}
+                onDragEnd={canDrag ? () => clearDragState() : undefined}
               />
             );
           })}

@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppDataContext, LiveTitlesContext, SseConnectionContext } from '../contexts.js';
 import { OPEN_SESSION_IDS_STORAGE_KEY, PINNED_SESSION_IDS_STORAGE_KEY } from '../localSettings.js';
-import type { SessionMeta } from '../types.js';
+import type { DurableRunListResult, SessionMeta } from '../types.js';
 import { Sidebar } from './Sidebar.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -58,6 +58,61 @@ function createSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
       status: 'scheduled',
     }],
     ...overrides,
+  };
+}
+
+function createRunsResult(): DurableRunListResult {
+  return {
+    scannedAt: '2026-03-16T10:00:00.000Z',
+    runsRoot: '/tmp/runs',
+    summary: {
+      total: 1,
+      recoveryActions: {},
+      statuses: { running: 1 },
+    },
+    runs: [{
+      runId: 'run-subagent-123',
+      paths: {
+        root: '/tmp/runs/run-subagent-123',
+        manifestPath: '/tmp/runs/run-subagent-123/manifest.json',
+        statusPath: '/tmp/runs/run-subagent-123/status.json',
+        checkpointPath: '/tmp/runs/run-subagent-123/checkpoint.json',
+        eventsPath: '/tmp/runs/run-subagent-123/events.jsonl',
+        outputLogPath: '/tmp/runs/run-subagent-123/output.log',
+        resultPath: '/tmp/runs/run-subagent-123/result.json',
+      },
+      manifest: {
+        version: 1,
+        id: 'run-subagent-123',
+        kind: 'background-run',
+        resumePolicy: 'manual',
+        createdAt: '2026-03-16T09:59:00.000Z',
+        spec: {
+          taskSlug: 'subagent',
+        },
+        source: {
+          type: 'tool',
+          id: 'conv-123',
+        },
+      },
+      status: {
+        version: 1,
+        runId: 'run-subagent-123',
+        status: 'running',
+        createdAt: '2026-03-16T09:59:00.000Z',
+        updatedAt: '2026-03-16T10:00:00.000Z',
+        activeAttempt: 1,
+        startedAt: '2026-03-16T09:59:10.000Z',
+      },
+      checkpoint: {
+        version: 1,
+        runId: 'run-subagent-123',
+        updatedAt: '2026-03-16T10:00:00.000Z',
+        payload: {},
+      },
+      problems: [],
+      recoveryAction: 'none',
+    }],
   };
 }
 
@@ -145,5 +200,40 @@ describe('Sidebar', () => {
 
     expect(html.indexOf('Projects')).toBeLessThan(html.indexOf('New chat'));
     expect(html.indexOf('New chat')).toBeLessThan(html.indexOf('Pinned'));
+  });
+
+  it('nests child conversations under their parent conversation when run lineage is available', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-123', 'child-1']));
+
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/inbox']}>
+        <SseConnectionContext.Provider value={{ status: 'offline' }}>
+          <AppDataContext.Provider value={{
+            activity: { entries: [], unreadCount: 0 },
+            projects: null,
+            sessions: [
+              createSession({ id: 'conv-123', title: 'Parent conversation', file: '/tmp/conv-123.jsonl', deferredResumes: [] }),
+              createSession({ id: 'child-1', title: 'Child conversation', file: '/tmp/child-1.jsonl', deferredResumes: [], sourceRunId: 'run-subagent-123' }),
+            ],
+            tasks: null,
+            runs: createRunsResult(),
+            setActivity: () => {},
+            setProjects: () => {},
+            setSessions: () => {},
+            setTasks: () => {},
+            setRuns: () => {},
+          }}>
+            <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: () => {} }}>
+              <Sidebar />
+            </LiveTitlesContext.Provider>
+          </AppDataContext.Provider>
+        </SseConnectionContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Parent conversation');
+    expect(html).toContain('↳ Child conversation');
+    expect(html).toContain('Nested under Parent conversation');
+    expect(html.indexOf('Parent conversation')).toBeLessThan(html.indexOf('↳ Child conversation'));
   });
 });
