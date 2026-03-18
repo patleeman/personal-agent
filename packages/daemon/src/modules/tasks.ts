@@ -3,7 +3,6 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { dirname, join, resolve } from 'path';
 import {
   createProjectActivityEntry,
-  getStateRoot,
   setActivityConversationLinks,
   writeProfileActivityEntry,
 } from '@personal-agent/core';
@@ -147,9 +146,9 @@ export interface TasksModuleDependencies {
  * Find Pi session IDs that were created within a ±5 minute window of a task run.
  * Sessions live at <stateRoot>/pi-agent/sessions/<cwd-slug>/<ts>_<uuid>.jsonl.
  */
-function findRelatedSessionIds(startedAt: string, endedAt: string): string[] {
+function findRelatedSessionIds(stateRoot: string, startedAt: string, endedAt: string): string[] {
   try {
-    const sessionsBase = join(getStateRoot(), 'pi-agent', 'sessions');
+    const sessionsBase = join(stateRoot, 'pi-agent', 'sessions');
     if (!existsSync(sessionsBase)) return [];
 
     const startMs = new Date(startedAt).getTime() - 60_000;   // 1 min before
@@ -497,7 +496,7 @@ export function createTasksModule(
   const publishTaskOutputNotifications = (
     task: ParsedTaskDefinition,
     status: TaskRunOutcomeStatus,
-    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string } },
+    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string; stateRoot: string } },
     details: {
       finishedAt: string;
       outputText?: string;
@@ -543,7 +542,7 @@ export function createTasksModule(
 
   const writeScheduledTaskActivityEntry = (
     task: ParsedTaskDefinition,
-    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; paths: { root: string } },
+    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; paths: { root: string; stateRoot: string } },
     activity: {
       activityId: string;
       createdAt: string;
@@ -560,7 +559,7 @@ export function createTasksModule(
     }
 
     writeProfileActivityEntry({
-      stateRoot: context.paths.root,
+      stateRoot: context.paths.stateRoot,
       repoRoot,
       profile: task.profile,
       entry: createProjectActivityEntry({
@@ -575,7 +574,7 @@ export function createTasksModule(
     });
 
     setActivityConversationLinks({
-      stateRoot: context.paths.root,
+      stateRoot: context.paths.stateRoot,
       profile: task.profile,
       activityId: activity.activityId,
       relatedConversationIds: activity.relatedConversationIds ?? [],
@@ -586,7 +585,7 @@ export function createTasksModule(
   const writeTaskActivity = (
     task: ParsedTaskDefinition,
     status: TaskRunOutcomeStatus,
-    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; paths: { root: string } },
+    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; paths: { root: string; stateRoot: string } },
     details: {
       startedAt?: string;
       finishedAt: string;
@@ -605,7 +604,7 @@ export function createTasksModule(
 
       // Find Pi sessions created during this task run for local attention linking.
       const relatedConversationIds = details.startedAt
-        ? findRelatedSessionIds(details.startedAt, details.finishedAt)
+        ? findRelatedSessionIds(context.paths.stateRoot, details.startedAt, details.finishedAt)
         : [];
 
       writeScheduledTaskActivityEntry(task, context, {
@@ -623,7 +622,7 @@ export function createTasksModule(
 
   const writeMissedTaskActivity = (
     task: ParsedTaskDefinition,
-    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; paths: { root: string } },
+    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; paths: { root: string; stateRoot: string } },
     details: {
       detectedAt: string;
       missedRuns: MissedTaskRunSummary;
@@ -722,7 +721,7 @@ export function createTasksModule(
   const executeTaskRun = async (
     task: ParsedTaskDefinition,
     record: TaskRuntimeState,
-    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string } },
+    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string; stateRoot: string } },
     controller: AbortController,
     options: { runIdOverride?: string } = {},
   ): Promise<void> => {
@@ -968,7 +967,7 @@ export function createTasksModule(
   const startTaskRun = (
     task: ParsedTaskDefinition,
     record: TaskRuntimeState,
-    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string } },
+    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string; stateRoot: string } },
     options: { runIdOverride?: string } = {},
   ): void => {
     const controller = new AbortController();
@@ -1006,7 +1005,7 @@ export function createTasksModule(
 
   const handleRequestedTaskRun = async (
     payload: Record<string, unknown>,
-    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string } },
+    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string; stateRoot: string } },
   ): Promise<void> => {
     const filePath = typeof payload.filePath === 'string' && payload.filePath.trim().length > 0
       ? resolve(payload.filePath)
@@ -1059,7 +1058,7 @@ export function createTasksModule(
     context: {
       logger: { info: (message: string) => void; warn: (message: string) => void };
       publish: (type: string, payload?: Record<string, unknown>) => boolean;
-      paths: { root: string };
+      paths: { root: string; stateRoot: string };
     },
   ): Promise<void> => {
     const recoveryTime = now();
@@ -1164,7 +1163,7 @@ export function createTasksModule(
     context: {
       logger: { info: (message: string) => void; warn: (message: string) => void };
       publish: (type: string, payload?: Record<string, unknown>) => boolean;
-      paths: { root: string };
+      paths: { root: string; stateRoot: string };
     },
   ): Promise<void> => {
     if (tickInProgress || stopping) {

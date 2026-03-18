@@ -24,6 +24,7 @@ export function resolveDaemonPaths(explicitSocketPath?: string): DaemonPaths {
     : join(root, 'personal-agentd.sock');
 
   return {
+    stateRoot: statePaths.root,
     root,
     socketPath,
     pidFile: join(root, 'personal-agentd.pid'),

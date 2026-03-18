@@ -213,7 +213,7 @@ export function createDeferredResumeModule(
               entry,
               repoRoot: profileContext.repoRoot,
               profile: profileContext.profile,
-              stateRoot: context.paths.root,
+              stateRoot: context.paths.stateRoot,
             });
           }
 
