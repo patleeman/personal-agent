@@ -19,7 +19,6 @@ import {
   createBashTool,
   type AgentSessionEvent,
   type ExtensionFactory,
-  type Tool,
 } from '@mariozechner/pi-coding-agent';
 import { invalidateAppTopics, publishAppEvent } from './appEvents.js';
 import {
@@ -134,8 +133,8 @@ function makeRegistry(auth: AuthStorage) {
   return new ModelRegistry(auth);
 }
 
-interface ToolPatchableSession extends AgentSession {
-  _baseToolRegistry?: Map<string, Tool>;
+interface ToolPatchableSessionInternals {
+  _baseToolRegistry?: Map<string, unknown>;
   _refreshToolRegistry?: (options?: {
     activeToolNames?: string[];
     includeAllExtensionTools?: boolean;
@@ -143,7 +142,7 @@ interface ToolPatchableSession extends AgentSession {
 }
 
 function patchConversationBashTool(session: AgentSession, cwd: string, conversationId: string, sessionFile?: string): void {
-  const patchableSession = session as ToolPatchableSession;
+  const patchableSession = session as unknown as ToolPatchableSessionInternals;
   if (!(patchableSession._baseToolRegistry instanceof Map) || typeof patchableSession._refreshToolRegistry !== 'function') {
     return;
   }
