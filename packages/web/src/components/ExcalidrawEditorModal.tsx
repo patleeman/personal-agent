@@ -227,8 +227,8 @@ export function ExcalidrawEditorModal({
                   onChange={(elements, appState, files) => {
                     sceneRef.current = {
                       elements: [...elements],
-                      appState: appState as unknown as Record<string, unknown>,
-                      files: files as unknown as Record<string, unknown>,
+                      appState: { ...appState },
+                      files: { ...files },
                     };
                   }}
                 />
