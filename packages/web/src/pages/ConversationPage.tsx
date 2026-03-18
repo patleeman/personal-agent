@@ -47,7 +47,10 @@ import {
   type PendingConversationPrompt,
 } from '../pendingConversationPrompt';
 import { getConversationResumeState } from '../conversationResume';
-import { resolveConversationComposerSubmitState } from '../conversationComposerSubmit';
+import {
+  normalizeConversationComposerBehavior,
+  resolveConversationComposerSubmitState,
+} from '../conversationComposerSubmit';
 import { useReloadState } from '../reloadState';
 import { ensureConversationTabOpen } from '../sessionTabs';
 import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSceneFromBlob, parseExcalidrawSceneFromSourceData, serializeExcalidrawScene } from '../excalidrawUtils';
@@ -1840,7 +1843,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     void stream.send(
       claimedInitialPrompt.text,
-      claimedInitialPrompt.behavior,
+      normalizeConversationComposerBehavior(claimedInitialPrompt.behavior, stream.isStreaming),
       claimedInitialPrompt.images,
       claimedInitialPrompt.attachmentRefs,
     ).then(async () => {
@@ -1856,7 +1859,16 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       console.error('Initial prompt failed:', error);
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     });
-  }, [draft, id, pendingInitialPrompt, stream.hasSnapshot, stream.send, refetchConversationProjects, showNotice]);
+  }, [
+    draft,
+    id,
+    pendingInitialPrompt,
+    stream.hasSnapshot,
+    stream.isStreaming,
+    stream.send,
+    refetchConversationProjects,
+    showNotice,
+  ]);
 
   const ensureConversationIsLiveForFork = useCallback(async () => {
     if (!id) {
@@ -2591,7 +2603,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         }
       }
 
-      const queuedBehavior = behavior ?? (isLiveSession && stream.isStreaming ? 'steer' : undefined);
+      const requestedBehavior = behavior ?? (isLiveSession && stream.isStreaming ? 'steer' : undefined);
+      const queuedBehavior = normalizeConversationComposerBehavior(requestedBehavior, stream.isStreaming);
 
       const persistPromptDrawings = async (conversationId: string): Promise<PromptAttachmentRefInput[]> => {
         if (pendingDrawingAttachments.length === 0) {
@@ -2828,7 +2841,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     if (e.key === 'Enter' && e.altKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
-      await submitComposer('followUp');
+      await submitComposer(resolveConversationComposerSubmitState(stream.isStreaming, true).behavior);
       return;
     }
 

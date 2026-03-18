@@ -333,6 +333,13 @@ function readContextUsagePayload(session: AgentSession): LiveContextUsage | null
   }
 }
 
+function normalizeQueuedPromptBehavior(
+  behavior: 'steer' | 'followUp' | undefined,
+  isStreaming: boolean,
+): 'steer' | 'followUp' | undefined {
+  return isStreaming ? behavior : undefined;
+}
+
 function readQueueState(session: AgentSession): { steering: string[]; followUp: string[] } {
   const steer = typeof session.getSteeringMessages === 'function'
     ? session.getSteeringMessages()
@@ -1328,16 +1335,17 @@ export async function promptSession(
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
   const { session } = entry;
+  const normalizedBehavior = normalizeQueuedPromptBehavior(behavior, session.isStreaming);
   const hasImages = Boolean(images && images.length > 0);
 
   const runPrompt = async (allowImages: boolean): Promise<void> => {
-    if (behavior === 'steer') {
+    if (normalizedBehavior === 'steer') {
       await (allowImages && hasImages ? session.steer(text, images) : session.steer(text));
       broadcastQueueState(entry, true);
       return;
     }
 
-    if (behavior === 'followUp') {
+    if (normalizedBehavior === 'followUp') {
       await (allowImages && hasImages ? session.followUp(text, images) : session.followUp(text));
       broadcastQueueState(entry, true);
       return;
