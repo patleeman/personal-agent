@@ -227,6 +227,40 @@ describe('ContextRail run detail', () => {
     expect(html).toContain('Target conversation');
   });
 
+  it('opens run details in the runs rail without conversation-only chrome', () => {
+    vi.mocked(useDurableRunStream).mockReturnValue({
+      detail: createDetail(),
+      log: { path: '/tmp/runs/conversation-live-conv-123/output.log', log: '' },
+      loading: false,
+      error: null,
+      reconnect: vi.fn(),
+    });
+
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/runs/conversation-live-conv-123']}>
+        <AppDataContext.Provider value={{
+          activity: null,
+          projects: null,
+          sessions: [createSession()],
+          tasks: null,
+          runs: null,
+          setActivity: vi.fn(),
+          setProjects: vi.fn(),
+          setSessions: vi.fn(),
+          setTasks: vi.fn(),
+          setRuns: vi.fn(),
+        }}>
+          <ContextRail />
+        </AppDataContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Fix runs navigation');
+    expect(html).toContain('href="/conversations/conv-123"');
+    expect(html).not.toContain('← Conversation');
+    expect(html).not.toContain('Full page');
+  });
+
   it('shows merge actions for capture memories in the memories rail', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {

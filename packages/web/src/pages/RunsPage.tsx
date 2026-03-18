@@ -2,21 +2,18 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAppData, useSseConnection } from '../contexts';
-import { useDurableRunStream } from '../hooks/useDurableRunStream';
 import {
   getRunCategory,
-  getRunConnections,
   getRunHeadline,
   getRunMoment,
   getRunPrimaryActionLabel,
   getRunPrimaryConnection,
   getRunSortTimestamp,
-  getRunTimeline,
   summarizeActiveRuns,
   type RunCategory,
   type RunPresentationLookups,
 } from '../runPresentation';
-import type { DurableRunDetailResult, DurableRunRecord } from '../types';
+import type { DurableRunRecord } from '../types';
 import { formatDate } from '../utils';
 import { EmptyState, ErrorState, LoadingState, PageHeader, PageHeading, ToolbarButton, cx } from '../components/ui';
 
@@ -135,175 +132,14 @@ function RunRow({
   );
 }
 
-function RunDetail({
-  detail,
-  log,
-  loading,
-  error,
-  lookups,
-  onCancel,
-  cancelling,
-}: {
-  detail: DurableRunDetailResult | null;
-  log: { path: string; log: string } | null;
-  loading: boolean;
-  error: string | null;
-  lookups: RunPresentationLookups;
-  onCancel: (runId: string) => void;
-  cancelling: boolean;
-}) {
-  if (loading) {
-    return <LoadingState className="mb-5" label="Loading run…" />;
-  }
-
-  if (error) {
-    return <ErrorState className="mb-5" message={`Failed to load run: ${error}`} />;
-  }
-
-  if (!detail) {
-    return null;
-  }
-
-  const run = detail.run;
-  const status = runStatusText(run);
-  const headline = getRunHeadline(run, lookups);
-  const connections = getRunConnections(run, lookups);
-  const timeline = getRunTimeline(run);
-  const showRecovery = run.recoveryAction !== 'none';
-  const canCancel = run.manifest?.kind === 'background-run' && (
-    run.status?.status === 'queued'
-    || run.status?.status === 'waiting'
-    || run.status?.status === 'running'
-    || run.status?.status === 'recovering'
-  );
-
-  return (
-    <div className="mb-6 space-y-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1 min-w-0">
-          <h2 className="text-[16px] font-medium text-primary break-words">{headline.title}</h2>
-          <p className="ui-card-meta flex flex-wrap items-center gap-1.5">
-            <span className={status.cls}>{status.text}</span>
-            <span className="opacity-40">·</span>
-            <span>{headline.summary}</span>
-            {showRecovery && (
-              <>
-                <span className="opacity-40">·</span>
-                <span>{formatRecoveryAction(run.recoveryAction)}</span>
-              </>
-            )}
-          </p>
-          <p className="text-[11px] font-mono text-dim break-all">{run.runId}</p>
-        </div>
-        {canCancel && (
-          <ToolbarButton onClick={() => onCancel(run.runId)} disabled={cancelling}>
-            {cancelling ? 'Cancelling…' : 'Cancel run'}
-          </ToolbarButton>
-        )}
-      </div>
-
-      {connections.length > 0 && (
-        <div className="border-t border-border-subtle pt-4 space-y-3">
-          <p className="ui-section-label">Connected to</p>
-          <div className="space-y-3">
-            {connections.map((connection) => {
-              const value = connection.to
-                ? <Link to={connection.to} className="text-[13px] text-accent hover:underline break-all">{connection.value}</Link>
-                : <p className="text-[13px] text-primary break-all">{connection.value}</p>;
-
-              return (
-                <div key={connection.key} className="space-y-0.5">
-                  <p className="text-[11px] uppercase tracking-[0.12em] text-dim">{connection.label}</p>
-                  {value}
-                  {connection.detail && <p className="text-[12px] text-secondary break-words">{connection.detail}</p>}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {timeline.length > 0 && (
-        <div className="border-t border-border-subtle pt-4 space-y-3">
-          <p className="ui-section-label">Timeline</p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {timeline.map((item) => (
-              <div key={item.label} className="space-y-1">
-                <p className="text-[11px] uppercase tracking-[0.12em] text-dim">{item.label}</p>
-                <p className="text-[13px] text-primary">{formatDate(item.at)}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="border-t border-border-subtle pt-4 grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1">
-          <p className="ui-section-label">Run state</p>
-          <p className="text-[13px] text-primary">{run.manifest?.kind ?? 'unknown kind'}</p>
-          {run.manifest?.resumePolicy && <p className="text-[12px] text-secondary">resume policy {run.manifest.resumePolicy}</p>}
-          {run.manifest?.source?.type && <p className="text-[12px] text-secondary">source {run.manifest.source.type}</p>}
-        </div>
-
-        <div className="space-y-1">
-          <p className="ui-section-label">Attempts</p>
-          <p className="text-[13px] text-primary">{run.status?.activeAttempt ?? 0}</p>
-          {run.checkpoint?.step && <p className="text-[12px] text-secondary">checkpoint {run.checkpoint.step}</p>}
-          {run.checkpoint?.cursor && <p className="text-[12px] text-secondary">cursor {run.checkpoint.cursor}</p>}
-        </div>
-      </div>
-
-      {(run.status?.lastError || run.problems.length > 0) && (
-        <div className="border-t border-border-subtle pt-4 space-y-3">
-          {run.status?.lastError && (
-            <div className="space-y-1">
-              <p className="ui-section-label">Last error</p>
-              <p className="text-[12px] text-danger whitespace-pre-wrap break-words">{run.status.lastError}</p>
-            </div>
-          )}
-
-          {run.problems.length > 0 && (
-            <div className="space-y-1">
-              <p className="ui-section-label">Problems</p>
-              <div className="space-y-1 text-[12px] text-danger">
-                {run.problems.map((problem) => (
-                  <p key={problem}>• {problem}</p>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="border-t border-border-subtle pt-4 space-y-2">
-        <div className="flex items-center justify-between gap-3">
-          <p className="ui-section-label">Output log</p>
-          {log?.path && <p className="text-[10px] font-mono text-dim truncate">{log.path.split('/').slice(-2).join('/')}</p>}
-        </div>
-        <pre className="text-[11px] font-mono text-secondary whitespace-pre-wrap break-all bg-elevated rounded-lg p-3 max-h-80 overflow-y-auto leading-relaxed">
-          {log?.log || '(empty)'}
-        </pre>
-      </div>
-    </div>
-  );
-}
-
 export function RunsPage() {
   const { id: selectedId } = useParams<{ id?: string }>();
   const { tasks, sessions, runs, setRuns } = useAppData();
   const { status: sseStatus } = useSseConnection();
   const [refreshError, setRefreshError] = useState<string | null>(null);
-  const [cancellingRunId, setCancellingRunId] = useState<string | null>(null);
   const [filter, setFilter] = useState<RunFilterValue>('all');
 
   const lookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
-  const {
-    detail,
-    log: detailLog,
-    loading: loadingDetail,
-    error: detailError,
-    reconnect: reconnectSelectedRun,
-  } = useDurableRunStream(selectedId ?? null, 120);
 
   const refreshRuns = useCallback(async () => {
     try {
@@ -317,20 +153,6 @@ export function RunsPage() {
       return null;
     }
   }, [setRuns]);
-
-  const handleCancelRun = useCallback(async (runId: string) => {
-    setCancellingRunId(runId);
-    try {
-      await api.cancelDurableRun(runId);
-      await refreshRuns();
-      reconnectSelectedRun();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setRefreshError(message);
-    } finally {
-      setCancellingRunId(null);
-    }
-  }, [reconnectSelectedRun, refreshRuns]);
 
   const runRecords = useMemo(() => {
     const next = [...(runs?.runs ?? [])];
@@ -391,7 +213,7 @@ export function RunsPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <PageHeader actions={<ToolbarButton onClick={() => { void refreshRuns(); reconnectSelectedRun(); }}>↻ Refresh</ToolbarButton>}>
+      <PageHeader actions={<ToolbarButton onClick={() => { void refreshRuns(); }}>↻ Refresh</ToolbarButton>}>
         <PageHeading
           title="Agent Runs"
           meta={(
@@ -413,7 +235,7 @@ export function RunsPage() {
         {visibleError && <ErrorState message={`Failed to load runs: ${visibleError}`} />}
 
         {!isLoading && !visibleError && runRecords.length > 0 && (
-          <div className="mb-5">
+          <div className="mb-5 space-y-2">
             <div className="ui-segmented-control" role="group" aria-label="Run filter">
               {filterOptions.map((option) => {
                 const count = option.value === 'all' ? runRecords.length : filterCounts[option.value];
@@ -429,19 +251,8 @@ export function RunsPage() {
                 );
               })}
             </div>
+            <p className="ui-card-meta">Select a run to inspect it in the right panel.</p>
           </div>
-        )}
-
-        {!isLoading && !visibleError && selectedId && (
-          <RunDetail
-            detail={detail}
-            log={detailLog}
-            loading={loadingDetail}
-            error={detailError}
-            lookups={lookups}
-            onCancel={handleCancelRun}
-            cancelling={cancellingRunId === selectedId}
-          />
         )}
 
         {!isLoading && !visibleError && runRecords.length === 0 && (
