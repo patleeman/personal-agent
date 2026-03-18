@@ -177,6 +177,17 @@ describe('sessionTabs', () => {
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
   });
 
+  it('can close a pinned conversation without reopening it in open tabs', () => {
+    replaceConversationLayout({ sessionIds: ['session-1'], pinnedSessionIds: ['session-2'] });
+    dispatchEvent.mockReset();
+
+    expect(unpinConversationTab('session-2', { open: false })).toEqual({
+      sessionIds: ['session-1'],
+      pinnedSessionIds: [],
+    });
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
+  });
+
   it('only dispatches changes when a tab actually closes', () => {
     ensureConversationTabOpen('session-1');
     dispatchEvent.mockReset();
