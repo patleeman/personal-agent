@@ -12,6 +12,7 @@ import {
   getRunPrimaryConnection,
   getRunSortTimestamp,
   getRunTimeline,
+  summarizeActiveRuns,
   type RunCategory,
   type RunPresentationLookups,
 } from '../runPresentation';
@@ -381,15 +382,12 @@ export function RunsPage() {
   }, [filter, runRecords]);
 
   const summary = useMemo(() => {
-    const running = runRecords.filter((run) => {
-      const status = run.status?.status;
-      return status === 'running' || status === 'recovering';
-    }).length;
+    const active = summarizeActiveRuns({ tasks, sessions, runs }).total;
     const needsRecovery = runRecords.filter((run) => run.recoveryAction === 'resume' || run.recoveryAction === 'rerun').length;
     const issues = runRecords.filter((run) => run.problems.length > 0 || run.recoveryAction === 'invalid').length;
 
-    return { running, needsRecovery, issues };
-  }, [runRecords]);
+    return { active, needsRecovery, issues };
+  }, [runRecords, runs, sessions, tasks]);
 
   return (
     <div className="flex flex-col h-full">
@@ -400,7 +398,7 @@ export function RunsPage() {
             runs && (
               <>
                 {runs.summary.total} {runs.summary.total === 1 ? 'run' : 'runs'}
-                {summary.running > 0 && <span className="ml-2 text-accent">· {summary.running} active</span>}
+                {summary.active > 0 && <span className="ml-2 text-accent">· {summary.active} active</span>}
                 {summary.needsRecovery > 0 && <span className="ml-2 text-warning">· {summary.needsRecovery} recoverable</span>}
                 {summary.issues > 0 && <span className="ml-2 text-danger">· {summary.issues} with issues</span>}
                 {filter !== 'all' && <span className="ml-2 text-secondary">· {filteredRuns.length} shown</span>}

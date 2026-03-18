@@ -25,8 +25,9 @@ import {
   shouldShowDraftConversationTab,
 } from '../draftConversation';
 import { getSidebarBrandLabel } from '../sidebarBrand';
-import { timeAgo } from '../utils';
 import { buildNestedSessionRows } from '../sessionLineage';
+import { summarizeActiveRuns } from '../runPresentation';
+import { timeAgo } from '../utils';
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 
@@ -366,14 +367,21 @@ function ShelfDropZone({
   );
 }
 
-function SidebarFooter() {
+function SidebarFooter({
+  activeRunCount,
+  agentRunsTitle,
+}: {
+  activeRunCount: number;
+  agentRunsTitle: string;
+}) {
   return (
     <div className="border-t border-border-subtle px-2 py-2 shrink-0 space-y-0.5">
       <TopNavItem
         to="/runs"
         icon={PATH.runs}
         label="Agent Runs"
-        title="Daemon-backed agent runs: scheduled task runs, deferred resumes, and recoverable conversation runs."
+        badge={activeRunCount}
+        title={agentRunsTitle}
       />
       <TopNavItem
         to="/system"
@@ -391,7 +399,7 @@ function SidebarFooter() {
 export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { activity, runs } = useAppData();
+  const { activity, runs, sessions, tasks } = useAppData();
   const { data: status } = useApi(api.status);
   const {
     pinnedSessions,
@@ -427,6 +435,32 @@ export function Sidebar() {
     }).length;
   }, [activity?.entries, allSessions]);
   const inboxCount = standaloneUnreadCount + archivedSessions.filter((session) => sessionNeedsAttention(session)).length;
+  const activeRuns = useMemo(() => summarizeActiveRuns({ tasks, sessions, runs }), [runs, sessions, tasks]);
+  const agentRunsTitle = useMemo(() => {
+    const base = 'Daemon-backed agent runs: scheduled task runs, deferred resumes, and recoverable conversation runs.';
+    if (activeRuns.total === 0) {
+      return base;
+    }
+
+    const breakdown: string[] = [];
+    if (activeRuns.conversation > 0) {
+      breakdown.push(`${activeRuns.conversation} conversation${activeRuns.conversation === 1 ? '' : 's'}`);
+    }
+    if (activeRuns.scheduled > 0) {
+      breakdown.push(`${activeRuns.scheduled} scheduled`);
+    }
+    if (activeRuns.background > 0) {
+      breakdown.push(`${activeRuns.background} background`);
+    }
+    if (activeRuns.deferred > 0) {
+      breakdown.push(`${activeRuns.deferred} deferred`);
+    }
+    if (activeRuns.other > 0) {
+      breakdown.push(`${activeRuns.other} other`);
+    }
+
+    return `${base} ${activeRuns.total} active now${breakdown.length > 0 ? ` · ${breakdown.join(' · ')}` : ''}.`;
+  }, [activeRuns]);
   const [draftComposer, setDraftComposer] = useState(() => readDraftConversationComposer());
   const [draftCwd, setDraftCwd] = useState(() => readDraftConversationCwd());
   const [draftHasAttachments, setDraftHasAttachments] = useState(() => hasDraftConversationAttachments());
@@ -872,7 +906,7 @@ export function Sidebar() {
         </div>
       </div>
 
-      <SidebarFooter />
+      <SidebarFooter activeRunCount={activeRuns.total} agentRunsTitle={agentRunsTitle} />
     </aside>
   );
 }
