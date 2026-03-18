@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MessageBlock, PromptAttachmentRefInput, PromptImageInput, SessionContextUsage, SseEvent } from '../types';
 import { api } from '../api';
+import { normalizeConversationComposerBehavior } from '../conversationComposerSubmit';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 
 export interface StreamState {
@@ -59,7 +60,9 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
   ) => {
     if (!sessionId) return;
 
-    if (!behavior) {
+    const normalizedBehavior = normalizeConversationComposerBehavior(behavior, streamingRef.current);
+
+    if (!normalizedBehavior) {
       const ts = new Date().toISOString();
       const userBlock: MessageBlock = {
         type: 'user',
@@ -81,7 +84,7 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
       setState((s) => ({ ...s, blocks: blocksRef.current }));
     }
 
-    await api.promptSession(sessionId, text, behavior, images, attachmentRefs);
+    await api.promptSession(sessionId, text, normalizedBehavior, images, attachmentRefs);
   }, [sessionId]);
 
   const abort = useCallback(async () => {

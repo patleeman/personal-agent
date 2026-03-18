@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { resolveConversationComposerSubmitState } from './conversationComposerSubmit.js';
+import {
+  normalizeConversationComposerBehavior,
+  resolveConversationComposerSubmitState,
+} from './conversationComposerSubmit.js';
+
+describe('normalizeConversationComposerBehavior', () => {
+  it('drops queued behaviors when the session is idle', () => {
+    expect(normalizeConversationComposerBehavior('steer', false)).toBeUndefined();
+    expect(normalizeConversationComposerBehavior('followUp', false)).toBeUndefined();
+  });
+
+  it('preserves queued behaviors while streaming', () => {
+    expect(normalizeConversationComposerBehavior('steer', true)).toBe('steer');
+    expect(normalizeConversationComposerBehavior('followUp', true)).toBe('followUp');
+  });
+});
 
 describe('resolveConversationComposerSubmitState', () => {
   it('shows Send when the session is idle', () => {

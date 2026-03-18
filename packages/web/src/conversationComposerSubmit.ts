@@ -3,6 +3,13 @@ export interface ConversationComposerSubmitState {
   behavior?: 'followUp';
 }
 
+export function normalizeConversationComposerBehavior(
+  behavior: 'steer' | 'followUp' | undefined,
+  isStreaming: boolean,
+): 'steer' | 'followUp' | undefined {
+  return isStreaming ? behavior : undefined;
+}
+
 export function resolveConversationComposerSubmitState(
   isStreaming: boolean,
   altKeyHeld: boolean,

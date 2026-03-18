@@ -7,6 +7,7 @@ import {
   ensureSessionFileExists,
   getLiveSessions,
   patchSessionManagerPersistence,
+  promptSession,
   registry,
   reloadAllLiveSessionAuth,
   renameSession,
@@ -1105,6 +1106,68 @@ describe('queued prompt restore', () => {
       { role: 'custom', content: 'more hidden steer context' },
     ]);
     expect(events).toContainEqual({ type: 'queue_state', steering: ['first queued prompt'], followUp: [] });
+  });
+});
+
+describe('promptSession', () => {
+  it('delivers follow-up prompts immediately when the session is idle', async () => {
+    const prompt = vi.fn(async () => undefined);
+    const steer = vi.fn(async () => undefined);
+    const followUp = vi.fn(async () => undefined);
+
+    setLiveEntry('session-idle-followup', {
+      sessionId: 'session-idle-followup',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Idle follow-up',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamMessage: null },
+        getContextUsage: () => null,
+        isStreaming: false,
+        prompt,
+        steer,
+        followUp,
+      },
+    });
+
+    await promptSession('session-idle-followup', 'continue working', 'followUp');
+
+    expect(prompt).toHaveBeenCalledWith('continue working');
+    expect(steer).not.toHaveBeenCalled();
+    expect(followUp).not.toHaveBeenCalled();
+  });
+
+  it('queues follow-up prompts while the session is streaming', async () => {
+    const prompt = vi.fn(async () => undefined);
+    const steer = vi.fn(async () => undefined);
+    const followUp = vi.fn(async () => undefined);
+
+    setLiveEntry('session-streaming-followup', {
+      sessionId: 'session-streaming-followup',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Streaming follow-up',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamMessage: null },
+        getContextUsage: () => null,
+        isStreaming: true,
+        prompt,
+        steer,
+        followUp,
+      },
+    });
+
+    await promptSession('session-streaming-followup', 'continue working', 'followUp');
+
+    expect(prompt).not.toHaveBeenCalled();
+    expect(steer).not.toHaveBeenCalled();
+    expect(followUp).toHaveBeenCalledWith('continue working');
   });
 });
 
