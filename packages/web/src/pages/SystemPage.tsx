@@ -67,6 +67,8 @@ function releaseKey(release: WebUiReleaseSummary | undefined): string {
   return [release.slot, release.revision ?? '', release.builtAt].join(':');
 }
 
+type ComponentAction = 'restart-web-ui' | 'restart-daemon' | 'restart-gateway' | 'run-sync';
+
 function StatBlock({
   label,
   value,
@@ -116,12 +118,14 @@ function SystemSection({
   label,
   description,
   to,
+  actions,
   children,
 }: {
   id: string;
   label: string;
   description: string;
   to: string;
+  actions?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -131,7 +135,10 @@ function SystemSection({
           <SectionLabel label={label} />
           <p className="ui-card-meta max-w-3xl">{description}</p>
         </div>
-        <Link to={to} className="ui-toolbar-button">Open advanced page</Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {actions}
+          <Link to={to} className="ui-toolbar-button">Open advanced page</Link>
+        </div>
       </div>
       {children}
     </section>
@@ -146,6 +153,9 @@ export function SystemPage() {
   const [applicationAction, setApplicationAction] = useState<'restart' | 'update' | null>(null);
   const [applicationMessage, setApplicationMessage] = useState<string | null>(null);
   const [applicationError, setApplicationError] = useState<string | null>(null);
+  const [componentAction, setComponentAction] = useState<ComponentAction | null>(null);
+  const [componentMessage, setComponentMessage] = useState<string | null>(null);
+  const [componentError, setComponentError] = useState<string | null>(null);
   const actionMonitorRef = useRef<number | null>(null);
 
   const refreshAll = useCallback(async (resetLoading = false) => {
@@ -209,14 +219,14 @@ export function SystemPage() {
 
   useEffect(() => {
     const id = window.setInterval(() => {
-      if (applicationAction) {
+      if (applicationAction || componentAction) {
         return;
       }
       void refreshAll(false);
     }, 20_000);
 
     return () => window.clearInterval(id);
-  }, [applicationAction, refreshAll]);
+  }, [applicationAction, componentAction, refreshAll]);
 
   const combinedWarnings = useMemo(() => {
     return [
@@ -228,7 +238,7 @@ export function SystemPage() {
   }, [daemon.data?.warnings, gateway.data?.warnings, sync.data?.warnings, webUi.data?.warnings]);
 
   async function handleApplicationAction(action: 'restart' | 'update') {
-    if (applicationAction || !webUi.data?.service.installed) {
+    if (applicationAction || componentAction || !webUi.data?.service.installed) {
       return;
     }
 
@@ -244,6 +254,8 @@ export function SystemPage() {
     setApplicationAction(action);
     setApplicationError(null);
     setApplicationMessage(null);
+    setComponentError(null);
+    setComponentMessage(null);
 
     try {
       const previousReleaseKey = releaseKey(webUi.data.service.deployment?.activeRelease);
@@ -258,8 +270,43 @@ export function SystemPage() {
     }
   }
 
+  async function handleComponentAction(action: ComponentAction) {
+    if (applicationAction || componentAction) {
+      return;
+    }
+
+    setComponentAction(action);
+    setComponentError(null);
+    setComponentMessage(null);
+    setApplicationError(null);
+    setApplicationMessage(null);
+
+    try {
+      if (action === 'restart-web-ui') {
+        await api.restartWebUiService();
+        setComponentMessage('Requested a managed web UI restart. Status refreshed below.');
+      } else if (action === 'restart-daemon') {
+        await api.restartDaemonService();
+        setComponentMessage('Requested a daemon restart. Status refreshed below.');
+      } else if (action === 'restart-gateway') {
+        await api.restartGateway();
+        setComponentMessage('Requested a gateway restart. Status refreshed below.');
+      } else {
+        await api.runSync();
+        setComponentMessage('Requested an immediate sync run. Status refreshed below.');
+      }
+
+      await refreshAll(false);
+    } catch (error) {
+      setComponentError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setComponentAction(null);
+    }
+  }
+
   const hasAnyData = Boolean(daemon.data || sync.data || gateway.data || webUi.data);
   const canManageApplication = webUi.data?.service.installed ?? false;
+  const actionsBusy = applicationAction !== null || componentAction !== null;
   const loadingEverything = !hasAnyData && daemon.loading && sync.loading && gateway.loading && webUi.loading;
 
   return (
@@ -269,17 +316,17 @@ export function SystemPage() {
           <>
             <ToolbarButton
               onClick={() => { void handleApplicationAction('update'); }}
-              disabled={applicationAction !== null || !canManageApplication}
+              disabled={actionsBusy || !canManageApplication}
             >
               {applicationAction === 'update' ? 'Update requested…' : 'Update + restart'}
             </ToolbarButton>
             <ToolbarButton
               onClick={() => { void handleApplicationAction('restart'); }}
-              disabled={applicationAction !== null || !canManageApplication}
+              disabled={actionsBusy || !canManageApplication}
             >
               {applicationAction === 'restart' ? 'Restart requested…' : 'Restart everything'}
             </ToolbarButton>
-            <ToolbarButton onClick={() => { void refreshAll(false); }} disabled={applicationAction !== null}>↻ Refresh</ToolbarButton>
+            <ToolbarButton onClick={() => { void refreshAll(false); }} disabled={actionsBusy}>↻ Refresh</ToolbarButton>
           </>
         )}
       >
@@ -294,7 +341,7 @@ export function SystemPage() {
 
         {!loadingEverything && (
           <div className="space-y-8">
-            {(combinedWarnings.length > 0 || applicationMessage || applicationError || !canManageApplication) && (
+            {(combinedWarnings.length > 0 || applicationMessage || applicationError || componentMessage || componentError || !canManageApplication) && (
               <div className="space-y-1">
                 {combinedWarnings.map((warning) => (
                   <p key={warning} className="text-[12px] text-warning">{warning}</p>
@@ -305,7 +352,9 @@ export function SystemPage() {
                   </p>
                 )}
                 {applicationMessage && <p className="text-[12px] text-secondary">{applicationMessage}</p>}
+                {componentMessage && <p className="text-[12px] text-secondary">{componentMessage}</p>}
                 {applicationError && <p className="text-[12px] text-danger">{applicationError}</p>}
+                {componentError && <p className="text-[12px] text-danger">{componentError}</p>}
               </div>
             )}
 
@@ -355,6 +404,14 @@ export function SystemPage() {
               label="Web UI"
               description="Managed service state, live release, and recent logs. Use the advanced page for install/start/stop, tailscale, rollback, and bad-release controls."
               to="/web-ui"
+              actions={(
+                <ToolbarButton
+                  onClick={() => { void handleComponentAction('restart-web-ui'); }}
+                  disabled={actionsBusy || !webUi.data?.service.installed || !webUi.data.service.running}
+                >
+                  {componentAction === 'restart-web-ui' ? 'Restarting…' : 'Restart web UI'}
+                </ToolbarButton>
+              )}
             >
               {webUi.loading && !webUi.data && <LoadingState label="Loading web UI state…" />}
               {!webUi.loading && webUi.error && !webUi.data && <ErrorState message={`Failed to load web UI state: ${webUi.error}`} />}
@@ -398,6 +455,14 @@ export function SystemPage() {
               label="Daemon"
               description="Background automation runtime, queue depth, and recent daemon log output. Use the advanced page for service management."
               to="/daemon"
+              actions={(
+                <ToolbarButton
+                  onClick={() => { void handleComponentAction('restart-daemon'); }}
+                  disabled={actionsBusy || !daemon.data?.service.installed || !daemon.data.service.running}
+                >
+                  {componentAction === 'restart-daemon' ? 'Restarting…' : 'Restart daemon'}
+                </ToolbarButton>
+              )}
             >
               {daemon.loading && !daemon.data && <LoadingState label="Loading daemon state…" />}
               {!daemon.loading && daemon.error && !daemon.data && <ErrorState message={`Failed to load daemon state: ${daemon.error}`} />}
@@ -439,6 +504,14 @@ export function SystemPage() {
               label="Gateway"
               description="Telegram gateway service health, queue depth, tracked conversations, and recent logs. Use the advanced page for configuration and conversation details."
               to="/gateway"
+              actions={(
+                <ToolbarButton
+                  onClick={() => { void handleComponentAction('restart-gateway'); }}
+                  disabled={actionsBusy || !gateway.data?.service.installed || !gateway.data.service.running}
+                >
+                  {componentAction === 'restart-gateway' ? 'Restarting…' : 'Restart gateway'}
+                </ToolbarButton>
+              )}
             >
               {gateway.loading && !gateway.data && <LoadingState label="Loading gateway state…" />}
               {!gateway.loading && gateway.error && !gateway.data && <ErrorState message={`Failed to load gateway state: ${gateway.error}`} />}
@@ -477,6 +550,14 @@ export function SystemPage() {
               label="Sync"
               description="Git-backed durable-state sync health, repo status, and recent sync-related daemon log output. Use the advanced page for setup and conflict details."
               to="/sync"
+              actions={(
+                <ToolbarButton
+                  onClick={() => { void handleComponentAction('run-sync'); }}
+                  disabled={actionsBusy || !sync.data?.daemon.connected || !sync.data.git.hasRepo}
+                >
+                  {componentAction === 'run-sync' ? 'Running sync…' : 'Run sync now'}
+                </ToolbarButton>
+              )}
             >
               {sync.loading && !sync.data && <LoadingState label="Loading sync state…" />}
               {!sync.loading && sync.error && !sync.data && <ErrorState message={`Failed to load sync state: ${sync.error}`} />}
