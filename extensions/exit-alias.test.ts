@@ -13,12 +13,17 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+type ExitCommand = {
+  description?: string;
+  handler: (args: string, ctx: { shutdown: () => void }) => Promise<void> | void;
+};
+
 describe('exit-alias shared extension', () => {
   it('registers /exit outside gateway mode and shuts down cleanly', async () => {
-    const commands: Record<string, { handler: (args: string, ctx: any) => Promise<void> | void }> = {};
+    const commands: Record<string, ExitCommand> = {};
 
     const pi = {
-      registerCommand: vi.fn((name: string, command: { handler: (args: string, ctx: any) => Promise<void> | void }) => {
+      registerCommand: vi.fn((name: string, command: ExitCommand) => {
         commands[name] = command;
       }),
     };

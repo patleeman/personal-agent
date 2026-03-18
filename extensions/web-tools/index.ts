@@ -122,6 +122,26 @@ function getExaApiKey(): string | undefined {
 	return resolvedExaApiKey;
 }
 
+interface ExaSearchResult {
+	title?: string;
+	url?: string;
+	text?: string;
+	highlights?: string[];
+	summary?: string;
+}
+
+interface ExaSearchResponse {
+	results?: ExaSearchResult[];
+}
+
+function getErrorMessage(error: unknown): string {
+	if (error instanceof Error) {
+		return error.message;
+	}
+
+	return String(error);
+}
+
 function createRequestSignal(signal: unknown, timeoutMs: number): AbortSignal {
 	const timeoutSignal = AbortSignal.timeout(timeoutMs);
 	if (!(signal instanceof AbortSignal)) {
@@ -166,6 +186,7 @@ export default function (pi: ExtensionAPI) {
 				if (!response.ok) {
 					return {
 						content: [{ type: "text" as const, text: `HTTP ${response.status}: ${response.statusText}` }],
+						details: { url, status: response.status, statusText: response.statusText },
 						isError: true,
 					};
 				}
@@ -258,9 +279,10 @@ export default function (pi: ExtensionAPI) {
 					content: [{ type: "text" as const, text: result }],
 					details: { url, title: article?.title, truncated: truncation.truncated },
 				};
-			} catch (e: any) {
+			} catch (e: unknown) {
 				return {
-					content: [{ type: "text" as const, text: `Error fetching ${url}: ${e.message}` }],
+					content: [{ type: "text" as const, text: `Error fetching ${url}: ${getErrorMessage(e)}` }],
+					details: { url, error: getErrorMessage(e) },
 					isError: true,
 				};
 			}
@@ -296,6 +318,7 @@ export default function (pi: ExtensionAPI) {
 			const exaApiKey = getExaApiKey();
 			if (exaApiKey) {
 				try {
+					const requestedResults = Math.min(offset + maxResults, 100);
 					const response = await fetch("https://api.exa.ai/search", {
 						method: "POST",
 						headers: {
@@ -304,7 +327,7 @@ export default function (pi: ExtensionAPI) {
 						},
 						body: JSON.stringify({
 							query,
-							numResults: maxResults,
+							numResults: requestedResults,
 							contents: {
 								text: true,
 								highlights: true,
@@ -317,8 +340,8 @@ export default function (pi: ExtensionAPI) {
 						// If Exa fails, fall through to DuckDuckGo
 						console.log(`Exa API returned ${response.status}, falling back to DuckDuckGo`);
 					} else {
-						const data = await response.json();
-						const results = (data.results || []).slice(0, maxResults);
+						const data = await response.json() as ExaSearchResponse;
+						const results = (data.results ?? []).slice(offset, offset + maxResults);
 
 						if (results.length === 0) {
 							return {
@@ -330,7 +353,7 @@ export default function (pi: ExtensionAPI) {
 						const resultStart = offset + 1;
 						const output = results
 							.map(
-								(r: any, i: number) => {
+								(r, i: number) => {
 									// Get snippet from various possible Exa response fields
 									let snippet = r.text || "";
 									if (!snippet && r.highlights && r.highlights.length > 0) {
@@ -355,9 +378,9 @@ export default function (pi: ExtensionAPI) {
 							details: { query, page, count: results.length, source: "exa" },
 						};
 					}
-				} catch (e: any) {
+				} catch (e: unknown) {
 					// Exa failed, fall through to DuckDuckGo
-					console.log(`Exa API error: ${e.message}, falling back to DuckDuckGo`);
+					console.log(`Exa API error: ${getErrorMessage(e)}, falling back to DuckDuckGo`);
 				}
 			}
 
@@ -381,6 +404,7 @@ export default function (pi: ExtensionAPI) {
 				if (!response.ok) {
 					return {
 						content: [{ type: "text" as const, text: `Search failed: HTTP ${response.status}` }],
+						details: { query, page, status: response.status },
 						isError: true,
 					};
 				}
@@ -440,9 +464,10 @@ export default function (pi: ExtensionAPI) {
 					content: [{ type: "text" as const, text: header + output }],
 					details: { query, page, count: results.length, source: "duckduckgo" },
 				};
-			} catch (e: any) {
+			} catch (e: unknown) {
 				return {
-					content: [{ type: "text" as const, text: `Search error: ${e.message}` }],
+					content: [{ type: "text" as const, text: `Search error: ${getErrorMessage(e)}` }],
+					details: { query, page, error: getErrorMessage(e) },
 					isError: true,
 				};
 			}

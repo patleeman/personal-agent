@@ -321,7 +321,7 @@ export function parseMcpCliServerInfo(output: string): McpCliServerInfo {
       continue;
     }
 
-    const toolLine = line.match(/^  ([^\s][^:]*)$/);
+    const toolLine = line.match(/^ {2}([^\s][^:]*)$/);
     if (toolLine) {
       tools.push({ name: toolLine[1]!.trim() });
     }

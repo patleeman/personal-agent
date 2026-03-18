@@ -156,7 +156,6 @@ import {
   migrateLegacyProfileMemoryDirs,
   readConversationAttachmentDownload,
   readMcpCliConfig,
-  readProject,
   removeConversationProjectLink,
   removeDeferredResume,
   resolveConversationAttachmentPromptFiles,
@@ -739,7 +738,14 @@ function getSessionLastActivityAt(sessionFile: string, fallback: string): string
 }
 
 function listUnreadConversationActivityEntries(profile = getCurrentProfile()) {
-  return listActivityForCurrentProfile()
+  const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, profile });
+  const read = loadReadState(profile);
+
+  return entries
+    .map(({ entry }) => ({
+      ...attachActivityConversationLinks(profile, entry),
+      read: read.has(entry.id),
+    }))
     .filter((entry) => !entry.read && entry.relatedConversationIds && entry.relatedConversationIds.length > 0)
     .map((entry) => ({
       id: entry.id,
@@ -1521,7 +1527,7 @@ function readProjectDetailForCurrentProfile(projectId: string): ProjectDetail {
   return enriched;
 }
 
-var processingDeferredResumes = false;
+let processingDeferredResumes = false;
 
 async function flushLiveDeferredResumes(): Promise<void> {
   if (processingDeferredResumes) {

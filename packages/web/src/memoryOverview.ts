@@ -124,7 +124,7 @@ function titleCaseToken(token: string): string {
 function cleanInlineMarkdown(value: string): string {
   return value
     .replace(/`([^`]+)`/g, '$1')
-    .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/\*([^*]+)\*/g, '$1')
     .replace(/\s+/g, ' ')

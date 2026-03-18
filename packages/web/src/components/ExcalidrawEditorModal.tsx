@@ -1,5 +1,4 @@
-import { Component, type ErrorInfo, type ReactNode, useRef, useState } from 'react';
-import { Excalidraw } from '@excalidraw/excalidraw';
+import { Component, type ErrorInfo, type ReactNode, useEffect, useRef, useState } from 'react';
 import '@excalidraw/excalidraw/index.css';
 import type { ExcalidrawSceneData } from '../excalidrawUtils';
 import { buildDrawingFileNames, serializeExcalidrawScene } from '../excalidrawUtils';
@@ -23,6 +22,18 @@ interface Props {
   saveLabel?: string;
   onClose: () => void;
   onSave: (payload: ExcalidrawEditorSavePayload) => Promise<void> | void;
+}
+
+type ExcalidrawComponent = typeof import('@excalidraw/excalidraw').Excalidraw;
+
+let excalidrawComponentPromise: Promise<ExcalidrawComponent> | null = null;
+
+async function loadExcalidrawComponent(): Promise<ExcalidrawComponent> {
+  if (!excalidrawComponentPromise) {
+    excalidrawComponentPromise = import('@excalidraw/excalidraw').then((module) => module.Excalidraw);
+  }
+
+  return excalidrawComponentPromise;
 }
 
 const EMPTY_SCENE: ExcalidrawSceneData = {
@@ -80,11 +91,42 @@ export function ExcalidrawEditorModal({
 }: Props) {
   const [title, setTitle] = useState(initialTitle);
   const [saving, setSaving] = useState(false);
+  const [LoadedExcalidraw, setLoadedExcalidraw] = useState<ExcalidrawComponent | null>(null);
+  const [loadError, setLoadError] = useState<Error | null>(null);
   const sceneRef = useRef<ExcalidrawSceneData>(initialScene ?? EMPTY_SCENE);
   const { theme } = useTheme();
   const excalidrawTheme = theme === 'dark' ? 'dark' : 'light';
 
+  useEffect(() => {
+    let cancelled = false;
+
+    void loadExcalidrawComponent()
+      .then((component) => {
+        if (cancelled) {
+          return;
+        }
+
+        setLoadedExcalidraw(() => component);
+        setLoadError(null);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return;
+        }
+
+        setLoadError(error instanceof Error ? error : new Error('Failed to load Excalidraw.'));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   async function handleSave() {
+    if (!LoadedExcalidraw || loadError) {
+      return;
+    }
+
     const normalizedTitle = title.trim() || 'Drawing';
     setSaving(true);
 
@@ -147,7 +189,7 @@ export function ExcalidrawEditorModal({
               type="button"
               onClick={() => { void handleSave(); }}
               className="ui-pill ui-pill-solid-accent"
-              disabled={saving}
+              disabled={saving || !LoadedExcalidraw || loadError !== null}
             >
               {saving ? 'Saving…' : saveLabel}
             </button>
@@ -155,38 +197,48 @@ export function ExcalidrawEditorModal({
         </div>
 
         <div className="min-h-0 flex-1 overflow-hidden">
-          <ExcalidrawErrorBoundary>
-            <div className="excalidraw-embed-lite h-full w-full">
-              <Excalidraw
-                theme={excalidrawTheme}
-                UIOptions={EMBEDDED_UI_OPTIONS}
-                renderTopRightUI={() => null}
-                initialData={initialScene ? {
-                  elements: [...initialScene.elements],
-                  appState: {
-                    ...initialScene.appState,
-                    theme: excalidrawTheme,
-                    openMenu: null,
-                    openSidebar: null,
-                  },
-                  files: initialScene.files,
-                } : {
-                  appState: {
-                    theme: excalidrawTheme,
-                    openMenu: null,
-                    openSidebar: null,
-                  },
-                }}
-                onChange={(elements, appState, files) => {
-                  sceneRef.current = {
-                    elements: [...elements],
-                    appState: appState as unknown as Record<string, unknown>,
-                    files: files as unknown as Record<string, unknown>,
-                  };
-                }}
-              />
+          {loadError ? (
+            <div className="flex h-full items-center justify-center px-6 text-center text-[12px] text-danger">
+              Failed to load Excalidraw: {loadError.message}
             </div>
-          </ExcalidrawErrorBoundary>
+          ) : LoadedExcalidraw ? (
+            <ExcalidrawErrorBoundary>
+              <div className="excalidraw-embed-lite h-full w-full">
+                <LoadedExcalidraw
+                  theme={excalidrawTheme}
+                  UIOptions={EMBEDDED_UI_OPTIONS}
+                  renderTopRightUI={() => null}
+                  initialData={initialScene ? {
+                    elements: [...initialScene.elements],
+                    appState: {
+                      ...initialScene.appState,
+                      theme: excalidrawTheme,
+                      openMenu: null,
+                      openSidebar: null,
+                    },
+                    files: initialScene.files,
+                  } : {
+                    appState: {
+                      theme: excalidrawTheme,
+                      openMenu: null,
+                      openSidebar: null,
+                    },
+                  }}
+                  onChange={(elements, appState, files) => {
+                    sceneRef.current = {
+                      elements: [...elements],
+                      appState: appState as unknown as Record<string, unknown>,
+                      files: files as unknown as Record<string, unknown>,
+                    };
+                  }}
+                />
+              </div>
+            </ExcalidrawErrorBoundary>
+          ) : (
+            <div className="flex h-full items-center justify-center px-6 text-center text-[12px] text-dim">
+              Loading Excalidraw…
+            </div>
+          )}
         </div>
       </div>
     </div>

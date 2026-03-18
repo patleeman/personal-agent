@@ -2,7 +2,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
-import type { DaemonState, GatewayLogTail, GatewayState, SyncState, WebUiReleaseSummary, WebUiState } from '../types';
+import type { DaemonState, GatewayLogTail, SyncState, WebUiReleaseSummary } from '../types';
 import { timeAgo } from '../utils';
 import { ErrorState, LoadingState, PageHeader, PageHeading, SectionLabel, ToolbarButton } from '../components/ui';
 
