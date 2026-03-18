@@ -370,6 +370,8 @@
 
   .ui-markdown a {
     @apply text-accent underline decoration-accent/40 underline-offset-2;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .ui-markdown img {
