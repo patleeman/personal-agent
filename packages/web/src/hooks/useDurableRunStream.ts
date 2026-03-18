@@ -68,7 +68,7 @@ export function useDurableRunStream(runId: string | null, tail = 120) {
             detail: null,
             log: null,
             loading: false,
-            error: error instanceof Error ? error.message : 'Could not load execution.',
+            error: error instanceof Error ? error.message : 'Could not load run.',
           });
         }
         return;
@@ -93,7 +93,7 @@ export function useDurableRunStream(runId: string | null, tail = 120) {
         }
 
         if (payload.type === 'deleted') {
-          setState({ detail: null, log: null, loading: false, error: `Execution no longer exists: ${payload.runId}` });
+          setState({ detail: null, log: null, loading: false, error: `Run no longer exists: ${payload.runId}` });
           stream?.close();
           return;
         }
@@ -111,7 +111,7 @@ export function useDurableRunStream(runId: string | null, tail = 120) {
         if (stream?.readyState === EventSource.CLOSED) {
           setState((current) => current.detail
             ? current
-            : { ...current, loading: false, error: current.error ?? 'Live execution updates are offline.' });
+            : { ...current, loading: false, error: current.error ?? 'Live run updates are offline.' });
         }
       };
     };

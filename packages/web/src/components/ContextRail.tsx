@@ -319,7 +319,7 @@ function ConversationRunContextPanel({ conversationId, runId }: { conversationId
       </div>
 
       {error && <ErrorState message={error} />}
-      {conversationId && <p className="text-[10px] text-dim">This execution belongs to the current conversation.</p>}
+      {conversationId && <p className="text-[10px] text-dim">This run belongs to the current conversation.</p>}
     </div>
   );
 }

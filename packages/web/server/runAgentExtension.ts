@@ -69,7 +69,7 @@ export function createRunAgentExtension(): (pi: ExtensionAPI) => void {
       name: 'run',
       label: 'Run',
       description: 'Inspect and manage durable daemon-backed background runs.',
-      promptSnippet: 'Use the run tool for daemon-backed background executions that should outlive the current turn.',
+      promptSnippet: 'Use the run tool for daemon-backed background runs that should outlive the current turn.',
       promptGuidelines: [
         'Use this tool for durable background jobs that should keep running outside the current turn.',
         'Prefer one focused run per independent task slug.',

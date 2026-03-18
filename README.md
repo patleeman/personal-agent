@@ -180,7 +180,7 @@ pa gateway service uninstall telegram
 `personal-agentd` runs background modules behind a local event bus:
 
 - **maintenance** - Periodic cleanup and retention
-- **tasks** - Scheduled `*.task.md` execution with retries, logs, and gateway output routing
+- **tasks** - Scheduled `*.task.md` runs with retries, logs, and gateway output routing
 - **sync** - Periodic git sync for durable cross-machine state
 
 CLI surface:

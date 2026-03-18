@@ -195,7 +195,7 @@ This distinction matters.
 Use:
 
 - **memory** for durable knowledge
-- **project** for current tracked execution state, project briefs, project notes, and project files tied to one piece of work
+- **project** for current tracked work state, project briefs, project notes, and project files tied to one piece of work
 - **inbox** for asynchronous outcomes that need attention
 
 A good rule:

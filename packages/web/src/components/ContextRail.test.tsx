@@ -131,11 +131,11 @@ describe('ContextRail run detail', () => {
 
     expect(html).toContain('← Conversation');
     expect(html).toContain('Current conversation');
-    expect(html).toContain('This execution belongs to the current conversation.');
+    expect(html).toContain('This run belongs to the current conversation.');
     expect(html).not.toContain('href="/conversations/conv-123"');
   });
 
-  it('keeps conversation links for executions that point at a different conversation', () => {
+  it('keeps conversation links for runs that point at a different conversation', () => {
     vi.mocked(useDurableRunStream).mockReturnValue({
       detail: createDetail({
         runId: 'conversation-deferred-resume-resume-1',

@@ -82,8 +82,8 @@ describe('readProjectDetailFromProject', () => {
       repoRoot,
       profile: 'datadog',
       projectId: 'web-ui',
-      id: 'execution',
-      title: 'Execution',
+      id: 'implementation',
+      title: 'Implementation',
       status: 'in_progress',
       makeCurrent: true,
     });
@@ -105,7 +105,7 @@ describe('readProjectDetailFromProject', () => {
       taskId: 'in-progress-task',
       status: 'in_progress',
       title: 'Build the project detail card',
-      milestoneId: 'execution',
+      milestoneId: 'implementation',
     });
 
     const detail = readProjectDetailFromProject({
@@ -128,7 +128,7 @@ describe('readProjectDetailFromProject', () => {
       id: 'in-progress-task',
       status: 'in_progress',
       title: 'Build the project detail card',
-      milestoneId: 'execution',
+      milestoneId: 'implementation',
     });
   });
 });
