@@ -286,7 +286,7 @@ function writeSyncActivity(
 
   try {
     writeProfileActivityEntry({
-      stateRoot: context.paths.root,
+      stateRoot: context.paths.stateRoot,
       profile,
       entry: createProjectActivityEntry({
         id: createActivityId(input.idPrefix, createdAt),

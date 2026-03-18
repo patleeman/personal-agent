@@ -85,6 +85,7 @@ function createContext(taskDir: string, stateRoot: string): {
   };
 
   const paths: DaemonPaths = {
+    stateRoot,
     root: stateRoot,
     socketPath: join(stateRoot, 'daemon.sock'),
     pidFile: join(stateRoot, 'daemon.pid'),
@@ -513,6 +514,71 @@ Write daily report
       notificationState: 'none',
     });
     expect(entries[0]?.entry.details).toContain('Daily report generated successfully.');
+
+    await module.stop?.(context);
+  });
+
+  it('writes task activity to the shared state root instead of daemon-internal state', async () => {
+    const repoRoot = createTempDir('tasks-module-repo-');
+    const taskDir = join(repoRoot, 'profiles', 'datadog', 'agent', 'tasks');
+    mkdirSync(taskDir, { recursive: true });
+    const stateRoot = createTempDir('tasks-module-state-');
+    const daemonRoot = join(stateRoot, 'daemon');
+    const taskPath = join(taskDir, 'memory-maintenance.task.md');
+
+    writeFileSync(taskPath, `---
+id: datadog-memory-maintenance
+at: "2026-03-02T10:00:00.000Z"
+profile: datadog
+---
+Maintain durable memory
+`);
+
+    let currentTime = new Date('2026-03-02T09:59:00.000Z');
+
+    const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(
+      request,
+      true,
+      currentTime.toISOString(),
+      undefined,
+      'Completed the datadog memory-maintenance pass.\n\nFiles updated\n- /tmp/processed-conversations.json',
+    ));
+
+    const module = createTasksModule(
+      {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
+      {
+        now: () => currentTime,
+        runTask,
+      },
+    );
+
+    const { context } = createContext(taskDir, stateRoot);
+    context.paths.root = daemonRoot;
+    context.paths.socketPath = join(daemonRoot, 'daemon.sock');
+    context.paths.pidFile = join(daemonRoot, 'daemon.pid');
+    context.paths.logDir = join(daemonRoot, 'logs');
+    context.paths.logFile = join(daemonRoot, 'logs', 'daemon.log');
+    mkdirSync(context.paths.logDir, { recursive: true });
+
+    await module.start(context);
+
+    currentTime = new Date('2026-03-02T10:00:10.000Z');
+    await module.handleEvent(createTimerEvent(), context);
+
+    await waitForCondition(() => listProfileActivityEntries({ stateRoot, profile: 'datadog' }).length === 1);
+
+    const visibleEntries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
+    expect(visibleEntries).toHaveLength(1);
+    expect(visibleEntries[0]?.entry.summary).toBe('Scheduled task datadog-memory-maintenance completed.');
+    expect(visibleEntries[0]?.entry.details).toContain('Files updated');
+    expect(listProfileActivityEntries({ stateRoot: daemonRoot, profile: 'datadog' })).toHaveLength(0);
 
     await module.stop?.(context);
   });

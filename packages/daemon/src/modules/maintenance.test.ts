@@ -47,6 +47,7 @@ function createContext(logDir: string, warn = vi.fn()): {
   };
 
   const paths: DaemonPaths = {
+    stateRoot: dirname(logDir),
     root: dirname(logDir),
     socketPath: join(logDir, 'daemon.sock'),
     pidFile: join(logDir, 'daemon.pid'),

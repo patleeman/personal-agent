@@ -22,6 +22,7 @@ export interface DaemonEventInput {
 }
 
 export interface DaemonPaths {
+  stateRoot: string;
   root: string;
   socketPath: string;
   pidFile: string;

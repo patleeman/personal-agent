@@ -24,6 +24,7 @@ describe('daemon paths', () => {
 
     const paths = resolveDaemonPaths();
 
+    expect(paths.stateRoot).toBe(root);
     expect(paths.root).toContain(join(root, 'daemon'));
     expect(paths.socketPath).toContain('personal-agentd.sock');
     expect(paths.pidFile).toContain('personal-agentd.pid');

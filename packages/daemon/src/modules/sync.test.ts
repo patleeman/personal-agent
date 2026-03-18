@@ -129,6 +129,7 @@ function createContext(stateRoot: string, syncConfig: SyncModuleConfig): DaemonM
   };
 
   const paths: DaemonPaths = {
+    stateRoot,
     root: stateRoot,
     socketPath: join(stateRoot, 'daemon.sock'),
     pidFile: join(stateRoot, 'daemon.pid'),
