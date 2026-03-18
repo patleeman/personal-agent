@@ -547,7 +547,7 @@ function DraftConversationContextPanel() {
           <p className="text-[11px] text-dim">
             {hasExplicitCwd
               ? 'This path will be used when the draft becomes a live conversation.'
-              : 'Use the folder picker as the default flow. Manual entry still works, and leaving the field blank lets a single referenced project repo root or the default process cwd choose for you.'}
+              : 'Use the folder picker as the default flow. Manual entry still works, and leaving the field blank lets a single referenced project repo root or the saved default working directory choose for you.'}
           </p>
           {(openCwdError || changeCwdError) && (
             <p className="text-[11px] text-danger/80">{changeCwdError ?? openCwdError}</p>

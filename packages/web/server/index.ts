@@ -46,6 +46,7 @@ import {
   writeWebUiConfig,
 } from './webUi.js';
 import { requestApplicationRestart, requestApplicationUpdate } from './applicationRestart.js';
+import { readSavedDefaultCwdPreferences, writeSavedDefaultCwdPreference } from './defaultCwdPreferences.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from './modelPreferences.js';
 import {
   cancelProviderOAuthLogin,
@@ -240,7 +241,7 @@ import {
 const PORT = parseInt(process.env.PA_WEB_PORT ?? '3741', 10);
 const DEFAULT_REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? DEFAULT_REPO_ROOT;
-const DEFAULT_WEB_CWD = process.cwd();
+const PROCESS_CWD = process.cwd();
 const AGENT_DIR = getPiAgentRuntimeDir();
 const AUTH_FILE = join(AGENT_DIR, 'auth.json');
 const SESSIONS_DIR = join(getPiAgentStateDir(), 'sessions');
@@ -253,6 +254,10 @@ const CONVERSATION_MEMORY_DISTILL_ACTIVE_STATUSES = new Set(['queued', 'running'
 
 function resolveDaemonRoot(): string {
   return resolveDaemonPaths(loadDaemonConfig().ipc.socketPath).root;
+}
+
+function getDefaultWebCwd(): string {
+  return readSavedDefaultCwdPreferences(SETTINGS_FILE, PROCESS_CWD).effectiveCwd;
 }
 
 installProcessLogging();
@@ -2334,6 +2339,50 @@ app.patch('/api/models/current', (req, res) => {
   }
 });
 
+app.get('/api/default-cwd', (_req, res) => {
+  try {
+    res.json(readSavedDefaultCwdPreferences(SETTINGS_FILE, PROCESS_CWD));
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.patch('/api/default-cwd', (req, res) => {
+  try {
+    const { cwd } = req.body as { cwd?: string | null };
+    if (cwd !== null && typeof cwd !== 'string') {
+      res.status(400).json({ error: 'cwd must be a string or null' });
+      return;
+    }
+
+    const saved = persistSettingsWrite(
+      (settingsFile) => writeSavedDefaultCwdPreference({ cwd }, settingsFile, {
+        baseDir: PROCESS_CWD,
+        validate: true,
+      }),
+      {
+        runtimeSettingsFile: SETTINGS_FILE,
+      },
+    );
+
+    res.json(saved);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message === 'cwd required' || message.startsWith('Directory does not exist:') || message.startsWith('Not a directory:')
+      ? 400
+      : 500;
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(status).json({ error: message });
+  }
+});
+
 app.get('/api/provider-auth', (_req, res) => {
   try {
     res.json(readProviderAuthState(AUTH_FILE));
@@ -3767,11 +3816,12 @@ app.post('/api/memories/:memoryId/start', async (req, res) => {
       ? frontmatter.source_cwd.trim()
       : '';
 
+    const defaultWebCwd = getDefaultWebCwd();
     const { cwd: requestedCwd } = req.body as { cwd?: string };
-    let nextCwd = resolveRequestedCwd(requestedCwd, sourceCwd || DEFAULT_WEB_CWD);
+    let nextCwd = resolveRequestedCwd(requestedCwd, sourceCwd || defaultWebCwd);
 
     if (!nextCwd && !requestedCwd) {
-      nextCwd = DEFAULT_WEB_CWD;
+      nextCwd = defaultWebCwd;
     }
 
     if (!nextCwd) {
@@ -3779,8 +3829,8 @@ app.post('/api/memories/:memoryId/start', async (req, res) => {
       return;
     }
 
-    if ((!existsSync(nextCwd) || !statSync(nextCwd).isDirectory()) && !requestedCwd && nextCwd !== DEFAULT_WEB_CWD) {
-      nextCwd = DEFAULT_WEB_CWD;
+    if ((!existsSync(nextCwd) || !statSync(nextCwd).isDirectory()) && !requestedCwd && nextCwd !== defaultWebCwd) {
+      nextCwd = defaultWebCwd;
     }
 
     if (!existsSync(nextCwd)) {
@@ -3873,7 +3923,7 @@ app.post('/api/live-sessions', async (req, res) => {
       repoRoot: REPO_ROOT,
       profile,
       explicitCwd: body.cwd,
-      defaultCwd: DEFAULT_WEB_CWD,
+      defaultCwd: getDefaultWebCwd(),
       referencedProjectIds,
     });
     const result = await createSession(cwd, {
@@ -5777,9 +5827,10 @@ app.post('/api/projects/:id/source', (req, res) => {
 
 app.post('/api/folder-picker', (req, res) => {
   try {
+    const defaultWebCwd = getDefaultWebCwd();
     const { cwd } = req.body as { cwd?: string };
     const result = pickFolder({
-      initialDirectory: resolveRequestedCwd(cwd, DEFAULT_WEB_CWD) ?? DEFAULT_WEB_CWD,
+      initialDirectory: resolveRequestedCwd(cwd, defaultWebCwd) ?? defaultWebCwd,
       prompt: 'Choose working directory',
     });
     res.json(result);
@@ -5813,9 +5864,10 @@ app.post('/api/local-path/open', (req, res) => {
 
 app.post('/api/run', (req, res) => {
   try {
+    const defaultWebCwd = getDefaultWebCwd();
     const { command, cwd: runCwd } = req.body as { command: string; cwd?: string };
     if (!command) { res.status(400).json({ error: 'command required' }); return; }
-    const resolvedRunCwd = resolveRequestedCwd(runCwd, DEFAULT_WEB_CWD) ?? DEFAULT_WEB_CWD;
+    const resolvedRunCwd = resolveRequestedCwd(runCwd, defaultWebCwd) ?? defaultWebCwd;
     let output = '';
     let exitCode = 0;
     try {
@@ -6333,7 +6385,7 @@ app.listen(PORT, () => {
     url: `http://localhost:${PORT}`,
     profile: getCurrentProfile(),
     repoRoot: REPO_ROOT,
-    cwd: DEFAULT_WEB_CWD,
+    cwd: getDefaultWebCwd(),
     dist: DIST_DIR,
   });
 });

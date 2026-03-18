@@ -232,9 +232,9 @@ If you store secrets as `op://...` references:
 - `PERSONAL_AGENT_OP_READ_TIMEOUT_MS`
 - `OP_SERVICE_ACCOUNT_TOKEN` if using a 1Password service account
 
-## Model, theme, and web UI defaults
+## Model, working directory, theme, and web UI defaults
 
-The agent's default model, thinking level, theme mapping, and some web UI behavior usually belong in profile `settings.json`.
+The agent's default model, thinking level, fallback working directory, theme mapping, and some web UI behavior usually belong in profile `settings.json`.
 
 Example:
 
@@ -243,6 +243,7 @@ Example:
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.4",
   "defaultThinkingLevel": "xhigh",
+  "defaultCwd": "~/workingdir/personal-agent",
   "themeDark": "cobalt2",
   "themeLight": "cobalt2-light",
   "themeMode": "system",
@@ -256,6 +257,8 @@ Example:
 ```
 
 These defaults are used when a run does not explicitly override them.
+
+`defaultCwd` is the fallback working directory for new web conversations and other web-triggered runs when no explicit cwd is set and no single referenced project `repoRoot` applies.
 
 `webUi.conversationTitles.model` is optional. If omitted, conversation auto-titles fall back to the saved runtime default model.
 

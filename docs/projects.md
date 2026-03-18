@@ -218,6 +218,7 @@ A project may store an optional `repoRoot`.
 This is useful when the project corresponds to a real repo or working tree.
 
 When a new conversation references exactly one project with a `repoRoot`, and no explicit cwd is provided, that repo root can become the initial working directory.
+Otherwise, the web UI falls back to the saved default cwd from Settings, or the web server process cwd when no default is saved.
 
 The Projects UI also lets you start a new conversation directly from a project.
 

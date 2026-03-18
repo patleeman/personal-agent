@@ -827,6 +827,11 @@ export interface ModelState {
   models: ModelInfo[];
 }
 
+export interface DefaultCwdState {
+  currentCwd: string;
+  effectiveCwd: string;
+}
+
 export type ProviderAuthType = 'none' | 'api_key' | 'oauth' | 'environment';
 
 export interface ProviderAuthSummary {
