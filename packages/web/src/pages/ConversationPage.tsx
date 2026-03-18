@@ -1939,33 +1939,19 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return resumed.id;
   }, [id, isLiveSession, sessions, stream, visibleSessionDetail]);
 
-  const forkConversationFromMessage = useCallback(async (messageIndex: number) => {
+  const rewindConversationFromMessage = useCallback(async (messageIndex: number) => {
     if (!id || !realMessages) {
       return;
     }
 
     const localMessageIndex = messageIndex - messageIndexOffset;
     if (localMessageIndex < 0 || localMessageIndex >= realMessages.length) {
-      showNotice('danger', 'Load the relevant part of the conversation before branching from it.');
+      showNotice('danger', 'Load the relevant part of the conversation before rewinding from it.');
       return;
     }
 
     try {
       const liveConversationId = await ensureConversationIsLiveForFork();
-      const clickedBlock = realMessages[localMessageIndex];
-
-      if (clickedBlock?.type === 'text') {
-        const entryId = resolveSessionEntryIdFromBlockId(clickedBlock.id);
-        if (!entryId) {
-          throw new Error('Unable to resolve the selected assistant message for branching.');
-        }
-
-        const { newSessionId } = await api.branchSession(liveConversationId, entryId);
-        ensureConversationTabOpen(newSessionId);
-        navigate(`/conversations/${newSessionId}`);
-        return;
-      }
-
       const entries = await api.forkEntries(liveConversationId);
       const entry = resolveForkEntryForMessage(realMessages, localMessageIndex, entries);
       if (!entry) {
@@ -1979,9 +1965,41 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       ensureConversationTabOpen(newSessionId);
       navigate(`/conversations/${newSessionId}`);
     } catch (error) {
-      showNotice('danger', `Fork failed: ${(error as Error).message}`);
+      showNotice('danger', `Rewind failed: ${(error as Error).message}`);
     }
   }, [ensureConversationIsLiveForFork, id, messageIndexOffset, navigate, realMessages, showNotice]);
+
+  const forkConversationFromMessage = useCallback(async (messageIndex: number) => {
+    if (!id || !realMessages) {
+      return;
+    }
+
+    const localMessageIndex = messageIndex - messageIndexOffset;
+    if (localMessageIndex < 0 || localMessageIndex >= realMessages.length) {
+      showNotice('danger', 'Load the relevant part of the conversation before branching from it.');
+      return;
+    }
+
+    const clickedBlock = realMessages[localMessageIndex];
+    if (clickedBlock?.type !== 'text') {
+      await rewindConversationFromMessage(messageIndex);
+      return;
+    }
+
+    try {
+      const liveConversationId = await ensureConversationIsLiveForFork();
+      const entryId = resolveSessionEntryIdFromBlockId(clickedBlock.id);
+      if (!entryId) {
+        throw new Error('Unable to resolve the selected assistant message for branching.');
+      }
+
+      const { newSessionId } = await api.branchSession(liveConversationId, entryId);
+      ensureConversationTabOpen(newSessionId);
+      navigate(`/conversations/${newSessionId}`);
+    } catch (error) {
+      showNotice('danger', `Fork failed: ${(error as Error).message}`);
+    }
+  }, [ensureConversationIsLiveForFork, id, messageIndexOffset, navigate, realMessages, rewindConversationFromMessage, showNotice]);
 
   function openHeaderPreference(preference: 'model' | 'thinking') {
     setHeaderPreference((current) => current === preference ? null : preference);
@@ -2971,6 +2989,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               isStreaming={stream.isStreaming}
               onCheckpointMessage={id && !stream.isStreaming ? saveMemoryFromMessage : undefined}
               onForkMessage={id && !stream.isStreaming ? forkConversationFromMessage : undefined}
+              onRewindMessage={id && !stream.isStreaming ? rewindConversationFromMessage : undefined}
               onHydrateMessage={hydrateHistoricalBlock}
               hydratingMessageBlockIds={hydratingHistoricalBlockIdSet}
               onOpenArtifact={openArtifact}
@@ -3028,6 +3047,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     draft,
     forkConversationFromMessage,
     hasRenderableMessages,
+    rewindConversationFromMessage,
     historicalBlockOffset,
     historicalTotalBlocks,
     hydrateHistoricalBlock,
@@ -3054,7 +3074,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     stream.isStreaming,
     title,
   ]);
-
 
   return (
     <div className="flex flex-col h-full">
