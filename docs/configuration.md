@@ -5,7 +5,7 @@ This page explains the user-facing configuration model for `personal-agent`.
 The guiding principle is:
 
 - keep durable defaults in files
-- use environment variables mainly for runtime overrides and secrets
+- use environment variables mainly for machine-local bootstrapping and external secret resolution
 
 ## The main config files
 
@@ -73,7 +73,10 @@ Use it for:
 - Telegram token
 - allowlisted chats
 - allowed user ids
+- blocked user ids
 - gateway cwd and queue limits
+
+Saved gateway settings are read from this file rather than per-setting environment-variable overrides.
 
 You can write this file either with `pa gateway setup telegram` or from the web UI Gateway page. The web UI also supports saving `op://...` 1Password references for supported gateway values.
 
@@ -197,7 +200,7 @@ See [Sync Guide](./sync.md).
 - `PERSONAL_AGENT_REPO_ROOT` — override the repo root (shared defaults)
 - `PERSONAL_AGENT_PROFILES_ROOT` — override the mutable profiles root
 - `PERSONAL_AGENT_LOCAL_PROFILE_DIR` — override the local overlay dir
-- `PERSONAL_AGENT_PROFILE` — override the active profile for some runtime surfaces, especially gateway and daemon contexts
+- `PERSONAL_AGENT_PROFILE` — override the active profile for some runtime surfaces, especially daemon and CLI contexts
 
 ### Runtime state
 
@@ -215,9 +218,6 @@ See [Sync Guide](./sync.md).
 ### Gateway
 
 - `PERSONAL_AGENT_GATEWAY_CONFIG_FILE` — alternate gateway config file
-- `TELEGRAM_BOT_TOKEN`
-- `PERSONAL_AGENT_TELEGRAM_ALLOWED_USER_IDS`
-- `PERSONAL_AGENT_TELEGRAM_ALLOWLIST`
 
 ### Web UI
 
@@ -283,7 +283,7 @@ For most setups:
 2. keep profile behavior in `~/.local/state/personal-agent/profiles/**/agent` and shared durable knowledge in `~/.local/state/personal-agent/profiles/_memory/*.md` (with repo defaults in `defaults/agent` and optional shared overlays in `~/.local/state/personal-agent/profiles/shared/agent`)
 3. keep daemon behavior in `daemon.json`
 4. use `pa gateway setup telegram` for gateway config
-5. keep secrets in 1Password or env vars, not directly in repo files
+5. keep secrets as 1Password references where possible; use env vars only when a component truly needs them
 
 ## Related docs
 

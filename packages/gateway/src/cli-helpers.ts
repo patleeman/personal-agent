@@ -577,16 +577,17 @@ export function printGatewayHelp(provider?: GatewayProvider): void {
     console.log('  pa gateway service status telegram        Show Telegram service status');
     console.log('  pa gateway service uninstall telegram     Remove Telegram background service');
     console.log('');
-    console.log('Config keys (written by setup):');
-    console.log('  TELEGRAM_BOT_TOKEN');
-    console.log('  PERSONAL_AGENT_TELEGRAM_ALLOWLIST (optional when room-approval flow is enabled)');
-    console.log('  PERSONAL_AGENT_TELEGRAM_ALLOWED_USER_IDS (recommended, comma-separated Telegram user IDs)');
-    console.log('  PERSONAL_AGENT_TELEGRAM_BLOCKED_USER_IDS (optional, comma-separated Telegram user IDs)');
-    console.log('  PERSONAL_AGENT_PROFILE (optional, default: shared)');
-    console.log('  PERSONAL_AGENT_TELEGRAM_CWD (optional, default: current working directory)');
-    console.log('  PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT (optional, default: 20)');
-    console.log('  PERSONAL_AGENT_TELEGRAM_TOOL_ACTIVITY_STREAM (optional, default: false)');
-    console.log('  PERSONAL_AGENT_TELEGRAM_CLEAR_RECENT_MESSAGES_ON_NEW (optional, default: true)');
+    console.log('Saved gateway settings (written by setup):');
+    console.log('  profile');
+    console.log('  defaultModel');
+    console.log('  telegram.token');
+    console.log('  telegram.allowlist (optional when room-approval flow is enabled)');
+    console.log('  telegram.allowedUserIds (recommended)');
+    console.log('  telegram.blockedUserIds (optional)');
+    console.log('  telegram.workingDirectory (optional, default: current working directory)');
+    console.log('  telegram.maxPendingPerChat (optional, default: 20)');
+    console.log('  telegram.toolActivityStream (optional, default: false)');
+    console.log('  telegram.clearRecentMessagesOnNew (optional, default: true)');
     console.log('');
     console.log(gatewayNext('pa gateway telegram setup'));
     return;
@@ -604,7 +605,7 @@ export function printGatewayHelp(provider?: GatewayProvider): void {
   console.log('');
   console.log(`Config file: ${getGatewayConfigFilePath()}`);
   console.log('');
-  console.log('Environment overrides (optional):');
-  console.log('  PERSONAL_AGENT_PROFILE');
+  console.log('Optional runtime env vars:');
+  console.log('  PERSONAL_AGENT_GATEWAY_CONFIG_FILE');
   console.log('  PERSONAL_AGENT_PI_TIMEOUT_MS');
 }

@@ -59,8 +59,8 @@ pa gateway telegram send "Your message here" --chat-ids 123456789,-100987654321
 Target resolution order:
 
 1. explicit `--chat-id` / `--chat-ids`
-2. `PERSONAL_AGENT_TELEGRAM_ALLOWED_USER_IDS` / `gateway.telegram.allowedUserIds`
-3. `PERSONAL_AGENT_TELEGRAM_ALLOWLIST` / `gateway.telegram.allowlist`
+2. `gateway.json.telegram.allowedUserIds`
+3. `gateway.json.telegram.allowlist`
 
 ## Configuration model
 
@@ -68,37 +68,34 @@ Gateway config file:
 
 - `~/.local/state/personal-agent/config/gateway.json`
 
-Per-setting precedence:
-
-1. environment variable
-2. `gateway.json`
-3. built-in default
+Saved gateway settings live in `gateway.json`.
 
 Examples:
 
-- profile: `PERSONAL_AGENT_PROFILE` → `gateway.json.profile` → `shared`
-- default model: `PERSONAL_AGENT_GATEWAY_DEFAULT_MODEL` → `gateway.json.defaultModel` → profile default model
-- Telegram token: `TELEGRAM_BOT_TOKEN` → `gateway.json.telegram.token`
+- profile: `gateway.json.profile` → `shared`
+- default model: `gateway.json.defaultModel` → profile default model
+- Telegram token: `gateway.json.telegram.token`
 
 ## Required Telegram setup
 
+Save these fields in `gateway.json` with `pa gateway setup telegram` or from the web UI Gateway page.
+
 Required:
 
-- `TELEGRAM_BOT_TOKEN`
-
-Strongly recommended:
-
-- `PERSONAL_AGENT_TELEGRAM_ALLOWED_USER_IDS`
+- `gateway.json.telegram.token`
+- at least one of:
+  - `gateway.json.telegram.allowedUserIds`
+  - `gateway.json.telegram.allowlist`
 
 Optional:
 
-- `PERSONAL_AGENT_GATEWAY_DEFAULT_MODEL`
-- `PERSONAL_AGENT_TELEGRAM_ALLOWLIST`
-- `PERSONAL_AGENT_TELEGRAM_BLOCKED_USER_IDS`
-- `PERSONAL_AGENT_TELEGRAM_CWD`
-- `PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT`
-- `PERSONAL_AGENT_TELEGRAM_TOOL_ACTIVITY_STREAM`
-- `PERSONAL_AGENT_TELEGRAM_CLEAR_RECENT_MESSAGES_ON_NEW`
+- `gateway.json.profile`
+- `gateway.json.defaultModel`
+- `gateway.json.telegram.blockedUserIds`
+- `gateway.json.telegram.workingDirectory`
+- `gateway.json.telegram.maxPendingPerChat`
+- `gateway.json.telegram.toolActivityStream`
+- `gateway.json.telegram.clearRecentMessagesOnNew`
 
 If you use `op://...` values, make sure the 1Password CLI is installed and authenticated. The web UI Gateway page can save these references into `gateway.json` for the Telegram bot token and supported Telegram list fields.
 

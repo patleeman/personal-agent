@@ -146,7 +146,7 @@ pa daemon status --json
 
 Common causes:
 
-- missing `TELEGRAM_BOT_TOKEN`
+- missing saved Telegram bot token
 - missing access control settings
 - `op://...` secret resolution failure
 

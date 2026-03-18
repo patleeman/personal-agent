@@ -2086,27 +2086,6 @@ function toPositiveInteger(value: string | undefined): number | undefined {
   return Math.floor(parsed);
 }
 
-function toOptionalBoolean(value: string | undefined): boolean | undefined {
-  if (typeof value !== 'string') {
-    return undefined;
-  }
-
-  const normalized = value.trim().toLowerCase();
-  if (normalized.length === 0) {
-    return undefined;
-  }
-
-  if (['1', 'true', 'yes', 'y', 'on'].includes(normalized)) {
-    return true;
-  }
-
-  if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) {
-    return false;
-  }
-
-  return undefined;
-}
-
 function resolvePiTimeoutMs(): number | undefined {
   const raw = process.env.PERSONAL_AGENT_PI_TIMEOUT_MS;
   if (typeof raw !== 'string' || raw.trim().length === 0) {
@@ -6586,64 +6565,38 @@ export function createQueuedTelegramMessageHandler(
   };
 }
 
-async function createTelegramConfigFromEnv(): Promise<TelegramBridgeConfig> {
+async function createTelegramConfigFromStoredConfig(): Promise<TelegramBridgeConfig> {
   const stored = readGatewayConfig();
   const storedTelegram = stored.telegram;
 
   const token = resolveConfiguredValue(
-    process.env.TELEGRAM_BOT_TOKEN ?? storedTelegram?.token,
-    { fieldName: 'TELEGRAM_BOT_TOKEN (or gateway.telegram.token)' },
+    storedTelegram?.token,
+    { fieldName: 'gateway.telegram.token' },
   );
 
   if (!token) {
-    throw new Error('TELEGRAM_BOT_TOKEN is required. Run `pa gateway setup telegram` or set TELEGRAM_BOT_TOKEN.');
+    throw new Error('Gateway telegram token missing. Run `pa gateway setup telegram` first.');
   }
 
-  const profile = process.env.PERSONAL_AGENT_PROFILE || stored.profile || 'shared';
-
-  const configuredDefaultModel = process.env.PERSONAL_AGENT_GATEWAY_DEFAULT_MODEL?.trim().length
-    ? process.env.PERSONAL_AGENT_GATEWAY_DEFAULT_MODEL.trim()
-    : stored.defaultModel;
+  const profile = stored.profile || 'shared';
+  const configuredDefaultModel = stored.defaultModel;
 
   if (configuredDefaultModel && !configuredDefaultModel.includes('/')) {
-    throw new Error('PERSONAL_AGENT_GATEWAY_DEFAULT_MODEL (or gateway.defaultModel) must use format provider/model.');
+    throw new Error('gateway.defaultModel must use format provider/model.');
   }
 
-  const allowlistFromEnv = parseAllowlist(resolveConfiguredValue(
-    process.env.PERSONAL_AGENT_TELEGRAM_ALLOWLIST,
-    { fieldName: 'PERSONAL_AGENT_TELEGRAM_ALLOWLIST' },
-  ));
-  const storedAllowlist = resolveConfiguredAllowlistEntries(
+  const allowlist = resolveConfiguredAllowlistEntries(
     storedTelegram?.allowlist,
     { fieldName: 'gateway.telegram.allowlist' },
   );
-  const allowlist = allowlistFromEnv.size > 0
-    ? allowlistFromEnv
-    : storedAllowlist;
-
-  const allowedUserIdsFromEnv = parseAllowlist(resolveConfiguredValue(
-    process.env.PERSONAL_AGENT_TELEGRAM_ALLOWED_USER_IDS,
-    { fieldName: 'PERSONAL_AGENT_TELEGRAM_ALLOWED_USER_IDS' },
-  ));
-  const storedAllowedUserIds = resolveConfiguredAllowlistEntries(
+  const allowedUserIds = resolveConfiguredAllowlistEntries(
     storedTelegram?.allowedUserIds,
     { fieldName: 'gateway.telegram.allowedUserIds' },
   );
-  const allowedUserIds = allowedUserIdsFromEnv.size > 0
-    ? allowedUserIdsFromEnv
-    : storedAllowedUserIds;
-
-  const blockedUserIdsFromEnv = parseAllowlist(resolveConfiguredValue(
-    process.env.PERSONAL_AGENT_TELEGRAM_BLOCKED_USER_IDS,
-    { fieldName: 'PERSONAL_AGENT_TELEGRAM_BLOCKED_USER_IDS' },
-  ));
-  const storedBlockedUserIds = resolveConfiguredAllowlistEntries(
+  const blockedUserIds = resolveConfiguredAllowlistEntries(
     storedTelegram?.blockedUserIds,
     { fieldName: 'gateway.telegram.blockedUserIds' },
   );
-  const blockedUserIds = blockedUserIdsFromEnv.size > 0
-    ? blockedUserIdsFromEnv
-    : storedBlockedUserIds;
 
   if (allowlist.size === 0 && allowedUserIds.size === 0) {
     throw new Error(
@@ -6652,20 +6605,10 @@ async function createTelegramConfigFromEnv(): Promise<TelegramBridgeConfig> {
     );
   }
 
-  const workingDirectory = process.env.PERSONAL_AGENT_TELEGRAM_CWD
-    || storedTelegram?.workingDirectory
-    || process.cwd();
-
-  const maxPendingPerChat = toPositiveInteger(process.env.PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT)
-    ?? storedTelegram?.maxPendingPerChat;
-
-  const toolActivityStream = toOptionalBoolean(process.env.PERSONAL_AGENT_TELEGRAM_TOOL_ACTIVITY_STREAM)
-    ?? storedTelegram?.toolActivityStream
-    ?? false;
-
-  const clearRecentMessagesOnNew = toOptionalBoolean(process.env.PERSONAL_AGENT_TELEGRAM_CLEAR_RECENT_MESSAGES_ON_NEW)
-    ?? storedTelegram?.clearRecentMessagesOnNew
-    ?? true;
+  const workingDirectory = storedTelegram?.workingDirectory || process.cwd();
+  const maxPendingPerChat = storedTelegram?.maxPendingPerChat;
+  const toolActivityStream = storedTelegram?.toolActivityStream ?? false;
+  const clearRecentMessagesOnNew = storedTelegram?.clearRecentMessagesOnNew ?? true;
 
   return {
     token,
@@ -6682,7 +6625,7 @@ async function createTelegramConfigFromEnv(): Promise<TelegramBridgeConfig> {
 }
 
 export async function startTelegramBridge(config?: TelegramBridgeConfig): Promise<void> {
-  const effectiveConfig = config ?? await createTelegramConfigFromEnv();
+  const effectiveConfig = config ?? await createTelegramConfigFromStoredConfig();
   process.env.PERSONAL_AGENT_GATEWAY_MODE = '1';
   process.env.PERSONAL_AGENT_GATEWAY_PROVIDER = 'telegram';
 
@@ -7003,7 +6946,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     if (allowedUserIds.size === 0) {
       console.warn(gatewayWarning(
         'Telegram allowed user IDs are empty; cannot send room authorization prompt. ' +
-        'Set PERSONAL_AGENT_TELEGRAM_ALLOWED_USER_IDS or gateway.telegram.allowedUserIds.',
+        'Save gateway.telegram.allowedUserIds in the gateway config first.',
       ));
       return 0;
     }
@@ -8780,29 +8723,14 @@ function resolveTelegramSendTargets(explicitChatIds: string[]): number[] {
     }
   }
 
-  const allowlistFromEnv = parseAllowlist(resolveConfiguredValue(
-    process.env.PERSONAL_AGENT_TELEGRAM_ALLOWLIST,
-    { fieldName: 'PERSONAL_AGENT_TELEGRAM_ALLOWLIST' },
-  ));
-  const storedAllowlist = resolveConfiguredAllowlistEntries(
+  const allowlist = resolveConfiguredAllowlistEntries(
     storedTelegram?.allowlist,
     { fieldName: 'gateway.telegram.allowlist' },
   );
-  const allowlist = allowlistFromEnv.size > 0
-    ? allowlistFromEnv
-    : storedAllowlist;
-
-  const allowedUserIdsFromEnv = parseAllowlist(resolveConfiguredValue(
-    process.env.PERSONAL_AGENT_TELEGRAM_ALLOWED_USER_IDS,
-    { fieldName: 'PERSONAL_AGENT_TELEGRAM_ALLOWED_USER_IDS' },
-  ));
-  const storedAllowedUserIds = resolveConfiguredAllowlistEntries(
+  const allowedUserIds = resolveConfiguredAllowlistEntries(
     storedTelegram?.allowedUserIds,
     { fieldName: 'gateway.telegram.allowedUserIds' },
   );
-  const allowedUserIds = allowedUserIdsFromEnv.size > 0
-    ? allowedUserIdsFromEnv
-    : storedAllowedUserIds;
 
   const targetIds = explicitTargets.size > 0
     ? explicitTargets
@@ -8810,8 +8738,8 @@ function resolveTelegramSendTargets(explicitChatIds: string[]): number[] {
 
   if (targetIds.size === 0) {
     throw new Error(
-      'No Telegram destination configured. Pass --chat-id <id> or configure PERSONAL_AGENT_TELEGRAM_ALLOWED_USER_IDS. ' +
-      'As a fallback, gateway allowlist chat IDs are also used when allowed user IDs are empty.',
+      'No Telegram destination configured. Pass --chat-id <id> or save gateway.telegram.allowedUserIds ' +
+      'or gateway.telegram.allowlist in the gateway config.',
     );
   }
 
@@ -8831,12 +8759,12 @@ function resolveTelegramSendTargets(explicitChatIds: string[]): number[] {
 function resolveTelegramSendToken(): string {
   const stored = readGatewayConfig();
   const token = resolveConfiguredValue(
-    process.env.TELEGRAM_BOT_TOKEN ?? stored.telegram?.token,
-    { fieldName: 'TELEGRAM_BOT_TOKEN (or gateway.telegram.token)' },
+    stored.telegram?.token,
+    { fieldName: 'gateway.telegram.token' },
   );
 
   if (!token) {
-    throw new Error('TELEGRAM_BOT_TOKEN is required. Run `pa gateway setup telegram` or set TELEGRAM_BOT_TOKEN.');
+    throw new Error('Gateway telegram token missing. Run `pa gateway setup telegram` first.');
   }
 
   return token;

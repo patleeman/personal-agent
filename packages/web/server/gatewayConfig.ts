@@ -26,19 +26,6 @@ export interface GatewayConfigUpdateInput {
   clearRecentMessagesOnNew: boolean;
 }
 
-const GATEWAY_ENV_OVERRIDE_KEYS = [
-  'PERSONAL_AGENT_PROFILE',
-  'PERSONAL_AGENT_GATEWAY_DEFAULT_MODEL',
-  'TELEGRAM_BOT_TOKEN',
-  'PERSONAL_AGENT_TELEGRAM_ALLOWLIST',
-  'PERSONAL_AGENT_TELEGRAM_ALLOWED_USER_IDS',
-  'PERSONAL_AGENT_TELEGRAM_BLOCKED_USER_IDS',
-  'PERSONAL_AGENT_TELEGRAM_CWD',
-  'PERSONAL_AGENT_TELEGRAM_MAX_PENDING_PER_CHAT',
-  'PERSONAL_AGENT_TELEGRAM_TOOL_ACTIVITY_STREAM',
-  'PERSONAL_AGENT_TELEGRAM_CLEAR_RECENT_MESSAGES_ON_NEW',
-] as const;
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -150,13 +137,6 @@ export function summarizeGatewayToken(value: string | undefined): GatewayTokenSu
     source: 'plain',
     preview: normalized.length > 4 ? `••••${normalized.slice(-4)}` : '••••',
   };
-}
-
-export function listGatewayEnvOverrideKeys(env: NodeJS.ProcessEnv = process.env): string[] {
-  return GATEWAY_ENV_OVERRIDE_KEYS.filter((key) => {
-    const value = env[key];
-    return typeof value === 'string' && value.trim().length > 0;
-  });
 }
 
 export function parseGatewayConfigUpdateInput(value: unknown): GatewayConfigUpdateInput {
