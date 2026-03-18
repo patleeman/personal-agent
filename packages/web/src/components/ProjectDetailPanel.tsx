@@ -91,15 +91,19 @@ function DetailSection(props: DetailSectionProps) {
 
 export function ProjectDetailPanel({
   project,
+  activeProfile,
   onChanged,
   onDeleted,
 }: {
   project: ProjectDetail;
+  activeProfile?: string;
   onChanged?: () => void;
   onDeleted?: (projectId: string) => void;
 }) {
   const navigate = useNavigate();
   const record = project.project;
+  const projectProfile = project.profile;
+  const canStartConversation = !activeProfile || activeProfile === projectProfile;
   const blockers = record.blockers.filter((blocker) => blocker.trim().length > 0);
   const recentProgress = record.recentProgress.filter((item) => item.trim().length > 0);
   const archived = isProjectArchived(record);
@@ -160,6 +164,7 @@ export function ProjectDetailPanel({
   const completionSummaryContent = (record.completionSummary ?? '').trim() || projectDocument.completionSummary.trim();
   const activityItems = useMemo(() => buildActivityItems(project), [project]);
   const topLevelError = archiveError ?? deleteError;
+  const projectApiOptions = useMemo(() => ({ profile: projectProfile }), [projectProfile]);
 
   useEffect(() => {
     if (!editingProject) {
@@ -216,7 +221,7 @@ export function ProjectDetailPanel({
         currentFocus: projectForm.currentFocus.trim() || null,
         blockers: splitLines(projectForm.blockers),
         recentProgress: splitLines(projectForm.recentProgress),
-      });
+      }, projectApiOptions);
       setEditingProject(false);
       onChanged?.();
     } catch (error) {
@@ -252,14 +257,14 @@ export function ProjectDetailPanel({
           status: milestoneForm.status,
           summary: milestoneForm.summary.trim() || undefined,
           makeCurrent: milestoneForm.makeCurrent,
-        });
+        }, projectApiOptions);
       } else {
         await api.updateProjectMilestone(record.id, milestoneEditor.milestoneId, {
           title: milestoneForm.title,
           status: milestoneForm.status,
           summary: milestoneForm.summary.trim() || null,
           makeCurrent: milestoneForm.makeCurrent,
-        });
+        }, projectApiOptions);
       }
 
       setMilestoneEditor(null);
@@ -277,7 +282,7 @@ export function ProjectDetailPanel({
     setMilestoneError(null);
 
     try {
-      await api.updateProject(record.id, { currentMilestoneId: milestoneId });
+      await api.updateProject(record.id, { currentMilestoneId: milestoneId }, projectApiOptions);
       onChanged?.();
     } catch (error) {
       setMilestoneError(error instanceof Error ? error.message : String(error));
@@ -293,7 +298,7 @@ export function ProjectDetailPanel({
     try {
       await api.updateProjectMilestone(record.id, milestoneId, status === 'in_progress'
         ? { status, makeCurrent: true }
-        : { status });
+        : { status }, projectApiOptions);
 
       const isCurrent = currentMilestone?.id === milestoneId;
       if (isCurrent && (status === 'completed' || status === 'cancelled')) {
@@ -302,7 +307,7 @@ export function ProjectDetailPanel({
           && milestone.status !== 'completed'
           && milestone.status !== 'cancelled'
         ));
-        await api.updateProject(record.id, { currentMilestoneId: nextCurrentMilestone?.id ?? null });
+        await api.updateProject(record.id, { currentMilestoneId: nextCurrentMilestone?.id ?? null }, projectApiOptions);
       }
 
       onChanged?.();
@@ -343,9 +348,9 @@ export function ProjectDetailPanel({
       };
 
       if (taskEditor.mode === 'add') {
-        await api.createProjectTask(record.id, payload);
+        await api.createProjectTask(record.id, payload, projectApiOptions);
       } else {
-        await api.updateProjectTask(record.id, taskEditor.taskId, payload);
+        await api.updateProjectTask(record.id, taskEditor.taskId, payload, projectApiOptions);
       }
 
       setTaskEditor(null);
@@ -363,7 +368,7 @@ export function ProjectDetailPanel({
     setMilestoneError(null);
 
     try {
-      await api.moveProjectMilestone(record.id, milestoneId, direction);
+      await api.moveProjectMilestone(record.id, milestoneId, direction, projectApiOptions);
       onChanged?.();
     } catch (error) {
       setMilestoneError(error instanceof Error ? error.message : String(error));
@@ -381,7 +386,7 @@ export function ProjectDetailPanel({
     setMilestoneError(null);
 
     try {
-      await api.deleteProjectMilestone(record.id, milestoneId);
+      await api.deleteProjectMilestone(record.id, milestoneId, projectApiOptions);
       if (milestoneEditor?.mode === 'edit' && milestoneEditor.milestoneId === milestoneId) {
         setMilestoneEditor(null);
       }
@@ -398,7 +403,7 @@ export function ProjectDetailPanel({
     setTaskError(null);
 
     try {
-      await api.moveProjectTask(record.id, taskId, direction);
+      await api.moveProjectTask(record.id, taskId, direction, projectApiOptions);
       onChanged?.();
     } catch (error) {
       setTaskError(error instanceof Error ? error.message : String(error));
@@ -416,7 +421,7 @@ export function ProjectDetailPanel({
     setTaskError(null);
 
     try {
-      await api.deleteProjectTask(record.id, taskId);
+      await api.deleteProjectTask(record.id, taskId, projectApiOptions);
       if (taskEditor?.mode === 'edit' && taskEditor.taskId === taskId) {
         setTaskEditor(null);
       }
@@ -439,7 +444,7 @@ export function ProjectDetailPanel({
 
     setRawProjectBusy(true);
     try {
-      const source = await api.projectSource(record.id);
+      const source = await api.projectSource(record.id, projectApiOptions);
       setRawProjectContent(source.content);
       setRawProjectLoaded(true);
     } catch (error) {
@@ -455,7 +460,7 @@ export function ProjectDetailPanel({
     setRawProjectError(null);
 
     try {
-      await api.saveProjectSource(record.id, rawProjectContent);
+      await api.saveProjectSource(record.id, rawProjectContent, projectApiOptions);
       onChanged?.();
     } catch (error) {
       setRawProjectError(error instanceof Error ? error.message : String(error));
@@ -480,9 +485,9 @@ export function ProjectDetailPanel({
 
     try {
       if (nextArchived) {
-        await api.archiveProject(record.id);
+        await api.archiveProject(record.id, projectApiOptions);
       } else {
-        await api.unarchiveProject(record.id);
+        await api.unarchiveProject(record.id, projectApiOptions);
       }
       onChanged?.();
     } catch (error) {
@@ -501,7 +506,7 @@ export function ProjectDetailPanel({
     setDeleteError(null);
 
     try {
-      await api.deleteProject(record.id);
+      await api.deleteProject(record.id, projectApiOptions);
       setDeleteBusy(false);
       onDeleted?.(record.id);
       return;
@@ -517,7 +522,7 @@ export function ProjectDetailPanel({
     setBriefError(null);
 
     try {
-      await api.saveProjectBrief(record.id, briefContent);
+      await api.saveProjectBrief(record.id, briefContent, projectApiOptions);
       setBriefEditing(false);
       onChanged?.();
     } catch (error) {
@@ -532,7 +537,7 @@ export function ProjectDetailPanel({
     setBriefError(null);
 
     try {
-      await api.regenerateProjectBrief(record.id);
+      await api.regenerateProjectBrief(record.id, projectApiOptions);
       setBriefEditing(false);
       onChanged?.();
     } catch (error) {
@@ -565,9 +570,9 @@ export function ProjectDetailPanel({
 
     try {
       if (noteEditor.mode === 'add') {
-        await api.createProjectNote(record.id, noteForm);
+        await api.createProjectNote(record.id, noteForm, projectApiOptions);
       } else {
-        await api.updateProjectNote(record.id, noteEditor.noteId, noteForm);
+        await api.updateProjectNote(record.id, noteEditor.noteId, noteForm, projectApiOptions);
       }
       setNoteEditor(null);
       setNoteForm(emptyNoteForm());
@@ -588,7 +593,7 @@ export function ProjectDetailPanel({
     setNoteError(null);
 
     try {
-      await api.deleteProjectNote(record.id, noteId);
+      await api.deleteProjectNote(record.id, noteId, projectApiOptions);
       if (noteEditor?.mode === 'edit' && noteEditor.noteId === noteId) {
         setNoteEditor(null);
       }
@@ -632,7 +637,7 @@ export function ProjectDetailPanel({
         title: fileUpload.title.trim() || undefined,
         description: fileUpload.description.trim() || undefined,
         data,
-      });
+      }, projectApiOptions);
       setFileUpload(emptyFileUploadState());
       onChanged?.();
     } catch (error) {
@@ -651,7 +656,7 @@ export function ProjectDetailPanel({
     setFileError(null);
 
     try {
-      await api.deleteProjectFile(record.id, file.kind, file.id);
+      await api.deleteProjectFile(record.id, file.kind, file.id, projectApiOptions);
       onChanged?.();
     } catch (error) {
       setFileError(error instanceof Error ? error.message : String(error));
@@ -661,6 +666,10 @@ export function ProjectDetailPanel({
   }
 
   async function startConversationFromProject() {
+    if (!canStartConversation) {
+      return;
+    }
+
     setConversationBusy(true);
     try {
       const { id } = await api.createLiveSession(undefined, [record.id]);
@@ -673,7 +682,7 @@ export function ProjectDetailPanel({
 
   function downloadProjectPackage() {
     const link = document.createElement('a');
-    link.href = `/api/projects/${encodeURIComponent(record.id)}/package`;
+    link.href = `/api/projects/${encodeURIComponent(record.id)}/package?viewProfile=${encodeURIComponent(projectProfile)}`;
     link.download = '';
     document.body.appendChild(link);
     link.click();
@@ -735,6 +744,7 @@ export function ProjectDetailPanel({
       <section className="space-y-5">
         <div className="flex flex-wrap items-center gap-2 text-[12px]">
           <span className="font-mono text-secondary">{record.id}</span>
+          <span className="text-dim">profile {projectProfile}</span>
           <span className="text-dim">updated {timeAgo(record.updatedAt)}</span>
         </div>
 
@@ -755,11 +765,16 @@ export function ProjectDetailPanel({
               <ToolbarButton onClick={() => { void toggleArchivedState(!archived); }} disabled={archiveBusy || deleteBusy}>
                 {archiveBusy ? (archived ? 'Restoring…' : 'Archiving…') : (archived ? 'Restore project' : 'Archive project')}
               </ToolbarButton>
-              <ToolbarButton onClick={() => { void startConversationFromProject(); }} disabled={conversationBusy || deleteBusy}>
+              <ToolbarButton onClick={() => { void startConversationFromProject(); }} disabled={conversationBusy || deleteBusy || !canStartConversation}>
                 {conversationBusy ? 'Starting…' : 'Start conversation'}
               </ToolbarButton>
             </div>
           </div>
+          {!canStartConversation && activeProfile && (
+            <p className="ui-card-meta max-w-4xl">
+              Switch the active profile to <span className="font-mono text-primary">{projectProfile}</span> in Settings before starting a conversation from this project.
+            </p>
+          )}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Pill tone={archived ? 'muted' : hasMeaningfulBlockers(record.blockers) ? 'warning' : 'teal'}>
               {formatProjectStatus(record.status)}
