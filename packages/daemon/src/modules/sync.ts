@@ -1,4 +1,4 @@
-import { existsSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { hostname } from 'os';
 import { join, resolve, sep } from 'path';
 import {
@@ -6,12 +6,15 @@ import {
   writeProfileActivityEntry,
   type ProjectActivityEntryDocument,
 } from '@personal-agent/core';
+import { getRepoRoot } from '@personal-agent/resources';
 import type { SyncModuleConfig } from '../config.js';
 import type { DaemonEvent } from '../types.js';
 import type { DaemonModule, DaemonModuleContext } from './types.js';
 import { runCommand } from './command.js';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
+const CONVERSATION_ATTENTION_MERGE_DRIVER = 'personal-agent-conversation-attention';
+const DEFERRED_RESUMES_MERGE_DRIVER = 'personal-agent-deferred-resumes';
 
 interface SyncModuleState {
   running: boolean;
@@ -110,6 +113,74 @@ function buildErrorResolverPrompt(input: {
     '- if credentials/network are the blocker, capture precise remediation steps',
     '- summarize what changed and what remains blocked',
   ].join('\n');
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `"'"'`)}'`;
+}
+
+function buildManagedMergeDriverCommand(subcommand: 'merge-conversation-attention' | 'merge-deferred-resumes'): string {
+  const cliEntrypoint = join(getRepoRoot(), 'packages', 'cli', 'dist', 'index.js');
+  return [
+    shellQuote(process.execPath),
+    shellQuote(cliEntrypoint),
+    'sync',
+    subcommand,
+    '%O',
+    '%A',
+    '%B',
+  ].join(' ');
+}
+
+function managedSyncRepoGitattributes(): string {
+  return `* text=auto\n\n# Append-only session JSONL transcripts merge best with union\npi-agent/sessions/**/*.jsonl text eol=lf merge=union\n\n# Conversation attention state should merge by per-conversation max/union semantics\npi-agent/state/conversation-attention/*.json text eol=lf merge=${CONVERSATION_ATTENTION_MERGE_DRIVER}\n\n# Deferred resume state should merge by resume id while preserving latest retry state\npi-agent/deferred-resumes-state.json text eol=lf merge=${DEFERRED_RESUMES_MERGE_DRIVER}\n`;
+}
+
+function readFileUtf8(path: string): string | undefined {
+  try {
+    return readFileSync(path, 'utf-8');
+  } catch {
+    return undefined;
+  }
+}
+
+async function ensureManagedMergeHandling(repoDir: string): Promise<void> {
+  const gitattributesPath = join(repoDir, '.gitattributes');
+  const managedAttributes = managedSyncRepoGitattributes();
+  if (readFileUtf8(gitattributesPath) !== managedAttributes) {
+    writeFileSync(gitattributesPath, managedAttributes);
+  }
+
+  const mergeSettings: Array<{ key: string; value: string }> = [
+    {
+      key: `merge.${CONVERSATION_ATTENTION_MERGE_DRIVER}.name`,
+      value: 'personal-agent conversation attention merge',
+    },
+    {
+      key: `merge.${CONVERSATION_ATTENTION_MERGE_DRIVER}.driver`,
+      value: buildManagedMergeDriverCommand('merge-conversation-attention'),
+    },
+    {
+      key: `merge.${DEFERRED_RESUMES_MERGE_DRIVER}.name`,
+      value: 'personal-agent deferred resumes merge',
+    },
+    {
+      key: `merge.${DEFERRED_RESUMES_MERGE_DRIVER}.driver`,
+      value: buildManagedMergeDriverCommand('merge-deferred-resumes'),
+    },
+  ];
+
+  for (const setting of mergeSettings) {
+    const existing = await runGit(repoDir, ['config', '--get', setting.key], 30_000);
+    if (existing.code === 0 && existing.stdout.trim() === setting.value) {
+      continue;
+    }
+
+    const updated = await runGit(repoDir, ['config', setting.key, setting.value], 30_000);
+    if (updated.code !== 0) {
+      throw new Error(updated.stderr || updated.stdout || `Failed to configure ${setting.key}`);
+    }
+  }
 }
 
 async function runGit(repoDir: string, args: string[], timeoutMs = 120_000): Promise<{ code: number; stdout: string; stderr: string }> {
@@ -524,6 +595,15 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
           context,
           profile,
         });
+        return;
+      }
+
+      try {
+        await ensureManagedMergeHandling(config.repoDir);
+      } catch (error) {
+        state.lastError = error instanceof Error ? error.message : String(error);
+        context.logger.warn(`git sync repair failed: ${state.lastError}`);
+        maybeNotifySyncError(state, context, config, profile, event, 'repair', state.lastError);
         return;
       }
 
