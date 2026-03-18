@@ -47,7 +47,7 @@ Handles periodic housekeeping such as log cleanup.
 
 Discovers and runs `*.task.md` files.
 
-This module is what powers scheduled task execution, retries, logs, and gateway output routing.
+This module is what powers scheduled task runs, retries, logs, and gateway output routing.
 
 See [Scheduled Tasks](./scheduled-tasks.md).
 

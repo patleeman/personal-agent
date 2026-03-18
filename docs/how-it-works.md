@@ -96,7 +96,7 @@ Use it for:
 - recent progress
 - a canonical project brief
 - optional milestones
-- execution tasks
+- project tasks
 - appended notes
 - attachments and project artifacts
 - linked conversations shown by the UI

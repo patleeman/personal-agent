@@ -152,11 +152,11 @@ function RunDetail({
   cancelling: boolean;
 }) {
   if (loading) {
-    return <LoadingState className="mb-5" label="Loading execution…" />;
+    return <LoadingState className="mb-5" label="Loading run…" />;
   }
 
   if (error) {
-    return <ErrorState className="mb-5" message={`Failed to load execution: ${error}`} />;
+    return <ErrorState className="mb-5" message={`Failed to load run: ${error}`} />;
   }
 
   if (!detail) {
@@ -196,7 +196,7 @@ function RunDetail({
         </div>
         {canCancel && (
           <ToolbarButton onClick={() => onCancel(run.runId)} disabled={cancelling}>
-            {cancelling ? 'Cancelling…' : 'Cancel execution'}
+            {cancelling ? 'Cancelling…' : 'Cancel run'}
           </ToolbarButton>
         )}
       </div>
@@ -238,7 +238,7 @@ function RunDetail({
 
       <div className="border-t border-border-subtle pt-4 grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
-          <p className="ui-section-label">Execution state</p>
+          <p className="ui-section-label">Run state</p>
           <p className="text-[13px] text-primary">{run.manifest?.kind ?? 'unknown kind'}</p>
           {run.manifest?.resumePolicy && <p className="text-[12px] text-secondary">resume policy {run.manifest.resumePolicy}</p>}
           {run.manifest?.source?.type && <p className="text-[12px] text-secondary">source {run.manifest.source.type}</p>}
@@ -346,7 +346,7 @@ export function RunsPage() {
 
   const isLoading = runs === null && sseStatus !== 'offline';
   const visibleError = runs === null && sseStatus === 'offline'
-    ? refreshError ?? 'Live updates are offline. Use refresh to load the latest executions.'
+    ? refreshError ?? 'Live updates are offline. Use refresh to load the latest runs.'
     : refreshError;
 
   const filterCounts = useMemo(() => {
@@ -395,11 +395,11 @@ export function RunsPage() {
     <div className="flex flex-col h-full">
       <PageHeader actions={<ToolbarButton onClick={() => { void refreshRuns(); reconnectSelectedRun(); }}>↻ Refresh</ToolbarButton>}>
         <PageHeading
-          title="Executions"
+          title="Agent Runs"
           meta={(
             runs && (
               <>
-                {runs.summary.total} {runs.summary.total === 1 ? 'execution' : 'executions'}
+                {runs.summary.total} {runs.summary.total === 1 ? 'run' : 'runs'}
                 {summary.running > 0 && <span className="ml-2 text-accent">· {summary.running} active</span>}
                 {summary.needsRecovery > 0 && <span className="ml-2 text-warning">· {summary.needsRecovery} recoverable</span>}
                 {summary.issues > 0 && <span className="ml-2 text-danger">· {summary.issues} with issues</span>}
@@ -411,12 +411,12 @@ export function RunsPage() {
       </PageHeader>
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        {isLoading && <LoadingState label="Loading executions…" />}
-        {visibleError && <ErrorState message={`Failed to load executions: ${visibleError}`} />}
+        {isLoading && <LoadingState label="Loading runs…" />}
+        {visibleError && <ErrorState message={`Failed to load runs: ${visibleError}`} />}
 
         {!isLoading && !visibleError && runRecords.length > 0 && (
           <div className="mb-5">
-            <div className="ui-segmented-control" role="group" aria-label="Execution filter">
+            <div className="ui-segmented-control" role="group" aria-label="Run filter">
               {filterOptions.map((option) => {
                 const count = option.value === 'all' ? runRecords.length : filterCounts[option.value];
                 return (
@@ -448,10 +448,10 @@ export function RunsPage() {
 
         {!isLoading && !visibleError && runRecords.length === 0 && (
           <EmptyState
-            title="No executions yet."
+            title="No runs yet."
             body={(
               <>
-                Executions appear here after background work is started through the daemon. You can also start a scheduled task from the <Link to="/scheduled" className="text-accent hover:underline">Scheduled</Link> page.
+                Agent runs appear here after background work starts through the daemon. You can also start a scheduled task from the <Link to="/scheduled" className="text-accent hover:underline">Scheduled</Link> page.
               </>
             )}
           />
@@ -459,8 +459,8 @@ export function RunsPage() {
 
         {!isLoading && !visibleError && runRecords.length > 0 && filteredRuns.length === 0 && (
           <EmptyState
-            title="No executions match this filter."
-            body="Try another execution type or switch back to all."
+            title="No runs match this filter."
+            body="Try another run type or switch back to all."
             action={<ToolbarButton onClick={() => setFilter('all')}>Show all</ToolbarButton>}
           />
         )}

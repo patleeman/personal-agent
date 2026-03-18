@@ -337,7 +337,7 @@ export function ProjectOverviewPanel({
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="ui-section-label">Tasks</p>
-              <p className="ui-card-meta mt-1">Top execution tasks from PROJECT.yaml</p>
+              <p className="ui-card-meta mt-1">Top project tasks from PROJECT.yaml</p>
             </div>
             <span className="text-[11px] font-mono text-dim">{project.taskCount}</span>
           </div>

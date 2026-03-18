@@ -282,7 +282,7 @@ describe('runPresentation', () => {
       cwd: '/repo',
       cwdSlug: 'repo',
       model: 'openai/gpt-5',
-      title: 'Watch subagent execution',
+      title: 'Watch subagent run',
       messageCount: 12,
     }];
 
@@ -314,7 +314,7 @@ describe('runPresentation', () => {
     expect(getRunConnections(run, { sessions })).toContainEqual({
       key: 'conversation:conv-123',
       label: 'Conversation',
-      value: 'Watch subagent execution',
+      value: 'Watch subagent run',
       to: '/conversations/conv-123',
       detail: 'conv-123',
     });

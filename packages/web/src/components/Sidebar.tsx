@@ -370,8 +370,8 @@ function SidebarFooter() {
       <TopNavItem
         to="/runs"
         icon={PATH.runs}
-        label="Executions"
-        title="Daemon-backed executions: scheduled task runs, deferred resumes, and recoverable conversation runs."
+        label="Agent Runs"
+        title="Daemon-backed agent runs: scheduled task runs, deferred resumes, and recoverable conversation runs."
       />
       <TopNavItem to="/settings" icon={PATH.settings} label="Settings" />
     </div>

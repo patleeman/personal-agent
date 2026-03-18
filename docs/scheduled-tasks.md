@@ -136,11 +136,11 @@ Important behavior to understand:
 
 One-time tasks resolve once and do not run again.
 
-## Execution model
+## Run model
 
 Tasks run as direct daemon-managed subprocesses.
 
-Each execution still writes a durable run record, log, and final result under the daemon state root.
+Each run still writes a durable run record, log, and final result under the daemon state root.
 
 ## Managing tasks from the web UI
 

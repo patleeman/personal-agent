@@ -14,7 +14,7 @@ Think of it as a **cross-conversation work hub** that can hold:
 - recent progress
 - a project brief
 - optional milestones
-- execution tasks
+- project tasks
 - appended notes
 - uploaded attachments
 - project artifacts
