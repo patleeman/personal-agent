@@ -202,8 +202,8 @@ describe('Sidebar', () => {
     expect(html.indexOf('Memories')).toBeLessThan(html.indexOf('Tools'));
     expect(html.indexOf('Tools')).toBeLessThan(html.indexOf('New chat'));
     expect(html.indexOf('New chat')).toBeLessThan(html.indexOf('Pinned'));
-    expect(html.indexOf('Open conversations')).toBeLessThan(html.indexOf('Executions'));
-    expect(html.indexOf('Executions')).toBeLessThan(html.indexOf('System'));
+    expect(html.indexOf('Open conversations')).toBeLessThan(html.indexOf('Agent Runs'));
+    expect(html.indexOf('Agent Runs')).toBeLessThan(html.indexOf('System'));
     expect(html.indexOf('System')).toBeLessThan(html.indexOf('Settings'));
   });
 
