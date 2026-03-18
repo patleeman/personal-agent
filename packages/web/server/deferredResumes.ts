@@ -1,9 +1,11 @@
 import {
+  activateDueDeferredResumes,
   getSessionDeferredResumeEntries,
   loadDeferredResumeState,
   parseDeferredResumeDelayMs,
   readSessionConversationId,
   removeDeferredResume,
+  retryDeferredResume,
   saveDeferredResumeState,
   scheduleDeferredResume,
   type DeferredResumeRecord,
@@ -52,6 +54,61 @@ function toSummary(record: DeferredResumeRecord): DeferredResumeSummary {
 export function listDeferredResumesForSessionFile(sessionFile: string): DeferredResumeSummary[] {
   const state = loadDeferredResumeState();
   return getSessionDeferredResumeEntries(state, sessionFile).map(toSummary);
+}
+
+export function activateDueDeferredResumesForSessionFile(input: {
+  sessionFile: string;
+  at?: Date;
+}): DeferredResumeSummary[] {
+  const state = loadDeferredResumeState();
+  const activated = activateDueDeferredResumes(state, {
+    at: input.at,
+    sessionFile: input.sessionFile,
+  });
+
+  if (activated.length > 0) {
+    saveDeferredResumeState(state);
+  }
+
+  return activated.map(toSummary);
+}
+
+export function completeDeferredResumeForSessionFile(input: {
+  sessionFile: string;
+  id: string;
+}): DeferredResumeSummary | undefined {
+  const state = loadDeferredResumeState();
+  const record = state.resumes[input.id];
+  if (!record || record.sessionFile !== input.sessionFile) {
+    return undefined;
+  }
+
+  removeDeferredResume(state, input.id);
+  saveDeferredResumeState(state);
+  return toSummary(record);
+}
+
+export function retryDeferredResumeForSessionFile(input: {
+  sessionFile: string;
+  id: string;
+  dueAt: string;
+}): DeferredResumeSummary | undefined {
+  const state = loadDeferredResumeState();
+  const record = state.resumes[input.id];
+  if (!record || record.sessionFile !== input.sessionFile) {
+    return undefined;
+  }
+
+  const retried = retryDeferredResume(state, {
+    id: input.id,
+    dueAt: input.dueAt,
+  });
+  if (!retried) {
+    return undefined;
+  }
+
+  saveDeferredResumeState(state);
+  return toSummary(retried);
 }
 
 export async function scheduleDeferredResumeForSessionFile(input: {

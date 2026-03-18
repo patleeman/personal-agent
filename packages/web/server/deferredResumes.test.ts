@@ -5,8 +5,11 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_DEFERRED_RESUME_PROMPT,
+  activateDueDeferredResumesForSessionFile,
   cancelDeferredResumeForSessionFile,
+  completeDeferredResumeForSessionFile,
   listDeferredResumesForSessionFile,
+  retryDeferredResumeForSessionFile,
   scheduleDeferredResumeForSessionFile,
 } from './deferredResumes.js';
 
@@ -90,6 +93,86 @@ describe('deferredResumes', () => {
     expect(listDeferredResumesForSessionFile('/tmp/sessions/current.jsonl')).toEqual([]);
     expect(listDeferredResumesForSessionFile('/tmp/sessions/other.jsonl')).toEqual([
       expect.objectContaining({ id: keep.id }),
+    ]);
+  });
+
+  it('completes a ready resume without dropping a newer schedule', async () => {
+    const stateRoot = createTempDir('pa-web-deferred-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const sessionFile = '/tmp/sessions/current.jsonl';
+
+    const first = await scheduleDeferredResumeForSessionFile({
+      sessionFile,
+      delay: '30s',
+      prompt: 'first',
+      now: new Date('2026-03-12T13:00:00.000Z'),
+    });
+
+    const activated = activateDueDeferredResumesForSessionFile({
+      sessionFile,
+      at: new Date('2026-03-12T13:00:31.000Z'),
+    });
+    expect(activated).toEqual([
+      expect.objectContaining({ id: first.id, status: 'ready' }),
+    ]);
+
+    const second = await scheduleDeferredResumeForSessionFile({
+      sessionFile,
+      delay: '10m',
+      prompt: 'second',
+      now: new Date('2026-03-12T13:00:32.000Z'),
+    });
+
+    const completed = completeDeferredResumeForSessionFile({
+      sessionFile,
+      id: first.id,
+    });
+
+    expect(completed).toEqual(expect.objectContaining({ id: first.id, status: 'ready' }));
+    expect(listDeferredResumesForSessionFile(sessionFile)).toEqual([
+      expect.objectContaining({ id: second.id, prompt: 'second', status: 'scheduled' }),
+    ]);
+  });
+
+  it('retries a ready resume without dropping a newer schedule', async () => {
+    const stateRoot = createTempDir('pa-web-deferred-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const sessionFile = '/tmp/sessions/current.jsonl';
+
+    const first = await scheduleDeferredResumeForSessionFile({
+      sessionFile,
+      delay: '30s',
+      prompt: 'first',
+      now: new Date('2026-03-12T13:00:00.000Z'),
+    });
+
+    activateDueDeferredResumesForSessionFile({
+      sessionFile,
+      at: new Date('2026-03-12T13:00:31.000Z'),
+    });
+
+    const second = await scheduleDeferredResumeForSessionFile({
+      sessionFile,
+      delay: '10m',
+      prompt: 'second',
+      now: new Date('2026-03-12T13:00:32.000Z'),
+    });
+
+    const retried = retryDeferredResumeForSessionFile({
+      sessionFile,
+      id: first.id,
+      dueAt: '2026-03-12T13:05:00.000Z',
+    });
+
+    expect(retried).toEqual(expect.objectContaining({
+      id: first.id,
+      status: 'scheduled',
+      dueAt: '2026-03-12T13:05:00.000Z',
+      attempts: 1,
+    }));
+    expect(listDeferredResumesForSessionFile(sessionFile)).toEqual([
+      expect.objectContaining({ id: first.id, status: 'scheduled', attempts: 1 }),
+      expect.objectContaining({ id: second.id, prompt: 'second', status: 'scheduled' }),
     ]);
   });
 
