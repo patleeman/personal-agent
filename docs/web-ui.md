@@ -267,6 +267,8 @@ Referenced projects matter in two ways:
 1. they stay attached to the conversation as durable project context
 2. if a new conversation references exactly one project with a `repoRoot`, that repo root can become the initial working directory when no explicit cwd is set
 
+Otherwise, the web UI falls back to the saved default cwd from Settings, or the web server process cwd when no default is saved.
+
 That makes project references more than just labels.
 
 ## Common conversation composer commands

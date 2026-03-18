@@ -1,4 +1,4 @@
-import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationCwdChangeResult, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DeferredResumeSummary, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, MemoryWorkItem, MergeMemoryDocResult, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectDiagnostics, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SyncState, ToolsState, WebUiState } from './types';
+import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationCwdChangeResult, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, MemoryWorkItem, MergeMemoryDocResult, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectDiagnostics, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SyncState, ToolsState, WebUiState } from './types';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch('/api' + path);
@@ -185,6 +185,7 @@ export const api = {
 
   // ── Models ────────────────────────────────────────────────────────────────
   models: () => get<ModelState>('/models'),
+  defaultCwd: () => get<DefaultCwdState>('/default-cwd'),
   tools: () => get<ToolsState>('/tools'),
   installPackageSource: (input: { source: string; target: 'profile' | 'local'; profileName?: string }) =>
     post<PackageInstallResult>('/tools/packages/install', input),
@@ -193,6 +194,8 @@ export const api = {
   setModel: (model: string) => patch<{ ok: boolean }>('/models/current', { model }),
   updateModelPreferences: (input: { model?: string; thinkingLevel?: string }) =>
     patch<{ ok: boolean }>('/models/current', input),
+  updateDefaultCwd: (cwd: string | null) =>
+    patch<DefaultCwdState>('/default-cwd', { cwd }),
   providerAuth: () => get<ProviderAuthState>('/provider-auth'),
   setProviderApiKey: (provider: string, apiKey: string) =>
     patch<ProviderAuthState>(`/provider-auth/${encodeURIComponent(provider)}/api-key`, { apiKey }),

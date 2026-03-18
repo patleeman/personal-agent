@@ -3040,7 +3040,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               )}
               title={draft ? NEW_CONVERSATION_TITLE : title}
               body={draft
-                ? 'Start typing to create a conversation. You can set its initial working directory in the right rail, or let a single referenced project repo root pick it automatically.'
+                ? 'Start typing to create a conversation. You can set its initial working directory in the right rail, use the saved default from Settings, or let a single referenced project repo root pick it automatically.'
                 : isLiveSession
                   ? 'This conversation is live but has no messages yet. Send a prompt to get started.'
                   : 'Start a Pi session to populate this conversation.'}

@@ -118,6 +118,12 @@ export function SettingsPage() {
     refetch: refetchModels,
   } = useApi(api.models);
   const {
+    data: defaultCwdState,
+    loading: defaultCwdLoading,
+    error: defaultCwdLoadError,
+    refetch: refetchDefaultCwd,
+  } = useApi(api.defaultCwd);
+  const {
     data: conversationTitleState,
     loading: conversationTitleLoading,
     error: conversationTitleError,
@@ -138,6 +144,9 @@ export function SettingsPage() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [savingPreference, setSavingPreference] = useState<'model' | 'thinking' | null>(null);
   const [modelError, setModelError] = useState<string | null>(null);
+  const [defaultCwdDraft, setDefaultCwdDraft] = useState('');
+  const [savingDefaultCwd, setSavingDefaultCwd] = useState(false);
+  const [defaultCwdSaveError, setDefaultCwdSaveError] = useState<string | null>(null);
   const [savingConversationTitle, setSavingConversationTitle] = useState<'enabled' | 'model' | null>(null);
   const [conversationTitleSaveError, setConversationTitleSaveError] = useState<string | null>(null);
   const [selectedProviderId, setSelectedProviderId] = useState('');
@@ -188,6 +197,16 @@ export function SettingsPage() {
 
     return providerAuthState.providers.find((provider) => provider.id === selectedProviderId) ?? null;
   }, [providerAuthState, selectedProviderId]);
+
+  const defaultCwdDirty = defaultCwdState
+    ? defaultCwdDraft.trim() !== defaultCwdState.currentCwd
+    : false;
+
+  useEffect(() => {
+    if (defaultCwdState) {
+      setDefaultCwdDraft(defaultCwdState.currentCwd);
+    }
+  }, [defaultCwdState?.currentCwd]);
 
   useEffect(() => {
     if (!providerAuthState || providerAuthState.providers.length === 0) {
@@ -318,6 +337,30 @@ export function SettingsPage() {
       setModelError(error instanceof Error ? error.message : String(error));
     } finally {
       setSavingPreference(null);
+    }
+  }
+
+  async function handleDefaultCwdSave(nextCwd: string | null = defaultCwdDraft) {
+    if (!defaultCwdState || savingDefaultCwd) {
+      return;
+    }
+
+    const normalizedCwd = (nextCwd ?? '').trim();
+    if (normalizedCwd === defaultCwdState.currentCwd) {
+      return;
+    }
+
+    setDefaultCwdSaveError(null);
+    setSavingDefaultCwd(true);
+
+    try {
+      const saved = await api.updateDefaultCwd(normalizedCwd || null);
+      setDefaultCwdDraft(saved.currentCwd);
+      await refetchDefaultCwd({ resetLoading: false });
+    } catch (error) {
+      setDefaultCwdSaveError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSavingDefaultCwd(false);
     }
   }
 
@@ -518,6 +561,7 @@ export function SettingsPage() {
         void Promise.all([
           refetchProfiles({ resetLoading: false }),
           refetchModels({ resetLoading: false }),
+          refetchDefaultCwd({ resetLoading: false }),
           refetchConversationTitleSettings({ resetLoading: false }),
           refetchProviderAuth({ resetLoading: false }),
           refetchStatus({ resetLoading: false }),
@@ -526,7 +570,7 @@ export function SettingsPage() {
       }}>↻ Refresh</ToolbarButton>}>
         <PageHeading
           title="Settings"
-          meta={pageMeta || 'Theme, profile defaults, provider credentials, model defaults, and interface reset tools.'}
+          meta={pageMeta || 'Theme, profile defaults, working directory defaults, provider credentials, and interface reset tools.'}
         />
       </PageHeader>
 
@@ -557,7 +601,7 @@ export function SettingsPage() {
           <section className="space-y-5 border-t border-border-subtle pt-6">
             <SectionLabel label="Agent defaults" />
 
-            <div className="grid gap-8 lg:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-8 lg:grid-cols-2 xl:grid-cols-4">
               <div className="space-y-3 min-w-0">
                 <div className="space-y-1">
                   <h2 className="text-[15px] font-medium text-primary">Profile</h2>
@@ -658,6 +702,75 @@ export function SettingsPage() {
                 ) : null}
 
                 {modelError && <p className="text-[12px] text-danger">{modelError}</p>}
+              </div>
+
+              <div className="space-y-3 min-w-0">
+                <div className="space-y-1">
+                  <h2 className="text-[15px] font-medium text-primary">Default working directory</h2>
+                  <p className="ui-card-meta max-w-xl">
+                    Used when a new live session or other web action starts without an explicit cwd. A single referenced project repo root still takes priority.
+                  </p>
+                </div>
+
+                {defaultCwdLoading && !defaultCwdState ? (
+                  <p className="ui-card-meta">Loading default working directory…</p>
+                ) : defaultCwdLoadError && !defaultCwdState ? (
+                  <p className="text-[12px] text-danger">Failed to load default working directory: {defaultCwdLoadError}</p>
+                ) : defaultCwdState ? (
+                  <form
+                    className="space-y-3"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void handleDefaultCwdSave();
+                    }}
+                  >
+                    <label className="ui-card-meta" htmlFor="settings-default-cwd">Path</label>
+                    <input
+                      id="settings-default-cwd"
+                      value={defaultCwdDraft}
+                      onChange={(event) => {
+                        setDefaultCwdDraft(event.target.value);
+                        if (defaultCwdSaveError) {
+                          setDefaultCwdSaveError(null);
+                        }
+                      }}
+                      className={`${INPUT_CLASS} font-mono text-[13px]`}
+                      placeholder="~/workingdir/project"
+                      autoComplete="off"
+                      spellCheck={false}
+                      disabled={savingDefaultCwd}
+                    />
+                    <p className="ui-card-meta break-all">
+                      {savingDefaultCwd
+                        ? 'Saving default working directory…'
+                        : defaultCwdState.currentCwd
+                          ? `Effective default: ${defaultCwdState.effectiveCwd}`
+                          : `Using process cwd: ${defaultCwdState.effectiveCwd}`}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="submit"
+                        disabled={savingDefaultCwd || !defaultCwdDirty}
+                        className={ACTION_BUTTON_CLASS}
+                      >
+                        {savingDefaultCwd ? 'Saving…' : 'Save working directory'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { void handleDefaultCwdSave(''); }}
+                        disabled={savingDefaultCwd || defaultCwdState.currentCwd.length === 0}
+                        className={ACTION_BUTTON_CLASS}
+                      >
+                        Use process cwd
+                      </button>
+                    </div>
+                    <p className="ui-card-meta">
+                      Use an absolute path, <span className="font-mono text-[11px]">~/…</span>, or a relative path. Leave it blank to fall back to the web server process cwd.
+                    </p>
+                  </form>
+                ) : null}
+
+                {defaultCwdSaveError && <p className="text-[12px] text-danger">{defaultCwdSaveError}</p>}
               </div>
 
               <div className="space-y-3 min-w-0">
