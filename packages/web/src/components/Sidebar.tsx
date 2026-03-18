@@ -687,6 +687,28 @@ export function Sidebar() {
     }
   }
 
+  function handleClosePinnedTab(sessionId: string) {
+    const isActive = location.pathname === `/conversations/${sessionId}`;
+    unpinSession(sessionId, { open: false });
+
+    if (draggingSessionId === sessionId) {
+      clearDragState();
+    }
+
+    if (!isActive) {
+      return;
+    }
+
+    const remainingPinnedSessions = pinnedSessions.filter((session) => session.id !== sessionId);
+    const nextConversation = remainingPinnedSessions[0] ?? tabs[0];
+    if (nextConversation) {
+      navigate(`/conversations/${nextConversation.id}`);
+      return;
+    }
+
+    navigate('/inbox');
+  }
+
   const handleNewConversation = useCallback(() => {
     navigate('/conversations/new');
   }, [navigate]);
@@ -827,7 +849,17 @@ export function Sidebar() {
                 depth={depth}
                 nestedUnderTitle={nestedUnderTitle}
                 nowMs={deferredResumeNowMs}
-                actions={[{
+                actions={depth > 0 ? [{
+                  key: 'unpin',
+                  title: 'Move to open conversations',
+                  icon: PATH.unpin,
+                  onClick: () => handleUnpinConversation(session.id),
+                }, {
+                  key: 'close',
+                  title: 'Close tab',
+                  icon: PATH.close,
+                  onClick: () => handleClosePinnedTab(session.id),
+                }] : [{
                   key: 'unpin',
                   title: 'Move to open conversations',
                   icon: PATH.unpin,
