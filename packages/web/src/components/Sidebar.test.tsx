@@ -174,7 +174,7 @@ describe('Sidebar', () => {
     expect(html).toContain('1 scheduled · next in 58s');
   });
 
-  it('renders new chat below the top nav and above pinned conversations', () => {
+  it('renders primary nav above new chat and utility nav below conversations', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/inbox']}>
         <SseConnectionContext.Provider value={{ status: 'offline' }}>
@@ -198,8 +198,13 @@ describe('Sidebar', () => {
       </MemoryRouter>,
     );
 
-    expect(html.indexOf('Projects')).toBeLessThan(html.indexOf('New chat'));
+    expect(html.indexOf('Projects')).toBeLessThan(html.indexOf('Memories'));
+    expect(html.indexOf('Memories')).toBeLessThan(html.indexOf('Tools'));
+    expect(html.indexOf('Tools')).toBeLessThan(html.indexOf('New chat'));
     expect(html.indexOf('New chat')).toBeLessThan(html.indexOf('Pinned'));
+    expect(html.indexOf('Open conversations')).toBeLessThan(html.indexOf('Executions'));
+    expect(html.indexOf('Executions')).toBeLessThan(html.indexOf('System'));
+    expect(html.indexOf('System')).toBeLessThan(html.indexOf('Settings'));
   });
 
   it('nests child conversations under their parent conversation when run lineage is available', () => {
