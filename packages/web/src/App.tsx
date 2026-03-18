@@ -1,21 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { api } from './api';
-import { TasksPage } from './pages/TasksPage';
 import { Layout } from './components/Layout';
-import { ConversationPage } from './pages/ConversationPage';
-import { GatewayPage } from './pages/GatewayPage';
-import { DaemonPage } from './pages/DaemonPage';
-import { SyncPage } from './pages/SyncPage';
 import { InboxPage } from './pages/InboxPage';
-import { RunsPage } from './pages/RunsPage';
-import { SystemPage } from './pages/SystemPage';
-import { WebUiPage } from './pages/WebUiPage';
-
-import { ProjectsPage } from './pages/ProjectsPage';
-import { SettingsPage } from './pages/SettingsPage';
-import { ToolsPage } from './pages/ToolsPage';
-import { MemoriesPage } from './pages/MemoriesPage';
 import {
   AppDataContext,
   AppEventsContext,
@@ -48,6 +35,33 @@ async function fetchSessionsSnapshot(): Promise<SessionMeta[]> {
     .map((entry) => buildSyntheticLiveSessionMeta(entry));
 
   return [...syntheticLive, ...applyLiveSessionState(jsonl, live)];
+}
+
+const TasksPage = lazy(() => import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })));
+const ConversationPage = lazy(() => import('./pages/ConversationPage').then((module) => ({ default: module.ConversationPage })));
+const GatewayPage = lazy(() => import('./pages/GatewayPage').then((module) => ({ default: module.GatewayPage })));
+const DaemonPage = lazy(() => import('./pages/DaemonPage').then((module) => ({ default: module.DaemonPage })));
+const SyncPage = lazy(() => import('./pages/SyncPage').then((module) => ({ default: module.SyncPage })));
+const RunsPage = lazy(() => import('./pages/RunsPage').then((module) => ({ default: module.RunsPage })));
+const SystemPage = lazy(() => import('./pages/SystemPage').then((module) => ({ default: module.SystemPage })));
+const WebUiPage = lazy(() => import('./pages/WebUiPage').then((module) => ({ default: module.WebUiPage })));
+const ProjectsPage = lazy(() => import('./pages/ProjectsPage').then((module) => ({ default: module.ProjectsPage })));
+const SettingsPage = lazy(() => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
+const ToolsPage = lazy(() => import('./pages/ToolsPage').then((module) => ({ default: module.ToolsPage })));
+const MemoriesPage = lazy(() => import('./pages/MemoriesPage').then((module) => ({ default: module.MemoriesPage })));
+
+function suspendRoute(element: React.ReactNode) {
+  return (
+    <Suspense
+      fallback={(
+        <div className="flex h-full items-center justify-center px-6 text-[12px] text-dim">
+          Loading…
+        </div>
+      )}
+    >
+      {element}
+    </Suspense>
+  );
 }
 
 export function App() {
@@ -194,28 +208,28 @@ export function App() {
                 <Routes>
                   <Route path="/" element={<Layout />}>
                     <Route index element={<Navigate to="/inbox" replace />} />
-                    <Route path="conversations/new" element={<ConversationPage draft />} />
-                    <Route path="conversations/:id" element={<ConversationPage />} />
+                    <Route path="conversations/new" element={suspendRoute(<ConversationPage draft />)} />
+                    <Route path="conversations/:id" element={suspendRoute(<ConversationPage />)} />
                     <Route path="inbox" element={<InboxPage />} />
                     <Route path="inbox/:id" element={<InboxPage />} />
-                    <Route path="system" element={<SystemPage />} />
-                    <Route path="gateway" element={<GatewayPage />} />
-                    <Route path="daemon" element={<DaemonPage />} />
-                    <Route path="sync" element={<SyncPage />} />
-                    <Route path="web-ui" element={<WebUiPage />} />
-                    <Route path="projects" element={<ProjectsPage />} />
-                    <Route path="projects/:id" element={<ProjectsPage />} />
-                    <Route path="memories" element={<MemoriesPage />} />
-                    <Route path="runs" element={<RunsPage />} />
-                    <Route path="runs/:id" element={<RunsPage />} />
-                    <Route path="scheduled" element={<TasksPage />} />
-                    <Route path="scheduled/:id" element={<TasksPage />} />
+                    <Route path="system" element={suspendRoute(<SystemPage />)} />
+                    <Route path="gateway" element={suspendRoute(<GatewayPage />)} />
+                    <Route path="daemon" element={suspendRoute(<DaemonPage />)} />
+                    <Route path="sync" element={suspendRoute(<SyncPage />)} />
+                    <Route path="web-ui" element={suspendRoute(<WebUiPage />)} />
+                    <Route path="projects" element={suspendRoute(<ProjectsPage />)} />
+                    <Route path="projects/:id" element={suspendRoute(<ProjectsPage />)} />
+                    <Route path="memories" element={suspendRoute(<MemoriesPage />)} />
+                    <Route path="runs" element={suspendRoute(<RunsPage />)} />
+                    <Route path="runs/:id" element={suspendRoute(<RunsPage />)} />
+                    <Route path="scheduled" element={suspendRoute(<TasksPage />)} />
+                    <Route path="scheduled/:id" element={suspendRoute(<TasksPage />)} />
                     <Route path="automations" element={<LegacyTaskRoutesRedirect />} />
                     <Route path="automations/:id" element={<LegacyTaskRoutesRedirect />} />
                     <Route path="tasks" element={<LegacyTaskRoutesRedirect />} />
                     <Route path="tasks/:id" element={<LegacyTaskRoutesRedirect />} />
-                    <Route path="tools" element={<ToolsPage />} />
-                    <Route path="settings" element={<SettingsPage />} />
+                    <Route path="tools" element={suspendRoute(<ToolsPage />)} />
+                    <Route path="settings" element={suspendRoute(<SettingsPage />)} />
                   </Route>
                 </Routes>
               </BrowserRouter>

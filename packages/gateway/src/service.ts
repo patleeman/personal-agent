@@ -351,6 +351,15 @@ function getLaunchdDomain(): string {
   return `gui/${process.getuid()}`;
 }
 
+function isLaunchdServiceRunning(status: { status: number | null; stdout: string; stderr: string }): boolean {
+  if ((status.status ?? 1) !== 0) {
+    return false;
+  }
+
+  const output = `${status.stdout}\n${status.stderr}`;
+  return /\bstate = running\b/.test(output) || /\bpid = \d+\b/.test(output);
+}
+
 function getLaunchdLabel(provider: GatewayProvider): string {
   return `io.personal-agent.gateway.${provider}`;
 }
@@ -428,7 +437,7 @@ function getLaunchdDaemonServiceStatus(): ManagedDaemonServiceStatus {
     manifestPath,
     logFile: getDaemonLogFile(),
     installed: existsSync(manifestPath),
-    running: (status.status ?? 1) === 0,
+    running: isLaunchdServiceRunning(status),
   };
 }
 
@@ -514,7 +523,7 @@ function getLaunchdWebUiServiceStatus(options: WebUiServiceOptions = {}): WebUiS
     url: buildWebUiUrl(normalizedOptions.port),
     deployment: getWebUiDeploymentSummary({ stablePort: normalizedOptions.port }),
     installed: existsSync(manifestPath),
-    running: (status.status ?? 1) === 0,
+    running: isLaunchdServiceRunning(status),
   };
 }
 
@@ -878,7 +887,7 @@ function getLaunchdGatewayServiceStatus(provider: GatewayProvider): GatewayServi
     manifestPath,
     logFile: getGatewayLogFile(provider),
     installed: existsSync(manifestPath),
-    running: (status.status ?? 1) === 0,
+    running: isLaunchdServiceRunning(status),
     daemonService: getLaunchdDaemonServiceStatus(),
   };
 }
