@@ -1,8 +1,9 @@
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { hostname } from 'os';
 import { join, resolve, sep } from 'path';
 import {
   createProjectActivityEntry,
+  getPiAgentRuntimeDir,
   writeProfileActivityEntry,
   type ProjectActivityEntryDocument,
 } from '@personal-agent/core';
@@ -232,6 +233,53 @@ function sanitizeProfileName(raw: string | undefined): string | undefined {
   return PROFILE_NAME_PATTERN.test(normalized) ? normalized : undefined;
 }
 
+function resolveMaintenanceStateRoot(stateRoot: string, profile: string): string {
+  return join(stateRoot, 'conversation-maintenance', profile, 'sync-maintenance-state');
+}
+
+function ensureMaintenanceAgentRuntimeState(stateRoot: string, profile: string): string {
+  const maintenanceStateRoot = resolveMaintenanceStateRoot(stateRoot, profile);
+  const sourceRuntimeDir = getPiAgentRuntimeDir(stateRoot);
+  const targetRuntimeDir = getPiAgentRuntimeDir(maintenanceStateRoot);
+
+  mkdirSync(targetRuntimeDir, { recursive: true, mode: 0o700 });
+
+  for (const fileName of ['auth.json', 'models.json', 'settings.json']) {
+    const sourcePath = join(sourceRuntimeDir, fileName);
+    const targetPath = join(targetRuntimeDir, fileName);
+    if (!existsSync(sourcePath)) {
+      continue;
+    }
+
+    copyFileSync(sourcePath, targetPath);
+  }
+
+  return maintenanceStateRoot;
+}
+
+function buildResolverAgentCommand(input: {
+  stateRoot: string;
+  profile: string;
+  prompt: string;
+}): string[] {
+  const maintenanceStateRoot = ensureMaintenanceAgentRuntimeState(input.stateRoot, input.profile);
+  const profilesRoot = process.env.PERSONAL_AGENT_PROFILES_ROOT?.trim() || join(input.stateRoot, 'profiles');
+  const cliEntrypoint = join(getRepoRoot(), 'packages', 'cli', 'dist', 'index.js');
+
+  return [
+    'env',
+    `PERSONAL_AGENT_STATE_ROOT=${maintenanceStateRoot}`,
+    `PERSONAL_AGENT_PROFILES_ROOT=${profilesRoot}`,
+    `PERSONAL_AGENT_REPO_ROOT=${getRepoRoot()}`,
+    process.execPath,
+    cliEntrypoint,
+    '--profile',
+    input.profile,
+    '-p',
+    input.prompt,
+  ];
+}
+
 function inferProfileFromTaskDir(taskDir: string): string | undefined {
   const normalized = resolve(taskDir);
   const segments = normalized.split(sep).filter((segment) => segment.length > 0);
@@ -380,21 +428,28 @@ function maybeNotifyConflicts(
   });
 }
 
-async function startConflictResolverRun(config: SyncModuleConfig, conflicts: string[]): Promise<string> {
-  const prompt = buildConflictResolverPrompt(config.repoDir, config.branch, config.remote, conflicts);
+async function startConflictResolverRun(input: {
+  config: SyncModuleConfig;
+  conflicts: string[];
+  profile: string;
+  stateRoot: string;
+}): Promise<string> {
+  const prompt = buildConflictResolverPrompt(input.config.repoDir, input.config.branch, input.config.remote, input.conflicts);
 
   const result = await runCommand(
     'pa',
     [
       'runs',
       'start',
-      config.conflictResolverTaskSlug,
+      input.config.conflictResolverTaskSlug,
       '--cwd',
-      config.repoDir,
+      input.config.repoDir,
       '--',
-      'pa',
-      '-p',
-      prompt,
+      ...buildResolverAgentCommand({
+        stateRoot: input.stateRoot,
+        profile: input.profile,
+        prompt,
+      }),
     ],
     60_000,
   );
@@ -412,6 +467,8 @@ async function startErrorResolverRun(input: {
   error: string;
   trigger: string;
   cwd: string;
+  profile: string;
+  stateRoot: string;
 }): Promise<string> {
   const prompt = buildErrorResolverPrompt({
     repoDir: input.config.repoDir,
@@ -431,9 +488,11 @@ async function startErrorResolverRun(input: {
       '--cwd',
       input.cwd,
       '--',
-      'pa',
-      '-p',
-      prompt,
+      ...buildResolverAgentCommand({
+        stateRoot: input.stateRoot,
+        profile: input.profile,
+        prompt,
+      }),
     ],
     60_000,
   );
@@ -474,7 +533,12 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
     }
 
     try {
-      const resolverResult = await startConflictResolverRun(config, conflicts);
+      const resolverResult = await startConflictResolverRun({
+        config,
+        conflicts,
+        profile,
+        stateRoot: context.paths.stateRoot,
+      });
       state.lastResolverStartedAt = now;
       state.lastResolverResult = resolverResult;
       state.lastConflictFingerprint = fingerprint;
@@ -539,6 +603,8 @@ export function createSyncModule(config: SyncModuleConfig): DaemonModule {
         error: normalized,
         trigger: triggerLabel(input.event),
         cwd: input.context.paths.root,
+        profile: input.profile,
+        stateRoot: input.context.paths.stateRoot,
       });
 
       state.lastErrorResolverStartedAt = now;

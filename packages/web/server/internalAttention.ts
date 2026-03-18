@@ -18,6 +18,7 @@ interface ClassifiedInternalServiceState {
 
 export interface WriteInternalAttentionEntryInput {
   repoRoot: string;
+  stateRoot?: string;
   profile: string;
   kind: InternalAttentionKind;
   summary: string;
@@ -29,6 +30,7 @@ export interface WriteInternalAttentionEntryInput {
 
 export interface ServiceAttentionMonitorOptions {
   repoRoot: string;
+  stateRoot?: string;
   getCurrentProfile: () => string;
   readDaemonState: () => Promise<DaemonStateSnapshot>;
   readGatewayState: (profile: string) => GatewayStateSnapshot;
@@ -169,6 +171,7 @@ export function writeInternalAttentionEntry(input: WriteInternalAttentionEntryIn
   const idPrefix = input.idPrefix ?? input.kind;
 
   return writeProfileActivityEntry({
+    stateRoot: input.stateRoot,
     repoRoot: input.repoRoot,
     profile: input.profile,
     entry: createProjectActivityEntry({
@@ -297,6 +300,7 @@ export function createServiceAttentionMonitor(options: ServiceAttentionMonitorOp
     if (nextIsIssue) {
       writeEntry({
         repoRoot: options.repoRoot,
+        stateRoot: options.stateRoot,
         profile,
         kind: 'service',
         summary: summarizeIssue(service, nextState),
@@ -310,6 +314,7 @@ export function createServiceAttentionMonitor(options: ServiceAttentionMonitorOp
     if (previousWasIssue && nextState.key === 'healthy') {
       writeEntry({
         repoRoot: options.repoRoot,
+        stateRoot: options.stateRoot,
         profile,
         kind: 'service',
         summary: summarizeRecovery(service),

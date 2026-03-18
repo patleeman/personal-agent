@@ -8,6 +8,7 @@ import { getRepoRoot } from '@personal-agent/resources';
 export interface RestartCompletionInboxEntryInput {
   profile: string;
   repoRoot?: string;
+  stateRoot?: string;
   requestedAt?: string;
   daemonStatus: string;
   webUiStatus: string;
@@ -18,6 +19,7 @@ export interface RestartCompletionInboxEntryInput {
 export interface RestartFailureInboxEntryInput {
   profile: string;
   repoRoot?: string;
+  stateRoot?: string;
   requestedAt?: string;
   phase?: string;
   error: string;
@@ -26,6 +28,7 @@ export interface RestartFailureInboxEntryInput {
 export interface UpdateCompletionInboxEntryInput {
   profile: string;
   repoRoot?: string;
+  stateRoot?: string;
   requestedAt?: string;
   daemonStatus: string;
   webUiStatus: string;
@@ -36,6 +39,7 @@ export interface UpdateCompletionInboxEntryInput {
 export interface UpdateFailureInboxEntryInput {
   profile: string;
   repoRoot?: string;
+  stateRoot?: string;
   requestedAt?: string;
   phase?: string;
   error: string;
@@ -44,6 +48,7 @@ export interface UpdateFailureInboxEntryInput {
 export interface WebUiRollbackInboxEntryInput {
   profile: string;
   repoRoot?: string;
+  stateRoot?: string;
   rolledBackFromSlot: 'blue' | 'green';
   rolledBackFromRevision?: string;
   restoredSlot: 'blue' | 'green';
@@ -56,6 +61,7 @@ export interface WebUiRollbackInboxEntryInput {
 export interface WebUiMarkedBadInboxEntryInput {
   profile: string;
   repoRoot?: string;
+  stateRoot?: string;
   slot?: 'blue' | 'green';
   revision: string;
   reason?: string;
@@ -83,6 +89,16 @@ function resolveEffectiveRepoRoot(repoRoot?: string): string {
   return getRepoRoot(repoRoot);
 }
 
+function resolveEffectiveActivityStateRoot(stateRoot?: string): string | undefined {
+  const explicit = stateRoot?.trim();
+  if (explicit && explicit.length > 0) {
+    return explicit;
+  }
+
+  const fromEnv = process.env.PERSONAL_AGENT_OPERATIONAL_ACTIVITY_STATE_ROOT?.trim();
+  return fromEnv && fromEnv.length > 0 ? fromEnv : undefined;
+}
+
 function readWebUiContext(repoRoot: string): {
   activeSlot?: 'blue' | 'green';
   activeRevision?: string;
@@ -105,6 +121,7 @@ function readWebUiContext(repoRoot: string): {
 
 function writeDeploymentInboxEntry(input: {
   repoRoot: string;
+  stateRoot?: string;
   profile: string;
   createdAt: string;
   idPrefix: string;
@@ -112,6 +129,7 @@ function writeDeploymentInboxEntry(input: {
   details: string[];
 }): string {
   return writeProfileActivityEntry({
+    stateRoot: input.stateRoot,
     profile: input.profile,
     repoRoot: input.repoRoot,
     entry: createProjectActivityEntry({
@@ -196,11 +214,13 @@ function buildApplicationFailureDetails(input: {
 
 export function writeRestartCompletionInboxEntry(input: RestartCompletionInboxEntryInput): string {
   const repoRoot = resolveEffectiveRepoRoot(input.repoRoot);
+  const stateRoot = resolveEffectiveActivityStateRoot(input.stateRoot);
   const completedAt = new Date().toISOString();
   const serviceContext = readWebUiContext(repoRoot);
 
   return writeDeploymentInboxEntry({
     repoRoot,
+    stateRoot,
     profile: input.profile,
     createdAt: completedAt,
     idPrefix: 'application-restart',
@@ -223,11 +243,13 @@ export function writeRestartCompletionInboxEntry(input: RestartCompletionInboxEn
 
 export function writeRestartFailureInboxEntry(input: RestartFailureInboxEntryInput): string {
   const repoRoot = resolveEffectiveRepoRoot(input.repoRoot);
+  const stateRoot = resolveEffectiveActivityStateRoot(input.stateRoot);
   const failedAt = new Date().toISOString();
   const serviceContext = readWebUiContext(repoRoot);
 
   return writeDeploymentInboxEntry({
     repoRoot,
+    stateRoot,
     profile: input.profile,
     createdAt: failedAt,
     idPrefix: 'application-restart-failed',
@@ -248,11 +270,13 @@ export function writeRestartFailureInboxEntry(input: RestartFailureInboxEntryInp
 
 export function writeUpdateCompletionInboxEntry(input: UpdateCompletionInboxEntryInput): string {
   const repoRoot = resolveEffectiveRepoRoot(input.repoRoot);
+  const stateRoot = resolveEffectiveActivityStateRoot(input.stateRoot);
   const completedAt = new Date().toISOString();
   const serviceContext = readWebUiContext(repoRoot);
 
   return writeDeploymentInboxEntry({
     repoRoot,
+    stateRoot,
     profile: input.profile,
     createdAt: completedAt,
     idPrefix: 'application-update',
@@ -275,11 +299,13 @@ export function writeUpdateCompletionInboxEntry(input: UpdateCompletionInboxEntr
 
 export function writeUpdateFailureInboxEntry(input: UpdateFailureInboxEntryInput): string {
   const repoRoot = resolveEffectiveRepoRoot(input.repoRoot);
+  const stateRoot = resolveEffectiveActivityStateRoot(input.stateRoot);
   const failedAt = new Date().toISOString();
   const serviceContext = readWebUiContext(repoRoot);
 
   return writeDeploymentInboxEntry({
     repoRoot,
+    stateRoot,
     profile: input.profile,
     createdAt: failedAt,
     idPrefix: 'application-update-failed',
@@ -300,6 +326,7 @@ export function writeUpdateFailureInboxEntry(input: UpdateFailureInboxEntryInput
 
 export function writeWebUiRollbackInboxEntry(input: WebUiRollbackInboxEntryInput): string {
   const repoRoot = resolveEffectiveRepoRoot(input.repoRoot);
+  const stateRoot = resolveEffectiveActivityStateRoot(input.stateRoot);
   const completedAt = new Date().toISOString();
   const serviceContext = readWebUiContext(repoRoot);
 
@@ -324,6 +351,7 @@ export function writeWebUiRollbackInboxEntry(input: WebUiRollbackInboxEntryInput
 
   return writeDeploymentInboxEntry({
     repoRoot,
+    stateRoot,
     profile: input.profile,
     createdAt: completedAt,
     idPrefix: 'web-ui-rollback',
@@ -334,6 +362,7 @@ export function writeWebUiRollbackInboxEntry(input: WebUiRollbackInboxEntryInput
 
 export function writeWebUiMarkedBadInboxEntry(input: WebUiMarkedBadInboxEntryInput): string {
   const repoRoot = resolveEffectiveRepoRoot(input.repoRoot);
+  const stateRoot = resolveEffectiveActivityStateRoot(input.stateRoot);
   const completedAt = new Date().toISOString();
   const serviceContext = readWebUiContext(repoRoot);
 
@@ -357,6 +386,7 @@ export function writeWebUiMarkedBadInboxEntry(input: WebUiMarkedBadInboxEntryInp
 
   return writeDeploymentInboxEntry({
     repoRoot,
+    stateRoot,
     profile: input.profile,
     createdAt: completedAt,
     idPrefix: 'web-ui-mark-bad',

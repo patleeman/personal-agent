@@ -98,8 +98,13 @@ function buildNotificationEnv(input: {
   profile: string;
   requestedAt: string;
 }): Record<string, string> {
+  const shared = {
+    PERSONAL_AGENT_OPERATIONAL_ACTIVITY_STATE_ROOT: join(getStateRoot(), 'daemon'),
+  };
+
   if (input.action === 'update') {
     return {
+      ...shared,
       PERSONAL_AGENT_UPDATE_NOTIFY_INBOX: '1',
       PERSONAL_AGENT_UPDATE_NOTIFY_PROFILE: input.profile,
       PERSONAL_AGENT_UPDATE_REQUESTED_AT: input.requestedAt,
@@ -107,6 +112,7 @@ function buildNotificationEnv(input: {
   }
 
   return {
+    ...shared,
     PERSONAL_AGENT_RESTART_NOTIFY_INBOX: '1',
     PERSONAL_AGENT_RESTART_NOTIFY_PROFILE: input.profile,
     PERSONAL_AGENT_RESTART_REQUESTED_AT: input.requestedAt,
