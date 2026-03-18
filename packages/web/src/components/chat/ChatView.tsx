@@ -961,15 +961,38 @@ function ErrorBlock({
 
 function MsgActions({
   isUser,
+  copyText,
   onFork,
   onCheckpoint,
 }: {
   isUser?: boolean;
+  copyText?: string;
   onFork?: () => Promise<void> | void;
   onCheckpoint?: () => Promise<void> | void;
 }) {
   const [isForking, setIsForking] = useState(false);
   const [isSavingCheckpoint, setIsSavingCheckpoint] = useState(false);
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const copyResetTimeoutRef = useRef<number | null>(null);
+  const canCopy = !isUser && typeof copyText === 'string' && copyText.length > 0;
+
+  useEffect(() => () => {
+    if (copyResetTimeoutRef.current !== null) {
+      window.clearTimeout(copyResetTimeoutRef.current);
+    }
+  }, []);
+
+  function setTransientCopyState(nextState: 'copied' | 'failed') {
+    if (copyResetTimeoutRef.current !== null) {
+      window.clearTimeout(copyResetTimeoutRef.current);
+    }
+
+    setCopyState(nextState);
+    copyResetTimeoutRef.current = window.setTimeout(() => {
+      setCopyState('idle');
+      copyResetTimeoutRef.current = null;
+    }, 1200);
+  }
 
   async function handleFork() {
     if (!onFork || isForking) {
@@ -997,10 +1020,29 @@ function MsgActions({
     }
   }
 
+  async function handleCopy() {
+    if (!canCopy) {
+      return;
+    }
+
+    if (typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') {
+      setTransientCopyState('failed');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(copyText);
+      setTransientCopyState('copied');
+    } catch {
+      setTransientCopyState('failed');
+    }
+  }
+
   return (
     <div className={`flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${isUser ? 'justify-start' : 'justify-end'}`}>
       {onCheckpoint && (
         <button
+          type="button"
           onClick={() => { void handleCheckpoint(); }}
           className={cx('ui-action-button', isSavingCheckpoint && 'text-accent')}
           title="Distill conversation up to this point into durable memory"
@@ -1009,8 +1051,19 @@ function MsgActions({
           {isSavingCheckpoint ? '⟡ distilling…' : '⟡ distill'}
         </button>
       )}
+      {canCopy && (
+        <button
+          type="button"
+          onClick={() => { void handleCopy(); }}
+          className={cx('ui-action-button', copyState === 'copied' && 'text-accent', copyState === 'failed' && 'text-danger')}
+          title={copyState === 'failed' ? 'Copy to clipboard failed' : 'Copy this assistant message to the clipboard'}
+        >
+          {copyState === 'copied' ? '⎘ copied' : copyState === 'failed' ? '⎘ copy failed' : '⎘ copy'}
+        </button>
+      )}
       {!isUser && onFork && (
         <button
+          type="button"
           onClick={() => { void handleFork(); }}
           className={cx('ui-action-button', isForking && 'text-accent')}
           title="Fork into a new conversation from here"
@@ -1117,7 +1170,7 @@ function AssistantMessage({
         </div>
         <div className="flex items-center gap-2 pt-0.5">
           <p className="ui-message-meta">{timeAgo(block.ts)}</p>
-          <MsgActions onCheckpoint={onCheckpoint} onFork={onFork} />
+          <MsgActions copyText={block.text} onCheckpoint={onCheckpoint} onFork={onFork} />
         </div>
       </div>
     </div>
