@@ -84,8 +84,9 @@ export interface ProjectSharePackageDocument {
 }
 
 function stripProjectRepoRoot(project: ProjectDocument): ProjectSharePackageProject {
-  const { repoRoot: _repoRoot, ...portableProject } = project;
-  return portableProject;
+  const portableProject = { ...project } as Partial<ProjectDocument>;
+  delete portableProject.repoRoot;
+  return portableProject as ProjectSharePackageProject;
 }
 
 function serializeFile(record: {

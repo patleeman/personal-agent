@@ -35,7 +35,7 @@ function readRequiredString(value: string | undefined, label: string): string {
 function readRequiredKind(kind: string | undefined): ConversationArtifactKind {
   const normalized = readRequiredString(kind, 'kind');
   if (!ARTIFACT_KIND_VALUES.includes(normalized as ConversationArtifactKind)) {
-    throw new Error(`Invalid artifact kind \"${normalized}\".`);
+    throw new Error(`Invalid artifact kind "${normalized}".`);
   }
 
   return normalized as ConversationArtifactKind;
@@ -103,7 +103,7 @@ export function createArtifactAgentExtension(options: {
               return {
                 content: [{
                   type: 'text' as const,
-                  text: `${record.revision === 1 ? 'Saved' : 'Updated'} artifact ${record.id} [${record.kind}] \"${record.title}\".`,
+                  text: `${record.revision === 1 ? 'Saved' : 'Updated'} artifact ${record.id} [${record.kind}] "${record.title}".`,
                 }],
                 details: {
                   action: 'save',

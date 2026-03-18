@@ -578,7 +578,7 @@ async function getOwnedDelegateRun(conversationId: string, runId: string) {
   return result;
 }
 
-export function createGatewayCoordinatorTools(options: GatewayCoordinatorToolOptions): Array<ToolDefinition<any>> {
+export function createGatewayCoordinatorTools(options: GatewayCoordinatorToolOptions): Array<ToolDefinition> {
   const delegateTool: ToolDefinition<typeof DelegateToolParams> = {
     name: 'delegate',
     label: 'Delegate',
@@ -881,7 +881,7 @@ export function createGatewayCoordinatorTools(options: GatewayCoordinatorToolOpt
     },
   };
 
-  return [delegateTool, scheduledTaskTool, deferredResumeTool];
+  return [delegateTool, scheduledTaskTool, deferredResumeTool] as unknown as Array<ToolDefinition>;
 }
 
 export async function cancelDeferredResumeForSessionFile(input: {

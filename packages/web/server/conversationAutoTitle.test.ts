@@ -16,9 +16,11 @@ import {
   generateConversationTitle,
   normalizeGeneratedConversationTitle,
   readConversationAutoTitleSettings,
+  type ConversationTitleModelRegistry,
 } from './conversationAutoTitle.js';
 
 const tempDirs: string[] = [];
+type TitleModel = ReturnType<ConversationTitleModelRegistry['getAvailable']>[number];
 
 afterEach(() => {
   completeSimpleMock.mockReset();
@@ -144,7 +146,7 @@ describe('generateConversationTitle', () => {
       id: 'gpt-5-mini',
       provider: 'openai',
       api: 'openai-responses',
-    } as any;
+    } as unknown as TitleModel;
     const modelRegistry = {
       getAvailable: () => [model],
       getApiKey: vi.fn().mockResolvedValue('test-key'),
@@ -207,7 +209,7 @@ describe('generateConversationTitle', () => {
       id: 'gpt-5-mini',
       provider: 'openai',
       api: 'openai-responses',
-    } as any;
+    } as unknown as TitleModel;
     const modelRegistry = {
       getAvailable: () => [model],
       getApiKey: vi.fn().mockResolvedValue('test-key'),

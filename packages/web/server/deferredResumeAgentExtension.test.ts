@@ -2,11 +2,14 @@ import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDeferredResumeAgentExtension } from './deferredResumeAgentExtension.js';
 
 const tempDirs: string[] = [];
 const originalEnv = process.env;
+type RegisteredTool = Parameters<ExtensionAPI['registerTool']>[0];
+type ExecuteContext = Parameters<NonNullable<RegisteredTool['execute']>>[4];
 
 function createTempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
@@ -25,9 +28,9 @@ afterEach(async () => {
 });
 
 function registerDeferredResumeTool() {
-  let registeredTool: any;
+  let registeredTool: RegisteredTool | undefined;
   createDeferredResumeAgentExtension()({
-    registerTool: (tool: unknown) => {
+    registerTool: (tool: RegisteredTool) => {
       registeredTool = tool;
     },
   } as never);
@@ -54,10 +57,12 @@ describe('deferred resume agent extension', () => {
         sessionManager: {
           getSessionFile: () => '/tmp/sessions/conv-123.jsonl',
         },
-      },
+      } as ExecuteContext,
     );
 
-    expect(result.content[0]?.text).toContain('Scheduled deferred resume');
+    const firstContent = result.content[0];
+    expect(firstContent?.type).toBe('text');
+    expect(firstContent && 'text' in firstContent ? firstContent.text : '').toContain('Scheduled deferred resume');
     expect(result.details).toEqual(expect.objectContaining({
       mode: 'web',
       sessionFile: '/tmp/sessions/conv-123.jsonl',
@@ -77,7 +82,7 @@ describe('deferred resume agent extension', () => {
         sessionManager: {
           getSessionFile: () => undefined,
         },
-      },
+      } as ExecuteContext,
     )).rejects.toThrow('Deferred resume requires a persisted session file.');
   });
 });

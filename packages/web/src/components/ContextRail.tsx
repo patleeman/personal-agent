@@ -166,12 +166,13 @@ function ConversationRunContextPanel({ conversationId, runId }: { conversationId
   const showRecovery = run.recoveryAction !== 'none';
   const cancelable = canCancelRun(run);
   const closeSearch = setConversationRunIdInSearch(location.search, null);
+  const currentConversationPath = `/conversations/${encodeURIComponent(conversationId)}`;
 
   return (
     <div className="space-y-4 px-4 py-4 overflow-y-auto">
       <div className="flex items-center justify-between gap-2">
         <button type="button" onClick={closeRun} className="ui-toolbar-button">
-          ← Session
+          ← Conversation
         </button>
         <div className="flex items-center gap-1.5">
           <button type="button" onClick={reconnect} className="ui-toolbar-button">
@@ -212,19 +213,36 @@ function ConversationRunContextPanel({ conversationId, runId }: { conversationId
         <div className="border-t border-border-subtle pt-3">
           <p className="ui-section-label mb-2">Connected to</p>
           <div className="space-y-2">
-            {connections.map((connection) => (
-              <div key={connection.key} className="space-y-0.5">
-                <p className="text-[11px] uppercase tracking-[0.12em] text-dim">{connection.label}</p>
-                {connection.to ? (
-                  <Link to={connection.to + (connection.label.startsWith('Conversation') ? closeSearch : '')} className="text-[13px] text-accent hover:underline break-all">
-                    {connection.value}
-                  </Link>
-                ) : (
-                  <p className="text-[13px] text-primary break-all">{connection.value}</p>
-                )}
-                {connection.detail && <p className="text-[12px] text-secondary break-words">{connection.detail}</p>}
-              </div>
-            ))}
+            {connections.map((connection) => {
+              const isCurrentConversationConnection = connection.label.startsWith('Conversation')
+                && connection.to === currentConversationPath;
+              const detailText = isCurrentConversationConnection
+                ? ['Current conversation', connection.detail].filter((value): value is string => typeof value === 'string' && value.length > 0).join(' · ')
+                : connection.detail;
+
+              return (
+                <div key={connection.key} className="space-y-0.5">
+                  <p className="text-[11px] uppercase tracking-[0.12em] text-dim">{connection.label}</p>
+                  {isCurrentConversationConnection ? (
+                    <button
+                      type="button"
+                      onClick={closeRun}
+                      className="text-left text-[13px] text-accent hover:underline break-all"
+                      title="Return to the current conversation"
+                    >
+                      {connection.value}
+                    </button>
+                  ) : connection.to ? (
+                    <Link to={connection.to + (connection.label.startsWith('Conversation') ? closeSearch : '')} className="text-[13px] text-accent hover:underline break-all">
+                      {connection.value}
+                    </Link>
+                  ) : (
+                    <p className="text-[13px] text-primary break-all">{connection.value}</p>
+                  )}
+                  {detailText && <p className="text-[12px] text-secondary break-words">{detailText}</p>}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -291,7 +309,7 @@ function ConversationRunContextPanel({ conversationId, runId }: { conversationId
       </div>
 
       {error && <ErrorState message={error} />}
-      {conversationId && <p className="text-[10px] text-dim">Opened from conversation {conversationId}.</p>}
+      {conversationId && <p className="text-[10px] text-dim">This execution belongs to the current conversation.</p>}
     </div>
   );
 }

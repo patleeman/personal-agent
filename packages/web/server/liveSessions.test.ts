@@ -1,6 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { getPiAgentStateDir } from '@personal-agent/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ensureSessionFileExists,
@@ -18,6 +19,35 @@ import {
 import { clearSessionCaches } from './sessions.js';
 
 const tempDirs: string[] = [];
+type LiveRegistryEntry = Parameters<typeof registry.set>[1];
+type AgentSessionEvent = Parameters<typeof toSse>[0];
+type PersistedSessionManager = Parameters<typeof ensureSessionFileExists>[0];
+
+function setLiveEntry(
+  sessionId: string,
+  entry: Omit<Partial<LiveRegistryEntry>, 'session'> & { session: unknown },
+) {
+  registry.set(sessionId, {
+    sessionId,
+    cwd: entry.cwd ?? '',
+    listeners: entry.listeners ?? new Set(),
+    title: entry.title ?? '',
+    autoTitleRequested: entry.autoTitleRequested ?? false,
+    lastContextUsageJson: entry.lastContextUsageJson ?? null,
+    lastQueueStateJson: entry.lastQueueStateJson ?? null,
+    ...(entry.lastDurableRunState ? { lastDurableRunState: entry.lastDurableRunState } : {}),
+    ...(entry.contextUsageTimer ? { contextUsageTimer: entry.contextUsageTimer } : {}),
+    session: entry.session as LiveRegistryEntry['session'],
+  });
+}
+
+function asAgentSessionEvent(event: unknown): AgentSessionEvent {
+  return event as AgentSessionEvent;
+}
+
+function asPersistedSessionManager(sessionManager: unknown): PersistedSessionManager {
+  return sessionManager as PersistedSessionManager;
+}
 
 afterEach(() => {
   registry.clear();
@@ -32,7 +62,7 @@ describe('reloadAllLiveSessionAuth', () => {
     const firstReload = vi.fn();
     const secondReload = vi.fn();
 
-    registry.set('session-1', {
+    setLiveEntry('session-1', {
       sessionId: 'session-1',
       cwd: '/tmp/workspace-a',
       listeners: new Set(),
@@ -47,9 +77,9 @@ describe('reloadAllLiveSessionAuth', () => {
           },
         },
       },
-    } as any);
+    });
 
-    registry.set('session-2', {
+    setLiveEntry('session-2', {
       sessionId: 'session-2',
       cwd: '/tmp/workspace-b',
       listeners: new Set(),
@@ -64,9 +94,9 @@ describe('reloadAllLiveSessionAuth', () => {
           },
         },
       },
-    } as any);
+    });
 
-    registry.set('session-3', {
+    setLiveEntry('session-3', {
       sessionId: 'session-3',
       cwd: '/tmp/workspace-c',
       listeners: new Set(),
@@ -75,7 +105,7 @@ describe('reloadAllLiveSessionAuth', () => {
       lastContextUsageJson: null,
       lastQueueStateJson: null,
       session: {},
-    } as any);
+    });
 
     expect(reloadAllLiveSessionAuth()).toBe(2);
     expect(firstReload).toHaveBeenCalledTimes(1);
@@ -85,7 +115,7 @@ describe('reloadAllLiveSessionAuth', () => {
 
 describe('live session subscriptions', () => {
   it('replays a snapshot of the current live conversation before future events', () => {
-    registry.set('session-1', {
+    setLiveEntry('session-1', {
       sessionId: 'session-1',
       cwd: '/tmp/workspace',
       listeners: new Set(),
@@ -115,7 +145,7 @@ describe('live session subscriptions', () => {
         getContextUsage: () => null,
         isStreaming: true,
       },
-    } as any);
+    });
 
     const events: SseEvent[] = [];
     const unsubscribe = subscribe('session-1', (event) => {
@@ -125,6 +155,8 @@ describe('live session subscriptions', () => {
     expect(unsubscribe).toBeTypeOf('function');
     expect(events[0]).toEqual({
       type: 'snapshot',
+      blockOffset: 0,
+      totalBlocks: 3,
       blocks: [
         {
           type: 'user',
@@ -189,7 +221,7 @@ describe('live session subscriptions', () => {
       '',
     ].join('\n'));
 
-    registry.set('session-merged', {
+    setLiveEntry('session-merged', {
       sessionId: 'session-merged',
       cwd: '/tmp/workspace',
       listeners: new Set(),
@@ -221,7 +253,7 @@ describe('live session subscriptions', () => {
         getContextUsage: () => null,
         isStreaming: true,
       },
-    } as any);
+    });
 
     const events: SseEvent[] = [];
     subscribe('session-merged', (event) => {
@@ -230,6 +262,8 @@ describe('live session subscriptions', () => {
 
     expect(events[0]).toEqual({
       type: 'snapshot',
+      blockOffset: 0,
+      totalBlocks: 5,
       blocks: [
         {
           type: 'user',
@@ -392,7 +426,7 @@ describe('live session subscriptions', () => {
       '',
     ].join('\n'));
 
-    registry.set('session-reordered', {
+    setLiveEntry('session-reordered', {
       sessionId: 'session-reordered',
       cwd: '/tmp/workspace',
       listeners: new Set(),
@@ -471,7 +505,7 @@ describe('live session subscriptions', () => {
         getContextUsage: () => null,
         isStreaming: true,
       },
-    } as any);
+    });
 
     const events: SseEvent[] = [];
     subscribe('session-reordered', (event) => {
@@ -498,7 +532,7 @@ describe('live session subscriptions', () => {
   });
 
   it('includes compaction summaries in the live snapshot', () => {
-    registry.set('session-summary', {
+    setLiveEntry('session-summary', {
       sessionId: 'session-summary',
       cwd: '/tmp/workspace',
       listeners: new Set(),
@@ -525,7 +559,7 @@ describe('live session subscriptions', () => {
         getContextUsage: () => null,
         isStreaming: false,
       },
-    } as any);
+    });
 
     const events: SseEvent[] = [];
     subscribe('session-summary', (event) => {
@@ -534,6 +568,8 @@ describe('live session subscriptions', () => {
 
     expect(events[0]).toEqual({
       type: 'snapshot',
+      blockOffset: 0,
+      totalBlocks: 2,
       blocks: [
         {
           type: 'summary',
@@ -590,7 +626,7 @@ describe('live session subscriptions', () => {
       '',
     ].join('\n'));
 
-    registry.set('session-idle', {
+    setLiveEntry('session-idle', {
       sessionId: 'session-idle',
       cwd: '/tmp/workspace',
       listeners: new Set(),
@@ -617,7 +653,7 @@ describe('live session subscriptions', () => {
         getContextUsage: () => null,
         isStreaming: false,
       },
-    } as any);
+    });
 
     const events: SseEvent[] = [];
     subscribe('session-idle', (event) => {
@@ -626,6 +662,8 @@ describe('live session subscriptions', () => {
 
     expect(events[0]).toEqual({
       type: 'snapshot',
+      blockOffset: 0,
+      totalBlocks: 4,
       blocks: [
         {
           type: 'user',
@@ -656,7 +694,7 @@ describe('live session subscriptions', () => {
   });
 
   it('includes the current live title in live session snapshots', () => {
-    registry.set('session-2', {
+    setLiveEntry('session-2', {
       sessionId: 'session-2',
       cwd: '/tmp/workspace',
       listeners: new Set(),
@@ -678,7 +716,7 @@ describe('live session subscriptions', () => {
         getContextUsage: () => null,
         isStreaming: false,
       },
-    } as any);
+    });
 
     expect(getLiveSessions()).toEqual([
       {
@@ -692,7 +730,7 @@ describe('live session subscriptions', () => {
   });
 
   it('prefers the persisted session name over the first user message fallback', () => {
-    registry.set('session-3', {
+    setLiveEntry('session-3', {
       sessionId: 'session-3',
       cwd: '/tmp/workspace',
       listeners: new Set(),
@@ -716,7 +754,7 @@ describe('live session subscriptions', () => {
         getContextUsage: () => null,
         isStreaming: false,
       },
-    } as any);
+    });
 
     expect(getLiveSessions()[0]).toEqual(expect.objectContaining({
       id: 'session-3',
@@ -732,7 +770,7 @@ describe('live session subscriptions', () => {
   });
 
   it('keeps the sticky conversation title even if in-memory messages shift later', () => {
-    registry.set('session-sticky', {
+    setLiveEntry('session-sticky', {
       sessionId: 'session-sticky',
       cwd: '/tmp/workspace',
       listeners: new Set(),
@@ -760,7 +798,7 @@ describe('live session subscriptions', () => {
         getContextUsage: () => null,
         isStreaming: false,
       },
-    } as any);
+    });
 
     expect(getLiveSessions()[0]).toEqual(expect.objectContaining({
       id: 'session-sticky',
@@ -796,7 +834,7 @@ describe('live session subscriptions', () => {
       }),
     };
 
-    registry.set('session-rename', {
+    setLiveEntry('session-rename', {
       sessionId: 'session-rename',
       cwd: '/tmp/workspace',
       listeners: new Set(),
@@ -805,7 +843,7 @@ describe('live session subscriptions', () => {
       lastContextUsageJson: null,
       lastQueueStateJson: null,
       session,
-    } as any);
+    });
 
     const events: SseEvent[] = [];
     subscribe('session-rename', (event) => {
@@ -843,7 +881,7 @@ describe('queued prompt restore', () => {
       },
     ];
 
-    registry.set('session-queue-restore', {
+    setLiveEntry('session-queue-restore', {
       sessionId: 'session-queue-restore',
       cwd: '/tmp/workspace',
       listeners: new Set(),
@@ -862,7 +900,7 @@ describe('queued prompt restore', () => {
           followUpQueue: [],
         },
       },
-    } as any);
+    });
 
     const events: SseEvent[] = [];
     subscribe('session-queue-restore', (event) => {
@@ -891,14 +929,14 @@ describe('queued prompt restore', () => {
 
 describe('event translation', () => {
   it('surfaces user messages from message_start events immediately', () => {
-    expect(toSse({
+    expect(toSse(asAgentSessionEvent({
       type: 'message_start',
       message: {
         role: 'user',
         content: [{ type: 'text', text: 'Show this prompt right away.' }],
         timestamp: 1,
       },
-    } as any)).toEqual({
+    }))).toEqual({
       type: 'user_message',
       block: {
         type: 'user',
@@ -910,18 +948,18 @@ describe('event translation', () => {
   });
 
   it('ignores user message_end events to avoid duplicate rows', () => {
-    expect(toSse({
+    expect(toSse(asAgentSessionEvent({
       type: 'message_end',
       message: {
         role: 'user',
         content: [{ type: 'text', text: 'Show this prompt right away.' }],
         timestamp: 1,
       },
-    } as any)).toBeNull();
+    }))).toBeNull();
   });
 
   it('surfaces assistant error messages from message_end events', () => {
-    expect(toSse({
+    expect(toSse(asAgentSessionEvent({
       type: 'message_end',
       message: {
         role: 'assistant',
@@ -930,7 +968,7 @@ describe('event translation', () => {
         errorMessage: 'Codex error: upstream overloaded',
         timestamp: 1,
       },
-    } as any)).toEqual({
+    }))).toEqual({
       type: 'error',
       message: 'Codex error: upstream overloaded',
     });
@@ -940,7 +978,7 @@ describe('event translation', () => {
 describe('session directory resolution', () => {
   it('stores web-created sessions under cwd-specific subdirectories', () => {
     expect(resolvePersistentSessionDir('/Users/patrick/workingdir/personal-agent')).toBe(
-      join(homedir(), '.local/state/personal-agent/pi-agent', 'sessions', '--Users-patrick-workingdir-personal-agent--'),
+      join(getPiAgentStateDir(), 'sessions', '--Users-patrick-workingdir-personal-agent--'),
     );
   });
 });
@@ -961,7 +999,7 @@ describe('session file persistence', () => {
       },
     };
 
-    ensureSessionFileExists(manager as any);
+    ensureSessionFileExists(asPersistedSessionManager(manager));
 
     expect(existsSync(sessionFile)).toBe(true);
     expect(manager.flushed).toBe(true);
@@ -983,7 +1021,14 @@ describe('session file persistence', () => {
       },
     ];
 
-    const manager = {
+    const manager: {
+      persist: boolean;
+      sessionFile: string;
+      flushed: boolean;
+      fileEntries: unknown[];
+      _rewriteFile(): void;
+      _persist?: (entry: unknown) => void;
+    } = {
       persist: true,
       sessionFile,
       flushed: false,
@@ -991,9 +1036,9 @@ describe('session file persistence', () => {
       _rewriteFile() {
         writeFileSync(sessionFile, `${entries.map((entry) => JSON.stringify(entry)).join('\n')}\n`);
       },
-    } as any;
+    };
 
-    patchSessionManagerPersistence(manager);
+    patchSessionManagerPersistence(asPersistedSessionManager(manager));
     manager._persist?.(entries[1]);
 
     expect(manager.flushed).toBe(true);

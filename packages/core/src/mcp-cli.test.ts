@@ -71,7 +71,7 @@ describe('mcp-cli output parsers', () => {
   });
 
   it('parses tool info output with JSON schema', () => {
-    const output = `Tool: getConfluencePage\nServer: atlassian\n\nDescription:\n  Get a Confluence page by page ID.\n\nInput Schema:\n{\n  \"type\": \"object\",\n  \"properties\": {\n    \"cloudId\": { \"type\": \"string\" },\n    \"pageId\": { \"type\": \"string\" }\n  },\n  \"required\": [\"cloudId\", \"pageId\"]\n}`;
+    const output = `Tool: getConfluencePage\nServer: atlassian\n\nDescription:\n  Get a Confluence page by page ID.\n\nInput Schema:\n{\n  "type": "object",\n  "properties": {\n    "cloudId": { "type": "string" },\n    "pageId": { "type": "string" }\n  },\n  "required": ["cloudId", "pageId"]\n}`;
 
     const info = parseMcpCliToolInfo(output);
     expect(info.tool).toBe('getConfluencePage');

@@ -188,7 +188,7 @@ function scaleWeightsToSegments(weights: SegmentWeights, totalTokens: number): C
   });
 
   let assigned = scaled.reduce((sum, entry) => sum + entry.baseTokens, 0);
-  let remaining = totalTokens - assigned;
+  const remaining = totalTokens - assigned;
 
   if (remaining > 0) {
     scaled
