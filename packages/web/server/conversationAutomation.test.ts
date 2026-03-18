@@ -10,6 +10,7 @@ import {
   moveConversationAutomationStep,
   resetConversationAutomationFromStep,
   resolveConversationAutomationPath,
+  updateConversationAutomationStep,
   writeConversationAutomationState,
 } from './conversationAutomation.js';
 
@@ -153,5 +154,73 @@ describe('conversationAutomation state', () => {
 
     expect(movedDown.steps.map((step) => step.id)).toEqual([second.id, first.id, third.id]);
     expect(movedDown.updatedAt).toBe('2026-03-18T12:05:00.000Z');
+  });
+
+  it('updates a step and resets it plus later steps back to pending', () => {
+    const first = createConversationAutomationSkillStep({
+      skillName: 'workflow-checkpoint',
+      skillArgs: 'initial args',
+      now: '2026-03-18T12:00:00.000Z',
+    });
+    const second = createConversationAutomationJudgeStep({
+      label: 'Ready?',
+      prompt: 'Judge the current output.',
+      now: '2026-03-18T12:01:00.000Z',
+    });
+
+    const updated = updateConversationAutomationStep({
+      version: 1,
+      conversationId: 'conv-123',
+      updatedAt: '2026-03-18T12:03:00.000Z',
+      paused: false,
+      steps: [
+        {
+          ...first,
+          status: 'completed',
+          startedAt: '2026-03-18T12:00:05.000Z',
+          completedAt: '2026-03-18T12:00:30.000Z',
+          resultReason: 'Completed.',
+          updatedAt: '2026-03-18T12:00:30.000Z',
+        },
+        {
+          ...second,
+          status: 'failed',
+          startedAt: '2026-03-18T12:01:05.000Z',
+          completedAt: '2026-03-18T12:01:20.000Z',
+          resultReason: 'Not ready.',
+          resultConfidence: 0.42,
+          updatedAt: '2026-03-18T12:01:20.000Z',
+        },
+      ],
+    }, first.id, {
+      label: 'Checkpoint draft',
+      skillName: 'workflow-checkpoint',
+      skillArgs: '',
+    }, '2026-03-18T12:04:00.000Z');
+
+    expect(updated.paused).toBe(false);
+    expect(updated.activeStepId).toBeUndefined();
+    expect(updated.steps[0]).toEqual(expect.objectContaining({
+      id: first.id,
+      kind: 'skill',
+      label: 'Checkpoint draft',
+      skillName: 'workflow-checkpoint',
+      status: 'pending',
+      updatedAt: '2026-03-18T12:04:00.000Z',
+    }));
+    expect(updated.steps[0]).not.toHaveProperty('skillArgs');
+    expect(updated.steps[0]).not.toHaveProperty('startedAt');
+    expect(updated.steps[0]).not.toHaveProperty('completedAt');
+    expect(updated.steps[0]).not.toHaveProperty('resultReason');
+    expect(updated.steps[1]).toMatchObject({
+      id: second.id,
+      kind: 'judge',
+      status: 'pending',
+      updatedAt: '2026-03-18T12:04:00.000Z',
+    });
+    expect(updated.steps[1]).not.toHaveProperty('startedAt');
+    expect(updated.steps[1]).not.toHaveProperty('completedAt');
+    expect(updated.steps[1]).not.toHaveProperty('resultReason');
+    expect(updated.steps[1]).not.toHaveProperty('resultConfidence');
   });
 });

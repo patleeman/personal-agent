@@ -357,6 +357,72 @@ export function resetConversationAutomationFromStep(
   };
 }
 
+export function updateConversationAutomationStep(
+  document: ConversationAutomationDocument,
+  stepId: string,
+  input:
+    | {
+        label?: string;
+        skillName: string;
+        skillArgs?: string;
+      }
+    | {
+        label?: string;
+        prompt: string;
+      },
+  now = new Date().toISOString(),
+): ConversationAutomationDocument {
+  const step = document.steps.find((candidate) => candidate.id === stepId);
+  if (!step) {
+    throw new Error(`Automation step not found: ${stepId}`);
+  }
+
+  const updatedAt = normalizeIsoTimestamp(now, new Date().toISOString());
+  const nextStep = step.kind === 'skill'
+    ? (() => {
+        const skillName = readNonEmptyString((input as { skillName?: string }).skillName);
+        if (!skillName) {
+          throw new Error('skillName is required.');
+        }
+
+        const skillArgs = normalizeOptionalSingleLineText((input as { skillArgs?: string }).skillArgs);
+        return {
+          id: step.id,
+          kind: 'skill' as const,
+          label: normalizeOptionalText(input.label) ?? skillName,
+          skillName,
+          ...(skillArgs ? { skillArgs } : {}),
+          status: 'pending' as const,
+          createdAt: step.createdAt,
+          updatedAt,
+        } satisfies ConversationAutomationSkillStep;
+      })()
+    : (() => {
+        const prompt = readNonEmptyString((input as { prompt?: string }).prompt);
+        if (!prompt) {
+          throw new Error('prompt is required.');
+        }
+
+        return {
+          id: step.id,
+          kind: 'judge' as const,
+          label: normalizeOptionalText(input.label) ?? 'Judge gate',
+          prompt,
+          status: 'pending' as const,
+          createdAt: step.createdAt,
+          updatedAt,
+        } satisfies ConversationAutomationJudgeStep;
+      })();
+
+  return resetConversationAutomationFromStep({
+    ...document,
+    steps: document.steps.map((candidate) => candidate.id === stepId ? nextStep : candidate),
+  }, stepId, {
+    now: updatedAt,
+    paused: document.paused,
+  });
+}
+
 export function moveConversationAutomationStep(
   document: ConversationAutomationDocument,
   stepId: string,

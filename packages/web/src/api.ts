@@ -297,6 +297,16 @@ export const api = {
     label?: string;
     prompt?: string;
   }) => post<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation/steps`, input),
+  updateConversationAutomationStep: (id: string, stepId: string, input:
+    | {
+        label?: string;
+        skillName: string;
+        skillArgs?: string;
+      }
+    | {
+        label?: string;
+        prompt: string;
+      }) => patch<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation/steps/${encodeURIComponent(stepId)}`, input),
   moveConversationAutomationStep: (id: string, stepId: string, direction: 'up' | 'down') =>
     post<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation/steps/${encodeURIComponent(stepId)}/move`, { direction }),
   resetConversationAutomationStep: (id: string, stepId: string, resume = false) =>

@@ -126,6 +126,7 @@ import {
   getConversationAutomationState,
   moveConversationAutomationStep,
   resetConversationAutomationFromStep,
+  updateConversationAutomationStep,
   writeConversationAutomationState,
 } from './conversationAutomation.js';
 import {
@@ -5097,6 +5098,77 @@ app.post('/api/conversations/:id/automation/steps', async (req, res) => {
     }
 
     res.status(201).json(buildConversationAutomationResponse(req.params.id));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: message });
+  }
+});
+
+app.patch('/api/conversations/:id/automation/steps/:stepId', async (req, res) => {
+  try {
+    const document = getConversationAutomationState({
+      profile: getCurrentProfile(),
+      conversationId: req.params.id,
+    });
+    const step = document.steps.find((candidate) => candidate.id === req.params.stepId);
+    if (!step) {
+      res.status(404).json({ error: 'Automation step not found' });
+      return;
+    }
+    if (step.status === 'running') {
+      res.status(409).json({ error: 'Running automation steps cannot be edited' });
+      return;
+    }
+
+    if (step.kind === 'skill') {
+      const body = req.body as {
+        label?: string;
+        skillName?: string;
+        skillArgs?: string;
+      };
+      const skillName = body.skillName?.trim() ?? '';
+      if (!skillName) {
+        res.status(400).json({ error: 'skillName required' });
+        return;
+      }
+
+      const skillNames = new Set(listSkillsForCurrentProfile().map((skill) => skill.name));
+      if (!skillNames.has(skillName)) {
+        res.status(400).json({ error: `Unknown skill: ${skillName}` });
+        return;
+      }
+
+      saveConversationAutomationDocument(updateConversationAutomationStep(document, req.params.stepId, {
+        label: body.label,
+        skillName,
+        skillArgs: body.skillArgs,
+      }));
+    } else {
+      const body = req.body as {
+        label?: string;
+        prompt?: string;
+      };
+      const prompt = body.prompt?.trim() ?? '';
+      if (!prompt) {
+        res.status(400).json({ error: 'prompt required' });
+        return;
+      }
+
+      saveConversationAutomationDocument(updateConversationAutomationStep(document, req.params.stepId, {
+        label: body.label,
+        prompt,
+      }));
+    }
+
+    if (!document.paused) {
+      await kickConversationAutomation(req.params.id);
+    }
+
+    res.json(buildConversationAutomationResponse(req.params.id));
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logError('request handler error', {
