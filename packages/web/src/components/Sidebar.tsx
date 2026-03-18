@@ -369,19 +369,17 @@ function ShelfDropZone({
 function SidebarFooter() {
   return (
     <div className="border-t border-border-subtle px-2 py-2 shrink-0 space-y-0.5">
-      <TopNavItem to="/memories" icon={PATH.memory} label="Manage memories" />
-      <TopNavItem to="/tools" icon={PATH.tools} label="Tools" />
+      <TopNavItem
+        to="/runs"
+        icon={PATH.runs}
+        label="Executions"
+        title="Daemon-backed agent runs: scheduled task runs, deferred resumes, and recoverable conversation runs."
+      />
       <TopNavItem
         to="/system"
         icon={PATH.system}
         label="System"
         title="Consolidated status for the daemon, sync, gateway, and managed web UI."
-      />
-      <TopNavItem
-        to="/runs"
-        icon={PATH.runs}
-        label="Agent Runs"
-        title="Daemon-backed agent runs: scheduled task runs, deferred resumes, and recoverable conversation runs."
       />
       <TopNavItem to="/settings" icon={PATH.settings} label="Settings" />
     </div>
@@ -742,6 +740,8 @@ export function Sidebar() {
         />
         <TopNavItem to="/scheduled" icon={PATH.tasks} label="Scheduled" />
         <TopNavItem to="/projects" icon={PATH.projects} label="Projects" />
+        <TopNavItem to="/memories" icon={PATH.memory} label="Memories" />
+        <TopNavItem to="/tools" icon={PATH.tools} label="Tools" />
       </div>
 
       <div className="mx-3 border-t border-border-subtle my-2" />
