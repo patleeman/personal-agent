@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppDataContext, LiveTitlesContext, SseConnectionContext } from '../contexts.js';
 import { OPEN_SESSION_IDS_STORAGE_KEY, PINNED_SESSION_IDS_STORAGE_KEY } from '../localSettings.js';
-import type { DurableRunListResult, SessionMeta } from '../types.js';
+import type { DurableRunListResult, ScheduledTaskSummary, SessionMeta } from '../types.js';
 import { Sidebar } from './Sidebar.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -57,6 +57,19 @@ function createSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
       attempts: 0,
       status: 'scheduled',
     }],
+    ...overrides,
+  };
+}
+
+function createTask(overrides: Partial<ScheduledTaskSummary> = {}): ScheduledTaskSummary {
+  return {
+    id: 'daily-report',
+    filePath: '/tmp/daily-report.task.md',
+    scheduleType: 'cron',
+    running: false,
+    enabled: true,
+    cron: '0 9 * * *',
+    prompt: 'Summarize yesterday and today.',
     ...overrides,
   };
 }
@@ -172,6 +185,34 @@ describe('Sidebar', () => {
 
     expect(html).toContain('Deferred ');
     expect(html).toContain('1 scheduled · next in 58s');
+  });
+
+  it('shows an active run badge in the utility nav', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/inbox']}>
+        <SseConnectionContext.Provider value={{ status: 'open' }}>
+          <AppDataContext.Provider value={{
+            activity: { entries: [], unreadCount: 0 },
+            projects: null,
+            sessions: [createSession({ isRunning: true })],
+            tasks: [createTask({ running: true })],
+            runs: createRunsResult(),
+            setActivity: () => {},
+            setProjects: () => {},
+            setSessions: () => {},
+            setTasks: () => {},
+            setRuns: () => {},
+          }}>
+            <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: () => {} }}>
+              <Sidebar />
+            </LiveTitlesContext.Provider>
+          </AppDataContext.Provider>
+        </SseConnectionContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Agent Runs</span><span class="ui-sidebar-nav-badge">3</span>');
+    expect(html).toContain('3 active now · 1 conversation · 1 scheduled · 1 background.');
   });
 
   it('renders primary nav above new chat and utility nav below conversations', () => {

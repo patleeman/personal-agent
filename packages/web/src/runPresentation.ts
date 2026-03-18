@@ -1,4 +1,4 @@
-import type { DurableRunRecord, ScheduledTaskSummary, SessionMeta } from './types';
+import type { DurableRunListResult, DurableRunRecord, ScheduledTaskSummary, SessionMeta } from './types';
 
 export interface RunPresentationLookups {
   tasks?: ScheduledTaskSummary[] | null;
@@ -24,6 +24,60 @@ export interface RunMoment {
 }
 
 export type RunCategory = 'scheduled' | 'conversation' | 'deferred' | 'background' | 'other';
+
+export interface ActiveRunsSummary {
+  total: number;
+  scheduled: number;
+  conversation: number;
+  deferred: number;
+  background: number;
+  other: number;
+}
+
+export function isRunInProgress(run: DurableRunRecord): boolean {
+  const status = run.status?.status;
+  return status === 'running' || status === 'recovering';
+}
+
+export function summarizeActiveRuns(input: {
+  tasks?: ScheduledTaskSummary[] | null;
+  sessions?: SessionMeta[] | null;
+  runs?: DurableRunListResult | null;
+}): ActiveRunsSummary {
+  const fallbackCounts = (input.runs?.runs ?? []).reduce<Record<RunCategory, number>>((counts, run) => {
+    if (!isRunInProgress(run)) {
+      return counts;
+    }
+
+    counts[getRunCategory(run)] += 1;
+    return counts;
+  }, {
+    scheduled: 0,
+    conversation: 0,
+    deferred: 0,
+    background: 0,
+    other: 0,
+  });
+
+  const scheduled = input.tasks
+    ? input.tasks.filter((task) => task.running).length
+    : fallbackCounts.scheduled;
+  const conversation = input.sessions
+    ? input.sessions.filter((session) => session.isRunning).length
+    : fallbackCounts.conversation;
+  const deferred = fallbackCounts.deferred;
+  const background = fallbackCounts.background;
+  const other = fallbackCounts.other;
+
+  return {
+    total: scheduled + conversation + deferred + background + other,
+    scheduled,
+    conversation,
+    deferred,
+    background,
+    other,
+  };
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
