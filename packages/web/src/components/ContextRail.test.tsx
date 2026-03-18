@@ -3,9 +3,19 @@ import { renderToString } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppDataContext } from '../contexts.js';
+import { useApi } from '../hooks.js';
+import { useConversations } from '../hooks/useConversations.js';
 import { useDurableRunStream } from '../hooks/useDurableRunStream.js';
 import type { DurableRunDetailResult, SessionMeta } from '../types.js';
 import { ContextRail } from './ContextRail.js';
+
+vi.mock('../hooks', () => ({
+  useApi: vi.fn(),
+}));
+
+vi.mock('../hooks/useConversations', () => ({
+  useConversations: vi.fn(),
+}));
 
 vi.mock('../hooks/useDurableRunStream', () => ({
   useDurableRunStream: vi.fn(),
@@ -94,6 +104,17 @@ describe('ContextRail run detail', () => {
 
       originalConsoleError(message, ...args);
     });
+
+    vi.mocked(useApi).mockReturnValue({
+      data: null,
+      loading: false,
+      refreshing: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    vi.mocked(useConversations).mockReturnValue({
+      openSession: vi.fn(),
+    } as never);
   });
 
   afterEach(() => {
@@ -204,5 +225,54 @@ describe('ContextRail run detail', () => {
 
     expect(html).toContain('href="/conversations/target-1"');
     expect(html).toContain('Target conversation');
+  });
+
+  it('shows merge actions for capture memories in the memories rail', () => {
+    vi.mocked(useApi).mockReturnValue({
+      data: {
+        memory: {
+          id: 'conv-memory-browser-20260318',
+          title: 'Memory browser polish capture',
+          summary: 'Capture doc waiting to merge into a canonical memory.',
+          tags: ['conversation', 'checkpoint', 'personal-agent', 'web-ui'],
+          path: '/tmp/conv-memory-browser-20260318.md',
+          type: 'conversation-checkpoint',
+          status: 'active',
+          area: 'personal-agent',
+          role: 'capture',
+          parent: 'personal-agent',
+          related: ['personal-agent-web-ui-preferences'],
+          updated: '2026-03-18T12:00:00.000Z',
+        },
+        content: '---\nid: conv-memory-browser-20260318\n---\n# Memory browser polish capture\n',
+      },
+      loading: false,
+      refreshing: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/memories?memory=conv-memory-browser-20260318']}>
+        <AppDataContext.Provider value={{
+          activity: null,
+          projects: null,
+          sessions: [createSession()],
+          tasks: null,
+          runs: null,
+          setActivity: vi.fn(),
+          setProjects: vi.fn(),
+          setSessions: vi.fn(),
+          setTasks: vi.fn(),
+          setRuns: vi.fn(),
+        }}>
+          <ContextRail />
+        </AppDataContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Merge capture');
+    expect(html).toContain('Merge into @personal-agent-web-ui-preferences');
+    expect(html).toContain('Merge into…');
   });
 });

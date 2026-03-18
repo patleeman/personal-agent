@@ -87,6 +87,11 @@ import { createActivityAgentExtension } from './activityAgentExtension.js';
 import { createRunAgentExtension } from './runAgentExtension.js';
 import { createMemoryAgentExtension } from './memoryAgentExtension.js';
 import {
+  mergeCaptureMemoryIntoCanonical,
+  saveCuratedDistilledConversationMemory,
+  type DistilledConversationMemoryDraft,
+} from './conversationMemoryCuration.js';
+import {
   createSession,
   createSessionFromExisting,
   resumeSession,
@@ -135,6 +140,7 @@ import {
   getProfilesRoot,
   getReadySessionDeferredResumeEntries,
   getStateRoot,
+  loadMemoryDocs,
   listConversationProjectLinks,
   listConversationArtifacts,
   listConversationAttachments,
@@ -907,13 +913,6 @@ interface CheckpointSnapshotBuildResult {
   };
 }
 
-interface DistilledConversationMemoryDraft {
-  title: string;
-  summary: string;
-  body: string;
-  tags: string[];
-}
-
 interface SaveDistilledConversationMemoryOptions {
   title?: string;
   summary?: string;
@@ -1099,8 +1098,6 @@ function buildCheckpointSnapshotFromSessionFile(sessionFile: string, requestedAn
   };
 }
 
-const MEMORY_DOC_ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
-
 function normalizeDistilledText(value: string, maxLength = 180): string {
   const normalized = value.replace(/\s+/g, ' ').trim();
   if (!normalized) {
@@ -1121,30 +1118,8 @@ function normalizeOptionalDistilledText(value: string | undefined): string | und
   return normalized.length > 0 ? normalized : undefined;
 }
 
-function toYamlQuotedString(value: string): string {
-  return JSON.stringify(value);
-}
-
 function currentDateYyyyMmDd(now = new Date()): string {
   return now.toISOString().slice(0, 10);
-}
-
-function compactDateStamp(now = new Date()): string {
-  return now.toISOString().slice(0, 10).replace(/-/g, '');
-}
-
-function slugifyMemoryIdSegment(value: string): string {
-  const slug = value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .replace(/-+/g, '-');
-
-  if (!slug) {
-    return 'conversation-memory';
-  }
-
-  return slug.length > 52 ? slug.slice(0, 52).replace(/-+$/g, '') : slug;
 }
 
 function normalizeDistilledTag(value: string): string | null {
@@ -1279,116 +1254,52 @@ function deriveDistilledConversationMemoryDraft(options: SaveDistilledConversati
       requestedTags: options.tags,
       relatedProjectIds: options.relatedProjectIds,
     }),
+    userIntent,
+    learnedPoints,
+    carryForwardPoints,
   };
 }
 
-function allocateDistilledMemoryId(memoryDir: string, title: string): string {
-  const baseSlug = `conv-${slugifyMemoryIdSegment(title)}-${compactDateStamp()}`;
-  const safeBase = MEMORY_DOC_ID_PATTERN.test(baseSlug) ? baseSlug : `conv-memory-${compactDateStamp()}`;
-
-  let candidate = safeBase;
-  let suffix = 2;
-
-  while (existsSync(join(memoryDir, `${candidate}.md`))) {
-    candidate = `${safeBase}-${suffix}`;
-    suffix += 1;
-  }
-
-  return candidate;
-}
-
-function buildDistilledMemoryMarkdown(input: {
-  id: string;
-  title: string;
-  summary: string;
-  tags: string[];
-  updated: string;
-  distilledAt: string;
-  sourceConversationTitle?: string;
-  sourceCwd?: string;
-  sourceProfile?: string;
-  relatedProjectIds: string[];
-  anchorPreview: string;
-  body: string;
-}): string {
-  const frontmatterLines = [
-    '---',
-    `id: ${input.id}`,
-    `title: ${toYamlQuotedString(input.title)}`,
-    `summary: ${toYamlQuotedString(input.summary)}`,
-    'type: "conversation-checkpoint"',
-    'status: "active"',
-    'tags:',
-    ...input.tags.map((tag) => `  - ${toYamlQuotedString(tag)}`),
-    `updated: ${input.updated}`,
-    'origin: "conversation"',
-    `distilled_at: ${input.distilledAt}`,
-    `anchor_preview: ${toYamlQuotedString(input.anchorPreview)}`,
-  ];
-
-  if (input.sourceConversationTitle) {
-    frontmatterLines.push(`origin_title: ${toYamlQuotedString(input.sourceConversationTitle)}`);
-  }
-
-  if (input.sourceCwd) {
-    frontmatterLines.push(`source_cwd: ${toYamlQuotedString(input.sourceCwd)}`);
-  }
-
-  if (input.sourceProfile) {
-    frontmatterLines.push(`source_profile: ${toYamlQuotedString(input.sourceProfile)}`);
-  }
-
-  if (input.relatedProjectIds.length > 0) {
-    frontmatterLines.push('related_project_ids:');
-    for (const projectId of input.relatedProjectIds) {
-      frontmatterLines.push(`  - ${toYamlQuotedString(projectId)}`);
-    }
-  }
-
-  frontmatterLines.push('---', '');
-
-  return `${frontmatterLines.join('\n')}${input.body.startsWith('#') ? '' : '\n'}${input.body}`;
-}
-
-function saveDistilledConversationMemory(options: SaveDistilledConversationMemoryOptions): MemoryDocItem {
+function saveDistilledConversationMemory(options: SaveDistilledConversationMemoryOptions): MemoryDocItem & {
+  disposition: 'updated-existing' | 'created-capture';
+  matchedCanonicalIds: string[];
+  hubId?: string;
+} {
   const memoryDir = ensureMemoryDocsDir();
-
   const draft = deriveDistilledConversationMemoryDraft(options);
-  const id = allocateDistilledMemoryId(memoryDir, draft.title);
   const updated = currentDateYyyyMmDd();
   const distilledAt = new Date().toISOString();
-  const filePath = join(memoryDir, `${id}.md`);
-
-  const content = buildDistilledMemoryMarkdown({
-    id,
-    title: draft.title,
-    summary: draft.summary,
-    tags: draft.tags,
+  const area = options.relatedProjectIds.length === 1
+    ? normalizeDistilledTag(options.relatedProjectIds[0] ?? '') ?? undefined
+    : undefined;
+  const loaded = loadMemoryDocs({ profilesRoot: getProfilesRoot() });
+  const saved = saveCuratedDistilledConversationMemory({
+    memoryDir,
+    existingDocs: loaded.docs,
+    draft,
     updated,
     distilledAt,
+    area,
     sourceConversationTitle: options.sourceConversationTitle,
     sourceCwd: options.sourceCwd,
     sourceProfile: options.sourceProfile,
     relatedProjectIds: options.relatedProjectIds,
     anchorPreview: normalizeDistilledText(options.snapshot.anchor.preview, 180),
-    body: draft.body,
   });
 
-  writeFileSync(filePath, content, 'utf-8');
-
   return {
-    id,
-    title: draft.title,
-    summary: draft.summary,
-    tags: draft.tags,
-    path: filePath,
-    type: 'conversation-checkpoint',
-    status: 'active',
-    updated,
+    ...saved.memory,
+    disposition: saved.disposition,
+    matchedCanonicalIds: saved.matchedCanonicalIds,
+    ...(saved.hubId ? { hubId: saved.hubId } : {}),
     recentSessionCount: 0,
     lastUsedAt: null,
     usedInLastSession: false,
-  } satisfies MemoryDocItem;
+  } satisfies MemoryDocItem & {
+    disposition: 'updated-existing' | 'created-capture';
+    matchedCanonicalIds: string[];
+    hubId?: string;
+  };
 }
 
 function summarizeProjectConversationSnippet(conversationId: string): string | undefined {
@@ -3539,6 +3450,63 @@ app.post('/api/memories/:memoryId', (req, res) => {
   }
 });
 
+app.post('/api/memories/:memoryId/merge', (req, res) => {
+  try {
+    const sourceMemoryId = req.params.memoryId?.trim();
+    const { targetMemoryId } = req.body as { targetMemoryId?: string };
+    const normalizedTargetMemoryId = typeof targetMemoryId === 'string' ? targetMemoryId.trim() : '';
+
+    if (!sourceMemoryId) {
+      res.status(400).json({ error: 'memoryId required' });
+      return;
+    }
+
+    if (!normalizedTargetMemoryId) {
+      res.status(400).json({ error: 'targetMemoryId required' });
+      return;
+    }
+
+    const loaded = loadMemoryDocs({ profilesRoot: getProfilesRoot() });
+    const captureDoc = loaded.docs.find((doc) => doc.id === sourceMemoryId);
+    if (!captureDoc) {
+      res.status(404).json({ error: `Memory @${sourceMemoryId} not found.` });
+      return;
+    }
+
+    const targetDoc = loaded.docs.find((doc) => doc.id === normalizedTargetMemoryId);
+    if (!targetDoc) {
+      res.status(404).json({ error: `Memory @${normalizedTargetMemoryId} not found.` });
+      return;
+    }
+
+    const result = mergeCaptureMemoryIntoCanonical({
+      captureDoc,
+      targetDoc,
+      updated: currentDateYyyyMmDd(),
+    });
+    const refreshed = listMemoryDocs({ includeSearchText: true }).find((entry) => entry.id === result.memory.id) ?? result.memory;
+
+    res.json({
+      memory: refreshed,
+      mergedMemoryId: result.mergedMemoryId,
+      deletedMemoryId: result.deletedMemoryId,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.includes('not found')
+      ? 404
+      : message.includes('required') || message.includes('capture') || message.includes('canonical') || message.includes('archived') || message.includes('different docs')
+        ? 400
+        : 500;
+
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(status).json({ error: message });
+  }
+});
+
 app.delete('/api/memories/:memoryId', (req, res) => {
   try {
     const memory = findMemoryDocById(req.params.memoryId);
@@ -3715,17 +3683,26 @@ app.post('/api/conversations/:id/memories/distill-now', (req, res) => {
       snapshot,
     });
 
+    const activitySummary = memory.disposition === 'updated-existing'
+      ? `Updated durable memory @${memory.id}`
+      : `Distilled capture memory @${memory.id}`;
+    const activityDetails = [
+      memory.disposition === 'updated-existing'
+        ? `Updated existing durable memory @${memory.id} from this conversation.`
+        : `Created capture memory @${memory.id} from this conversation.`,
+      `Title: ${memory.title}`,
+      memory.summary ? `Summary: ${memory.summary}` : undefined,
+      memory.parent ? `Attached to hub: @${memory.parent}` : undefined,
+      memory.matchedCanonicalIds.length > 0 ? `Related canonicals: ${memory.matchedCanonicalIds.map((memoryId) => `@${memoryId}`).join(', ')}` : undefined,
+    ].filter((line): line is string => Boolean(line)).join('\n');
+
     const activityId = emitActivity
       ? writeConversationMemoryDistillActivity({
           profile,
           conversationId,
           kind: 'conversation-memory-distilled',
-          summary: `Distilled memory @${memory.id}`,
-          details: [
-            `Created durable memory @${memory.id} from this conversation.`,
-            `Title: ${memory.title}`,
-            memory.summary ? `Summary: ${memory.summary}` : undefined,
-          ].filter((line): line is string => Boolean(line)).join('\n'),
+          summary: activitySummary,
+          details: activityDetails,
           relatedProjectIds,
         })
       : undefined;
@@ -3733,6 +3710,9 @@ app.post('/api/conversations/:id/memories/distill-now', (req, res) => {
     res.json({
       conversationId,
       memory,
+      disposition: memory.disposition,
+      matchedCanonicalIds: memory.matchedCanonicalIds,
+      ...(memory.hubId ? { hubId: memory.hubId } : {}),
       ...(activityId ? { activityId } : {}),
     });
   } catch (err) {
@@ -5883,6 +5863,10 @@ interface MemoryDocItem extends MemoryUsageSummary {
   path: string;
   type?: string;
   status?: string;
+  area?: string;
+  role?: string;
+  parent?: string;
+  related?: string[];
   updated?: string;
   searchText?: string;
 }
@@ -5984,33 +5968,50 @@ function ensureMemoryDocsDir(): string {
 
 function listMemoryDocs(options: { includeSearchText?: boolean } = {}): MemoryDocItem[] {
   const includeSearchText = options.includeSearchText === true;
-  const memoryDocs: MemoryDocItem[] = [];
-  const memoryDir = ensureMemoryDocsDir();
+  const loaded = loadMemoryDocs({ profilesRoot: getProfilesRoot() });
 
-  for (const file of readdirSync(memoryDir).filter((name) => name.endsWith('.md'))) {
-    const filePath = join(memoryDir, file);
-    const fm = parseFrontmatter(filePath);
-    const id = file.replace(/\.md$/, '');
-    const tags = fm.tags;
-    const searchText = includeSearchText ? extractMemorySearchText(filePath) : '';
+  const roleRank = (role: string | undefined): number => {
+    switch (role?.trim().toLowerCase()) {
+      case 'hub':
+        return 0;
+      case 'canonical':
+        return 1;
+      case 'capture':
+        return 2;
+      default:
+        return 3;
+    }
+  };
 
-    memoryDocs.push({
-      id: String(fm.id ?? id),
-      title: String(fm.title ?? id),
-      summary: String(fm.summary ?? ''),
-      tags: Array.isArray(tags) ? tags.map(String) : typeof tags === 'string' ? [tags] : [],
-      path: filePath,
-      type: typeof fm.type === 'string' ? fm.type : undefined,
-      status: typeof fm.status === 'string' ? fm.status : undefined,
-      updated: typeof fm.updated === 'string' ? fm.updated : undefined,
+  const memoryDocs = loaded.docs.map((doc) => {
+    const searchText = includeSearchText ? extractMemorySearchText(doc.filePath) : '';
+
+    return {
+      id: doc.id,
+      title: doc.title,
+      summary: doc.summary,
+      tags: doc.tags,
+      path: doc.filePath,
+      type: doc.type,
+      status: doc.status,
+      area: doc.area,
+      role: doc.role,
+      parent: doc.parent,
+      related: doc.related,
+      updated: doc.updated,
       ...(searchText ? { searchText } : {}),
       recentSessionCount: 0,
       lastUsedAt: null,
       usedInLastSession: false,
-    });
-  }
+    } satisfies MemoryDocItem;
+  });
 
   return memoryDocs.sort((left, right) => {
+    const roleDifference = roleRank(left.role) - roleRank(right.role);
+    if (roleDifference !== 0) {
+      return roleDifference;
+    }
+
     const leftUpdated = left.updated ?? '';
     const rightUpdated = right.updated ?? '';
     if (leftUpdated !== rightUpdated) {

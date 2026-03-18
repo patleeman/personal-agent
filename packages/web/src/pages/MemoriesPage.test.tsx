@@ -35,6 +35,18 @@ describe('MemoriesPage', () => {
       data: {
         memories: [
           {
+            id: 'memory-index',
+            title: 'Memory index',
+            summary: 'Top-level knowledge hub.',
+            tags: ['memory', 'index'],
+            path: '/tmp/memory-index.md',
+            type: 'index',
+            status: 'active',
+            role: 'hub',
+            area: 'memory',
+            updated: '2026-03-17T12:00:00.000Z',
+          },
+          {
             id: 'system-design',
             title: 'System design notes',
             summary: 'Guidelines for architecting new services.',
@@ -42,6 +54,9 @@ describe('MemoriesPage', () => {
             path: '/tmp/system-design.md',
             type: 'reference',
             status: 'active',
+            role: 'canonical',
+            area: 'engineering',
+            parent: 'memory-index',
             updated: '2026-03-16T12:00:00.000Z',
           },
           {
@@ -50,6 +65,8 @@ describe('MemoriesPage', () => {
             summary: 'Keep responses concise and direct.',
             tags: ['communication'],
             path: '/tmp/writing-style.md',
+            role: 'canonical',
+            area: 'communication',
             updated: '2026-03-15T08:00:00.000Z',
           },
         ],
@@ -69,7 +86,9 @@ describe('MemoriesPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Search memories');
+    expect(html).toContain('Knowledge hubs');
+    expect(html).toContain('Browse memories');
+    expect(html).toContain('Memory index');
     expect(html).toContain('System design notes');
     expect(html).toContain('Writing style');
     expect(html).toContain('href="/memories?memory=system-design"');

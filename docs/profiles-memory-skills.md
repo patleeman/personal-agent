@@ -145,6 +145,10 @@ Typical optional fields:
 
 - `type`
 - `status`
+- `area`
+- `role`
+- `parent`
+- `related`
 
 Example:
 
@@ -159,6 +163,10 @@ tags:
   - ci
   - runbook
   - debugging
+area: ci
+role: canonical
+related:
+  - incident-response
 updated: 2026-03-12
 ---
 
@@ -174,6 +182,23 @@ Use memory docs for:
 - domain references
 - architecture notes
 - decision summaries
+
+### Organizing memory docs
+
+Keep storage flat, but organize memory with metadata and hub docs:
+
+- `role: hub` — topic table of contents / overview doc
+- `role: canonical` — durable source-of-truth doc for a subtopic
+- `role: capture` — temporary distilled note that still needs curation/merge
+- `area` — stable topic grouping such as `personal-agent` or `ai-trend-intel`
+- `parent` — optional parent hub memory id
+- `related` — optional related memory ids
+
+A good maintenance pattern is:
+
+1. create or update a hub for each major area
+2. prefer updating existing canonical docs instead of creating duplicate notes
+3. treat capture docs as merge candidates rather than permanent top-level memory clutter
 
 ## Shared profile vs non-shared profiles
 

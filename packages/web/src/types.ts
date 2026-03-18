@@ -583,6 +583,9 @@ export interface SessionMeta {
   messageCount: number;
   isRunning?: boolean;
   lastActivityAt?: string;
+  parentSessionFile?: string;
+  parentSessionId?: string;
+  sourceRunId?: string;
   needsAttention?: boolean;
   attentionUpdatedAt?: string;
   attentionUnreadMessageCount?: number;
@@ -756,6 +759,10 @@ export interface MemoryDocItem {
   path: string;
   type?: string;
   status?: string;
+  area?: string;
+  role?: string;
+  parent?: string;
+  related?: string[];
   updated?: string;
   searchText?: string;
   recentSessionCount?: number;
@@ -766,6 +773,12 @@ export interface MemoryDocItem {
 export interface MemoryDocDetail {
   memory: MemoryDocItem;
   content: string;
+}
+
+export interface MergeMemoryDocResult {
+  memory: MemoryDocItem;
+  mergedMemoryId: string;
+  deletedMemoryId: string;
 }
 
 export interface MemoryWorkItem {

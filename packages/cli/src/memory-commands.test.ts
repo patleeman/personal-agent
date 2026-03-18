@@ -139,6 +139,8 @@ title: Runpod Notes
 summary: Provisioning notes for short-lived GPU pods.
 type: project
 status: active
+area: compute
+role: canonical
 tags: [gpu, infra]
 updated: 2026-03-08
 ---
@@ -154,10 +156,12 @@ title: Desktop Machine Notes
 summary: Local Ubuntu GPU workstation details.
 type: reference
 status: archived
+area: compute
+role: canonical
 tags: [gpu, desktop]
 updated: 2026-03-08
 ---
-Desktop operational notes.
+Desktop Ubuntu operational notes.
 `,
     );
 
@@ -179,6 +183,10 @@ Desktop operational notes.
       'reference',
       '--status',
       'archived',
+      '--area',
+      'compute',
+      '--role',
+      'canonical',
       '--text',
       'ubuntu',
       '--json',
@@ -234,6 +242,22 @@ Duplicate memory doc.
       '# Missing frontmatter\n',
     );
 
+    writeFile(
+      join(profilesRoot, '_memory', 'orphan.md'),
+      `---
+id: orphan
+title: Orphan
+summary: Broken parent reference.
+type: note
+status: active
+parent: missing-parent
+tags: [test]
+updated: 2026-03-08
+---
+Broken parent reference.
+`,
+    );
+
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
     process.env.PERSONAL_AGENT_PROFILES_ROOT = profilesRoot;
     process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
@@ -249,11 +273,15 @@ Duplicate memory doc.
     const payload = JSON.parse(logs[0] as string) as {
       parseErrors: Array<unknown>;
       duplicateIds: Array<{ id: string }>;
+      referenceErrors: Array<{ id: string; field: string; targetId: string }>;
     };
 
     expect(payload.parseErrors.length).toBe(1);
     expect(payload.duplicateIds).toHaveLength(1);
     expect(payload.duplicateIds[0]?.id).toBe('runpod');
+    expect(payload.referenceErrors).toEqual([
+      expect.objectContaining({ id: 'orphan', field: 'parent', targetId: 'missing-parent' }),
+    ]);
 
     logSpy.mockRestore();
   });
@@ -284,6 +312,12 @@ Duplicate memory doc.
       'note',
       '--status',
       'active',
+      '--area',
+      'memory',
+      '--role',
+      'hub',
+      '--related',
+      'personal-agent',
       '--json',
     ]);
 
@@ -295,6 +329,9 @@ Duplicate memory doc.
       tags: string[];
       type: string;
       status: string;
+      area?: string;
+      role?: string;
+      related: string[];
       overwritten: boolean;
       updated: string;
     };
@@ -304,6 +341,9 @@ Duplicate memory doc.
     expect(payload.tags).toEqual(['notes', 'personal']);
     expect(payload.type).toBe('note');
     expect(payload.status).toBe('active');
+    expect(payload.area).toBe('memory');
+    expect(payload.role).toBe('hub');
+    expect(payload.related).toEqual(['personal-agent']);
     expect(payload.overwritten).toBe(false);
     expect(payload.updated).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
@@ -311,6 +351,10 @@ Duplicate memory doc.
     expect(fileContent).toContain('id: quick-note');
     expect(fileContent).toContain('title: "Quick Note"');
     expect(fileContent).toContain('summary: "Tracks one-off details."');
+    expect(fileContent).toContain('area: memory');
+    expect(fileContent).toContain('role: "hub"');
+    expect(fileContent).toContain('related:');
+    expect(fileContent).toContain('  - "personal-agent"');
     expect(fileContent).toContain('tags:');
     expect(fileContent).toContain('  - "notes"');
     expect(fileContent).toContain('  - "personal"');

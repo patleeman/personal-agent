@@ -18,7 +18,7 @@ function memoryListUsageText(): string {
 }
 
 function memoryFindUsageText(): string {
-  return 'Usage: pa memory find [--tag <tag>] [--type <type>] [--status <status>] [--text <query>] [--json]';
+  return 'Usage: pa memory find [--tag <tag>] [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--text <query>] [--json]';
 }
 
 function memoryShowUsageText(): string {
@@ -26,7 +26,7 @@ function memoryShowUsageText(): string {
 }
 
 function memoryNewUsageText(): string {
-  return 'Usage: pa memory new <id> --title <title> --summary <summary> --tags <tag1,tag2> [--type <type>] [--status <status>] [--force] [--json]';
+  return 'Usage: pa memory new <id> --title <title> --summary <summary> --tags <tag1,tag2> [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--related <id1,id2>] [--force] [--json]';
 }
 
 function memoryLintUsageText(): string {
@@ -35,6 +35,10 @@ function memoryLintUsageText(): string {
 
 function formatMemoryTags(tags: string[]): string {
   return tags.length > 0 ? tags.join(', ') : 'none';
+}
+
+function formatMemoryRelated(related: string[]): string {
+  return related.length > 0 ? related.map((value) => `@${value}`).join(', ') : 'none';
 }
 
 function isMemoryHelpToken(value: string | undefined): boolean {
@@ -49,14 +53,14 @@ function printMemoryHelp(): void {
 Commands:
   list [--json]
                            List parsed global memory docs
-  find [--tag <tag>] [--type <type>] [--status <status>] [--text <query>] [--json]
+  find [--tag <tag>] [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--text <query>] [--json]
                            Filter global memory docs by metadata fields
   show <id> [--json]
                            Show one memory doc and metadata
-  new <id> --title <title> --summary <summary> --tags <tag1,tag2> [--type <type>] [--status <status>] [--force] [--json]
+  new <id> --title <title> --summary <summary> --tags <tag1,tag2> [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--related <id1,id2>] [--force] [--json]
                            Create a new global memory doc template with YAML frontmatter
   lint [--json]
-                           Validate global memory doc frontmatter and duplicate ids
+                           Validate global memory doc frontmatter, duplicate ids, and broken memory references
   help                     Show memory help
 `);
 }
@@ -115,6 +119,10 @@ export async function memoryCommand(args: string[]): Promise<number> {
       console.log(bullet(`${doc.id}: ${doc.title}`));
       console.log(keyValue('Type', doc.type, 4));
       console.log(keyValue('Status', doc.status, 4));
+      if (doc.area) console.log(keyValue('Area', doc.area, 4));
+      if (doc.role) console.log(keyValue('Role', doc.role, 4));
+      if (doc.parent) console.log(keyValue('Parent', `@${doc.parent}`, 4));
+      if (doc.related.length > 0) console.log(keyValue('Related', formatMemoryRelated(doc.related), 4));
       console.log(keyValue('Updated', doc.updated, 4));
       console.log(keyValue('Tags', formatMemoryTags(doc.tags), 4));
       console.log(keyValue('Summary', doc.summary, 4));
@@ -136,6 +144,9 @@ export async function memoryCommand(args: string[]): Promise<number> {
     let jsonMode = false;
     let typeFilter: string | undefined;
     let statusFilter: string | undefined;
+    let areaFilter: string | undefined;
+    let roleFilter: string | undefined;
+    let parentFilter: string | undefined;
     let textFilter: string | undefined;
     const tagFilters: string[] = [];
 
@@ -210,6 +221,51 @@ export async function memoryCommand(args: string[]): Promise<number> {
         continue;
       }
 
+      if (arg === '--area') {
+        const value = rest[index + 1];
+        if (!value || value.startsWith('-')) throw new Error(memoryFindUsageText());
+        areaFilter = value.trim().toLowerCase();
+        index += 1;
+        continue;
+      }
+
+      if (arg.startsWith('--area=')) {
+        const value = arg.slice('--area='.length).trim();
+        if (value.length === 0) throw new Error(memoryFindUsageText());
+        areaFilter = value.toLowerCase();
+        continue;
+      }
+
+      if (arg === '--role') {
+        const value = rest[index + 1];
+        if (!value || value.startsWith('-')) throw new Error(memoryFindUsageText());
+        roleFilter = value.trim().toLowerCase();
+        index += 1;
+        continue;
+      }
+
+      if (arg.startsWith('--role=')) {
+        const value = arg.slice('--role='.length).trim();
+        if (value.length === 0) throw new Error(memoryFindUsageText());
+        roleFilter = value.toLowerCase();
+        continue;
+      }
+
+      if (arg === '--parent') {
+        const value = rest[index + 1];
+        if (!value || value.startsWith('-')) throw new Error(memoryFindUsageText());
+        parentFilter = value.trim().toLowerCase();
+        index += 1;
+        continue;
+      }
+
+      if (arg.startsWith('--parent=')) {
+        const value = arg.slice('--parent='.length).trim();
+        if (value.length === 0) throw new Error(memoryFindUsageText());
+        parentFilter = value.toLowerCase();
+        continue;
+      }
+
       if (arg === '--text') {
         const value = rest[index + 1];
         if (!value || value.startsWith('-')) {
@@ -239,6 +295,9 @@ export async function memoryCommand(args: string[]): Promise<number> {
       tags: tagFilters,
       type: typeFilter,
       status: statusFilter,
+      area: areaFilter,
+      role: roleFilter,
+      parent: parentFilter,
       text: textFilter,
     });
 
@@ -248,6 +307,9 @@ export async function memoryCommand(args: string[]): Promise<number> {
         tags: tagFilters,
         type: typeFilter ?? null,
         status: statusFilter ?? null,
+        area: areaFilter ?? null,
+        role: roleFilter ?? null,
+        parent: parentFilter ?? null,
         text: textFilter ?? null,
       },
       docs: filteredDocs,
@@ -264,6 +326,9 @@ export async function memoryCommand(args: string[]): Promise<number> {
     console.log(keyValue('Tag filters', tagFilters.length > 0 ? tagFilters.join(', ') : 'none'));
     console.log(keyValue('Type filter', typeFilter ?? 'none'));
     console.log(keyValue('Status filter', statusFilter ?? 'none'));
+    console.log(keyValue('Area filter', areaFilter ?? 'none'));
+    console.log(keyValue('Role filter', roleFilter ?? 'none'));
+    console.log(keyValue('Parent filter', parentFilter ?? 'none'));
     console.log(keyValue('Text filter', textFilter ?? 'none'));
 
     if (filteredDocs.length === 0) {
@@ -275,6 +340,10 @@ export async function memoryCommand(args: string[]): Promise<number> {
       console.log(bullet(`${doc.id}: ${doc.title}`));
       console.log(keyValue('Type', doc.type, 4));
       console.log(keyValue('Status', doc.status, 4));
+      if (doc.area) console.log(keyValue('Area', doc.area, 4));
+      if (doc.role) console.log(keyValue('Role', doc.role, 4));
+      if (doc.parent) console.log(keyValue('Parent', `@${doc.parent}`, 4));
+      if (doc.related.length > 0) console.log(keyValue('Related', formatMemoryRelated(doc.related), 4));
       console.log(keyValue('Updated', doc.updated, 4));
       console.log(keyValue('Tags', formatMemoryTags(doc.tags), 4));
       console.log(keyValue('Summary', doc.summary, 4));
@@ -333,6 +402,10 @@ export async function memoryCommand(args: string[]): Promise<number> {
     console.log(keyValue('Title', doc.title));
     console.log(keyValue('Type', doc.type));
     console.log(keyValue('Status', doc.status));
+    if (doc.area) console.log(keyValue('Area', doc.area));
+    if (doc.role) console.log(keyValue('Role', doc.role));
+    if (doc.parent) console.log(keyValue('Parent', `@${doc.parent}`));
+    if (doc.related.length > 0) console.log(keyValue('Related', formatMemoryRelated(doc.related)));
     console.log(keyValue('Updated', doc.updated));
     console.log(keyValue('Tags', formatMemoryTags(doc.tags)));
     console.log(keyValue('Summary', doc.summary));
@@ -360,7 +433,11 @@ export async function memoryCommand(args: string[]): Promise<number> {
     let summary: string | undefined;
     let type = 'note';
     let status = 'active';
+    let area: string | undefined;
+    let role: string | undefined;
+    let parent: string | undefined;
     const rawTagValues: string[] = [];
+    const rawRelatedValues: string[] = [];
     const positional: string[] = [];
 
     for (let index = 0; index < rest.length; index += 1) {
@@ -460,6 +537,66 @@ export async function memoryCommand(args: string[]): Promise<number> {
         continue;
       }
 
+      if (arg === '--area') {
+        const value = rest[index + 1];
+        if (!value || value.startsWith('-')) throw new Error(memoryNewUsageText());
+        area = value.trim();
+        index += 1;
+        continue;
+      }
+
+      if (arg.startsWith('--area=')) {
+        const value = arg.slice('--area='.length).trim();
+        if (value.length === 0) throw new Error(memoryNewUsageText());
+        area = value;
+        continue;
+      }
+
+      if (arg === '--role') {
+        const value = rest[index + 1];
+        if (!value || value.startsWith('-')) throw new Error(memoryNewUsageText());
+        role = value.trim();
+        index += 1;
+        continue;
+      }
+
+      if (arg.startsWith('--role=')) {
+        const value = arg.slice('--role='.length).trim();
+        if (value.length === 0) throw new Error(memoryNewUsageText());
+        role = value;
+        continue;
+      }
+
+      if (arg === '--parent') {
+        const value = rest[index + 1];
+        if (!value || value.startsWith('-')) throw new Error(memoryNewUsageText());
+        parent = value.trim();
+        index += 1;
+        continue;
+      }
+
+      if (arg.startsWith('--parent=')) {
+        const value = arg.slice('--parent='.length).trim();
+        if (value.length === 0) throw new Error(memoryNewUsageText());
+        parent = value;
+        continue;
+      }
+
+      if (arg === '--related') {
+        const value = rest[index + 1];
+        if (!value || value.startsWith('-')) throw new Error(memoryNewUsageText());
+        rawRelatedValues.push(value.trim());
+        index += 1;
+        continue;
+      }
+
+      if (arg.startsWith('--related=')) {
+        const value = arg.slice('--related='.length).trim();
+        if (value.length === 0) throw new Error(memoryNewUsageText());
+        rawRelatedValues.push(value);
+        continue;
+      }
+
       if (arg === '--tags' || arg === '--tag') {
         const value = rest[index + 1];
         if (!value || value.startsWith('-')) {
@@ -514,12 +651,18 @@ export async function memoryCommand(args: string[]): Promise<number> {
       throw new Error(memoryNewUsageText());
     }
 
+    const related = splitMemoryTagValues(rawRelatedValues);
+
     const payload = createMemoryDoc({
       id,
       title,
       summary,
       type,
       status,
+      area,
+      role,
+      parent,
+      related,
       tags,
       force,
     });
@@ -534,6 +677,10 @@ export async function memoryCommand(args: string[]): Promise<number> {
     console.log(keyValue('File', payload.filePath));
     console.log(keyValue('Type', payload.type));
     console.log(keyValue('Status', payload.status));
+    if (payload.area) console.log(keyValue('Area', payload.area));
+    if (payload.role) console.log(keyValue('Role', payload.role));
+    if (payload.parent) console.log(keyValue('Parent', `@${payload.parent}`));
+    if (payload.related.length > 0) console.log(keyValue('Related', formatMemoryRelated(payload.related)));
     console.log(keyValue('Tags', formatMemoryTags(payload.tags)));
     console.log(keyValue('Updated', payload.updated));
 
@@ -557,7 +704,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
     }
 
     const payload = lintMemoryDocs();
-    const hasIssues = payload.parseErrors.length > 0 || payload.duplicateIds.length > 0;
+    const hasIssues = payload.parseErrors.length > 0 || payload.duplicateIds.length > 0 || payload.referenceErrors.length > 0;
 
     if (jsonMode) {
       console.log(JSON.stringify(payload, null, 2));
@@ -569,6 +716,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
     console.log(keyValue('Docs parsed', payload.validDocs));
     console.log(keyValue('Parse errors', payload.parseErrors.length));
     console.log(keyValue('Duplicate ids', payload.duplicateIds.length));
+    console.log(keyValue('Reference errors', payload.referenceErrors.length));
 
     if (!hasIssues) {
       console.log('');
@@ -589,6 +737,14 @@ export async function memoryCommand(args: string[]): Promise<number> {
       console.log(warning('Duplicate ids'));
       for (const duplicate of payload.duplicateIds) {
         console.log(keyValue('Duplicate', `${duplicate.id} -> ${duplicate.files.join(', ')}`, 4));
+      }
+    }
+
+    if (payload.referenceErrors.length > 0) {
+      console.log('');
+      console.log(warning('Broken memory references'));
+      for (const issue of payload.referenceErrors) {
+        console.log(keyValue('Reference', `${issue.id}.${issue.field} -> ${issue.targetId}: ${issue.error} (${issue.filePath})`, 4));
       }
     }
 
