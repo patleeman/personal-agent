@@ -335,12 +335,29 @@ export function getDueScheduledSessionDeferredResumeEntries(
     .filter((entry) => entry.status === 'scheduled' && Date.parse(entry.dueAt) <= nowMs);
 }
 
+export function activateDeferredResume(
+  state: DeferredResumeStateFile,
+  input: { id: string; at?: Date },
+): DeferredResumeRecord | undefined {
+  const current = state.resumes[input.id];
+  if (!current) {
+    return undefined;
+  }
+
+  if (current.status === 'ready') {
+    return { ...current };
+  }
+
+  current.status = 'ready';
+  current.readyAt = (input.at ?? new Date()).toISOString();
+  return { ...current };
+}
+
 export function activateDueDeferredResumes(
   state: DeferredResumeStateFile,
   input?: { at?: Date; sessionFile?: string },
 ): DeferredResumeRecord[] {
   const at = input?.at ?? new Date();
-  const activatedAt = at.toISOString();
   const nowMs = at.getTime();
   const activated: DeferredResumeRecord[] = [];
 
@@ -357,14 +374,13 @@ export function activateDueDeferredResumes(
       continue;
     }
 
-    const current = state.resumes[entry.id];
-    if (!current || current.status !== 'scheduled') {
-      continue;
+    const activatedEntry = activateDeferredResume(state, {
+      id: entry.id,
+      at,
+    });
+    if (activatedEntry) {
+      activated.push(activatedEntry);
     }
-
-    current.status = 'ready';
-    current.readyAt = activatedAt;
-    activated.push({ ...current });
   }
 
   return activated.sort(compareDeferredResumeRecords);
