@@ -145,6 +145,24 @@ If a deferred resume becomes ready while you already have that saved conversatio
 
 From the deferred details row, you can also fire a scheduled resume immediately or cancel it.
 
+Conversations can also carry lightweight automation.
+That automation is an ordered todo list of skill steps for that conversation.
+When the list finishes, the agent does one final review pass and can append more todo items before stopping.
+
+### Automation
+
+The Automation page manages reusable conversation-automation presets.
+
+Each preset is a named ordered todo list of skill items.
+You can:
+
+- create presets
+- reorder or remove todo items
+- mark presets as defaults for new conversations
+- apply presets into a live conversation
+
+The per-conversation automation panel shows the current todo list, active item, review state, and whether automation is enabled.
+
 ### Projects
 
 Projects are durable cross-conversation work hubs.
@@ -240,6 +258,7 @@ Settings lets you change:
 - default model
 - default thinking level
 - conversation auto-title behavior and title model
+- whether inherited conversation-automation presets start enabled by default
 - saved UI state
 
 Switching the active profile affects:

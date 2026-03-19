@@ -37,7 +37,7 @@ describe('conversationAutomationProfileSettings', () => {
       webUi: {
         conversationAutomation: {
           workflowPresets: {
-            presets: [{ id: 'preset-1', name: 'Checkpoint', updatedAt: '2026-03-19T00:00:00.000Z', gates: [] }],
+            presets: [{ id: 'preset-1', name: 'Checkpoint', updatedAt: '2026-03-19T00:00:00.000Z', items: [] }],
             defaultPresetIds: ['preset-1'],
           },
         },
@@ -68,9 +68,6 @@ describe('conversationAutomationProfileSettings', () => {
           workflowPresets: {
             defaultPresetIds: ['preset-1'],
           },
-        },
-        conversationAutomationJudge: {
-          model: 'openai/gpt-5-mini',
         },
       },
     });

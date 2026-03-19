@@ -1,4 +1,4 @@
-import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationFilterValidationResult, ConversationAutomationJudgeSettingsState, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateGate, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationCwdChangeResult, ConversationExecutionState, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DisplayBlock, DurableRunDetailResult, DurableRunListResult, ExecutionTargetPathMapping, ExecutionTargetsState, FolderPickerResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, MemoryWorkItem, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectDiagnostics, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SyncState, ToolsState, WebUiState } from './types';
+import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationCwdChangeResult, ConversationExecutionState, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DisplayBlock, DurableRunDetailResult, DurableRunListResult, ExecutionTargetPathMapping, ExecutionTargetsState, FolderPickerResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, MemoryWorkItem, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectDiagnostics, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SyncState, ToolsState, WebUiState } from './types';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch('/api' + path);
@@ -224,9 +224,6 @@ export const api = {
   conversationAutomationDefaults: () => get<ConversationAutomationPreferencesState>('/conversation-automation/defaults'),
   updateConversationAutomationDefaults: (input: { defaultEnabled: boolean }) =>
     patch<ConversationAutomationPreferencesState>('/conversation-automation/defaults', input),
-  conversationAutomationJudgeSettings: () => get<ConversationAutomationJudgeSettingsState>('/conversation-automation/settings'),
-  updateConversationAutomationJudgeSettings: (input: { model?: string | null; systemPrompt?: string | null }) =>
-    patch<ConversationAutomationJudgeSettingsState>('/conversation-automation/settings', input),
   openConversationTabs: () => get<{ sessionIds: string[]; pinnedSessionIds: string[] }>('/web-ui/open-conversations'),
   setOpenConversationTabs: (sessionIds: string[], pinnedSessionIds: string[] = []) =>
     patch<{ ok: boolean; sessionIds: string[]; pinnedSessionIds: string[] }>('/web-ui/open-conversations', { sessionIds, pinnedSessionIds }),
@@ -329,12 +326,11 @@ export const api = {
   conversationAutomation: (id: string) => get<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation`),
   updateConversationAutomation: (id: string, input: {
     enabled?: boolean;
-    gates?: ConversationAutomationTemplateGate[];
+    items?: ConversationAutomationTemplateTodoItem[];
   }) => patch<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation`, input),
-  resetConversationAutomationGate: (id: string, gateId: string, resume = false) =>
-    post<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation/gates/${encodeURIComponent(gateId)}/reset`, { resume }),
+  resetConversationAutomationItem: (id: string, itemId: string, resume = false) =>
+    post<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation/items/${encodeURIComponent(itemId)}/reset`, { resume }),
   conversationAutomationWorkspace: () => get<ConversationAutomationWorkspaceState>('/conversation-automation/workspace'),
-  validateConversationAutomationQuery: (query: string) => post<ConversationAutomationFilterValidationResult>('/conversation-automation/query/validate', { query }),
   conversationAutomationWorkflowPresets: () => get<ConversationAutomationWorkflowPresetLibraryState>('/conversation-automation/workflow-presets'),
   updateConversationAutomationWorkflowPresets: (input: ConversationAutomationWorkflowPresetLibraryState) =>
     patch<ConversationAutomationWorkflowPresetLibraryState>('/conversation-automation/workflow-presets', input),
