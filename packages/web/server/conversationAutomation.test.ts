@@ -8,10 +8,12 @@ import {
   createConversationAutomationGate,
   createConversationAutomationSkillStep,
   loadConversationAutomationState,
+  readSavedConversationAutomationPreferences,
   replaceConversationAutomationGates,
   resetConversationAutomationFromGate,
   resolveConversationAutomationPath,
   templateGateFromRuntimeGate,
+  writeSavedConversationAutomationPreferences,
   writeConversationAutomationState,
   writeSavedConversationAutomationWorkflowPresets,
 } from './conversationAutomation.js';
@@ -89,6 +91,40 @@ describe('conversationAutomation state', () => {
       stateRoot,
       conversationId: 'conv-123',
     })).toBe(false);
+  });
+
+  it('can enable inherited default presets automatically for new conversations', () => {
+    const stateRoot = createTempDir('pa-conversation-automation-');
+    const settingsFile = join(stateRoot, 'settings.json');
+
+    writeSavedConversationAutomationPreferences({ defaultEnabled: true }, settingsFile);
+    writeSavedConversationAutomationWorkflowPresets({
+      defaultPresetIds: ['preset-checkpoint'],
+      presets: [{
+        id: 'preset-checkpoint',
+        name: 'Checkpoint flow',
+        updatedAt: '2026-03-18T12:00:00.000Z',
+        gates: [{
+          id: 'gate-default-1',
+          label: 'Ready to checkpoint?',
+          prompt: 'Pass only when the latest assistant message requests a checkpoint.',
+          skills: [{
+            id: 'skill-default-1',
+            label: 'workflow-checkpoint',
+            skillName: 'workflow-checkpoint',
+          }],
+        }],
+      }],
+    }, settingsFile);
+
+    const loaded = loadConversationAutomationState({
+      profile: 'datadog',
+      stateRoot,
+      conversationId: 'conv-enabled',
+      settingsFile,
+    });
+
+    expect(loaded.document.enabled).toBe(true);
   });
 
   it('combines the default preset stack for conversations without a local override', () => {
@@ -394,6 +430,34 @@ describe('conversationAutomation state', () => {
     expect(reset.gates[1]).not.toHaveProperty('resultReason');
     expect(reset.gates[1]!.skills[0]).toMatchObject({ status: 'pending', updatedAt: '2026-03-18T12:04:00.000Z' });
     expect(reset.gates[1]!.skills[0]).not.toHaveProperty('startedAt');
+  });
+
+  it('reads and writes automation default preferences without dropping preset settings', () => {
+    const stateRoot = createTempDir('pa-conversation-automation-');
+    const settingsFile = join(stateRoot, 'settings.json');
+
+    writeSavedConversationAutomationWorkflowPresets({
+      defaultPresetIds: ['preset-checkpoint'],
+      presets: [{
+        id: 'preset-checkpoint',
+        name: 'Checkpoint flow',
+        updatedAt: '2026-03-18T12:00:00.000Z',
+        gates: [],
+      }],
+    }, settingsFile);
+
+    expect(writeSavedConversationAutomationPreferences({ defaultEnabled: true }, settingsFile)).toEqual({
+      defaultEnabled: true,
+    });
+    expect(readSavedConversationAutomationPreferences(settingsFile)).toEqual({
+      defaultEnabled: true,
+    });
+    expect(loadConversationAutomationState({
+      profile: 'datadog',
+      stateRoot,
+      conversationId: 'conv-defaults',
+      settingsFile,
+    }).presetLibrary.defaultPresetIds).toEqual(['preset-checkpoint']);
   });
 
   it('migrates the legacy flat queue into nested judge gates', () => {

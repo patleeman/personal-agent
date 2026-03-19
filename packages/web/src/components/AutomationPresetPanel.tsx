@@ -72,7 +72,7 @@ function createEmptyGate(): ConversationAutomationTemplateGate {
   return {
     id: createDraftId('gate'),
     label: 'Automation rule',
-    prompt: 'judge:"Did the agent complete the task?"',
+    prompt: 'repo:personal-agent AND judge:"Did the assistant complete the task?"',
     skills: [],
   };
 }
@@ -855,7 +855,7 @@ export function AutomationPresetPanel({
                   value={selectedGate.prompt}
                   onChange={(event) => handleUpdateSelectedGate({ prompt: event.target.value })}
                   className={`${INPUT_CLASS} min-h-[96px] resize-y font-mono leading-relaxed`}
-                  placeholder={'event:turn_end AND tool:edit AND prompt:"Did the agent complete implementation of the feature?"'}
+                  placeholder={'event:turn_end AND repo:personal-agent AND tool:edit AND prompt:"Did the assistant complete implementation of the feature?"'}
                   spellCheck={false}
                 />
                 <div className="space-y-1 rounded-lg bg-surface/50 px-3 py-2 text-[11px]">
