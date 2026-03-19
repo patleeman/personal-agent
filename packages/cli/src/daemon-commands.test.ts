@@ -9,6 +9,41 @@ import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { gatewayMocks, daemonMocks } = vi.hoisted(() => ({
+  gatewayMocks: {
+    getManagedDaemonServiceStatus: vi.fn(() => ({
+      identifier: 'mock-daemon',
+      manifestPath: '/tmp/mock-daemon',
+      installed: false,
+      running: false,
+    })),
+    restartManagedDaemonServiceIfInstalled: vi.fn(() => undefined),
+  },
+  daemonMocks: {
+    startDaemonDetached: vi.fn(async () => undefined),
+    stopDaemonGracefully: vi.fn(async () => undefined),
+  },
+}));
+
+vi.mock('@personal-agent/gateway', async () => {
+  const actual = await vi.importActual<typeof import('@personal-agent/gateway')>('@personal-agent/gateway');
+  return {
+    ...actual,
+    getManagedDaemonServiceStatus: gatewayMocks.getManagedDaemonServiceStatus,
+    restartManagedDaemonServiceIfInstalled: gatewayMocks.restartManagedDaemonServiceIfInstalled,
+  };
+});
+
+vi.mock('@personal-agent/daemon', async () => {
+  const actual = await vi.importActual<typeof import('@personal-agent/daemon')>('@personal-agent/daemon');
+  return {
+    ...actual,
+    startDaemonDetached: daemonMocks.startDaemonDetached,
+    stopDaemonGracefully: daemonMocks.stopDaemonGracefully,
+  };
+});
+
 import { runCli } from './index.js';
 
 const originalEnv = process.env;
@@ -35,6 +70,20 @@ beforeEach(() => {
     PERSONAL_AGENT_DISABLE_DAEMON_EVENTS: '1',
     PI_SESSION_DIR: createTempDir('pi-session-')
   };
+
+  gatewayMocks.getManagedDaemonServiceStatus.mockReset();
+  gatewayMocks.getManagedDaemonServiceStatus.mockImplementation(() => ({
+    identifier: 'mock-daemon',
+    manifestPath: '/tmp/mock-daemon',
+    installed: false,
+    running: false,
+  }));
+  gatewayMocks.restartManagedDaemonServiceIfInstalled.mockReset();
+  gatewayMocks.restartManagedDaemonServiceIfInstalled.mockImplementation(() => undefined);
+  daemonMocks.startDaemonDetached.mockReset();
+  daemonMocks.startDaemonDetached.mockImplementation(async () => undefined);
+  daemonMocks.stopDaemonGracefully.mockReset();
+  daemonMocks.stopDaemonGracefully.mockImplementation(async () => undefined);
 });
 
 afterEach(async () => {
@@ -192,6 +241,35 @@ describe('daemon command matrix', () => {
 
     expect(exitCode).toBe(0);
     expect(logs.some((line) => line.includes('personal-agentd restart requested'))).toBe(true);
+
+    logSpy.mockRestore();
+  });
+
+  it('uses the managed daemon service for daemon restart when installed', async () => {
+    const stateRoot = createTempDir('personal-agent-cli-state-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+
+    gatewayMocks.getManagedDaemonServiceStatus.mockReturnValue({
+      identifier: 'mock-daemon',
+      manifestPath: '/tmp/mock-daemon',
+      installed: true,
+      running: true,
+    });
+    gatewayMocks.restartManagedDaemonServiceIfInstalled.mockReturnValue({
+      identifier: 'mock-daemon',
+      manifestPath: '/tmp/mock-daemon',
+      installed: true,
+      running: true,
+    });
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    const exitCode = await runCli(['daemon', 'restart']);
+
+    expect(exitCode).toBe(0);
+    expect(gatewayMocks.restartManagedDaemonServiceIfInstalled).toHaveBeenCalledTimes(1);
+    expect(daemonMocks.stopDaemonGracefully).not.toHaveBeenCalled();
+    expect(daemonMocks.startDaemonDetached).not.toHaveBeenCalled();
 
     logSpy.mockRestore();
   });

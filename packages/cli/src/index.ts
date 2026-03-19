@@ -2,6 +2,7 @@
 
 import { spawn, spawnSync } from 'child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'fs';
+import { createConnection } from 'net';
 import { homedir } from 'os';
 import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -1606,11 +1607,7 @@ async function daemonCommand(args: string[]): Promise<number> {
 
   if (subcommand === 'restart') {
     ensureNoExtraCommandArgs(rest, 'pa daemon restart');
-    const daemonSpinner = spinner('Restarting personal-agentd');
-    daemonSpinner.start();
-    await stopDaemonGracefully();
-    await startDaemonDetached();
-    daemonSpinner.succeed('personal-agentd restart requested');
+    await restartDaemonWithManagedServiceFallback();
     console.log(`  ${formatNextStep('pa daemon status')}`);
     return 0;
   }
@@ -1791,6 +1788,52 @@ function isMissingServiceManagerError(error: unknown): boolean {
   return message.includes('spawnSync launchctl ENOENT') || message.includes('spawnSync systemctl ENOENT');
 }
 
+async function restartDaemonWithManagedServiceFallback(): Promise<{
+  serviceManagerAvailable: boolean;
+  daemonStatus: string;
+}> {
+  let managedDaemonService: ReturnType<typeof getManagedDaemonServiceStatus> | undefined;
+  let serviceManagerAvailable = true;
+
+  try {
+    managedDaemonService = getManagedDaemonServiceStatus();
+  } catch (error) {
+    if (isMissingServiceManagerError(error)) {
+      serviceManagerAvailable = false;
+    } else {
+      throw new Error(`Unable to inspect managed daemon service: ${(error as Error).message}`);
+    }
+  }
+
+  const daemonSpinner = spinner('Restarting personal-agentd');
+  daemonSpinner.start();
+
+  try {
+    if (managedDaemonService?.installed) {
+      const restarted = restartManagedDaemonServiceIfInstalled();
+      const identifier = restarted?.identifier ?? managedDaemonService.identifier;
+      daemonSpinner.succeed('personal-agentd restart requested');
+      return {
+        serviceManagerAvailable: true,
+        daemonStatus: `restarted (mode: managed service ${identifier})`,
+      };
+    }
+
+    await stopDaemonGracefully();
+    await startDaemonDetached();
+    daemonSpinner.succeed('personal-agentd restart requested');
+    return {
+      serviceManagerAvailable,
+      daemonStatus: serviceManagerAvailable
+        ? 'restarted (mode: detached; managed service not installed)'
+        : 'restarted (mode: detached; service manager unavailable)',
+    };
+  } catch (error) {
+    daemonSpinner.fail('Unable to restart personal-agentd');
+    throw error;
+  }
+}
+
 interface RestartSummary {
   restartedGatewayServices: string[];
   skippedGatewayServices: string[];
@@ -1803,36 +1846,13 @@ async function restartBackgroundServices(options: {
   repoRoot?: string;
   webUiPort?: number;
 } = {}): Promise<RestartSummary> {
-  const daemonSpinner = spinner('Restarting personal-agentd');
-  daemonSpinner.start();
-
-  try {
-    await stopDaemonGracefully();
-    await startDaemonDetached();
-    daemonSpinner.succeed('personal-agentd restart requested');
-  } catch (error) {
-    daemonSpinner.fail('Unable to restart personal-agentd');
-    throw error;
-  }
-
-  let serviceManagerAvailable = true;
-  let daemonStatus = 'restarted (mode: detached; managed service not installed)';
+  const daemonRestart = await restartDaemonWithManagedServiceFallback();
+  const serviceManagerAvailable = daemonRestart.serviceManagerAvailable;
+  const daemonStatus = daemonRestart.daemonStatus;
   let webUiStatus = 'not installed';
 
-  try {
-    const managedDaemonService = restartManagedDaemonServiceIfInstalled();
-
-    if (managedDaemonService) {
-      daemonStatus = `restarted (mode: managed service ${managedDaemonService.identifier})`;
-    }
-  } catch (error) {
-    if (isMissingServiceManagerError(error)) {
-      serviceManagerAvailable = false;
-      daemonStatus = 'restarted (mode: detached; service manager unavailable)';
-      webUiStatus = 'skipped (service manager unavailable)';
-    } else {
-      throw new Error(`Unable to reconcile managed daemon service: ${(error as Error).message}`);
-    }
+  if (!serviceManagerAvailable) {
+    webUiStatus = 'skipped (service manager unavailable)';
   }
 
   if (serviceManagerAvailable) {
@@ -4061,6 +4081,28 @@ function openWebUiInBrowser(url: string): void {
   spawnSync(command, [url], { stdio: 'ignore' });
 }
 
+async function isLocalPortListening(port: number): Promise<boolean> {
+  return new Promise((resolvePromise) => {
+    let settled = false;
+    const socket = createConnection({ host: '127.0.0.1', port });
+
+    const finish = (result: boolean) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      socket.destroy();
+      resolvePromise(result);
+    };
+
+    socket.setTimeout(500);
+    socket.once('connect', () => finish(true));
+    socket.once('timeout', () => finish(false));
+    socket.once('error', () => finish(false));
+  });
+}
+
 interface WebUiCandidateHandle {
   child: ReturnType<typeof spawn>;
   release: WebUiReleaseSummary;
@@ -4606,6 +4648,25 @@ async function startForegroundWebUi(args: string[]): Promise<number> {
   }
 
   const url = `http://localhost:${portParse.value}`;
+
+  try {
+    const managedStatus = getWebUiServiceStatus({ repoRoot, port: portParse.value });
+    if (managedStatus.installed && managedStatus.running && await isLocalPortListening(portParse.value)) {
+      if (openBrowser) {
+        setTimeout(() => {
+          openWebUiInBrowser(url);
+        }, 1200);
+      }
+
+      console.log(warning(`Managed web UI service is already running on ${managedStatus.url}; skipping foreground launch.`));
+      console.log(`  ${formatNextStep('pa ui service status')}`);
+      return 0;
+    }
+  } catch (error) {
+    if (!isMissingServiceManagerError(error)) {
+      console.log(`  ${warning(`Could not inspect managed web UI service: ${(error as Error).message}`)}`);
+    }
+  }
 
   if (openBrowser) {
     setTimeout(() => {
