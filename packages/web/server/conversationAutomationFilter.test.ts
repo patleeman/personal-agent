@@ -8,6 +8,7 @@ import {
   buildLegacyJudgeFilter,
   evaluateConversationAutomationFilter,
   normalizeConversationAutomationFilter,
+  previewConversationAutomationFilterDeterministicMatch,
   parseConversationAutomationFilter,
   validateConversationAutomationFilter,
 } from './conversationAutomationFilter.js';
@@ -118,6 +119,32 @@ describe('conversationAutomationFilter', () => {
 
     expect(passResult.pass).toBe(true);
     expect(failResult.pass).toBe(false);
+  });
+
+  it('uses only deterministic clauses for preview matches', () => {
+    const preview = previewConversationAutomationFilterDeterministicMatch(
+      'event:turn_end AND tool:edit AND prompt:"Did the assistant finish?"',
+      {
+        cwd: '/tmp',
+        messages: [{ role: 'assistant', content: [{ type: 'toolCall', name: 'edit' }] }],
+        toolNames: new Set(['edit']),
+        trigger: 'turn_end',
+      },
+    );
+
+    const promptOnly = previewConversationAutomationFilterDeterministicMatch(
+      'prompt:"Did the assistant finish?"',
+      {
+        cwd: '/tmp',
+        messages: [],
+        toolNames: new Set(),
+        trigger: 'turn_end',
+      },
+    );
+
+    expect(preview.pass).toBe(true);
+    expect(promptOnly.pass).toBe(false);
+    expect(promptOnly.reason).toContain('No deterministic preview conditions');
   });
 
   it('builds help metadata with examples and values', () => {

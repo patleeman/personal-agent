@@ -10,6 +10,7 @@ export interface UseApiResult<T> {
   refreshing: boolean;
   error: string | null;
   refetch: (options?: RefetchOptions) => Promise<T | null>;
+  replaceData: (nextData: T) => void;
 }
 
 /**
@@ -78,10 +79,18 @@ export function useApi<T>(fetcher: () => Promise<T>, key?: string): UseApiResult
     }
   }, []);
 
+  const replaceData = useCallback((nextData: T) => {
+    dataRef.current = nextData;
+    setData(nextData);
+    setLoading(false);
+    setRefreshing(false);
+    setError(null);
+  }, []);
+
   useEffect(() => {
     void runFetch({ resetLoading: true });
   }, [key, runFetch]);
 
-  return { data, loading, refreshing, error, refetch: runFetch };
+  return { data, loading, refreshing, error, refetch: runFetch, replaceData };
 }
 

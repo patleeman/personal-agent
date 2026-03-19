@@ -36,6 +36,7 @@ import {
 import {
   evaluateConversationAutomationFilter,
   mayMatchConversationAutomationTrigger,
+  previewConversationAutomationFilterDeterministicMatch,
   type ConversationAutomationFilterTrigger,
 } from './conversationAutomationFilter.js';
 import { syncWebLiveConversationRun, type WebLiveConversationRunState } from './conversationRuns.js';
@@ -797,7 +798,7 @@ export async function previewConversationAutomationMatch(
   sessionId: string,
   query: string,
   trigger: ConversationAutomationFilterTrigger,
-): Promise<Awaited<ReturnType<typeof evaluateConversationAutomationFilter>> | null> {
+): Promise<ReturnType<typeof previewConversationAutomationFilterDeterministicMatch> | null> {
   const entry = registry.get(sessionId);
   if (!entry) {
     return null;
@@ -811,12 +812,10 @@ export async function previewConversationAutomationMatch(
     };
   }
 
-  return evaluateConversationAutomationFilter(query, {
+  return previewConversationAutomationFilterDeterministicMatch(query, {
     cwd: entry.cwd,
     messages: getSessionMessages(entry.session),
     toolNames: new Set(entry.session.getActiveToolNames()),
-    modelRegistry: entry.session.modelRegistry,
-    settingsFile: SETTINGS_FILE,
     trigger,
   });
 }

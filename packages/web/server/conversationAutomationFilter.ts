@@ -433,6 +433,125 @@ export function mayMatchConversationAutomationTrigger(
   return nodeMayMatch(parsed);
 }
 
+function pruneNonDeterministicConversationAutomationFilterNode(
+  node: ConversationAutomationFilterNode,
+): ConversationAutomationFilterNode | null {
+  if (node.type === 'term') {
+    return node.field === 'prompt' ? null : node;
+  }
+
+  const children = node.children
+    .map((child) => pruneNonDeterministicConversationAutomationFilterNode(child))
+    .filter((child): child is ConversationAutomationFilterNode => child !== null);
+
+  if (children.length === 0) {
+    return null;
+  }
+
+  if (children.length === 1) {
+    return children[0] ?? null;
+  }
+
+  return {
+    ...node,
+    children,
+  };
+}
+
+export function previewConversationAutomationFilterDeterministicMatch(
+  input: string,
+  options: {
+    cwd: string;
+    messages: Array<{ role?: string; content?: unknown }>;
+    toolNames: Set<string>;
+    trigger: ConversationAutomationFilterTrigger;
+  },
+): ConversationAutomationJudgeDecision {
+  const parsed = validateConversationAutomationFilter(input, {
+    toolNames: options.toolNames,
+    events: new Set<ConversationAutomationFilterTrigger>(['manual', 'turn_end']),
+  });
+  const deterministic = pruneNonDeterministicConversationAutomationFilterNode(parsed);
+  if (!deterministic) {
+    return {
+      pass: false,
+      reason: 'No deterministic preview conditions to evaluate.',
+      confidence: null,
+    };
+  }
+
+  const usedToolNames = collectUsedToolNames(options.messages);
+  const repo = readGitRepoInfo(options.cwd);
+
+  function evaluateNode(node: ConversationAutomationFilterNode): ConversationAutomationJudgeDecision {
+    if (node.type === 'term') {
+      if (node.field === 'event') {
+        const pass = node.value === options.trigger;
+        return {
+          pass,
+          reason: pass ? `Event ${node.value} matched.` : `Waiting for event ${node.value}.`,
+          confidence: null,
+        };
+      }
+
+      if (node.field === 'tool') {
+        const pass = usedToolNames.has(node.value);
+        return {
+          pass,
+          reason: pass ? `Used tool ${node.value}.` : `Tool ${node.value} not used.`,
+          confidence: null,
+        };
+      }
+
+      const pass = repo?.name === node.value;
+      return {
+        pass,
+        reason: pass
+          ? `Conversation cwd is inside repo ${node.value}.`
+          : repo
+            ? `Conversation cwd is inside repo ${repo.name}, not ${node.value}.`
+            : `Conversation cwd is not inside git repo ${node.value}.`,
+        confidence: null,
+      };
+    }
+
+    if (node.operator === 'AND') {
+      let lastPassing: ConversationAutomationJudgeDecision = {
+        pass: true,
+        reason: 'All deterministic conditions matched.',
+        confidence: null,
+      };
+
+      for (const child of node.children) {
+        const result = evaluateNode(child);
+        if (!result.pass) {
+          return result;
+        }
+        lastPassing = result.reason ? result : lastPassing;
+      }
+
+      return lastPassing;
+    }
+
+    let firstFailure: ConversationAutomationJudgeDecision | null = null;
+    for (const child of node.children) {
+      const result = evaluateNode(child);
+      if (result.pass) {
+        return result;
+      }
+      firstFailure ??= result;
+    }
+
+    return firstFailure ?? {
+      pass: false,
+      reason: 'No deterministic conditions matched.',
+      confidence: null,
+    };
+  }
+
+  return evaluateNode(deterministic);
+}
+
 export async function evaluateConversationAutomationFilter(
   input: string,
   options: {

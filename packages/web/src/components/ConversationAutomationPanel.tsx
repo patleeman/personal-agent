@@ -98,6 +98,7 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
     refreshing,
     error,
     refetch,
+    replaceData,
   } = useApi(fetcher, conversationId);
   const [actionError, setActionError] = useState<string | null>(null);
   const [togglingEnabled, setTogglingEnabled] = useState(false);
@@ -115,22 +116,18 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
     setApplyingPreset(false);
   }, [conversationId]);
 
-  async function refreshWithResult<T>(request: Promise<T>) {
-    setActionError(null);
-    await request;
-    return refetch({ resetLoading: false });
-  }
-
   async function handleToggleEnabled(nextEnabled: boolean) {
     if (!data || togglingEnabled) {
       return;
     }
 
+    setActionError(null);
     setTogglingEnabled(true);
     try {
-      await refreshWithResult(api.updateConversationAutomation(conversationId, {
+      const saved = await api.updateConversationAutomation(conversationId, {
         enabled: nextEnabled,
-      }));
+      });
+      replaceData(saved);
     } catch (nextError) {
       setActionError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
@@ -164,11 +161,13 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
       ...presetGates,
     ];
 
+    setActionError(null);
     setApplyingPreset(true);
     try {
-      await refreshWithResult(api.updateConversationAutomation(conversationId, {
+      const saved = await api.updateConversationAutomation(conversationId, {
         gates: nextGates,
-      }));
+      });
+      replaceData(saved);
     } catch (nextError) {
       setActionError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
