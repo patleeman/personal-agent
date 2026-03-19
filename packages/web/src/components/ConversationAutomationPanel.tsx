@@ -102,7 +102,7 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const [selectedTemplateItemKey, setSelectedTemplateItemKey] = useState('');
-  const [pendingAction, setPendingAction] = useState<'item' | 'plan' | null>(null);
+  const [pendingAction, setPendingAction] = useState<'item' | 'plan' | 'move' | 'remove' | null>(null);
 
   useEffect(() => {
     void refetch({ resetLoading: false });
@@ -115,6 +115,29 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
     setPendingAction(null);
   }, [conversationId]);
 
+  const automation = data?.automation ?? null;
+  const planOptions = data?.presetLibrary.presets ?? [];
+  const itemOptions = useMemo(() => planOptions.flatMap((preset) => preset.items.map((item) => ({
+    key: `${preset.id}::${item.id}`,
+    presetId: preset.id,
+    presetName: preset.name,
+    item,
+  }))), [planOptions]);
+
+  useEffect(() => {
+    if (selectedPlanId && planOptions.some((preset) => preset.id === selectedPlanId)) {
+      return;
+    }
+    setSelectedPlanId(planOptions[0]?.id ?? '');
+  }, [planOptions, selectedPlanId]);
+
+  useEffect(() => {
+    if (selectedTemplateItemKey && itemOptions.some((item) => item.key === selectedTemplateItemKey)) {
+      return;
+    }
+    setSelectedTemplateItemKey(itemOptions[0]?.key ?? '');
+  }, [itemOptions, selectedTemplateItemKey]);
+
   if (loading && !data) {
     return <LoadingState label="Loading plan…" className="px-3 py-3" />;
   }
@@ -123,34 +146,12 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
     return <ErrorState message={error} className="px-3 py-3" />;
   }
 
-  if (!data) {
+  if (!data || !automation) {
     return null;
   }
 
-  const automation = data.automation;
-  const presetLibrary = data.presetLibrary;
   const progressLabel = buildProgressLabel(automation);
-  const planOptions = presetLibrary.presets;
-  const itemOptions = useMemo(() => presetLibrary.presets.flatMap((preset) => preset.items.map((item) => ({
-    key: `${preset.id}::${item.id}`,
-    presetId: preset.id,
-    presetName: preset.name,
-    item,
-  }))), [presetLibrary.presets]);
-
-  useEffect(() => {
-    if (!selectedPlanId || planOptions.some((preset) => preset.id === selectedPlanId)) {
-      return;
-    }
-    setSelectedPlanId(planOptions[0]?.id ?? '');
-  }, [planOptions, selectedPlanId]);
-
-  useEffect(() => {
-    if (!selectedTemplateItemKey || itemOptions.some((item) => item.key === selectedTemplateItemKey)) {
-      return;
-    }
-    setSelectedTemplateItemKey(itemOptions[0]?.key ?? '');
-  }, [itemOptions, selectedTemplateItemKey]);
+  const currentItems = automation.items.map(templateItemFromRuntimeItem);
 
   async function saveItems(nextItems: ConversationAutomationTemplateTodoItem[]) {
     const saved = await api.updateConversationPlan(conversationId, { items: nextItems });
@@ -171,7 +172,7 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
     setPendingAction('plan');
     try {
       await saveItems([
-        ...automation.items.map(templateItemFromRuntimeItem),
+        ...currentItems,
         ...preset.items.map(cloneTemplateItem),
       ]);
     } catch (nextError) {
@@ -195,9 +196,54 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
     setPendingAction('item');
     try {
       await saveItems([
-        ...automation.items.map(templateItemFromRuntimeItem),
+        ...currentItems,
         cloneTemplateItem(selected.item),
       ]);
+    } catch (nextError) {
+      setActionError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
+  async function handleMoveItem(itemId: string, direction: -1 | 1) {
+    if (pendingAction) {
+      return;
+    }
+
+    const index = currentItems.findIndex((item) => item.id === itemId);
+    const nextIndex = index + direction;
+    if (index < 0 || nextIndex < 0 || nextIndex >= currentItems.length) {
+      return;
+    }
+
+    const nextItems = [...currentItems];
+    const [movedItem] = nextItems.splice(index, 1);
+    if (!movedItem) {
+      return;
+    }
+    nextItems.splice(nextIndex, 0, movedItem);
+
+    setActionError(null);
+    setPendingAction('move');
+    try {
+      await saveItems(nextItems);
+    } catch (nextError) {
+      setActionError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
+  async function handleRemoveItem(itemId: string) {
+    if (pendingAction) {
+      return;
+    }
+
+    setActionError(null);
+    setPendingAction('remove');
+    try {
+      await saveItems(currentItems.filter((item) => item.id !== itemId));
     } catch (nextError) {
       setActionError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
@@ -285,13 +331,22 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
           <p className="ui-section-label">Todo list</p>
           {automation.items.map((item, index) => (
             <div key={item.id} className="rounded-lg bg-surface/60 px-3 py-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] uppercase tracking-[0.14em] text-dim">Item {index + 1}</span>
-                <Pill tone={itemTone(item.status)}>{item.status}</Pill>
-                {automation.activeItemId === item.id && <span className="text-[10px] uppercase tracking-[0.14em] text-accent">active</span>}
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] uppercase tracking-[0.14em] text-dim">Item {index + 1}</span>
+                    <Pill tone={itemTone(item.status)}>{item.status}</Pill>
+                    {automation.activeItemId === item.id && <span className="text-[10px] uppercase tracking-[0.14em] text-accent">active</span>}
+                  </div>
+                  <p className="mt-1 text-[13px] font-medium text-primary break-words">{item.label}</p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <ToolbarButton onClick={() => { void handleMoveItem(item.id, -1); }} disabled={index === 0 || pendingAction !== null}>↑</ToolbarButton>
+                  <ToolbarButton onClick={() => { void handleMoveItem(item.id, 1); }} disabled={index === automation.items.length - 1 || pendingAction !== null}>↓</ToolbarButton>
+                  <ToolbarButton onClick={() => { void handleRemoveItem(item.id); }} disabled={pendingAction !== null} className="text-danger">Remove</ToolbarButton>
+                </div>
               </div>
-              <p className="mt-1 text-[13px] font-medium text-primary break-words">{item.label}</p>
-              <p className="mt-1 rounded-md bg-base/60 px-2.5 py-2 text-[11px] leading-relaxed break-words text-secondary font-mono whitespace-pre-wrap">
+              <p className="mt-2 rounded-md bg-base/60 px-2.5 py-2 text-[11px] leading-relaxed break-words text-secondary font-mono whitespace-pre-wrap">
                 {item.kind === 'instruction'
                   ? item.text
                   : `/skill:${item.skillName}${item.skillArgs ? ` ${item.skillArgs}` : ''}`}

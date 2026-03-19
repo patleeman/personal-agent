@@ -303,6 +303,7 @@ const TOOL_META: Record<string, { icon: string; label: string; color: string; to
   web_fetch:   { icon: '⌕',  label: 'web_fetch',       color: 'text-success border-success/25 bg-success/5',   tone: 'success' },
   screenshot:  { icon: '⊡',  label: 'screenshot',      color: 'text-secondary border-border-default bg-elevated', tone: 'muted' },
   artifact:    { icon: '◫',  label: 'artifact',        color: 'text-accent border-accent/25 bg-accent/5',      tone: 'accent' },
+  todo_list:   { icon: '☑',  label: 'todo_list',       color: 'text-warning border-warning/25 bg-warning/5',    tone: 'warning' },
   deferred_resume: { icon: '⏰', label: 'deferred_resume', color: 'text-warning border-warning/25 bg-warning/5', tone: 'warning' },
 };
 function toolMeta(t: string) {

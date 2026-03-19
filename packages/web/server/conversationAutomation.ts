@@ -548,10 +548,9 @@ function normalizeWorkflowPresetLibraryState(settings: Record<string, unknown>):
   };
 }
 
-export function readSavedConversationAutomationPreferences(settingsFile: string): ConversationAutomationPreferencesState {
-  const automationSettings = readConversationAutomationSettings(readSettingsObject(settingsFile));
+export function readSavedConversationAutomationPreferences(_settingsFile: string): ConversationAutomationPreferencesState {
   return {
-    defaultEnabled: readBoolean(automationSettings.defaultEnabled, false),
+    defaultEnabled: true,
   };
 }
 
@@ -560,20 +559,14 @@ export function readSavedConversationAutomationWorkflowPresets(settingsFile: str
 }
 
 export function writeSavedConversationAutomationPreferences(
-  input: { defaultEnabled?: boolean },
+  _input: { defaultEnabled?: boolean },
   settingsFile: string,
 ): ConversationAutomationPreferencesState {
   const settings = readSettingsObject(settingsFile);
   const webUi = readWebUiSettings(settings);
   const automationSettings = readConversationAutomationSettings(settings);
 
-  if (input.defaultEnabled !== undefined) {
-    if (input.defaultEnabled) {
-      automationSettings.defaultEnabled = true;
-    } else {
-      delete automationSettings.defaultEnabled;
-    }
-  }
+  delete automationSettings.defaultEnabled;
 
   if (Object.keys(automationSettings).length > 0) {
     webUi.conversationAutomation = automationSettings;
@@ -588,7 +581,7 @@ export function writeSavedConversationAutomationPreferences(
   }
 
   writeSettingsObject(settingsFile, settings);
-  return readSavedConversationAutomationPreferences(settingsFile);
+  return { defaultEnabled: true };
 }
 
 export function writeSavedConversationAutomationWorkflowPresets(
@@ -641,7 +634,7 @@ function buildDocumentFromTemplate(
   conversationId: string,
   items: ConversationAutomationTemplateTodoItem[],
   now = new Date().toISOString(),
-  enabled = false,
+  enabled = items.length > 0,
 ): ConversationAutomationDocument {
   return {
     version: DOCUMENT_VERSION,
@@ -662,7 +655,7 @@ export function readConversationAutomationDocument(path: string, conversationId:
 export function loadConversationAutomationState(options: ResolveConversationAutomationPathOptions & { settingsFile?: string }): LoadedConversationAutomationState {
   const preferences = options.settingsFile
     ? readSavedConversationAutomationPreferences(options.settingsFile)
-    : { defaultEnabled: false } satisfies ConversationAutomationPreferencesState;
+    : { defaultEnabled: true } satisfies ConversationAutomationPreferencesState;
   const presetLibrary = options.settingsFile
     ? readSavedConversationAutomationWorkflowPresets(options.settingsFile)
     : { presets: [], defaultPresetIds: [] } satisfies ConversationAutomationWorkflowPresetLibraryState;
@@ -762,6 +755,7 @@ export function replaceConversationAutomationItems(
     ...document,
     items: nextItems,
     updatedAt,
+    enabled: nextItems.length > 0,
     activeItemId: undefined,
     review: undefined,
   };
@@ -791,6 +785,7 @@ export function appendConversationAutomationItems(
       })),
     ],
     updatedAt,
+    enabled: true,
     review: undefined,
   };
 }

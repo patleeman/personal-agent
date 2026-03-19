@@ -66,7 +66,7 @@ describe('conversationAutomation state', () => {
       version: 3,
       conversationId: 'conv-123',
       updatedAt: loaded.document.updatedAt,
-      enabled: false,
+      enabled: true,
       items: [
         expect.objectContaining({
           label: 'workflow-checkpoint',
