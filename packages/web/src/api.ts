@@ -1,4 +1,4 @@
-import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationJudgeSettingsState, ConversationAutomationResponse, ConversationCwdChangeResult, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, MemoryWorkItem, MergeMemoryDocResult, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectDiagnostics, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SyncState, ToolsState, WebUiState } from './types';
+import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationJudgeSettingsState, ConversationAutomationResponse, ConversationAutomationTemplateGate, ConversationAutomationWorkflowPresetLibraryState, ConversationCwdChangeResult, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, MemoryWorkItem, MergeMemoryDocResult, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectDiagnostics, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SyncState, ToolsState, WebUiState } from './types';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch('/api' + path);
@@ -288,31 +288,15 @@ export const api = {
   liveSession: (id: string) => get<LiveSessionMeta & { live: boolean }>(`/live-sessions/${id}`),
   liveSessionContext: (id: string) => get<LiveSessionContext>(`/live-sessions/${id}/context`),
   conversationAutomation: (id: string) => get<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation`),
-  updateConversationAutomation: (id: string, input: { paused: boolean }) =>
-    patch<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation`, input),
-  addConversationAutomationStep: (id: string, input: {
-    kind: 'skill' | 'judge';
-    skillName?: string;
-    skillArgs?: string;
-    label?: string;
-    prompt?: string;
-  }) => post<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation/steps`, input),
-  updateConversationAutomationStep: (id: string, stepId: string, input:
-    | {
-        label?: string;
-        skillName: string;
-        skillArgs?: string;
-      }
-    | {
-        label?: string;
-        prompt: string;
-      }) => patch<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation/steps/${encodeURIComponent(stepId)}`, input),
-  moveConversationAutomationStep: (id: string, stepId: string, direction: 'up' | 'down') =>
-    post<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation/steps/${encodeURIComponent(stepId)}/move`, { direction }),
-  resetConversationAutomationStep: (id: string, stepId: string, resume = false) =>
-    post<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation/steps/${encodeURIComponent(stepId)}/reset`, { resume }),
-  deleteConversationAutomationStep: (id: string, stepId: string) =>
-    del<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation/steps/${encodeURIComponent(stepId)}`),
+  updateConversationAutomation: (id: string, input: {
+    enabled?: boolean;
+    gates?: ConversationAutomationTemplateGate[];
+  }) => patch<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation`, input),
+  resetConversationAutomationGate: (id: string, gateId: string, resume = false) =>
+    post<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation/gates/${encodeURIComponent(gateId)}/reset`, { resume }),
+  conversationAutomationWorkflowPresets: () => get<ConversationAutomationWorkflowPresetLibraryState>('/conversation-automation/workflow-presets'),
+  updateConversationAutomationWorkflowPresets: (input: ConversationAutomationWorkflowPresetLibraryState) =>
+    patch<ConversationAutomationWorkflowPresetLibraryState>('/conversation-automation/workflow-presets', input),
   liveSessionContextUsage: (id: string) => get<SessionContextUsage>(`/live-sessions/${encodeURIComponent(id)}/context-usage`),
   conversationArtifacts: (id: string) => get<{ conversationId: string; artifacts: ConversationArtifactSummary[] }>(`/conversations/${encodeURIComponent(id)}/artifacts`),
   conversationArtifact: (id: string, artifactId: string) => get<{ conversationId: string; artifact: ConversationArtifactRecord }>(`/conversations/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(artifactId)}`),

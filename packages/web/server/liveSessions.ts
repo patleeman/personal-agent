@@ -27,10 +27,10 @@ import {
 } from './conversationAutoTitle.js';
 import {
   buildConversationAutomationSkillPrompt,
-  getConversationAutomationState,
+  loadConversationAutomationState,
   writeConversationAutomationState,
   type ConversationAutomationDocument,
-  type ConversationAutomationJudgeStep,
+  type ConversationAutomationGate,
   type ConversationAutomationSkillStep,
 } from './conversationAutomation.js';
 import { runConversationAutomationJudge } from './conversationAutomationJudge.js';
@@ -798,11 +798,31 @@ function saveConversationAutomation(entry: LiveEntry, document: ConversationAuto
   return saved;
 }
 
-function clearConversationAutomationStepRuntime(step: ConversationAutomationSkillStep | ConversationAutomationJudgeStep): void {
+function clearConversationAutomationGateRuntime(gate: ConversationAutomationGate): void {
+  delete gate.startedAt;
+  delete gate.completedAt;
+  delete gate.resultReason;
+  delete gate.resultConfidence;
+}
+
+function clearConversationAutomationSkillRuntime(step: ConversationAutomationSkillStep): void {
   delete step.startedAt;
   delete step.completedAt;
   delete step.resultReason;
   delete step.resultConfidence;
+}
+
+function findConversationAutomationGate(document: ConversationAutomationDocument, gateId: string | undefined): ConversationAutomationGate | null {
+  const normalizedGateId = gateId?.trim();
+  if (!normalizedGateId) {
+    return null;
+  }
+
+  return document.gates.find((gate) => gate.id === normalizedGateId) ?? null;
+}
+
+function findFirstIncompleteConversationAutomationGate(document: ConversationAutomationDocument): ConversationAutomationGate | null {
+  return document.gates.find((gate) => gate.status !== 'completed') ?? null;
 }
 
 function maybeFinalizeConversationAutomationSkillStep(
@@ -810,16 +830,23 @@ function maybeFinalizeConversationAutomationSkillStep(
   document: ConversationAutomationDocument,
   finishedAt: string,
 ): ConversationAutomationDocument {
-  const activeStepId = document.activeStepId?.trim();
-  if (!activeStepId) {
-    return document;
+  const gate = findConversationAutomationGate(document, document.activeGateId);
+  const activeSkillId = document.activeSkillId?.trim();
+  if (!gate || !activeSkillId) {
+    return {
+      ...document,
+      activeGateId: undefined,
+      activeSkillId: undefined,
+      updatedAt: finishedAt,
+    };
   }
 
-  const step = document.steps.find((candidate): candidate is ConversationAutomationSkillStep => candidate.id === activeStepId && candidate.kind === 'skill');
+  const step = gate.skills.find((candidate) => candidate.id === activeSkillId);
   if (!step) {
     return {
       ...document,
-      activeStepId: undefined,
+      activeGateId: undefined,
+      activeSkillId: undefined,
       updatedAt: finishedAt,
     };
   }
@@ -829,10 +856,25 @@ function maybeFinalizeConversationAutomationSkillStep(
   step.updatedAt = finishedAt;
   step.completedAt = finishedAt;
   step.resultReason = failure ? failure : 'Follow-up turn completed.';
-  document.activeStepId = undefined;
+  gate.updatedAt = finishedAt;
+  document.activeGateId = undefined;
+  document.activeSkillId = undefined;
   document.updatedAt = finishedAt;
+
   if (failure) {
-    document.paused = true;
+    gate.status = 'failed';
+    gate.completedAt = finishedAt;
+    gate.resultReason = failure;
+    document.enabled = false;
+    return document;
+  }
+
+  const hasPendingSkill = gate.skills.some((skill) => skill.status === 'pending');
+  if (!hasPendingSkill) {
+    gate.status = 'completed';
+    gate.completedAt = finishedAt;
+  } else {
+    gate.status = 'running';
   }
 
   return document;
@@ -843,41 +885,36 @@ function interruptConversationAutomationStep(
   reason: string,
   finishedAt: string,
 ): ConversationAutomationDocument {
-  const activeStepId = document.activeStepId?.trim();
-  if (!activeStepId) {
-    return document;
-  }
-
-  const step = document.steps.find((candidate) => candidate.id === activeStepId);
-  if (!step) {
+  const gate = findConversationAutomationGate(document, document.activeGateId);
+  if (!gate) {
     return {
       ...document,
-      activeStepId: undefined,
+      activeGateId: undefined,
+      activeSkillId: undefined,
       updatedAt: finishedAt,
-      paused: true,
+      enabled: false,
     };
   }
 
-  step.status = 'failed';
-  step.updatedAt = finishedAt;
-  step.completedAt = finishedAt;
-  step.resultReason = reason;
-  document.activeStepId = undefined;
-  document.updatedAt = finishedAt;
-  document.paused = true;
-  return document;
-}
-
-function hasPendingConversationAutomationStep(document: ConversationAutomationDocument): boolean {
-  return document.steps.some((step) => step.status === 'pending');
-}
-
-function finalizeConversationAutomationIfDone(document: ConversationAutomationDocument, updatedAt: string): ConversationAutomationDocument {
-  if (!document.activeStepId && !hasPendingConversationAutomationStep(document)) {
-    document.paused = true;
-    document.updatedAt = updatedAt;
+  const activeSkillId = document.activeSkillId?.trim();
+  if (activeSkillId) {
+    const step = gate.skills.find((candidate) => candidate.id === activeSkillId);
+    if (step) {
+      step.status = 'failed';
+      step.updatedAt = finishedAt;
+      step.completedAt = finishedAt;
+      step.resultReason = reason;
+    }
   }
 
+  gate.status = 'failed';
+  gate.updatedAt = finishedAt;
+  gate.completedAt = finishedAt;
+  gate.resultReason = reason;
+  document.activeGateId = undefined;
+  document.activeSkillId = undefined;
+  document.updatedAt = finishedAt;
+  document.enabled = false;
   return document;
 }
 
@@ -892,117 +929,145 @@ export async function kickConversationAutomation(
 
   automationProcessingSessions.add(sessionId);
   try {
-    let document = getConversationAutomationState({
+    let document = loadConversationAutomationState({
       profile: resolveConversationAutomationProfile(),
       conversationId: sessionId,
-    });
+      settingsFile: SETTINGS_FILE,
+    }).document;
 
-    if (trigger === 'manual' && document.activeStepId) {
+    if (trigger === 'manual' && (document.activeGateId || document.activeSkillId)) {
       document = interruptConversationAutomationStep(
         document,
         'Conversation automation was interrupted before the step completed.',
         new Date().toISOString(),
       );
-      document = finalizeConversationAutomationIfDone(document, document.updatedAt);
       document = saveConversationAutomation(entry, document);
       entry.currentTurnError = null;
     }
 
-    if (trigger === 'turn_end' && document.activeStepId) {
+    if (trigger === 'turn_end' && document.activeSkillId) {
       document = maybeFinalizeConversationAutomationSkillStep(entry, document, new Date().toISOString());
-      document = finalizeConversationAutomationIfDone(document, document.updatedAt);
       document = saveConversationAutomation(entry, document);
       entry.currentTurnError = null;
     }
 
-    while (!entry.session.isStreaming && !document.paused) {
-      const nextStep = document.steps.find((step) => step.status === 'pending');
-      if (!nextStep) {
-        document = finalizeConversationAutomationIfDone(document, new Date().toISOString());
-        saveConversationAutomation(entry, document);
+    while (!entry.session.isStreaming && document.enabled) {
+      const nextGate = findFirstIncompleteConversationAutomationGate(document);
+      if (!nextGate) {
         break;
       }
 
-      if (nextStep.kind === 'judge') {
+      const pendingSkill = nextGate.skills.find((skill) => skill.status === 'pending');
+      if (nextGate.status === 'running') {
+        if (!pendingSkill) {
+          nextGate.status = 'completed';
+          nextGate.completedAt = new Date().toISOString();
+          nextGate.updatedAt = nextGate.completedAt;
+          document.updatedAt = nextGate.completedAt;
+          document = saveConversationAutomation(entry, document);
+          if (trigger !== 'turn_end') {
+            break;
+          }
+          continue;
+        }
+
         const startedAt = new Date().toISOString();
-        clearConversationAutomationStepRuntime(nextStep);
-        nextStep.status = 'running';
-        nextStep.startedAt = startedAt;
-        nextStep.updatedAt = startedAt;
-        document.activeStepId = nextStep.id;
+        clearConversationAutomationSkillRuntime(pendingSkill);
+        pendingSkill.status = 'running';
+        pendingSkill.startedAt = startedAt;
+        pendingSkill.updatedAt = startedAt;
+        nextGate.status = 'running';
+        nextGate.updatedAt = startedAt;
+        document.activeGateId = nextGate.id;
+        document.activeSkillId = pendingSkill.id;
         document.updatedAt = startedAt;
         document = saveConversationAutomation(entry, document);
 
         try {
-          const result = await runConversationAutomationJudge({
-            prompt: nextStep.prompt,
-            messages: getSessionMessages(entry.session),
-            modelRegistry: entry.session.modelRegistry,
-            settingsFile: SETTINGS_FILE,
-          });
-
-          const completedAt = new Date().toISOString();
-          nextStep.status = result.pass ? 'completed' : 'failed';
-          nextStep.updatedAt = completedAt;
-          nextStep.completedAt = completedAt;
-          nextStep.resultReason = result.reason;
-          if (result.confidence !== null) {
-            nextStep.resultConfidence = result.confidence;
-          } else {
-            delete nextStep.resultConfidence;
-          }
-          document.activeStepId = undefined;
-          document.updatedAt = completedAt;
-          if (!result.pass) {
-            document.paused = true;
-          }
-          document = finalizeConversationAutomationIfDone(document, completedAt);
-          document = saveConversationAutomation(entry, document);
-          if (!result.pass) {
-            break;
-          }
-          continue;
+          entry.currentTurnError = null;
+          await promptSession(sessionId, buildConversationAutomationSkillPrompt(pendingSkill), 'followUp');
         } catch (error) {
           const failedAt = new Date().toISOString();
-          nextStep.status = 'failed';
-          nextStep.updatedAt = failedAt;
-          nextStep.completedAt = failedAt;
-          nextStep.resultReason = error instanceof Error ? error.message : String(error);
-          delete nextStep.resultConfidence;
-          document.activeStepId = undefined;
+          pendingSkill.status = 'failed';
+          pendingSkill.updatedAt = failedAt;
+          pendingSkill.completedAt = failedAt;
+          pendingSkill.resultReason = error instanceof Error ? error.message : String(error);
+          nextGate.status = 'failed';
+          nextGate.updatedAt = failedAt;
+          nextGate.completedAt = failedAt;
+          nextGate.resultReason = pendingSkill.resultReason;
+          document.activeGateId = undefined;
+          document.activeSkillId = undefined;
           document.updatedAt = failedAt;
-          document.paused = true;
-          document = finalizeConversationAutomationIfDone(document, failedAt);
+          document.enabled = false;
           saveConversationAutomation(entry, document);
-          break;
         }
+        break;
+      }
+
+      if (trigger !== 'turn_end') {
+        break;
       }
 
       const startedAt = new Date().toISOString();
-      clearConversationAutomationStepRuntime(nextStep);
-      nextStep.status = 'running';
-      nextStep.startedAt = startedAt;
-      nextStep.updatedAt = startedAt;
-      document.activeStepId = nextStep.id;
+      clearConversationAutomationGateRuntime(nextGate);
+      nextGate.status = 'running';
+      nextGate.startedAt = startedAt;
+      nextGate.updatedAt = startedAt;
+      document.activeGateId = nextGate.id;
+      document.activeSkillId = undefined;
       document.updatedAt = startedAt;
       document = saveConversationAutomation(entry, document);
 
       try {
-        entry.currentTurnError = null;
-        await promptSession(sessionId, buildConversationAutomationSkillPrompt(nextStep), 'followUp');
+        const result = await runConversationAutomationJudge({
+          prompt: nextGate.prompt,
+          messages: getSessionMessages(entry.session),
+          modelRegistry: entry.session.modelRegistry,
+          settingsFile: SETTINGS_FILE,
+        });
+
+        const completedAt = new Date().toISOString();
+        nextGate.updatedAt = completedAt;
+        nextGate.completedAt = completedAt;
+        nextGate.resultReason = result.reason;
+        if (result.confidence !== null) {
+          nextGate.resultConfidence = result.confidence;
+        } else {
+          delete nextGate.resultConfidence;
+        }
+        document.activeGateId = undefined;
+        document.updatedAt = completedAt;
+
+        if (!result.pass) {
+          nextGate.status = 'failed';
+          document = saveConversationAutomation(entry, document);
+          break;
+        }
+
+        if (nextGate.skills.length === 0) {
+          nextGate.status = 'completed';
+          document = saveConversationAutomation(entry, document);
+          continue;
+        }
+
+        nextGate.status = 'running';
+        delete nextGate.completedAt;
+        document = saveConversationAutomation(entry, document);
+        continue;
       } catch (error) {
         const failedAt = new Date().toISOString();
-        nextStep.status = 'failed';
-        nextStep.updatedAt = failedAt;
-        nextStep.completedAt = failedAt;
-        nextStep.resultReason = error instanceof Error ? error.message : String(error);
-        document.activeStepId = undefined;
+        nextGate.status = 'failed';
+        nextGate.updatedAt = failedAt;
+        nextGate.completedAt = failedAt;
+        nextGate.resultReason = error instanceof Error ? error.message : String(error);
+        delete nextGate.resultConfidence;
+        document.activeGateId = undefined;
         document.updatedAt = failedAt;
-        document.paused = true;
-        document = finalizeConversationAutomationIfDone(document, failedAt);
+        document.enabled = false;
         saveConversationAutomation(entry, document);
+        break;
       }
-      break;
     }
   } finally {
     automationProcessingSessions.delete(sessionId);

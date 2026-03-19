@@ -888,37 +888,70 @@ export interface ConversationAutomationJudgeSettingsState {
   usingDefaultSystemPrompt: boolean;
 }
 
-export type ConversationAutomationStepStatus = 'pending' | 'running' | 'completed' | 'failed';
+export type ConversationAutomationSkillStepStatus = 'pending' | 'running' | 'completed' | 'failed';
+export type ConversationAutomationGateStatus = 'pending' | 'running' | 'completed' | 'failed';
 
-export type ConversationAutomationStep = {
+export interface ConversationAutomationTemplateSkillStep {
   id: string;
-  kind: 'skill' | 'judge';
   label: string;
-  status: ConversationAutomationStepStatus;
+  skillName: string;
+  skillArgs?: string;
+}
+
+export interface ConversationAutomationTemplateGate {
+  id: string;
+  label: string;
+  prompt: string;
+  skills: ConversationAutomationTemplateSkillStep[];
+}
+
+export interface ConversationAutomationSkillStep {
+  id: string;
+  label: string;
+  skillName: string;
+  skillArgs?: string;
+  status: ConversationAutomationSkillStepStatus;
   createdAt: string;
   updatedAt: string;
   startedAt?: string;
   completedAt?: string;
   resultReason?: string;
   resultConfidence?: number;
-} & (
-  | {
-      kind: 'skill';
-      skillName: string;
-      skillArgs?: string;
-    }
-  | {
-      kind: 'judge';
-      prompt: string;
-    }
-);
+}
+
+export interface ConversationAutomationGate {
+  id: string;
+  label: string;
+  prompt: string;
+  status: ConversationAutomationGateStatus;
+  createdAt: string;
+  updatedAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  resultReason?: string;
+  resultConfidence?: number;
+  skills: ConversationAutomationSkillStep[];
+}
+
+export interface ConversationAutomationWorkflowPreset {
+  id: string;
+  name: string;
+  updatedAt: string;
+  gates: ConversationAutomationTemplateGate[];
+}
+
+export interface ConversationAutomationWorkflowPresetLibraryState {
+  presets: ConversationAutomationWorkflowPreset[];
+  defaultPresetId: string | null;
+}
 
 export interface ConversationAutomationState {
   conversationId: string;
-  paused: boolean;
-  activeStepId: string | null;
+  enabled: boolean;
+  activeGateId: string | null;
+  activeSkillId: string | null;
   updatedAt: string;
-  steps: ConversationAutomationStep[];
+  gates: ConversationAutomationGate[];
 }
 
 export interface ConversationAutomationSkillInfo {
@@ -930,7 +963,9 @@ export interface ConversationAutomationSkillInfo {
 export interface ConversationAutomationResponse {
   conversationId: string;
   live: boolean;
+  inheritedPresetId: string | null;
   automation: ConversationAutomationState;
+  presetLibrary: ConversationAutomationWorkflowPresetLibraryState;
   skills: ConversationAutomationSkillInfo[];
   judge: ConversationAutomationJudgeSettingsState;
 }

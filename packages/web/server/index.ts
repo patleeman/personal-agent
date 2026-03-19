@@ -121,13 +121,13 @@ import {
 } from './liveSessions.js';
 import { recoverDurableLiveConversations } from './conversationRecovery.js';
 import {
-  createConversationAutomationJudgeStep,
-  createConversationAutomationSkillStep,
-  getConversationAutomationState,
-  moveConversationAutomationStep,
-  resetConversationAutomationFromStep,
-  updateConversationAutomationStep,
+  loadConversationAutomationState,
+  replaceConversationAutomationGates,
+  resetConversationAutomationFromGate,
+  updateConversationAutomationEnabled,
   writeConversationAutomationState,
+  readSavedConversationAutomationWorkflowPresets,
+  writeSavedConversationAutomationWorkflowPresets,
 } from './conversationAutomation.js';
 import {
   readSavedConversationAutomationJudgePreferences,
@@ -2564,10 +2564,12 @@ function listAvailableThemeIds(): string[] {
 
 function buildConversationAutomationResponse(conversationId: string) {
   const profile = getCurrentProfile();
-  const automation = getConversationAutomationState({
+  const loaded = loadConversationAutomationState({
     profile,
     conversationId,
+    settingsFile: SETTINGS_FILE,
   });
+  const automation = loaded.document;
   const skills = listSkillsForCurrentProfile().map((skill) => ({
     name: skill.name,
     description: skill.description,
@@ -2578,32 +2580,40 @@ function buildConversationAutomationResponse(conversationId: string) {
   return {
     conversationId,
     live: liveRegistry.has(conversationId),
+    inheritedPresetId: loaded.inheritedPresetId,
     automation: {
       conversationId: automation.conversationId,
-      paused: automation.paused,
-      activeStepId: automation.activeStepId ?? null,
+      enabled: automation.enabled,
+      activeGateId: automation.activeGateId ?? null,
+      activeSkillId: automation.activeSkillId ?? null,
       updatedAt: automation.updatedAt,
-      steps: automation.steps.map((step) => ({
-        id: step.id,
-        kind: step.kind,
-        label: step.label,
-        status: step.status,
-        createdAt: step.createdAt,
-        updatedAt: step.updatedAt,
-        ...(step.startedAt ? { startedAt: step.startedAt } : {}),
-        ...(step.completedAt ? { completedAt: step.completedAt } : {}),
-        ...(step.resultReason ? { resultReason: step.resultReason } : {}),
-        ...(typeof step.resultConfidence === 'number' ? { resultConfidence: step.resultConfidence } : {}),
-        ...(step.kind === 'skill'
-          ? {
-              skillName: step.skillName,
-              ...(step.skillArgs ? { skillArgs: step.skillArgs } : {}),
-            }
-          : {
-              prompt: step.prompt,
-            }),
+      gates: automation.gates.map((gate) => ({
+        id: gate.id,
+        label: gate.label,
+        prompt: gate.prompt,
+        status: gate.status,
+        createdAt: gate.createdAt,
+        updatedAt: gate.updatedAt,
+        ...(gate.startedAt ? { startedAt: gate.startedAt } : {}),
+        ...(gate.completedAt ? { completedAt: gate.completedAt } : {}),
+        ...(gate.resultReason ? { resultReason: gate.resultReason } : {}),
+        ...(typeof gate.resultConfidence === 'number' ? { resultConfidence: gate.resultConfidence } : {}),
+        skills: gate.skills.map((skill) => ({
+          id: skill.id,
+          label: skill.label,
+          skillName: skill.skillName,
+          ...(skill.skillArgs ? { skillArgs: skill.skillArgs } : {}),
+          status: skill.status,
+          createdAt: skill.createdAt,
+          updatedAt: skill.updatedAt,
+          ...(skill.startedAt ? { startedAt: skill.startedAt } : {}),
+          ...(skill.completedAt ? { completedAt: skill.completedAt } : {}),
+          ...(skill.resultReason ? { resultReason: skill.resultReason } : {}),
+          ...(typeof skill.resultConfidence === 'number' ? { resultConfidence: skill.resultConfidence } : {}),
+        })),
       })),
     },
+    presetLibrary: loaded.presetLibrary,
     skills,
     judge,
   };
@@ -2616,6 +2626,113 @@ function saveConversationAutomationDocument(document: Parameters<typeof writeCon
   });
   invalidateAppTopics('sessions');
   return saved;
+}
+
+function validateConversationAutomationTemplateGates(gates: unknown, availableSkillNames: Set<string>): asserts gates is Array<{
+  id: string;
+  label?: string;
+  prompt: string;
+  skills?: Array<{
+    id: string;
+    label?: string;
+    skillName: string;
+    skillArgs?: string;
+  }>;
+}> {
+  if (!Array.isArray(gates)) {
+    throw new Error('gates must be an array');
+  }
+
+  for (const gate of gates) {
+    if (!gate || typeof gate !== 'object' || Array.isArray(gate)) {
+      throw new Error('Each gate must be an object.');
+    }
+
+    const prompt = typeof (gate as { prompt?: unknown }).prompt === 'string'
+      ? (gate as { prompt: string }).prompt.trim()
+      : '';
+    if (!prompt) {
+      throw new Error('Each gate requires a prompt.');
+    }
+
+    const skills = Array.isArray((gate as { skills?: unknown }).skills)
+      ? (gate as { skills: Array<{ skillName?: unknown }> }).skills
+      : [];
+    for (const skill of skills) {
+      const skillName = typeof skill?.skillName === 'string' ? skill.skillName.trim() : '';
+      if (!skillName) {
+        throw new Error('Each nested skill requires a skillName.');
+      }
+      if (!availableSkillNames.has(skillName)) {
+        throw new Error(`Unknown skill: ${skillName}`);
+      }
+    }
+  }
+}
+
+function validateConversationAutomationWorkflowPresets(
+  presets: unknown,
+  defaultPresetId: unknown,
+  availableSkillNames: Set<string>,
+): asserts presets is Array<{
+  id: string;
+  name: string;
+  gates: Array<{
+    id: string;
+    label?: string;
+    prompt: string;
+    skills?: Array<{
+      id: string;
+      label?: string;
+      skillName: string;
+      skillArgs?: string;
+    }>;
+  }>;
+}> {
+  if (!Array.isArray(presets)) {
+    throw new Error('presets must be an array');
+  }
+
+  const presetIds = new Set<string>();
+  for (const preset of presets) {
+    if (!preset || typeof preset !== 'object' || Array.isArray(preset)) {
+      throw new Error('Each preset must be an object.');
+    }
+
+    const id = typeof (preset as { id?: unknown }).id === 'string'
+      ? (preset as { id: string }).id.trim()
+      : '';
+    if (!id) {
+      throw new Error('Each preset requires an id.');
+    }
+    if (presetIds.has(id)) {
+      throw new Error(`Duplicate preset id: ${id}`);
+    }
+    presetIds.add(id);
+
+    const name = typeof (preset as { name?: unknown }).name === 'string'
+      ? (preset as { name: string }).name.trim()
+      : '';
+    if (!name) {
+      throw new Error('Each preset requires a name.');
+    }
+
+    const gates = (preset as { gates?: unknown }).gates;
+    if (!Array.isArray(gates) || gates.length === 0) {
+      throw new Error('Each preset requires at least one gate.');
+    }
+    validateConversationAutomationTemplateGates(gates, availableSkillNames);
+  }
+
+  if (defaultPresetId !== null && defaultPresetId !== undefined) {
+    const normalizedDefaultPresetId = typeof defaultPresetId === 'string' ? defaultPresetId.trim() : '';
+    if (!normalizedDefaultPresetId) {
+      throw new Error('defaultPresetId must be a string or null');
+    }
+    if (!presetIds.has(normalizedDefaultPresetId)) {
+      throw new Error(`Default preset not found: ${normalizedDefaultPresetId}`);
+    }
+  }
 }
 
 app.get('/api/models', (_req, res) => {
@@ -2928,6 +3045,57 @@ app.patch('/api/conversation-automation/settings', (req, res) => {
       stack: err instanceof Error ? err.stack : undefined,
     });
     res.status(500).json({ error: String(err) });
+  }
+});
+
+app.get('/api/conversation-automation/workflow-presets', (_req, res) => {
+  try {
+    res.json(readSavedConversationAutomationWorkflowPresets(SETTINGS_FILE));
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.patch('/api/conversation-automation/workflow-presets', (req, res) => {
+  try {
+    const { presets, defaultPresetId } = req.body as {
+      presets?: unknown;
+      defaultPresetId?: unknown;
+    };
+    const skillNames = new Set(listSkillsForCurrentProfile().map((skill) => skill.name));
+    validateConversationAutomationWorkflowPresets(presets, defaultPresetId, skillNames);
+
+    const saved = persistSettingsWrite(
+      (settingsFile) => writeSavedConversationAutomationWorkflowPresets({
+        presets: presets as Parameters<typeof writeSavedConversationAutomationWorkflowPresets>[0]['presets'],
+        defaultPresetId: (typeof defaultPresetId === 'string' ? defaultPresetId : null) as Parameters<typeof writeSavedConversationAutomationWorkflowPresets>[0]['defaultPresetId'],
+      }, settingsFile),
+      { runtimeSettingsFile: SETTINGS_FILE },
+    );
+
+    res.json(saved);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.startsWith('Unknown skill:')
+      || message.includes('gates must be an array')
+      || message.includes('Each gate')
+      || message.includes('Each nested skill')
+      || message.includes('presets must be an array')
+      || message.includes('Each preset')
+      || message.includes('Duplicate preset id:')
+      || message.includes('defaultPresetId must be a string or null')
+      || message.includes('Default preset not found:')
+      ? 400
+      : 500;
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(status).json({ error: message });
   }
 });
 
@@ -5011,274 +5179,80 @@ app.get('/api/conversations/:id/automation', (req, res) => {
 
 app.patch('/api/conversations/:id/automation', async (req, res) => {
   try {
-    const { paused } = req.body as { paused?: boolean };
-    if (typeof paused !== 'boolean') {
-      res.status(400).json({ error: 'paused required' });
-      return;
-    }
-
-    const document = getConversationAutomationState({
-      profile: getCurrentProfile(),
-      conversationId: req.params.id,
-    });
-    document.paused = paused;
-    document.updatedAt = new Date().toISOString();
-    saveConversationAutomationDocument(document);
-
-    if (!paused) {
-      await kickConversationAutomation(req.params.id);
-    }
-
-    res.json(buildConversationAutomationResponse(req.params.id));
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.post('/api/conversations/:id/automation/steps', async (req, res) => {
-  try {
     const body = req.body as {
-      kind?: 'skill' | 'judge';
-      skillName?: string;
-      skillArgs?: string;
-      label?: string;
-      prompt?: string;
+      enabled?: boolean;
+      gates?: unknown;
     };
 
-    if (body.kind !== 'skill' && body.kind !== 'judge') {
-      res.status(400).json({ error: 'kind must be skill or judge' });
+    if (typeof body.enabled !== 'boolean' && !Array.isArray(body.gates)) {
+      res.status(400).json({ error: 'enabled or gates required' });
       return;
     }
 
-    const document = getConversationAutomationState({
-      profile: getCurrentProfile(),
-      conversationId: req.params.id,
-    });
-
-    if (body.kind === 'skill') {
-      const skillName = body.skillName?.trim() ?? '';
-      if (!skillName) {
-        res.status(400).json({ error: 'skillName required' });
-        return;
-      }
-
-      const skillNames = new Set(listSkillsForCurrentProfile().map((skill) => skill.name));
-      if (!skillNames.has(skillName)) {
-        res.status(400).json({ error: `Unknown skill: ${skillName}` });
-        return;
-      }
-
-      document.steps.push(createConversationAutomationSkillStep({
-        skillName,
-        label: body.label,
-        skillArgs: body.skillArgs,
-      }));
-    } else {
-      const prompt = body.prompt?.trim() ?? '';
-      if (!prompt) {
-        res.status(400).json({ error: 'prompt required' });
-        return;
-      }
-
-      document.steps.push(createConversationAutomationJudgeStep({
-        label: body.label,
-        prompt,
-      }));
+    const skillNames = new Set(listSkillsForCurrentProfile().map((skill) => skill.name));
+    if (Array.isArray(body.gates)) {
+      validateConversationAutomationTemplateGates(body.gates, skillNames);
     }
 
-    document.updatedAt = new Date().toISOString();
+    let document = loadConversationAutomationState({
+      profile: getCurrentProfile(),
+      conversationId: req.params.id,
+      settingsFile: SETTINGS_FILE,
+    }).document;
+    const updatedAt = new Date().toISOString();
+
+    if (Array.isArray(body.gates)) {
+      document = replaceConversationAutomationGates(document, body.gates, updatedAt);
+    }
+
+    if (typeof body.enabled === 'boolean') {
+      document = updateConversationAutomationEnabled(document, body.enabled, updatedAt);
+    }
+
     saveConversationAutomationDocument(document);
 
-    if (!document.paused) {
-      await kickConversationAutomation(req.params.id);
-    }
-
-    res.status(201).json(buildConversationAutomationResponse(req.params.id));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    logError('request handler error', {
-      message,
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: message });
-  }
-});
-
-app.patch('/api/conversations/:id/automation/steps/:stepId', async (req, res) => {
-  try {
-    const document = getConversationAutomationState({
-      profile: getCurrentProfile(),
-      conversationId: req.params.id,
-    });
-    const step = document.steps.find((candidate) => candidate.id === req.params.stepId);
-    if (!step) {
-      res.status(404).json({ error: 'Automation step not found' });
-      return;
-    }
-    if (step.status === 'running') {
-      res.status(409).json({ error: 'Running automation steps cannot be edited' });
-      return;
-    }
-
-    if (step.kind === 'skill') {
-      const body = req.body as {
-        label?: string;
-        skillName?: string;
-        skillArgs?: string;
-      };
-      const skillName = body.skillName?.trim() ?? '';
-      if (!skillName) {
-        res.status(400).json({ error: 'skillName required' });
-        return;
-      }
-
-      const skillNames = new Set(listSkillsForCurrentProfile().map((skill) => skill.name));
-      if (!skillNames.has(skillName)) {
-        res.status(400).json({ error: `Unknown skill: ${skillName}` });
-        return;
-      }
-
-      saveConversationAutomationDocument(updateConversationAutomationStep(document, req.params.stepId, {
-        label: body.label,
-        skillName,
-        skillArgs: body.skillArgs,
-      }));
-    } else {
-      const body = req.body as {
-        label?: string;
-        prompt?: string;
-      };
-      const prompt = body.prompt?.trim() ?? '';
-      if (!prompt) {
-        res.status(400).json({ error: 'prompt required' });
-        return;
-      }
-
-      saveConversationAutomationDocument(updateConversationAutomationStep(document, req.params.stepId, {
-        label: body.label,
-        prompt,
-      }));
-    }
-
-    if (!document.paused) {
+    if (document.enabled) {
       await kickConversationAutomation(req.params.id);
     }
 
     res.json(buildConversationAutomationResponse(req.params.id));
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    const status = message.startsWith('Unknown skill:') || message.includes('gates must be an array') || message.includes('Each gate') || message.includes('Each nested skill')
+      ? 400
+      : 500;
     logError('request handler error', {
       message,
       stack: err instanceof Error ? err.stack : undefined,
     });
-    res.status(500).json({ error: message });
+    res.status(status).json({ error: message });
   }
 });
 
-app.post('/api/conversations/:id/automation/steps/:stepId/move', async (req, res) => {
-  try {
-    const { direction } = req.body as { direction?: 'up' | 'down' };
-    if (direction !== 'up' && direction !== 'down') {
-      res.status(400).json({ error: 'direction must be up or down' });
-      return;
-    }
-
-    const document = getConversationAutomationState({
-      profile: getCurrentProfile(),
-      conversationId: req.params.id,
-    });
-    const step = document.steps.find((candidate) => candidate.id === req.params.stepId);
-    if (!step) {
-      res.status(404).json({ error: 'Automation step not found' });
-      return;
-    }
-    if (step.status === 'running') {
-      res.status(409).json({ error: 'Running automation steps cannot be moved' });
-      return;
-    }
-
-    saveConversationAutomationDocument(moveConversationAutomationStep(document, req.params.stepId, direction));
-
-    if (!document.paused) {
-      await kickConversationAutomation(req.params.id);
-    }
-
-    res.json(buildConversationAutomationResponse(req.params.id));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    logError('request handler error', {
-      message,
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: message });
-  }
-});
-
-app.post('/api/conversations/:id/automation/steps/:stepId/reset', async (req, res) => {
+app.post('/api/conversations/:id/automation/gates/:gateId/reset', async (req, res) => {
   try {
     const { resume } = req.body as { resume?: boolean };
-    const document = getConversationAutomationState({
+    const loaded = loadConversationAutomationState({
       profile: getCurrentProfile(),
       conversationId: req.params.id,
+      settingsFile: SETTINGS_FILE,
     });
-    const step = document.steps.find((candidate) => candidate.id === req.params.stepId);
-    if (!step) {
-      res.status(404).json({ error: 'Automation step not found' });
+    const document = loaded.document;
+    const gate = document.gates.find((candidate) => candidate.id === req.params.gateId);
+    if (!gate) {
+      res.status(404).json({ error: 'Automation gate not found' });
       return;
     }
-    if (step.status === 'running') {
-      res.status(409).json({ error: 'Running automation steps cannot be reset' });
+    if (document.activeGateId === gate.id || gate.status === 'running') {
+      res.status(409).json({ error: 'Running automation gates cannot be reset' });
       return;
     }
 
-    saveConversationAutomationDocument(resetConversationAutomationFromStep(document, req.params.stepId, {
-      paused: typeof resume === 'boolean' ? !resume : document.paused,
+    saveConversationAutomationDocument(resetConversationAutomationFromGate(document, req.params.gateId, {
+      enabled: resume === true ? true : document.enabled,
     }));
 
     if (resume) {
-      await kickConversationAutomation(req.params.id);
-    }
-
-    res.json(buildConversationAutomationResponse(req.params.id));
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    logError('request handler error', {
-      message,
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: message });
-  }
-});
-
-app.delete('/api/conversations/:id/automation/steps/:stepId', async (req, res) => {
-  try {
-    const document = getConversationAutomationState({
-      profile: getCurrentProfile(),
-      conversationId: req.params.id,
-    });
-    const step = document.steps.find((candidate) => candidate.id === req.params.stepId);
-    if (!step) {
-      res.status(404).json({ error: 'Automation step not found' });
-      return;
-    }
-    if (step.status === 'running') {
-      res.status(409).json({ error: 'Running automation steps cannot be deleted' });
-      return;
-    }
-
-    document.steps = document.steps.filter((candidate) => candidate.id !== req.params.stepId);
-    document.updatedAt = new Date().toISOString();
-    if (document.steps.length === 0) {
-      document.paused = true;
-      document.activeStepId = undefined;
-    }
-    saveConversationAutomationDocument(document);
-
-    if (!document.paused) {
       await kickConversationAutomation(req.params.id);
     }
 
