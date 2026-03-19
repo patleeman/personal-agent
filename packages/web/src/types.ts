@@ -972,7 +972,7 @@ export interface ConversationAutomationPreferencesState {
   defaultEnabled: boolean;
 }
 
-export type ConversationAutomationTodoItemStatus = 'pending' | 'running' | 'completed' | 'failed' | 'blocked';
+export type ConversationAutomationTodoItemStatus = 'pending' | 'running' | 'waiting' | 'completed' | 'failed' | 'blocked';
 export type ConversationAutomationReviewStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 export type ConversationAutomationTodoItemKind = 'skill' | 'instruction';
@@ -1037,6 +1037,11 @@ export interface ConversationAutomationState {
   enabled: boolean;
   activeItemId: string | null;
   updatedAt: string;
+  waitingForUser?: {
+    createdAt: string;
+    updatedAt: string;
+    reason?: string;
+  };
   items: ConversationAutomationTodoItem[];
   review?: ConversationAutomationReviewState;
 }

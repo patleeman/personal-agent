@@ -793,7 +793,7 @@ export function Sidebar() {
           title={`Open unified search (${SIDEBAR_SEARCH_HOTKEY})`}
           onClick={handleOpenSearch}
         />
-        <TopNavItem to={plansTarget} icon={PATH.automation} label="Plans" title="Open the full-page plan editor for the active conversation." />
+        <TopNavItem to={plansTarget} icon={PATH.automation} label="Checklists" title="Open the full-page checklist editor for the active conversation." />
         <TopNavItem to="/scheduled" icon={PATH.tasks} label="Scheduled" />
         <TopNavItem to="/projects" icon={PATH.projects} label="Projects" />
         <TopNavItem to="/memories" icon={PATH.memory} label="Memories" />

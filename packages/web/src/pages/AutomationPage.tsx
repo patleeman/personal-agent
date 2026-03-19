@@ -47,7 +47,7 @@ function filterPresets(presets: ConversationAutomationWorkflowPreset[], query: s
 
 function presetMeta(preset: ConversationAutomationWorkflowPreset, workspace: ConversationAutomationWorkspaceState): string {
   const parts = [
-    `${preset.items.length} ${preset.items.length === 1 ? 'step' : 'steps'}`,
+    `${preset.items.length} ${preset.items.length === 1 ? 'item' : 'items'}`,
   ];
 
   if (workspace.presetLibrary.defaultPresetIds.includes(preset.id)) {
@@ -76,11 +76,6 @@ export function AutomationPage() {
   const creatingNew = useMemo(() => new URLSearchParams(location.search).get(NEW_PLAN_SEARCH_PARAM) === '1', [location.search]);
   const presets = data?.presetLibrary.presets ?? [];
   const filteredPresets = useMemo(() => filterPresets(presets, query), [presets, query]);
-  const selectedPlan = useMemo(
-    () => selectedPlanId ? presets.find((preset) => preset.id === selectedPlanId) ?? null : null,
-    [presets, selectedPlanId],
-  );
-
   const setSelection = useCallback((presetId: string | null, nextCreatingNew = false, replace = false) => {
     const nextSearch = buildPlanSearch(location.search, presetId, nextCreatingNew);
     navigate(`/plans${nextSearch}`, { replace });
@@ -98,15 +93,22 @@ export function AutomationPage() {
     setSelection(null, false, true);
   }, [data, loading, presets, selectedPlanId, setSelection]);
 
+  useEffect(() => {
+    if (loading || !data || creatingNew || selectedPlanId || presets.length === 0) {
+      return;
+    }
+
+    setSelection(presets[0]?.id ?? null, false, true);
+  }, [creatingNew, data, loading, presets, selectedPlanId, setSelection]);
+
   const pageMeta = data
     ? [
-      `${presets.length} ${presets.length === 1 ? 'plan' : 'plans'}`,
+      `${presets.length} ${presets.length === 1 ? 'checklist' : 'checklists'}`,
       data.presetLibrary.defaultPresetIds.length > 0
         ? `defaults ${data.presetLibrary.defaultPresetIds.map((presetId) => presets.find((preset) => preset.id === presetId)?.name ?? presetId).join(', ')}`
-        : 'no default plans',
-      `${data.skills.length} ${data.skills.length === 1 ? 'skill' : 'skills'} available`,
+        : 'no default checklists',
     ].join(' · ')
-    : 'Reusable action plans';
+    : 'Reusable checklists';
 
   return (
     <div className="flex h-full flex-col">
@@ -115,7 +117,7 @@ export function AutomationPage() {
         actions={(
           <>
             <ToolbarButton onClick={() => setSelection(null, true)}>
-              + New plan
+              + New checklist
             </ToolbarButton>
             <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); }} disabled={refreshing}>
               {refreshing ? 'Refreshing…' : '↻ Refresh'}
@@ -123,12 +125,12 @@ export function AutomationPage() {
           </>
         )}
       >
-        <PageHeading title="Plans" meta={pageMeta} />
+        <PageHeading title="Checklists" meta={pageMeta} />
       </PageHeader>
 
       <div className="flex-1 px-6 py-4">
-        {loading && <LoadingState label="Loading plans…" />}
-        {error && <ErrorState message={`Unable to load plans: ${error}`} />}
+        {loading && <LoadingState label="Loading checklists…" />}
+        {error && <ErrorState message={`Unable to load checklists: ${error}`} />}
 
         {!loading && !error && data && (
           <div className="space-y-5 pb-5">
@@ -136,22 +138,22 @@ export function AutomationPage() {
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Filter plans by name or step"
+                placeholder="Filter checklists by name or item"
                 className="w-full max-w-xl rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60"
               />
             </div>
 
-            {creatingNew && <p className="text-[12px] text-dim">Editing a new plan in the right pane.</p>}
+            {creatingNew && <p className="text-[12px] text-dim">Editing a new checklist in the right pane.</p>}
 
             {presets.length === 0 ? (
               <EmptyState
-                title="No plans yet"
-                body="Create a plan in the right pane."
-                action={<ToolbarButton onClick={() => setSelection(null, true)}>Create plan</ToolbarButton>}
+                title="No checklists yet"
+                body="Create a checklist in the right pane."
+                action={<ToolbarButton onClick={() => setSelection(null, true)}>Create checklist</ToolbarButton>}
               />
             ) : filteredPresets.length === 0 ? (
               <EmptyState
-                title="No plans match that filter"
+                title="No checklists match that filter"
                 body="Try a different search term or clear the filter."
               />
             ) : (
@@ -169,7 +171,7 @@ export function AutomationPage() {
                       <p className="ui-row-title truncate">{preset.name}</p>
                       <p className="ui-row-summary">{presetMeta(preset, data)}</p>
                       <p className="ui-row-meta flex flex-wrap items-center gap-1.5">
-                        <span>{preset.items.length} steps</span>
+                        <span>{preset.items.length} items</span>
                         <span className="opacity-40">·</span>
                         <span>{preset.updatedAt ? new Date(preset.updatedAt).toLocaleString() : 'saved in settings'}</span>
                       </p>
@@ -179,12 +181,6 @@ export function AutomationPage() {
               </div>
             )}
 
-            {selectedPlan && (
-              <div className="rounded-xl border border-border-subtle bg-surface/70 px-4 py-3">
-                <p className="ui-section-label">Selected plan</p>
-                <p className="mt-1 text-[13px] font-medium text-primary">{selectedPlan.name}</p>
-              </div>
-            )}
           </div>
         )}
       </div>

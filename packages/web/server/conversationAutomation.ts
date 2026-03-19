@@ -4,10 +4,10 @@ import { getStateRoot, validateConversationId } from '@personal-agent/core';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 const ITEM_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
-const DOCUMENT_VERSION = 3 as const;
+const DOCUMENT_VERSION = 4 as const;
 const MAX_REVIEW_ITEMS_PER_APPEND = 10;
 
-export type ConversationAutomationTodoItemStatus = 'pending' | 'running' | 'completed' | 'failed' | 'blocked';
+export type ConversationAutomationTodoItemStatus = 'pending' | 'running' | 'waiting' | 'completed' | 'failed' | 'blocked';
 export type ConversationAutomationReviewStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 interface ConversationAutomationRuntimeFields {
@@ -42,14 +42,21 @@ export interface ConversationAutomationReviewState extends ConversationAutomatio
   round: number;
 }
 
+export interface ConversationAutomationWaitState {
+  createdAt: string;
+  updatedAt: string;
+  reason?: string;
+}
+
 export interface ConversationAutomationDocument {
-  version: 3;
+  version: 4;
   conversationId: string;
   updatedAt: string;
   enabled: boolean;
   activeItemId?: string;
   items: ConversationAutomationTodoItem[];
   review?: ConversationAutomationReviewState;
+  waitingForUser?: ConversationAutomationWaitState;
 }
 
 export interface ConversationAutomationWorkflowPreset {
@@ -281,7 +288,7 @@ function normalizeRuntimeFields(value: Record<string, unknown>, fallbackNow: str
 
 function normalizeTodoItemStatus(value: unknown): ConversationAutomationTodoItemStatus {
   const normalized = readNonEmptyString(value);
-  return normalized === 'running' || normalized === 'completed' || normalized === 'failed' || normalized === 'blocked'
+  return normalized === 'running' || normalized === 'waiting' || normalized === 'completed' || normalized === 'failed' || normalized === 'blocked'
     ? normalized
     : 'pending';
 }
@@ -313,6 +320,18 @@ function normalizeRuntimeReviewState(value: unknown, fallbackNow: string): Conve
     ...normalizeRuntimeFields(value, fallbackNow),
     status: normalizeReviewStatus(value.status),
     round: typeof value.round === 'number' && Number.isFinite(value.round) && value.round > 0 ? Math.floor(value.round) : 1,
+  };
+}
+
+function normalizeWaitState(value: unknown, fallbackNow: string): ConversationAutomationWaitState | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  return {
+    createdAt: normalizeIsoTimestamp(value.createdAt, fallbackNow),
+    updatedAt: normalizeIsoTimestamp(value.updatedAt, fallbackNow),
+    ...(normalizeOptionalText(value.reason) ? { reason: normalizeOptionalText(value.reason) } : {}),
   };
 }
 
@@ -369,15 +388,20 @@ function normalizeDocument(value: unknown, fallbackConversationId: string): Conv
   const safeReview = review?.status === 'running' && safeActiveItemId
     ? { ...review, status: 'pending' as const, updatedAt: fallbackNow, startedAt: undefined }
     : review;
+  const waitingForUser = normalizeWaitState(record.waitingForUser, fallbackNow);
+  const enabled = waitingForUser
+    ? false
+    : record.enabled === true || (!(record as { paused?: boolean }).paused && record.enabled !== false && items.length > 0 && record.version === 1);
 
   return {
     version: DOCUMENT_VERSION,
     conversationId,
     updatedAt: normalizeIsoTimestamp(record.updatedAt, fallbackNow),
-    enabled: record.enabled === true || (!(record as { paused?: boolean }).paused && record.enabled !== false && items.length > 0 && record.version === 1),
+    enabled,
     ...(safeActiveItemId ? { activeItemId: safeActiveItemId } : {}),
     items,
     ...(safeReview ? { review: safeReview } : {}),
+    ...(waitingForUser ? { waitingForUser } : {}),
   };
 }
 
@@ -450,7 +474,7 @@ export function describeConversationAutomationItem(item: ConversationAutomationT
 export function buildConversationAutomationItemPrompt(item: ConversationAutomationTemplateTodoItem): string {
   const body = item.kind === 'instruction'
     ? [
-      'Carry out this plan step:',
+      'Carry out this checklist item:',
       item.text.trim(),
     ].join('\n\n')
     : describeConversationAutomationItem(item);
@@ -459,7 +483,8 @@ export function buildConversationAutomationItemPrompt(item: ConversationAutomati
     body,
     '',
     'Before you stop, use the todo_list tool to update the active todo item.',
-    'Mark it completed when the step is actually done.',
+    'Mark it completed when the item is actually done.',
+    'If you need user input before continuing, use the wait_for_user tool with a short reason.',
     'If you cannot complete it, mark it blocked or failed with a short reason.',
   ].join('\n');
 }
@@ -695,6 +720,10 @@ export function getConversationAutomationState(options: ResolveConversationAutom
   return readConversationAutomationDocument(path, options.conversationId);
 }
 
+function hasOpenConversationAutomationItems(items: ConversationAutomationTodoItem[]): boolean {
+  return items.some((item) => item.status === 'pending' || item.status === 'running' || item.status === 'waiting');
+}
+
 export function writeConversationAutomationState(options: {
   profile: string;
   stateRoot?: string;
@@ -742,12 +771,24 @@ export function replaceConversationAutomationItems(
   const nextItems = items.map((inputItem) => {
     const template = normalizeTemplateTodoItem(inputItem, updatedAt);
     const existingItem = existingItemMap.get(template.id);
+    const preservedStatus = existingItem?.status === 'completed'
+      ? 'completed'
+      : existingItem?.status === 'failed'
+        ? 'failed'
+        : existingItem?.status === 'blocked'
+          ? 'blocked'
+          : existingItem?.status === 'waiting'
+            ? 'waiting'
+            : 'pending';
 
     return {
       ...template,
-      status: 'pending' as const,
+      status: preservedStatus,
       createdAt: existingItem?.createdAt ?? updatedAt,
       updatedAt,
+      ...(preservedStatus === 'completed' && existingItem?.completedAt ? { completedAt: existingItem.completedAt } : {}),
+      ...(preservedStatus === 'waiting' && existingItem?.resultReason ? { resultReason: existingItem.resultReason } : {}),
+      ...(preservedStatus !== 'completed' && preservedStatus !== 'waiting' && existingItem?.resultReason && (preservedStatus === 'failed' || preservedStatus === 'blocked') ? { resultReason: existingItem.resultReason } : {}),
     } satisfies ConversationAutomationTodoItem;
   });
 
@@ -755,7 +796,7 @@ export function replaceConversationAutomationItems(
     ...document,
     items: nextItems,
     updatedAt,
-    enabled: nextItems.length > 0,
+    enabled: document.waitingForUser ? false : nextItems.length > 0,
     activeItemId: undefined,
     review: undefined,
   };
@@ -775,17 +816,19 @@ export function appendConversationAutomationItems(
     };
   }
 
+  const nextItems = [
+    ...document.items,
+    ...items.map((item) => createConversationAutomationTodoItem({
+      ...normalizeTemplateTodoItem(item, updatedAt),
+      now: updatedAt,
+    })),
+  ];
+
   return {
     ...document,
-    items: [
-      ...document.items,
-      ...items.map((item) => createConversationAutomationTodoItem({
-        ...normalizeTemplateTodoItem(item, updatedAt),
-        now: updatedAt,
-      })),
-    ],
+    items: nextItems,
     updatedAt,
-    enabled: true,
+    enabled: document.waitingForUser ? false : nextItems.length > 0,
     review: undefined,
   };
 }
@@ -806,25 +849,150 @@ export function updateConversationAutomationItemStatus(
     throw new Error(`Automation item not found: ${itemId}`);
   }
 
+  const nextItems = document.items.map((item, itemIndex) => {
+    if (itemIndex !== index) {
+      return item;
+    }
+
+    return {
+      ...item,
+      status,
+      updatedAt,
+      startedAt: undefined,
+      completedAt: updatedAt,
+      ...(normalizeOptionalText(options.resultReason) ? { resultReason: normalizeOptionalText(options.resultReason) } : {}),
+    };
+  });
+
   return {
     ...document,
-    items: document.items.map((item, itemIndex) => {
-      if (itemIndex !== index) {
-        return item;
-      }
-
-      return {
-        ...item,
-        status,
-        updatedAt,
-        completedAt: updatedAt,
-        ...(normalizeOptionalText(options.resultReason) ? { resultReason: normalizeOptionalText(options.resultReason) } : {}),
-      };
-    }),
+    items: nextItems,
     updatedAt,
-    enabled: options.enabled ?? (status === 'completed' ? document.enabled : false),
+    enabled: options.enabled ?? (status === 'completed'
+      ? (document.waitingForUser ? false : document.enabled)
+      : false),
     activeItemId: document.activeItemId === itemId ? undefined : document.activeItemId,
     review: undefined,
+    ...(document.waitingForUser ? { waitingForUser: document.waitingForUser } : {}),
+  };
+}
+
+export function setConversationAutomationItemPending(
+  document: ConversationAutomationDocument,
+  itemId: string,
+  options: { now?: string; enabled?: boolean } = {},
+): ConversationAutomationDocument {
+  const updatedAt = normalizeIsoTimestamp(options.now, new Date().toISOString());
+  const index = document.items.findIndex((item) => item.id === itemId);
+  if (index < 0) {
+    throw new Error(`Automation item not found: ${itemId}`);
+  }
+
+  const nextItems = document.items.map((item, itemIndex) => {
+    if (itemIndex !== index) {
+      return item;
+    }
+
+    return {
+      ...item,
+      status: 'pending' as const,
+      updatedAt,
+      startedAt: undefined,
+      completedAt: undefined,
+      resultReason: undefined,
+    };
+  });
+
+  return {
+    ...document,
+    items: nextItems,
+    updatedAt,
+    enabled: options.enabled ?? true,
+    activeItemId: undefined,
+    review: undefined,
+    waitingForUser: undefined,
+  };
+}
+
+export function setConversationAutomationWaitingForUser(
+  document: ConversationAutomationDocument,
+  options: { now?: string; reason?: string } = {},
+): ConversationAutomationDocument {
+  const updatedAt = normalizeIsoTimestamp(options.now, new Date().toISOString());
+  const waitingReason = normalizeOptionalText(options.reason);
+  const nextItems = document.items.map((item) => {
+    if (item.id !== document.activeItemId) {
+      return item;
+    }
+
+    return {
+      ...item,
+      status: 'waiting' as const,
+      updatedAt,
+      startedAt: undefined,
+      ...(waitingReason ? { resultReason: waitingReason } : {}),
+    };
+  });
+  const nextReview = document.review
+    ? {
+      ...document.review,
+      status: 'pending' as const,
+      updatedAt,
+      startedAt: undefined,
+      completedAt: undefined,
+      resultReason: waitingReason ?? document.review.resultReason,
+    }
+    : undefined;
+
+  return {
+    ...document,
+    items: nextItems,
+    updatedAt,
+    enabled: false,
+    activeItemId: undefined,
+    ...(nextReview ? { review: nextReview } : { review: undefined }),
+    waitingForUser: {
+      createdAt: document.waitingForUser?.createdAt ?? updatedAt,
+      updatedAt,
+      ...(waitingReason ? { reason: waitingReason } : {}),
+    },
+  };
+}
+
+export function resumeConversationAutomationAfterUserMessage(
+  document: ConversationAutomationDocument,
+  now = new Date().toISOString(),
+): ConversationAutomationDocument {
+  const updatedAt = normalizeIsoTimestamp(now, new Date().toISOString());
+  const nextItems = document.items.map((item) => {
+    if (item.status !== 'waiting') {
+      return item;
+    }
+
+    return {
+      ...item,
+      status: 'pending' as const,
+      updatedAt,
+      startedAt: undefined,
+      completedAt: undefined,
+      resultReason: undefined,
+    };
+  });
+
+  const shouldResumeReview = document.review?.status === 'pending';
+
+  return {
+    ...document,
+    items: nextItems,
+    updatedAt,
+    enabled: nextItems.length > 0 || shouldResumeReview,
+    activeItemId: undefined,
+    review: shouldResumeReview ? {
+      ...document.review!,
+      updatedAt,
+      resultReason: undefined,
+    } : undefined,
+    waitingForUser: undefined,
   };
 }
 
@@ -835,7 +1003,7 @@ export function updateConversationAutomationEnabled(
 ): ConversationAutomationDocument {
   return {
     ...document,
-    enabled,
+    enabled: enabled && !document.waitingForUser && (document.items.length > 0 || document.review?.status === 'pending'),
     updatedAt: normalizeIsoTimestamp(now, new Date().toISOString()),
   };
 }
@@ -851,26 +1019,29 @@ export function resetConversationAutomationFromItem(
     throw new Error(`Automation item not found: ${itemId}`);
   }
 
+  const nextItems = document.items.map((item, itemIndex) => {
+    if (itemIndex < index) {
+      return item;
+    }
+
+    return {
+      ...item,
+      status: 'pending' as const,
+      updatedAt,
+      completedAt: undefined,
+      startedAt: undefined,
+      resultReason: undefined,
+    };
+  });
+
   return {
     ...document,
-    items: document.items.map((item, itemIndex) => {
-      if (itemIndex < index) {
-        return item;
-      }
-
-      return {
-        ...item,
-        status: 'pending' as const,
-        updatedAt,
-        completedAt: undefined,
-        startedAt: undefined,
-        resultReason: undefined,
-      };
-    }),
+    items: nextItems,
     updatedAt,
-    enabled: options.enabled ?? document.enabled,
+    enabled: options.enabled ?? !document.waitingForUser,
     activeItemId: undefined,
     review: undefined,
+    waitingForUser: undefined,
   };
 }
 
@@ -879,11 +1050,13 @@ function buildTodoListLine(item: ConversationAutomationTodoItem): string {
     ? '[x]'
     : item.status === 'running'
       ? '[>]'
-      : item.status === 'failed'
-        ? '[!]'
-        : item.status === 'blocked'
-          ? '[~]'
-          : '[ ]';
+      : item.status === 'waiting'
+        ? '[?]'
+        : item.status === 'failed'
+          ? '[!]'
+          : item.status === 'blocked'
+            ? '[~]'
+            : '[ ]';
   const prompt = describeConversationAutomationItem(item);
   return `${status} ${item.label} — ${prompt}`;
 }
@@ -897,6 +1070,7 @@ export function buildConversationAutomationReviewPrompt(document: Pick<Conversat
   return [
     `Review the automation todo list before stopping. This is review round ${round}.`,
     'If additional automation work is required, use the todo_list tool to add the needed follow-up items.',
+    'If you need to pause for user input before more work can happen, use the wait_for_user tool with a short reason.',
     'If nothing else is required, reply briefly.',
     '',
     'Todo list:',
