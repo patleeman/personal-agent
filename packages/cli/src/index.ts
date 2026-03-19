@@ -4966,6 +4966,7 @@ Examples:
   pa memory new quick-note --title "Quick Note" --summary "What this doc tracks." --tags notes
   pa memory lint
   pa mcp list
+  pa mcp list --probe
   pa mcp info atlassian
   pa runs list
   pa runs show <id>

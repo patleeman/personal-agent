@@ -763,6 +763,20 @@ function findServer(config: McpConfigState, serverName: string): McpServerConfig
   return server;
 }
 
+function formatMcpOperationError(error: unknown, server?: McpServerConfig): string {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (message === 'Incompatible auth server: does not support dynamic client registration' && server?.transport === 'remote') {
+    if (server.url === 'https://mcp.slack.com/mcp') {
+      return `${message}. Slack MCP requires a fixed OAuth client. Add oauth.clientId to the slack entry in mcp_servers.json and use callback http://${server.callbackHost ?? 'localhost'}:${server.callbackPort ?? 3118}${server.callbackPath ?? '/callback'}.`;
+    }
+
+    return `${message}. Add oauth.clientId for the ${server.name} remote MCP server in mcp_servers.json.`;
+  }
+
+  return message;
+}
+
 export async function inspectMcpServer(
   serverName: string,
   options: {
@@ -834,7 +848,7 @@ export async function inspectMcpServer(
       stdout: '',
       stderr: stderrLogs.join('\n'),
       exitCode: 1,
-      error: error instanceof Error ? error.message : String(error),
+      error: formatMcpOperationError(error, server),
     };
   }
 }
@@ -905,7 +919,7 @@ export async function inspectMcpTool(
       stdout: '',
       stderr: stderrLogs.join('\n'),
       exitCode: 1,
-      error: error instanceof Error ? error.message : String(error),
+      error: formatMcpOperationError(error, server),
     };
   }
 }
@@ -966,7 +980,7 @@ export async function callMcpTool(
       stdout: '',
       stderr: stderrLogs.join('\n'),
       exitCode: 1,
-      error: error instanceof Error ? error.message : String(error),
+      error: formatMcpOperationError(error, server),
     };
   }
 }
@@ -977,24 +991,32 @@ export async function listMcpCatalog(options: {
   env?: NodeJS.ProcessEnv;
   timeoutMs?: number;
   withDescriptions?: boolean;
+  probe?: boolean;
   log?: (message: string) => void;
 } = {}): Promise<{
   config: McpConfigState;
+  probed: boolean;
   servers: McpCatalogServerResult[];
 }> {
   const cwd = options.cwd ? resolve(options.cwd) : process.cwd();
   const env = options.env ?? process.env;
   const config = readMcpConfig({ cwd, configPath: options.configPath, env });
+  const probe = options.probe ?? false;
   const servers: McpCatalogServerResult[] = [];
 
   for (const server of config.servers) {
+    if (!probe) {
+      servers.push({ name: server.name });
+      continue;
+    }
+
     const inspected = await inspectMcpServer(server.name, options);
     servers.push(inspected.data
       ? { name: server.name, info: inspected.data }
       : { name: server.name, error: (inspected.error ?? inspected.stderr) || 'Unknown MCP error' });
   }
 
-  return { config, servers };
+  return { config, probed: probe, servers };
 }
 
 export async function grepMcpTools(
@@ -1013,7 +1035,10 @@ export async function grepMcpTools(
   errors: Array<{ server: string; error: string }>;
 }> {
   const regex = patternToRegex(pattern);
-  const catalog = await listMcpCatalog(options);
+  const catalog = await listMcpCatalog({
+    ...options,
+    probe: true,
+  });
   const matches: Array<{ server: string; tool: McpServerToolSummary }> = [];
   const errors: Array<{ server: string; error: string }> = [];
 
