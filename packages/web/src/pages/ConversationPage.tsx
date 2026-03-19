@@ -826,6 +826,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const messageIndexOffset = historicalBlockOffset;
   const messageCount = realMessages?.length ?? 0;
   const artifactAutoOpenSeededRef = useRef(false);
+  const artifactAutoOpenStartedAtRef = useRef(new Date().toISOString());
   const [showTree, setShowTree] = useState(false);
   const [treeSnapshot, setTreeSnapshot] = useState<ConversationTreeSnapshot | null>(null);
   const [treeLoading, setTreeLoading] = useState(false);
@@ -870,6 +871,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   useEffect(() => {
     artifactAutoOpenSeededRef.current = false;
+    artifactAutoOpenStartedAtRef.current = new Date().toISOString();
     processedArtifactAutoOpenIdsRef.current = new Set();
   }, [id]);
 
@@ -914,6 +916,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       }
 
       processedArtifactAutoOpenIdsRef.current.add(blockKey);
+
+      const artifactCreatedAt = Date.parse(block.ts);
+      const autoOpenStartedAt = Date.parse(artifactAutoOpenStartedAtRef.current);
+      if (!Number.isFinite(artifactCreatedAt) || !Number.isFinite(autoOpenStartedAt) || artifactCreatedAt < autoOpenStartedAt) {
+        continue;
+      }
+
       openArtifact(artifact.artifactId);
       break;
     }
