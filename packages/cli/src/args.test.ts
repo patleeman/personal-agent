@@ -25,6 +25,10 @@ describe('parseCommand', () => {
       command: 'runs',
       args: ['list'],
     });
+    expect(parseCommand(['targets', 'list'])).toEqual({
+      command: 'targets',
+      args: ['list'],
+    });
   });
 
   it('treats unknown first token as tui args passthrough', () => {

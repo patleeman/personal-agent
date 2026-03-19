@@ -3846,7 +3846,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function inspectSshBinaryState() {
-  return inspectCliBinary({ command: 'ssh', cwd: REPO_ROOT });
+  return inspectCliBinary({ command: 'ssh', cwd: REPO_ROOT, versionArgs: ['-V'] });
 }
 
 function normalizeExecutionTargetInput(body: unknown) {

@@ -98,6 +98,7 @@ import {
   writeWebUiRollbackInboxEntry,
 } from './restartNotifications.js';
 import { runsCommand } from './runs-command.js';
+import { targetsCommand } from './targets-command.js';
 import { syncCommand } from './sync-command.js';
 import { waitForWebUiHealthy } from './web-ui-health.js';
 import {
@@ -4777,6 +4778,13 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       run: runsCommand,
     },
     {
+      name: 'targets',
+      usage: 'targets [list|show|add|update|delete|help] [args...]',
+      description: 'Inspect and manage execution targets',
+      disableBuiltInHelp: true,
+      run: targetsCommand,
+    },
+    {
       name: 'sync',
       usage: 'sync [status|run|setup|help] [args...]',
       description: 'Configure and run automatic git state sync',
@@ -4888,6 +4896,8 @@ Examples:
   pa runs show <id>
   pa runs start code-review -- pa -p "review this diff"
   pa runs cancel <id>
+  pa targets list
+  pa targets add gpu-box --label "GPU Box" --ssh gpu-box --default-cwd /srv/personal-agent --map /Users/patrickc.lee/personal/personal-agent=/srv/personal-agent
   pa sync status
   pa sync setup --repo git@github.com:you/personal-agent-state.git --fresh
   pa sync run

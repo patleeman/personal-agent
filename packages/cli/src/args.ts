@@ -3,7 +3,7 @@ export interface ParsedCommand {
   args: string[];
 }
 
-const DEFAULT_KNOWN_COMMANDS = ['tui', 'profile', 'doctor', 'restart', 'update', 'daemon', 'tasks', 'inbox', 'runs', 'gateway', 'ui'];
+const DEFAULT_KNOWN_COMMANDS = ['tui', 'profile', 'doctor', 'restart', 'update', 'daemon', 'tasks', 'inbox', 'runs', 'targets', 'gateway', 'ui'];
 
 export function parseCommand(argv: string[], knownCommands: string[] = DEFAULT_KNOWN_COMMANDS): ParsedCommand {
   if (argv.length === 0) {

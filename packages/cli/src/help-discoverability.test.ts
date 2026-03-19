@@ -67,6 +67,10 @@ describe('subcommand help discoverability', () => {
       expected: ['Runs commands', 'Usage: pa runs [list|show|logs|start|cancel|help] [args...]', 'start <task-slug> [--cwd <path>] [--] <command...>'],
     },
     {
+      argv: ['targets', '--help'],
+      expected: ['Execution targets commands', 'Usage: pa targets [list|show|add|update|delete|help]', 'add <id> --label <label> --ssh <destination>'],
+    },
+    {
       argv: ['daemon', '--help'],
       expected: ['Daemon', 'pa daemon status [--json]', 'pa daemon service [install|status|uninstall|help]'],
     },

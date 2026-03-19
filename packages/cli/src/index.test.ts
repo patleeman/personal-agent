@@ -15,6 +15,7 @@ describe('parseCommand', () => {
     expect(parseCommand(['tasks', 'list'])).toEqual({ command: 'tasks', args: ['list'] });
     expect(parseCommand(['inbox', 'list'])).toEqual({ command: 'inbox', args: ['list'] });
     expect(parseCommand(['runs', 'list'])).toEqual({ command: 'runs', args: ['list'] });
+    expect(parseCommand(['targets', 'list'])).toEqual({ command: 'targets', args: ['list'] });
     expect(parseCommand(['gateway', 'start'])).toEqual({ command: 'gateway', args: ['start'] });
     expect(parseCommand(['tui', '--profile', 'shared'])).toEqual({
       command: 'tui',
