@@ -119,6 +119,12 @@ function readRunLogTail(logPath: string, maxLines: number): string {
 
 function describeRunCommand(run: ScannedDurableRun): string | undefined {
   const payload = readCheckpointPayload(run.checkpoint);
+  const agent = isRecord(payload.agent) ? payload.agent : undefined;
+  const agentPrompt = trimText(readOptionalString(agent?.prompt), MAX_COMMAND_LENGTH);
+  if (agentPrompt) {
+    return agentPrompt;
+  }
+
   const shellCommand = trimText(readOptionalString(payload.shellCommand), MAX_COMMAND_LENGTH);
   if (shellCommand) {
     return shellCommand;

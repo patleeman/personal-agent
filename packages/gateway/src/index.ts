@@ -75,7 +75,6 @@ import {
   buildTelegramRunCliArgs,
   parseTelegramRunRequest,
   parseRunCliOutput,
-  resolveGatewayCliEntryPath,
   runGatewayRunCli,
   runTelegramRunCommand,
   type TelegramRunNotifyMode,
@@ -8242,24 +8241,16 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
       throw new Error(`Invalid telegram chat id: ${parsedConversation.chatId}`);
     }
 
-    const cliEntryPath = resolveGatewayCliEntryPath();
-    const argv = cliEntryPath
-      ? [process.execPath, cliEntryPath]
-      : ['pa'];
-
-    argv.push('--plain', '--profile', effectiveConfig.profile, '--no-session');
-
-    if (input.model) {
-      argv.push('--model', input.model);
-    }
-
-    argv.push('-p', input.workerPrompt);
-
     await ensureDaemonAvailableForDelegates();
     const result = await startBackgroundRun({
       taskSlug: input.taskSlug,
       cwd: input.cwd,
-      argv,
+      agent: {
+        prompt: input.workerPrompt,
+        profile: effectiveConfig.profile,
+        ...(input.model ? { model: input.model } : {}),
+        noSession: true,
+      },
       source: {
         type: GATEWAY_DELEGATE_SOURCE_TYPE,
         id: input.conversationId,

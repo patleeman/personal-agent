@@ -1,5 +1,6 @@
 import type { ScannedDurableRun, ScannedDurableRunsSummary } from './runs/store.js';
 import type { BackgroundRunNotificationSpec } from './runs/background-runs.js';
+import type { BackgroundRunAgentSpec } from './background-run-agent.js';
 import type { RecoverableWebLiveConversationRun, WebLiveConversationPendingOperation, WebLiveConversationRunState } from './runs/web-live-conversations.js';
 
 export type EventPayload = Record<string, unknown>;
@@ -110,6 +111,7 @@ export interface StartBackgroundRunRequestInput {
   cwd: string;
   argv?: string[];
   shellCommand?: string;
+  agent?: BackgroundRunAgentSpec;
   source?: {
     type: string;
     id?: string;

@@ -3,6 +3,7 @@ import { createServer, type Server, type Socket } from 'net';
 import { createWriteStream, existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { getPiAgentStateDir } from '@personal-agent/core';
+import { looksLikePersonalAgentCliEntryPath } from './background-run-agent.js';
 import { EventBus } from './event-bus.js';
 import { createDaemonEvent, isDaemonEvent } from './events.js';
 import { parseRequest, serializeResponse, type DaemonRequest, type DaemonResponse } from './ipc-protocol.js';
@@ -121,19 +122,27 @@ function resolveBackgroundRunSessionDir(runId: string): string {
   return join(getPiAgentStateDir(), 'sessions', BACKGROUND_RUN_SESSIONS_DIR_NAME, runId);
 }
 
-function appendBackgroundRunSessionDir(input: StartBackgroundRunInput, runId: string): {
+function appendBackgroundRunSessionDir(input: {
+  argv?: string[];
+  shellCommand?: string;
+}, runId: string): {
   argv?: string[];
   shellCommand?: string;
 } {
   const sessionDir = resolveBackgroundRunSessionDir(runId);
 
   if (input.argv && input.argv.length > 0) {
-    if (!looksLikePaCommand(input.argv[0]) || hasExplicitSessionOverride(input.argv.slice(1))) {
-      return { argv: input.argv };
+    const argv = input.argv;
+    const directPa = looksLikePaCommand(argv[0]);
+    const nodeCliEntry = looksLikePersonalAgentCliEntryPath(argv[1]);
+    const firstPiArgIndex = nodeCliEntry ? 2 : 1;
+
+    if ((!directPa && !nodeCliEntry) || hasExplicitSessionOverride(argv.slice(firstPiArgIndex))) {
+      return { argv };
     }
 
     return {
-      argv: [...input.argv, '--session-dir', sessionDir],
+      argv: [...argv, '--session-dir', sessionDir],
     };
   }
 
@@ -762,7 +771,10 @@ export class PersonalAgentDaemon {
     const record = await createBackgroundRunRecord(this.runsRoot, input);
     const startedAt = new Date().toISOString();
     const outputStream = createWriteStream(record.paths.outputLogPath, { flags: 'a', encoding: 'utf-8' });
-    const spawnInput = appendBackgroundRunSessionDir(input, record.runId);
+    const spawnInput = appendBackgroundRunSessionDir({
+      argv: record.argv,
+      shellCommand: record.shellCommand,
+    }, record.runId);
 
     const childEnv = {
       ...process.env,

@@ -125,4 +125,48 @@ describe('run agent extension', () => {
     });
     expect(result.content[0]?.text).toContain('Started durable run run-456');
   });
+
+  it('starts a durable agent run through the daemon', async () => {
+    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+    startBackgroundRunMock.mockResolvedValue({
+      accepted: true,
+      runId: 'run-agent-123',
+      logPath: '/tmp/run-agent-123.log',
+    });
+
+    const runTool = registerRunTool();
+    const result = await runTool.execute(
+      'tool-1',
+      {
+        action: 'start_agent',
+        taskSlug: 'fix-build',
+        prompt: 'Fix the build errors and report back.',
+        model: 'openai-codex/gpt-5.4',
+        profile: 'datadog',
+      },
+      undefined,
+      undefined,
+      createToolContext('conv-agent', '/tmp/sessions/conv-agent.jsonl'),
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(startBackgroundRunMock).toHaveBeenCalledWith({
+      taskSlug: 'fix-build',
+      cwd: '/tmp/workspace',
+      agent: {
+        prompt: 'Fix the build errors and report back.',
+        model: 'openai-codex/gpt-5.4',
+        profile: 'datadog',
+      },
+      source: {
+        type: 'tool',
+        id: 'conv-agent',
+        filePath: '/tmp/sessions/conv-agent.jsonl',
+      },
+      checkpointPayload: {
+        resumeParentOnExit: true,
+      },
+    });
+    expect(result.content[0]?.text).toContain('Started durable agent run run-agent-123');
+  });
 });

@@ -15,7 +15,7 @@ import { readTailLines } from './file-utils.js';
 import { bullet, dim, keyValue, section, statusChip } from './ui.js';
 
 function runsUsageText(): string {
-  return 'Usage: pa runs [list|show|logs|start|cancel|help] [args...]';
+  return 'Usage: pa runs [list|show|logs|start|start-agent|cancel|help] [args...]';
 }
 
 function runsListUsageText(): string {
@@ -32,6 +32,10 @@ function runsLogsUsageText(): string {
 
 function runsStartUsageText(): string {
   return 'Usage: pa runs start <task-slug> [--cwd <path>] [--] <command...>';
+}
+
+function runsStartAgentUsageText(): string {
+  return 'Usage: pa runs start-agent <task-slug> [--cwd <path>] --prompt <text> [--profile <name>] [--model <ref>]';
 }
 
 function runsCancelUsageText(): string {
@@ -125,7 +129,9 @@ Commands:
   show <id> [--json]              Show one durable run record and recovery metadata
   logs <id> [--tail <n>]          Show run output log (default: 80 lines)
   start <task-slug> [--cwd <path>] [--] <command...>
-                                  Start a durable background run
+                                  Start a durable shell/background run
+  start-agent <task-slug> [--cwd <path>] --prompt <text> [--profile <name>] [--model <ref>]
+                                  Start a durable background agent run
   cancel <id>                     Cancel one durable background run
   help                            Show runs help
 `);
@@ -381,6 +387,73 @@ export async function runsCommand(args: string[]): Promise<number> {
     }
 
     console.log(section('Durable run started'));
+    console.log(keyValue('Run', result.runId));
+    if (result.logPath) {
+      console.log(keyValue('Log', result.logPath));
+    }
+    console.log(keyValue('Inspect', `pa runs show ${result.runId}`));
+    return 0;
+  }
+
+  if (subcommand === 'start-agent') {
+    let cwd = process.cwd();
+    let prompt: string | undefined;
+    let profile: string | undefined;
+    let model: string | undefined;
+    const positional: string[] = [];
+
+    for (let index = 0; index < rest.length; index += 1) {
+      const arg = rest[index] as string;
+
+      if (arg === '--cwd' || arg === '--prompt' || arg === '--profile' || arg === '--model') {
+        const value = rest[index + 1];
+        if (!value || value.startsWith('-')) {
+          throw new Error(runsStartAgentUsageText());
+        }
+
+        if (arg === '--cwd') {
+          cwd = value;
+        } else if (arg === '--prompt') {
+          prompt = value;
+        } else if (arg === '--profile') {
+          profile = value;
+        } else {
+          model = value;
+        }
+
+        index += 1;
+        continue;
+      }
+
+      if (arg.startsWith('--')) {
+        throw new Error(runsStartAgentUsageText());
+      }
+
+      positional.push(arg);
+    }
+
+    if (positional.length !== 1 || !prompt) {
+      throw new Error(runsStartAgentUsageText());
+    }
+
+    await ensureDaemonAvailable();
+    const taskSlug = positional[0] as string;
+    const result = await startBackgroundRun({
+      taskSlug,
+      cwd,
+      agent: {
+        prompt,
+        ...(profile ? { profile } : {}),
+        ...(model ? { model } : {}),
+      },
+      source: readBackgroundRunSource(taskSlug),
+    });
+
+    if (!result.accepted) {
+      throw new Error(result.reason ?? `Failed to start run ${result.runId}`);
+    }
+
+    console.log(section('Durable agent run started'));
     console.log(keyValue('Run', result.runId));
     if (result.logPath) {
       console.log(keyValue('Log', result.logPath));

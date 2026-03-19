@@ -4969,7 +4969,8 @@ Examples:
   pa mcp info atlassian
   pa runs list
   pa runs show <id>
-  pa runs start code-review -- pa tui -p "review this diff"
+  pa runs start code-review -- npm test
+  pa runs start-agent code-review --prompt "review this diff"
   pa runs cancel <id>
   pa targets list
   pa targets add gpu-box --label "GPU Box" --ssh gpu-box --default-cwd /srv/personal-agent --map /Users/patrickc.lee/personal/personal-agent=/srv/personal-agent
