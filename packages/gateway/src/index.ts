@@ -8224,6 +8224,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
   const startDelegatedAgentRun = async (input: {
     conversationId: string;
+    sessionFile?: string;
     taskSlug: string;
     taskPrompt: string;
     workerPrompt: string;
@@ -8262,6 +8263,12 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
       source: {
         type: GATEWAY_DELEGATE_SOURCE_TYPE,
         id: input.conversationId,
+        ...(input.sessionFile ? { filePath: input.sessionFile } : {}),
+      },
+      checkpointPayload: {
+        resumeParentOnExit: input.notifyMode === 'resume',
+        taskPrompt: input.taskPrompt,
+        notifyMode: input.notifyMode,
       },
     });
 
@@ -8269,19 +8276,21 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
       throw new Error(result.reason ?? `Could not start delegated run for ${input.taskSlug}.`);
     }
 
-    delegateWatches.set(result.runId, {
-      runId: result.runId,
-      conversationId: input.conversationId,
-      chatId,
-      messageThreadId: parsedConversation.messageThreadId,
-      taskSlug: input.taskSlug,
-      taskPrompt: input.taskPrompt,
-      notifyMode: input.notifyMode,
-      logPath: result.logPath,
-      startedAt: new Date().toISOString(),
-    });
+    if (input.notifyMode !== 'resume') {
+      delegateWatches.set(result.runId, {
+        runId: result.runId,
+        conversationId: input.conversationId,
+        chatId,
+        messageThreadId: parsedConversation.messageThreadId,
+        taskSlug: input.taskSlug,
+        taskPrompt: input.taskPrompt,
+        notifyMode: input.notifyMode,
+        logPath: result.logPath,
+        startedAt: new Date().toISOString(),
+      });
 
-    void pollDelegateWatches();
+      void pollDelegateWatches();
+    }
 
     return {
       runId: result.runId,

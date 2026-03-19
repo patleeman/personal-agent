@@ -52,6 +52,7 @@ interface TaskRuntimeEntry {
 
 export interface GatewayDelegateStartInput {
   conversationId: string;
+  sessionFile?: string;
   taskSlug: string;
   taskPrompt: string;
   workerPrompt: string;
@@ -602,9 +603,15 @@ export function createGatewayCoordinatorTools(options: GatewayCoordinatorToolOpt
             const cwd = readRequiredString(params.cwd ?? ctx.cwd, 'cwd');
             const model = readOptionalModelReference(params.model);
             const notifyMode = (params.notifyMode as DelegateNotifyMode | undefined) ?? 'resume';
+            const sessionFile = ctx.sessionManager.getSessionFile();
+            if (notifyMode === 'resume' && !sessionFile) {
+              throw new Error('Delegated resume requires a persisted session file.');
+            }
+
             const workerPrompt = buildDelegateWorkerPrompt({ taskPrompt, cwd });
             const result = await options.startDelegateRun({
               conversationId,
+              sessionFile: sessionFile ?? undefined,
               taskSlug,
               taskPrompt,
               workerPrompt,

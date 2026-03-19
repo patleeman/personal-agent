@@ -10,6 +10,7 @@ import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createConnection } from 'net';
 import { randomUUID } from 'crypto';
+import { loadDeferredResumeState } from '@personal-agent/core';
 import { PersonalAgentDaemon } from './server.js';
 import type { DaemonConfig } from './config.js';
 import { resolveDaemonPaths } from './paths.js';
@@ -125,6 +126,13 @@ async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void
 
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
+}
+
+function createSessionFile(conversationId: string): string {
+  const sessionDir = createTempDir('sessions-');
+  const sessionFile = join(sessionDir, `${conversationId}.jsonl`);
+  writeFileSync(sessionFile, `${JSON.stringify({ type: 'session', id: conversationId })}\n`, 'utf-8');
+  return sessionFile;
 }
 
 describe('daemon IPC integration', () => {
@@ -320,6 +328,146 @@ describe('daemon IPC integration', () => {
     expect(run?.status?.status).toBe('completed');
     expect(readFileSync(run?.paths.outputLogPath as string, 'utf-8')).toContain('hello from durable run');
     expect(existsSync(run?.paths.resultPath as string)).toBe(true);
+  });
+
+  it('creates a ready deferred resume when a resumable background run finishes', async () => {
+    daemon = new PersonalAgentDaemon(config);
+    await daemon.start();
+
+    const sessionFile = createSessionFile('conv-run-resume');
+    const response = await sendRequest(socketPath, {
+      id: `req_${randomUUID()}`,
+      type: 'runs.startBackground',
+      input: {
+        taskSlug: 'resume-test',
+        cwd: createTempDir('bg-run-resume-cwd-'),
+        argv: [process.execPath, '-e', "console.log('resume-ready')"],
+        source: {
+          type: 'tool',
+          id: 'conv-run-resume',
+          filePath: sessionFile,
+        },
+        checkpointPayload: {
+          resumeParentOnExit: true,
+        },
+      },
+    });
+
+    expect(response.ok).toBe(true);
+    const runId = (response.result as { runId: string }).runId;
+    const runsRoot = resolveDurableRunsRoot(resolveDaemonPaths(config.ipc.socketPath).root);
+
+    await waitFor(() => scanDurableRun(runsRoot, runId)?.status?.status === 'completed');
+    await waitFor(() => Object.values(loadDeferredResumeState().resumes).some((entry) => entry.sessionFile === sessionFile && entry.status === 'ready'));
+
+    const resumes = Object.values(loadDeferredResumeState().resumes)
+      .filter((entry) => entry.sessionFile === sessionFile);
+
+    expect(resumes).toHaveLength(1);
+    expect(resumes[0]).toMatchObject({
+      sessionFile,
+      status: 'ready',
+    });
+    expect(resumes[0]?.prompt).toContain(runId);
+    expect(resumes[0]?.prompt).toContain('Use run get/logs');
+
+    const run = scanDurableRun(runsRoot, runId);
+    const payload = run?.checkpoint?.payload as Record<string, unknown> | undefined;
+    expect((payload?.backgroundRunResume as { deferredResumeId?: string } | undefined)?.deferredResumeId).toBe(resumes[0]?.id);
+  });
+
+  it('creates a delegate-style deferred resume for gateway delegate runs', async () => {
+    daemon = new PersonalAgentDaemon(config);
+    await daemon.start();
+
+    const sessionFile = createSessionFile('conv-gateway-resume');
+    const response = await sendRequest(socketPath, {
+      id: `req_${randomUUID()}`,
+      type: 'runs.startBackground',
+      input: {
+        taskSlug: 'delegate-review',
+        cwd: createTempDir('bg-run-gateway-cwd-'),
+        argv: [process.execPath, '-e', "console.log('delegate-ready')"],
+        source: {
+          type: 'gateway-delegate',
+          id: 'telegram-1',
+          filePath: sessionFile,
+        },
+        checkpointPayload: {
+          resumeParentOnExit: true,
+          notifyMode: 'resume',
+          taskPrompt: 'Review the failing build and summarize the fix.',
+        },
+      },
+    });
+
+    expect(response.ok).toBe(true);
+    await waitFor(() => Object.values(loadDeferredResumeState().resumes).some((entry) => entry.sessionFile === sessionFile && entry.status === 'ready'));
+
+    const resumes = Object.values(loadDeferredResumeState().resumes)
+      .filter((entry) => entry.sessionFile === sessionFile);
+
+    expect(resumes).toHaveLength(1);
+    expect(resumes[0]?.prompt).toContain('Original delegated task:');
+    expect(resumes[0]?.prompt).toContain('Review the failing build and summarize the fix.');
+    expect(resumes[0]?.prompt).toContain('Use delegate get/logs');
+  });
+
+  it('batches resumable background runs until the last active run for the session stops', async () => {
+    daemon = new PersonalAgentDaemon(config);
+    await daemon.start();
+
+    const sessionFile = createSessionFile('conv-run-batch');
+    const runsRoot = resolveDurableRunsRoot(resolveDaemonPaths(config.ipc.socketPath).root);
+    const commonInput = {
+      cwd: createTempDir('bg-run-batch-cwd-'),
+      source: {
+        type: 'tool',
+        id: 'conv-run-batch',
+        filePath: sessionFile,
+      },
+      checkpointPayload: {
+        resumeParentOnExit: true,
+      },
+    };
+
+    const slowResponse = await sendRequest(socketPath, {
+      id: `req_${randomUUID()}`,
+      type: 'runs.startBackground',
+      input: {
+        ...commonInput,
+        taskSlug: 'slow-batch',
+        argv: [process.execPath, '-e', "setTimeout(() => console.log('slow-ready'), 300)"],
+      },
+    });
+    const fastResponse = await sendRequest(socketPath, {
+      id: `req_${randomUUID()}`,
+      type: 'runs.startBackground',
+      input: {
+        ...commonInput,
+        taskSlug: 'fast-batch',
+        argv: [process.execPath, '-e', "console.log('fast-ready')"],
+      },
+    });
+
+    expect(slowResponse.ok).toBe(true);
+    expect(fastResponse.ok).toBe(true);
+
+    const slowRunId = (slowResponse.result as { runId: string }).runId;
+    const fastRunId = (fastResponse.result as { runId: string }).runId;
+
+    await waitFor(() => scanDurableRun(runsRoot, fastRunId)?.status?.status === 'completed');
+    expect(Object.values(loadDeferredResumeState().resumes)).toHaveLength(0);
+
+    await waitFor(() => scanDurableRun(runsRoot, slowRunId)?.status?.status === 'completed');
+    await waitFor(() => Object.values(loadDeferredResumeState().resumes).some((entry) => entry.sessionFile === sessionFile && entry.status === 'ready'));
+
+    const resumes = Object.values(loadDeferredResumeState().resumes)
+      .filter((entry) => entry.sessionFile === sessionFile);
+
+    expect(resumes).toHaveLength(1);
+    expect(resumes[0]?.prompt).toContain(slowRunId);
+    expect(resumes[0]?.prompt).toContain(fastRunId);
   });
 
   it('cancels a durable background run', async () => {

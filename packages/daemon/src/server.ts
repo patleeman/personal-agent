@@ -16,6 +16,7 @@ import {
   markBackgroundRunStarted,
   type StartBackgroundRunInput,
 } from './runs/background-runs.js';
+import { scheduleBackgroundRunDeferredResumeIfReady } from './runs/background-run-deferred-resumes.js';
 import {
   resolveDurableRunPaths,
   resolveDurableRunsRoot,
@@ -736,21 +737,54 @@ export class PersonalAgentDaemon {
     };
   }
 
+  private async surfaceBackgroundRunDeferredResume(triggerRunId: string): Promise<void> {
+    try {
+      const result = await scheduleBackgroundRunDeferredResumeIfReady({
+        daemonRoot: this.paths.root,
+        runsRoot: this.runsRoot,
+        triggerRunId,
+      });
+
+      if (!result.deferredResumeId) {
+        return;
+      }
+
+      this.log(
+        'info',
+        `background run follow-up queued run=${triggerRunId} deferredResume=${result.deferredResumeId} surfaced=${result.surfacedRunIds.join(',')}`,
+      );
+    } catch (error) {
+      this.log('warn', `background run follow-up scheduling failed run=${triggerRunId} error=${(error as Error).message}`);
+    }
+  }
+
   private async startBackgroundRun(input: StartBackgroundRunInput): Promise<StartBackgroundRunResult> {
     const record = await createBackgroundRunRecord(this.runsRoot, input);
     const startedAt = new Date().toISOString();
     const outputStream = createWriteStream(record.paths.outputLogPath, { flags: 'a', encoding: 'utf-8' });
     const spawnInput = appendBackgroundRunSessionDir(input, record.runId);
 
+    const childEnv = {
+      ...process.env,
+      PERSONAL_AGENT_RUN_ID: record.runId,
+      PERSONAL_AGENT_RUN_ROOT: record.paths.root,
+      PERSONAL_AGENT_RUN_MANIFEST_PATH: record.paths.manifestPath,
+      PERSONAL_AGENT_RUN_STATUS_PATH: record.paths.statusPath,
+      PERSONAL_AGENT_RUN_CHECKPOINT_PATH: record.paths.checkpointPath,
+      PERSONAL_AGENT_RUN_EVENTS_PATH: record.paths.eventsPath,
+      PERSONAL_AGENT_RUN_OUTPUT_LOG_PATH: record.paths.outputLogPath,
+      PERSONAL_AGENT_RUN_RESULT_PATH: record.paths.resultPath,
+    };
+
     const child = spawnInput.argv
       ? spawn(spawnInput.argv[0] as string, spawnInput.argv.slice(1), {
           cwd: input.cwd,
-          env: process.env,
+          env: childEnv,
           stdio: ['ignore', 'pipe', 'pipe'],
         })
       : spawn('sh', ['-lc', spawnInput.shellCommand as string], {
           cwd: input.cwd,
-          env: process.env,
+          env: childEnv,
           stdio: ['ignore', 'pipe', 'pipe'],
         });
 
@@ -846,9 +880,13 @@ export class PersonalAgentDaemon {
         error: handle.cancelling
           ? (handle.cancelReason ?? 'Cancelled by user')
           : (typeof code === 'number' && code === 0 ? undefined : `Command exited with code ${String(code ?? signal ?? 1)}`),
-      }).finally(() => {
-        outputStream.end();
-      });
+      })
+        .then(async () => {
+          await this.surfaceBackgroundRunDeferredResume(record.runId);
+        })
+        .finally(() => {
+          outputStream.end();
+        });
     });
 
     this.log('info', `background run started id=${record.runId} pid=${String(child.pid ?? 'n/a')} cwd=${input.cwd}`);
@@ -919,6 +957,7 @@ export class PersonalAgentDaemon {
       cancelled: true,
       error: reason,
     });
+    await this.surfaceBackgroundRunDeferredResume(runId);
 
     this.log('info', `background run cancelled from durable state id=${runId}`);
     return {
@@ -935,11 +974,14 @@ export class PersonalAgentDaemon {
         return;
       }
 
-      await markBackgroundRunInterrupted({
+      const interrupted = await markBackgroundRunInterrupted({
         runId: run.runId,
         runPaths: resolveDurableRunPaths(this.runsRoot, run.runId),
         reason: 'Daemon restarted before background run completion.',
       });
+      if (interrupted) {
+        await this.surfaceBackgroundRunDeferredResume(run.runId);
+      }
     }));
   }
 
