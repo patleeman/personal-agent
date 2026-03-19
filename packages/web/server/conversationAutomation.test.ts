@@ -36,7 +36,7 @@ describe('conversationAutomation state', () => {
     const settingsFile = join(stateRoot, 'settings.json');
 
     const presetLibrary = writeSavedConversationAutomationWorkflowPresets({
-      defaultPresetId: 'preset-checkpoint',
+      defaultPresetIds: ['preset-checkpoint'],
       presets: [{
         id: 'preset-checkpoint',
         name: 'Checkpoint flow',
@@ -61,8 +61,8 @@ describe('conversationAutomation state', () => {
       settingsFile,
     });
 
-    expect(presetLibrary.defaultPresetId).toBe('preset-checkpoint');
-    expect(loaded.inheritedPresetId).toBe('preset-checkpoint');
+    expect(presetLibrary.defaultPresetIds).toEqual(['preset-checkpoint']);
+    expect(loaded.inheritedPresetIds).toEqual(['preset-checkpoint']);
     expect(loaded.presetLibrary.presets).toEqual(presetLibrary.presets);
     expect(loaded.document).toEqual({
       version: 2,
@@ -71,13 +71,11 @@ describe('conversationAutomation state', () => {
       enabled: false,
       gates: [
         expect.objectContaining({
-          id: 'gate-default-1',
           label: 'Ready to checkpoint?',
           prompt: 'Pass only when the latest assistant message requests a checkpoint.',
           status: 'pending',
           skills: [
             expect.objectContaining({
-              id: 'skill-default-1',
               label: 'workflow-checkpoint',
               skillName: 'workflow-checkpoint',
               status: 'pending',
@@ -91,6 +89,57 @@ describe('conversationAutomation state', () => {
       stateRoot,
       conversationId: 'conv-123',
     })).toBe(false);
+  });
+
+  it('combines the default preset stack for conversations without a local override', () => {
+    const stateRoot = createTempDir('pa-conversation-automation-');
+    const settingsFile = join(stateRoot, 'settings.json');
+
+    const presetLibrary = writeSavedConversationAutomationWorkflowPresets({
+      defaultPresetIds: ['preset-a', 'preset-b'],
+      presets: [{
+        id: 'preset-a',
+        name: 'Code review',
+        updatedAt: '2026-03-18T12:00:00.000Z',
+        gates: [{
+          id: 'gate-a-1',
+          label: 'Review requested?',
+          prompt: 'Pass when the user asks for review.',
+          skills: [{
+            id: 'skill-a-1',
+            label: 'review',
+            skillName: 'workflow-checkpoint',
+          }],
+        }],
+      }, {
+        id: 'preset-b',
+        name: 'Follow-up',
+        updatedAt: '2026-03-18T12:05:00.000Z',
+        gates: [{
+          id: 'gate-b-1',
+          label: 'Ship it?',
+          prompt: 'Pass when the user says to checkpoint.',
+          skills: [{
+            id: 'skill-b-1',
+            label: 'checkpoint',
+            skillName: 'workflow-checkpoint',
+          }],
+        }],
+      }],
+    }, settingsFile);
+
+    const loaded = loadConversationAutomationState({
+      profile: 'datadog',
+      stateRoot,
+      conversationId: 'conv-stacked',
+      settingsFile,
+    });
+
+    expect(presetLibrary.defaultPresetIds).toEqual(['preset-a', 'preset-b']);
+    expect(loaded.inheritedPresetIds).toEqual(['preset-a', 'preset-b']);
+    expect(loaded.document.gates).toHaveLength(2);
+    expect(loaded.document.gates.map((gate) => gate.label)).toEqual(['Review requested?', 'Ship it?']);
+    expect(new Set(loaded.document.gates.map((gate) => gate.id)).size).toBe(2);
   });
 
   it('migrates the legacy saved default workflow into a default preset', () => {
@@ -124,9 +173,9 @@ describe('conversationAutomation state', () => {
       settingsFile,
     });
 
-    expect(loaded.inheritedPresetId).toBe('preset-default');
+    expect(loaded.inheritedPresetIds).toEqual(['preset-default']);
     expect(loaded.presetLibrary).toEqual({
-      defaultPresetId: 'preset-default',
+      defaultPresetIds: ['preset-default'],
       presets: [{
         id: 'preset-default',
         name: 'Default workflow',
@@ -183,7 +232,7 @@ describe('conversationAutomation state', () => {
       stateRoot,
       conversationId: 'conv-123',
     })).toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-automation', 'datadog', 'conv-123.json'));
-    expect(loaded.inheritedPresetId).toBeNull();
+    expect(loaded.inheritedPresetIds).toEqual([]);
     expect(loaded.document.enabled).toBe(true);
     expect(loaded.document.gates).toEqual([
       expect.objectContaining({

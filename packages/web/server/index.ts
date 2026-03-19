@@ -2580,7 +2580,7 @@ function buildConversationAutomationResponse(conversationId: string) {
   return {
     conversationId,
     live: liveRegistry.has(conversationId),
-    inheritedPresetId: loaded.inheritedPresetId,
+    inheritedPresetIds: loaded.inheritedPresetIds,
     automation: {
       conversationId: automation.conversationId,
       enabled: automation.enabled,
@@ -2672,7 +2672,7 @@ function validateConversationAutomationTemplateGates(gates: unknown, availableSk
 
 function validateConversationAutomationWorkflowPresets(
   presets: unknown,
-  defaultPresetId: unknown,
+  defaultPresetIds: unknown,
   availableSkillNames: Set<string>,
 ): asserts presets is Array<{
   id: string;
@@ -2724,13 +2724,24 @@ function validateConversationAutomationWorkflowPresets(
     validateConversationAutomationTemplateGates(gates, availableSkillNames);
   }
 
-  if (defaultPresetId !== null && defaultPresetId !== undefined) {
-    const normalizedDefaultPresetId = typeof defaultPresetId === 'string' ? defaultPresetId.trim() : '';
-    if (!normalizedDefaultPresetId) {
-      throw new Error('defaultPresetId must be a string or null');
+  if (defaultPresetIds !== null && defaultPresetIds !== undefined) {
+    if (!Array.isArray(defaultPresetIds)) {
+      throw new Error('defaultPresetIds must be an array');
     }
-    if (!presetIds.has(normalizedDefaultPresetId)) {
-      throw new Error(`Default preset not found: ${normalizedDefaultPresetId}`);
+
+    const seenDefaultPresetIds = new Set<string>();
+    for (const presetId of defaultPresetIds) {
+      const normalizedPresetId = typeof presetId === 'string' ? presetId.trim() : '';
+      if (!normalizedPresetId) {
+        throw new Error('Each default preset id must be a non-empty string.');
+      }
+      if (!presetIds.has(normalizedPresetId)) {
+        throw new Error(`Default preset not found: ${normalizedPresetId}`);
+      }
+      if (seenDefaultPresetIds.has(normalizedPresetId)) {
+        throw new Error(`Duplicate default preset id: ${normalizedPresetId}`);
+      }
+      seenDefaultPresetIds.add(normalizedPresetId);
     }
   }
 }
@@ -3048,6 +3059,26 @@ app.patch('/api/conversation-automation/settings', (req, res) => {
   }
 });
 
+app.get('/api/conversation-automation/workspace', (_req, res) => {
+  try {
+    res.json({
+      presetLibrary: readSavedConversationAutomationWorkflowPresets(SETTINGS_FILE),
+      judge: readSavedConversationAutomationJudgePreferences(SETTINGS_FILE),
+      skills: listSkillsForCurrentProfile().map((skill) => ({
+        name: skill.name,
+        description: skill.description,
+        source: skill.source,
+      })),
+    });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 app.get('/api/conversation-automation/workflow-presets', (_req, res) => {
   try {
     res.json(readSavedConversationAutomationWorkflowPresets(SETTINGS_FILE));
@@ -3062,17 +3093,17 @@ app.get('/api/conversation-automation/workflow-presets', (_req, res) => {
 
 app.patch('/api/conversation-automation/workflow-presets', (req, res) => {
   try {
-    const { presets, defaultPresetId } = req.body as {
+    const { presets, defaultPresetIds } = req.body as {
       presets?: unknown;
-      defaultPresetId?: unknown;
+      defaultPresetIds?: unknown;
     };
     const skillNames = new Set(listSkillsForCurrentProfile().map((skill) => skill.name));
-    validateConversationAutomationWorkflowPresets(presets, defaultPresetId, skillNames);
+    validateConversationAutomationWorkflowPresets(presets, defaultPresetIds, skillNames);
 
     const saved = persistSettingsWrite(
       (settingsFile) => writeSavedConversationAutomationWorkflowPresets({
         presets: presets as Parameters<typeof writeSavedConversationAutomationWorkflowPresets>[0]['presets'],
-        defaultPresetId: (typeof defaultPresetId === 'string' ? defaultPresetId : null) as Parameters<typeof writeSavedConversationAutomationWorkflowPresets>[0]['defaultPresetId'],
+        defaultPresetIds: (Array.isArray(defaultPresetIds) ? defaultPresetIds.filter((presetId): presetId is string => typeof presetId === 'string') : []) as Parameters<typeof writeSavedConversationAutomationWorkflowPresets>[0]['defaultPresetIds'],
       }, settingsFile),
       { runtimeSettingsFile: SETTINGS_FILE },
     );
@@ -3087,7 +3118,9 @@ app.patch('/api/conversation-automation/workflow-presets', (req, res) => {
       || message.includes('presets must be an array')
       || message.includes('Each preset')
       || message.includes('Duplicate preset id:')
-      || message.includes('defaultPresetId must be a string or null')
+      || message.includes('defaultPresetIds must be an array')
+      || message.includes('Each default preset id must be a non-empty string.')
+      || message.includes('Duplicate default preset id:')
       || message.includes('Default preset not found:')
       ? 400
       : 500;
