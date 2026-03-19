@@ -36,23 +36,16 @@ function filterPresets(presets: ConversationAutomationWorkflowPreset[], query: s
   return presets.filter((preset) => {
     const haystack = [
       preset.name,
-      ...preset.gates.map((gate) => gate.label),
-      ...preset.gates.flatMap((gate) => gate.skills.map((skill) => `${skill.label} ${skill.skillName}`)),
+      ...preset.items.map((item) => `${item.label} ${item.skillName} ${item.skillArgs ?? ''}`),
     ].join('\n').toLowerCase();
 
     return haystack.includes(normalized);
   });
 }
 
-function countSkills(preset: ConversationAutomationWorkflowPreset): number {
-  return preset.gates.reduce((sum, gate) => sum + gate.skills.length, 0);
-}
-
 function presetMeta(preset: ConversationAutomationWorkflowPreset, workspace: ConversationAutomationWorkspaceState): string {
-  const skillCount = countSkills(preset);
   const parts = [
-    `${preset.gates.length} ${preset.gates.length === 1 ? 'gate' : 'gates'}`,
-    `${skillCount} ${skillCount === 1 ? 'skill' : 'skills'}`,
+    `${preset.items.length} ${preset.items.length === 1 ? 'item' : 'items'}`,
   ];
 
   if (workspace.presetLibrary.defaultPresetIds.includes(preset.id)) {
@@ -111,7 +104,7 @@ export function AutomationPage() {
         : 'no default presets',
       `${data.skills.length} ${data.skills.length === 1 ? 'skill' : 'skills'} available`,
     ].join(' · ')
-    : 'Reusable automation templates';
+    : 'Reusable automation presets';
 
   return (
     <div className="flex h-full flex-col">
@@ -141,10 +134,9 @@ export function AutomationPage() {
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Filter presets by name, gate, or skill"
+                placeholder="Filter presets by name or item"
                 className="w-full max-w-xl rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60"
               />
-              <ToolbarButton onClick={() => { navigate('/settings'); }}>Judge prompt</ToolbarButton>
             </div>
 
             {creatingNew && <p className="text-[12px] text-dim">Editing new preset in the right pane.</p>}
@@ -164,7 +156,6 @@ export function AutomationPage() {
               <div className="space-y-px">
                 {filteredPresets.map((preset) => {
                   const selected = !creatingNew && preset.id === selectedPresetId;
-                  const skillCount = countSkills(preset);
                   return (
                     <ListLinkRow
                       key={preset.id}
@@ -176,9 +167,7 @@ export function AutomationPage() {
                       <p className="ui-row-title truncate">{preset.name}</p>
                       <p className="ui-row-summary">{presetMeta(preset, data)}</p>
                       <p className="ui-row-meta flex flex-wrap items-center gap-1.5">
-                        <span>{preset.gates.length} gates</span>
-                        <span className="opacity-40">·</span>
-                        <span>{skillCount} skills</span>
+                        <span>{preset.items.length} items</span>
                         <span className="opacity-40">·</span>
                         <span>{preset.updatedAt ? new Date(preset.updatedAt).toLocaleString() : 'saved in settings'}</span>
                       </p>

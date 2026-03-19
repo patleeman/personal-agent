@@ -136,12 +136,6 @@ export function SettingsPage() {
     refetch: refetchConversationAutomationDefaults,
   } = useApi(api.conversationAutomationDefaults);
   const {
-    data: conversationAutomationJudgeState,
-    loading: conversationAutomationJudgeLoading,
-    error: conversationAutomationJudgeError,
-    refetch: refetchConversationAutomationJudgeSettings,
-  } = useApi(api.conversationAutomationJudgeSettings);
-  const {
     data: status,
     error: statusError,
     refetch: refetchStatus,
@@ -161,11 +155,8 @@ export function SettingsPage() {
   const [defaultCwdSaveError, setDefaultCwdSaveError] = useState<string | null>(null);
   const [savingConversationTitle, setSavingConversationTitle] = useState<'enabled' | 'model' | null>(null);
   const [conversationTitleSaveError, setConversationTitleSaveError] = useState<string | null>(null);
-  const [conversationAutomationJudgePromptDraft, setConversationAutomationJudgePromptDraft] = useState('');
   const [savingConversationAutomationDefaultEnabled, setSavingConversationAutomationDefaultEnabled] = useState(false);
   const [conversationAutomationDefaultEnabledError, setConversationAutomationDefaultEnabledError] = useState<string | null>(null);
-  const [savingConversationAutomationJudge, setSavingConversationAutomationJudge] = useState<'model' | 'systemPrompt' | null>(null);
-  const [conversationAutomationJudgeSaveError, setConversationAutomationJudgeSaveError] = useState<string | null>(null);
   const [selectedProviderId, setSelectedProviderId] = useState('');
   const [providerApiKey, setProviderApiKey] = useState('');
   const [providerCredentialAction, setProviderCredentialAction] = useState<'saveKey' | 'remove' | null>(null);
@@ -207,15 +198,6 @@ export function SettingsPage() {
     [conversationTitleState?.effectiveModel, modelState?.models],
   );
 
-  const selectedConversationAutomationJudgeModel = useMemo(
-    () => findModelByRef(modelState?.models ?? [], conversationAutomationJudgeState?.currentModel ?? ''),
-    [conversationAutomationJudgeState?.currentModel, modelState?.models],
-  );
-
-  const effectiveConversationAutomationJudgeModel = useMemo(
-    () => findModelByRef(modelState?.models ?? [], conversationAutomationJudgeState?.effectiveModel ?? ''),
-    [conversationAutomationJudgeState?.effectiveModel, modelState?.models],
-  );
 
   const selectedProvider = useMemo(() => {
     if (!providerAuthState || !selectedProviderId) {
@@ -228,21 +210,12 @@ export function SettingsPage() {
   const defaultCwdDirty = defaultCwdState
     ? defaultCwdDraft.trim() !== defaultCwdState.currentCwd
     : false;
-  const conversationAutomationJudgePromptDirty = conversationAutomationJudgeState
-    ? conversationAutomationJudgePromptDraft.trim() !== conversationAutomationJudgeState.systemPrompt.trim()
-    : false;
 
   useEffect(() => {
     if (defaultCwdState) {
       setDefaultCwdDraft(defaultCwdState.currentCwd);
     }
   }, [defaultCwdState?.currentCwd]);
-
-  useEffect(() => {
-    if (conversationAutomationJudgeState) {
-      setConversationAutomationJudgePromptDraft(conversationAutomationJudgeState.systemPrompt);
-    }
-  }, [conversationAutomationJudgeState?.systemPrompt]);
 
   useEffect(() => {
     if (!providerAuthState || providerAuthState.providers.length === 0) {
@@ -369,7 +342,6 @@ export function SettingsPage() {
       await api.updateModelPreferences(input);
       await refetchModels({ resetLoading: false });
       await refetchConversationTitleSettings({ resetLoading: false });
-      await refetchConversationAutomationJudgeSettings({ resetLoading: false });
     } catch (error) {
       setModelError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -445,38 +417,6 @@ export function SettingsPage() {
       setConversationAutomationDefaultEnabledError(error instanceof Error ? error.message : String(error));
     } finally {
       setSavingConversationAutomationDefaultEnabled(false);
-    }
-  }
-
-  async function handleConversationAutomationJudgeSettingChange(
-    input: { model?: string | null; systemPrompt?: string | null },
-    field: 'model' | 'systemPrompt',
-  ) {
-    if (!conversationAutomationJudgeState || savingConversationAutomationJudge !== null) {
-      return;
-    }
-
-    if (field === 'model' && (input.model ?? '') === conversationAutomationJudgeState.currentModel) {
-      return;
-    }
-
-    if (field === 'systemPrompt' && (input.systemPrompt ?? '').trim() === conversationAutomationJudgeState.systemPrompt.trim()) {
-      return;
-    }
-
-    setConversationAutomationJudgeSaveError(null);
-    setSavingConversationAutomationJudge(field);
-
-    try {
-      const saved = await api.updateConversationAutomationJudgeSettings(input);
-      if (field === 'systemPrompt') {
-        setConversationAutomationJudgePromptDraft(saved.systemPrompt);
-      }
-      await refetchConversationAutomationJudgeSettings({ resetLoading: false });
-    } catch (error) {
-      setConversationAutomationJudgeSaveError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setSavingConversationAutomationJudge(null);
     }
   }
 
@@ -651,7 +591,6 @@ export function SettingsPage() {
           refetchDefaultCwd({ resetLoading: false }),
           refetchConversationTitleSettings({ resetLoading: false }),
           refetchConversationAutomationDefaults({ resetLoading: false }),
-          refetchConversationAutomationJudgeSettings({ resetLoading: false }),
           refetchProviderAuth({ resetLoading: false }),
           refetchStatus({ resetLoading: false }),
           oauthLoginState ? api.providerOAuthLogin(oauthLoginState.id).then(setOauthLoginState).catch(() => null) : Promise.resolve(null),
@@ -979,124 +918,18 @@ export function SettingsPage() {
 
                 {conversationAutomationDefaultEnabledError && <p className="text-[12px] text-danger">{conversationAutomationDefaultEnabledError}</p>}
               </div>
-
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <h2 className="text-[15px] font-medium text-primary">Judge model</h2>
-                  <p className="ui-card-meta max-w-2xl">
-                    Judge gates use a separate model from the normal conversation default. Leave it empty to fall back to the runtime default model.
-                  </p>
-                </div>
-
-                {(conversationAutomationJudgeLoading && !conversationAutomationJudgeState) || (modelsLoading && !modelState) ? (
-                  <p className="ui-card-meta">Loading automation judge settings…</p>
-                ) : (!conversationAutomationJudgeState && conversationAutomationJudgeError) ? (
-                  <p className="text-[12px] text-danger">Failed to load automation judge settings: {conversationAutomationJudgeError}</p>
-                ) : (!modelState && modelsError) ? (
-                  <p className="text-[12px] text-danger">Failed to load models: {modelsError}</p>
-                ) : conversationAutomationJudgeState && modelState ? (
-                  <>
-                    <label className="ui-card-meta" htmlFor="settings-conversation-automation-judge-model">Judge model</label>
-                    <select
-                      id="settings-conversation-automation-judge-model"
-                      value={conversationAutomationJudgeState.currentModel}
-                      onChange={(event) => {
-                        void handleConversationAutomationJudgeSettingChange({ model: event.target.value || '' }, 'model');
-                      }}
-                      disabled={savingConversationAutomationJudge !== null || modelState.models.length === 0}
-                      className={INPUT_CLASS}
-                    >
-                      <option value="">Use runtime default ({conversationAutomationJudgeState.effectiveModel})</option>
-                      {groupedModels.map(([provider, models]) => (
-                        <optgroup key={provider} label={provider}>
-                          {models.map((model) => (
-                            <option key={`${model.provider}/${model.id}`} value={`${model.provider}/${model.id}`}>
-                              {model.name} · {formatContextWindowLabel(model.context)} ctx
-                            </option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                    <p className="ui-card-meta">
-                      {savingConversationAutomationJudge === 'model'
-                        ? 'Saving judge model…'
-                        : conversationAutomationJudgeState.currentModel
-                          ? `Pinned judge model: ${formatModelSummary(selectedConversationAutomationJudgeModel, conversationAutomationJudgeState.currentModel)}`
-                          : `Using runtime default: ${formatModelSummary(effectiveConversationAutomationJudgeModel, conversationAutomationJudgeState.effectiveModel)}`}
-                    </p>
-                  </>
-                ) : null}
               </div>
-            </div>
 
               <div className="space-y-3 min-w-0">
                 <div className="space-y-1">
-                  <h2 className="text-[15px] font-medium text-primary">Judge system prompt</h2>
+                  <h2 className="text-[15px] font-medium text-primary">Execution model</h2>
                   <p className="ui-card-meta max-w-2xl">
-                    Used for every conversation judge gate. The judge receives only the sanitized user/assistant thread, not tool traces or thinking blocks.
+                    Conversation automation now runs an ordered todo list of skill items. When the list completes, the assistant performs one final review pass and can append more items before stopping.
                   </p>
                 </div>
-
-                {conversationAutomationJudgeState ? (
-                  <>
-                    <label className="ui-card-meta" htmlFor="settings-conversation-automation-judge-prompt">System prompt</label>
-                    <textarea
-                      id="settings-conversation-automation-judge-prompt"
-                      value={conversationAutomationJudgePromptDraft}
-                      onChange={(event) => {
-                        setConversationAutomationJudgePromptDraft(event.target.value);
-                        if (conversationAutomationJudgeSaveError) {
-                          setConversationAutomationJudgeSaveError(null);
-                        }
-                      }}
-                      className={`${INPUT_CLASS} min-h-[180px] resize-y leading-relaxed`}
-                      disabled={savingConversationAutomationJudge !== null}
-                      spellCheck={false}
-                    />
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void handleConversationAutomationJudgeSettingChange({ systemPrompt: conversationAutomationJudgePromptDraft }, 'systemPrompt');
-                        }}
-                        disabled={savingConversationAutomationJudge !== null || !conversationAutomationJudgePromptDirty}
-                        className={ACTION_BUTTON_CLASS}
-                      >
-                        {savingConversationAutomationJudge === 'systemPrompt' ? 'Saving…' : 'Save system prompt'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setConversationAutomationJudgePromptDraft(conversationAutomationJudgeState.systemPrompt);
-                          setConversationAutomationJudgeSaveError(null);
-                        }}
-                        disabled={savingConversationAutomationJudge !== null || !conversationAutomationJudgePromptDirty}
-                        className={ACTION_BUTTON_CLASS}
-                      >
-                        Revert draft
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void handleConversationAutomationJudgeSettingChange({ systemPrompt: null }, 'systemPrompt');
-                        }}
-                        disabled={savingConversationAutomationJudge !== null || conversationAutomationJudgeState.usingDefaultSystemPrompt}
-                        className={ACTION_BUTTON_CLASS}
-                      >
-                        Use default prompt
-                      </button>
-                    </div>
-                    <p className="ui-card-meta">
-                      {conversationAutomationJudgeState.usingDefaultSystemPrompt
-                        ? 'Using the built-in judge prompt until you save a custom one.'
-                        : 'Custom judge prompt saved in settings.json.'}
-                    </p>
-                  </>
-                ) : conversationAutomationJudgeLoading ? (
-                  <p className="ui-card-meta">Loading judge prompt…</p>
-                ) : null}
-
-                {conversationAutomationJudgeSaveError && <p className="text-[12px] text-danger">{conversationAutomationJudgeSaveError}</p>}
+                <p className="ui-card-meta max-w-2xl">
+                  Manage the actual todo lists from the Automation page. There is no separate judge model or query syntax to configure anymore.
+                </p>
               </div>
             </div>
           </section>

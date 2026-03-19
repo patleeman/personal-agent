@@ -948,68 +948,48 @@ export interface ConversationTitleSettingsState {
   effectiveModel: string;
 }
 
-export interface ConversationAutomationJudgeSettingsState {
-  currentModel: string;
-  effectiveModel: string;
-  systemPrompt: string;
-  usingDefaultSystemPrompt: boolean;
-}
-
 export interface ConversationAutomationPreferencesState {
   defaultEnabled: boolean;
 }
 
-export type ConversationAutomationSkillStepStatus = 'pending' | 'running' | 'completed' | 'failed';
-export type ConversationAutomationGateStatus = 'pending' | 'running' | 'completed' | 'failed';
+export type ConversationAutomationTodoItemStatus = 'pending' | 'running' | 'completed' | 'failed';
+export type ConversationAutomationReviewStatus = 'pending' | 'running' | 'completed' | 'failed';
 
-export interface ConversationAutomationTemplateSkillStep {
+export interface ConversationAutomationTemplateTodoItem {
   id: string;
   label: string;
   skillName: string;
   skillArgs?: string;
 }
 
-export interface ConversationAutomationTemplateGate {
-  id: string;
-  label: string;
-  prompt: string;
-  skills: ConversationAutomationTemplateSkillStep[];
-}
-
-export interface ConversationAutomationSkillStep {
+export interface ConversationAutomationTodoItem {
   id: string;
   label: string;
   skillName: string;
   skillArgs?: string;
-  status: ConversationAutomationSkillStepStatus;
+  status: ConversationAutomationTodoItemStatus;
   createdAt: string;
   updatedAt: string;
   startedAt?: string;
   completedAt?: string;
   resultReason?: string;
-  resultConfidence?: number;
 }
 
-export interface ConversationAutomationGate {
-  id: string;
-  label: string;
-  prompt: string;
-  status: ConversationAutomationGateStatus;
+export interface ConversationAutomationReviewState {
+  status: ConversationAutomationReviewStatus;
+  round: number;
   createdAt: string;
   updatedAt: string;
   startedAt?: string;
   completedAt?: string;
   resultReason?: string;
-  resultConfidence?: number;
-  matchesCurrentConditions?: boolean;
-  skills: ConversationAutomationSkillStep[];
 }
 
 export interface ConversationAutomationWorkflowPreset {
   id: string;
   name: string;
   updatedAt: string;
-  gates: ConversationAutomationTemplateGate[];
+  items: ConversationAutomationTemplateTodoItem[];
 }
 
 export interface ConversationAutomationWorkflowPresetLibraryState {
@@ -1020,39 +1000,16 @@ export interface ConversationAutomationWorkflowPresetLibraryState {
 export interface ConversationAutomationState {
   conversationId: string;
   enabled: boolean;
-  activeGateId: string | null;
-  activeSkillId: string | null;
+  activeItemId: string | null;
   updatedAt: string;
-  gates: ConversationAutomationGate[];
+  items: ConversationAutomationTodoItem[];
+  review?: ConversationAutomationReviewState;
 }
 
 export interface ConversationAutomationSkillInfo {
   name: string;
   description: string;
   source: string;
-}
-
-export interface ConversationAutomationFilterHelpField {
-  key: 'tool' | 'event' | 'repo' | 'prompt' | 'judge';
-  description: string;
-  valueHint: string;
-  values?: string[];
-}
-
-export interface ConversationAutomationFilterHelpTool {
-  name: string;
-  description: string;
-}
-
-export interface ConversationAutomationFilterHelp {
-  fields: ConversationAutomationFilterHelpField[];
-  examples: string[];
-  availableTools: ConversationAutomationFilterHelpTool[];
-}
-
-export interface ConversationAutomationFilterValidationResult {
-  valid: boolean;
-  error: string | null;
 }
 
 export interface ConversationAutomationResponse {
@@ -1062,14 +1019,11 @@ export interface ConversationAutomationResponse {
   automation: ConversationAutomationState;
   presetLibrary: ConversationAutomationWorkflowPresetLibraryState;
   skills: ConversationAutomationSkillInfo[];
-  judge: ConversationAutomationJudgeSettingsState;
 }
 
 export interface ConversationAutomationWorkspaceState {
   presetLibrary: ConversationAutomationWorkflowPresetLibraryState;
   skills: ConversationAutomationSkillInfo[];
-  judge: ConversationAutomationJudgeSettingsState;
-  filterHelp: ConversationAutomationFilterHelp;
 }
 
 export interface ProfileState {

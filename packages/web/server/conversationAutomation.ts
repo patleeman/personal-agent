@@ -1,15 +1,14 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { getStateRoot, validateConversationId } from '@personal-agent/core';
-import { normalizeConversationAutomationFilter } from './conversationAutomationFilter.js';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 const ITEM_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
-const DOCUMENT_VERSION = 2 as const;
-const DEFAULT_WORKFLOW_PROMPT = 'Always pass this migrated automation gate and continue the nested skills.';
+const DOCUMENT_VERSION = 3 as const;
+const MAX_REVIEW_ITEMS_PER_APPEND = 10;
 
-export type ConversationAutomationSkillStepStatus = 'pending' | 'running' | 'completed' | 'failed';
-export type ConversationAutomationGateStatus = 'pending' | 'running' | 'completed' | 'failed';
+export type ConversationAutomationTodoItemStatus = 'pending' | 'running' | 'completed' | 'failed';
+export type ConversationAutomationReviewStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 interface ConversationAutomationRuntimeFields {
   createdAt: string;
@@ -17,54 +16,43 @@ interface ConversationAutomationRuntimeFields {
   startedAt?: string;
   completedAt?: string;
   resultReason?: string;
-  resultConfidence?: number;
 }
 
-export interface ConversationAutomationTemplateSkillStep {
+export interface ConversationAutomationTemplateTodoItem {
   id: string;
   label: string;
   skillName: string;
   skillArgs?: string;
 }
 
-export interface ConversationAutomationTemplateGate {
-  id: string;
-  label: string;
-  prompt: string;
-  skills: ConversationAutomationTemplateSkillStep[];
-}
-
-export interface ConversationAutomationSkillStep extends ConversationAutomationRuntimeFields {
+export interface ConversationAutomationTodoItem extends ConversationAutomationRuntimeFields {
   id: string;
   label: string;
   skillName: string;
   skillArgs?: string;
-  status: ConversationAutomationSkillStepStatus;
+  status: ConversationAutomationTodoItemStatus;
 }
 
-export interface ConversationAutomationGate extends ConversationAutomationRuntimeFields {
-  id: string;
-  label: string;
-  prompt: string;
-  status: ConversationAutomationGateStatus;
-  skills: ConversationAutomationSkillStep[];
+export interface ConversationAutomationReviewState extends ConversationAutomationRuntimeFields {
+  status: ConversationAutomationReviewStatus;
+  round: number;
 }
 
 export interface ConversationAutomationDocument {
-  version: 2;
+  version: 3;
   conversationId: string;
   updatedAt: string;
   enabled: boolean;
-  activeGateId?: string;
-  activeSkillId?: string;
-  gates: ConversationAutomationGate[];
+  activeItemId?: string;
+  items: ConversationAutomationTodoItem[];
+  review?: ConversationAutomationReviewState;
 }
 
 export interface ConversationAutomationWorkflowPreset {
   id: string;
   name: string;
   updatedAt: string;
-  gates: ConversationAutomationTemplateGate[];
+  items: ConversationAutomationTemplateTodoItem[];
 }
 
 export interface ConversationAutomationWorkflowPresetLibraryState {
@@ -90,26 +78,6 @@ export interface ResolveConversationAutomationOptions {
 export interface ResolveConversationAutomationPathOptions extends ResolveConversationAutomationOptions {
   conversationId: string;
 }
-
-interface LegacyConversationAutomationBaseStep extends ConversationAutomationRuntimeFields {
-  id: string;
-  kind: 'skill' | 'judge';
-  label: string;
-  status: ConversationAutomationSkillStepStatus;
-}
-
-interface LegacyConversationAutomationSkillStep extends LegacyConversationAutomationBaseStep {
-  kind: 'skill';
-  skillName: string;
-  skillArgs?: string;
-}
-
-interface LegacyConversationAutomationJudgeStep extends LegacyConversationAutomationBaseStep {
-  kind: 'judge';
-  prompt: string;
-}
-
-type LegacyConversationAutomationStep = LegacyConversationAutomationSkillStep | LegacyConversationAutomationJudgeStep;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -139,12 +107,6 @@ function normalizeIsoTimestamp(value: unknown, fallback: string): string {
   }
 
   return fallback;
-}
-
-function normalizeConfidence(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value)
-    ? Math.max(0, Math.min(1, value))
-    : undefined;
 }
 
 function validateProfileName(profile: string): void {
@@ -211,43 +173,35 @@ export function conversationAutomationDocumentExists(options: ResolveConversatio
   return existsSync(resolveConversationAutomationPath(options));
 }
 
-function createAutomationId(prefix: 'gate' | 'skill' | 'preset', now = new Date()): string {
+function createAutomationId(prefix: 'item' | 'preset', now = new Date()): string {
   return `${prefix}-${now.toISOString().replace(/[.:TZ-]/g, '').slice(0, 17)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-export function createConversationAutomationGateId(now = new Date()): string {
-  return createAutomationId('gate', now);
-}
-
-export function createConversationAutomationSkillStepId(now = new Date()): string {
-  return createAutomationId('skill', now);
+export function createConversationAutomationTodoItemId(now = new Date()): string {
+  return createAutomationId('item', now);
 }
 
 export function createConversationAutomationWorkflowPresetId(now = new Date()): string {
   return createAutomationId('preset', now);
 }
 
-function cloneTemplateGatesForConversation(gates: ConversationAutomationTemplateGate[]): ConversationAutomationTemplateGate[] {
-  return gates.map((gate) => ({
-    ...gate,
-    id: createConversationAutomationGateId(),
-    skills: gate.skills.map((skill) => ({
-      ...skill,
-      id: createConversationAutomationSkillStepId(),
-    })),
+function cloneTemplateItemsForConversation(items: ConversationAutomationTemplateTodoItem[]): ConversationAutomationTemplateTodoItem[] {
+  return items.map((item) => ({
+    ...item,
+    id: createConversationAutomationTodoItemId(),
   }));
 }
 
-function normalizeTemplateSkillStep(value: unknown, fallbackNow: string): ConversationAutomationTemplateSkillStep {
+function normalizeTemplateTodoItem(value: unknown, fallbackNow: string): ConversationAutomationTemplateTodoItem {
   if (!isRecord(value)) {
-    throw new Error('Automation skill must be an object.');
+    throw new Error('Automation item must be an object.');
   }
 
-  const id = readNonEmptyString(value.id) || createConversationAutomationSkillStepId(new Date(fallbackNow));
+  const id = readNonEmptyString(value.id) || createConversationAutomationTodoItemId(new Date(fallbackNow));
   validateItemId(id);
   const skillName = readNonEmptyString(value.skillName);
   if (!skillName) {
-    throw new Error(`Automation skill ${id} is missing skillName.`);
+    throw new Error(`Automation item ${id} is missing skillName.`);
   }
 
   return {
@@ -258,29 +212,18 @@ function normalizeTemplateSkillStep(value: unknown, fallbackNow: string): Conver
   };
 }
 
-function normalizeTemplateGate(value: unknown, fallbackNow: string): ConversationAutomationTemplateGate {
-  if (!isRecord(value)) {
-    throw new Error('Automation gate must be an object.');
+function flattenLegacyGateItems(gates: unknown, fallbackNow: string): ConversationAutomationTemplateTodoItem[] {
+  if (!Array.isArray(gates)) {
+    return [];
   }
 
-  const id = readNonEmptyString(value.id) || createConversationAutomationGateId(new Date(fallbackNow));
-  validateItemId(id);
-  const rawPrompt = readNonEmptyString(value.prompt);
-  if (!rawPrompt) {
-    throw new Error(`Automation gate ${id} is missing prompt.`);
-  }
-  const prompt = normalizeConversationAutomationFilter(rawPrompt);
+  return gates.flatMap((gate) => {
+    if (!isRecord(gate) || !Array.isArray(gate.skills)) {
+      return [];
+    }
 
-  const skills = Array.isArray(value.skills)
-    ? value.skills.map((skill) => normalizeTemplateSkillStep(skill, fallbackNow))
-    : [];
-
-  return {
-    id,
-    label: normalizeOptionalText(value.label) ?? 'Judge gate',
-    prompt,
-    skills,
-  };
+    return gate.skills.map((skill) => normalizeTemplateTodoItem(skill, fallbackNow));
+  });
 }
 
 function normalizeRuntimeFields(value: Record<string, unknown>, fallbackNow: string): ConversationAutomationRuntimeFields {
@@ -290,321 +233,125 @@ function normalizeRuntimeFields(value: Record<string, unknown>, fallbackNow: str
     ...(normalizeOptionalText(value.startedAt) ? { startedAt: normalizeIsoTimestamp(value.startedAt, fallbackNow) } : {}),
     ...(normalizeOptionalText(value.completedAt) ? { completedAt: normalizeIsoTimestamp(value.completedAt, fallbackNow) } : {}),
     ...(normalizeOptionalText(value.resultReason) ? { resultReason: normalizeOptionalText(value.resultReason) } : {}),
-    ...(normalizeConfidence(value.resultConfidence) !== undefined ? { resultConfidence: normalizeConfidence(value.resultConfidence) } : {}),
   };
 }
 
-function normalizeSkillStatus(value: unknown): ConversationAutomationSkillStepStatus {
+function normalizeTodoItemStatus(value: unknown): ConversationAutomationTodoItemStatus {
   const normalized = readNonEmptyString(value);
   return normalized === 'running' || normalized === 'completed' || normalized === 'failed'
     ? normalized
     : 'pending';
 }
 
-function normalizeGateStatus(value: unknown): ConversationAutomationGateStatus {
+function normalizeReviewStatus(value: unknown): ConversationAutomationReviewStatus {
   const normalized = readNonEmptyString(value);
   return normalized === 'running' || normalized === 'completed' || normalized === 'failed'
     ? normalized
     : 'pending';
 }
 
-function normalizeRuntimeSkillStep(value: unknown, fallbackNow: string): ConversationAutomationSkillStep {
-  const template = normalizeTemplateSkillStep(value, fallbackNow);
+function normalizeRuntimeTodoItem(value: unknown, fallbackNow: string): ConversationAutomationTodoItem {
+  const template = normalizeTemplateTodoItem(value, fallbackNow);
   const record = value as Record<string, unknown>;
 
   return {
     ...template,
     ...normalizeRuntimeFields(record, fallbackNow),
-    status: normalizeSkillStatus(record.status),
+    status: normalizeTodoItemStatus(record.status),
   };
 }
 
-function normalizeRuntimeGate(value: unknown, fallbackNow: string): ConversationAutomationGate {
-  const template = normalizeTemplateGate(value, fallbackNow);
-  const record = value as Record<string, unknown>;
-
-  return {
-    ...template,
-    skills: Array.isArray(record.skills)
-      ? record.skills.map((skill) => normalizeRuntimeSkillStep(skill, fallbackNow))
-      : [],
-    ...normalizeRuntimeFields(record, fallbackNow),
-    status: normalizeGateStatus(record.status),
-  };
-}
-
-function normalizeLegacyBaseStep(
-  value: Record<string, unknown>,
-  kind: 'skill' | 'judge',
-  fallbackNow: string,
-): LegacyConversationAutomationBaseStep {
-  const id = readNonEmptyString(value.id);
-  validateItemId(id);
-  const label = readNonEmptyString(value.label);
-  if (!label) {
-    throw new Error(`Automation step ${id} is missing a label.`);
-  }
-
-  return {
-    id,
-    kind,
-    label,
-    status: normalizeSkillStatus(value.status),
-    ...normalizeRuntimeFields(value, fallbackNow),
-  };
-}
-
-function normalizeLegacyStep(value: unknown, fallbackNow: string): LegacyConversationAutomationStep {
+function normalizeRuntimeReviewState(value: unknown, fallbackNow: string): ConversationAutomationReviewState | undefined {
   if (!isRecord(value)) {
-    throw new Error('Legacy automation step must be an object.');
+    return undefined;
   }
 
-  const kind = readNonEmptyString(value.kind);
-  if (kind === 'skill') {
-    const base = normalizeLegacyBaseStep(value, 'skill', fallbackNow);
-    const skillName = readNonEmptyString(value.skillName);
-    if (!skillName) {
-      throw new Error(`Automation step ${base.id} is missing skillName.`);
-    }
-
-    return {
-      ...base,
-      kind: 'skill',
-      skillName,
-      ...(normalizeOptionalSingleLineText(value.skillArgs) ? { skillArgs: normalizeOptionalSingleLineText(value.skillArgs) } : {}),
-    };
-  }
-
-  if (kind === 'judge') {
-    const base = normalizeLegacyBaseStep(value, 'judge', fallbackNow);
-    const prompt = readNonEmptyString(value.prompt);
-    if (!prompt) {
-      throw new Error(`Automation step ${base.id} is missing prompt.`);
-    }
-
-    return {
-      ...base,
-      kind: 'judge',
-      prompt,
-    };
-  }
-
-  throw new Error(`Unsupported automation step kind: ${String(value.kind)}`);
-}
-
-function clearGateRuntime(gate: ConversationAutomationGate): void {
-  delete gate.startedAt;
-  delete gate.completedAt;
-  delete gate.resultReason;
-  delete gate.resultConfidence;
-}
-
-function clearSkillRuntime(skill: ConversationAutomationSkillStep): void {
-  delete skill.startedAt;
-  delete skill.completedAt;
-  delete skill.resultReason;
-  delete skill.resultConfidence;
-}
-
-function resetGateForPending(gate: ConversationAutomationGate, updatedAt: string): ConversationAutomationGate {
-  const nextGate: ConversationAutomationGate = {
-    ...gate,
-    updatedAt,
-    status: 'pending',
-    skills: gate.skills.map((skill) => ({
-      ...skill,
-      updatedAt,
-      status: 'pending',
-    })),
-  };
-  clearGateRuntime(nextGate);
-  for (const skill of nextGate.skills) {
-    clearSkillRuntime(skill);
-  }
-  return nextGate;
-}
-
-function createSyntheticLegacyGate(now: string): ConversationAutomationGate {
   return {
-    id: createConversationAutomationGateId(new Date(now)),
-    label: 'Migrated gate',
-    prompt: DEFAULT_WORKFLOW_PROMPT,
-    status: 'pending',
-    createdAt: now,
-    updatedAt: now,
-    skills: [],
+    ...normalizeRuntimeFields(value, fallbackNow),
+    status: normalizeReviewStatus(value.status),
+    round: typeof value.round === 'number' && Number.isFinite(value.round) && value.round > 0 ? Math.floor(value.round) : 1,
   };
 }
 
-function migrateLegacyDocument(record: Record<string, unknown>, fallbackConversationId: string, fallbackNow: string): ConversationAutomationDocument {
-  const conversationId = readNonEmptyString(record.conversationId) || fallbackConversationId;
-  validateConversationId(conversationId);
+function flattenLegacyDocumentItems(record: Record<string, unknown>, fallbackNow: string): ConversationAutomationTodoItem[] {
+  if (Array.isArray(record.items)) {
+    return record.items.map((item) => normalizeRuntimeTodoItem(item, fallbackNow));
+  }
 
-  const activeStepId = normalizeOptionalText(record.activeStepId);
-  const steps = Array.isArray(record.steps)
-    ? record.steps.map((step) => normalizeLegacyStep(step, fallbackNow))
-    : [];
-
-  const gates: ConversationAutomationGate[] = [];
-  let currentGate: ConversationAutomationGate | null = null;
-  let activeGateId: string | undefined;
-  let activeSkillId: string | undefined;
-
-  for (const step of steps) {
-    if (step.kind === 'judge') {
-      currentGate = {
-        id: step.id,
-        label: step.label,
-        prompt: step.prompt,
-        status: step.status === 'completed' ? 'completed' : step.status,
-        createdAt: step.createdAt,
-        updatedAt: step.updatedAt,
-        ...(step.startedAt ? { startedAt: step.startedAt } : {}),
-        ...(step.completedAt ? { completedAt: step.completedAt } : {}),
-        ...(step.resultReason ? { resultReason: step.resultReason } : {}),
-        ...(typeof step.resultConfidence === 'number' ? { resultConfidence: step.resultConfidence } : {}),
-        skills: [],
-      };
-      if (activeStepId === step.id) {
-        activeGateId = step.id;
+  if (Array.isArray(record.gates)) {
+    return record.gates.flatMap((gate) => {
+      if (!isRecord(gate) || !Array.isArray(gate.skills)) {
+        return [];
       }
-      gates.push(currentGate);
-      continue;
-    }
-
-    if (!currentGate) {
-      currentGate = createSyntheticLegacyGate(step.createdAt);
-      gates.push(currentGate);
-    }
-
-    currentGate.skills.push({
-      id: step.id,
-      label: step.label,
-      skillName: step.skillName,
-      ...(step.skillArgs ? { skillArgs: step.skillArgs } : {}),
-      status: step.status,
-      createdAt: step.createdAt,
-      updatedAt: step.updatedAt,
-      ...(step.startedAt ? { startedAt: step.startedAt } : {}),
-      ...(step.completedAt ? { completedAt: step.completedAt } : {}),
-      ...(step.resultReason ? { resultReason: step.resultReason } : {}),
-      ...(typeof step.resultConfidence === 'number' ? { resultConfidence: step.resultConfidence } : {}),
+      return gate.skills.map((skill) => normalizeRuntimeTodoItem(skill, fallbackNow));
     });
-
-    if (activeStepId === step.id) {
-      activeGateId = currentGate.id;
-      activeSkillId = step.id;
-    }
   }
 
-  for (const gate of gates) {
-    const hasRunningSkill = gate.skills.some((skill) => skill.status === 'running');
-    const hasFailedSkill = gate.skills.some((skill) => skill.status === 'failed');
-    const hasPendingSkill = gate.skills.some((skill) => skill.status === 'pending');
-    const allCompleted = gate.skills.length > 0 && gate.skills.every((skill) => skill.status === 'completed');
-
-    if (activeGateId === gate.id || hasRunningSkill) {
-      gate.status = 'running';
-      continue;
-    }
-
-    if (hasFailedSkill) {
-      gate.status = 'failed';
-      continue;
-    }
-
-    if (allCompleted) {
-      gate.status = 'completed';
-      continue;
-    }
-
-    if (hasPendingSkill && (gate.status === 'completed' || gate.status === 'running')) {
-      gate.status = 'running';
-      continue;
-    }
-
-    if (hasPendingSkill) {
-      gate.status = 'pending';
-    }
+  if (Array.isArray(record.steps)) {
+    return record.steps.flatMap((step) => {
+      if (!isRecord(step) || readNonEmptyString(step.kind) !== 'skill') {
+        return [];
+      }
+      return [normalizeRuntimeTodoItem(step, fallbackNow)];
+    });
   }
 
-  return {
-    version: DOCUMENT_VERSION,
-    conversationId,
-    updatedAt: normalizeIsoTimestamp(record.updatedAt, fallbackNow),
-    enabled: !(record.paused === true),
-    ...(activeGateId ? { activeGateId } : {}),
-    ...(activeSkillId ? { activeSkillId } : {}),
-    gates,
-  };
+  return [];
 }
 
 function normalizeDocument(value: unknown, fallbackConversationId: string): ConversationAutomationDocument {
   const fallbackNow = new Date().toISOString();
   const record = isRecord(value) ? value : {};
-
-  if (Array.isArray(record.steps) || record.version === 1) {
-    return migrateLegacyDocument(record, fallbackConversationId, fallbackNow);
-  }
-
   const conversationId = readNonEmptyString(record.conversationId) || fallbackConversationId;
   validateConversationId(conversationId);
 
-  const gates = Array.isArray(record.gates)
-    ? record.gates.map((gate) => normalizeRuntimeGate(gate, fallbackNow))
-    : [];
-
-  const activeGateId = normalizeOptionalText(record.activeGateId);
-  const activeSkillId = normalizeOptionalText(record.activeSkillId);
-  const normalizedGateIds = new Set(gates.map((gate) => gate.id));
-  const safeActiveGateId = activeGateId && normalizedGateIds.has(activeGateId) ? activeGateId : undefined;
-  const safeActiveSkillId = safeActiveGateId && activeSkillId
-    ? gates.find((gate) => gate.id === safeActiveGateId)?.skills.find((skill) => skill.id === activeSkillId)?.id
+  const items = flattenLegacyDocumentItems(record, fallbackNow);
+  const activeItemId = normalizeOptionalText(record.activeItemId) ?? normalizeOptionalText(record.activeSkillId);
+  const safeActiveItemId = activeItemId && items.some((item) => item.id === activeItemId)
+    ? activeItemId
     : undefined;
 
-  for (const gate of gates) {
-    const gateIsActive = gate.id === safeActiveGateId;
-    if (!gateIsActive && gate.status === 'running') {
-      gate.status = gate.skills.some((skill) => skill.status === 'completed') ? 'failed' : 'pending';
-      gate.updatedAt = fallbackNow;
-      clearGateRuntime(gate);
-    }
-
-    for (const skill of gate.skills) {
-      const skillIsActive = gateIsActive && skill.id === safeActiveSkillId;
-      if (!skillIsActive && skill.status === 'running') {
-        skill.status = 'pending';
-        skill.updatedAt = fallbackNow;
-        clearSkillRuntime(skill);
-      }
+  for (const item of items) {
+    const itemIsActive = item.id === safeActiveItemId;
+    if (!itemIsActive && item.status === 'running') {
+      item.status = item.completedAt ? 'failed' : 'pending';
+      item.updatedAt = fallbackNow;
+      delete item.startedAt;
+      delete item.completedAt;
+      delete item.resultReason;
     }
   }
+
+  const review = normalizeRuntimeReviewState(record.review, fallbackNow);
+  const safeReview = review?.status === 'running' && safeActiveItemId
+    ? { ...review, status: 'pending' as const, updatedAt: fallbackNow, startedAt: undefined }
+    : review;
 
   return {
     version: DOCUMENT_VERSION,
     conversationId,
     updatedAt: normalizeIsoTimestamp(record.updatedAt, fallbackNow),
-    enabled: record.enabled === true,
-    ...(safeActiveGateId ? { activeGateId: safeActiveGateId } : {}),
-    ...(safeActiveSkillId ? { activeSkillId: safeActiveSkillId } : {}),
-    gates,
+    enabled: record.enabled === true || (!(record as { paused?: boolean }).paused && record.enabled !== false && items.length > 0 && record.version === 1),
+    ...(safeActiveItemId ? { activeItemId: safeActiveItemId } : {}),
+    items,
+    ...(safeReview ? { review: safeReview } : {}),
   };
 }
 
-export function createConversationAutomationSkillStep(input: {
+export function createConversationAutomationTodoItem(input: {
   id?: string;
   label?: string;
   skillName: string;
   skillArgs?: string;
   now?: string;
-}): ConversationAutomationSkillStep {
+}): ConversationAutomationTodoItem {
   const createdAt = normalizeIsoTimestamp(input.now, new Date().toISOString());
   const skillName = readNonEmptyString(input.skillName);
   if (!skillName) {
     throw new Error('skillName is required.');
   }
 
-  const id = readNonEmptyString(input.id) || createConversationAutomationSkillStepId(new Date(createdAt));
+  const id = readNonEmptyString(input.id) || createConversationAutomationTodoItemId(new Date(createdAt));
   validateItemId(id);
 
   return {
@@ -618,44 +365,13 @@ export function createConversationAutomationSkillStep(input: {
   };
 }
 
-export function createConversationAutomationGate(input: {
-  id?: string;
-  label?: string;
-  prompt: string;
-  skills?: ConversationAutomationTemplateSkillStep[];
-  now?: string;
-}): ConversationAutomationGate {
-  const createdAt = normalizeIsoTimestamp(input.now, new Date().toISOString());
-  const rawPrompt = readNonEmptyString(input.prompt);
-  if (!rawPrompt) {
-    throw new Error('prompt is required.');
-  }
-  const prompt = normalizeConversationAutomationFilter(rawPrompt);
-
-  const id = readNonEmptyString(input.id) || createConversationAutomationGateId(new Date(createdAt));
-  validateItemId(id);
-
-  return {
-    id,
-    label: normalizeOptionalText(input.label) ?? 'Judge gate',
-    prompt,
-    status: 'pending',
-    createdAt,
-    updatedAt: createdAt,
-    skills: (input.skills ?? []).map((skill) => createConversationAutomationSkillStep({
-      ...skill,
-      now: createdAt,
-    })),
-  };
-}
-
-export function buildConversationAutomationSkillPrompt(step: Pick<ConversationAutomationTemplateSkillStep, 'skillName' | 'skillArgs'>): string {
-  const skillName = readNonEmptyString(step.skillName);
+export function buildConversationAutomationSkillPrompt(item: Pick<ConversationAutomationTemplateTodoItem, 'skillName' | 'skillArgs'>): string {
+  const skillName = readNonEmptyString(item.skillName);
   if (!skillName) {
     throw new Error('skillName is required.');
   }
 
-  const skillArgs = normalizeOptionalSingleLineText(step.skillArgs);
+  const skillArgs = normalizeOptionalSingleLineText(item.skillArgs);
   return skillArgs ? `/skill:${skillName} ${skillArgs}` : `/skill:${skillName}`;
 }
 
@@ -673,11 +389,11 @@ function normalizeLegacyDefaultWorkflowPreset(settings: Record<string, unknown>)
   }
 
   const fallbackNow = new Date().toISOString();
-  const gates = Array.isArray(defaultWorkflow.gates)
-    ? defaultWorkflow.gates.map((gate) => normalizeTemplateGate(gate, fallbackNow))
-    : [];
+  const items = Array.isArray(defaultWorkflow.items)
+    ? defaultWorkflow.items.map((item) => normalizeTemplateTodoItem(item, fallbackNow))
+    : flattenLegacyGateItems(defaultWorkflow.gates, fallbackNow);
 
-  if (gates.length === 0) {
+  if (items.length === 0) {
     return {
       presets: [],
       defaultPresetIds: [],
@@ -690,7 +406,7 @@ function normalizeLegacyDefaultWorkflowPreset(settings: Record<string, unknown>)
       id: presetId,
       name: 'Default workflow',
       updatedAt: normalizeIsoTimestamp(defaultWorkflow.updatedAt, fallbackNow),
-      gates,
+      items,
     }],
     defaultPresetIds: [presetId],
   };
@@ -704,15 +420,15 @@ function normalizeWorkflowPreset(value: unknown, fallbackNow: string): Conversat
   const id = readNonEmptyString(value.id) || createConversationAutomationWorkflowPresetId(new Date(fallbackNow));
   validateItemId(id);
   const name = normalizeOptionalText(value.name) ?? 'Workflow preset';
-  const gates = Array.isArray(value.gates)
-    ? value.gates.map((gate) => normalizeTemplateGate(gate, fallbackNow))
-    : [];
+  const items = Array.isArray(value.items)
+    ? value.items.map((item) => normalizeTemplateTodoItem(item, fallbackNow))
+    : flattenLegacyGateItems(value.gates, fallbackNow);
 
   return {
     id,
     name,
     updatedAt: normalizeIsoTimestamp(value.updatedAt, fallbackNow),
-    gates,
+    items,
   };
 }
 
@@ -834,7 +550,7 @@ export function writeSavedConversationAutomationWorkflowPresets(
 
 function buildDocumentFromTemplate(
   conversationId: string,
-  gates: ConversationAutomationTemplateGate[],
+  items: ConversationAutomationTemplateTodoItem[],
   now = new Date().toISOString(),
   enabled = false,
 ): ConversationAutomationDocument {
@@ -843,8 +559,8 @@ function buildDocumentFromTemplate(
     conversationId,
     updatedAt: now,
     enabled,
-    gates: gates.map((gate) => createConversationAutomationGate({
-      ...gate,
+    items: items.map((item) => createConversationAutomationTodoItem({
+      ...item,
       now,
     })),
   };
@@ -871,7 +587,7 @@ export function loadConversationAutomationState(options: ResolveConversationAuto
       document: inheritedPresets.length > 0
         ? buildDocumentFromTemplate(
           options.conversationId,
-          inheritedPresets.flatMap((preset) => cloneTemplateGatesForConversation(preset.gates)),
+          inheritedPresets.flatMap((preset) => cloneTemplateItemsForConversation(preset.items)),
           undefined,
           preferences.defaultEnabled,
         )
@@ -914,61 +630,72 @@ export function writeConversationAutomationState(options: {
   return normalized;
 }
 
-export function templateGateFromRuntimeGate(gate: ConversationAutomationGate): ConversationAutomationTemplateGate {
+export function templateTodoItemFromRuntimeItem(item: ConversationAutomationTodoItem): ConversationAutomationTemplateTodoItem {
   return {
-    id: gate.id,
-    label: gate.label,
-    prompt: gate.prompt,
-    skills: gate.skills.map((skill) => ({
-      id: skill.id,
-      label: skill.label,
-      skillName: skill.skillName,
-      ...(skill.skillArgs ? { skillArgs: skill.skillArgs } : {}),
-    })),
+    id: item.id,
+    label: item.label,
+    skillName: item.skillName,
+    ...(item.skillArgs ? { skillArgs: item.skillArgs } : {}),
   };
 }
 
-export function replaceConversationAutomationGates(
+export function replaceConversationAutomationItems(
   document: ConversationAutomationDocument,
-  gates: ConversationAutomationTemplateGate[],
+  items: ConversationAutomationTemplateTodoItem[],
   now = new Date().toISOString(),
 ): ConversationAutomationDocument {
   const updatedAt = normalizeIsoTimestamp(now, new Date().toISOString());
-  const existingGateMap = new Map(document.gates.map((gate) => [gate.id, gate]));
+  const existingItemMap = new Map(document.items.map((item) => [item.id, item]));
 
-  const nextGates = gates.map((inputGate) => {
-    const template = normalizeTemplateGate(inputGate, updatedAt);
-    const existingGate = existingGateMap.get(template.id);
-    const existingSkillMap = new Map(existingGate?.skills.map((skill) => [skill.id, skill]) ?? []);
+  const nextItems = items.map((inputItem) => {
+    const template = normalizeTemplateTodoItem(inputItem, updatedAt);
+    const existingItem = existingItemMap.get(template.id);
 
     return {
       id: template.id,
       label: template.label,
-      prompt: template.prompt,
+      skillName: template.skillName,
+      ...(template.skillArgs ? { skillArgs: template.skillArgs } : {}),
       status: 'pending' as const,
-      createdAt: existingGate?.createdAt ?? updatedAt,
+      createdAt: existingItem?.createdAt ?? updatedAt,
       updatedAt,
-      skills: template.skills.map((templateSkill) => {
-        const existingSkill = existingSkillMap.get(templateSkill.id);
-        return {
-          id: templateSkill.id,
-          label: templateSkill.label,
-          skillName: templateSkill.skillName,
-          ...(templateSkill.skillArgs ? { skillArgs: templateSkill.skillArgs } : {}),
-          status: 'pending' as const,
-          createdAt: existingSkill?.createdAt ?? updatedAt,
-          updatedAt,
-        } satisfies ConversationAutomationSkillStep;
-      }),
-    } satisfies ConversationAutomationGate;
+    } satisfies ConversationAutomationTodoItem;
   });
 
   return {
     ...document,
-    gates: nextGates,
+    items: nextItems,
     updatedAt,
-    activeGateId: undefined,
-    activeSkillId: undefined,
+    activeItemId: undefined,
+    review: undefined,
+  };
+}
+
+export function appendConversationAutomationItems(
+  document: ConversationAutomationDocument,
+  items: ConversationAutomationTemplateTodoItem[],
+  now = new Date().toISOString(),
+): ConversationAutomationDocument {
+  const updatedAt = normalizeIsoTimestamp(now, new Date().toISOString());
+  if (items.length === 0) {
+    return {
+      ...document,
+      updatedAt,
+      review: undefined,
+    };
+  }
+
+  return {
+    ...document,
+    items: [
+      ...document.items,
+      ...items.map((item) => createConversationAutomationTodoItem({
+        ...normalizeTemplateTodoItem(item, updatedAt),
+        now: updatedAt,
+      })),
+    ],
+    updatedAt,
+    review: undefined,
   };
 }
 
@@ -984,23 +711,108 @@ export function updateConversationAutomationEnabled(
   };
 }
 
-export function resetConversationAutomationFromGate(
+export function resetConversationAutomationFromItem(
   document: ConversationAutomationDocument,
-  gateId: string,
+  itemId: string,
   options: { now?: string; enabled?: boolean } = {},
 ): ConversationAutomationDocument {
   const updatedAt = normalizeIsoTimestamp(options.now, new Date().toISOString());
-  const index = document.gates.findIndex((gate) => gate.id === gateId);
+  const index = document.items.findIndex((item) => item.id === itemId);
   if (index < 0) {
-    throw new Error(`Automation gate not found: ${gateId}`);
+    throw new Error(`Automation item not found: ${itemId}`);
   }
 
   return {
     ...document,
-    gates: document.gates.map((gate, gateIndex) => gateIndex < index ? gate : resetGateForPending(gate, updatedAt)),
+    items: document.items.map((item, itemIndex) => {
+      if (itemIndex < index) {
+        return item;
+      }
+
+      return {
+        ...item,
+        status: 'pending' as const,
+        updatedAt,
+        completedAt: undefined,
+        startedAt: undefined,
+        resultReason: undefined,
+      };
+    }),
     updatedAt,
     enabled: options.enabled ?? document.enabled,
-    activeGateId: undefined,
-    activeSkillId: undefined,
+    activeItemId: undefined,
+    review: undefined,
   };
+}
+
+function buildTodoListLine(item: Pick<ConversationAutomationTodoItem, 'label' | 'skillName' | 'skillArgs' | 'status'>): string {
+  const status = item.status === 'completed'
+    ? '[x]'
+    : item.status === 'running'
+      ? '[>]'
+      : item.status === 'failed'
+        ? '[!]'
+        : '[ ]';
+  const prompt = buildConversationAutomationSkillPrompt(item);
+  return `${status} ${item.label} — ${prompt}`;
+}
+
+export function buildConversationAutomationReviewPrompt(document: Pick<ConversationAutomationDocument, 'items' | 'review'>): string {
+  const lines = document.items.length > 0
+    ? document.items.map((item) => `- ${buildTodoListLine(item)}`)
+    : ['- (no todo items)'];
+  const round = Math.max(1, document.review?.round ?? 1);
+
+  return [
+    `Review the automation todo list before stopping. This is review round ${round}.`,
+    'If additional automation work is required, include exactly one <automation-todos> block at the end of your response.',
+    'Each item inside that block must be a <skill> tag with a required name attribute, an optional args attribute, and label text between the opening and closing tags.',
+    'If nothing else is required, reply briefly without an <automation-todos> block.',
+    '',
+    'Todo list:',
+    ...lines,
+    '',
+    'Example:',
+    '<automation-todos>',
+    '  <skill name="workflow-checkpoint" args="commit only my files">Checkpoint</skill>',
+    '</automation-todos>',
+  ].join('\n');
+}
+
+export function parseConversationAutomationTodoAppendBlock(text: string): ConversationAutomationTemplateTodoItem[] {
+  const normalized = text.trim();
+  if (!normalized) {
+    return [];
+  }
+
+  const blockMatch = normalized.match(/<automation-todos>([\s\S]*?)<\/automation-todos>/i);
+  if (!blockMatch) {
+    return [];
+  }
+
+  const blockBody = blockMatch[1] ?? '';
+  const items: ConversationAutomationTemplateTodoItem[] = [];
+  const skillPattern = /<skill\s+name="([^"]+)"(?:\s+args="([^"]*)")?\s*>([\s\S]*?)<\/skill>/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = skillPattern.exec(blockBody)) !== null) {
+    const skillName = readNonEmptyString(match[1]);
+    const label = readNonEmptyString(match[3]);
+    if (!skillName) {
+      continue;
+    }
+
+    items.push({
+      id: createConversationAutomationTodoItemId(),
+      label: label || skillName,
+      skillName,
+      ...(normalizeOptionalSingleLineText(match[2]) ? { skillArgs: normalizeOptionalSingleLineText(match[2]) } : {}),
+    });
+
+    if (items.length >= MAX_REVIEW_ITEMS_PER_APPEND) {
+      break;
+    }
+  }
+
+  return items;
 }

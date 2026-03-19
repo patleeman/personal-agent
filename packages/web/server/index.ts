@@ -96,6 +96,7 @@ import {
   createSession,
   createSessionFromExisting,
   resumeSession,
+  ensureSessionFileExists,
   getLiveSessions,
   getSessionStats,
   getSessionContextUsage,
@@ -107,7 +108,6 @@ import {
   restoreQueuedMessage,
   queuePromptContext,
   kickConversationAutomation,
-  previewConversationAutomationMatch,
   compactSession,
   reloadSessionResources,
   reloadAllLiveSessionAuth,
@@ -123,22 +123,14 @@ import { recoverDurableLiveConversations } from './conversationRecovery.js';
 import {
   loadConversationAutomationState,
   readSavedConversationAutomationPreferences,
-  replaceConversationAutomationGates,
-  resetConversationAutomationFromGate,
+  replaceConversationAutomationItems,
+  resetConversationAutomationFromItem,
   updateConversationAutomationEnabled,
   writeSavedConversationAutomationPreferences,
   writeConversationAutomationState,
   readSavedConversationAutomationWorkflowPresets,
   writeSavedConversationAutomationWorkflowPresets,
 } from './conversationAutomation.js';
-import {
-  readSavedConversationAutomationJudgePreferences,
-  writeSavedConversationAutomationJudgePreferences,
-} from './conversationAutomationJudge.js';
-import {
-  buildConversationAutomationFilterHelp,
-  validateConversationAutomationFilter,
-} from './conversationAutomationFilter.js';
 import {
   clearLocalConversationAutomationSettings,
   migrateLocalConversationAutomationSettingsToProfile,
@@ -1120,7 +1112,18 @@ function listConversationSessionsSnapshot() {
 }
 
 function resolveConversationSessionFile(conversationId: string): string | undefined {
-  return listConversationSessionsSnapshot().find((session) => session.id === conversationId)?.file;
+  const liveEntry = liveRegistry.get(conversationId);
+  if (liveEntry) {
+    ensureSessionFileExists(liveEntry.session.sessionManager);
+  }
+
+  const liveSessionFile = liveEntry?.session.sessionFile?.trim();
+  if (liveSessionFile && existsSync(liveSessionFile)) {
+    return liveSessionFile;
+  }
+
+  const snapshotSessionFile = listConversationSessionsSnapshot().find((session) => session.id === conversationId)?.file?.trim();
+  return snapshotSessionFile || undefined;
 }
 
 interface ParsedSessionJsonLine {
@@ -2650,13 +2653,6 @@ async function buildConversationAutomationResponse(conversationId: string) {
     description: skill.description,
     source: skill.source,
   }));
-  const judge = readSavedConversationAutomationJudgePreferences(SETTINGS_FILE);
-  const previewGate = automation.enabled
-    ? automation.gates.find((gate) => gate.status !== 'completed') ?? null
-    : null;
-  const previewResult = previewGate
-    ? await previewConversationAutomationMatch(conversationId, previewGate.prompt, 'turn_end').catch(() => null)
-    : null;
 
   return {
     conversationId,
@@ -2665,39 +2661,34 @@ async function buildConversationAutomationResponse(conversationId: string) {
     automation: {
       conversationId: automation.conversationId,
       enabled: automation.enabled,
-      activeGateId: automation.activeGateId ?? null,
-      activeSkillId: automation.activeSkillId ?? null,
+      activeItemId: automation.activeItemId ?? null,
       updatedAt: automation.updatedAt,
-      gates: automation.gates.map((gate) => ({
-        id: gate.id,
-        label: gate.label,
-        prompt: gate.prompt,
-        status: gate.status,
-        createdAt: gate.createdAt,
-        updatedAt: gate.updatedAt,
-        ...(gate.startedAt ? { startedAt: gate.startedAt } : {}),
-        ...(gate.completedAt ? { completedAt: gate.completedAt } : {}),
-        ...(gate.resultReason ? { resultReason: gate.resultReason } : {}),
-        ...(typeof gate.resultConfidence === 'number' ? { resultConfidence: gate.resultConfidence } : {}),
-        ...(previewGate?.id === gate.id && previewResult ? { matchesCurrentConditions: previewResult.pass } : {}),
-        skills: gate.skills.map((skill) => ({
-          id: skill.id,
-          label: skill.label,
-          skillName: skill.skillName,
-          ...(skill.skillArgs ? { skillArgs: skill.skillArgs } : {}),
-          status: skill.status,
-          createdAt: skill.createdAt,
-          updatedAt: skill.updatedAt,
-          ...(skill.startedAt ? { startedAt: skill.startedAt } : {}),
-          ...(skill.completedAt ? { completedAt: skill.completedAt } : {}),
-          ...(skill.resultReason ? { resultReason: skill.resultReason } : {}),
-          ...(typeof skill.resultConfidence === 'number' ? { resultConfidence: skill.resultConfidence } : {}),
-        })),
+      items: automation.items.map((item) => ({
+        id: item.id,
+        label: item.label,
+        skillName: item.skillName,
+        ...(item.skillArgs ? { skillArgs: item.skillArgs } : {}),
+        status: item.status,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+        ...(item.startedAt ? { startedAt: item.startedAt } : {}),
+        ...(item.completedAt ? { completedAt: item.completedAt } : {}),
+        ...(item.resultReason ? { resultReason: item.resultReason } : {}),
       })),
+      ...(automation.review ? {
+        review: {
+          status: automation.review.status,
+          round: automation.review.round,
+          createdAt: automation.review.createdAt,
+          updatedAt: automation.review.updatedAt,
+          ...(automation.review.startedAt ? { startedAt: automation.review.startedAt } : {}),
+          ...(automation.review.completedAt ? { completedAt: automation.review.completedAt } : {}),
+          ...(automation.review.resultReason ? { resultReason: automation.review.resultReason } : {}),
+        },
+      } : {}),
     },
     presetLibrary: loaded.presetLibrary,
     skills,
-    judge,
   };
 }
 
@@ -2710,86 +2701,29 @@ function saveConversationAutomationDocument(document: Parameters<typeof writeCon
   return saved;
 }
 
-async function listConversationAutomationTools(profile = getCurrentProfile()): Promise<Array<{ name: string; description: string }>> {
-  const details = await withTemporaryProfileAgentDir(profile, async (agentDir) => inspectAvailableTools(REPO_ROOT, {
-    ...buildLiveSessionResourceOptions(profile),
-    agentDir,
-    extensionFactories: buildLiveSessionExtensionFactories(),
-  }));
-
-  const activeToolSet = new Set(
-    Array.isArray(details.activeTools)
-      ? details.activeTools.filter((toolName): toolName is string => typeof toolName === 'string' && toolName.trim().length > 0)
-      : [],
-  );
-
-  const candidateTools = Array.isArray(details.tools)
-    ? details.tools.filter((tool) => tool && typeof tool.name === 'string' && tool.name.trim().length > 0)
-    : [];
-
-  const selectedTools = activeToolSet.size > 0
-    ? candidateTools.filter((tool) => activeToolSet.has(tool.name.trim()))
-    : candidateTools;
-
-  const dedupedTools = new Map<string, { name: string; description: string }>();
-  for (const tool of selectedTools) {
-    const name = tool.name.trim();
-    const description = typeof tool.description === 'string' ? tool.description.trim() : '';
-    const current = dedupedTools.get(name);
-    if (!current || (!current.description && description)) {
-      dedupedTools.set(name, { name, description });
-    }
-  }
-
-  return [...dedupedTools.values()].sort((a, b) => a.name.localeCompare(b.name));
-}
-
-async function listConversationAutomationToolNames(profile = getCurrentProfile()): Promise<string[]> {
-  return (await listConversationAutomationTools(profile)).map((tool) => tool.name);
-}
-
-function validateConversationAutomationTemplateGates(gates: unknown, availableSkillNames: Set<string>, availableToolNames: Set<string>): asserts gates is Array<{
+function validateConversationAutomationTemplateItems(items: unknown, availableSkillNames: Set<string>): asserts items is Array<{
   id: string;
   label?: string;
-  prompt: string;
-  skills?: Array<{
-    id: string;
-    label?: string;
-    skillName: string;
-    skillArgs?: string;
-  }>;
+  skillName: string;
+  skillArgs?: string;
 }> {
-  if (!Array.isArray(gates)) {
-    throw new Error('gates must be an array');
+  if (!Array.isArray(items)) {
+    throw new Error('items must be an array');
   }
 
-  for (const gate of gates) {
-    if (!gate || typeof gate !== 'object' || Array.isArray(gate)) {
-      throw new Error('Each gate must be an object.');
+  for (const item of items) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error('Each item must be an object.');
     }
 
-    const prompt = typeof (gate as { prompt?: unknown }).prompt === 'string'
-      ? (gate as { prompt: string }).prompt.trim()
+    const skillName = typeof (item as { skillName?: unknown }).skillName === 'string'
+      ? (item as { skillName: string }).skillName.trim()
       : '';
-    if (!prompt) {
-      throw new Error('Each gate requires a filter.');
+    if (!skillName) {
+      throw new Error('Each item requires a skillName.');
     }
-    validateConversationAutomationFilter(prompt, {
-      toolNames: availableToolNames,
-      events: new Set(['manual', 'turn_end']),
-    });
-
-    const skills = Array.isArray((gate as { skills?: unknown }).skills)
-      ? (gate as { skills: Array<{ skillName?: unknown }> }).skills
-      : [];
-    for (const skill of skills) {
-      const skillName = typeof skill?.skillName === 'string' ? skill.skillName.trim() : '';
-      if (!skillName) {
-        throw new Error('Each nested skill requires a skillName.');
-      }
-      if (!availableSkillNames.has(skillName)) {
-        throw new Error(`Unknown skill: ${skillName}`);
-      }
+    if (!availableSkillNames.has(skillName)) {
+      throw new Error(`Unknown skill: ${skillName}`);
     }
   }
 }
@@ -2798,20 +2732,14 @@ function validateConversationAutomationWorkflowPresets(
   presets: unknown,
   defaultPresetIds: unknown,
   availableSkillNames: Set<string>,
-  availableToolNames: Set<string>,
 ): asserts presets is Array<{
   id: string;
   name: string;
-  gates: Array<{
+  items: Array<{
     id: string;
     label?: string;
-    prompt: string;
-    skills?: Array<{
-      id: string;
-      label?: string;
-      skillName: string;
-      skillArgs?: string;
-    }>;
+    skillName: string;
+    skillArgs?: string;
   }>;
 }> {
   if (!Array.isArray(presets)) {
@@ -2842,11 +2770,11 @@ function validateConversationAutomationWorkflowPresets(
       throw new Error('Each preset requires a name.');
     }
 
-    const gates = (preset as { gates?: unknown }).gates;
-    if (!Array.isArray(gates) || gates.length === 0) {
-      throw new Error('Each preset requires at least one gate.');
+    const items = (preset as { items?: unknown }).items;
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new Error('Each preset requires at least one item.');
     }
-    validateConversationAutomationTemplateGates(gates, availableSkillNames, availableToolNames);
+    validateConversationAutomationTemplateItems(items, availableSkillNames);
   }
 
   if (defaultPresetIds !== null && defaultPresetIds !== undefined) {
@@ -3183,52 +3111,15 @@ app.patch('/api/conversation-automation/defaults', (req, res) => {
   }
 });
 
-app.get('/api/conversation-automation/settings', (_req, res) => {
-  try {
-    res.json(readSavedConversationAutomationJudgePreferences(SETTINGS_FILE));
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.patch('/api/conversation-automation/settings', (req, res) => {
-  try {
-    const { model, systemPrompt } = req.body as { model?: string | null; systemPrompt?: string | null };
-    if (typeof model !== 'string' && model !== null && typeof systemPrompt !== 'string' && systemPrompt !== null) {
-      res.status(400).json({ error: 'model or systemPrompt required' });
-      return;
-    }
-
-    writeSavedConversationAutomationJudgePreferences({ model, systemPrompt }, getCurrentProfileSettingsFile());
-    clearLocalConversationAutomationSettingsOverride();
-    materializeWebProfile(getCurrentProfile());
-
-    res.json(readSavedConversationAutomationJudgePreferences(SETTINGS_FILE));
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
 app.get('/api/conversation-automation/workspace', async (_req, res) => {
   try {
-    const tools = await listConversationAutomationTools();
     res.json({
       presetLibrary: readSavedConversationAutomationWorkflowPresets(SETTINGS_FILE),
-      judge: readSavedConversationAutomationJudgePreferences(SETTINGS_FILE),
       skills: listSkillsForCurrentProfile().map((skill) => ({
         name: skill.name,
         description: skill.description,
         source: skill.source,
       })),
-      filterHelp: buildConversationAutomationFilterHelp(tools),
     });
   } catch (err) {
     logError('request handler error', {
@@ -3236,26 +3127,6 @@ app.get('/api/conversation-automation/workspace', async (_req, res) => {
       stack: err instanceof Error ? err.stack : undefined,
     });
     res.status(500).json({ error: String(err) });
-  }
-});
-
-app.post('/api/conversation-automation/query/validate', async (req, res) => {
-  try {
-    const { query } = req.body as { query?: unknown };
-    if (typeof query !== 'string') {
-      res.status(400).json({ valid: false, error: 'query must be a string' });
-      return;
-    }
-
-    const toolNames = await listConversationAutomationToolNames();
-    validateConversationAutomationFilter(query, {
-      toolNames: new Set(toolNames),
-      events: new Set(['manual', 'turn_end']),
-    });
-    res.json({ valid: true, error: null });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    res.status(400).json({ valid: false, error: message });
   }
 });
 
@@ -3278,8 +3149,7 @@ app.patch('/api/conversation-automation/workflow-presets', async (req, res) => {
       defaultPresetIds?: unknown;
     };
     const skillNames = new Set(listSkillsForCurrentProfile().map((skill) => skill.name));
-    const toolNames = new Set(await listConversationAutomationToolNames());
-    validateConversationAutomationWorkflowPresets(presets, defaultPresetIds, skillNames, toolNames);
+    validateConversationAutomationWorkflowPresets(presets, defaultPresetIds, skillNames);
 
     writeSavedConversationAutomationWorkflowPresets({
       presets: presets as Parameters<typeof writeSavedConversationAutomationWorkflowPresets>[0]['presets'],
@@ -3292,19 +3162,8 @@ app.patch('/api/conversation-automation/workflow-presets', async (req, res) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const status = message.startsWith('Unknown skill:')
-      || message.startsWith('Unknown tool:')
-      || message.startsWith('Unknown event:')
-      || message.startsWith('Unsupported filter key:')
-      || message.includes('Filter is required.')
-      || message.includes('Expected a field name like tool:edit')
-      || message.includes('Expected closing parenthesis.')
-      || message.includes('Expected a value after')
-      || message.includes('Unexpected token:')
-      || message.includes('Unexpected character:')
-      || message.includes('Unterminated quoted string.')
-      || message.includes('gates must be an array')
-      || message.includes('Each gate')
-      || message.includes('Each nested skill')
+      || message.includes('items must be an array')
+      || message.includes('Each item')
       || message.includes('presets must be an array')
       || message.includes('Each preset')
       || message.includes('Duplicate preset id:')
@@ -5581,18 +5440,17 @@ app.patch('/api/conversations/:id/automation', async (req, res) => {
   try {
     const body = req.body as {
       enabled?: boolean;
-      gates?: unknown;
+      items?: unknown;
     };
 
-    if (typeof body.enabled !== 'boolean' && !Array.isArray(body.gates)) {
-      res.status(400).json({ error: 'enabled or gates required' });
+    if (typeof body.enabled !== 'boolean' && !Array.isArray(body.items)) {
+      res.status(400).json({ error: 'enabled or items required' });
       return;
     }
 
     const skillNames = new Set(listSkillsForCurrentProfile().map((skill) => skill.name));
-    if (Array.isArray(body.gates)) {
-      const toolNames = new Set(await listConversationAutomationToolNames());
-      validateConversationAutomationTemplateGates(body.gates, skillNames, toolNames);
+    if (Array.isArray(body.items)) {
+      validateConversationAutomationTemplateItems(body.items, skillNames);
     }
 
     let document = loadConversationAutomationState({
@@ -5602,8 +5460,8 @@ app.patch('/api/conversations/:id/automation', async (req, res) => {
     }).document;
     const updatedAt = new Date().toISOString();
 
-    if (Array.isArray(body.gates)) {
-      document = replaceConversationAutomationGates(document, body.gates, updatedAt);
+    if (Array.isArray(body.items)) {
+      document = replaceConversationAutomationItems(document, body.items, updatedAt);
     }
 
     if (typeof body.enabled === 'boolean') {
@@ -5620,19 +5478,8 @@ app.patch('/api/conversations/:id/automation', async (req, res) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const status = message.startsWith('Unknown skill:')
-      || message.startsWith('Unknown tool:')
-      || message.startsWith('Unknown event:')
-      || message.startsWith('Unsupported filter key:')
-      || message.includes('Filter is required.')
-      || message.includes('Expected a field name like tool:edit')
-      || message.includes('Expected closing parenthesis.')
-      || message.includes('Expected a value after')
-      || message.includes('Unexpected token:')
-      || message.includes('Unexpected character:')
-      || message.includes('Unterminated quoted string.')
-      || message.includes('gates must be an array')
-      || message.includes('Each gate')
-      || message.includes('Each nested skill')
+      || message.includes('items must be an array')
+      || message.includes('Each item')
       ? 400
       : 500;
     logError('request handler error', {
@@ -5643,7 +5490,7 @@ app.patch('/api/conversations/:id/automation', async (req, res) => {
   }
 });
 
-app.post('/api/conversations/:id/automation/gates/:gateId/reset', async (req, res) => {
+app.post('/api/conversations/:id/automation/items/:itemId/reset', async (req, res) => {
   try {
     const { resume } = req.body as { resume?: boolean };
     const loaded = loadConversationAutomationState({
@@ -5652,17 +5499,17 @@ app.post('/api/conversations/:id/automation/gates/:gateId/reset', async (req, re
       settingsFile: SETTINGS_FILE,
     });
     const document = loaded.document;
-    const gate = document.gates.find((candidate) => candidate.id === req.params.gateId);
-    if (!gate) {
-      res.status(404).json({ error: 'Automation gate not found' });
+    const item = document.items.find((candidate) => candidate.id === req.params.itemId);
+    if (!item) {
+      res.status(404).json({ error: 'Automation item not found' });
       return;
     }
-    if (document.activeGateId === gate.id || gate.status === 'running') {
-      res.status(409).json({ error: 'Running automation gates cannot be reset' });
+    if (document.activeItemId === item.id || item.status === 'running') {
+      res.status(409).json({ error: 'Running automation items cannot be reset' });
       return;
     }
 
-    saveConversationAutomationDocument(resetConversationAutomationFromGate(document, req.params.gateId, {
+    saveConversationAutomationDocument(resetConversationAutomationFromItem(document, req.params.itemId, {
       enabled: resume === true ? true : document.enabled,
     }));
 

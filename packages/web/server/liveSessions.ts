@@ -26,19 +26,16 @@ import {
   hasAssistantTitleSourceMessage,
 } from './conversationAutoTitle.js';
 import {
+  appendConversationAutomationItems,
+  buildConversationAutomationReviewPrompt,
   buildConversationAutomationSkillPrompt,
   loadConversationAutomationState,
+  parseConversationAutomationTodoAppendBlock,
   writeConversationAutomationState,
   type ConversationAutomationDocument,
-  type ConversationAutomationGate,
-  type ConversationAutomationSkillStep,
+  type ConversationAutomationReviewState,
+  type ConversationAutomationTodoItem,
 } from './conversationAutomation.js';
-import {
-  evaluateConversationAutomationFilter,
-  mayMatchConversationAutomationTrigger,
-  previewConversationAutomationFilterDeterministicMatch,
-  type ConversationAutomationFilterTrigger,
-} from './conversationAutomationFilter.js';
 import { syncWebLiveConversationRun, type WebLiveConversationRunState } from './conversationRuns.js';
 import {
   buildDisplayBlocksFromEntries,
@@ -794,32 +791,6 @@ function resolveConversationAutomationProfile(): string {
   return resolveLiveSessionProfile() ?? 'shared';
 }
 
-export async function previewConversationAutomationMatch(
-  sessionId: string,
-  query: string,
-  trigger: ConversationAutomationFilterTrigger,
-): Promise<ReturnType<typeof previewConversationAutomationFilterDeterministicMatch> | null> {
-  const entry = registry.get(sessionId);
-  if (!entry) {
-    return null;
-  }
-
-  if (!mayMatchConversationAutomationTrigger(query, trigger)) {
-    return {
-      pass: false,
-      reason: `Waiting for event ${trigger}.`,
-      confidence: null,
-    };
-  }
-
-  return previewConversationAutomationFilterDeterministicMatch(query, {
-    cwd: entry.cwd,
-    messages: getSessionMessages(entry.session),
-    toolNames: new Set(entry.session.getActiveToolNames()),
-    trigger,
-  });
-}
-
 function saveConversationAutomation(entry: LiveEntry, document: ConversationAutomationDocument): ConversationAutomationDocument {
   const saved = writeConversationAutomationState({
     profile: resolveConversationAutomationProfile(),
@@ -829,86 +800,119 @@ function saveConversationAutomation(entry: LiveEntry, document: ConversationAuto
   return saved;
 }
 
-function clearConversationAutomationGateRuntime(gate: ConversationAutomationGate): void {
-  delete gate.startedAt;
-  delete gate.completedAt;
-  delete gate.resultReason;
-  delete gate.resultConfidence;
+function clearConversationAutomationTodoItemRuntime(item: ConversationAutomationTodoItem): void {
+  delete item.startedAt;
+  delete item.completedAt;
+  delete item.resultReason;
 }
 
-function clearConversationAutomationSkillRuntime(step: ConversationAutomationSkillStep): void {
-  delete step.startedAt;
-  delete step.completedAt;
-  delete step.resultReason;
-  delete step.resultConfidence;
+function clearConversationAutomationReviewRuntime(review: ConversationAutomationReviewState): void {
+  delete review.startedAt;
+  delete review.completedAt;
+  delete review.resultReason;
 }
 
-function findConversationAutomationGate(document: ConversationAutomationDocument, gateId: string | undefined): ConversationAutomationGate | null {
-  const normalizedGateId = gateId?.trim();
-  if (!normalizedGateId) {
+function findConversationAutomationTodoItem(document: ConversationAutomationDocument, itemId: string | undefined): ConversationAutomationTodoItem | null {
+  const normalizedItemId = itemId?.trim();
+  if (!normalizedItemId) {
     return null;
   }
 
-  return document.gates.find((gate) => gate.id === normalizedGateId) ?? null;
+  return document.items.find((item) => item.id === normalizedItemId) ?? null;
 }
 
-function findFirstIncompleteConversationAutomationGate(document: ConversationAutomationDocument): ConversationAutomationGate | null {
-  return document.gates.find((gate) => gate.status !== 'completed') ?? null;
+function findFirstPendingConversationAutomationTodoItem(document: ConversationAutomationDocument): ConversationAutomationTodoItem | null {
+  return document.items.find((item) => item.status === 'pending') ?? null;
 }
 
-function maybeFinalizeConversationAutomationSkillStep(
+function hasFailedConversationAutomationTodoItem(document: ConversationAutomationDocument): boolean {
+  return document.items.some((item) => item.status === 'failed');
+}
+
+function latestAssistantText(entry: LiveEntry): string {
+  const messages = getSessionMessages(entry.session);
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (!message || message.role !== 'assistant' || !Array.isArray(message.content)) {
+      continue;
+    }
+
+    const text = message.content
+      .filter((block): block is { type: 'text'; text?: string } => Boolean(block) && typeof block === 'object' && (block as { type?: string }).type === 'text')
+      .map((block) => block.text ?? '')
+      .join('\n')
+      .trim();
+    if (text) {
+      return text;
+    }
+  }
+
+  return '';
+}
+
+function maybeFinalizeConversationAutomationTodoItem(
   entry: LiveEntry,
   document: ConversationAutomationDocument,
   finishedAt: string,
 ): ConversationAutomationDocument {
-  const gate = findConversationAutomationGate(document, document.activeGateId);
-  const activeSkillId = document.activeSkillId?.trim();
-  if (!gate || !activeSkillId) {
+  const item = findConversationAutomationTodoItem(document, document.activeItemId);
+  if (!item) {
     return {
       ...document,
-      activeGateId: undefined,
-      activeSkillId: undefined,
-      updatedAt: finishedAt,
-    };
-  }
-
-  const step = gate.skills.find((candidate) => candidate.id === activeSkillId);
-  if (!step) {
-    return {
-      ...document,
-      activeGateId: undefined,
-      activeSkillId: undefined,
+      activeItemId: undefined,
       updatedAt: finishedAt,
     };
   }
 
   const failure = entry.currentTurnError?.trim();
-  step.status = failure ? 'failed' : 'completed';
-  step.updatedAt = finishedAt;
-  step.completedAt = finishedAt;
-  step.resultReason = failure ? failure : 'Follow-up turn completed.';
-  gate.updatedAt = finishedAt;
-  document.activeGateId = undefined;
-  document.activeSkillId = undefined;
+  item.status = failure ? 'failed' : 'completed';
+  item.updatedAt = finishedAt;
+  item.completedAt = finishedAt;
+  item.resultReason = failure ? failure : 'Follow-up turn completed.';
+  document.activeItemId = undefined;
   document.updatedAt = finishedAt;
 
   if (failure) {
-    gate.status = 'failed';
-    gate.completedAt = finishedAt;
-    gate.resultReason = failure;
+    document.enabled = false;
+  }
+
+  return document;
+}
+
+function maybeFinalizeConversationAutomationReview(
+  entry: LiveEntry,
+  document: ConversationAutomationDocument,
+  finishedAt: string,
+): ConversationAutomationDocument {
+  const review = document.review;
+  if (!review || review.status !== 'running') {
+    return document;
+  }
+
+  const failure = entry.currentTurnError?.trim();
+  review.updatedAt = finishedAt;
+  review.completedAt = finishedAt;
+
+  if (failure) {
+    review.status = 'failed';
+    review.resultReason = failure;
+    document.updatedAt = finishedAt;
     document.enabled = false;
     return document;
   }
 
-  const hasPendingSkill = gate.skills.some((skill) => skill.status === 'pending');
-  if (!hasPendingSkill) {
-    gate.status = 'completed';
-    gate.completedAt = finishedAt;
-  } else {
-    gate.status = 'running';
+  const appendedItems = parseConversationAutomationTodoAppendBlock(latestAssistantText(entry));
+  review.status = 'completed';
+  review.resultReason = appendedItems.length > 0
+    ? `Added ${appendedItems.length} todo item${appendedItems.length === 1 ? '' : 's'}.`
+    : 'No additional todo items.';
+  document.updatedAt = finishedAt;
+
+  if (appendedItems.length === 0) {
+    return document;
   }
 
-  return document;
+  return appendConversationAutomationItems(document, appendedItems, finishedAt);
 }
 
 function interruptConversationAutomationStep(
@@ -916,37 +920,41 @@ function interruptConversationAutomationStep(
   reason: string,
   finishedAt: string,
 ): ConversationAutomationDocument {
-  const gate = findConversationAutomationGate(document, document.activeGateId);
-  if (!gate) {
-    return {
-      ...document,
-      activeGateId: undefined,
-      activeSkillId: undefined,
-      updatedAt: finishedAt,
-      enabled: false,
-    };
+  const item = findConversationAutomationTodoItem(document, document.activeItemId);
+  if (item) {
+    item.status = 'failed';
+    item.updatedAt = finishedAt;
+    item.completedAt = finishedAt;
+    item.resultReason = reason;
   }
 
-  const activeSkillId = document.activeSkillId?.trim();
-  if (activeSkillId) {
-    const step = gate.skills.find((candidate) => candidate.id === activeSkillId);
-    if (step) {
-      step.status = 'failed';
-      step.updatedAt = finishedAt;
-      step.completedAt = finishedAt;
-      step.resultReason = reason;
-    }
+  if (document.review?.status === 'running') {
+    document.review.status = 'failed';
+    document.review.updatedAt = finishedAt;
+    document.review.completedAt = finishedAt;
+    document.review.resultReason = reason;
   }
 
-  gate.status = 'failed';
-  gate.updatedAt = finishedAt;
-  gate.completedAt = finishedAt;
-  gate.resultReason = reason;
-  document.activeGateId = undefined;
-  document.activeSkillId = undefined;
+  document.activeItemId = undefined;
   document.updatedAt = finishedAt;
   document.enabled = false;
   return document;
+}
+
+function shouldStartConversationAutomationReview(document: ConversationAutomationDocument): boolean {
+  if (document.items.length === 0 || hasFailedConversationAutomationTodoItem(document)) {
+    return false;
+  }
+
+  if (findFirstPendingConversationAutomationTodoItem(document) || document.activeItemId) {
+    return false;
+  }
+
+  if (!document.review) {
+    return true;
+  }
+
+  return document.review.status === 'pending';
 }
 
 export async function kickConversationAutomation(
@@ -966,7 +974,7 @@ export async function kickConversationAutomation(
       settingsFile: SETTINGS_FILE,
     }).document;
 
-    if (trigger === 'manual' && (document.activeGateId || document.activeSkillId)) {
+    if (trigger === 'manual' && (document.activeItemId || document.review?.status === 'running')) {
       document = interruptConversationAutomationStep(
         document,
         'Conversation automation was interrupted before the step completed.',
@@ -976,59 +984,39 @@ export async function kickConversationAutomation(
       entry.currentTurnError = null;
     }
 
-    if (trigger === 'turn_end' && document.activeSkillId) {
-      document = maybeFinalizeConversationAutomationSkillStep(entry, document, new Date().toISOString());
+    if (trigger === 'turn_end' && document.activeItemId) {
+      document = maybeFinalizeConversationAutomationTodoItem(entry, document, new Date().toISOString());
+      document = saveConversationAutomation(entry, document);
+      entry.currentTurnError = null;
+    } else if (trigger === 'turn_end' && document.review?.status === 'running') {
+      document = maybeFinalizeConversationAutomationReview(entry, document, new Date().toISOString());
       document = saveConversationAutomation(entry, document);
       entry.currentTurnError = null;
     }
 
     while (!entry.session.isStreaming && document.enabled) {
-      const nextGate = findFirstIncompleteConversationAutomationGate(document);
-      if (!nextGate) {
-        break;
-      }
-
-      const pendingSkill = nextGate.skills.find((skill) => skill.status === 'pending');
-      if (nextGate.status === 'running') {
-        if (!pendingSkill) {
-          nextGate.status = 'completed';
-          nextGate.completedAt = new Date().toISOString();
-          nextGate.updatedAt = nextGate.completedAt;
-          document.updatedAt = nextGate.completedAt;
-          document = saveConversationAutomation(entry, document);
-          if (trigger !== 'turn_end') {
-            break;
-          }
-          continue;
-        }
-
+      const pendingItem = findFirstPendingConversationAutomationTodoItem(document);
+      if (pendingItem) {
         const startedAt = new Date().toISOString();
-        clearConversationAutomationSkillRuntime(pendingSkill);
-        pendingSkill.status = 'running';
-        pendingSkill.startedAt = startedAt;
-        pendingSkill.updatedAt = startedAt;
-        nextGate.status = 'running';
-        nextGate.updatedAt = startedAt;
-        document.activeGateId = nextGate.id;
-        document.activeSkillId = pendingSkill.id;
+        clearConversationAutomationTodoItemRuntime(pendingItem);
+        pendingItem.status = 'running';
+        pendingItem.startedAt = startedAt;
+        pendingItem.updatedAt = startedAt;
+        document.activeItemId = pendingItem.id;
         document.updatedAt = startedAt;
+        document.review = undefined;
         document = saveConversationAutomation(entry, document);
 
         try {
           entry.currentTurnError = null;
-          await promptSession(sessionId, buildConversationAutomationSkillPrompt(pendingSkill), 'followUp');
+          await promptSession(sessionId, buildConversationAutomationSkillPrompt(pendingItem), 'followUp');
         } catch (error) {
           const failedAt = new Date().toISOString();
-          pendingSkill.status = 'failed';
-          pendingSkill.updatedAt = failedAt;
-          pendingSkill.completedAt = failedAt;
-          pendingSkill.resultReason = error instanceof Error ? error.message : String(error);
-          nextGate.status = 'failed';
-          nextGate.updatedAt = failedAt;
-          nextGate.completedAt = failedAt;
-          nextGate.resultReason = pendingSkill.resultReason;
-          document.activeGateId = undefined;
-          document.activeSkillId = undefined;
+          pendingItem.status = 'failed';
+          pendingItem.updatedAt = failedAt;
+          pendingItem.completedAt = failedAt;
+          pendingItem.resultReason = error instanceof Error ? error.message : String(error);
+          document.activeItemId = undefined;
           document.updatedAt = failedAt;
           document.enabled = false;
           saveConversationAutomation(entry, document);
@@ -1036,75 +1024,40 @@ export async function kickConversationAutomation(
         break;
       }
 
-      if (trigger !== 'turn_end') {
-        break;
-      }
-
-      if (!mayMatchConversationAutomationTrigger(nextGate.prompt, trigger)) {
+      if (!shouldStartConversationAutomationReview(document)) {
         break;
       }
 
       const startedAt = new Date().toISOString();
-      clearConversationAutomationGateRuntime(nextGate);
-      nextGate.status = 'running';
-      nextGate.startedAt = startedAt;
-      nextGate.updatedAt = startedAt;
-      document.activeGateId = nextGate.id;
-      document.activeSkillId = undefined;
+      const review: ConversationAutomationReviewState = {
+        createdAt: document.review?.createdAt ?? startedAt,
+        updatedAt: startedAt,
+        startedAt,
+        status: 'running',
+        round: document.review?.round ?? 1,
+      };
+      clearConversationAutomationReviewRuntime(review);
+      review.startedAt = startedAt;
+      document.review = review;
       document.updatedAt = startedAt;
       document = saveConversationAutomation(entry, document);
 
       try {
-        const result = await evaluateConversationAutomationFilter(nextGate.prompt, {
-          cwd: entry.cwd,
-          messages: getSessionMessages(entry.session),
-          toolNames: new Set(entry.session.getActiveToolNames()),
-          modelRegistry: entry.session.modelRegistry,
-          settingsFile: SETTINGS_FILE,
-          trigger,
-        });
-
-        const completedAt = new Date().toISOString();
-        nextGate.updatedAt = completedAt;
-        nextGate.completedAt = completedAt;
-        nextGate.resultReason = result.reason;
-        if (result.confidence !== null) {
-          nextGate.resultConfidence = result.confidence;
-        } else {
-          delete nextGate.resultConfidence;
-        }
-        document.activeGateId = undefined;
-        document.updatedAt = completedAt;
-
-        if (!result.pass) {
-          nextGate.status = 'failed';
-          document = saveConversationAutomation(entry, document);
-          break;
-        }
-
-        if (nextGate.skills.length === 0) {
-          nextGate.status = 'completed';
-          document = saveConversationAutomation(entry, document);
-          continue;
-        }
-
-        nextGate.status = 'running';
-        delete nextGate.completedAt;
-        document = saveConversationAutomation(entry, document);
-        continue;
+        entry.currentTurnError = null;
+        await promptSession(sessionId, buildConversationAutomationReviewPrompt(document), 'followUp');
       } catch (error) {
         const failedAt = new Date().toISOString();
-        nextGate.status = 'failed';
-        nextGate.updatedAt = failedAt;
-        nextGate.completedAt = failedAt;
-        nextGate.resultReason = error instanceof Error ? error.message : String(error);
-        delete nextGate.resultConfidence;
-        document.activeGateId = undefined;
+        if (document.review) {
+          document.review.status = 'failed';
+          document.review.updatedAt = failedAt;
+          document.review.completedAt = failedAt;
+          document.review.resultReason = error instanceof Error ? error.message : String(error);
+        }
         document.updatedAt = failedAt;
         document.enabled = false;
         saveConversationAutomation(entry, document);
-        break;
       }
+      break;
     }
   } finally {
     automationProcessingSessions.delete(sessionId);
