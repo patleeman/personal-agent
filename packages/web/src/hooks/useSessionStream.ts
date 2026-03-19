@@ -7,6 +7,7 @@ import type { MessageBlock, PromptAttachmentRefInput, PromptImageInput, SessionC
 import { api } from '../api';
 import { normalizeConversationComposerBehavior } from '../conversationComposerSubmit';
 import { displayBlockToMessageBlock } from '../messageBlocks';
+import { parseSkillBlock } from '../skillBlock';
 
 export interface StreamState {
   blocks: MessageBlock[];
@@ -42,6 +43,32 @@ export function selectVisibleStreamState(
   requestedSessionId: string | null,
 ): StreamState {
   return stateSessionId === requestedSessionId ? state : INITIAL_STREAM_STATE;
+}
+
+function readInvokedSkillName(text: string): string | null {
+  const match = text.trim().match(/^\/skill:([^\s]+)/i);
+  const skillName = match?.[1]?.trim().toLowerCase();
+  return skillName && skillName.length > 0 ? skillName : null;
+}
+
+export function shouldReplaceOptimisticUserBlock(previous: MessageBlock | undefined, next: MessageBlock): boolean {
+  if (previous?.type !== 'user' || next.type !== 'user') {
+    return false;
+  }
+
+  const previousSkillName = readInvokedSkillName(previous.text);
+  if (!previousSkillName) {
+    return false;
+  }
+
+  const nextSkillBlock = parseSkillBlock(next.text);
+  if (!nextSkillBlock) {
+    return false;
+  }
+
+  const previousImageCount = previous.images?.length ?? 0;
+  const nextImageCount = next.images?.length ?? 0;
+  return previousImageCount === nextImageCount && nextSkillBlock.name.trim().toLowerCase() === previousSkillName;
 }
 
 export function useSessionStream(sessionId: string | null, options?: { tailBlocks?: number }) {
@@ -199,8 +226,9 @@ function applyEvent(
       const sameUserBlock = last?.type === 'user' && nextBlock.type === 'user'
         && last.text === nextBlock.text
         && lastImageCount === nextImageCount;
+      const replaceOptimisticUserBlock = shouldReplaceOptimisticUserBlock(last, nextBlock);
 
-      if (sameUserBlock) {
+      if (sameUserBlock || replaceOptimisticUserBlock) {
         blocks[blocks.length - 1] = nextBlock;
       } else {
         blocks.push(nextBlock);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import type { MessageBlock } from '../types';
 import type { StreamState } from './useSessionStream';
-import { INITIAL_STREAM_STATE, selectVisibleStreamState } from './useSessionStream';
+import { INITIAL_STREAM_STATE, selectVisibleStreamState, shouldReplaceOptimisticUserBlock } from './useSessionStream';
 
 describe('selectVisibleStreamState', () => {
   it('hides stale stream data after navigating to a different session', () => {
@@ -25,5 +26,46 @@ describe('selectVisibleStreamState', () => {
     };
 
     expect(selectVisibleStreamState(state, 'session-a', 'session-a')).toBe(state);
+  });
+});
+
+
+describe('shouldReplaceOptimisticUserBlock', () => {
+  it('replaces an optimistic /skill bubble with the expanded skill block', () => {
+    const previous: MessageBlock = {
+      type: 'user',
+      ts: '2026-03-19T12:00:00.000Z',
+      text: '/skill:workflow-checkpoint commit only my files',
+    };
+    const next: MessageBlock = {
+      type: 'user',
+      ts: '2026-03-19T12:00:01.000Z',
+      text: [
+        '<skill name="workflow-checkpoint" location="/state/profiles/shared/agent/skills/workflow-checkpoint/SKILL.md">',
+        'References are relative to /state/profiles/shared/agent/skills/workflow-checkpoint.',
+        '</skill>',
+      ].join('\n'),
+    };
+
+    expect(shouldReplaceOptimisticUserBlock(previous, next)).toBe(true);
+  });
+
+  it('does not replace normal user messages', () => {
+    const previous: MessageBlock = {
+      type: 'user',
+      ts: '2026-03-19T12:00:00.000Z',
+      text: 'hello there',
+    };
+    const next: MessageBlock = {
+      type: 'user',
+      ts: '2026-03-19T12:00:01.000Z',
+      text: [
+        '<skill name="workflow-checkpoint" location="/state/profiles/shared/agent/skills/workflow-checkpoint/SKILL.md">',
+        'References are relative to /state/profiles/shared/agent/skills/workflow-checkpoint.',
+        '</skill>',
+      ].join('\n'),
+    };
+
+    expect(shouldReplaceOptimisticUserBlock(previous, next)).toBe(false);
   });
 });
