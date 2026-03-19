@@ -181,6 +181,36 @@ describe('SystemPage', () => {
         refreshing: false,
         error: null,
         refetch,
+      })
+      .mockReturnValueOnce({
+        data: {
+          targets: [{
+            id: 'gpu-box',
+            label: 'GPU Box',
+            transport: 'ssh',
+            sshDestination: 'gpu-box',
+            cwdMappings: [],
+            createdAt: '2026-03-18T17:00:00.000Z',
+            updatedAt: '2026-03-18T17:00:00.000Z',
+            activeRunCount: 1,
+            readyImportCount: 1,
+          }],
+          sshBinary: {
+            available: true,
+            command: 'ssh',
+            path: '/usr/bin/ssh',
+            version: 'OpenSSH_9.7p1',
+          },
+          summary: {
+            totalTargets: 1,
+            activeRemoteRuns: 1,
+            readyImports: 1,
+          },
+        },
+        loading: false,
+        refreshing: false,
+        error: null,
+        refetch,
       });
 
     const html = renderToString(
@@ -195,5 +225,8 @@ describe('SystemPage', () => {
     expect(html).toContain('Restart daemon');
     expect(html).toContain('Restart gateway');
     expect(html).toContain('Run sync now');
+    expect(html).toContain('Execution targets');
+    expect(html).toContain('GPU Box');
+    expect(html).toContain('Save target');
   });
 });

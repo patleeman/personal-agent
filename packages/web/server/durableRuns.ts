@@ -12,7 +12,9 @@ import {
   type CancelDurableRunResult,
   type GetDurableRunResult,
   type ListDurableRunsResult,
+  type ScannedDurableRun,
 } from '@personal-agent/daemon';
+import { decorateRemoteExecutionRun } from './remoteExecution.js';
 
 function isDaemonUnavailable(error: unknown): boolean {
   if (!(error instanceof Error)) {
@@ -37,6 +39,10 @@ function isRunNotFound(error: unknown): boolean {
 
 function resolveRunsRoot(): string {
   return resolveDurableRunsRoot(resolveDaemonPaths().root);
+}
+
+function decorateRuns<T extends ScannedDurableRun>(runs: T[]) {
+  return runs.map((run) => decorateRemoteExecutionRun(run));
 }
 
 function readTailText(filePath: string | undefined, maxLines = 120, maxBytes = 64 * 1024): string {

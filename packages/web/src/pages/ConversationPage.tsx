@@ -1,10 +1,10 @@
 import { Suspense, lazy, useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, type RefObject } from 'react';
-import { useLocation, useParams, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { ChatView } from '../components/chat/ChatView';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput } from '../types';
+import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, RemoteRunImportStatus } from '../types';
 import { useApi } from '../hooks';
 import { useSessionDetail } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
@@ -15,6 +15,7 @@ import { createConversationLiveRunId, getConversationRunIdFromSearch, setConvers
 import { formatContextBreakdownLabel, formatContextUsageLabel, formatContextWindowLabel, formatLiveSessionLabel, formatThinkingLevelLabel } from '../conversationHeader';
 import { isConversationScrolledToBottom, shouldShowScrollToBottomControl } from '../conversationScroll';
 import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE } from '../conversationTitle';
+import { getRunSortTimestamp } from '../runPresentation';
 import { emitConversationProjectsChanged, CONVERSATION_PROJECTS_CHANGED_EVENT } from '../conversationProjectEvents';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { THINKING_LEVEL_OPTIONS, groupModelsByProvider } from '../modelPreferences';
@@ -35,12 +36,15 @@ import {
   clearDraftConversationAttachments,
   clearDraftConversationComposer,
   clearDraftConversationCwd,
+  clearDraftConversationExecutionTarget,
   DRAFT_CONVERSATION_ROUTE,
   isDraftConversationAttachmentsMutationCurrent,
   persistDraftConversationAttachments,
   persistDraftConversationComposer,
+  persistDraftConversationExecutionTarget,
   readDraftConversationAttachments,
   readDraftConversationCwd,
+  readDraftConversationExecutionTarget,
   type DraftConversationDrawingAttachment,
 } from '../draftConversation';
 import {
@@ -55,7 +59,9 @@ import {
   resolveConversationComposerSubmitState,
 } from '../conversationComposerSubmit';
 import { useReloadState } from '../reloadState';
+import { applyLiveSessionState, buildSyntheticLiveSessionMeta } from '../sessionIndicators';
 import { ensureConversationTabOpen } from '../sessionTabs';
+import { formatDate } from '../utils';
 import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSceneFromBlob, parseExcalidrawSceneFromSourceData, serializeExcalidrawScene } from '../excalidrawUtils';
 
 const ConversationTree = lazy(() => import('../components/ConversationTree').then((module) => ({ default: module.ConversationTree })));
@@ -71,6 +77,54 @@ const HISTORICAL_BACKGROUND_PREFETCH_DELAY_MS = 800;
 const INITIAL_SCROLL_STABLE_FRAME_COUNT = 2;
 const INITIAL_SCROLL_MAX_FRAMES = 45;
 const MAX_CONVERSATION_RAIL_BLOCKS = 240;
+
+function summarizeSingleLine(value: string, maxLength = 120): string {
+  const normalized = value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line.length > 0)
+    ?.replace(/\s+/g, ' ');
+
+  if (!normalized) {
+    return '';
+  }
+
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1).trimEnd()}…` : normalized;
+}
+
+function remoteExecutionStatusMeta(run: DurableRunRecord): { label: string; className: string } {
+  switch (run.status?.status) {
+    case 'running':
+      return { label: 'executing remotely', className: 'text-accent' };
+    case 'recovering':
+      return { label: 'recovering', className: 'text-warning' };
+    case 'completed':
+      return { label: 'remote execution complete', className: 'text-success' };
+    case 'failed':
+    case 'interrupted':
+      return { label: run.status.status, className: 'text-danger' };
+    case 'cancelled':
+      return { label: 'cancelled', className: 'text-dim' };
+    case 'queued':
+    case 'waiting':
+      return { label: run.status.status, className: 'text-dim' };
+    default:
+      return { label: run.status?.status ?? 'pending', className: 'text-dim' };
+  }
+}
+
+function remoteImportStatusMeta(status: RemoteRunImportStatus): { label: string; className: string } {
+  switch (status) {
+    case 'ready':
+      return { label: 'ready to import', className: 'text-warning' };
+    case 'imported':
+      return { label: 'imported', className: 'text-success' };
+    case 'failed':
+      return { label: 'import failed', className: 'text-danger' };
+    default:
+      return { label: 'not imported yet', className: 'text-dim' };
+  }
+}
 
 // ── Model picker ──────────────────────────────────────────────────────────────
 
@@ -370,6 +424,130 @@ function ContextBar({
           <span className="font-mono text-dim tabular-nums">{formatContextUsageLabel(total, win)}</span>
         </span>
       </div>
+    </div>
+  );
+}
+
+function ConversationExecutionBar({
+  execution,
+  targets,
+  remoteRuns,
+  disabled,
+  busy,
+  importRunId,
+  onSelectTarget,
+  onInspectRun,
+  onImportRun,
+  transcriptHref,
+}: {
+  execution: {
+    targetId: string | null;
+    location: 'local' | 'remote';
+    target: ExecutionTargetSummary | null;
+  };
+  targets: ExecutionTargetSummary[];
+  remoteRuns: DurableRunRecord[];
+  disabled: boolean;
+  busy: boolean;
+  importRunId: string | null;
+  onSelectTarget: (targetId: string | null) => void;
+  onInspectRun: (runId: string) => void;
+  onImportRun: (runId: string) => void;
+  transcriptHref: (runId: string) => string;
+}) {
+  const visibleRemoteRuns = remoteRuns.slice(0, 3);
+
+  return (
+    <div className="border-b border-border-subtle px-3 py-2.5">
+      <div className="flex flex-wrap items-center gap-2 text-[11px] text-secondary">
+        <span className="ui-section-label">Execution</span>
+        <select
+          value={execution.targetId ?? ''}
+          onChange={(event) => onSelectTarget(event.target.value.trim() || null)}
+          disabled={busy || disabled}
+          className="min-w-[11rem] rounded-md border border-border-subtle bg-surface px-2 py-1 text-[12px] text-primary outline-none transition-colors focus:border-accent/60 disabled:cursor-default disabled:opacity-60"
+          aria-label="Conversation execution target"
+        >
+          <option value="">Local agent</option>
+          {targets.map((target) => (
+            <option key={target.id} value={target.id}>{target.label}</option>
+          ))}
+        </select>
+        <span className={execution.location === 'remote' ? 'text-accent' : 'text-dim'}>
+          {execution.target ? `SSH ${execution.target.sshDestination}` : 'Run locally'}
+        </span>
+        {busy && <span className="text-dim">Saving…</span>}
+        {targets.length === 0 && (
+          <Link to="/system#execution-targets" className="text-accent hover:underline">
+            Add targets on System
+          </Link>
+        )}
+      </div>
+
+      {visibleRemoteRuns.length > 0 && (
+        <div className="mt-2 space-y-2 border-t border-border-subtle pt-2">
+          {visibleRemoteRuns.map((run) => {
+            const remote = run.remoteExecution;
+            if (!remote) {
+              return null;
+            }
+
+            const executionMeta = remoteExecutionStatusMeta(run);
+            const importMeta = remoteImportStatusMeta(remote.importStatus);
+            const promptSummary = summarizeSingleLine(remote.prompt, 96);
+            const importBusy = importRunId === run.runId;
+            const canImport = remote.importStatus === 'ready';
+
+            return (
+              <div key={run.runId} className="flex flex-wrap items-start justify-between gap-3 text-[11px]">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-secondary">
+                    <span className="font-medium text-primary">{remote.targetLabel}</span>
+                    <span className={executionMeta.className}>{executionMeta.label}</span>
+                    <span className={importMeta.className}>import {importMeta.label}</span>
+                  </div>
+                  <p className="text-dim">
+                    {promptSummary || 'Remote execution run'}
+                    {remote.remoteCwd && ` · ${remote.remoteCwd}`}
+                    {remote.submittedAt && ` · ${formatDate(remote.submittedAt)}`}
+                  </p>
+                  {remote.importSummary && <p className="text-secondary">{remote.importSummary}</p>}
+                  {remote.importError && <p className="text-danger">{remote.importError}</p>}
+                </div>
+                <div className="flex shrink-0 items-center gap-2 text-[11px]">
+                  {remote.transcriptAvailable && (
+                    <a href={transcriptHref(run.runId)} className="text-secondary hover:text-primary" target="_blank" rel="noreferrer">
+                      Transcript
+                    </a>
+                  )}
+                  {canImport && (
+                    <button
+                      type="button"
+                      onClick={() => onImportRun(run.runId)}
+                      disabled={importBusy}
+                      className="text-warning transition-colors hover:text-warning/80 disabled:cursor-default disabled:text-dim"
+                    >
+                      {importBusy ? 'Importing…' : 'Import'}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onInspectRun(run.runId)}
+                    className="text-accent transition-colors hover:text-accent/80"
+                  >
+                    Run ↗
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {remoteRuns.length > visibleRemoteRuns.length && (
+            <p className="text-[11px] text-dim">
+              {remoteRuns.length - visibleRemoteRuns.length} older remote run{remoteRuns.length - visibleRemoteRuns.length === 1 ? '' : 's'} are available from the run rail.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1041,6 +1219,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [composerAltHeld, setComposerAltHeld] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
+  const [draftExecutionTargetId, setDraftExecutionTargetId] = useState<string | null>(() => readDraftConversationExecutionTarget());
+  const [executionTargetBusy, setExecutionTargetBusy] = useState(false);
+  const [remoteRunActionId, setRemoteRunActionId] = useState<string | null>(null);
   const composerHistoryScopeId = draft ? null : id ?? null;
   const [composerHistory, setComposerHistory] = useState<string[]>(() => readComposerHistory(composerHistoryScopeId));
   const [composerHistoryIndex, setComposerHistoryIndex] = useState<number | null>(null);
@@ -1074,6 +1255,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setMentionIdx(0);
     draftAttachmentsHydratedRef.current = true;
   }, [draft]);
+
+  useEffect(() => {
+    if (!draft || !draftAttachmentsHydratedRef.current) {
+      return;
+    }
+
+    persistDraftConversationExecutionTarget(draftExecutionTargetId);
+  }, [draft, draftExecutionTargetId]);
 
   useEffect(() => {
     if (!draft || !draftAttachmentsHydratedRef.current) {
@@ -1168,8 +1357,20 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const prevStreamingRef = useRef(false);
   const { data: memoryData, refetch: refetchMemoryData } = useApi(api.memory);
   const { data: profileState } = useApi(api.profiles);
+  const executionTargetsState = useApi(api.executionTargets);
+  const conversationExecutionState = useApi(
+    async () => (id
+      ? api.conversationExecution(id)
+      : {
+          conversationId: 'draft',
+          targetId: null,
+          location: 'local' as const,
+          target: null,
+        }),
+    id ?? 'draft-conversation-execution',
+  );
   const { versions } = useAppEvents();
-  const { projects, tasks, sessions, setProjects, setSessions } = useAppData();
+  const { projects, tasks, sessions, runs, setProjects, setSessions, setRuns } = useAppData();
   const conversationRunId = useMemo(() => (id ? createConversationLiveRunId(id) : null), [id]);
   const [conversationRun, setConversationRun] = useState<DurableRunRecord | null>(null);
   const [resumeConversationBusy, setResumeConversationBusy] = useState(false);
@@ -1278,6 +1479,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     () => buildDeferredResumeIndicatorText(orderedDeferredResumes, deferredResumeNowMs),
     [orderedDeferredResumes, deferredResumeNowMs],
   );
+  const conversationRemoteRuns = useMemo(() => {
+    if (!id) {
+      return [] as DurableRunRecord[];
+    }
+
+    return [...(runs?.runs ?? [])]
+      .filter((run) => run.remoteExecution?.conversationId === id)
+      .sort((left, right) => getRunSortTimestamp(right).localeCompare(getRunSortTimestamp(left)) || right.runId.localeCompare(left.runId));
+  }, [id, runs]);
   const lastConversationMessage = realMessages?.[realMessages.length - 1] ?? null;
   const lastCopyableAgentText = useMemo(() => {
     if (!realMessages) {
@@ -1339,6 +1549,38 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       cancelled = true;
     };
   }, [conversationRunId, draft, versions.sessions]);
+
+  useEffect(() => {
+    if (versions.runs === 0) {
+      return;
+    }
+
+    void executionTargetsState.refetch({ resetLoading: false });
+    if (id) {
+      void conversationExecutionState.refetch({ resetLoading: false });
+    }
+  }, [conversationExecutionState.refetch, executionTargetsState.refetch, id, versions.runs]);
+
+  const selectedExecutionTargetId = draft
+    ? draftExecutionTargetId
+    : (conversationExecutionState.data?.targetId ?? null);
+  const selectedExecutionTarget = useMemo<ExecutionTargetSummary | null>(() => {
+    if (!selectedExecutionTargetId) {
+      return null;
+    }
+
+    return executionTargetsState.data?.targets.find((target) => target.id === selectedExecutionTargetId) ?? null;
+  }, [executionTargetsState.data?.targets, selectedExecutionTargetId]);
+  const executionTargets = executionTargetsState.data?.targets ?? [];
+  const conversationExecution = useMemo(() => ({
+    conversationId: id ?? 'draft',
+    targetId: selectedExecutionTargetId,
+    location: selectedExecutionTarget ? 'remote' as const : 'local' as const,
+    target: selectedExecutionTarget,
+  }), [id, selectedExecutionTarget, selectedExecutionTargetId]);
+  const replaceConversationExecution = conversationExecutionState.replaceData;
+  const executionSelectionBusy = executionTargetBusy;
+  const remoteImportRunId = remoteRunActionId;
 
   const refetchConversationAttachments = useCallback(async () => {
     if (!id) {
@@ -2477,6 +2719,81 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
+  async function handleExecutionTargetSelect(targetId: string | null) {
+    if (executionSelectionBusy) {
+      return;
+    }
+
+    setExecutionTargetBusy(true);
+    try {
+      if (draft) {
+        setDraftExecutionTargetId(targetId);
+        persistDraftConversationExecutionTarget(targetId);
+        return;
+      }
+
+      if (!id) {
+        return;
+      }
+
+      const next = await api.updateConversationExecution(id, targetId);
+      replaceConversationExecution(next);
+      showNotice('accent', next.target ? `Remote execution set to ${next.target.label}.` : 'Execution target reset to local.', 3000);
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    } finally {
+      setExecutionTargetBusy(false);
+    }
+  }
+
+  async function refreshRunsSnapshot() {
+    try {
+      const nextRuns = await api.runs();
+      setRuns(nextRuns);
+    } catch {
+      // Ignore optimistic refresh failures.
+    }
+  }
+
+  async function refreshSessionsSnapshot() {
+    try {
+      const [storedSessions, liveSessions] = await Promise.all([
+        api.sessions(),
+        api.liveSessions(),
+      ]);
+      const storedIds = new Set(storedSessions.map((session) => session.id));
+      const syntheticLive = liveSessions
+        .filter((entry) => !storedIds.has(entry.id))
+        .map((entry) => buildSyntheticLiveSessionMeta(entry));
+      setSessions([...syntheticLive, ...applyLiveSessionState(storedSessions, liveSessions)]);
+    } catch {
+      // Ignore optimistic refresh failures.
+    }
+  }
+
+  async function importRemoteRunResult(runId: string) {
+    if (remoteImportRunId) {
+      return;
+    }
+
+    setRemoteRunActionId(runId);
+    try {
+      const result = await api.importRemoteRun(runId);
+      await Promise.all([
+        refreshRunsSnapshot(),
+        refreshSessionsSnapshot(),
+      ]);
+      showNotice('accent', result.summary || `Imported remote result into ${result.conversationId}.`, 4500);
+      if (isLiveSession) {
+        stream.reconnect();
+      }
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    } finally {
+      setRemoteRunActionId(null);
+    }
+  }
+
   async function handleProjectSlashCommand(command: ProjectSlashCommand) {
     try {
       if (command.action === 'new') {
@@ -2557,6 +2874,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     clearDraftConversationAttachments();
     clearDraftConversationComposer();
     clearDraftConversationCwd();
+    clearDraftConversationExecutionTarget();
+    setDraftExecutionTargetId(null);
     setInput('');
     setAttachments([]);
     setDrawingAttachments([]);
@@ -2820,6 +3139,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
       const requestedBehavior = behavior ?? (isLiveSession && stream.isStreaming ? 'steer' : undefined);
       const queuedBehavior = normalizeConversationComposerBehavior(requestedBehavior, stream.isStreaming);
+      const remoteTargetId = conversationExecution.targetId;
+      const shouldOffloadRemotely = typeof remoteTargetId === 'string' && remoteTargetId.length > 0;
 
       const persistPromptDrawings = async (conversationId: string): Promise<PromptAttachmentRefInput[]> => {
         if (pendingDrawingAttachments.length === 0) {
@@ -2837,6 +3158,52 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         }
       };
 
+      if (shouldOffloadRemotely) {
+        if (promptImages.length > 0 || pendingDrawingAttachments.length > 0) {
+          setInput(inputSnapshot);
+          setAttachments(pendingImageAttachments);
+          setDrawingAttachments(pendingDrawingAttachments);
+          showNotice('danger', 'Remote offload currently supports text-only prompts.', 4000);
+          return;
+        }
+
+        rememberComposerInput(inputSnapshot);
+        try {
+          const result = await api.remoteRuns({
+            ...(id ? { conversationId: id } : {
+              cwd: readDraftConversationCwd().trim() || undefined,
+              referencedProjectIds: draftReferencedProjectIds,
+            }),
+            text: textToSend,
+            targetId: remoteTargetId,
+          });
+          await Promise.all([
+            refreshRunsSnapshot(),
+            refreshSessionsSnapshot(),
+          ]);
+          if (!id) {
+            clearDraftConversationAttachments();
+            clearDraftConversationCwd();
+            clearDraftConversationExecutionTarget();
+            setDraftExecutionTargetId(null);
+            ensureConversationTabOpen(result.conversationId);
+            navigate({
+              pathname: `/conversations/${result.conversationId}`,
+              search: setConversationRunIdInSearch('', result.runId),
+            }, { replace: true });
+          } else {
+            openRun(result.runId);
+          }
+          showNotice('accent', `Offloaded to ${result.target.label}.`, 4000);
+        } catch (error) {
+          showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+          setInput(inputSnapshot);
+          setAttachments(pendingImageAttachments);
+          setDrawingAttachments(pendingDrawingAttachments);
+        }
+        return;
+      }
+
       if (!id && !visibleSessionDetail) {
         rememberComposerInput(inputSnapshot);
         try {
@@ -2853,6 +3220,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           });
           clearDraftConversationAttachments();
           clearDraftConversationCwd();
+          clearDraftConversationExecutionTarget();
           ensureConversationTabOpen(newId);
           navigate(`/conversations/${newId}`, { replace: true });
         } catch (error) {
@@ -3373,6 +3741,19 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               </div>
             )}
 
+            <ConversationExecutionBar
+              execution={conversationExecution}
+              targets={executionTargets}
+              remoteRuns={conversationRemoteRuns}
+              disabled={stream.isStreaming}
+              busy={executionSelectionBusy}
+              importRunId={remoteImportRunId}
+              onSelectTarget={(targetId) => { void handleExecutionTargetSelect(targetId); }}
+              onInspectRun={openRun}
+              onImportRun={(runId) => { void importRemoteRunResult(runId); }}
+              transcriptHref={(runId) => api.remoteRunTranscriptUrl(runId)}
+            />
+
             {/* Prompt references */}
             {draftMentionItems.length > 0 && (
               <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-3 pt-3 pb-2.5">
@@ -3640,7 +4021,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     }}
                     className="ui-pill ui-pill-solid-accent"
                   >
-                    {composerSubmit.label}
+                    {conversationExecution.location === 'remote' ? 'Offload' : composerSubmit.label}
                   </button>
                 </div>
               )}

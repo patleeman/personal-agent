@@ -128,6 +128,7 @@ function RunContextPanel({ conversationId, runId }: { conversationId?: string; r
   const navigate = useNavigate();
   const { tasks, sessions } = useAppData();
   const [cancelling, setCancelling] = useState(false);
+  const [importingRemote, setImportingRemote] = useState(false);
   const lookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
   const {
     detail,
@@ -184,6 +185,21 @@ function RunContextPanel({ conversationId, runId }: { conversationId?: string; r
   const closeSearch = conversationId ? setConversationRunIdInSearch(location.search, null) : '';
   const currentConversationPath = conversationId ? `/conversations/${encodeURIComponent(conversationId)}` : null;
   const showConversationChrome = Boolean(conversationId);
+  const remoteExecution = run.remoteExecution;
+
+  async function handleImportRemote() {
+    if (!remoteExecution || importingRemote || remoteExecution.importStatus !== 'ready') {
+      return;
+    }
+
+    setImportingRemote(true);
+    try {
+      await api.importRemoteRun(run.runId);
+      reconnect();
+    } finally {
+      setImportingRemote(false);
+    }
+  }
 
   return (
     <div className="space-y-4 px-4 py-4 overflow-y-auto">
@@ -227,6 +243,36 @@ function RunContextPanel({ conversationId, runId }: { conversationId?: string; r
           <button type="button" onClick={() => { void handleCancel(); }} disabled={cancelling} className="ui-toolbar-button text-danger">
             {cancelling ? 'Cancelling…' : 'Cancel'}
           </button>
+        </div>
+      )}
+
+      {remoteExecution && (
+        <div className="border-t border-border-subtle pt-3 space-y-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1 min-w-0">
+              <p className="ui-section-label">Remote execution</p>
+              <p className="text-[13px] text-primary break-words">{remoteExecution.targetLabel}</p>
+              <p className="text-[12px] text-secondary break-words">{remoteExecution.remoteCwd}</p>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {remoteExecution.transcriptAvailable && (
+                <a href={api.remoteRunTranscriptUrl(run.runId)} target="_blank" rel="noreferrer" className="ui-toolbar-button">
+                  Transcript
+                </a>
+              )}
+              {remoteExecution.importStatus === 'ready' && (
+                <button type="button" onClick={() => { void handleImportRemote(); }} disabled={importingRemote} className="ui-toolbar-button text-warning">
+                  {importingRemote ? 'Importing…' : 'Import'}
+                </button>
+              )}
+            </div>
+          </div>
+          <p className="text-[12px] text-secondary break-words">{remoteExecution.prompt}</p>
+          <p className="text-[12px] text-secondary">
+            Import status: <span className={remoteExecution.importStatus === 'imported' ? 'text-success' : remoteExecution.importStatus === 'ready' ? 'text-warning' : remoteExecution.importStatus === 'failed' ? 'text-danger' : 'text-dim'}>{remoteExecution.importStatus}</span>
+          </p>
+          {remoteExecution.importSummary && <p className="text-[12px] text-secondary break-words">{remoteExecution.importSummary}</p>}
+          {remoteExecution.importError && <p className="text-[12px] text-danger break-words">{remoteExecution.importError}</p>}
         </div>
       )}
 

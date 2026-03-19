@@ -341,6 +341,38 @@ describe('sessions', () => {
     expect(readSessionBlocks('session-named')?.meta.title).toBe('Generated conversation title');
   });
 
+  it('renders visible custom message entries as transcript text blocks', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    const dir = join(sessionsDir, '--tmp-project--');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, '2026-03-11T12-00-00-000Z_session-custom.jsonl'), [
+      JSON.stringify({ type: 'session', id: 'session-custom', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
+      JSON.stringify({ type: 'model_change', modelId: 'test-model' }),
+      JSON.stringify({
+        type: 'message',
+        id: 'session-custom-user-1',
+        parentId: null,
+        timestamp: '2026-03-11T12:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Investigate remotely' }] },
+      }),
+      JSON.stringify({
+        type: 'custom_message',
+        id: 'session-custom-import-1',
+        parentId: 'session-custom-user-1',
+        timestamp: '2026-03-11T12:00:01.000Z',
+        customType: 'remote_run_import',
+        content: [{ type: 'text', text: 'Remote execution imported from GPU Box.' }],
+        display: true,
+      }),
+    ].join('\n') + '\n');
+
+    const detail = readSessionBlocks('session-custom');
+    expect(detail?.meta.messageCount).toBe(2);
+    expect(detail?.blocks.filter((block) => block.type === 'text').map((block) => block.text)).toContain('Remote execution imported from GPU Box.');
+  });
+
   it('renames a stored conversation by appending session metadata', () => {
     const sessionsDir = createTempSessionsDir();
     configureSessionEnv(sessionsDir);

@@ -16,6 +16,7 @@ import {
   clearDraftConversationAttachments,
   clearDraftConversationComposer,
   clearDraftConversationCwd,
+  clearDraftConversationExecutionTarget,
   DRAFT_CONVERSATION_ID,
   DRAFT_CONVERSATION_ROUTE,
   DRAFT_CONVERSATION_STATE_CHANGED_EVENT,
@@ -627,6 +628,7 @@ export function Sidebar() {
     clearDraftConversationAttachments();
     clearDraftConversationComposer();
     clearDraftConversationCwd();
+    clearDraftConversationExecutionTarget();
     setDraftComposer('');
     setDraftCwd('');
     setDraftHasAttachments(false);

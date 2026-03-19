@@ -35,6 +35,8 @@ export interface StartBackgroundRunInput {
     filePath?: string;
   };
   notification?: BackgroundRunNotificationSpec;
+  manifestMetadata?: Record<string, unknown>;
+  checkpointPayload?: Record<string, unknown>;
   createdAt?: string;
 }
 
@@ -175,6 +177,7 @@ export async function createBackgroundRunRecord(
     updatedAt: createdAt,
     step: 'queued',
     payload: {
+      ...(input.checkpointPayload ?? {}),
       taskSlug: input.taskSlug,
       cwd: input.cwd,
       ...(argv ? { argv } : {}),

@@ -1,4 +1,6 @@
-import type { DurableRunListResult, DurableRunRecord, ScheduledTaskSummary, SessionMeta } from './types';
+import type { DurableRunListResult, DurableRunRecord, RemoteExecutionRunSummary, ScheduledTaskSummary, SessionMeta } from './types';
+
+const REMOTE_EXECUTION_RUN_SOURCE_TYPE = 'conversation-remote-run';
 
 export interface RunPresentationLookups {
   tasks?: ScheduledTaskSummary[] | null;
@@ -24,6 +26,8 @@ export interface RunMoment {
 }
 
 export type RunCategory = 'scheduled' | 'conversation' | 'deferred' | 'background' | 'other';
+export type RunLocation = 'local' | 'remote';
+export type RunImportState = 'not_ready' | 'ready' | 'imported' | 'failed' | null;
 
 export interface ActiveRunsSummary {
   total: number;
@@ -138,10 +142,11 @@ function conversationLabel(run: DurableRunRecord, lookups: RunPresentationLookup
   const sourceType = run.manifest?.source?.type;
   const isConversationRun = run.manifest?.kind === 'conversation'
     || sourceType === 'web-live-session'
-    || sourceType === 'deferred-resume';
+    || sourceType === 'deferred-resume'
+    || sourceType === REMOTE_EXECUTION_RUN_SOURCE_TYPE;
 
   if (isConversationRun) {
-    const conversationId = sourceType === 'web-live-session'
+    const conversationId = sourceType === 'web-live-session' || sourceType === REMOTE_EXECUTION_RUN_SOURCE_TYPE
       ? run.manifest?.source?.id ?? readSpec(run, 'conversationId') ?? readCheckpoint(run, 'conversationId')
       : readCheckpoint(run, 'conversationId') ?? readSpec(run, 'conversationId');
     const title = readCheckpoint(run, 'title') ?? sessionById(lookups, conversationId)?.title;
@@ -166,6 +171,16 @@ function conversationLabel(run: DurableRunRecord, lookups: RunPresentationLookup
   return {};
 }
 
+export function getRunLocation(run: DurableRunRecord): 'local' | 'remote' {
+  return run.location === 'remote' || Boolean(run.remoteExecution) || run.manifest?.source?.type === REMOTE_EXECUTION_RUN_SOURCE_TYPE
+    ? 'remote'
+    : 'local';
+}
+
+export function getRunImportState(run: DurableRunRecord): RemoteExecutionRunSummary['importStatus'] | null {
+  return run.remoteExecution?.importStatus ?? null;
+}
+
 export function getRunCategory(run: DurableRunRecord): RunCategory {
   if (run.manifest?.source?.type === 'scheduled-task' || run.manifest?.kind === 'scheduled-task') {
     return 'scheduled';
@@ -182,6 +197,7 @@ export function getRunCategory(run: DurableRunRecord): RunCategory {
   if (
     run.manifest?.kind === 'background-run'
     || run.manifest?.source?.type === 'background-run'
+    || run.manifest?.source?.type === REMOTE_EXECUTION_RUN_SOURCE_TYPE
     || run.manifest?.kind === 'raw-shell'
     || run.manifest?.kind === 'workflow'
   ) {
@@ -198,6 +214,10 @@ function sourceKindLabel(run: DurableRunRecord): string {
 
   if (run.manifest?.source?.type === 'web-live-session') {
     return 'Live conversation';
+  }
+
+  if (run.manifest?.source?.type === REMOTE_EXECUTION_RUN_SOURCE_TYPE || run.remoteExecution) {
+    return 'Remote execution';
   }
 
   if (run.manifest?.source?.type === 'deferred-resume') {
@@ -251,6 +271,17 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
     const summary = suffix && headline !== suffix
       ? `Deferred resume · ${suffix}`
       : 'Deferred resume';
+    return { title: headline, summary };
+  }
+
+  if (run.manifest?.source?.type === REMOTE_EXECUTION_RUN_SOURCE_TYPE || run.remoteExecution) {
+    const prompt = excerpt(run.remoteExecution?.prompt) ?? excerpt(readCheckpoint(run, 'prompt') ?? readSpec(run, 'prompt'));
+    const { title, conversationId } = conversationLabel(run, lookups);
+    const targetLabel = run.remoteExecution?.targetLabel;
+    const headline = prompt ?? title ?? conversationId ?? run.runId;
+    const summary = targetLabel
+      ? `Remote execution · ${targetLabel}`
+      : 'Remote execution';
     return { title: headline, summary };
   }
 
@@ -316,6 +347,21 @@ export function getRunConnections(run: DurableRunRecord, lookups: RunPresentatio
     });
   }
 
+  if (run.manifest?.source?.type === REMOTE_EXECUTION_RUN_SOURCE_TYPE || run.remoteExecution) {
+    const targetLabel = run.remoteExecution?.targetLabel ?? readCheckpoint(run, 'targetLabel');
+    const remoteCwd = run.remoteExecution?.remoteCwd ?? readCheckpoint(run, 'remoteCwd');
+    const prompt = excerpt(run.remoteExecution?.prompt ?? readCheckpoint(run, 'prompt') ?? readSpec(run, 'prompt'));
+
+    if (targetLabel) {
+      connections.push({
+        key: `target:${run.remoteExecution?.targetId ?? targetLabel}`,
+        label: 'Execution target',
+        value: targetLabel,
+        detail: [remoteCwd, prompt].filter((value): value is string => typeof value === 'string' && value.length > 0).join(' · ') || undefined,
+      });
+    }
+  }
+
   const filePath = run.manifest?.source?.filePath;
   if (filePath) {
     connections.push({
@@ -374,9 +420,11 @@ export function getRunSortTimestamp(run: DurableRunRecord): string {
 export function getRunTimeline(run: DurableRunRecord): Array<{ label: string; at: string }> {
   const timeline = [
     { label: 'Created', at: run.manifest?.createdAt },
+    { label: 'Submitted remotely', at: run.remoteExecution?.submittedAt },
     { label: 'Started', at: run.status?.startedAt },
     { label: 'Updated', at: run.status?.updatedAt },
     { label: 'Completed', at: run.status?.completedAt },
+    { label: 'Imported', at: run.remoteExecution?.importedAt },
   ];
 
   return timeline.filter((item): item is { label: string; at: string } => typeof item.at === 'string' && item.at.length > 0);

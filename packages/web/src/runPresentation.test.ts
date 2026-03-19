@@ -3,6 +3,8 @@ import {
   getRunCategory,
   getRunConnections,
   getRunHeadline,
+  getRunImportState,
+  getRunLocation,
   getRunMoment,
   getRunPrimaryActionLabel,
   getRunPrimaryConnection,
@@ -208,6 +210,69 @@ describe('runPresentation', () => {
         value: '/tmp/sessions/conv-123.jsonl',
       },
     ]);
+  });
+
+  it('builds remote execution headlines and keeps the conversation as the primary action', () => {
+    const sessions: SessionMeta[] = [{
+      id: 'conv-123',
+      file: '/tmp/sessions/conv-123.jsonl',
+      timestamp: '2026-03-12T20:00:00.000Z',
+      cwd: '/repo',
+      cwdSlug: 'repo',
+      model: 'openai/gpt-5',
+      title: 'Investigate regression',
+      messageCount: 8,
+    }];
+
+    const run = createRun({
+      manifest: {
+        version: 1,
+        id: 'run-remote-123',
+        kind: 'background-run',
+        resumePolicy: 'manual',
+        createdAt: '2026-03-12T20:30:00.000Z',
+        spec: {},
+        source: {
+          type: 'conversation-remote-run',
+          id: 'conv-123',
+          filePath: '/tmp/sessions/conv-123.jsonl',
+        },
+      },
+      remoteExecution: {
+        targetId: 'gpu-box',
+        targetLabel: 'GPU Box',
+        transport: 'ssh',
+        conversationId: 'conv-123',
+        localCwd: '/repo',
+        remoteCwd: '/srv/agent/repo',
+        prompt: 'Investigate the regression on the remote target.',
+        submittedAt: '2026-03-12T20:31:00.000Z',
+        importStatus: 'ready',
+        transcriptAvailable: true,
+        transcriptFileName: 'run-remote-123-remote-transcript.md',
+      },
+    });
+
+    expect(getRunHeadline(run, { sessions })).toEqual({
+      title: 'Investigate the regression on the remote target.',
+      summary: 'Remote execution · GPU Box',
+    });
+    expect(getRunConnections(run, { sessions })).toContainEqual({
+      key: 'conversation:conv-123',
+      label: 'Conversation',
+      value: 'Investigate regression',
+      to: '/conversations/conv-123',
+      detail: 'conv-123',
+    });
+    expect(getRunConnections(run, { sessions })).toContainEqual({
+      key: 'target:gpu-box',
+      label: 'Execution target',
+      value: 'GPU Box',
+      detail: '/srv/agent/repo · Investigate the regression on the remote target.',
+    });
+    expect(getRunLocation(run)).toBe('remote');
+    expect(getRunImportState(run)).toBe('ready');
+    expect(getRunPrimaryActionLabel(getRunPrimaryConnection(run, { sessions }))).toBe('Open conversation');
   });
 
   it('classifies run categories and primary links', () => {

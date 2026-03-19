@@ -147,6 +147,14 @@ import {
 import { createWebLiveConversationRunId, syncWebLiveConversationRun } from './conversationRuns.js';
 import { cancelDurableRun, getDurableRun, getDurableRunLog, getDurableRunSnapshot, listDurableRuns } from './durableRuns.js';
 import {
+  buildConversationExecutionState,
+  buildExecutionTargetsState,
+  buildRemoteExecutionTranscriptResponse,
+  importRemoteExecutionRun,
+  readRemoteExecutionRunConversationId,
+  submitRemoteExecutionRun,
+} from './remoteExecution.js';
+import {
   buildReferencedMemoryDocsContext,
   buildReferencedProfilesContext,
   buildReferencedSkillsContext,
@@ -162,7 +170,9 @@ import {
   getActivityConversationLink,
   getConversationArtifact,
   getConversationAttachment,
+  getConversationExecutionTarget,
   getConversationProjectLink,
+  getExecutionTarget,
   getProfilesRoot,
   getStateRoot,
   loadMemoryDocs,
@@ -192,11 +202,14 @@ import {
   resolveConversationAttachmentPromptFiles,
   resolveProjectPaths,
   saveConversationAttachment,
+  saveExecutionTarget,
   saveProfileActivityReadState,
   setActivityConversationLinks,
+  setConversationExecutionTarget,
   setConversationProjectLinks,
   summarizeConversationAttention,
   writeProfileActivityEntry,
+  deleteExecutionTarget,
 } from '@personal-agent/core';
 import {
   getRepoDefaultsAgentDir,
@@ -3828,6 +3841,121 @@ app.post('/api/tasks/:id/run', async (req, res) => {
   }
 });
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function inspectSshBinaryState() {
+  return inspectCliBinary({ command: 'ssh', cwd: REPO_ROOT });
+}
+
+function normalizeExecutionTargetInput(body: unknown) {
+  if (!isRecord(body)) {
+    throw new Error('Execution target payload must be an object.');
+  }
+
+  const cwdMappings = Array.isArray(body.cwdMappings)
+    ? body.cwdMappings.flatMap((entry) => {
+        if (!isRecord(entry)) {
+          return [];
+        }
+
+        const localPrefix = typeof entry.localPrefix === 'string' ? entry.localPrefix.trim() : '';
+        const remotePrefix = typeof entry.remotePrefix === 'string' ? entry.remotePrefix.trim() : '';
+        return localPrefix && remotePrefix ? [{ localPrefix, remotePrefix }] : [];
+      })
+    : [];
+
+  const readOptional = (value: unknown) => typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+
+  return {
+    id: typeof body.id === 'string' ? body.id.trim() : '',
+    label: typeof body.label === 'string' ? body.label.trim() : '',
+    sshDestination: typeof body.sshDestination === 'string' ? body.sshDestination.trim() : '',
+    ...(readOptional(body.description) ? { description: readOptional(body.description) } : {}),
+    ...(readOptional(body.sshCommand) ? { sshCommand: readOptional(body.sshCommand) } : {}),
+    ...(readOptional(body.remotePaCommand) ? { remotePaCommand: readOptional(body.remotePaCommand) } : {}),
+    ...(readOptional(body.profile) ? { profile: readOptional(body.profile) } : {}),
+    ...(readOptional(body.defaultRemoteCwd) ? { defaultRemoteCwd: readOptional(body.defaultRemoteCwd) } : {}),
+    ...(readOptional(body.commandPrefix) ? { commandPrefix: readOptional(body.commandPrefix) } : {}),
+    cwdMappings,
+  };
+}
+
+async function readExecutionTargetsState() {
+  return buildExecutionTargetsState({
+    runs: (await listDurableRuns()).runs,
+    inspectSshBinary: inspectSshBinaryState,
+  });
+}
+
+async function readConversationExecutionState(conversationId: string) {
+  const stored = getConversationExecutionTarget({
+    profile: getCurrentProfile(),
+    conversationId,
+  });
+
+  return buildConversationExecutionState({
+    conversationId,
+    targetId: stored?.targetId ?? null,
+    runs: (await listDurableRuns()).runs,
+    inspectSshBinary: inspectSshBinaryState,
+  });
+}
+
+app.get('/api/execution-targets', async (_req, res) => {
+  try {
+    res.json(await readExecutionTargetsState());
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/execution-targets', async (req, res) => {
+  try {
+    saveExecutionTarget({
+      target: normalizeExecutionTargetInput(req.body),
+    });
+    res.json(await readExecutionTargetsState());
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(message.includes('required') || message.startsWith('Invalid execution target') ? 400 : 500).json({ error: message });
+  }
+});
+
+app.patch('/api/execution-targets/:id', async (req, res) => {
+  try {
+    saveExecutionTarget({
+      target: {
+        ...normalizeExecutionTargetInput(req.body),
+        id: req.params.id,
+      },
+    });
+    res.json(await readExecutionTargetsState());
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(message.includes('required') || message.startsWith('Invalid execution target') ? 400 : 500).json({ error: message });
+  }
+});
+
+app.delete('/api/execution-targets/:id', async (req, res) => {
+  try {
+    if (!deleteExecutionTarget({ targetId: req.params.id })) {
+      res.status(404).json({ error: 'Execution target not found.' });
+      return;
+    }
+
+    res.json(await readExecutionTargetsState());
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(message.startsWith('Invalid execution target') ? 400 : 500).json({ error: message });
+  }
+});
+
 app.get('/api/runs', async (_req, res) => {
   try {
     const result = await listDurableRuns();
@@ -4024,6 +4152,63 @@ app.post('/api/runs/:id/cancel', async (req, res) => {
       stack: err instanceof Error ? err.stack : undefined,
     });
     res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/runs/:id/import', async (req, res) => {
+  try {
+    const detail = await getDurableRun(req.params.id);
+    if (!detail) {
+      res.status(404).json({ error: 'Run not found' });
+      return;
+    }
+
+    const conversationId = readRemoteExecutionRunConversationId(detail.run);
+    if (!conversationId) {
+      res.status(409).json({ error: 'This run is not a remote execution run.' });
+      return;
+    }
+
+    const sessionFile = resolveConversationSessionFile(conversationId) ?? detail.run.manifest?.source?.filePath;
+    if (!sessionFile || !existsSync(sessionFile)) {
+      res.status(404).json({ error: 'Conversation not found for this remote run.' });
+      return;
+    }
+
+    const result = await importRemoteExecutionRun({
+      run: detail.run,
+      sessionFile,
+    });
+
+    invalidateAppTopics('sessions', 'runs');
+    res.json({ ok: true, runId: req.params.id, ...result });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.includes('not found')
+      ? 404
+      : message.includes('already been imported') || message.includes('has not completed') || message.includes('not a remote execution run') || message.includes('Wait for the current local turn')
+        ? 409
+        : 500;
+    res.status(status).json({ error: message });
+  }
+});
+
+app.get('/api/runs/:id/remote-transcript', async (req, res) => {
+  try {
+    const detail = await getDurableRun(req.params.id);
+    if (!detail) {
+      res.status(404).json({ error: 'Run not found' });
+      return;
+    }
+
+    const transcript = buildRemoteExecutionTranscriptResponse(detail.run);
+    res.setHeader('Content-Type', transcript.contentType);
+    res.setHeader('Content-Disposition', transcript.contentDisposition);
+    res.send(transcript.content);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.includes('missing') ? 404 : 409;
+    res.status(status).json({ error: message });
   }
 });
 
@@ -4661,6 +4846,50 @@ app.post('/api/live-sessions/resume', async (req, res) => {
       stack: err instanceof Error ? err.stack : undefined,
     });
     res.status(500).json({ error: String(err) });
+  }
+});
+
+app.post('/api/remote-runs', async (req, res) => {
+  try {
+    const body = req.body as {
+      conversationId?: string;
+      cwd?: string;
+      referencedProjectIds?: string[];
+      text?: string;
+      targetId?: string;
+    };
+    const profile = getCurrentProfile();
+    const conversationId = typeof body.conversationId === 'string' ? body.conversationId.trim() : '';
+    const referencedProjectIds = Array.isArray(body.referencedProjectIds)
+      ? body.referencedProjectIds.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      : [];
+    const sessionFile = conversationId ? resolveConversationSessionFile(conversationId) : undefined;
+    const cwd = conversationId
+      ? undefined
+      : resolveConversationCwd({
+          repoRoot: REPO_ROOT,
+          profile,
+          explicitCwd: body.cwd,
+          defaultCwd: getDefaultWebCwd(),
+          referencedProjectIds,
+        });
+
+    const result = await submitRemoteExecutionRun({
+      ...(conversationId ? { conversationId, sessionFile } : { cwd, referencedProjectIds }),
+      text: typeof body.text === 'string' ? body.text : '',
+      targetId: typeof body.targetId === 'string' ? body.targetId : '',
+      profile,
+      repoRoot: REPO_ROOT,
+    });
+
+    invalidateAppTopics('sessions', 'runs');
+    res.status(202).json({ accepted: true, ...result });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.includes('required') || message.includes('not found') || message.includes('Wait for the current local turn')
+      ? 400
+      : 500;
+    res.status(status).json({ error: message });
   }
 });
 
@@ -5446,6 +5675,40 @@ app.post('/api/conversations/:id/automation/gates/:gateId/reset', async (req, re
       stack: err instanceof Error ? err.stack : undefined,
     });
     res.status(500).json({ error: message });
+  }
+});
+
+app.get('/api/conversations/:id/execution', async (req, res) => {
+  try {
+    res.json(await readConversationExecutionState(req.params.id));
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.patch('/api/conversations/:id/execution', async (req, res) => {
+  try {
+    const targetId = req.body?.targetId === null
+      ? null
+      : typeof req.body?.targetId === 'string'
+        ? req.body.targetId.trim() || null
+        : null;
+
+    if (targetId && !getExecutionTarget({ targetId })) {
+      res.status(400).json({ error: `Execution target ${targetId} not found.` });
+      return;
+    }
+
+    setConversationExecutionTarget({
+      profile: getCurrentProfile(),
+      conversationId: req.params.id,
+      targetId,
+    });
+
+    res.json(await readConversationExecutionState(req.params.id));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(message.startsWith('Invalid') ? 400 : 500).json({ error: message });
   }
 });
 

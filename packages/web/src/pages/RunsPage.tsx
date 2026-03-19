@@ -5,6 +5,8 @@ import { useAppData, useSseConnection } from '../contexts';
 import {
   getRunCategory,
   getRunHeadline,
+  getRunImportState,
+  getRunLocation,
   getRunMoment,
   getRunPrimaryActionLabel,
   getRunPrimaryConnection,
@@ -71,6 +73,41 @@ const RUN_FILTERS: Array<{ value: RunFilterValue; label: string }> = [
   { value: 'other', label: 'Other' },
 ];
 
+type RunLocationFilterValue = 'all' | 'local' | 'remote';
+type RunImportFilterValue = 'all' | 'not_ready' | 'ready' | 'imported' | 'failed';
+
+const RUN_LOCATION_FILTERS: Array<{ value: RunLocationFilterValue; label: string }> = [
+  { value: 'all', label: 'All locations' },
+  { value: 'local', label: 'Local' },
+  { value: 'remote', label: 'Remote' },
+];
+
+const RUN_IMPORT_FILTERS: Array<{ value: RunImportFilterValue; label: string }> = [
+  { value: 'all', label: 'All imports' },
+  { value: 'not_ready', label: 'Not ready' },
+  { value: 'ready', label: 'Ready' },
+  { value: 'imported', label: 'Imported' },
+  { value: 'failed', label: 'Import failed' },
+];
+
+function runImportStatusMeta(run: DurableRunRecord): { text: string; cls: string } | null {
+  const state = getRunImportState(run);
+  if (!state) {
+    return null;
+  }
+
+  switch (state) {
+    case 'ready':
+      return { text: 'import ready', cls: 'text-warning' };
+    case 'imported':
+      return { text: 'imported', cls: 'text-success' };
+    case 'failed':
+      return { text: 'import failed', cls: 'text-danger' };
+    default:
+      return { text: 'not imported', cls: 'text-dim' };
+  }
+}
+
 function RunRow({
   run,
   isSelected,
@@ -86,6 +123,8 @@ function RunRow({
   const showRecovery = run.recoveryAction !== 'none';
   const primaryConnection = getRunPrimaryConnection(run, lookups);
   const primaryActionLabel = getRunPrimaryActionLabel(primaryConnection);
+  const importStatus = runImportStatusMeta(run);
+  const locationLabel = getRunLocation(run) === 'remote' ? 'remote' : 'local';
 
   return (
     <div className={cx('group', 'ui-list-row', isSelected ? 'ui-list-row-selected' : 'ui-list-row-hover')}>
@@ -105,6 +144,16 @@ function RunRow({
             <>
               <span className="opacity-40">·</span>
               <span>{formatRecoveryAction(run.recoveryAction)}</span>
+            </>
+          )}
+          <>
+            <span className="opacity-40">·</span>
+            <span>{locationLabel}</span>
+          </>
+          {importStatus && (
+            <>
+              <span className="opacity-40">·</span>
+              <span className={importStatus.cls}>{importStatus.text}</span>
             </>
           )}
           {run.problems.length > 0 && (
@@ -138,6 +187,8 @@ export function RunsPage() {
   const { status: sseStatus } = useSseConnection();
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [filter, setFilter] = useState<RunFilterValue>('all');
+  const [locationFilter, setLocationFilter] = useState<RunLocationFilterValue>('all');
+  const [importFilter, setImportFilter] = useState<RunImportFilterValue>('all');
 
   const lookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
 
@@ -189,19 +240,68 @@ export function RunsPage() {
     return RUN_FILTERS.filter((option) => option.value === 'all' || filterCounts[option.value] > 0);
   }, [filterCounts]);
 
+  const locationCounts = useMemo(() => {
+    return runRecords.reduce<Record<'local' | 'remote', number>>((counts, run) => {
+      counts[getRunLocation(run)] += 1;
+      return counts;
+    }, { local: 0, remote: 0 });
+  }, [runRecords]);
+
+  const importCounts = useMemo(() => {
+    return runRecords.reduce<Record<'not_ready' | 'ready' | 'imported' | 'failed', number>>((counts, run) => {
+      const importState = getRunImportState(run);
+      if (!importState) {
+        return counts;
+      }
+
+      counts[importState] += 1;
+      return counts;
+    }, { not_ready: 0, ready: 0, imported: 0, failed: 0 });
+  }, [runRecords]);
+
+  const locationOptions = useMemo(() => {
+    return RUN_LOCATION_FILTERS.filter((option) => option.value === 'all' || locationCounts[option.value] > 0);
+  }, [locationCounts]);
+
+  const importOptions = useMemo(() => {
+    return RUN_IMPORT_FILTERS.filter((option) => option.value === 'all' || importCounts[option.value] > 0);
+  }, [importCounts]);
+
   useEffect(() => {
     if (filter !== 'all' && !filterOptions.some((option) => option.value === filter)) {
       setFilter('all');
     }
   }, [filter, filterOptions]);
 
-  const filteredRuns = useMemo(() => {
-    if (filter === 'all') {
-      return runRecords;
+  useEffect(() => {
+    if (locationFilter !== 'all' && !locationOptions.some((option) => option.value === locationFilter)) {
+      setLocationFilter('all');
     }
+  }, [locationFilter, locationOptions]);
 
-    return runRecords.filter((run) => getRunCategory(run) === filter);
-  }, [filter, runRecords]);
+  useEffect(() => {
+    if (importFilter !== 'all' && !importOptions.some((option) => option.value === importFilter)) {
+      setImportFilter('all');
+    }
+  }, [importFilter, importOptions]);
+
+  const filteredRuns = useMemo(() => {
+    return runRecords.filter((run) => {
+      if (filter !== 'all' && getRunCategory(run) !== filter) {
+        return false;
+      }
+
+      if (locationFilter !== 'all' && getRunLocation(run) !== locationFilter) {
+        return false;
+      }
+
+      if (importFilter !== 'all' && getRunImportState(run) !== importFilter) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [filter, importFilter, locationFilter, runRecords]);
 
   const summary = useMemo(() => {
     const active = summarizeActiveRuns({ tasks, sessions, runs }).total;
@@ -223,7 +323,7 @@ export function RunsPage() {
                 {summary.active > 0 && <span className="ml-2 text-accent">· {summary.active} active</span>}
                 {summary.needsRecovery > 0 && <span className="ml-2 text-warning">· {summary.needsRecovery} recoverable</span>}
                 {summary.issues > 0 && <span className="ml-2 text-danger">· {summary.issues} with issues</span>}
-                {filter !== 'all' && <span className="ml-2 text-secondary">· {filteredRuns.length} shown</span>}
+                {(filter !== 'all' || locationFilter !== 'all' || importFilter !== 'all') && <span className="ml-2 text-secondary">· {filteredRuns.length} shown</span>}
               </>
             )
           )}
@@ -235,23 +335,61 @@ export function RunsPage() {
         {visibleError && <ErrorState message={`Failed to load runs: ${visibleError}`} />}
 
         {!isLoading && !visibleError && runRecords.length > 0 && (
-          <div className="mb-5 space-y-2">
-            <div className="ui-segmented-control" role="group" aria-label="Run filter">
-              {filterOptions.map((option) => {
-                const count = option.value === 'all' ? runRecords.length : filterCounts[option.value];
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => setFilter(option.value)}
-                    className={cx('ui-segmented-button', filter === option.value && 'ui-segmented-button-active')}
-                  >
-                    {option.label} <span className="tabular-nums text-dim/70">{count}</span>
-                  </button>
-                );
-              })}
+          <div className="mb-5 space-y-3">
+            <div className="space-y-2">
+              <div className="ui-segmented-control" role="group" aria-label="Run category filter">
+                {filterOptions.map((option) => {
+                  const count = option.value === 'all' ? runRecords.length : filterCounts[option.value];
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setFilter(option.value)}
+                      className={cx('ui-segmented-button', filter === option.value && 'ui-segmented-button-active')}
+                    >
+                      {option.label} <span className="tabular-nums text-dim/70">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {locationCounts.remote > 0 && (
+                <div className="ui-segmented-control" role="group" aria-label="Run location filter">
+                  {locationOptions.map((option) => {
+                    const count = option.value === 'all' ? runRecords.length : locationCounts[option.value];
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setLocationFilter(option.value)}
+                        className={cx('ui-segmented-button', locationFilter === option.value && 'ui-segmented-button-active')}
+                      >
+                        {option.label} <span className="tabular-nums text-dim/70">{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {locationCounts.remote > 0 && (
+                <div className="ui-segmented-control" role="group" aria-label="Run import filter">
+                  {importOptions.map((option) => {
+                    const count = option.value === 'all'
+                      ? runRecords.filter((run) => getRunLocation(run) === 'remote').length
+                      : importCounts[option.value];
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setImportFilter(option.value)}
+                        className={cx('ui-segmented-button', importFilter === option.value && 'ui-segmented-button-active')}
+                      >
+                        {option.label} <span className="tabular-nums text-dim/70">{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-            <p className="ui-card-meta">Select a run to inspect it in the right panel.</p>
+            <p className="ui-card-meta">Select a run to inspect it in the right panel. Remote work stays in the same list and uses location/import facets instead of a separate category.</p>
           </div>
         )}
 
@@ -270,7 +408,7 @@ export function RunsPage() {
           <EmptyState
             title="No runs match this filter."
             body="Try another run type or switch back to all."
-            action={<ToolbarButton onClick={() => setFilter('all')}>Show all</ToolbarButton>}
+            action={<ToolbarButton onClick={() => { setFilter('all'); setLocationFilter('all'); setImportFilter('all'); }}>Show all</ToolbarButton>}
           />
         )}
 
