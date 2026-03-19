@@ -68,8 +68,7 @@ describe('ToolsPage', () => {
             },
           ],
           dependentCliTools: [],
-          mcpCli: {
-            binary: { available: false, command: 'mcp-cli' },
+          mcp: {
             configPath: '',
             configExists: false,
             searchedPaths: [],

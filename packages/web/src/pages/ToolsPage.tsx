@@ -7,7 +7,7 @@ import type {
   AgentToolInfo,
   CliBinaryState,
   DependentCliToolState,
-  McpCliServerConfig,
+  McpServerConfig,
   PackageSourceTargetState,
   ProfilePackageSourceTargetState,
 } from '../types';
@@ -80,7 +80,7 @@ function summarizeCliBinary(binary: CliBinaryState): string {
     : `Unavailable${binary.error ? ` · ${binary.error}` : ''}`;
 }
 
-function commandLineForServer(server: McpCliServerConfig): string {
+function commandLineForServer(server: McpServerConfig): string {
   return [server.command, ...server.args].filter(Boolean).join(' ');
 }
 
@@ -170,7 +170,7 @@ function McpServerRow({
   locationSearch,
   currentSelection,
 }: {
-  server: McpCliServerConfig;
+  server: McpServerConfig;
   locationSearch: string;
   currentSelection: ToolsRailSelection | null;
 }) {
@@ -225,18 +225,13 @@ export function ToolsPage() {
     ? `${toolsState.tools.length} tools · ${toolsState.activeTools.length} active by default · profile ${toolsState.profile}`
     : 'Inspect available tools, schemas, and CLI integrations.';
   const dependentCliTools = toolsState?.dependentCliTools ?? [];
-  const mcpCli = toolsState?.mcpCli ?? {
-    binary: {
-      available: false,
-      command: 'mcp-cli',
-      error: toolsState ? 'MCP inspection metadata unavailable. Restart the web server to load the latest API shape.' : undefined,
-    },
+  const mcp = toolsState?.mcp ?? {
     configPath: '',
     configExists: false,
     searchedPaths: [] as string[],
-    servers: [] as McpCliServerConfig[],
+    servers: [] as McpServerConfig[],
   };
-  const hasMcpCliMetadata = Boolean(toolsState?.mcpCli);
+  const hasMcpMetadata = Boolean(toolsState?.mcp);
   const packageInstall = toolsState?.packageInstall ?? {
     currentProfile: '',
     profileTargets: [] as ProfilePackageSourceTargetState[],
@@ -760,36 +755,30 @@ export function ToolsPage() {
                 )}
 
                 <div className="space-y-1 border-t border-border-subtle pt-6">
-                  <h2 className="text-[15px] font-medium text-primary">mcp-cli</h2>
+                  <h2 className="text-[15px] font-medium text-primary">MCP</h2>
                   <p className="ui-card-meta max-w-2xl">
-                    Browse configured MCP servers from your local mcp-cli config. This is an inspection surface only — the agent can use these via the bash tool by running mcp-cli directly. Inspecting a server or tool may trigger OAuth in the browser on first use.
+                    Browse configured MCP servers from your local MCP config. This inspection surface now uses pa’s native MCP client instead of shelling out to mcp-cli. Inspecting a server or tool may still trigger OAuth in the browser on first use.
                   </p>
                 </div>
 
                 <div className="space-y-1">
-                  <p className="ui-card-meta">{summarizeCliBinary(mcpCli.binary)}</p>
-                  {mcpCli.binary.path && (
-                    <p className="break-all font-mono text-[12px] leading-relaxed text-primary">{mcpCli.binary.path}</p>
+                  {mcp.configPath && (
+                    <p className="break-all font-mono text-[12px] leading-relaxed text-primary">{mcp.configPath}</p>
                   )}
-                  {mcpCli.configPath && (
-                    <p className="break-all font-mono text-[12px] leading-relaxed text-primary">{mcpCli.configPath}</p>
-                  )}
-                  {!mcpCli.configExists && mcpCli.searchedPaths.length > 1 && (
-                    <p className="ui-card-meta">Searched: {mcpCli.searchedPaths.join(' · ')}</p>
+                  {!mcp.configExists && mcp.searchedPaths.length > 1 && (
+                    <p className="ui-card-meta">Searched: {mcp.searchedPaths.join(' · ')}</p>
                   )}
                 </div>
 
-                {!hasMcpCliMetadata ? (
+                {!hasMcpMetadata ? (
                   <p className="text-[12px] text-danger">Restart the web server to load MCP inspection metadata.</p>
-                ) : !mcpCli.binary.available ? (
-                  <p className="text-[12px] text-danger">mcp-cli is not available in this environment.</p>
-                ) : !mcpCli.configExists ? (
+                ) : !mcp.configExists ? (
                   <p className="ui-card-meta">No mcp_servers.json found for this workspace.</p>
-                ) : mcpCli.servers.length === 0 ? (
+                ) : mcp.servers.length === 0 ? (
                   <p className="ui-card-meta">No MCP servers are configured in the current mcp_servers.json.</p>
                 ) : (
                   <div className="space-y-px">
-                    {mcpCli.servers.map((server) => (
+                    {mcp.servers.map((server) => (
                       <McpServerRow
                         key={server.name}
                         server={server}

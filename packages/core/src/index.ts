@@ -56,8 +56,8 @@ export * from './projects.js';
 // CLI binary inspection exports
 export * from './cli-binary.js';
 
-// MCP CLI integration exports
-export * from './mcp-cli.js';
+// Native MCP integration exports
+export * from './mcp.js';
 
 // Memory package path + migration exports
 export * from './memory-docs.js';

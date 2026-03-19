@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
+import { SessionManager } from '@mariozechner/pi-coding-agent';
 import { listSessions, readSessionBlock, readSessionBlocks, readSessionImageAsset, readSessionSearchText, readSessionTree, renameStoredSession } from './sessions.js';
 import { invalidateAppTopics, startAppEventMonitor, subscribeAppEvents, type AppEventTopic } from './appEvents.js';
 import { resolveConversationCwd, resolveRequestedCwd } from './conversationCwd.js';
@@ -93,18 +94,18 @@ import {
   type DistilledConversationMemoryDraft,
 } from './conversationMemoryCuration.js';
 import {
-  createSession,
+  createSession as createLocalSession,
   createSessionFromExisting,
-  resumeSession,
+  resumeSession as resumeLocalSession,
   ensureSessionFileExists,
-  getLiveSessions,
+  getLiveSessions as getLocalLiveSessions,
   getSessionStats,
   getSessionContextUsage,
   getAvailableModels,
   inspectAvailableTools,
-  isLive,
-  subscribe,
-  promptSession,
+  isLive as isLocalLive,
+  subscribe as subscribeLocal,
+  promptSession as promptLocalSession,
   restoreQueuedMessage,
   queuePromptContext,
   kickConversationAutomation,
@@ -113,12 +114,26 @@ import {
   reloadAllLiveSessionAuth,
   exportSessionHtml,
   renameSession,
-  abortSession,
+  abortSession as abortLocalSession,
   destroySession,
   branchSession,
   forkSession,
   registry as liveRegistry,
 } from './liveSessions.js';
+import {
+  abortRemoteLiveSession,
+  clearRemoteConversationBindingForConversation,
+  createLocalMirrorSession,
+  createRemoteLiveSession,
+  getRemoteLiveSessionMeta,
+  isRemoteLiveSession,
+  listRemoteLiveSessions,
+  promptRemoteLiveSession,
+  readRemoteConversationBindingForConversation,
+  resumeRemoteLiveSession,
+  stopRemoteLiveSession,
+  subscribeRemoteLiveSession,
+} from './remoteLiveSessions.js';
 import { recoverDurableLiveConversations } from './conversationRecovery.js';
 import {
   loadConversationAutomationState,
@@ -143,6 +158,7 @@ import {
   buildRemoteExecutionTranscriptResponse,
   importRemoteExecutionRun,
   readRemoteExecutionRunConversationId,
+  resolveRemoteExecutionCwd,
   submitRemoteExecutionRun,
 } from './remoteExecution.js';
 import {
@@ -171,10 +187,9 @@ import {
   listConversationProjectLinks,
   listConversationArtifacts,
   listConversationAttachments,
-  cleanMcpCliStderr,
   inspectCliBinary,
-  inspectMcpCliServer,
-  inspectMcpCliTool,
+  inspectMcpServer,
+  inspectMcpTool,
   listProfileActivityEntries,
   listProjectIds,
   createProjectActivityEntry,
@@ -188,7 +203,7 @@ import {
   getPiAgentStateDir,
   migrateLegacyProfileMemoryDirs,
   readConversationAttachmentDownload,
-  readMcpCliConfig,
+  readMcpConfig,
   removeConversationProjectLink,
   resolveConversationAttachmentPromptFiles,
   resolveProjectPaths,
@@ -283,6 +298,35 @@ const DEFERRED_RESUME_POLL_MS = 3_000;
 const DEFERRED_RESUME_RETRY_DELAY_MS = 30_000;
 const CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE = 'conversation-memory-distill';
 const CONVERSATION_MEMORY_DISTILL_ACTIVE_STATUSES = new Set(['queued', 'running', 'recovering', 'waiting']);
+
+function isLiveSession(sessionId: string): boolean {
+  return isLocalLive(sessionId) || isRemoteLiveSession(sessionId);
+}
+
+function listAllLiveSessions() {
+  const local = getLocalLiveSessions();
+  const localIds = new Set(local.map((session) => session.id));
+  const remote = listRemoteLiveSessions().filter((session) => !localIds.has(session.id));
+  return [...local, ...remote];
+}
+
+function subscribeLiveSession(
+  sessionId: string,
+  listener: (event: unknown) => void,
+  options?: { tailBlocks?: number },
+): (() => void) | null {
+  return subscribeLocal(sessionId, listener, options)
+    ?? subscribeRemoteLiveSession(sessionId, listener, options);
+}
+
+async function abortLiveSession(sessionId: string): Promise<void> {
+  if (isRemoteLiveSession(sessionId)) {
+    await abortRemoteLiveSession(sessionId);
+    return;
+  }
+
+  await abortLocalSession(sessionId);
+}
 
 function resolveDaemonRoot(): string {
   return resolveDaemonPaths(loadDaemonConfig().ipc.socketPath).root;
@@ -1075,7 +1119,7 @@ function listConversationSessionsSnapshot() {
   const profile = getCurrentProfile();
   const deferredResumesBySessionFile = listDeferredResumeSummariesBySessionFile();
   const jsonl = decorateSessionsWithAttention(profile, listSessions(), deferredResumesBySessionFile);
-  const live = getLiveSessions();
+  const live = listAllLiveSessions();
   const liveById = new Map(live.map((entry) => [entry.id, entry]));
   const jsonlIds = new Set(jsonl.map((session) => session.id));
   const syntheticLive = live
@@ -1720,7 +1764,7 @@ async function flushLiveDeferredResumes(): Promise<void> {
     // Server-side deferred resume delivery only injects prompts into conversations that are
     // already live. The web client may auto-resume an open saved conversation first, then
     // call back into this same flush path to deliver the due prompts.
-    const liveSessions = getLiveSessions().filter((session) => session.sessionFile);
+    const liveSessions = listAllLiveSessions().filter((session) => session.sessionFile);
     if (liveSessions.length === 0) {
       return;
     }
@@ -1776,7 +1820,7 @@ async function flushLiveDeferredResumes(): Promise<void> {
             });
           }
 
-          await promptSession(
+          await promptLocalSession(
             session.id,
             readyEntry.prompt,
             liveEntry.session.isStreaming ? 'followUp' : undefined,
@@ -1863,10 +1907,10 @@ function startDeferredResumeLoop(): void {
 
 function startConversationRecovery(): void {
   void recoverDurableLiveConversations({
-    isLive,
-    resumeSession,
+    isLive: isLocalLive,
+    resumeSession: resumeLocalSession,
     queuePromptContext,
-    promptSession,
+    promptSession: promptLocalSession,
     loaderOptions: {
       ...buildLiveSessionResourceOptions(),
       extensionFactories: buildLiveSessionExtensionFactories(),
@@ -2524,7 +2568,7 @@ app.post('/api/activity/:id/start', async (req, res) => {
       defaultCwd: getDefaultWebCwd(),
       referencedProjectIds: relatedProjectIds,
     });
-    const result = await createSession(cwd, {
+    const result = await createLocalSession(cwd, {
       ...buildLiveSessionResourceOptions(),
       extensionFactories: buildLiveSessionExtensionFactories(),
     });
@@ -3189,8 +3233,7 @@ app.get('/api/tools', async (req, res) => {
       agentDir,
       extensionFactories: buildLiveSessionExtensionFactories(),
     }));
-    const mcpCliBinary = inspectCliBinary({ command: 'mcp-cli', cwd: REPO_ROOT });
-    const mcpCliConfig = readMcpCliConfig({ cwd: REPO_ROOT });
+    const mcpConfig = readMcpConfig({ cwd: REPO_ROOT });
     const onePasswordCommand = process.env.PERSONAL_AGENT_OP_BIN?.trim() || 'op';
     const dependentCliTools = [
       {
@@ -3207,12 +3250,19 @@ app.get('/api/tools', async (req, res) => {
       profile,
       ...details,
       dependentCliTools,
-      mcpCli: {
-        binary: mcpCliBinary,
-        configPath: mcpCliConfig.path,
-        configExists: mcpCliConfig.exists,
-        searchedPaths: mcpCliConfig.searchedPaths,
-        servers: mcpCliConfig.servers,
+      mcp: {
+        configPath: mcpConfig.path,
+        configExists: mcpConfig.exists,
+        searchedPaths: mcpConfig.searchedPaths,
+        servers: mcpConfig.servers.map((server) => ({
+          name: server.name,
+          transport: server.transport,
+          command: server.command,
+          args: [...server.args],
+          cwd: server.cwd,
+          url: server.url,
+          raw: {},
+        })),
       },
       packageInstall: buildPackageInstallState(),
     });
@@ -3272,7 +3322,7 @@ app.post('/api/tools/packages/install', (req, res) => {
   }
 });
 
-app.get('/api/tools/mcp/servers/:server', (_req, res) => {
+app.get('/api/tools/mcp/servers/:server', async (_req, res) => {
   try {
     const server = _req.params.server;
     if (!server) {
@@ -3280,17 +3330,17 @@ app.get('/api/tools/mcp/servers/:server', (_req, res) => {
       return;
     }
 
-    const config = readMcpCliConfig({ cwd: REPO_ROOT });
-    const result = inspectMcpCliServer(server, {
+    const config = readMcpConfig({ cwd: REPO_ROOT });
+    const result = await inspectMcpServer(server, {
       cwd: REPO_ROOT,
       configPath: config.path,
     });
 
-    if (result.exitCode !== 0) {
+    if (result.exitCode !== 0 || !result.data) {
       res.status(500).json({
-        error: result.error ?? (cleanMcpCliStderr(result.stderr) || result.stdout || `mcp-cli exited with code ${result.exitCode}`),
+        error: (result.error ?? result.stderr) || `Failed to inspect MCP server ${server}`,
         stdout: result.stdout,
-        stderr: cleanMcpCliStderr(result.stderr),
+        stderr: result.stderr,
         exitCode: result.exitCode,
       });
       return;
@@ -3299,9 +3349,9 @@ app.get('/api/tools/mcp/servers/:server', (_req, res) => {
     res.json({
       server,
       stdout: result.stdout,
-      stderr: cleanMcpCliStderr(result.stderr),
+      stderr: result.stderr,
       exitCode: result.exitCode,
-      ...result.info,
+      ...result.data,
     });
   } catch (err) {
     logError('request handler error', {
@@ -3312,7 +3362,7 @@ app.get('/api/tools/mcp/servers/:server', (_req, res) => {
   }
 });
 
-app.get('/api/tools/mcp/servers/:server/tools/:tool', (_req, res) => {
+app.get('/api/tools/mcp/servers/:server/tools/:tool', async (_req, res) => {
   try {
     const { server, tool } = _req.params;
     if (!server || !tool) {
@@ -3320,17 +3370,17 @@ app.get('/api/tools/mcp/servers/:server/tools/:tool', (_req, res) => {
       return;
     }
 
-    const config = readMcpCliConfig({ cwd: REPO_ROOT });
-    const result = inspectMcpCliTool(server, tool, {
+    const config = readMcpConfig({ cwd: REPO_ROOT });
+    const result = await inspectMcpTool(server, tool, {
       cwd: REPO_ROOT,
       configPath: config.path,
     });
 
-    if (result.exitCode !== 0) {
+    if (result.exitCode !== 0 || !result.data) {
       res.status(500).json({
-        error: result.error ?? (cleanMcpCliStderr(result.stderr) || result.stdout || `mcp-cli exited with code ${result.exitCode}`),
+        error: (result.error ?? result.stderr) || `Failed to inspect MCP tool ${server}/${tool}`,
         stdout: result.stdout,
-        stderr: cleanMcpCliStderr(result.stderr),
+        stderr: result.stderr,
         exitCode: result.exitCode,
       });
       return;
@@ -3340,9 +3390,9 @@ app.get('/api/tools/mcp/servers/:server/tools/:tool', (_req, res) => {
       server,
       tool,
       stdout: result.stdout,
-      stderr: cleanMcpCliStderr(result.stderr),
+      stderr: result.stderr,
       exitCode: result.exitCode,
-      ...result.info,
+      ...result.data,
     });
   } catch (err) {
     logError('request handler error', {
@@ -4586,7 +4636,7 @@ app.post('/api/memories/:memoryId/start', async (req, res) => {
       return;
     }
 
-    const result = await createSession(nextCwd, {
+    const result = await createLocalSession(nextCwd, {
       ...buildLiveSessionResourceOptions(),
       extensionFactories: buildLiveSessionExtensionFactories(),
     });
@@ -4641,13 +4691,13 @@ app.post('/api/memories/:memoryId/start', async (req, res) => {
 
 /** List all in-process live sessions */
 app.get('/api/live-sessions', (_req, res) => {
-  res.json(getLiveSessions());
+  res.json(listAllLiveSessions());
 });
 
 /** Create a new live session */
 app.post('/api/live-sessions', async (req, res) => {
   try {
-    const body = req.body as { cwd?: string; referencedProjectIds?: string[]; text?: string };
+    const body = req.body as { cwd?: string; referencedProjectIds?: string[]; text?: string; targetId?: string | null };
     const profile = getCurrentProfile();
     const inferredReferencedProjectIds = body.text
       ? resolvePromptReferences({
@@ -4669,7 +4719,44 @@ app.post('/api/live-sessions', async (req, res) => {
       defaultCwd: getDefaultWebCwd(),
       referencedProjectIds,
     });
-    const result = await createSession(cwd, {
+    const targetId = typeof body.targetId === 'string' ? body.targetId.trim() || null : null;
+
+    if (targetId) {
+      const target = getExecutionTarget({ targetId });
+      if (!target) {
+        res.status(400).json({ error: `Execution target ${targetId} not found.` });
+        return;
+      }
+
+      const remoteCwd = resolveRemoteExecutionCwd(target, cwd);
+      const result = await createLocalMirrorSession({ remoteCwd });
+      setConversationExecutionTarget({
+        profile,
+        conversationId: result.id,
+        targetId,
+      });
+      await createRemoteLiveSession({
+        profile,
+        targetId,
+        remoteCwd,
+        localSessionFile: result.sessionFile,
+        conversationId: result.id,
+      });
+
+      if (referencedProjectIds.length > 0) {
+        setConversationProjectLinks({
+          profile,
+          conversationId: result.id,
+          relatedProjectIds: referencedProjectIds,
+        });
+        invalidateAppTopics('projects', 'sessions');
+      }
+
+      res.json(result);
+      return;
+    }
+
+    const result = await createLocalSession(cwd, {
       ...buildLiveSessionResourceOptions(),
       extensionFactories: buildLiveSessionExtensionFactories(),
     });
@@ -4696,7 +4783,25 @@ app.post('/api/live-sessions/resume', async (req, res) => {
   try {
     const { sessionFile } = req.body as { sessionFile: string };
     if (!sessionFile) { res.status(400).json({ error: 'sessionFile required' }); return; }
-    const result = await resumeSession(sessionFile, {
+
+    const conversationId = SessionManager.open(sessionFile).getSessionId();
+    const targetBinding = getConversationExecutionTarget({
+      profile: getCurrentProfile(),
+      conversationId,
+    });
+
+    if (targetBinding) {
+      const result = await resumeRemoteLiveSession({
+        profile: getCurrentProfile(),
+        conversationId,
+        localSessionFile: sessionFile,
+        targetId: targetBinding.targetId,
+      });
+      res.json(result);
+      return;
+    }
+
+    const result = await resumeLocalSession(sessionFile, {
       ...buildLiveSessionResourceOptions(),
       extensionFactories: buildLiveSessionExtensionFactories(),
     });
@@ -4765,7 +4870,7 @@ app.post('/api/conversations/:id/recover', async (req, res) => {
 
     const resumeFallbackPrompt = readWebUiConfig().resumeFallbackPrompt;
 
-    if (isLive(conversationId)) {
+    if (isLocalLive(conversationId)) {
       const liveEntry = liveRegistry.get(conversationId);
       if (liveEntry?.session.sessionFile) {
         await syncWebLiveConversationRun({
@@ -4783,7 +4888,7 @@ app.post('/api/conversations/:id/recover', async (req, res) => {
         });
       }
 
-      promptSession(conversationId, resumeFallbackPrompt).catch(async (error) => {
+      promptLocalSession(conversationId, resumeFallbackPrompt).catch(async (error) => {
         if (liveEntry?.session.sessionFile) {
           await syncWebLiveConversationRun({
             conversationId,
@@ -4839,7 +4944,7 @@ app.post('/api/conversations/:id/recover', async (req, res) => {
     const manifestCwd = typeof manifestSpec?.cwd === 'string' && manifestSpec.cwd.trim().length > 0
       ? manifestSpec.cwd.trim()
       : undefined;
-    const resumed = await resumeSession(sessionFile, {
+    const resumed = await resumeLocalSession(sessionFile, {
       ...buildLiveSessionResourceOptions(),
       extensionFactories: buildLiveSessionExtensionFactories(),
     });
@@ -4880,7 +4985,7 @@ app.post('/api/conversations/:id/recover', async (req, res) => {
       await queuePromptContext(resumed.id, message.customType, message.content);
     }
 
-    promptSession(
+    promptLocalSession(
       resumed.id,
       recoveryOperation.text,
       recoveryOperation.behavior,
@@ -4921,17 +5026,16 @@ app.post('/api/conversations/:id/recover', async (req, res) => {
 
 /** Check if a session is live */
 app.get('/api/live-sessions/:id', (req, res) => {
-  const live = isLive(req.params.id);
+  const live = isLiveSession(req.params.id);
   if (!live) { res.status(404).json({ live: false }); return; }
-  const all = getLiveSessions();
-  const entry = all.find(s => s.id === req.params.id);
+  const entry = listAllLiveSessions().find((session) => session.id === req.params.id);
   res.json({ live: true, ...entry });
 });
 
 /** SSE stream for a live session */
 app.get('/api/live-sessions/:id/events', (req, res) => {
   const { id } = req.params;
-  if (!isLive(id)) { res.status(404).json({ error: 'Not a live session' }); return; }
+  if (!isLiveSession(id)) { res.status(404).json({ error: 'Not a live session' }); return; }
 
   const rawTailBlocks = Array.isArray(req.query.tailBlocks) ? req.query.tailBlocks[0] : req.query.tailBlocks;
   const parsedTailBlocks = typeof rawTailBlocks === 'string'
@@ -4952,7 +5056,7 @@ app.get('/api/live-sessions/:id/events', (req, res) => {
   // Send a heartbeat comment every 15s so the connection stays alive
   const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), 15_000);
 
-  const unsubscribe = subscribe(id, (event) => {
+  const unsubscribe = subscribeLiveSession(id, (event) => {
     res.write(`data: ${JSON.stringify(event)}\n\n`);
   }, tailBlocks ? { tailBlocks } : undefined);
 
@@ -5182,12 +5286,14 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
       referencedProfiles.length > 0 ? buildReferencedProfilesContext(referencedProfiles, REPO_ROOT) : '',
     ].filter(Boolean);
 
-    if (queuedContextBlocks.length > 0) {
-      await queuePromptContext(id, 'referenced_context', queuedContextBlocks.join('\n\n'));
+    const hiddenContext = queuedContextBlocks.join('\n\n');
+    const isRemoteLive = isRemoteLiveSession(id);
+    if (!isRemoteLive && queuedContextBlocks.length > 0) {
+      await queuePromptContext(id, 'referenced_context', hiddenContext);
     }
 
     const liveEntry = liveRegistry.get(id);
-    if (liveEntry?.session.sessionFile) {
+    if (!isRemoteLive && liveEntry?.session.sessionFile) {
       await syncWebLiveConversationRun({
         conversationId: id,
         sessionFile: liveEntry.session.sessionFile,
@@ -5213,7 +5319,7 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
             ? {
                 contextMessages: [{
                   customType: 'referenced_context',
-                  content: queuedContextBlocks.join('\n\n'),
+                  content: hiddenContext,
                 }],
               }
             : {}),
@@ -5222,14 +5328,30 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
       });
     }
 
+    if (isRemoteLive && referencedAttachments.length > 0) {
+      res.status(400).json({ error: 'Remote conversations do not support local attachment references yet.' });
+      return;
+    }
+
     // Don't await — streaming response goes over SSE
-    promptSession(id, text, behavior, images?.map((image) => ({
+    const promptImages = images?.map((image) => ({
       type: 'image' as const,
       data: image.data,
       mimeType: image.mimeType,
       ...(image.name ? { name: image.name } : {}),
-    }))).catch(async (err) => {
-      if (liveEntry?.session.sessionFile) {
+    }));
+    const promptPromise = isRemoteLive
+      ? promptRemoteLiveSession({
+          conversationId: id,
+          text,
+          behavior,
+          images: promptImages,
+          ...(hiddenContext ? { hiddenContext } : {}),
+        })
+      : promptLocalSession(id, text, behavior, promptImages);
+
+    promptPromise.catch(async (err) => {
+      if (!isRemoteLive && liveEntry?.session.sessionFile) {
         await syncWebLiveConversationRun({
           conversationId: id,
           sessionFile: liveEntry.session.sessionFile,
@@ -5357,7 +5479,7 @@ app.patch('/api/live-sessions/:id/name', async (req, res) => {
 /** Abort a running agent */
 app.post('/api/live-sessions/:id/abort', async (req, res) => {
   try {
-    await abortSession(req.params.id);
+    await abortLiveSession(req.params.id);
     res.json({ ok: true });
   } catch (err) {
     logError('request handler error', {
@@ -5372,35 +5494,36 @@ app.post('/api/live-sessions/:id/abort', async (req, res) => {
 app.get('/api/live-sessions/:id/context', (req, res) => {
   const { id } = req.params;
 
-  // cwd: live registry first, then JSONL meta, then session list
+  // cwd: local live registry first, then remote live registry, then JSONL meta, then session list
   const liveEntry = liveRegistry.get(id);
+  const remoteLive = getRemoteLiveSessionMeta(id);
   const detail = readSessionBlocks(id);
   const allSessions = listSessions();
-  const sessionMeta = allSessions.find(s => s.id === id);
-  const cwd = liveEntry?.cwd ?? detail?.meta.cwd ?? sessionMeta?.cwd;
+  const sessionMeta = allSessions.find((session) => session.id === id);
+  const cwd = liveEntry?.cwd ?? remoteLive?.cwd ?? detail?.meta.cwd ?? sessionMeta?.cwd;
   if (!cwd) { res.status(404).json({ error: 'Session not found' }); return; }
 
-  const gitSummary = readGitStatusSummary(cwd);
+  const gitSummary = remoteLive ? null : readGitStatusSummary(cwd);
 
-  // User messages: prefer live in-memory messages (most up-to-date), fall back to JSONL
+  // User messages: prefer local live in-memory messages (most up-to-date), otherwise use persisted transcript.
   let userMessages: { id: string; ts: string; text: string; imageCount: number }[] = [];
   if (liveEntry) {
     userMessages = liveEntry.session.agent.state.messages
-      .filter(m => m.role === 'user')
+      .filter((message) => message.role === 'user')
       .slice(-5)
-      .map((m, i) => {
-        const { text, imageCount } = summarizeUserMessageContent(m.content);
-        return { id: String(i), ts: new Date().toISOString(), text: text.slice(0, 300), imageCount };
+      .map((message, index) => {
+        const { text, imageCount } = summarizeUserMessageContent(message.content);
+        return { id: String(index), ts: new Date().toISOString(), text: text.slice(0, 300), imageCount };
       });
   } else {
     userMessages = (detail?.blocks ?? [])
-      .filter((b) => b.type === 'user')
+      .filter((block) => block.type === 'user')
       .slice(-5)
-      .map((b) => ({
-        id: b.id,
-        ts: b.ts,
-        text: 'text' in b ? b.text : '',
-        imageCount: 'images' in b && Array.isArray(b.images) ? b.images.length : 0,
+      .map((block) => ({
+        id: block.id,
+        ts: block.ts,
+        text: 'text' in block ? block.text : '',
+        imageCount: 'images' in block && Array.isArray(block.images) ? block.images.length : 0,
       }));
   }
 
@@ -5549,11 +5672,32 @@ app.patch('/api/conversations/:id/execution', async (req, res) => {
       return;
     }
 
+    const profile = getCurrentProfile();
+    const previous = getConversationExecutionTarget({
+      profile,
+      conversationId: req.params.id,
+    });
+
+    if (previous?.targetId && previous.targetId !== targetId) {
+      await stopRemoteLiveSession(req.params.id).catch(() => undefined);
+      clearRemoteConversationBindingForConversation({
+        profile,
+        conversationId: req.params.id,
+      });
+    }
+
     setConversationExecutionTarget({
-      profile: getCurrentProfile(),
+      profile,
       conversationId: req.params.id,
       targetId,
     });
+
+    if (targetId === null) {
+      clearRemoteConversationBindingForConversation({
+        profile,
+        conversationId: req.params.id,
+      });
+    }
 
     res.json(await readConversationExecutionState(req.params.id));
   } catch (err) {
@@ -5572,7 +5716,7 @@ app.patch('/api/conversations/:id/title', (req, res) => {
     }
 
     const conversationId = req.params.id;
-    if (isLive(conversationId)) {
+    if (isLocalLive(conversationId)) {
       renameSession(conversationId, nextName);
       res.json({ ok: true, title: nextName });
       return;
@@ -5600,6 +5744,15 @@ app.post('/api/conversations/:id/cwd', async (req, res) => {
   try {
     const { cwd: requestedCwd } = req.body as { cwd?: string };
     const conversationId = req.params.id;
+    const remoteBinding = readRemoteConversationBindingForConversation({
+      profile: getCurrentProfile(),
+      conversationId,
+    });
+    if (remoteBinding) {
+      res.status(409).json({ error: 'Changing the working directory for remote conversations is not supported yet.' });
+      return;
+    }
+
     const liveEntry = liveRegistry.get(conversationId);
     const sessionDetail = readSessionBlocks(conversationId);
     const currentCwd = liveEntry?.cwd ?? sessionDetail?.meta.cwd;
@@ -6214,13 +6367,24 @@ app.get('/api/live-sessions/:id/stats', (req, res) => {
 });
 
 app.get('/api/live-sessions/:id/context-usage', (req, res) => {
+  if (isRemoteLiveSession(req.params.id)) {
+    res.json({ tokens: null, modelId: undefined, contextWindow: undefined });
+    return;
+  }
+
   const usage = getSessionContextUsage(req.params.id);
   if (!usage) { res.status(404).json({ error: 'Not found' }); return; }
   res.json(usage);
 });
 
 /** Destroy / close a live session */
-app.delete('/api/live-sessions/:id', (req, res) => {
+app.delete('/api/live-sessions/:id', async (req, res) => {
+  if (isRemoteLiveSession(req.params.id)) {
+    await stopRemoteLiveSession(req.params.id);
+    res.json({ ok: true });
+    return;
+  }
+
   destroySession(req.params.id);
   res.json({ ok: true });
 });

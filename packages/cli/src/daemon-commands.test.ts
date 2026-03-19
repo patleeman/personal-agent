@@ -18,7 +18,7 @@ const { gatewayMocks, daemonMocks } = vi.hoisted(() => ({
       installed: false,
       running: false,
     })),
-    restartManagedDaemonServiceIfInstalled: vi.fn(() => undefined),
+    restartManagedDaemonServiceIfInstalled: vi.fn((): any => undefined),
   },
   daemonMocks: {
     startDaemonDetached: vi.fn(async () => undefined),
