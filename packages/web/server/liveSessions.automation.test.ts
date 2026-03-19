@@ -154,7 +154,7 @@ describe('conversation automation live-session integration', () => {
 
     await kickConversationAutomation('conv-124', 'turn_end');
 
-    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('Carry out this plan step:'));
+    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('Carry out this checklist item:'));
     expect(prompt).toHaveBeenCalledWith(expect.stringContaining('Review the last failing test run and explain the smallest safe fix.'));
     expect(prompt).toHaveBeenCalledWith(expect.stringContaining('todo_list tool'));
     const updated = getConversationAutomationState({

@@ -11,6 +11,8 @@ import {
   replaceConversationAutomationItems,
   resetConversationAutomationFromItem,
   resolveConversationAutomationPath,
+  resumeConversationAutomationAfterUserMessage,
+  setConversationAutomationWaitingForUser,
   updateConversationAutomationItemStatus,
   templateTodoItemFromRuntimeItem,
   writeSavedConversationAutomationPreferences,
@@ -63,7 +65,7 @@ describe('conversationAutomation state', () => {
     expect(loaded.inheritedPresetIds).toEqual(['preset-checkpoint']);
     expect(loaded.presetLibrary.presets).toEqual(presetLibrary.presets);
     expect(loaded.document).toEqual({
-      version: 3,
+      version: 4,
       conversationId: 'conv-123',
       updatedAt: loaded.document.updatedAt,
       enabled: true,
@@ -530,13 +532,53 @@ describe('conversationAutomation state', () => {
       status: 'pending',
       text: 'Open the failing test output, identify the root cause, and summarize the fix plan.',
     });
-    expect(buildConversationAutomationItemPrompt(item)).toContain('Carry out this plan step:');
+    expect(buildConversationAutomationItemPrompt(item)).toContain('Carry out this checklist item:');
     expect(buildConversationAutomationItemPrompt(item)).toContain('todo_list tool');
     expect(templateTodoItemFromRuntimeItem(item)).toEqual({
       id: 'item-instruction',
       kind: 'instruction',
       label: 'Open the failing test output, identify the root cause, and summarize…',
       text: 'Open the failing test output, identify the root cause, and summarize the fix plan.',
+    });
+  });
+
+  it('pauses checklist automation explicitly for user input and resumes on the next user message', () => {
+    const waiting = setConversationAutomationWaitingForUser({
+      version: 4,
+      conversationId: 'conv-123',
+      updatedAt: '2026-03-18T12:00:05.000Z',
+      enabled: true,
+      activeItemId: 'item-1',
+      items: [{
+        ...createConversationAutomationTodoItem({
+          id: 'item-1',
+          kind: 'instruction',
+          text: 'Ask the user which deployment target to use, then continue.',
+          now: '2026-03-18T12:00:00.000Z',
+        }),
+        status: 'running',
+        startedAt: '2026-03-18T12:00:05.000Z',
+        updatedAt: '2026-03-18T12:00:05.000Z',
+      }],
+    }, {
+      now: '2026-03-18T12:00:10.000Z',
+      reason: 'Need the deployment target from the user.',
+    });
+
+    expect(waiting.enabled).toBe(false);
+    expect(waiting.activeItemId).toBeUndefined();
+    expect(waiting.waitingForUser?.reason).toBe('Need the deployment target from the user.');
+    expect(waiting.items[0]).toMatchObject({
+      status: 'waiting',
+      resultReason: 'Need the deployment target from the user.',
+    });
+
+    const resumed = resumeConversationAutomationAfterUserMessage(waiting, '2026-03-18T12:00:20.000Z');
+    expect(resumed.enabled).toBe(true);
+    expect(resumed.waitingForUser).toBeUndefined();
+    expect(resumed.items[0]).toMatchObject({
+      status: 'pending',
+      resultReason: undefined,
     });
   });
 });

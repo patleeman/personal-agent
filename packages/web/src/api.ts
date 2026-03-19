@@ -333,6 +333,8 @@ export const api = {
   }) => patch<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/plan`, input),
   resetConversationPlanItem: (id: string, itemId: string, resume = false) =>
     post<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/plan/items/${encodeURIComponent(itemId)}/reset`, { resume }),
+  setConversationPlanItemStatus: (id: string, itemId: string, checked: boolean) =>
+    post<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/plan/items/${encodeURIComponent(itemId)}/status`, { checked }),
   conversationPlansWorkspace: () => get<ConversationAutomationWorkspaceState>('/conversation-plans/workspace'),
   conversationPlanLibrary: () => get<ConversationAutomationWorkflowPresetLibraryState>('/conversation-plans/library'),
   updateConversationPlanLibrary: (input: ConversationAutomationWorkflowPresetLibraryState) =>

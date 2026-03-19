@@ -1461,7 +1461,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         </div>
       </Section>
 
-      <Section title="Plan">
+      <Section title="Todo list">
         <ConversationAutomationPanel conversationId={id} />
       </Section>
 
@@ -2358,16 +2358,16 @@ export function ContextRail() {
   const selectedPlanId = new URLSearchParams(location.search).get('plan')?.trim() || null;
   const creatingPlan = new URLSearchParams(location.search).get('new') === '1';
 
-  // Plans
+  // Checklists
   if (section === 'plans') return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <RailHeader label="Plans" sub={selectedPlanId ?? (creatingPlan ? 'new plan' : undefined)} />
+      <RailHeader label="Checklists" sub={selectedPlanId ?? (creatingPlan ? 'new checklist' : undefined)} />
       <div className="min-h-0 flex-1 overflow-y-auto">
         {suspendRailPanel(
           selectedPlanId || creatingPlan
             ? <AutomationPresetPanel presetId={selectedPlanId} creatingNew={creatingPlan} />
-            : <EmptyPrompt text="Select a plan or create a new one to edit reusable action plans." />,
-          'Loading plans…',
+            : <EmptyPrompt text="Select a checklist or create a new one to edit reusable checklists." />,
+          'Loading checklists…',
         )}
       </div>
     </div>

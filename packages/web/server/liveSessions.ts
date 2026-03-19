@@ -827,6 +827,10 @@ function hasFailedConversationAutomationTodoItem(document: ConversationAutomatio
   return document.items.some((item) => item.status === 'failed' || item.status === 'blocked');
 }
 
+function hasOpenConversationAutomationTodoItem(document: ConversationAutomationDocument): boolean {
+  return document.items.some((item) => item.status === 'pending' || item.status === 'running' || item.status === 'waiting');
+}
+
 function maybeFinalizeConversationAutomationTodoItem(
   entry: LiveEntry,
   document: ConversationAutomationDocument,
@@ -924,11 +928,11 @@ function interruptConversationAutomationStep(
 }
 
 function shouldStartConversationAutomationReview(document: ConversationAutomationDocument): boolean {
-  if (document.items.length === 0 || hasFailedConversationAutomationTodoItem(document)) {
+  if (document.items.length === 0 || hasFailedConversationAutomationTodoItem(document) || document.waitingForUser) {
     return false;
   }
 
-  if (findFirstPendingConversationAutomationTodoItem(document) || document.activeItemId) {
+  if (hasOpenConversationAutomationTodoItem(document) || document.activeItemId) {
     return false;
   }
 

@@ -88,6 +88,7 @@ import { createDeferredResumeAgentExtension } from './deferredResumeAgentExtensi
 import { createScheduledTaskAgentExtension } from './scheduledTaskAgentExtension.js';
 import { createActivityAgentExtension } from './activityAgentExtension.js';
 import { createConversationTodoAgentExtension } from './conversationTodoAgentExtension.js';
+import { createWaitForUserAgentExtension } from './waitForUserAgentExtension.js';
 import { createRunAgentExtension } from './runAgentExtension.js';
 import { createMemoryAgentExtension } from './memoryAgentExtension.js';
 import {
@@ -146,7 +147,10 @@ import {
   replaceConversationAutomationItems,
   resetConversationAutomationFromItem,
   resolveConversationAutomationPath,
+  resumeConversationAutomationAfterUserMessage,
+  setConversationAutomationItemPending,
   updateConversationAutomationEnabled,
+  updateConversationAutomationItemStatus,
   writeSavedConversationAutomationPreferences,
   writeConversationAutomationState,
   readSavedConversationAutomationWorkflowPresets,
@@ -517,6 +521,10 @@ function buildLiveSessionExtensionFactories() {
       getCurrentProfile,
     }),
     createConversationTodoAgentExtension({
+      stateRoot: getStateRoot(),
+      getCurrentProfile,
+    }),
+    createWaitForUserAgentExtension({
       stateRoot: getStateRoot(),
       getCurrentProfile,
     }),
@@ -2717,6 +2725,13 @@ async function buildConversationAutomationResponse(conversationId: string) {
       enabled: automation.enabled,
       activeItemId: automation.activeItemId ?? null,
       updatedAt: automation.updatedAt,
+      ...(automation.waitingForUser ? {
+        waitingForUser: {
+          createdAt: automation.waitingForUser.createdAt,
+          updatedAt: automation.waitingForUser.updatedAt,
+          ...(automation.waitingForUser.reason ? { reason: automation.waitingForUser.reason } : {}),
+        },
+      } : {}),
       items: automation.items.map((item) => ({
         id: item.id,
         kind: item.kind,
@@ -5369,6 +5384,15 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
 
     const hiddenContext = queuedContextBlocks.join('\n\n');
     const isRemoteLive = isRemoteLiveSession(id);
+    const automationBeforePrompt = loadConversationAutomationState({
+      profile: getCurrentProfile(),
+      conversationId: id,
+      settingsFile: SETTINGS_FILE,
+    }).document;
+    if (automationBeforePrompt.waitingForUser || automationBeforePrompt.items.some((item) => item.status === 'waiting')) {
+      saveConversationAutomationDocument(resumeConversationAutomationAfterUserMessage(automationBeforePrompt));
+    }
+
     if (!isRemoteLive && queuedContextBlocks.length > 0) {
       await queuePromptContext(id, 'referenced_context', hiddenContext);
     }
@@ -5720,6 +5744,54 @@ app.post('/api/conversations/:id/plan/items/:itemId/reset', async (req, res) => 
     }));
 
     if (resume) {
+      await kickConversationAutomation(req.params.id);
+    }
+
+    res.json(await buildConversationAutomationResponse(req.params.id));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: message });
+  }
+});
+
+app.post('/api/conversations/:id/plan/items/:itemId/status', async (req, res) => {
+  try {
+    const { checked } = req.body as { checked?: unknown };
+    if (typeof checked !== 'boolean') {
+      res.status(400).json({ error: 'checked must be a boolean' });
+      return;
+    }
+
+    const loaded = loadConversationAutomationState({
+      profile: getCurrentProfile(),
+      conversationId: req.params.id,
+      settingsFile: SETTINGS_FILE,
+    });
+    const document = loaded.document;
+    const item = document.items.find((candidate) => candidate.id === req.params.itemId);
+    if (!item) {
+      res.status(404).json({ error: 'Automation item not found' });
+      return;
+    }
+    if (document.activeItemId === item.id || item.status === 'running') {
+      res.status(409).json({ error: 'Running automation items cannot be edited from the checklist.' });
+      return;
+    }
+
+    const nextDocument = checked
+      ? updateConversationAutomationItemStatus(document, req.params.itemId, 'completed', {
+        resultReason: 'Completed from the checklist UI.',
+      })
+      : setConversationAutomationItemPending(document, req.params.itemId, {
+        enabled: true,
+      });
+    saveConversationAutomationDocument(nextDocument);
+
+    if (!checked) {
       await kickConversationAutomation(req.params.id);
     }
 
