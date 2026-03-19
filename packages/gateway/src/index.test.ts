@@ -7,6 +7,7 @@ import {
   flushGatewayNotifications,
   parseAllowlist,
   parseGatewayCliArgs,
+  planDelegateCompletionBatching,
   registerGatewayCliCommands,
   splitTelegramMessage,
 } from './index.js';
@@ -189,6 +190,71 @@ describe('splitTelegramMessage', () => {
       const fenceCount = (chunk.match(/```/g) ?? []).length;
       expect(fenceCount % 2).toBe(0);
     }
+  });
+});
+
+describe('planDelegateCompletionBatching', () => {
+  it('holds resume completions until the last running delegate in the conversation finishes', () => {
+    const completed = [
+      { runId: 'run-a', conversationId: 'conv-1', notifyMode: 'resume' as const },
+      { runId: 'run-b', conversationId: 'conv-1', notifyMode: 'message' as const },
+    ];
+    const remaining = [
+      { runId: 'run-c', conversationId: 'conv-1', notifyMode: 'resume' as const },
+      { runId: 'run-d', conversationId: 'conv-2', notifyMode: 'resume' as const },
+    ];
+
+    const plan = planDelegateCompletionBatching({
+      completed,
+      remaining,
+    });
+
+    expect(plan.immediate.map((watch) => watch.runId)).toEqual(['run-b']);
+    expect(plan.readyResumeBatches).toEqual([]);
+    expect(plan.pendingResumeBatches).toEqual([
+      {
+        conversationId: 'conv-1',
+        watches: [{ runId: 'run-a', conversationId: 'conv-1', notifyMode: 'resume' }],
+      },
+    ]);
+  });
+
+  it('flushes accumulated resume completions once no running delegates remain in that conversation', () => {
+    const completed = [
+      { runId: 'run-c', conversationId: 'conv-1', notifyMode: 'resume' as const },
+      { runId: 'run-x', conversationId: 'conv-2', notifyMode: 'resume' as const },
+    ];
+    const remaining = [
+      { runId: 'run-y', conversationId: 'conv-2', notifyMode: 'resume' as const },
+    ];
+
+    const plan = planDelegateCompletionBatching({
+      completed,
+      remaining,
+      existingResumeBatches: [
+        [
+          'conv-1',
+          [{ runId: 'run-a', conversationId: 'conv-1', notifyMode: 'resume' as const }],
+        ],
+      ],
+    });
+
+    expect(plan.immediate).toEqual([]);
+    expect(plan.readyResumeBatches).toEqual([
+      {
+        conversationId: 'conv-1',
+        watches: [
+          { runId: 'run-a', conversationId: 'conv-1', notifyMode: 'resume' },
+          { runId: 'run-c', conversationId: 'conv-1', notifyMode: 'resume' },
+        ],
+      },
+    ]);
+    expect(plan.pendingResumeBatches).toEqual([
+      {
+        conversationId: 'conv-2',
+        watches: [{ runId: 'run-x', conversationId: 'conv-2', notifyMode: 'resume' }],
+      },
+    ]);
   });
 });
 
@@ -1485,6 +1551,105 @@ describe('queued telegram message handler', () => {
     expect(promptCall.prompt).toBe('also check edge cases');
   });
 
+  it('suppresses visible queued follow-up messages for internal synthetic follow-ups', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+
+    let resolveRun: ((value: string) => void) | undefined;
+    const firstRun = new Promise<string>((resolve) => {
+      resolveRun = resolve;
+    });
+
+    const submitPrompt = vi.fn()
+      .mockResolvedValueOnce({ mode: 'started', run: firstRun });
+
+    const controller = {
+      submitPrompt,
+      submitFollowUp: vi.fn(async () => ({ mode: 'followup' as const })),
+      compact: vi.fn(async () => 'Context compacted.'),
+      getUserMessagesForForking: vi.fn(async () => []),
+      fork: vi.fn(async () => ({
+        selectedText: 'first',
+        cancelled: false,
+        sessionFile: '/tmp/sessions/1.jsonl.fork-entry-1',
+      })),
+      getSessionFile: vi.fn(async () => '/tmp/sessions/1.jsonl'),
+      abortCurrent: vi.fn(async () => false),
+      waitForIdle: vi.fn(async () => {
+        await firstRun;
+      }),
+      dispose: vi.fn(async () => undefined),
+    };
+
+    const createConversationController = vi.fn(async () => controller);
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createConversationController,
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, text: 'first' });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    handler.handleMessage({
+      chat: { id: 1 },
+      text: '/followup internal continuation',
+      internal: {
+        durable: false,
+        suppressFollowUpQueuedMessage: true,
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(controller.submitFollowUp).toHaveBeenCalledTimes(1);
+    expect(sendMessage).not.toHaveBeenCalledWith(1, 'Queued as follow-up.');
+
+    resolveRun?.('reply:first');
+    await handler.waitForIdle('1');
+
+    expect(sendMessage).toHaveBeenCalledWith(1, 'reply:first');
+  });
+
+  it('allows internal synthetic follow-ups to bypass chat access checks', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async ({ prompt }: { prompt: string }) => `reply:${prompt}`);
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(),
+      allowedUserIds: new Set(['42']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({
+      chat: { id: 999 },
+      text: '/followup internal continuation',
+      internal: {
+        durable: false,
+        suppressFollowUpQueuedMessage: true,
+        bypassAccessChecks: true,
+      },
+    });
+    await handler.waitForIdle('999');
+
+    expect(runPrompt).toHaveBeenCalledTimes(1);
+    const promptCall = runPrompt.mock.calls[0]?.[0] as { prompt: string };
+    expect(promptCall.prompt).toBe('internal continuation');
+    expect(sendMessage).not.toHaveBeenCalledWith(999, 'This chat is not allowed.');
+  });
+
   it('reuses the last prompt with /regenerate', async () => {
     const sendMessage = vi.fn(async () => undefined);
     const sendChatAction = vi.fn(async () => undefined);
@@ -1908,6 +2073,51 @@ describe('queued telegram message handler', () => {
     }
   });
 
+  it('does not durably store internal synthetic follow-up messages', async () => {
+    const durableInboxDir = createTempDir('gateway-telegram-internal-');
+
+    try {
+      const sendMessage = vi.fn(async () => undefined);
+      const sendChatAction = vi.fn(async () => undefined);
+
+      let resolveRun: ((value: string) => void) | undefined;
+      const runPromise = new Promise<string>((resolve) => {
+        resolveRun = resolve;
+      });
+
+      const runPrompt = vi.fn(async () => runPromise);
+
+      const handler = createQueuedTelegramMessageHandler({
+        allowlist: new Set(['1']),
+        profileName: 'shared',
+        agentDir: '/tmp/agent',
+        telegramSessionDir: '/tmp/sessions',
+        workingDirectory: '/tmp/work',
+        sendMessage,
+        sendChatAction,
+        durableInboxDir,
+        createConversationController: createTestConversationControllerFactory(runPrompt),
+      });
+
+      handler.handleMessage({
+        chat: { id: 1 },
+        message_id: 305,
+        text: '/followup internal replay-safe continuation',
+        internal: {
+          durable: false,
+          suppressFollowUpQueuedMessage: true,
+        },
+      });
+
+      expect(readdirSync(durableInboxDir)).toHaveLength(0);
+
+      resolveRun?.('done');
+      await handler.waitForIdle('1');
+    } finally {
+      rmSync(durableInboxDir, { recursive: true, force: true });
+    }
+  });
+
   it('drops telegram messages with invalid chat ids before durable storage', async () => {
     const durableInboxDir = createTempDir('gateway-telegram-invalid-chat-');
 
@@ -1982,6 +2192,56 @@ describe('queued telegram message handler', () => {
     } finally {
       rmSync(durableInboxDir, { recursive: true, force: true });
     }
+  });
+
+  it('drops exact duplicate telegram message ids in the same chat', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async ({ prompt }: { prompt: string }) => `reply:${prompt}`);
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, message_id: 500, text: 'first copy' });
+    handler.handleMessage({ chat: { id: 1 }, message_id: 500, text: 'duplicate copy' });
+    await handler.waitForIdle('1');
+
+    expect(runPrompt).toHaveBeenCalledTimes(1);
+    const promptCall = runPrompt.mock.calls[0]?.[0] as { prompt: string };
+    expect(promptCall.prompt).toBe('first copy');
+  });
+
+  it('does not drop older unseen telegram message ids in the same chat', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async ({ prompt }: { prompt: string }) => `reply:${prompt}`);
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({ chat: { id: 1 }, message_id: 600, text: 'newer message first' });
+    handler.handleMessage({ chat: { id: 1 }, message_id: 599, text: 'older but unseen message second' });
+    await handler.waitForIdle('1');
+
+    expect(runPrompt).toHaveBeenCalledTimes(2);
+    const prompts = runPrompt.mock.calls.map((call) => (call[0] as { prompt: string }).prompt);
+    expect(prompts).toEqual(['newer message first', 'older but unseen message second']);
   });
 
   it('continues sending typing actions while a telegram run is active', async () => {
