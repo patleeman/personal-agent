@@ -248,7 +248,7 @@ function resolveApplicationCommandLockFile(): string {
   return join(resolveStatePaths().root, 'web', 'app-restart.lock.json');
 }
 
-function clearOwnedApplicationCommandLock(action: 'restart' | 'update'): void {
+function clearOwnedApplicationCommandLock(action: 'restart' | 'update' | 'web-ui-service-restart'): void {
   const lockFile = resolveApplicationCommandLockFile();
   if (!existsSync(lockFile)) {
     return;
@@ -4442,20 +4442,24 @@ async function runWebUiServiceAction(action: string, args: string[]): Promise<vo
   }
 
   if (action === 'restart') {
-    const service = restartWebUiService(options);
-    await waitForWebUiHealthy(service.port);
+    try {
+      const service = restartWebUiService(options);
+      await waitForWebUiHealthy(service.port);
 
-    if (autoEnableTailscaleAfterServiceStart) {
-      syncWebUiTailscaleServeFromCli({
-        enabled: true,
-        port: service.port,
-        strict: false,
-        context: 'Could not re-apply configured Tailscale Serve setting',
-      });
+      if (autoEnableTailscaleAfterServiceStart) {
+        syncWebUiTailscaleServeFromCli({
+          enabled: true,
+          port: service.port,
+          strict: false,
+          context: 'Could not re-apply configured Tailscale Serve setting',
+        });
+      }
+
+      console.log(success(`Restarted managed web UI service on ${service.url}`));
+      return;
+    } finally {
+      clearOwnedApplicationCommandLock('web-ui-service-restart');
     }
-
-    console.log(success(`Restarted managed web UI service on ${service.url}`));
-    return;
   }
 
   if (action === 'rollback') {

@@ -17,7 +17,7 @@ vi.mock('@personal-agent/gateway', () => ({
   getWebUiServiceStatus: getWebUiServiceStatusMock,
 }));
 
-import { requestApplicationRestart, requestApplicationUpdate } from './applicationRestart.js';
+import { requestApplicationRestart, requestApplicationUpdate, requestWebUiServiceRestart } from './applicationRestart.js';
 
 const tempDirs: string[] = [];
 const originalEnv = process.env;
@@ -133,6 +133,53 @@ describe('application maintenance requests', () => {
       profile: 'datadog',
       port: 3741,
       command: [process.execPath, cliEntryFile, 'update'],
+    });
+  });
+
+  it('spawns a detached pa ui service restart process and records a lock file', () => {
+    const stateRoot = createTempDir('pa-web-service-restart-state-');
+    const repoRoot = createTempDir('pa-web-service-restart-repo-');
+    const cliEntryFile = join(repoRoot, 'packages', 'cli', 'dist', 'index.js');
+    const logFile = join(stateRoot, 'web', 'logs', 'web.log');
+
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    mkdirSync(join(repoRoot, 'packages', 'cli', 'dist'), { recursive: true });
+    writeFileSync(cliEntryFile, 'console.log("cli");\n');
+
+    const unref = vi.fn();
+    spawnMock.mockReturnValue({ pid: 6262, unref });
+    getWebUiServiceStatusMock.mockReturnValue({
+      installed: true,
+      port: 3741,
+      logFile,
+    });
+
+    const result = requestWebUiServiceRestart({ repoRoot });
+    const lockFile = join(stateRoot, 'web', 'app-restart.lock.json');
+
+    expect(result.accepted).toBe(true);
+    expect(result.action).toBe('web-ui-service-restart');
+    expect(spawnMock).toHaveBeenCalledWith(process.execPath, [cliEntryFile, 'ui', 'service', 'restart', '--port', '3741'], {
+      cwd: repoRoot,
+      detached: true,
+      stdio: ['ignore', expect.any(Number), expect.any(Number)],
+      env: expect.objectContaining({
+        PERSONAL_AGENT_REPO_ROOT: repoRoot,
+      }),
+    });
+    const restartCallEnv = spawnMock.mock.calls.at(-1)?.[2]?.env as Record<string, string | undefined> | undefined;
+    expect(restartCallEnv?.PERSONAL_AGENT_RESTART_NOTIFY_INBOX).toBeUndefined();
+    expect(restartCallEnv?.PERSONAL_AGENT_UPDATE_NOTIFY_INBOX).toBeUndefined();
+    expect(unref).toHaveBeenCalledTimes(1);
+    expect(existsSync(lockFile)).toBe(true);
+
+    expect(JSON.parse(readFileSync(lockFile, 'utf-8'))).toMatchObject({
+      action: 'web-ui-service-restart',
+      pid: 6262,
+      repoRoot,
+      profile: '',
+      port: 3741,
+      command: [process.execPath, cliEntryFile, 'ui', 'service', 'restart', '--port', '3741'],
     });
   });
 

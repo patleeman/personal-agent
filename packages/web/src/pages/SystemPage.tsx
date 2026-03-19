@@ -251,6 +251,52 @@ export function SystemPage() {
     }, 2500);
   }
 
+  function startWebUiRestartMonitor() {
+    clearActionMonitor();
+
+    let sawFailure = false;
+    let attempts = 0;
+
+    const poll = async () => {
+      attempts += 1;
+
+      try {
+        await api.webUiState();
+
+        if (sawFailure) {
+          clearActionMonitor();
+          window.location.reload();
+          return;
+        }
+
+        if (attempts >= 3) {
+          clearActionMonitor();
+          setComponentAction(null);
+          setComponentMessage('Managed web UI restart completed.');
+          await refreshAll(false);
+          return;
+        }
+      } catch {
+        sawFailure = true;
+      }
+
+      if (attempts >= 120) {
+        clearActionMonitor();
+        setComponentAction(null);
+        setComponentMessage('The managed web UI restart is taking longer than expected. Refresh in a moment to check status.');
+        return;
+      }
+
+      actionMonitorRef.current = window.setTimeout(() => {
+        void poll();
+      }, 2500);
+    };
+
+    actionMonitorRef.current = window.setTimeout(() => {
+      void poll();
+    }, 2500);
+  }
+
   useEffect(() => () => {
     clearActionMonitor();
   }, []);
@@ -419,9 +465,13 @@ export function SystemPage() {
 
     try {
       if (action === 'restart-web-ui') {
-        await api.restartWebUiService();
-        setComponentMessage('Requested a managed web UI restart. Status refreshed below.');
-      } else if (action === 'restart-daemon') {
+        const result = await api.restartWebUiService();
+        setComponentMessage(result.message);
+        startWebUiRestartMonitor();
+        return;
+      }
+
+      if (action === 'restart-daemon') {
         await api.restartDaemonService();
         setComponentMessage('Requested a daemon restart. Status refreshed below.');
       } else if (action === 'restart-gateway') {
@@ -433,9 +483,9 @@ export function SystemPage() {
       }
 
       await refreshAll(false);
+      setComponentAction(null);
     } catch (error) {
       setComponentError(error instanceof Error ? error.message : String(error));
-    } finally {
       setComponentAction(null);
     }
   }
