@@ -344,31 +344,31 @@ export function buildConversationAutomationFilterHelp(
     fields: [
       {
         key: 'event',
-        description: 'Matches the automation lifecycle event that is currently evaluating the rule.',
-        valueHint: 'manual or turn_end',
+        description: 'Exact match on the current automation trigger. Use manual or turn_end.',
+        valueHint: 'exact event name',
         values: sortedEvents,
       },
       {
         key: 'tool',
-        description: 'Matches when the tool was used in the conversation.',
-        valueHint: 'tool name',
+        description: 'Exact match on a tool used in the conversation history.',
+        valueHint: 'exact tool name',
         values: sortedTools,
       },
       {
         key: 'prompt',
-        description: 'Runs the shared judge model against the visible user/assistant thread.',
-        valueHint: 'quoted question or instruction',
+        description: 'Ask the judge model a quoted yes/no question about the visible user/assistant conversation. This is not text search.',
+        valueHint: 'quoted judge question',
       },
       {
         key: 'judge',
-        description: 'Legacy alias for prompt.',
-        valueHint: 'quoted question or instruction',
+        description: 'Legacy alias for prompt. Same behavior: it calls the judge model, not a text search.',
+        valueHint: 'quoted judge question',
       },
     ],
     examples: [
       `event:${exampleEvent}`,
       `(event:${exampleEvent} AND tool:${exampleToolA}) OR tool:${exampleToolB}`,
-      `event:${exampleEvent} AND tool:${exampleToolA} AND prompt:"Did the agent complete implementation of the feature?"`,
+      `event:${exampleEvent} AND tool:${exampleToolA} AND prompt:"Did the assistant already complete the feature?"`,
     ],
     availableTools,
   };

@@ -72,6 +72,6 @@ describe('conversationAutomationFilter', () => {
     expect(help.examples[0]).toContain('event:turn_end');
     expect(help.examples[1]).toContain('tool:edit');
     expect(help.examples[1]).toContain('tool:web_search');
-    expect(help.examples[2]).toContain('prompt:"Did the agent complete implementation of the feature?"');
+    expect(help.examples[2]).toContain('prompt:"Did the assistant already complete the feature?"');
   });
 });

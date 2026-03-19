@@ -868,13 +868,17 @@ export function AutomationPresetPanel({
                           : (filterValidation.error ?? 'Invalid filter.')
                       : 'Use AND, OR, and parentheses.'}
                   </p>
-                  <p className="text-dim">Example: {data.filterHelp.examples[1] ?? data.filterHelp.examples[0]}</p>
-                  <div className="flex flex-wrap gap-1.5">
+                  <p className="text-dim">Example: {data.filterHelp.examples[2] ?? data.filterHelp.examples[0]}</p>
+                  <p className="text-dim">Only boolean operators and field:value clauses are supported right now. No wildcards, fuzzy search, or text-contains operators yet.</p>
+                  <div className="space-y-1.5">
                     {data.filterHelp.fields.map((field) => (
-                      <span key={field.key} className="rounded bg-base px-2 py-1 text-[10px] text-secondary">
-                        <span className="font-mono text-primary">{field.key}</span>
-                        <span className="text-dim"> · {field.valueHint}</span>
-                      </span>
+                      <div key={field.key} className="rounded bg-base/70 px-2 py-2 text-[10px] leading-relaxed text-secondary">
+                        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                          <span className="font-mono text-primary">{field.key}</span>
+                          <span className="text-dim">· {field.valueHint}</span>
+                        </div>
+                        <p className="mt-1 text-dim">{field.description}</p>
+                      </div>
                     ))}
                   </div>
                   {data.filterHelp.fields.find((field) => field.key === 'event')?.values?.length ? (
