@@ -46,6 +46,7 @@ const RunsPage = lazy(() => import('./pages/RunsPage').then((module) => ({ defau
 const SystemPage = lazy(() => import('./pages/SystemPage').then((module) => ({ default: module.SystemPage })));
 const WebUiPage = lazy(() => import('./pages/WebUiPage').then((module) => ({ default: module.WebUiPage })));
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage').then((module) => ({ default: module.ProjectsPage })));
+const AutomationPage = lazy(() => import('./pages/AutomationPage').then((module) => ({ default: module.AutomationPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
 const ToolsPage = lazy(() => import('./pages/ToolsPage').then((module) => ({ default: module.ToolsPage })));
 const MemoriesPage = lazy(() => import('./pages/MemoriesPage').then((module) => ({ default: module.MemoriesPage })));
@@ -219,6 +220,8 @@ export function App() {
                     <Route path="web-ui" element={suspendRoute(<WebUiPage />)} />
                     <Route path="projects" element={suspendRoute(<ProjectsPage />)} />
                     <Route path="projects/:id" element={suspendRoute(<ProjectsPage />)} />
+                    <Route path="automation" element={suspendRoute(<AutomationPage />)} />
+                    <Route path="automation/:id" element={suspendRoute(<AutomationPage />)} />
                     <Route path="memories" element={suspendRoute(<MemoriesPage />)} />
                     <Route path="runs" element={suspendRoute(<RunsPage />)} />
                     <Route path="runs/:id" element={suspendRoute(<RunsPage />)} />

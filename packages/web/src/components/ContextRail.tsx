@@ -2042,6 +2042,20 @@ export function ContextRail() {
   const scheduledSection = section === 'scheduled' || section === 'automations' || section === 'tasks';
   const creatingScheduledTask = scheduledSection && new URLSearchParams(location.search).get('new') === '1';
 
+  // Automation
+  if (section === 'automation' && id) return (
+    <div className="flex-1 overflow-y-auto flex flex-col">
+      <RailHeader label="Session" sub={id} />
+      <LiveSessionContextPanel id={id} />
+    </div>
+  );
+  if (section === 'automation') return (
+    <div className="flex-1 flex flex-col">
+      <RailHeader label="Automation" />
+      <EmptyPrompt text="Select a conversation to inspect its context while editing automation." />
+    </div>
+  );
+
   // Conversations
   if (section === 'conversations' && id && selectedArtifactId) return (
     <div className="flex-1 overflow-hidden flex flex-col">

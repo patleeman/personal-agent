@@ -44,6 +44,7 @@ const PATH = {
   inbox:    'M2.25 13.5h3.86a2.25 2.25 0 0 1 2.012 1.244l.256.512a2.25 2.25 0 0 0 2.013 1.244h3.218a2.25 2.25 0 0 0 2.013-1.244l.256-.512a2.25 2.25 0 0 1 2.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 0 0-2.15-1.588H6.911a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.661Z',
   search:   'M21 21l-4.35-4.35m1.6-5.15a6.75 6.75 0 1 1-13.5 0 6.75 6.75 0 0 1 13.5 0Z',
   gateway:  'M7.5 7.5 3.75 12l3.75 4.5m9-9 3.75 4.5-3.75 4.5M20.25 12H3.75',
+  automation: 'M6 6h5v5H6zM13 13h5v5h-5zM11 8.5h2M12 9.5v5M8.5 11v2M15.5 11v2',
   daemon:   'M6 4.5h12A1.5 1.5 0 0 1 19.5 6v12a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V6A1.5 1.5 0 0 1 6 4.5Zm0 3.75h12M6 12h12M6 15.75h12',
   sync:     'M4.5 12a7.5 7.5 0 0 1 12.803-5.303M19.5 12a7.5 7.5 0 0 1-12.803 5.303M16.5 3.75v3h-3m-3 10.5h3v3',
   system:   'M4.5 7.5h15m-15 4.5h15m-15 4.5h15M6.75 4.5h10.5A2.25 2.25 0 0 1 19.5 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 17.25V6.75A2.25 2.25 0 0 1 6.75 4.5Z',
@@ -420,6 +421,7 @@ export function Sidebar() {
   } | null>(null);
   const allSessions = useMemo(() => [...pinnedSessions, ...tabs, ...archivedSessions], [archivedSessions, pinnedSessions, tabs]);
   const activeConversationId = useMemo(() => getActiveConversationId(location.pathname), [location.pathname]);
+  const automationTarget = activeConversationId ? `/automation/${encodeURIComponent(activeConversationId)}` : '/automation';
   const attentionIds = useMemo(
     () => new Set(allSessions.filter((session) => sessionNeedsAttention(session)).map((session) => session.id)),
     [allSessions],
@@ -794,6 +796,7 @@ export function Sidebar() {
           title={`Open unified search (${SIDEBAR_SEARCH_HOTKEY})`}
           onClick={handleOpenSearch}
         />
+        <TopNavItem to={automationTarget} icon={PATH.automation} label="Automation" title="Open the full-page workflow editor for the active conversation." />
         <TopNavItem to="/scheduled" icon={PATH.tasks} label="Scheduled" />
         <TopNavItem to="/projects" icon={PATH.projects} label="Projects" />
         <TopNavItem to="/memories" icon={PATH.memory} label="Memories" />
