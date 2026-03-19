@@ -1518,11 +1518,12 @@ function ProjectDetailContext({ id }: { id: string }) {
   );
 }
 
-// ── Managed memory docs ──────────────────────────────────────────────────────
+// ── Managed memory packages ──────────────────────────────────────────────────
 
 const MANAGED_MEMORY_ID_SEARCH_PARAM = 'memory';
+const MANAGED_MEMORY_FILE_SEARCH_PARAM = 'file';
 
-function buildManagedMemorySearch(locationSearch: string, memoryId: string | null): string {
+function buildManagedMemorySearch(locationSearch: string, memoryId: string | null, relativePath: string | null = null): string {
   const params = new URLSearchParams(locationSearch);
 
   if (memoryId) {
@@ -1531,11 +1532,17 @@ function buildManagedMemorySearch(locationSearch: string, memoryId: string | nul
     params.delete(MANAGED_MEMORY_ID_SEARCH_PARAM);
   }
 
+  if (relativePath) {
+    params.set(MANAGED_MEMORY_FILE_SEARCH_PARAM, relativePath);
+  } else {
+    params.delete(MANAGED_MEMORY_FILE_SEARCH_PARAM);
+  }
+
   const next = params.toString();
   return next ? `?${next}` : '';
 }
 
-function MemoryDocContext({ memoryId }: { memoryId: string }) {
+function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relativePath: string | null }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { openSession } = useConversations();
@@ -1543,39 +1550,90 @@ function MemoryDocContext({ memoryId }: { memoryId: string }) {
   const { data, loading, refreshing, error, refetch } = useApi(fetcher, memoryId);
   const [draft, setDraft] = useState('');
   const [savedContent, setSavedContent] = useState('');
+  const [selectedContent, setSelectedContent] = useState('');
+  const [selectedContentLoading, setSelectedContentLoading] = useState(false);
+  const [selectedContentError, setSelectedContentError] = useState<string | null>(null);
   const [saveBusy, setSaveBusy] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [startBusy, setStartBusy] = useState(false);
-  const [mergeBusy, setMergeBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: 'accent' | 'danger'; text: string } | null>(null);
 
-  const setSelectedMemory = useCallback((nextMemoryId: string | null, replace = false) => {
-    const nextSearch = buildManagedMemorySearch(location.search, nextMemoryId);
+  const setSelectedMemory = useCallback((nextMemoryId: string | null, nextRelativePath: string | null = null, replace = false) => {
+    const nextSearch = buildManagedMemorySearch(location.search, nextMemoryId, nextRelativePath);
     navigate(`/memories${nextSearch}`, { replace });
   }, [location.search, navigate]);
 
+  const memory = data?.memory ?? null;
+  const references = data?.references ?? [];
+  const selectedReference = useMemo(
+    () => references.find((reference) => reference.relativePath === relativePath) ?? null,
+    [references, relativePath],
+  );
+  const selectedFilePath = selectedReference?.path ?? memory?.path ?? null;
+  const selectedFileLabel = selectedReference?.title ?? memory?.title ?? 'Memory';
+  const selectedFileSummary = selectedReference?.summary ?? memory?.summary ?? '';
+  const selectedFileRelativePath = selectedReference?.relativePath ?? 'MEMORY.md';
+  const dirty = draft !== savedContent;
+
   useEffect(() => {
-    if (!data) {
+    if (!memory || !relativePath) {
       return;
     }
 
-    setDraft(data.content);
-    setSavedContent(data.content);
-  }, [data?.content, data?.memory.id]);
+    if (!references.some((reference) => reference.relativePath === relativePath)) {
+      setSelectedMemory(memory.id, null, true);
+    }
+  }, [memory, references, relativePath, setSelectedMemory]);
 
-  const dirty = draft !== savedContent;
-  const memory = data?.memory ?? null;
-  const mergeCandidateIds = useMemo(() => {
-    if (!memory || memory.role?.trim().toLowerCase() !== 'capture') {
-      return [] as string[];
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSelectedContent() {
+      if (!memory) {
+        return;
+      }
+
+      if (!selectedReference) {
+        setSelectedContent(data?.content ?? '');
+        setSelectedContentError(null);
+        setSelectedContentLoading(false);
+        return;
+      }
+
+      setSelectedContentLoading(true);
+      setSelectedContentError(null);
+      try {
+        const result = await api.memoryFile(selectedReference.path);
+        if (cancelled) {
+          return;
+        }
+        setSelectedContent(result.content);
+      } catch (selectedError) {
+        if (cancelled) {
+          return;
+        }
+        setSelectedContentError(selectedError instanceof Error ? selectedError.message : String(selectedError));
+        setSelectedContent('');
+      } finally {
+        if (!cancelled) {
+          setSelectedContentLoading(false);
+        }
+      }
     }
 
-    return [...new Set((memory.related ?? []).filter((relatedId) => relatedId !== memory.id))];
-  }, [memory]);
-  const canMergeCapture = memory?.role?.trim().toLowerCase() === 'capture';
+    void loadSelectedContent();
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.content, memory?.id, selectedReference?.path]);
+
+  useEffect(() => {
+    setDraft(selectedContent);
+    setSavedContent(selectedContent);
+  }, [selectedContent, selectedFilePath]);
 
   async function handleSave() {
-    if (!memory || saveBusy || !dirty) {
+    if (!memory || !selectedFilePath || saveBusy || !dirty) {
       return;
     }
 
@@ -1583,18 +1641,30 @@ function MemoryDocContext({ memoryId }: { memoryId: string }) {
     setNotice(null);
 
     try {
-      const result = await api.saveMemoryDoc(memory.id, draft);
-      setDraft(result.content);
-      setSavedContent(result.content);
-      emitMemoriesChanged();
-      setNotice({ tone: 'accent', text: `Saved @${result.memory.id}.` });
+      if (selectedReference) {
+        await api.memoryFileSave(selectedReference.path, draft);
+        const refreshedFile = await api.memoryFile(selectedReference.path);
+        setSelectedContent(refreshedFile.content);
+        setDraft(refreshedFile.content);
+        setSavedContent(refreshedFile.content);
+        await refetch({ resetLoading: false });
+        setNotice({ tone: 'accent', text: `Saved ${selectedReference.relativePath}.` });
+      } else {
+        const result = await api.saveMemoryDoc(memory.id, draft);
+        setSelectedContent(result.content);
+        setDraft(result.content);
+        setSavedContent(result.content);
+        setNotice({ tone: 'accent', text: `Saved @${result.memory.id}.` });
 
-      if (result.memory.id !== memory.id) {
-        setSelectedMemory(result.memory.id, true);
-        return;
+        if (result.memory.id !== memory.id) {
+          setSelectedMemory(result.memory.id, null, true);
+          return;
+        }
+
+        await refetch({ resetLoading: false });
       }
 
-      await refetch({ resetLoading: false });
+      emitMemoriesChanged();
     } catch (saveError) {
       setNotice({ tone: 'danger', text: saveError instanceof Error ? saveError.message : String(saveError) });
     } finally {
@@ -1603,11 +1673,11 @@ function MemoryDocContext({ memoryId }: { memoryId: string }) {
   }
 
   async function handleDelete() {
-    if (!memory || deleteBusy) {
+    if (!memory || deleteBusy || selectedReference) {
       return;
     }
 
-    if (!window.confirm(`Delete memory @${memory.id}? This cannot be undone.`)) {
+    if (!window.confirm(`Delete memory hub @${memory.id}? This removes the full package, including references and assets.`)) {
       return;
     }
 
@@ -1617,7 +1687,7 @@ function MemoryDocContext({ memoryId }: { memoryId: string }) {
     try {
       await api.deleteMemoryDoc(memory.id);
       emitMemoriesChanged();
-      setSelectedMemory(null, true);
+      setSelectedMemory(null, null, true);
     } catch (deleteError) {
       setNotice({ tone: 'danger', text: deleteError instanceof Error ? deleteError.message : String(deleteError) });
       setDeleteBusy(false);
@@ -1642,52 +1712,6 @@ function MemoryDocContext({ memoryId }: { memoryId: string }) {
     }
   }
 
-  async function handleMerge(targetMemoryId: string) {
-    if (!memory || mergeBusy) {
-      return;
-    }
-
-    const normalizedTargetMemoryId = targetMemoryId.trim();
-    if (!normalizedTargetMemoryId) {
-      return;
-    }
-
-    if (dirty) {
-      setNotice({ tone: 'danger', text: 'Save this capture before merging it.' });
-      return;
-    }
-
-    if (!window.confirm(`Merge capture @${memory.id} into canonical @${normalizedTargetMemoryId}? This appends the capture into the canonical doc and deletes the capture file.`)) {
-      return;
-    }
-
-    setMergeBusy(true);
-    setNotice(null);
-
-    try {
-      const result = await api.mergeMemoryDoc(memory.id, normalizedTargetMemoryId);
-      emitMemoriesChanged();
-      setSelectedMemory(result.memory.id, true);
-    } catch (mergeError) {
-      setNotice({ tone: 'danger', text: mergeError instanceof Error ? mergeError.message : String(mergeError) });
-      setMergeBusy(false);
-    }
-  }
-
-  function handleManualMerge() {
-    if (!memory || mergeBusy) {
-      return;
-    }
-
-    const suggestedTarget = mergeCandidateIds[0] ?? '';
-    const targetMemoryId = window.prompt('Merge this capture into which canonical memory id?', suggestedTarget)?.trim();
-    if (!targetMemoryId) {
-      return;
-    }
-
-    void handleMerge(targetMemoryId);
-  }
-
   if (loading && !data) {
     return <LoadingState label="Loading memory…" className="px-4 py-4" />;
   }
@@ -1705,27 +1729,39 @@ function MemoryDocContext({ memoryId }: { memoryId: string }) {
       <div className="shrink-0 space-y-4 border-b border-border-subtle px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="ui-card-title truncate">{memory.title}</p>
-            <p className="ui-card-meta mt-0.5 font-mono truncate" title={`@${memory.id}`}>@{memory.id}</p>
+            <p className="ui-card-title truncate">{selectedFileLabel}</p>
+            <p className="ui-card-meta mt-0.5 font-mono truncate" title={`@${memory.id}`}>@{memory.id} · {selectedFileRelativePath}</p>
           </div>
           <button
             type="button"
             onClick={() => { void refetch({ resetLoading: false }); }}
-            disabled={refreshing}
+            disabled={refreshing || selectedContentLoading}
             className="ui-toolbar-button shrink-0"
           >
-            {refreshing ? 'Refreshing…' : '↻ Refresh'}
+            {refreshing || selectedContentLoading ? 'Refreshing…' : '↻ Refresh'}
           </button>
         </div>
 
         <div className="space-y-2">
           <div className="ui-detail-row">
-            <span className="ui-detail-label">Path</span>
-            <span className="ui-detail-value break-all font-mono">{memory.path}</span>
+            <span className="ui-detail-label">Hub</span>
+            <Link to={`/memories${buildManagedMemorySearch(location.search, memory.id)}`} className="ui-detail-value text-accent hover:underline">
+              @{memory.id}
+            </Link>
           </div>
+          <div className="ui-detail-row">
+            <span className="ui-detail-label">File</span>
+            <span className="ui-detail-value break-all font-mono">{selectedFilePath}</span>
+          </div>
+          {selectedFileSummary && (
+            <div className="ui-detail-row items-start">
+              <span className="ui-detail-label">Summary</span>
+              <span className="ui-detail-value">{selectedFileSummary}</span>
+            </div>
+          )}
           {memory.updated && (
             <div className="ui-detail-row">
-              <span className="ui-detail-label">Updated</span>
+              <span className="ui-detail-label">Hub updated</span>
               <span className="ui-detail-value">{timeAgo(memory.updated)}</span>
             </div>
           )}
@@ -1747,32 +1783,6 @@ function MemoryDocContext({ memoryId }: { memoryId: string }) {
               <span className="ui-detail-value">{memory.area}</span>
             </div>
           )}
-          {memory.role && (
-            <div className="ui-detail-row">
-              <span className="ui-detail-label">Role</span>
-              <span className="ui-detail-value">{memory.role}</span>
-            </div>
-          )}
-          {memory.parent && (
-            <div className="ui-detail-row">
-              <span className="ui-detail-label">Parent</span>
-              <Link to={`/memories${buildManagedMemorySearch(location.search, memory.parent)}`} className="ui-detail-value text-accent hover:underline">
-                @{memory.parent}
-              </Link>
-            </div>
-          )}
-          {(memory.related?.length ?? 0) > 0 && (
-            <div className="ui-detail-row items-start">
-              <span className="ui-detail-label">Related</span>
-              <span className="ui-detail-value flex flex-wrap gap-x-2 gap-y-1">
-                {(memory.related ?? []).map((relatedId) => (
-                  <Link key={relatedId} to={`/memories${buildManagedMemorySearch(location.search, relatedId)}`} className="text-accent hover:underline">
-                    @{relatedId}
-                  </Link>
-                ))}
-              </span>
-            </div>
-          )}
           {memory.tags.length > 0 && (
             <div className="ui-detail-row">
               <span className="ui-detail-label">Tags</span>
@@ -1781,47 +1791,37 @@ function MemoryDocContext({ memoryId }: { memoryId: string }) {
           )}
         </div>
 
-        {canMergeCapture && (
-          <div className="space-y-2 border-t border-border-subtle pt-4">
-            <div className="space-y-1">
-              <p className="ui-section-label">Merge capture</p>
-              <p className="ui-card-meta">
-                Merge this capture into a canonical memory once it has been reviewed and cleaned up.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {mergeCandidateIds.map((targetMemoryId) => (
-                <button
-                  key={targetMemoryId}
-                  type="button"
-                  onClick={() => { void handleMerge(targetMemoryId); }}
-                  disabled={mergeBusy || loading || dirty}
-                  className="ui-toolbar-button text-accent"
-                >
-                  {mergeBusy ? 'Merging…' : `Merge into @${targetMemoryId}`}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={handleManualMerge}
-                disabled={mergeBusy || loading || dirty}
-                className="ui-toolbar-button"
-              >
-                {mergeBusy ? 'Merging…' : 'Merge into…'}
-              </button>
-            </div>
-            {mergeCandidateIds.length === 0 && !dirty && (
-              <p className="ui-card-meta">No merge targets suggested yet. Use “Merge into…” to pick a canonical doc manually.</p>
-            )}
-            {dirty && <p className="ui-card-meta">Save changes before merging this capture.</p>}
+        <div className="space-y-2 border-t border-border-subtle pt-4">
+          <div className="space-y-1">
+            <p className="ui-section-label">Package files</p>
+            <p className="ui-card-meta">Browse the hub overview and package-local references.</p>
           </div>
-        )}
+          <div className="flex flex-col gap-1.5">
+            <Link
+              to={`/memories${buildManagedMemorySearch(location.search, memory.id)}`}
+              className={relativePath ? 'ui-toolbar-button' : 'ui-toolbar-button text-accent'}
+            >
+              MEMORY.md
+            </Link>
+            {references.map((reference) => (
+              <Link
+                key={reference.path}
+                to={`/memories${buildManagedMemorySearch(location.search, memory.id, reference.relativePath)}`}
+                className={reference.relativePath === relativePath ? 'ui-toolbar-button text-accent' : 'ui-toolbar-button'}
+              >
+                <span className="truncate">{reference.title}</span>
+                <span className="ml-1 truncate text-dim">· {reference.relativePath}</span>
+              </Link>
+            ))}
+            {references.length === 0 && <p className="ui-card-meta">No reference files yet.</p>}
+          </div>
+        </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
           <button
             type="button"
             onClick={() => { void handleStartConversation(); }}
-            disabled={startBusy || mergeBusy || loading}
+            disabled={startBusy || loading}
             className="ui-toolbar-button text-accent"
           >
             {startBusy ? 'Starting…' : 'Start convo'}
@@ -1829,19 +1829,21 @@ function MemoryDocContext({ memoryId }: { memoryId: string }) {
           <button
             type="button"
             onClick={() => { void handleSave(); }}
-            disabled={!dirty || saveBusy || mergeBusy || loading}
+            disabled={!dirty || saveBusy || loading || selectedContentLoading || Boolean(selectedContentError)}
             className={dirty ? 'ui-toolbar-button text-accent' : 'ui-toolbar-button'}
           >
             {saveBusy ? 'Saving…' : 'Save'}
           </button>
-          <button
-            type="button"
-            onClick={() => { void handleDelete(); }}
-            disabled={deleteBusy || mergeBusy || loading}
-            className="ui-toolbar-button text-danger"
-          >
-            {deleteBusy ? 'Deleting…' : 'Delete'}
-          </button>
+          {!selectedReference && (
+            <button
+              type="button"
+              onClick={() => { void handleDelete(); }}
+              disabled={deleteBusy || loading}
+              className="ui-toolbar-button text-danger"
+            >
+              {deleteBusy ? 'Deleting…' : 'Delete hub'}
+            </button>
+          )}
           {dirty && !saveBusy && <span className="ui-card-meta">Unsaved changes</span>}
         </div>
 
@@ -1853,18 +1855,24 @@ function MemoryDocContext({ memoryId }: { memoryId: string }) {
       </div>
 
       <div className="min-h-0 flex-1 px-4 py-4">
-        <textarea
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
-              event.preventDefault();
-              void handleSave();
-            }
-          }}
-          className="h-full min-h-[24rem] w-full resize-none rounded-lg border border-border-default bg-base px-3 py-3 font-mono text-[12px] leading-relaxed text-primary outline-none transition-colors focus:border-accent/60"
-          spellCheck={false}
-        />
+        {selectedContentError ? (
+          <ErrorState message={`Failed to load file: ${selectedContentError}`} className="px-0 py-0" />
+        ) : selectedContentLoading ? (
+          <LoadingState label="Loading file…" className="px-0 py-0" />
+        ) : (
+          <textarea
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+                event.preventDefault();
+                void handleSave();
+              }
+            }}
+            className="h-full min-h-[24rem] w-full resize-none rounded-lg border border-border-default bg-base px-3 py-3 font-mono text-[12px] leading-relaxed text-primary outline-none transition-colors focus:border-accent/60"
+            spellCheck={false}
+          />
+        )}
       </div>
     </div>
   );
@@ -2157,14 +2165,16 @@ export function ContextRail() {
 
   // Managed memories
   if (section === 'memories') {
-    const memoryId = new URLSearchParams(location.search).get(MANAGED_MEMORY_ID_SEARCH_PARAM)?.trim() || null;
+    const params = new URLSearchParams(location.search);
+    const memoryId = params.get(MANAGED_MEMORY_ID_SEARCH_PARAM)?.trim() || null;
+    const relativePath = params.get(MANAGED_MEMORY_FILE_SEARCH_PARAM)?.trim() || null;
 
     if (memoryId) {
       return (
         <div className="flex-1 flex flex-col overflow-hidden">
-          <RailHeader label="Memory" sub={`@${memoryId}`} />
+          <RailHeader label="Memory" sub={relativePath ? `@${memoryId} · ${relativePath}` : `@${memoryId}`} />
           <div className="flex-1 overflow-y-auto">
-            <MemoryDocContext memoryId={memoryId} />
+            <MemoryDocContext memoryId={memoryId} relativePath={relativePath} />
           </div>
         </div>
       );
@@ -2173,7 +2183,7 @@ export function ContextRail() {
     return (
       <div className="flex-1 flex flex-col">
         <RailHeader label="Memory" />
-        <EmptyPrompt text="Select a memory to inspect and edit it." />
+        <EmptyPrompt text="Select a memory hub to inspect its MEMORY.md and package-local references." />
       </div>
     );
   }

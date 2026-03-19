@@ -2,7 +2,7 @@
 
 Profiles are how `personal-agent` changes behavior, prompting, defaults, and reusable capabilities around a shared global memory store.
 
-A profile is not just a name. It is the durable resource bundle the agent runs with, even though memory docs themselves are shared globally.
+A profile is not just a name. It is the durable resource bundle the agent runs with, even though memories themselves are shared globally.
 
 ## The layer model
 
@@ -43,9 +43,9 @@ Non-shared profiles can also keep durable profile state in:
 - `projects/<projectId>/PROJECT.yaml`
 - `activity/*.md`
 
-Shared global memory docs live alongside profiles at:
+Shared global memories live alongside profiles at:
 
-- `~/.local/state/personal-agent/profiles/_memory/*.md`
+- `~/.local/state/personal-agent/profiles/_memory/<memory-name>/MEMORY.md`
 
 ## Example layout
 
@@ -60,6 +60,12 @@ Shared global memory docs live alongside profiles at:
 ~/.local/state/personal-agent/
 └── profiles/
     ├── _memory/
+    │   ├── personal-agent/
+    │   │   ├── MEMORY.md
+    │   │   ├── references/
+    │   │   └── assets/
+    │   └── runpod/
+    │       └── MEMORY.md
     ├── shared/
     │   └── agent/
     │       ├── settings.json
@@ -83,7 +89,9 @@ Shared global memory docs live alongside profiles at:
 | --- | --- |
 | `AGENTS.md` | durable role, behavior rules, and operating policy |
 | `skills/` | reusable workflows or domain-specific capabilities |
-| `profiles/_memory/*.md` | shared durable notes, briefs, specs, references, and learned patterns |
+| `profiles/_memory/<memory-name>/MEMORY.md` | shared durable knowledge hubs |
+| `profiles/_memory/<memory-name>/references/**` | detailed notes, distilled captures, and supporting breakdowns for that hub |
+| `profiles/_memory/<memory-name>/assets/**` | non-markdown assets used by that memory package |
 | `tasks/*.task.md` | scheduled automation |
 | `projects/` | long-running tracked work |
 | `activity/` | inbox items created by the system or by explicit inbox commands |
@@ -114,7 +122,7 @@ Use a skill when you want something that is:
 
 - reusable across conversations
 - broader than one project
-- more operational than a memory note
+- more operational than a memory package
 
 Examples:
 
@@ -123,26 +131,56 @@ Examples:
 - a Git or release workflow
 - a browser-automation workflow
 
-Skills show up in the Memory page and can also be invoked from supported interfaces like Telegram slash commands.
+Skills show up in the system prompt as lightweight name + description hints. The full `SKILL.md` loads on demand.
 
-## Memory docs: durable notes and references
+## Memory packages: durable knowledge hubs
 
-Memory docs live under the shared global store:
+Memories mirror the skill packaging model.
 
-- `~/.local/state/personal-agent/profiles/_memory/*.md`
+A memory is a directory with a `MEMORY.md` file. Everything else is freeform.
 
-They are flat Markdown files with YAML frontmatter.
+```text
+memory-name/
+├── MEMORY.md
+├── references/
+└── assets/
+```
+
+`MEMORY.md` uses skill-style frontmatter:
+
+```md
+---
+name: personal-agent
+description: Durable knowledge hub for personal-agent architecture, UI decisions, and workflows.
+metadata:
+  title: Personal-agent knowledge hub
+  tags:
+    - personal-agent
+    - architecture
+    - ui
+  updated: 2026-03-19
+  status: active
+---
+
+# Personal-agent knowledge hub
+
+Use this file as the hub overview. Link out to `references/` when the topic needs more structure.
+```
 
 Required frontmatter fields:
 
-- `id`
+- `name`
+- `description`
+
+Optional frontmatter fields:
+
+- `metadata` — arbitrary structured metadata used for status, tags, relationships, timestamps, and workflow-specific fields
+
+Common metadata keys in this repo:
+
 - `title`
-- `summary`
 - `tags`
 - `updated`
-
-Typical optional fields:
-
 - `type`
 - `status`
 - `area`
@@ -150,55 +188,31 @@ Typical optional fields:
 - `parent`
 - `related`
 
-Example:
-
-```md
----
-id: runbook-ci-failures
-title: "CI failure runbook"
-summary: "Common checks when CI fails in this repo."
-type: "runbook"
-status: "active"
-tags:
-  - ci
-  - runbook
-  - debugging
-area: ci
-role: canonical
-related:
-  - incident-response
-updated: 2026-03-12
----
-
-# CI failure runbook
-
-Document the checks, commands, and patterns the agent should reuse later.
-```
-
-Use memory docs for:
+Use memory packages for:
 
 - runbooks
 - research notes
 - domain references
 - architecture notes
 - decision summaries
+- durable knowledge the agent should be able to discover from a short catalog
 
-### Organizing memory docs
+## Organizing memories
 
-Keep storage flat, but organize memory with metadata and hub docs:
+Prefer a sparse top-level memory root.
 
-- `role: hub` — topic table of contents / overview doc
-- `role: canonical` — durable source-of-truth doc for a subtopic
-- `role: capture` — temporary distilled note that still needs curation/merge
-- `area` — stable topic grouping such as `personal-agent` or `ai-trend-intel`
-- `parent` — optional parent hub memory id
-- `related` — optional related memory ids
+Good pattern:
 
-A good maintenance pattern is:
+1. create one top-level memory package per durable topic area
+2. keep the hub overview in `MEMORY.md`
+3. move detailed material into `references/`
+4. keep supporting files in `assets/`
+5. update an existing memory package instead of creating near-duplicates
 
-1. create or update a hub for each major area
-2. prefer updating existing canonical docs instead of creating duplicate notes
-3. treat capture docs as merge candidates rather than permanent top-level memory clutter
+The main idea is:
+
+- **skills** are reusable workflows
+- **memories** are reusable knowledge hubs
 
 ## Shared profile vs non-shared profiles
 
@@ -206,7 +220,7 @@ Important convention:
 
 - `shared` is for common profile resources
 - non-shared profiles are where profile-local `AGENTS.md`, skills, tasks, projects, and activity live
-- durable memory docs live in the shared global memory store at `profiles/_memory/`
+- durable memories live in the shared global memory store at `profiles/_memory/`
 
 In particular:
 
@@ -219,9 +233,9 @@ This distinction matters.
 
 Use:
 
-- **memory** for durable knowledge
+- **memory** for durable reusable knowledge
 - **project** for current tracked work state, project briefs, project notes, and project files tied to one piece of work
-- **inbox** for asynchronous outcomes that need attention
+- **inbox** for asynchronous outcomes that need attention later
 
 A good rule:
 
@@ -239,7 +253,7 @@ pa profile show
 pa profile use <name>
 ```
 
-### Memory doc commands
+### Memory commands
 
 ```bash
 pa memory list
@@ -248,6 +262,8 @@ pa memory show <id>
 pa memory new <id> --title "..." --summary "..." --tags tag1,tag2
 pa memory lint
 ```
+
+`pa memory new` creates a new memory package and scaffolds `<memory-name>/MEMORY.md`.
 
 ## Local overlay
 
@@ -271,7 +287,7 @@ Do not store conversation ids or session ids in portable durable files.
 
 That includes:
 
-- global memory docs
+- global memory package frontmatter/metadata
 - project files
 - activity frontmatter
 - any profile-local schema meant to be portable

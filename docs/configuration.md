@@ -101,7 +101,7 @@ Common files:
 - `themes/`
 - `extensions/`
 
-Shared global memory docs live at `~/.local/state/personal-agent/profiles/_memory/*.md`.
+Shared global memories live at `~/.local/state/personal-agent/profiles/_memory/<memory-name>/MEMORY.md`.
 
 See [Profiles, Memory, and Skills](./profiles-memory-skills.md).
 
@@ -283,7 +283,7 @@ You can also adjust model, theme, and conversation title settings from the web U
 For most setups:
 
 1. set the default profile with `pa profile use <name>`
-2. keep profile behavior in `~/.local/state/personal-agent/profiles/**/agent` and shared durable knowledge in `~/.local/state/personal-agent/profiles/_memory/*.md` (with repo defaults in `defaults/agent` and optional shared overlays in `~/.local/state/personal-agent/profiles/shared/agent`)
+2. keep profile behavior in `~/.local/state/personal-agent/profiles/**/agent` and shared durable knowledge in `~/.local/state/personal-agent/profiles/_memory/<memory-name>/MEMORY.md` (with repo defaults in `defaults/agent` and optional shared overlays in `~/.local/state/personal-agent/profiles/shared/agent`)
 3. keep daemon behavior in `daemon.json`
 4. use `pa gateway setup telegram` for gateway config
 5. keep secrets as 1Password references where possible; use env vars only when a component truly needs them

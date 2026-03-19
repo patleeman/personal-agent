@@ -238,7 +238,7 @@ pa inbox list --unread
 
 If you expected a task result, verify the task actually ran.
 
-## Memory docs fail to parse
+## Memory packages fail to parse
 
 Run:
 

@@ -60,7 +60,7 @@ Use this rule:
 
 - change `AGENTS.md` when you want to change durable behavior or policy
 - add or update a **skill** when you want a reusable workflow
-- add a **memory doc** when you want durable knowledge or reference material
+- add a **memory package** when you want durable knowledge or reference material
 - create or update a **project** when you want tracked work state
 - create a **scheduled task** when you want unattended automation
 

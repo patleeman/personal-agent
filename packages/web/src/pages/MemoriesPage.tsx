@@ -32,10 +32,7 @@ function filterMemories(memories: MemoryDocItem[], query: string): MemoryDocItem
       memory.type,
       memory.status,
       memory.area,
-      memory.role,
-      memory.parent,
       memory.searchText,
-      ...(memory.related ?? []),
       ...memory.tags,
     ]
       .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
@@ -44,10 +41,6 @@ function filterMemories(memories: MemoryDocItem[], query: string): MemoryDocItem
 
     return haystack.includes(normalized);
   });
-}
-
-function isHubMemory(memory: MemoryDocItem): boolean {
-  return memory.role?.trim().toLowerCase() === 'hub';
 }
 
 function buildMemorySearch(locationSearch: string, memoryId: string | null): string {
@@ -107,6 +100,11 @@ function memoryWorkItemLabel(item: MemoryWorkItem): string {
   }
 }
 
+function formatReferenceCount(count: number | undefined): string {
+  const normalized = count ?? 0;
+  return `${normalized} ${normalized === 1 ? 'reference' : 'references'}`;
+}
+
 export function MemoriesPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -122,18 +120,14 @@ export function MemoriesPage() {
   const memories = data?.memories ?? [];
   const memoryQueue = data?.memoryQueue ?? [];
   const filteredMemories = useMemo(() => filterMemories(memories, query), [memories, query]);
-  const hubMemories = useMemo(() => memories.filter((memory) => isHubMemory(memory)), [memories]);
-  const visibleBrowseMemories = useMemo(() => {
-    if (query.trim()) {
-      return filteredMemories;
-    }
-
-    return filteredMemories.filter((memory) => !isHubMemory(memory));
-  }, [filteredMemories, query]);
   const selectedMemoryId = useMemo(() => {
     const value = new URLSearchParams(location.search).get(MEMORY_ID_SEARCH_PARAM);
     return value?.trim() || null;
   }, [location.search]);
+  const selectedMemory = useMemo(
+    () => memories.find((memory) => memory.id === selectedMemoryId) ?? null,
+    [memories, selectedMemoryId],
+  );
 
   const setSelectedMemory = useCallback((memoryId: string | null, replace = false) => {
     const nextSearch = buildMemorySearch(location.search, memoryId);
@@ -175,7 +169,7 @@ export function MemoriesPage() {
           title="Memories"
           meta={(
             <>
-              {memories.length} memory {memories.length === 1 ? 'doc' : 'docs'}
+              {memories.length} knowledge {memories.length === 1 ? 'hub' : 'hubs'}
               {memoryQueue.length > 0 && <span className="ml-2 text-secondary">· {memoryQueue.length} in queue</span>}
               {selectedMemoryId && <span className="ml-2 text-secondary">· @{selectedMemoryId}</span>}
             </>
@@ -190,7 +184,7 @@ export function MemoriesPage() {
         {!loading && !error && memories.length === 0 && memoryQueue.length === 0 && (
           <EmptyState
             title="No memories yet."
-            body="Distill a conversation message to create a durable memory doc."
+            body="Distill a conversation message to create or update a durable memory hub package."
           />
         )}
 
@@ -224,64 +218,48 @@ export function MemoriesPage() {
 
             {memories.length > 0 && (
               <>
-                {!query.trim() && hubMemories.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="ui-section-label">Knowledge hubs</p>
-                    <p className="ui-card-meta">Start from a hub to browse an area instead of scanning raw files.</p>
-                    <div className="space-y-px">
-                      {hubMemories.map((memory) => {
-                        const isSelected = memory.id === selectedMemoryId;
-                        const href = `/memories${buildMemorySearch(location.search, memory.id)}`;
-
-                        return (
-                          <ListLinkRow
-                            key={memory.id}
-                            to={href}
-                            selected={isSelected}
-                            leading={<span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${memoryDotClass(memory)}`} />}
-                          >
-                            <p className="ui-row-title">{memory.title}</p>
-                            <p className="ui-row-summary">{memory.summary || '(no summary)'}</p>
-                            <div className="ui-row-meta flex flex-wrap items-center gap-1.5">
-                              <span>hub</span>
-                              {memory.area && (
-                                <>
-                                  <span className="opacity-40">·</span>
-                                  <span>{memory.area}</span>
-                                </>
-                              )}
-                              <span className="opacity-40">·</span>
-                              <span className="font-mono" title={`@${memory.id}`}>@{memory.id}</span>
-                            </div>
-                          </ListLinkRow>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
                 <div className="space-y-2">
-                  <label htmlFor="memories-search" className="ui-section-label">Browse memories</label>
+                  <p className="ui-section-label">Knowledge hubs</p>
+                  <p className="ui-card-meta max-w-3xl">
+                    Memory packages work like skills: each hub has a `MEMORY.md` overview plus package-local `references/` and `assets/`.
+                    Search hub metadata and reference content below, then inspect the selected package in the right panel.
+                  </p>
+                </div>
+
+                <div className="space-y-2 border-t border-border-subtle pt-5">
+                  <label htmlFor="memories-search" className="ui-section-label">Search hubs</label>
                   <input
                     id="memories-search"
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Search by title, summary, tags, area, role, or ID"
+                    placeholder="Search hubs, summaries, tags, or reference content"
                     className={INPUT_CLASS}
                     autoComplete="off"
                     spellCheck={false}
                   />
                   <p className="ui-card-meta">
                     {query.trim()
-                      ? `Showing ${filteredMemories.length} of ${memories.length}.`
-                      : `Showing ${memories.length} memories.`}
-                    {' '}Select a memory to inspect it in the right panel.
+                      ? `Showing ${filteredMemories.length} of ${memories.length} hubs.`
+                      : `Showing ${memories.length} hubs.`}
+                    {' '}Select a hub to browse its `MEMORY.md` and package-local references in the right panel.
                   </p>
                 </div>
 
-                {visibleBrowseMemories.length > 0 ? (
-                  <div className="space-y-px">
-                    {visibleBrowseMemories.map((memory) => {
+                {selectedMemory && (
+                  <div className="space-y-1 border-t border-border-subtle pt-5">
+                    <p className="ui-section-label">Selected hub</p>
+                    <p className="text-[15px] font-medium text-primary">{selectedMemory.title}</p>
+                    <p className="ui-card-meta">
+                      {formatReferenceCount(selectedMemory.referenceCount)}
+                      {selectedMemory.area && <span> · {selectedMemory.area}</span>}
+                      {selectedMemory.updated && <span> · updated {timeAgo(selectedMemory.updated)}</span>}
+                    </p>
+                  </div>
+                )}
+
+                {filteredMemories.length > 0 ? (
+                  <div className="space-y-px border-t border-border-subtle pt-5">
+                    {filteredMemories.map((memory) => {
                       const isSelected = memory.id === selectedMemoryId;
                       const href = `/memories${buildMemorySearch(location.search, memory.id)}`;
                       const tagsSummary = memory.tags.slice(0, 3).join(' · ');
@@ -296,15 +274,19 @@ export function MemoriesPage() {
                           <p className="ui-row-title">{memory.title}</p>
                           <p className="ui-row-summary">{memory.summary || '(no summary)'}</p>
                           <div className="ui-row-meta flex flex-wrap items-center gap-1.5">
-                            {memory.role && <span>{memory.role}</span>}
+                            <span>{formatReferenceCount(memory.referenceCount)}</span>
                             {memory.area && (
                               <>
-                                {memory.role && <span className="opacity-40">·</span>}
+                                <span className="opacity-40">·</span>
                                 <span>{memory.area}</span>
                               </>
                             )}
-                            {(memory.role || memory.area) && <span className="opacity-40">·</span>}
-                            {memory.type && <span>{memory.type}</span>}
+                            {memory.type && (
+                              <>
+                                <span className="opacity-40">·</span>
+                                <span>{memory.type}</span>
+                              </>
+                            )}
                             {memory.status && (
                               <>
                                 <span className="opacity-40">·</span>
@@ -313,12 +295,6 @@ export function MemoriesPage() {
                             )}
                             <span className="opacity-40">·</span>
                             <span className="max-w-[18rem] truncate font-mono" title={`@${memory.id}`}>@{memory.id}</span>
-                            {memory.parent && (
-                              <>
-                                <span className="opacity-40">·</span>
-                                <span className="max-w-[16rem] truncate" title={`parent: @${memory.parent}`}>parent @${memory.parent}</span>
-                              </>
-                            )}
                             {memory.updated && (
                               <>
                                 <span className="opacity-40">·</span>
@@ -336,10 +312,10 @@ export function MemoriesPage() {
                       );
                     })}
                   </div>
-                ) : !query.trim() && hubMemories.length > 0 ? null : (
+                ) : (
                   <EmptyState
                     title="No matches"
-                    body="Try a broader search across titles, summaries, tags, area, role, and linked memory ids."
+                    body="Try a broader search across hub titles, summaries, tags, and package-local reference content."
                     action={<ToolbarButton onClick={() => setQuery('')}>Clear search</ToolbarButton>}
                   />
                 )}

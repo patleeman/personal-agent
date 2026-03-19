@@ -15,14 +15,14 @@ type MemoryAction = (typeof MEMORY_ACTION_VALUES)[number];
 
 const MemoryToolParams = Type.Object({
   action: Type.Union(MEMORY_ACTION_VALUES.map((value) => Type.Literal(value))),
-  memoryId: Type.Optional(Type.String({ description: 'Memory doc id for show/new actions.' })),
-  title: Type.Optional(Type.String({ description: 'Memory doc title for new.' })),
-  summary: Type.Optional(Type.String({ description: 'Memory doc summary for new.' })),
+  memoryId: Type.Optional(Type.String({ description: 'Memory package id for show/new actions.' })),
+  title: Type.Optional(Type.String({ description: 'Display title stored in memory metadata for new.' })),
+  summary: Type.Optional(Type.String({ description: 'Memory description for new.' })),
   tags: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { description: 'Tags for find/new. For find, all supplied tags must match.' })),
-  type: Type.Optional(Type.String({ description: 'Type filter for find or memory doc type for new.' })),
-  status: Type.Optional(Type.String({ description: 'Status filter for find or memory doc status for new.' })),
+  type: Type.Optional(Type.String({ description: 'Type filter for find or memory package type for new.' })),
+  status: Type.Optional(Type.String({ description: 'Status filter for find or memory package status for new.' })),
   text: Type.Optional(Type.String({ description: 'Metadata text query for find. Matches id, title, summary, and tags.' })),
-  force: Type.Optional(Type.Boolean({ description: 'Overwrite an existing memory doc when action=new.' })),
+  force: Type.Optional(Type.Boolean({ description: 'Overwrite an existing memory package when action=new.' })),
 });
 
 function readRequiredString(value: string | undefined, label: string): string {
@@ -71,7 +71,7 @@ function normalizeTags(tags: string[] | undefined): string[] {
   return splitMemoryTagValues(tags ?? []);
 }
 
-function formatMemoryDoc(doc: {
+function formatMemoryPackage(doc: {
   id: string;
   title: string;
   type: string;
@@ -83,7 +83,7 @@ function formatMemoryDoc(doc: {
   body: string;
 }): string {
   return [
-    `Memory doc @${doc.id}`,
+    `Memory package @${doc.id}`,
     `title: ${doc.title}`,
     `type: ${doc.type}`,
     `status: ${doc.status}`,
@@ -101,12 +101,12 @@ export function createMemoryAgentExtension(): (pi: ExtensionAPI) => void {
     pi.registerTool({
       name: 'memory',
       label: 'Memory',
-      description: 'Inspect, search, create, and validate global memory docs.',
-      promptSnippet: 'Use the memory tool when you need to inspect or update durable global memory docs instead of shelling out to pa memory.',
+      description: 'Inspect, search, create, and validate shared memory packages.',
+      promptSnippet: 'Use the memory tool when you need to inspect or update durable shared memory packages instead of shelling out to pa memory.',
       promptGuidelines: [
-        'Use this tool for global memory doc discovery and validation instead of running pa memory through bash.',
-        'Prefer find/show before creating a new memory doc so you do not duplicate durable knowledge.',
-        'Use new to scaffold a valid memory doc template with frontmatter, then edit the file only when you need to add details beyond the scaffold.',
+        'Use this tool for shared memory package discovery and validation instead of running pa memory through bash.',
+        'Prefer find/show before creating a new memory package so you do not duplicate durable knowledge.',
+        'Use new to scaffold a valid memory package with MEMORY.md frontmatter, then edit the file only when you need to add details beyond the scaffold.',
       ],
       parameters: MemoryToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
@@ -115,8 +115,8 @@ export function createMemoryAgentExtension(): (pi: ExtensionAPI) => void {
             case 'list': {
               const loaded = loadMemoryDocs();
               const lines = loaded.docs.length > 0
-                ? ['Memory docs:', ...formatMemorySummaryList(loaded.docs)]
-                : ['No memory docs found.'];
+                ? ['Memory packages:', ...formatMemorySummaryList(loaded.docs)]
+                : ['No memory packages found.'];
               const parseErrorLines = formatParseErrors(loaded.parseErrors);
               if (parseErrorLines.length > 0) {
                 lines.push('', ...parseErrorLines);
@@ -145,7 +145,7 @@ export function createMemoryAgentExtension(): (pi: ExtensionAPI) => void {
               });
 
               const lines = [
-                'Memory doc search:',
+                'Memory package search:',
                 `tags: ${tags.length > 0 ? tags.join(', ') : 'none'}`,
                 `type: ${params.type?.trim() || 'none'}`,
                 `status: ${params.status?.trim() || 'none'}`,
@@ -153,7 +153,7 @@ export function createMemoryAgentExtension(): (pi: ExtensionAPI) => void {
                 '',
                 ...(filteredDocs.length > 0
                   ? formatMemorySummaryList(filteredDocs)
-                  : ['No memory docs matched the supplied filters.']),
+                  : ['No memory packages matched the supplied filters.']),
               ];
               const parseErrorLines = formatParseErrors(loaded.parseErrors);
               if (parseErrorLines.length > 0) {
@@ -182,7 +182,7 @@ export function createMemoryAgentExtension(): (pi: ExtensionAPI) => void {
               const loaded = loadMemoryDocs();
               const memoryId = readRequiredString(params.memoryId, 'memoryId');
               const doc = resolveMemoryDocById(loaded.docs, memoryId);
-              const lines = [formatMemoryDoc(doc)];
+              const lines = [formatMemoryPackage(doc)];
               const parseErrorLines = formatParseErrors(loaded.parseErrors);
               if (parseErrorLines.length > 0) {
                 lines.push('', ...parseErrorLines);
@@ -223,7 +223,7 @@ export function createMemoryAgentExtension(): (pi: ExtensionAPI) => void {
                 content: [{
                   type: 'text' as const,
                   text: [
-                    `${result.overwritten ? 'Updated' : 'Created'} memory @${result.id}.`,
+                    `${result.overwritten ? 'Updated' : 'Created'} memory package @${result.id}.`,
                     `file: ${result.filePath}`,
                     `type: ${result.type}`,
                     `status: ${result.status}`,
@@ -257,7 +257,7 @@ export function createMemoryAgentExtension(): (pi: ExtensionAPI) => void {
               ];
 
               if (!hasIssues) {
-                lines.push('', 'All memory docs are valid.');
+                lines.push('', 'All memory packages are valid.');
               }
 
               if (result.parseErrors.length > 0) {

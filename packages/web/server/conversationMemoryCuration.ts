@@ -1,7 +1,7 @@
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
-import type { ParsedMemoryDoc } from '@personal-agent/core';
+import { loadMemoryDocs, loadMemoryPackageReferences, type ParsedMemoryDoc, type ParsedMemoryReference } from '@personal-agent/core';
 
 export interface DistilledConversationMemoryDraft {
   title: string;
@@ -37,37 +37,22 @@ export interface SavedDistilledConversationMemoryResult {
     type: string;
     status: string;
     area?: string;
-    role: string;
-    parent?: string;
-    related: string[];
     updated: string;
+    referenceCount: number;
   };
-  disposition: 'updated-existing' | 'created-capture';
-  matchedCanonicalIds: string[];
-  hubId?: string;
-}
-
-export interface MergeCaptureMemoryIntoCanonicalResult {
-  memory: {
-    id: string;
+  reference: {
+    path: string;
+    relativePath: string;
     title: string;
     summary: string;
     tags: string[];
-    path: string;
-    type: string;
-    status: string;
-    area?: string;
-    role: string;
-    parent?: string;
-    related: string[];
     updated: string;
   };
-  mergedMemoryId: string;
-  deletedMemoryId: string;
+  disposition: 'updated-existing' | 'created-reference';
 }
 
-interface CanonicalMatch {
-  doc: ParsedMemoryDoc;
+interface ReferenceMatch {
+  reference: ParsedMemoryReference;
   score: number;
 }
 
@@ -86,23 +71,26 @@ const GENERIC_MEMORY_TERMS = new Set([
   'being',
   'between',
   'both',
-  'capture',
   'checkpoint',
   'checkpoints',
   'conversation',
   'conversations',
   'could',
+  'detail',
+  'details',
   'distill',
   'distilled',
-  'doc',
-  'docs',
   'does',
   'done',
   'durable',
   'during',
   'each',
+  'file',
+  'files',
   'from',
   'have',
+  'hub',
+  'hubs',
   'into',
   'just',
   'keep',
@@ -116,8 +104,10 @@ const GENERIC_MEMORY_TERMS = new Set([
   'notes',
   'onto',
   'over',
-  'project',
-  'projects',
+  'package',
+  'packages',
+  'reference',
+  'references',
   'same',
   'should',
   'that',
@@ -192,118 +182,11 @@ function buildSpecificDraftTags(tags: string[], area: string | undefined): strin
   return [...new Set(values)];
 }
 
-function findHubDoc(docs: ParsedMemoryDoc[], area: string | undefined): ParsedMemoryDoc | undefined {
-  if (!area) {
-    return undefined;
-  }
-
-  const activeDocs = docs.filter((doc) => doc.status !== 'archived');
-  const exact = activeDocs.find((doc) => doc.role === 'hub' && doc.id === area);
-  if (exact) {
-    return exact;
-  }
-
-  const areaMatches = activeDocs.filter((doc) => doc.role === 'hub' && doc.area === area);
-  return areaMatches.length === 1 ? areaMatches[0] : undefined;
-}
-
-function scoreCanonicalMatch(doc: ParsedMemoryDoc, draft: DistilledConversationMemoryDraft, area: string | undefined): CanonicalMatch {
-  const ignoredTerms = buildIgnoredTerms(area);
-  const queryText = [draft.title, draft.summary, draft.body].join('\n');
-  const normalizedQueryText = normalizeMatchText(queryText);
-  const queryTokens = tokenizeForMatching(queryText, ignoredTerms);
-  const docText = [doc.id, doc.title, doc.summary, doc.tags.join(' '), doc.body].join('\n');
-  const docTokens = tokenizeForMatching(docText, ignoredTerms);
-  const draftTags = buildSpecificDraftTags(draft.tags, area);
-  const docTags = doc.tags
-    .map((tag) => normalizeTag(tag))
-    .filter((tag): tag is string => Boolean(tag));
-
-  let score = 0;
-
-  if (area && (doc.area === area || doc.id === area)) {
-    score += 1;
-  }
-
-  const matchedDraftTags = draftTags.filter((tag) => docTags.includes(tag));
-  score += matchedDraftTags.length * 4;
-
-  for (const tag of docTags) {
-    if (tag === 'conversation' || tag === 'checkpoint' || tag === 'memory') {
-      continue;
-    }
-
-    const phrase = tag.replace(/-/g, ' ');
-    if (phrase.length >= 4 && normalizedQueryText.includes(phrase)) {
-      score += 2;
-    }
-  }
-
-  const normalizedTitle = normalizeMatchText(doc.title);
-  if (normalizedTitle.length >= 8 && normalizedQueryText.includes(normalizedTitle)) {
-    score += 3;
-  }
-
-  const normalizedIdPhrase = doc.id.replace(/-/g, ' ');
-  if (normalizedIdPhrase.length >= 8 && normalizedQueryText.includes(normalizedIdPhrase)) {
-    score += 3;
-  }
-
-  let overlapCount = 0;
-  for (const token of queryTokens) {
-    if (docTokens.has(token)) {
-      overlapCount += 1;
-    }
-  }
-  score += Math.min(overlapCount, 6);
-
-  return { doc, score };
-}
-
-function chooseCanonicalMatch(docs: ParsedMemoryDoc[], draft: DistilledConversationMemoryDraft, area: string | undefined): {
-  target?: ParsedMemoryDoc;
-  relatedIds: string[];
-} {
-  const activeCanonicalDocs = docs.filter((doc) => doc.role === 'canonical' && doc.status !== 'archived');
-  const scopedCanonicalDocs = area
-    ? activeCanonicalDocs.filter((doc) => doc.area === area || doc.id === area)
-    : activeCanonicalDocs;
-
-  if (area && scopedCanonicalDocs.length === 1) {
-    return {
-      target: scopedCanonicalDocs[0],
-      relatedIds: [scopedCanonicalDocs[0].id],
-    };
-  }
-
-  const scored = scopedCanonicalDocs
-    .map((doc) => scoreCanonicalMatch(doc, draft, area))
-    .filter((entry) => entry.score > 0)
-    .sort((left, right) => {
-      if (right.score !== left.score) {
-        return right.score - left.score;
-      }
-
-      return left.doc.id.localeCompare(right.doc.id);
-    });
-
-  const top = scored[0];
-  const second = scored[1];
-  const isStrongMatch = Boolean(top)
-    && top.score >= 6
-    && (!second || top.score >= second.score + 2);
-
-  return {
-    target: isStrongMatch ? top?.doc : undefined,
-    relatedIds: scored.slice(0, 3).map((entry) => entry.doc.id),
-  };
-}
-
-function splitMarkdownFrontmatter(rawContent: string): { frontmatter: string; body: string } {
+function splitMarkdownFrontmatter(rawContent: string): { frontmatter: string; body: string } | null {
   const normalized = rawContent.replace(/\r\n/g, '\n');
   const match = normalized.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   if (!match) {
-    throw new Error('Memory markdown must start with YAML frontmatter.');
+    return null;
   }
 
   return {
@@ -312,26 +195,7 @@ function splitMarkdownFrontmatter(rawContent: string): { frontmatter: string; bo
   };
 }
 
-function readParsedMemoryMarkdown(filePath: string): { frontmatter: Record<string, unknown>; body: string } {
-  if (!existsSync(filePath)) {
-    throw new Error(`Memory file not found: ${filePath}`);
-  }
-
-  const raw = readFileSync(filePath, 'utf-8');
-  const parsed = splitMarkdownFrontmatter(raw);
-  const frontmatter = parseYaml(parsed.frontmatter);
-  if (!frontmatter || typeof frontmatter !== 'object' || Array.isArray(frontmatter)) {
-    throw new Error(`Invalid memory frontmatter in ${filePath}`);
-  }
-
-  return {
-    frontmatter: frontmatter as Record<string, unknown>,
-    body: parsed.body,
-  };
-}
-
-function readOptionalFrontmatterString(frontmatter: Record<string, unknown>, key: string): string | undefined {
-  const value = frontmatter[key];
+function readLooseString(value: unknown): string | undefined {
   if (typeof value !== 'string') {
     return undefined;
   }
@@ -340,10 +204,119 @@ function readOptionalFrontmatterString(frontmatter: Record<string, unknown>, key
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function readLooseStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return [...new Set(value
+    .map((item) => readLooseString(item))
+    .filter((item): item is string => Boolean(item)))];
+}
+
+function extractMarkdownTitle(body: string): string | undefined {
+  const match = body.match(/^#\s+(.+)$/m);
+  const title = match?.[1]?.trim();
+  return title && title.length > 0 ? title : undefined;
+}
+
+function extractFirstParagraph(body: string): string | undefined {
+  const paragraphs = body
+    .replace(/\r\n/g, '\n')
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter((paragraph) => paragraph.length > 0)
+    .filter((paragraph) => !paragraph.startsWith('#'));
+
+  const first = paragraphs[0];
+  if (!first) {
+    return undefined;
+  }
+
+  const cleaned = first
+    .replace(/\s+/g, ' ')
+    .replace(/^[-*]\s+/, '')
+    .trim();
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
+function humanizeMemoryTitle(value: string): string {
+  return value
+    .split('-')
+    .filter((part) => part.length > 0)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function buildMemoryFrontmatter(options: {
+  name: string;
+  description: string;
+  metadata: Record<string, unknown>;
+}): Record<string, unknown> {
+  const frontmatter: Record<string, unknown> = {
+    name: options.name,
+    description: options.description,
+  };
+
+  if (Object.keys(options.metadata).length > 0) {
+    frontmatter.metadata = options.metadata;
+  }
+
+  return frontmatter;
+}
+
 function stringifyMemoryMarkdown(frontmatter: Record<string, unknown>, body: string): string {
   const frontmatterText = stringifyYaml(frontmatter).trimEnd();
   const normalizedBody = body.replace(/^\n+/, '');
   return `---\n${frontmatterText}\n---\n\n${normalizedBody.replace(/\s*$/, '\n')}`;
+}
+
+function readParsedReferenceMarkdown(filePath: string): { frontmatter: Record<string, unknown> | null; body: string } {
+  if (!existsSync(filePath)) {
+    throw new Error(`Memory file not found: ${filePath}`);
+  }
+
+  const raw = readFileSync(filePath, 'utf-8');
+  const parsed = splitMarkdownFrontmatter(raw);
+  if (!parsed) {
+    return {
+      frontmatter: null,
+      body: raw.trim(),
+    };
+  }
+
+  try {
+    const frontmatter = parseYaml(parsed.frontmatter);
+    if (!frontmatter || typeof frontmatter !== 'object' || Array.isArray(frontmatter)) {
+      return {
+        frontmatter: null,
+        body: parsed.body,
+      };
+    }
+
+    return {
+      frontmatter: frontmatter as Record<string, unknown>,
+      body: parsed.body,
+    };
+  } catch {
+    return {
+      frontmatter: null,
+      body: parsed.body,
+    };
+  }
+}
+
+function readFrontmatterMetadata(frontmatter: Record<string, unknown> | null): Record<string, unknown> {
+  if (!frontmatter) {
+    return {};
+  }
+
+  const existing = frontmatter.metadata;
+  if (existing && typeof existing === 'object' && !Array.isArray(existing)) {
+    return { ...(existing as Record<string, unknown>) };
+  }
+
+  return {};
 }
 
 function appendDistilledUpdateSection(existingBody: string, block: string): string {
@@ -360,56 +333,7 @@ function appendDistilledUpdateSection(existingBody: string, block: string): stri
   return `${trimmedBody}\n\n${DISTILLED_UPDATES_HEADING}\n\n${block}\n`;
 }
 
-function extractLineValue(body: string, prefix: string): string | undefined {
-  const escapedPrefix = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = body.match(new RegExp(`^${escapedPrefix}(.+)$`, 'm'));
-  const value = match?.[1]?.trim();
-  return value && value.length > 0 ? value : undefined;
-}
-
-function extractBulletSection(body: string, heading: string): string[] {
-  const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = body.match(new RegExp(`(?:^|\\n)${escapedHeading}\\n([\\s\\S]*?)(?=\\n(?:#|##|_|[A-Z][^\\n]*:)|$)`));
-  if (!match) {
-    return [];
-  }
-
-  return (match[1] ?? '')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.startsWith('- '))
-    .map((line) => line.slice(2).trim())
-    .filter((line) => line.length > 0);
-}
-
-function buildDraftFromCaptureDoc(captureDoc: ParsedMemoryDoc): {
-  draft: DistilledConversationMemoryDraft;
-  sourceConversationTitle?: string;
-  sourceCwd?: string;
-} {
-  const parsed = readParsedMemoryMarkdown(captureDoc.filePath);
-  const userIntent = extractLineValue(parsed.body, 'At this checkpoint, the user intent was: ')
-    ?? captureDoc.summary
-    ?? 'Merge this capture into the target canonical memory.';
-  const learnedPoints = extractBulletSection(parsed.body, 'What the agent had learned by this point:');
-  const carryForwardPoints = extractBulletSection(parsed.body, 'Key carry-forward points:');
-
-  return {
-    draft: {
-      title: captureDoc.title,
-      summary: captureDoc.summary,
-      body: parsed.body.startsWith('#') ? parsed.body : `# ${captureDoc.title}\n\n${parsed.body}`,
-      tags: captureDoc.tags,
-      userIntent,
-      learnedPoints,
-      carryForwardPoints,
-    },
-    sourceConversationTitle: readOptionalFrontmatterString(parsed.frontmatter, 'origin_title'),
-    sourceCwd: readOptionalFrontmatterString(parsed.frontmatter, 'source_cwd'),
-  };
-}
-
-function buildCanonicalUpdateBlock(options: {
+function buildReferenceUpdateBlock(options: {
   updated: string;
   sourceConversationTitle?: string;
   sourceCwd?: string;
@@ -442,52 +366,7 @@ function buildCanonicalUpdateBlock(options: {
   ].filter((part): part is string => Boolean(part));
 
   lines.push(`- Source: ${sourceParts.join(' · ')}`);
-
   return lines.join('\n');
-}
-
-function updateCanonicalMemoryDoc(options: {
-  doc: ParsedMemoryDoc;
-  draft: DistilledConversationMemoryDraft;
-  updated: string;
-  sourceConversationTitle?: string;
-  sourceCwd?: string;
-}): SavedDistilledConversationMemoryResult {
-  const parsed = readParsedMemoryMarkdown(options.doc.filePath);
-  const updatedFrontmatter = {
-    ...parsed.frontmatter,
-    updated: options.updated,
-  };
-
-  const updateBlock = buildCanonicalUpdateBlock({
-    updated: options.updated,
-    sourceConversationTitle: options.sourceConversationTitle,
-    sourceCwd: options.sourceCwd,
-    draft: options.draft,
-  });
-
-  const nextBody = appendDistilledUpdateSection(parsed.body, updateBlock);
-  writeFileSync(options.doc.filePath, stringifyMemoryMarkdown(updatedFrontmatter, nextBody), 'utf-8');
-
-  return {
-    memory: {
-      id: options.doc.id,
-      title: options.doc.title,
-      summary: options.doc.summary,
-      tags: options.doc.tags,
-      path: options.doc.filePath,
-      type: options.doc.type,
-      status: options.doc.status,
-      area: options.doc.area,
-      role: options.doc.role ?? 'canonical',
-      parent: options.doc.parent,
-      related: options.doc.related,
-      updated: options.updated,
-    },
-    disposition: 'updated-existing',
-    matchedCanonicalIds: [options.doc.id],
-    ...(options.doc.parent ? { hubId: options.doc.parent } : {}),
-  };
 }
 
 function compactDateStamp(now = new Date()): string {
@@ -502,20 +381,102 @@ function slugifyMemoryIdSegment(value: string): string {
     .replace(/-+/g, '-');
 
   if (!slug) {
-    return 'conversation-memory';
+    return 'memory-reference';
   }
 
   return slug.length > 52 ? slug.slice(0, 52).replace(/-+$/g, '') : slug;
 }
 
-function allocateDistilledMemoryId(memoryDir: string, title: string): string {
-  const baseSlug = `conv-${slugifyMemoryIdSegment(title)}-${compactDateStamp()}`;
-  const safeBase = MEMORY_DOC_ID_PATTERN.test(baseSlug) ? baseSlug : `conv-memory-${compactDateStamp()}`;
+function findHubDoc(docs: ParsedMemoryDoc[], area: string | undefined): ParsedMemoryDoc | undefined {
+  if (!area) {
+    return undefined;
+  }
 
-  let candidate = safeBase;
+  const activeDocs = docs.filter((doc) => doc.status !== 'archived');
+  const exact = activeDocs.find((doc) => doc.id === area);
+  if (exact) {
+    return exact;
+  }
+
+  const areaMatches = activeDocs.filter((doc) => doc.area === area);
+  return areaMatches.length === 1 ? areaMatches[0] : undefined;
+}
+
+function scoreReferenceMatch(reference: ParsedMemoryReference, draft: DistilledConversationMemoryDraft, area: string | undefined): ReferenceMatch {
+  const ignoredTerms = buildIgnoredTerms(area);
+  const queryText = [draft.title, draft.summary, draft.body].join('\n');
+  const normalizedQueryText = normalizeMatchText(queryText);
+  const queryTokens = tokenizeForMatching(queryText, ignoredTerms);
+  const referenceText = [reference.id, reference.title, reference.summary, reference.tags.join(' '), reference.body].join('\n');
+  const referenceTokens = tokenizeForMatching(referenceText, ignoredTerms);
+  const draftTags = buildSpecificDraftTags(draft.tags, area);
+  const referenceTags = reference.tags
+    .map((tag) => normalizeTag(tag))
+    .filter((tag): tag is string => Boolean(tag));
+
+  let score = 0;
+
+  const matchedDraftTags = draftTags.filter((tag) => referenceTags.includes(tag));
+  score += matchedDraftTags.length * 4;
+
+  for (const tag of referenceTags) {
+    const phrase = tag.replace(/-/g, ' ');
+    if (phrase.length >= 4 && normalizedQueryText.includes(phrase)) {
+      score += 2;
+    }
+  }
+
+  const normalizedTitle = normalizeMatchText(reference.title);
+  if (normalizedTitle.length >= 8 && normalizedQueryText.includes(normalizedTitle)) {
+    score += 3;
+  }
+
+  const normalizedIdPhrase = reference.id.replace(/-/g, ' ');
+  if (normalizedIdPhrase.length >= 8 && normalizedQueryText.includes(normalizedIdPhrase)) {
+    score += 3;
+  }
+
+  let overlapCount = 0;
+  for (const token of queryTokens) {
+    if (referenceTokens.has(token)) {
+      overlapCount += 1;
+    }
+  }
+  score += Math.min(overlapCount, 6);
+
+  return { reference, score };
+}
+
+function chooseReferenceMatch(references: ParsedMemoryReference[], draft: DistilledConversationMemoryDraft, area: string | undefined): ParsedMemoryReference | undefined {
+  const scored = references
+    .map((reference) => scoreReferenceMatch(reference, draft, area))
+    .filter((entry) => entry.score > 0)
+    .sort((left, right) => {
+      if (right.score !== left.score) {
+        return right.score - left.score;
+      }
+
+      return left.reference.title.localeCompare(right.reference.title);
+    });
+
+  const top = scored[0];
+  const second = scored[1];
+  const isStrongMatch = Boolean(top)
+    && top.score >= 6
+    && (!second || top.score >= second.score + 2);
+
+  return isStrongMatch ? top?.reference : undefined;
+}
+
+function deriveNewHubId(existingDocs: ParsedMemoryDoc[], draft: DistilledConversationMemoryDraft, area: string | undefined): string {
+  const specificTag = buildSpecificDraftTags(draft.tags, area)[0];
+  const preferred = area ?? specificTag ?? slugifyMemoryIdSegment(draft.title);
+  const safeBase = MEMORY_DOC_ID_PATTERN.test(preferred) ? preferred : slugifyMemoryIdSegment(draft.title);
+  const existingIds = new Set(existingDocs.map((doc) => doc.id));
+
+  let candidate = safeBase || `memory-${compactDateStamp()}`;
   let suffix = 2;
-
-  while (existsSync(join(memoryDir, `${candidate}.md`))) {
+  while (existingIds.has(candidate)) {
     candidate = `${safeBase}-${suffix}`;
     suffix += 1;
   }
@@ -523,16 +484,72 @@ function allocateDistilledMemoryId(memoryDir: string, title: string): string {
   return candidate;
 }
 
-function buildCaptureMemoryMarkdown(input: {
+function readHubDoc(memoryDir: string, id: string): ParsedMemoryDoc {
+  const refreshed = loadMemoryDocs({ profilesRoot: dirname(memoryDir) }).docs.find((doc) => doc.id === id);
+  if (!refreshed) {
+    throw new Error(`Failed to load memory hub @${id}.`);
+  }
+
+  return refreshed;
+}
+
+function createHubMemoryDoc(options: SaveCuratedDistilledConversationMemoryOptions, existingDocs: ParsedMemoryDoc[]): ParsedMemoryDoc {
+  const id = deriveNewHubId(existingDocs, options.draft, options.area);
+  const packagePath = join(options.memoryDir, id);
+  const filePath = join(packagePath, 'MEMORY.md');
+  const hubTitle = options.area ? humanizeMemoryTitle(options.area) : options.draft.title;
+  const hubSummary = options.area
+    ? `Durable knowledge hub for ${humanizeMemoryTitle(options.area)}.`
+    : options.draft.summary;
+  const metadata: Record<string, unknown> = {
+    title: hubTitle,
+    type: 'note',
+    status: 'active',
+    area: options.area ?? id,
+    role: 'hub',
+    tags: [...new Set(options.draft.tags.filter((tag) => tag !== 'conversation' && tag !== 'checkpoint'))],
+    updated: options.updated,
+  };
+
+  mkdirSync(packagePath, { recursive: true });
+  writeFileSync(filePath, stringifyMemoryMarkdown(buildMemoryFrontmatter({
+    name: id,
+    description: hubSummary,
+    metadata,
+  }), [
+    `# ${hubTitle}`,
+    '',
+    hubSummary,
+    '',
+    '## References',
+    '',
+    'Use this hub to organize durable notes for this area. Detailed material lives in `references/`.',
+  ].join('\n')), 'utf-8');
+
+  return readHubDoc(options.memoryDir, id);
+}
+
+function referenceIdFromTitle(title: string, existingReferenceIds: Set<string>): string {
+  const baseSlug = slugifyMemoryIdSegment(title);
+  const safeBase = MEMORY_DOC_ID_PATTERN.test(baseSlug) ? baseSlug : `memory-reference-${compactDateStamp()}`;
+
+  let candidate = safeBase;
+  let suffix = 2;
+  while (existingReferenceIds.has(candidate)) {
+    candidate = `${safeBase}-${suffix}`;
+    suffix += 1;
+  }
+
+  return candidate;
+}
+
+function buildReferenceMarkdown(input: {
   id: string;
   title: string;
   summary: string;
   tags: string[];
   updated: string;
   area?: string;
-  role: string;
-  parent?: string;
-  related: string[];
   distilledAt: string;
   sourceConversationTitle?: string;
   sourceCwd?: string;
@@ -541,16 +558,11 @@ function buildCaptureMemoryMarkdown(input: {
   anchorPreview: string;
   body: string;
 }): string {
-  const frontmatter: Record<string, unknown> = {
-    id: input.id,
+  const metadata: Record<string, unknown> = {
     title: input.title,
-    summary: input.summary,
-    type: 'conversation-checkpoint',
+    type: 'note',
     status: 'active',
     ...(input.area ? { area: input.area } : {}),
-    role: input.role,
-    ...(input.parent ? { parent: input.parent } : {}),
-    ...(input.related.length > 0 ? { related: input.related } : {}),
     tags: input.tags,
     updated: input.updated,
     origin: 'conversation',
@@ -562,24 +574,88 @@ function buildCaptureMemoryMarkdown(input: {
     ...(input.relatedProjectIds.length > 0 ? { related_project_ids: input.relatedProjectIds } : {}),
   };
 
-  const normalizedBody = input.body.startsWith('#') ? input.body : `\n${input.body}`;
-  return stringifyMemoryMarkdown(frontmatter, normalizedBody);
+  const normalizedBody = input.body.startsWith('#') ? input.body : `# ${input.title}\n\n${input.body}`;
+  return stringifyMemoryMarkdown(buildMemoryFrontmatter({
+    name: input.id,
+    description: input.summary,
+    metadata,
+  }), normalizedBody);
 }
 
-function createCaptureMemoryDoc(options: SaveCuratedDistilledConversationMemoryOptions, relatedIds: string[], hubId: string | undefined): SavedDistilledConversationMemoryResult {
-  const id = allocateDistilledMemoryId(options.memoryDir, options.draft.title);
-  const filePath = join(options.memoryDir, `${id}.md`);
-  const related = relatedIds.filter((relatedId) => relatedId !== hubId).slice(0, 3);
-  const content = buildCaptureMemoryMarkdown({
+function updateReferenceMemory(options: {
+  hub: ParsedMemoryDoc;
+  reference: ParsedMemoryReference;
+  draft: DistilledConversationMemoryDraft;
+  updated: string;
+  sourceConversationTitle?: string;
+  sourceCwd?: string;
+}): SavedDistilledConversationMemoryResult {
+  const parsed = readParsedReferenceMarkdown(options.reference.filePath);
+  const frontmatter = parsed.frontmatter ?? {};
+  const metadata = readFrontmatterMetadata(parsed.frontmatter);
+  metadata.updated = options.updated;
+  metadata.title = options.reference.title;
+  if (options.hub.area) {
+    metadata.area = options.hub.area;
+  }
+
+  const updateBlock = buildReferenceUpdateBlock({
+    updated: options.updated,
+    sourceConversationTitle: options.sourceConversationTitle,
+    sourceCwd: options.sourceCwd,
+    draft: options.draft,
+  });
+  const nextBody = appendDistilledUpdateSection(parsed.body, updateBlock);
+  const nextSummary = readLooseString(frontmatter.description) ?? options.reference.summary;
+
+  writeFileSync(
+    options.reference.filePath,
+    stringifyMemoryMarkdown(buildMemoryFrontmatter({
+      name: readLooseString(frontmatter.name) ?? options.reference.id,
+      description: nextSummary,
+      metadata,
+    }), nextBody),
+    'utf-8',
+  );
+
+  return {
+    memory: {
+      id: options.hub.id,
+      title: options.hub.title,
+      summary: options.hub.summary,
+      tags: options.hub.tags,
+      path: options.hub.filePath,
+      type: options.hub.type,
+      status: options.hub.status,
+      area: options.hub.area,
+      updated: options.updated,
+      referenceCount: options.hub.referencePaths.length,
+    },
+    reference: {
+      path: options.reference.filePath,
+      relativePath: options.reference.relativePath,
+      title: options.reference.title,
+      summary: options.reference.summary,
+      tags: options.reference.tags,
+      updated: options.updated,
+    },
+    disposition: 'updated-existing',
+  };
+}
+
+function createReferenceMemory(options: SaveCuratedDistilledConversationMemoryOptions, hub: ParsedMemoryDoc): SavedDistilledConversationMemoryResult {
+  const existingReferences = loadMemoryPackageReferences(hub.packagePath);
+  const existingReferenceIds = new Set(existingReferences.map((reference) => reference.id));
+  const id = referenceIdFromTitle(options.draft.title, existingReferenceIds);
+  const filePath = join(hub.packagePath, 'references', `${id}.md`);
+  const relativePath = `references/${id}.md`;
+  const content = buildReferenceMarkdown({
     id,
     title: options.draft.title,
     summary: options.draft.summary,
     tags: options.draft.tags,
     updated: options.updated,
-    area: options.area,
-    role: 'capture',
-    parent: hubId,
-    related,
+    area: options.area ?? hub.area ?? hub.id,
     distilledAt: options.distilledAt,
     sourceConversationTitle: options.sourceConversationTitle,
     sourceCwd: options.sourceCwd,
@@ -589,75 +665,43 @@ function createCaptureMemoryDoc(options: SaveCuratedDistilledConversationMemoryO
     body: options.draft.body,
   });
 
+  mkdirSync(join(hub.packagePath, 'references'), { recursive: true });
   writeFileSync(filePath, content, 'utf-8');
 
   return {
     memory: {
-      id,
+      id: hub.id,
+      title: hub.title,
+      summary: hub.summary,
+      tags: hub.tags,
+      path: hub.filePath,
+      type: hub.type,
+      status: hub.status,
+      area: hub.area,
+      updated: options.updated,
+      referenceCount: hub.referencePaths.length + 1,
+    },
+    reference: {
+      path: filePath,
+      relativePath,
       title: options.draft.title,
       summary: options.draft.summary,
       tags: options.draft.tags,
-      path: filePath,
-      type: 'conversation-checkpoint',
-      status: 'active',
-      area: options.area,
-      role: 'capture',
-      parent: hubId,
-      related,
       updated: options.updated,
     },
-    disposition: 'created-capture',
-    matchedCanonicalIds: relatedIds,
-    ...(hubId ? { hubId } : {}),
-  };
-}
-
-export function mergeCaptureMemoryIntoCanonical(options: {
-  captureDoc: ParsedMemoryDoc;
-  targetDoc: ParsedMemoryDoc;
-  updated: string;
-}): MergeCaptureMemoryIntoCanonicalResult {
-  if (options.captureDoc.id === options.targetDoc.id) {
-    throw new Error('Capture memory and target memory must be different docs.');
-  }
-
-  if (options.captureDoc.role !== 'capture') {
-    throw new Error(`Memory @${options.captureDoc.id} is not a capture doc.`);
-  }
-
-  if (options.targetDoc.role !== 'canonical') {
-    throw new Error(`Memory @${options.targetDoc.id} is not a canonical doc.`);
-  }
-
-  if (options.targetDoc.status === 'archived') {
-    throw new Error(`Memory @${options.targetDoc.id} is archived and cannot accept merges.`);
-  }
-
-  const capture = buildDraftFromCaptureDoc(options.captureDoc);
-  const result = updateCanonicalMemoryDoc({
-    doc: options.targetDoc,
-    draft: capture.draft,
-    updated: options.updated,
-    sourceConversationTitle: capture.sourceConversationTitle,
-    sourceCwd: capture.sourceCwd,
-  });
-
-  unlinkSync(options.captureDoc.filePath);
-
-  return {
-    memory: result.memory,
-    mergedMemoryId: options.captureDoc.id,
-    deletedMemoryId: options.captureDoc.id,
+    disposition: 'created-reference',
   };
 }
 
 export function saveCuratedDistilledConversationMemory(options: SaveCuratedDistilledConversationMemoryOptions): SavedDistilledConversationMemoryResult {
-  const hub = findHubDoc(options.existingDocs, options.area);
-  const match = chooseCanonicalMatch(options.existingDocs, options.draft, options.area);
+  const hub = findHubDoc(options.existingDocs, options.area) ?? createHubMemoryDoc(options, options.existingDocs);
+  const references = loadMemoryPackageReferences(hub.packagePath).filter((reference) => reference.body.trim().length > 0);
+  const match = chooseReferenceMatch(references, options.draft, options.area ?? hub.area ?? hub.id);
 
-  if (match.target) {
-    return updateCanonicalMemoryDoc({
-      doc: match.target,
+  if (match) {
+    return updateReferenceMemory({
+      hub,
+      reference: match,
       draft: options.draft,
       updated: options.updated,
       sourceConversationTitle: options.sourceConversationTitle,
@@ -665,5 +709,5 @@ export function saveCuratedDistilledConversationMemory(options: SaveCuratedDisti
     });
   }
 
-  return createCaptureMemoryDoc(options, match.relatedIds, hub?.id);
+  return createReferenceMemory(options, hub);
 }

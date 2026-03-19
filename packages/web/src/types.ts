@@ -768,20 +768,25 @@ export interface MemoryDocItem {
   related?: string[];
   updated?: string;
   searchText?: string;
+  referenceCount?: number;
   recentSessionCount?: number;
   lastUsedAt?: string | null;
   usedInLastSession?: boolean;
 }
 
+export interface MemoryReferenceItem {
+  title: string;
+  summary: string;
+  tags: string[];
+  path: string;
+  relativePath: string;
+  updated?: string;
+}
+
 export interface MemoryDocDetail {
   memory: MemoryDocItem;
   content: string;
-}
-
-export interface MergeMemoryDocResult {
-  memory: MemoryDocItem;
-  mergedMemoryId: string;
-  deletedMemoryId: string;
+  references: MemoryReferenceItem[];
 }
 
 export interface MemoryWorkItem {

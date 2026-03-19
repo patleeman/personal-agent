@@ -30,7 +30,7 @@ describe('MemoriesPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders memory docs with the shared list layout and selected row styling', () => {
+  it('renders hub packages with the shared list layout and selected row styling', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         memories: [
@@ -39,34 +39,23 @@ describe('MemoriesPage', () => {
             title: 'Memory index',
             summary: 'Top-level knowledge hub.',
             tags: ['memory', 'index'],
-            path: '/tmp/memory-index.md',
+            path: '/tmp/memory-index/MEMORY.md',
             type: 'index',
             status: 'active',
             role: 'hub',
             area: 'memory',
+            referenceCount: 2,
             updated: '2026-03-17T12:00:00.000Z',
-          },
-          {
-            id: 'system-design',
-            title: 'System design notes',
-            summary: 'Guidelines for architecting new services.',
-            tags: ['architecture', 'backend'],
-            path: '/tmp/system-design.md',
-            type: 'reference',
-            status: 'active',
-            role: 'canonical',
-            area: 'engineering',
-            parent: 'memory-index',
-            updated: '2026-03-16T12:00:00.000Z',
           },
           {
             id: 'writing-style',
             title: 'Writing style',
             summary: 'Keep responses concise and direct.',
             tags: ['communication'],
-            path: '/tmp/writing-style.md',
-            role: 'canonical',
+            path: '/tmp/writing-style/MEMORY.md',
+            role: 'hub',
             area: 'communication',
+            referenceCount: 1,
             updated: '2026-03-15T08:00:00.000Z',
           },
         ],
@@ -79,7 +68,7 @@ describe('MemoriesPage', () => {
     });
 
     const html = renderToString(
-      <MemoryRouter initialEntries={['/memories?memory=system-design']}>
+      <MemoryRouter initialEntries={['/memories?memory=memory-index']}>
         <Routes>
           <Route path="/memories" element={<MemoriesPage />} />
         </Routes>
@@ -87,13 +76,14 @@ describe('MemoriesPage', () => {
     );
 
     expect(html).toContain('Knowledge hubs');
-    expect(html).toContain('Browse memories');
+    expect(html).toContain('Search hubs');
+    expect(html).toContain('Selected hub');
     expect(html).toContain('Memory index');
-    expect(html).toContain('System design notes');
     expect(html).toContain('Writing style');
-    expect(html).toContain('href="/memories?memory=system-design"');
+    expect(html).toContain('2 references');
+    expect(html).toContain('href="/memories?memory=memory-index"');
     expect(html).toContain('ui-list-row-selected');
-    expect(html).not.toContain('Start convo');
+    expect(html).not.toContain('Browse memories');
   });
 
   it('shows active distillation work in the memory queue', () => {
@@ -129,7 +119,7 @@ describe('MemoriesPage', () => {
     expect(html).toContain('/conversations/conv-123');
   });
 
-  it('shows the empty state when there are no memory docs', () => {
+  it('shows the empty state when there are no memory packages', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         memories: [],
@@ -150,6 +140,6 @@ describe('MemoriesPage', () => {
     );
 
     expect(html).toContain('No memories yet.');
-    expect(html).toContain('Distill a conversation message to create a durable memory doc.');
+    expect(html).toContain('Distill a conversation message to create or update a durable memory hub package.');
   });
 });

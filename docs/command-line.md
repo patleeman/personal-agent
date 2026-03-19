@@ -198,7 +198,7 @@ See [Web UI Guide](./web-ui.md).
 
 ### `pa memory [list|find|show|new|lint]`
 
-Work with the shared global memory docs store.
+Work with the shared global memory packages store.
 
 Examples:
 
@@ -290,7 +290,7 @@ pa runs list
 pa inbox list --unread
 ```
 
-### Create and validate a memory note
+### Create and validate a memory package
 
 ```bash
 pa memory new repo-notes \

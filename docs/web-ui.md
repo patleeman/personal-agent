@@ -202,7 +202,7 @@ The Memory page is a user-facing browser for:
 
 - profile `AGENTS.md`
 - skills
-- shared global memory docs
+- shared global memory packages
 - memory distillation work that is still running or needs attention
 
 It is meant to answer:
@@ -253,7 +253,7 @@ You can reference:
 
 - projects
 - scheduled tasks
-- memory docs
+- memory packages
 - skills
 - profiles
 

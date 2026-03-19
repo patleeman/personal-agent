@@ -1,5 +1,5 @@
-import { join, relative, resolve } from 'node:path';
-import { existsSync } from 'node:fs';
+import { basename, join, relative, resolve } from 'node:path';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import {
@@ -113,6 +113,121 @@ function toDisplayPath(cwd: string, path: string): string {
   return displayed.replace(/\\/g, '/');
 }
 
+interface MemoryDefinition {
+  name: string;
+  description: string;
+  path: string;
+  role?: string;
+}
+
+function extractMemoryRole(content: string): string | undefined {
+  const frontmatter = extractFrontmatterBlock(content);
+  if (!frontmatter) {
+    return undefined;
+  }
+
+  const match = frontmatter.match(/^\s*role:\s*["']?([^"'\n]+)["']?\s*$/m);
+  const role = match?.[1]?.trim().toLowerCase();
+  return role && role.length > 0 ? role : undefined;
+}
+
+function extractFrontmatterBlock(content: string): string | null {
+  const match = content.match(/^---\s*\n([\s\S]*?)\n---\s*(?:\n|$)/);
+  return match?.[1] ?? null;
+}
+
+function parseMarkdownFrontmatter(content: string): Record<string, string> {
+  const body = extractFrontmatterBlock(content);
+  if (!body) {
+    return {};
+  }
+
+  const output: Record<string, string> = {};
+
+  for (const line of body.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0 || trimmed.startsWith('#')) {
+      continue;
+    }
+
+    const separatorIndex = trimmed.indexOf(':');
+    if (separatorIndex <= 0) {
+      continue;
+    }
+
+    const key = trimmed.slice(0, separatorIndex).trim().toLowerCase();
+    const value = trimmed.slice(separatorIndex + 1).trim().replace(/^['"]|['"]$/g, '');
+    if (!key || !value) {
+      continue;
+    }
+
+    output[key] = value;
+  }
+
+  return output;
+}
+
+function listAvailableMemories(memoryDir: string | undefined): MemoryDefinition[] {
+  if (!memoryDir || !existsSync(memoryDir)) {
+    return [];
+  }
+
+  const entries = readdirSync(memoryDir, { withFileTypes: true });
+  const discovered: MemoryDefinition[] = [];
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    const memoryFile = join(memoryDir, entry.name, 'MEMORY.md');
+    if (!existsSync(memoryFile)) {
+      continue;
+    }
+
+    try {
+      const content = readFileSync(memoryFile, 'utf-8');
+      const frontmatter = parseMarkdownFrontmatter(content);
+      const name = (frontmatter.name ?? basename(entry.name)).trim();
+      const description = (frontmatter.description ?? '').trim();
+      if (!name || !description) {
+        continue;
+      }
+
+      discovered.push({
+        name,
+        description,
+        path: memoryFile,
+        role: extractMemoryRole(content),
+      });
+    } catch {
+      // Ignore malformed memory packages in the prompt-time hint list.
+    }
+  }
+
+  const preferred = discovered.filter((memory) => !memory.role || memory.role === 'hub');
+  const visible = preferred.length > 0 ? preferred : discovered;
+  return visible.sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function buildAvailableMemoriesSection(cwd: string, memoryDir: string | undefined): string {
+  const memories = listAvailableMemories(memoryDir);
+  if (memories.length === 0) {
+    return 'No shared memory packages found.';
+  }
+
+  return [
+    '<available_memories>',
+    ...memories.map((memory) => [
+      `  <memory name="${memory.name}" location="${toDisplayPath(cwd, memory.path)}">`,
+      `    ${memory.description}`,
+      '  </memory>',
+    ].join('\n')),
+    '</available_memories>',
+    'Memories are durable knowledge hubs packaged like skills. Read the matching MEMORY.md when the user refers to that area, then follow relative references inside the memory directory.',
+  ].join('\n');
+}
+
 export function resolveMemoryProfileContext(cwd: string): MemoryProfileContext {
   const repoRoot = resolveRepoRoot();
   const profilesRoot = resolveProfilesRoot();
@@ -179,12 +294,14 @@ function buildMemoryTemplateVariables(options: {
     : '';
 
   const memorySection = options.activeMemoryDir
-    ? `- Global memory dir: ${toDisplayPath(options.cwd, options.activeMemoryDir)}\n- Memory doc template: ${toDisplayPath(options.cwd, join(options.activeMemoryDir, '<doc-id>.md'))}`
+    ? `- Global memory dir: ${toDisplayPath(options.cwd, options.activeMemoryDir)}\n- Memory package template: ${toDisplayPath(options.cwd, join(options.activeMemoryDir, '<memory-name>', 'MEMORY.md'))}`
     : '- Global memory dir: unavailable';
 
   const memoryRetrievalSection = options.activeMemoryDir
-    ? '- At task start, apply the active AGENTS policy first, then load only the skills and memory docs relevant to the current request.\n- Retrieval order: AGENTS.md for durable policy/facts, skills for reusable workflows/tactics, global memory docs for durable knowledge/context.\n- Prefer targeted retrieval over broad scans; do not read the whole memory directory unless the task genuinely requires it.\n- Prefer `pa memory list` to inventory available memory docs.\n- Prefer `pa memory find --text <query>` and/or `--tag`, `--type`, `--status` to locate relevant docs quickly.\n- Use `pa memory show <id>` to inspect a specific memory doc by id.\n- Use `pa memory new <id> ...` to create a new memory doc with valid frontmatter when needed.\n- Use `pa memory lint` after creating or heavily editing memory docs.'
-    : '- Global memory docs are unavailable; rely on AGENTS, skills, and repo docs instead.';
+    ? '- At task start, apply the active AGENTS policy first, then load only the skills and memory packages relevant to the current request.\n- Retrieval order: AGENTS.md for durable policy/facts, skills for reusable workflows/tactics, shared memory packages for durable knowledge/context.\n- Prefer targeted retrieval over broad scans; do not read the whole memory directory unless the task genuinely requires it.\n- Prefer `pa memory list` to inventory available memories.\n- Prefer `pa memory find --text <query>` and/or `--tag`, `--type`, `--status` to locate relevant memories quickly.\n- Use `pa memory show <id>` to inspect a specific memory package by id.\n- Use `pa memory new <id> ...` to create a new memory package with a valid MEMORY.md scaffold when needed.\n- Use `pa memory lint` after creating or heavily editing memories.'
+    : '- Shared memory packages are unavailable; rely on AGENTS, skills, and repo docs instead.';
+
+  const availableMemoriesSection = buildAvailableMemoriesSection(options.cwd, options.activeMemoryDir);
 
   const docsDirDisplay = toDisplayPath(options.cwd, join(options.repoRoot, 'docs'));
   const docsIndexDisplay = toDisplayPath(options.cwd, join(options.repoRoot, 'docs', 'README.md'));
@@ -201,6 +318,7 @@ function buildMemoryTemplateVariables(options: {
     docs_dir: docsDirDisplay,
     docs_index: docsIndexDisplay,
     memory_retrieval_section: memoryRetrievalSection,
+    available_memories_section: availableMemoriesSection,
   };
 }
 
