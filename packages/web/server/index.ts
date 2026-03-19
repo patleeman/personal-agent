@@ -259,6 +259,7 @@ import {
   activateDueDeferredResumesForSessionFile,
   cancelDeferredResumeForSessionFile,
   completeDeferredResumeForSessionFile,
+  fireDeferredResumeNowForSessionFile,
   listDeferredResumesForSessionFile,
   retryDeferredResumeForSessionFile,
   scheduleDeferredResumeForSessionFile,
@@ -5951,6 +5952,31 @@ app.post('/api/conversations/:id/deferred-resumes', async (req, res) => {
     res.json({
       conversationId: req.params.id,
       resume: resumeRecord,
+      resumes: listDeferredResumesForSessionFile(sessionFile),
+    });
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
+});
+
+app.post('/api/conversations/:id/deferred-resumes/:resumeId/fire', async (req, res) => {
+  try {
+    const sessionFile = resolveConversationSessionFile(req.params.id);
+    if (!sessionFile) {
+      res.status(404).json({ error: 'Conversation not found' });
+      return;
+    }
+
+    const resume = await fireDeferredResumeNowForSessionFile({
+      sessionFile,
+      id: req.params.resumeId,
+    });
+
+    await flushLiveDeferredResumes();
+    invalidateAppTopics('sessions');
+    res.json({
+      conversationId: req.params.id,
+      resume,
       resumes: listDeferredResumesForSessionFile(sessionFile),
     });
   } catch (err) {

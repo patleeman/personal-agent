@@ -375,6 +375,14 @@ export const api = {
 
       return res.json() as Promise<{ conversationId: string; resume: DeferredResumeSummary; resumes: DeferredResumeSummary[] }>;
     }),
+  fireDeferredResumeNow: (id: string, resumeId: string) =>
+    fetch(`/api/conversations/${encodeURIComponent(id)}/deferred-resumes/${encodeURIComponent(resumeId)}/fire`, { method: 'POST' }).then(async (res) => {
+      if (!res.ok) {
+        throw new Error(await readApiError(res));
+      }
+
+      return res.json() as Promise<{ conversationId: string; resume: DeferredResumeSummary; resumes: DeferredResumeSummary[] }>;
+    }),
   cancelDeferredResume: (id: string, resumeId: string) =>
     fetch(`/api/conversations/${encodeURIComponent(id)}/deferred-resumes/${encodeURIComponent(resumeId)}`, { method: 'DELETE' }).then(async (res) => {
       if (!res.ok) {

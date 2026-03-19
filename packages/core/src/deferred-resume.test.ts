@@ -4,6 +4,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  activateDeferredResume,
   activateDueDeferredResumes,
   createEmptyDeferredResumeState,
   getDueScheduledSessionDeferredResumeEntries,
@@ -78,15 +79,14 @@ describe('deferred resume state', () => {
 
     expect(getDueScheduledSessionDeferredResumeEntries(state, '/tmp/sessions/current.jsonl', new Date('2026-03-08T11:59:59.000Z'))).toEqual([]);
 
-    const activated = activateDueDeferredResumes(state, {
-      at: new Date('2026-03-08T12:00:30.000Z'),
+    const activatedEarly = activateDeferredResume(state, {
+      id: 'resume-1',
+      at: new Date('2026-03-08T11:55:00.000Z'),
     });
-
-    expect(activated).toHaveLength(1);
-    expect(activated[0]).toMatchObject({
+    expect(activatedEarly).toMatchObject({
       id: 'resume-1',
       status: 'ready',
-      readyAt: '2026-03-08T12:00:30.000Z',
+      readyAt: '2026-03-08T11:55:00.000Z',
     });
     expect(getReadySessionDeferredResumeEntries(state, '/tmp/sessions/current.jsonl')).toHaveLength(1);
 
@@ -101,6 +101,18 @@ describe('deferred resume state', () => {
       attempts: 1,
     });
     expect(getReadySessionDeferredResumeEntries(state, '/tmp/sessions/current.jsonl')).toEqual([]);
+
+    const activated = activateDueDeferredResumes(state, {
+      at: new Date('2026-03-08T12:05:30.000Z'),
+    });
+
+    expect(activated).toHaveLength(1);
+    expect(activated[0]).toMatchObject({
+      id: 'resume-1',
+      status: 'ready',
+      readyAt: '2026-03-08T12:05:30.000Z',
+    });
+    expect(getReadySessionDeferredResumeEntries(state, '/tmp/sessions/current.jsonl')).toHaveLength(1);
 
     expect(removeDeferredResume(state, 'resume-1')).toBe(true);
     expect(removeDeferredResume(state, 'resume-1')).toBe(false);

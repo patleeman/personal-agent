@@ -2349,6 +2349,23 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
+  async function fireDeferredResumeNow(resumeId: string) {
+    if (!id) {
+      return;
+    }
+
+    setDeferredResumesBusy(true);
+    try {
+      const result = await api.fireDeferredResumeNow(id, resumeId);
+      setDeferredResumes(result.resumes);
+      showNotice('accent', 'Deferred resume firing…');
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    } finally {
+      setDeferredResumesBusy(false);
+    }
+  }
+
   async function cancelDeferredResume(resumeId: string) {
     if (!id) {
       return;
@@ -3531,14 +3548,26 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                             {resume.attempts > 0 ? ` · retries ${resume.attempts}` : ''}
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => { void cancelDeferredResume(resume.id); }}
-                          className="shrink-0 text-[11px] text-dim transition-colors hover:text-danger disabled:opacity-40"
-                          disabled={deferredResumesBusy}
-                        >
-                          cancel
-                        </button>
+                        <div className="flex shrink-0 items-center gap-3">
+                          {resume.status === 'scheduled' && (
+                            <button
+                              type="button"
+                              onClick={() => { void fireDeferredResumeNow(resume.id); }}
+                              className="text-[11px] text-accent transition-colors hover:text-accent/80 disabled:opacity-40"
+                              disabled={deferredResumesBusy}
+                            >
+                              fire now
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => { void cancelDeferredResume(resume.id); }}
+                            className="text-[11px] text-dim transition-colors hover:text-danger disabled:opacity-40"
+                            disabled={deferredResumesBusy}
+                          >
+                            cancel
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>

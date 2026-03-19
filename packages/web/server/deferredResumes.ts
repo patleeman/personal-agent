@@ -1,4 +1,5 @@
 import {
+  activateDeferredResume,
   activateDueDeferredResumes,
   getSessionDeferredResumeEntries,
   loadDeferredResumeState,
@@ -13,6 +14,7 @@ import {
 import {
   cancelDeferredResumeConversationRun,
   loadDaemonConfig,
+  markDeferredResumeConversationRunReady,
   resolveDaemonPaths,
   scheduleDeferredResumeConversationRun,
 } from '@personal-agent/daemon';
@@ -109,6 +111,43 @@ export function retryDeferredResumeForSessionFile(input: {
 
   saveDeferredResumeState(state);
   return toSummary(retried);
+}
+
+export async function fireDeferredResumeNowForSessionFile(input: {
+  sessionFile: string;
+  id: string;
+  at?: Date;
+}): Promise<DeferredResumeSummary> {
+  const state = loadDeferredResumeState();
+  const record = state.resumes[input.id];
+  if (!record || record.sessionFile !== input.sessionFile) {
+    throw new Error(`No deferred resume found for this conversation: ${input.id}`);
+  }
+
+  const wasReady = record.status === 'ready';
+  const activated = activateDeferredResume(state, {
+    id: input.id,
+    at: input.at,
+  });
+  if (!activated) {
+    throw new Error(`No deferred resume found for this conversation: ${input.id}`);
+  }
+
+  saveDeferredResumeState(state);
+  if (!wasReady) {
+    await markDeferredResumeConversationRunReady({
+      daemonRoot: resolveDaemonRoot(),
+      deferredResumeId: activated.id,
+      sessionFile: activated.sessionFile,
+      prompt: activated.prompt,
+      dueAt: activated.dueAt,
+      createdAt: activated.createdAt,
+      readyAt: activated.readyAt ?? (input.at ?? new Date()).toISOString(),
+      conversationId: readSessionConversationId(activated.sessionFile),
+    });
+  }
+
+  return toSummary(activated);
 }
 
 export async function scheduleDeferredResumeForSessionFile(input: {

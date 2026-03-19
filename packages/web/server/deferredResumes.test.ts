@@ -8,6 +8,7 @@ import {
   activateDueDeferredResumesForSessionFile,
   cancelDeferredResumeForSessionFile,
   completeDeferredResumeForSessionFile,
+  fireDeferredResumeNowForSessionFile,
   listDeferredResumesForSessionFile,
   retryDeferredResumeForSessionFile,
   scheduleDeferredResumeForSessionFile,
@@ -93,6 +94,42 @@ describe('deferredResumes', () => {
     expect(listDeferredResumesForSessionFile('/tmp/sessions/current.jsonl')).toEqual([]);
     expect(listDeferredResumesForSessionFile('/tmp/sessions/other.jsonl')).toEqual([
       expect.objectContaining({ id: keep.id }),
+    ]);
+  });
+
+  it('fires a scheduled resume immediately without dropping a newer schedule', async () => {
+    const stateRoot = createTempDir('pa-web-deferred-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const sessionFile = '/tmp/sessions/current.jsonl';
+
+    const first = await scheduleDeferredResumeForSessionFile({
+      sessionFile,
+      delay: '10m',
+      prompt: 'first',
+      now: new Date('2026-03-12T13:00:00.000Z'),
+    });
+
+    const second = await scheduleDeferredResumeForSessionFile({
+      sessionFile,
+      delay: '20m',
+      prompt: 'second',
+      now: new Date('2026-03-12T13:00:01.000Z'),
+    });
+
+    const fired = await fireDeferredResumeNowForSessionFile({
+      sessionFile,
+      id: first.id,
+      at: new Date('2026-03-12T13:00:30.000Z'),
+    });
+
+    expect(fired).toEqual(expect.objectContaining({
+      id: first.id,
+      status: 'ready',
+      readyAt: '2026-03-12T13:00:30.000Z',
+    }));
+    expect(listDeferredResumesForSessionFile(sessionFile)).toEqual([
+      expect.objectContaining({ id: first.id, status: 'ready', readyAt: '2026-03-12T13:00:30.000Z' }),
+      expect.objectContaining({ id: second.id, prompt: 'second', status: 'scheduled' }),
     ]);
   });
 
