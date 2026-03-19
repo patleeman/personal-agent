@@ -288,6 +288,7 @@ describe('sync module', () => {
       expect(resolverArgs).toContain('PERSONAL_AGENT_STATE_ROOT=');
       expect(resolverArgs).toContain('conversation-maintenance/assistant/sync-maintenance-state');
       expect(resolverArgs).toContain('PERSONAL_AGENT_PROFILES_ROOT=');
+      expect(resolverArgs).toContain('tui');
       expect(resolverArgs).toContain('--profile');
       expect(resolverArgs).toContain('assistant');
       expect(resolverArgs).toContain('-p');
@@ -362,6 +363,7 @@ describe('sync module', () => {
       expect(resolverArgs).toContain('PERSONAL_AGENT_STATE_ROOT=');
       expect(resolverArgs).toContain('conversation-maintenance/assistant/sync-maintenance-state');
       expect(resolverArgs).toContain('PERSONAL_AGENT_PROFILES_ROOT=');
+      expect(resolverArgs).toContain('tui');
       expect(resolverArgs).toContain('--profile');
       expect(resolverArgs).toContain('assistant');
       expect(resolverArgs).toContain('-p');

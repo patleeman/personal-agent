@@ -273,6 +273,7 @@ function buildResolverAgentCommand(input: {
     `PERSONAL_AGENT_REPO_ROOT=${getRepoRoot()}`,
     process.execPath,
     cliEntrypoint,
+    'tui',
     '--profile',
     input.profile,
     '-p',
