@@ -30,7 +30,7 @@ describe('MemoriesPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders hub packages with the shared list layout and selected row styling', () => {
+  it('renders memory packages with the shared list layout and selected row styling', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         memories: [
@@ -44,6 +44,7 @@ describe('MemoriesPage', () => {
             status: 'active',
             role: 'hub',
             area: 'memory',
+            related: ['personal-agent'],
             referenceCount: 2,
             updated: '2026-03-17T12:00:00.000Z',
           },
@@ -55,6 +56,7 @@ describe('MemoriesPage', () => {
             path: '/tmp/writing-style/MEMORY.md',
             role: 'hub',
             area: 'communication',
+            parent: 'memory-index',
             referenceCount: 1,
             updated: '2026-03-15T08:00:00.000Z',
           },
@@ -75,12 +77,14 @@ describe('MemoriesPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Knowledge hubs');
-    expect(html).toContain('Search hubs');
-    expect(html).toContain('Selected hub');
+    expect(html).toContain('Memory packages');
+    expect(html).toContain('Search packages');
+    expect(html).toContain('Selected package');
     expect(html).toContain('Memory index');
     expect(html).toContain('Writing style');
     expect(html).toContain('2 references');
+    expect(html).toContain('1 related package');
+    expect(html).toContain('parent');
     expect(html).toContain('href="/memories?memory=memory-index"');
     expect(html).toContain('ui-list-row-selected');
     expect(html).not.toContain('Browse memories');
@@ -140,6 +144,6 @@ describe('MemoriesPage', () => {
     );
 
     expect(html).toContain('No memories yet.');
-    expect(html).toContain('Distill a conversation message to create or update a durable memory hub package.');
+    expect(html).toContain('Distill a conversation message to create or update a durable memory package.');
   });
 });

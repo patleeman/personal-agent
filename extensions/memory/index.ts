@@ -337,25 +337,6 @@ function buildMemoryPolicyBlock(options: {
   return renderPromptCatalogTemplate(template, buildMemoryTemplateVariables(options));
 }
 
-function buildMemoryOperationsReminder(options: {
-  cwd: string;
-  repoRoot: string;
-  requestedProfile: string;
-  activeProfile: string;
-  activeProfileDir: string;
-  activeAgentsFile?: string;
-  activeSkillsDir: string;
-  activeTasksDir?: string;
-  activeMemoryDir?: string;
-}): string {
-  const template = requirePromptCatalogEntryFromExtension(import.meta.url, 'reminders/memory-operations.md');
-  return renderPromptCatalogTemplate(template, buildMemoryTemplateVariables(options));
-}
-
-function isMemorySpecificPrompt(prompt: string): boolean {
-  return /\b(memory|remember|persist|retain|agents\.md|durable memory|memory maintenance)\b/i.test(prompt);
-}
-
 export default function memoryExtension(pi: ExtensionAPI): void {
   pi.on('before_agent_start', async (event, ctx) => {
     const prompt = event.prompt?.trim() ?? '';
@@ -376,35 +357,8 @@ export default function memoryExtension(pi: ExtensionAPI): void {
       activeMemoryDir: context.activeMemoryDir,
     });
 
-    const result: {
-      systemPrompt: string;
-      message?: {
-        customType: string;
-        content: string;
-        display: false;
-      };
-    } = {
+    return {
       systemPrompt: `${event.systemPrompt}\n\n${memoryPolicy}`,
     };
-
-    if (isMemorySpecificPrompt(prompt)) {
-      result.message = {
-        customType: 'memory-operations-reminder',
-        content: buildMemoryOperationsReminder({
-          cwd: context.cwd,
-          repoRoot: context.repoRoot,
-          requestedProfile: context.requestedProfile,
-          activeProfile: context.activeProfile,
-          activeProfileDir: context.activeProfileDir,
-          activeAgentsFile: context.activeAgentsFile,
-          activeSkillsDir: context.activeSkillsDir,
-          activeTasksDir: context.activeTasksDir,
-          activeMemoryDir: context.activeMemoryDir,
-        }),
-        display: false,
-      };
-    }
-
-    return result;
   });
 }

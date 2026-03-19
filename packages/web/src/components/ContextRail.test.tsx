@@ -274,6 +274,7 @@ describe('ContextRail run detail', () => {
           status: 'active',
           area: 'personal-agent',
           role: 'hub',
+          related: ['personal-agent-web-ui-preferences'],
           updated: '2026-03-18T12:00:00.000Z',
         },
         content: '---\nname: personal-agent\n---\n# Personal-agent knowledge hub\n',
@@ -311,6 +312,9 @@ describe('ContextRail run detail', () => {
       </MemoryRouter>,
     );
 
+    expect(html).toContain('Package');
+    expect(html).toContain('Role');
+    expect(html).toContain('href="/memories?memory=personal-agent-web-ui-preferences"');
     expect(html).toContain('Package files');
     expect(html).toContain('MEMORY.md');
     expect(html).toContain('Web UI preferences');

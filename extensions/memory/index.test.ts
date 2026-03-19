@@ -84,13 +84,7 @@ describe('memory extension', () => {
     expect(result?.systemPrompt).toContain('Provisioning notes for short-lived GPU pods.');
     expect(result?.systemPrompt).toContain(join(stateRoot, 'profiles', '_memory', 'runpod', 'MEMORY.md'));
     expect(result?.systemPrompt).not.toContain('pa memory list --profile datadog');
-    expect(result?.message?.customType).toBe('memory-operations-reminder');
-    expect(result?.message?.display).toBe(false);
-    expect(result?.message?.content).toContain('SYSTEM_REMINDER: This request touches durable memory or profile behavior.');
-    expect(result?.message?.content).toContain('pa memory list');
-    expect(result?.message?.content).toContain('pa memory find --text <query>');
-    expect(result?.message?.content).toContain('pa memory show <id>');
-    expect(result?.message?.content).toContain('Use the active profile targets already present in system context.');
+    expect(result?.message).toBeUndefined();
   });
 
   it('falls back to shared when requested profile directory is missing', async () => {
@@ -129,7 +123,7 @@ describe('memory extension', () => {
     expect(result?.systemPrompt).toContain('- Scheduled tasks dir: none (shared profile does not use profile task dir)');
     expect(result?.systemPrompt).toContain(`- Global memory dir: ${join(stateRoot, 'profiles', '_memory')}`);
     expect(result?.systemPrompt).not.toContain('pa memory list --profile shared');
-    expect(result?.message?.content).toContain('pa memory list');
+    expect(result?.message).toBeUndefined();
   });
 
   it('does not inject memory policy for slash commands or empty prompts', async () => {
