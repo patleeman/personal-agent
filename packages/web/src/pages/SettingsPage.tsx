@@ -130,6 +130,12 @@ export function SettingsPage() {
     refetch: refetchConversationTitleSettings,
   } = useApi(api.conversationTitleSettings);
   const {
+    data: conversationAutomationDefaultsState,
+    loading: conversationAutomationDefaultsLoading,
+    error: conversationAutomationDefaultsError,
+    refetch: refetchConversationAutomationDefaults,
+  } = useApi(api.conversationAutomationDefaults);
+  const {
     data: conversationAutomationJudgeState,
     loading: conversationAutomationJudgeLoading,
     error: conversationAutomationJudgeError,
@@ -156,6 +162,8 @@ export function SettingsPage() {
   const [savingConversationTitle, setSavingConversationTitle] = useState<'enabled' | 'model' | null>(null);
   const [conversationTitleSaveError, setConversationTitleSaveError] = useState<string | null>(null);
   const [conversationAutomationJudgePromptDraft, setConversationAutomationJudgePromptDraft] = useState('');
+  const [savingConversationAutomationDefaultEnabled, setSavingConversationAutomationDefaultEnabled] = useState(false);
+  const [conversationAutomationDefaultEnabledError, setConversationAutomationDefaultEnabledError] = useState<string | null>(null);
   const [savingConversationAutomationJudge, setSavingConversationAutomationJudge] = useState<'model' | 'systemPrompt' | null>(null);
   const [conversationAutomationJudgeSaveError, setConversationAutomationJudgeSaveError] = useState<string | null>(null);
   const [selectedProviderId, setSelectedProviderId] = useState('');
@@ -422,6 +430,24 @@ export function SettingsPage() {
     }
   }
 
+  async function handleConversationAutomationDefaultEnabledChange(defaultEnabled: boolean) {
+    if (!conversationAutomationDefaultsState || savingConversationAutomationDefaultEnabled || defaultEnabled === conversationAutomationDefaultsState.defaultEnabled) {
+      return;
+    }
+
+    setConversationAutomationDefaultEnabledError(null);
+    setSavingConversationAutomationDefaultEnabled(true);
+
+    try {
+      await api.updateConversationAutomationDefaults({ defaultEnabled });
+      await refetchConversationAutomationDefaults({ resetLoading: false });
+    } catch (error) {
+      setConversationAutomationDefaultEnabledError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSavingConversationAutomationDefaultEnabled(false);
+    }
+  }
+
   async function handleConversationAutomationJudgeSettingChange(
     input: { model?: string | null; systemPrompt?: string | null },
     field: 'model' | 'systemPrompt',
@@ -624,6 +650,7 @@ export function SettingsPage() {
           refetchModels({ resetLoading: false }),
           refetchDefaultCwd({ resetLoading: false }),
           refetchConversationTitleSettings({ resetLoading: false }),
+          refetchConversationAutomationDefaults({ resetLoading: false }),
           refetchConversationAutomationJudgeSettings({ resetLoading: false }),
           refetchProviderAuth({ resetLoading: false }),
           refetchStatus({ resetLoading: false }),
@@ -912,7 +939,48 @@ export function SettingsPage() {
             <SectionLabel label="Conversation automation" />
 
             <div className="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-              <div className="space-y-3 min-w-0">
+              <div className="space-y-6 min-w-0">
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <h2 className="text-[15px] font-medium text-primary">Default behavior</h2>
+                  <p className="ui-card-meta max-w-2xl">
+                    Controls whether new conversations that inherit automation presets start with automation enabled or paused.
+                  </p>
+                </div>
+
+                {conversationAutomationDefaultsLoading && !conversationAutomationDefaultsState ? (
+                  <p className="ui-card-meta">Loading automation defaults…</p>
+                ) : (!conversationAutomationDefaultsState && conversationAutomationDefaultsError) ? (
+                  <p className="text-[12px] text-danger">Failed to load automation defaults: {conversationAutomationDefaultsError}</p>
+                ) : conversationAutomationDefaultsState ? (
+                  <>
+                    <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="settings-conversation-automation-default-enabled">
+                      <input
+                        id="settings-conversation-automation-default-enabled"
+                        type="checkbox"
+                        checked={conversationAutomationDefaultsState.defaultEnabled}
+                        onChange={(event) => {
+                          void handleConversationAutomationDefaultEnabledChange(event.target.checked);
+                        }}
+                        disabled={savingConversationAutomationDefaultEnabled}
+                        className={CHECKBOX_CLASS}
+                      />
+                      <span>Enable automation in new conversations</span>
+                    </label>
+                    <p className="ui-card-meta">
+                      {savingConversationAutomationDefaultEnabled
+                        ? 'Saving automation default…'
+                        : conversationAutomationDefaultsState.defaultEnabled
+                          ? 'New conversations with inherited presets start enabled.'
+                          : 'New conversations with inherited presets stay paused until you enable them.'}
+                    </p>
+                  </>
+                ) : null}
+
+                {conversationAutomationDefaultEnabledError && <p className="text-[12px] text-danger">{conversationAutomationDefaultEnabledError}</p>}
+              </div>
+
+              <div className="space-y-3">
                 <div className="space-y-1">
                   <h2 className="text-[15px] font-medium text-primary">Judge model</h2>
                   <p className="ui-card-meta max-w-2xl">
@@ -959,6 +1027,7 @@ export function SettingsPage() {
                   </>
                 ) : null}
               </div>
+            </div>
 
               <div className="space-y-3 min-w-0">
                 <div className="space-y-1">

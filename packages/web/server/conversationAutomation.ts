@@ -72,6 +72,10 @@ export interface ConversationAutomationWorkflowPresetLibraryState {
   defaultPresetIds: string[];
 }
 
+export interface ConversationAutomationPreferencesState {
+  defaultEnabled: boolean;
+}
+
 export interface LoadedConversationAutomationState {
   document: ConversationAutomationDocument;
   inheritedPresetIds: string[];
@@ -113,6 +117,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readNonEmptyString(value: unknown): string {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : '';
+}
+
+function readBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback;
 }
 
 function normalizeOptionalText(value: unknown): string | undefined {
@@ -735,8 +743,47 @@ function normalizeWorkflowPresetLibraryState(settings: Record<string, unknown>):
   };
 }
 
+export function readSavedConversationAutomationPreferences(settingsFile: string): ConversationAutomationPreferencesState {
+  const automationSettings = readConversationAutomationSettings(readSettingsObject(settingsFile));
+  return {
+    defaultEnabled: readBoolean(automationSettings.defaultEnabled, false),
+  };
+}
+
 export function readSavedConversationAutomationWorkflowPresets(settingsFile: string): ConversationAutomationWorkflowPresetLibraryState {
   return normalizeWorkflowPresetLibraryState(readSettingsObject(settingsFile));
+}
+
+export function writeSavedConversationAutomationPreferences(
+  input: { defaultEnabled?: boolean },
+  settingsFile: string,
+): ConversationAutomationPreferencesState {
+  const settings = readSettingsObject(settingsFile);
+  const webUi = readWebUiSettings(settings);
+  const automationSettings = readConversationAutomationSettings(settings);
+
+  if (input.defaultEnabled !== undefined) {
+    if (input.defaultEnabled) {
+      automationSettings.defaultEnabled = true;
+    } else {
+      delete automationSettings.defaultEnabled;
+    }
+  }
+
+  if (Object.keys(automationSettings).length > 0) {
+    webUi.conversationAutomation = automationSettings;
+  } else {
+    delete webUi.conversationAutomation;
+  }
+
+  if (Object.keys(webUi).length > 0) {
+    settings.webUi = webUi;
+  } else {
+    delete settings.webUi;
+  }
+
+  writeSettingsObject(settingsFile, settings);
+  return readSavedConversationAutomationPreferences(settingsFile);
 }
 
 export function writeSavedConversationAutomationWorkflowPresets(
@@ -789,12 +836,13 @@ function buildDocumentFromTemplate(
   conversationId: string,
   gates: ConversationAutomationTemplateGate[],
   now = new Date().toISOString(),
+  enabled = false,
 ): ConversationAutomationDocument {
   return {
     version: DOCUMENT_VERSION,
     conversationId,
     updatedAt: now,
-    enabled: false,
+    enabled,
     gates: gates.map((gate) => createConversationAutomationGate({
       ...gate,
       now,
@@ -807,6 +855,9 @@ export function readConversationAutomationDocument(path: string, conversationId:
 }
 
 export function loadConversationAutomationState(options: ResolveConversationAutomationPathOptions & { settingsFile?: string }): LoadedConversationAutomationState {
+  const preferences = options.settingsFile
+    ? readSavedConversationAutomationPreferences(options.settingsFile)
+    : { defaultEnabled: false } satisfies ConversationAutomationPreferencesState;
   const presetLibrary = options.settingsFile
     ? readSavedConversationAutomationWorkflowPresets(options.settingsFile)
     : { presets: [], defaultPresetIds: [] } satisfies ConversationAutomationWorkflowPresetLibraryState;
@@ -818,7 +869,12 @@ export function loadConversationAutomationState(options: ResolveConversationAuto
   if (!existsSync(path)) {
     return {
       document: inheritedPresets.length > 0
-        ? buildDocumentFromTemplate(options.conversationId, inheritedPresets.flatMap((preset) => cloneTemplateGatesForConversation(preset.gates)))
+        ? buildDocumentFromTemplate(
+          options.conversationId,
+          inheritedPresets.flatMap((preset) => cloneTemplateGatesForConversation(preset.gates)),
+          undefined,
+          preferences.defaultEnabled,
+        )
         : normalizeDocument(undefined, options.conversationId),
       inheritedPresetIds: inheritedPresets.map((preset) => preset.id),
       presetLibrary,

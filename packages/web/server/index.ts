@@ -124,9 +124,11 @@ import {
 import { recoverDurableLiveConversations } from './conversationRecovery.js';
 import {
   loadConversationAutomationState,
+  readSavedConversationAutomationPreferences,
   replaceConversationAutomationGates,
   resetConversationAutomationFromGate,
   updateConversationAutomationEnabled,
+  writeSavedConversationAutomationPreferences,
   writeConversationAutomationState,
   readSavedConversationAutomationWorkflowPresets,
   writeSavedConversationAutomationWorkflowPresets,
@@ -3110,6 +3112,40 @@ app.patch('/api/conversation-titles/settings', (req, res) => {
     );
 
     res.json(saved);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.get('/api/conversation-automation/defaults', (_req, res) => {
+  try {
+    res.json(readSavedConversationAutomationPreferences(SETTINGS_FILE));
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.patch('/api/conversation-automation/defaults', (req, res) => {
+  try {
+    const { defaultEnabled } = req.body as { defaultEnabled?: unknown };
+    if (typeof defaultEnabled !== 'boolean') {
+      res.status(400).json({ error: 'defaultEnabled must be a boolean' });
+      return;
+    }
+
+    writeSavedConversationAutomationPreferences({ defaultEnabled }, getCurrentProfileSettingsFile());
+    clearLocalConversationAutomationSettingsOverride();
+    materializeWebProfile(getCurrentProfile());
+
+    res.json(readSavedConversationAutomationPreferences(SETTINGS_FILE));
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),

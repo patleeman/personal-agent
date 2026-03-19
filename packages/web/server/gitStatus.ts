@@ -1,4 +1,10 @@
 import { execFileSync } from 'node:child_process';
+import { basename, resolve } from 'node:path';
+
+export interface GitRepoInfo {
+  root: string;
+  name: string;
+}
 
 export interface GitStatusSummary {
   branch: string | null;
@@ -102,13 +108,28 @@ function hasHeadCommit(cwd: string): boolean {
   return runGitCommandAllowFailure(['rev-parse', '--verify', 'HEAD'], cwd).exitCode === 0;
 }
 
-export function readGitStatusSummary(cwd: string): GitStatusSummary | null {
+export function readGitRepoInfo(cwd: string): GitRepoInfo | null {
   try {
     const isWorkTree = runGitCommand(['rev-parse', '--is-inside-work-tree'], cwd).trim();
     if (isWorkTree !== 'true') {
       return null;
     }
+
+    const root = resolve(runGitCommand(['rev-parse', '--show-toplevel'], cwd).trim());
+    const name = basename(root).trim();
+    if (!name) {
+      return null;
+    }
+
+    return { root, name };
   } catch {
+    return null;
+  }
+}
+
+export function readGitStatusSummary(cwd: string): GitStatusSummary | null {
+  const repo = readGitRepoInfo(cwd);
+  if (!repo) {
     return null;
   }
 

@@ -812,6 +812,7 @@ export async function previewConversationAutomationMatch(
   }
 
   return evaluateConversationAutomationFilter(query, {
+    cwd: entry.cwd,
     messages: getSessionMessages(entry.session),
     toolNames: new Set(entry.session.getActiveToolNames()),
     modelRegistry: entry.session.modelRegistry,
@@ -1056,6 +1057,7 @@ export async function kickConversationAutomation(
 
       try {
         const result = await evaluateConversationAutomationFilter(nextGate.prompt, {
+          cwd: entry.cwd,
           messages: getSessionMessages(entry.session),
           toolNames: new Set(entry.session.getActiveToolNames()),
           modelRegistry: entry.session.modelRegistry,

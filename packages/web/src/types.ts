@@ -888,6 +888,10 @@ export interface ConversationAutomationJudgeSettingsState {
   usingDefaultSystemPrompt: boolean;
 }
 
+export interface ConversationAutomationPreferencesState {
+  defaultEnabled: boolean;
+}
+
 export type ConversationAutomationSkillStepStatus = 'pending' | 'running' | 'completed' | 'failed';
 export type ConversationAutomationGateStatus = 'pending' | 'running' | 'completed' | 'failed';
 
@@ -962,7 +966,7 @@ export interface ConversationAutomationSkillInfo {
 }
 
 export interface ConversationAutomationFilterHelpField {
-  key: 'tool' | 'event' | 'prompt' | 'judge';
+  key: 'tool' | 'event' | 'repo' | 'prompt' | 'judge';
   description: string;
   valueHint: string;
   values?: string[];

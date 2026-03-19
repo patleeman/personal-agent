@@ -1,10 +1,10 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { countGitStatusEntries, parseGitNumstat, readGitStatusSummary } from './gitStatus.js';
+import { countGitStatusEntries, parseGitNumstat, readGitRepoInfo, readGitStatusSummary } from './gitStatus.js';
 
 const tempDirs: string[] = [];
 
@@ -48,7 +48,28 @@ describe('countGitStatusEntries', () => {
 describe('readGitStatusSummary', () => {
   it('returns null outside a git repository', () => {
     const dir = createTempDir('pa-web-git-outside-');
+    expect(readGitRepoInfo(dir)).toBeNull();
     expect(readGitStatusSummary(dir)).toBeNull();
+  });
+
+  it('reads the containing git repo root and basename', () => {
+    const dir = createTempDir('pa-web-git-repo-info-');
+    runGit(['init'], dir);
+
+    const nestedRoot = join(dir, 'nested');
+    const nested = join(nestedRoot, 'deeper');
+    mkdirSync(nested, { recursive: true });
+    writeFileSync(join(dir, 'tracked.txt'), 'one\n');
+    runGit(['add', '.'], dir);
+    runGit(['-c', 'user.name=Test', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', 'commit', '-m', 'init'], dir);
+    writeFileSync(join(nestedRoot, '.keep'), '');
+    runGit(['add', '.'], dir);
+    runGit(['-c', 'user.name=Test', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', 'commit', '-m', 'nested'], dir);
+
+    expect(readGitRepoInfo(nested)).toEqual(expect.objectContaining({
+      root: expect.stringContaining(`/pa-web-git-repo-info-`),
+      name: expect.stringContaining('pa-web-git-repo-info-'),
+    }));
   });
 
   it('summarizes staged, unstaged, and untracked changes', () => {

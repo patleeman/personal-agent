@@ -1,6 +1,7 @@
+import { readGitRepoInfo } from './gitStatus.js';
 import { runConversationAutomationJudge, type ConversationAutomationJudgeDecision, type ConversationAutomationJudgeModelRegistry } from './conversationAutomationJudge.js';
 
-export type ConversationAutomationFilterField = 'tool' | 'event' | 'prompt';
+export type ConversationAutomationFilterField = 'tool' | 'event' | 'repo' | 'prompt';
 export type ConversationAutomationFilterFieldAlias = ConversationAutomationFilterField | 'judge';
 export type ConversationAutomationFilterTrigger = 'manual' | 'turn_end';
 export type ConversationAutomationFilterOperator = 'AND' | 'OR';
@@ -199,7 +200,7 @@ class Parser {
   }
 
   private parseTerm(): ConversationAutomationFilterTerm {
-    const fieldToken = this.expect('word', 'Expected a field name like tool:edit, event:turn_end, or prompt:"...".');
+    const fieldToken = this.expect('word', 'Expected a field name like tool:edit, event:turn_end, repo:personal-agent, or prompt:"...".');
     this.expect('colon', `Expected ':' after ${fieldToken.value}.`);
     const valueToken = this.consume();
 
@@ -208,7 +209,7 @@ class Parser {
     }
 
     const field = fieldToken.value.toLowerCase();
-    if (field !== 'tool' && field !== 'event' && field !== 'prompt' && field !== 'judge') {
+    if (field !== 'tool' && field !== 'event' && field !== 'repo' && field !== 'prompt' && field !== 'judge') {
       throw new FilterSyntaxError(`Unsupported filter key: ${fieldToken.value}.`);
     }
 
@@ -339,6 +340,7 @@ export function buildConversationAutomationFilterHelp(
   const exampleToolA = sortedTools.includes('edit') ? 'edit' : (sortedTools[0] ?? 'edit');
   const exampleToolB = sortedTools.includes('web_search') ? 'web_search' : (sortedTools[1] ?? exampleToolA);
   const exampleEvent = sortedEvents.includes('turn_end') ? 'turn_end' : (sortedEvents[0] ?? 'turn_end');
+  const exampleRepo = 'personal-agent';
 
   return {
     fields: [
@@ -355,6 +357,11 @@ export function buildConversationAutomationFilterHelp(
         values: sortedTools,
       },
       {
+        key: 'repo',
+        description: 'Exact match on the basename of the git repository that contains the conversation cwd.',
+        valueHint: 'exact git repo name',
+      },
+      {
         key: 'prompt',
         description: 'Ask the judge model a quoted yes/no question about the visible user/assistant conversation. This is not text search.',
         valueHint: 'quoted judge question',
@@ -367,8 +374,8 @@ export function buildConversationAutomationFilterHelp(
     ],
     examples: [
       `event:${exampleEvent}`,
-      `(event:${exampleEvent} AND tool:${exampleToolA}) OR tool:${exampleToolB}`,
-      `event:${exampleEvent} AND tool:${exampleToolA} AND prompt:"Did the assistant already complete the feature?"`,
+      `(event:${exampleEvent} AND repo:${exampleRepo}) OR tool:${exampleToolB}`,
+      `event:${exampleEvent} AND repo:${exampleRepo} AND tool:${exampleToolA} AND prompt:"Did the assistant already complete the feature?"`,
     ],
     availableTools,
   };
@@ -429,6 +436,7 @@ export function mayMatchConversationAutomationTrigger(
 export async function evaluateConversationAutomationFilter(
   input: string,
   options: {
+    cwd: string;
     messages: Array<{ role?: string; content?: unknown }>;
     toolNames: Set<string>;
     modelRegistry: ConversationAutomationJudgeModelRegistry;
@@ -441,6 +449,7 @@ export async function evaluateConversationAutomationFilter(
     events: new Set<ConversationAutomationFilterTrigger>(['manual', 'turn_end']),
   });
   const usedToolNames = collectUsedToolNames(options.messages);
+  const repo = readGitRepoInfo(options.cwd);
 
   async function evaluateNode(node: ConversationAutomationFilterNode): Promise<ConversationAutomationJudgeDecision> {
     if (node.type === 'term') {
@@ -458,6 +467,19 @@ export async function evaluateConversationAutomationFilter(
         return {
           pass,
           reason: pass ? `Used tool ${node.value}.` : `Tool ${node.value} not used.`,
+          confidence: null,
+        };
+      }
+
+      if (node.field === 'repo') {
+        const pass = repo?.name === node.value;
+        return {
+          pass,
+          reason: pass
+            ? `Conversation cwd is inside repo ${node.value}.`
+            : repo
+              ? `Conversation cwd is inside repo ${repo.name}, not ${node.value}.`
+              : `Conversation cwd is not inside git repo ${node.value}.`,
           confidence: null,
         };
       }
