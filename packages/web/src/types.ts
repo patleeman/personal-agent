@@ -1068,10 +1068,9 @@ export interface DependentCliToolState {
   binary: CliBinaryState;
 }
 
-export type McpCliBinaryState = CliBinaryState;
-
-export interface McpCliServerConfig {
+export interface McpServerConfig {
   name: string;
+  transport: 'stdio' | 'remote';
   command?: string;
   args: string[];
   cwd?: string;
@@ -1080,31 +1079,31 @@ export interface McpCliServerConfig {
   raw: Record<string, unknown>;
 }
 
-export interface McpCliState {
-  binary: McpCliBinaryState;
+export interface McpState {
   configPath: string;
   configExists: boolean;
   searchedPaths: string[];
-  servers: McpCliServerConfig[];
+  servers: McpServerConfig[];
 }
 
-export interface McpCliServerToolSummary {
+export interface McpServerToolSummary {
   name: string;
+  description?: string;
 }
 
-export interface McpCliServerDetail {
+export interface McpServerDetail {
   server?: string;
   transport?: string;
   commandLine?: string;
   toolCount?: number;
-  tools: McpCliServerToolSummary[];
+  tools: McpServerToolSummary[];
   rawOutput: string;
   stdout: string;
   stderr: string;
   exitCode: number;
 }
 
-export interface McpCliToolDetail {
+export interface McpToolDetail {
   server?: string;
   tool?: string;
   description?: string;
@@ -1162,6 +1161,6 @@ export interface ToolsState {
   newSessionInjectedMessages: InjectedPromptMessage[];
   newSessionToolDefinitions: AgentToolInfo[];
   dependentCliTools: DependentCliToolState[];
-  mcpCli: McpCliState;
+  mcp: McpState;
   packageInstall: PackageInstallState;
 }

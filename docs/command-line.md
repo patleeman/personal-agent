@@ -40,6 +40,7 @@ These commands are handled by `personal-agent` itself:
 - `pa inbox ...`
 - `pa ui ...`
 - `pa memory ...`
+- `pa mcp ...`
 - `pa runs ...`
 - `pa targets ...`
 - `pa sync ...`
@@ -67,6 +68,7 @@ pa tui
 pa tui -p "hello"
 pa inbox list
 pa memory list
+pa mcp list
 pa tasks list
 pa targets list
 pa sync status
@@ -218,11 +220,30 @@ Examples:
 pa memory list
 pa memory find --tag notes --area personal-agent --role canonical
 pa memory show quick-note
+```
+
 pa memory new memory-index   --title "Memory index"   --summary "Top-level memory table of contents"   --tags memory,index   --type index   --area memory   --role hub
 pa memory lint
 ```
 
 See [Profiles, Memory, and Skills](./profiles-memory-skills.md).
+
+### `pa mcp [list|info|grep|call|auth|logout]`
+
+Inspect and call configured MCP servers using pa’s native MCP client.
+
+Examples:
+
+```bash
+pa mcp list
+pa mcp list -d
+pa mcp info atlassian
+pa mcp info atlassian/getConfluencePage
+pa mcp grep '*jira*'
+pa mcp call atlassian getAccessibleAtlassianResources '{}'
+pa mcp auth slack
+pa mcp logout slack
+```
 
 ### `pa runs [list|show|logs|start|cancel|help]`
 

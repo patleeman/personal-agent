@@ -5,7 +5,7 @@ import { useApi } from '../hooks';
 import type {
   AgentToolInfo,
   CliBinaryState,
-  McpCliServerConfig,
+  McpServerConfig,
   PackageSourceTargetState,
   ToolParameterSchema,
   ToolsState,
@@ -105,7 +105,7 @@ function summarizeCliBinary(binary: CliBinaryState): string {
     : `Unavailable${binary.error ? ` · ${binary.error}` : ''}`;
 }
 
-function commandLineForServer(server: McpCliServerConfig): string {
+function commandLineForServer(server: McpServerConfig): string {
   return [server.command, ...server.args].filter(Boolean).join(' ');
 }
 
@@ -348,10 +348,10 @@ function McpServerDetailPanel({
   server,
   onSelect,
 }: {
-  server: McpCliServerConfig;
+  server: McpServerConfig;
   onSelect: (selection: ToolsRailSelection | null) => void;
 }) {
-  const fetcher = useCallback(() => api.mcpCliServer(server.name), [server.name]);
+  const fetcher = useCallback(() => api.mcpServer(server.name), [server.name]);
   const { data, loading, refreshing, error, refetch } = useApi(fetcher, server.name);
   const commandLine = commandLineForServer(server);
 
@@ -420,7 +420,7 @@ function McpToolDetailPanel({
   tool: string;
   onSelect: (selection: ToolsRailSelection | null) => void;
 }) {
-  const fetcher = useCallback(() => api.mcpCliTool(server, tool), [server, tool]);
+  const fetcher = useCallback(() => api.mcpTool(server, tool), [server, tool]);
   const { data, loading, refreshing, error, refetch } = useApi(fetcher, `${server}/${tool}`);
 
   return (
@@ -552,7 +552,7 @@ function renderSelectionPanel(input: {
       return tool ? <CliDetailPanel tool={tool} /> : <EmptyPrompt text="That CLI dependency is no longer available." />;
     }
     case 'mcp-server': {
-      const server = toolsState.mcpCli.servers.find((candidate) => candidate.name === selection.server) ?? null;
+      const server = toolsState.mcp.servers.find((candidate) => candidate.name === selection.server) ?? null;
       return server ? <McpServerDetailPanel server={server} onSelect={onSelect} /> : <EmptyPrompt text="That MCP server is no longer configured." />;
     }
     case 'mcp-tool':

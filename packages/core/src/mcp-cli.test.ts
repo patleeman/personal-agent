@@ -1,85 +1,136 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
-  parseMcpCliServerInfo,
-  parseMcpCliToolInfo,
-  readMcpCliConfig,
-  resolveMcpCliConfig,
-} from './mcp-cli.js';
+  callMcpTool,
+  inspectMcpServer,
+  inspectMcpTool,
+  readMcpConfig,
+  resolveMcpConfig,
+} from './mcp.js';
 
-describe('mcp-cli config helpers', () => {
+function makeTempDir(prefix: string): string {
+  const dir = join(tmpdir(), `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+describe('mcp config helpers', () => {
   it('reads configured servers from mcp_servers.json', () => {
-    const cwd = join(tmpdir(), `pa-mcp-${Date.now()}`);
-    mkdirSync(cwd, { recursive: true });
+    const cwd = makeTempDir('pa-mcp-config');
     writeFileSync(join(cwd, 'mcp_servers.json'), JSON.stringify({
       mcpServers: {
         atlassian: {
           command: 'npx',
-          args: ['-y', 'mcp-remote@latest', 'https://mcp.atlassian.com/v1/mcp'],
+          args: ['-y', 'mcp-remote@latest', 'https://mcp.atlassian.com/v1/mcp', '--resource', 'https://datadoghq.atlassian.net/'],
+        },
+        slack: {
+          type: 'remote',
+          url: 'https://mcp.slack.com/mcp',
+          callback: { host: 'localhost', port: 3118, path: '/callback' },
+          oauth: { clientId: 'client-123' },
         },
         local: {
           command: 'node',
-          args: ['server.js'],
+          args: ['server.mjs'],
           cwd: '/tmp/mcp',
           env: { TOKEN: 'secret', NUMBER: 1 },
         },
       },
     }, null, 2));
 
-    const result = readMcpCliConfig({ cwd });
+    const result = readMcpConfig({ cwd });
     expect(result.exists).toBe(true);
     expect(result.path).toBe(join(cwd, 'mcp_servers.json'));
-    expect(result.servers).toHaveLength(2);
+    expect(result.servers).toHaveLength(3);
     expect(result.servers[0]).toMatchObject({
       name: 'atlassian',
-      command: 'npx',
-      args: ['-y', 'mcp-remote@latest', 'https://mcp.atlassian.com/v1/mcp'],
+      transport: 'remote',
       url: 'https://mcp.atlassian.com/v1/mcp',
+      authorizeResource: 'https://datadoghq.atlassian.net/',
     });
     expect(result.servers[1]).toMatchObject({
       name: 'local',
+      transport: 'stdio',
       command: 'node',
-      args: ['server.js'],
+      args: ['server.mjs'],
       cwd: '/tmp/mcp',
       env: { TOKEN: 'secret' },
+    });
+    expect(result.servers[2]).toMatchObject({
+      name: 'slack',
+      transport: 'remote',
+      url: 'https://mcp.slack.com/mcp',
+      callbackHost: 'localhost',
+      callbackPort: 3118,
+      callbackPath: '/callback',
     });
   });
 
   it('resolves an explicit config path relative to cwd', () => {
-    const cwd = join(tmpdir(), `pa-mcp-explicit-${Date.now()}`);
+    const cwd = makeTempDir('pa-mcp-explicit');
     mkdirSync(join(cwd, 'config'), { recursive: true });
     writeFileSync(join(cwd, 'config', 'servers.json'), JSON.stringify({ mcpServers: {} }));
 
-    const result = resolveMcpCliConfig({ cwd, configPath: './config/servers.json' });
+    const result = resolveMcpConfig({ cwd, configPath: './config/servers.json' });
     expect(result.path).toBe(join(cwd, 'config', 'servers.json'));
     expect(result.exists).toBe(true);
   });
 });
 
-describe('mcp-cli output parsers', () => {
-  it('parses server info output', () => {
-    const output = `Server: atlassian\nTransport: stdio\nCommand: npx -y mcp-remote@latest https://mcp.atlassian.com/v1/mcp\n\nTools (2):\n  getConfluencePage\n    Parameters:\n      • cloudId (string, required)\n  search\n    Parameters:\n      • query (string, required)\n`;
+describe('native MCP client', () => {
+  it('inspects and calls a stdio server', async () => {
+    const cwd = makeTempDir('pa-mcp-server');
+    const sdkRoot = pathToFileURL(join(process.cwd(), 'node_modules', '@modelcontextprotocol', 'sdk', 'dist', 'esm')).href;
+    const zodUrl = pathToFileURL(join(process.cwd(), 'node_modules', 'zod', 'v4', 'index.js')).href;
+    const serverPath = join(cwd, 'server.mjs');
 
-    const info = parseMcpCliServerInfo(output);
-    expect(info.server).toBe('atlassian');
-    expect(info.transport).toBe('stdio');
-    expect(info.commandLine).toContain('mcp-remote@latest');
-    expect(info.toolCount).toBe(2);
-    expect(info.tools.map((tool) => tool.name)).toEqual(['getConfluencePage', 'search']);
-  });
+    writeFileSync(serverPath, `
+import { McpServer } from '${sdkRoot}/server/mcp.js';
+import { StdioServerTransport } from '${sdkRoot}/server/stdio.js';
+import * as z from '${zodUrl}';
 
-  it('parses tool info output with JSON schema', () => {
-    const output = `Tool: getConfluencePage\nServer: atlassian\n\nDescription:\n  Get a Confluence page by page ID.\n\nInput Schema:\n{\n  "type": "object",\n  "properties": {\n    "cloudId": { "type": "string" },\n    "pageId": { "type": "string" }\n  },\n  "required": ["cloudId", "pageId"]\n}`;
+const server = new McpServer({ name: 'fixture-server', version: '1.0.0' });
+server.registerTool('echo', {
+  description: 'Echo text back to the caller.',
+  inputSchema: { text: z.string() },
+}, async ({ text }) => ({
+  content: [{ type: 'text', text: String(text) }],
+}));
 
-    const info = parseMcpCliToolInfo(output);
-    expect(info.tool).toBe('getConfluencePage');
-    expect(info.server).toBe('atlassian');
-    expect(info.description).toBe('Get a Confluence page by page ID.');
-    expect(info.schema).toMatchObject({
+await server.connect(new StdioServerTransport());
+`, 'utf-8');
+
+    writeFileSync(join(cwd, 'mcp_servers.json'), JSON.stringify({
+      mcpServers: {
+        fixture: {
+          command: process.execPath,
+          args: [serverPath],
+        },
+      },
+    }, null, 2));
+
+    const serverInfo = await inspectMcpServer('fixture', { cwd, withDescriptions: true });
+    expect(serverInfo.exitCode).toBe(0);
+    expect(serverInfo.data?.toolCount).toBe(1);
+    expect(serverInfo.data?.tools[0]).toMatchObject({
+      name: 'echo',
+      description: 'Echo text back to the caller.',
+    });
+
+    const toolInfo = await inspectMcpTool('fixture', 'echo', { cwd });
+    expect(toolInfo.exitCode).toBe(0);
+    expect(toolInfo.data?.schema).toMatchObject({
       type: 'object',
-      required: ['cloudId', 'pageId'],
+      required: ['text'],
+    });
+
+    const toolResult = await callMcpTool('fixture', 'echo', { text: 'hello' }, { cwd });
+    expect(toolResult.exitCode).toBe(0);
+    expect(toolResult.data?.parsed).toMatchObject({
+      content: [{ type: 'text', text: 'hello' }],
     });
   });
 });

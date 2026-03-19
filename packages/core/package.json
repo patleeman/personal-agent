@@ -18,6 +18,8 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "open": "^10.2.0",
     "yaml": "^2.8.2"
   }
 }

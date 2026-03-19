@@ -89,6 +89,7 @@ import {
 import { hasOption } from './args.js';
 import { readTailLines } from './file-utils.js';
 import { memoryCommand } from './memory.js';
+import { mcpCommand } from './mcp-command.js';
 import { readConfig, setDefaultProfile } from './config.js';
 import {
   writeRestartCompletionInboxEntry,
@@ -4836,6 +4837,13 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       run: memoryCommand,
     },
     {
+      name: 'mcp',
+      usage: 'mcp [list|info|grep|call|auth|logout|help] [args...]',
+      description: 'Inspect and call configured MCP servers natively',
+      disableBuiltInHelp: true,
+      run: mcpCommand,
+    },
+    {
       name: 'runs',
       usage: 'runs [list|show|logs|start|cancel|help] [args...]',
       description: 'Inspect and manage durable background runs',
@@ -4957,6 +4965,8 @@ Examples:
   pa memory show runpod
   pa memory new quick-note --title "Quick Note" --summary "What this doc tracks." --tags notes
   pa memory lint
+  pa mcp list
+  pa mcp info atlassian
   pa runs list
   pa runs show <id>
   pa runs start code-review -- pa tui -p "review this diff"
