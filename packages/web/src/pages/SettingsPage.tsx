@@ -134,7 +134,7 @@ export function SettingsPage() {
     loading: conversationAutomationDefaultsLoading,
     error: conversationAutomationDefaultsError,
     refetch: refetchConversationAutomationDefaults,
-  } = useApi(api.conversationAutomationDefaults);
+  } = useApi(api.conversationPlanDefaults);
   const {
     data: status,
     error: statusError,
@@ -411,7 +411,7 @@ export function SettingsPage() {
     setSavingConversationAutomationDefaultEnabled(true);
 
     try {
-      await api.updateConversationAutomationDefaults({ defaultEnabled });
+      await api.updateConversationPlanDefaults({ defaultEnabled });
       await refetchConversationAutomationDefaults({ resetLoading: false });
     } catch (error) {
       setConversationAutomationDefaultEnabledError(error instanceof Error ? error.message : String(error));
@@ -875,62 +875,46 @@ export function SettingsPage() {
           </section>
 
           <section className="space-y-5 border-t border-border-subtle pt-6">
-            <SectionLabel label="Conversation automation" />
+            <SectionLabel label="Plan execution" />
 
-            <div className="grid gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-              <div className="space-y-6 min-w-0">
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <h2 className="text-[15px] font-medium text-primary">Default behavior</h2>
-                  <p className="ui-card-meta max-w-2xl">
-                    Controls whether new conversations that inherit automation presets start with automation enabled or paused.
-                  </p>
-                </div>
-
-                {conversationAutomationDefaultsLoading && !conversationAutomationDefaultsState ? (
-                  <p className="ui-card-meta">Loading automation defaults…</p>
-                ) : (!conversationAutomationDefaultsState && conversationAutomationDefaultsError) ? (
-                  <p className="text-[12px] text-danger">Failed to load automation defaults: {conversationAutomationDefaultsError}</p>
-                ) : conversationAutomationDefaultsState ? (
-                  <>
-                    <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="settings-conversation-automation-default-enabled">
-                      <input
-                        id="settings-conversation-automation-default-enabled"
-                        type="checkbox"
-                        checked={conversationAutomationDefaultsState.defaultEnabled}
-                        onChange={(event) => {
-                          void handleConversationAutomationDefaultEnabledChange(event.target.checked);
-                        }}
-                        disabled={savingConversationAutomationDefaultEnabled}
-                        className={CHECKBOX_CLASS}
-                      />
-                      <span>Enable automation in new conversations</span>
-                    </label>
-                    <p className="ui-card-meta">
-                      {savingConversationAutomationDefaultEnabled
-                        ? 'Saving automation default…'
-                        : conversationAutomationDefaultsState.defaultEnabled
-                          ? 'New conversations with inherited presets start enabled.'
-                          : 'New conversations with inherited presets stay paused until you enable them.'}
-                    </p>
-                  </>
-                ) : null}
-
-                {conversationAutomationDefaultEnabledError && <p className="text-[12px] text-danger">{conversationAutomationDefaultEnabledError}</p>}
-              </div>
-              </div>
-
-              <div className="space-y-3 min-w-0">
-                <div className="space-y-1">
-                  <h2 className="text-[15px] font-medium text-primary">Execution model</h2>
-                  <p className="ui-card-meta max-w-2xl">
-                    Conversation automation now runs an ordered todo list of skill items. When the list completes, the assistant performs one final review pass and can append more items before stopping.
-                  </p>
-                </div>
+            <div className="space-y-3 min-w-0">
+              <div className="space-y-1">
+                <h2 className="text-[15px] font-medium text-primary">Default behavior</h2>
                 <p className="ui-card-meta max-w-2xl">
-                  Manage the actual todo lists from the Automation page. There is no separate judge model or query syntax to configure anymore.
+                  Controls whether new conversations that inherit plans start running immediately or stay paused.
                 </p>
               </div>
+
+              {conversationAutomationDefaultsLoading && !conversationAutomationDefaultsState ? (
+                <p className="ui-card-meta">Loading plan defaults…</p>
+              ) : (!conversationAutomationDefaultsState && conversationAutomationDefaultsError) ? (
+                <p className="text-[12px] text-danger">Failed to load plan defaults: {conversationAutomationDefaultsError}</p>
+              ) : conversationAutomationDefaultsState ? (
+                <>
+                  <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="settings-conversation-automation-default-enabled">
+                    <input
+                      id="settings-conversation-automation-default-enabled"
+                      type="checkbox"
+                      checked={conversationAutomationDefaultsState.defaultEnabled}
+                      onChange={(event) => {
+                        void handleConversationAutomationDefaultEnabledChange(event.target.checked);
+                      }}
+                      disabled={savingConversationAutomationDefaultEnabled}
+                      className={CHECKBOX_CLASS}
+                    />
+                    <span>Run inherited plans in new conversations</span>
+                  </label>
+                  <p className="ui-card-meta">
+                    {savingConversationAutomationDefaultEnabled
+                      ? 'Saving plan default…'
+                      : conversationAutomationDefaultsState.defaultEnabled
+                        ? 'New conversations with inherited plans start running immediately.'
+                        : 'New conversations with inherited plans stay paused until you enable them.'}
+                  </p>
+                </>
+              ) : null}
+
+              {conversationAutomationDefaultEnabledError && <p className="text-[12px] text-danger">{conversationAutomationDefaultEnabledError}</p>}
             </div>
           </section>
 

@@ -417,7 +417,7 @@ export function Sidebar() {
   } | null>(null);
   const allSessions = useMemo(() => [...pinnedSessions, ...tabs, ...archivedSessions], [archivedSessions, pinnedSessions, tabs]);
   const activeConversationId = useMemo(() => getActiveConversationId(location.pathname), [location.pathname]);
-  const automationTarget = '/automation';
+  const plansTarget = '/plans';
   const attentionIds = useMemo(
     () => new Set(allSessions.filter((session) => sessionNeedsAttention(session)).map((session) => session.id)),
     [allSessions],
@@ -793,7 +793,7 @@ export function Sidebar() {
           title={`Open unified search (${SIDEBAR_SEARCH_HOTKEY})`}
           onClick={handleOpenSearch}
         />
-        <TopNavItem to={automationTarget} icon={PATH.automation} label="Automation" title="Open the full-page workflow editor for the active conversation." />
+        <TopNavItem to={plansTarget} icon={PATH.automation} label="Plans" title="Open the full-page plan editor for the active conversation." />
         <TopNavItem to="/scheduled" icon={PATH.tasks} label="Scheduled" />
         <TopNavItem to="/projects" icon={PATH.projects} label="Projects" />
         <TopNavItem to="/memories" icon={PATH.memory} label="Memories" />

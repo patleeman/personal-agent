@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { useAppEvents } from '../contexts';
@@ -18,6 +18,8 @@ function itemTone(status: ConversationAutomationTodoItem['status']) {
       return 'accent' as const;
     case 'completed':
       return 'success' as const;
+    case 'blocked':
+      return 'warning' as const;
     case 'failed':
       return 'danger' as const;
     default:
@@ -36,6 +38,11 @@ function buildProgressLabel(automation: ConversationAutomationResponse['automati
     return `${completed}/${automation.items.length} complete · running ${running.label}`;
   }
 
+  const blocked = automation.items.find((item) => item.status === 'blocked');
+  if (blocked) {
+    return `${completed}/${automation.items.length} complete · blocked ${blocked.label}`;
+  }
+
   if (automation.review?.status === 'running') {
     return `${completed}/${automation.items.length} complete · reviewing`;
   }
@@ -47,16 +54,43 @@ function buildProgressLabel(automation: ConversationAutomationResponse['automati
   return `${completed}/${automation.items.length} complete`;
 }
 
-function clonePresetItemsForConversation(items: ConversationAutomationTemplateTodoItem[]): ConversationAutomationTemplateTodoItem[] {
-  return items.map((item) => ({
-    ...item,
-    id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-  }));
+function cloneTemplateItem(item: ConversationAutomationTemplateTodoItem): ConversationAutomationTemplateTodoItem {
+  return item.kind === 'instruction'
+    ? {
+      id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      kind: 'instruction',
+      label: item.label,
+      text: item.text,
+    }
+    : {
+      id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      kind: 'skill',
+      label: item.label,
+      skillName: item.skillName,
+      ...(item.skillArgs ? { skillArgs: item.skillArgs } : {}),
+    };
+}
+
+function templateItemFromRuntimeItem(item: ConversationAutomationTodoItem): ConversationAutomationTemplateTodoItem {
+  return item.kind === 'instruction'
+    ? {
+      id: item.id,
+      kind: 'instruction',
+      label: item.label,
+      text: item.text,
+    }
+    : {
+      id: item.id,
+      kind: 'skill',
+      label: item.label,
+      skillName: item.skillName,
+      ...(item.skillArgs ? { skillArgs: item.skillArgs } : {}),
+    };
 }
 
 export function ConversationAutomationPanel({ conversationId }: { conversationId: string }) {
   const { versions } = useAppEvents();
-  const fetcher = useCallback(() => api.conversationAutomation(conversationId), [conversationId]);
+  const fetcher = useCallback(() => api.conversationPlan(conversationId), [conversationId]);
   const {
     data,
     loading,
@@ -66,9 +100,9 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
     replaceData,
   } = useApi(fetcher, conversationId);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [togglingEnabled, setTogglingEnabled] = useState(false);
-  const [selectedApplyPresetId, setSelectedApplyPresetId] = useState('');
-  const [applyingPreset, setApplyingPreset] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState('');
+  const [selectedTemplateItemKey, setSelectedTemplateItemKey] = useState('');
+  const [pendingAction, setPendingAction] = useState<'item' | 'plan' | null>(null);
 
   useEffect(() => {
     void refetch({ resetLoading: false });
@@ -76,87 +110,13 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
 
   useEffect(() => {
     setActionError(null);
-    setTogglingEnabled(false);
-    setSelectedApplyPresetId('');
-    setApplyingPreset(false);
+    setSelectedPlanId('');
+    setSelectedTemplateItemKey('');
+    setPendingAction(null);
   }, [conversationId]);
 
-  async function handleToggleEnabled(nextEnabled: boolean) {
-    if (!data || togglingEnabled) {
-      return;
-    }
-
-    setActionError(null);
-    setTogglingEnabled(true);
-    try {
-      const saved = await api.updateConversationAutomation(conversationId, {
-        enabled: nextEnabled,
-      });
-      replaceData(saved);
-    } catch (nextError) {
-      setActionError(nextError instanceof Error ? nextError.message : String(nextError));
-    } finally {
-      setTogglingEnabled(false);
-    }
-  }
-
-  async function handleApplyPreset() {
-    if (!data || !selectedApplyPresetId || applyingPreset) {
-      return;
-    }
-
-    const selectedPreset = data.presetLibrary.presets.find((preset) => preset.id === selectedApplyPresetId);
-    if (!selectedPreset) {
-      return;
-    }
-
-    const nextItems = [
-      ...automation.items.map((item) => ({
-        id: item.id,
-        label: item.label,
-        skillName: item.skillName,
-        ...(item.skillArgs ? { skillArgs: item.skillArgs } : {}),
-      })),
-      ...clonePresetItemsForConversation(selectedPreset.items),
-    ];
-
-    setActionError(null);
-    setApplyingPreset(true);
-    try {
-      const saved = await api.updateConversationAutomation(conversationId, {
-        items: nextItems,
-      });
-      replaceData(saved);
-    } catch (nextError) {
-      setActionError(nextError instanceof Error ? nextError.message : String(nextError));
-    } finally {
-      setApplyingPreset(false);
-    }
-  }
-
-  useEffect(() => {
-    if (!data) {
-      return;
-    }
-
-    const selectedStillExists = selectedApplyPresetId
-      && data.presetLibrary.presets.some((preset) => preset.id === selectedApplyPresetId);
-    if (selectedStillExists) {
-      return;
-    }
-
-    const fallbackId = [...data.inheritedPresetIds, ...data.presetLibrary.defaultPresetIds]
-      .find((presetId) => presetId.trim().length > 0 && data.presetLibrary.presets.some((preset) => preset.id === presetId))
-      ?? data.presetLibrary.presets[0]?.id
-      ?? '';
-
-    if (fallbackId !== selectedApplyPresetId) {
-      setSelectedApplyPresetId(fallbackId);
-    }
-  }, [data, selectedApplyPresetId]);
-
   if (loading && !data) {
-    return <LoadingState label="Loading automation…" className="px-3 py-3" />;
+    return <LoadingState label="Loading plan…" className="px-3 py-3" />;
   }
 
   if (error && !data) {
@@ -169,101 +129,156 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
 
   const automation = data.automation;
   const presetLibrary = data.presetLibrary;
-  const defaultPresets = presetLibrary.defaultPresetIds
-    .map((presetId) => presetLibrary.presets.find((preset) => preset.id === presetId) ?? null)
-    .filter((preset): preset is NonNullable<typeof preset> => Boolean(preset));
-  const inheritedPresets = data.inheritedPresetIds
-    .map((presetId) => presetLibrary.presets.find((preset) => preset.id === presetId) ?? null)
-    .filter((preset): preset is NonNullable<typeof preset> => Boolean(preset));
   const progressLabel = buildProgressLabel(automation);
-  const canToggleEnabled = !(automation.items.length === 0 && defaultPresets.length === 0 && !automation.enabled);
+  const planOptions = presetLibrary.presets;
+  const itemOptions = useMemo(() => presetLibrary.presets.flatMap((preset) => preset.items.map((item) => ({
+    key: `${preset.id}::${item.id}`,
+    presetId: preset.id,
+    presetName: preset.name,
+    item,
+  }))), [presetLibrary.presets]);
+
+  useEffect(() => {
+    if (!selectedPlanId || planOptions.some((preset) => preset.id === selectedPlanId)) {
+      return;
+    }
+    setSelectedPlanId(planOptions[0]?.id ?? '');
+  }, [planOptions, selectedPlanId]);
+
+  useEffect(() => {
+    if (!selectedTemplateItemKey || itemOptions.some((item) => item.key === selectedTemplateItemKey)) {
+      return;
+    }
+    setSelectedTemplateItemKey(itemOptions[0]?.key ?? '');
+  }, [itemOptions, selectedTemplateItemKey]);
+
+  async function saveItems(nextItems: ConversationAutomationTemplateTodoItem[]) {
+    const saved = await api.updateConversationPlan(conversationId, { items: nextItems });
+    replaceData(saved);
+  }
+
+  async function handleAddPlan() {
+    if (!selectedPlanId || pendingAction) {
+      return;
+    }
+
+    const preset = planOptions.find((candidate) => candidate.id === selectedPlanId);
+    if (!preset) {
+      return;
+    }
+
+    setActionError(null);
+    setPendingAction('plan');
+    try {
+      await saveItems([
+        ...automation.items.map(templateItemFromRuntimeItem),
+        ...preset.items.map(cloneTemplateItem),
+      ]);
+    } catch (nextError) {
+      setActionError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setPendingAction(null);
+    }
+  }
+
+  async function handleAddItem() {
+    if (!selectedTemplateItemKey || pendingAction) {
+      return;
+    }
+
+    const selected = itemOptions.find((item) => item.key === selectedTemplateItemKey);
+    if (!selected) {
+      return;
+    }
+
+    setActionError(null);
+    setPendingAction('item');
+    try {
+      await saveItems([
+        ...automation.items.map(templateItemFromRuntimeItem),
+        cloneTemplateItem(selected.item),
+      ]);
+    } catch (nextError) {
+      setActionError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setPendingAction(null);
+    }
+  }
 
   return (
     <SurfacePanel muted className="space-y-3 px-3 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] text-dim">
-              {automation.items.length} {automation.items.length === 1 ? 'item' : 'items'}
-            </span>
-            <span className="text-[11px] text-dim">{progressLabel}</span>
-            {refreshing && <span className="text-[11px] text-dim">refreshing…</span>}
-          </div>
-          {(inheritedPresets.length > 0 || defaultPresets.length > 0) && (
-            <div className="flex flex-wrap gap-1.5">
-              {inheritedPresets.map((preset) => <Pill key={`inherited-${preset.id}`} tone="steel">{preset.name}</Pill>)}
-              {inheritedPresets.length === 0 && defaultPresets.map((preset) => <Pill key={`default-${preset.id}`} tone="steel">{preset.name}</Pill>)}
-            </div>
-          )}
-        </div>
-
-        <button
-          type="button"
-          onClick={() => { void handleToggleEnabled(!automation.enabled); }}
-          disabled={togglingEnabled || !canToggleEnabled}
-          className={cx(
-            'inline-flex items-center gap-2 rounded-full px-1 py-1 text-[12px] transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-            automation.enabled ? 'bg-success/15 text-success' : 'bg-surface text-dim',
-          )}
-          aria-pressed={automation.enabled}
-        >
-          <span
-            className={cx(
-              'relative inline-flex h-5 w-9 rounded-full transition-colors',
-              automation.enabled ? 'bg-success' : 'bg-border-default',
-            )}
-          >
-            <span
-              className={cx(
-                'absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform',
-                automation.enabled ? 'translate-x-[18px]' : 'translate-x-0.5',
-              )}
-            />
-          </span>
-          <span className="pr-2 font-medium">{togglingEnabled ? 'Saving…' : 'Enabled'}</span>
-        </button>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[11px] text-dim">
+          {automation.items.length} {automation.items.length === 1 ? 'item' : 'items'}
+        </span>
+        <span className="text-[11px] text-dim">{progressLabel}</span>
+        {refreshing && <span className="text-[11px] text-dim">refreshing…</span>}
       </div>
 
-      {!data.live && automation.enabled && (
-        <p className="text-[11px] text-warning">Resume conversation to keep automation running.</p>
+      {!data.live && automation.items.length > 0 && (
+        <p className="text-[11px] text-warning">Resume conversation to start working through these items.</p>
       )}
 
-      {presetLibrary.presets.length > 0 && (
+      {(itemOptions.length > 0 || planOptions.length > 0) && (
         <div className="space-y-2 border-t border-border-subtle pt-3">
           <div className="flex items-center justify-between gap-3">
-            <p className="ui-section-label">Apply presets</p>
-            <Link to="/automation" className="text-[11px] text-accent hover:underline">manage</Link>
+            <p className="ui-section-label">Add items</p>
+            <Link to="/plans" className="text-[11px] text-accent hover:underline">manage plans</Link>
           </div>
 
-          <div className="flex items-center gap-2">
-            <select
-              value={selectedApplyPresetId}
-              onChange={(event) => setSelectedApplyPresetId(event.target.value)}
-              className={cx(SELECT_CLASS, 'flex-1')}
-              disabled={applyingPreset}
-            >
-              {presetLibrary.presets.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.name} · {preset.items.length} {preset.items.length === 1 ? 'item' : 'items'}
-                </option>
-              ))}
-            </select>
-            <ToolbarButton
-              onClick={() => { void handleApplyPreset(); }}
-              disabled={!selectedApplyPresetId || applyingPreset}
-              className="text-accent"
-            >
-              {applyingPreset ? 'Adding…' : 'Add'}
-            </ToolbarButton>
-          </div>
+          {itemOptions.length > 0 && (
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedTemplateItemKey}
+                onChange={(event) => setSelectedTemplateItemKey(event.target.value)}
+                className={cx(SELECT_CLASS, 'flex-1')}
+                disabled={pendingAction !== null}
+              >
+                {itemOptions.map((option) => (
+                  <option key={option.key} value={option.key}>
+                    {option.presetName} · {option.item.label}
+                  </option>
+                ))}
+              </select>
+              <ToolbarButton
+                onClick={() => { void handleAddItem(); }}
+                disabled={!selectedTemplateItemKey || pendingAction !== null}
+                className="text-accent"
+              >
+                {pendingAction === 'item' ? 'Adding…' : 'Add item'}
+              </ToolbarButton>
+            </div>
+          )}
+
+          {planOptions.length > 0 && (
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedPlanId}
+                onChange={(event) => setSelectedPlanId(event.target.value)}
+                className={cx(SELECT_CLASS, 'flex-1')}
+                disabled={pendingAction !== null}
+              >
+                {planOptions.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.name} · {preset.items.length} {preset.items.length === 1 ? 'item' : 'items'}
+                  </option>
+                ))}
+              </select>
+              <ToolbarButton
+                onClick={() => { void handleAddPlan(); }}
+                disabled={!selectedPlanId || pendingAction !== null}
+                className="text-accent"
+              >
+                {pendingAction === 'plan' ? 'Adding…' : 'Add plan'}
+              </ToolbarButton>
+            </div>
+          )}
         </div>
       )}
 
       {automation.items.length === 0 ? (
         <div className="border-t border-border-subtle pt-3 text-[12px] text-dim">
-          {defaultPresets.length > 0
-            ? `Using defaults: ${defaultPresets.map((preset) => preset.name).join(', ')}`
-            : 'No todo list yet. Add a preset or manage presets.'}
+          No todo list yet. Add items from a plan to get started.
         </div>
       ) : (
         <div className="space-y-2 border-t border-border-subtle pt-3">
@@ -276,8 +291,10 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
                 {automation.activeItemId === item.id && <span className="text-[10px] uppercase tracking-[0.14em] text-accent">active</span>}
               </div>
               <p className="mt-1 text-[13px] font-medium text-primary break-words">{item.label}</p>
-              <p className="mt-1 rounded-md bg-base/60 px-2.5 py-2 font-mono text-[11px] leading-relaxed break-words text-secondary">
-                /skill:{item.skillName}{item.skillArgs ? ` ${item.skillArgs}` : ''}
+              <p className="mt-1 rounded-md bg-base/60 px-2.5 py-2 text-[11px] leading-relaxed break-words text-secondary font-mono whitespace-pre-wrap">
+                {item.kind === 'instruction'
+                  ? item.text
+                  : `/skill:${item.skillName}${item.skillArgs ? ` ${item.skillArgs}` : ''}`}
               </p>
               {item.resultReason && <p className="mt-1 text-[11px] text-secondary break-words">{item.resultReason}</p>}
             </div>

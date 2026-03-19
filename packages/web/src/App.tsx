@@ -220,7 +220,7 @@ export function App() {
                     <Route path="web-ui" element={suspendRoute(<WebUiPage />)} />
                     <Route path="projects" element={suspendRoute(<ProjectsPage />)} />
                     <Route path="projects/:id" element={suspendRoute(<ProjectsPage />)} />
-                    <Route path="automation" element={suspendRoute(<AutomationPage />)} />
+                    <Route path="plans" element={suspendRoute(<AutomationPage />)} />
                     <Route path="memories" element={suspendRoute(<MemoriesPage />)} />
                     <Route path="runs" element={suspendRoute(<RunsPage />)} />
                     <Route path="runs/:id" element={suspendRoute(<RunsPage />)} />

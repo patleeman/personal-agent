@@ -221,9 +221,9 @@ export const api = {
   conversationTitleSettings: () => get<ConversationTitleSettingsState>('/conversation-titles/settings'),
   updateConversationTitleSettings: (input: { enabled?: boolean; model?: string | null }) =>
     patch<ConversationTitleSettingsState>('/conversation-titles/settings', input),
-  conversationAutomationDefaults: () => get<ConversationAutomationPreferencesState>('/conversation-automation/defaults'),
-  updateConversationAutomationDefaults: (input: { defaultEnabled: boolean }) =>
-    patch<ConversationAutomationPreferencesState>('/conversation-automation/defaults', input),
+  conversationPlanDefaults: () => get<ConversationAutomationPreferencesState>('/conversation-plans/defaults'),
+  updateConversationPlanDefaults: (input: { defaultEnabled: boolean }) =>
+    patch<ConversationAutomationPreferencesState>('/conversation-plans/defaults', input),
   openConversationTabs: () => get<{ sessionIds: string[]; pinnedSessionIds: string[] }>('/web-ui/open-conversations'),
   setOpenConversationTabs: (sessionIds: string[], pinnedSessionIds: string[] = []) =>
     patch<{ ok: boolean; sessionIds: string[]; pinnedSessionIds: string[] }>('/web-ui/open-conversations', { sessionIds, pinnedSessionIds }),
@@ -325,17 +325,17 @@ export const api = {
   }) => post<{ accepted: true; conversationId: string; sessionFile: string; runId: string; remoteCwd: string; target: { id: string; label: string } }>(`/remote-runs`, input),
   conversationExecution: (id: string) => get<ConversationExecutionState>(`/conversations/${encodeURIComponent(id)}/execution`),
   updateConversationExecution: (id: string, targetId: string | null) => patch<ConversationExecutionState>(`/conversations/${encodeURIComponent(id)}/execution`, { targetId }),
-  conversationAutomation: (id: string) => get<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation`),
-  updateConversationAutomation: (id: string, input: {
+  conversationPlan: (id: string) => get<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/plan`),
+  updateConversationPlan: (id: string, input: {
     enabled?: boolean;
     items?: ConversationAutomationTemplateTodoItem[];
-  }) => patch<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation`, input),
-  resetConversationAutomationItem: (id: string, itemId: string, resume = false) =>
-    post<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation/items/${encodeURIComponent(itemId)}/reset`, { resume }),
-  conversationAutomationWorkspace: () => get<ConversationAutomationWorkspaceState>('/conversation-automation/workspace'),
-  conversationAutomationWorkflowPresets: () => get<ConversationAutomationWorkflowPresetLibraryState>('/conversation-automation/workflow-presets'),
-  updateConversationAutomationWorkflowPresets: (input: ConversationAutomationWorkflowPresetLibraryState) =>
-    patch<ConversationAutomationWorkflowPresetLibraryState>('/conversation-automation/workflow-presets', input),
+  }) => patch<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/plan`, input),
+  resetConversationPlanItem: (id: string, itemId: string, resume = false) =>
+    post<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/plan/items/${encodeURIComponent(itemId)}/reset`, { resume }),
+  conversationPlansWorkspace: () => get<ConversationAutomationWorkspaceState>('/conversation-plans/workspace'),
+  conversationPlanLibrary: () => get<ConversationAutomationWorkflowPresetLibraryState>('/conversation-plans/library'),
+  updateConversationPlanLibrary: (input: ConversationAutomationWorkflowPresetLibraryState) =>
+    patch<ConversationAutomationWorkflowPresetLibraryState>('/conversation-plans/library', input),
   liveSessionContextUsage: (id: string) => get<SessionContextUsage>(`/live-sessions/${encodeURIComponent(id)}/context-usage`),
   conversationArtifacts: (id: string) => get<{ conversationId: string; artifacts: ConversationArtifactSummary[] }>(`/conversations/${encodeURIComponent(id)}/artifacts`),
   conversationArtifact: (id: string, artifactId: string) => get<{ conversationId: string; artifact: ConversationArtifactRecord }>(`/conversations/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(artifactId)}`),
