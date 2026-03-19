@@ -50,11 +50,12 @@ function registerRunTool() {
   return registeredTool;
 }
 
-function createToolContext(conversationId = 'conv-123') {
+function createToolContext(conversationId = 'conv-123', sessionFile = '/tmp/sessions/conv-123.jsonl') {
   return {
     cwd: '/tmp/workspace',
     sessionManager: {
       getSessionId: () => conversationId,
+      getSessionFile: () => sessionFile,
     },
   };
 }
@@ -105,7 +106,7 @@ describe('run agent extension', () => {
       },
       undefined,
       undefined,
-      createToolContext('conv-999'),
+      createToolContext('conv-999', '/tmp/sessions/conv-999.jsonl'),
     );
 
     expect(result.isError).not.toBe(true);
@@ -116,6 +117,10 @@ describe('run agent extension', () => {
       source: {
         type: 'tool',
         id: 'conv-999',
+        filePath: '/tmp/sessions/conv-999.jsonl',
+      },
+      checkpointPayload: {
+        resumeParentOnExit: true,
       },
     });
     expect(result.content[0]?.text).toContain('Started durable run run-456');

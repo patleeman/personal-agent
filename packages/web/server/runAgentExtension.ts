@@ -147,6 +147,9 @@ export function createRunAgentExtension(): (pi: ExtensionAPI) => void {
                   id: conversationId,
                   ...(conversationFile ? { filePath: conversationFile } : {}),
                 },
+                checkpointPayload: {
+                  resumeParentOnExit: true,
+                },
               });
 
               if (!result.accepted) {
