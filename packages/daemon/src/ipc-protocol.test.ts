@@ -120,6 +120,38 @@ describe('parseRequest', () => {
     });
   });
 
+  it('parses runs.startBackground agent request', () => {
+    const parsed = parseRequest(JSON.stringify({
+      id: 'req_7ba',
+      type: 'runs.startBackground',
+      input: {
+        taskSlug: 'subagent',
+        cwd: '/tmp/work',
+        agent: {
+          prompt: 'Review the latest diff',
+          profile: 'datadog',
+          model: 'openai-codex/gpt-5.4',
+          noSession: true,
+        },
+      },
+    }));
+
+    expect(parsed).toEqual({
+      id: 'req_7ba',
+      type: 'runs.startBackground',
+      input: {
+        taskSlug: 'subagent',
+        cwd: '/tmp/work',
+        agent: {
+          prompt: 'Review the latest diff',
+          profile: 'datadog',
+          model: 'openai-codex/gpt-5.4',
+          noSession: true,
+        },
+      },
+    });
+  });
+
   it('parses runs.startBackground manifest metadata and checkpoint payload', () => {
     const parsed = parseRequest(JSON.stringify({
       id: 'req_7bb',

@@ -62,6 +62,11 @@ export {
   type StartBackgroundRunRecord,
 } from './runs/background-runs.js';
 export {
+  buildBackgroundAgentArgv,
+  looksLikePersonalAgentCliEntryPath,
+  type BackgroundRunAgentSpec,
+} from './background-run-agent.js';
+export {
   createWebLiveConversationRunId,
   saveWebLiveConversationRunState,
   listRecoverableWebLiveConversationRuns,

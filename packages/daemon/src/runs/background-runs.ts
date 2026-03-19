@@ -1,5 +1,6 @@
 import { appendFileSync, mkdirSync, writeFileSync } from 'fs';
 import { dirname } from 'path';
+import { buildBackgroundAgentArgv, type BackgroundRunAgentSpec } from '../background-run-agent.js';
 import {
   appendDurableRunEvent,
   createDurableRunManifest,
@@ -29,6 +30,7 @@ export interface StartBackgroundRunInput {
   cwd: string;
   argv?: string[];
   shellCommand?: string;
+  agent?: BackgroundRunAgentSpec;
   source?: {
     type: string;
     id?: string;
@@ -43,6 +45,8 @@ export interface StartBackgroundRunInput {
 export interface StartBackgroundRunRecord {
   runId: string;
   paths: DurableRunPaths;
+  argv?: string[];
+  shellCommand?: string;
 }
 
 export interface FinalizeBackgroundRunInput {
@@ -95,19 +99,51 @@ function normalizeShellCommand(command: string | undefined): string | undefined 
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function ensureCommandSpec(input: StartBackgroundRunInput): { argv?: string[]; shellCommand?: string } {
+function normalizeAgentSpec(spec: BackgroundRunAgentSpec | undefined): BackgroundRunAgentSpec | undefined {
+  if (!spec) {
+    return undefined;
+  }
+
+  const prompt = spec.prompt.trim();
+  if (prompt.length === 0) {
+    throw new Error('Background agent run prompt must be non-empty.');
+  }
+
+  const profile = spec.profile?.trim();
+  const model = spec.model?.trim();
+
+  return {
+    prompt,
+    ...(profile ? { profile } : {}),
+    ...(model ? { model } : {}),
+    ...(spec.noSession === true ? { noSession: true } : {}),
+  };
+}
+
+function ensureCommandSpec(input: StartBackgroundRunInput): {
+  argv?: string[];
+  shellCommand?: string;
+  agent?: BackgroundRunAgentSpec;
+} {
   const argv = normalizeArgv(input.argv);
   const shellCommand = normalizeShellCommand(input.shellCommand);
+  const agent = normalizeAgentSpec(input.agent);
+  const definedSpecs = [argv ? 'argv' : null, shellCommand ? 'shellCommand' : null, agent ? 'agent' : null]
+    .filter((value): value is 'argv' | 'shellCommand' | 'agent' => value !== null);
 
-  if (argv && shellCommand) {
-    throw new Error('Background run must use either argv or shellCommand, not both.');
+  if (definedSpecs.length > 1) {
+    throw new Error('Background run must use exactly one of argv, shellCommand, or agent.');
   }
 
-  if (!argv && !shellCommand) {
-    throw new Error('Background run must include argv or shellCommand.');
+  if (!agent && !argv && !shellCommand) {
+    throw new Error('Background run must include argv, shellCommand, or agent.');
   }
 
-  return { argv, shellCommand };
+  return {
+    ...(agent ? { agent, argv: buildBackgroundAgentArgv(agent) } : {}),
+    ...(argv ? { argv } : {}),
+    ...(shellCommand ? { shellCommand } : {}),
+  };
 }
 
 function appendOutputLog(path: string, text: string): void {
@@ -133,7 +169,7 @@ export async function createBackgroundRunRecord(
   const createdAt = new Date(input.createdAt ?? Date.now()).toISOString();
   const runId = createBackgroundRunId(input.taskSlug, createdAt);
   const paths = resolveDurableRunPaths(runsRoot, runId);
-  const { argv, shellCommand } = ensureCommandSpec(input);
+  const { argv, shellCommand, agent } = ensureCommandSpec(input);
 
   mkdirSync(paths.root, { recursive: true, mode: 0o700 });
   writeFileSync(paths.outputLogPath, '', 'utf-8');
@@ -148,6 +184,7 @@ export async function createBackgroundRunRecord(
       cwd: input.cwd,
       ...(argv ? { argv } : {}),
       ...(shellCommand ? { shellCommand } : {}),
+      ...(agent ? { agent } : {}),
       ...(input.notification ? { notification: input.notification } : {}),
     },
     source: input.source
@@ -182,6 +219,7 @@ export async function createBackgroundRunRecord(
       cwd: input.cwd,
       ...(argv ? { argv } : {}),
       ...(shellCommand ? { shellCommand } : {}),
+      ...(agent ? { agent } : {}),
     },
   });
 
@@ -196,12 +234,18 @@ export async function createBackgroundRunRecord(
       cwd: input.cwd,
       ...(argv ? { argv } : {}),
       ...(shellCommand ? { shellCommand } : {}),
+      ...(agent ? { agent } : {}),
     },
   });
 
   appendOutputLog(paths.outputLogPath, `# task=${input.taskSlug}\n# cwd=${input.cwd}\n# createdAt=${createdAt}\n`);
 
-  return { runId, paths };
+  return {
+    runId,
+    paths,
+    ...(argv ? { argv } : {}),
+    ...(shellCommand ? { shellCommand } : {}),
+  };
 }
 
 export async function markBackgroundRunStarted(input: {

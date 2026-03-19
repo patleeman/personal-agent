@@ -171,6 +171,40 @@ function readOptionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
+function readOptionalBoolean(value: unknown, label: string): boolean | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== 'boolean') {
+    throw new Error(`${label} must be a boolean`);
+  }
+
+  return value;
+}
+
+function readBackgroundRunAgent(value: unknown): StartBackgroundRunRequestInput['agent'] {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    throw new Error('runs.startBackground agent must be an object when provided');
+  }
+
+  const prompt = readRequiredString(value.prompt, 'runs.startBackground agent.prompt');
+  const profile = readOptionalString(value.profile);
+  const model = readOptionalString(value.model);
+  const noSession = readOptionalBoolean(value.noSession, 'runs.startBackground agent.noSession');
+
+  return {
+    prompt,
+    ...(profile ? { profile } : {}),
+    ...(model ? { model } : {}),
+    ...(noSession !== undefined ? { noSession } : {}),
+  };
+}
+
 function readBackgroundRunNotification(value: unknown): StartBackgroundRunRequestInput['notification'] {
   if (value === undefined) {
     return undefined;
@@ -230,6 +264,7 @@ function readBackgroundRunInput(value: unknown): StartBackgroundRunRequestInput 
     ? rawArgv.map((entry, index) => readRequiredString(entry, `runs.startBackground argv[${index}]`))
     : undefined;
   const shellCommand = readOptionalString(value.shellCommand);
+  const agent = readBackgroundRunAgent(value.agent);
   const notification = readBackgroundRunNotification(value.notification);
 
   return {
@@ -237,6 +272,7 @@ function readBackgroundRunInput(value: unknown): StartBackgroundRunRequestInput 
     cwd: readRequiredString(value.cwd, 'runs.startBackground cwd'),
     ...(argv ? { argv } : {}),
     ...(shellCommand ? { shellCommand } : {}),
+    ...(agent ? { agent } : {}),
     ...(isRecord(value.source)
       ? {
           source: {

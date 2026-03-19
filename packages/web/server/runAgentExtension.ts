@@ -5,7 +5,7 @@ import { invalidateAppTopics } from './appEvents.js';
 import { ensureDaemonAvailable } from './daemonToolUtils.js';
 import { cancelDurableRun, getDurableRun, getDurableRunLog, listDurableRuns } from './durableRuns.js';
 
-const RUN_ACTION_VALUES = ['list', 'get', 'logs', 'start', 'cancel'] as const;
+const RUN_ACTION_VALUES = ['list', 'get', 'logs', 'start', 'start_agent', 'cancel'] as const;
 
 type RunAction = (typeof RUN_ACTION_VALUES)[number];
 
@@ -14,6 +14,9 @@ const RunToolParams = Type.Object({
   runId: Type.Optional(Type.String({ description: 'Run id for get/logs/cancel actions.' })),
   taskSlug: Type.Optional(Type.String({ description: 'Short durable task slug for start, for example code-review.' })),
   command: Type.Optional(Type.String({ description: 'Shell command to execute for start.' })),
+  prompt: Type.Optional(Type.String({ description: 'Agent prompt body for start_agent.' })),
+  model: Type.Optional(Type.String({ description: 'Optional full model ref for start_agent, for example openai-codex/gpt-5.4.' })),
+  profile: Type.Optional(Type.String({ description: 'Optional profile override for start_agent. Defaults to the active conversation profile.' })),
   cwd: Type.Optional(Type.String({ description: 'Working directory for start. Defaults to the current conversation cwd.' })),
   tail: Type.Optional(Type.Number({ minimum: 1, maximum: 1000, description: 'Number of log lines to include for logs.' })),
 });
@@ -73,7 +76,7 @@ export function createRunAgentExtension(): (pi: ExtensionAPI) => void {
       promptGuidelines: [
         'Use this tool for durable background jobs that should keep running outside the current turn.',
         'Prefer one focused run per independent task slug.',
-        'Use start for detached shell work, get/logs for inspection, and cancel to stop a run.',
+        'Use start for detached shell work, start_agent for detached subagents, get/logs for inspection, and cancel to stop a run.',
       ],
       parameters: RunToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
@@ -167,6 +170,56 @@ export function createRunAgentExtension(): (pi: ExtensionAPI) => void {
                   runId: result.runId,
                   taskSlug,
                   cwd,
+                  logPath: result.logPath,
+                },
+              };
+            }
+
+            case 'start_agent': {
+              const taskSlug = readRequiredString(params.taskSlug, 'taskSlug');
+              const prompt = readRequiredString(params.prompt, 'prompt');
+              const cwd = readRequiredString(params.cwd ?? ctx.cwd, 'cwd');
+              const conversationId = ctx.sessionManager.getSessionId();
+              const conversationFile = ctx.sessionManager.getSessionFile();
+              const model = params.model?.trim();
+              const profile = params.profile?.trim();
+
+              await ensureDaemonAvailable();
+              const result = await startBackgroundRun({
+                taskSlug,
+                cwd,
+                agent: {
+                  prompt,
+                  ...(model ? { model } : {}),
+                  ...(profile ? { profile } : {}),
+                },
+                source: {
+                  type: 'tool',
+                  id: conversationId,
+                  ...(conversationFile ? { filePath: conversationFile } : {}),
+                },
+                checkpointPayload: {
+                  resumeParentOnExit: true,
+                },
+              });
+
+              if (!result.accepted) {
+                throw new Error(result.reason ?? `Could not start durable agent run for ${taskSlug}.`);
+              }
+
+              invalidateAppTopics('runs');
+              return {
+                content: [{
+                  type: 'text' as const,
+                  text: `Started durable agent run ${result.runId} for ${taskSlug}.`,
+                }],
+                details: {
+                  action: 'start_agent',
+                  runId: result.runId,
+                  taskSlug,
+                  cwd,
+                  model,
+                  profile,
                   logPath: result.logPath,
                 },
               };

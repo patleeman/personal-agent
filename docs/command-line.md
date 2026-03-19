@@ -220,9 +220,7 @@ Examples:
 pa memory list
 pa memory find --tag notes --area personal-agent --role canonical
 pa memory show quick-note
-```
-
-pa memory new memory-index   --title "Memory index"   --summary "Top-level memory table of contents"   --tags memory,index   --type index   --area memory   --role hub
+pa memory new memory-index --title "Memory index" --summary "Top-level memory table of contents" --tags memory,index --type index --area memory --role hub
 pa memory lint
 ```
 
@@ -236,7 +234,8 @@ Examples:
 
 ```bash
 pa mcp list
-pa mcp list -d
+pa mcp list --probe
+pa mcp list --probe -d
 pa mcp info atlassian
 pa mcp info atlassian/getConfluencePage
 pa mcp grep '*jira*'
@@ -245,7 +244,34 @@ pa mcp auth slack
 pa mcp logout slack
 ```
 
-### `pa runs [list|show|logs|start|cancel|help]`
+`pa mcp list` is config-only by default. Use `--probe` to connect to servers and fetch tool metadata.
+
+Native remote MCP config example:
+
+```json
+{
+  "mcpServers": {
+    "atlassian": {
+      "type": "remote",
+      "url": "https://mcp.atlassian.com/v1/mcp"
+    },
+    "slack": {
+      "type": "remote",
+      "url": "https://mcp.slack.com/mcp",
+      "callback": {
+        "host": "localhost",
+        "port": 3118,
+        "path": "/callback"
+      },
+      "oauth": {
+        "clientId": "1601185624273.8899143856786"
+      }
+    }
+  }
+}
+```
+
+### `pa runs [list|show|logs|start|start-agent|cancel|help]`
 
 Inspect and manage durable daemon-backed background runs.
 
@@ -255,7 +281,8 @@ Examples:
 pa runs list
 pa runs show <id>
 pa runs logs <id> --tail 120
-pa runs start code-review -- pa tui -p "review this diff"
+pa runs start code-review -- npm test
+pa runs start-agent code-review --prompt "review this diff"
 pa runs cancel <id>
 ```
 

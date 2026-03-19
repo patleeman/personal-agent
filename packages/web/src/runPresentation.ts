@@ -96,8 +96,26 @@ function readSpec(run: DurableRunRecord, key: string): string | undefined {
   return isRecord(run.manifest?.spec) ? readString(run.manifest.spec, key) : undefined;
 }
 
+function readNestedSpec(run: DurableRunRecord, key: string, nestedKey: string): string | undefined {
+  if (!isRecord(run.manifest?.spec)) {
+    return undefined;
+  }
+
+  const value = run.manifest.spec[key];
+  return isRecord(value) ? readString(value, nestedKey) : undefined;
+}
+
 function readCheckpoint(run: DurableRunRecord, key: string): string | undefined {
   return isRecord(run.checkpoint?.payload) ? readString(run.checkpoint.payload, key) : undefined;
+}
+
+function readNestedCheckpoint(run: DurableRunRecord, key: string, nestedKey: string): string | undefined {
+  if (!isRecord(run.checkpoint?.payload)) {
+    return undefined;
+  }
+
+  const value = run.checkpoint.payload[key];
+  return isRecord(value) ? readString(value, nestedKey) : undefined;
 }
 
 function excerpt(value: string | undefined, maxLength = 88): string | undefined {
@@ -286,9 +304,10 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
   }
 
   if (run.manifest?.kind === 'background-run' || run.manifest?.source?.type === 'background-run') {
+    const agentPrompt = excerpt(readNestedSpec(run, 'agent', 'prompt') ?? readNestedCheckpoint(run, 'agent', 'prompt'));
     const shellCommand = excerpt(readSpec(run, 'shellCommand') ?? readCheckpoint(run, 'shellCommand'));
     const taskSlug = readSpec(run, 'taskSlug') ?? readCheckpoint(run, 'taskSlug') ?? run.manifest?.source?.id;
-    const headline = shellCommand ?? taskSlug ?? run.runId;
+    const headline = agentPrompt ?? shellCommand ?? taskSlug ?? run.runId;
     const summary = taskSlug && headline !== taskSlug
       ? `Background run · ${taskSlug}`
       : 'Background run';

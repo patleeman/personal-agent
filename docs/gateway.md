@@ -206,7 +206,7 @@ Good examples:
 Examples:
 
 ```text
-/run code-review -- pa tui -p "review this diff"
+/run code-review -- npm test
 /run list
 /run show <id>
 /run logs <id> tail=120
