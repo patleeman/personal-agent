@@ -2640,31 +2640,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
-  async function refreshRunsSnapshot() {
-    try {
-      const nextRuns = await api.runs();
-      setRuns(nextRuns);
-    } catch {
-      // Ignore optimistic refresh failures.
-    }
-  }
-
-  async function refreshSessionsSnapshot() {
-    try {
-      const [storedSessions, liveSessions] = await Promise.all([
-        api.sessions(),
-        api.liveSessions(),
-      ]);
-      const storedIds = new Set(storedSessions.map((session) => session.id));
-      const syntheticLive = liveSessions
-        .filter((entry) => !storedIds.has(entry.id))
-        .map((entry) => buildSyntheticLiveSessionMeta(entry));
-      setSessions([...syntheticLive, ...applyLiveSessionState(storedSessions, liveSessions)]);
-    } catch {
-      // Ignore optimistic refresh failures.
-    }
-  }
-
   async function handleProjectSlashCommand(command: ProjectSlashCommand) {
     try {
       if (command.action === 'new') {
@@ -3011,7 +2986,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       const requestedBehavior = behavior ?? (isLiveSession && stream.isStreaming ? 'steer' : undefined);
       const queuedBehavior = normalizeConversationComposerBehavior(requestedBehavior, stream.isStreaming);
       const remoteTargetId = conversationExecution.targetId;
-      const shouldOffloadRemotely = typeof remoteTargetId === 'string' && remoteTargetId.length > 0;
+
+      if (remoteTargetId && pendingDrawingAttachments.length > 0) {
+        setInput(inputSnapshot);
+        setAttachments(pendingImageAttachments);
+        setDrawingAttachments(pendingDrawingAttachments);
+        showNotice('danger', 'Remote conversations do not support local drawing attachments yet.', 4000);
+        return;
+      }
 
       const persistPromptDrawings = async (conversationId: string): Promise<PromptAttachmentRefInput[]> => {
         if (pendingDrawingAttachments.length === 0) {
@@ -3029,57 +3011,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         }
       };
 
-      if (shouldOffloadRemotely) {
-        if (promptImages.length > 0 || pendingDrawingAttachments.length > 0) {
-          setInput(inputSnapshot);
-          setAttachments(pendingImageAttachments);
-          setDrawingAttachments(pendingDrawingAttachments);
-          showNotice('danger', 'Remote offload currently supports text-only prompts.', 4000);
-          return;
-        }
-
-        rememberComposerInput(inputSnapshot);
-        try {
-          const result = await api.remoteRuns({
-            ...(id ? { conversationId: id } : {
-              cwd: readDraftConversationCwd().trim() || undefined,
-              referencedProjectIds: draftReferencedProjectIds,
-            }),
-            text: textToSend,
-            targetId: remoteTargetId,
-          });
-          await Promise.all([
-            refreshRunsSnapshot(),
-            refreshSessionsSnapshot(),
-          ]);
-          if (!id) {
-            clearDraftConversationAttachments();
-            clearDraftConversationCwd();
-            clearDraftConversationExecutionTarget();
-            setDraftExecutionTargetId(null);
-            ensureConversationTabOpen(result.conversationId);
-            navigate({
-              pathname: `/conversations/${result.conversationId}`,
-              search: setConversationRunIdInSearch('', result.runId),
-            }, { replace: true });
-          } else {
-            openRun(result.runId);
-          }
-          showNotice('accent', `Offloaded to ${result.target.label}.`, 4000);
-        } catch (error) {
-          showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-          setInput(inputSnapshot);
-          setAttachments(pendingImageAttachments);
-          setDrawingAttachments(pendingDrawingAttachments);
-        }
-        return;
-      }
-
       if (!id && !visibleSessionDetail) {
         rememberComposerInput(inputSnapshot);
         try {
           const draftCwd = readDraftConversationCwd().trim() || undefined;
-          const { id: newId } = await api.createLiveSession(draftCwd, draftReferencedProjectIds);
+          const { id: newId } = await api.createLiveSession(draftCwd, draftReferencedProjectIds, undefined, remoteTargetId);
           const attachmentRefs = await persistPromptDrawings(newId);
 
           rememberComposerInput(inputSnapshot, newId);
@@ -3892,7 +3828,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     }}
                     className="ui-pill ui-pill-solid-accent"
                   >
-                    {conversationExecution.location === 'remote' ? 'Offload' : composerSubmit.label}
+                    {composerSubmit.label}
                   </button>
                 </div>
               )}
