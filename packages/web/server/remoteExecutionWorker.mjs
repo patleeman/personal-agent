@@ -6,6 +6,7 @@ import { spawn } from 'node:child_process';
 
 const REMOTE_EXECUTION_RESULT_FILE = 'remote-execution.json';
 const REMOTE_EXECUTION_SESSION_FILE = 'remote-session.jsonl';
+const LOCAL_PA_CLI_PATH = join(process.cwd(), 'packages', 'cli', 'dist', 'index.js');
 
 function quoteShellArg(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
@@ -65,7 +66,7 @@ function runProcess(command, args, options = {}) {
 }
 
 function sshArgs(target, remoteCommand) {
-  return [target.sshDestination, 'sh', '-lc', remoteCommand];
+  return [target.sshDestination, `bash -lc ${quoteShellArg(remoteCommand)}`];
 }
 
 async function runSsh(target, remoteCommand, options = {}) {
@@ -132,12 +133,32 @@ async function findRemoteSessionPath(target, remoteSessionsDir) {
   return remoteSessionPath;
 }
 
-function buildRemoteRunCommand(bundle, remoteTempDir) {
+async function ensureRemoteTargetInstalled(target) {
+  if (target.remotePaCommand) {
+    return null;
+  }
+
+  if (!existsSync(LOCAL_PA_CLI_PATH)) {
+    throw new Error(`Local pa CLI not found: ${LOCAL_PA_CLI_PATH}`);
+  }
+
+  const { stdout } = await runProcess(process.execPath, [LOCAL_PA_CLI_PATH, '--plain', 'targets', 'install', target.id, '--json'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      NO_COLOR: '1',
+      PERSONAL_AGENT_PLAIN_OUTPUT: '1',
+    },
+  });
+
+  return JSON.parse(stdout);
+}
+
+function buildRemoteRunCommand(bundle, remoteTempDir, remotePaCommand) {
   const remoteSessionsDir = `${remoteTempDir}/sessions`;
   const remoteBootstrapPath = `${remoteTempDir}/bootstrap-session.jsonl`;
   const profileArg = bundle.target.profile ? ` --profile ${quoteShellArg(bundle.target.profile)}` : '';
   const commandPrefix = bundle.target.commandPrefix ? `${bundle.target.commandPrefix} && ` : '';
-  const remotePaCommand = bundle.target.remotePaCommand || 'pa';
   const promptArg = quoteShellArg(bundle.prompt);
 
   return {
@@ -147,7 +168,7 @@ function buildRemoteRunCommand(bundle, remoteTempDir) {
       'set -euo pipefail',
       `mkdir -p ${quoteShellArg(remoteSessionsDir)}`,
       `cd ${quoteShellArg(bundle.remoteCwd)}`,
-      `${commandPrefix}${remotePaCommand}${profileArg} --fork ${quoteShellArg(remoteBootstrapPath)} --session-dir ${quoteShellArg(remoteSessionsDir)} -p ${promptArg}`,
+      `${commandPrefix}${remotePaCommand} tui${profileArg} --fork ${quoteShellArg(remoteBootstrapPath)} --session-dir ${quoteShellArg(remoteSessionsDir)} -p ${promptArg}`,
     ].join(' && '),
   };
 }
@@ -172,7 +193,9 @@ async function main() {
   const resultPath = join(runRoot, REMOTE_EXECUTION_RESULT_FILE);
 
   try {
-    const runCommand = buildRemoteRunCommand(bundle, remoteTempDir);
+    const installedTarget = await ensureRemoteTargetInstalled(bundle.target);
+    const remotePaCommand = installedTarget?.launcherPath || bundle.target.remotePaCommand || 'pa';
+    const runCommand = buildRemoteRunCommand(bundle, remoteTempDir, remotePaCommand);
     await uploadFile(bundle.target, bundle.bootstrapSessionFile, runCommand.remoteBootstrapPath);
     await runSsh(bundle.target, runCommand.command);
     const remoteSessionPath = await findRemoteSessionPath(bundle.target, runCommand.remoteSessionsDir);

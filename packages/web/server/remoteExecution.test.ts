@@ -164,6 +164,9 @@ describe('remote execution runs', () => {
       importSummary: result.summary,
     });
 
+    const persistedSession = readFileSync(sessionFile, 'utf-8');
+    expect(persistedSession).toContain('remote_run_import');
+    expect(persistedSession).toContain('I found the regression');
     expect(result.summary).toContain('SSH command builder');
   });
 });

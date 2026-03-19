@@ -86,6 +86,7 @@ pa tasks logs <id>
 ```bash
 pa targets list
 pa targets add gpu-box --label "GPU Box" --ssh gpu-box --default-cwd /srv/personal-agent --map /Users/patrickc.lee/personal/personal-agent=/srv/personal-agent
+pa targets install gpu-box
 pa targets show gpu-box
 ```
 
@@ -239,7 +240,7 @@ pa runs cancel <id>
 
 Use this as the main control surface for detached local background work.
 
-### `pa targets [list|show|add|update|delete|help]`
+### `pa targets [list|show|add|update|install|delete|help]`
 
 Inspect and manage machine-local execution targets for remote conversation offload.
 
@@ -249,9 +250,12 @@ Examples:
 pa targets list
 pa targets show gpu-box
 pa targets add gpu-box --label "GPU Box" --ssh gpu-box --default-cwd /srv/personal-agent --map /Users/patrickc.lee/personal/personal-agent=/srv/personal-agent
+pa targets install gpu-box
 pa targets update gpu-box --remote-pa-command /opt/bin/pa --profile datadog
 pa targets delete gpu-box
 ```
+
+`pa targets install <id>` uploads the current built `personal-agent` runtime bundle plus synced profile/auth state to the remote target so remote runs do not require a full `personal-agent` checkout on that machine.
 
 Targets are stored in `~/.local/state/personal-agent/config/execution-targets.json` by default.
 Use this when you want your local agent to configure remote SSH destinations without hand-editing the System page form.

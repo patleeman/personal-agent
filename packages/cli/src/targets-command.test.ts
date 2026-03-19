@@ -3,6 +3,7 @@ import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as remoteTargetInstall from './remote-target-install.js';
 import { runCli } from './index.js';
 
 const originalEnv = process.env;
@@ -109,6 +110,36 @@ describe('targets CLI command', () => {
     expect(payload.target.label).toBe('GPU Box 2');
     expect(payload.target.profile).toBe('datadog');
     expect(payload.target.remotePaCommand).toBe('/opt/bin/pa');
+  });
+
+  it('installs a configured remote execution target runtime', async () => {
+    const logs: string[] = [];
+    vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
+      logs.push(String(message ?? ''));
+    });
+    vi.spyOn(remoteTargetInstall, 'ensureRemoteTargetInstall').mockResolvedValue({
+      version: 1,
+      targetId: 'gpu-box',
+      targetLabel: 'GPU Box',
+      sshDestination: 'gpu-box',
+      remoteHome: '/home/bits',
+      installRoot: '/home/bits/.local/share/personal-agent/targets/gpu-box',
+      stateRoot: '/home/bits/.local/state/personal-agent',
+      launcherPath: '/home/bits/.local/share/personal-agent/targets/gpu-box/current/bin/pa-remote',
+      runtimeHash: 'runtime-hash',
+      stateHash: 'state-hash',
+      nodeVersion: 'v20.11.1',
+      runtimeChanged: true,
+      stateChanged: true,
+    });
+
+    expect(await runCli(['targets', 'add', 'gpu-box', '--label', 'GPU Box', '--ssh', 'gpu-box'])).toBe(0);
+
+    logs.length = 0;
+    expect(await runCli(['targets', 'install', 'gpu-box'])).toBe(0);
+    expect(remoteTargetInstall.ensureRemoteTargetInstall).toHaveBeenCalledWith({ targetId: 'gpu-box', force: false });
+    expect(logs.join('\n')).toContain('Installed remote target runtime');
+    expect(logs.join('\n')).toContain('/home/bits/.local/share/personal-agent/targets/gpu-box/current/bin/pa-remote');
   });
 
   it('deletes execution targets', async () => {
