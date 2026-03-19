@@ -7,7 +7,7 @@ const ITEM_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
 const DOCUMENT_VERSION = 3 as const;
 const MAX_REVIEW_ITEMS_PER_APPEND = 10;
 
-export type ConversationAutomationTodoItemStatus = 'pending' | 'running' | 'completed' | 'failed';
+export type ConversationAutomationTodoItemStatus = 'pending' | 'running' | 'completed' | 'failed' | 'blocked';
 export type ConversationAutomationReviewStatus = 'pending' | 'running' | 'completed' | 'failed';
 
 interface ConversationAutomationRuntimeFields {
@@ -18,20 +18,24 @@ interface ConversationAutomationRuntimeFields {
   resultReason?: string;
 }
 
-export interface ConversationAutomationTemplateTodoItem {
-  id: string;
-  label: string;
-  skillName: string;
-  skillArgs?: string;
-}
+export type ConversationAutomationTodoItemKind = 'skill' | 'instruction';
 
-export interface ConversationAutomationTodoItem extends ConversationAutomationRuntimeFields {
+export type ConversationAutomationTemplateTodoItem = {
   id: string;
+  kind?: 'skill';
   label: string;
   skillName: string;
   skillArgs?: string;
+} | {
+  id: string;
+  kind: 'instruction';
+  label: string;
+  text: string;
+};
+
+export type ConversationAutomationTodoItem = (ConversationAutomationTemplateTodoItem & ConversationAutomationRuntimeFields & {
   status: ConversationAutomationTodoItemStatus;
-}
+});
 
 export interface ConversationAutomationReviewState extends ConversationAutomationRuntimeFields {
   status: ConversationAutomationReviewStatus;
@@ -99,6 +103,28 @@ function normalizeOptionalText(value: unknown): string | undefined {
 function normalizeOptionalSingleLineText(value: unknown): string | undefined {
   const normalized = normalizeOptionalText(value)?.replace(/\s+/g, ' ').trim();
   return normalized || undefined;
+}
+
+function inferTodoItemKind(value: Record<string, unknown>): ConversationAutomationTodoItemKind {
+  const explicitKind = readNonEmptyString(value.kind);
+  if (explicitKind === 'instruction') {
+    return 'instruction';
+  }
+  if (explicitKind === 'skill') {
+    return 'skill';
+  }
+
+  const hasText = typeof value.text === 'string' && value.text.trim().length > 0;
+  const hasSkillName = typeof value.skillName === 'string' && value.skillName.trim().length > 0;
+  return hasText && !hasSkillName ? 'instruction' : 'skill';
+}
+
+function summarizeInstructionLabel(text: string): string {
+  const singleLine = text.replace(/\s+/g, ' ').trim();
+  if (singleLine.length <= 72) {
+    return singleLine;
+  }
+  return `${singleLine.slice(0, 69).trimEnd()}…`;
 }
 
 function normalizeIsoTimestamp(value: unknown, fallback: string): string {
@@ -199,6 +225,22 @@ function normalizeTemplateTodoItem(value: unknown, fallbackNow: string): Convers
 
   const id = readNonEmptyString(value.id) || createConversationAutomationTodoItemId(new Date(fallbackNow));
   validateItemId(id);
+  const kind = inferTodoItemKind(value);
+
+  if (kind === 'instruction') {
+    const text = normalizeOptionalText(value.text);
+    if (!text) {
+      throw new Error(`Automation item ${id} is missing text.`);
+    }
+
+    return {
+      id,
+      kind: 'instruction',
+      label: normalizeOptionalText(value.label) ?? summarizeInstructionLabel(text),
+      text,
+    };
+  }
+
   const skillName = readNonEmptyString(value.skillName);
   if (!skillName) {
     throw new Error(`Automation item ${id} is missing skillName.`);
@@ -206,6 +248,7 @@ function normalizeTemplateTodoItem(value: unknown, fallbackNow: string): Convers
 
   return {
     id,
+    kind: 'skill',
     label: normalizeOptionalText(value.label) ?? skillName,
     skillName,
     ...(normalizeOptionalSingleLineText(value.skillArgs) ? { skillArgs: normalizeOptionalSingleLineText(value.skillArgs) } : {}),
@@ -238,7 +281,7 @@ function normalizeRuntimeFields(value: Record<string, unknown>, fallbackNow: str
 
 function normalizeTodoItemStatus(value: unknown): ConversationAutomationTodoItemStatus {
   const normalized = readNonEmptyString(value);
-  return normalized === 'running' || normalized === 'completed' || normalized === 'failed'
+  return normalized === 'running' || normalized === 'completed' || normalized === 'failed' || normalized === 'blocked'
     ? normalized
     : 'pending';
 }
@@ -341,21 +384,46 @@ function normalizeDocument(value: unknown, fallbackConversationId: string): Conv
 export function createConversationAutomationTodoItem(input: {
   id?: string;
   label?: string;
-  skillName: string;
+  kind?: ConversationAutomationTodoItemKind;
+  skillName?: string;
   skillArgs?: string;
+  text?: string;
   now?: string;
 }): ConversationAutomationTodoItem {
   const createdAt = normalizeIsoTimestamp(input.now, new Date().toISOString());
+  const id = readNonEmptyString(input.id) || createConversationAutomationTodoItemId(new Date(createdAt));
+  validateItemId(id);
+  const kind = input.kind === 'instruction'
+    ? 'instruction'
+    : input.kind === 'skill'
+      ? 'skill'
+      : (readNonEmptyString(input.text) && !readNonEmptyString(input.skillName) ? 'instruction' : 'skill');
+
+  if (kind === 'instruction') {
+    const text = normalizeOptionalText(input.text);
+    if (!text) {
+      throw new Error('text is required.');
+    }
+
+    return {
+      id,
+      kind: 'instruction',
+      label: normalizeOptionalText(input.label) ?? summarizeInstructionLabel(text),
+      text,
+      status: 'pending',
+      createdAt,
+      updatedAt: createdAt,
+    };
+  }
+
   const skillName = readNonEmptyString(input.skillName);
   if (!skillName) {
     throw new Error('skillName is required.');
   }
 
-  const id = readNonEmptyString(input.id) || createConversationAutomationTodoItemId(new Date(createdAt));
-  validateItemId(id);
-
   return {
     id,
+    kind: 'skill',
     label: normalizeOptionalText(input.label) ?? skillName,
     skillName,
     ...(normalizeOptionalSingleLineText(input.skillArgs) ? { skillArgs: normalizeOptionalSingleLineText(input.skillArgs) } : {}),
@@ -365,7 +433,11 @@ export function createConversationAutomationTodoItem(input: {
   };
 }
 
-export function buildConversationAutomationSkillPrompt(item: Pick<ConversationAutomationTemplateTodoItem, 'skillName' | 'skillArgs'>): string {
+export function describeConversationAutomationItem(item: ConversationAutomationTemplateTodoItem | ConversationAutomationTodoItem): string {
+  if (item.kind === 'instruction') {
+    return item.text.trim();
+  }
+
   const skillName = readNonEmptyString(item.skillName);
   if (!skillName) {
     throw new Error('skillName is required.');
@@ -373,6 +445,23 @@ export function buildConversationAutomationSkillPrompt(item: Pick<ConversationAu
 
   const skillArgs = normalizeOptionalSingleLineText(item.skillArgs);
   return skillArgs ? `/skill:${skillName} ${skillArgs}` : `/skill:${skillName}`;
+}
+
+export function buildConversationAutomationItemPrompt(item: ConversationAutomationTemplateTodoItem): string {
+  const body = item.kind === 'instruction'
+    ? [
+      'Carry out this plan step:',
+      item.text.trim(),
+    ].join('\n\n')
+    : describeConversationAutomationItem(item);
+
+  return [
+    body,
+    '',
+    'Before you stop, use the todo_list tool to update the active todo item.',
+    'Mark it completed when the step is actually done.',
+    'If you cannot complete it, mark it blocked or failed with a short reason.',
+  ].join('\n');
 }
 
 function normalizeLegacyDefaultWorkflowPreset(settings: Record<string, unknown>): ConversationAutomationWorkflowPresetLibraryState {
@@ -631,8 +720,18 @@ export function writeConversationAutomationState(options: {
 }
 
 export function templateTodoItemFromRuntimeItem(item: ConversationAutomationTodoItem): ConversationAutomationTemplateTodoItem {
+  if (item.kind === 'instruction') {
+    return {
+      id: item.id,
+      kind: 'instruction',
+      label: item.label,
+      text: item.text,
+    };
+  }
+
   return {
     id: item.id,
+    kind: 'skill',
     label: item.label,
     skillName: item.skillName,
     ...(item.skillArgs ? { skillArgs: item.skillArgs } : {}),
@@ -652,10 +751,7 @@ export function replaceConversationAutomationItems(
     const existingItem = existingItemMap.get(template.id);
 
     return {
-      id: template.id,
-      label: template.label,
-      skillName: template.skillName,
-      ...(template.skillArgs ? { skillArgs: template.skillArgs } : {}),
+      ...template,
       status: 'pending' as const,
       createdAt: existingItem?.createdAt ?? updatedAt,
       updatedAt,
@@ -695,6 +791,44 @@ export function appendConversationAutomationItems(
       })),
     ],
     updatedAt,
+    review: undefined,
+  };
+}
+
+export function updateConversationAutomationItemStatus(
+  document: ConversationAutomationDocument,
+  itemId: string,
+  status: Extract<ConversationAutomationTodoItemStatus, 'completed' | 'failed' | 'blocked'>,
+  options: {
+    now?: string;
+    resultReason?: string;
+    enabled?: boolean;
+  } = {},
+): ConversationAutomationDocument {
+  const updatedAt = normalizeIsoTimestamp(options.now, new Date().toISOString());
+  const index = document.items.findIndex((item) => item.id === itemId);
+  if (index < 0) {
+    throw new Error(`Automation item not found: ${itemId}`);
+  }
+
+  return {
+    ...document,
+    items: document.items.map((item, itemIndex) => {
+      if (itemIndex !== index) {
+        return item;
+      }
+
+      return {
+        ...item,
+        status,
+        updatedAt,
+        completedAt: updatedAt,
+        ...(normalizeOptionalText(options.resultReason) ? { resultReason: normalizeOptionalText(options.resultReason) } : {}),
+      };
+    }),
+    updatedAt,
+    enabled: options.enabled ?? (status === 'completed' ? document.enabled : false),
+    activeItemId: document.activeItemId === itemId ? undefined : document.activeItemId,
     review: undefined,
   };
 }
@@ -745,15 +879,17 @@ export function resetConversationAutomationFromItem(
   };
 }
 
-function buildTodoListLine(item: Pick<ConversationAutomationTodoItem, 'label' | 'skillName' | 'skillArgs' | 'status'>): string {
+function buildTodoListLine(item: ConversationAutomationTodoItem): string {
   const status = item.status === 'completed'
     ? '[x]'
     : item.status === 'running'
       ? '[>]'
       : item.status === 'failed'
         ? '[!]'
-        : '[ ]';
-  const prompt = buildConversationAutomationSkillPrompt(item);
+        : item.status === 'blocked'
+          ? '[~]'
+          : '[ ]';
+  const prompt = describeConversationAutomationItem(item);
   return `${status} ${item.label} — ${prompt}`;
 }
 
@@ -765,17 +901,11 @@ export function buildConversationAutomationReviewPrompt(document: Pick<Conversat
 
   return [
     `Review the automation todo list before stopping. This is review round ${round}.`,
-    'If additional automation work is required, include exactly one <automation-todos> block at the end of your response.',
-    'Each item inside that block must be a <skill> tag with a required name attribute, an optional args attribute, and label text between the opening and closing tags.',
-    'If nothing else is required, reply briefly without an <automation-todos> block.',
+    'If additional automation work is required, use the todo_list tool to add the needed follow-up items.',
+    'If nothing else is required, reply briefly.',
     '',
     'Todo list:',
     ...lines,
-    '',
-    'Example:',
-    '<automation-todos>',
-    '  <skill name="workflow-checkpoint" args="commit only my files">Checkpoint</skill>',
-    '</automation-todos>',
   ].join('\n');
 }
 
@@ -804,6 +934,7 @@ export function parseConversationAutomationTodoAppendBlock(text: string): Conver
 
     items.push({
       id: createConversationAutomationTodoItemId(),
+      kind: 'skill',
       label: label || skillName,
       skillName,
       ...(normalizeOptionalSingleLineText(match[2]) ? { skillArgs: normalizeOptionalSingleLineText(match[2]) } : {}),

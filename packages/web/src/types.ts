@@ -970,7 +970,7 @@ export type ConversationAutomationTodoItemKind = 'skill' | 'instruction';
 
 export type ConversationAutomationTemplateTodoItem = {
   id: string;
-  kind: 'skill';
+  kind?: 'skill';
   label: string;
   skillName: string;
   skillArgs?: string;
@@ -983,7 +983,7 @@ export type ConversationAutomationTemplateTodoItem = {
 
 export type ConversationAutomationTodoItem = ({
   id: string;
-  kind: 'skill';
+  kind?: 'skill';
   label: string;
   skillName: string;
   skillArgs?: string;

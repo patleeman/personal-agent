@@ -2716,9 +2716,16 @@ async function buildConversationAutomationResponse(conversationId: string) {
       updatedAt: automation.updatedAt,
       items: automation.items.map((item) => ({
         id: item.id,
+        kind: item.kind,
         label: item.label,
-        skillName: item.skillName,
-        ...(item.skillArgs ? { skillArgs: item.skillArgs } : {}),
+        ...('text' in item
+          ? {
+            text: item.text,
+          }
+          : {
+            skillName: item.skillName,
+            ...(item.skillArgs ? { skillArgs: item.skillArgs } : {}),
+          }),
         status: item.status,
         createdAt: item.createdAt,
         updatedAt: item.updatedAt,
@@ -2755,8 +2762,10 @@ function saveConversationAutomationDocument(document: Parameters<typeof writeCon
 function validateConversationAutomationTemplateItems(items: unknown, availableSkillNames: Set<string>): asserts items is Array<{
   id: string;
   label?: string;
-  skillName: string;
+  kind?: 'skill' | 'instruction';
+  skillName?: string;
   skillArgs?: string;
+  text?: string;
 }> {
   if (!Array.isArray(items)) {
     throw new Error('items must be an array');
@@ -2767,11 +2776,32 @@ function validateConversationAutomationTemplateItems(items: unknown, availableSk
       throw new Error('Each item must be an object.');
     }
 
+    const explicitKind = typeof (item as { kind?: unknown }).kind === 'string'
+      ? (item as { kind: string }).kind.trim()
+      : '';
+    if (explicitKind && explicitKind !== 'skill' && explicitKind !== 'instruction') {
+      throw new Error('Each item kind must be skill or instruction.');
+    }
+
+    const text = typeof (item as { text?: unknown }).text === 'string'
+      ? (item as { text: string }).text.trim()
+      : '';
     const skillName = typeof (item as { skillName?: unknown }).skillName === 'string'
       ? (item as { skillName: string }).skillName.trim()
       : '';
+    const kind = explicitKind === 'instruction' || (!explicitKind && text && !skillName)
+      ? 'instruction'
+      : 'skill';
+
+    if (kind === 'instruction') {
+      if (!text) {
+        throw new Error('Each instruction item requires text.');
+      }
+      continue;
+    }
+
     if (!skillName) {
-      throw new Error('Each item requires a skillName.');
+      throw new Error('Each skill item requires a skillName.');
     }
     if (!availableSkillNames.has(skillName)) {
       throw new Error(`Unknown skill: ${skillName}`);
@@ -2789,8 +2819,10 @@ function validateConversationAutomationWorkflowPresets(
   items: Array<{
     id: string;
     label?: string;
-    skillName: string;
+    kind?: 'skill' | 'instruction';
+    skillName?: string;
     skillArgs?: string;
+    text?: string;
   }>;
 }> {
   if (!Array.isArray(presets)) {
@@ -3128,7 +3160,7 @@ app.patch('/api/conversation-titles/settings', (req, res) => {
   }
 });
 
-app.get('/api/conversation-automation/defaults', (_req, res) => {
+app.get('/api/conversation-plans/defaults', (_req, res) => {
   try {
     res.json(readSavedConversationAutomationPreferences(SETTINGS_FILE));
   } catch (err) {
@@ -3140,7 +3172,7 @@ app.get('/api/conversation-automation/defaults', (_req, res) => {
   }
 });
 
-app.patch('/api/conversation-automation/defaults', (req, res) => {
+app.patch('/api/conversation-plans/defaults', (req, res) => {
   try {
     const { defaultEnabled } = req.body as { defaultEnabled?: unknown };
     if (typeof defaultEnabled !== 'boolean') {
@@ -3162,7 +3194,7 @@ app.patch('/api/conversation-automation/defaults', (req, res) => {
   }
 });
 
-app.get('/api/conversation-automation/workspace', async (_req, res) => {
+app.get('/api/conversation-plans/workspace', async (_req, res) => {
   try {
     res.json({
       presetLibrary: readSavedConversationAutomationWorkflowPresets(SETTINGS_FILE),
@@ -3181,7 +3213,7 @@ app.get('/api/conversation-automation/workspace', async (_req, res) => {
   }
 });
 
-app.get('/api/conversation-automation/workflow-presets', (_req, res) => {
+app.get('/api/conversation-plans/library', (_req, res) => {
   try {
     res.json(readSavedConversationAutomationWorkflowPresets(SETTINGS_FILE));
   } catch (err) {
@@ -3193,7 +3225,7 @@ app.get('/api/conversation-automation/workflow-presets', (_req, res) => {
   }
 });
 
-app.patch('/api/conversation-automation/workflow-presets', async (req, res) => {
+app.patch('/api/conversation-plans/library', async (req, res) => {
   try {
     const { presets, defaultPresetIds } = req.body as {
       presets?: unknown;
@@ -3215,6 +3247,8 @@ app.patch('/api/conversation-automation/workflow-presets', async (req, res) => {
     const status = message.startsWith('Unknown skill:')
       || message.includes('items must be an array')
       || message.includes('Each item')
+      || message.includes('Each skill item')
+      || message.includes('Each instruction item')
       || message.includes('presets must be an array')
       || message.includes('Each preset')
       || message.includes('Duplicate preset id:')
@@ -5554,7 +5588,7 @@ app.get('/api/live-sessions/:id/context', (req, res) => {
   });
 });
 
-app.get('/api/conversations/:id/automation', async (req, res) => {
+app.get('/api/conversations/:id/plan', async (req, res) => {
   try {
     res.json(await buildConversationAutomationResponse(req.params.id));
   } catch (err) {
@@ -5566,7 +5600,7 @@ app.get('/api/conversations/:id/automation', async (req, res) => {
   }
 });
 
-app.patch('/api/conversations/:id/automation', async (req, res) => {
+app.patch('/api/conversations/:id/plan', async (req, res) => {
   try {
     const body = req.body as {
       enabled?: boolean;
@@ -5610,6 +5644,8 @@ app.patch('/api/conversations/:id/automation', async (req, res) => {
     const status = message.startsWith('Unknown skill:')
       || message.includes('items must be an array')
       || message.includes('Each item')
+      || message.includes('Each skill item')
+      || message.includes('Each instruction item')
       ? 400
       : 500;
     logError('request handler error', {
@@ -5620,7 +5656,7 @@ app.patch('/api/conversations/:id/automation', async (req, res) => {
   }
 });
 
-app.post('/api/conversations/:id/automation/items/:itemId/reset', async (req, res) => {
+app.post('/api/conversations/:id/plan/items/:itemId/reset', async (req, res) => {
   try {
     const { resume } = req.body as { resume?: boolean };
     const loaded = loadConversationAutomationState({

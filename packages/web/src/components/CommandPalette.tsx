@@ -148,7 +148,7 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       section: 'nav',
       title: 'Scheduled',
       subtitle: 'Browse recurring and one-off tasks',
-      keywords: ['tasks', 'automation'],
+      keywords: ['tasks', 'plans'],
       order: 4,
       action: { kind: 'navigate', to: '/scheduled' },
     },

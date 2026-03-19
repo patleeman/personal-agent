@@ -2329,17 +2329,17 @@ export function ContextRail() {
   const selectedRunId = getConversationRunIdFromSearch(location.search);
   const scheduledSection = section === 'scheduled' || section === 'automations' || section === 'tasks';
   const creatingScheduledTask = scheduledSection && new URLSearchParams(location.search).get('new') === '1';
-  const automationPresetId = new URLSearchParams(location.search).get('preset')?.trim() || null;
-  const creatingAutomationPreset = new URLSearchParams(location.search).get('new') === '1';
+  const selectedPlanId = new URLSearchParams(location.search).get('plan')?.trim() || null;
+  const creatingPlan = new URLSearchParams(location.search).get('new') === '1';
 
-  // Automation
-  if (section === 'automation') return (
+  // Plans
+  if (section === 'plans') return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <RailHeader label="Plans" sub={automationPresetId ?? (creatingAutomationPreset ? 'new plan' : undefined)} />
+      <RailHeader label="Plans" sub={selectedPlanId ?? (creatingPlan ? 'new plan' : undefined)} />
       <div className="min-h-0 flex-1 overflow-y-auto">
         {suspendRailPanel(
-          automationPresetId || creatingAutomationPreset
-            ? <AutomationPresetPanel presetId={automationPresetId} creatingNew={creatingAutomationPreset} />
+          selectedPlanId || creatingPlan
+            ? <AutomationPresetPanel presetId={selectedPlanId} creatingNew={creatingPlan} />
             : <EmptyPrompt text="Select a plan or create a new one to edit reusable action plans." />,
           'Loading plans…',
         )}

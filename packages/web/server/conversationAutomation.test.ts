@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  buildConversationAutomationSkillPrompt,
+  buildConversationAutomationItemPrompt,
   conversationAutomationDocumentExists,
   createConversationAutomationTodoItem,
   loadConversationAutomationState,
@@ -11,6 +11,7 @@ import {
   replaceConversationAutomationItems,
   resetConversationAutomationFromItem,
   resolveConversationAutomationPath,
+  updateConversationAutomationItemStatus,
   templateTodoItemFromRuntimeItem,
   writeSavedConversationAutomationPreferences,
   writeConversationAutomationState,
@@ -44,6 +45,7 @@ describe('conversationAutomation state', () => {
         updatedAt: '2026-03-18T12:00:00.000Z',
         items: [{
           id: 'item-default-1',
+          kind: 'skill',
           label: 'workflow-checkpoint',
           skillName: 'workflow-checkpoint',
         }],
@@ -93,6 +95,7 @@ describe('conversationAutomation state', () => {
         updatedAt: '2026-03-18T12:00:00.000Z',
         items: [{
           id: 'item-default-1',
+          kind: 'skill',
           label: 'workflow-checkpoint',
           skillName: 'workflow-checkpoint',
         }],
@@ -121,6 +124,7 @@ describe('conversationAutomation state', () => {
         updatedAt: '2026-03-18T12:00:00.000Z',
         items: [{
           id: 'item-a-1',
+          kind: 'skill',
           label: 'review',
           skillName: 'subagent-code-review',
         }],
@@ -130,6 +134,7 @@ describe('conversationAutomation state', () => {
         updatedAt: '2026-03-18T12:05:00.000Z',
         items: [{
           id: 'item-b-1',
+          kind: 'skill',
           label: 'checkpoint',
           skillName: 'workflow-checkpoint',
         }],
@@ -190,6 +195,7 @@ describe('conversationAutomation state', () => {
         updatedAt: '2026-03-18T12:00:00.000Z',
         items: [{
           id: 'skill-default-1',
+          kind: 'skill',
           label: 'workflow-checkpoint',
           skillName: 'workflow-checkpoint',
         }],
@@ -241,7 +247,8 @@ describe('conversationAutomation state', () => {
         status: 'pending',
       }),
     ]);
-    expect(buildConversationAutomationSkillPrompt(loaded.document.items[0]!)).toBe('/skill:workflow-checkpoint commit only my files');
+    expect(buildConversationAutomationItemPrompt(loaded.document.items[0]!)).toContain('/skill:workflow-checkpoint commit only my files');
+    expect(buildConversationAutomationItemPrompt(loaded.document.items[0]!)).toContain('todo_list tool');
   });
 
   it('replaces items from editable template data and resets runtime state', () => {
@@ -271,6 +278,7 @@ describe('conversationAutomation state', () => {
       },
     }, [{
       id: 'item-1',
+      kind: 'skill',
       label: 'subagent-code-review',
       skillName: 'subagent-code-review',
     }], '2026-03-18T12:04:00.000Z');
@@ -290,6 +298,54 @@ describe('conversationAutomation state', () => {
     ]);
     expect(updated.items[0]).not.toHaveProperty('startedAt');
     expect(updated.items[0]).not.toHaveProperty('resultReason');
+  });
+
+  it('marks an item blocked and clears the active item', () => {
+    const blocked = updateConversationAutomationItemStatus({
+      version: 3,
+      conversationId: 'conv-123',
+      updatedAt: '2026-03-18T12:03:00.000Z',
+      enabled: true,
+      activeItemId: 'item-2',
+      items: [
+        {
+          ...createConversationAutomationTodoItem({
+            id: 'item-1',
+            label: 'workflow-checkpoint',
+            skillName: 'workflow-checkpoint',
+            now: '2026-03-18T12:00:00.000Z',
+          }),
+          status: 'completed' as const,
+          startedAt: '2026-03-18T12:00:10.000Z',
+          completedAt: '2026-03-18T12:00:20.000Z',
+          resultReason: 'Done.',
+          updatedAt: '2026-03-18T12:00:20.000Z',
+        },
+        {
+          ...createConversationAutomationTodoItem({
+            id: 'item-2',
+            label: 'subagent-code-review',
+            skillName: 'subagent-code-review',
+            now: '2026-03-18T12:01:00.000Z',
+          }),
+          status: 'running' as const,
+          startedAt: '2026-03-18T12:01:05.000Z',
+          updatedAt: '2026-03-18T12:01:05.000Z',
+        },
+      ],
+    }, 'item-2', 'blocked', {
+      now: '2026-03-18T12:04:00.000Z',
+      resultReason: 'Waiting on approval.',
+      enabled: false,
+    });
+
+    expect(blocked.enabled).toBe(false);
+    expect(blocked.activeItemId).toBeUndefined();
+    expect(blocked.items[1]).toMatchObject({
+      status: 'blocked',
+      completedAt: '2026-03-18T12:04:00.000Z',
+      resultReason: 'Waiting on approval.',
+    });
   });
 
   it('resets an item and every later item back to pending', () => {
@@ -360,6 +416,7 @@ describe('conversationAutomation state', () => {
         updatedAt: '2026-03-18T12:00:00.000Z',
         items: [{
           id: 'item-default-1',
+          kind: 'skill',
           label: 'workflow-checkpoint',
           skillName: 'workflow-checkpoint',
         }],
@@ -453,8 +510,33 @@ describe('conversationAutomation state', () => {
     ]);
     expect(templateTodoItemFromRuntimeItem(loaded.document.items[0]!)).toEqual({
       id: 'skill-1',
+      kind: 'skill',
       label: 'workflow-checkpoint',
       skillName: 'workflow-checkpoint',
+    });
+  });
+
+  it('supports custom instruction steps', () => {
+    const item = createConversationAutomationTodoItem({
+      id: 'item-instruction',
+      kind: 'instruction',
+      text: 'Open the failing test output, identify the root cause, and summarize the fix plan.',
+      now: '2026-03-18T12:00:00.000Z',
+    });
+
+    expect(item).toMatchObject({
+      id: 'item-instruction',
+      kind: 'instruction',
+      status: 'pending',
+      text: 'Open the failing test output, identify the root cause, and summarize the fix plan.',
+    });
+    expect(buildConversationAutomationItemPrompt(item)).toContain('Carry out this plan step:');
+    expect(buildConversationAutomationItemPrompt(item)).toContain('todo_list tool');
+    expect(templateTodoItemFromRuntimeItem(item)).toEqual({
+      id: 'item-instruction',
+      kind: 'instruction',
+      label: 'Open the failing test output, identify the root cause, and summarize…',
+      text: 'Open the failing test output, identify the root cause, and summarize the fix plan.',
     });
   });
 });

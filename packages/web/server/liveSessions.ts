@@ -26,11 +26,9 @@ import {
   hasAssistantTitleSourceMessage,
 } from './conversationAutoTitle.js';
 import {
-  appendConversationAutomationItems,
+  buildConversationAutomationItemPrompt,
   buildConversationAutomationReviewPrompt,
-  buildConversationAutomationSkillPrompt,
   loadConversationAutomationState,
-  parseConversationAutomationTodoAppendBlock,
   writeConversationAutomationState,
   type ConversationAutomationDocument,
   type ConversationAutomationReviewState,
@@ -826,28 +824,7 @@ function findFirstPendingConversationAutomationTodoItem(document: ConversationAu
 }
 
 function hasFailedConversationAutomationTodoItem(document: ConversationAutomationDocument): boolean {
-  return document.items.some((item) => item.status === 'failed');
-}
-
-function latestAssistantText(entry: LiveEntry): string {
-  const messages = getSessionMessages(entry.session);
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (!message || message.role !== 'assistant' || !Array.isArray(message.content)) {
-      continue;
-    }
-
-    const text = message.content
-      .filter((block): block is { type: 'text'; text?: string } => Boolean(block) && typeof block === 'object' && (block as { type?: string }).type === 'text')
-      .map((block) => block.text ?? '')
-      .join('\n')
-      .trim();
-    if (text) {
-      return text;
-    }
-  }
-
-  return '';
+  return document.items.some((item) => item.status === 'failed' || item.status === 'blocked');
 }
 
 function maybeFinalizeConversationAutomationTodoItem(
@@ -865,17 +842,30 @@ function maybeFinalizeConversationAutomationTodoItem(
   }
 
   const failure = entry.currentTurnError?.trim();
-  item.status = failure ? 'failed' : 'completed';
-  item.updatedAt = finishedAt;
-  item.completedAt = finishedAt;
-  item.resultReason = failure ? failure : 'Follow-up turn completed.';
-  document.activeItemId = undefined;
-  document.updatedAt = finishedAt;
-
   if (failure) {
+    item.status = 'failed';
+    item.updatedAt = finishedAt;
+    item.completedAt = finishedAt;
+    item.resultReason = failure;
+    document.activeItemId = undefined;
+    document.updatedAt = finishedAt;
     document.enabled = false;
+    return document;
   }
 
+  if (item.status !== 'running') {
+    document.activeItemId = undefined;
+    document.updatedAt = finishedAt;
+    return document;
+  }
+
+  item.status = 'failed';
+  item.updatedAt = finishedAt;
+  item.completedAt = finishedAt;
+  item.resultReason = 'Automation step ended without using todo_list to resolve the active item.';
+  document.activeItemId = undefined;
+  document.updatedAt = finishedAt;
+  document.enabled = false;
   return document;
 }
 
@@ -901,18 +891,10 @@ function maybeFinalizeConversationAutomationReview(
     return document;
   }
 
-  const appendedItems = parseConversationAutomationTodoAppendBlock(latestAssistantText(entry));
   review.status = 'completed';
-  review.resultReason = appendedItems.length > 0
-    ? `Added ${appendedItems.length} todo item${appendedItems.length === 1 ? '' : 's'}.`
-    : 'No additional todo items.';
+  review.resultReason = 'Review finished.';
   document.updatedAt = finishedAt;
-
-  if (appendedItems.length === 0) {
-    return document;
-  }
-
-  return appendConversationAutomationItems(document, appendedItems, finishedAt);
+  return document;
 }
 
 function interruptConversationAutomationStep(
@@ -1009,7 +991,7 @@ export async function kickConversationAutomation(
 
         try {
           entry.currentTurnError = null;
-          await promptSession(sessionId, buildConversationAutomationSkillPrompt(pendingItem), 'followUp');
+          await promptSession(sessionId, buildConversationAutomationItemPrompt(pendingItem), 'followUp');
         } catch (error) {
           const failedAt = new Date().toISOString();
           pendingItem.status = 'failed';

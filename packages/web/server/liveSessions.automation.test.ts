@@ -93,7 +93,8 @@ describe('conversation automation live-session integration', () => {
 
     await kickConversationAutomation('conv-123', 'turn_end');
 
-    expect(prompt).toHaveBeenCalledWith('/skill:workflow-checkpoint commit only my files');
+    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('/skill:workflow-checkpoint commit only my files'));
+    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('todo_list tool'));
     const updated = getConversationAutomationState({
       profile: 'datadog',
       stateRoot,
@@ -108,7 +109,69 @@ describe('conversation automation live-session integration', () => {
     expect(updated.enabled).toBe(true);
   });
 
-  it('finalizes the active item on turn end and starts review', async () => {
+  it('starts a custom instruction step as a follow-up turn', async () => {
+    const stateRoot = createTempDir('pa-live-automation-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
+
+    const prompt = vi.fn(async () => undefined);
+    const item = createConversationAutomationTodoItem({
+      id: 'item-text-1',
+      kind: 'instruction',
+      text: 'Review the last failing test run and explain the smallest safe fix.',
+      now: '2026-03-18T12:00:00.000Z',
+    });
+
+    writeConversationAutomationState({
+      profile: 'datadog',
+      stateRoot,
+      document: {
+        version: 3,
+        conversationId: 'conv-124',
+        updatedAt: '2026-03-18T12:00:00.000Z',
+        enabled: true,
+        items: [item],
+      },
+    });
+
+    setLiveEntry('conv-124', {
+      title: 'Instruction automation conversation',
+      session: {
+        state: { messages: [], streamMessage: null },
+        agent: { state: { messages: [] } },
+        getActiveToolNames: () => [],
+        getContextUsage: () => null,
+        isStreaming: false,
+        prompt,
+        steer: vi.fn(async () => undefined),
+        followUp: vi.fn(async () => undefined),
+        modelRegistry: {
+          getAvailable: () => [],
+          getApiKey: vi.fn(),
+        },
+      },
+    });
+
+    await kickConversationAutomation('conv-124', 'turn_end');
+
+    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('Carry out this plan step:'));
+    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('Review the last failing test run and explain the smallest safe fix.'));
+    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('todo_list tool'));
+    const updated = getConversationAutomationState({
+      profile: 'datadog',
+      stateRoot,
+      conversationId: 'conv-124',
+    });
+    expect(updated.activeItemId).toBe('item-text-1');
+    expect(updated.items[0]).toMatchObject({
+      id: 'item-text-1',
+      kind: 'instruction',
+      status: 'running',
+      text: 'Review the last failing test run and explain the smallest safe fix.',
+    });
+  });
+
+  it('fails the active item when a step ends without resolving it through todo_list', async () => {
     const stateRoot = createTempDir('pa-live-automation-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
@@ -165,20 +228,16 @@ describe('conversation automation live-session integration', () => {
       conversationId: 'conv-123',
     });
     expect(updated.activeItemId).toBeUndefined();
-    expect(updated.enabled).toBe(true);
+    expect(updated.enabled).toBe(false);
     expect(updated.items[0]).toMatchObject({
       id: 'item-1',
-      status: 'completed',
-      resultReason: 'Follow-up turn completed.',
+      status: 'failed',
+      resultReason: 'Automation step ended without using todo_list to resolve the active item.',
     });
-    expect(updated.review).toMatchObject({
-      status: 'running',
-      round: 1,
-    });
-    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('Review the automation todo list before stopping.'));
+    expect(prompt).not.toHaveBeenCalled();
   });
 
-  it('appends review-generated items and starts the first appended item', async () => {
+  it('starts review when all items are already completed', async () => {
     const stateRoot = createTempDir('pa-live-automation-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
@@ -197,12 +256,6 @@ describe('conversation automation live-session integration', () => {
       updatedAt: '2026-03-18T12:00:10.000Z',
       resultReason: 'Done.',
     };
-    const assistantText = [
-      'Looks good.',
-      '<automation-todos>',
-      '  <skill name="workflow-checkpoint" args="commit only my files">Checkpoint</skill>',
-      '</automation-todos>',
-    ].join('\n');
 
     writeConversationAutomationState({
       profile: 'datadog',
@@ -213,13 +266,6 @@ describe('conversation automation live-session integration', () => {
         updatedAt: '2026-03-18T12:00:15.000Z',
         enabled: true,
         items: [completedItem],
-        review: {
-          status: 'running',
-          round: 1,
-          createdAt: '2026-03-18T12:00:12.000Z',
-          updatedAt: '2026-03-18T12:00:15.000Z',
-          startedAt: '2026-03-18T12:00:12.000Z',
-        },
       },
     });
 
@@ -227,15 +273,8 @@ describe('conversation automation live-session integration', () => {
       title: 'Automation conversation',
       currentTurnError: null,
       session: {
-        state: {
-          messages: [{ role: 'assistant', content: [{ type: 'text', text: assistantText }] }],
-          streamMessage: null,
-        },
-        agent: {
-          state: {
-            messages: [{ role: 'assistant', content: [{ type: 'text', text: assistantText }] }],
-          },
-        },
+        state: { messages: [], streamMessage: null },
+        agent: { state: { messages: [] } },
         getContextUsage: () => null,
         isStreaming: false,
         prompt,
@@ -255,15 +294,11 @@ describe('conversation automation live-session integration', () => {
       stateRoot,
       conversationId: 'conv-123',
     });
-    expect(updated.review).toBeUndefined();
-    expect(updated.items).toHaveLength(2);
-    expect(updated.activeItemId).toBe(updated.items[1]!.id);
-    expect(updated.items[1]).toMatchObject({
-      label: 'Checkpoint',
-      skillName: 'workflow-checkpoint',
-      skillArgs: 'commit only my files',
+    expect(updated.review).toMatchObject({
       status: 'running',
+      round: 1,
     });
-    expect(prompt).toHaveBeenCalledWith('/skill:workflow-checkpoint commit only my files');
+    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('Review the automation todo list before stopping.'));
+    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('use the todo_list tool to add the needed follow-up items'));
   });
 });
