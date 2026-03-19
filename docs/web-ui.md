@@ -37,6 +37,9 @@ Default address (local interface):
 
 - `http://localhost:3741`
 
+If the managed web UI service is already installed, running, and listening on the requested port, `pa ui` reuses it instead of trying to start a second foreground server on the same port.
+That avoids duplicate-launch failures like `EADDRINUSE` and makes `pa ui --open` a safe way to jump back into the UI.
+
 ## Expose with Tailscale Serve
 
 You can expose the running web UI to your Tailnet via Tailscale Serve.
