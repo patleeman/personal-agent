@@ -261,24 +261,30 @@ describe('ContextRail run detail', () => {
     expect(html).not.toContain('Full page');
   });
 
-  it('shows merge actions for capture memories in the memories rail', () => {
+  it('shows package-local references in the memories rail', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         memory: {
-          id: 'conv-memory-browser-20260318',
-          title: 'Memory browser polish capture',
-          summary: 'Capture doc waiting to merge into a canonical memory.',
-          tags: ['conversation', 'checkpoint', 'personal-agent', 'web-ui'],
-          path: '/tmp/conv-memory-browser-20260318.md',
-          type: 'conversation-checkpoint',
+          id: 'personal-agent',
+          title: 'Personal-agent knowledge hub',
+          summary: 'Durable knowledge hub for personal-agent.',
+          tags: ['personal-agent', 'web-ui'],
+          path: '/tmp/personal-agent/MEMORY.md',
+          type: 'project',
           status: 'active',
           area: 'personal-agent',
-          role: 'capture',
-          parent: 'personal-agent',
-          related: ['personal-agent-web-ui-preferences'],
+          role: 'hub',
           updated: '2026-03-18T12:00:00.000Z',
         },
-        content: '---\nid: conv-memory-browser-20260318\n---\n# Memory browser polish capture\n',
+        content: '---\nname: personal-agent\n---\n# Personal-agent knowledge hub\n',
+        references: [{
+          title: 'Web UI preferences',
+          summary: 'Durable UI notes.',
+          tags: ['personal-agent', 'web-ui'],
+          path: '/tmp/personal-agent/references/personal-agent-web-ui-preferences.md',
+          relativePath: 'references/personal-agent-web-ui-preferences.md',
+          updated: '2026-03-18T12:00:00.000Z',
+        }],
       },
       loading: false,
       refreshing: false,
@@ -287,7 +293,7 @@ describe('ContextRail run detail', () => {
     });
 
     const html = renderToString(
-      <MemoryRouter initialEntries={['/memories?memory=conv-memory-browser-20260318']}>
+      <MemoryRouter initialEntries={['/memories?memory=personal-agent']}>
         <AppDataContext.Provider value={{
           activity: null,
           projects: null,
@@ -305,8 +311,9 @@ describe('ContextRail run detail', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Merge capture');
-    expect(html).toContain('Merge into @personal-agent-web-ui-preferences');
-    expect(html).toContain('Merge into…');
+    expect(html).toContain('Package files');
+    expect(html).toContain('MEMORY.md');
+    expect(html).toContain('Web UI preferences');
+    expect(html).toContain('references/personal-agent-web-ui-preferences.md');
   });
 });

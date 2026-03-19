@@ -19,6 +19,10 @@ function writeFile(path: string, content: string): void {
   writeFileSync(path, content);
 }
 
+function memoryPath(profilesRoot: string, memoryName: string): string {
+  return join(profilesRoot, '_memory', memoryName, 'MEMORY.md');
+}
+
 function createMemoryRepo(): { repoRoot: string; profilesRoot: string; configPath: string } {
   const repoRoot = createTempDir('personal-agent-memory-repo-');
   const profilesRoot = createTempDir('personal-agent-memory-profiles-');
@@ -52,7 +56,7 @@ afterEach(async () => {
 });
 
 describe('memory command', () => {
-  it('lists and shows global memory docs, migrating legacy profile files', async () => {
+  it('lists and shows global memory packages, migrating legacy profile files', async () => {
     const { repoRoot, profilesRoot, configPath } = createMemoryRepo();
 
     writeFile(
@@ -106,7 +110,7 @@ Desktop operational notes.
     expect(listPayload.memoryDir).toBe(join(profilesRoot, '_memory'));
     expect(listPayload.docs.map((doc) => doc.id)).toEqual(['desktop', 'runpod']);
     expect(listPayload.parseErrors).toHaveLength(0);
-    expect(readFileSync(join(profilesRoot, '_memory', 'runpod.md'), 'utf-8')).toContain('id: runpod');
+    expect(readFileSync(memoryPath(profilesRoot, 'runpod'), 'utf-8')).toContain('name: runpod');
 
     logs.length = 0;
 
@@ -128,39 +132,49 @@ Desktop operational notes.
     logSpy.mockRestore();
   });
 
-  it('filters memory docs by tag/type/status/text', async () => {
+  it('filters memory packages by tag/type/status/text', async () => {
     const { repoRoot, profilesRoot, configPath } = createMemoryRepo();
 
     writeFile(
-      join(profilesRoot, '_memory', 'runpod.md'),
+      memoryPath(profilesRoot, 'runpod'),
       `---
-id: runpod
-title: Runpod Notes
-summary: Provisioning notes for short-lived GPU pods.
-type: project
-status: active
-area: compute
-role: canonical
-tags: [gpu, infra]
-updated: 2026-03-08
+name: runpod
+description: Provisioning notes for short-lived GPU pods.
+metadata:
+  title: Runpod Notes
+  type: project
+  status: active
+  area: compute
+  role: hub
+  tags:
+    - gpu
+    - infra
+  updated: 2026-03-08
 ---
+# Runpod
+
 Runpod operational notes.
 `,
     );
 
     writeFile(
-      join(profilesRoot, '_memory', 'desktop.md'),
+      memoryPath(profilesRoot, 'desktop'),
       `---
-id: desktop
-title: Desktop Machine Notes
-summary: Local Ubuntu GPU workstation details.
-type: reference
-status: archived
-area: compute
-role: canonical
-tags: [gpu, desktop]
-updated: 2026-03-08
+name: desktop
+description: Local Ubuntu GPU workstation details.
+metadata:
+  title: Desktop Machine Notes
+  type: reference
+  status: archived
+  area: compute
+  role: hub
+  tags:
+    - gpu
+    - desktop
+  updated: 2026-03-08
 ---
+# Desktop
+
 Desktop Ubuntu operational notes.
 `,
     );
@@ -185,8 +199,6 @@ Desktop Ubuntu operational notes.
       'archived',
       '--area',
       'compute',
-      '--role',
-      'canonical',
       '--text',
       'ubuntu',
       '--json',
@@ -208,52 +220,46 @@ Desktop Ubuntu operational notes.
     const { repoRoot, profilesRoot, configPath } = createMemoryRepo();
 
     writeFile(
-      join(profilesRoot, '_memory', 'runpod.md'),
+      memoryPath(profilesRoot, 'runpod'),
       `---
-id: runpod
-title: Runpod Notes
-summary: Provisioning notes for short-lived GPU pods.
-type: project
-status: active
-tags: [gpu, infra]
-updated: 2026-03-08
+name: runpod
+description: Provisioning notes for short-lived GPU pods.
+metadata:
+  title: Runpod Notes
+  type: project
+  status: active
+  tags:
+    - gpu
+    - infra
+  updated: 2026-03-08
 ---
+# Runpod
+
 Runpod operational notes.
 `,
     );
 
     writeFile(
-      join(profilesRoot, '_memory', 'duplicate.md'),
-      `---
-id: runpod
-title: Duplicate id
-summary: Duplicate id test.
-type: note
-status: active
-tags: [test]
-updated: 2026-03-08
----
-Duplicate memory doc.
-`,
-    );
-
-    writeFile(
-      join(profilesRoot, '_memory', 'invalid.md'),
+      memoryPath(profilesRoot, 'invalid'),
       '# Missing frontmatter\n',
     );
 
     writeFile(
-      join(profilesRoot, '_memory', 'orphan.md'),
+      memoryPath(profilesRoot, 'orphan'),
       `---
-id: orphan
-title: Orphan
-summary: Broken parent reference.
-type: note
-status: active
-parent: missing-parent
-tags: [test]
-updated: 2026-03-08
+name: orphan
+description: Broken parent reference.
+metadata:
+  title: Orphan
+  type: note
+  status: active
+  parent: missing-parent
+  tags:
+    - test
+  updated: 2026-03-08
 ---
+# Orphan
+
 Broken parent reference.
 `,
     );
@@ -276,17 +282,14 @@ Broken parent reference.
       referenceErrors: Array<{ id: string; field: string; targetId: string }>;
     };
 
-    expect(payload.parseErrors.length).toBe(1);
-    expect(payload.duplicateIds).toHaveLength(1);
-    expect(payload.duplicateIds[0]?.id).toBe('runpod');
-    expect(payload.referenceErrors).toEqual([
-      expect.objectContaining({ id: 'orphan', field: 'parent', targetId: 'missing-parent' }),
-    ]);
+    expect(payload.parseErrors.length).toBe(2);
+    expect(payload.duplicateIds).toHaveLength(0);
+    expect(payload.referenceErrors).toEqual([]);
 
     logSpy.mockRestore();
   });
 
-  it('creates a memory doc template with memory new', async () => {
+  it('creates a memory package template with memory new', async () => {
     const { repoRoot, profilesRoot, configPath } = createMemoryRepo();
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
@@ -337,7 +340,7 @@ Broken parent reference.
     };
 
     expect(payload.id).toBe('quick-note');
-    expect(payload.filePath).toBe(join(profilesRoot, '_memory', 'quick-note.md'));
+    expect(payload.filePath).toBe(memoryPath(profilesRoot, 'quick-note'));
     expect(payload.tags).toEqual(['notes', 'personal']);
     expect(payload.type).toBe('note');
     expect(payload.status).toBe('active');
@@ -348,21 +351,22 @@ Broken parent reference.
     expect(payload.updated).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
     const fileContent = readFileSync(payload.filePath, 'utf-8');
-    expect(fileContent).toContain('id: quick-note');
-    expect(fileContent).toContain('title: "Quick Note"');
-    expect(fileContent).toContain('summary: "Tracks one-off details."');
+    expect(fileContent).toContain('name: quick-note');
+    expect(fileContent).toContain('description: Tracks one-off details.');
+    expect(fileContent).toContain('metadata:');
+    expect(fileContent).toContain('title: Quick Note');
     expect(fileContent).toContain('area: memory');
-    expect(fileContent).toContain('role: "hub"');
+    expect(fileContent).toContain('role: hub');
     expect(fileContent).toContain('related:');
-    expect(fileContent).toContain('  - "personal-agent"');
+    expect(fileContent).toContain('- personal-agent');
     expect(fileContent).toContain('tags:');
-    expect(fileContent).toContain('  - "notes"');
-    expect(fileContent).toContain('  - "personal"');
+    expect(fileContent).toContain('- notes');
+    expect(fileContent).toContain('- personal');
 
     logSpy.mockRestore();
   });
 
-  it('requires --force to overwrite an existing memory doc', async () => {
+  it('requires --force to overwrite an existing memory package', async () => {
     const { repoRoot, profilesRoot, configPath } = createMemoryRepo();
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
@@ -409,7 +413,7 @@ Broken parent reference.
     ]);
 
     expect(withoutForceExitCode).toBe(1);
-    expect(errors.some((line) => line.includes('Memory doc already exists'))).toBe(true);
+    expect(errors.some((line) => line.includes('Memory package already exists'))).toBe(true);
 
     errorSpy.mockRestore();
 
@@ -438,7 +442,7 @@ Broken parent reference.
     expect(payload.overwritten).toBe(true);
 
     const fileContent = readFileSync(payload.filePath, 'utf-8');
-    expect(fileContent).toContain('title: "Updated Note"');
+    expect(fileContent).toContain('title: Updated Note');
 
     logSpy.mockRestore();
   });

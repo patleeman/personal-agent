@@ -1,10 +1,10 @@
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { loadMemoryDocs } from '@personal-agent/core';
-import { mergeCaptureMemoryIntoCanonical, saveCuratedDistilledConversationMemory, type DistilledConversationMemoryDraft } from './conversationMemoryCuration.js';
+import { saveCuratedDistilledConversationMemory, type DistilledConversationMemoryDraft } from './conversationMemoryCuration.js';
 
 const tempDirs: string[] = [];
 
@@ -23,8 +23,12 @@ afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-function memoryPath(profilesRoot: string, fileName: string): string {
-  return join(profilesRoot, '_memory', fileName);
+function memoryPath(profilesRoot: string, memoryName: string): string {
+  return join(profilesRoot, '_memory', memoryName, 'MEMORY.md');
+}
+
+function referencePath(profilesRoot: string, memoryName: string, referenceName: string): string {
+  return join(profilesRoot, '_memory', memoryName, 'references', `${referenceName}.md`);
 }
 
 function buildDraft(overrides: Partial<DistilledConversationMemoryDraft> = {}): DistilledConversationMemoryDraft {
@@ -46,104 +50,39 @@ At this checkpoint, the user intent was: tighten the memory browser around hubs,
 }
 
 describe('conversation memory curation', () => {
-  it('updates the single canonical doc for a scoped area instead of creating a capture', () => {
-    const profilesRoot = createTempDir('pa-conversation-memory-single-');
-    writeFile(
-      memoryPath(profilesRoot, 'runpod.md'),
-      `---
-id: runpod
-title: "Runpod"
-summary: "Canonical runpod operating notes."
-type: "reference"
-status: "active"
-area: runpod
-role: "canonical"
-tags:
-  - "runpod"
-  - "gpu"
-updated: 2026-03-18
----
-
-# Runpod
-
-Canonical runpod notes.
-`,
-    );
-
-    const loaded = loadMemoryDocs({ profilesRoot });
-    expect(loaded.parseErrors).toHaveLength(0);
-
-    const result = saveCuratedDistilledConversationMemory({
-      memoryDir: join(profilesRoot, '_memory'),
-      existingDocs: loaded.docs,
-      draft: buildDraft({
-        title: 'Runpod cleanup and provisioning follow-ups',
-        summary: 'Track Runpod cleanup and provisioning follow-ups.',
-        body: '# Runpod cleanup and provisioning follow-ups\n\nTrack Runpod cleanup and provisioning follow-ups.\n',
-        tags: ['conversation', 'checkpoint', 'runpod', 'gpu'],
-        userIntent: 'finish the runpod provisioning cleanup work.',
-        learnedPoints: ['The cleanup flow should remove stale pods automatically.'],
-        carryForwardPoints: ['Keep provisioning fast and short-lived.'],
-      }),
-      updated: '2026-03-18',
-      distilledAt: '2026-03-18T12:00:00.000Z',
-      area: 'runpod',
-      sourceConversationTitle: 'Runpod cleanup',
-      sourceCwd: '/tmp/runpod',
-      sourceProfile: 'assistant',
-      relatedProjectIds: ['runpod'],
-      anchorPreview: 'Runpod cleanup follow-ups',
-    });
-
-    expect(result.disposition).toBe('updated-existing');
-    expect(result.memory.id).toBe('runpod');
-    expect(readdirSync(join(profilesRoot, '_memory'))).toEqual(['runpod.md']);
-
-    const updatedContent = readFileSync(memoryPath(profilesRoot, 'runpod.md'), 'utf-8');
-    expect(updatedContent).toContain('## Distilled updates');
-    expect(updatedContent).toContain('### 2026-03-18 — Runpod cleanup and provisioning follow-ups');
-    expect(updatedContent).toContain('finish the runpod provisioning cleanup work');
-  });
-
-  it('updates the strongest matching canonical doc when an area has multiple canonicals', () => {
+  it('updates the strongest matching reference inside an existing hub package', () => {
     const profilesRoot = createTempDir('pa-conversation-memory-match-');
     writeFile(
-      memoryPath(profilesRoot, 'personal-agent.md'),
+      memoryPath(profilesRoot, 'personal-agent'),
       `---
-id: personal-agent
-title: "personal-agent knowledge hub"
-summary: "Hub doc."
-type: "project"
-status: "active"
-area: personal-agent
-role: "hub"
-related:
-  - "personal-agent-web-ui-preferences"
-  - "personal-agent-project-state-model"
-tags:
-  - "personal-agent"
-updated: 2026-03-18
+name: personal-agent
+description: Hub doc.
+metadata:
+  title: Personal-agent knowledge hub
+  type: project
+  status: active
+  area: personal-agent
+  role: hub
+  tags:
+    - personal-agent
+  updated: 2026-03-18
 ---
 
-# personal-agent knowledge hub
+# Personal-agent knowledge hub
 `,
     );
     writeFile(
-      memoryPath(profilesRoot, 'personal-agent-web-ui-preferences.md'),
+      referencePath(profilesRoot, 'personal-agent', 'web-ui'),
       `---
-id: personal-agent-web-ui-preferences
-title: "Personal-agent web UI preferences"
-summary: "Durable UX preferences for the web app."
-type: "project"
-status: "active"
-area: personal-agent
-role: "canonical"
-parent: personal-agent
-tags:
-  - "personal-agent"
-  - "web-ui"
-  - "ux"
-updated: 2026-03-18
+name: web-ui
+description: Durable UX preferences for the web app.
+metadata:
+  title: Personal-agent web UI preferences
+  tags:
+    - personal-agent
+    - web-ui
+    - ux
+  updated: 2026-03-18
 ---
 
 # Personal-agent web UI preferences
@@ -153,24 +92,8 @@ updated: 2026-03-18
 `,
     );
     writeFile(
-      memoryPath(profilesRoot, 'personal-agent-project-state-model.md'),
-      `---
-id: personal-agent-project-state-model
-title: "Personal-agent project state model"
-summary: "Project boundaries and state model."
-type: "project"
-status: "active"
-area: personal-agent
-role: "canonical"
-parent: personal-agent
-tags:
-  - "personal-agent"
-  - "projects"
-  - "state"
-updated: 2026-03-18
----
-
-# Personal-agent project state model
+      referencePath(profilesRoot, 'personal-agent', 'state-model'),
+      `# Personal-agent project state model
 
 - Keep planning state durable.
 - Respect project boundaries.
@@ -195,75 +118,44 @@ updated: 2026-03-18
     });
 
     expect(result.disposition).toBe('updated-existing');
-    expect(result.memory.id).toBe('personal-agent-web-ui-preferences');
+    expect(result.memory.id).toBe('personal-agent');
+    expect(result.reference.relativePath).toBe('references/web-ui.md');
 
-    const webUiContent = readFileSync(memoryPath(profilesRoot, 'personal-agent-web-ui-preferences.md'), 'utf-8');
+    const webUiContent = readFileSync(referencePath(profilesRoot, 'personal-agent', 'web-ui'), 'utf-8');
     expect(webUiContent).toContain('## Distilled updates');
     expect(webUiContent).toContain('Memory browser and right rail polish');
     expect(webUiContent).toContain('page-shell/list/right-rail pattern');
 
-    const stateModelContent = readFileSync(memoryPath(profilesRoot, 'personal-agent-project-state-model.md'), 'utf-8');
+    const stateModelContent = readFileSync(referencePath(profilesRoot, 'personal-agent', 'state-model'), 'utf-8');
     expect(stateModelContent).not.toContain('Memory browser and right rail polish');
   });
 
-  it('creates a capture attached to the matching hub when no canonical match is strong enough', () => {
-    const profilesRoot = createTempDir('pa-conversation-memory-capture-');
+  it('creates a new reference inside the matching hub when no reference match is strong enough', () => {
+    const profilesRoot = createTempDir('pa-conversation-memory-create-ref-');
     writeFile(
-      memoryPath(profilesRoot, 'personal-agent.md'),
+      memoryPath(profilesRoot, 'personal-agent'),
       `---
-id: personal-agent
-title: "personal-agent knowledge hub"
-summary: "Hub doc."
-type: "project"
-status: "active"
-area: personal-agent
-role: "hub"
-tags:
-  - "personal-agent"
-updated: 2026-03-18
+name: personal-agent
+description: Hub doc.
+metadata:
+  title: Personal-agent knowledge hub
+  type: project
+  status: active
+  area: personal-agent
+  role: hub
+  tags:
+    - personal-agent
+  updated: 2026-03-18
 ---
 
-# personal-agent knowledge hub
+# Personal-agent knowledge hub
 `,
     );
     writeFile(
-      memoryPath(profilesRoot, 'personal-agent-web-ui-preferences.md'),
-      `---
-id: personal-agent-web-ui-preferences
-title: "Personal-agent web UI preferences"
-summary: "Durable UX preferences for the web app."
-type: "project"
-status: "active"
-area: personal-agent
-role: "canonical"
-parent: personal-agent
-tags:
-  - "personal-agent"
-  - "web-ui"
-updated: 2026-03-18
----
+      referencePath(profilesRoot, 'personal-agent', 'deployment-notes'),
+      `# Deployment notes
 
-# Personal-agent web UI preferences
-`,
-    );
-    writeFile(
-      memoryPath(profilesRoot, 'personal-agent-project-state-model.md'),
-      `---
-id: personal-agent-project-state-model
-title: "Personal-agent project state model"
-summary: "Project boundaries and state model."
-type: "project"
-status: "active"
-area: personal-agent
-role: "canonical"
-parent: personal-agent
-tags:
-  - "personal-agent"
-  - "projects"
-updated: 2026-03-18
----
-
-# Personal-agent project state model
+Track deployment timings and release checks.
 `,
     );
 
@@ -275,12 +167,12 @@ updated: 2026-03-18
       existingDocs: loaded.docs,
       draft: buildDraft({
         title: 'General personal-agent follow-up',
-        summary: 'Loose follow-up that should stay a capture until curated.',
-        body: '# General personal-agent follow-up\n\nLoose follow-up that should stay a capture until curated.\n',
+        summary: 'Loose follow-up that should stay in the package until curated further.',
+        body: '# General personal-agent follow-up\n\nLoose follow-up that should stay in the package until curated further.\n',
         tags: ['conversation', 'checkpoint', 'personal-agent'],
-        userIntent: 'capture a broad follow-up without picking a single canonical target.',
+        userIntent: 'capture a broad follow-up inside the package without picking an existing reference.',
         learnedPoints: ['There are a few follow-ups to sort out later.'],
-        carryForwardPoints: ['Curate this into a specific canonical doc later.'],
+        carryForwardPoints: ['Curate this into a more specific reference later.'],
       }),
       updated: '2026-03-18',
       distilledAt: '2026-03-18T12:00:00.000Z',
@@ -292,100 +184,43 @@ updated: 2026-03-18
       anchorPreview: 'General personal-agent follow-up',
     });
 
-    expect(result.disposition).toBe('created-capture');
-    expect(result.memory.role).toBe('capture');
-    expect(result.memory.parent).toBe('personal-agent');
-    expect(result.memory.id).toMatch(/^conv-general-personal-agent-follow-up-20260318/);
+    expect(result.disposition).toBe('created-reference');
+    expect(result.memory.id).toBe('personal-agent');
+    expect(result.reference.relativePath).toMatch(/^references\/general-personal-agent-follow-up/);
 
-    const createdContent = readFileSync(result.memory.path, 'utf-8');
-    expect(createdContent).toContain('role: capture');
-    expect(createdContent).toContain('parent: personal-agent');
+    const createdContent = readFileSync(result.reference.path, 'utf-8');
+    expect(createdContent).toContain('name: general-personal-agent-follow-up');
+    expect(createdContent).toContain('description: Loose follow-up that should stay in the package until curated further.');
+    expect(createdContent).toContain('origin: conversation');
   });
 
-  it('merges a capture doc into a canonical doc and deletes the capture file', () => {
-    const profilesRoot = createTempDir('pa-conversation-memory-merge-');
-    writeFile(
-      memoryPath(profilesRoot, 'personal-agent-web-ui-preferences.md'),
-      `---
-id: personal-agent-web-ui-preferences
-title: "Personal-agent web UI preferences"
-summary: "Durable UX preferences for the web app."
-type: "project"
-status: "active"
-area: personal-agent
-role: "canonical"
-parent: personal-agent
-tags:
-  - "personal-agent"
-  - "web-ui"
-updated: 2026-03-18
----
-
-# Personal-agent web UI preferences
-
-- Keep the right rail visible and resizable.
-`,
-    );
-    writeFile(
-      memoryPath(profilesRoot, 'conv-memory-browser-20260318.md'),
-      `---
-id: conv-memory-browser-20260318
-title: "Memory browser polish capture"
-summary: "Capture doc waiting to merge into a canonical memory."
-type: "conversation-checkpoint"
-status: "active"
-area: personal-agent
-role: "capture"
-parent: personal-agent
-related:
-  - "personal-agent-web-ui-preferences"
-tags:
-  - "conversation"
-  - "checkpoint"
-  - "personal-agent"
-  - "web-ui"
-updated: 2026-03-18
-origin: "conversation"
-origin_title: "Memory browser polish"
-source_cwd: "/Users/patrick/workingdir/personal-agent"
----
-
-# Memory browser polish capture
-
-Capture doc waiting to merge into a canonical memory.
-
-At this checkpoint, the user intent was: tighten the memory browser around hubs and the right rail.
-
-What the agent had learned by this point:
-- Memory management should reuse the page-shell/list/right-rail pattern.
-
-Key carry-forward points:
-- Keep the right rail visible and resizable.
-`,
-    );
+  it('creates a new hub package before writing a reference when no matching hub exists', () => {
+    const profilesRoot = createTempDir('pa-conversation-memory-new-hub-');
 
     const loaded = loadMemoryDocs({ profilesRoot });
-    expect(loaded.parseErrors).toHaveLength(0);
+    expect(loaded.docs).toHaveLength(0);
 
-    const captureDoc = loaded.docs.find((doc) => doc.id === 'conv-memory-browser-20260318');
-    const canonicalDoc = loaded.docs.find((doc) => doc.id === 'personal-agent-web-ui-preferences');
-    expect(captureDoc).toBeTruthy();
-    expect(canonicalDoc).toBeTruthy();
-
-    const result = mergeCaptureMemoryIntoCanonical({
-      captureDoc: captureDoc!,
-      targetDoc: canonicalDoc!,
+    const result = saveCuratedDistilledConversationMemory({
+      memoryDir: join(profilesRoot, '_memory'),
+      existingDocs: loaded.docs,
+      draft: buildDraft({
+        title: 'Runpod provisioning notes',
+        summary: 'Capture a new Runpod memory area.',
+        tags: ['conversation', 'checkpoint', 'runpod', 'gpu'],
+      }),
       updated: '2026-03-19',
+      distilledAt: '2026-03-19T12:00:00.000Z',
+      area: 'runpod',
+      sourceConversationTitle: 'Runpod provisioning',
+      sourceCwd: '/tmp/runpod',
+      sourceProfile: 'assistant',
+      relatedProjectIds: ['runpod'],
+      anchorPreview: 'Runpod provisioning notes',
     });
 
-    expect(result.memory.id).toBe('personal-agent-web-ui-preferences');
-    expect(result.mergedMemoryId).toBe('conv-memory-browser-20260318');
-    expect(readdirSync(join(profilesRoot, '_memory')).sort()).toEqual(['personal-agent-web-ui-preferences.md']);
-
-    const canonicalContent = readFileSync(memoryPath(profilesRoot, 'personal-agent-web-ui-preferences.md'), 'utf-8');
-    expect(canonicalContent).toContain('## Distilled updates');
-    expect(canonicalContent).toContain('### 2026-03-19 — Memory browser polish capture');
-    expect(canonicalContent).toContain('tighten the memory browser around hubs and the right rail');
-    expect(canonicalContent).toContain('conversation "Memory browser polish"');
+    expect(result.disposition).toBe('created-reference');
+    expect(result.memory.id).toBe('runpod');
+    expect(readFileSync(memoryPath(profilesRoot, 'runpod'), 'utf-8')).toContain('role: hub');
+    expect(result.reference.relativePath).toBe('references/runpod-provisioning-notes.md');
   });
 });

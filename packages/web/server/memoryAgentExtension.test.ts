@@ -69,39 +69,49 @@ function createToolContext() {
   };
 }
 
-function memoryPath(fileName: string): string {
-  return join(process.env.PERSONAL_AGENT_STATE_ROOT as string, 'profiles', '_memory', fileName);
+function memoryPath(memoryName: string): string {
+  return join(process.env.PERSONAL_AGENT_STATE_ROOT as string, 'profiles', '_memory', memoryName, 'MEMORY.md');
 }
 
 describe('memory agent extension', () => {
-  it('lists, finds, and shows memory docs', async () => {
+  it('lists, finds, and shows memory packages', async () => {
     const memoryTool = registerMemoryTool();
 
     writeFile(
-      memoryPath('runpod.md'),
+      memoryPath('runpod'),
       `---
-id: runpod
-title: Runpod Notes
-summary: Provisioning notes for short-lived GPU pods.
-type: project
-status: active
-tags: [gpu, infra]
-updated: 2026-03-08
+name: runpod
+description: Provisioning notes for short-lived GPU pods.
+metadata:
+  title: Runpod Notes
+  type: project
+  status: active
+  tags:
+    - gpu
+    - infra
+  updated: 2026-03-08
 ---
+# Runpod
+
 Runpod operational notes.
 `,
     );
     writeFile(
-      memoryPath('desktop.md'),
+      memoryPath('desktop'),
       `---
-id: desktop
-title: Desktop Machine Notes
-summary: Local Ubuntu GPU workstation details.
-type: reference
-status: archived
-tags: [gpu, desktop]
-updated: 2026-03-09
+name: desktop
+description: Local Ubuntu GPU workstation details.
+metadata:
+  title: Desktop Machine Notes
+  type: reference
+  status: archived
+  tags:
+    - gpu
+    - desktop
+  updated: 2026-03-09
 ---
+# Desktop
+
 Desktop operational notes.
 `,
     );
@@ -127,11 +137,11 @@ Desktop operational notes.
       memoryId: 'runpod',
     }, undefined, undefined, createToolContext());
     expect(showResult.isError).not.toBe(true);
-    expect(showResult.content[0]?.text).toContain('Memory doc @runpod');
+    expect(showResult.content[0]?.text).toContain('Memory package @runpod');
     expect(showResult.content[0]?.text).toContain('Runpod operational notes.');
   });
 
-  it('creates new memory docs and requires force to overwrite', async () => {
+  it('creates new memory packages and requires force to overwrite', async () => {
     const memoryTool = registerMemoryTool();
 
     const created = await memoryTool.execute('tool-1', {
@@ -145,8 +155,9 @@ Desktop operational notes.
     }, undefined, undefined, createToolContext());
 
     expect(created.isError).not.toBe(true);
-    expect(created.content[0]?.text).toContain('Created memory @quick-note');
-    expect(readFileSync(memoryPath('quick-note.md'), 'utf-8')).toContain('title: "Quick Note"');
+    expect(created.content[0]?.text).toContain('Created memory package @quick-note');
+    expect(readFileSync(memoryPath('quick-note'), 'utf-8')).toContain('name: quick-note');
+    expect(readFileSync(memoryPath('quick-note'), 'utf-8')).toContain('description: Tracks one-off details.');
 
     const duplicate = await memoryTool.execute('tool-2', {
       action: 'new',
@@ -157,7 +168,7 @@ Desktop operational notes.
     }, undefined, undefined, createToolContext());
 
     expect(duplicate.isError).toBe(true);
-    expect(duplicate.content[0]?.text).toContain('Memory doc already exists');
+    expect(duplicate.content[0]?.text).toContain('Memory package already exists');
 
     const updated = await memoryTool.execute('tool-3', {
       action: 'new',
@@ -169,48 +180,58 @@ Desktop operational notes.
     }, undefined, undefined, createToolContext());
 
     expect(updated.isError).not.toBe(true);
-    expect(updated.content[0]?.text).toContain('Updated memory @quick-note');
-    expect(readFileSync(memoryPath('quick-note.md'), 'utf-8')).toContain('title: "Updated Note"');
+    expect(updated.content[0]?.text).toContain('Updated memory package @quick-note');
+    expect(readFileSync(memoryPath('quick-note'), 'utf-8')).toContain('title: Updated Note');
   });
 
   it('reports lint issues without treating lint as a tool failure', async () => {
     const memoryTool = registerMemoryTool();
 
     writeFile(
-      memoryPath('runpod.md'),
+      memoryPath('runpod'),
       `---
-id: runpod
-title: Runpod Notes
-summary: Provisioning notes for short-lived GPU pods.
-type: project
-status: active
-tags: [gpu, infra]
-updated: 2026-03-08
+name: runpod
+description: Provisioning notes for short-lived GPU pods.
+metadata:
+  title: Runpod Notes
+  type: project
+  status: active
+  tags:
+    - gpu
+    - infra
+  updated: 2026-03-08
 ---
+# Runpod
+
 Runpod operational notes.
 `,
     );
     writeFile(
-      memoryPath('duplicate.md'),
+      memoryPath('orphan'),
       `---
-id: runpod
-title: Duplicate id
-summary: Duplicate id test.
-type: note
-status: active
-tags: [test]
-updated: 2026-03-08
+name: orphan
+description: Broken parent reference.
+metadata:
+  title: Orphan
+  type: note
+  status: active
+  parent: missing-parent
+  tags:
+    - test
+  updated: 2026-03-08
 ---
-Duplicate memory doc.
+# Orphan
+
+Broken parent reference.
 `,
     );
-    writeFile(memoryPath('invalid.md'), '# Missing frontmatter\n');
+    writeFile(memoryPath('invalid'), '# Missing frontmatter\n');
 
     const lintResult = await memoryTool.execute('tool-1', { action: 'lint' }, undefined, undefined, createToolContext());
     expect(lintResult.isError).not.toBe(true);
     expect(lintResult.content[0]?.text).toContain('Parse errors:');
-    expect(lintResult.content[0]?.text).toContain('Duplicate ids:');
-    expect(lintResult.content[0]?.text).toContain('runpod');
-    expect(lintResult.details).toMatchObject({ hasIssues: true, duplicateCount: 1, parseErrorCount: 1 });
+    expect(lintResult.content[0]?.text).not.toContain('Duplicate ids:');
+    expect(lintResult.content[0]?.text).toContain('orphan');
+    expect(lintResult.details).toMatchObject({ hasIssues: true, duplicateCount: 0, parseErrorCount: 2 });
   });
 });

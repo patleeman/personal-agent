@@ -13,14 +13,15 @@
 
 ## Global memory convention
 
-- Durable memory docs live in the shared global store at `~/.local/state/personal-agent/profiles/_memory/`.
+- Durable memories live in the shared global store at `~/.local/state/personal-agent/profiles/_memory/`.
 - There is never a shared-profile memory dir (`~/.local/state/personal-agent/profiles/shared/agent/memory` should not exist).
-- Memory docs are available to the agent via normal file tools (`read`, `edit`, `write`).
-- Use memory docs for durable briefs, runbooks, specs, and notes that should be reusable across profile contexts.
-- Keep memory docs flat at `profiles/_memory/*.md` (no nested project tree).
-- Every memory doc must include YAML frontmatter with at least: `id`, `title`, `summary`, `tags`, `updated`.
+- A memory is a directory containing `MEMORY.md`, plus optional `references/` and `assets/`.
+- Memory packages are available to the agent via normal file tools (`read`, `edit`, `write`).
+- Use memory packages for durable briefs, runbooks, specs, and notes that should be reusable across profile contexts.
+- Keep top-level memories as curated hubs under `profiles/_memory/<memory-name>/MEMORY.md`; break down detailed material inside each package instead of flattening the root.
+- Every `MEMORY.md` must include YAML frontmatter with at least: `name`, `description`, and optional `metadata`.
 - Use `pa memory list/find/show/new/lint` for discovery, creation, and validation.
-- Keep non-markdown automation state outside memory.
+- Keep non-markdown automation state outside memory packages.
 - Keep reusable cross-project workflows in profile `skills/` dirs under the state root; keep durable behavior/preferences in profile `AGENTS.md` files.
 
 ## Conversation locality boundary

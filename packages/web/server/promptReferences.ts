@@ -180,7 +180,7 @@ export function buildReferencedTasksContext(tasks: PromptReferenceTask[], repoRo
 
 export function buildReferencedMemoryDocsContext(memoryDocs: PromptReferenceMemoryDoc[], repoRoot: string): string {
   return [
-    'Referenced knowledge docs:',
+    'Referenced memories:',
     ...memoryDocs.map((doc) => {
       const lines = [
         `- @${doc.id}: ${doc.title}`,
@@ -199,7 +199,7 @@ export function buildReferencedMemoryDocsContext(memoryDocs: PromptReferenceMemo
 
       return lines.join('\n');
     }),
-    'These are durable knowledge docs. Read them when the user refers to that knowledge, asks for details, or wants the information updated.',
+    'These are durable memory packages. Read them when the user refers to that knowledge, asks for details, or wants the information updated.',
   ].join('\n');
 }
 

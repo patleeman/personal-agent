@@ -90,7 +90,6 @@ import { createActivityAgentExtension } from './activityAgentExtension.js';
 import { createRunAgentExtension } from './runAgentExtension.js';
 import { createMemoryAgentExtension } from './memoryAgentExtension.js';
 import {
-  mergeCaptureMemoryIntoCanonical,
   saveCuratedDistilledConversationMemory,
   type DistilledConversationMemoryDraft,
 } from './conversationMemoryCuration.js';
@@ -167,6 +166,7 @@ import {
   getProfilesRoot,
   getStateRoot,
   loadMemoryDocs,
+  loadMemoryPackageReferences,
   listConversationProjectLinks,
   listConversationArtifacts,
   listConversationAttachments,
@@ -1482,9 +1482,15 @@ function deriveDistilledConversationMemoryDraft(options: SaveDistilledConversati
 }
 
 function saveDistilledConversationMemory(options: SaveDistilledConversationMemoryOptions): MemoryDocItem & {
-  disposition: 'updated-existing' | 'created-capture';
-  matchedCanonicalIds: string[];
-  hubId?: string;
+  disposition: 'updated-existing' | 'created-reference';
+  reference: {
+    path: string;
+    relativePath: string;
+    title: string;
+    summary: string;
+    tags: string[];
+    updated: string;
+  };
 } {
   const memoryDir = ensureMemoryDocsDir();
   const draft = deriveDistilledConversationMemoryDraft(options);
@@ -1493,7 +1499,7 @@ function saveDistilledConversationMemory(options: SaveDistilledConversationMemor
   const area = options.relatedProjectIds.length === 1
     ? normalizeDistilledTag(options.relatedProjectIds[0] ?? '') ?? undefined
     : undefined;
-  const loaded = loadMemoryDocs({ profilesRoot: getProfilesRoot(), includeReferences: true });
+  const loaded = loadMemoryDocs({ profilesRoot: getProfilesRoot() });
   const saved = saveCuratedDistilledConversationMemory({
     memoryDir,
     existingDocs: loaded.docs,
@@ -1511,15 +1517,20 @@ function saveDistilledConversationMemory(options: SaveDistilledConversationMemor
   return {
     ...saved.memory,
     disposition: saved.disposition,
-    matchedCanonicalIds: saved.matchedCanonicalIds,
-    ...(saved.hubId ? { hubId: saved.hubId } : {}),
+    reference: saved.reference,
     recentSessionCount: 0,
     lastUsedAt: null,
     usedInLastSession: false,
   } satisfies MemoryDocItem & {
-    disposition: 'updated-existing' | 'created-capture';
-    matchedCanonicalIds: string[];
-    hubId?: string;
+    disposition: 'updated-existing' | 'created-reference';
+    reference: {
+      path: string;
+      relativePath: string;
+      title: string;
+      summary: string;
+      tags: string[];
+      updated: string;
+    };
   };
 }
 
@@ -4179,27 +4190,14 @@ app.get('/api/memories/:memoryId', (req, res) => {
       return;
     }
 
-    const loaded = loadMemoryDocs({ profilesRoot: getProfilesRoot(), includeReferences: true });
-    const references = loaded.docs
-      .filter((doc) => doc.packageId === memory.id && doc.filePath !== memory.path)
-      .map((doc) => ({
-        id: doc.id,
-        title: doc.title,
-        summary: doc.summary,
-        tags: doc.tags,
-        path: doc.filePath,
-        type: doc.type,
-        status: doc.status,
-        area: doc.area,
-        role: doc.role,
-        parent: doc.parent,
-        related: doc.related,
-        updated: doc.updated,
-        recentSessionCount: 0,
-        lastUsedAt: null,
-        usedInLastSession: false,
-      } satisfies MemoryDocItem))
-      .sort((left, right) => (right.updated ?? '').localeCompare(left.updated ?? '') || left.title.localeCompare(right.title));
+    const references = loadMemoryPackageReferences(dirname(memory.path)).map((reference) => ({
+      title: reference.title,
+      summary: reference.summary,
+      tags: reference.tags,
+      path: reference.filePath,
+      relativePath: reference.relativePath,
+      updated: reference.updated || undefined,
+    } satisfies MemoryReferenceItem));
 
     res.json({
       memory,
@@ -4231,27 +4229,14 @@ app.post('/api/memories/:memoryId', (req, res) => {
 
     writeFileSync(memory.path, content, 'utf-8');
     const refreshed = listMemoryDocs({ includeSearchText: true }).find((entry) => entry.path === memory.path) ?? memory;
-    const loaded = loadMemoryDocs({ profilesRoot: getProfilesRoot(), includeReferences: true });
-    const references = loaded.docs
-      .filter((doc) => doc.packageId === refreshed.id && doc.filePath !== refreshed.path)
-      .map((doc) => ({
-        id: doc.id,
-        title: doc.title,
-        summary: doc.summary,
-        tags: doc.tags,
-        path: doc.filePath,
-        type: doc.type,
-        status: doc.status,
-        area: doc.area,
-        role: doc.role,
-        parent: doc.parent,
-        related: doc.related,
-        updated: doc.updated,
-        recentSessionCount: 0,
-        lastUsedAt: null,
-        usedInLastSession: false,
-      } satisfies MemoryDocItem))
-      .sort((left, right) => (right.updated ?? '').localeCompare(left.updated ?? '') || left.title.localeCompare(right.title));
+    const references = loadMemoryPackageReferences(dirname(refreshed.path)).map((reference) => ({
+      title: reference.title,
+      summary: reference.summary,
+      tags: reference.tags,
+      path: reference.filePath,
+      relativePath: reference.relativePath,
+      updated: reference.updated || undefined,
+    } satisfies MemoryReferenceItem));
 
     res.json({
       memory: refreshed,
@@ -4264,63 +4249,6 @@ app.post('/api/memories/:memoryId', (req, res) => {
       stack: err instanceof Error ? err.stack : undefined,
     });
     res.status(500).json({ error: String(err) });
-  }
-});
-
-app.post('/api/memories/:memoryId/merge', (req, res) => {
-  try {
-    const sourceMemoryId = req.params.memoryId?.trim();
-    const { targetMemoryId } = req.body as { targetMemoryId?: string };
-    const normalizedTargetMemoryId = typeof targetMemoryId === 'string' ? targetMemoryId.trim() : '';
-
-    if (!sourceMemoryId) {
-      res.status(400).json({ error: 'memoryId required' });
-      return;
-    }
-
-    if (!normalizedTargetMemoryId) {
-      res.status(400).json({ error: 'targetMemoryId required' });
-      return;
-    }
-
-    const loaded = loadMemoryDocs({ profilesRoot: getProfilesRoot(), includeReferences: true });
-    const captureDoc = loaded.docs.find((doc) => doc.id === sourceMemoryId);
-    if (!captureDoc) {
-      res.status(404).json({ error: `Memory @${sourceMemoryId} not found.` });
-      return;
-    }
-
-    const targetDoc = loaded.docs.find((doc) => doc.id === normalizedTargetMemoryId);
-    if (!targetDoc) {
-      res.status(404).json({ error: `Memory @${normalizedTargetMemoryId} not found.` });
-      return;
-    }
-
-    const result = mergeCaptureMemoryIntoCanonical({
-      captureDoc,
-      targetDoc,
-      updated: currentDateYyyyMmDd(),
-    });
-    const refreshed = listMemoryDocs({ includeSearchText: true }).find((entry) => entry.id === result.memory.id) ?? result.memory;
-
-    res.json({
-      memory: refreshed,
-      mergedMemoryId: result.mergedMemoryId,
-      deletedMemoryId: result.deletedMemoryId,
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const status = message.includes('not found')
-      ? 404
-      : message.includes('required') || message.includes('capture') || message.includes('canonical') || message.includes('archived') || message.includes('different docs')
-        ? 400
-        : 500;
-
-    logError('request handler error', {
-      message,
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(status).json({ error: message });
   }
 });
 
@@ -4501,16 +4429,16 @@ app.post('/api/conversations/:id/memories/distill-now', (req, res) => {
     });
 
     const activitySummary = memory.disposition === 'updated-existing'
-      ? `Updated durable memory @${memory.id}`
-      : `Distilled capture memory @${memory.id}`;
+      ? `Updated memory reference in @${memory.id}`
+      : `Created memory reference in @${memory.id}`;
     const activityDetails = [
       memory.disposition === 'updated-existing'
-        ? `Updated existing durable memory @${memory.id} from this conversation.`
-        : `Created capture memory @${memory.id} from this conversation.`,
-      `Title: ${memory.title}`,
-      memory.summary ? `Summary: ${memory.summary}` : undefined,
-      memory.parent ? `Attached to hub: @${memory.parent}` : undefined,
-      memory.matchedCanonicalIds.length > 0 ? `Related canonicals: ${memory.matchedCanonicalIds.map((memoryId) => `@${memoryId}`).join(', ')}` : undefined,
+        ? `Updated an existing reference inside durable memory hub @${memory.id} from this conversation.`
+        : `Created a new reference inside durable memory hub @${memory.id} from this conversation.`,
+      `Hub title: ${memory.title}`,
+      memory.summary ? `Hub summary: ${memory.summary}` : undefined,
+      `Reference: ${memory.reference.title}`,
+      `Reference path: ${memory.reference.relativePath}`,
     ].filter((line): line is string => Boolean(line)).join('\n');
 
     const activityId = emitActivity
@@ -4528,8 +4456,7 @@ app.post('/api/conversations/:id/memories/distill-now', (req, res) => {
       conversationId,
       memory,
       disposition: memory.disposition,
-      matchedCanonicalIds: memory.matchedCanonicalIds,
-      ...(memory.hubId ? { hubId: memory.hubId } : {}),
+      reference: memory.reference,
       ...(activityId ? { activityId } : {}),
     });
   } catch (err) {
@@ -6862,6 +6789,16 @@ interface MemoryDocItem extends MemoryUsageSummary {
   related?: string[];
   updated?: string;
   searchText?: string;
+  referenceCount?: number;
+}
+
+interface MemoryReferenceItem {
+  title: string;
+  summary: string;
+  path: string;
+  relativePath: string;
+  tags: string[];
+  updated?: string;
 }
 
 interface MemoryWorkItem {
@@ -6964,28 +6901,10 @@ function listMemoryDocs(options: { includeSearchText?: boolean } = {}): MemoryDo
   const includeSearchText = options.includeSearchText === true;
   const loaded = loadMemoryDocs({ profilesRoot: getProfilesRoot() });
 
-  const roleRank = (role: string | undefined): number => {
-    switch (role?.trim().toLowerCase()) {
-      case 'hub':
-        return 0;
-      case 'canonical':
-        return 1;
-      case 'capture':
-        return 2;
-      default:
-        return 3;
-    }
-  };
+  const memoryDocs = loaded.docs.map((doc) => {
+    const searchText = includeSearchText ? extractMemorySearchText([doc.filePath, ...doc.referencePaths]) : '';
 
-  const memoryDocs = loaded.docs
-    .filter((doc) => {
-      const normalizedRole = doc.role?.trim().toLowerCase();
-      return normalizedRole !== 'canonical' && normalizedRole !== 'capture';
-    })
-    .map((doc) => {
-      const searchText = includeSearchText ? extractMemorySearchText([doc.filePath, ...doc.referencePaths]) : '';
-
-      return {
+    return {
       id: doc.id,
       title: doc.title,
       summary: doc.summary,
@@ -6998,6 +6917,7 @@ function listMemoryDocs(options: { includeSearchText?: boolean } = {}): MemoryDo
       parent: doc.parent,
       related: doc.related,
       updated: doc.updated,
+      referenceCount: doc.referencePaths.length,
       ...(searchText ? { searchText } : {}),
       recentSessionCount: 0,
       lastUsedAt: null,
@@ -7006,11 +6926,6 @@ function listMemoryDocs(options: { includeSearchText?: boolean } = {}): MemoryDo
   });
 
   return memoryDocs.sort((left, right) => {
-    const roleDifference = roleRank(left.role) - roleRank(right.role);
-    if (roleDifference !== 0) {
-      return roleDifference;
-    }
-
     const leftUpdated = left.updated ?? '';
     const rightUpdated = right.updated ?? '';
     if (leftUpdated !== rightUpdated) {

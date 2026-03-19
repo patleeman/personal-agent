@@ -52,15 +52,15 @@ function printMemoryHelp(): void {
 
 Commands:
   list [--json]
-                           List parsed global memory docs
+                           List parsed shared memory packages
   find [--tag <tag>] [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--text <query>] [--json]
-                           Filter global memory docs by metadata fields
+                           Filter shared memory packages by metadata fields
   show <id> [--json]
-                           Show one memory doc and metadata
+                           Show one memory package and metadata
   new <id> --title <title> --summary <summary> --tags <tag1,tag2> [--type <type>] [--status <status>] [--area <area>] [--role <role>] [--parent <id>] [--related <id1,id2>] [--force] [--json]
-                           Create a new global memory doc template with YAML frontmatter
+                           Create a new shared memory package scaffold with MEMORY.md frontmatter
   lint [--json]
-                           Validate global memory doc frontmatter, duplicate ids, and broken memory references
+                           Validate shared memory package frontmatter, duplicate ids, and broken memory references
   help                     Show memory help
 `);
 }
@@ -107,11 +107,11 @@ export async function memoryCommand(args: string[]): Promise<number> {
       return loaded.parseErrors.length > 0 ? 1 : 0;
     }
 
-    console.log(section('Memory docs'));
+    console.log(section('Memory packages'));
     console.log(keyValue('Memory dir', loaded.memoryDir));
 
     if (loaded.docs.length === 0) {
-      console.log(dim('No memory docs found.'));
+      console.log(dim('No memory packages found.'));
     }
 
     for (const doc of loaded.docs) {
@@ -131,7 +131,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
     if (loaded.parseErrors.length > 0) {
       console.log('');
-      console.log(warning(`${loaded.parseErrors.length} memory doc(s) failed to parse`));
+      console.log(warning(`${loaded.parseErrors.length} memory package(s) failed to parse`));
       for (const issue of loaded.parseErrors) {
         console.log(keyValue('Parse error', `${issue.filePath}: ${issue.error}`, 4));
       }
@@ -321,7 +321,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
       return loaded.parseErrors.length > 0 ? 1 : 0;
     }
 
-    console.log(section('Memory doc search'));
+    console.log(section('Memory package search'));
     console.log(keyValue('Memory dir', loaded.memoryDir));
     console.log(keyValue('Tag filters', tagFilters.length > 0 ? tagFilters.join(', ') : 'none'));
     console.log(keyValue('Type filter', typeFilter ?? 'none'));
@@ -332,7 +332,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
     console.log(keyValue('Text filter', textFilter ?? 'none'));
 
     if (filteredDocs.length === 0) {
-      console.log(dim('No memory docs matched the supplied filters.'));
+      console.log(dim('No memory packages matched the supplied filters.'));
     }
 
     for (const doc of filteredDocs) {
@@ -352,7 +352,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
     if (loaded.parseErrors.length > 0) {
       console.log('');
-      console.log(warning(`${loaded.parseErrors.length} memory doc(s) failed to parse`));
+      console.log(warning(`${loaded.parseErrors.length} memory package(s) failed to parse`));
       for (const issue of loaded.parseErrors) {
         console.log(keyValue('Parse error', `${issue.filePath}: ${issue.error}`, 4));
       }
@@ -398,7 +398,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
       return loaded.parseErrors.length > 0 ? 1 : 0;
     }
 
-    console.log(section(`Memory doc: ${doc.id}`));
+    console.log(section(`Memory package: ${doc.id}`));
     console.log(keyValue('Title', doc.title));
     console.log(keyValue('Type', doc.type));
     console.log(keyValue('Status', doc.status));
@@ -417,7 +417,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
     if (loaded.parseErrors.length > 0) {
       console.log('');
-      console.log(warning(`${loaded.parseErrors.length} memory doc(s) failed to parse`));
+      console.log(warning(`${loaded.parseErrors.length} memory package(s) failed to parse`));
       for (const issue of loaded.parseErrors) {
         console.log(keyValue('Parse error', `${issue.filePath}: ${issue.error}`, 4));
       }
@@ -672,7 +672,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
       return 0;
     }
 
-    console.log(section(`Memory doc ${payload.overwritten ? 'updated' : 'created'}`));
+    console.log(section(`Memory package ${payload.overwritten ? 'updated' : 'created'}`));
     console.log(keyValue('ID', payload.id));
     console.log(keyValue('File', payload.filePath));
     console.log(keyValue('Type', payload.type));
@@ -685,7 +685,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
     console.log(keyValue('Updated', payload.updated));
 
     console.log('');
-    console.log(success(`Memory doc ${payload.overwritten ? 'updated' : 'created'}:`, payload.id));
+    console.log(success(`Memory package ${payload.overwritten ? 'updated' : 'created'}:`, payload.id));
     console.log(`  ${formatHint(`Edit ${payload.filePath} to add details`)}`);
     return 0;
   }
@@ -720,7 +720,7 @@ export async function memoryCommand(args: string[]): Promise<number> {
 
     if (!hasIssues) {
       console.log('');
-      console.log(success('All memory docs are valid'));
+      console.log(success('All memory packages are valid'));
       return 0;
     }
 

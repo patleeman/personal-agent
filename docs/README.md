@@ -47,7 +47,7 @@ These docs intentionally focus on product behavior and daily use. They are not p
 | Work interactively with the agent right now | conversation / live session | local runtime session state (optionally replicated via sync) |
 | Notice something that happened asynchronously later | inbox/activity | local runtime inbox state under `~/.local/state/personal-agent/pi-agent/state/inbox/**` |
 | Track long-running work, briefs, notes, files, blockers, and next steps across conversations | project | `~/.local/state/personal-agent/profiles/<profile>/agent/projects/<projectId>/PROJECT.yaml` + sibling project resources |
-| Store durable behavior, knowledge, or reusable workflows | profiles, AGENTS, memory docs, skills | shared repo defaults + profile resources under `~/.local/state/personal-agent/profiles/<profile>/agent/**` + global memory docs under `~/.local/state/personal-agent/profiles/_memory/*.md` |
+| Store durable behavior, knowledge, or reusable workflows | profiles, AGENTS, memory packages, skills | shared repo defaults + profile resources under `~/.local/state/personal-agent/profiles/<profile>/agent/**` + global memories under `~/.local/state/personal-agent/profiles/_memory/<memory-name>/MEMORY.md` |
 | Run automation on a schedule | scheduled task + daemon | `~/.local/state/personal-agent/profiles/<profile>/agent/tasks/*.task.md` + local daemon state |
 | Keep durable state in sync across machines | sync (`pa sync`) | git remote + `~/.local/state/personal-agent/sync/**` |
 | Talk to the same agent through Telegram | gateway | local gateway state + the active profile |
@@ -63,7 +63,7 @@ The most important model is:
 In practice:
 
 - use **projects** for ongoing tracked work
-- use **memory docs** for durable notes and references
+- use **memory packages** for durable knowledge hubs and references
 - use **skills** for reusable workflows
 - use **inbox activity** for asynchronous outcomes worth noticing later
 - use **scheduled tasks** for unattended automation

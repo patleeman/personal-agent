@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -13,6 +13,19 @@ function createTempDir(prefix: string): string {
   return dir;
 }
 
+function writeMemoryPackage(stateRoot: string, memoryName: string, description: string): void {
+  mkdirSync(join(stateRoot, 'profiles', '_memory', memoryName), { recursive: true });
+  writeFileSync(join(stateRoot, 'profiles', '_memory', memoryName, 'MEMORY.md'), `---
+name: ${memoryName}
+description: ${description}
+metadata:
+  updated: 2026-03-19
+---
+
+# ${memoryName}
+`);
+}
+
 afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   vi.restoreAllMocks();
@@ -24,7 +37,7 @@ afterEach(async () => {
 });
 
 describe('memory extension', () => {
-  it('injects active profile path targets and memory policy instructions', async () => {
+  it('injects active profile path targets, memory policy instructions, and available memories', async () => {
     const repoRoot = createTempDir('memory-repo-');
     const stateRoot = createTempDir('memory-state-');
 
@@ -34,6 +47,7 @@ describe('memory extension', () => {
 
     mkdirSync(join(stateRoot, 'profiles', 'shared', 'agent'), { recursive: true });
     mkdirSync(join(stateRoot, 'profiles', 'datadog', 'agent'), { recursive: true });
+    writeMemoryPackage(stateRoot, 'runpod', 'Provisioning notes for short-lived GPU pods.');
 
     let beforeAgentStartHandler: ((event: { prompt: string; systemPrompt: string }, ctx: { cwd: string }) => Promise<unknown>) | undefined;
 
@@ -63,7 +77,12 @@ describe('memory extension', () => {
     expect(result?.systemPrompt).toContain(`- Skills dir: ${join(stateRoot, 'profiles', 'datadog', 'agent', 'skills')}`);
     expect(result?.systemPrompt).toContain(`- Scheduled tasks dir: ${join(stateRoot, 'profiles', 'datadog', 'agent', 'tasks')}`);
     expect(result?.systemPrompt).toContain(`- Global memory dir: ${join(stateRoot, 'profiles', '_memory')}`);
-    expect(result?.systemPrompt).toContain('Use active-profile AGENTS.md + skills and the shared global memory docs as the durable memory system.');
+    expect(result?.systemPrompt).toContain(`- Memory package template: ${join(stateRoot, 'profiles', '_memory', '<memory-name>', 'MEMORY.md')}`);
+    expect(result?.systemPrompt).toContain('Use active-profile AGENTS.md + skills and the shared memory packages store as the durable memory system.');
+    expect(result?.systemPrompt).toContain('<available_memories>');
+    expect(result?.systemPrompt).toContain('<memory name="runpod"');
+    expect(result?.systemPrompt).toContain('Provisioning notes for short-lived GPU pods.');
+    expect(result?.systemPrompt).toContain(join(stateRoot, 'profiles', '_memory', 'runpod', 'MEMORY.md'));
     expect(result?.systemPrompt).not.toContain('pa memory list --profile datadog');
     expect(result?.message?.customType).toBe('memory-operations-reminder');
     expect(result?.message?.display).toBe(false);

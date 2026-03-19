@@ -27,7 +27,7 @@ Mutable profile state defaults to the state home:
 - `~/.local/state/personal-agent/profiles/<profile>/agent/AGENTS.md`
 - `~/.local/state/personal-agent/profiles/<profile>/agent/tasks/*.task.md`
 - `~/.local/state/personal-agent/profiles/<profile>/agent/projects/<projectId>/PROJECT.yaml`
-- shared global memory docs at `~/.local/state/personal-agent/profiles/_memory/*.md`
+- shared global memories at `~/.local/state/personal-agent/profiles/_memory/<memory-name>/MEMORY.md`
 
 ### Local runtime state
 
@@ -113,7 +113,7 @@ Use it for:
 
 - stable behavior rules in profile `AGENTS.md`
 - reusable workflows in profile `skills/`
-- shared durable notes, briefs, specs, and references in `profiles/_memory/*.md`
+- shared durable notes, briefs, specs, and references in `profiles/_memory/<memory-name>/MEMORY.md` plus package-local `references/`
 
 Memory is not the same as project state.
 
@@ -178,7 +178,7 @@ See [Sync Guide](./sync.md).
 | --- | --- | --- |
 | Work with the agent right now | conversation | best place for active interaction |
 | Track a real piece of ongoing work | project | durable plan, brief, notes, files, blockers, status, and linked conversations |
-| Save something the agent should know later | memory doc / skill / AGENTS | reusable durable knowledge |
+| Save something the agent should know later | memory package / skill / AGENTS | reusable durable knowledge |
 | Notice async outcomes later | inbox/activity | attention surface, not a transcript |
 | Run something on a schedule | scheduled task | unattended automation |
 | Keep durable state aligned across devices | sync (`pa sync`) | git-backed state sharing under `~/.local/state/personal-agent/sync/**` |
@@ -206,7 +206,7 @@ Portable durable files should not store conversation ids or session ids.
 That means:
 
 - do not put conversation ids in `PROJECT.yaml`
-- do not put conversation ids in memory doc frontmatter
+- do not put conversation ids in memory package frontmatter or metadata
 - do not key repo files by conversation id
 
 If you need conversation-local bindings, keep them in local runtime state.
@@ -225,7 +225,7 @@ A common workflow looks like this:
 
 1. Start in a conversation through the web UI, TUI, or Telegram.
 2. Create or reference a project if the work is ongoing.
-3. Use the active profile's AGENTS/skills plus shared memory docs to guide behavior and bring in durable knowledge.
+3. Use the active profile's AGENTS/skills plus shared memory packages to guide behavior and bring in durable knowledge.
 4. If the work should happen later, put it into a scheduled task.
 5. When asynchronous work finishes, the result shows up in the inbox.
 
