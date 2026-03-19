@@ -144,7 +144,7 @@ pa tasks logs <id> --tail 120
 ### Durable background runs
 
 ```bash
-pa runs start code-review -- pa -p "review this diff"
+pa runs start code-review -- pa tui -p "review this diff"
 pa runs list
 pa runs show <id>
 pa runs logs <id> --tail 120

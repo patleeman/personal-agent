@@ -16,16 +16,16 @@ Use:
 ```bash
 pa tui
 pa tui --profile assistant
-pa -p "hello"
-pa --profile assistant -p "hello"
+pa tui -p "hello"
+pa tui --profile assistant -p "hello"
 ```
 
-If `pa` sees an unknown top-level argument, it treats the command as Pi passthrough.
+Pi passthrough now requires the explicit `tui` subcommand. Unknown top-level commands or options are CLI errors.
 
 Example:
 
 ```bash
-pa -p "summarize this repo"
+pa tui -p "summarize this repo"
 ```
 
 ### 2. Manage durable features
@@ -64,7 +64,7 @@ pa daemon status
 ```bash
 pa ui --open
 pa tui
-pa -p "hello"
+pa tui -p "hello"
 pa inbox list
 pa memory list
 pa tasks list
@@ -233,7 +233,7 @@ Examples:
 pa runs list
 pa runs show <id>
 pa runs logs <id> --tail 120
-pa runs start code-review -- pa -p "review this diff"
+pa runs start code-review -- pa tui -p "review this diff"
 pa runs cancel <id>
 ```
 
@@ -305,7 +305,7 @@ If the managed web UI service is installed, `pa update` stages the next web UI r
 ### Run one prompt with the active profile
 
 ```bash
-pa -p "Summarize the latest inbox items"
+pa tui -p "Summarize the latest inbox items"
 ```
 
 ### Open the UI and inspect background state

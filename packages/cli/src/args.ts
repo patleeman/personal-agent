@@ -3,11 +3,11 @@ export interface ParsedCommand {
   args: string[];
 }
 
-const DEFAULT_KNOWN_COMMANDS = ['tui', 'profile', 'doctor', 'restart', 'update', 'daemon', 'tasks', 'inbox', 'runs', 'targets', 'gateway', 'ui'];
+const DEFAULT_KNOWN_COMMANDS = ['tui', 'install', 'profile', 'doctor', 'restart', 'update', 'daemon', 'tasks', 'inbox', 'ui', 'memory', 'runs', 'targets', 'sync', 'gateway'];
 
 export function parseCommand(argv: string[], knownCommands: string[] = DEFAULT_KNOWN_COMMANDS): ParsedCommand {
   if (argv.length === 0) {
-    return { command: 'tui', args: [] };
+    return { command: 'help', args: [] };
   }
 
   const [first, ...rest] = argv;
@@ -20,7 +20,7 @@ export function parseCommand(argv: string[], knownCommands: string[] = DEFAULT_K
     return { command: first, args: rest };
   }
 
-  return { command: 'tui', args: argv };
+  return { command: first, args: rest };
 }
 
 export function hasOption(args: string[], option: string): boolean {

@@ -4866,7 +4866,7 @@ Global options:
 
 Examples:
   pa
-  pa --plain -p "hello"
+  pa --plain tui -p "hello"
   pa tui --profile datadog -p "hello"
   pa tui -- --model kimi-coding/k2p5
   pa install https://github.com/davebcn87/pi-autoresearch
@@ -4894,7 +4894,7 @@ Examples:
   pa memory lint
   pa runs list
   pa runs show <id>
-  pa runs start code-review -- pa -p "review this diff"
+  pa runs start code-review -- pa tui -p "review this diff"
   pa runs cancel <id>
   pa targets list
   pa targets add gpu-box --label "GPU Box" --ssh gpu-box --default-cwd /srv/personal-agent --map /Users/patrickc.lee/personal/personal-agent=/srv/personal-agent
@@ -4956,7 +4956,8 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
     const isHelpRequest = firstArg === '--help' || firstArg === '-h' || firstArg === 'help';
 
     if (!isHelpRequest && !knownCommands.has(firstArg)) {
-      return runCommand(parsedFlags.argv);
+      console.error(uiError('CLI error', `Unknown top-level command or option: ${firstArg}. Use 'pa tui ...' to pass arguments to Pi.`));
+      return 1;
     }
 
     await program.parseAsync(parsedFlags.argv, { from: 'user' });

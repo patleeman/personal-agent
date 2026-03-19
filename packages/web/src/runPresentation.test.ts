@@ -361,7 +361,7 @@ describe('runPresentation', () => {
         createdAt: '2026-03-12T20:30:00.000Z',
         spec: {
           taskSlug: 'subagent',
-          shellCommand: 'pa -p "focused work"',
+          shellCommand: 'pa tui -p "focused work"',
         },
         source: {
           type: 'tool',

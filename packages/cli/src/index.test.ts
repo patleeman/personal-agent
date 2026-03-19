@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { parseCommand } from './args.js';
 
 describe('parseCommand', () => {
-  it('defaults to tui when no command is provided', () => {
-    expect(parseCommand([])).toEqual({ command: 'tui', args: [] });
+  it('defaults to help when no command is provided', () => {
+    expect(parseCommand([])).toEqual({ command: 'help', args: [] });
   });
 
   it('detects explicit commands', () => {
@@ -23,10 +23,10 @@ describe('parseCommand', () => {
     });
   });
 
-  it('treats unknown first token as tui args', () => {
+  it('returns unknown first token directly', () => {
     expect(parseCommand(['--profile', 'shared'])).toEqual({
-      command: 'tui',
-      args: ['--profile', 'shared'],
+      command: '--profile',
+      args: ['shared'],
     });
   });
 
