@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createLocalMirrorSession } from './remoteLiveSessions.js';
+import { createLocalMirrorSession, forkLocalMirrorSession } from './remoteLiveSessions.js';
 
 const originalEnv = process.env;
 const tempDirs: string[] = [];
@@ -33,5 +33,20 @@ describe('remote live sessions', () => {
     expect(result.id).toBeTruthy();
     expect(existsSync(result.sessionFile)).toBe(true);
     expect(readFileSync(result.sessionFile, 'utf-8')).toContain('/home/bits/project');
+  });
+
+  it('forks a local mirror session into a new remote cwd', async () => {
+    const original = await createLocalMirrorSession({ remoteCwd: '/home/bits/project' });
+    const forked = forkLocalMirrorSession({
+      sessionFile: original.sessionFile,
+      remoteCwd: '/srv/other-project',
+    });
+
+    expect(forked.id).not.toBe(original.id);
+    expect(existsSync(forked.sessionFile)).toBe(true);
+
+    const content = readFileSync(forked.sessionFile, 'utf-8');
+    expect(content).toContain('/srv/other-project');
+    expect(content.match(/"type":"session"/g)?.length).toBe(1);
   });
 });

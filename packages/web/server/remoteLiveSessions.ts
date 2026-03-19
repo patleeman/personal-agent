@@ -73,6 +73,17 @@ interface RemoteLiveEntry {
   idleTimer?: ReturnType<typeof setTimeout>;
 }
 
+export interface RemoteFolderEntry {
+  name: string;
+  path: string;
+}
+
+export interface RemoteFolderListing {
+  cwd: string;
+  parent: string | null;
+  entries: RemoteFolderEntry[];
+}
+
 export const remoteRegistry = new Map<string, RemoteLiveEntry>();
 
 function quoteShellArg(value: string): string {
@@ -123,13 +134,19 @@ function rewriteLocalSessionHeader(sessionFile: string, conversationId: string, 
     return;
   }
 
-  const rewritten = lines.map((line, index) => {
+  let sawSession = false;
+  const rewritten = lines.flatMap((line) => {
     const parsed = JSON.parse(line) as Record<string, unknown>;
-    if (index === 0 && parsed.type === 'session') {
-      return JSON.stringify({ ...parsed, id: conversationId, cwd });
+    if (parsed.type === 'session') {
+      if (sawSession) {
+        return [];
+      }
+
+      sawSession = true;
+      return [JSON.stringify({ ...parsed, id: conversationId, cwd })];
     }
 
-    return JSON.stringify(parsed);
+    return [JSON.stringify(parsed)];
   });
 
   writeFileSync(sessionFile, `${rewritten.join('\n')}\n`);
@@ -149,13 +166,19 @@ function rewriteLocalMirrorFromRemote(options: {
     return;
   }
 
-  const rewritten = lines.map((line, index) => {
+  let sawSession = false;
+  const rewritten = lines.flatMap((line) => {
     const parsed = JSON.parse(line) as Record<string, unknown>;
-    if (index === 0 && parsed.type === 'session') {
-      return JSON.stringify({ ...parsed, id: options.conversationId, cwd: options.remoteCwd });
+    if (parsed.type === 'session') {
+      if (sawSession) {
+        return [];
+      }
+
+      sawSession = true;
+      return [JSON.stringify({ ...parsed, id: options.conversationId, cwd: options.remoteCwd })];
     }
 
-    return JSON.stringify(parsed);
+    return [JSON.stringify(parsed)];
   });
 
   writeFileSync(options.localSessionFile, `${rewritten.join('\n')}\n`);
@@ -202,6 +225,19 @@ function sshArgs(target: ExecutionTargetRecord, remoteCommand: string): string[]
 
 async function runSsh(target: ExecutionTargetRecord, remoteCommand: string, input?: string): Promise<{ stdout: string; stderr: string }> {
   return await runProcess(target.sshCommand || 'ssh', sshArgs(target, remoteCommand), { input });
+}
+
+async function runRemoteNodeScript(target: ExecutionTargetRecord, script: string, env: Record<string, string>): Promise<string> {
+  const commandPrefix = target.commandPrefix ? `${target.commandPrefix} && ` : '';
+  const envAssignments = Object.entries(env)
+    .map(([key, value]) => `${key}=${quoteShellArg(value)}`)
+    .join(' ');
+  const command = [
+    'set -euo pipefail',
+    `${commandPrefix}${envAssignments} exec node`.trim(),
+  ].join(' && ');
+  const result = await runSsh(target, command, script);
+  return result.stdout;
 }
 
 async function uploadFile(target: ExecutionTargetRecord, localPath: string, remotePath: string): Promise<void> {
@@ -631,6 +667,95 @@ async function startRemoteEntry(options: {
   } finally {
     await bootstrapCleanup?.();
   }
+}
+
+export async function browseRemoteTargetDirectory(options: {
+  targetId: string;
+  cwd?: string;
+  baseCwd?: string;
+}): Promise<RemoteFolderListing> {
+  const target = getExecutionTarget({ targetId: options.targetId });
+  if (!target) {
+    throw new Error(`Execution target ${options.targetId} not found.`);
+  }
+
+  const stdout = await runRemoteNodeScript(target, `
+const fs = require('node:fs');
+const path = require('node:path');
+
+function normalize(input) {
+  return typeof input === 'string' ? input.trim() : '';
+}
+
+function expandHome(input) {
+  if (input === '~') {
+    return process.env.HOME || '/';
+  }
+  if (input.startsWith('~/')) {
+    return path.posix.resolve(process.env.HOME || '/', input.slice(2));
+  }
+  return input;
+}
+
+const requested = normalize(process.env.TARGET_DIR);
+const base = normalize(process.env.BASE_DIR) || process.env.HOME || '/';
+const selected = requested ? expandHome(requested) : base;
+const resolved = requested && !selected.startsWith('/')
+  ? path.posix.resolve(base, selected)
+  : path.posix.resolve(selected);
+if (!fs.existsSync(resolved)) {
+  throw new Error('Directory does not exist: ' + resolved);
+}
+const stat = fs.statSync(resolved);
+if (!stat.isDirectory()) {
+  throw new Error('Not a directory: ' + resolved);
+}
+const cwd = fs.realpathSync(resolved);
+const root = path.parse(cwd).root;
+const parent = cwd === root ? null : path.posix.dirname(cwd);
+const entries = fs.readdirSync(cwd, { withFileTypes: true })
+  .map((entry) => ({
+    name: entry.name,
+    path: path.posix.join(cwd, entry.name),
+    isDirectory: (() => {
+      try {
+        return fs.statSync(path.posix.join(cwd, entry.name)).isDirectory();
+      } catch {
+        return false;
+      }
+    })(),
+  }))
+  .filter((entry) => entry.isDirectory)
+  .sort((left, right) => left.name.localeCompare(right.name))
+  .slice(0, 200)
+  .map(({ name, path }) => ({ name, path }));
+process.stdout.write(JSON.stringify({ cwd, parent, entries }));
+`, {
+    TARGET_DIR: options.cwd?.trim() ?? '',
+    BASE_DIR: options.baseCwd?.trim() ?? target.defaultRemoteCwd?.trim() ?? '',
+  });
+
+  return JSON.parse(stdout) as RemoteFolderListing;
+}
+
+export function forkLocalMirrorSession(options: {
+  sessionFile: string;
+  remoteCwd: string;
+}): { id: string; sessionFile: string } {
+  const sessionManager = SessionManager.forkFrom(
+    options.sessionFile,
+    options.remoteCwd,
+    resolvePersistentSessionDir(options.remoteCwd),
+  );
+  patchSessionManagerPersistence(sessionManager);
+  ensureSessionFileExists(sessionManager);
+  const sessionFile = readRequiredString(sessionManager.getSessionFile(), 'forked local mirror sessionFile');
+  const conversationId = sessionManager.getSessionId();
+  rewriteLocalSessionHeader(sessionFile, conversationId, options.remoteCwd);
+  return {
+    id: conversationId,
+    sessionFile,
+  };
 }
 
 export async function createRemoteLiveSession(options: {
