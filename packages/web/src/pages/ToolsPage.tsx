@@ -757,7 +757,7 @@ export function ToolsPage() {
                 <div className="space-y-1 border-t border-border-subtle pt-6">
                   <h2 className="text-[15px] font-medium text-primary">MCP</h2>
                   <p className="ui-card-meta max-w-2xl">
-                    Browse configured MCP servers from your local MCP config. This inspection surface now uses pa’s native MCP client instead of shelling out to mcp-cli. Inspecting a server or tool may still trigger OAuth in the browser on first use.
+                    Browse configured MCP servers from your local MCP config. This inspection surface uses pa’s native MCP client. Inspecting a server or tool may still trigger OAuth in the browser on first use.
                   </p>
                 </div>
 

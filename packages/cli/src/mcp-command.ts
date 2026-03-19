@@ -21,8 +21,8 @@ function printMcpHelp(): void {
   console.log(`Usage: pa mcp [list|info|grep|call|auth|logout|help] [args...]
 
 Commands:
-  list [-d|--with-descriptions] [-c|--config <path>] [--json]
-                                  List configured MCP servers and tools
+  list [--probe] [-d|--with-descriptions] [-c|--config <path>] [--json]
+                                  List configured MCP servers; use --probe to fetch tools
   info <server> [tool] [-c|--config <path>] [--json]
                                   Inspect one server or tool
   grep <pattern> [-d|--with-descriptions] [-c|--config <path>] [--json]
@@ -37,7 +37,9 @@ Commands:
 
 Examples:
   pa mcp
-  pa mcp list -d
+  pa mcp list
+  pa mcp list --probe
+  pa mcp list --probe -d
   pa mcp info atlassian
   pa mcp info atlassian getConfluencePage
   pa mcp info atlassian/getConfluencePage
@@ -62,11 +64,13 @@ function parseCommonOptions(args: string[]): {
   configPath?: string;
   json: boolean;
   withDescriptions: boolean;
+  probe: boolean;
 } {
   const positional: string[] = [];
   let configPath: string | undefined;
   let json = false;
   let withDescriptions = false;
+  let probe = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index] as string;
@@ -78,6 +82,11 @@ function parseCommonOptions(args: string[]): {
 
     if (arg === '--with-descriptions' || arg === '-d') {
       withDescriptions = true;
+      continue;
+    }
+
+    if (arg === '--probe') {
+      probe = true;
       continue;
     }
 
@@ -95,6 +104,7 @@ function parseCommonOptions(args: string[]): {
     configPath,
     json,
     withDescriptions,
+    probe,
   };
 }
 
@@ -178,6 +188,7 @@ export async function mcpCommand(args: string[]): Promise<number> {
     const catalog = await listMcpCatalog({
       configPath: options.configPath,
       withDescriptions: options.withDescriptions,
+      probe: options.probe || options.withDescriptions,
       log: (message) => console.error(message),
     });
 
@@ -188,6 +199,12 @@ export async function mcpCommand(args: string[]): Promise<number> {
 
     console.log(section('MCP servers'));
     printConfiguredServers(catalog.config.path, catalog.config.servers);
+
+    if (!catalog.probed) {
+      console.log('');
+      console.log(dim('Use pa mcp list --probe or pa mcp info <server> to fetch tools.'));
+      return 0;
+    }
 
     for (const server of catalog.servers) {
       console.log('');

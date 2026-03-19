@@ -122,9 +122,11 @@ import {
 } from './liveSessions.js';
 import {
   abortRemoteLiveSession,
+  browseRemoteTargetDirectory,
   clearRemoteConversationBindingForConversation,
   createLocalMirrorSession,
   createRemoteLiveSession,
+  forkLocalMirrorSession,
   getRemoteLiveSessionMeta,
   isRemoteLiveSession,
   listRemoteLiveSessions,
@@ -5744,14 +5746,11 @@ app.post('/api/conversations/:id/cwd', async (req, res) => {
   try {
     const { cwd: requestedCwd } = req.body as { cwd?: string };
     const conversationId = req.params.id;
+    const profile = getCurrentProfile();
     const remoteBinding = readRemoteConversationBindingForConversation({
-      profile: getCurrentProfile(),
+      profile,
       conversationId,
     });
-    if (remoteBinding) {
-      res.status(409).json({ error: 'Changing the working directory for remote conversations is not supported yet.' });
-      return;
-    }
 
     const liveEntry = liveRegistry.get(conversationId);
     const sessionDetail = readSessionBlocks(conversationId);
@@ -5760,6 +5759,65 @@ app.post('/api/conversations/:id/cwd', async (req, res) => {
 
     if (!currentCwd || !sourceSessionFile) {
       res.status(404).json({ error: 'Conversation not found.' });
+      return;
+    }
+
+    if (remoteBinding) {
+      const remoteLive = getRemoteLiveSessionMeta(conversationId);
+      if (remoteLive?.isStreaming) {
+        res.status(409).json({ error: 'Stop the current response before changing the working directory.' });
+        return;
+      }
+
+      const resolved = await browseRemoteTargetDirectory({
+        targetId: remoteBinding.targetId,
+        cwd: requestedCwd,
+        baseCwd: currentCwd,
+      });
+
+      if (resolved.cwd === currentCwd) {
+        res.json({ id: conversationId, sessionFile: sourceSessionFile, cwd: currentCwd, changed: false });
+        return;
+      }
+
+      const result = forkLocalMirrorSession({
+        sessionFile: sourceSessionFile,
+        remoteCwd: resolved.cwd,
+      });
+
+      const relatedProjectIds = getConversationProjectLink({
+        profile,
+        conversationId,
+      })?.relatedProjectIds ?? [];
+
+      if (relatedProjectIds.length > 0) {
+        setConversationProjectLinks({
+          profile,
+          conversationId: result.id,
+          relatedProjectIds,
+        });
+      }
+
+      setConversationExecutionTarget({
+        profile,
+        conversationId: result.id,
+        targetId: remoteBinding.targetId,
+      });
+      await createRemoteLiveSession({
+        profile,
+        targetId: remoteBinding.targetId,
+        remoteCwd: resolved.cwd,
+        localSessionFile: result.sessionFile,
+        conversationId: result.id,
+        bootstrapLocalSessionFile: result.sessionFile,
+      });
+
+      if (remoteLive) {
+        await stopRemoteLiveSession(conversationId).catch(() => undefined);
+      }
+
+      invalidateAppTopics('projects', 'sessions');
+      res.json({ id: result.id, sessionFile: result.sessionFile, cwd: resolved.cwd, changed: true });
       return;
     }
 
@@ -5794,7 +5852,6 @@ app.post('/api/conversations/:id/cwd', async (req, res) => {
       extensionFactories: buildLiveSessionExtensionFactories(),
     });
 
-    const profile = getCurrentProfile();
     const relatedProjectIds = getConversationProjectLink({
       profile,
       conversationId,
@@ -6995,6 +7052,30 @@ app.post('/api/projects/:id/source', (req, res) => {
 });
 
 // ── Shell run ─────────────────────────────────────────────────────────────────
+
+app.post('/api/execution-targets/:targetId/folders', async (req, res) => {
+  try {
+    const { cwd, baseCwd } = req.body as { cwd?: string; baseCwd?: string };
+    const result = await browseRemoteTargetDirectory({
+      targetId: req.params.targetId,
+      cwd,
+      baseCwd,
+    });
+    res.json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.includes('not found')
+      ? 404
+      : message.includes('Directory does not exist') || message.includes('Not a directory') || message.endsWith('required')
+        ? 400
+        : 500;
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(status).json({ error: message });
+  }
+});
 
 app.post('/api/folder-picker', (req, res) => {
   try {

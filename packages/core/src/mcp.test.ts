@@ -7,6 +7,7 @@ import {
   callMcpTool,
   inspectMcpServer,
   inspectMcpTool,
+  listMcpCatalog,
   readMcpConfig,
   resolveMcpConfig,
 } from './mcp.js';
@@ -77,6 +78,22 @@ describe('mcp config helpers', () => {
     const result = resolveMcpConfig({ cwd, configPath: './config/servers.json' });
     expect(result.path).toBe(join(cwd, 'config', 'servers.json'));
     expect(result.exists).toBe(true);
+  });
+
+  it('lists configured servers without probing by default', async () => {
+    const cwd = makeTempDir('pa-mcp-list');
+    writeFileSync(join(cwd, 'mcp_servers.json'), JSON.stringify({
+      mcpServers: {
+        broken: {
+          command: '/definitely/not/a/real/command',
+          args: [],
+        },
+      },
+    }, null, 2));
+
+    const catalog = await listMcpCatalog({ cwd });
+    expect(catalog.probed).toBe(false);
+    expect(catalog.servers).toEqual([{ name: 'broken' }]);
   });
 });
 
