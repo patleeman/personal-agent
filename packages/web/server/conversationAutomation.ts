@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { getStateRoot, validateConversationId } from '@personal-agent/core';
+import { normalizeConversationAutomationFilter } from './conversationAutomationFilter.js';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 const ITEM_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
@@ -256,10 +257,11 @@ function normalizeTemplateGate(value: unknown, fallbackNow: string): Conversatio
 
   const id = readNonEmptyString(value.id) || createConversationAutomationGateId(new Date(fallbackNow));
   validateItemId(id);
-  const prompt = readNonEmptyString(value.prompt);
-  if (!prompt) {
+  const rawPrompt = readNonEmptyString(value.prompt);
+  if (!rawPrompt) {
     throw new Error(`Automation gate ${id} is missing prompt.`);
   }
+  const prompt = normalizeConversationAutomationFilter(rawPrompt);
 
   const skills = Array.isArray(value.skills)
     ? value.skills.map((skill) => normalizeTemplateSkillStep(skill, fallbackNow))
@@ -616,10 +618,11 @@ export function createConversationAutomationGate(input: {
   now?: string;
 }): ConversationAutomationGate {
   const createdAt = normalizeIsoTimestamp(input.now, new Date().toISOString());
-  const prompt = readNonEmptyString(input.prompt);
-  if (!prompt) {
+  const rawPrompt = readNonEmptyString(input.prompt);
+  if (!rawPrompt) {
     throw new Error('prompt is required.');
   }
+  const prompt = normalizeConversationAutomationFilter(rawPrompt);
 
   const id = readNonEmptyString(input.id) || createConversationAutomationGateId(new Date(createdAt));
   validateItemId(id);

@@ -33,7 +33,11 @@ import {
   type ConversationAutomationGate,
   type ConversationAutomationSkillStep,
 } from './conversationAutomation.js';
-import { runConversationAutomationJudge } from './conversationAutomationJudge.js';
+import {
+  evaluateConversationAutomationFilter,
+  mayMatchConversationAutomationTrigger,
+  type ConversationAutomationFilterTrigger,
+} from './conversationAutomationFilter.js';
 import { syncWebLiveConversationRun, type WebLiveConversationRunState } from './conversationRuns.js';
 import {
   buildDisplayBlocksFromEntries,
@@ -789,6 +793,33 @@ function resolveConversationAutomationProfile(): string {
   return resolveLiveSessionProfile() ?? 'shared';
 }
 
+export async function previewConversationAutomationMatch(
+  sessionId: string,
+  query: string,
+  trigger: ConversationAutomationFilterTrigger,
+): Promise<Awaited<ReturnType<typeof evaluateConversationAutomationFilter>> | null> {
+  const entry = registry.get(sessionId);
+  if (!entry) {
+    return null;
+  }
+
+  if (!mayMatchConversationAutomationTrigger(query, trigger)) {
+    return {
+      pass: false,
+      reason: `Waiting for event ${trigger}.`,
+      confidence: null,
+    };
+  }
+
+  return evaluateConversationAutomationFilter(query, {
+    messages: getSessionMessages(entry.session),
+    toolNames: new Set(entry.session.getActiveToolNames()),
+    modelRegistry: entry.session.modelRegistry,
+    settingsFile: SETTINGS_FILE,
+    trigger,
+  });
+}
+
 function saveConversationAutomation(entry: LiveEntry, document: ConversationAutomationDocument): ConversationAutomationDocument {
   const saved = writeConversationAutomationState({
     profile: resolveConversationAutomationProfile(),
@@ -1009,6 +1040,10 @@ export async function kickConversationAutomation(
         break;
       }
 
+      if (!mayMatchConversationAutomationTrigger(nextGate.prompt, trigger)) {
+        break;
+      }
+
       const startedAt = new Date().toISOString();
       clearConversationAutomationGateRuntime(nextGate);
       nextGate.status = 'running';
@@ -1020,11 +1055,12 @@ export async function kickConversationAutomation(
       document = saveConversationAutomation(entry, document);
 
       try {
-        const result = await runConversationAutomationJudge({
-          prompt: nextGate.prompt,
+        const result = await evaluateConversationAutomationFilter(nextGate.prompt, {
           messages: getSessionMessages(entry.session),
+          toolNames: new Set(entry.session.getActiveToolNames()),
           modelRegistry: entry.session.modelRegistry,
           settingsFile: SETTINGS_FILE,
+          trigger,
         });
 
         const completedAt = new Date().toISOString();

@@ -47,6 +47,80 @@ afterEach(() => {
 });
 
 describe('conversation automation live-session integration', () => {
+  it('waits for the configured lifecycle event before running a gate', async () => {
+    const stateRoot = createTempDir('pa-live-automation-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
+
+    const gate = createConversationAutomationGate({
+      id: 'gate-1',
+      label: 'Only on manual trigger',
+      prompt: 'event:manual AND prompt:"Pass when manually triggered."',
+      skills: [],
+      now: '2026-03-18T12:00:00.000Z',
+    });
+
+    writeConversationAutomationState({
+      profile: 'datadog',
+      stateRoot,
+      document: {
+        version: 2,
+        conversationId: 'conv-123',
+        updatedAt: '2026-03-18T12:00:00.000Z',
+        enabled: true,
+        gates: [gate],
+      },
+    });
+
+    setLiveEntry('conv-123', {
+      title: 'Automation conversation',
+      session: {
+        state: {
+          messages: [{ role: 'assistant', content: [{ type: 'text', text: 'Pass when manually triggered.' }] }],
+          streamMessage: null,
+        },
+        agent: {
+          state: {
+            messages: [{ role: 'assistant', content: [{ type: 'text', text: 'Pass when manually triggered.' }] }],
+          },
+        },
+        getActiveToolNames: () => [],
+        getContextUsage: () => null,
+        isStreaming: false,
+        prompt: vi.fn(async () => undefined),
+        steer: vi.fn(async () => undefined),
+        followUp: vi.fn(async () => undefined),
+        modelRegistry: {
+          getAvailable: () => [
+            {
+              id: 'gpt-5-mini',
+              provider: 'openai',
+              name: 'GPT-5 Mini',
+              contextWindow: 128000,
+              async generateText() {
+                return JSON.stringify({ pass: true, reason: 'ready', confidence: 0.9 });
+              },
+            },
+          ],
+          getApiKey: vi.fn(),
+        },
+      },
+    });
+
+    await kickConversationAutomation('conv-123', 'turn_end');
+
+    const updated = getConversationAutomationState({
+      profile: 'datadog',
+      stateRoot,
+      conversationId: 'conv-123',
+    });
+    expect(updated.gates[0]).toMatchObject({
+      id: 'gate-1',
+      status: 'pending',
+    });
+    expect(updated.gates[0]).not.toHaveProperty('resultReason');
+  });
+
   it('starts the next nested skill as an in-thread follow-up once its gate is running', async () => {
     const stateRoot = createTempDir('pa-live-automation-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;

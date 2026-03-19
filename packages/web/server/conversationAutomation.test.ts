@@ -72,7 +72,7 @@ describe('conversationAutomation state', () => {
       gates: [
         expect.objectContaining({
           label: 'Ready to checkpoint?',
-          prompt: 'Pass only when the latest assistant message requests a checkpoint.',
+          prompt: 'prompt:"Pass only when the latest assistant message requests a checkpoint."',
           status: 'pending',
           skills: [
             expect.objectContaining({
@@ -183,7 +183,7 @@ describe('conversationAutomation state', () => {
         gates: [{
           id: 'gate-default-1',
           label: 'Ready to checkpoint?',
-          prompt: 'Pass only when the latest assistant message requests a checkpoint.',
+          prompt: 'prompt:"Pass only when the latest assistant message requests a checkpoint."',
           skills: [{
             id: 'skill-default-1',
             label: 'workflow-checkpoint',
@@ -305,7 +305,7 @@ describe('conversationAutomation state', () => {
       expect.objectContaining({
         id: 'gate-1',
         label: 'Ready for review?',
-        prompt: 'Pass only when the output is ready for review.',
+        prompt: 'prompt:"Pass only when the output is ready for review."',
         status: 'pending',
         createdAt: '2026-03-18T12:00:00.000Z',
         updatedAt: '2026-03-18T12:04:00.000Z',
