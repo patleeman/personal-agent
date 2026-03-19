@@ -137,13 +137,6 @@ export function AutomationPage() {
 
         {!loading && !error && data && (
           <div className="space-y-5 pb-5">
-            <div className="space-y-2">
-              <p className="ui-section-label">Reusable presets</p>
-              <p className="ui-card-meta max-w-3xl">
-                Build automation templates once, add one or more of them to the default stack for new conversations, and reuse them without rebuilding the workflow each time.
-              </p>
-            </div>
-
             <div className="flex flex-wrap items-center gap-3">
               <input
                 value={query}
@@ -151,22 +144,15 @@ export function AutomationPage() {
                 placeholder="Filter presets by name, gate, or skill"
                 className="w-full max-w-xl rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60"
               />
-              <ToolbarButton onClick={() => { navigate('/settings'); }}>Judge defaults</ToolbarButton>
+              <ToolbarButton onClick={() => { navigate('/settings'); }}>Judge prompt</ToolbarButton>
             </div>
 
-            {creatingNew && (
-              <div className="rounded-xl border border-accent/25 bg-accent/10 px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <Pill tone="accent">new preset</Pill>
-                  <span className="text-[12px] text-secondary">The editor is open in the right pane.</span>
-                </div>
-              </div>
-            )}
+            {creatingNew && <p className="text-[12px] text-dim">Editing new preset in the right pane.</p>}
 
             {presets.length === 0 ? (
               <EmptyState
                 title="No automation presets yet"
-                body="Create a reusable preset in the right pane, then optionally set it as the default for new conversations."
+                body="Create a preset in the right pane."
                 action={<ToolbarButton onClick={() => setSelection(null, true)}>Create preset</ToolbarButton>}
               />
             ) : filteredPresets.length === 0 ? (
@@ -206,9 +192,6 @@ export function AutomationPage() {
               <div className="rounded-xl border border-border-subtle bg-surface/70 px-4 py-3">
                 <p className="ui-section-label">Selected preset</p>
                 <p className="mt-1 text-[13px] font-medium text-primary">{selectedPreset.name}</p>
-                <p className="mt-1 text-[12px] text-secondary">
-                  Open in the right pane to edit gates, nested skills, default status, and reusable behavior.
-                </p>
               </div>
             )}
           </div>

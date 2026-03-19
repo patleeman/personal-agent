@@ -930,6 +930,7 @@ export interface ConversationAutomationGate {
   completedAt?: string;
   resultReason?: string;
   resultConfidence?: number;
+  matchesCurrentConditions?: boolean;
   skills: ConversationAutomationSkillStep[];
 }
 
@@ -960,6 +961,29 @@ export interface ConversationAutomationSkillInfo {
   source: string;
 }
 
+export interface ConversationAutomationFilterHelpField {
+  key: 'tool' | 'event' | 'prompt' | 'judge';
+  description: string;
+  valueHint: string;
+  values?: string[];
+}
+
+export interface ConversationAutomationFilterHelpTool {
+  name: string;
+  description: string;
+}
+
+export interface ConversationAutomationFilterHelp {
+  fields: ConversationAutomationFilterHelpField[];
+  examples: string[];
+  availableTools: ConversationAutomationFilterHelpTool[];
+}
+
+export interface ConversationAutomationFilterValidationResult {
+  valid: boolean;
+  error: string | null;
+}
+
 export interface ConversationAutomationResponse {
   conversationId: string;
   live: boolean;
@@ -974,6 +998,7 @@ export interface ConversationAutomationWorkspaceState {
   presetLibrary: ConversationAutomationWorkflowPresetLibraryState;
   skills: ConversationAutomationSkillInfo[];
   judge: ConversationAutomationJudgeSettingsState;
+  filterHelp: ConversationAutomationFilterHelp;
 }
 
 export interface ProfileState {
