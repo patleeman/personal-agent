@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, watch, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, watch, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1493,7 +1493,7 @@ function saveDistilledConversationMemory(options: SaveDistilledConversationMemor
   const area = options.relatedProjectIds.length === 1
     ? normalizeDistilledTag(options.relatedProjectIds[0] ?? '') ?? undefined
     : undefined;
-  const loaded = loadMemoryDocs({ profilesRoot: getProfilesRoot() });
+  const loaded = loadMemoryDocs({ profilesRoot: getProfilesRoot(), includeReferences: true });
   const saved = saveCuratedDistilledConversationMemory({
     memoryDir,
     existingDocs: loaded.docs,
@@ -4179,9 +4179,32 @@ app.get('/api/memories/:memoryId', (req, res) => {
       return;
     }
 
+    const loaded = loadMemoryDocs({ profilesRoot: getProfilesRoot(), includeReferences: true });
+    const references = loaded.docs
+      .filter((doc) => doc.packageId === memory.id && doc.filePath !== memory.path)
+      .map((doc) => ({
+        id: doc.id,
+        title: doc.title,
+        summary: doc.summary,
+        tags: doc.tags,
+        path: doc.filePath,
+        type: doc.type,
+        status: doc.status,
+        area: doc.area,
+        role: doc.role,
+        parent: doc.parent,
+        related: doc.related,
+        updated: doc.updated,
+        recentSessionCount: 0,
+        lastUsedAt: null,
+        usedInLastSession: false,
+      } satisfies MemoryDocItem))
+      .sort((left, right) => (right.updated ?? '').localeCompare(left.updated ?? '') || left.title.localeCompare(right.title));
+
     res.json({
       memory,
       content: readFileSync(memory.path, 'utf-8'),
+      references,
     });
   } catch (err) {
     logError('request handler error', {
@@ -4208,10 +4231,32 @@ app.post('/api/memories/:memoryId', (req, res) => {
 
     writeFileSync(memory.path, content, 'utf-8');
     const refreshed = listMemoryDocs({ includeSearchText: true }).find((entry) => entry.path === memory.path) ?? memory;
+    const loaded = loadMemoryDocs({ profilesRoot: getProfilesRoot(), includeReferences: true });
+    const references = loaded.docs
+      .filter((doc) => doc.packageId === refreshed.id && doc.filePath !== refreshed.path)
+      .map((doc) => ({
+        id: doc.id,
+        title: doc.title,
+        summary: doc.summary,
+        tags: doc.tags,
+        path: doc.filePath,
+        type: doc.type,
+        status: doc.status,
+        area: doc.area,
+        role: doc.role,
+        parent: doc.parent,
+        related: doc.related,
+        updated: doc.updated,
+        recentSessionCount: 0,
+        lastUsedAt: null,
+        usedInLastSession: false,
+      } satisfies MemoryDocItem))
+      .sort((left, right) => (right.updated ?? '').localeCompare(left.updated ?? '') || left.title.localeCompare(right.title));
 
     res.json({
       memory: refreshed,
       content,
+      references,
     });
   } catch (err) {
     logError('request handler error', {
@@ -4238,7 +4283,7 @@ app.post('/api/memories/:memoryId/merge', (req, res) => {
       return;
     }
 
-    const loaded = loadMemoryDocs({ profilesRoot: getProfilesRoot() });
+    const loaded = loadMemoryDocs({ profilesRoot: getProfilesRoot(), includeReferences: true });
     const captureDoc = loaded.docs.find((doc) => doc.id === sourceMemoryId);
     if (!captureDoc) {
       res.status(404).json({ error: `Memory @${sourceMemoryId} not found.` });
@@ -4292,7 +4337,7 @@ app.delete('/api/memories/:memoryId', (req, res) => {
       return;
     }
 
-    unlinkSync(memory.path);
+    rmSync(dirname(memory.path), { recursive: true, force: true });
     res.json({ deleted: true, memoryId: memory.id });
   } catch (err) {
     logError('request handler error', {
@@ -4528,15 +4573,15 @@ app.post('/api/memories/:memoryId/start', async (req, res) => {
     const profile = getCurrentProfile();
     const memoryId = req.params.memoryId;
     const memory = listMemoryDocs().find((entry) => entry.id === memoryId);
+    const loadedMemory = loadMemoryDocs({ profilesRoot: getProfilesRoot() }).docs.find((entry) => entry.id === memoryId);
 
-    if (!memory) {
+    if (!memory || !loadedMemory) {
       res.status(404).json({ error: 'Memory not found.' });
       return;
     }
 
-    const frontmatter = parseFrontmatter(memory.path);
-    const sourceCwd = typeof frontmatter.source_cwd === 'string'
-      ? frontmatter.source_cwd.trim()
+    const sourceCwd = typeof loadedMemory.metadata.source_cwd === 'string'
+      ? loadedMemory.metadata.source_cwd.trim()
       : '';
 
     const defaultWebCwd = getDefaultWebCwd();
@@ -4571,8 +4616,8 @@ app.post('/api/memories/:memoryId/start', async (req, res) => {
       extensionFactories: buildLiveSessionExtensionFactories(),
     });
 
-    const requestedRelatedProjectIds = Array.isArray(frontmatter.related_project_ids)
-      ? frontmatter.related_project_ids.filter((projectId): projectId is string => typeof projectId === 'string' && projectId.trim().length > 0)
+    const requestedRelatedProjectIds = Array.isArray(loadedMemory.metadata.related_project_ids)
+      ? loadedMemory.metadata.related_project_ids.filter((projectId): projectId is string => typeof projectId === 'string' && projectId.trim().length > 0)
       : [];
     const availableProjectIds = new Set(listProjectIds({ repoRoot: REPO_ROOT, profile }));
     const relatedProjectIds = requestedRelatedProjectIds.filter((projectId) => availableProjectIds.has(projectId));
@@ -6881,12 +6926,13 @@ function normalizeMemoryPath(value: unknown): string | null {
   return normalize(trimmed.startsWith('/') ? trimmed : join(REPO_ROOT, trimmed));
 }
 
-function extractMemorySearchText(filePath: string, maxCharacters = 16_000): string {
+function extractMemorySearchText(filePaths: string[], maxCharacters = 16_000): string {
   try {
-    const raw = readFileSync(filePath, 'utf-8');
-    const body = raw.replace(/^---\n[\s\S]*?\n---\n?/, '');
+    const combined = filePaths
+      .map((filePath) => readFileSync(filePath, 'utf-8').replace(/^---\n[\s\S]*?\n---\n?/, ''))
+      .join('\n\n');
 
-    return body
+    return combined
       .replace(/```[\s\S]*?```/g, ' ')
       .replace(/`([^`]+)`/g, '$1')
       .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
@@ -6931,10 +6977,15 @@ function listMemoryDocs(options: { includeSearchText?: boolean } = {}): MemoryDo
     }
   };
 
-  const memoryDocs = loaded.docs.map((doc) => {
-    const searchText = includeSearchText ? extractMemorySearchText(doc.filePath) : '';
+  const memoryDocs = loaded.docs
+    .filter((doc) => {
+      const normalizedRole = doc.role?.trim().toLowerCase();
+      return normalizedRole !== 'canonical' && normalizedRole !== 'capture';
+    })
+    .map((doc) => {
+      const searchText = includeSearchText ? extractMemorySearchText([doc.filePath, ...doc.referencePaths]) : '';
 
-    return {
+      return {
       id: doc.id,
       title: doc.title,
       summary: doc.summary,
