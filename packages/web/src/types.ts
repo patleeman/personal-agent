@@ -879,6 +879,15 @@ export interface ConversationExecutionState {
   target: ExecutionTargetSummary | null;
 }
 
+export interface RemoteConversationConnectionState {
+  conversationId: string;
+  targetId: string | null;
+  connected: boolean;
+  state: 'local' | 'idle' | 'installing' | 'connecting' | 'connected' | 'error';
+  message: string | null;
+  updatedAt: string | null;
+}
+
 export interface AppStatus {
   profile: string;
   repoRoot: string;

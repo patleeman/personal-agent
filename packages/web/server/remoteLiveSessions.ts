@@ -84,10 +84,25 @@ export interface RemoteFolderListing {
   entries: RemoteFolderEntry[];
 }
 
+export interface RemoteConversationConnectionState {
+  conversationId: string;
+  targetId: string | null;
+  connected: boolean;
+  state: 'local' | 'idle' | 'installing' | 'connecting' | 'connected' | 'error';
+  message: string | null;
+  updatedAt: string | null;
+}
+
 export const remoteRegistry = new Map<string, RemoteLiveEntry>();
+const remoteConnectionStates = new Map<string, RemoteConversationConnectionState>();
 
 function quoteShellArg(value: string): string {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
+function setRemoteConnectionState(state: RemoteConversationConnectionState): RemoteConversationConnectionState {
+  remoteConnectionStates.set(state.conversationId, state);
+  return state;
 }
 
 function readRequiredString(value: unknown, label: string): string {
@@ -502,6 +517,32 @@ async function syncMirrorFromRemote(entry: RemoteLiveEntry): Promise<void> {
   entry.title = detail?.meta.title;
 }
 
+export async function syncRemoteConversationMirror(options: { profile: string; conversationId: string }): Promise<void> {
+  const liveEntry = remoteRegistry.get(options.conversationId);
+  if (liveEntry) {
+    await syncMirrorFromRemote(liveEntry);
+    return;
+  }
+
+  const binding = getRemoteConversationBinding(options);
+  if (!binding?.remoteSessionFile) {
+    return;
+  }
+
+  const target = getExecutionTarget({ targetId: binding.targetId });
+  if (!target) {
+    throw new Error(`Execution target ${binding.targetId} not found.`);
+  }
+
+  const remoteContent = await downloadRemoteFile(target, binding.remoteSessionFile);
+  rewriteLocalMirrorFromRemote({
+    localSessionFile: binding.localSessionFile,
+    conversationId: binding.conversationId,
+    remoteCwd: binding.remoteCwd,
+    remoteContent,
+  });
+}
+
 function scheduleIdleStop(entry: RemoteLiveEntry): void {
   if (entry.listeners.size > 0 || entry.isStreaming) {
     return;
@@ -590,6 +631,14 @@ function attachRpcEventForwarding(entry: RemoteLiveEntry): void {
     if (error) {
       emit(entry, { type: 'error', message: error });
     }
+    setRemoteConnectionState({
+      conversationId: entry.conversationId,
+      targetId: entry.target.id,
+      connected: false,
+      state: error ? 'error' : 'idle',
+      message: error || 'Remote workspace disconnected.',
+      updatedAt: new Date().toISOString(),
+    });
     remoteRegistry.delete(entry.conversationId);
   });
 }
@@ -615,18 +664,44 @@ async function startRemoteEntry(options: {
   remoteSessionFile?: string;
   bootstrapLocalSessionFile?: string;
 }): Promise<RemoteLiveEntry> {
-  const installedTarget = await ensureRemoteTargetInstalled(options.target);
-  const remotePaCommand = installedTarget?.launcherPath || options.target.remotePaCommand || 'pa';
+  setRemoteConnectionState({
+    conversationId: options.conversationId,
+    targetId: options.target.id,
+    connected: false,
+    state: 'installing',
+    message: 'Preparing the remote runtime…',
+    updatedAt: new Date().toISOString(),
+  });
 
   let bootstrapCleanup: (() => Promise<void>) | undefined;
-  let remoteBootstrapFile: string | undefined;
-  if (options.bootstrapLocalSessionFile) {
-    const uploaded = await createBootstrapRemoteFile(options.target, options.bootstrapLocalSessionFile);
-    bootstrapCleanup = uploaded.cleanup;
-    remoteBootstrapFile = uploaded.remotePath;
-  }
-
   try {
+    const installedTarget = await ensureRemoteTargetInstalled(options.target);
+    const remotePaCommand = installedTarget?.launcherPath || options.target.remotePaCommand || 'pa';
+
+    let remoteBootstrapFile: string | undefined;
+    if (options.bootstrapLocalSessionFile) {
+      setRemoteConnectionState({
+        conversationId: options.conversationId,
+        targetId: options.target.id,
+        connected: false,
+        state: 'connecting',
+        message: 'Uploading the local conversation mirror…',
+        updatedAt: new Date().toISOString(),
+      });
+      const uploaded = await createBootstrapRemoteFile(options.target, options.bootstrapLocalSessionFile);
+      bootstrapCleanup = uploaded.cleanup;
+      remoteBootstrapFile = uploaded.remotePath;
+    }
+
+    setRemoteConnectionState({
+      conversationId: options.conversationId,
+      targetId: options.target.id,
+      connected: false,
+      state: 'connecting',
+      message: 'Opening the remote Pi session…',
+      updatedAt: new Date().toISOString(),
+    });
+
     const rpc = createSshRpcClient({
       target: options.target,
       remotePaCommand,
@@ -663,7 +738,26 @@ async function startRemoteEntry(options: {
       remoteSessionFile,
     });
 
+    setRemoteConnectionState({
+      conversationId: options.conversationId,
+      targetId: options.target.id,
+      connected: true,
+      state: 'connected',
+      message: 'Connected to the remote workspace.',
+      updatedAt: new Date().toISOString(),
+    });
+
     return entry;
+  } catch (error) {
+    setRemoteConnectionState({
+      conversationId: options.conversationId,
+      targetId: options.target.id,
+      connected: false,
+      state: 'error',
+      message: error instanceof Error ? error.message : String(error),
+      updatedAt: new Date().toISOString(),
+    });
+    throw error;
   } finally {
     await bootstrapCleanup?.();
   }
@@ -835,6 +929,14 @@ export async function stopRemoteLiveSession(conversationId: string): Promise<voi
 
   clearTimeout(entry.idleTimer);
   remoteRegistry.delete(conversationId);
+  setRemoteConnectionState({
+    conversationId: entry.conversationId,
+    targetId: entry.target.id,
+    connected: false,
+    state: 'idle',
+    message: 'Remote workspace disconnected.',
+    updatedAt: new Date().toISOString(),
+  });
   await entry.rpc.stop().catch(() => undefined);
 }
 
@@ -943,4 +1045,45 @@ export function readRemoteConversationBindingForConversation(options: { profile:
 
 export function clearRemoteConversationBindingForConversation(options: { profile: string; conversationId: string }): void {
   deleteRemoteConversationBinding(options);
+}
+
+export function getRemoteConversationConnectionState(options: { profile: string; conversationId: string }): RemoteConversationConnectionState {
+  const liveEntry = remoteRegistry.get(options.conversationId);
+  if (liveEntry) {
+    const current = remoteConnectionStates.get(options.conversationId);
+    return {
+      conversationId: options.conversationId,
+      targetId: liveEntry.target.id,
+      connected: true,
+      state: 'connected',
+      message: current?.message ?? 'Connected to the remote workspace.',
+      updatedAt: current?.updatedAt ?? new Date().toISOString(),
+    };
+  }
+
+  const binding = getRemoteConversationBinding(options);
+  if (!binding) {
+    return {
+      conversationId: options.conversationId,
+      targetId: null,
+      connected: false,
+      state: 'local',
+      message: null,
+      updatedAt: null,
+    };
+  }
+
+  const current = remoteConnectionStates.get(options.conversationId);
+  if (current && current.targetId === binding.targetId) {
+    return current;
+  }
+
+  return {
+    conversationId: options.conversationId,
+    targetId: binding.targetId,
+    connected: false,
+    state: 'idle',
+    message: 'Remote workspace disconnected. Click connect to resume.',
+    updatedAt: binding.updatedAt,
+  };
 }

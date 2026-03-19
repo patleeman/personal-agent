@@ -280,6 +280,27 @@ function createWorkspacePackageLinks(stageRoot: string): void {
   }
 }
 
+function computeRemoteRuntimeHash(repoRoot: string): string {
+  const runtimeInputHash = computePathSetHash([
+    { sourcePath: join(repoRoot, 'defaults'), relativePath: 'defaults' },
+    { sourcePath: join(repoRoot, 'extensions'), relativePath: 'extensions' },
+    { sourcePath: join(repoRoot, 'themes'), relativePath: 'themes' },
+    { sourcePath: join(repoRoot, 'prompt-catalog'), relativePath: 'prompt-catalog' },
+    { sourcePath: join(repoRoot, 'package.json'), relativePath: 'package.json' },
+    { sourcePath: join(repoRoot, 'package-lock.json'), relativePath: 'package-lock.json' },
+    ...RUNTIME_PACKAGE_NAMES.flatMap((packageName) => ([
+      { sourcePath: join(repoRoot, 'packages', packageName, 'package.json'), relativePath: `packages/${packageName}/package.json` },
+      { sourcePath: join(repoRoot, 'packages', packageName, 'dist'), relativePath: `packages/${packageName}/dist` },
+    ])),
+  ]);
+
+  return createHash('sha256')
+    .update(runtimeInputHash)
+    .update('\0launcher\0')
+    .update(REMOTE_RUNTIME_LAUNCHER_CONTENT)
+    .digest('hex');
+}
+
 export async function createRemoteRuntimeBundle(options: { repoRoot?: string } = {}): Promise<BuiltRemoteBundle> {
   const repoRoot = getRepoRoot(options.repoRoot);
   ensureRuntimeSourceFile(join(repoRoot, 'node_modules'), 'node_modules');
@@ -306,23 +327,7 @@ export async function createRemoteRuntimeBundle(options: { repoRoot?: string } =
   createWorkspacePackageLinks(stageRoot);
   createRuntimeLauncher(stageRoot);
 
-  const runtimeInputHash = computePathSetHash([
-    { sourcePath: join(repoRoot, 'defaults'), relativePath: 'defaults' },
-    { sourcePath: join(repoRoot, 'extensions'), relativePath: 'extensions' },
-    { sourcePath: join(repoRoot, 'themes'), relativePath: 'themes' },
-    { sourcePath: join(repoRoot, 'prompt-catalog'), relativePath: 'prompt-catalog' },
-    { sourcePath: join(repoRoot, 'package.json'), relativePath: 'package.json' },
-    { sourcePath: join(repoRoot, 'package-lock.json'), relativePath: 'package-lock.json' },
-    ...RUNTIME_PACKAGE_NAMES.flatMap((packageName) => ([
-      { sourcePath: join(repoRoot, 'packages', packageName, 'package.json'), relativePath: `packages/${packageName}/package.json` },
-      { sourcePath: join(repoRoot, 'packages', packageName, 'dist'), relativePath: `packages/${packageName}/dist` },
-    ])),
-  ]);
-  const runtimeHash = createHash('sha256')
-    .update(runtimeInputHash)
-    .update('\0launcher\0')
-    .update(REMOTE_RUNTIME_LAUNCHER_CONTENT)
-    .digest('hex');
+  const runtimeHash = computeRemoteRuntimeHash(repoRoot);
   const manifest: RemoteRuntimeBundleManifest = {
     version: 1,
     layoutVersion: REMOTE_INSTALL_LAYOUT_VERSION,
@@ -343,6 +348,15 @@ export async function createRemoteRuntimeBundle(options: { repoRoot?: string } =
   };
 }
 
+function computeRemoteStateHash(stateRoot: string): string {
+  return computePathSetHash([
+    { sourcePath: join(stateRoot, 'profiles'), relativePath: 'profiles', dereferenceSymlinks: true },
+    { sourcePath: join(stateRoot, 'config', 'local'), relativePath: 'config/local', dereferenceSymlinks: true },
+    { sourcePath: join(stateRoot, 'config', 'config.json'), relativePath: 'config/config.json', dereferenceSymlinks: true },
+    { sourcePath: join(stateRoot, 'pi-agent-runtime', 'auth.json'), relativePath: 'pi-agent-runtime/auth.json', dereferenceSymlinks: true },
+  ]);
+}
+
 export async function createRemoteStateBundle(options: { stateRoot?: string } = {}): Promise<BuiltRemoteBundle> {
   const stateRoot = resolve(options.stateRoot ?? resolveStatePaths().root);
   const workspaceRoot = mkdtempSync(join(tmpdir(), 'pa-remote-state-'));
@@ -355,12 +369,7 @@ export async function createRemoteStateBundle(options: { stateRoot?: string } = 
   copyFileIfExists(join(stateRoot, 'config', 'config.json'), join(stageRoot, 'config', 'config.json'), { dereference: true });
   copyFileIfExists(join(stateRoot, 'pi-agent-runtime', 'auth.json'), join(stageRoot, 'pi-agent-runtime', 'auth.json'), { dereference: true });
 
-  const stateHash = computePathSetHash([
-    { sourcePath: join(stateRoot, 'profiles'), relativePath: 'profiles', dereferenceSymlinks: true },
-    { sourcePath: join(stateRoot, 'config', 'local'), relativePath: 'config/local', dereferenceSymlinks: true },
-    { sourcePath: join(stateRoot, 'config', 'config.json'), relativePath: 'config/config.json', dereferenceSymlinks: true },
-    { sourcePath: join(stateRoot, 'pi-agent-runtime', 'auth.json'), relativePath: 'pi-agent-runtime/auth.json', dereferenceSymlinks: true },
-  ]);
+  const stateHash = computeRemoteStateHash(stateRoot);
   const manifest: RemoteStateBundleManifest = {
     version: 1,
     stateHash,
@@ -458,20 +467,23 @@ export async function ensureRemoteTargetInstall(options: { targetId: string; for
     throw new Error(`Execution target not found: ${options.targetId}`);
   }
 
-  const [runtimeBundle, stateBundle, remoteHome, nodeVersion] = await Promise.all([
-    createRemoteRuntimeBundle(),
-    createRemoteStateBundle(),
+  const repoRoot = getRepoRoot();
+  const stateRoot = resolveStatePaths().root;
+  const [remoteHome, nodeVersion] = await Promise.all([
     resolveRemoteHome(target),
     inspectRemoteNodeVersion(target),
   ]);
 
   const paths = resolveRemoteInstallPaths(target.id, remoteHome);
-  const remoteManifest = await readRemoteManifest(target, paths.manifestPath);
-  const runtimeChanged = options.force === true || remoteManifest?.runtimeHash !== runtimeBundle.hash;
-  const stateChanged = options.force === true || remoteManifest?.stateHash !== stateBundle.hash;
+  const [remoteManifest, runtimeHash, stateHash] = await Promise.all([
+    readRemoteManifest(target, paths.manifestPath),
+    Promise.resolve(computeRemoteRuntimeHash(repoRoot)),
+    Promise.resolve(computeRemoteStateHash(stateRoot)),
+  ]);
+  const runtimeChanged = options.force === true || remoteManifest?.runtimeHash !== runtimeHash;
+  const stateChanged = options.force === true || remoteManifest?.stateHash !== stateHash;
 
   if (!runtimeChanged && !stateChanged) {
-    await Promise.all([runtimeBundle.cleanup(), stateBundle.cleanup()]);
     return {
       version: 1,
       targetId: target.id,
@@ -481,13 +493,18 @@ export async function ensureRemoteTargetInstall(options: { targetId: string; for
       installRoot: paths.installRoot,
       stateRoot: paths.stateRoot,
       launcherPath: remoteManifest?.launcherPath || paths.launcherPath,
-      runtimeHash: runtimeBundle.hash,
-      stateHash: stateBundle.hash,
+      runtimeHash,
+      stateHash,
       nodeVersion,
       runtimeChanged: false,
       stateChanged: false,
     };
   }
+
+  const [runtimeBundle, stateBundle] = await Promise.all([
+    runtimeChanged ? createRemoteRuntimeBundle({ repoRoot }) : Promise.resolve(null),
+    stateChanged ? createRemoteStateBundle({ stateRoot }) : Promise.resolve(null),
+  ]);
 
   const remoteTempDir = await createRemoteTempDir(target);
   const localManifestPath = join(tmpdir(), `pa-remote-target-manifest-${target.id}-${Date.now()}.json`);
@@ -497,8 +514,8 @@ export async function ensureRemoteTargetInstall(options: { targetId: string; for
     const installManifest: RemoteInstallManifest = {
       version: 1,
       targetId: target.id,
-      runtimeHash: runtimeBundle.hash,
-      stateHash: stateBundle.hash,
+      runtimeHash,
+      stateHash,
       installRoot: paths.installRoot,
       stateRoot: paths.stateRoot,
       launcherPath: paths.launcherPath,
@@ -506,10 +523,10 @@ export async function ensureRemoteTargetInstall(options: { targetId: string; for
     };
     writeFileSync(localManifestPath, `${JSON.stringify(installManifest, null, 2)}\n`);
 
-    if (runtimeChanged) {
+    if (runtimeChanged && runtimeBundle) {
       await uploadFile(target, runtimeBundle.tarPath, joinRemotePath(remoteTempDir, 'runtime.tgz'));
     }
-    if (stateChanged) {
+    if (stateChanged && stateBundle) {
       await uploadFile(target, stateBundle.tarPath, joinRemotePath(remoteTempDir, 'state.tgz'));
     }
     await uploadFile(target, localManifestPath, remoteManifestPath);
@@ -520,7 +537,7 @@ export async function ensureRemoteTargetInstall(options: { targetId: string; for
     ];
 
     if (runtimeChanged) {
-      const releaseRoot = joinRemotePath(paths.releasesRoot, runtimeBundle.hash);
+      const releaseRoot = joinRemotePath(paths.releasesRoot, runtimeHash);
       const stagingRoot = `${releaseRoot}.tmp`;
       remoteCommands.push(
         `rm -rf ${quoteShellArg(stagingRoot)}`,
@@ -555,16 +572,16 @@ export async function ensureRemoteTargetInstall(options: { targetId: string; for
       installRoot: paths.installRoot,
       stateRoot: paths.stateRoot,
       launcherPath: paths.launcherPath,
-      runtimeHash: runtimeBundle.hash,
-      stateHash: stateBundle.hash,
+      runtimeHash,
+      stateHash,
       nodeVersion,
       runtimeChanged,
       stateChanged,
     };
   } finally {
     await Promise.allSettled([
-      runtimeBundle.cleanup(),
-      stateBundle.cleanup(),
+      runtimeBundle?.cleanup(),
+      stateBundle?.cleanup(),
       rm(localManifestPath, { force: true }),
       runSsh(target, `rm -rf ${quoteShellArg(remoteTempDir)}`).catch(() => undefined),
     ]);

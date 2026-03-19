@@ -1279,11 +1279,25 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         }),
     id ?? 'draft-conversation-execution',
   );
+  const remoteConversationConnectionState = useApi(
+    async () => (id
+      ? api.remoteConversationConnection(id)
+      : {
+          conversationId: 'draft',
+          targetId: null,
+          connected: false,
+          state: 'local' as const,
+          message: null,
+          updatedAt: null,
+        }),
+    id ?? 'draft-remote-connection',
+  );
   const { versions } = useAppEvents();
   const { projects, tasks, sessions, runs, setProjects, setSessions, setRuns } = useAppData();
   const conversationRunId = useMemo(() => (id ? createConversationLiveRunId(id) : null), [id]);
   const [conversationRun, setConversationRun] = useState<DurableRunRecord | null>(null);
   const [resumeConversationBusy, setResumeConversationBusy] = useState(false);
+  const [remoteConnectBusy, setRemoteConnectBusy] = useState(false);
   const conversationProjectsFetcher = useCallback(async () => {
     if (!id) {
       return { conversationId: '', relatedProjectIds: [] };
@@ -1481,6 +1495,27 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }), [id, selectedExecutionTarget, selectedExecutionTargetId]);
   const replaceConversationExecution = conversationExecutionState.replaceData;
   const executionSelectionBusy = executionTargetBusy;
+
+  useEffect(() => {
+    if (!id || !selectedExecutionTargetId) {
+      return;
+    }
+
+    void remoteConversationConnectionState.refetch({ resetLoading: false });
+
+    const state = remoteConversationConnectionState.data?.state;
+    if (!remoteConnectBusy && state !== 'installing' && state !== 'connecting') {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      void remoteConversationConnectionState.refetch({ resetLoading: false });
+    }, 1000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [id, remoteConnectBusy, remoteConversationConnectionState.data?.state, remoteConversationConnectionState.refetch, selectedExecutionTargetId]);
 
   const refetchConversationAttachments = useCallback(async () => {
     if (!id) {
@@ -2087,41 +2122,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return resumed.id;
   }, [id, isLiveSession, savedConversationSessionFile, stream]);
 
-  const remoteAutoResumeConversationIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (draft || !id || !selectedExecutionTargetId || confirmedLive !== false || !savedConversationSessionFile || stream.hasSnapshot) {
-      remoteAutoResumeConversationIdRef.current = null;
-      return;
-    }
-
-    if (remoteAutoResumeConversationIdRef.current === id) {
-      return;
-    }
-
-    remoteAutoResumeConversationIdRef.current = id;
-    let cancelled = false;
-
-    void api.resumeSession(savedConversationSessionFile)
-      .then(() => {
-        if (cancelled) {
-          return;
-        }
-
-        setConfirmedLive(true);
-        stream.reconnect();
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          console.error('Remote auto-resume failed:', error);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [confirmedLive, draft, id, savedConversationSessionFile, selectedExecutionTargetId, stream.hasSnapshot, stream.reconnect]);
-
   const rewindConversationFromMessage = useCallback(async (messageIndex: number) => {
     if (!id || !realMessages) {
       return;
@@ -2577,6 +2577,25 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     }
   }
+
+  const connectRemoteConversation = useCallback(async () => {
+    if (!id || draft || !selectedExecutionTargetId || !savedConversationSessionFile || remoteConnectBusy) {
+      return;
+    }
+
+    setRemoteConnectBusy(true);
+    try {
+      await api.resumeSession(savedConversationSessionFile);
+      setConfirmedLive(true);
+      stream.reconnect();
+      await remoteConversationConnectionState.refetch({ resetLoading: false });
+      showNotice('accent', 'Connected to the remote workspace.');
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    } finally {
+      setRemoteConnectBusy(false);
+    }
+  }, [draft, id, remoteConnectBusy, remoteConversationConnectionState, savedConversationSessionFile, selectedExecutionTargetId, showNotice, stream]);
 
   const resumeConversation = useCallback(async () => {
     if (!id || draft || resumeConversationBusy) {
@@ -3302,6 +3321,24 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const composerSubmit = resolveConversationComposerSubmitState(stream.isStreaming, composerAltHeld);
   const showScrollToBottomControl = shouldShowScrollToBottomControl(messageCount, atBottom);
   const hasRenderableMessages = (realMessages?.length ?? 0) > 0;
+  const remoteConversationRequiresConnect = Boolean(selectedExecutionTargetId)
+    && !draft
+    && !isLiveSession
+    && !remoteConnectBusy
+    && !Boolean(pendingInitialPrompt)
+    && pendingInitialPromptSessionIdRef.current !== id;
+  const remoteConnectionPending = Boolean(selectedExecutionTargetId)
+    && !stream.isStreaming
+    && (remoteConnectBusy
+      || Boolean(pendingInitialPrompt)
+      || pendingInitialPromptSessionIdRef.current === id);
+  const remoteConnectionStatusMessage = remoteConversationConnectionState.data?.message
+    ?? (remoteConnectionPending
+      ? 'Connecting to the remote workspace…'
+      : remoteConversationRequiresConnect
+        ? 'Remote workspace disconnected. Click connect to resume.'
+        : null);
+  const composerDisabled = remoteConnectionPending || remoteConversationRequiresConnect;
   // Keep the rail off once transcripts are large enough to trigger windowing.
   // The rail continuously re-measures mounted message markers, which makes
   // composer-driven layout work scale with transcript size.
@@ -3320,13 +3357,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     && !visibleSessionDetail
     && stream.blocks.length === 0;
   const hydratingRemoteConversation = Boolean(selectedExecutionTargetId)
-    && confirmedLive !== true
     && !stream.hasSnapshot
-    && !visibleSessionDetail
     && stream.blocks.length === 0
+    && remoteConnectionPending
     && Boolean(savedConversationSessionFile || pendingInitialPrompt);
   const showConversationLoadingState = !hasRenderableMessages
-    && (sessionLoading || hydratingLiveConversation || hydratingRemoteConversation);
+    && (sessionLoading || hydratingLiveConversation || hydratingRemoteConversation || remoteConnectionPending);
 
   const transcriptPane = useMemo(() => (
     <div className="relative flex-1 min-h-0">
@@ -3372,7 +3408,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             />
           </>
         ) : showConversationLoadingState ? (
-          <LoadingState label="Loading session…" className="justify-center h-full" />
+          <LoadingState
+            label={remoteConnectionPending ? 'Connecting to remote workspace…' : 'Loading session…'}
+            className="justify-center h-full"
+          />
         ) : (
           <EmptyState
             className="h-full flex flex-col justify-center px-8"
@@ -3386,9 +3425,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             title={draft ? NEW_CONVERSATION_TITLE : title}
             body={draft
               ? 'Start typing to create a conversation. You can set its initial working directory in the right rail, use the saved default from Settings, or let a single referenced project repo root pick it automatically.'
-              : isLiveSession
-                ? 'This conversation is live but has no messages yet. Send a prompt to get started.'
-                : 'Start a Pi session to populate this conversation.'}
+              : remoteConnectionPending
+                ? 'Connecting to the remote workspace and staging your first turn. Your message has been queued and will send as soon as the remote session is ready.'
+                : remoteConversationRequiresConnect
+                  ? (remoteConnectionStatusMessage ?? 'Remote workspace disconnected. Click connect to resume this conversation.')
+                  : isLiveSession
+                    ? 'This conversation is live but has no messages yet. Send a prompt to get started.'
+                    : 'Start a Pi session to populate this conversation.'}
             action={draft ? (
               <DraftExecutionTargetSelector
                 execution={conversationExecution}
@@ -3396,6 +3439,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 busy={executionSelectionBusy}
                 onSelectTarget={(targetId) => { void handleExecutionTargetSelect(targetId); }}
               />
+            ) : remoteConversationRequiresConnect ? (
+              <button
+                type="button"
+                onClick={() => { void connectRemoteConversation(); }}
+                disabled={remoteConnectBusy}
+                className="ui-action-button"
+              >
+                {remoteConnectBusy ? 'Connecting…' : 'Connect to remote'}
+              </button>
             ) : undefined}
           />
         )}
@@ -3442,6 +3494,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     openRun,
     realMessages,
     requestedFocusMessageIndex,
+    remoteConnectBusy,
+    remoteConnectionPending,
+    remoteConnectionStatusMessage,
+    remoteConversationRequiresConnect,
+    connectRemoteConversation,
     resumeConversation,
     resumeConversationBusy,
     saveMemoryFromMessage,
@@ -3508,7 +3565,18 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     </button>
                   </>
                 )}
-                {!stream.isStreaming && conversationResumeState.canResume && (
+                {!stream.isStreaming && remoteConversationRequiresConnect && (
+                  <button
+                    type="button"
+                    onClick={() => { void connectRemoteConversation(); }}
+                    disabled={remoteConnectBusy}
+                    title="Connect to the remote workspace"
+                    className="text-accent transition-colors hover:text-accent/80 disabled:cursor-default disabled:text-dim"
+                  >
+                    {remoteConnectBusy ? 'connecting…' : 'connect'}
+                  </button>
+                )}
+                {!stream.isStreaming && !remoteConversationRequiresConnect && conversationResumeState.canResume && (
                   <button
                     type="button"
                     onClick={() => { void resumeConversation(); }}
@@ -3518,6 +3586,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   >
                     {resumeConversationBusy ? 'opening…' : (conversationResumeState.actionLabel ?? 'resume')}
                   </button>
+                )}
+                {!stream.isStreaming && remoteConnectionPending && (
+                  <span className="inline-flex items-center gap-1.5 text-accent" title={remoteConnectionStatusMessage ?? undefined}>
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent animate-pulse" />
+                    {remoteConnectBusy ? 'connecting…' : 'queued…'}
+                  </span>
                 )}
                 {isLiveSession && <span className="text-accent">{formatLiveSessionLabel(isLiveSession)}</span>}
               </>
@@ -3576,6 +3650,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               onOpenPreferences={openHeaderPreference}
             />
             {!draft && <ConversationExecutionBadge execution={conversationExecution} />}
+            {!draft && remoteConnectionStatusMessage && selectedExecutionTargetId && !isLiveSession && (
+              <p className="mt-2 text-[11px] text-secondary">{remoteConnectionStatusMessage}</p>
+            )}
             {headerPreference && (
               <HeaderPreferencesMenu
                 models={models}
@@ -3606,6 +3683,21 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         {notice && (
           <div className="mb-2 text-center">
             <Pill tone={notice.tone}>{notice.text}</Pill>
+          </div>
+        )}
+        {selectedExecutionTargetId && !draft && !isLiveSession && remoteConnectionStatusMessage && (
+          <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-border-subtle px-3 py-2 text-[11px] text-secondary">
+            <span className="min-w-0 truncate">{remoteConnectionStatusMessage}</span>
+            {remoteConversationRequiresConnect && (
+              <button
+                type="button"
+                onClick={() => { void connectRemoteConversation(); }}
+                disabled={remoteConnectBusy}
+                className="ui-toolbar-button shrink-0"
+              >
+                {remoteConnectBusy ? 'Connecting…' : 'Connect'}
+              </button>
+            )}
           </div>
         )}
 
@@ -3863,6 +3955,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 title="Attach image or Excalidraw file"
                 aria-label="Attach image or Excalidraw file"
                 onClick={openFilePicker}
+                disabled={composerDisabled}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
@@ -3874,6 +3967,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 title="Create drawing"
                 aria-label="Create drawing"
                 onClick={openDrawingEditor}
+                disabled={composerDisabled}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 20h9" />
@@ -3888,8 +3982,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
                 rows={1}
-                className="flex-1 bg-transparent text-sm text-primary placeholder:text-dim outline-none resize-none leading-relaxed"
-                placeholder="Message… (/ for commands, @ to reference projects, tasks, knowledge, and profiles)"
+                disabled={composerDisabled}
+                className="flex-1 bg-transparent text-sm text-primary placeholder:text-dim outline-none resize-none leading-relaxed disabled:cursor-default disabled:text-dim"
+                placeholder={remoteConversationRequiresConnect ? 'Connect to the remote workspace to continue…' : 'Message… (/ for commands, @ to reference projects, tasks, knowledge, and profiles)'}
                 title="Ctrl+C clears the composer. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts."
                 style={{ minHeight: '24px', maxHeight: '160px' }}
               />
@@ -3904,7 +3999,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                       ).behavior;
                       void submitComposer(behavior);
                     }}
-                    className="ui-pill ui-pill-solid-accent"
+                    disabled={composerDisabled}
+                    className="ui-pill ui-pill-solid-accent disabled:cursor-default disabled:opacity-60"
                   >
                     {composerSubmit.label}
                   </button>
