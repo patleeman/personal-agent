@@ -4,7 +4,7 @@ import { ChatView } from '../components/chat/ChatView';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, RemoteRunImportStatus } from '../types';
+import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput } from '../types';
 import { useApi } from '../hooks';
 import { useSessionDetail } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
@@ -15,7 +15,6 @@ import { createConversationLiveRunId, getConversationRunIdFromSearch, setConvers
 import { formatContextBreakdownLabel, formatContextUsageLabel, formatContextWindowLabel, formatLiveSessionLabel, formatThinkingLevelLabel } from '../conversationHeader';
 import { isConversationScrolledToBottom, shouldShowScrollToBottomControl } from '../conversationScroll';
 import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE } from '../conversationTitle';
-import { getRunSortTimestamp } from '../runPresentation';
 import { emitConversationProjectsChanged, CONVERSATION_PROJECTS_CHANGED_EVENT } from '../conversationProjectEvents';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { THINKING_LEVEL_OPTIONS, groupModelsByProvider } from '../modelPreferences';
@@ -78,52 +77,16 @@ const INITIAL_SCROLL_STABLE_FRAME_COUNT = 2;
 const INITIAL_SCROLL_MAX_FRAMES = 45;
 const MAX_CONVERSATION_RAIL_BLOCKS = 240;
 
-function summarizeSingleLine(value: string, maxLength = 120): string {
-  const normalized = value
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find((line) => line.length > 0)
-    ?.replace(/\s+/g, ' ');
-
-  if (!normalized) {
-    return '';
+function describeConversationExecution(execution: {
+  targetId: string | null;
+  location: 'local' | 'remote';
+  target: ExecutionTargetSummary | null;
+}): string {
+  if (execution.target) {
+    return `SSH ${execution.target.sshDestination}`;
   }
 
-  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1).trimEnd()}…` : normalized;
-}
-
-function remoteExecutionStatusMeta(run: DurableRunRecord): { label: string; className: string } {
-  switch (run.status?.status) {
-    case 'running':
-      return { label: 'executing remotely', className: 'text-accent' };
-    case 'recovering':
-      return { label: 'recovering', className: 'text-warning' };
-    case 'completed':
-      return { label: 'remote execution complete', className: 'text-success' };
-    case 'failed':
-    case 'interrupted':
-      return { label: run.status.status, className: 'text-danger' };
-    case 'cancelled':
-      return { label: 'cancelled', className: 'text-dim' };
-    case 'queued':
-    case 'waiting':
-      return { label: run.status.status, className: 'text-dim' };
-    default:
-      return { label: run.status?.status ?? 'pending', className: 'text-dim' };
-  }
-}
-
-function remoteImportStatusMeta(status: RemoteRunImportStatus): { label: string; className: string } {
-  switch (status) {
-    case 'ready':
-      return { label: 'ready to import', className: 'text-warning' };
-    case 'imported':
-      return { label: 'imported', className: 'text-success' };
-    case 'failed':
-      return { label: 'import failed', className: 'text-danger' };
-    default:
-      return { label: 'not imported yet', className: 'text-dim' };
-  }
+  return 'Runs in this app';
 }
 
 // ── Model picker ──────────────────────────────────────────────────────────────
@@ -428,17 +391,11 @@ function ContextBar({
   );
 }
 
-function ConversationExecutionBar({
+function DraftExecutionTargetSelector({
   execution,
   targets,
-  remoteRuns,
-  disabled,
   busy,
-  importRunId,
   onSelectTarget,
-  onInspectRun,
-  onImportRun,
-  transcriptHref,
 }: {
   execution: {
     targetId: string | null;
@@ -446,108 +403,56 @@ function ConversationExecutionBar({
     target: ExecutionTargetSummary | null;
   };
   targets: ExecutionTargetSummary[];
-  remoteRuns: DurableRunRecord[];
-  disabled: boolean;
   busy: boolean;
-  importRunId: string | null;
   onSelectTarget: (targetId: string | null) => void;
-  onInspectRun: (runId: string) => void;
-  onImportRun: (runId: string) => void;
-  transcriptHref: (runId: string) => string;
 }) {
-  const visibleRemoteRuns = remoteRuns.slice(0, 3);
-
   return (
-    <div className="border-b border-border-subtle px-3 py-2.5">
-      <div className="flex flex-wrap items-center gap-2 text-[11px] text-secondary">
+    <div className="mt-4 space-y-2 text-center">
+      <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] text-secondary">
         <span className="ui-section-label">Execution</span>
         <select
-          value={execution.targetId ?? ''}
+          value={execution.target ? execution.target.id : ''}
           onChange={(event) => onSelectTarget(event.target.value.trim() || null)}
-          disabled={busy || disabled}
-          className="min-w-[11rem] rounded-md border border-border-subtle bg-surface px-2 py-1 text-[12px] text-primary outline-none transition-colors focus:border-accent/60 disabled:cursor-default disabled:opacity-60"
-          aria-label="Conversation execution target"
+          disabled={busy}
+          className="min-w-[12rem] rounded-md border border-border-subtle bg-surface px-2.5 py-1.5 text-[12px] text-primary outline-none transition-colors focus:border-accent/60 disabled:cursor-default disabled:opacity-60"
+          aria-label="Draft conversation execution target"
         >
           <option value="">Local agent</option>
           {targets.map((target) => (
             <option key={target.id} value={target.id}>{target.label}</option>
           ))}
         </select>
-        <span className={execution.location === 'remote' ? 'text-accent' : 'text-dim'}>
-          {execution.target ? `SSH ${execution.target.sshDestination}` : 'Run locally'}
-        </span>
         {busy && <span className="text-dim">Saving…</span>}
-        {targets.length === 0 && (
-          <Link to="/system#execution-targets" className="text-accent hover:underline">
-            Add targets on System
-          </Link>
-        )}
       </div>
-
-      {visibleRemoteRuns.length > 0 && (
-        <div className="mt-2 space-y-2 border-t border-border-subtle pt-2">
-          {visibleRemoteRuns.map((run) => {
-            const remote = run.remoteExecution;
-            if (!remote) {
-              return null;
-            }
-
-            const executionMeta = remoteExecutionStatusMeta(run);
-            const importMeta = remoteImportStatusMeta(remote.importStatus);
-            const promptSummary = summarizeSingleLine(remote.prompt, 96);
-            const importBusy = importRunId === run.runId;
-            const canImport = remote.importStatus === 'ready';
-
-            return (
-              <div key={run.runId} className="flex flex-wrap items-start justify-between gap-3 text-[11px]">
-                <div className="min-w-0 flex-1 space-y-1">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-secondary">
-                    <span className="font-medium text-primary">{remote.targetLabel}</span>
-                    <span className={executionMeta.className}>{executionMeta.label}</span>
-                    <span className={importMeta.className}>import {importMeta.label}</span>
-                  </div>
-                  <p className="text-dim">
-                    {promptSummary || 'Remote execution run'}
-                    {remote.remoteCwd && ` · ${remote.remoteCwd}`}
-                    {remote.submittedAt && ` · ${formatDate(remote.submittedAt)}`}
-                  </p>
-                  {remote.importSummary && <p className="text-secondary">{remote.importSummary}</p>}
-                  {remote.importError && <p className="text-danger">{remote.importError}</p>}
-                </div>
-                <div className="flex shrink-0 items-center gap-2 text-[11px]">
-                  {remote.transcriptAvailable && (
-                    <a href={transcriptHref(run.runId)} className="text-secondary hover:text-primary" target="_blank" rel="noreferrer">
-                      Transcript
-                    </a>
-                  )}
-                  {canImport && (
-                    <button
-                      type="button"
-                      onClick={() => onImportRun(run.runId)}
-                      disabled={importBusy}
-                      className="text-warning transition-colors hover:text-warning/80 disabled:cursor-default disabled:text-dim"
-                    >
-                      {importBusy ? 'Importing…' : 'Import'}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => onInspectRun(run.runId)}
-                    className="text-accent transition-colors hover:text-accent/80"
-                  >
-                    Run ↗
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-          {remoteRuns.length > visibleRemoteRuns.length && (
-            <p className="text-[11px] text-dim">
-              {remoteRuns.length - visibleRemoteRuns.length} older remote run{remoteRuns.length - visibleRemoteRuns.length === 1 ? '' : 's'} are available from the run rail.
-            </p>
-          )}
-        </div>
+      <p className="text-[11px] text-dim">
+        Choose where the first turn runs. This is locked after the conversation starts.
+      </p>
+      {targets.length === 0 && (
+        <p className="text-[11px] text-secondary">
+          No execution targets configured yet. Ask your local agent to run <span className="font-mono">pa targets help</span> or <Link to="/system#execution-targets" className="text-accent hover:underline">add one on System</Link>.
+        </p>
       )}
+    </div>
+  );
+}
+
+function ConversationExecutionBadge({
+  execution,
+}: {
+  execution: {
+    targetId: string | null;
+    location: 'local' | 'remote';
+    target: ExecutionTargetSummary | null;
+  };
+}) {
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-secondary">
+      <span className="ui-section-label">Execution</span>
+      <Pill tone={execution.target ? 'accent' : 'muted'}>
+        {execution.target ? execution.target.label : 'Local agent'}
+      </Pill>
+      <span className={execution.target ? 'text-accent' : 'text-dim'}>{describeConversationExecution(execution)}</span>
+      <span className="text-dim">locked for this conversation</span>
     </div>
   );
 }
@@ -1221,7 +1126,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [atBottom, setAtBottom] = useState(true);
   const [draftExecutionTargetId, setDraftExecutionTargetId] = useState<string | null>(() => readDraftConversationExecutionTarget());
   const [executionTargetBusy, setExecutionTargetBusy] = useState(false);
-  const [remoteRunActionId, setRemoteRunActionId] = useState<string | null>(null);
   const composerHistoryScopeId = draft ? null : id ?? null;
   const [composerHistory, setComposerHistory] = useState<string[]>(() => readComposerHistory(composerHistoryScopeId));
   const [composerHistoryIndex, setComposerHistoryIndex] = useState<number | null>(null);
@@ -1479,15 +1383,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     () => buildDeferredResumeIndicatorText(orderedDeferredResumes, deferredResumeNowMs),
     [orderedDeferredResumes, deferredResumeNowMs],
   );
-  const conversationRemoteRuns = useMemo(() => {
-    if (!id) {
-      return [] as DurableRunRecord[];
-    }
-
-    return [...(runs?.runs ?? [])]
-      .filter((run) => run.remoteExecution?.conversationId === id)
-      .sort((left, right) => getRunSortTimestamp(right).localeCompare(getRunSortTimestamp(left)) || right.runId.localeCompare(left.runId));
-  }, [id, runs]);
   const lastConversationMessage = realMessages?.[realMessages.length - 1] ?? null;
   const lastCopyableAgentText = useMemo(() => {
     if (!realMessages) {
@@ -1580,7 +1475,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }), [id, selectedExecutionTarget, selectedExecutionTargetId]);
   const replaceConversationExecution = conversationExecutionState.replaceData;
   const executionSelectionBusy = executionTargetBusy;
-  const remoteImportRunId = remoteRunActionId;
 
   const refetchConversationAttachments = useCallback(async () => {
     if (!id) {
@@ -2771,29 +2665,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
-  async function importRemoteRunResult(runId: string) {
-    if (remoteImportRunId) {
-      return;
-    }
-
-    setRemoteRunActionId(runId);
-    try {
-      const result = await api.importRemoteRun(runId);
-      await Promise.all([
-        refreshRunsSnapshot(),
-        refreshSessionsSnapshot(),
-      ]);
-      showNotice('accent', result.summary || `Imported remote result into ${result.conversationId}.`, 4500);
-      if (isLiveSession) {
-        stream.reconnect();
-      }
-    } catch (error) {
-      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-    } finally {
-      setRemoteRunActionId(null);
-    }
-  }
-
   async function handleProjectSlashCommand(command: ProjectSlashCommand) {
     try {
       if (command.action === 'new') {
@@ -3535,6 +3406,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               : isLiveSession
                 ? 'This conversation is live but has no messages yet. Send a prompt to get started.'
                 : 'Start a Pi session to populate this conversation.'}
+            action={draft ? (
+              <DraftExecutionTargetSelector
+                execution={conversationExecution}
+                targets={executionTargets}
+                busy={executionSelectionBusy}
+                onSelectTarget={(targetId) => { void handleExecutionTargetSelect(targetId); }}
+              />
+            ) : undefined}
           />
         )}
         {showScrollToBottomControl && (
@@ -3556,11 +3435,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       )}
     </div>
   ), [
+    conversationExecution,
     conversationResumeState.actionLabel,
     conversationResumeState.canResume,
     conversationResumeState.title,
     draft,
+    executionSelectionBusy,
+    executionTargets,
     forkConversationFromMessage,
+    handleExecutionTargetSelect,
     hasRenderableMessages,
     rewindConversationFromMessage,
     historicalBlockOffset,
@@ -3678,6 +3561,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               activePreference={headerPreference}
               onOpenPreferences={openHeaderPreference}
             />
+            {!draft && <ConversationExecutionBadge execution={conversationExecution} />}
             {headerPreference && (
               <HeaderPreferencesMenu
                 models={models}
@@ -3740,19 +3624,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 📎 Drop files to attach
               </div>
             )}
-
-            <ConversationExecutionBar
-              execution={conversationExecution}
-              targets={executionTargets}
-              remoteRuns={conversationRemoteRuns}
-              disabled={stream.isStreaming}
-              busy={executionSelectionBusy}
-              importRunId={remoteImportRunId}
-              onSelectTarget={(targetId) => { void handleExecutionTargetSelect(targetId); }}
-              onInspectRun={openRun}
-              onImportRun={(runId) => { void importRemoteRunResult(runId); }}
-              transcriptHref={(runId) => api.remoteRunTranscriptUrl(runId)}
-            />
 
             {/* Prompt references */}
             {draftMentionItems.length > 0 && (

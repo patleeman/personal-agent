@@ -40,6 +40,8 @@ These commands are handled by `personal-agent` itself:
 - `pa inbox ...`
 - `pa ui ...`
 - `pa memory ...`
+- `pa runs ...`
+- `pa targets ...`
 - `pa sync ...`
 - `pa gateway ...`
 - `pa restart`
@@ -66,6 +68,7 @@ pa -p "hello"
 pa inbox list
 pa memory list
 pa tasks list
+pa targets list
 pa sync status
 ```
 
@@ -76,6 +79,14 @@ pa daemon start
 pa daemon service install
 pa tasks validate --all
 pa tasks logs <id>
+```
+
+### Remote execution targets
+
+```bash
+pa targets list
+pa targets add gpu-box --label "GPU Box" --ssh gpu-box --default-cwd /srv/personal-agent --map /Users/patrickc.lee/personal/personal-agent=/srv/personal-agent
+pa targets show gpu-box
 ```
 
 ### Gateway
@@ -227,6 +238,23 @@ pa runs cancel <id>
 ```
 
 Use this as the main control surface for detached local background work.
+
+### `pa targets [list|show|add|update|delete|help]`
+
+Inspect and manage machine-local execution targets for remote conversation offload.
+
+Examples:
+
+```bash
+pa targets list
+pa targets show gpu-box
+pa targets add gpu-box --label "GPU Box" --ssh gpu-box --default-cwd /srv/personal-agent --map /Users/patrickc.lee/personal/personal-agent=/srv/personal-agent
+pa targets update gpu-box --remote-pa-command /opt/bin/pa --profile datadog
+pa targets delete gpu-box
+```
+
+Targets are stored in `~/.local/state/personal-agent/config/execution-targets.json` by default.
+Use this when you want your local agent to configure remote SSH destinations without hand-editing the System page form.
 
 ### `pa sync [status|run|setup|help]`
 

@@ -139,6 +139,8 @@ The UI supports:
 
 A new draft conversation becomes a live session when you send the first prompt.
 
+If execution targets are configured, the draft conversation empty state lets you choose where the first turn runs before you send it. Once the conversation starts, that execution choice is shown in the header and treated as locked for that conversation.
+
 If a deferred resume becomes ready while you already have that saved conversation open in the web UI, the page auto-resumes it and delivers the deferred prompt without requiring a manual `continue now` click.
 
 From the deferred details row, you can also fire a scheduled resume immediately or cancel it.
@@ -185,6 +187,7 @@ It gives you one place to:
 
 - check whether each service is healthy and running
 - inspect recent log tails for each subsystem
+- configure execution targets for remote conversation offload
 - run per-subsystem actions directly from the page (restart Web UI / daemon / gateway, or trigger sync now)
 - jump into the advanced Daemon, Sync, Gateway, or Web UI pages when you need deeper controls
 - run **Update + restart** (`pa update`) or **Restart everything** (`pa restart --rebuild`) for the managed application

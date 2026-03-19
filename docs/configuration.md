@@ -82,6 +82,26 @@ You can write this file either with `pa gateway setup telegram` or from the web 
 
 See [Gateway Guide](./gateway.md).
 
+### `~/.local/state/personal-agent/config/execution-targets.json`
+
+This stores machine-local execution targets for remote conversation offload.
+
+Use it for:
+
+- named SSH destinations such as `gpu-box` or `runpod-a100`
+- remote default working directories
+- local repo path → remote checkout mappings
+- optional remote profile / `pa` command overrides
+
+Prefer writing this file with:
+
+```bash
+pa targets list
+pa targets add <id> --label <label> --ssh <destination>
+```
+
+Because SSH destinations and path mappings are often machine-specific, this file is generally local runtime config rather than shared profile state.
+
 ## Profile resource configuration
 
 Profile resources resolve from repo defaults plus mutable profile homes:

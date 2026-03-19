@@ -227,6 +227,7 @@ describe('SystemPage', () => {
     expect(html).toContain('Run sync now');
     expect(html).toContain('Execution targets');
     expect(html).toContain('GPU Box');
-    expect(html).toContain('Save target');
+    expect(html).toContain('Add target');
+    expect(html).not.toContain('Save target');
   });
 });
