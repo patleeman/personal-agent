@@ -14,7 +14,7 @@ import { getWebUiServiceStatus } from '@personal-agent/gateway';
 
 const RESTART_LOCK_MAX_AGE_MS = 30 * 60 * 1000;
 
-type ApplicationCommand = 'restart' | 'update';
+type ApplicationCommand = 'restart' | 'update' | 'web-ui-service-restart';
 
 interface ApplicationCommandLock {
   action?: ApplicationCommand;
@@ -35,6 +35,7 @@ export interface ApplicationCommandRequestResult {
 }
 
 export type ApplicationRestartRequestResult = ApplicationCommandRequestResult;
+export type WebUiServiceRestartRequestResult = ApplicationCommandRequestResult;
 
 function resolveApplicationCommandLockFile(): string {
   return join(getStateRoot(), 'web', 'app-restart.lock.json');
@@ -74,12 +75,24 @@ function isProcessRunning(pid: number | undefined): boolean {
 }
 
 function commandLabel(action: ApplicationCommand): string {
-  return action === 'update' ? 'update' : 'restart';
+  if (action === 'update') {
+    return 'update';
+  }
+
+  if (action === 'web-ui-service-restart') {
+    return 'web UI service restart';
+  }
+
+  return 'restart';
 }
 
-function buildCliCommand(action: ApplicationCommand, cliEntryFile: string): string[] {
+function buildCliCommand(action: ApplicationCommand, cliEntryFile: string, port: number): string[] {
   if (action === 'update') {
     return [process.execPath, cliEntryFile, 'update'];
+  }
+
+  if (action === 'web-ui-service-restart') {
+    return [process.execPath, cliEntryFile, 'ui', 'service', 'restart', '--port', String(port)];
   }
 
   return [process.execPath, cliEntryFile, 'restart', '--rebuild'];
@@ -90,12 +103,16 @@ function buildRequestMessage(action: ApplicationCommand): string {
     return 'Application update requested. Pulling latest changes, rebuilding packages, and restarting background services.';
   }
 
+  if (action === 'web-ui-service-restart') {
+    return 'Managed web UI restart requested. This page will reconnect when the service is back.';
+  }
+
   return 'Application restart requested. Rebuilding packages and restarting background services.';
 }
 
 function buildNotificationEnv(input: {
   action: ApplicationCommand;
-  profile: string;
+  profile?: string;
   requestedAt: string;
 }): Record<string, string> {
   const shared = {
@@ -106,17 +123,31 @@ function buildNotificationEnv(input: {
     return {
       ...shared,
       PERSONAL_AGENT_UPDATE_NOTIFY_INBOX: '1',
-      PERSONAL_AGENT_UPDATE_NOTIFY_PROFILE: input.profile,
+      PERSONAL_AGENT_UPDATE_NOTIFY_PROFILE: input.profile ?? '',
       PERSONAL_AGENT_UPDATE_REQUESTED_AT: input.requestedAt,
     };
   }
 
-  return {
-    ...shared,
-    PERSONAL_AGENT_RESTART_NOTIFY_INBOX: '1',
-    PERSONAL_AGENT_RESTART_NOTIFY_PROFILE: input.profile,
-    PERSONAL_AGENT_RESTART_REQUESTED_AT: input.requestedAt,
-  };
+  if (input.action === 'restart') {
+    return {
+      ...shared,
+      PERSONAL_AGENT_RESTART_NOTIFY_INBOX: '1',
+      PERSONAL_AGENT_RESTART_NOTIFY_PROFILE: input.profile ?? '',
+      PERSONAL_AGENT_RESTART_REQUESTED_AT: input.requestedAt,
+    };
+  }
+
+  return {};
+}
+
+function buildAlreadyRunningMessage(action: ApplicationCommand, requestedAt?: string): string {
+  const suffix = requestedAt ? ` (${requestedAt})` : '';
+
+  if (action === 'web-ui-service-restart') {
+    return `Managed web UI restart already in progress${suffix}.`;
+  }
+
+  return `Application ${commandLabel(action)} already in progress${suffix}.`;
 }
 
 function ensureApplicationCommandNotRunning(lockFile: string): void {
@@ -136,9 +167,8 @@ function ensureApplicationCommandNotRunning(lockFile: string): void {
     : true;
 
   if (isProcessRunning(current.pid) && !staleByAge) {
-    const suffix = current.requestedAt ? ` (${current.requestedAt})` : '';
-    const currentAction = current.action === 'update' ? 'update' : 'restart';
-    throw new Error(`Application ${currentAction} already in progress${suffix}.`);
+    const currentAction = current.action ?? 'restart';
+    throw new Error(buildAlreadyRunningMessage(currentAction, current.requestedAt));
   }
 
   rmSync(lockFile, { force: true });
@@ -146,12 +176,12 @@ function ensureApplicationCommandNotRunning(lockFile: string): void {
 
 function requestApplicationCommand(input: {
   repoRoot: string;
-  profile: string;
+  profile?: string;
   action: ApplicationCommand;
 }): ApplicationCommandRequestResult {
   const repoRoot = resolve(input.repoRoot);
-  const profile = input.profile.trim();
-  if (profile.length === 0) {
+  const profile = input.profile?.trim() ?? '';
+  if (input.action !== 'web-ui-service-restart' && profile.length === 0) {
     throw new Error(`Application ${commandLabel(input.action)} requires a profile.`);
   }
 
@@ -176,7 +206,7 @@ function requestApplicationCommand(input: {
   mkdirSync(dirname(logFile), { recursive: true });
 
   const requestedAt = new Date().toISOString();
-  const command = buildCliCommand(input.action, cliEntryFile);
+  const command = buildCliCommand(input.action, cliEntryFile, webUiStatus.port);
 
   writeFileSync(lockFile, `${JSON.stringify({
     action: input.action,
@@ -258,5 +288,14 @@ export function requestApplicationUpdate(input: {
   return requestApplicationCommand({
     ...input,
     action: 'update',
+  });
+}
+
+export function requestWebUiServiceRestart(input: {
+  repoRoot: string;
+}): WebUiServiceRestartRequestResult {
+  return requestApplicationCommand({
+    ...input,
+    action: 'web-ui-service-restart',
   });
 }

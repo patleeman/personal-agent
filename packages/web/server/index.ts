@@ -38,7 +38,6 @@ import {
   markBadWebUiReleaseAndReadState,
   readWebUiState,
   readWebUiConfig,
-  restartWebUiServiceAndReadState,
   rollbackWebUiServiceAndReadState,
   startWebUiServiceAndReadState,
   stopWebUiServiceAndReadState,
@@ -46,7 +45,7 @@ import {
   uninstallWebUiServiceAndReadState,
   writeWebUiConfig,
 } from './webUi.js';
-import { requestApplicationRestart, requestApplicationUpdate } from './applicationRestart.js';
+import { requestApplicationRestart, requestApplicationUpdate, requestWebUiServiceRestart } from './applicationRestart.js';
 import { buildContentDispositionHeader } from './httpHeaders.js';
 import { readSavedDefaultCwdPreferences, writeSavedDefaultCwdPreference } from './defaultCwdPreferences.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from './modelPreferences.js';
@@ -2354,13 +2353,17 @@ app.post('/api/web-ui/service/start', (_req, res) => {
 
 app.post('/api/web-ui/service/restart', (_req, res) => {
   try {
-    res.json(restartWebUiServiceAndReadState());
+    res.status(202).json(requestWebUiServiceRestart({ repoRoot: REPO_ROOT }));
   } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.startsWith('Managed web UI restart already in progress')
+      || message.startsWith('Application restart already in progress')
+      || message.startsWith('Application update already in progress')
+      ? 409
+      : message.startsWith('Managed web UI service is not installed')
+        ? 400
+        : 500;
+    res.status(status).json({ error: message });
   }
 });
 
