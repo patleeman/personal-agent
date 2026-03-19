@@ -66,7 +66,7 @@ You can always override per run:
 
 ```bash
 pa tui --profile assistant
-pa --profile assistant -p "hello"
+pa tui --profile assistant -p "hello"
 ```
 
 ## Start the daemon
@@ -150,7 +150,7 @@ pa tui
 Or send a one-off prompt:
 
 ```bash
-pa -p "Summarize my current profile"
+pa tui -p "Summarize my current profile"
 ```
 
 ## Optional: set up Telegram

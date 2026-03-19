@@ -56,7 +56,7 @@ describe('conversationRuns helpers', () => {
         type: 'tool_use',
         ts: '2026-03-13T18:00:00.000Z',
         tool: 'bash',
-        input: { command: 'pa runs start code-review -- pa -p "review this diff"' },
+        input: { command: 'pa runs start code-review -- pa tui -p "review this diff"' },
         output: 'Run        run-code-review-2026-03-13T17-42-11-000Z-abcd1234\nInspect    pa runs show run-code-review-2026-03-13T17-42-11-000Z-abcd1234',
       },
       {

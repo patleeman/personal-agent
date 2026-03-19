@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { hasOption, parseCommand } from './args.js';
 
 describe('parseCommand', () => {
-  it('defaults to tui for empty argv', () => {
-    expect(parseCommand([])).toEqual({ command: 'tui', args: [] });
+  it('defaults to help for empty argv', () => {
+    expect(parseCommand([])).toEqual({ command: 'help', args: [] });
   });
 
   it('parses help aliases', () => {
@@ -31,8 +31,8 @@ describe('parseCommand', () => {
     });
   });
 
-  it('treats unknown first token as tui args passthrough', () => {
-    expect(parseCommand(['-p', 'hello'])).toEqual({ command: 'tui', args: ['-p', 'hello'] });
+  it('returns unknown first token directly', () => {
+    expect(parseCommand(['-p', 'hello'])).toEqual({ command: '-p', args: ['hello'] });
   });
 
   it('supports custom known command list', () => {

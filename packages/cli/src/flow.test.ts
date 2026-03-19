@@ -172,25 +172,29 @@ describe('CLI command flows', () => {
     expect(loggedArgs).not.toContain('--profile');
   });
 
-  it('shows help with no args and passes unknown args through to pi', async () => {
+  it('shows help with no args and rejects unknown top-level args', async () => {
     const stateRoot = createTempDir('personal-agent-cli-state-');
     const repo = createTestRepo(stateRoot);
     const runLogDir = createTempDir('personal-agent-cli-log-');
     const argsLogPath = join(runLogDir, 'pi-args.log');
     const fakePiBinDir = createFakePiBinary(argsLogPath);
+    const errors: string[] = [];
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation((message?: unknown) => {
+      errors.push(String(message ?? ''));
+    });
 
     process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
     expect(await runCli([])).toBe(0);
-    expect(await runCli(['-p', 'hello from pa'])).toBe(0);
+    expect(await runCli(['-p', 'hello from pa'])).toBe(1);
+    expect(await runCli(['--profile', 'shared', '-p', 'hello from pa'])).toBe(1);
+    expect(await runCli(['unknown'])).toBe(1);
+    expect(errors.some((line) => line.includes("Use 'pa tui ...' to pass arguments to Pi."))).toBe(true);
+    expect(existsSync(argsLogPath)).toBe(false);
 
-    const loggedArgs = readFileSync(argsLogPath, 'utf-8');
-    expect(loggedArgs).toContain('--model');
-    expect(loggedArgs).toContain('--thinking');
-    expect(loggedArgs).toContain('-p');
-    expect(loggedArgs).toContain('hello from pa');
+    errorSpy.mockRestore();
   });
 
   it('returns non-zero for invalid profile usage and rejects doctor --profile flag', async () => {
