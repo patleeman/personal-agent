@@ -4,8 +4,6 @@ This directory holds reminder-style prompt text used when conditional guidance i
 
 Current reminder candidates and decisions:
 
-- `memory-operations.md` — **implemented** as a hidden reminder for memory-specific requests.
-- `code-references.md` — available as a reminder candidate; related guidance is also present in the active shared system sections.
 - `delegation.md` — available as a reminder candidate for future subagent/durable-run follow-up hooks.
 
 Use reminders when:

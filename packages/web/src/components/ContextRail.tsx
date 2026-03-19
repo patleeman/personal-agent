@@ -1723,7 +1723,7 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
       return;
     }
 
-    if (!window.confirm(`Delete memory hub @${memory.id}? This removes the full package, including references and assets.`)) {
+    if (!window.confirm(`Delete memory package @${memory.id}? This removes the full package, including references and assets.`)) {
       return;
     }
 
@@ -1790,7 +1790,7 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
 
         <div className="space-y-2">
           <div className="ui-detail-row">
-            <span className="ui-detail-label">Hub</span>
+            <span className="ui-detail-label">Package</span>
             <Link to={`/memories${buildManagedMemorySearch(location.search, memory.id)}`} className="ui-detail-value text-accent hover:underline">
               @{memory.id}
             </Link>
@@ -1807,8 +1807,14 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
           )}
           {memory.updated && (
             <div className="ui-detail-row">
-              <span className="ui-detail-label">Hub updated</span>
+              <span className="ui-detail-label">Package updated</span>
               <span className="ui-detail-value">{timeAgo(memory.updated)}</span>
+            </div>
+          )}
+          {memory.role && (
+            <div className="ui-detail-row">
+              <span className="ui-detail-label">Role</span>
+              <span className="ui-detail-value">{memory.role}</span>
             </div>
           )}
           {memory.type && (
@@ -1829,6 +1835,33 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
               <span className="ui-detail-value">{memory.area}</span>
             </div>
           )}
+          {memory.parent && (
+            <div className="ui-detail-row">
+              <span className="ui-detail-label">Parent</span>
+              <Link
+                to={`/memories${buildManagedMemorySearch(location.search, memory.parent)}`}
+                className="ui-detail-value text-accent hover:underline"
+              >
+                @{memory.parent}
+              </Link>
+            </div>
+          )}
+          {memory.related && memory.related.length > 0 && (
+            <div className="ui-detail-row items-start">
+              <span className="ui-detail-label">Related</span>
+              <span className="ui-detail-value flex flex-wrap gap-x-2 gap-y-1">
+                {memory.related.map((relatedId) => (
+                  <Link
+                    key={relatedId}
+                    to={`/memories${buildManagedMemorySearch(location.search, relatedId)}`}
+                    className="text-accent hover:underline"
+                  >
+                    @{relatedId}
+                  </Link>
+                ))}
+              </span>
+            </div>
+          )}
           {memory.tags.length > 0 && (
             <div className="ui-detail-row">
               <span className="ui-detail-label">Tags</span>
@@ -1840,7 +1873,7 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
         <div className="space-y-2 border-t border-border-subtle pt-4">
           <div className="space-y-1">
             <p className="ui-section-label">Package files</p>
-            <p className="ui-card-meta">Browse the hub overview and package-local references.</p>
+            <p className="ui-card-meta">Browse `MEMORY.md` and package-local references. Assets remain on disk inside `assets/`.</p>
           </div>
           <div className="flex flex-col gap-1.5">
             <Link
@@ -1887,7 +1920,7 @@ function MemoryDocContext({ memoryId, relativePath }: { memoryId: string; relati
               disabled={deleteBusy || loading}
               className="ui-toolbar-button text-danger"
             >
-              {deleteBusy ? 'Deleting…' : 'Delete hub'}
+              {deleteBusy ? 'Deleting…' : 'Delete package'}
             </button>
           )}
           {dirty && !saveBusy && <span className="ui-card-meta">Unsaved changes</span>}
@@ -2229,7 +2262,7 @@ export function ContextRail() {
     return (
       <div className="flex-1 flex flex-col">
         <RailHeader label="Memory" />
-        <EmptyPrompt text="Select a memory hub to inspect its MEMORY.md and package-local references." />
+        <EmptyPrompt text="Select a memory package to inspect its MEMORY.md, relationships, and package-local references." />
       </div>
     );
   }

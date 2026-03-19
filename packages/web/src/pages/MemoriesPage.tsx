@@ -32,7 +32,10 @@ function filterMemories(memories: MemoryDocItem[], query: string): MemoryDocItem
       memory.type,
       memory.status,
       memory.area,
+      memory.role,
+      memory.parent,
       memory.searchText,
+      ...(memory.related ?? []),
       ...memory.tags,
     ]
       .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
@@ -105,6 +108,15 @@ function formatReferenceCount(count: number | undefined): string {
   return `${normalized} ${normalized === 1 ? 'reference' : 'references'}`;
 }
 
+function formatRelatedCount(related: string[] | undefined): string | null {
+  const normalized = related?.length ?? 0;
+  if (normalized === 0) {
+    return null;
+  }
+
+  return `${normalized} related ${normalized === 1 ? 'package' : 'packages'}`;
+}
+
 export function MemoriesPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -169,7 +181,7 @@ export function MemoriesPage() {
           title="Memories"
           meta={(
             <>
-              {memories.length} knowledge {memories.length === 1 ? 'hub' : 'hubs'}
+              {memories.length} memory {memories.length === 1 ? 'package' : 'packages'}
               {memoryQueue.length > 0 && <span className="ml-2 text-secondary">· {memoryQueue.length} in queue</span>}
               {selectedMemoryId && <span className="ml-2 text-secondary">· @{selectedMemoryId}</span>}
             </>
@@ -184,7 +196,7 @@ export function MemoriesPage() {
         {!loading && !error && memories.length === 0 && memoryQueue.length === 0 && (
           <EmptyState
             title="No memories yet."
-            body="Distill a conversation message to create or update a durable memory hub package."
+            body="Distill a conversation message to create or update a durable memory package."
           />
         )}
 
@@ -219,39 +231,41 @@ export function MemoriesPage() {
             {memories.length > 0 && (
               <>
                 <div className="space-y-2">
-                  <p className="ui-section-label">Knowledge hubs</p>
+                  <p className="ui-section-label">Memory packages</p>
                   <p className="ui-card-meta max-w-3xl">
-                    Memory packages work like skills: each hub has a `MEMORY.md` overview plus package-local `references/` and `assets/`.
-                    Search hub metadata and reference content below, then inspect the selected package in the right panel.
+                    Memory packages mirror skills: each package has a `MEMORY.md` overview plus package-local `references/` and `assets/`.
+                    Search package metadata and reference content below, then inspect the selected package in the right panel.
                   </p>
                 </div>
 
                 <div className="space-y-2 border-t border-border-subtle pt-5">
-                  <label htmlFor="memories-search" className="ui-section-label">Search hubs</label>
+                  <label htmlFor="memories-search" className="ui-section-label">Search packages</label>
                   <input
                     id="memories-search"
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Search hubs, summaries, tags, or reference content"
+                    placeholder="Search packages, summaries, tags, metadata, or reference content"
                     className={INPUT_CLASS}
                     autoComplete="off"
                     spellCheck={false}
                   />
                   <p className="ui-card-meta">
                     {query.trim()
-                      ? `Showing ${filteredMemories.length} of ${memories.length} hubs.`
-                      : `Showing ${memories.length} hubs.`}
-                    {' '}Select a hub to browse its `MEMORY.md` and package-local references in the right panel.
+                      ? `Showing ${filteredMemories.length} of ${memories.length} packages.`
+                      : `Showing ${memories.length} packages.`}
+                    {' '}Select a package to browse its `MEMORY.md`, relationships, and package-local references in the right panel.
                   </p>
                 </div>
 
                 {selectedMemory && (
                   <div className="space-y-1 border-t border-border-subtle pt-5">
-                    <p className="ui-section-label">Selected hub</p>
+                    <p className="ui-section-label">Selected package</p>
                     <p className="text-[15px] font-medium text-primary">{selectedMemory.title}</p>
                     <p className="ui-card-meta">
                       {formatReferenceCount(selectedMemory.referenceCount)}
+                      {selectedMemory.role && <span> · {selectedMemory.role}</span>}
                       {selectedMemory.area && <span> · {selectedMemory.area}</span>}
+                      {formatRelatedCount(selectedMemory.related) && <span> · {formatRelatedCount(selectedMemory.related)}</span>}
                       {selectedMemory.updated && <span> · updated {timeAgo(selectedMemory.updated)}</span>}
                     </p>
                   </div>
@@ -263,6 +277,7 @@ export function MemoriesPage() {
                       const isSelected = memory.id === selectedMemoryId;
                       const href = `/memories${buildMemorySearch(location.search, memory.id)}`;
                       const tagsSummary = memory.tags.slice(0, 3).join(' · ');
+                      const relatedSummary = memory.related?.slice(0, 3).map((item) => `@${item}`).join(' · ') ?? '';
 
                       return (
                         <ListLinkRow
@@ -275,6 +290,12 @@ export function MemoriesPage() {
                           <p className="ui-row-summary">{memory.summary || '(no summary)'}</p>
                           <div className="ui-row-meta flex flex-wrap items-center gap-1.5">
                             <span>{formatReferenceCount(memory.referenceCount)}</span>
+                            {memory.role && (
+                              <>
+                                <span className="opacity-40">·</span>
+                                <span>{memory.role}</span>
+                              </>
+                            )}
                             {memory.area && (
                               <>
                                 <span className="opacity-40">·</span>
@@ -308,6 +329,23 @@ export function MemoriesPage() {
                               </>
                             )}
                           </div>
+                          {(memory.parent || relatedSummary) && (
+                            <div className="ui-row-meta flex flex-wrap items-center gap-1.5">
+                              {memory.parent && (
+                                <>
+                                  <span>parent</span>
+                                  <span className="font-mono" title={`@${memory.parent}`}>@{memory.parent}</span>
+                                </>
+                              )}
+                              {memory.parent && relatedSummary && <span className="opacity-40">·</span>}
+                              {relatedSummary && (
+                                <>
+                                  <span>related</span>
+                                  <span className="max-w-[22rem] truncate font-mono" title={relatedSummary}>{relatedSummary}</span>
+                                </>
+                              )}
+                            </div>
+                          )}
                         </ListLinkRow>
                       );
                     })}
@@ -315,7 +353,7 @@ export function MemoriesPage() {
                 ) : (
                   <EmptyState
                     title="No matches"
-                    body="Try a broader search across hub titles, summaries, tags, and package-local reference content."
+                    body="Try a broader search across package titles, summaries, tags, metadata, and package-local reference content."
                     action={<ToolbarButton onClick={() => setQuery('')}>Clear search</ToolbarButton>}
                   />
                 )}
