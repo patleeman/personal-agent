@@ -139,6 +139,10 @@ import {
   buildConversationAutomationFilterHelp,
   validateConversationAutomationFilter,
 } from './conversationAutomationFilter.js';
+import {
+  clearLocalConversationAutomationSettings,
+  migrateLocalConversationAutomationSettingsToProfile,
+} from './conversationAutomationProfileSettings.js';
 import { createWebLiveConversationRunId, syncWebLiveConversationRun } from './conversationRuns.js';
 import { cancelDurableRun, getDurableRun, getDurableRunLog, getDurableRunSnapshot, listDurableRuns } from './durableRuns.js';
 import {
@@ -198,6 +202,7 @@ import {
   listProfiles,
   materializeProfileToAgentDir,
   readPackageSourceTargetState,
+  resolveProfileSettingsFilePath,
   resolveResourceProfile,
 } from '@personal-agent/resources';
 import {
@@ -374,6 +379,11 @@ async function syncDaemonTaskScopeForProfile(profile: string): Promise<void> {
 }
 
 try {
+  if (migrateConversationAutomationSettingsForProfile(currentProfile)) {
+    logInfo('migrated local conversation automation settings to active profile', {
+      profile: currentProfile,
+    });
+  }
   materializeWebProfile(currentProfile);
 } catch (error) {
   logWarn('failed to materialize initial profile', {
@@ -388,6 +398,29 @@ function getCurrentProfile(): string {
   return currentProfile;
 }
 
+function getCurrentProfileSettingsFile(): string {
+  return resolveProfileSettingsFilePath(getCurrentProfile(), {
+    repoRoot: REPO_ROOT,
+    profilesRoot: getProfilesRoot(),
+  });
+}
+
+function migrateConversationAutomationSettingsForProfile(profile: string): boolean {
+  const migration = migrateLocalConversationAutomationSettingsToProfile(profile, {
+    repoRoot: REPO_ROOT,
+    profilesRoot: getProfilesRoot(),
+  });
+  return migration.migrated;
+}
+
+function clearLocalConversationAutomationSettingsOverride(): boolean {
+  const result = clearLocalConversationAutomationSettings({
+    repoRoot: REPO_ROOT,
+    profilesRoot: getProfilesRoot(),
+  });
+  return result.changed;
+}
+
 async function setCurrentProfile(profile: string): Promise<string> {
   const availableProfiles = listAvailableProfiles();
   if (!availableProfiles.includes(profile)) {
@@ -398,8 +431,14 @@ async function setCurrentProfile(profile: string): Promise<string> {
     return currentProfile;
   }
 
+  const migratedAutomationSettings = migrateConversationAutomationSettingsForProfile(profile);
   materializeWebProfile(profile);
   currentProfile = profile;
+  if (migratedAutomationSettings) {
+    logInfo('migrated local conversation automation settings to selected profile', {
+      profile,
+    });
+  }
   writeSavedProfilePreferences(profile, PROFILE_CONFIG_FILE);
   await syncDaemonTaskScopeForProfile(profile);
   invalidateAppTopics('activity', 'projects', 'tasks');
@@ -3100,12 +3139,11 @@ app.patch('/api/conversation-automation/settings', (req, res) => {
       return;
     }
 
-    const saved = persistSettingsWrite(
-      (settingsFile) => writeSavedConversationAutomationJudgePreferences({ model, systemPrompt }, settingsFile),
-      { runtimeSettingsFile: SETTINGS_FILE },
-    );
+    writeSavedConversationAutomationJudgePreferences({ model, systemPrompt }, getCurrentProfileSettingsFile());
+    clearLocalConversationAutomationSettingsOverride();
+    materializeWebProfile(getCurrentProfile());
 
-    res.json(saved);
+    res.json(readSavedConversationAutomationJudgePreferences(SETTINGS_FILE));
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -3179,15 +3217,14 @@ app.patch('/api/conversation-automation/workflow-presets', async (req, res) => {
     const toolNames = new Set(await listConversationAutomationToolNames());
     validateConversationAutomationWorkflowPresets(presets, defaultPresetIds, skillNames, toolNames);
 
-    const saved = persistSettingsWrite(
-      (settingsFile) => writeSavedConversationAutomationWorkflowPresets({
-        presets: presets as Parameters<typeof writeSavedConversationAutomationWorkflowPresets>[0]['presets'],
-        defaultPresetIds: (Array.isArray(defaultPresetIds) ? defaultPresetIds.filter((presetId): presetId is string => typeof presetId === 'string') : []) as Parameters<typeof writeSavedConversationAutomationWorkflowPresets>[0]['defaultPresetIds'],
-      }, settingsFile),
-      { runtimeSettingsFile: SETTINGS_FILE },
-    );
+    writeSavedConversationAutomationWorkflowPresets({
+      presets: presets as Parameters<typeof writeSavedConversationAutomationWorkflowPresets>[0]['presets'],
+      defaultPresetIds: (Array.isArray(defaultPresetIds) ? defaultPresetIds.filter((presetId): presetId is string => typeof presetId === 'string') : []) as Parameters<typeof writeSavedConversationAutomationWorkflowPresets>[0]['defaultPresetIds'],
+    }, getCurrentProfileSettingsFile());
+    clearLocalConversationAutomationSettingsOverride();
+    materializeWebProfile(getCurrentProfile());
 
-    res.json(saved);
+    res.json(readSavedConversationAutomationWorkflowPresets(SETTINGS_FILE));
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const status = message.startsWith('Unknown skill:')
