@@ -588,7 +588,7 @@ export function SystemPage() {
                   label="Targets"
                   value={executionTargets.data ? String(executionTargets.data.summary.totalTargets) : 'loading…'}
                   meta={executionTargets.data
-                    ? `${executionTargets.data.summary.activeRemoteRuns} active remote · ${executionTargets.data.summary.readyImports} ready imports`
+                    ? `${executionTargets.data.summary.activeRemoteRuns} detached remote · ${executionTargets.data.summary.readyImports} ready imports`
                     : undefined}
                   valueClassName={executionTargets.data?.summary.totalTargets ? 'text-primary' : 'text-dim'}
                 />
@@ -598,7 +598,7 @@ export function SystemPage() {
             <SystemSection
               id="execution-targets"
               label="Execution targets"
-              description="Remote kernels stay execution-only. Configure SSH destinations here, see which targets have active remote work, and keep imports conversation-first."
+              description="Configure SSH-backed remote kernels here. They can back live remote conversations and also run detached remote work when you explicitly start it."
               actions={(
                 <ToolbarButton onClick={() => resetTargetDraft(null, { open: true })} disabled={targetMutationBusy}>
                   Add target
@@ -622,7 +622,7 @@ export function SystemPage() {
                       meta={executionTargets.data.summary.totalTargets === 1 ? '1 target' : `${executionTargets.data.summary.totalTargets} targets`}
                     />
                     <StatBlock
-                      label="Active remote runs"
+                      label="Detached remote runs"
                       value={String(executionTargets.data.summary.activeRemoteRuns)}
                       meta="Currently running or recovering"
                     />

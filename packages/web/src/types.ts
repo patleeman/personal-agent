@@ -724,6 +724,17 @@ export interface FolderPickerResult {
   cancelled: boolean;
 }
 
+export interface RemoteFolderEntry {
+  name: string;
+  path: string;
+}
+
+export interface RemoteFolderListing {
+  cwd: string;
+  parent: string | null;
+  entries: RemoteFolderEntry[];
+}
+
 export interface LiveSessionMeta {
   id:          string;
   cwd:         string;
@@ -952,28 +963,43 @@ export interface ConversationAutomationPreferencesState {
   defaultEnabled: boolean;
 }
 
-export type ConversationAutomationTodoItemStatus = 'pending' | 'running' | 'completed' | 'failed';
+export type ConversationAutomationTodoItemStatus = 'pending' | 'running' | 'completed' | 'failed' | 'blocked';
 export type ConversationAutomationReviewStatus = 'pending' | 'running' | 'completed' | 'failed';
 
-export interface ConversationAutomationTemplateTodoItem {
-  id: string;
-  label: string;
-  skillName: string;
-  skillArgs?: string;
-}
+export type ConversationAutomationTodoItemKind = 'skill' | 'instruction';
 
-export interface ConversationAutomationTodoItem {
+export type ConversationAutomationTemplateTodoItem = {
   id: string;
+  kind: 'skill';
   label: string;
   skillName: string;
   skillArgs?: string;
+} | {
+  id: string;
+  kind: 'instruction';
+  label: string;
+  text: string;
+};
+
+export type ConversationAutomationTodoItem = ({
+  id: string;
+  kind: 'skill';
+  label: string;
+  skillName: string;
+  skillArgs?: string;
+} | {
+  id: string;
+  kind: 'instruction';
+  label: string;
+  text: string;
+}) & {
   status: ConversationAutomationTodoItemStatus;
   createdAt: string;
   updatedAt: string;
   startedAt?: string;
   completedAt?: string;
   resultReason?: string;
-}
+};
 
 export interface ConversationAutomationReviewState {
   status: ConversationAutomationReviewStatus;

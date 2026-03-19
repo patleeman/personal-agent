@@ -10,6 +10,7 @@ import {
 } from '../conversationRuns';
 import {
   buildDraftConversationCwdStorageKey,
+  buildDraftConversationExecutionTargetStorageKey,
   DRAFT_CONVERSATION_ID,
 } from '../draftConversation';
 import { useReloadState } from '../reloadState';
@@ -31,7 +32,7 @@ import { useConversations } from '../hooks/useConversations';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { buildCapabilityCards, buildIdentitySummary, buildKnowledgeSections, buildMemoryPageSummary } from '../memoryOverview';
 import { emitMemoriesChanged } from '../memoryDocEvents';
-import type { ActivityEntry, DurableRunDetailResult, DurableRunRecord, LiveSessionContext, ProjectDetail, ProjectRecord } from '../types';
+import type { ActivityEntry, ConversationExecutionState, DurableRunDetailResult, DurableRunRecord, LiveSessionContext, ProjectDetail, ProjectRecord, RemoteFolderListing } from '../types';
 import { formatDate, kindMeta, timeAgo } from '../utils';
 import { useAppData, useAppEvents } from '../contexts';
 import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
@@ -82,6 +83,77 @@ function RailHeader({ label, sub }: { label: string; sub?: string }) {
         <p className="ui-section-label">{label}</p>
         {sub && <p className="text-[12px] text-secondary mt-0.5 font-mono truncate">{sub}</p>}
       </div>
+    </div>
+  );
+}
+
+function RemoteFolderBrowser({
+  listing,
+  loading,
+  error,
+  selecting = false,
+  onNavigate,
+  onSelect,
+  onClose,
+}: {
+  listing: RemoteFolderListing | null;
+  loading: boolean;
+  error: string | null;
+  selecting?: boolean;
+  onNavigate: (path: string) => void;
+  onSelect: (path: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="space-y-2 rounded-lg border border-border-subtle bg-base px-3 py-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="ui-section-label">Remote folders</p>
+          <p className="mt-1 break-all font-mono text-[11px] text-secondary">{listing?.cwd ?? 'Loading…'}</p>
+        </div>
+        <button type="button" onClick={onClose} className="ui-toolbar-button shrink-0">Close</button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => { if (listing?.parent) onNavigate(listing.parent); }}
+          disabled={loading || !listing?.parent}
+          className="ui-toolbar-button"
+        >
+          Up
+        </button>
+        <button
+          type="button"
+          onClick={() => { if (listing) onSelect(listing.cwd); }}
+          disabled={loading || !listing || selecting}
+          className="ui-toolbar-button text-accent"
+        >
+          {selecting ? 'Using…' : 'Use this folder'}
+        </button>
+      </div>
+
+      {error && <p className="text-[11px] text-danger/80">{error}</p>}
+      {loading && <p className="text-[11px] text-dim animate-pulse">Loading remote folders…</p>}
+      {!loading && !error && listing && listing.entries.length === 0 && (
+        <p className="text-[11px] text-dim">No subdirectories found here.</p>
+      )}
+      {!loading && listing && listing.entries.length > 0 && (
+        <div className="max-h-56 overflow-y-auto rounded-lg border border-border-subtle bg-surface">
+          {listing.entries.map((entry) => (
+            <button
+              key={entry.path}
+              type="button"
+              onClick={() => onNavigate(entry.path)}
+              className="flex w-full items-center justify-between gap-3 border-t border-border-subtle px-3 py-2 text-left first:border-t-0 hover:bg-elevated/70"
+              title={entry.path}
+            >
+              <span className="truncate text-[12px] text-primary">{entry.name}</span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-dim">open</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -412,12 +484,21 @@ function DraftConversationContextPanel() {
     initialValue: '',
     shouldPersist: (value) => value.trim().length > 0,
   });
+  const [draftTargetId] = useReloadState<string | null>({
+    storageKey: buildDraftConversationExecutionTargetStorageKey(),
+    initialValue: null,
+    shouldPersist: (value) => typeof value === 'string' && value.trim().length > 0,
+  });
   const [changingCwd, setChangingCwd] = useState(false);
   const [requestedCwd, setRequestedCwd] = useState(draftCwd);
   const [pickCwdBusy, setPickCwdBusy] = useState(false);
   const [openCwdBusy, setOpenCwdBusy] = useState(false);
   const [openCwdError, setOpenCwdError] = useState<string | null>(null);
   const [changeCwdError, setChangeCwdError] = useState<string | null>(null);
+  const [remotePickerOpen, setRemotePickerOpen] = useState(false);
+  const [remotePickerBusy, setRemotePickerBusy] = useState(false);
+  const [remotePickerError, setRemotePickerError] = useState<string | null>(null);
+  const [remotePickerListing, setRemotePickerListing] = useState<RemoteFolderListing | null>(null);
 
   useEffect(() => {
     if (!changingCwd) {
@@ -425,7 +506,35 @@ function DraftConversationContextPanel() {
     }
   }, [draftCwd, changingCwd]);
 
+  useEffect(() => {
+    setRemotePickerOpen(false);
+    setRemotePickerError(null);
+    setRemotePickerListing(null);
+  }, [draftTargetId]);
+
   const hasExplicitCwd = draftCwd.trim().length > 0;
+  const isRemoteDraft = typeof draftTargetId === 'string' && draftTargetId.length > 0;
+
+  async function loadRemoteDraftFolders(pathOverride?: string) {
+    if (!draftTargetId) {
+      return;
+    }
+
+    setRemotePickerBusy(true);
+    setRemotePickerError(null);
+    try {
+      const result = await api.browseRemoteFolder(
+        draftTargetId,
+        pathOverride ?? (draftCwd || undefined),
+        draftCwd || undefined,
+      );
+      setRemotePickerListing(result);
+    } catch (error) {
+      setRemotePickerError(error instanceof Error ? error.message : 'Could not browse remote folders.');
+    } finally {
+      setRemotePickerBusy(false);
+    }
+  }
 
   async function pickDraftCwd() {
     if (pickCwdBusy) {
@@ -436,6 +545,12 @@ function DraftConversationContextPanel() {
     setOpenCwdError(null);
     setChangeCwdError(null);
     try {
+      if (draftTargetId) {
+        setRemotePickerOpen(true);
+        await loadRemoteDraftFolders();
+        return;
+      }
+
       const result = await api.pickFolder(draftCwd || undefined);
       if (result.cancelled || !result.path) {
         return;
@@ -451,8 +566,16 @@ function DraftConversationContextPanel() {
     }
   }
 
+  function selectRemoteDraftFolder(path: string) {
+    setDraftCwd(path);
+    setRequestedCwd(path);
+    setRemotePickerOpen(false);
+    setRemotePickerError(null);
+    setChangingCwd(false);
+  }
+
   async function openCwdInVscode() {
-    if (!hasExplicitCwd || openCwdBusy) {
+    if (!hasExplicitCwd || openCwdBusy || isRemoteDraft) {
       return;
     }
 
@@ -474,6 +597,7 @@ function DraftConversationContextPanel() {
     setRequestedCwd(draftCwd);
     setOpenCwdError(null);
     setChangeCwdError(null);
+    setRemotePickerOpen(false);
     setChangingCwd(true);
   }
 
@@ -488,6 +612,7 @@ function DraftConversationContextPanel() {
     setDraftCwd(nextCwd);
     setRequestedCwd(nextCwd);
     setChangeCwdError(null);
+    setRemotePickerOpen(false);
     setChangingCwd(false);
   }
 
@@ -496,6 +621,8 @@ function DraftConversationContextPanel() {
     setRequestedCwd('');
     setOpenCwdError(null);
     setChangeCwdError(null);
+    setRemotePickerOpen(false);
+    setRemotePickerError(null);
     setChangingCwd(false);
   }
 
@@ -523,16 +650,16 @@ function DraftConversationContextPanel() {
               <button
                 type="button"
                 onClick={() => { void pickDraftCwd(); }}
-                disabled={pickCwdBusy}
+                disabled={pickCwdBusy || remotePickerBusy}
                 className="ui-toolbar-button text-accent whitespace-nowrap"
-                title="Choose the initial working directory for this draft conversation"
+                title={isRemoteDraft ? 'Browse folders on the remote execution target' : 'Choose the initial working directory for this draft conversation'}
               >
-                {pickCwdBusy ? 'Choosing…' : 'Choose folder…'}
+                {pickCwdBusy || remotePickerBusy ? 'Choosing…' : isRemoteDraft ? 'Browse remote…' : 'Choose folder…'}
               </button>
               <button
                 type="button"
                 onClick={startChangingCwd}
-                disabled={pickCwdBusy}
+                disabled={pickCwdBusy || remotePickerBusy}
                 className="ui-toolbar-button whitespace-nowrap"
                 title="Enter the working directory manually"
               >
@@ -541,8 +668,8 @@ function DraftConversationContextPanel() {
               <IconButton
                 compact
                 onClick={() => { void openCwdInVscode(); }}
-                disabled={!hasExplicitCwd || openCwdBusy || pickCwdBusy}
-                title={openCwdBusy ? 'Opening VS Code…' : 'Open the draft working directory in VS Code'}
+                disabled={!hasExplicitCwd || openCwdBusy || pickCwdBusy || remotePickerBusy || isRemoteDraft}
+                title={isRemoteDraft ? 'Open the remote workspace directly from the remote host instead.' : openCwdBusy ? 'Opening VS Code…' : 'Open the draft working directory in VS Code'}
                 aria-label="Open the draft working directory in VS Code"
                 className="shrink-0"
               >
@@ -554,6 +681,19 @@ function DraftConversationContextPanel() {
               </IconButton>
             </div>
           </div>
+          {remotePickerOpen && isRemoteDraft && (
+            <RemoteFolderBrowser
+              listing={remotePickerListing}
+              loading={remotePickerBusy}
+              error={remotePickerError}
+              onNavigate={(path) => { void loadRemoteDraftFolders(path); }}
+              onSelect={selectRemoteDraftFolder}
+              onClose={() => {
+                setRemotePickerOpen(false);
+                setRemotePickerError(null);
+              }}
+            />
+          )}
           {changingCwd && (
             <form
               className="space-y-2"
@@ -584,7 +724,7 @@ function DraftConversationContextPanel() {
                 className="w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] font-mono text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50"
               />
               <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] text-dim">Use the folder picker above for the default flow, or enter an absolute, ~, or relative path here.</p>
+                <p className="text-[11px] text-dim">{isRemoteDraft ? 'Browse the remote filesystem above, or enter an absolute, ~, or relative remote path here.' : 'Use the folder picker above for the default flow, or enter an absolute, ~, or relative path here.'}</p>
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
@@ -607,8 +747,12 @@ function DraftConversationContextPanel() {
           )}
           <p className="text-[11px] text-dim">
             {hasExplicitCwd
-              ? 'This path will be used when the draft becomes a live conversation.'
-              : 'Use the folder picker as the default flow. Manual entry still works, and leaving the field blank lets a single referenced project repo root or the saved default working directory choose for you.'}
+              ? isRemoteDraft
+                ? 'This remote path will be used when the draft becomes a live remote conversation.'
+                : 'This path will be used when the draft becomes a live conversation.'
+              : isRemoteDraft
+                ? 'Browse the remote target or enter a remote path manually. Leaving this blank lets the target default remote cwd decide where the conversation starts.'
+                : 'Use the folder picker as the default flow. Manual entry still works, and leaving the field blank lets a single referenced project repo root or the saved default working directory choose for you.'}
           </p>
           {(openCwdError || changeCwdError) && (
             <p className="text-[11px] text-danger/80">{changeCwdError ?? openCwdError}</p>
@@ -625,6 +769,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const { versions } = useAppEvents();
   const { tasks, sessions } = useAppData();
   const [data, setData] = useState<LiveSessionContext | null>(null);
+  const [execution, setExecution] = useState<ConversationExecutionState | null>(null);
   const [allProjects, setAllProjects] = useState<ProjectRecord[]>([]);
   const [focusedProjectId, setFocusedProjectId] = useState('');
   const [attachProjectId, setAttachProjectId] = useState('');
@@ -645,15 +790,20 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const [requestedCwd, setRequestedCwd] = useState('');
   const [changeCwdBusy, setChangeCwdBusy] = useState(false);
   const [changeCwdError, setChangeCwdError] = useState<string | null>(null);
+  const [remotePickerOpen, setRemotePickerOpen] = useState(false);
+  const [remotePickerBusy, setRemotePickerBusy] = useState(false);
+  const [remotePickerError, setRemotePickerError] = useState<string | null>(null);
+  const [remotePickerListing, setRemotePickerListing] = useState<RemoteFolderListing | null>(null);
 
   const load = useCallback(() => {
     let cancelled = false;
     setLoading(true);
     setError(false);
-    Promise.all([api.liveSessionContext(id), api.projects()])
-      .then(([context, projects]) => {
+    Promise.all([api.liveSessionContext(id), api.projects(), api.conversationExecution(id)])
+      .then(([context, projects, nextExecution]) => {
         if (cancelled) return;
         setData(context);
+        setExecution(nextExecution);
         setAllProjects(projects);
         setLoading(false);
       })
@@ -730,6 +880,10 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     setChangeCwdBusy(false);
     setChangeCwdError(null);
     setOpenCwdError(null);
+    setRemotePickerOpen(false);
+    setRemotePickerBusy(false);
+    setRemotePickerError(null);
+    setRemotePickerListing(null);
     setRunsExpanded(false);
   }, [id]);
 
@@ -754,6 +908,8 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   }, [id, load]);
 
   const relatedProjectIds = data?.relatedProjectIds ?? [];
+  const remoteTargetId = execution?.location === 'remote' ? execution.targetId : null;
+  const isRemoteConversation = typeof remoteTargetId === 'string' && remoteTargetId.length > 0;
   const availableProjects = allProjects.filter((project) => !relatedProjectIds.includes(project.id) && !isProjectArchived(project));
   const availableProjectIds = availableProjects.map((project) => project.id);
   const selectedAttachProject = availableProjects.find((project) => project.id === attachProjectId) ?? null;
@@ -950,6 +1106,27 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     });
   }
 
+  async function loadRemoteConversationFolders(pathOverride?: string) {
+    if (!remoteTargetId || !data) {
+      return;
+    }
+
+    setRemotePickerBusy(true);
+    setRemotePickerError(null);
+    try {
+      const result = await api.browseRemoteFolder(
+        remoteTargetId,
+        pathOverride ?? (data.cwd || undefined),
+        data.cwd || undefined,
+      );
+      setRemotePickerListing(result);
+    } catch (error) {
+      setRemotePickerError(error instanceof Error ? error.message : 'Could not browse remote folders.');
+    } finally {
+      setRemotePickerBusy(false);
+    }
+  }
+
   async function pickAndSubmitCwd() {
     if (!data || pickCwdBusy || changeCwdBusy) {
       return;
@@ -959,6 +1136,12 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     setOpenCwdError(null);
     setChangeCwdError(null);
     try {
+      if (remoteTargetId) {
+        setRemotePickerOpen(true);
+        await loadRemoteConversationFolders();
+        return;
+      }
+
       const result = await api.pickFolder(data.cwd);
       if (result.cancelled || !result.path) {
         return;
@@ -975,7 +1158,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   }
 
   async function openCwdInVscode() {
-    if (!data || openCwdBusy) return;
+    if (!data || openCwdBusy || isRemoteConversation) return;
 
     setOpenCwdBusy(true);
     setOpenCwdError(null);
@@ -992,13 +1175,14 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   }
 
   function startChangingCwd() {
-    if (!data || changeCwdBusy || pickCwdBusy) {
+    if (!data || changeCwdBusy || pickCwdBusy || remotePickerBusy) {
       return;
     }
 
     setRequestedCwd(data.cwd);
     setOpenCwdError(null);
     setChangeCwdError(null);
+    setRemotePickerOpen(false);
     setChangingCwd(true);
   }
 
@@ -1026,6 +1210,8 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     try {
       const result = await api.changeConversationCwd(id, nextCwd);
       setChangingCwd(false);
+      setRemotePickerOpen(false);
+      setRemotePickerError(null);
       setRequestedCwd(result.cwd);
 
       if (!result.changed || result.id === id) {
@@ -1064,16 +1250,16 @@ function LiveSessionContextPanel({ id }: { id: string }) {
               <button
                 type="button"
                 onClick={() => { void pickAndSubmitCwd(); }}
-                disabled={pickCwdBusy || changeCwdBusy}
+                disabled={pickCwdBusy || changeCwdBusy || remotePickerBusy}
                 className="ui-toolbar-button text-accent whitespace-nowrap"
-                title="Choose a new working directory for this conversation"
+                title={isRemoteConversation ? 'Browse folders on the remote execution target' : 'Choose a new working directory for this conversation'}
               >
-                {pickCwdBusy ? 'Choosing…' : 'Choose folder…'}
+                {pickCwdBusy || remotePickerBusy ? 'Choosing…' : isRemoteConversation ? 'Browse remote…' : 'Choose folder…'}
               </button>
               <button
                 type="button"
                 onClick={startChangingCwd}
-                disabled={changingCwd || changeCwdBusy || pickCwdBusy}
+                disabled={changingCwd || changeCwdBusy || pickCwdBusy || remotePickerBusy}
                 className="ui-toolbar-button whitespace-nowrap"
                 title="Enter the working directory manually"
               >
@@ -1082,8 +1268,8 @@ function LiveSessionContextPanel({ id }: { id: string }) {
               <IconButton
                 compact
                 onClick={() => { void openCwdInVscode(); }}
-                disabled={openCwdBusy || pickCwdBusy || changeCwdBusy}
-                title={openCwdBusy ? 'Opening VS Code…' : 'Open current working directory in VS Code'}
+                disabled={openCwdBusy || pickCwdBusy || changeCwdBusy || remotePickerBusy || isRemoteConversation}
+                title={isRemoteConversation ? 'Open the remote workspace directly from the remote host instead.' : openCwdBusy ? 'Opening VS Code…' : 'Open current working directory in VS Code'}
                 aria-label="Open current working directory in VS Code"
                 className="shrink-0"
               >
@@ -1095,6 +1281,20 @@ function LiveSessionContextPanel({ id }: { id: string }) {
               </IconButton>
             </div>
           </div>
+          {remotePickerOpen && isRemoteConversation && (
+            <RemoteFolderBrowser
+              listing={remotePickerListing}
+              loading={remotePickerBusy}
+              error={remotePickerError}
+              selecting={changeCwdBusy}
+              onNavigate={(path) => { void loadRemoteConversationFolders(path); }}
+              onSelect={(path) => { void submitCwdChange(path); }}
+              onClose={() => {
+                setRemotePickerOpen(false);
+                setRemotePickerError(null);
+              }}
+            />
+          )}
           {changingCwd && (
             <form
               className="space-y-2"
@@ -1125,7 +1325,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
                 className="w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] font-mono text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50"
               />
               <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] text-dim">Use the folder picker above for the default flow, or enter an absolute, ~, or relative path here.</p>
+                <p className="text-[11px] text-dim">{isRemoteConversation ? 'Browse the remote filesystem above, or enter an absolute, ~, or relative remote path here.' : 'Use the folder picker above for the default flow, or enter an absolute, ~, or relative path here.'}</p>
                 <div className="flex items-center gap-1">
                   <button
                     type="button"
@@ -1235,7 +1435,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         </div>
       </Section>
 
-      <Section title="Automation">
+      <Section title="Plan">
         <ConversationAutomationPanel conversationId={id} />
       </Section>
 
@@ -2135,13 +2335,13 @@ export function ContextRail() {
   // Automation
   if (section === 'automation') return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <RailHeader label="Automation" sub={automationPresetId ?? (creatingAutomationPreset ? 'new preset' : undefined)} />
+      <RailHeader label="Plans" sub={automationPresetId ?? (creatingAutomationPreset ? 'new plan' : undefined)} />
       <div className="min-h-0 flex-1 overflow-y-auto">
         {suspendRailPanel(
           automationPresetId || creatingAutomationPreset
             ? <AutomationPresetPanel presetId={automationPresetId} creatingNew={creatingAutomationPreset} />
-            : <EmptyPrompt text="Select a preset or create a new one to edit reusable automation templates." />,
-          'Loading automation…',
+            : <EmptyPrompt text="Select a plan or create a new one to edit reusable action plans." />,
+          'Loading plans…',
         )}
       </div>
     </div>
