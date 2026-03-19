@@ -303,6 +303,11 @@ export interface TelegramMessageLike {
     message_id?: number;
   };
   from?: TelegramUserLike;
+  internal?: {
+    durable?: boolean;
+    suppressFollowUpQueuedMessage?: boolean;
+    bypassAccessChecks?: boolean;
+  };
 }
 
 interface TelegramCallbackQueryLike {
@@ -636,6 +641,7 @@ const TELEGRAM_RESUME_SELECTION_CALLBACK_PREFIX = 'resume_select:';
 const TELEGRAM_ROOM_AUTH_REQUEST_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const TELEGRAM_MAX_PENDING_ROOM_AUTH_REQUESTS = 500;
 const TELEGRAM_MAX_TRACKED_CONVERSATION_MESSAGES = 200;
+const TELEGRAM_MAX_TRACKED_CHAT_MESSAGE_IDS = 500;
 const TELEGRAM_CLEAR_SWEEP_MESSAGE_LIMIT = 400;
 const TELEGRAM_CLEAR_SWEEP_MESSAGE_LIMIT_ALL = 5000;
 const TELEGRAM_DELETE_MESSAGES_CHUNK_SIZE = 100;
@@ -2232,6 +2238,70 @@ export function splitTelegramMessage(text: string, chunkSize = TELEGRAM_MAX_MESS
   }
 
   return chunks;
+}
+
+export function planDelegateCompletionBatching<T extends {
+  conversationId: string;
+  notifyMode: 'none' | 'message' | 'resume';
+}>(input: {
+  completed: T[];
+  remaining: Iterable<T>;
+  existingResumeBatches?: Iterable<readonly [string, readonly T[]]>;
+}): {
+  immediate: T[];
+  readyResumeBatches: Array<{ conversationId: string; watches: T[] }>;
+  pendingResumeBatches: Array<{ conversationId: string; watches: T[] }>;
+} {
+  const immediate: T[] = [];
+  const pendingByConversation = new Map<string, T[]>();
+
+  for (const [conversationId, watches] of input.existingResumeBatches ?? []) {
+    pendingByConversation.set(conversationId, [...watches]);
+  }
+
+  for (const watch of input.completed) {
+    if (watch.notifyMode !== 'resume') {
+      immediate.push(watch);
+      continue;
+    }
+
+    const existing = pendingByConversation.get(watch.conversationId);
+    if (existing) {
+      existing.push(watch);
+      continue;
+    }
+
+    pendingByConversation.set(watch.conversationId, [watch]);
+  }
+
+  const conversationsWithRunningResumeDelegates = new Set<string>();
+  for (const watch of input.remaining) {
+    if (watch.notifyMode === 'resume') {
+      conversationsWithRunningResumeDelegates.add(watch.conversationId);
+    }
+  }
+
+  const readyResumeBatches: Array<{ conversationId: string; watches: T[] }> = [];
+  const pendingResumeBatches: Array<{ conversationId: string; watches: T[] }> = [];
+
+  for (const [conversationId, watches] of pendingByConversation.entries()) {
+    const batch = {
+      conversationId,
+      watches,
+    };
+
+    if (conversationsWithRunningResumeDelegates.has(conversationId)) {
+      pendingResumeBatches.push(batch);
+    } else {
+      readyResumeBatches.push(batch);
+    }
+  }
+
+  return {
+    immediate,
+    readyResumeBatches,
+    pendingResumeBatches,
+  };
 }
 
 function inferMimeTypeFromPath(filePath: string): string | undefined {
@@ -5181,6 +5251,30 @@ function trackTelegramConversationMessageId(
   messageIdsByConversation.set(conversationId, tracked);
 }
 
+function trackSeenTelegramChatMessageId(
+  messageIdsByChat: Map<string, number[]>,
+  chatId: string,
+  messageId: number | undefined,
+): boolean {
+  if (typeof messageId !== 'number' || !Number.isSafeInteger(messageId) || messageId <= 0) {
+    return false;
+  }
+
+  const tracked = messageIdsByChat.get(chatId) ?? [];
+  if (tracked.includes(messageId)) {
+    return true;
+  }
+
+  tracked.push(messageId);
+
+  if (tracked.length > TELEGRAM_MAX_TRACKED_CHAT_MESSAGE_IDS) {
+    tracked.splice(0, tracked.length - TELEGRAM_MAX_TRACKED_CHAT_MESSAGE_IDS);
+  }
+
+  messageIdsByChat.set(chatId, tracked);
+  return false;
+}
+
 function buildTelegramClearSweepMessageIds(
   latestMessageId: number | undefined,
   maxCount: number,
@@ -5308,13 +5402,14 @@ async function processTelegramMessage(
   const allowedUserIds = options.allowedUserIds ?? new Set<string>();
   const blockedUserIds = options.blockedUserIds ?? new Set<string>();
   const senderIsAllowedUser = senderUserId ? allowedUserIds.has(senderUserId) : false;
+  const bypassAccessChecks = message.internal?.bypassAccessChecks === true;
 
-  if (senderUserId && blockedUserIds.has(senderUserId)) {
+  if (!bypassAccessChecks && senderUserId && blockedUserIds.has(senderUserId)) {
     return completedMessageProcessingResult();
   }
 
   const allowSenderlessMessageInAllowlistedChat = !senderUserId && options.allowlist.has(chatId);
-  if (allowedUserIds.size > 0 && !senderIsAllowedUser && !allowSenderlessMessageInAllowlistedChat) {
+  if (!bypassAccessChecks && allowedUserIds.size > 0 && !senderIsAllowedUser && !allowSenderlessMessageInAllowlistedChat) {
     return completedMessageProcessingResult();
   }
 
@@ -5399,7 +5494,7 @@ async function processTelegramMessage(
   const bypassAllowlistForDirectChat = senderIsAllowedUser && message.chat.type === 'private';
   const canAutoAuthorizeRoom = senderIsAllowedUser && message.chat.type !== 'private';
 
-  if (!options.allowlist.has(chatId) && !bypassAllowlistForDirectChat) {
+  if (!bypassAccessChecks && !options.allowlist.has(chatId) && !bypassAllowlistForDirectChat) {
     if (canAutoAuthorizeRoom && !isServiceOnlyMessage) {
       options.allowlist.add(chatId);
       options.persistAccessLists?.();
@@ -6285,6 +6380,10 @@ model=${model}`,
     return completedMessageProcessingResult();
   }
 
+  if (message.internal?.suppressFollowUpQueuedMessage) {
+    return completedMessageProcessingResult();
+  }
+
   await sendMessageToConversation(FOLLOWUP_QUEUED_MESSAGE);
   return completedMessageProcessingResult();
 }
@@ -6296,7 +6395,7 @@ export function createQueuedTelegramMessageHandler(
   const pendingPerConversation = new Map<string, number>();
   const controllers = new Map<string, Promise<GatewayConversationController>>();
   const runTasks = new Map<string, Set<Promise<void>>>();
-  const latestMessageIdByChat = new Map<string, number>();
+  const seenMessageIdsByChat = new Map<string, number[]>();
   const lastPromptByConversation = new Map<string, TelegramPromptMemoryEntry>();
   const awaitingFollowUpByConversation = new Set<string>();
   const recentMessageIdsByConversation = new Map<string, number[]>();
@@ -6437,14 +6536,9 @@ export function createQueuedTelegramMessageHandler(
     const messageThreadId = normalizeTelegramMessageThreadId(message.message_thread_id);
     const conversationId = buildTelegramConversationId(chatId, messageThreadId);
 
-    if (typeof message.message_id === 'number') {
-      const latestMessageId = latestMessageIdByChat.get(chatId);
-      if (latestMessageId !== undefined && message.message_id <= latestMessageId) {
-        acknowledgePendingMessage(pendingMessageId);
-        return false;
-      }
-
-      latestMessageIdByChat.set(chatId, message.message_id);
+    if (trackSeenTelegramChatMessageId(seenMessageIdsByChat, chatId, message.message_id)) {
+      acknowledgePendingMessage(pendingMessageId);
+      return false;
     }
 
     const pending = pendingPerConversation.get(conversationId) ?? 0;
@@ -6512,7 +6606,7 @@ export function createQueuedTelegramMessageHandler(
 
       let pendingMessageId: string | undefined;
 
-      if (durableInboxDir) {
+      if (durableInboxDir && message.internal?.durable !== false) {
         try {
           pendingMessageId = storeTelegramPendingMessage(durableInboxDir, message);
         } catch (error) {
@@ -7199,7 +7293,6 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
   const runGroups = new Map<string, TelegramRunGroup>();
   const runWatches = new Map<string, TelegramRunWatch>();
   let runWatchPollInFlight = false;
-  let syntheticInternalMessageId = Date.now();
   const telegramHandlerRef: { current?: QueuedTelegramMessageHandler } = {};
 
   const buildSyntheticTelegramSender = (): TelegramUserLike | undefined => {
@@ -7238,16 +7331,18 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
       return false;
     }
 
-    syntheticInternalMessageId += 1;
     telegramHandlerRef.current.handleMessage({
       chat: {
         id: Number(parsed.chatId),
-        type: 'supergroup',
       },
-      message_id: syntheticInternalMessageId,
       message_thread_id: parsed.messageThreadId,
       text: `/followup ${prompt}`,
       from: syntheticSender,
+      internal: {
+        durable: false,
+        suppressFollowUpQueuedMessage: true,
+        bypassAccessChecks: true,
+      },
     });
     return true;
   };
@@ -7265,7 +7360,18 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
   }
 
   const delegateWatches = new Map<string, GatewayDelegateWatch>();
+  const delegateResumeBatches = new Map<string, GatewayDelegateWatch[]>();
   let delegateWatchPollInFlight = false;
+
+  const orderDelegateBatchWatches = (watches: GatewayDelegateWatch[]): GatewayDelegateWatch[] => [...watches]
+    .sort((left, right) => {
+      const timestampCompare = left.startedAt.localeCompare(right.startedAt);
+      if (timestampCompare !== 0) {
+        return timestampCompare;
+      }
+
+      return left.runId.localeCompare(right.runId);
+    });
 
   const buildDelegateCompletionMessage = async (watch: GatewayDelegateWatch): Promise<string> => {
     const run = await getDurableRun(watch.runId);
@@ -7284,6 +7390,29 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
     if (logText) {
       lines.push('', 'Recent log tail:', logText);
+    }
+
+    return lines.join('\n');
+  };
+
+  const buildDelegateBatchCompletionMessage = async (watches: GatewayDelegateWatch[]): Promise<string> => {
+    const orderedWatches = orderDelegateBatchWatches(watches);
+    if (orderedWatches.length === 1) {
+      return buildDelegateCompletionMessage(orderedWatches[0]!);
+    }
+
+    const lines = ['Delegated runs finished:'];
+
+    for (const watch of orderedWatches) {
+      const run = await getDurableRun(watch.runId);
+      const status = run?.run.status?.status ?? 'unknown';
+      const summary = [`- ${watch.runId}`, `task=${watch.taskSlug}`, `status=${status}`];
+
+      if (watch.logPath) {
+        summary.push(`log=${watch.logPath}`);
+      }
+
+      lines.push(summary.join(' · '));
     }
 
     return lines.join('\n');
@@ -7309,7 +7438,50 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     ].join('\n');
   };
 
+  const buildDelegateBatchFollowUpPrompt = async (watches: GatewayDelegateWatch[]): Promise<string> => {
+    const orderedWatches = orderDelegateBatchWatches(watches);
+    if (orderedWatches.length === 1) {
+      return buildDelegateFollowUpPrompt(orderedWatches[0]!);
+    }
+
+    const lines = [
+      'Delegated runs have finished. Continue from this point.',
+      '',
+      'Completed delegated runs:',
+    ];
+
+    for (const watch of orderedWatches) {
+      const run = await getDurableRun(watch.runId);
+      const status = run?.run.status?.status ?? 'unknown';
+      const logText = readRunLogTail(watch.logPath, 20).trim() || '(empty log)';
+
+      lines.push(
+        '',
+        `Run ${watch.runId}`,
+        `taskSlug=${watch.taskSlug}`,
+        `status=${status}`,
+        '',
+        'Original delegated task:',
+        watch.taskPrompt,
+        '',
+        'Recent log tail:',
+        logText,
+      );
+    }
+
+    lines.push(
+      '',
+      'Use delegate get/logs if you need more detail. Then summarize the combined outcome and continue with the next concrete step.',
+    );
+
+    return lines.join('\n');
+  };
+
   const finalizeDelegateWatch = async (watch: GatewayDelegateWatch): Promise<void> => {
+    if (watch.notifyMode === 'none') {
+      return;
+    }
+
     const completionMessage = await buildDelegateCompletionMessage(watch);
 
     if (watch.notifyMode === 'message') {
@@ -7317,27 +7489,55 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
       return;
     }
 
-    if (watch.notifyMode === 'resume') {
-      const followUpPrompt = await buildDelegateFollowUpPrompt(watch);
-      const resumed = dispatchSyntheticTelegramFollowUp(watch.conversationId, followUpPrompt);
-      if (!resumed) {
-        await sendTelegramMessageToConversation(
-          watch.chatId,
-          watch.messageThreadId,
-          `${completionMessage}\n\nUnable to auto-resume. Reply in this conversation to continue.`,
-        );
-      }
+    const followUpPrompt = await buildDelegateFollowUpPrompt(watch);
+    const resumed = dispatchSyntheticTelegramFollowUp(watch.conversationId, followUpPrompt);
+    if (!resumed) {
+      await sendTelegramMessageToConversation(
+        watch.chatId,
+        watch.messageThreadId,
+        `${completionMessage}\n\nUnable to auto-resume. Reply in this conversation to continue.`,
+      );
+    }
+  };
+
+  const finalizeDelegateResumeBatch = async (
+    conversationId: string,
+    watches: GatewayDelegateWatch[],
+  ): Promise<void> => {
+    const orderedWatches = orderDelegateBatchWatches(watches);
+    if (orderedWatches.length === 0) {
+      return;
+    }
+
+    if (orderedWatches.length === 1) {
+      await finalizeDelegateWatch(orderedWatches[0]!);
+      return;
+    }
+
+    const completionMessage = await buildDelegateBatchCompletionMessage(orderedWatches);
+    const followUpPrompt = await buildDelegateBatchFollowUpPrompt(orderedWatches);
+    const firstWatch = orderedWatches[0]!;
+    const resumed = dispatchSyntheticTelegramFollowUp(conversationId, followUpPrompt);
+
+    if (!resumed) {
+      await sendTelegramMessageToConversation(
+        firstWatch.chatId,
+        firstWatch.messageThreadId,
+        `${completionMessage}\n\nUnable to auto-resume. Reply in this conversation to continue.`,
+      );
     }
   };
 
   const pollDelegateWatches = async (): Promise<void> => {
-    if (delegateWatchPollInFlight || delegateWatches.size === 0) {
+    if (delegateWatchPollInFlight || (delegateWatches.size === 0 && delegateResumeBatches.size === 0)) {
       return;
     }
 
     delegateWatchPollInFlight = true;
 
     try {
+      const completedWatches: GatewayDelegateWatch[] = [];
+
       for (const [runId, watch] of [...delegateWatches.entries()]) {
         const result = await getDurableRun(runId).catch(() => null);
         const status = result?.run.status?.status;
@@ -7347,7 +7547,26 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
         }
 
         delegateWatches.delete(runId);
+        completedWatches.push(watch);
+      }
+
+      const batchingPlan = planDelegateCompletionBatching({
+        completed: completedWatches,
+        remaining: delegateWatches.values(),
+        existingResumeBatches: delegateResumeBatches.entries(),
+      });
+
+      delegateResumeBatches.clear();
+      for (const batch of batchingPlan.pendingResumeBatches) {
+        delegateResumeBatches.set(batch.conversationId, batch.watches);
+      }
+
+      for (const watch of batchingPlan.immediate) {
         await finalizeDelegateWatch(watch);
+      }
+
+      for (const batch of batchingPlan.readyResumeBatches) {
+        await finalizeDelegateResumeBatch(batch.conversationId, batch.watches);
       }
     } finally {
       delegateWatchPollInFlight = false;
