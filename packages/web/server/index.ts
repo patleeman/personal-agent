@@ -136,6 +136,7 @@ import {
   resumeRemoteLiveSession,
   stopRemoteLiveSession,
   subscribeRemoteLiveSession,
+  syncRemoteConversationMirror,
 } from './remoteLiveSessions.js';
 import { recoverDurableLiveConversations } from './conversationRecovery.js';
 import {
@@ -143,6 +144,7 @@ import {
   readSavedConversationAutomationPreferences,
   replaceConversationAutomationItems,
   resetConversationAutomationFromItem,
+  resolveConversationAutomationPath,
   updateConversationAutomationEnabled,
   writeSavedConversationAutomationPreferences,
   writeConversationAutomationState,
@@ -2759,6 +2761,36 @@ function saveConversationAutomationDocument(document: Parameters<typeof writeCon
   return saved;
 }
 
+function migrateDraftConversationPlan(profile: string, conversationId: string): void {
+  const draftConversationId = 'new';
+  const draftPath = resolveConversationAutomationPath({ profile, conversationId: draftConversationId });
+  const loaded = loadConversationAutomationState({
+    profile,
+    conversationId: draftConversationId,
+    settingsFile: SETTINGS_FILE,
+  });
+
+  if (loaded.document.items.length > 0) {
+    writeConversationAutomationState({
+      profile,
+      document: {
+        ...loaded.document,
+        conversationId,
+        updatedAt: new Date().toISOString(),
+        enabled: true,
+        activeItemId: undefined,
+        review: undefined,
+      },
+    });
+  }
+
+  if (existsSync(draftPath)) {
+    rmSync(draftPath, { force: true });
+  }
+
+  invalidateAppTopics('sessions');
+}
+
 function validateConversationAutomationTemplateItems(items: unknown, availableSkillNames: Set<string>): asserts items is Array<{
   id: string;
   label?: string;
@@ -4179,8 +4211,13 @@ app.get('/api/sessions', (_req, res) => {
   }
 });
 
-app.get('/api/sessions/:id', (req, res) => {
+app.get('/api/sessions/:id', async (req, res) => {
   try {
+    await syncRemoteConversationMirror({
+      profile: getCurrentProfile(),
+      conversationId: req.params.id,
+    }).catch(() => undefined);
+
     const rawTailBlocks = Array.isArray(req.query.tailBlocks) ? req.query.tailBlocks[0] : req.query.tailBlocks;
     const parsedTailBlocks = typeof rawTailBlocks === 'string'
       ? Number.parseInt(rawTailBlocks, 10)
@@ -4793,6 +4830,7 @@ app.post('/api/live-sessions', async (req, res) => {
         invalidateAppTopics('projects', 'sessions');
       }
 
+      migrateDraftConversationPlan(profile, result.id);
       res.json(result);
       return;
     }
@@ -4809,6 +4847,7 @@ app.post('/api/live-sessions', async (req, res) => {
       });
       invalidateAppTopics('projects', 'sessions');
     }
+    migrateDraftConversationPlan(profile, result.id);
     res.json(result);
   } catch (err) {
     logError('request handler error', {

@@ -130,12 +130,6 @@ export function SettingsPage() {
     refetch: refetchConversationTitleSettings,
   } = useApi(api.conversationTitleSettings);
   const {
-    data: conversationAutomationDefaultsState,
-    loading: conversationAutomationDefaultsLoading,
-    error: conversationAutomationDefaultsError,
-    refetch: refetchConversationAutomationDefaults,
-  } = useApi(api.conversationPlanDefaults);
-  const {
     data: status,
     error: statusError,
     refetch: refetchStatus,
@@ -155,8 +149,6 @@ export function SettingsPage() {
   const [defaultCwdSaveError, setDefaultCwdSaveError] = useState<string | null>(null);
   const [savingConversationTitle, setSavingConversationTitle] = useState<'enabled' | 'model' | null>(null);
   const [conversationTitleSaveError, setConversationTitleSaveError] = useState<string | null>(null);
-  const [savingConversationAutomationDefaultEnabled, setSavingConversationAutomationDefaultEnabled] = useState(false);
-  const [conversationAutomationDefaultEnabledError, setConversationAutomationDefaultEnabledError] = useState<string | null>(null);
   const [selectedProviderId, setSelectedProviderId] = useState('');
   const [providerApiKey, setProviderApiKey] = useState('');
   const [providerCredentialAction, setProviderCredentialAction] = useState<'saveKey' | 'remove' | null>(null);
@@ -399,24 +391,6 @@ export function SettingsPage() {
       setConversationTitleSaveError(error instanceof Error ? error.message : String(error));
     } finally {
       setSavingConversationTitle(null);
-    }
-  }
-
-  async function handleConversationAutomationDefaultEnabledChange(defaultEnabled: boolean) {
-    if (!conversationAutomationDefaultsState || savingConversationAutomationDefaultEnabled || defaultEnabled === conversationAutomationDefaultsState.defaultEnabled) {
-      return;
-    }
-
-    setConversationAutomationDefaultEnabledError(null);
-    setSavingConversationAutomationDefaultEnabled(true);
-
-    try {
-      await api.updateConversationPlanDefaults({ defaultEnabled });
-      await refetchConversationAutomationDefaults({ resetLoading: false });
-    } catch (error) {
-      setConversationAutomationDefaultEnabledError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setSavingConversationAutomationDefaultEnabled(false);
     }
   }
 
@@ -871,50 +845,6 @@ export function SettingsPage() {
 
                 {conversationTitleSaveError && <p className="text-[12px] text-danger">{conversationTitleSaveError}</p>}
               </div>
-            </div>
-          </section>
-
-          <section className="space-y-5 border-t border-border-subtle pt-6">
-            <SectionLabel label="Plan execution" />
-
-            <div className="space-y-3 min-w-0">
-              <div className="space-y-1">
-                <h2 className="text-[15px] font-medium text-primary">Default behavior</h2>
-                <p className="ui-card-meta max-w-2xl">
-                  Controls whether new conversations that inherit plans start running immediately or stay paused.
-                </p>
-              </div>
-
-              {conversationAutomationDefaultsLoading && !conversationAutomationDefaultsState ? (
-                <p className="ui-card-meta">Loading plan defaults…</p>
-              ) : (!conversationAutomationDefaultsState && conversationAutomationDefaultsError) ? (
-                <p className="text-[12px] text-danger">Failed to load plan defaults: {conversationAutomationDefaultsError}</p>
-              ) : conversationAutomationDefaultsState ? (
-                <>
-                  <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="settings-conversation-automation-default-enabled">
-                    <input
-                      id="settings-conversation-automation-default-enabled"
-                      type="checkbox"
-                      checked={conversationAutomationDefaultsState.defaultEnabled}
-                      onChange={(event) => {
-                        void handleConversationAutomationDefaultEnabledChange(event.target.checked);
-                      }}
-                      disabled={savingConversationAutomationDefaultEnabled}
-                      className={CHECKBOX_CLASS}
-                    />
-                    <span>Run inherited plans in new conversations</span>
-                  </label>
-                  <p className="ui-card-meta">
-                    {savingConversationAutomationDefaultEnabled
-                      ? 'Saving plan default…'
-                      : conversationAutomationDefaultsState.defaultEnabled
-                        ? 'New conversations with inherited plans start running immediately.'
-                        : 'New conversations with inherited plans stay paused until you enable them.'}
-                  </p>
-                </>
-              ) : null}
-
-              {conversationAutomationDefaultEnabledError && <p className="text-[12px] text-danger">{conversationAutomationDefaultEnabledError}</p>}
             </div>
           </section>
 

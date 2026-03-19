@@ -150,7 +150,7 @@ From the deferred details row, you can also fire a scheduled resume immediately 
 
 Conversations can also carry lightweight automation.
 That automation is an ordered todo list of skill steps for that conversation.
-When the list finishes, the agent does one final review pass and can append more todo items before stopping.
+When the list finishes, the agent does one final review pass and can add more todo items through the todo-list tool before stopping.
 
 ### Automation
 
