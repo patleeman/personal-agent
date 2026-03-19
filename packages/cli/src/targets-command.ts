@@ -8,10 +8,11 @@ import {
   type ExecutionTargetRecord,
   type SaveExecutionTargetInput,
 } from '@personal-agent/core';
+import { ensureRemoteTargetInstall } from './remote-target-install.js';
 import { bullet, dim, keyValue, section, success } from './ui.js';
 
 function targetsUsageText(): string {
-  return 'Usage: pa targets [list|show|add|update|delete|help] [args...]';
+  return 'Usage: pa targets [list|show|add|update|install|delete|help] [args...]';
 }
 
 function targetsListUsageText(): string {
@@ -28,6 +29,10 @@ function targetsAddUsageText(): string {
 
 function targetsUpdateUsageText(): string {
   return 'Usage: pa targets update <id> [--label <label>] [--ssh <destination>] [--description <text>] [--ssh-command <command>] [--remote-pa-command <command>] [--profile <profile>] [--default-cwd <path>] [--command-prefix <command>] [--map <local=>remote>]... [--json]';
+}
+
+function targetsInstallUsageText(): string {
+  return 'Usage: pa targets install <id> [--force] [--json]';
 }
 
 function targetsDeleteUsageText(): string {
@@ -82,7 +87,7 @@ function printTarget(target: ExecutionTargetRecord): void {
 function printTargetsHelp(): void {
   console.log(section('Execution targets commands'));
   console.log('');
-  console.log(`Usage: pa targets [list|show|add|update|delete|help]
+  console.log(`Usage: pa targets [list|show|add|update|install|delete|help]
 
 Commands:
   list [--json]
@@ -93,6 +98,8 @@ Commands:
                            Create a new execution target in machine-local config
   update <id> [--label <label>] [--ssh <destination>] [--description <text>] [--ssh-command <command>] [--remote-pa-command <command>] [--profile <profile>] [--default-cwd <path>] [--command-prefix <command>] [--map <local=>remote>]... [--json]
                            Update an existing execution target
+  install <id> [--force] [--json]
+                           Upload or refresh the remote personal-agent runtime bundle and synced state for one target
   delete <id> [--json]
                            Delete one execution target
   help                     Show execution target help
@@ -417,6 +424,35 @@ export async function targetsCommand(args: string[]): Promise<number> {
 
     console.log(success('Updated execution target', `${target.id} → ${target.label}`));
     console.log(keyValue('Config file', resolveExecutionTargetsFilePath()));
+    return 0;
+  }
+
+  if (subcommand === 'install') {
+    const [targetId, ...optionArgs] = rest;
+    const jsonMode = optionArgs.includes('--json');
+    const force = optionArgs.includes('--force');
+    const unknownOptions = optionArgs.filter((arg) => arg.startsWith('--') && arg !== '--json' && arg !== '--force');
+
+    if (!targetId || targetId.startsWith('-') || unknownOptions.length > 0) {
+      throw new Error(targetsInstallUsageText());
+    }
+
+    const result = await ensureRemoteTargetInstall({ targetId, force });
+
+    if (jsonMode) {
+      console.log(JSON.stringify(result, null, 2));
+      return 0;
+    }
+
+    console.log(success('Installed remote target runtime', `${result.targetId} → ${result.targetLabel}`));
+    console.log(keyValue('SSH destination', result.sshDestination));
+    console.log(keyValue('Remote home', result.remoteHome));
+    console.log(keyValue('Install root', result.installRoot));
+    console.log(keyValue('State root', result.stateRoot));
+    console.log(keyValue('Launcher', result.launcherPath));
+    console.log(keyValue('Node', result.nodeVersion));
+    console.log(keyValue('Runtime updated', result.runtimeChanged ? 'yes' : 'no'));
+    console.log(keyValue('State synced', result.stateChanged ? 'yes' : 'no'));
     return 0;
   }
 

@@ -68,7 +68,7 @@ describe('subcommand help discoverability', () => {
     },
     {
       argv: ['targets', '--help'],
-      expected: ['Execution targets commands', 'Usage: pa targets [list|show|add|update|delete|help]', 'add <id> --label <label> --ssh <destination>'],
+      expected: ['Execution targets commands', 'Usage: pa targets [list|show|add|update|install|delete|help]', 'install <id> [--force] [--json]'],
     },
     {
       argv: ['daemon', '--help'],

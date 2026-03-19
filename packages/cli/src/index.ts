@@ -4783,7 +4783,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     },
     {
       name: 'targets',
-      usage: 'targets [list|show|add|update|delete|help] [args...]',
+      usage: 'targets [list|show|add|update|install|delete|help] [args...]',
       description: 'Inspect and manage execution targets',
       disableBuiltInHelp: true,
       run: targetsCommand,
@@ -4902,6 +4902,7 @@ Examples:
   pa runs cancel <id>
   pa targets list
   pa targets add gpu-box --label "GPU Box" --ssh gpu-box --default-cwd /srv/personal-agent --map /Users/patrickc.lee/personal/personal-agent=/srv/personal-agent
+  pa targets install gpu-box
   pa sync status
   pa sync setup --repo git@github.com:you/personal-agent-state.git --fresh
   pa sync run

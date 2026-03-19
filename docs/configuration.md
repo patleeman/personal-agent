@@ -92,6 +92,7 @@ Use it for:
 - remote default working directories
 - local repo path → remote checkout mappings
 - optional remote profile / `pa` command overrides
+- installed remote runtime bundles created by `pa targets install <id>`
 
 Prefer writing this file with:
 

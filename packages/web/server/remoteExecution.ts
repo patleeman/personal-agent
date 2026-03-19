@@ -25,6 +25,8 @@ import { buildContentDispositionHeader } from './httpHeaders.js';
 import {
   appendDetachedUserMessage,
   appendVisibleCustomMessage,
+  ensureSessionFileExists,
+  patchSessionManagerPersistence,
   registry as liveRegistry,
   resolvePersistentSessionDir,
 } from './liveSessions.js';
@@ -408,6 +410,7 @@ async function createStoredConversation(options: {
   referencedProjectIds: string[];
 }): Promise<{ conversationId: string; sessionFile: string; localCwd: string }> {
   const sessionManager = SessionManager.create(options.cwd, resolvePersistentSessionDir(options.cwd));
+  patchSessionManagerPersistence(sessionManager);
   const sessionFile = sessionManager.getSessionFile();
   const conversationId = sessionManager.getSessionId();
   if (!sessionFile) {
@@ -415,6 +418,7 @@ async function createStoredConversation(options: {
   }
 
   sessionManager.appendMessage(buildUserMessage(options.text));
+  ensureSessionFileExists(sessionManager);
 
   if (options.referencedProjectIds.length > 0) {
     setConversationProjectLinks({
@@ -431,11 +435,41 @@ async function createStoredConversation(options: {
   };
 }
 
+function resolveConversationSessionFileForRemoteRun(options: {
+  conversationId: string;
+  sessionFile?: string;
+}): string {
+  const liveEntry = liveRegistry.get(options.conversationId);
+  if (liveEntry) {
+    ensureSessionFileExists(liveEntry.session.sessionManager);
+  }
+
+  const liveSessionFile = readOptionalString(liveEntry?.session.sessionFile);
+  if (liveSessionFile && existsSync(liveSessionFile)) {
+    return liveSessionFile;
+  }
+
+  const providedSessionFile = readOptionalString(options.sessionFile);
+  if (providedSessionFile && existsSync(providedSessionFile)) {
+    return providedSessionFile;
+  }
+
+  if (liveSessionFile) {
+    return liveSessionFile;
+  }
+
+  if (providedSessionFile) {
+    return providedSessionFile;
+  }
+
+  throw new Error(`Conversation ${options.conversationId} does not have a persisted session transcript file.`);
+}
+
 async function appendUserMessageToConversation(options: {
   conversationId: string;
-  sessionFile: string;
+  sessionFile?: string;
   text: string;
-}): Promise<{ localCwd: string }> {
+}): Promise<{ localCwd: string; sessionFile: string }> {
   const liveEntry = liveRegistry.get(options.conversationId);
   if (liveEntry) {
     if (liveEntry.session.isStreaming) {
@@ -443,12 +477,21 @@ async function appendUserMessageToConversation(options: {
     }
 
     await appendDetachedUserMessage(options.conversationId, options.text);
-    return { localCwd: liveEntry.cwd };
+    return {
+      localCwd: liveEntry.cwd,
+      sessionFile: resolveConversationSessionFileForRemoteRun(options),
+    };
   }
 
-  const manager = SessionManager.open(options.sessionFile);
+  const sessionFile = resolveConversationSessionFileForRemoteRun(options);
+  const manager = SessionManager.open(sessionFile);
+  patchSessionManagerPersistence(manager);
   manager.appendMessage(buildUserMessage(options.text));
-  return { localCwd: manager.getCwd() };
+  ensureSessionFileExists(manager);
+  return {
+    localCwd: manager.getCwd(),
+    sessionFile,
+  };
 }
 
 function createRemoteExecutionCheckpointState(input: {
@@ -550,6 +593,7 @@ export async function submitRemoteExecutionRun(options: {
       text: prompt,
     });
     localCwd = appended.localCwd;
+    sessionFile = appended.sessionFile;
   }
 
   const remoteCwd = resolveRemoteExecutionCwd(target, localCwd);
@@ -834,7 +878,10 @@ async function appendRemoteImportMessage(options: {
   }
 
   const manager = SessionManager.open(options.sessionFile);
-  return manager.appendCustomMessageEntry(REMOTE_EXECUTION_IMPORT_CUSTOM_TYPE, options.content, true, options.details);
+  patchSessionManagerPersistence(manager);
+  const messageId = manager.appendCustomMessageEntry(REMOTE_EXECUTION_IMPORT_CUSTOM_TYPE, options.content, true, options.details);
+  ensureSessionFileExists(manager);
+  return messageId;
 }
 
 export async function importRemoteExecutionRun(options: {
