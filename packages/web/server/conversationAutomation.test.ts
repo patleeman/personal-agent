@@ -1,17 +1,19 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildConversationAutomationSkillPrompt,
-  createConversationAutomationJudgeStep,
+  conversationAutomationDocumentExists,
+  createConversationAutomationGate,
   createConversationAutomationSkillStep,
-  getConversationAutomationState,
-  moveConversationAutomationStep,
-  resetConversationAutomationFromStep,
+  loadConversationAutomationState,
+  replaceConversationAutomationGates,
+  resetConversationAutomationFromGate,
   resolveConversationAutomationPath,
-  updateConversationAutomationStep,
+  templateGateFromRuntimeGate,
   writeConversationAutomationState,
+  writeSavedConversationAutomationWorkflowPresets,
 } from './conversationAutomation.js';
 
 const tempDirs: string[] = [];
@@ -29,32 +31,148 @@ afterEach(() => {
 });
 
 describe('conversationAutomation state', () => {
-  it('saves and reloads conversation-local automation steps under local state', () => {
+  it('loads the default preset for conversations without a local override', () => {
     const stateRoot = createTempDir('pa-conversation-automation-');
-    const skillStep = createConversationAutomationSkillStep({
-      skillName: 'workflow-checkpoint',
-      skillArgs: 'commit only my files',
-      now: '2026-03-18T12:00:00.000Z',
+    const settingsFile = join(stateRoot, 'settings.json');
+
+    const presetLibrary = writeSavedConversationAutomationWorkflowPresets({
+      defaultPresetId: 'preset-checkpoint',
+      presets: [{
+        id: 'preset-checkpoint',
+        name: 'Checkpoint flow',
+        updatedAt: '2026-03-18T12:00:00.000Z',
+        gates: [{
+          id: 'gate-default-1',
+          label: 'Ready to checkpoint?',
+          prompt: 'Pass only when the latest assistant message requests a checkpoint.',
+          skills: [{
+            id: 'skill-default-1',
+            label: 'workflow-checkpoint',
+            skillName: 'workflow-checkpoint',
+          }],
+        }],
+      }],
+    }, settingsFile);
+
+    const loaded = loadConversationAutomationState({
+      profile: 'datadog',
+      stateRoot,
+      conversationId: 'conv-123',
+      settingsFile,
     });
-    const judgeStep = createConversationAutomationJudgeStep({
-      label: 'Ready for review?',
-      prompt: 'Decide whether the conversation is ready for code review.',
-      now: '2026-03-18T12:01:00.000Z',
+
+    expect(presetLibrary.defaultPresetId).toBe('preset-checkpoint');
+    expect(loaded.inheritedPresetId).toBe('preset-checkpoint');
+    expect(loaded.presetLibrary.presets).toEqual(presetLibrary.presets);
+    expect(loaded.document).toEqual({
+      version: 2,
+      conversationId: 'conv-123',
+      updatedAt: loaded.document.updatedAt,
+      enabled: false,
+      gates: [
+        expect.objectContaining({
+          id: 'gate-default-1',
+          label: 'Ready to checkpoint?',
+          prompt: 'Pass only when the latest assistant message requests a checkpoint.',
+          status: 'pending',
+          skills: [
+            expect.objectContaining({
+              id: 'skill-default-1',
+              label: 'workflow-checkpoint',
+              skillName: 'workflow-checkpoint',
+              status: 'pending',
+            }),
+          ],
+        }),
+      ],
+    });
+    expect(conversationAutomationDocumentExists({
+      profile: 'datadog',
+      stateRoot,
+      conversationId: 'conv-123',
+    })).toBe(false);
+  });
+
+  it('migrates the legacy saved default workflow into a default preset', () => {
+    const stateRoot = createTempDir('pa-conversation-automation-');
+    const settingsFile = join(stateRoot, 'settings.json');
+
+    writeFileSync(settingsFile, JSON.stringify({
+      webUi: {
+        conversationAutomation: {
+          defaultWorkflow: {
+            updatedAt: '2026-03-18T12:00:00.000Z',
+            gates: [{
+              id: 'gate-default-1',
+              label: 'Ready to checkpoint?',
+              prompt: 'Pass only when the latest assistant message requests a checkpoint.',
+              skills: [{
+                id: 'skill-default-1',
+                label: 'workflow-checkpoint',
+                skillName: 'workflow-checkpoint',
+              }],
+            }],
+          },
+        },
+      },
+    }, null, 2) + '\n');
+
+    const loaded = loadConversationAutomationState({
+      profile: 'datadog',
+      stateRoot,
+      conversationId: 'conv-legacy',
+      settingsFile,
+    });
+
+    expect(loaded.inheritedPresetId).toBe('preset-default');
+    expect(loaded.presetLibrary).toEqual({
+      defaultPresetId: 'preset-default',
+      presets: [{
+        id: 'preset-default',
+        name: 'Default workflow',
+        updatedAt: '2026-03-18T12:00:00.000Z',
+        gates: [{
+          id: 'gate-default-1',
+          label: 'Ready to checkpoint?',
+          prompt: 'Pass only when the latest assistant message requests a checkpoint.',
+          skills: [{
+            id: 'skill-default-1',
+            label: 'workflow-checkpoint',
+            skillName: 'workflow-checkpoint',
+          }],
+        }],
+      }],
+    });
+  });
+
+  it('saves and reloads nested gates under local state', () => {
+    const stateRoot = createTempDir('pa-conversation-automation-');
+    const checkpointGate = createConversationAutomationGate({
+      id: 'gate-1',
+      label: 'Ready to checkpoint?',
+      prompt: 'Pass only when the conversation is ready for a checkpoint.',
+      skills: [{
+        id: 'skill-1',
+        label: 'workflow-checkpoint',
+        skillName: 'workflow-checkpoint',
+        skillArgs: 'commit only my files',
+      }],
+      now: '2026-03-18T12:00:00.000Z',
     });
 
     writeConversationAutomationState({
       profile: 'datadog',
       stateRoot,
       document: {
-        version: 1,
+        version: 2,
         conversationId: 'conv-123',
-        updatedAt: '2026-03-18T12:01:00.000Z',
-        paused: true,
-        steps: [skillStep, judgeStep],
+        updatedAt: '2026-03-18T12:00:00.000Z',
+        enabled: true,
+        gates: [checkpointGate],
       },
     });
 
-    const loaded = getConversationAutomationState({
+    const loaded = loadConversationAutomationState({
       profile: 'datadog',
       stateRoot,
       conversationId: 'conv-123',
@@ -65,162 +183,256 @@ describe('conversationAutomation state', () => {
       stateRoot,
       conversationId: 'conv-123',
     })).toBe(join(stateRoot, 'pi-agent', 'state', 'conversation-automation', 'datadog', 'conv-123.json'));
-    expect(loaded).toEqual({
-      version: 1,
-      conversationId: 'conv-123',
-      updatedAt: '2026-03-18T12:01:00.000Z',
-      paused: true,
-      steps: [
-        expect.objectContaining({
-          kind: 'skill',
-          skillName: 'workflow-checkpoint',
-          skillArgs: 'commit only my files',
-          status: 'pending',
-        }),
-        expect.objectContaining({
-          kind: 'judge',
-          label: 'Ready for review?',
-          prompt: 'Decide whether the conversation is ready for code review.',
-          status: 'pending',
-        }),
-      ],
-    });
-    expect(buildConversationAutomationSkillPrompt(loaded.steps[0] as typeof skillStep)).toBe('/skill:workflow-checkpoint commit only my files');
+    expect(loaded.inheritedPresetId).toBeNull();
+    expect(loaded.document.enabled).toBe(true);
+    expect(loaded.document.gates).toEqual([
+      expect.objectContaining({
+        id: 'gate-1',
+        label: 'Ready to checkpoint?',
+        status: 'pending',
+        skills: [
+          expect.objectContaining({
+            id: 'skill-1',
+            label: 'workflow-checkpoint',
+            skillName: 'workflow-checkpoint',
+            skillArgs: 'commit only my files',
+            status: 'pending',
+          }),
+        ],
+      }),
+    ]);
+    expect(buildConversationAutomationSkillPrompt(loaded.document.gates[0]!.skills[0]!)).toBe('/skill:workflow-checkpoint commit only my files');
   });
 
-  it('resets a step and all later steps back to pending', () => {
-    const skillStep = createConversationAutomationSkillStep({
-      skillName: 'subagent-code-review',
-      now: '2026-03-18T12:00:00.000Z',
-    });
-    const judgeStep = createConversationAutomationJudgeStep({
-      prompt: 'Did the review pass?',
-      now: '2026-03-18T12:01:00.000Z',
-    });
-
-    const document = {
-      version: 1 as const,
+  it('replaces gates from editable template data and resets runtime state', () => {
+    const updated = replaceConversationAutomationGates({
+      version: 2,
       conversationId: 'conv-123',
       updatedAt: '2026-03-18T12:03:00.000Z',
-      paused: true,
-      steps: [
-        {
-          ...skillStep,
-          status: 'completed' as const,
-          startedAt: '2026-03-18T12:00:10.000Z',
-          completedAt: '2026-03-18T12:00:30.000Z',
-          resultReason: 'Completed.',
-          updatedAt: '2026-03-18T12:00:30.000Z',
-        },
-        {
-          ...judgeStep,
-          status: 'failed' as const,
+      enabled: true,
+      activeGateId: 'gate-1',
+      activeSkillId: 'skill-1',
+      gates: [{
+        ...createConversationAutomationGate({
+          id: 'gate-1',
+          label: 'Old gate',
+          prompt: 'Old prompt',
+          skills: [{
+            id: 'skill-1',
+            label: 'workflow-checkpoint',
+            skillName: 'workflow-checkpoint',
+          }],
+          now: '2026-03-18T12:00:00.000Z',
+        }),
+        status: 'running',
+        startedAt: '2026-03-18T12:01:00.000Z',
+        resultReason: 'Passed earlier.',
+        skills: [{
+          ...createConversationAutomationSkillStep({
+            id: 'skill-1',
+            label: 'workflow-checkpoint',
+            skillName: 'workflow-checkpoint',
+            now: '2026-03-18T12:00:00.000Z',
+          }),
+          status: 'running',
           startedAt: '2026-03-18T12:02:00.000Z',
-          completedAt: '2026-03-18T12:02:10.000Z',
-          resultReason: 'Not ready yet.',
-          resultConfidence: 0.91,
-          updatedAt: '2026-03-18T12:02:10.000Z',
-        },
-      ],
+        }],
+      }],
+    }, [{
+      id: 'gate-1',
+      label: 'Ready for review?',
+      prompt: 'Pass only when the output is ready for review.',
+      skills: [{
+        id: 'skill-1',
+        label: 'subagent-code-review',
+        skillName: 'subagent-code-review',
+      }],
+    }], '2026-03-18T12:04:00.000Z');
+
+    expect(updated.activeGateId).toBeUndefined();
+    expect(updated.activeSkillId).toBeUndefined();
+    expect(updated.updatedAt).toBe('2026-03-18T12:04:00.000Z');
+    expect(updated.gates).toEqual([
+      expect.objectContaining({
+        id: 'gate-1',
+        label: 'Ready for review?',
+        prompt: 'Pass only when the output is ready for review.',
+        status: 'pending',
+        createdAt: '2026-03-18T12:00:00.000Z',
+        updatedAt: '2026-03-18T12:04:00.000Z',
+        skills: [
+          expect.objectContaining({
+            id: 'skill-1',
+            label: 'subagent-code-review',
+            skillName: 'subagent-code-review',
+            status: 'pending',
+            createdAt: '2026-03-18T12:00:00.000Z',
+            updatedAt: '2026-03-18T12:04:00.000Z',
+          }),
+        ],
+      }),
+    ]);
+    expect(updated.gates[0]).not.toHaveProperty('startedAt');
+    expect(updated.gates[0]).not.toHaveProperty('resultReason');
+    expect(updated.gates[0]!.skills[0]).not.toHaveProperty('startedAt');
+  });
+
+  it('resets a gate and every later gate back to pending', () => {
+    const first = {
+      ...createConversationAutomationGate({
+        id: 'gate-1',
+        label: 'Ready?',
+        prompt: 'Pass when ready.',
+        skills: [{
+          id: 'skill-1',
+          label: 'workflow-checkpoint',
+          skillName: 'workflow-checkpoint',
+        }],
+        now: '2026-03-18T12:00:00.000Z',
+      }),
+      status: 'completed' as const,
+      startedAt: '2026-03-18T12:00:10.000Z',
+      completedAt: '2026-03-18T12:00:20.000Z',
+      resultReason: 'Passed.',
+      skills: [{
+        ...createConversationAutomationSkillStep({
+          id: 'skill-1',
+          label: 'workflow-checkpoint',
+          skillName: 'workflow-checkpoint',
+          now: '2026-03-18T12:00:00.000Z',
+        }),
+        status: 'completed' as const,
+        startedAt: '2026-03-18T12:00:12.000Z',
+        completedAt: '2026-03-18T12:00:20.000Z',
+        resultReason: 'Done.',
+      }],
+    };
+    const second = {
+      ...createConversationAutomationGate({
+        id: 'gate-2',
+        label: 'Approved?',
+        prompt: 'Pass when approved.',
+        skills: [{
+          id: 'skill-2',
+          label: 'subagent-code-review',
+          skillName: 'subagent-code-review',
+        }],
+        now: '2026-03-18T12:01:00.000Z',
+      }),
+      status: 'failed' as const,
+      startedAt: '2026-03-18T12:01:05.000Z',
+      completedAt: '2026-03-18T12:01:15.000Z',
+      resultReason: 'Not approved yet.',
+      resultConfidence: 0.75,
     };
 
-    const reset = resetConversationAutomationFromStep(document, judgeStep.id, {
-      now: '2026-03-18T12:04:00.000Z',
-      paused: false,
-    });
-
-    expect(reset.paused).toBe(false);
-    expect(reset.activeStepId).toBeUndefined();
-    expect(reset.steps[0]).toMatchObject({ status: 'completed', resultReason: 'Completed.' });
-    expect(reset.steps[1]).toMatchObject({ status: 'pending', updatedAt: '2026-03-18T12:04:00.000Z' });
-    expect(reset.steps[1]).not.toHaveProperty('startedAt');
-    expect(reset.steps[1]).not.toHaveProperty('completedAt');
-    expect(reset.steps[1]).not.toHaveProperty('resultReason');
-    expect(reset.steps[1]).not.toHaveProperty('resultConfidence');
-  });
-
-  it('moves pending steps up and down within the queue', () => {
-    const first = createConversationAutomationSkillStep({ skillName: 'workflow-checkpoint' });
-    const second = createConversationAutomationJudgeStep({ prompt: 'Judge second step.' });
-    const third = createConversationAutomationSkillStep({ skillName: 'subagent-code-review' });
-
-    const movedDown = moveConversationAutomationStep({
-      version: 1,
-      conversationId: 'conv-123',
-      updatedAt: '2026-03-18T12:00:00.000Z',
-      paused: true,
-      steps: [first, second, third],
-    }, first.id, 'down', '2026-03-18T12:05:00.000Z');
-
-    expect(movedDown.steps.map((step) => step.id)).toEqual([second.id, first.id, third.id]);
-    expect(movedDown.updatedAt).toBe('2026-03-18T12:05:00.000Z');
-  });
-
-  it('updates a step and resets it plus later steps back to pending', () => {
-    const first = createConversationAutomationSkillStep({
-      skillName: 'workflow-checkpoint',
-      skillArgs: 'initial args',
-      now: '2026-03-18T12:00:00.000Z',
-    });
-    const second = createConversationAutomationJudgeStep({
-      label: 'Ready?',
-      prompt: 'Judge the current output.',
-      now: '2026-03-18T12:01:00.000Z',
-    });
-
-    const updated = updateConversationAutomationStep({
-      version: 1,
+    const reset = resetConversationAutomationFromGate({
+      version: 2,
       conversationId: 'conv-123',
       updatedAt: '2026-03-18T12:03:00.000Z',
+      enabled: false,
+      gates: [first, second],
+    }, 'gate-2', {
+      now: '2026-03-18T12:04:00.000Z',
+      enabled: true,
+    });
+
+    expect(reset.enabled).toBe(true);
+    expect(reset.gates[0]).toMatchObject({ status: 'completed', resultReason: 'Passed.' });
+    expect(reset.gates[1]).toMatchObject({ status: 'pending', updatedAt: '2026-03-18T12:04:00.000Z' });
+    expect(reset.gates[1]).not.toHaveProperty('startedAt');
+    expect(reset.gates[1]).not.toHaveProperty('completedAt');
+    expect(reset.gates[1]).not.toHaveProperty('resultReason');
+    expect(reset.gates[1]!.skills[0]).toMatchObject({ status: 'pending', updatedAt: '2026-03-18T12:04:00.000Z' });
+    expect(reset.gates[1]!.skills[0]).not.toHaveProperty('startedAt');
+  });
+
+  it('migrates the legacy flat queue into nested judge gates', () => {
+    const stateRoot = createTempDir('pa-conversation-automation-');
+    const path = resolveConversationAutomationPath({
+      profile: 'datadog',
+      stateRoot,
+      conversationId: 'conv-123',
+    });
+
+    mkdirp(path);
+    writeFileSync(path, JSON.stringify({
+      version: 1,
+      conversationId: 'conv-123',
+      updatedAt: '2026-03-18T12:05:00.000Z',
       paused: false,
+      activeStepId: 'skill-2',
       steps: [
         {
-          ...first,
+          id: 'judge-1',
+          kind: 'judge',
+          label: 'Ready?',
+          prompt: 'Pass when the conversation is ready.',
           status: 'completed',
-          startedAt: '2026-03-18T12:00:05.000Z',
-          completedAt: '2026-03-18T12:00:30.000Z',
-          resultReason: 'Completed.',
-          updatedAt: '2026-03-18T12:00:30.000Z',
+          createdAt: '2026-03-18T12:00:00.000Z',
+          updatedAt: '2026-03-18T12:00:10.000Z',
         },
         {
-          ...second,
-          status: 'failed',
-          startedAt: '2026-03-18T12:01:05.000Z',
-          completedAt: '2026-03-18T12:01:20.000Z',
-          resultReason: 'Not ready.',
-          resultConfidence: 0.42,
+          id: 'skill-1',
+          kind: 'skill',
+          label: 'workflow-checkpoint',
+          skillName: 'workflow-checkpoint',
+          status: 'completed',
+          createdAt: '2026-03-18T12:00:00.000Z',
+          updatedAt: '2026-03-18T12:00:20.000Z',
+        },
+        {
+          id: 'judge-2',
+          kind: 'judge',
+          label: 'Approved?',
+          prompt: 'Pass when approved.',
+          status: 'completed',
+          createdAt: '2026-03-18T12:01:00.000Z',
+          updatedAt: '2026-03-18T12:01:10.000Z',
+        },
+        {
+          id: 'skill-2',
+          kind: 'skill',
+          label: 'subagent-code-review',
+          skillName: 'subagent-code-review',
+          status: 'running',
+          createdAt: '2026-03-18T12:01:00.000Z',
           updatedAt: '2026-03-18T12:01:20.000Z',
         },
       ],
-    }, first.id, {
-      label: 'Checkpoint draft',
-      skillName: 'workflow-checkpoint',
-      skillArgs: '',
-    }, '2026-03-18T12:04:00.000Z');
+    }, null, 2) + '\n');
 
-    expect(updated.paused).toBe(false);
-    expect(updated.activeStepId).toBeUndefined();
-    expect(updated.steps[0]).toEqual(expect.objectContaining({
-      id: first.id,
-      kind: 'skill',
-      label: 'Checkpoint draft',
-      skillName: 'workflow-checkpoint',
-      status: 'pending',
-      updatedAt: '2026-03-18T12:04:00.000Z',
-    }));
-    expect(updated.steps[0]).not.toHaveProperty('skillArgs');
-    expect(updated.steps[0]).not.toHaveProperty('startedAt');
-    expect(updated.steps[0]).not.toHaveProperty('completedAt');
-    expect(updated.steps[0]).not.toHaveProperty('resultReason');
-    expect(updated.steps[1]).toMatchObject({
-      id: second.id,
-      kind: 'judge',
-      status: 'pending',
-      updatedAt: '2026-03-18T12:04:00.000Z',
+    const loaded = loadConversationAutomationState({
+      profile: 'datadog',
+      stateRoot,
+      conversationId: 'conv-123',
     });
-    expect(updated.steps[1]).not.toHaveProperty('startedAt');
-    expect(updated.steps[1]).not.toHaveProperty('completedAt');
-    expect(updated.steps[1]).not.toHaveProperty('resultReason');
-    expect(updated.steps[1]).not.toHaveProperty('resultConfidence');
+
+    expect(loaded.document.enabled).toBe(true);
+    expect(loaded.document.activeGateId).toBe('judge-2');
+    expect(loaded.document.activeSkillId).toBe('skill-2');
+    expect(loaded.document.gates.map((gate) => ({
+      id: gate.id,
+      label: gate.label,
+      status: gate.status,
+      skills: gate.skills.map((skill) => skill.id),
+    }))).toEqual([
+      { id: 'judge-1', label: 'Ready?', status: 'completed', skills: ['skill-1'] },
+      { id: 'judge-2', label: 'Approved?', status: 'running', skills: ['skill-2'] },
+    ]);
+    expect(templateGateFromRuntimeGate(loaded.document.gates[0]!)).toEqual({
+      id: 'judge-1',
+      label: 'Ready?',
+      prompt: 'Pass when the conversation is ready.',
+      skills: [{
+        id: 'skill-1',
+        label: 'workflow-checkpoint',
+        skillName: 'workflow-checkpoint',
+      }],
+    });
   });
 });
+
+function mkdirp(path: string) {
+  mkdirSync(dirname(path), { recursive: true });
+}
