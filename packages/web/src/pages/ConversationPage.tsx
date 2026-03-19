@@ -7,7 +7,7 @@ import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../c
 import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput } from '../types';
 import { useApi } from '../hooks';
 import { useSessionDetail } from '../hooks/useSessions';
-import { useSessionStream } from '../hooks/useSessionStream';
+import { normalizePendingQueueItems, useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../api';
 import { appendComposerHistory, readComposerHistory } from '../composerHistory';
 import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversationArtifacts';
@@ -582,11 +582,12 @@ function base64ToFile(data: string, mimeType: string, name: string): File {
 }
 
 function restoreQueuedImageFiles(
-  images: PromptImageInput[],
+  images: PromptImageInput[] | undefined | null,
   behavior: 'steer' | 'followUp',
   queueIndex: number,
 ): File[] {
-  return images.map((image, imageIndex) => {
+  const normalizedImages = Array.isArray(images) ? images : [];
+  return normalizedImages.map((image, imageIndex) => {
     const extension = fileExtensionForMimeType(image.mimeType);
     const name = image.name?.trim() || `queued-${behavior}-${queueIndex + 1}-${imageIndex + 1}.${extension}`;
     return base64ToFile(image.data, image.mimeType, name);
@@ -826,7 +827,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [id]);
 
   // ── Existing session data (read-only JSONL) ───────────────────────────────
-  const { detail: sessionDetail, loading: sessionLoading } = useSessionDetail(id, { tailBlocks: historicalTailBlocks });
+  const { detail: sessionDetail, loading: sessionLoading, error: sessionError } = useSessionDetail(id, { tailBlocks: historicalTailBlocks });
   const visibleSessionDetail = sessionDetail?.meta.id === id ? sessionDetail : null;
   const [hydratedHistoricalBlocks, setHydratedHistoricalBlocks] = useState<Record<string, MessageBlock>>({});
   const [hydratingHistoricalBlockIds, setHydratingHistoricalBlockIds] = useState<string[]>([]);
@@ -1244,20 +1245,25 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [draft, id]);
 
   // Pending steer/followup queue as reported by the live session.
-  const pendingQueue = useMemo(() => ([
-    ...stream.pendingQueue.steering.map((text, index) => ({
-      id: `steer-${index}`,
-      text: text.trim() || '(queued attachment)',
-      type: 'steer' as const,
-      queueIndex: index,
-    })),
-    ...stream.pendingQueue.followUp.map((text, index) => ({
-      id: `followup-${index}`,
-      text: text.trim() || '(queued attachment)',
-      type: 'followUp' as const,
-      queueIndex: index,
-    })),
-  ]), [stream.pendingQueue.followUp, stream.pendingQueue.steering]);
+  const pendingQueue = useMemo(() => {
+    const steeringQueue = normalizePendingQueueItems(stream.pendingQueue?.steering);
+    const followUpQueue = normalizePendingQueueItems(stream.pendingQueue?.followUp);
+
+    return [
+      ...steeringQueue.map((text, index) => ({
+        id: `steer-${index}`,
+        text: text.trim() || '(queued attachment)',
+        type: 'steer' as const,
+        queueIndex: index,
+      })),
+      ...followUpQueue.map((text, index) => ({
+        id: `followup-${index}`,
+        text: text.trim() || '(queued attachment)',
+        type: 'followUp' as const,
+        queueIndex: index,
+      })),
+    ];
+  }, [stream.pendingQueue?.followUp, stream.pendingQueue?.steering]);
   const prevStreamingRef = useRef(false);
   const { data: memoryData, refetch: refetchMemoryData } = useApi(api.memory);
   const { data: profileState } = useApi(api.profiles);
@@ -2080,6 +2086,41 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     stream.reconnect();
     return resumed.id;
   }, [id, isLiveSession, savedConversationSessionFile, stream]);
+
+  const remoteAutoResumeConversationIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (draft || !id || !selectedExecutionTargetId || confirmedLive !== false || !savedConversationSessionFile || stream.hasSnapshot) {
+      remoteAutoResumeConversationIdRef.current = null;
+      return;
+    }
+
+    if (remoteAutoResumeConversationIdRef.current === id) {
+      return;
+    }
+
+    remoteAutoResumeConversationIdRef.current = id;
+    let cancelled = false;
+
+    void api.resumeSession(savedConversationSessionFile)
+      .then(() => {
+        if (cancelled) {
+          return;
+        }
+
+        setConfirmedLive(true);
+        stream.reconnect();
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('Remote auto-resume failed:', error);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [confirmedLive, draft, id, savedConversationSessionFile, selectedExecutionTargetId, stream.hasSnapshot, stream.reconnect]);
 
   const rewindConversationFromMessage = useCallback(async (messageIndex: number) => {
     if (!id || !realMessages) {
@@ -3104,7 +3145,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     try {
       const restored = await api.restoreQueuedMessage(id, { behavior, index: queueIndex });
-      const restoredText = restored.text;
+      const restoredText = typeof restored.text === 'string' ? restored.text : '';
       const restoredFiles = restoreQueuedImageFiles(restored.images, behavior, queueIndex);
       const hasRestoredText = restoredText.trim().length > 0;
 
@@ -3278,8 +3319,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     && !stream.hasSnapshot
     && !visibleSessionDetail
     && stream.blocks.length === 0;
+  const hydratingRemoteConversation = Boolean(selectedExecutionTargetId)
+    && confirmedLive !== true
+    && !stream.hasSnapshot
+    && !visibleSessionDetail
+    && stream.blocks.length === 0
+    && Boolean(savedConversationSessionFile || pendingInitialPrompt);
   const showConversationLoadingState = !hasRenderableMessages
-    && (sessionLoading || hydratingLiveConversation);
+    && (sessionLoading || hydratingLiveConversation || hydratingRemoteConversation);
 
   const transcriptPane = useMemo(() => (
     <div className="relative flex-1 min-h-0">
@@ -3408,6 +3455,37 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     stream.isStreaming,
     title,
   ]);
+
+  const missingConversation = !draft
+    && Boolean(id)
+    && confirmedLive === false
+    && !sessionLoading
+    && !visibleSessionDetail
+    && !savedConversationSessionFile
+    && !pendingInitialPrompt
+    && !selectedExecutionTargetId;
+
+  if (missingConversation) {
+    return (
+      <div className="flex flex-col h-full">
+        <PageHeader className="gap-3 py-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className="ui-page-title truncate">Conversation not found</h1>
+          </div>
+        </PageHeader>
+        <EmptyState
+          className="h-full flex flex-col justify-center px-8"
+          title="Conversation not found"
+          body={sessionError ?? 'This conversation no longer exists or the live session has ended.'}
+          action={(
+            <Link to="/conversations/new" className="ui-action-button">
+              Start a new conversation
+            </Link>
+          )}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full">
