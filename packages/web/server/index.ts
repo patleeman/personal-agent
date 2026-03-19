@@ -47,6 +47,7 @@ import {
   writeWebUiConfig,
 } from './webUi.js';
 import { requestApplicationRestart, requestApplicationUpdate } from './applicationRestart.js';
+import { buildContentDispositionHeader } from './httpHeaders.js';
 import { readSavedDefaultCwdPreferences, writeSavedDefaultCwdPreference } from './defaultCwdPreferences.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from './modelPreferences.js';
 import {
@@ -3910,7 +3911,7 @@ app.get('/api/sessions/:id/blocks/:blockId/image', (req, res) => {
     const asset = readSessionImageAsset(req.params.id, req.params.blockId);
     if (!asset) { res.status(404).json({ error: 'Session image not found' }); return; }
     if (asset.fileName) {
-      res.setHeader('Content-Disposition', `inline; filename=${JSON.stringify(asset.fileName)}`);
+      res.setHeader('Content-Disposition', buildContentDispositionHeader('inline', asset.fileName));
     }
     res.setHeader('Cache-Control', 'private, max-age=3600');
     res.type(asset.mimeType);
@@ -3930,7 +3931,7 @@ app.get('/api/sessions/:id/blocks/:blockId/images/:imageIndex', (req, res) => {
     const asset = readSessionImageAsset(req.params.id, req.params.blockId, imageIndex);
     if (!asset) { res.status(404).json({ error: 'Session image not found' }); return; }
     if (asset.fileName) {
-      res.setHeader('Content-Disposition', `inline; filename=${JSON.stringify(asset.fileName)}`);
+      res.setHeader('Content-Disposition', buildContentDispositionHeader('inline', asset.fileName));
     }
     res.setHeader('Cache-Control', 'private, max-age=3600');
     res.type(asset.mimeType);
@@ -5676,9 +5677,11 @@ app.get('/api/conversations/:id/attachments/:attachmentId/download/:asset', (req
       ...(revisionQuery ? { revision: revisionQuery } : {}),
     });
 
-    const sanitizedFileName = download.fileName.replace(/"/g, '');
     res.setHeader('Content-Type', download.mimeType);
-    res.setHeader('Content-Disposition', `${asset === 'preview' ? 'inline' : 'attachment'}; filename="${sanitizedFileName}"`);
+    res.setHeader('Content-Disposition', buildContentDispositionHeader(
+      asset === 'preview' ? 'inline' : 'attachment',
+      download.fileName,
+    ));
     res.sendFile(download.filePath);
   } catch (err) {
     logError('request handler error', {
@@ -6038,7 +6041,7 @@ app.get('/api/projects/:id/package', (req, res) => {
     });
 
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader('Content-Disposition', buildContentDispositionHeader('attachment', fileName));
     res.send(`${JSON.stringify(projectPackage, null, 2)}\n`);
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });
@@ -6315,7 +6318,7 @@ app.get('/api/projects/:id/files/:kind/:fileId/download', (req, res) => {
     if (download.file.mimeType) {
       res.type(download.file.mimeType);
     }
-    res.setHeader('Content-Disposition', `attachment; filename="${download.file.originalName.replace(/"/g, '')}"`);
+    res.setHeader('Content-Disposition', buildContentDispositionHeader('attachment', download.file.originalName));
     res.sendFile(download.filePath);
   } catch (error) {
     res.status(projectErrorStatus(error)).json({ error: error instanceof Error ? error.message : String(error) });

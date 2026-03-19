@@ -243,6 +243,32 @@ function resolveWebUiLogFile(): string {
   return join(resolveStatePaths().root, 'web', 'logs', 'web.log');
 }
 
+function resolveApplicationCommandLockFile(): string {
+  return join(resolveStatePaths().root, 'web', 'app-restart.lock.json');
+}
+
+function clearOwnedApplicationCommandLock(action: 'restart' | 'update'): void {
+  const lockFile = resolveApplicationCommandLockFile();
+  if (!existsSync(lockFile)) {
+    return;
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(lockFile, 'utf-8')) as {
+      action?: unknown;
+      pid?: unknown;
+    };
+
+    if (parsed.action !== action || parsed.pid !== process.pid) {
+      return;
+    }
+  } catch {
+    return;
+  }
+
+  rmSync(lockFile, { force: true });
+}
+
 interface PiCommandInvocation {
   command: string;
   argsPrefix: string[];
@@ -1988,6 +2014,8 @@ async function restartCommand(args: string[]): Promise<number> {
     }
 
     throw error;
+  } finally {
+    clearOwnedApplicationCommandLock('restart');
   }
 }
 
@@ -2119,6 +2147,8 @@ async function updateCommand(args: string[]): Promise<number> {
     }
 
     throw error;
+  } finally {
+    clearOwnedApplicationCommandLock('update');
   }
 }
 

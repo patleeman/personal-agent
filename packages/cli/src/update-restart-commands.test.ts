@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'fs';
+import { existsSync, mkdtempSync, mkdirSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -81,6 +81,24 @@ describe('update and restart commands', () => {
     logSpy.mockRestore();
   });
 
+  it('clears an owned application restart lock after pa restart completes', async () => {
+    const stateRoot = createTempDir('personal-agent-cli-state-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+
+    const lockFile = join(stateRoot, 'web', 'app-restart.lock.json');
+    mkdirSync(join(stateRoot, 'web'), { recursive: true });
+    writeFileSync(lockFile, `${JSON.stringify({ action: 'restart', pid: process.pid })}\n`);
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    const exitCode = await runCli(['restart']);
+
+    expect(exitCode).toBe(0);
+    expect(existsSync(lockFile)).toBe(false);
+
+    logSpy.mockRestore();
+  });
+
   it('validates pa restart arguments', async () => {
     const errors: string[] = [];
     const errorSpy = vi.spyOn(console, 'error').mockImplementation((message?: unknown) => {
@@ -126,6 +144,26 @@ describe('update and restart commands', () => {
     expect(exitCode).toBe(1);
     expect(errors.some((line) => line.includes('Repository root is not a git checkout'))).toBe(true);
     expect(errors.some((line) => line.includes('Usage: pa update'))).toBe(false);
+
+    errorSpy.mockRestore();
+  });
+
+  it('clears an owned application update lock after pa update exits', async () => {
+    const stateRoot = createTempDir('personal-agent-cli-state-');
+    const nonGitRepo = createTempDir('personal-agent-non-git-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_REPO_ROOT = nonGitRepo;
+
+    const lockFile = join(stateRoot, 'web', 'app-restart.lock.json');
+    mkdirSync(join(stateRoot, 'web'), { recursive: true });
+    writeFileSync(lockFile, `${JSON.stringify({ action: 'update', pid: process.pid })}\n`);
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const exitCode = await runCli(['update']);
+
+    expect(exitCode).toBe(1);
+    expect(existsSync(lockFile)).toBe(false);
 
     errorSpy.mockRestore();
   });
