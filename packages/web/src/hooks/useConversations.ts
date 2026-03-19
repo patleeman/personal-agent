@@ -52,6 +52,20 @@ function applyLayoutState(layout: ConversationLayout, setters: {
   setters.setPinnedIds(layout.pinnedSessionIds);
 }
 
+function buildPlaceholderSessionMeta(id: string, title?: string): SessionMeta {
+  return {
+    id,
+    file: '',
+    timestamp: new Date(0).toISOString(),
+    cwd: '',
+    cwdSlug: '',
+    model: '',
+    title: title ?? 'Connecting…',
+    messageCount: 0,
+    isRunning: false,
+  };
+}
+
 export function useConversations() {
   const [openIds, setOpenIds] = useState(() => readOpenSessionIds());
   const [pinnedIds, setPinnedIds] = useState(() => readPinnedSessionIds());
@@ -203,16 +217,26 @@ export function useConversations() {
     [withTitles],
   );
   const pinnedSessions = useMemo(
-    () => pinnedIds
-      .map((id) => sessionsById.get(id))
-      .filter((session): session is SessionMeta => Boolean(session)),
-    [pinnedIds, sessionsById],
+    () => pinnedIds.map((id) => {
+      const session = sessionsById.get(id);
+      if (session) {
+        return session;
+      }
+
+      return buildPlaceholderSessionMeta(id, normalizeConversationTitle(liveTitles.get(id)) ?? 'Connecting…');
+    }),
+    [liveTitles, pinnedIds, sessionsById],
   );
   const tabs = useMemo(
-    () => openIds
-      .map((id) => sessionsById.get(id))
-      .filter((session): session is SessionMeta => Boolean(session)),
-    [openIds, sessionsById],
+    () => openIds.map((id) => {
+      const session = sessionsById.get(id);
+      if (session) {
+        return session;
+      }
+
+      return buildPlaceholderSessionMeta(id, normalizeConversationTitle(liveTitles.get(id)) ?? 'Connecting…');
+    }),
+    [liveTitles, openIds, sessionsById],
   );
   const archivedSessions = useMemo(
     () => withTitles.filter((session) => !openIdSet.has(session.id) && !pinnedIdSet.has(session.id)),

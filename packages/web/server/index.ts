@@ -128,6 +128,7 @@ import {
   createLocalMirrorSession,
   createRemoteLiveSession,
   forkLocalMirrorSession,
+  getRemoteConversationConnectionState,
   getRemoteLiveSessionMeta,
   isRemoteLiveSession,
   listRemoteLiveSessions,
@@ -5736,6 +5737,17 @@ app.post('/api/conversations/:id/plan/items/:itemId/reset', async (req, res) => 
 app.get('/api/conversations/:id/execution', async (req, res) => {
   try {
     res.json(await readConversationExecutionState(req.params.id));
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.get('/api/conversations/:id/remote-connection', (req, res) => {
+  try {
+    res.json(getRemoteConversationConnectionState({
+      profile: getCurrentProfile(),
+      conversationId: req.params.id,
+    }));
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
