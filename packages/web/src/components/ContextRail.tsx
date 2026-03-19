@@ -87,6 +87,44 @@ function RailHeader({ label, sub }: { label: string; sub?: string }) {
   );
 }
 
+function FolderIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3.75 7.5A1.5 1.5 0 0 1 5.25 6h4.018a1.5 1.5 0 0 1 1.06.44l1.172 1.17a1.5 1.5 0 0 0 1.06.44h6.19a1.5 1.5 0 0 1 1.5 1.5v7.95a1.5 1.5 0 0 1-1.5 1.5H5.25a1.5 1.5 0 0 1-1.5-1.5V7.5Z" />
+      <path d="M3.75 9.75h16.5" />
+    </svg>
+  );
+}
+
+function PencilIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20.25h9" />
+      <path d="m16.875 3.375 3.75 3.75" />
+      <path d="M18.75 1.5a2.652 2.652 0 1 1 3.75 3.75L7.5 20.25l-4.5 1.5 1.5-4.5L18.75 1.5Z" />
+    </svg>
+  );
+}
+
+function XIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="m6 6 12 12" />
+      <path d="M18 6 6 18" />
+    </svg>
+  );
+}
+
+function ExternalLinkIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14.25 4.5h5.25v5.25" />
+      <path d="M19.5 4.5 10.5 13.5" />
+      <path d="M19.5 13.5v4.125A1.875 1.875 0 0 1 17.625 19.5H6.375A1.875 1.875 0 0 1 4.5 17.625V6.375A1.875 1.875 0 0 1 6.375 4.5H10.5" />
+    </svg>
+  );
+}
+
 function RemoteFolderBrowser({
   listing,
   loading,
@@ -630,41 +668,43 @@ function DraftConversationContextPanel() {
     <div className="space-y-5 px-4 py-4">
       <Section title="Working Directory">
         <SurfacePanel muted className="px-3 py-3 space-y-2.5">
-          <div className="flex items-start gap-2">
+          <div className="space-y-2">
             {hasExplicitCwd ? (
-              <p className="ui-card-body break-all min-w-0 flex-1" title={draftCwd}>{draftCwd}</p>
+              <p className="ui-card-body min-w-0 overflow-x-auto whitespace-nowrap pr-1 font-mono text-primary" title={draftCwd}>{draftCwd}</p>
             ) : (
-              <p className="text-[12px] text-dim min-w-0 flex-1">No explicit working directory set yet.</p>
+              <p className="ui-card-body min-w-0 text-dim">No working directory set.</p>
             )}
-            <div className="flex items-center gap-1 shrink-0 mt-0.5">
+            <div className="flex items-center justify-end gap-0.5">
               {hasExplicitCwd && !changingCwd && (
-                <button
-                  type="button"
+                <IconButton
+                  compact
                   onClick={clearExplicitCwd}
-                  className="ui-toolbar-button"
+                  className="text-danger"
                   title="Clear the draft working directory"
+                  aria-label="Clear the draft working directory"
                 >
-                  Clear
-                </button>
+                  <XIcon />
+                </IconButton>
               )}
-              <button
-                type="button"
+              <IconButton
+                compact
                 onClick={() => { void pickDraftCwd(); }}
                 disabled={pickCwdBusy || remotePickerBusy}
-                className="ui-toolbar-button text-accent whitespace-nowrap"
-                title={isRemoteDraft ? 'Browse folders on the remote execution target' : 'Choose the initial working directory for this draft conversation'}
+                className="text-accent"
+                title={pickCwdBusy || remotePickerBusy ? 'Choosing working directory…' : isRemoteDraft ? 'Browse folders on the remote execution target' : 'Choose the initial working directory for this draft conversation'}
+                aria-label={isRemoteDraft ? 'Browse folders on the remote execution target' : 'Choose the initial working directory for this draft conversation'}
               >
-                {pickCwdBusy || remotePickerBusy ? 'Choosing…' : isRemoteDraft ? 'Browse remote…' : 'Choose folder…'}
-              </button>
-              <button
-                type="button"
+                <FolderIcon className={pickCwdBusy || remotePickerBusy ? 'animate-pulse' : undefined} />
+              </IconButton>
+              <IconButton
+                compact
                 onClick={startChangingCwd}
                 disabled={pickCwdBusy || remotePickerBusy}
-                className="ui-toolbar-button whitespace-nowrap"
                 title="Enter the working directory manually"
+                aria-label="Enter the working directory manually"
               >
-                Manual
-              </button>
+                <PencilIcon />
+              </IconButton>
               <IconButton
                 compact
                 onClick={() => { void openCwdInVscode(); }}
@@ -673,11 +713,7 @@ function DraftConversationContextPanel() {
                 aria-label="Open the draft working directory in VS Code"
                 className="shrink-0"
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14.25 4.5h5.25v5.25" />
-                  <path d="M19.5 4.5 10.5 13.5" />
-                  <path d="M19.5 13.5v4.125A1.875 1.875 0 0 1 17.625 19.5H6.375A1.875 1.875 0 0 1 4.5 17.625V6.375A1.875 1.875 0 0 1 6.375 4.5H10.5" />
-                </svg>
+                <ExternalLinkIcon className={openCwdBusy ? 'animate-pulse' : undefined} />
               </IconButton>
             </div>
           </div>
@@ -745,15 +781,6 @@ function DraftConversationContextPanel() {
               </div>
             </form>
           )}
-          <p className="text-[11px] text-dim">
-            {hasExplicitCwd
-              ? isRemoteDraft
-                ? 'This remote path will be used when the draft becomes a live remote conversation.'
-                : 'This path will be used when the draft becomes a live conversation.'
-              : isRemoteDraft
-                ? 'Browse the remote target or enter a remote path manually. Leaving this blank lets the target default remote cwd decide where the conversation starts.'
-                : 'Use the folder picker as the default flow. Manual entry still works, and leaving the field blank lets a single referenced project repo root or the saved default working directory choose for you.'}
-          </p>
           {(openCwdError || changeCwdError) && (
             <p className="text-[11px] text-danger/80">{changeCwdError ?? openCwdError}</p>
           )}
@@ -1234,8 +1261,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   if (error) return <div className="px-4 py-4 text-[12px] text-dim/60">Unable to load context.</div>;
   if (!data) return null;
 
-  const dirParts = data.cwd.replace(/^\//, '').split('/');
-  const cwdShort = dirParts.length > 3 ? '…/' + dirParts.slice(-3).join('/') : data.cwd;
   const gitChangeLabel = data.git
     ? `${data.git.changeCount} ${data.git.changeCount === 1 ? 'change' : 'changes'}`
     : null;
@@ -1244,27 +1269,28 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     <div className="space-y-5 px-4 py-4">
       <Section title="Working Directory">
         <SurfacePanel muted className="px-3 py-3 space-y-2.5">
-          <div className="flex items-start gap-2">
-            <p className="ui-card-body break-all min-w-0 flex-1" title={data.cwd}>{cwdShort}</p>
-            <div className="flex items-center gap-1 shrink-0 mt-0.5">
-              <button
-                type="button"
+          <div className="space-y-2">
+            <p className="ui-card-body min-w-0 overflow-x-auto whitespace-nowrap pr-1 font-mono text-primary" title={data.cwd}>{data.cwd}</p>
+            <div className="flex items-center justify-end gap-0.5">
+              <IconButton
+                compact
                 onClick={() => { void pickAndSubmitCwd(); }}
                 disabled={pickCwdBusy || changeCwdBusy || remotePickerBusy}
-                className="ui-toolbar-button text-accent whitespace-nowrap"
-                title={isRemoteConversation ? 'Browse folders on the remote execution target' : 'Choose a new working directory for this conversation'}
+                className="text-accent"
+                title={pickCwdBusy || remotePickerBusy ? 'Choosing working directory…' : isRemoteConversation ? 'Browse folders on the remote execution target' : 'Choose a new working directory for this conversation'}
+                aria-label={isRemoteConversation ? 'Browse folders on the remote execution target' : 'Choose a new working directory for this conversation'}
               >
-                {pickCwdBusy || remotePickerBusy ? 'Choosing…' : isRemoteConversation ? 'Browse remote…' : 'Choose folder…'}
-              </button>
-              <button
-                type="button"
+                <FolderIcon className={pickCwdBusy || remotePickerBusy ? 'animate-pulse' : undefined} />
+              </IconButton>
+              <IconButton
+                compact
                 onClick={startChangingCwd}
                 disabled={changingCwd || changeCwdBusy || pickCwdBusy || remotePickerBusy}
-                className="ui-toolbar-button whitespace-nowrap"
                 title="Enter the working directory manually"
+                aria-label="Enter the working directory manually"
               >
-                Manual
-              </button>
+                <PencilIcon />
+              </IconButton>
               <IconButton
                 compact
                 onClick={() => { void openCwdInVscode(); }}
@@ -1273,11 +1299,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
                 aria-label="Open current working directory in VS Code"
                 className="shrink-0"
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M14.25 4.5h5.25v5.25" />
-                  <path d="M19.5 4.5 10.5 13.5" />
-                  <path d="M19.5 13.5v4.125A1.875 1.875 0 0 1 17.625 19.5H6.375A1.875 1.875 0 0 1 4.5 17.625V6.375A1.875 1.875 0 0 1 6.375 4.5H10.5" />
-                </svg>
+                <ExternalLinkIcon className={openCwdBusy ? 'animate-pulse' : undefined} />
               </IconButton>
             </div>
           </div>
