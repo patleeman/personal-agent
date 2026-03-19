@@ -120,6 +120,52 @@ describe('parseRequest', () => {
     });
   });
 
+  it('parses runs.startBackground manifest metadata and checkpoint payload', () => {
+    const parsed = parseRequest(JSON.stringify({
+      id: 'req_7bb',
+      type: 'runs.startBackground',
+      input: {
+        taskSlug: 'remote-run',
+        cwd: '/tmp/work',
+        shellCommand: 'node worker.mjs',
+        manifestMetadata: {
+          remoteExecution: {
+            targetId: 'gpu-box',
+          },
+        },
+        checkpointPayload: {
+          remoteExecution: {
+            import: {
+              status: 'not_ready',
+            },
+          },
+        },
+      },
+    }));
+
+    expect(parsed).toEqual({
+      id: 'req_7bb',
+      type: 'runs.startBackground',
+      input: {
+        taskSlug: 'remote-run',
+        cwd: '/tmp/work',
+        shellCommand: 'node worker.mjs',
+        manifestMetadata: {
+          remoteExecution: {
+            targetId: 'gpu-box',
+          },
+        },
+        checkpointPayload: {
+          remoteExecution: {
+            import: {
+              status: 'not_ready',
+            },
+          },
+        },
+      },
+    });
+  });
+
   it('parses runs.cancel request', () => {
     const parsed = parseRequest(JSON.stringify({
       id: 'req_7c',

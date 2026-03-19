@@ -1681,6 +1681,67 @@ export async function queuePromptContext(
   });
 }
 
+export async function appendDetachedUserMessage(
+  sessionId: string,
+  text: string,
+): Promise<void> {
+  const entry = registry.get(sessionId);
+  if (!entry) throw new Error(`Session ${sessionId} is not live`);
+  if (entry.session.isStreaming) {
+    throw new Error(`Session ${sessionId} is currently streaming`);
+  }
+
+  const normalizedText = text.trim();
+  if (!normalizedText) {
+    return;
+  }
+
+  const message = {
+    role: 'user' as const,
+    content: [{ type: 'text' as const, text: normalizedText }],
+    timestamp: Date.now(),
+  };
+
+  entry.session.agent.appendMessage(message);
+  entry.session.sessionManager.appendMessage(message);
+
+  if (!entry.session.sessionName?.trim() && isPlaceholderConversationTitle(entry.title)) {
+    const fallbackTitle = buildFallbackTitleFromContent(message.content);
+    if (fallbackTitle) {
+      entry.title = fallbackTitle;
+      broadcastTitle(entry);
+    }
+  }
+
+  invalidateAppTopics('sessions');
+}
+
+export async function appendVisibleCustomMessage(
+  sessionId: string,
+  customType: string,
+  content: string,
+  details?: unknown,
+): Promise<void> {
+  const entry = registry.get(sessionId);
+  if (!entry) throw new Error(`Session ${sessionId} is not live`);
+  if (entry.session.isStreaming) {
+    throw new Error(`Session ${sessionId} is currently streaming`);
+  }
+
+  const message = content.trim();
+  if (!message) {
+    return;
+  }
+
+  await entry.session.sendCustomMessage({
+    customType,
+    content: message,
+    display: true,
+    details,
+  });
+  invalidateAppTopics('sessions');
+}
+
 export async function promptSession(
   sessionId: string,
   text: string,

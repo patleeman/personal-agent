@@ -116,6 +116,8 @@ export interface StartBackgroundRunRequestInput {
     filePath?: string;
   };
   notification?: BackgroundRunNotificationSpec;
+  manifestMetadata?: Record<string, unknown>;
+  checkpointPayload?: Record<string, unknown>;
 }
 
 export interface StartBackgroundRunResult {

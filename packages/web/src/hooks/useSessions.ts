@@ -1,31 +1,35 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import { useAppEvents } from '../contexts';
 import type { SessionDetail, SessionMeta } from '../types';
-
-// ── Session list ──────────────────────────────────────────────────────────────
 
 export function useSessions() {
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
     fetch('/api/sessions')
-      .then(r => r.json())
-      .then((data: SessionMeta[]) => { setSessions(data); setLoading(false); })
-      .catch(e => { setError(String(e)); setLoading(false); });
+      .then((response) => response.json())
+      .then((data: SessionMeta[]) => {
+        setSessions(data);
+        setLoading(false);
+      })
+      .catch((nextError) => {
+        setError(String(nextError));
+        setLoading(false);
+      });
   }, []);
 
   return { sessions, loading, error };
 }
 
-// ── Session detail ────────────────────────────────────────────────────────────
-
 export function useSessionDetail(sessionId: string | undefined, options?: { tailBlocks?: number }) {
-  const [detail, setDetail]   = useState<SessionDetail | null>(null);
+  const { versions } = useAppEvents();
+  const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!sessionId) {
@@ -61,7 +65,7 @@ export function useSessionDetail(sessionId: string | undefined, options?: { tail
     return () => {
       cancelled = true;
     };
-  }, [options?.tailBlocks, sessionId]);
+  }, [options?.tailBlocks, sessionId, versions.sessions]);
 
   return { detail, loading, error };
 }

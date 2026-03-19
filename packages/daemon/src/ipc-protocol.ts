@@ -216,6 +216,16 @@ function readBackgroundRunInput(value: unknown): StartBackgroundRunRequestInput 
     throw new Error('runs.startBackground argv must be an array when provided');
   }
 
+  const manifestMetadata = value.manifestMetadata;
+  if (manifestMetadata !== undefined && !isRecord(manifestMetadata)) {
+    throw new Error('runs.startBackground manifestMetadata must be an object when provided');
+  }
+
+  const checkpointPayload = value.checkpointPayload;
+  if (checkpointPayload !== undefined && !isRecord(checkpointPayload)) {
+    throw new Error('runs.startBackground checkpointPayload must be an object when provided');
+  }
+
   const argv = Array.isArray(rawArgv)
     ? rawArgv.map((entry, index) => readRequiredString(entry, `runs.startBackground argv[${index}]`))
     : undefined;
@@ -237,6 +247,8 @@ function readBackgroundRunInput(value: unknown): StartBackgroundRunRequestInput 
         }
       : {}),
     ...(notification ? { notification } : {}),
+    ...(manifestMetadata ? { manifestMetadata } : {}),
+    ...(checkpointPayload ? { checkpointPayload } : {}),
   };
 }
 

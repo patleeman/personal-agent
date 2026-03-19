@@ -84,6 +84,17 @@ interface RawMessage {
   };
 }
 
+interface RawCustomMessage {
+  type: 'custom_message';
+  id: string;
+  parentId: string | null;
+  timestamp: string;
+  customType?: string;
+  content: RawMessageContent;
+  details?: unknown;
+  display?: boolean;
+}
+
 interface RawCompaction {
   type: 'compaction';
   id: string;
@@ -103,7 +114,7 @@ interface RawBranchSummary {
   fromId: string;
 }
 
-type RawLine = RawSessionRecord | RawModelChange | RawSessionInfo | RawMessage | RawCompaction | RawBranchSummary | { type: string };
+type RawLine = RawSessionRecord | RawModelChange | RawSessionInfo | RawMessage | RawCustomMessage | RawCompaction | RawBranchSummary | { type: string };
 type PiSessionTreeNode = ReturnType<SessionManager['getTree']>[number];
 
 // ── Public types ───────────────────────────────────────────────────────────────
@@ -228,6 +239,8 @@ export interface DisplayMessageEntryLike {
     summary?: string;
     tokensBefore?: number;
     fromId?: string;
+    customType?: string;
+    display?: boolean;
   };
 }
 
@@ -538,9 +551,9 @@ function buildDisplayBlocksInternal(
       continue;
     }
 
-    if (role === 'assistant') {
+    if (role === 'assistant' || role === 'custom') {
       for (const block of contentBlocks) {
-        if (block.type === 'thinking' && block.thinking?.trim()) {
+        if (role === 'assistant' && block.type === 'thinking' && block.thinking?.trim()) {
           recordAnchor();
           blocks.push({ type: 'thinking', id: `${baseId}-t${blocks.length}`, ts, text: block.thinking });
           continue;
@@ -552,7 +565,7 @@ function buildDisplayBlocksInternal(
           continue;
         }
 
-        if (block.type === 'toolCall' && block.id) {
+        if (role === 'assistant' && block.type === 'toolCall' && block.id) {
           recordAnchor();
           const idx = blocks.length;
           toolCallIndex.set(block.id, idx);
@@ -568,7 +581,7 @@ function buildDisplayBlocksInternal(
         }
       }
 
-      if (errorMessage) {
+      if (role === 'assistant' && errorMessage) {
         recordAnchor();
         blocks.push({
           type: 'error',
@@ -820,6 +833,13 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): SessionMeta
     if (line.type === 'session_info') {
       sawSessionInfo = true;
       namedTitle = normalizeSessionName((line as RawSessionInfo).name);
+      continue;
+    }
+
+    if (line.type === 'custom_message') {
+      if ((line as RawCustomMessage).display) {
+        messageCount += 1;
+      }
       continue;
     }
 
@@ -1108,7 +1128,7 @@ export function clearSessionCaches(): void {
   persistedIndexJson = null;
 }
 
-function buildDisplayMessageEntriesFromSessionEntries(entries: SessionEntry[]): DisplayMessageEntryLike[] {
+export function buildDisplayMessageEntriesFromSessionEntries(entries: SessionEntry[]): DisplayMessageEntryLike[] {
   const displayEntries: DisplayMessageEntryLike[] = [];
 
   for (const entry of entries) {
@@ -1117,6 +1137,23 @@ function buildDisplayMessageEntriesFromSessionEntries(entries: SessionEntry[]): 
         id: entry.id,
         timestamp: entry.timestamp,
         message: entry.message,
+      });
+      continue;
+    }
+
+    if (entry.type === 'custom_message') {
+      const customMessage: DisplayMessageEntryLike['message'] = {
+        role: 'custom',
+        content: entry.content,
+        details: entry.details,
+        customType: entry.customType,
+        display: entry.display,
+      };
+
+      displayEntries.push({
+        id: entry.id,
+        timestamp: entry.timestamp,
+        message: customMessage,
       });
       continue;
     }

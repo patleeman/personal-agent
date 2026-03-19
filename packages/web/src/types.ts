@@ -310,6 +310,25 @@ export interface DurableRunPaths {
   resultPath: string;
 }
 
+export type RemoteRunImportStatus = 'not_ready' | 'ready' | 'imported' | 'failed';
+
+export interface RemoteExecutionRunSummary {
+  targetId: string;
+  targetLabel: string;
+  transport: 'ssh';
+  conversationId: string;
+  localCwd: string;
+  remoteCwd: string;
+  prompt: string;
+  submittedAt: string;
+  importStatus: RemoteRunImportStatus;
+  importedAt?: string;
+  importSummary?: string;
+  importError?: string;
+  transcriptAvailable: boolean;
+  transcriptFileName?: string;
+}
+
 export interface DurableRunRecord {
   runId: string;
   paths: DurableRunPaths;
@@ -318,6 +337,8 @@ export interface DurableRunRecord {
   checkpoint?: DurableRunCheckpoint;
   problems: string[];
   recoveryAction: string;
+  location?: 'local' | 'remote';
+  remoteExecution?: RemoteExecutionRunSummary;
 }
 
 export interface DurableRunsSummary {
@@ -804,6 +825,47 @@ export interface MemoryData {
   agentsMd: MemoryAgentsItem[];
   skills: MemorySkillItem[];
   memoryDocs: MemoryDocItem[];
+}
+
+export interface ExecutionTargetPathMapping {
+  localPrefix: string;
+  remotePrefix: string;
+}
+
+export interface ExecutionTargetSummary {
+  id: string;
+  label: string;
+  description?: string;
+  transport: 'ssh';
+  sshDestination: string;
+  sshCommand?: string;
+  remotePaCommand?: string;
+  profile?: string;
+  defaultRemoteCwd?: string;
+  commandPrefix?: string;
+  cwdMappings: ExecutionTargetPathMapping[];
+  createdAt: string;
+  updatedAt: string;
+  activeRunCount: number;
+  readyImportCount: number;
+  latestRunAt?: string;
+}
+
+export interface ExecutionTargetsState {
+  targets: ExecutionTargetSummary[];
+  sshBinary: CliBinaryState;
+  summary: {
+    totalTargets: number;
+    activeRemoteRuns: number;
+    readyImports: number;
+  };
+}
+
+export interface ConversationExecutionState {
+  conversationId: string;
+  targetId: string | null;
+  location: 'local' | 'remote';
+  target: ExecutionTargetSummary | null;
 }
 
 export interface AppStatus {

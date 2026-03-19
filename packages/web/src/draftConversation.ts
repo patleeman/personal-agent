@@ -10,6 +10,7 @@ export const DRAFT_CONVERSATION_STATE_CHANGED_EVENT = 'pa:draft-conversation-sta
 const DRAFT_CONVERSATION_COMPOSER_STORAGE_KEY = 'pa:reload:conversation:draft:composer';
 const DRAFT_CONVERSATION_CWD_STORAGE_KEY = 'pa:reload:conversation:draft:cwd';
 const DRAFT_CONVERSATION_ATTACHMENTS_STORAGE_KEY = 'pa:reload:conversation:draft:attachments';
+const DRAFT_CONVERSATION_EXECUTION_TARGET_STORAGE_KEY = 'pa:reload:conversation:draft:execution-target';
 
 let draftConversationAttachmentsMutationVersion = 0;
 
@@ -46,12 +47,25 @@ export function buildDraftConversationAttachmentsStorageKey(): string {
   return DRAFT_CONVERSATION_ATTACHMENTS_STORAGE_KEY;
 }
 
+export function buildDraftConversationExecutionTargetStorageKey(): string {
+  return DRAFT_CONVERSATION_EXECUTION_TARGET_STORAGE_KEY;
+}
+
 function normalizeDraftConversationComposer(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
 function normalizeDraftConversationCwd(value: unknown): string {
   return typeof value === 'string' ? value : '';
+}
+
+function normalizeDraftConversationExecutionTarget(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
 }
 
 function normalizeDraftConversationImage(value: unknown): PromptImageInput | null {
@@ -116,14 +130,6 @@ function normalizeDraftConversationDrawing(value: unknown): DraftConversationDra
   };
 }
 
-function emitDraftConversationStateChanged(): void {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.dispatchEvent(new Event(DRAFT_CONVERSATION_STATE_CHANGED_EVENT));
-}
-
 function normalizeDraftConversationAttachments(value: unknown): DraftConversationAttachments {
   if (!value || typeof value !== 'object') {
     return { images: [], drawings: [] };
@@ -142,6 +148,14 @@ function normalizeDraftConversationAttachments(value: unknown): DraftConversatio
     : [];
 
   return { images, drawings };
+}
+
+function emitDraftConversationStateChanged(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.dispatchEvent(new Event(DRAFT_CONVERSATION_STATE_CHANGED_EVENT));
 }
 
 export function readDraftConversationComposer(
@@ -206,6 +220,37 @@ export function clearDraftConversationCwd(
   emitDraftConversationStateChanged();
 }
 
+export function readDraftConversationExecutionTarget(
+  storage: StorageLike | null = getSessionStorage(),
+): string | null {
+  return readStoredState<string | null>({
+    key: buildDraftConversationExecutionTargetStorageKey(),
+    fallback: null,
+    storage,
+    deserialize: (raw) => normalizeDraftConversationExecutionTarget(JSON.parse(raw) as unknown),
+  });
+}
+
+export function persistDraftConversationExecutionTarget(
+  targetId: string | null,
+  storage: StorageLike | null = getSessionStorage(),
+): void {
+  persistStoredState({
+    key: buildDraftConversationExecutionTargetStorageKey(),
+    value: targetId,
+    storage,
+    shouldPersist: (value) => typeof value === 'string' && value.trim().length > 0,
+  });
+  emitDraftConversationStateChanged();
+}
+
+export function clearDraftConversationExecutionTarget(
+  storage: StorageLike | null = getSessionStorage(),
+): void {
+  clearStoredState(storage, buildDraftConversationExecutionTargetStorageKey());
+  emitDraftConversationStateChanged();
+}
+
 export function readDraftConversationAttachments(
   storage: StorageLike | null = getSessionStorage(),
 ): DraftConversationAttachments {
@@ -261,7 +306,7 @@ export function isDraftConversationPath(pathname: string): boolean {
 export function shouldShowDraftConversationTab(
   pathname: string,
   composerText: string,
-  cwd: string = '',
+  cwd = '',
   hasAttachments = false,
 ): boolean {
   return isDraftConversationPath(pathname)

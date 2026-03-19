@@ -1,4 +1,4 @@
-import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationFilterValidationResult, ConversationAutomationJudgeSettingsState, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateGate, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationCwdChangeResult, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FolderPickerResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, MemoryWorkItem, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectDiagnostics, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SyncState, ToolsState, WebUiState } from './types';
+import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationFilterValidationResult, ConversationAutomationJudgeSettingsState, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateGate, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationCwdChangeResult, ConversationExecutionState, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DisplayBlock, DurableRunDetailResult, DurableRunListResult, ExecutionTargetPathMapping, ExecutionTargetsState, FolderPickerResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, McpCliServerDetail, McpCliToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, MemoryWorkItem, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectDiagnostics, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SyncState, ToolsState, WebUiState } from './types';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch('/api' + path);
@@ -265,6 +265,8 @@ export const api = {
   durableRunLog: (id: string, tail?: number) =>
     get<{ log: string; path: string }>(`/runs/${encodeURIComponent(id)}/log${tail ? `?tail=${encodeURIComponent(String(tail))}` : ''}`),
   cancelDurableRun: (id: string) => post<{ cancelled: boolean; runId: string }>(`/runs/${encodeURIComponent(id)}/cancel`),
+  importRemoteRun: (id: string) => post<{ ok: true; runId: string; conversationId: string; summary: string; importedAt: string }>(`/runs/${encodeURIComponent(id)}/import`),
+  remoteRunTranscriptUrl: (id: string) => `/api/runs/${encodeURIComponent(id)}/remote-transcript`,
 
   // ── Shell run ─────────────────────────────────────────────────────────────
   pickFolder: (cwd?: string) =>
@@ -290,6 +292,40 @@ export const api = {
   liveSessions: () => get<LiveSessionMeta[]>('/live-sessions'),
   liveSession: (id: string) => get<LiveSessionMeta & { live: boolean }>(`/live-sessions/${id}`),
   liveSessionContext: (id: string) => get<LiveSessionContext>(`/live-sessions/${id}/context`),
+  executionTargets: () => get<ExecutionTargetsState>('/execution-targets'),
+  createExecutionTarget: (input: {
+    id: string;
+    label: string;
+    description?: string | null;
+    sshDestination: string;
+    sshCommand?: string | null;
+    remotePaCommand?: string | null;
+    profile?: string | null;
+    defaultRemoteCwd?: string | null;
+    commandPrefix?: string | null;
+    cwdMappings?: ExecutionTargetPathMapping[];
+  }) => post<ExecutionTargetsState>('/execution-targets', input),
+  updateExecutionTarget: (id: string, input: {
+    label: string;
+    description?: string | null;
+    sshDestination: string;
+    sshCommand?: string | null;
+    remotePaCommand?: string | null;
+    profile?: string | null;
+    defaultRemoteCwd?: string | null;
+    commandPrefix?: string | null;
+    cwdMappings?: ExecutionTargetPathMapping[];
+  }) => patch<ExecutionTargetsState>(`/execution-targets/${encodeURIComponent(id)}`, input),
+  deleteExecutionTarget: (id: string) => del<ExecutionTargetsState>(`/execution-targets/${encodeURIComponent(id)}`),
+  remoteRuns: (input: {
+    conversationId?: string;
+    cwd?: string;
+    referencedProjectIds?: string[];
+    text: string;
+    targetId: string;
+  }) => post<{ accepted: true; conversationId: string; sessionFile: string; runId: string; remoteCwd: string; target: { id: string; label: string } }>(`/remote-runs`, input),
+  conversationExecution: (id: string) => get<ConversationExecutionState>(`/conversations/${encodeURIComponent(id)}/execution`),
+  updateConversationExecution: (id: string, targetId: string | null) => patch<ConversationExecutionState>(`/conversations/${encodeURIComponent(id)}/execution`, { targetId }),
   conversationAutomation: (id: string) => get<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/automation`),
   updateConversationAutomation: (id: string, input: {
     enabled?: boolean;

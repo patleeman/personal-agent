@@ -2,7 +2,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
-import type { DaemonState, GatewayLogTail, SyncState, WebUiReleaseSummary } from '../types';
+import type { DaemonState, ExecutionTargetSummary, GatewayLogTail, SyncState, WebUiReleaseSummary } from '../types';
 import { timeAgo } from '../utils';
 import { ErrorState, LoadingState, PageHeader, PageHeading, SectionLabel, ToolbarButton } from '../components/ui';
 
@@ -67,6 +67,25 @@ function releaseKey(release: WebUiReleaseSummary | undefined): string {
   return [release.slot, release.revision ?? '', release.builtAt].join(':');
 }
 
+function serializeTargetMappings(target: ExecutionTargetSummary | null): string {
+  if (!target || target.cwdMappings.length === 0) {
+    return '';
+  }
+
+  return target.cwdMappings.map((mapping) => `${mapping.localPrefix} => ${mapping.remotePrefix}`).join('\n');
+}
+
+function parseTargetMappings(input: string): Array<{ localPrefix: string; remotePrefix: string }> {
+  return input
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .flatMap((line) => {
+      const [localPrefix, remotePrefix] = line.split(/=>|=/).map((part) => part.trim());
+      return localPrefix && remotePrefix ? [{ localPrefix, remotePrefix }] : [];
+    });
+}
+
 type ComponentAction = 'restart-web-ui' | 'restart-daemon' | 'restart-gateway' | 'run-sync';
 
 function StatBlock({
@@ -124,7 +143,7 @@ function SystemSection({
   id: string;
   label: string;
   description: string;
-  to: string;
+  to?: string;
   actions?: ReactNode;
   children: ReactNode;
 }) {
@@ -137,7 +156,7 @@ function SystemSection({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {actions}
-          <Link to={to} className="ui-toolbar-button">Open advanced page</Link>
+          {to && <Link to={to} className="ui-toolbar-button">Open advanced page</Link>}
         </div>
       </div>
       {children}
@@ -150,6 +169,23 @@ export function SystemPage() {
   const sync = useApi(api.sync);
   const gateway = useApi(api.gateway);
   const webUi = useApi(api.webUiState);
+  const executionTargets = useApi(api.executionTargets);
+  const [editingTargetId, setEditingTargetId] = useState<string | null>(null);
+  const [targetDraft, setTargetDraft] = useState({
+    id: '',
+    label: '',
+    description: '',
+    sshDestination: '',
+    sshCommand: '',
+    remotePaCommand: '',
+    profile: '',
+    defaultRemoteCwd: '',
+    commandPrefix: '',
+    mappingsText: '',
+  });
+  const [targetMutationBusy, setTargetMutationBusy] = useState(false);
+  const [targetMessage, setTargetMessage] = useState<string | null>(null);
+  const [targetError, setTargetError] = useState<string | null>(null);
   const [applicationAction, setApplicationAction] = useState<'restart' | 'update' | null>(null);
   const [applicationMessage, setApplicationMessage] = useState<string | null>(null);
   const [applicationError, setApplicationError] = useState<string | null>(null);
@@ -164,8 +200,9 @@ export function SystemPage() {
       sync.refetch({ resetLoading }),
       gateway.refetch({ resetLoading }),
       webUi.refetch({ resetLoading }),
+      executionTargets.refetch({ resetLoading }),
     ]);
-  }, [daemon.refetch, gateway.refetch, sync.refetch, webUi.refetch]);
+  }, [daemon.refetch, executionTargets.refetch, gateway.refetch, sync.refetch, webUi.refetch]);
 
   function clearActionMonitor() {
     if (actionMonitorRef.current !== null) {
@@ -236,6 +273,99 @@ export function SystemPage() {
       ...(sync.data?.warnings ?? []).map((warning) => `Sync: ${warning}`),
     ];
   }, [daemon.data?.warnings, gateway.data?.warnings, sync.data?.warnings, webUi.data?.warnings]);
+
+  function resetTargetDraft(target: ExecutionTargetSummary | null = null) {
+    setEditingTargetId(target?.id ?? null);
+    setTargetDraft({
+      id: target?.id ?? '',
+      label: target?.label ?? '',
+      description: target?.description ?? '',
+      sshDestination: target?.sshDestination ?? '',
+      sshCommand: target?.sshCommand ?? '',
+      remotePaCommand: target?.remotePaCommand ?? '',
+      profile: target?.profile ?? '',
+      defaultRemoteCwd: target?.defaultRemoteCwd ?? '',
+      commandPrefix: target?.commandPrefix ?? '',
+      mappingsText: serializeTargetMappings(target),
+    });
+    setTargetError(null);
+    setTargetMessage(null);
+  }
+
+  async function saveTarget() {
+    if (targetMutationBusy) {
+      return;
+    }
+
+    setTargetMutationBusy(true);
+    setTargetError(null);
+    setTargetMessage(null);
+
+    try {
+      const payload = {
+        id: targetDraft.id.trim(),
+        label: targetDraft.label.trim(),
+        sshDestination: targetDraft.sshDestination.trim(),
+        ...(targetDraft.description.trim() ? { description: targetDraft.description.trim() } : {}),
+        ...(targetDraft.sshCommand.trim() ? { sshCommand: targetDraft.sshCommand.trim() } : {}),
+        ...(targetDraft.remotePaCommand.trim() ? { remotePaCommand: targetDraft.remotePaCommand.trim() } : {}),
+        ...(targetDraft.profile.trim() ? { profile: targetDraft.profile.trim() } : {}),
+        ...(targetDraft.defaultRemoteCwd.trim() ? { defaultRemoteCwd: targetDraft.defaultRemoteCwd.trim() } : {}),
+        ...(targetDraft.commandPrefix.trim() ? { commandPrefix: targetDraft.commandPrefix.trim() } : {}),
+        cwdMappings: parseTargetMappings(targetDraft.mappingsText),
+      };
+
+      const next = editingTargetId
+        ? await api.updateExecutionTarget(editingTargetId, {
+            label: payload.label,
+            sshDestination: payload.sshDestination,
+            description: payload.description,
+            sshCommand: payload.sshCommand,
+            remotePaCommand: payload.remotePaCommand,
+            profile: payload.profile,
+            defaultRemoteCwd: payload.defaultRemoteCwd,
+            commandPrefix: payload.commandPrefix,
+            cwdMappings: payload.cwdMappings,
+          })
+        : await api.createExecutionTarget(payload);
+
+      executionTargets.replaceData(next);
+      resetTargetDraft();
+      setTargetMessage(editingTargetId ? 'Execution target updated.' : 'Execution target saved.');
+    } catch (error) {
+      setTargetError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setTargetMutationBusy(false);
+    }
+  }
+
+  async function removeTarget(targetId: string) {
+    if (targetMutationBusy) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete execution target ${targetId}?`);
+    if (!confirmed) {
+      return;
+    }
+
+    setTargetMutationBusy(true);
+    setTargetError(null);
+    setTargetMessage(null);
+
+    try {
+      const next = await api.deleteExecutionTarget(targetId);
+      executionTargets.replaceData(next);
+      if (editingTargetId === targetId) {
+        resetTargetDraft();
+      }
+      setTargetMessage('Execution target deleted.');
+    } catch (error) {
+      setTargetError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setTargetMutationBusy(false);
+    }
+  }
 
   async function handleApplicationAction(action: 'restart' | 'update') {
     if (applicationAction || componentAction || !webUi.data?.service.installed) {
@@ -341,7 +471,7 @@ export function SystemPage() {
 
         {!loadingEverything && (
           <div className="space-y-8">
-            {(combinedWarnings.length > 0 || applicationMessage || applicationError || componentMessage || componentError || !canManageApplication) && (
+            {(combinedWarnings.length > 0 || applicationMessage || applicationError || componentMessage || componentError || targetMessage || targetError || !canManageApplication) && (
               <div className="space-y-1">
                 {combinedWarnings.map((warning) => (
                   <p key={warning} className="text-[12px] text-warning">{warning}</p>
@@ -353,14 +483,16 @@ export function SystemPage() {
                 )}
                 {applicationMessage && <p className="text-[12px] text-secondary">{applicationMessage}</p>}
                 {componentMessage && <p className="text-[12px] text-secondary">{componentMessage}</p>}
+                {targetMessage && <p className="text-[12px] text-secondary">{targetMessage}</p>}
                 {applicationError && <p className="text-[12px] text-danger">{applicationError}</p>}
                 {componentError && <p className="text-[12px] text-danger">{componentError}</p>}
+                {targetError && <p className="text-[12px] text-danger">{targetError}</p>}
               </div>
             )}
 
             <section className="space-y-4">
               <SectionLabel label="Overview" />
-              <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2 xl:grid-cols-5">
                 <StatBlock
                   label="Web UI"
                   value={webUi.data ? serviceStatusText(webUi.data.service) : 'loading…'}
@@ -396,8 +528,103 @@ export function SystemPage() {
                     : undefined}
                   valueClassName={sync.data ? syncSummaryToneClass(sync.data) : undefined}
                 />
+                <StatBlock
+                  label="Targets"
+                  value={executionTargets.data ? String(executionTargets.data.summary.totalTargets) : 'loading…'}
+                  meta={executionTargets.data
+                    ? `${executionTargets.data.summary.activeRemoteRuns} active remote · ${executionTargets.data.summary.readyImports} ready imports`
+                    : undefined}
+                  valueClassName={executionTargets.data?.summary.totalTargets ? 'text-primary' : 'text-dim'}
+                />
               </div>
             </section>
+
+            <SystemSection
+              id="execution-targets"
+              label="Execution targets"
+              description="Remote kernels stay execution-only. Configure SSH destinations here, see which targets have active remote work, and keep imports conversation-first."
+              actions={(
+                <ToolbarButton onClick={() => resetTargetDraft()} disabled={targetMutationBusy}>
+                  {editingTargetId ? 'New target' : 'Add target'}
+                </ToolbarButton>
+              )}
+            >
+              {executionTargets.loading && !executionTargets.data && <LoadingState label="Loading execution targets…" />}
+              {!executionTargets.loading && executionTargets.error && !executionTargets.data && <ErrorState message={`Failed to load execution targets: ${executionTargets.error}`} />}
+              {executionTargets.data && (
+                <div className="space-y-4">
+                  <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2 xl:grid-cols-4">
+                    <StatBlock
+                      label="SSH"
+                      value={executionTargets.data.sshBinary.available ? 'available' : 'missing'}
+                      meta={executionTargets.data.sshBinary.path ?? executionTargets.data.sshBinary.error}
+                      valueClassName={executionTargets.data.sshBinary.available ? 'text-success' : 'text-warning'}
+                    />
+                    <StatBlock
+                      label="Configured"
+                      value={String(executionTargets.data.summary.totalTargets)}
+                      meta={executionTargets.data.summary.totalTargets === 1 ? '1 target' : `${executionTargets.data.summary.totalTargets} targets`}
+                    />
+                    <StatBlock
+                      label="Active remote runs"
+                      value={String(executionTargets.data.summary.activeRemoteRuns)}
+                      meta="Currently running or recovering"
+                    />
+                    <StatBlock
+                      label="Ready imports"
+                      value={String(executionTargets.data.summary.readyImports)}
+                      meta="Completed remote runs waiting to be imported"
+                    />
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {executionTargets.data.targets.length === 0 ? (
+                      <p className="text-[12px] text-dim">No execution targets configured yet.</p>
+                    ) : executionTargets.data.targets.map((target) => (
+                      <div key={target.id} className="flex flex-wrap items-start justify-between gap-3 border-t border-border-subtle pt-3 first:border-t-0 first:pt-0">
+                        <div className="min-w-0">
+                          <p className="text-[13px] font-medium text-primary">{target.label}</p>
+                          <p className="ui-card-meta mt-1 break-words">{target.sshDestination}{target.defaultRemoteCwd ? ` · ${target.defaultRemoteCwd}` : ''}</p>
+                          {target.description && <p className="mt-1 text-[12px] text-secondary break-words">{target.description}</p>}
+                          <p className="mt-1 text-[11px] text-dim">
+                            {target.activeRunCount} active · {target.readyImportCount} ready imports
+                            {target.latestRunAt ? ` · last activity ${timeAgo(target.latestRunAt)}` : ''}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <button type="button" className="ui-toolbar-button" onClick={() => resetTargetDraft(target)} disabled={targetMutationBusy}>Edit</button>
+                          <button type="button" className="ui-toolbar-button text-danger" onClick={() => { void removeTarget(target.id); }} disabled={targetMutationBusy}>Delete</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="border-t border-border-subtle pt-4 space-y-3">
+                    <div>
+                      <p className="ui-section-label">{editingTargetId ? `Edit ${editingTargetId}` : 'Add target'}</p>
+                      <p className="ui-card-meta mt-1">Use SSH host aliases when possible. Path mappings let a local repo path resolve to a remote checkout path.</p>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <input value={targetDraft.id} onChange={(event) => setTargetDraft((current) => ({ ...current, id: event.target.value }))} disabled={Boolean(editingTargetId) || targetMutationBusy} placeholder="id" className="rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary outline-none focus:border-accent/60 disabled:opacity-50" />
+                      <input value={targetDraft.label} onChange={(event) => setTargetDraft((current) => ({ ...current, label: event.target.value }))} disabled={targetMutationBusy} placeholder="Label" className="rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary outline-none focus:border-accent/60 disabled:opacity-50" />
+                      <input value={targetDraft.sshDestination} onChange={(event) => setTargetDraft((current) => ({ ...current, sshDestination: event.target.value }))} disabled={targetMutationBusy} placeholder="SSH destination" className="rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary outline-none focus:border-accent/60 disabled:opacity-50" />
+                      <input value={targetDraft.defaultRemoteCwd} onChange={(event) => setTargetDraft((current) => ({ ...current, defaultRemoteCwd: event.target.value }))} disabled={targetMutationBusy} placeholder="Default remote cwd (optional)" className="rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary outline-none focus:border-accent/60 disabled:opacity-50" />
+                      <input value={targetDraft.profile} onChange={(event) => setTargetDraft((current) => ({ ...current, profile: event.target.value }))} disabled={targetMutationBusy} placeholder="Remote profile (optional)" className="rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary outline-none focus:border-accent/60 disabled:opacity-50" />
+                      <input value={targetDraft.remotePaCommand} onChange={(event) => setTargetDraft((current) => ({ ...current, remotePaCommand: event.target.value }))} disabled={targetMutationBusy} placeholder="Remote pa command (optional)" className="rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary outline-none focus:border-accent/60 disabled:opacity-50" />
+                    </div>
+                    <input value={targetDraft.description} onChange={(event) => setTargetDraft((current) => ({ ...current, description: event.target.value }))} disabled={targetMutationBusy} placeholder="Description (optional)" className="w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary outline-none focus:border-accent/60 disabled:opacity-50" />
+                    <input value={targetDraft.commandPrefix} onChange={(event) => setTargetDraft((current) => ({ ...current, commandPrefix: event.target.value }))} disabled={targetMutationBusy} placeholder="Command prefix (optional)" className="w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary outline-none focus:border-accent/60 disabled:opacity-50" />
+                    <textarea value={targetDraft.mappingsText} onChange={(event) => setTargetDraft((current) => ({ ...current, mappingsText: event.target.value }))} disabled={targetMutationBusy} placeholder="/local/path => /remote/path" rows={4} className="w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary outline-none focus:border-accent/60 disabled:opacity-50" />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <ToolbarButton onClick={() => { void saveTarget(); }} disabled={targetMutationBusy}>{targetMutationBusy ? 'Saving…' : 'Save target'}</ToolbarButton>
+                      {(editingTargetId || targetDraft.id || targetDraft.label || targetDraft.sshDestination || targetDraft.mappingsText) && (
+                        <ToolbarButton onClick={() => resetTargetDraft()} disabled={targetMutationBusy}>Clear</ToolbarButton>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </SystemSection>
 
             <SystemSection
               id="web-ui"
