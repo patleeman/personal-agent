@@ -421,7 +421,7 @@ export function Sidebar() {
   } | null>(null);
   const allSessions = useMemo(() => [...pinnedSessions, ...tabs, ...archivedSessions], [archivedSessions, pinnedSessions, tabs]);
   const activeConversationId = useMemo(() => getActiveConversationId(location.pathname), [location.pathname]);
-  const automationTarget = activeConversationId ? `/automation/${encodeURIComponent(activeConversationId)}` : '/automation';
+  const automationTarget = '/automation';
   const attentionIds = useMemo(
     () => new Set(allSessions.filter((session) => sessionNeedsAttention(session)).map((session) => session.id)),
     [allSessions],

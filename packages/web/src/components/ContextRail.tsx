@@ -46,6 +46,7 @@ const ProjectOverviewPanel = lazy(() => import('./ProjectOverviewPanel').then((m
 const ScheduledTaskCreatePanel = lazy(() => import('./ScheduledTaskPanel').then((module) => ({ default: module.ScheduledTaskCreatePanel })));
 const ScheduledTaskPanel = lazy(() => import('./ScheduledTaskPanel').then((module) => ({ default: module.ScheduledTaskPanel })));
 const ToolsContextPanel = lazy(() => import('./ToolsContextPanel').then((module) => ({ default: module.ToolsContextPanel })));
+const AutomationPresetPanel = lazy(() => import('./AutomationPresetPanel').then((module) => ({ default: module.AutomationPresetPanel })));
 
 function suspendRailPanel(element: React.ReactNode, label = 'Loading…') {
   return (
@@ -2041,18 +2042,21 @@ export function ContextRail() {
   const selectedRunId = getConversationRunIdFromSearch(location.search);
   const scheduledSection = section === 'scheduled' || section === 'automations' || section === 'tasks';
   const creatingScheduledTask = scheduledSection && new URLSearchParams(location.search).get('new') === '1';
+  const automationPresetId = new URLSearchParams(location.search).get('preset')?.trim() || null;
+  const creatingAutomationPreset = new URLSearchParams(location.search).get('new') === '1';
 
   // Automation
-  if (section === 'automation' && id) return (
-    <div className="flex-1 overflow-y-auto flex flex-col">
-      <RailHeader label="Session" sub={id} />
-      <LiveSessionContextPanel id={id} />
-    </div>
-  );
   if (section === 'automation') return (
-    <div className="flex-1 flex flex-col">
-      <RailHeader label="Automation" />
-      <EmptyPrompt text="Select a conversation to inspect its context while editing automation." />
+    <div className="flex-1 flex flex-col overflow-hidden">
+      <RailHeader label="Automation" sub={automationPresetId ?? (creatingAutomationPreset ? 'new preset' : undefined)} />
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {suspendRailPanel(
+          automationPresetId || creatingAutomationPreset
+            ? <AutomationPresetPanel presetId={automationPresetId} creatingNew={creatingAutomationPreset} />
+            : <EmptyPrompt text="Select a preset or create a new one to edit reusable automation templates." />,
+          'Loading automation…',
+        )}
+      </div>
     </div>
   );
 

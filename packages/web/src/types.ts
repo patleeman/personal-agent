@@ -942,7 +942,7 @@ export interface ConversationAutomationWorkflowPreset {
 
 export interface ConversationAutomationWorkflowPresetLibraryState {
   presets: ConversationAutomationWorkflowPreset[];
-  defaultPresetId: string | null;
+  defaultPresetIds: string[];
 }
 
 export interface ConversationAutomationState {
@@ -963,8 +963,14 @@ export interface ConversationAutomationSkillInfo {
 export interface ConversationAutomationResponse {
   conversationId: string;
   live: boolean;
-  inheritedPresetId: string | null;
+  inheritedPresetIds: string[];
   automation: ConversationAutomationState;
+  presetLibrary: ConversationAutomationWorkflowPresetLibraryState;
+  skills: ConversationAutomationSkillInfo[];
+  judge: ConversationAutomationJudgeSettingsState;
+}
+
+export interface ConversationAutomationWorkspaceState {
   presetLibrary: ConversationAutomationWorkflowPresetLibraryState;
   skills: ConversationAutomationSkillInfo[];
   judge: ConversationAutomationJudgeSettingsState;

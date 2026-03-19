@@ -7,6 +7,7 @@ import type {
   ConversationAutomationGate,
   ConversationAutomationResponse,
   ConversationAutomationSkillStep,
+  ConversationAutomationTemplateGate,
 } from '../types';
 import { ErrorState, LoadingState, Pill, SurfacePanel, ToolbarButton } from './ui';
 
@@ -75,6 +76,21 @@ function describeGate(gate: ConversationAutomationGate): string {
   return 'Evaluates after each conversation turn while Automation is On.';
 }
 
+function createAppliedAutomationId(prefix: 'gate' | 'skill'): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function clonePresetGatesForConversation(gates: ConversationAutomationTemplateGate[]): ConversationAutomationTemplateGate[] {
+  return gates.map((gate) => ({
+    ...gate,
+    id: createAppliedAutomationId('gate'),
+    skills: gate.skills.map((skill) => ({
+      ...skill,
+      id: createAppliedAutomationId('skill'),
+    })),
+  }));
+}
+
 export function ConversationAutomationPanel({ conversationId }: { conversationId: string }) {
   const navigate = useNavigate();
   const { versions } = useAppEvents();
@@ -88,6 +104,8 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
   } = useApi(fetcher, conversationId);
   const [actionError, setActionError] = useState<string | null>(null);
   const [togglingEnabled, setTogglingEnabled] = useState(false);
+  const [selectedApplyPresetIds, setSelectedApplyPresetIds] = useState<string[]>([]);
+  const [applyingPresetMode, setApplyingPresetMode] = useState<'replace' | 'append' | null>(null);
   const [rerunningGateId, setRerunningGateId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -97,6 +115,8 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
   useEffect(() => {
     setActionError(null);
     setTogglingEnabled(false);
+    setSelectedApplyPresetIds([]);
+    setApplyingPresetMode(null);
     setRerunningGateId(null);
   }, [conversationId]);
 
@@ -134,6 +154,60 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
     }
   }
 
+  async function handleApplyPresets(mode: 'replace' | 'append') {
+    if (!data || selectedApplyPresetIds.length === 0 || applyingPresetMode !== null) {
+      return;
+    }
+
+    const selectedPresets = data.presetLibrary.presets.filter((preset) => selectedApplyPresetIds.includes(preset.id));
+    if (selectedPresets.length === 0) {
+      return;
+    }
+
+    const presetGates = selectedPresets.flatMap((preset) => clonePresetGatesForConversation(preset.gates));
+    const nextGates = mode === 'replace'
+      ? presetGates
+      : [...automation.gates.map((gate) => ({
+          id: gate.id,
+          label: gate.label,
+          prompt: gate.prompt,
+          skills: gate.skills.map((skill) => ({
+            id: skill.id,
+            label: skill.label,
+            skillName: skill.skillName,
+            ...(skill.skillArgs ? { skillArgs: skill.skillArgs } : {}),
+          })),
+        })), ...presetGates];
+
+    setApplyingPresetMode(mode);
+    try {
+      await refreshWithResult(api.updateConversationAutomation(conversationId, {
+        gates: nextGates,
+      }));
+    } catch (nextError) {
+      setActionError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setApplyingPresetMode(null);
+    }
+  }
+
+  useEffect(() => {
+    if (!data) {
+      return;
+    }
+
+    const validIds = selectedApplyPresetIds.filter((presetId) => data.presetLibrary.presets.some((preset) => preset.id === presetId));
+    const fallbackIds = [...data.inheritedPresetIds, ...data.presetLibrary.defaultPresetIds]
+      .filter((presetId, index, allPresetIds) => presetId.trim().length > 0 && allPresetIds.indexOf(presetId) === index);
+    const nextIds = validIds.length > 0 ? validIds : [...new Set(fallbackIds)];
+
+    if (nextIds.length === selectedApplyPresetIds.length && nextIds.every((presetId, index) => presetId === selectedApplyPresetIds[index])) {
+      return;
+    }
+
+    setSelectedApplyPresetIds(nextIds);
+  }, [data, selectedApplyPresetIds]);
+
   if (loading && !data) {
     return <LoadingState label="Loading automation…" className="px-3 py-3" />;
   }
@@ -148,12 +222,12 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
 
   const automation = data.automation;
   const presetLibrary = data.presetLibrary;
-  const defaultPreset = presetLibrary.defaultPresetId
-    ? presetLibrary.presets.find((preset) => preset.id === presetLibrary.defaultPresetId) ?? null
-    : null;
-  const inheritedPreset = data.inheritedPresetId
-    ? presetLibrary.presets.find((preset) => preset.id === data.inheritedPresetId) ?? null
-    : null;
+  const defaultPresets = presetLibrary.defaultPresetIds
+    .map((presetId) => presetLibrary.presets.find((preset) => preset.id === presetId) ?? null)
+    .filter((preset): preset is NonNullable<typeof preset> => Boolean(preset));
+  const inheritedPresets = data.inheritedPresetIds
+    .map((presetId) => presetLibrary.presets.find((preset) => preset.id === presetId) ?? null)
+    .filter((preset): preset is NonNullable<typeof preset> => Boolean(preset));
   const progressLabel = buildProgressLabel(automation);
   const totalSkillCount = countSkills(automation.gates);
   const statusTone = automation.enabled ? 'accent' : 'muted';
@@ -164,7 +238,7 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
         <div className="min-w-0 space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
             <Pill tone={statusTone}>{automation.enabled ? 'on' : 'off'}</Pill>
-            {inheritedPreset && <Pill tone="steel">preset · {inheritedPreset.name}</Pill>}
+            {inheritedPresets.map((preset) => <Pill key={preset.id} tone="steel">preset · {preset.name}</Pill>)}
             <span className="text-[11px] text-dim">
               {automation.gates.length === 1 ? '1 gate' : `${automation.gates.length} gates`} · {totalSkillCount === 1 ? '1 skill' : `${totalSkillCount} skills`}
             </span>
@@ -182,16 +256,23 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
               type="checkbox"
               checked={automation.enabled}
               onChange={(event) => { void handleToggleEnabled(event.target.checked); }}
-              disabled={togglingEnabled || (automation.gates.length === 0 && !defaultPreset && !automation.enabled)}
+              disabled={togglingEnabled || (automation.gates.length === 0 && defaultPresets.length === 0 && !automation.enabled)}
               className={CHECKBOX_CLASS}
             />
             <span>{togglingEnabled ? 'Saving…' : automation.enabled ? 'On' : 'Off'}</span>
           </label>
           <ToolbarButton
-            onClick={() => { navigate(`/automation/${encodeURIComponent(conversationId)}`); }}
+            onClick={() => {
+              const targetPresetId = inheritedPresets[0]?.id ?? defaultPresets[0]?.id ?? null;
+              const params = new URLSearchParams();
+              if (targetPresetId) {
+                params.set('preset', targetPresetId);
+              }
+              navigate(`/automation${params.toString() ? `?${params.toString()}` : ''}`);
+            }}
             className="text-accent"
           >
-            {automation.gates.length === 0 ? 'Set up' : 'Open page'}
+            Manage templates
           </ToolbarButton>
         </div>
       </div>
@@ -200,11 +281,65 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
         <p className="text-[11px] text-warning">Resume this conversation to continue evaluating gates and running nested skills.</p>
       )}
 
+      {presetLibrary.presets.length > 0 && (
+        <div className="space-y-2 rounded-xl border border-border-subtle bg-surface/70 px-3 py-3">
+          <p className="ui-section-label">Apply reusable presets</p>
+          <div className="space-y-2">
+            {presetLibrary.presets.map((preset) => {
+              const checked = selectedApplyPresetIds.includes(preset.id);
+              const skillCount = countSkills(preset.gates);
+              return (
+                <label key={preset.id} className="flex items-start gap-2 rounded-lg border border-border-subtle px-2.5 py-2 text-[12px] text-primary">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(event) => {
+                      setSelectedApplyPresetIds((current) => event.target.checked
+                        ? [...current, preset.id]
+                        : current.filter((presetId) => presetId !== preset.id));
+                    }}
+                    className={CHECKBOX_CLASS}
+                    disabled={applyingPresetMode !== null}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-primary">{preset.name}</span>
+                      {presetLibrary.defaultPresetIds.includes(preset.id) && <Pill tone="accent">default</Pill>}
+                    </span>
+                    <span className="mt-0.5 block text-[11px] text-dim">
+                      {preset.gates.length} {preset.gates.length === 1 ? 'gate' : 'gates'} · {skillCount} {skillCount === 1 ? 'skill' : 'skills'}
+                    </span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <ToolbarButton
+              onClick={() => { void handleApplyPresets('replace'); }}
+              disabled={selectedApplyPresetIds.length === 0 || applyingPresetMode !== null}
+              className="text-accent"
+            >
+              {applyingPresetMode === 'replace' ? 'Applying…' : 'Replace with selected'}
+            </ToolbarButton>
+            <ToolbarButton
+              onClick={() => { void handleApplyPresets('append'); }}
+              disabled={selectedApplyPresetIds.length === 0 || applyingPresetMode !== null}
+            >
+              {applyingPresetMode === 'append' ? 'Applying…' : 'Append selected'}
+            </ToolbarButton>
+          </div>
+          <p className="text-[11px] text-dim">
+            Presets are reusable building blocks. Replace the conversation workflow with the selected presets, or append them onto the current workflow in order.
+          </p>
+        </div>
+      )}
+
       {automation.gates.length === 0 ? (
         <p className="text-[12px] text-dim">
-          {defaultPreset
-            ? `No local workflow saved yet. This conversation will use the default preset “${defaultPreset.name}” until you customize it.`
-            : 'No workflow configured yet. Open the automation page to add gate blocks, nested skills, and reusable presets.'}
+          {defaultPresets.length > 0
+            ? `No local workflow saved yet. This conversation will use the default preset stack (${defaultPresets.map((preset) => preset.name).join(', ')}) until you customize it.`
+            : 'No workflow configured yet. Use the Automation page to create reusable presets, then add them to the default stack or copy them into this conversation when needed.'}
         </p>
       ) : (
         <div className="space-y-3">

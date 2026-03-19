@@ -68,12 +68,12 @@ export interface ConversationAutomationWorkflowPreset {
 
 export interface ConversationAutomationWorkflowPresetLibraryState {
   presets: ConversationAutomationWorkflowPreset[];
-  defaultPresetId: string | null;
+  defaultPresetIds: string[];
 }
 
 export interface LoadedConversationAutomationState {
   document: ConversationAutomationDocument;
-  inheritedPresetId: string | null;
+  inheritedPresetIds: string[];
   presetLibrary: ConversationAutomationWorkflowPresetLibraryState;
 }
 
@@ -216,6 +216,17 @@ export function createConversationAutomationSkillStepId(now = new Date()): strin
 
 export function createConversationAutomationWorkflowPresetId(now = new Date()): string {
   return createAutomationId('preset', now);
+}
+
+function cloneTemplateGatesForConversation(gates: ConversationAutomationTemplateGate[]): ConversationAutomationTemplateGate[] {
+  return gates.map((gate) => ({
+    ...gate,
+    id: createConversationAutomationGateId(),
+    skills: gate.skills.map((skill) => ({
+      ...skill,
+      id: createConversationAutomationSkillStepId(),
+    })),
+  }));
 }
 
 function normalizeTemplateSkillStep(value: unknown, fallbackNow: string): ConversationAutomationTemplateSkillStep {
@@ -646,7 +657,7 @@ function normalizeLegacyDefaultWorkflowPreset(settings: Record<string, unknown>)
   if (!defaultWorkflow) {
     return {
       presets: [],
-      defaultPresetId: null,
+      defaultPresetIds: [],
     };
   }
 
@@ -658,7 +669,7 @@ function normalizeLegacyDefaultWorkflowPreset(settings: Record<string, unknown>)
   if (gates.length === 0) {
     return {
       presets: [],
-      defaultPresetId: null,
+      defaultPresetIds: [],
     };
   }
 
@@ -670,7 +681,7 @@ function normalizeLegacyDefaultWorkflowPreset(settings: Record<string, unknown>)
       updatedAt: normalizeIsoTimestamp(defaultWorkflow.updatedAt, fallbackNow),
       gates,
     }],
-    defaultPresetId: presetId,
+    defaultPresetIds: [presetId],
   };
 }
 
@@ -708,14 +719,16 @@ function normalizeWorkflowPresetLibraryState(settings: Record<string, unknown>):
   const presets = Array.isArray(presetLibrary.presets)
     ? presetLibrary.presets.map((preset) => normalizeWorkflowPreset(preset, fallbackNow))
     : [];
-  const defaultPresetId = normalizeOptionalText(presetLibrary.defaultPresetId);
-  const validDefaultPresetId = defaultPresetId && presets.some((preset) => preset.id === defaultPresetId)
-    ? defaultPresetId
-    : null;
+  const rawDefaultPresetIds = Array.isArray(presetLibrary.defaultPresetIds)
+    ? presetLibrary.defaultPresetIds
+    : (normalizeOptionalText(presetLibrary.defaultPresetId) ? [normalizeOptionalText(presetLibrary.defaultPresetId)] : []);
+  const validDefaultPresetIds = [...new Set(rawDefaultPresetIds
+    .map((presetId) => normalizeOptionalText(presetId))
+    .filter((presetId): presetId is string => Boolean(presetId && presets.some((preset) => preset.id === presetId))))];
 
   return {
     presets,
-    defaultPresetId: validDefaultPresetId,
+    defaultPresetIds: validDefaultPresetIds,
   };
 }
 
@@ -726,7 +739,7 @@ export function readSavedConversationAutomationWorkflowPresets(settingsFile: str
 export function writeSavedConversationAutomationWorkflowPresets(
   input: {
     presets: ConversationAutomationWorkflowPreset[];
-    defaultPresetId: string | null;
+    defaultPresetIds: string[];
   },
   settingsFile: string,
 ): ConversationAutomationWorkflowPresetLibraryState {
@@ -738,16 +751,16 @@ export function writeSavedConversationAutomationWorkflowPresets(
     ...preset,
     updatedAt: now,
   }, now));
-  const defaultPresetId = normalizeOptionalText(input.defaultPresetId);
+  const defaultPresetIds = [...new Set((Array.isArray(input.defaultPresetIds) ? input.defaultPresetIds : [])
+    .map((presetId) => normalizeOptionalText(presetId))
+    .filter((presetId): presetId is string => Boolean(presetId && presets.some((preset) => preset.id === presetId))))];
 
   delete automationSettings.defaultWorkflow;
 
   if (presets.length > 0) {
     automationSettings.workflowPresets = {
       presets,
-      ...(defaultPresetId && presets.some((preset) => preset.id === defaultPresetId)
-        ? { defaultPresetId }
-        : {}),
+      ...(defaultPresetIds.length > 0 ? { defaultPresetIds } : {}),
     };
   } else {
     delete automationSettings.workflowPresets;
@@ -793,25 +806,25 @@ export function readConversationAutomationDocument(path: string, conversationId:
 export function loadConversationAutomationState(options: ResolveConversationAutomationPathOptions & { settingsFile?: string }): LoadedConversationAutomationState {
   const presetLibrary = options.settingsFile
     ? readSavedConversationAutomationWorkflowPresets(options.settingsFile)
-    : { presets: [], defaultPresetId: null } satisfies ConversationAutomationWorkflowPresetLibraryState;
-  const inheritedPreset = presetLibrary.defaultPresetId
-    ? presetLibrary.presets.find((preset) => preset.id === presetLibrary.defaultPresetId) ?? null
-    : null;
+    : { presets: [], defaultPresetIds: [] } satisfies ConversationAutomationWorkflowPresetLibraryState;
+  const inheritedPresets = presetLibrary.defaultPresetIds
+    .map((presetId) => presetLibrary.presets.find((preset) => preset.id === presetId) ?? null)
+    .filter((preset): preset is ConversationAutomationWorkflowPreset => Boolean(preset));
   const path = resolveConversationAutomationPath(options);
 
   if (!existsSync(path)) {
     return {
-      document: inheritedPreset
-        ? buildDocumentFromTemplate(options.conversationId, inheritedPreset.gates)
+      document: inheritedPresets.length > 0
+        ? buildDocumentFromTemplate(options.conversationId, inheritedPresets.flatMap((preset) => cloneTemplateGatesForConversation(preset.gates)))
         : normalizeDocument(undefined, options.conversationId),
-      inheritedPresetId: inheritedPreset?.id ?? null,
+      inheritedPresetIds: inheritedPresets.map((preset) => preset.id),
       presetLibrary,
     };
   }
 
   return {
     document: readConversationAutomationDocument(path, options.conversationId),
-    inheritedPresetId: null,
+    inheritedPresetIds: [],
     presetLibrary,
   };
 }
