@@ -14,7 +14,7 @@ import {
 import { loadDaemonConfig, resolveDaemonPaths, resolveDurableRunsRoot } from '@personal-agent/daemon';
 import { logWarn } from './logging.js';
 
-export type AppEventTopic = 'activity' | 'projects' | 'sessions' | 'tasks' | 'runs';
+export type AppEventTopic = 'activity' | 'projects' | 'sessions' | 'tasks' | 'runs' | 'automation';
 
 export type AppEvent =
   | { type: 'connected' }
@@ -109,6 +109,7 @@ function createTopicSignatures(options: AppEventMonitorOptions, profile: string)
     sessions: `sessions:${readPathSnapshot(options.sessionsDir)}|artifacts:${readPathSnapshot(conversationArtifactsDir)}|attention:${readPathSnapshot(conversationAttentionStateFile)}|deferred:${readPathSnapshot(deferredResumeStateFile)}|conversation-links:${readPathSnapshot(conversationLinksDir)}|${activitySignature}`,
     tasks: `tasks:${readPathSnapshot(tasksDir)}|state:${readPathSnapshot(options.taskStateFile)}`,
     runs: `runs:${readPathSnapshot(runsRoot)}`,
+    automation: 'automation:explicit-invalidations',
   };
 }
 
@@ -161,7 +162,7 @@ export function startAppEventMonitor(options: AppEventMonitorOptions): void {
     if (lastProfile !== profile) {
       lastProfile = profile;
       lastSignatures = nextSignatures;
-      invalidateAppTopics('activity', 'projects', 'sessions', 'tasks', 'runs');
+      invalidateAppTopics('activity', 'projects', 'sessions', 'tasks', 'runs', 'automation');
       return;
     }
 

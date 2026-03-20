@@ -2774,7 +2774,7 @@ function saveConversationAutomationDocument(document: Parameters<typeof writeCon
     profile: getCurrentProfile(),
     document,
   });
-  invalidateAppTopics('sessions');
+  invalidateAppTopics('automation');
   return saved;
 }
 
@@ -2805,7 +2805,7 @@ function migrateDraftConversationPlan(profile: string, conversationId: string): 
     rmSync(draftPath, { force: true });
   }
 
-  invalidateAppTopics('sessions');
+  invalidateAppTopics('automation');
 }
 
 function validateConversationAutomationTemplateItems(items: unknown, availableSkillNames: Set<string>): asserts items is Array<{
@@ -3232,6 +3232,7 @@ app.patch('/api/conversation-plans/defaults', (req, res) => {
     writeSavedConversationAutomationPreferences({ defaultEnabled }, getCurrentProfileSettingsFile());
     clearLocalConversationAutomationSettingsOverride();
     materializeWebProfile(getCurrentProfile());
+    invalidateAppTopics('automation');
 
     res.json(readSavedConversationAutomationPreferences(SETTINGS_FILE));
   } catch (err) {
@@ -3289,6 +3290,7 @@ app.patch('/api/conversation-plans/library', async (req, res) => {
     }, getCurrentProfileSettingsFile());
     clearLocalConversationAutomationSettingsOverride();
     materializeWebProfile(getCurrentProfile());
+    invalidateAppTopics('automation');
 
     res.json(readSavedConversationAutomationWorkflowPresets(SETTINGS_FILE));
   } catch (err) {

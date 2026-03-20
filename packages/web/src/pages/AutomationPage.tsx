@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
+import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import type { ConversationAutomationWorkflowPreset, ConversationAutomationWorkspaceState } from '../types';
 import { EmptyState, ErrorState, ListLinkRow, LoadingState, PageHeader, PageHeading, Pill, ToolbarButton } from '../components/ui';
 
@@ -68,6 +69,8 @@ export function AutomationPage() {
     refetch,
   } = useApi(api.conversationPlansWorkspace);
   const [query, setQuery] = useState('');
+
+  useInvalidateOnTopics(['automation'], refetch);
 
   const selectedPlanId = useMemo(() => {
     const value = new URLSearchParams(location.search).get(PLAN_ID_SEARCH_PARAM);

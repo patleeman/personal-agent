@@ -794,7 +794,7 @@ function saveConversationAutomation(entry: LiveEntry, document: ConversationAuto
     profile: resolveConversationAutomationProfile(),
     document,
   });
-  invalidateAppTopics('sessions');
+  invalidateAppTopics('automation');
   return saved;
 }
 

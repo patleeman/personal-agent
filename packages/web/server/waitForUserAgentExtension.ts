@@ -44,7 +44,7 @@ export function createWaitForUserAgentExtension(options: {
           reason: params.reason,
         });
         writeConversationAutomationState({ stateRoot: options.stateRoot, profile, document });
-        invalidateAppTopics('sessions');
+        invalidateAppTopics('automation');
 
         return {
           content: [{
