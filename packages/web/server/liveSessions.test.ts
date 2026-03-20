@@ -9,6 +9,7 @@ import {
   isPlaceholderConversationTitle,
   patchSessionManagerPersistence,
   promptSession,
+  queuePromptContext,
   registry,
   reloadAllLiveSessionAuth,
   renameSession,
@@ -1148,6 +1149,68 @@ describe('queued prompt restore', () => {
       { role: 'custom', content: 'more hidden steer context' },
     ]);
     expect(events).toContainEqual({ type: 'queue_state', steering: ['first queued prompt'], followUp: [] });
+  });
+});
+
+describe('queuePromptContext', () => {
+  it('appends hidden context immediately when the session is idle so the user prompt stays latest', async () => {
+    const sendCustomMessage = vi.fn(async () => undefined);
+
+    setLiveEntry('session-idle-context', {
+      sessionId: 'session-idle-context',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Idle context',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamMessage: null },
+        getContextUsage: () => null,
+        isStreaming: false,
+        sendCustomMessage,
+      },
+    });
+
+    await queuePromptContext('session-idle-context', 'referenced_context', 'Conversation automation context');
+
+    expect(sendCustomMessage).toHaveBeenCalledWith({
+      customType: 'referenced_context',
+      content: 'Conversation automation context',
+      display: false,
+      details: undefined,
+    });
+  });
+
+  it('queues hidden context for the next turn while the session is streaming', async () => {
+    const sendCustomMessage = vi.fn(async () => undefined);
+
+    setLiveEntry('session-streaming-context', {
+      sessionId: 'session-streaming-context',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Streaming context',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamMessage: null },
+        getContextUsage: () => null,
+        isStreaming: true,
+        sendCustomMessage,
+      },
+    });
+
+    await queuePromptContext('session-streaming-context', 'referenced_context', 'Conversation automation context');
+
+    expect(sendCustomMessage).toHaveBeenCalledWith({
+      customType: 'referenced_context',
+      content: 'Conversation automation context',
+      display: false,
+      details: undefined,
+    }, {
+      deliverAs: 'nextTurn',
+    });
   });
 });
 

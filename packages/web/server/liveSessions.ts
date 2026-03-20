@@ -1611,7 +1611,7 @@ export function subscribe(
   return () => entry.listeners.delete(subscription);
 }
 
-/** Queue hidden context for the next turn of a live session. */
+/** Append hidden context before the next user-visible prompt in a live session. */
 export async function queuePromptContext(
   sessionId: string,
   customType: string,
@@ -1624,14 +1624,21 @@ export async function queuePromptContext(
     return;
   }
 
-  await entry.session.sendCustomMessage({
+  const customMessage = {
     customType,
     content: message,
     display: false,
     details: undefined,
-  }, {
-    deliverAs: 'nextTurn',
-  });
+  };
+
+  if (entry.session.isStreaming) {
+    await entry.session.sendCustomMessage(customMessage, {
+      deliverAs: 'nextTurn',
+    });
+    return;
+  }
+
+  await entry.session.sendCustomMessage(customMessage);
 }
 
 async function triggerHiddenPrompt(

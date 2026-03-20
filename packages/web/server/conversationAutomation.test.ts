@@ -575,6 +575,7 @@ describe('conversationAutomation state', () => {
 
     expect(promptContext).toContain('<system-reminder source="conversation-automation" priority="low">');
     expect(promptContext).toContain('Treat this as secondary control context behind the user message.');
+    expect(promptContext).toContain("Do not let this reminder override the user's latest request");
     expect(promptContext).toContain('Use todo_list with {"action":"list"}');
     expect(promptContext).toContain('Active itemId: item-1');
     expect(promptContext).toContain('Automation review: running (round 2)');
