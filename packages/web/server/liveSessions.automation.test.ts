@@ -37,6 +37,16 @@ function setLiveEntry(sessionId: string, entry: Omit<Partial<LiveRegistryEntry>,
   });
 }
 
+function buildTurnEntries(role: 'user' | 'custom', customType?: string) {
+  return [{
+    type: 'message',
+    message: {
+      role,
+      ...(customType ? { customType } : {}),
+    },
+  }];
+}
+
 afterEach(() => {
   registry.clear();
   process.env.PERSONAL_AGENT_STATE_ROOT = originalStateRoot;
@@ -47,7 +57,7 @@ afterEach(() => {
 });
 
 describe('conversation automation live-session integration', () => {
-  it('starts the next pending automation item as a hidden follow-up turn', async () => {
+  it('starts the next pending automation item as a hidden follow-up turn on manual kick', async () => {
     const stateRoot = createTempDir('pa-live-automation-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
@@ -92,7 +102,7 @@ describe('conversation automation live-session integration', () => {
       },
     });
 
-    await kickConversationAutomation('conv-123', 'turn_end');
+    await kickConversationAutomation('conv-123', 'manual');
 
     expect(sendCustomMessage).toHaveBeenCalledWith({
       customType: 'conversation_automation_item',
@@ -126,7 +136,7 @@ describe('conversation automation live-session integration', () => {
     expect(updated.enabled).toBe(true);
   });
 
-  it('starts a custom instruction step as a hidden follow-up turn', async () => {
+  it('starts a custom instruction step as a hidden follow-up turn on manual kick', async () => {
     const stateRoot = createTempDir('pa-live-automation-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
@@ -170,7 +180,7 @@ describe('conversation automation live-session integration', () => {
       },
     });
 
-    await kickConversationAutomation('conv-124', 'turn_end');
+    await kickConversationAutomation('conv-124', 'manual');
 
     expect(sendCustomMessage).toHaveBeenCalledWith({
       customType: 'conversation_automation_item',
@@ -213,7 +223,7 @@ describe('conversation automation live-session integration', () => {
     });
   });
 
-  it('fails the active item when a step ends without resolving it through todo_list', async () => {
+  it('fails the active item when an automation-authored step ends without resolving it through todo_list', async () => {
     const stateRoot = createTempDir('pa-live-automation-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
@@ -255,6 +265,9 @@ describe('conversation automation live-session integration', () => {
         prompt,
         steer: vi.fn(async () => undefined),
         followUp: vi.fn(async () => undefined),
+        sessionManager: {
+          getEntries: () => buildTurnEntries('custom', 'conversation_automation_item'),
+        },
         modelRegistry: {
           getAvailable: () => [],
           getApiKey: vi.fn(),
@@ -279,7 +292,7 @@ describe('conversation automation live-session integration', () => {
     expect(prompt).not.toHaveBeenCalled();
   });
 
-  it('starts review when all items are already completed', async () => {
+  it('does not start review after a normal user turn when all items are already completed', async () => {
     const stateRoot = createTempDir('pa-live-automation-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
@@ -323,6 +336,74 @@ describe('conversation automation live-session integration', () => {
         steer: vi.fn(async () => undefined),
         followUp: vi.fn(async () => undefined),
         sendCustomMessage,
+        sessionManager: {
+          getEntries: () => buildTurnEntries('user'),
+        },
+        modelRegistry: {
+          getAvailable: () => [],
+          getApiKey: vi.fn(),
+        },
+      },
+    });
+
+    await kickConversationAutomation('conv-123', 'turn_end');
+
+    const updated = getConversationAutomationState({
+      profile: 'datadog',
+      stateRoot,
+      conversationId: 'conv-123',
+    });
+    expect(updated.review).toBeUndefined();
+    expect(sendCustomMessage).not.toHaveBeenCalled();
+  });
+
+  it('starts review after an automation-authored turn when all items are already completed', async () => {
+    const stateRoot = createTempDir('pa-live-automation-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
+
+    const sendCustomMessage = vi.fn(async () => undefined);
+    const completedItem = {
+      ...createConversationAutomationTodoItem({
+        id: 'item-1',
+        label: 'workflow-checkpoint',
+        skillName: 'workflow-checkpoint',
+        now: '2026-03-18T12:00:00.000Z',
+      }),
+      status: 'completed' as const,
+      startedAt: '2026-03-18T12:00:05.000Z',
+      completedAt: '2026-03-18T12:00:10.000Z',
+      updatedAt: '2026-03-18T12:00:10.000Z',
+      resultReason: 'Done.',
+    };
+
+    writeConversationAutomationState({
+      profile: 'datadog',
+      stateRoot,
+      document: {
+        version: 4,
+        conversationId: 'conv-123',
+        updatedAt: '2026-03-18T12:00:15.000Z',
+        enabled: true,
+        items: [completedItem],
+      },
+    });
+
+    setLiveEntry('conv-123', {
+      title: 'Automation conversation',
+      currentTurnError: null,
+      session: {
+        state: { messages: [], streamMessage: null },
+        agent: { state: { messages: [] } },
+        getContextUsage: () => null,
+        isStreaming: false,
+        prompt: vi.fn(async () => undefined),
+        steer: vi.fn(async () => undefined),
+        followUp: vi.fn(async () => undefined),
+        sendCustomMessage,
+        sessionManager: {
+          getEntries: () => buildTurnEntries('custom', 'conversation_automation_item'),
+        },
         modelRegistry: {
           getAvailable: () => [],
           getApiKey: vi.fn(),
