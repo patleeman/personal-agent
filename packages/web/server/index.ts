@@ -5795,13 +5795,9 @@ app.post('/api/conversations/:id/plan/items/:itemId/status', async (req, res) =>
         resultReason: 'Completed from the checklist UI.',
       })
       : setConversationAutomationItemPending(document, req.params.itemId, {
-        enabled: true,
+        enabled: document.enabled,
       });
     saveConversationAutomationDocument(nextDocument);
-
-    if (!checked) {
-      await kickConversationAutomation(req.params.id);
-    }
 
     res.json(await buildConversationAutomationResponse(req.params.id));
   } catch (err) {

@@ -16,6 +16,7 @@ import {
   resetConversationAutomationFromItem,
   resolveConversationAutomationPath,
   resumeConversationAutomationAfterUserMessage,
+  setConversationAutomationItemPending,
   setConversationAutomationWaitingForUser,
   updateConversationAutomationItemStatus,
   templateTodoItemFromRuntimeItem,
@@ -409,6 +410,41 @@ describe('conversationAutomation state', () => {
     expect(reset.items[1]?.startedAt).toBeUndefined();
     expect(reset.items[1]?.completedAt).toBeUndefined();
     expect(reset.items[1]?.resultReason).toBeUndefined();
+  });
+
+  it('can set a single item back to pending without auto-enabling automation', () => {
+    const item = {
+      ...createConversationAutomationTodoItem({
+        id: 'item-1',
+        label: 'workflow-checkpoint',
+        skillName: 'workflow-checkpoint',
+        now: '2026-03-18T12:00:00.000Z',
+      }),
+      status: 'completed' as const,
+      startedAt: '2026-03-18T12:00:10.000Z',
+      completedAt: '2026-03-18T12:00:20.000Z',
+      resultReason: 'Done.',
+      updatedAt: '2026-03-18T12:00:20.000Z',
+    };
+
+    const reset = setConversationAutomationItemPending({
+      version: 4,
+      conversationId: 'conv-123',
+      updatedAt: '2026-03-18T12:03:00.000Z',
+      enabled: false,
+      items: [item],
+    }, 'item-1', {
+      now: '2026-03-18T12:04:00.000Z',
+      enabled: false,
+    });
+
+    expect(reset.enabled).toBe(false);
+    expect(reset.activeItemId).toBeUndefined();
+    expect(reset.review).toBeUndefined();
+    expect(reset.items[0]).toMatchObject({ status: 'pending', updatedAt: '2026-03-18T12:04:00.000Z' });
+    expect(reset.items[0]?.startedAt).toBeUndefined();
+    expect(reset.items[0]?.completedAt).toBeUndefined();
+    expect(reset.items[0]?.resultReason).toBeUndefined();
   });
 
   it('reads and writes automation default preferences without dropping preset settings', () => {
