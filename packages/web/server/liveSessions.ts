@@ -479,6 +479,8 @@ function buildLiveStateBlocks(session: AgentSession): DisplayBlock[] {
       summary: (message as { summary?: string }).summary,
       tokensBefore: (message as { tokensBefore?: number }).tokensBefore,
       fromId: (message as { fromId?: string }).fromId,
+      customType: (message as { customType?: string }).customType,
+      display: (message as { display?: boolean }).display,
     },
   })));
 }
@@ -495,6 +497,8 @@ function fingerprintDisplayBlock(block: DisplayBlock): string {
     case 'text':
     case 'thinking':
       return JSON.stringify({ type: block.type, ts: block.ts, text: block.text });
+    case 'context':
+      return JSON.stringify({ type: block.type, ts: block.ts, text: block.text, customType: block.customType ?? null });
     case 'summary':
       return JSON.stringify({ type: block.type, ts: block.ts, kind: block.kind, title: block.title, text: block.text });
     case 'tool_use':

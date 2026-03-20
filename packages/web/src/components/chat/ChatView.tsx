@@ -292,6 +292,19 @@ function buildSummaryPreview(text: string, maxLines: number) {
   return previewLines.join('\n');
 }
 
+function formatInjectedContextLabel(customType?: string): string {
+  if (!customType || customType === 'referenced_context') {
+    return 'Injected context';
+  }
+
+  const normalized = customType.replace(/[_-]+/g, ' ').trim();
+  if (!normalized) {
+    return 'Injected context';
+  }
+
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
 // ── Tool icon & color ─────────────────────────────────────────────────────────
 
 const TOOL_META: Record<string, { icon: string; label: string; color: string; tone: 'steel' | 'teal' | 'accent' | 'success' | 'warning' | 'muted' }> = {
@@ -1209,6 +1222,32 @@ function AssistantMessage({
   );
 }
 
+function ContextMessage({
+  block,
+}: {
+  block: Extract<MessageBlock, { type: 'context' }>;
+}) {
+  const label = formatInjectedContextLabel(block.customType);
+
+  return (
+    <div className="group">
+      <div
+        className="rounded-2xl rounded-l-md border-l-2 border-warning/35 bg-warning/5 px-3.5 py-3"
+        data-context-type={block.customType ?? 'injected_context'}
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-warning">{label}</p>
+          <span className="flex-1" />
+          <p className="ui-message-meta">{timeAgo(block.ts)}</p>
+        </div>
+        <div className="pt-2 text-primary">
+          {renderText(block.text)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SummaryMessage({
   block,
 }: {
@@ -1627,6 +1666,8 @@ export const ChatView = memo(function ChatView({
               onFork={onForkMessage ? () => onForkMessage(absoluteIndex) : undefined}
             />
           );
+        case 'context':
+          return <ContextMessage block={block} />;
         case 'summary':
           return <SummaryMessage block={block} />;
         case 'thinking':

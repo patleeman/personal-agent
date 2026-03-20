@@ -171,6 +171,7 @@ interface DisplayImage {
 export type DisplayBlock =
   | { type: 'user';     id: string; ts: string; text: string; images?: DisplayImage[] }
   | { type: 'text';     id: string; ts: string; text: string }
+  | { type: 'context';  id: string; ts: string; text: string; customType?: string }
   | { type: 'summary';  id: string; ts: string; kind: 'compaction' | 'branch'; title: string; text: string }
   | { type: 'thinking'; id: string; ts: string; text: string }
   | { type: 'tool_use'; id: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; toolCallId: string; details?: unknown; outputDeferred?: boolean }
@@ -304,6 +305,10 @@ export function getAssistantErrorDisplayMessage(message: {
   return errorMessage && errorMessage.length > 0
     ? errorMessage
     : 'The model returned an error before completing its response.';
+}
+
+function isInjectedContextMessage(message: DisplayMessageEntryLike['message']): boolean {
+  return message.role === 'custom' && (message.display === false || message.customType === 'referenced_context');
 }
 
 function normalizeSearchSegment(text: string, maxLength = 360): string {
@@ -547,6 +552,44 @@ function buildDisplayBlocksInternal(
           text,
           ...(images.length > 0 ? { images } : {}),
         });
+      }
+      continue;
+    }
+
+    if (isInjectedContextMessage(msg.message)) {
+      for (const block of contentBlocks) {
+        if (block.type === 'text' && block.text?.trim()) {
+          recordAnchor();
+          blocks.push({
+            type: 'context',
+            id: `${baseId}-m${blocks.length}`,
+            ts,
+            text: block.text,
+            ...(msg.message.customType ? { customType: msg.message.customType } : {}),
+          });
+          continue;
+        }
+
+        if (block.type === 'image') {
+          const src = imageSrc(block);
+          const mimeType = imageMimeType(block);
+          if (!src || !mimeType) {
+            continue;
+          }
+
+          recordAnchor();
+          blocks.push({
+            type: 'image',
+            id: `${baseId}-i${blocks.length}`,
+            ts,
+            alt: 'Injected context image',
+            src,
+            mimeType,
+            ...(typeof block.name === 'string' && block.name.trim().length > 0
+              ? { caption: block.name.trim() }
+              : {}),
+          });
+        }
       }
       continue;
     }

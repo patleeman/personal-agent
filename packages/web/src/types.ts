@@ -82,6 +82,7 @@ export interface ConversationAttachmentRecord extends ConversationAttachmentSumm
 export type MessageBlock =
   | { type: 'user';      id?: string; ts: string; text: string; images?: MessageImage[] }
   | { type: 'text';      id?: string; ts: string; text: string; streaming?: boolean }
+  | { type: 'context';   id?: string; ts: string; text: string; customType?: string }
   | { type: 'summary';   id?: string; ts: string; kind: 'compaction' | 'branch'; title: string; text: string }
   | { type: 'thinking';  id?: string; ts: string; text: string }
   | { type: 'tool_use';  id?: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; running?: boolean; status?: 'running' | 'ok' | 'error'; error?: boolean; _toolCallId?: string; details?: unknown; outputDeferred?: boolean }
@@ -621,6 +622,7 @@ export interface SessionMeta {
 export type DisplayBlock =
   | { type: 'user';     id: string; ts: string; text: string; images?: MessageImage[] }
   | { type: 'text';     id: string; ts: string; text: string }
+  | { type: 'context';  id: string; ts: string; text: string; customType?: string }
   | { type: 'summary';  id: string; ts: string; kind: 'compaction' | 'branch'; title: string; text: string }
   | { type: 'thinking'; id: string; ts: string; text: string }
   | { type: 'tool_use'; id: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; toolCallId: string; details?: unknown; outputDeferred?: boolean }

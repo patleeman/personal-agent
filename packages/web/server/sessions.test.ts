@@ -373,6 +373,31 @@ describe('sessions', () => {
     expect(detail?.blocks.filter((block) => block.type === 'text').map((block) => block.text)).toContain('Remote execution imported from GPU Box.');
   });
 
+  it('renders hidden custom context entries as dedicated context blocks', () => {
+    const blocks = buildDisplayBlocksFromEntries([
+      {
+        id: 'context-1',
+        timestamp: '2026-03-12T16:00:00.000Z',
+        message: {
+          role: 'custom',
+          customType: 'referenced_context',
+          display: false,
+          content: [{ type: 'text', text: 'Conversation automation context:\n- Review the todo list.' }],
+        },
+      },
+    ]);
+
+    expect(blocks).toEqual([
+      {
+        type: 'context',
+        id: 'context-1-m0',
+        ts: '2026-03-12T16:00:00.000Z',
+        text: 'Conversation automation context:\n- Review the todo list.',
+        customType: 'referenced_context',
+      },
+    ]);
+  });
+
   it('renames a stored conversation by appending session metadata', () => {
     const sessionsDir = createTempSessionsDir();
     configureSessionEnv(sessionsDir);
