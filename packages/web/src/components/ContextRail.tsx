@@ -666,10 +666,6 @@ function DraftConversationContextPanel() {
 
   return (
     <div className="space-y-5 px-4 py-4">
-      <Section title="Todo list">
-        <ConversationAutomationPanel conversationId={DRAFT_CONVERSATION_ID} />
-      </Section>
-
       <Section title="Working Directory">
         <SurfacePanel muted className="px-3 py-3 space-y-2.5">
           <div className="space-y-2">
@@ -789,6 +785,10 @@ function DraftConversationContextPanel() {
             <p className="text-[11px] text-danger/80">{changeCwdError ?? openCwdError}</p>
           )}
         </SurfacePanel>
+      </Section>
+
+      <Section title="Todo list">
+        <ConversationAutomationPanel conversationId={DRAFT_CONVERSATION_ID} />
       </Section>
     </div>
   );

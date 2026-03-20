@@ -320,4 +320,29 @@ describe('ContextRail run detail', () => {
     expect(html).toContain('Web UI preferences');
     expect(html).toContain('references/personal-agent-web-ui-preferences.md');
   });
+
+  it('shows working directory before the todo list on the draft conversation rail', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/conversations/new']}>
+        <AppDataContext.Provider value={{
+          activity: null,
+          projects: null,
+          sessions: [createSession()],
+          tasks: null,
+          runs: null,
+          setActivity: vi.fn(),
+          setProjects: vi.fn(),
+          setSessions: vi.fn(),
+          setTasks: vi.fn(),
+          setRuns: vi.fn(),
+        }}>
+          <ContextRail />
+        </AppDataContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html.indexOf('Working Directory')).toBeGreaterThanOrEqual(0);
+    expect(html.indexOf('Todo list')).toBeGreaterThanOrEqual(0);
+    expect(html.indexOf('Working Directory')).toBeLessThan(html.indexOf('Todo list'));
+  });
 });
