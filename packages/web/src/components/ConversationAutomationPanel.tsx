@@ -15,12 +15,11 @@ import type {
   ConversationAutomationResponse,
   ConversationAutomationTodoItem,
 } from '../types';
-import { ErrorState, IconButton, ListButtonRow, LoadingState, SurfacePanel, cx } from './ui';
+import { ErrorState, IconButton, LoadingState, SurfacePanel, ToolbarButton, cx } from './ui';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50';
+const SELECT_CLASS = `${INPUT_CLASS} pr-10`;
 const TEXTAREA_CLASS = 'w-full min-h-[32px] resize-none border-0 bg-transparent px-0 py-0 text-[13px] leading-6 text-primary placeholder:text-dim/80 focus:outline-none disabled:opacity-50';
-
-type AddMode = 'item' | 'checklist';
 
 function buildProgressLabel(automation: ConversationAutomationResponse['automation']): string {
   if (automation.items.length === 0) {
@@ -64,10 +63,6 @@ function moveDraftItem(items: ChecklistDraftItem[], itemId: string, targetItemId
   return next;
 }
 
-function checklistSearchText(preset: ConversationAutomationResponse['presetLibrary']['presets'][number]): string {
-  return [preset.name, ...toChecklistDraftItems(preset.items).map((item) => item.text)].join('\n').toLowerCase();
-}
-
 function itemMeta(item: ConversationAutomationTodoItem, active: boolean): string {
   if (item.status === 'waiting') {
     return active ? 'waiting · active' : 'waiting';
@@ -90,7 +85,7 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
   const [draftItems, setDraftItems] = useState<ChecklistDraftItem[]>([]);
   const [draftKey, setDraftKey] = useState<string | null>(null);
   const [appendOpen, setAppendOpen] = useState(false);
-  const [appendQuery, setAppendQuery] = useState('');
+  const [appendPresetId, setAppendPresetId] = useState('');
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<'save' | 'toggle' | 'remove' | 'append' | null>(null);
 
@@ -101,7 +96,7 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
   useEffect(() => {
     setActionError(null);
     setAppendOpen(false);
-    setAppendQuery('');
+    setAppendPresetId('');
     setDraggingItemId(null);
     setPendingAction(null);
     setDraftKey(null);
@@ -129,11 +124,10 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
   }, [data, draftKey]);
 
   const automation = data?.automation ?? null;
-  const visibleAppendPresets = useMemo(() => {
-    const normalized = appendQuery.trim().toLowerCase();
-    return (data?.presetLibrary.presets ?? [])
-      .filter((preset) => !normalized || checklistSearchText(preset).includes(normalized));
-  }, [appendQuery, data?.presetLibrary.presets]);
+  const appendPresets = useMemo(
+    () => data?.presetLibrary.presets ?? [],
+    [data?.presetLibrary.presets],
+  );
 
   if (loading && !data) {
     return <LoadingState label="Loading todo list…" className="px-3 py-3" />;
@@ -200,7 +194,7 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
             {refreshing && <span className="ml-1.5">· refreshing…</span>}
           </p>
         </div>
-        <Link to="/plans" className="shrink-0 text-[11px] text-accent hover:underline">manage checklists</Link>
+        <Link to="/plans" className="shrink-0 text-[11px] text-accent hover:underline">manage presets</Link>
       </div>
 
       {automation.waitingForUser && (
@@ -218,10 +212,13 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
             className="inline-flex items-center gap-1 text-secondary transition-colors hover:text-primary disabled:opacity-40"
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-              <path d="M21 3v6h-6" />
+              <path d="M4 6h10" />
+              <path d="M4 12h10" />
+              <path d="M4 18h10" />
+              <path d="M18 9v6" />
+              <path d="M15 12h6" />
             </svg>
-            <span>{appendOpen ? 'Hide checklist picker' : 'Append checklist'}</span>
+            <span>Add preset</span>
           </button>
           <button
             type="button"
@@ -238,34 +235,41 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
         </div>
 
         {appendOpen && (
-          <div className="space-y-2">
-            <input
-              value={appendQuery}
-              onChange={(event) => setAppendQuery(event.target.value)}
-              placeholder="Search checklists"
-              className={INPUT_CLASS}
-            />
-            <div className="space-y-px">
-              {visibleAppendPresets.map((preset) => (
-                <ListButtonRow
-                  key={preset.id}
-                  onClick={() => {
-                    const nextItems = appendChecklistPresetItems(draftItems, preset);
-                    setDraftItems(nextItems);
-                    setAppendOpen(false);
-                    setAppendQuery('');
-                    void handleCommitItems(nextItems);
-                  }}
-                  className="-mx-0 px-0 py-2"
-                  trailing={<span className="text-[11px] text-accent">Append</span>}
-                >
-                  <p className="ui-row-title truncate">{preset.name}</p>
-                  <p className="ui-row-meta">{preset.items.length} {preset.items.length === 1 ? 'item' : 'items'}</p>
-                </ListButtonRow>
-              ))}
-              {visibleAppendPresets.length === 0 && <p className="text-[11px] text-dim">No checklists match that search.</p>}
+          appendPresets.length === 0 ? (
+            <p className="text-[11px] text-dim">No presets available yet.</p>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={appendPresetId}
+                onChange={(event) => setAppendPresetId(event.target.value)}
+                className={cx(SELECT_CLASS, 'min-w-0 flex-1')}
+                disabled={pendingAction !== null}
+              >
+                <option value="">Select preset</option>
+                {appendPresets.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.name} · {preset.items.length} {preset.items.length === 1 ? 'item' : 'items'}
+                  </option>
+                ))}
+              </select>
+              <ToolbarButton
+                onClick={() => {
+                  const preset = appendPresets.find((candidate) => candidate.id === appendPresetId);
+                  if (!preset) {
+                    return;
+                  }
+                  const nextItems = appendChecklistPresetItems(draftItems, preset);
+                  setDraftItems(nextItems);
+                  setAppendOpen(false);
+                  setAppendPresetId('');
+                  void handleCommitItems(nextItems);
+                }}
+                disabled={pendingAction !== null || !appendPresetId}
+              >
+                Add
+              </ToolbarButton>
             </div>
-          </div>
+          )
         )}
       </div>
 

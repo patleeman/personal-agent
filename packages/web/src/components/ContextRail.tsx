@@ -2358,16 +2358,16 @@ export function ContextRail() {
   const selectedPlanId = new URLSearchParams(location.search).get('plan')?.trim() || null;
   const creatingPlan = new URLSearchParams(location.search).get('new') === '1';
 
-  // Checklists
+  // Presets
   if (section === 'plans') return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <RailHeader label="Checklists" sub={selectedPlanId ?? (creatingPlan ? 'new checklist' : undefined)} />
+      <RailHeader label="Presets" sub={selectedPlanId ?? (creatingPlan ? 'new preset' : undefined)} />
       <div className="min-h-0 flex-1 overflow-y-auto">
         {suspendRailPanel(
           selectedPlanId || creatingPlan
             ? <AutomationPresetPanel presetId={selectedPlanId} creatingNew={creatingPlan} />
-            : <EmptyPrompt text="Select a checklist or create a new one to edit reusable checklists." />,
-          'Loading checklists…',
+            : <EmptyPrompt text="Select a preset or create a new one to edit reusable presets." />,
+          'Loading presets…',
         )}
       </div>
     </div>

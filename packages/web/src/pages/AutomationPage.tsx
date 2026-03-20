@@ -103,12 +103,12 @@ export function AutomationPage() {
 
   const pageMeta = data
     ? [
-      `${presets.length} ${presets.length === 1 ? 'checklist' : 'checklists'}`,
+      `${presets.length} ${presets.length === 1 ? 'preset' : 'presets'}`,
       data.presetLibrary.defaultPresetIds.length > 0
         ? `defaults ${data.presetLibrary.defaultPresetIds.map((presetId) => presets.find((preset) => preset.id === presetId)?.name ?? presetId).join(', ')}`
-        : 'no default checklists',
+        : 'no default presets',
     ].join(' · ')
-    : 'Reusable checklists';
+    : 'Reusable presets';
 
   return (
     <div className="flex h-full flex-col">
@@ -117,7 +117,7 @@ export function AutomationPage() {
         actions={(
           <>
             <ToolbarButton onClick={() => setSelection(null, true)}>
-              + New checklist
+              + New preset
             </ToolbarButton>
             <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); }} disabled={refreshing}>
               {refreshing ? 'Refreshing…' : '↻ Refresh'}
@@ -125,12 +125,12 @@ export function AutomationPage() {
           </>
         )}
       >
-        <PageHeading title="Checklists" meta={pageMeta} />
+        <PageHeading title="Presets" meta={pageMeta} />
       </PageHeader>
 
       <div className="flex-1 px-6 py-4">
-        {loading && <LoadingState label="Loading checklists…" />}
-        {error && <ErrorState message={`Unable to load checklists: ${error}`} />}
+        {loading && <LoadingState label="Loading presets…" />}
+        {error && <ErrorState message={`Unable to load presets: ${error}`} />}
 
         {!loading && !error && data && (
           <div className="space-y-5 pb-5">
@@ -138,22 +138,22 @@ export function AutomationPage() {
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Filter checklists by name or item"
+                placeholder="Filter presets by name or item"
                 className="w-full max-w-xl rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60"
               />
             </div>
 
-            {creatingNew && <p className="text-[12px] text-dim">Editing a new checklist in the right pane.</p>}
+            {creatingNew && <p className="text-[12px] text-dim">Editing a new preset in the right pane.</p>}
 
             {presets.length === 0 ? (
               <EmptyState
-                title="No checklists yet"
-                body="Create a checklist in the right pane."
-                action={<ToolbarButton onClick={() => setSelection(null, true)}>Create checklist</ToolbarButton>}
+                title="No presets yet"
+                body="Create a preset in the right pane."
+                action={<ToolbarButton onClick={() => setSelection(null, true)}>Create preset</ToolbarButton>}
               />
             ) : filteredPresets.length === 0 ? (
               <EmptyState
-                title="No checklists match that filter"
+                title="No presets match that filter"
                 body="Try a different search term or clear the filter."
               />
             ) : (

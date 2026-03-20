@@ -4,7 +4,6 @@ import { api } from '../api';
 import {
   appendChecklistPresetItems,
   checklistDraftItemsToTemplateItems,
-  cloneChecklistDraftItems,
   createChecklistDraftItem,
   type ChecklistDraftItem,
   summarizeChecklistText,
@@ -12,9 +11,10 @@ import {
 } from '../checklists';
 import { useApi } from '../hooks';
 import type { ConversationAutomationWorkflowPreset } from '../types';
-import { ErrorState, ListButtonRow, LoadingState, Pill, ToolbarButton, cx } from './ui';
+import { ErrorState, LoadingState, Pill, ToolbarButton, cx } from './ui';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50';
+const SELECT_CLASS = `${INPUT_CLASS} pr-10`;
 const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[88px] resize-y leading-relaxed`;
 
 function createDraftId(prefix: 'preset'): string {
@@ -69,10 +69,6 @@ function moveDraftItem(items: ChecklistDraftItem[], itemId: string, targetItemId
   return next;
 }
 
-function checklistSearchText(preset: ConversationAutomationWorkflowPreset): string {
-  return [preset.name, ...toChecklistDraftItems(preset.items).map((item) => item.text)].join('\n').toLowerCase();
-}
-
 export function AutomationPresetPanel({
   presetId,
   creatingNew,
@@ -92,7 +88,7 @@ export function AutomationPresetPanel({
   const [presetNameDraft, setPresetNameDraft] = useState('');
   const [draftItems, setDraftItems] = useState<ChecklistDraftItem[]>([]);
   const [appendOpen, setAppendOpen] = useState(false);
-  const [appendQuery, setAppendQuery] = useState('');
+  const [appendPresetId, setAppendPresetId] = useState('');
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<'save' | 'delete' | 'default' | null>(null);
@@ -107,22 +103,20 @@ export function AutomationPresetPanel({
     items: toChecklistDraftItems(selectedPreset?.items ?? []),
   }), [selectedPreset]);
   const editorDirty = JSON.stringify({ name: presetNameDraft, items: draftItems }) !== baseline;
-  const visibleAppendPresets = useMemo(() => {
-    const normalized = appendQuery.trim().toLowerCase();
-    return (data?.presetLibrary.presets ?? [])
-      .filter((preset) => preset.id !== selectedPreset?.id)
-      .filter((preset) => !normalized || checklistSearchText(preset).includes(normalized));
-  }, [appendQuery, data?.presetLibrary.presets, selectedPreset?.id]);
+  const appendPresets = useMemo(
+    () => (data?.presetLibrary.presets ?? []).filter((preset) => preset.id !== selectedPreset?.id),
+    [data?.presetLibrary.presets, selectedPreset?.id],
+  );
 
   useEffect(() => {
     if (!data || !panelKey || initializedKey === panelKey) {
       return;
     }
 
-    setPresetNameDraft(creatingNew ? 'New checklist' : (selectedPreset?.name ?? ''));
+    setPresetNameDraft(creatingNew ? 'New preset' : (selectedPreset?.name ?? ''));
     setDraftItems(creatingNew ? [] : toChecklistDraftItems(selectedPreset?.items ?? []));
     setAppendOpen(false);
-    setAppendQuery('');
+    setAppendPresetId('');
     setActionError(null);
     setPendingAction(null);
     setInitializedKey(panelKey);
@@ -207,11 +201,11 @@ export function AutomationPresetPanel({
   }
 
   if (loading && !data) {
-    return <LoadingState label="Loading checklists…" className="justify-center h-full" />;
+    return <LoadingState label="Loading presets…" className="justify-center h-full" />;
   }
 
   if (error && !data) {
-    return <ErrorState message={`Failed to load checklists: ${error}`} className="px-4 py-4" />;
+    return <ErrorState message={`Failed to load presets: ${error}`} className="px-4 py-4" />;
   }
 
   if (!data || !panelKey) {
@@ -225,15 +219,15 @@ export function AutomationPresetPanel({
       <div className="space-y-2">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="ui-card-title break-words">{creatingNew ? 'New checklist' : (selectedPreset?.name ?? 'Checklist')}</p>
-            <p className="mt-1 text-[12px] text-secondary">Reusable todo list for the agent.</p>
+            <p className="ui-card-title break-words">{creatingNew ? 'New preset' : (selectedPreset?.name ?? 'Preset')}</p>
+            <p className="mt-1 text-[12px] text-secondary">Reusable preset for the agent.</p>
           </div>
           {selectedPreset && isDefault && <Pill tone="accent">default</Pill>}
         </div>
         <input
           value={presetNameDraft}
           onChange={(event) => setPresetNameDraft(event.target.value)}
-          placeholder="Checklist name"
+          placeholder="Preset name"
           className={INPUT_CLASS}
         />
       </div>
@@ -242,11 +236,11 @@ export function AutomationPresetPanel({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <p className="ui-section-label">Todo list</p>
-            <p className="mt-1 text-[12px] text-secondary">Ordered checklist items for the agent.</p>
+            <p className="mt-1 text-[12px] text-secondary">Ordered preset items for the agent.</p>
           </div>
           <div className="flex items-center gap-2">
             <ToolbarButton onClick={() => setAppendOpen((value) => !value)} disabled={pendingAction !== null}>
-              Append checklist
+              Add preset
             </ToolbarButton>
             <ToolbarButton
               onClick={() => setDraftItems((current) => [...current, createChecklistDraftItem()])}
@@ -258,31 +252,40 @@ export function AutomationPresetPanel({
         </div>
 
         {appendOpen && (
-          <div className="space-y-2 border-t border-border-subtle/70 pt-3">
-            <input
-              value={appendQuery}
-              onChange={(event) => setAppendQuery(event.target.value)}
-              placeholder="Search checklists"
-              className={INPUT_CLASS}
-            />
-            <div className="space-y-px">
-              {visibleAppendPresets.map((preset) => (
-                <ListButtonRow
-                  key={preset.id}
+          <div className="border-t border-border-subtle/70 pt-3">
+            {appendPresets.length === 0 ? (
+              <p className="text-[11px] text-dim">No other presets available yet.</p>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={appendPresetId}
+                  onChange={(event) => setAppendPresetId(event.target.value)}
+                  className={cx(SELECT_CLASS, 'min-w-0 flex-1')}
+                  disabled={pendingAction !== null}
+                >
+                  <option value="">Select preset</option>
+                  {appendPresets.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.name} · {preset.items.length} {preset.items.length === 1 ? 'item' : 'items'}
+                    </option>
+                  ))}
+                </select>
+                <ToolbarButton
                   onClick={() => {
+                    const preset = appendPresets.find((candidate) => candidate.id === appendPresetId);
+                    if (!preset) {
+                      return;
+                    }
                     setDraftItems((current) => appendChecklistPresetItems(current, preset));
                     setAppendOpen(false);
-                    setAppendQuery('');
+                    setAppendPresetId('');
                   }}
-                  className="-mx-0 px-0 py-2"
-                  trailing={<span className="text-[11px] text-accent">Append</span>}
+                  disabled={pendingAction !== null || !appendPresetId}
                 >
-                  <p className="ui-row-title truncate">{preset.name}</p>
-                  <p className="ui-row-meta">{preset.items.length} {preset.items.length === 1 ? 'item' : 'items'}</p>
-                </ListButtonRow>
-              ))}
-              {visibleAppendPresets.length === 0 && <p className="text-[11px] text-dim">No checklists match that search.</p>}
-            </div>
+                  Add
+                </ToolbarButton>
+              </div>
+            )}
           </div>
         )}
 
