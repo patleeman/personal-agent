@@ -88,6 +88,7 @@ import { createDeferredResumeAgentExtension } from './deferredResumeAgentExtensi
 import { createScheduledTaskAgentExtension } from './scheduledTaskAgentExtension.js';
 import { createActivityAgentExtension } from './activityAgentExtension.js';
 import { createConversationTodoAgentExtension } from './conversationTodoAgentExtension.js';
+import { createConversationAutomationPromptExtension } from './conversationAutomationPromptExtension.js';
 import { createWaitForUserAgentExtension } from './waitForUserAgentExtension.js';
 import { createRunAgentExtension } from './runAgentExtension.js';
 import { createMemoryAgentExtension } from './memoryAgentExtension.js';
@@ -142,7 +143,6 @@ import {
 } from './remoteLiveSessions.js';
 import { recoverDurableLiveConversations } from './conversationRecovery.js';
 import {
-  buildConversationAutomationPromptContext,
   loadConversationAutomationState,
   readSavedConversationAutomationPreferences,
   replaceConversationAutomationItems,
@@ -150,7 +150,6 @@ import {
   resolveConversationAutomationPath,
   resumeConversationAutomationAfterUserMessage,
   setConversationAutomationItemPending,
-  shouldInjectConversationAutomationPromptContext,
   updateConversationAutomationEnabled,
   updateConversationAutomationItemStatus,
   writeSavedConversationAutomationPreferences,
@@ -523,6 +522,10 @@ function buildLiveSessionExtensionFactories() {
       getCurrentProfile,
     }),
     createConversationTodoAgentExtension({
+      stateRoot: getStateRoot(),
+      getCurrentProfile,
+    }),
+    createConversationAutomationPromptExtension({
       stateRoot: getStateRoot(),
       getCurrentProfile,
     }),
@@ -5378,26 +5381,16 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
     }
 
     const isRemoteLive = isRemoteLiveSession(id);
-    let automationBeforePrompt = loadConversationAutomationState({
+    const automationBeforePrompt = loadConversationAutomationState({
       profile: getCurrentProfile(),
       conversationId: id,
       settingsFile: SETTINGS_FILE,
     }).document;
     if (automationBeforePrompt.waitingForUser || automationBeforePrompt.items.some((item) => item.status === 'waiting')) {
-      automationBeforePrompt = saveConversationAutomationDocument(resumeConversationAutomationAfterUserMessage(automationBeforePrompt));
-    }
-
-    const automationPromptContext = buildConversationAutomationPromptContext(automationBeforePrompt);
-    const shouldInjectAutomationPromptContext = shouldInjectConversationAutomationPromptContext(automationBeforePrompt);
-    if (shouldInjectAutomationPromptContext) {
-      automationBeforePrompt = saveConversationAutomationDocument({
-        ...automationBeforePrompt,
-        lastInjectedPromptContextUpdatedAt: automationBeforePrompt.updatedAt,
-      });
+      saveConversationAutomationDocument(resumeConversationAutomationAfterUserMessage(automationBeforePrompt));
     }
 
     const queuedContextBlocks = [
-      shouldInjectAutomationPromptContext ? automationPromptContext : '',
       relatedProjectIds.length > 0 ? buildReferencedProjectsContext(relatedProjectIds) : '',
       referencedAttachments.length > 0 ? buildConversationAttachmentsContext(referencedAttachments) : '',
       referencedTasks.length > 0 ? buildReferencedTasksContext(referencedTasks, REPO_ROOT) : '',
