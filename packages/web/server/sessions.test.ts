@@ -373,7 +373,7 @@ describe('sessions', () => {
     expect(detail?.blocks.filter((block) => block.type === 'text').map((block) => block.text)).toContain('Remote execution imported from GPU Box.');
   });
 
-  it('renders hidden custom context entries as dedicated context blocks', () => {
+  it('keeps hidden custom context entries out of the visible transcript', () => {
     const blocks = buildDisplayBlocksFromEntries([
       {
         id: 'context-1',
@@ -387,15 +387,7 @@ describe('sessions', () => {
       },
     ]);
 
-    expect(blocks).toEqual([
-      {
-        type: 'context',
-        id: 'context-1-m0',
-        ts: '2026-03-12T16:00:00.000Z',
-        text: 'Conversation automation context:\n- Review the todo list.',
-        customType: 'referenced_context',
-      },
-    ]);
+    expect(blocks).toEqual([]);
   });
 
   it('renames a stored conversation by appending session metadata', () => {

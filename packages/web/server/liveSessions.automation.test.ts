@@ -47,12 +47,12 @@ afterEach(() => {
 });
 
 describe('conversation automation live-session integration', () => {
-  it('starts the next pending automation item as a follow-up turn', async () => {
+  it('starts the next pending automation item as a hidden follow-up turn', async () => {
     const stateRoot = createTempDir('pa-live-automation-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
 
-    const prompt = vi.fn(async () => undefined);
+    const sendCustomMessage = vi.fn(async () => undefined);
     const item = createConversationAutomationTodoItem({
       id: 'item-1',
       label: 'workflow-checkpoint',
@@ -81,9 +81,10 @@ describe('conversation automation live-session integration', () => {
         getActiveToolNames: () => [],
         getContextUsage: () => null,
         isStreaming: false,
-        prompt,
+        prompt: vi.fn(async () => undefined),
         steer: vi.fn(async () => undefined),
         followUp: vi.fn(async () => undefined),
+        sendCustomMessage,
         modelRegistry: {
           getAvailable: () => [],
           getApiKey: vi.fn(),
@@ -93,8 +94,24 @@ describe('conversation automation live-session integration', () => {
 
     await kickConversationAutomation('conv-123', 'turn_end');
 
-    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('/skill:workflow-checkpoint commit only my files'));
-    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('todo_list tool'));
+    expect(sendCustomMessage).toHaveBeenCalledWith({
+      customType: 'conversation_automation_item',
+      content: expect.stringContaining('/skill:workflow-checkpoint commit only my files'),
+      display: false,
+      details: undefined,
+    }, {
+      deliverAs: 'followUp',
+      triggerTurn: true,
+    });
+    expect(sendCustomMessage).toHaveBeenCalledWith({
+      customType: 'conversation_automation_item',
+      content: expect.stringContaining('todo_list tool'),
+      display: false,
+      details: undefined,
+    }, {
+      deliverAs: 'followUp',
+      triggerTurn: true,
+    });
     const updated = getConversationAutomationState({
       profile: 'datadog',
       stateRoot,
@@ -109,12 +126,12 @@ describe('conversation automation live-session integration', () => {
     expect(updated.enabled).toBe(true);
   });
 
-  it('starts a custom instruction step as a follow-up turn', async () => {
+  it('starts a custom instruction step as a hidden follow-up turn', async () => {
     const stateRoot = createTempDir('pa-live-automation-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
 
-    const prompt = vi.fn(async () => undefined);
+    const sendCustomMessage = vi.fn(async () => undefined);
     const item = createConversationAutomationTodoItem({
       id: 'item-text-1',
       kind: 'instruction',
@@ -142,9 +159,10 @@ describe('conversation automation live-session integration', () => {
         getActiveToolNames: () => [],
         getContextUsage: () => null,
         isStreaming: false,
-        prompt,
+        prompt: vi.fn(async () => undefined),
         steer: vi.fn(async () => undefined),
         followUp: vi.fn(async () => undefined),
+        sendCustomMessage,
         modelRegistry: {
           getAvailable: () => [],
           getApiKey: vi.fn(),
@@ -154,9 +172,33 @@ describe('conversation automation live-session integration', () => {
 
     await kickConversationAutomation('conv-124', 'turn_end');
 
-    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('Carry out this checklist item:'));
-    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('Review the last failing test run and explain the smallest safe fix.'));
-    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('todo_list tool'));
+    expect(sendCustomMessage).toHaveBeenCalledWith({
+      customType: 'conversation_automation_item',
+      content: expect.stringContaining('Carry out this checklist item:'),
+      display: false,
+      details: undefined,
+    }, {
+      deliverAs: 'followUp',
+      triggerTurn: true,
+    });
+    expect(sendCustomMessage).toHaveBeenCalledWith({
+      customType: 'conversation_automation_item',
+      content: expect.stringContaining('Review the last failing test run and explain the smallest safe fix.'),
+      display: false,
+      details: undefined,
+    }, {
+      deliverAs: 'followUp',
+      triggerTurn: true,
+    });
+    expect(sendCustomMessage).toHaveBeenCalledWith({
+      customType: 'conversation_automation_item',
+      content: expect.stringContaining('todo_list tool'),
+      display: false,
+      details: undefined,
+    }, {
+      deliverAs: 'followUp',
+      triggerTurn: true,
+    });
     const updated = getConversationAutomationState({
       profile: 'datadog',
       stateRoot,
@@ -242,7 +284,7 @@ describe('conversation automation live-session integration', () => {
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
 
-    const prompt = vi.fn(async () => undefined);
+    const sendCustomMessage = vi.fn(async () => undefined);
     const completedItem = {
       ...createConversationAutomationTodoItem({
         id: 'item-1',
@@ -277,9 +319,10 @@ describe('conversation automation live-session integration', () => {
         agent: { state: { messages: [] } },
         getContextUsage: () => null,
         isStreaming: false,
-        prompt,
+        prompt: vi.fn(async () => undefined),
         steer: vi.fn(async () => undefined),
         followUp: vi.fn(async () => undefined),
+        sendCustomMessage,
         modelRegistry: {
           getAvailable: () => [],
           getApiKey: vi.fn(),
@@ -298,7 +341,23 @@ describe('conversation automation live-session integration', () => {
       status: 'running',
       round: 1,
     });
-    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('Review the automation todo list before stopping.'));
-    expect(prompt).toHaveBeenCalledWith(expect.stringContaining('use the todo_list tool to add the needed follow-up items'));
+    expect(sendCustomMessage).toHaveBeenCalledWith({
+      customType: 'conversation_automation_review',
+      content: expect.stringContaining('Review the automation todo list before stopping.'),
+      display: false,
+      details: undefined,
+    }, {
+      deliverAs: 'followUp',
+      triggerTurn: true,
+    });
+    expect(sendCustomMessage).toHaveBeenCalledWith({
+      customType: 'conversation_automation_review',
+      content: expect.stringContaining('use the todo_list tool to add the needed follow-up items'),
+      display: false,
+      details: undefined,
+    }, {
+      deliverAs: 'followUp',
+      triggerTurn: true,
+    });
   });
 });

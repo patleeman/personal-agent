@@ -999,7 +999,12 @@ export async function kickConversationAutomation(
 
         try {
           entry.currentTurnError = null;
-          await promptSession(sessionId, buildConversationAutomationItemPrompt(pendingItem), 'followUp');
+          await triggerHiddenPrompt(
+            sessionId,
+            'conversation_automation_item',
+            buildConversationAutomationItemPrompt(pendingItem),
+            'followUp',
+          );
         } catch (error) {
           const failedAt = new Date().toISOString();
           pendingItem.status = 'failed';
@@ -1034,7 +1039,12 @@ export async function kickConversationAutomation(
 
       try {
         entry.currentTurnError = null;
-        await promptSession(sessionId, buildConversationAutomationReviewPrompt(document), 'followUp');
+        await triggerHiddenPrompt(
+          sessionId,
+          'conversation_automation_review',
+          buildConversationAutomationReviewPrompt(document),
+          'followUp',
+        );
       } catch (error) {
         const failedAt = new Date().toISOString();
         if (document.review) {
@@ -1621,6 +1631,30 @@ export async function queuePromptContext(
     details: undefined,
   }, {
     deliverAs: 'nextTurn',
+  });
+}
+
+async function triggerHiddenPrompt(
+  sessionId: string,
+  customType: string,
+  content: string,
+  behavior: 'steer' | 'followUp' = 'followUp',
+): Promise<void> {
+  const entry = registry.get(sessionId);
+  if (!entry) throw new Error(`Session ${sessionId} is not live`);
+  const message = content.trim();
+  if (!message) {
+    return;
+  }
+
+  await entry.session.sendCustomMessage({
+    customType,
+    content: message,
+    display: false,
+    details: undefined,
+  }, {
+    deliverAs: behavior,
+    triggerTurn: true,
   });
 }
 
