@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildConversationAutomationItemPrompt,
+  buildConversationAutomationPromptContext,
   conversationAutomationDocumentExists,
   createConversationAutomationTodoItem,
   loadConversationAutomationState,
@@ -540,6 +541,43 @@ describe('conversationAutomation state', () => {
       label: 'Open the failing test output, identify the root cause, and summarize…',
       text: 'Open the failing test output, identify the root cause, and summarize the fix plan.',
     });
+  });
+
+  it('builds prompt context that injects the current todo list and reminder', () => {
+    const promptContext = buildConversationAutomationPromptContext({
+      activeItemId: 'item-1',
+      review: {
+        status: 'running',
+        round: 2,
+        createdAt: '2026-03-18T12:00:00.000Z',
+        updatedAt: '2026-03-18T12:00:05.000Z',
+      },
+      waitingForUser: {
+        createdAt: '2026-03-18T12:00:06.000Z',
+        updatedAt: '2026-03-18T12:00:06.000Z',
+        reason: 'Need the deployment target from the user.',
+      },
+      items: [{
+        ...createConversationAutomationTodoItem({
+          id: 'item-1',
+          kind: 'instruction',
+          text: 'Inspect the broken todo reminder flow and fix it.',
+          now: '2026-03-18T12:00:00.000Z',
+        }),
+        status: 'running',
+        startedAt: '2026-03-18T12:00:01.000Z',
+        updatedAt: '2026-03-18T12:00:05.000Z',
+      }],
+    });
+
+    expect(promptContext).toContain('Conversation automation context:');
+    expect(promptContext).toContain('automation todo list');
+    expect(promptContext).toContain('todo_list tool');
+    expect(promptContext).toContain('Active todo item: @item-1');
+    expect(promptContext).toContain('Automation review: running (round 2)');
+    expect(promptContext).toContain('Waiting for user: Need the deployment target from the user.');
+    expect(promptContext).toContain('@item-1 [active]');
+    expect(promptContext).toContain('Inspect the broken todo reminder flow and fix it.');
   });
 
   it('pauses checklist automation explicitly for user input and resumes on the next user message', () => {
