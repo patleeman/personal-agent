@@ -10,11 +10,12 @@ import {
 import { invalidateAppTopics } from './appEvents.js';
 
 const TODO_LIST_ACTION_VALUES = ['get', 'add', 'complete', 'block', 'fail', 'reopen'] as const;
+const TODO_LIST_ACTION_INPUT_VALUES = [...TODO_LIST_ACTION_VALUES, 'list'] as const;
 
 type TodoListAction = (typeof TODO_LIST_ACTION_VALUES)[number];
 
 const TodoListToolParams = Type.Object({
-  action: Type.Union(TODO_LIST_ACTION_VALUES.map((value) => Type.Literal(value))),
+  action: Type.Union(TODO_LIST_ACTION_INPUT_VALUES.map((value) => Type.Literal(value))),
   itemId: Type.Optional(Type.String({ description: 'Todo item id. Defaults to the active item for complete/block/fail.' })),
   label: Type.Optional(Type.String({ description: 'Optional todo item label for add.' })),
   kind: Type.Optional(Type.Union([Type.Literal('skill'), Type.Literal('instruction')], { description: 'Todo item kind for add.' })),
@@ -39,8 +40,21 @@ function readOptionalString(value: string | undefined): string | undefined {
   return normalized && normalized.length > 0 ? normalized : undefined;
 }
 
+function normalizeTodoAction(value: string): TodoListAction {
+  return value === 'list' ? 'get' : value as TodoListAction;
+}
+
+function normalizeTodoItemId(value: string | undefined): string | undefined {
+  const normalized = readOptionalString(value);
+  if (!normalized) {
+    return undefined;
+  }
+
+  return normalized.startsWith('@') ? normalized.slice(1) : normalized;
+}
+
 function resolveTargetItemId(params: { itemId?: string }, activeItemId: string | undefined): string {
-  const explicit = readOptionalString(params.itemId);
+  const explicit = normalizeTodoItemId(params.itemId);
   if (explicit) {
     return explicit;
   }
@@ -98,7 +112,7 @@ export function createConversationTodoAgentExtension(options: {
           const updatedAt = new Date().toISOString();
           let document = loaded.document;
 
-          switch (params.action as TodoListAction) {
+          switch (normalizeTodoAction(params.action)) {
             case 'get': {
               return {
                 content: [{ type: 'text' as const, text: formatTodoList(document) }],
@@ -216,7 +230,10 @@ export function createConversationTodoAgentExtension(options: {
             }
 
             case 'reopen': {
-              const itemId = readRequiredString(params.itemId, 'itemId');
+              const itemId = normalizeTodoItemId(params.itemId);
+              if (!itemId) {
+                throw new Error('itemId is required.');
+              }
               document = resetConversationAutomationFromItem(document, itemId, {
                 now: updatedAt,
                 enabled: params.resume === true ? true : document.enabled,
