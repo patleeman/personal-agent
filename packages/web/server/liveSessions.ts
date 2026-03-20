@@ -947,6 +947,29 @@ function shouldStartConversationAutomationReview(document: ConversationAutomatio
   return document.review.status === 'pending';
 }
 
+function didTurnEndFromConversationAutomation(entry: LiveEntry): boolean {
+  const entries = typeof entry.session.sessionManager?.getEntries === 'function'
+    ? entry.session.sessionManager.getEntries()
+    : [];
+
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const candidate = entries[index];
+    if (candidate?.type !== 'message') {
+      continue;
+    }
+
+    const message = candidate.message as { role?: string; customType?: string } | undefined;
+    if (!message || message.role === 'assistant') {
+      continue;
+    }
+
+    return message.role === 'custom'
+      && (message.customType === 'conversation_automation_item' || message.customType === 'conversation_automation_review');
+  }
+
+  return false;
+}
+
 export async function kickConversationAutomation(
   sessionId: string,
   trigger: 'manual' | 'turn_end' = 'manual',
@@ -958,6 +981,9 @@ export async function kickConversationAutomation(
 
   automationProcessingSessions.add(sessionId);
   try {
+    const shouldContinueAfterTurnEnd = trigger === 'turn_end'
+      ? didTurnEndFromConversationAutomation(entry)
+      : true;
     let document = loadConversationAutomationState({
       profile: resolveConversationAutomationProfile(),
       conversationId: sessionId,
@@ -974,17 +1000,17 @@ export async function kickConversationAutomation(
       entry.currentTurnError = null;
     }
 
-    if (trigger === 'turn_end' && document.activeItemId) {
+    if (trigger === 'turn_end' && shouldContinueAfterTurnEnd && document.activeItemId) {
       document = maybeFinalizeConversationAutomationTodoItem(entry, document, new Date().toISOString());
       document = saveConversationAutomation(entry, document);
       entry.currentTurnError = null;
-    } else if (trigger === 'turn_end' && document.review?.status === 'running') {
+    } else if (trigger === 'turn_end' && shouldContinueAfterTurnEnd && document.review?.status === 'running') {
       document = maybeFinalizeConversationAutomationReview(entry, document, new Date().toISOString());
       document = saveConversationAutomation(entry, document);
       entry.currentTurnError = null;
     }
 
-    while (!entry.session.isStreaming && document.enabled) {
+    while (!entry.session.isStreaming && document.enabled && shouldContinueAfterTurnEnd) {
       const pendingItem = findFirstPendingConversationAutomationTodoItem(document);
       if (pendingItem) {
         const startedAt = new Date().toISOString();
