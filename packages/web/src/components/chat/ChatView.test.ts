@@ -240,6 +240,23 @@ describe('chat view streaming disclosure', () => {
     expect(html).not.toContain('ui-message-card-assistant');
   });
 
+  it('renders injected context blocks with dedicated reminder styling', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'context',
+        ts: '2026-03-11T18:00:00.000Z',
+        customType: 'referenced_context',
+        text: 'Conversation automation context:\n\n- Review the todo list before stopping.',
+      }],
+    }));
+
+    expect(html).toContain('Injected context');
+    expect(html).toContain('data-context-type="referenced_context"');
+    expect(html).toContain('Conversation automation context:');
+    expect(html).not.toContain('ui-chat-avatar-mark">pa<');
+    expect(html).not.toContain('ui-message-card-assistant');
+  });
+
   it('collapses long compaction summaries to a short preview by default', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: [{
