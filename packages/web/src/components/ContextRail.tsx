@@ -2361,13 +2361,13 @@ export function ContextRail() {
   // Presets
   if (section === 'plans') return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <RailHeader label="Presets" sub={selectedPlanId ?? (creatingPlan ? 'new preset' : undefined)} />
+      <RailHeader label="Todo Presets" sub={selectedPlanId ?? (creatingPlan ? 'new preset' : undefined)} />
       <div className="min-h-0 flex-1 overflow-y-auto">
         {suspendRailPanel(
           selectedPlanId || creatingPlan
             ? <AutomationPresetPanel presetId={selectedPlanId} creatingNew={creatingPlan} />
-            : <EmptyPrompt text="Select a preset or create a new one to edit reusable presets." />,
-          'Loading presets…',
+            : <EmptyPrompt text="Select a todo preset or create a new one to edit reusable todo presets." />,
+          'Loading todo presets…',
         )}
       </div>
     </div>
