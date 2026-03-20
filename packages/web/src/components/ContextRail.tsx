@@ -76,6 +76,28 @@ function EmptyPrompt({ text }: { text: string }) {
   );
 }
 
+function ConversationExecutionPanel({ execution }: { execution: ConversationExecutionState | null }) {
+  const target = execution?.target ?? null;
+  const isRemote = execution?.location === 'remote' && target;
+
+  return (
+    <SurfacePanel muted className="px-3 py-3 space-y-2.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <p className="text-[13px] font-medium text-primary break-words">{target ? target.label : 'Local agent'}</p>
+          {isRemote && (
+            <p className="text-[12px] font-mono text-secondary break-all">{target.sshDestination}</p>
+          )}
+        </div>
+        <Pill tone={isRemote ? 'accent' : 'muted'}>{isRemote ? 'remote' : 'local'}</Pill>
+      </div>
+      {target?.description && (
+        <p className="text-[12px] text-secondary break-words">{target.description}</p>
+      )}
+    </SurfacePanel>
+  );
+}
+
 function RailHeader({ label, sub }: { label: string; sub?: string }) {
   return (
     <div className="px-4 pt-4 pb-3 border-b border-border-subtle shrink-0">
@@ -1271,6 +1293,10 @@ function LiveSessionContextPanel({ id }: { id: string }) {
 
   return (
     <div className="space-y-5 px-4 py-4">
+      <Section title="Execution Environment">
+        <ConversationExecutionPanel execution={execution} />
+      </Section>
+
       <Section title="Working Directory">
         <SurfacePanel muted className="px-3 py-3 space-y-2.5">
           <div className="space-y-2">
