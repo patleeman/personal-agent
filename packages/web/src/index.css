@@ -96,8 +96,7 @@
   .excalidraw-embed-lite .layer-ui__wrapper__top-right,
   .excalidraw-embed-lite .layer-ui__wrapper__footer,
   .excalidraw-embed-lite .sidebar-tabs-root,
-  .excalidraw-embed-lite .sidebar-triggers,
-  .excalidraw-embed-lite .selected-shape-actions {
+  .excalidraw-embed-lite .sidebar-triggers {
     display: none !important;
   }
 

@@ -1,6 +1,13 @@
 export const EXCALIDRAW_SOURCE_MIME_TYPE = 'application/vnd.excalidraw+json';
 export const EXCALIDRAW_PREVIEW_MIME_TYPE = 'image/png';
 
+const DEFAULT_PREVIEW_BACKGROUND = '#ffffff';
+const DEFAULT_PREVIEW_EXPORT_PADDING = 16;
+const MIN_PREVIEW_LONG_SIDE = 900;
+const MAX_PREVIEW_LONG_SIDE = 1600;
+const PREVIEW_FRAME_INSET_RATIO = 0.08;
+const MIN_PREVIEW_FRAME_INSET = 40;
+
 type ExcalidrawElements = Parameters<typeof import('@excalidraw/excalidraw').serializeAsJSON>[0];
 type ExcalidrawAppState = Parameters<typeof import('@excalidraw/excalidraw').serializeAsJSON>[1];
 type ExcalidrawFiles = Parameters<typeof import('@excalidraw/excalidraw').serializeAsJSON>[2];
@@ -17,6 +24,11 @@ export interface SerializedExcalidrawScene {
   previewData: string;
   previewMimeType: string;
   previewUrl: string;
+}
+
+export interface ExcalidrawPreviewFrameSize {
+  width: number;
+  height: number;
 }
 
 type ExcalidrawModule = Pick<typeof import('@excalidraw/excalidraw'), 'loadFromBlob' | 'serializeAsJSON' | 'exportToBlob'>;
@@ -94,6 +106,116 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+function positiveFiniteNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function resolvePreviewBackgroundColor(appState: ExcalidrawAppState): string {
+  const value = (appState as { viewBackgroundColor?: unknown }).viewBackgroundColor;
+  return typeof value === 'string' && value.trim().length > 0 ? value : DEFAULT_PREVIEW_BACKGROUND;
+}
+
+async function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error('Failed to convert canvas to blob.'));
+        return;
+      }
+
+      resolve(blob);
+    }, mimeType);
+  });
+}
+
+async function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(blob);
+    const image = new Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(image);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Failed to load preview image.'));
+    };
+
+    image.src = objectUrl;
+  });
+}
+
+export function resolveExcalidrawPreviewFrameSize(appState: ExcalidrawAppState | null | undefined): ExcalidrawPreviewFrameSize | null {
+  if (!appState || typeof appState !== 'object') {
+    return null;
+  }
+
+  const width = positiveFiniteNumber((appState as { width?: unknown }).width);
+  const height = positiveFiniteNumber((appState as { height?: unknown }).height);
+
+  if (!width || !height) {
+    return null;
+  }
+
+  const longSide = Math.max(width, height);
+  const scale = longSide > MAX_PREVIEW_LONG_SIDE
+    ? MAX_PREVIEW_LONG_SIDE / longSide
+    : longSide < MIN_PREVIEW_LONG_SIDE
+      ? MIN_PREVIEW_LONG_SIDE / longSide
+      : 1;
+
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+}
+
+async function framePreviewBlob(blob: Blob, scene: ExcalidrawSceneData): Promise<Blob> {
+  const frameSize = resolveExcalidrawPreviewFrameSize(scene.appState);
+  if (!frameSize) {
+    return blob;
+  }
+
+  const image = await loadImageFromBlob(blob);
+  const imageWidth = positiveFiniteNumber(image.naturalWidth);
+  const imageHeight = positiveFiniteNumber(image.naturalHeight);
+
+  if (!imageWidth || !imageHeight) {
+    return blob;
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = frameSize.width;
+  canvas.height = frameSize.height;
+
+  const context = canvas.getContext('2d');
+  if (!context) {
+    return blob;
+  }
+
+  context.fillStyle = resolvePreviewBackgroundColor(scene.appState);
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  const inset = Math.max(
+    MIN_PREVIEW_FRAME_INSET,
+    Math.round(Math.min(canvas.width, canvas.height) * PREVIEW_FRAME_INSET_RATIO),
+  );
+  const availableWidth = Math.max(1, canvas.width - inset * 2);
+  const availableHeight = Math.max(1, canvas.height - inset * 2);
+  const scale = Math.min(availableWidth / imageWidth, availableHeight / imageHeight);
+  const drawWidth = Math.max(1, Math.round(imageWidth * scale));
+  const drawHeight = Math.max(1, Math.round(imageHeight * scale));
+  const drawX = Math.round((canvas.width - drawWidth) / 2);
+  const drawY = Math.round((canvas.height - drawHeight) / 2);
+
+  context.imageSmoothingEnabled = true;
+  context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
+
+  return canvasToBlob(canvas, EXCALIDRAW_PREVIEW_MIME_TYPE);
+}
+
 export function buildDrawingFileNames(title: string): { sourceName: string; previewName: string } {
   const normalized = title.trim().replace(/\s+/g, '-').replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
   const base = normalized.length > 0 ? normalized : 'drawing';
@@ -152,7 +274,7 @@ export async function serializeExcalidrawScene(scene: ExcalidrawSceneData): Prom
     'local',
   );
 
-  const previewBlob = await excalidraw.exportToBlob({
+  const croppedPreviewBlob = await excalidraw.exportToBlob({
     elements: scene.elements,
     appState: {
       ...scene.appState,
@@ -162,9 +284,10 @@ export async function serializeExcalidrawScene(scene: ExcalidrawSceneData): Prom
     },
     files: scene.files,
     mimeType: EXCALIDRAW_PREVIEW_MIME_TYPE,
-    exportPadding: 16,
+    exportPadding: DEFAULT_PREVIEW_EXPORT_PADDING,
   });
 
+  const previewBlob = await framePreviewBlob(croppedPreviewBlob, scene).catch(() => croppedPreviewBlob);
   const previewUrl = await blobToDataUrl(previewBlob);
   const previewCommaIndex = previewUrl.indexOf(',');
 
