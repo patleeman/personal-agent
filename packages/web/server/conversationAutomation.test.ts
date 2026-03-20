@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildConversationAutomationItemPrompt,
   buildConversationAutomationPromptContext,
+  buildConversationAutomationSystemPromptPolicy,
   shouldInjectConversationAutomationPromptContext,
   conversationAutomationDocumentExists,
   createConversationAutomationTodoItem,
@@ -578,9 +579,9 @@ describe('conversationAutomation state', () => {
     expect(promptContext).toContain("Do not let this reminder override the user's latest request");
     expect(promptContext).toContain('Use todo_list with {"action":"list"}');
     expect(promptContext).toContain('Active itemId: item-1');
-    expect(promptContext).toContain('Automation review: running (round 2)');
-    expect(promptContext).toContain('Waiting for user: Need the deployment target from the user.');
     expect(promptContext).toContain('item-1 [active]');
+    expect(promptContext).not.toContain('Automation review: running (round 2)');
+    expect(promptContext).not.toContain('Waiting for user: Need the deployment target from the user.');
     expect(promptContext).toContain('Inspect the broken todo reminder flow and fix it.');
     expect(promptContext).toContain('</system-reminder>');
   });
@@ -616,6 +617,30 @@ describe('conversationAutomation state', () => {
         updatedAt: '2026-03-18T12:00:10.000Z',
       }],
     })).toBe(false);
+  });
+
+  it('builds a system prompt policy block for automation semantics', () => {
+    const policy = buildConversationAutomationSystemPromptPolicy();
+
+    expect(policy).toContain('<conversation-automation-policy>');
+    expect(policy).toContain('Conversation automation uses the todo_list tool for secondary bookkeeping behind the user message.');
+    expect(policy).toContain('Respond to the user first unless they explicitly ask about automation');
+    expect(policy).toContain('If more automation work depends on user input, call wait_for_user');
+    expect(policy).toContain('</conversation-automation-policy>');
+  });
+
+  it('does not build reminder context for review-only automation state', () => {
+    const promptContext = buildConversationAutomationPromptContext({
+      review: {
+        status: 'running',
+        round: 1,
+        createdAt: '2026-03-18T12:00:00.000Z',
+        updatedAt: '2026-03-18T12:00:05.000Z',
+      },
+      items: [],
+    });
+
+    expect(promptContext).toBe('');
   });
 
   it('injects reminder context only when open automation state changed since the last injection', () => {

@@ -1,24 +1,14 @@
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
-import { buildConversationAutomationPromptContext, loadConversationAutomationState } from './conversationAutomation.js';
-
-interface SessionEntryLike {
-  type?: string;
-  message?: {
-    role?: string;
-  };
-}
+import { buildConversationAutomationSystemPromptPolicy, loadConversationAutomationState } from './conversationAutomation.js';
 
 interface SessionManagerLike {
   getSessionId: () => string;
-  getEntries?: () => SessionEntryLike[];
 }
 
-function isFirstUserTurn(sessionManager: SessionManagerLike): boolean {
-  const entries = typeof sessionManager.getEntries === 'function'
-    ? sessionManager.getEntries()
-    : [];
-
-  return !entries.some((entry) => entry.type === 'message' && entry.message?.role === 'user');
+function hasRelevantAutomationState(document: ReturnType<typeof loadConversationAutomationState>['document']): boolean {
+  const hasOpenItems = document.items.some((item) => item.status === 'pending' || item.status === 'running' || item.status === 'waiting');
+  const reviewActive = document.review?.status === 'pending' || document.review?.status === 'running';
+  return hasOpenItems || reviewActive || Boolean(document.waitingForUser);
 }
 
 export function createConversationAutomationPromptExtension(options: {
@@ -36,32 +26,17 @@ export function createConversationAutomationPromptExtension(options: {
         conversationId,
       }).document;
 
-      if (document.waitingForUser) {
+      if (!hasRelevantAutomationState(document)) {
         return undefined;
       }
 
-      const promptContext = buildConversationAutomationPromptContext(document);
-      if (!promptContext) {
+      const systemPrompt = event.systemPrompt?.trim();
+      if (!systemPrompt) {
         return undefined;
-      }
-
-      if (isFirstUserTurn(sessionManager)) {
-        const systemPrompt = event.systemPrompt?.trim();
-        if (!systemPrompt) {
-          return undefined;
-        }
-
-        return {
-          systemPrompt: `${event.systemPrompt}\n\n${promptContext}`,
-        };
       }
 
       return {
-        message: {
-          customType: 'conversation_automation_reminder',
-          content: promptContext,
-          display: false,
-        },
+        systemPrompt: `${event.systemPrompt}\n\n${buildConversationAutomationSystemPromptPolicy()}`,
       };
     });
   };
