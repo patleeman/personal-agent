@@ -105,7 +105,7 @@ describe('conversation automation live-session integration', () => {
     });
     expect(sendCustomMessage).toHaveBeenCalledWith({
       customType: 'conversation_automation_item',
-      content: expect.stringContaining('todo_list tool'),
+      content: expect.stringContaining('Resolve this todo with todo_list using itemId "item-1".'),
       display: false,
       details: undefined,
     }, {
@@ -192,7 +192,7 @@ describe('conversation automation live-session integration', () => {
     });
     expect(sendCustomMessage).toHaveBeenCalledWith({
       customType: 'conversation_automation_item',
-      content: expect.stringContaining('todo_list tool'),
+      content: expect.stringContaining('Resolve this todo with todo_list using itemId "item-text-1".'),
       display: false,
       details: undefined,
     }, {
@@ -352,7 +352,7 @@ describe('conversation automation live-session integration', () => {
     });
     expect(sendCustomMessage).toHaveBeenCalledWith({
       customType: 'conversation_automation_review',
-      content: expect.stringContaining('use the todo_list tool to add the needed follow-up items'),
+      content: expect.stringContaining('use todo_list with {"action":"add",...} to add the needed follow-up items'),
       display: false,
       details: undefined,
     }, {
