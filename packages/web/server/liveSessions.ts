@@ -1275,7 +1275,9 @@ function wireSession(
     }
   });
 
-  void kickConversationAutomation(id);
+  if (didTurnEndFromConversationAutomation(entry)) {
+    void kickConversationAutomation(id, 'turn_end');
+  }
 
   return entry;
 }
