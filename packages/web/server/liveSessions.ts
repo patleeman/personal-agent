@@ -44,6 +44,7 @@ import {
   type DisplayBlock,
 } from './sessions.js';
 import { estimateContextUsageSegments } from './sessionContextUsage.js';
+import { logInfo, logWarn } from './logging.js';
 
 const AGENT_DIR = getPiAgentRuntimeDir();
 const SETTINGS_FILE = join(AGENT_DIR, 'settings.json');
@@ -992,6 +993,19 @@ function didTurnEndFromConversationAutomationPostTurnReview(entry: LiveEntry): b
   return turn?.role === 'custom' && turn.customType === 'conversation_automation_post_turn_review';
 }
 
+function summarizeConversationAutomationState(document: ConversationAutomationDocument): Record<string, unknown> {
+  return {
+    enabled: document.enabled,
+    activeItemId: document.activeItemId ?? null,
+    pendingCount: document.items.filter((item) => item.status === 'pending').length,
+    runningCount: document.items.filter((item) => item.status === 'running').length,
+    waitingCount: document.items.filter((item) => item.status === 'waiting').length,
+    blockedOrFailedCount: document.items.filter((item) => item.status === 'blocked' || item.status === 'failed').length,
+    reviewStatus: document.review?.status ?? null,
+    waitingForUser: Boolean(document.waitingForUser),
+  };
+}
+
 export async function kickConversationAutomation(
   sessionId: string,
   trigger: 'manual' | 'turn_end' = 'manual',
@@ -1014,6 +1028,21 @@ export async function kickConversationAutomation(
       conversationId: sessionId,
       settingsFile: SETTINGS_FILE,
     }).document;
+    const lastTurn = trigger === 'turn_end'
+      ? readLastNonAssistantConversationTurn(entry)
+      : null;
+
+    if (trigger === 'turn_end' && document.enabled) {
+      logInfo('automation turn_end evaluation', {
+        sessionId,
+        trigger,
+        lastTurnRole: lastTurn?.role ?? null,
+        lastTurnCustomType: lastTurn?.customType ?? null,
+        didAutomationAuthorLastTurn,
+        didAutomationPostTurnReviewLastTurn: didTurnEndFromConversationAutomationPostTurnReview(entry),
+        ...summarizeConversationAutomationState(document),
+      });
+    }
 
     if (trigger === 'manual' && (document.activeItemId || document.review?.status === 'running')) {
       document = interruptConversationAutomationStep(
@@ -1039,8 +1068,16 @@ export async function kickConversationAutomation(
           buildConversationAutomationPostTurnReviewPrompt(document),
           'followUp',
         );
-      } catch {
-        // Leave automation state unchanged when bookkeeping follow-up cannot be queued.
+        logInfo('queued automation post-turn review', {
+          sessionId,
+          ...summarizeConversationAutomationState(document),
+        });
+      } catch (error) {
+        logWarn('failed to queue automation post-turn review', {
+          sessionId,
+          error: error instanceof Error ? { message: error.message, stack: error.stack } : String(error),
+          ...summarizeConversationAutomationState(document),
+        });
       }
       return;
     }
