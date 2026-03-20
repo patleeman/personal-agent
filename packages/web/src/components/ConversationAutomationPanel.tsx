@@ -20,7 +20,7 @@ import type {
 import { ErrorState, IconButton, LoadingState, SurfacePanel, cx } from './ui';
 
 const ITEM_TEXTAREA_CLASS = 'w-full min-h-[24px] resize-none border-0 bg-transparent px-0 py-0 text-[14px] leading-6 text-primary placeholder:text-dim/70 focus:outline-none disabled:opacity-50';
-const COMPOSER_TEXTAREA_CLASS = 'flex-1 bg-transparent text-[13px] leading-6 text-primary placeholder:text-dim outline-none resize-none disabled:cursor-default disabled:text-dim';
+const COMPOSER_TEXTAREA_CLASS = 'min-w-0 flex-1 bg-transparent text-[13px] leading-5 text-primary placeholder:text-dim outline-none resize-none disabled:cursor-default disabled:text-dim';
 
 type PendingAction = 'save' | 'toggle' | null;
 
@@ -644,7 +644,7 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
         )}
       </div>
 
-      <div className="border-t border-border-subtle/70 px-3 py-3">
+      <div className="border-t border-border-subtle/70 px-3 py-2.5">
         <div className="relative">
           {showComposerMenu && (
             <ComposerMenu
@@ -658,7 +658,7 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
             'ui-input-shell overflow-hidden',
             showComposerMenu ? 'border-accent/40 ring-1 ring-accent/15' : 'border-border-subtle',
           )}>
-            <div className="flex items-end gap-2 px-3 py-2.5">
+            <div className="flex items-end gap-2 px-3 py-2">
               <textarea
                 ref={composerTextareaRef}
                 value={composerText}
@@ -673,20 +673,18 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
                 rows={1}
                 disabled={pendingAction !== null}
                 className={COMPOSER_TEXTAREA_CLASS}
-                placeholder="Add an item, /skill:..., or /preset:..."
-                style={{ minHeight: '24px', maxHeight: '128px' }}
+                placeholder="Add an item… /skill:... or /preset:..."
+                title="Type / to insert a skill or preset"
+                style={{ minHeight: '20px', maxHeight: '96px' }}
               />
-            </div>
 
-            <div className="flex items-center justify-between gap-3 border-t border-border-subtle/70 px-3 py-2">
-              <p className="text-[11px] text-dim">Type / to insert a skill or preset.</p>
               <button
                 type="button"
                 onClick={() => { void handleAddComposerItem(); }}
                 disabled={pendingAction !== null || composerText.trim().length === 0}
-                className="text-[12px] font-medium text-accent transition-colors hover:text-accent/75 disabled:cursor-default disabled:opacity-40"
+                className="shrink-0 rounded-md px-2 py-1 text-[12px] font-medium text-accent transition-colors hover:bg-accent/10 hover:text-accent/75 disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
               >
-                + Add item
+                Add
               </button>
             </div>
           </div>
