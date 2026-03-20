@@ -60,7 +60,6 @@ import {
 import { useReloadState } from '../reloadState';
 import { applyLiveSessionState, buildSyntheticLiveSessionMeta } from '../sessionIndicators';
 import { ensureConversationTabOpen } from '../sessionTabs';
-import { formatDate } from '../utils';
 import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSceneFromBlob, parseExcalidrawSceneFromSourceData, serializeExcalidrawScene } from '../excalidrawUtils';
 
 const ConversationTree = lazy(() => import('../components/ConversationTree').then((module) => ({ default: module.ConversationTree })));
@@ -76,18 +75,6 @@ const HISTORICAL_BACKGROUND_PREFETCH_DELAY_MS = 800;
 const INITIAL_SCROLL_STABLE_FRAME_COUNT = 2;
 const INITIAL_SCROLL_MAX_FRAMES = 45;
 const MAX_CONVERSATION_RAIL_BLOCKS = 240;
-
-function describeConversationExecution(execution: {
-  targetId: string | null;
-  location: 'local' | 'remote';
-  target: ExecutionTargetSummary | null;
-}): string {
-  if (execution.target) {
-    return `SSH ${execution.target.sshDestination}`;
-  }
-
-  return 'Runs in this app';
-}
 
 // ── Model picker ──────────────────────────────────────────────────────────────
 
@@ -431,27 +418,6 @@ export function DraftExecutionTargetSelector({
       <p className="text-[11px] text-dim">
         Choose where the first turn runs. This is locked after the conversation starts.
       </p>
-    </div>
-  );
-}
-
-function ConversationExecutionBadge({
-  execution,
-}: {
-  execution: {
-    targetId: string | null;
-    location: 'local' | 'remote';
-    target: ExecutionTargetSummary | null;
-  };
-}) {
-  return (
-    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-secondary">
-      <span className="ui-section-label">Execution</span>
-      <Pill tone={execution.target ? 'accent' : 'muted'}>
-        {execution.target ? execution.target.label : 'Local agent'}
-      </Pill>
-      <span className={execution.target ? 'text-accent' : 'text-dim'}>{describeConversationExecution(execution)}</span>
-      <span className="text-dim">locked for this conversation</span>
     </div>
   );
 }
@@ -3648,7 +3614,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               activePreference={headerPreference}
               onOpenPreferences={openHeaderPreference}
             />
-            {!draft && <ConversationExecutionBadge execution={conversationExecution} />}
             {!draft && remoteConnectionStatusMessage && selectedExecutionTargetId && !isLiveSession && (
               <p className="mt-2 text-[11px] text-secondary">{remoteConnectionStatusMessage}</p>
             )}
