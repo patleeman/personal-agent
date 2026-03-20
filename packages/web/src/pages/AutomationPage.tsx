@@ -111,7 +111,7 @@ export function AutomationPage() {
         ? `defaults ${data.presetLibrary.defaultPresetIds.map((presetId) => presets.find((preset) => preset.id === presetId)?.name ?? presetId).join(', ')}`
         : 'no default presets',
     ].join(' · ')
-    : 'Reusable presets';
+    : 'Reusable todo presets';
 
   return (
     <div className="flex h-full flex-col">
@@ -128,12 +128,12 @@ export function AutomationPage() {
           </>
         )}
       >
-        <PageHeading title="Presets" meta={pageMeta} />
+        <PageHeading title="Todo Presets" meta={pageMeta} />
       </PageHeader>
 
       <div className="flex-1 px-6 py-4">
-        {loading && <LoadingState label="Loading presets…" />}
-        {error && <ErrorState message={`Unable to load presets: ${error}`} />}
+        {loading && <LoadingState label="Loading todo presets…" />}
+        {error && <ErrorState message={`Unable to load todo presets: ${error}`} />}
 
         {!loading && !error && data && (
           <div className="space-y-5 pb-5">
