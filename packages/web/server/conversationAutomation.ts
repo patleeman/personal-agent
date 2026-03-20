@@ -1061,6 +1061,45 @@ function buildTodoListLine(item: ConversationAutomationTodoItem): string {
   return `${status} ${item.label} — ${prompt}`;
 }
 
+export function buildConversationAutomationPromptContext(
+  document: Pick<ConversationAutomationDocument, 'items' | 'activeItemId' | 'review' | 'waitingForUser'>,
+): string {
+  if (document.items.length === 0 && !document.review && !document.waitingForUser) {
+    return '';
+  }
+
+  const lines = [
+    'Conversation automation context:',
+    'This conversation has an automation todo list.',
+    'Before deciding what to do next or declaring the work done, inspect and update it with the todo_list tool when relevant.',
+  ];
+
+  if (document.activeItemId) {
+    lines.push(`Active todo item: @${document.activeItemId}`);
+  }
+
+  if (document.review) {
+    lines.push(`Automation review: ${document.review.status} (round ${Math.max(1, document.review.round)})`);
+  }
+
+  if (document.waitingForUser) {
+    lines.push(`Waiting for user: ${document.waitingForUser.reason?.trim() || 'yes'}`);
+  }
+
+  lines.push('', 'Todo list:');
+
+  if (document.items.length === 0) {
+    lines.push('- (no todo items)');
+  } else {
+    lines.push(...document.items.map((item) => {
+      const active = item.id === document.activeItemId ? ' [active]' : '';
+      return `- @${item.id}${active} · ${buildTodoListLine(item)}`;
+    }));
+  }
+
+  return lines.join('\n');
+}
+
 export function buildConversationAutomationReviewPrompt(document: Pick<ConversationAutomationDocument, 'items' | 'review'>): string {
   const lines = document.items.length > 0
     ? document.items.map((item) => `- ${buildTodoListLine(item)}`)

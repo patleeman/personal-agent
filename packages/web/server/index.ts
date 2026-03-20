@@ -142,6 +142,7 @@ import {
 } from './remoteLiveSessions.js';
 import { recoverDurableLiveConversations } from './conversationRecovery.js';
 import {
+  buildConversationAutomationPromptContext,
   loadConversationAutomationState,
   readSavedConversationAutomationPreferences,
   replaceConversationAutomationItems,
@@ -5373,7 +5374,18 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
       }
     }
 
+    const isRemoteLive = isRemoteLiveSession(id);
+    let automationBeforePrompt = loadConversationAutomationState({
+      profile: getCurrentProfile(),
+      conversationId: id,
+      settingsFile: SETTINGS_FILE,
+    }).document;
+    if (automationBeforePrompt.waitingForUser || automationBeforePrompt.items.some((item) => item.status === 'waiting')) {
+      automationBeforePrompt = saveConversationAutomationDocument(resumeConversationAutomationAfterUserMessage(automationBeforePrompt));
+    }
+
     const queuedContextBlocks = [
+      buildConversationAutomationPromptContext(automationBeforePrompt),
       relatedProjectIds.length > 0 ? buildReferencedProjectsContext(relatedProjectIds) : '',
       referencedAttachments.length > 0 ? buildConversationAttachmentsContext(referencedAttachments) : '',
       referencedTasks.length > 0 ? buildReferencedTasksContext(referencedTasks, REPO_ROOT) : '',
@@ -5383,15 +5395,6 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
     ].filter(Boolean);
 
     const hiddenContext = queuedContextBlocks.join('\n\n');
-    const isRemoteLive = isRemoteLiveSession(id);
-    const automationBeforePrompt = loadConversationAutomationState({
-      profile: getCurrentProfile(),
-      conversationId: id,
-      settingsFile: SETTINGS_FILE,
-    }).document;
-    if (automationBeforePrompt.waitingForUser || automationBeforePrompt.items.some((item) => item.status === 'waiting')) {
-      saveConversationAutomationDocument(resumeConversationAutomationAfterUserMessage(automationBeforePrompt));
-    }
 
     if (!isRemoteLive && queuedContextBlocks.length > 0) {
       await queuePromptContext(id, 'referenced_context', hiddenContext);
