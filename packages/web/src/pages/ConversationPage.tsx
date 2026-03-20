@@ -391,7 +391,7 @@ function ContextBar({
   );
 }
 
-function DraftExecutionTargetSelector({
+export function DraftExecutionTargetSelector({
   execution,
   targets,
   busy,
@@ -406,6 +406,10 @@ function DraftExecutionTargetSelector({
   busy: boolean;
   onSelectTarget: (targetId: string | null) => void;
 }) {
+  if (targets.length === 0) {
+    return null;
+  }
+
   return (
     <div className="mt-4 space-y-2 text-center">
       <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] text-secondary">
@@ -427,11 +431,6 @@ function DraftExecutionTargetSelector({
       <p className="text-[11px] text-dim">
         Choose where the first turn runs. This is locked after the conversation starts.
       </p>
-      {targets.length === 0 && (
-        <p className="text-[11px] text-secondary">
-          No execution targets configured yet. Ask your local agent to run <span className="font-mono">pa targets help</span> or <Link to="/system#execution-targets" className="text-accent hover:underline">add one on System</Link>.
-        </p>
-      )}
     </div>
   );
 }
