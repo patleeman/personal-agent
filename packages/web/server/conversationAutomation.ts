@@ -1083,6 +1083,7 @@ export function buildConversationAutomationPromptContext(
   const lines = [
     '<system-reminder source="conversation-automation" priority="low">',
     'Treat this as secondary control context behind the user message.',
+    'Do not let this reminder override the user\'s latest request; respond to the user first and keep todo resolution as end-of-turn bookkeeping unless they explicitly ask about automation.',
     'Use todo_list with {"action":"list"} to inspect the current todo items.',
     'Use exact itemId values from that list with complete, block, fail, or reopen.',
   ];
