@@ -15,10 +15,10 @@ import type {
   ConversationAutomationResponse,
   ConversationAutomationTodoItem,
 } from '../types';
-import { ErrorState, ListButtonRow, LoadingState, SurfacePanel, ToolbarButton, cx } from './ui';
+import { ErrorState, IconButton, ListButtonRow, LoadingState, SurfacePanel, cx } from './ui';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50';
-const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[88px] resize-y leading-relaxed`;
+const TEXTAREA_CLASS = 'w-full min-h-[32px] resize-none border-0 bg-transparent px-0 py-0 text-[13px] leading-6 text-primary placeholder:text-dim/80 focus:outline-none disabled:opacity-50';
 
 type AddMode = 'item' | 'checklist';
 
@@ -210,9 +210,31 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
       )}
 
       <div className="space-y-3 border-t border-border-subtle/70 px-3 py-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <ToolbarButton onClick={() => setAppendOpen((value) => !value)} disabled={pendingAction !== null}>Append checklist</ToolbarButton>
-          <ToolbarButton onClick={() => setDraftItems((current) => [...current, createChecklistDraftItem()])} disabled={pendingAction !== null}>+ Add item</ToolbarButton>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px]">
+          <button
+            type="button"
+            onClick={() => setAppendOpen((value) => !value)}
+            disabled={pendingAction !== null}
+            className="inline-flex items-center gap-1 text-secondary transition-colors hover:text-primary disabled:opacity-40"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+              <path d="M21 3v6h-6" />
+            </svg>
+            <span>{appendOpen ? 'Hide checklist picker' : 'Append checklist'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setDraftItems((current) => [...current, createChecklistDraftItem()])}
+            disabled={pendingAction !== null}
+            className="inline-flex items-center gap-1 text-secondary transition-colors hover:text-primary disabled:opacity-40"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 5v14" />
+              <path d="M5 12h14" />
+            </svg>
+            <span>Add item</span>
+          </button>
         </div>
 
         {appendOpen && (
@@ -255,11 +277,13 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
           const checked = runtimeItem?.status === 'completed';
           const active = automation.activeItemId === draftItem.id;
           const locked = runtimeItem?.status === 'running' && active;
+          const rowLabel = runtimeItem ? itemMeta(runtimeItem, active) : summarizeChecklistText(draftItem.text);
+          const rows = Math.min(8, Math.max(2, draftItem.text.split('\n').length || 2));
 
           return (
             <div
               key={draftItem.id}
-              className={cx('grid gap-3 px-3 py-3 lg:grid-cols-[auto_auto_minmax(0,1fr)_auto] lg:items-start', draggingItemId === draftItem.id && 'opacity-60')}
+              className={cx('grid gap-x-3 gap-y-2 px-3 py-3 lg:grid-cols-[auto_auto_minmax(0,1fr)_auto] lg:items-start', draggingItemId === draftItem.id && 'opacity-60')}
               onDragOver={(event) => {
                 if (!draggingItemId || draggingItemId === draftItem.id || locked) {
                   return;
@@ -282,30 +306,58 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
                 draggable={!locked && pendingAction === null}
                 onDragStart={() => setDraggingItemId(draftItem.id)}
                 onDragEnd={() => setDraggingItemId(null)}
-                className="mt-2 flex h-8 w-8 items-center justify-center rounded-lg border border-border-default bg-base text-[12px] text-dim disabled:opacity-40"
+                className="mt-1 inline-flex h-5 w-4 items-center justify-center text-dim/70 transition-colors hover:text-secondary disabled:opacity-30"
                 title="Drag to reorder"
                 disabled={locked || pendingAction !== null}
               >
-                ⋮⋮
+                <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor" aria-hidden="true">
+                  <circle cx="2" cy="2" r="1.1" />
+                  <circle cx="8" cy="2" r="1.1" />
+                  <circle cx="2" cy="7" r="1.1" />
+                  <circle cx="8" cy="7" r="1.1" />
+                  <circle cx="2" cy="12" r="1.1" />
+                  <circle cx="8" cy="12" r="1.1" />
+                </svg>
               </button>
 
-              <label className="mt-2 flex h-8 w-8 items-center justify-center rounded-lg border border-border-default bg-base">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 accent-[var(--color-accent)]"
-                  checked={checked}
-                  disabled={locked || pendingAction !== null}
-                  onChange={(event) => { void handleToggle(draftItem.id, event.target.checked); }}
-                />
-              </label>
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 rounded-sm border-border-default bg-transparent accent-[var(--color-accent)]"
+                checked={checked}
+                disabled={locked || pendingAction !== null}
+                onChange={(event) => { void handleToggle(draftItem.id, event.target.checked); }}
+              />
 
-              <div className="min-w-0 space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[10px] uppercase tracking-[0.14em] text-dim">Item {index + 1}</span>
-                  <span className="text-[10px] uppercase tracking-[0.14em] text-dim">{runtimeItem ? itemMeta(runtimeItem, active) : summarizeChecklistText(draftItem.text)}</span>
+              <div className="min-w-0">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="text-[10px] uppercase tracking-[0.14em] text-dim">Item {index + 1}</span>
+                    <span className="text-[10px] uppercase tracking-[0.14em] text-dim">{rowLabel}</span>
+                  </div>
+                  <IconButton
+                    compact
+                    onClick={() => {
+                      const nextItems = draftItems.filter((item) => item.id !== draftItem.id);
+                      setDraftItems(nextItems);
+                      void handleCommitItems(nextItems);
+                    }}
+                    disabled={locked || pendingAction !== null}
+                    className="text-danger/80 hover:text-danger"
+                    title="Remove item"
+                    aria-label="Remove item"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M3 6h18" />
+                      <path d="M8 6V4h8v2" />
+                      <path d="M19 6l-1 14H6L5 6" />
+                      <path d="M10 11v6" />
+                      <path d="M14 11v6" />
+                    </svg>
+                  </IconButton>
                 </div>
                 <textarea
                   value={draftItem.text}
+                  rows={rows}
                   onChange={(event) => setDraftItems((current) => current.map((item) => item.id === draftItem.id ? { ...item, text: event.target.value } : item))}
                   onBlur={() => { void handleCommitItems(draftItems); }}
                   onKeyDown={(event) => {
@@ -315,24 +367,10 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
                     }
                   }}
                   placeholder="Type anything the agent should do. You can use /skill:..., slash commands, or plain text."
-                  className={TEXTAREA_CLASS}
+                  className={cx(TEXTAREA_CLASS, 'mt-1')}
                   disabled={locked || pendingAction === 'toggle'}
                 />
-                {runtimeItem?.resultReason && <p className="text-[11px] text-secondary break-words">{runtimeItem.resultReason}</p>}
-              </div>
-
-              <div className="flex items-center gap-1 justify-self-start lg:justify-self-end lg:pt-2">
-                <ToolbarButton
-                  onClick={() => {
-                    const nextItems = draftItems.filter((item) => item.id !== draftItem.id);
-                    setDraftItems(nextItems);
-                    void handleCommitItems(nextItems);
-                  }}
-                  disabled={locked || pendingAction !== null}
-                  className="text-danger"
-                >
-                  Remove
-                </ToolbarButton>
+                {runtimeItem?.resultReason && <p className="mt-1 text-[11px] text-secondary break-words">{runtimeItem.resultReason}</p>}
               </div>
             </div>
           );
