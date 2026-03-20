@@ -61,7 +61,7 @@ function registerTodoTool(stateRoot: string) {
 }
 
 describe('conversation todo agent extension', () => {
-  it('accepts list as an alias for get', async () => {
+  it('uses list as the only inspect action and returns structured output', async () => {
     const stateRoot = createTempDir('pa-web-todo-tool-');
     const todoTool = registerTodoTool(stateRoot);
     const ctx = createToolContext();
@@ -84,17 +84,21 @@ describe('conversation todo agent extension', () => {
     });
 
     expect(Value.Check(todoTool.parameters as never, { action: 'list' })).toBe(true);
+    expect(Value.Check(todoTool.parameters as never, { action: 'get' })).toBe(false);
 
     const result = await todoTool.execute('tool-1', { action: 'list' }, undefined, undefined, ctx);
-    expect(result.content[0]?.text).toContain('Todo list for conversation conv-123');
-    expect(result.content[0]?.text).toContain('@item-1');
+    const text = result.content[0]?.text ?? '';
+    expect(text).toContain('"conversationId": "conv-123"');
+    expect(text).toContain('"id": "item-1"');
+    expect(text).not.toContain('@item-1');
     expect(result.details).toMatchObject({
-      action: 'get',
+      action: 'list',
       conversationId: 'conv-123',
+      items: [expect.objectContaining({ id: 'item-1', status: 'pending' })],
     });
   });
 
-  it('normalizes @-prefixed item ids for explicit completion', async () => {
+  it('requires an explicit raw itemId for completion and gives a helpful error', async () => {
     const stateRoot = createTempDir('pa-web-todo-tool-');
     const todoTool = registerTodoTool(stateRoot);
     const ctx = createToolContext();
@@ -107,6 +111,7 @@ describe('conversation todo agent extension', () => {
         conversationId: 'conv-123',
         updatedAt: '2026-03-20T12:00:00.000Z',
         enabled: true,
+        activeItemId: 'item-1',
         items: [{
           ...createConversationAutomationTodoItem({
             id: 'item-1',
@@ -114,17 +119,48 @@ describe('conversation todo agent extension', () => {
             skillName: 'workflow-checkpoint',
             now: '2026-03-20T12:00:00.000Z',
           }),
-          status: 'completed',
-          completedAt: '2026-03-20T12:00:10.000Z',
-          updatedAt: '2026-03-20T12:00:10.000Z',
-          resultReason: 'Completed.',
+          status: 'running',
+          startedAt: '2026-03-20T12:00:05.000Z',
+          updatedAt: '2026-03-20T12:00:05.000Z',
         }],
       },
     });
 
-    const result = await todoTool.execute('tool-2', {
+    await expect(todoTool.execute('tool-2', {
+      action: 'complete',
+    }, undefined, undefined, ctx)).rejects.toThrow('itemId is required for action "complete"');
+
+    await expect(todoTool.execute('tool-3', {
       action: 'complete',
       itemId: '@item-1',
+    }, undefined, undefined, ctx)).rejects.toThrow('Unknown itemId "@item-1"');
+  });
+
+  it('completes an item when given the exact raw itemId from list', async () => {
+    const stateRoot = createTempDir('pa-web-todo-tool-');
+    const todoTool = registerTodoTool(stateRoot);
+    const ctx = createToolContext();
+
+    writeConversationAutomationState({
+      stateRoot,
+      profile: 'datadog',
+      document: {
+        version: 4,
+        conversationId: 'conv-123',
+        updatedAt: '2026-03-20T12:00:00.000Z',
+        enabled: true,
+        items: [createConversationAutomationTodoItem({
+          id: 'item-1',
+          label: 'Checkpoint changes',
+          skillName: 'workflow-checkpoint',
+          now: '2026-03-20T12:00:00.000Z',
+        })],
+      },
+    });
+
+    const result = await todoTool.execute('tool-4', {
+      action: 'complete',
+      itemId: 'item-1',
     }, undefined, undefined, ctx);
 
     expect(result.content[0]?.text).toContain('Marked todo item item-1 completed.');

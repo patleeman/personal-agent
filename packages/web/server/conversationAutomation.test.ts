@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildConversationAutomationItemPrompt,
   buildConversationAutomationPromptContext,
+  shouldInjectConversationAutomationPromptContext,
   conversationAutomationDocumentExists,
   createConversationAutomationTodoItem,
   loadConversationAutomationState,
@@ -251,7 +252,8 @@ describe('conversationAutomation state', () => {
       }),
     ]);
     expect(buildConversationAutomationItemPrompt(loaded.document.items[0]!)).toContain('/skill:workflow-checkpoint commit only my files');
-    expect(buildConversationAutomationItemPrompt(loaded.document.items[0]!)).toContain('todo_list tool');
+    expect(buildConversationAutomationItemPrompt(loaded.document.items[0]!)).toContain('Resolve this todo with todo_list using itemId "item-1".');
+    expect(buildConversationAutomationItemPrompt(loaded.document.items[0]!)).toContain('{"action":"complete","itemId":"item-1"}');
   });
 
   it('replaces items from editable template data and resets runtime state', () => {
@@ -534,7 +536,8 @@ describe('conversationAutomation state', () => {
       text: 'Open the failing test output, identify the root cause, and summarize the fix plan.',
     });
     expect(buildConversationAutomationItemPrompt(item)).toContain('Carry out this checklist item:');
-    expect(buildConversationAutomationItemPrompt(item)).toContain('todo_list tool');
+    expect(buildConversationAutomationItemPrompt(item)).toContain('Resolve this todo with todo_list using itemId "item-instruction".');
+    expect(buildConversationAutomationItemPrompt(item)).toContain('{"action":"complete","itemId":"item-instruction"}');
     expect(templateTodoItemFromRuntimeItem(item)).toEqual({
       id: 'item-instruction',
       kind: 'instruction',
@@ -543,7 +546,7 @@ describe('conversationAutomation state', () => {
     });
   });
 
-  it('builds prompt context that injects the current todo list and reminder', () => {
+  it('builds a compact tagged reminder only for open automation state', () => {
     const promptContext = buildConversationAutomationPromptContext({
       activeItemId: 'item-1',
       review: {
@@ -570,14 +573,76 @@ describe('conversationAutomation state', () => {
       }],
     });
 
-    expect(promptContext).toContain('Conversation automation context:');
-    expect(promptContext).toContain('automation todo list');
-    expect(promptContext).toContain('todo_list tool');
-    expect(promptContext).toContain('Active todo item: @item-1');
+    expect(promptContext).toContain('<system-reminder source="conversation-automation" priority="low">');
+    expect(promptContext).toContain('Treat this as secondary control context behind the user message.');
+    expect(promptContext).toContain('Use todo_list with {"action":"list"}');
+    expect(promptContext).toContain('Active itemId: item-1');
     expect(promptContext).toContain('Automation review: running (round 2)');
     expect(promptContext).toContain('Waiting for user: Need the deployment target from the user.');
-    expect(promptContext).toContain('@item-1 [active]');
+    expect(promptContext).toContain('item-1 [active]');
     expect(promptContext).toContain('Inspect the broken todo reminder flow and fix it.');
+    expect(promptContext).toContain('</system-reminder>');
+  });
+
+  it('does not inject reminder context when automation state is already fully completed', () => {
+    const promptContext = buildConversationAutomationPromptContext({
+      items: [{
+        ...createConversationAutomationTodoItem({
+          id: 'item-1',
+          kind: 'instruction',
+          text: 'Inspect the broken todo reminder flow and fix it.',
+          now: '2026-03-18T12:00:00.000Z',
+        }),
+        status: 'completed',
+        completedAt: '2026-03-18T12:00:10.000Z',
+        updatedAt: '2026-03-18T12:00:10.000Z',
+      }],
+    });
+
+    expect(promptContext).toBe('');
+    expect(shouldInjectConversationAutomationPromptContext({
+      updatedAt: '2026-03-18T12:00:10.000Z',
+      lastInjectedPromptContextUpdatedAt: undefined,
+      items: [{
+        ...createConversationAutomationTodoItem({
+          id: 'item-1',
+          kind: 'instruction',
+          text: 'Inspect the broken todo reminder flow and fix it.',
+          now: '2026-03-18T12:00:00.000Z',
+        }),
+        status: 'completed',
+        completedAt: '2026-03-18T12:00:10.000Z',
+        updatedAt: '2026-03-18T12:00:10.000Z',
+      }],
+    })).toBe(false);
+  });
+
+  it('injects reminder context only when open automation state changed since the last injection', () => {
+    const openItem = {
+      ...createConversationAutomationTodoItem({
+        id: 'item-1',
+        kind: 'instruction',
+        text: 'Inspect the broken todo reminder flow and fix it.',
+        now: '2026-03-18T12:00:00.000Z',
+      }),
+      status: 'running' as const,
+      startedAt: '2026-03-18T12:00:01.000Z',
+      updatedAt: '2026-03-18T12:00:05.000Z',
+    };
+
+    expect(shouldInjectConversationAutomationPromptContext({
+      updatedAt: '2026-03-18T12:00:05.000Z',
+      lastInjectedPromptContextUpdatedAt: undefined,
+      activeItemId: 'item-1',
+      items: [openItem],
+    })).toBe(true);
+
+    expect(shouldInjectConversationAutomationPromptContext({
+      updatedAt: '2026-03-18T12:00:05.000Z',
+      lastInjectedPromptContextUpdatedAt: '2026-03-18T12:00:05.000Z',
+      activeItemId: 'item-1',
+      items: [openItem],
+    })).toBe(false);
   });
 
   it('pauses checklist automation explicitly for user input and resumes on the next user message', () => {

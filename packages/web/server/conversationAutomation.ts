@@ -57,6 +57,7 @@ export interface ConversationAutomationDocument {
   items: ConversationAutomationTodoItem[];
   review?: ConversationAutomationReviewState;
   waitingForUser?: ConversationAutomationWaitState;
+  lastInjectedPromptContextUpdatedAt?: string;
 }
 
 export interface ConversationAutomationWorkflowPreset {
@@ -402,6 +403,9 @@ function normalizeDocument(value: unknown, fallbackConversationId: string): Conv
     items,
     ...(safeReview ? { review: safeReview } : {}),
     ...(waitingForUser ? { waitingForUser } : {}),
+    ...(normalizeOptionalText(record.lastInjectedPromptContextUpdatedAt)
+      ? { lastInjectedPromptContextUpdatedAt: normalizeIsoTimestamp(record.lastInjectedPromptContextUpdatedAt, fallbackNow) }
+      : {}),
   };
 }
 
@@ -482,10 +486,11 @@ export function buildConversationAutomationItemPrompt(item: ConversationAutomati
   return [
     body,
     '',
-    'Before you stop, use the todo_list tool to update the active todo item.',
-    'Mark it completed when the item is actually done.',
+    `Resolve this todo with todo_list using itemId "${item.id}".`,
+    `Use {"action":"complete","itemId":"${item.id}"} only when the item is actually done.`,
+    `Use {"action":"block","itemId":"${item.id}","reason":"..."} if you are blocked.`,
+    `Use {"action":"fail","itemId":"${item.id}","reason":"..."} if the item cannot be completed.`,
     'If you need user input before continuing, use the wait_for_user tool with a short reason.',
-    'If you cannot complete it, mark it blocked or failed with a short reason.',
   ].join('\n');
 }
 
@@ -1061,43 +1066,56 @@ function buildTodoListLine(item: ConversationAutomationTodoItem): string {
   return `${status} ${item.label} — ${prompt}`;
 }
 
+function isOpenConversationAutomationTodoItem(item: ConversationAutomationTodoItem): boolean {
+  return item.status === 'pending' || item.status === 'running' || item.status === 'waiting';
+}
+
 export function buildConversationAutomationPromptContext(
   document: Pick<ConversationAutomationDocument, 'items' | 'activeItemId' | 'review' | 'waitingForUser'>,
 ): string {
-  if (document.items.length === 0 && !document.review && !document.waitingForUser) {
+  const openItems = document.items.filter(isOpenConversationAutomationTodoItem);
+  const reviewActive = document.review?.status === 'pending' || document.review?.status === 'running';
+
+  if (openItems.length === 0 && !reviewActive && !document.waitingForUser) {
     return '';
   }
 
   const lines = [
-    'Conversation automation context:',
-    'This conversation has an automation todo list.',
-    'Before deciding what to do next or declaring the work done, inspect and update it with the todo_list tool when relevant.',
+    '<system-reminder source="conversation-automation" priority="low">',
+    'Treat this as secondary control context behind the user message.',
+    'Use todo_list with {"action":"list"} to inspect the current todo items.',
+    'Use exact itemId values from that list with complete, block, fail, or reopen.',
   ];
 
   if (document.activeItemId) {
-    lines.push(`Active todo item: @${document.activeItemId}`);
+    lines.push(`Active itemId: ${document.activeItemId}`);
   }
 
-  if (document.review) {
-    lines.push(`Automation review: ${document.review.status} (round ${Math.max(1, document.review.round)})`);
+  if (reviewActive) {
+    lines.push(`Automation review: ${document.review!.status} (round ${Math.max(1, document.review!.round)})`);
   }
 
   if (document.waitingForUser) {
     lines.push(`Waiting for user: ${document.waitingForUser.reason?.trim() || 'yes'}`);
   }
 
-  lines.push('', 'Todo list:');
-
-  if (document.items.length === 0) {
-    lines.push('- (no todo items)');
-  } else {
-    lines.push(...document.items.map((item) => {
+  if (openItems.length > 0) {
+    lines.push('Open todo items:');
+    lines.push(...openItems.map((item) => {
       const active = item.id === document.activeItemId ? ' [active]' : '';
-      return `- @${item.id}${active} · ${buildTodoListLine(item)}`;
+      return `- ${item.id}${active} · ${buildTodoListLine(item)}`;
     }));
   }
 
+  lines.push('</system-reminder>');
   return lines.join('\n');
+}
+
+export function shouldInjectConversationAutomationPromptContext(
+  document: Pick<ConversationAutomationDocument, 'updatedAt' | 'lastInjectedPromptContextUpdatedAt' | 'items' | 'activeItemId' | 'review' | 'waitingForUser'>,
+): boolean {
+  return buildConversationAutomationPromptContext(document).length > 0
+    && document.lastInjectedPromptContextUpdatedAt !== document.updatedAt;
 }
 
 export function buildConversationAutomationReviewPrompt(document: Pick<ConversationAutomationDocument, 'items' | 'review'>): string {
@@ -1108,7 +1126,8 @@ export function buildConversationAutomationReviewPrompt(document: Pick<Conversat
 
   return [
     `Review the automation todo list before stopping. This is review round ${round}.`,
-    'If additional automation work is required, use the todo_list tool to add the needed follow-up items.',
+    'Use todo_list with {"action":"list"} if you need to inspect the current items again.',
+    'If additional automation work is required, use todo_list with {"action":"add",...} to add the needed follow-up items.',
     'If you need to pause for user input before more work can happen, use the wait_for_user tool with a short reason.',
     'If nothing else is required, reply briefly.',
     '',

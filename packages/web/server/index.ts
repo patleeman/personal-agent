@@ -150,6 +150,7 @@ import {
   resolveConversationAutomationPath,
   resumeConversationAutomationAfterUserMessage,
   setConversationAutomationItemPending,
+  shouldInjectConversationAutomationPromptContext,
   updateConversationAutomationEnabled,
   updateConversationAutomationItemStatus,
   writeSavedConversationAutomationPreferences,
@@ -5386,8 +5387,17 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
       automationBeforePrompt = saveConversationAutomationDocument(resumeConversationAutomationAfterUserMessage(automationBeforePrompt));
     }
 
+    const automationPromptContext = buildConversationAutomationPromptContext(automationBeforePrompt);
+    const shouldInjectAutomationPromptContext = shouldInjectConversationAutomationPromptContext(automationBeforePrompt);
+    if (shouldInjectAutomationPromptContext) {
+      automationBeforePrompt = saveConversationAutomationDocument({
+        ...automationBeforePrompt,
+        lastInjectedPromptContextUpdatedAt: automationBeforePrompt.updatedAt,
+      });
+    }
+
     const queuedContextBlocks = [
-      buildConversationAutomationPromptContext(automationBeforePrompt),
+      shouldInjectAutomationPromptContext ? automationPromptContext : '',
       relatedProjectIds.length > 0 ? buildReferencedProjectsContext(relatedProjectIds) : '',
       referencedAttachments.length > 0 ? buildConversationAttachmentsContext(referencedAttachments) : '',
       referencedTasks.length > 0 ? buildReferencedTasksContext(referencedTasks, REPO_ROOT) : '',
