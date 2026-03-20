@@ -1400,6 +1400,10 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         </SurfacePanel>
       </Section>
 
+      <Section title="Todo list">
+        <ConversationAutomationPanel conversationId={id} />
+      </Section>
+
       <Section title="Referenced projects">
         <div className="space-y-3">
           {relatedProjectIds.length > 1 && (
@@ -1459,10 +1463,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
             <p className="text-[12px] text-dim">No projects available.</p>
           )}
         </div>
-      </Section>
-
-      <Section title="Todo list">
-        <ConversationAutomationPanel conversationId={id} />
       </Section>
 
       <Section title="Runs">
