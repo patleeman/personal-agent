@@ -1,5 +1,5 @@
-import { useRef, useState, useCallback, useEffect } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Component, useRef, useState, useCallback, useEffect, type ReactNode } from 'react';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 import { CommandPalette } from './CommandPalette';
 import { ContextRail } from './ContextRail';
 import { Sidebar } from './Sidebar';
@@ -119,6 +119,54 @@ function ResizeHandle({
 
 // ── Layout ────────────────────────────────────────────────────────────────────
 
+class RouteContentBoundary extends Component<{
+  resetKey: string;
+  pathname: string;
+  children: ReactNode;
+}, {
+  hasError: boolean;
+}> {
+  state = { hasError: false };
+
+  static getDerivedStateFromError(): { hasError: boolean } {
+    return { hasError: true };
+  }
+
+  componentDidUpdate(prevProps: Readonly<{ resetKey: string }>) {
+    if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
+      this.setState({ hasError: false });
+    }
+  }
+
+  render() {
+    if (!this.state.hasError) {
+      return this.props.children;
+    }
+
+    const isConversationRoute = this.props.pathname.startsWith('/conversations/');
+    const title = isConversationRoute ? 'Conversation unavailable' : 'This page hit an unexpected error';
+    const body = isConversationRoute
+      ? 'This conversation may be stale, missing, or temporarily broken. Open another conversation or start a new one.'
+      : 'Try another page, then come back if needed.';
+
+    return (
+      <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden select-text">
+        <div className="flex h-full items-center justify-center px-8 py-10">
+          <div className="max-w-lg rounded-2xl border border-border-subtle bg-surface px-6 py-6 shadow-sm">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-dim">Recovered from render error</p>
+            <h1 className="mt-2 text-[22px] font-semibold text-primary">{title}</h1>
+            <p className="mt-2 text-[13px] leading-6 text-secondary">{body}</p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <Link to="/inbox" className="ui-action-button">Open inbox</Link>
+              <Link to="/conversations/new" className="ui-action-button">New conversation</Link>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
+}
+
 function useViewportWidth() {
   const [viewportWidth, setViewportWidth] = useState(() => (
     typeof window === 'undefined' ? 1440 : window.innerWidth
@@ -185,17 +233,19 @@ export function Layout() {
 
         <ResizeHandle onMouseDown={sidebar.onMouseDown} />
 
-        {/* Center */}
-        <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden select-text">
-          <Outlet />
-        </main>
+        <RouteContentBoundary resetKey={`${location.pathname}${location.search}`} pathname={location.pathname}>
+          {/* Center */}
+          <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden select-text">
+            <Outlet />
+          </main>
 
-        <>
-          <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
-          <div style={{ width: railWidth }} className="flex-shrink-0 flex flex-col overflow-hidden select-text">
-            <ContextRail />
-          </div>
-        </>
+          <>
+            <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
+            <div style={{ width: railWidth }} className="flex-shrink-0 flex flex-col overflow-hidden select-text">
+              <ContextRail />
+            </div>
+          </>
+        </RouteContentBoundary>
       </div>
 
       <CommandPalette />
