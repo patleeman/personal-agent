@@ -37,6 +37,12 @@ export const INITIAL_STREAM_STATE: StreamState = {
   pendingQueue: { steering: [], followUp: [] },
 };
 
+export function normalizePendingQueueItems(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
+}
+
 export function selectVisibleStreamState(
   state: StreamState,
   stateSessionId: string | null,
@@ -238,8 +244,11 @@ function applyEvent(
       return { ...prev, blocks, totalBlocks: Math.max(prev.totalBlocks, prev.blockOffset + blocks.length) };
     }
 
-    case 'queue_state':
-      return { ...prev, pendingQueue: { steering: [...event.steering], followUp: [...event.followUp] } };
+    case 'queue_state': {
+      const steering = normalizePendingQueueItems(event.steering);
+      const followUp = normalizePendingQueueItems(event.followUp);
+      return { ...prev, pendingQueue: { steering, followUp } };
+    }
 
     case 'text_delta': {
       const last = blocks[blocks.length - 1];

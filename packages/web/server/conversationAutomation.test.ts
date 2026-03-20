@@ -219,7 +219,7 @@ describe('conversationAutomation state', () => {
       profile: 'datadog',
       stateRoot,
       document: {
-        version: 3,
+        version: 4,
         conversationId: 'conv-123',
         updatedAt: '2026-03-18T12:00:00.000Z',
         enabled: true,
@@ -255,7 +255,7 @@ describe('conversationAutomation state', () => {
 
   it('replaces items from editable template data and resets runtime state', () => {
     const updated = replaceConversationAutomationItems({
-      version: 3,
+      version: 4,
       conversationId: 'conv-123',
       updatedAt: '2026-03-18T12:03:00.000Z',
       enabled: true,
@@ -304,7 +304,7 @@ describe('conversationAutomation state', () => {
 
   it('marks an item blocked and clears the active item', () => {
     const blocked = updateConversationAutomationItemStatus({
-      version: 3,
+      version: 4,
       conversationId: 'conv-123',
       updatedAt: '2026-03-18T12:03:00.000Z',
       enabled: true,
@@ -379,7 +379,7 @@ describe('conversationAutomation state', () => {
     };
 
     const reset = resetConversationAutomationFromItem({
-      version: 3,
+      version: 4,
       conversationId: 'conv-123',
       updatedAt: '2026-03-18T12:03:00.000Z',
       enabled: false,

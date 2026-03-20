@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import type { MessageBlock } from '../types';
 import type { StreamState } from './useSessionStream';
-import { INITIAL_STREAM_STATE, selectVisibleStreamState, shouldReplaceOptimisticUserBlock } from './useSessionStream';
+import { INITIAL_STREAM_STATE, normalizePendingQueueItems, selectVisibleStreamState, shouldReplaceOptimisticUserBlock } from './useSessionStream';
+
+describe('normalizePendingQueueItems', () => {
+  it('keeps only string queue entries', () => {
+    expect(normalizePendingQueueItems(['first', 2, null, 'second'])).toEqual(['first', 'second']);
+  });
+
+  it('falls back to an empty queue for non-array payloads', () => {
+    expect(normalizePendingQueueItems(undefined)).toEqual([]);
+    expect(normalizePendingQueueItems({ steering: ['bad-shape'] })).toEqual([]);
+  });
+});
 
 describe('selectVisibleStreamState', () => {
   it('hides stale stream data after navigating to a different session', () => {
@@ -28,7 +39,6 @@ describe('selectVisibleStreamState', () => {
     expect(selectVisibleStreamState(state, 'session-a', 'session-a')).toBe(state);
   });
 });
-
 
 describe('shouldReplaceOptimisticUserBlock', () => {
   it('replaces an optimistic /skill bubble with the expanded skill block', () => {

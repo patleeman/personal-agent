@@ -65,7 +65,7 @@ describe('conversation automation live-session integration', () => {
       profile: 'datadog',
       stateRoot,
       document: {
-        version: 3,
+        version: 4,
         conversationId: 'conv-123',
         updatedAt: '2026-03-18T12:00:00.000Z',
         enabled: true,
@@ -126,7 +126,7 @@ describe('conversation automation live-session integration', () => {
       profile: 'datadog',
       stateRoot,
       document: {
-        version: 3,
+        version: 4,
         conversationId: 'conv-124',
         updatedAt: '2026-03-18T12:00:00.000Z',
         enabled: true,
@@ -193,7 +193,7 @@ describe('conversation automation live-session integration', () => {
       profile: 'datadog',
       stateRoot,
       document: {
-        version: 3,
+        version: 4,
         conversationId: 'conv-123',
         updatedAt: '2026-03-18T12:00:05.000Z',
         enabled: true,
@@ -261,7 +261,7 @@ describe('conversation automation live-session integration', () => {
       profile: 'datadog',
       stateRoot,
       document: {
-        version: 3,
+        version: 4,
         conversationId: 'conv-123',
         updatedAt: '2026-03-18T12:00:15.000Z',
         enabled: true,
