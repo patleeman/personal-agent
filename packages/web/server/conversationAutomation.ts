@@ -1066,17 +1066,27 @@ function buildTodoListLine(item: ConversationAutomationTodoItem): string {
   return `${status} ${item.label} — ${prompt}`;
 }
 
-function isOpenConversationAutomationTodoItem(item: ConversationAutomationTodoItem): boolean {
-  return item.status === 'pending' || item.status === 'running' || item.status === 'waiting';
+function isPromptVisibleConversationAutomationTodoItem(item: ConversationAutomationTodoItem): boolean {
+  return item.status === 'pending' || item.status === 'running';
+}
+
+export function buildConversationAutomationSystemPromptPolicy(): string {
+  return [
+    '<conversation-automation-policy>',
+    'Conversation automation uses the todo_list tool for secondary bookkeeping behind the user message.',
+    'Respond to the user first unless they explicitly ask about automation or an automation item directly answers their request.',
+    'Use todo_list with {"action":"list"} before resolving automation items, then use exact itemId values from that list with complete, block, fail, or reopen.',
+    'If more automation work depends on user input, call wait_for_user with a short reason instead of guessing.',
+    '</conversation-automation-policy>',
+  ].join('\n');
 }
 
 export function buildConversationAutomationPromptContext(
   document: Pick<ConversationAutomationDocument, 'items' | 'activeItemId' | 'review' | 'waitingForUser'>,
 ): string {
-  const openItems = document.items.filter(isOpenConversationAutomationTodoItem);
-  const reviewActive = document.review?.status === 'pending' || document.review?.status === 'running';
+  const openItems = document.items.filter(isPromptVisibleConversationAutomationTodoItem);
 
-  if (openItems.length === 0 && !reviewActive && !document.waitingForUser) {
+  if (openItems.length === 0) {
     return '';
   }
 
@@ -1088,25 +1098,15 @@ export function buildConversationAutomationPromptContext(
     'Use exact itemId values from that list with complete, block, fail, or reopen.',
   ];
 
-  if (document.activeItemId) {
+  if (document.activeItemId && openItems.some((item) => item.id === document.activeItemId)) {
     lines.push(`Active itemId: ${document.activeItemId}`);
   }
 
-  if (reviewActive) {
-    lines.push(`Automation review: ${document.review!.status} (round ${Math.max(1, document.review!.round)})`);
-  }
-
-  if (document.waitingForUser) {
-    lines.push(`Waiting for user: ${document.waitingForUser.reason?.trim() || 'yes'}`);
-  }
-
-  if (openItems.length > 0) {
-    lines.push('Open todo items:');
-    lines.push(...openItems.map((item) => {
-      const active = item.id === document.activeItemId ? ' [active]' : '';
-      return `- ${item.id}${active} · ${buildTodoListLine(item)}`;
-    }));
-  }
+  lines.push('Open todo items:');
+  lines.push(...openItems.map((item) => {
+    const active = item.id === document.activeItemId ? ' [active]' : '';
+    return `- ${item.id}${active} · ${buildTodoListLine(item)}`;
+  }));
 
   lines.push('</system-reminder>');
   return lines.join('\n');

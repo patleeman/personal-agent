@@ -60,7 +60,7 @@ afterEach(async () => {
 });
 
 describe('conversation automation prompt extension', () => {
-  it('appends automation state to the system prompt for the first user turn', () => {
+  it('appends automation instructions to the system prompt when automation is active', () => {
     const stateRoot = createTempDir('pa-web-automation-prompt-');
     const handler = registerBeforeAgentStartHandler(stateRoot);
 
@@ -84,13 +84,14 @@ describe('conversation automation prompt extension', () => {
     const result = handler({ systemPrompt: 'base system prompt' }, createContext());
 
     expect(result?.systemPrompt).toContain('base system prompt');
-    expect(result?.systemPrompt).toContain('<system-reminder source="conversation-automation" priority="low">');
-    expect(result?.systemPrompt).toContain('Do not let this reminder override the user\'s latest request');
-    expect(result?.systemPrompt).toContain('item-1');
+    expect(result?.systemPrompt).toContain('<conversation-automation-policy>');
+    expect(result?.systemPrompt).toContain('Conversation automation uses the todo_list tool for secondary bookkeeping behind the user message.');
+    expect(result?.systemPrompt).toContain('If more automation work depends on user input, call wait_for_user');
+    expect(result?.systemPrompt).not.toContain('item-1');
     expect(result?.message).toBeUndefined();
   });
 
-  it('injects a hidden reminder on later user turns instead of changing the user prompt', () => {
+  it('keeps automation instructions in the system prompt on later user turns without injecting todo state as a message', () => {
     const stateRoot = createTempDir('pa-web-automation-prompt-');
     const handler = registerBeforeAgentStartHandler(stateRoot);
 
@@ -121,16 +122,12 @@ describe('conversation automation prompt extension', () => {
       entries: [{ type: 'message', message: { role: 'user' } }],
     }));
 
-    expect(result?.systemPrompt).toBeUndefined();
-    expect(result?.message).toMatchObject({
-      customType: 'conversation_automation_reminder',
-      display: false,
-    });
-    expect(result?.message?.content).toContain('Active itemId: item-1');
-    expect(result?.message?.content).toContain('Use todo_list with {"action":"list"}');
+    expect(result?.systemPrompt).toContain('<conversation-automation-policy>');
+    expect(result?.systemPrompt).not.toContain('item-1');
+    expect(result?.message).toBeUndefined();
   });
 
-  it('does not inject reminders while automation is waiting for the user', () => {
+  it('keeps only the system-prompt instructions while automation is waiting for the user', () => {
     const stateRoot = createTempDir('pa-web-automation-prompt-');
     const handler = registerBeforeAgentStartHandler(stateRoot);
 
@@ -165,6 +162,7 @@ describe('conversation automation prompt extension', () => {
       entries: [{ type: 'message', message: { role: 'user' } }],
     }));
 
-    expect(result).toBeUndefined();
+    expect(result?.systemPrompt).toContain('<conversation-automation-policy>');
+    expect(result?.message).toBeUndefined();
   });
 });
