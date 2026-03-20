@@ -308,7 +308,7 @@ export function getAssistantErrorDisplayMessage(message: {
 }
 
 function isInjectedContextMessage(message: DisplayMessageEntryLike['message']): boolean {
-  return message.role === 'custom' && (message.display === false || message.customType === 'referenced_context');
+  return message.role === 'custom' && message.display === true && message.customType === 'referenced_context';
 }
 
 function normalizeSearchSegment(text: string, maxLength = 360): string {
@@ -591,6 +591,10 @@ function buildDisplayBlocksInternal(
           });
         }
       }
+      continue;
+    }
+
+    if (role === 'custom' && msg.message.display === false) {
       continue;
     }
 
