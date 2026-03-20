@@ -1119,6 +1119,27 @@ export function shouldInjectConversationAutomationPromptContext(
     && document.lastInjectedPromptContextUpdatedAt !== document.updatedAt;
 }
 
+export function buildConversationAutomationPostTurnReviewPrompt(
+  document: Pick<ConversationAutomationDocument, 'items'>,
+): string {
+  const lines = document.items.length > 0
+    ? document.items.map((item) => `- ${buildTodoListLine(item)}`)
+    : ['- (no todo items)'];
+
+  return [
+    'Review the automation todo list after the assistant\'s user-facing reply.',
+    'This hidden follow-up turn is for checklist bookkeeping only. Do not start implementation work or continue the main task here.',
+    'Use todo_list with {"action":"list"} to inspect the current items.',
+    'Resolve items only if they are now complete, not applicable, blocked, or failed.',
+    'If additional automation work is required, use todo_list with {"action":"add",...} to add the needed follow-up items.',
+    'If more automation work depends on user input, call wait_for_user with a short reason.',
+    'If nothing needs to change, reply briefly.',
+    '',
+    'Todo list:',
+    ...lines,
+  ].join('\n');
+}
+
 export function buildConversationAutomationReviewPrompt(document: Pick<ConversationAutomationDocument, 'items' | 'review'>): string {
   const lines = document.items.length > 0
     ? document.items.map((item) => `- ${buildTodoListLine(item)}`)

@@ -27,6 +27,7 @@ import {
 } from './conversationAutoTitle.js';
 import {
   buildConversationAutomationItemPrompt,
+  buildConversationAutomationPostTurnReviewPrompt,
   buildConversationAutomationReviewPrompt,
   loadConversationAutomationState,
   writeConversationAutomationState,
@@ -931,6 +932,14 @@ function interruptConversationAutomationStep(
   return document;
 }
 
+function shouldStartConversationAutomationPostTurnReview(document: ConversationAutomationDocument): boolean {
+  if (!document.enabled || document.waitingForUser || document.activeItemId || document.review?.status === 'running') {
+    return false;
+  }
+
+  return document.items.some((item) => item.status === 'pending') || document.review?.status === 'pending';
+}
+
 function shouldStartConversationAutomationReview(document: ConversationAutomationDocument): boolean {
   if (document.items.length === 0 || hasFailedConversationAutomationTodoItem(document) || document.waitingForUser) {
     return false;
@@ -947,7 +956,7 @@ function shouldStartConversationAutomationReview(document: ConversationAutomatio
   return document.review.status === 'pending';
 }
 
-function didTurnEndFromConversationAutomation(entry: LiveEntry): boolean {
+function readLastNonAssistantConversationTurn(entry: LiveEntry): { role: string; customType?: string } | null {
   const entries = typeof entry.session.sessionManager?.getEntries === 'function'
     ? entry.session.sessionManager.getEntries()
     : [];
@@ -959,15 +968,28 @@ function didTurnEndFromConversationAutomation(entry: LiveEntry): boolean {
     }
 
     const message = candidate.message as { role?: string; customType?: string } | undefined;
-    if (!message || message.role === 'assistant') {
+    if (!message || !message.role || message.role === 'assistant') {
       continue;
     }
 
-    return message.role === 'custom'
-      && (message.customType === 'conversation_automation_item' || message.customType === 'conversation_automation_review');
+    return {
+      role: message.role,
+      ...(message.customType ? { customType: message.customType } : {}),
+    };
   }
 
-  return false;
+  return null;
+}
+
+function didTurnEndFromConversationAutomation(entry: LiveEntry): boolean {
+  const turn = readLastNonAssistantConversationTurn(entry);
+  return turn?.role === 'custom'
+    && (turn.customType === 'conversation_automation_item' || turn.customType === 'conversation_automation_review');
+}
+
+function didTurnEndFromConversationAutomationPostTurnReview(entry: LiveEntry): boolean {
+  const turn = readLastNonAssistantConversationTurn(entry);
+  return turn?.role === 'custom' && turn.customType === 'conversation_automation_post_turn_review';
 }
 
 export async function kickConversationAutomation(
@@ -981,8 +1003,11 @@ export async function kickConversationAutomation(
 
   automationProcessingSessions.add(sessionId);
   try {
-    const shouldContinueAfterTurnEnd = trigger === 'turn_end'
+    const didAutomationAuthorLastTurn = trigger === 'turn_end'
       ? didTurnEndFromConversationAutomation(entry)
+      : false;
+    const shouldContinueAfterTurnEnd = trigger === 'turn_end'
+      ? didAutomationAuthorLastTurn
       : true;
     let document = loadConversationAutomationState({
       profile: resolveConversationAutomationProfile(),
@@ -998,6 +1023,26 @@ export async function kickConversationAutomation(
       );
       document = saveConversationAutomation(entry, document);
       entry.currentTurnError = null;
+    }
+
+    if (
+      trigger === 'turn_end'
+      && !didAutomationAuthorLastTurn
+      && !didTurnEndFromConversationAutomationPostTurnReview(entry)
+      && shouldStartConversationAutomationPostTurnReview(document)
+    ) {
+      try {
+        entry.currentTurnError = null;
+        await triggerHiddenPrompt(
+          sessionId,
+          'conversation_automation_post_turn_review',
+          buildConversationAutomationPostTurnReviewPrompt(document),
+          'followUp',
+        );
+      } catch {
+        // Leave automation state unchanged when bookkeeping follow-up cannot be queued.
+      }
+      return;
     }
 
     if (trigger === 'turn_end' && shouldContinueAfterTurnEnd && document.activeItemId) {

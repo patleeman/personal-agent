@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildConversationAutomationItemPrompt,
+  buildConversationAutomationPostTurnReviewPrompt,
   buildConversationAutomationPromptContext,
   buildConversationAutomationSystemPromptPolicy,
   shouldInjectConversationAutomationPromptContext,
@@ -617,6 +618,27 @@ describe('conversationAutomation state', () => {
         updatedAt: '2026-03-18T12:00:10.000Z',
       }],
     })).toBe(false);
+  });
+
+  it('builds a post-turn review prompt for checklist bookkeeping', () => {
+    const prompt = buildConversationAutomationPostTurnReviewPrompt({
+      items: [{
+        ...createConversationAutomationTodoItem({
+          id: 'item-1',
+          kind: 'instruction',
+          text: 'Inspect the broken todo reminder flow and fix it.',
+          now: '2026-03-18T12:00:00.000Z',
+        }),
+        status: 'pending',
+      }],
+    });
+
+    expect(prompt).toContain('Review the automation todo list after the assistant\'s user-facing reply.');
+    expect(prompt).toContain('This hidden follow-up turn is for checklist bookkeeping only.');
+    expect(prompt).toContain('Do not start implementation work or continue the main task here.');
+    expect(prompt).toContain('Use todo_list with {"action":"list"}');
+    expect(prompt).toContain('If more automation work depends on user input, call wait_for_user');
+    expect(prompt).toContain('Inspect the broken todo reminder flow and fix it.');
   });
 
   it('builds a system prompt policy block for automation semantics', () => {
