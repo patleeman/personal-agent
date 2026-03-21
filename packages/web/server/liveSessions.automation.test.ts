@@ -47,6 +47,29 @@ function buildTurnEntries(role: 'user' | 'custom', customType?: string) {
   }];
 }
 
+function buildTurnEntriesWithAssistant(
+  role: 'user' | 'custom',
+  options: { customType?: string; assistantStopReason?: string; assistantErrorMessage?: string } = {},
+) {
+  return [
+    {
+      type: 'message',
+      message: {
+        role,
+        ...(options.customType ? { customType: options.customType } : {}),
+      },
+    },
+    {
+      type: 'message',
+      message: {
+        role: 'assistant',
+        ...(options.assistantStopReason ? { stopReason: options.assistantStopReason } : {}),
+        ...(options.assistantErrorMessage ? { errorMessage: options.assistantErrorMessage } : {}),
+      },
+    },
+  ];
+}
+
 afterEach(() => {
   registry.clear();
   process.env.PERSONAL_AGENT_STATE_ROOT = originalStateRoot;
@@ -330,7 +353,7 @@ describe('conversation automation live-session integration', () => {
         followUp: vi.fn(async () => undefined),
         sendCustomMessage,
         sessionManager: {
-          getEntries: () => buildTurnEntries('user'),
+          getEntries: () => buildTurnEntriesWithAssistant('user'),
         },
         modelRegistry: {
           getAvailable: () => [],
@@ -369,6 +392,60 @@ describe('conversation automation live-session integration', () => {
       deliverAs: 'followUp',
       triggerTurn: true,
     });
+  });
+
+  it('does not start post-turn review after an aborted assistant reply', async () => {
+    const stateRoot = createTempDir('pa-live-automation-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
+
+    const sendCustomMessage = vi.fn(async () => undefined);
+    const pendingItem = createConversationAutomationTodoItem({
+      id: 'item-1',
+      label: 'workflow-checkpoint',
+      skillName: 'workflow-checkpoint',
+      now: '2026-03-18T12:00:00.000Z',
+    });
+
+    writeConversationAutomationState({
+      profile: 'datadog',
+      stateRoot,
+      document: {
+        version: 4,
+        conversationId: 'conv-123',
+        updatedAt: '2026-03-18T12:00:15.000Z',
+        enabled: true,
+        items: [pendingItem],
+      },
+    });
+
+    setLiveEntry('conv-123', {
+      title: 'Automation conversation',
+      currentTurnError: null,
+      session: {
+        state: { messages: [], streamMessage: null },
+        agent: { state: { messages: [] } },
+        getContextUsage: () => null,
+        isStreaming: false,
+        prompt: vi.fn(async () => undefined),
+        steer: vi.fn(async () => undefined),
+        followUp: vi.fn(async () => undefined),
+        sendCustomMessage,
+        sessionManager: {
+          getEntries: () => buildTurnEntriesWithAssistant('user', {
+            assistantStopReason: 'aborted',
+          }),
+        },
+        modelRegistry: {
+          getAvailable: () => [],
+          getApiKey: vi.fn(),
+        },
+      },
+    });
+
+    await kickConversationAutomation('conv-123', 'turn_end');
+
+    expect(sendCustomMessage).not.toHaveBeenCalled();
   });
 
   it('does not continue automation after a bookkeeping review turn', async () => {

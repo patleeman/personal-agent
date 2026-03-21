@@ -228,6 +228,7 @@ function parseJsonLine(rawLine: string): RawLine | null {
 
 export interface DisplayMessageEntryLike {
   id: string;
+  parentId?: string | null;
   timestamp: string | number;
   message: {
     role: string;
@@ -502,12 +503,47 @@ function describeConversationTreeMessage(entry: SessionEntry): Omit<Conversation
   return null;
 }
 
+function collectHiddenTranscriptEntryIds(messages: DisplayMessageEntryLike[]): Set<string> {
+  const hiddenRoots = new Set(
+    messages
+      .filter((message) => message.message.role === 'custom' && message.message.display === false)
+      .map((message) => message.id),
+  );
+  if (hiddenRoots.size === 0) {
+    return new Set();
+  }
+
+  const parentById = new Map(messages.map((message) => [message.id, message.parentId ?? null] as const));
+  const hiddenById = new Map<string, boolean>();
+
+  const isHidden = (id: string | undefined): boolean => {
+    if (!id) {
+      return false;
+    }
+    if (hiddenById.has(id)) {
+      return hiddenById.get(id) ?? false;
+    }
+    if (hiddenRoots.has(id)) {
+      hiddenById.set(id, true);
+      return true;
+    }
+
+    const parentId = parentById.get(id) ?? null;
+    const hidden = parentId ? isHidden(parentId) : false;
+    hiddenById.set(id, hidden);
+    return hidden;
+  };
+
+  return new Set(messages.filter((message) => isHidden(message.id)).map((message) => message.id));
+}
+
 function buildDisplayBlocksInternal(
   messages: DisplayMessageEntryLike[],
   entryAnchorIndexById?: Map<string, number>,
 ): DisplayBlock[] {
   const blocks: DisplayBlock[] = [];
   const toolCallIndex = new Map<string, number>();
+  const hiddenTranscriptEntryIds = collectHiddenTranscriptEntryIds(messages);
 
   for (const [messageIndex, msg] of messages.entries()) {
     const { role, content, toolCallId, toolName, details, summary } = msg.message;
@@ -515,6 +551,9 @@ function buildDisplayBlocksInternal(
     const contentBlocks = normalizeContent(content);
     const errorMessage = getAssistantErrorDisplayMessage(msg.message);
     const baseId = msg.id || `msg-${messageIndex}`;
+    if (hiddenTranscriptEntryIds.has(baseId)) {
+      continue;
+    }
     let anchorRecorded = false;
 
     const recordAnchor = () => {
@@ -1182,6 +1221,7 @@ export function buildDisplayMessageEntriesFromSessionEntries(entries: SessionEnt
     if (entry.type === 'message') {
       displayEntries.push({
         id: entry.id,
+        parentId: entry.parentId,
         timestamp: entry.timestamp,
         message: entry.message,
       });
@@ -1199,6 +1239,7 @@ export function buildDisplayMessageEntriesFromSessionEntries(entries: SessionEnt
 
       displayEntries.push({
         id: entry.id,
+        parentId: entry.parentId,
         timestamp: entry.timestamp,
         message: customMessage,
       });
