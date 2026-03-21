@@ -114,8 +114,8 @@ interface LiveEntry {
   currentTurnError?: string | null;
   lastDurableRunState?: WebLiveConversationRunState;
   contextUsageTimer?: ReturnType<typeof setTimeout>;
-  pendingHiddenTurnCustomTypes?: string[];
-  activeHiddenTurnCustomType?: string | null;
+  pendingHiddenTurnCustomTypes: string[];
+  activeHiddenTurnCustomType: string | null;
 }
 
 export interface LiveSessionLifecycleEvent {
