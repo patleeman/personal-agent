@@ -390,6 +390,57 @@ describe('sessions', () => {
     expect(blocks).toEqual([]);
   });
 
+  it('keeps assistant replies from hidden custom turns out of the visible transcript', () => {
+    const blocks = buildDisplayBlocksFromEntries([
+      {
+        id: 'user-1',
+        timestamp: '2026-03-12T16:00:00.000Z',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'Create a new project.' }],
+        },
+      },
+      {
+        id: 'hidden-1',
+        parentId: 'user-1',
+        timestamp: '2026-03-12T16:00:01.000Z',
+        message: {
+          role: 'custom',
+          customType: 'conversation_automation_post_turn_review',
+          display: false,
+          content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }],
+        },
+      },
+      {
+        id: 'assistant-1',
+        parentId: 'hidden-1',
+        timestamp: '2026-03-12T16:00:02.000Z',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'No automation changes needed.' }],
+        },
+      },
+      {
+        id: 'tool-1',
+        parentId: 'assistant-1',
+        timestamp: '2026-03-12T16:00:03.000Z',
+        message: {
+          role: 'toolResult',
+          toolCallId: 'call-1',
+          toolName: 'todo_list',
+          content: [{ type: 'text', text: '{"action":"list"}' }],
+        },
+      },
+    ]);
+
+    expect(blocks).toEqual([
+      expect.objectContaining({
+        type: 'user',
+        text: 'Create a new project.',
+      }),
+    ]);
+  });
+
   it('renames a stored conversation by appending session metadata', () => {
     const sessionsDir = createTempSessionsDir();
     configureSessionEnv(sessionsDir);

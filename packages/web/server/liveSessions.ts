@@ -1008,13 +1008,65 @@ function shouldStartConversationAutomationReview(document: ConversationAutomatio
   return document.review.status === 'pending';
 }
 
-function readLastNonAssistantConversationTurn(entry: LiveEntry): { role: string; customType?: string } | null {
-  const entries = typeof entry.session.sessionManager?.getEntries === 'function'
+function readLastConversationEntries(entry: LiveEntry) {
+  return typeof entry.session.sessionManager?.getEntries === 'function'
     ? entry.session.sessionManager.getEntries()
     : [];
+}
+
+function readLastAssistantConversationMessage(entry: LiveEntry): {
+  stopReason?: string;
+  errorMessage?: string;
+} | null {
+  const entries = readLastConversationEntries(entry);
 
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const candidate = entries[index];
+    if (candidate?.type !== 'message') {
+      continue;
+    }
+
+    const message = candidate.message as {
+      role?: string;
+      stopReason?: string;
+      errorMessage?: string;
+    } | undefined;
+    if (!message || message.role !== 'assistant') {
+      continue;
+    }
+
+    return {
+      ...(message.stopReason ? { stopReason: message.stopReason } : {}),
+      ...(message.errorMessage ? { errorMessage: message.errorMessage } : {}),
+    };
+  }
+
+  return null;
+}
+
+function didLastAssistantReplyCompleteSuccessfully(entry: LiveEntry): boolean {
+  const lastAssistantMessage = readLastAssistantConversationMessage(entry);
+  if (!lastAssistantMessage) {
+    return false;
+  }
+  if (lastAssistantMessage.stopReason === 'aborted' || lastAssistantMessage.stopReason === 'error') {
+    return false;
+  }
+
+  return !lastAssistantMessage.errorMessage?.trim();
+}
+
+function readLastNonAssistantConversationTurn(entry: LiveEntry): { role: string; customType?: string } | null {
+  const entries = readLastConversationEntries(entry);
+
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const candidate = entries[index];
+    if (candidate?.type === 'custom_message') {
+      return {
+        role: 'custom',
+        ...(candidate.customType ? { customType: candidate.customType } : {}),
+      };
+    }
     if (candidate?.type !== 'message') {
       continue;
     }
@@ -1082,6 +1134,12 @@ export async function kickConversationAutomation(
     const lastTurn = trigger === 'turn_end'
       ? readLastNonAssistantConversationTurn(entry)
       : null;
+    const lastAssistantMessage = trigger === 'turn_end'
+      ? readLastAssistantConversationMessage(entry)
+      : null;
+    const didLastAssistantReplySucceed = trigger === 'turn_end'
+      ? didLastAssistantReplyCompleteSuccessfully(entry)
+      : false;
 
     if (trigger === 'turn_end' && document.enabled) {
       logInfo('automation turn_end evaluation', {
@@ -1089,6 +1147,9 @@ export async function kickConversationAutomation(
         trigger,
         lastTurnRole: lastTurn?.role ?? null,
         lastTurnCustomType: lastTurn?.customType ?? null,
+        lastAssistantStopReason: lastAssistantMessage?.stopReason ?? null,
+        lastAssistantErrorMessage: lastAssistantMessage?.errorMessage ?? null,
+        didLastAssistantReplySucceed,
         didAutomationAuthorLastTurn,
         didAutomationPostTurnReviewLastTurn: didTurnEndFromConversationAutomationPostTurnReview(entry),
         ...summarizeConversationAutomationState(document),
@@ -1109,6 +1170,7 @@ export async function kickConversationAutomation(
       trigger === 'turn_end'
       && !didAutomationAuthorLastTurn
       && !didTurnEndFromConversationAutomationPostTurnReview(entry)
+      && didLastAssistantReplySucceed
       && shouldStartConversationAutomationPostTurnReview(document)
     ) {
       try {
@@ -1297,6 +1359,22 @@ function broadcastQueueState(entry: LiveEntry, force = false): void {
   broadcast(entry, { type: 'queue_state', ...queueState });
 }
 
+function shouldSuppressLiveEventForHiddenTurn(entry: LiveEntry, event: AgentSessionEvent): boolean {
+  ensureHiddenTurnState(entry);
+  if (!entry.activeHiddenTurnCustomType) {
+    return false;
+  }
+
+  return event.type === 'agent_start'
+    || event.type === 'agent_end'
+    || event.type === 'turn_end'
+    || event.type === 'message_update'
+    || event.type === 'message_end'
+    || event.type === 'tool_execution_start'
+    || event.type === 'tool_execution_update'
+    || event.type === 'tool_execution_end';
+}
+
 function scheduleContextUsage(entry: LiveEntry, delayMs = 400): void {
   if (entry.contextUsageTimer) {
     return;
@@ -1335,6 +1413,8 @@ function wireSession(
     lastContextUsageJson: null,
     lastQueueStateJson: null,
     currentTurnError: null,
+    pendingHiddenTurnCustomTypes: [],
+    activeHiddenTurnCustomType: null,
   };
   registry.set(id, entry);
   invalidateAppTopics('sessions');
@@ -1342,8 +1422,16 @@ function wireSession(
   maybeAutoTitleConversation(entry);
 
   session.subscribe((event: AgentSessionEvent) => {
+    ensureHiddenTurnState(entry);
+    if (event.type === 'agent_start' && !entry.activeHiddenTurnCustomType && entry.pendingHiddenTurnCustomTypes.length > 0) {
+      entry.activeHiddenTurnCustomType = entry.pendingHiddenTurnCustomTypes.shift() ?? null;
+    }
+    const suppressLiveEvent = shouldSuppressLiveEventForHiddenTurn(entry, event);
+
     if (event.type === 'turn_end') {
-      maybeAutoTitleConversation(entry);
+      if (!entry.activeHiddenTurnCustomType) {
+        maybeAutoTitleConversation(entry);
+      }
       void syncDurableConversationRun(entry, 'waiting');
       void kickConversationAutomation(entry.sessionId, 'turn_end');
       notifyLiveSessionLifecycleHandlers(entry, 'turn_end');
@@ -1405,8 +1493,12 @@ function wireSession(
     }
 
     const sse = toSse(event);
-    if (sse) {
+    if (sse && !suppressLiveEvent) {
       broadcast(entry, sse);
+    }
+
+    if (event.type === 'turn_end' && entry.activeHiddenTurnCustomType) {
+      entry.activeHiddenTurnCustomType = null;
     }
   });
 
@@ -1817,15 +1909,26 @@ async function triggerHiddenPrompt(
     return;
   }
 
-  await entry.session.sendCustomMessage({
-    customType,
-    content: message,
-    display: false,
-    details: undefined,
-  }, {
-    deliverAs: behavior,
-    triggerTurn: true,
-  });
+  ensureHiddenTurnState(entry);
+  entry.pendingHiddenTurnCustomTypes.push(customType);
+
+  try {
+    await entry.session.sendCustomMessage({
+      customType,
+      content: message,
+      display: false,
+      details: undefined,
+    }, {
+      deliverAs: behavior,
+      triggerTurn: true,
+    });
+  } catch (error) {
+    const index = entry.pendingHiddenTurnCustomTypes.lastIndexOf(customType);
+    if (index >= 0) {
+      entry.pendingHiddenTurnCustomTypes.splice(index, 1);
+    }
+    throw error;
+  }
 }
 
 export async function appendDetachedUserMessage(
