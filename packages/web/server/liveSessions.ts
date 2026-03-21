@@ -114,11 +114,50 @@ interface LiveEntry {
   currentTurnError?: string | null;
   lastDurableRunState?: WebLiveConversationRunState;
   contextUsageTimer?: ReturnType<typeof setTimeout>;
+  pendingHiddenTurnCustomTypes?: string[];
+  activeHiddenTurnCustomType?: string | null;
 }
+
+export interface LiveSessionLifecycleEvent {
+  conversationId: string;
+  sessionFile?: string;
+  title: string;
+  cwd: string;
+  trigger: 'turn_end' | 'auto_compaction_end';
+}
+
+export type LiveSessionLifecycleHandler = (event: LiveSessionLifecycleEvent) => void | Promise<void>;
 
 export const registry = new Map<string, LiveEntry>();
 const toolTimings = new Map<string, number>(); // toolCallId → start ms
 const automationProcessingSessions = new Set<string>();
+const lifecycleHandlers = new Set<LiveSessionLifecycleHandler>();
+
+export function registerLiveSessionLifecycleHandler(handler: LiveSessionLifecycleHandler): () => void {
+  lifecycleHandlers.add(handler);
+  return () => lifecycleHandlers.delete(handler);
+}
+
+function notifyLiveSessionLifecycleHandlers(entry: LiveEntry, trigger: 'turn_end' | 'auto_compaction_end'): void {
+  ensureSessionFileExists(entry.session.sessionManager);
+  const event: LiveSessionLifecycleEvent = {
+    conversationId: entry.sessionId,
+    sessionFile: entry.session.sessionFile?.trim() || undefined,
+    title: resolveEntryTitle(entry),
+    cwd: entry.cwd,
+    trigger,
+  };
+
+  for (const handler of lifecycleHandlers) {
+    Promise.resolve(handler(event)).catch((error) => {
+      logWarn('live session lifecycle handler failed', {
+        conversationId: entry.sessionId,
+        trigger,
+        error: error instanceof Error ? { message: error.message, stack: error.stack } : String(error),
+      });
+    });
+  }
+}
 
 export function reloadAllLiveSessionAuth(): number {
   let reloadedCount = 0;
@@ -458,12 +497,12 @@ function buildUserMessageBlock(message: { content?: unknown; timestamp?: string 
   return block?.type === 'user' ? block : null;
 }
 
-function buildLiveStateBlocks(session: AgentSession): DisplayBlock[] {
+function buildLiveStateBlocks(session: AgentSession, options: { omitStreamMessage?: boolean } = {}): DisplayBlock[] {
   const state = session.state;
   const messages = state.messages.slice();
   const streamMessage = state.streamMessage;
 
-  if (streamMessage) {
+  if (streamMessage && !options.omitStreamMessage) {
     messages.push(streamMessage);
   }
 
@@ -679,12 +718,24 @@ function mergeConversationHistoryBlocks(persistedBlocks: DisplayBlock[], liveBlo
 
 const DEFAULT_LIVE_SNAPSHOT_TAIL_BLOCKS = 400;
 
+function ensureHiddenTurnState(entry: LiveEntry): void {
+  if (!Array.isArray(entry.pendingHiddenTurnCustomTypes)) {
+    entry.pendingHiddenTurnCustomTypes = [];
+  }
+  if (typeof entry.activeHiddenTurnCustomType === 'undefined') {
+    entry.activeHiddenTurnCustomType = null;
+  }
+}
+
 function buildLiveSnapshot(entry: LiveEntry, tailBlocks?: number): {
   blocks: DisplayBlock[];
   blockOffset: number;
   totalBlocks: number;
 } {
-  const liveBlocks = buildLiveStateBlocks(entry.session);
+  ensureHiddenTurnState(entry);
+  const liveBlocks = buildLiveStateBlocks(entry.session, {
+    omitStreamMessage: Boolean(entry.activeHiddenTurnCustomType),
+  });
   const sessionFile = entry.session.sessionFile?.trim();
   if (!sessionFile || !existsSync(sessionFile)) {
     return {
@@ -1295,6 +1346,7 @@ function wireSession(
       maybeAutoTitleConversation(entry);
       void syncDurableConversationRun(entry, 'waiting');
       void kickConversationAutomation(entry.sessionId, 'turn_end');
+      notifyLiveSessionLifecycleHandlers(entry, 'turn_end');
     }
 
     if (event.type === 'agent_start' || event.type === 'message_update' || event.type === 'tool_execution_start' || event.type === 'tool_execution_update' || event.type === 'tool_execution_end') {
@@ -1349,6 +1401,7 @@ function wireSession(
       clearContextUsageTimer(entry);
       broadcastContextUsage(entry, true);
       invalidateAppTopics('sessions');
+      notifyLiveSessionLifecycleHandlers(entry, 'auto_compaction_end');
     }
 
     const sse = toSse(event);

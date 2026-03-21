@@ -4,9 +4,13 @@ import { resolve } from 'node:path';
 interface DistillConversationMemoryRunPayload {
   conversationId: string;
   anchorMessageId?: string;
+  checkpointId?: string;
   title?: string;
   summary?: string;
   tags?: string[];
+  mode?: 'manual' | 'auto';
+  trigger?: 'manual' | 'turn_end' | 'auto_compaction_end';
+  emitActivity?: boolean;
 }
 
 interface ParsedArgs {
@@ -51,8 +55,14 @@ function parseArgs(argv: string[]): ParsedArgs {
     payload: {
       conversationId: payload.conversationId.trim(),
       ...(typeof payload.anchorMessageId === 'string' && payload.anchorMessageId.trim().length > 0 ? { anchorMessageId: payload.anchorMessageId.trim() } : {}),
+      ...(typeof payload.checkpointId === 'string' && payload.checkpointId.trim().length > 0 ? { checkpointId: payload.checkpointId.trim() } : {}),
       ...(typeof payload.title === 'string' && payload.title.trim().length > 0 ? { title: payload.title.trim() } : {}),
       ...(typeof payload.summary === 'string' && payload.summary.trim().length > 0 ? { summary: payload.summary.trim() } : {}),
+      ...(payload.mode === 'manual' ? { mode: 'manual' as const } : payload.mode === 'auto' ? { mode: 'auto' as const } : {}),
+      ...(payload.trigger === 'manual' || payload.trigger === 'turn_end' || payload.trigger === 'auto_compaction_end'
+        ? { trigger: payload.trigger }
+        : {}),
+      ...(typeof payload.emitActivity === 'boolean' ? { emitActivity: payload.emitActivity } : {}),
       ...(Array.isArray(payload.tags)
         ? {
             tags: payload.tags
@@ -76,8 +86,11 @@ async function runDistillation(args: ParsedArgs): Promise<void> {
       title: args.payload.title,
       summary: args.payload.summary,
       anchorMessageId: args.payload.anchorMessageId,
+      checkpointId: args.payload.checkpointId,
       tags: args.payload.tags,
-      emitActivity: true,
+      mode: args.payload.mode,
+      trigger: args.payload.trigger,
+      emitActivity: args.payload.emitActivity ?? true,
     }),
   });
 

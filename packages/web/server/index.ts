@@ -97,6 +97,18 @@ import {
   type DistilledConversationMemoryDraft,
 } from './conversationMemoryCuration.js';
 import {
+  buildConversationMemoryWorkItemsFromStates,
+  listConversationMemoryMaintenanceStates,
+  markConversationMemoryMaintenanceRunCompleted,
+  markConversationMemoryMaintenanceRunFailed,
+  markConversationMemoryMaintenanceRunStarted,
+  prepareConversationMemoryMaintenance,
+  readConversationCheckpointSnapshotFromState,
+  readConversationMemoryMaintenanceState,
+  type ConversationMemoryMaintenanceMode,
+  type ConversationMemoryMaintenanceTrigger,
+} from './conversationMemoryMaintenance.js';
+import {
   createSession as createLocalSession,
   createSessionFromExisting,
   resumeSession as resumeLocalSession,
@@ -121,6 +133,7 @@ import {
   destroySession,
   branchSession,
   forkSession,
+  registerLiveSessionLifecycleHandler,
   registry as liveRegistry,
 } from './liveSessions.js';
 import {
@@ -455,6 +468,20 @@ try {
 }
 
 void syncDaemonTaskScopeForProfile(currentProfile);
+
+registerLiveSessionLifecycleHandler((event) => {
+  if (!event.sessionFile || !existsSync(event.sessionFile)) {
+    return;
+  }
+
+  return maybeStartAutomaticConversationMemoryDistill({
+    conversationId: event.conversationId,
+    sessionFile: event.sessionFile,
+    title: event.title,
+    cwd: event.cwd,
+    trigger: event.trigger,
+  });
+});
 
 function getCurrentProfile(): string {
   return currentProfile;
@@ -857,6 +884,161 @@ async function readConversationMemoryDistillRunState(conversationId: string): Pr
   };
 }
 
+interface ConversationMemoryDistillRunInput {
+  conversationId: string;
+  profile: string;
+  checkpointId: string;
+  mode: ConversationMemoryMaintenanceMode;
+  trigger: ConversationMemoryMaintenanceTrigger;
+  title?: string;
+  summary?: string;
+  tags?: string[];
+  emitActivity?: boolean;
+}
+
+function resolveConversationMemoryDistillRunnerPath(): string {
+  return join(REPO_ROOT, 'packages/web/dist-server/distillConversationMemoryRun.js');
+}
+
+async function startConversationMemoryDistillRun(input: ConversationMemoryDistillRunInput) {
+  const runnerPath = resolveConversationMemoryDistillRunnerPath();
+  if (!existsSync(runnerPath)) {
+    return {
+      accepted: false,
+      reason: `Distillation runner not found: ${runnerPath}`,
+      runId: undefined,
+      logPath: undefined,
+    };
+  }
+
+  const payload = Buffer.from(JSON.stringify({
+    conversationId: input.conversationId,
+    checkpointId: input.checkpointId,
+    title: input.title,
+    summary: input.summary,
+    tags: input.tags,
+    mode: input.mode,
+    trigger: input.trigger,
+    emitActivity: input.emitActivity ?? false,
+  }), 'utf-8').toString('base64url');
+
+  return startBackgroundRun({
+    taskSlug: `distill-memory-${input.conversationId}`,
+    cwd: REPO_ROOT,
+    argv: [
+      process.execPath,
+      runnerPath,
+      '--port',
+      String(PORT),
+      '--profile',
+      input.profile,
+      '--payload',
+      payload,
+    ],
+    source: {
+      type: CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE,
+      id: input.conversationId,
+    },
+  });
+}
+
+async function maybeStartAutomaticConversationMemoryDistill(input: {
+  conversationId: string;
+  sessionFile: string;
+  title?: string;
+  cwd?: string;
+  trigger: Exclude<ConversationMemoryMaintenanceTrigger, 'manual'>;
+}): Promise<void> {
+  const profile = getCurrentProfile();
+  const relatedProjectIds = getConversationProjectLink({
+    profile,
+    conversationId: input.conversationId,
+  })?.relatedProjectIds ?? [];
+  const prepared = prepareConversationMemoryMaintenance({
+    profile,
+    conversationId: input.conversationId,
+    sessionFile: input.sessionFile,
+    conversationTitle: input.title,
+    cwd: input.cwd,
+    relatedProjectIds,
+    trigger: input.trigger,
+    mode: 'auto',
+  });
+
+  if (!prepared.shouldStartRun) {
+    return;
+  }
+
+  const existing = await readConversationMemoryDistillRunState(input.conversationId);
+  if (existing.running) {
+    return;
+  }
+
+  const result = await startConversationMemoryDistillRun({
+    conversationId: input.conversationId,
+    profile,
+    checkpointId: prepared.checkpoint.checkpointId,
+    mode: 'auto',
+    trigger: input.trigger,
+    emitActivity: false,
+  });
+
+  if (!result.accepted || !result.runId) {
+    markConversationMemoryMaintenanceRunFailed({
+      profile,
+      conversationId: input.conversationId,
+      checkpointId: prepared.checkpoint.checkpointId,
+      error: result.reason ?? 'Could not start conversation memory distillation.',
+    });
+    return;
+  }
+
+  markConversationMemoryMaintenanceRunStarted({
+    profile,
+    conversationId: input.conversationId,
+    checkpointId: prepared.checkpoint.checkpointId,
+    runId: result.runId,
+  });
+}
+
+async function maybeKickConversationMemoryFollowUp(profile: string, conversationId: string): Promise<void> {
+  const state = readConversationMemoryMaintenanceState({ profile, conversationId });
+  if (!state || state.status !== 'pending' || !state.autoPromotionEligible) {
+    return;
+  }
+
+  const existing = await readConversationMemoryDistillRunState(conversationId);
+  if (existing.running) {
+    return;
+  }
+
+  const result = await startConversationMemoryDistillRun({
+    conversationId,
+    profile,
+    checkpointId: state.latestCheckpointId,
+    mode: state.latestMode,
+    trigger: state.latestTrigger,
+    emitActivity: false,
+  });
+
+  if (!result.accepted || !result.runId) {
+    markConversationMemoryMaintenanceRunFailed({
+      profile,
+      conversationId,
+      checkpointId: state.latestCheckpointId,
+      error: result.reason ?? 'Could not start conversation memory distillation.',
+    });
+    return;
+  }
+
+  markConversationMemoryMaintenanceRunStarted({
+    profile,
+    conversationId,
+    checkpointId: state.latestCheckpointId,
+    runId: result.runId,
+  });
+}
+
 async function listMemoryWorkItems(): Promise<MemoryWorkItem[]> {
   const sessionsById = new Map(listConversationSessionsSnapshot().map((session) => [session.id, session]));
   const runs = (await listDurableRuns()).runs
@@ -898,7 +1080,15 @@ async function listMemoryWorkItems(): Promise<MemoryWorkItem[]> {
     });
   }
 
-  return items;
+  const pendingStates = buildConversationMemoryWorkItemsFromStates(
+    listConversationMemoryMaintenanceStates({ profile: getCurrentProfile() })
+      .filter((state) => !seenConversationIds.has(state.conversationId)),
+  ).map((item) => ({
+    ...item,
+    conversationTitle: sessionsById.get(item.conversationId)?.title ?? item.conversationTitle,
+  }));
+
+  return [...items, ...pendingStates].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
 function loadTaskStateEntries(): TaskRuntimeEntry[] {
@@ -4478,8 +4668,15 @@ app.delete('/api/memories/:memoryId', (req, res) => {
 app.get('/api/conversations/:id/memories/status', async (req, res) => {
   try {
     const conversationId = req.params.id;
-    const state = await readConversationMemoryDistillRunState(conversationId);
-    res.json(state);
+    const runState = await readConversationMemoryDistillRunState(conversationId);
+    const maintenanceState = readConversationMemoryMaintenanceState({
+      profile: getCurrentProfile(),
+      conversationId,
+    });
+    res.json({
+      ...runState,
+      status: runState.status ?? maintenanceState?.status ?? null,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logError('request handler error', {
@@ -4515,41 +4712,42 @@ app.post('/api/conversations/:id/memories', async (req, res) => {
       anchorMessageId?: string;
       tags?: string[];
     };
-
-    const runnerPath = join(REPO_ROOT, 'packages/web/dist-server/distillConversationMemoryRun.js');
-    if (!existsSync(runnerPath)) {
-      res.status(500).json({ error: `Distillation runner not found: ${runnerPath}` });
-      return;
-    }
-
-    const payload = Buffer.from(JSON.stringify({
+    const sourceSession = listConversationSessionsSnapshot().find((session) => session.id === conversationId);
+    const relatedProjectIds = getConversationProjectLink({
+      profile,
       conversationId,
-      anchorMessageId,
+    })?.relatedProjectIds ?? [];
+    const prepared = prepareConversationMemoryMaintenance({
+      profile,
+      conversationId,
+      sessionFile,
+      conversationTitle: sourceSession?.title,
+      cwd: sourceSession?.cwd,
+      relatedProjectIds,
+      trigger: 'manual',
+      mode: 'manual',
+      requestedAnchorMessageId: anchorMessageId,
+    });
+
+    const result = await startConversationMemoryDistillRun({
+      conversationId,
+      profile,
+      checkpointId: prepared.checkpoint.checkpointId,
+      mode: 'manual',
+      trigger: 'manual',
       title,
       summary,
       tags,
-    }), 'utf-8').toString('base64url');
-
-    const result = await startBackgroundRun({
-      taskSlug: `distill-memory-${conversationId}`,
-      cwd: REPO_ROOT,
-      argv: [
-        process.execPath,
-        runnerPath,
-        '--port',
-        String(PORT),
-        '--profile',
-        profile,
-        '--payload',
-        payload,
-      ],
-      source: {
-        type: CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE,
-        id: conversationId,
-      },
+      emitActivity: true,
     });
 
-    if (!result.accepted) {
+    if (!result.accepted || !result.runId) {
+      markConversationMemoryMaintenanceRunFailed({
+        profile,
+        conversationId,
+        checkpointId: prepared.checkpoint.checkpointId,
+        error: result.reason ?? 'Could not start conversation memory distillation.',
+      });
       res.status(503).json({
         error: result.reason ?? 'Could not start conversation memory distillation.',
         accepted: false,
@@ -4557,6 +4755,13 @@ app.post('/api/conversations/:id/memories', async (req, res) => {
       });
       return;
     }
+
+    markConversationMemoryMaintenanceRunStarted({
+      profile,
+      conversationId,
+      checkpointId: prepared.checkpoint.checkpointId,
+      runId: result.runId,
+    });
 
     res.json({
       conversationId,
@@ -4575,7 +4780,7 @@ app.post('/api/conversations/:id/memories', async (req, res) => {
   }
 });
 
-app.post('/api/conversations/:id/memories/distill-now', (req, res) => {
+app.post('/api/conversations/:id/memories/distill-now', async (req, res) => {
   const currentProfile = getCurrentProfile();
   const conversationId = req.params.id;
   const {
@@ -4583,19 +4788,33 @@ app.post('/api/conversations/:id/memories/distill-now', (req, res) => {
     title,
     summary,
     anchorMessageId,
+    checkpointId,
     tags,
+    mode: requestedMode,
+    trigger: requestedTrigger,
     emitActivity = false,
   } = req.body as {
     profile?: string;
     title?: string;
     summary?: string;
     anchorMessageId?: string;
+    checkpointId?: string;
     tags?: string[];
+    mode?: ConversationMemoryMaintenanceMode;
+    trigger?: ConversationMemoryMaintenanceTrigger;
     emitActivity?: boolean;
   };
   const profile = typeof requestedProfile === 'string' && requestedProfile.trim().length > 0
     ? requestedProfile.trim()
     : currentProfile;
+  const mode: ConversationMemoryMaintenanceMode = requestedMode === 'manual' ? 'manual' : 'auto';
+  const trigger: ConversationMemoryMaintenanceTrigger = requestedTrigger === 'manual'
+    || requestedTrigger === 'auto_compaction_end'
+    ? requestedTrigger
+    : 'turn_end';
+  const normalizedCheckpointId = typeof checkpointId === 'string' && checkpointId.trim().length > 0
+    ? checkpointId.trim()
+    : undefined;
 
   try {
     if (liveRegistry.get(conversationId)?.session.isStreaming) {
@@ -4603,18 +4822,24 @@ app.post('/api/conversations/:id/memories/distill-now', (req, res) => {
       return;
     }
 
-    const sessionFile = resolveConversationSessionFile(conversationId);
-    if (!sessionFile || !existsSync(sessionFile)) {
-      res.status(404).json({ error: 'Conversation not found.' });
-      return;
-    }
-
-    const snapshot = buildCheckpointSnapshotFromSessionFile(sessionFile, anchorMessageId);
     const sourceSession = listConversationSessionsSnapshot().find((session) => session.id === conversationId);
     const relatedProjectIds = getConversationProjectLink({
       profile,
       conversationId,
     })?.relatedProjectIds ?? [];
+    const snapshot = normalizedCheckpointId
+      ? readConversationCheckpointSnapshotFromState({
+          profile,
+          conversationId,
+          checkpointId: normalizedCheckpointId,
+        })
+      : (() => {
+          const sessionFile = resolveConversationSessionFile(conversationId);
+          if (!sessionFile || !existsSync(sessionFile)) {
+            throw new Error('Conversation not found.');
+          }
+          return buildCheckpointSnapshotFromSessionFile(sessionFile, anchorMessageId);
+        })();
 
     const memory = saveDistilledConversationMemory({
       title,
@@ -4651,6 +4876,19 @@ app.post('/api/conversations/:id/memories/distill-now', (req, res) => {
         })
       : undefined;
 
+    if (normalizedCheckpointId) {
+      const state = markConversationMemoryMaintenanceRunCompleted({
+        profile,
+        conversationId,
+        checkpointId: normalizedCheckpointId,
+        memoryId: memory.id,
+        referencePath: memory.reference.relativePath,
+      });
+      if (mode === 'auto' && state.status === 'pending') {
+        await maybeKickConversationMemoryFollowUp(profile, conversationId);
+      }
+    }
+
     res.json({
       conversationId,
       memory,
@@ -4660,6 +4898,19 @@ app.post('/api/conversations/:id/memories/distill-now', (req, res) => {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+
+    if (normalizedCheckpointId) {
+      try {
+        markConversationMemoryMaintenanceRunFailed({
+          profile,
+          conversationId,
+          checkpointId: normalizedCheckpointId,
+          error: message,
+        });
+      } catch {
+        // Ignore maintenance state write errors in failure path.
+      }
+    }
 
     if (emitActivity) {
       try {
@@ -4689,6 +4940,11 @@ app.post('/api/conversations/:id/memories/distill-now', (req, res) => {
     logError('request handler error', {
       message,
       stack: err instanceof Error ? err.stack : undefined,
+      conversationId,
+      profile,
+      mode,
+      trigger,
+      checkpointId: normalizedCheckpointId,
     });
     res.status(status).json({ error: message });
   }
