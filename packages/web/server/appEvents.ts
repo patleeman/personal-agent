@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, statSync, watch, type Dirent, type FSWatcher } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import {
-  getProfilesRoot,
+  getDurableTasksDir,
   getStateRoot,
   resolveActivityReadStatePath,
   resolveConversationAttentionStatePath,
@@ -178,7 +178,7 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
   const projectsDir = resolveProfileProjectsDir({ repoRoot: options.repoRoot, profile });
   const conversationLinksDir = resolveProfileConversationLinksDir({ profile });
   const conversationArtifactsDir = resolveProfileConversationArtifactsDir({ profile });
-  const tasksDir = join(getProfilesRoot(), profile, 'agent', 'tasks');
+  const tasksDir = getDurableTasksDir();
   const runsRoot = resolveDurableRunsRoot(dirname(options.taskStateFile));
   const conversationAttentionStateFile = resolveConversationAttentionStatePath({ profile });
   const deferredResumeStateFile = resolveDeferredResumeStateFile();

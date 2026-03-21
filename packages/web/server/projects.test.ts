@@ -32,7 +32,8 @@ afterEach(async () => {
 function createTempRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'pa-web-projects-'));
   tempDirs.push(dir);
-  process.env.PERSONAL_AGENT_PROFILES_ROOT = join(dir, 'profiles');
+  process.env.PERSONAL_AGENT_STATE_ROOT = dir;
+  process.env.PERSONAL_AGENT_PROFILES_ROOT = join(dir, 'sync', 'profiles');
   return dir;
 }
 

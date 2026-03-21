@@ -11,6 +11,7 @@ import {
   bootstrapState,
   bootstrapStateOrThrow,
   canBootstrap,
+  getDurableSessionsDir,
   preparePiAgentDir,
   type RuntimeStatePaths,
 } from './index.js';
@@ -289,7 +290,7 @@ describe('preparePiAgentDir', () => {
     expect(result.copiedLegacyAuth).toBe(false);
     expect(lstatSync(result.sessionsDir).isSymbolicLink()).toBe(true);
     expect(resolve(dirname(result.sessionsDir), readlinkSync(result.sessionsDir)))
-      .toBe(join(statePaths.root, 'pi-agent', 'sessions'));
+      .toBe(join(statePaths.root, 'sync', 'pi-agent', 'sessions'));
   });
 
   it('moves machine-local runtime artifacts out of the durable synced pi-agent dir', async () => {
@@ -300,10 +301,10 @@ describe('preparePiAgentDir', () => {
       cache: join(tempDir, 'state', 'cache'),
     };
 
-    const staleAgentsFile = join(statePaths.root, 'pi-agent', 'AGENTS.md');
-    const staleSettingsFile = join(statePaths.root, 'pi-agent', 'settings.json');
+    const staleAgentsFile = join(statePaths.root, 'sync', 'pi-agent', 'AGENTS.md');
+    const staleSettingsFile = join(statePaths.root, 'sync', 'pi-agent', 'settings.json');
     const runtimeSettingsFile = join(statePaths.root, 'pi-agent-runtime', 'settings.json');
-    await mkdir(join(statePaths.root, 'pi-agent'), { recursive: true });
+    await mkdir(join(statePaths.root, 'sync', 'pi-agent'), { recursive: true });
     await writeFile(staleAgentsFile, '# stale\n');
     await writeFile(staleSettingsFile, '{"theme":"legacy"}\n');
 
@@ -315,5 +316,33 @@ describe('preparePiAgentDir', () => {
     expect(existsSync(staleAgentsFile)).toBe(false);
     expect(existsSync(staleSettingsFile)).toBe(false);
     expect(await readFile(runtimeSettingsFile, 'utf-8')).toContain('legacy');
+  });
+
+  it('moves misplaced local session transcripts into the synced durable sessions dir', async () => {
+    const statePaths: RuntimeStatePaths = {
+      root: join(tempDir, 'state'),
+      auth: join(tempDir, 'state', 'auth'),
+      session: join(tempDir, 'state', 'session'),
+      cache: join(tempDir, 'state', 'cache'),
+    };
+
+    const legacySessionFile = join(statePaths.root, 'pi-agent', 'sessions', '--tmp-project--', '2026-03-21T18-00-00-000Z_local.jsonl');
+    const durableSessionFile = join(getDurableSessionsDir(statePaths.root), '--tmp-project--', '2026-03-21T18-05-00-000Z_synced.jsonl');
+
+    await mkdir(dirname(legacySessionFile), { recursive: true });
+    await mkdir(dirname(durableSessionFile), { recursive: true });
+    await writeFile(legacySessionFile, '{"type":"session","id":"local-session","timestamp":"2026-03-21T18:00:00.000Z","cwd":"/tmp/project"}\n');
+    await writeFile(durableSessionFile, '{"type":"session","id":"synced-session","timestamp":"2026-03-21T18:05:00.000Z","cwd":"/tmp/project"}\n');
+
+    const result = await preparePiAgentDir({
+      statePaths,
+      copyLegacyAuth: false,
+    });
+
+    expect(resolve(dirname(result.sessionsDir), readlinkSync(result.sessionsDir))).toBe(getDurableSessionsDir(statePaths.root));
+    expect(existsSync(legacySessionFile)).toBe(false);
+    expect(await readFile(join(getDurableSessionsDir(statePaths.root), '--tmp-project--', '2026-03-21T18-00-00-000Z_local.jsonl'), 'utf-8'))
+      .toContain('local-session');
+    expect(await readFile(durableSessionFile, 'utf-8')).toContain('synced-session');
   });
 });

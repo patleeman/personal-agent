@@ -14,9 +14,11 @@ const originalEnv = process.env;
 const tempDirs: string[] = [];
 
 beforeEach(() => {
+  const stateRoot = createTempDir();
   process.env = {
     ...originalEnv,
-    PERSONAL_AGENT_PROFILES_ROOT: '/profiles-root',
+    PERSONAL_AGENT_STATE_ROOT: stateRoot,
+    PERSONAL_AGENT_PROFILES_ROOT: join(stateRoot, 'sync', 'profiles'),
   };
 });
 
@@ -154,7 +156,7 @@ describe('daemonProfileSync', () => {
       configUpdated: true,
       daemonWasRunning: true,
       daemonRestarted: true,
-      desiredTaskDir: '/profiles-root/datadog/agent/tasks',
+      desiredTaskDir: join(process.env.PERSONAL_AGENT_STATE_ROOT!, 'sync', 'tasks'),
       runningTaskDir: '/repo/profiles',
     });
     expect(stopDaemonGracefully).toHaveBeenCalledTimes(1);
@@ -180,7 +182,7 @@ describe('daemonProfileSync', () => {
       configUpdated: false,
       daemonWasRunning: true,
       daemonRestarted: true,
-      desiredTaskDir: '/profiles-root/datadog/agent/tasks',
+      desiredTaskDir: join(process.env.PERSONAL_AGENT_STATE_ROOT!, 'sync', 'tasks'),
       runningTaskDir: '/repo/profiles/datadog/agent/tasks',
     });
     expect(stopDaemonGracefully).toHaveBeenCalledTimes(1);

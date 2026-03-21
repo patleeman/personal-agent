@@ -20,23 +20,25 @@ function writeFile(path: string, content: string): void {
 }
 
 function memoryPath(profilesRoot: string, memoryName: string): string {
-  return join(profilesRoot, '_memory', memoryName, 'MEMORY.md');
+  return join(profilesRoot, '..', 'memory', memoryName, 'MEMORY.md');
 }
 
-function createMemoryRepo(): { repoRoot: string; profilesRoot: string; configPath: string } {
+function createMemoryRepo(): { repoRoot: string; profilesRoot: string; configPath: string; stateRoot: string } {
   const repoRoot = createTempDir('personal-agent-memory-repo-');
-  const profilesRoot = createTempDir('personal-agent-memory-profiles-');
+  const stateRoot = createTempDir('personal-agent-memory-state-');
+  const profilesRoot = join(stateRoot, 'sync', 'profiles');
   const configDir = createTempDir('personal-agent-memory-config-');
   const configPath = join(configDir, 'config.json');
 
   writeFile(configPath, JSON.stringify({ defaultProfile: 'assistant' }));
   writeFile(join(repoRoot, 'defaults/agent/AGENTS.md'), '# Shared\n');
-  writeFile(join(profilesRoot, 'assistant/agent/AGENTS.md'), '# Assistant\n');
+  writeFile(join(profilesRoot, 'assistant.json'), '{"title":"Assistant"}\n');
 
   return {
     repoRoot,
     profilesRoot,
     configPath,
+    stateRoot,
   };
 }
 
@@ -57,10 +59,10 @@ afterEach(async () => {
 
 describe('memory command', () => {
   it('lists and shows global memory packages, migrating legacy profile files', async () => {
-    const { repoRoot, profilesRoot, configPath } = createMemoryRepo();
+    const { repoRoot, profilesRoot, configPath, stateRoot } = createMemoryRepo();
 
     writeFile(
-      join(profilesRoot, 'assistant/agent/memory/runpod.md'),
+      join(profilesRoot, 'assistant', 'agent', 'memory', 'runpod.md'),
       `---
 id: runpod
 title: Runpod Notes
@@ -75,7 +77,7 @@ Runpod operational notes.
     );
 
     writeFile(
-      join(profilesRoot, 'assistant/agent/memory/desktop.md'),
+      join(profilesRoot, 'assistant', 'agent', 'memory', 'desktop.md'),
       `---
 id: desktop
 title: Desktop Machine Notes
@@ -90,6 +92,7 @@ Desktop operational notes.
     );
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_PROFILES_ROOT = profilesRoot;
     process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
 
@@ -107,7 +110,7 @@ Desktop operational notes.
       parseErrors: Array<unknown>;
     };
 
-    expect(listPayload.memoryDir).toBe(join(profilesRoot, '_memory'));
+    expect(listPayload.memoryDir).toBe(join(profilesRoot, '..', 'memory'));
     expect(listPayload.docs.map((doc) => doc.id)).toEqual(['desktop', 'runpod']);
     expect(listPayload.parseErrors).toHaveLength(0);
     expect(readFileSync(memoryPath(profilesRoot, 'runpod'), 'utf-8')).toContain('name: runpod');
@@ -133,7 +136,7 @@ Desktop operational notes.
   });
 
   it('filters memory packages by tag/type/status/text', async () => {
-    const { repoRoot, profilesRoot, configPath } = createMemoryRepo();
+    const { repoRoot, profilesRoot, configPath, stateRoot } = createMemoryRepo();
 
     writeFile(
       memoryPath(profilesRoot, 'runpod'),
@@ -180,6 +183,7 @@ Desktop Ubuntu operational notes.
     );
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_PROFILES_ROOT = profilesRoot;
     process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
 
@@ -217,7 +221,7 @@ Desktop Ubuntu operational notes.
   });
 
   it('fails lint when docs have parse errors or duplicate ids', async () => {
-    const { repoRoot, profilesRoot, configPath } = createMemoryRepo();
+    const { repoRoot, profilesRoot, configPath, stateRoot } = createMemoryRepo();
 
     writeFile(
       memoryPath(profilesRoot, 'runpod'),
@@ -265,6 +269,7 @@ Broken parent reference.
     );
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_PROFILES_ROOT = profilesRoot;
     process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
 
@@ -290,9 +295,10 @@ Broken parent reference.
   });
 
   it('creates a memory package template with memory new', async () => {
-    const { repoRoot, profilesRoot, configPath } = createMemoryRepo();
+    const { repoRoot, profilesRoot, configPath, stateRoot } = createMemoryRepo();
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_PROFILES_ROOT = profilesRoot;
     process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
 
@@ -367,9 +373,10 @@ Broken parent reference.
   });
 
   it('requires --force to overwrite an existing memory package', async () => {
-    const { repoRoot, profilesRoot, configPath } = createMemoryRepo();
+    const { repoRoot, profilesRoot, configPath, stateRoot } = createMemoryRepo();
 
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_PROFILES_ROOT = profilesRoot;
     process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
 

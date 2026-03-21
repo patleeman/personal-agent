@@ -5,6 +5,7 @@ import { dirname, join } from 'path';
 import {
   createProjectActivityEntry,
   getActivityConversationLink,
+  getDurableSessionsDir,
   setActivityConversationLinks,
   writeProfileActivityEntry,
 } from '@personal-agent/core';
@@ -39,14 +40,15 @@ function createTestRepo(stateRoot: string = process.env.PERSONAL_AGENT_STATE_ROO
   );
 
   if (stateRoot) {
-    writeFile(join(stateRoot, 'profiles/datadog/agent/AGENTS.md'), '# Datadog\n');
+    writeFile(join(stateRoot, 'sync', 'profiles', 'datadog.json'), '{"title":"Datadog"}\n');
+    writeFile(join(stateRoot, 'sync', 'agents', 'datadog.md'), '# Datadog\n');
   }
 
   return repo;
 }
 
 function writeSessionFile(stateRoot: string, relativePath: string, lines: unknown[]): string {
-  const filePath = join(stateRoot, 'pi-agent', 'sessions', relativePath);
+  const filePath = join(getDurableSessionsDir(stateRoot), relativePath);
   writeFile(filePath, lines.map((line) => JSON.stringify(line)).join('\n') + '\n');
   return filePath;
 }

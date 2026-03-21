@@ -29,7 +29,8 @@ function createTestRepo(stateRoot?: string): string {
   writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
   if (stateRoot) {
-    writeFile(join(stateRoot, 'profiles/datadog/agent/AGENTS.md'), '# Datadog\n');
+    writeFile(join(stateRoot, 'sync', 'profiles', 'datadog.json'), '{"title":"Datadog"}\n');
+    writeFile(join(stateRoot, 'sync', 'agents', 'datadog.md'), '# Datadog\n');
   }
 
   return repo;
@@ -139,7 +140,6 @@ describe('profile command failure paths', () => {
     expect(exitCode).toBe(0);
     expect(logs.some((line) => line.includes('Default profile set to: datadog'))).toBe(true);
 
-    // Verify config was written
     const config = JSON.parse(readFileSync(configPath, 'utf-8')) as { defaultProfile: string };
     expect(config.defaultProfile).toBe('datadog');
 
@@ -156,7 +156,6 @@ describe('profile command failure paths', () => {
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
 
-    // First set a default profile
     await runCli(['profile', 'use', 'datadog']);
 
     const logs: string[] = [];
@@ -168,7 +167,6 @@ describe('profile command failure paths', () => {
 
     expect(exitCode).toBe(0);
     expect(logs.some((line) => line.includes('Profiles:'))).toBe(true);
-    // Should show both profiles
     expect(logs.some((line) => line.includes('datadog'))).toBe(true);
     expect(logs.some((line) => line.includes('shared'))).toBe(true);
 
@@ -196,7 +194,6 @@ describe('profile command failure paths', () => {
 
     expect(exitCode).toBe(0);
 
-    // Find JSON output
     const jsonLine = logs.find((line) => line.includes('"name":'));
     expect(jsonLine).toBeDefined();
 

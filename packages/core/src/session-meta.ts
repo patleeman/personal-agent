@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
-import { getStateRoot } from './runtime/paths.js';
+import { getDurableSessionsDir } from './runtime/paths.js';
 
 export interface StoredSessionMeta {
   id: string;
@@ -48,7 +48,7 @@ interface RawMessage {
 type RawLine = RawSessionRecord | RawModelChange | RawSessionInfo | RawMessage | { type: string };
 
 function resolveDefaultSessionsDir(): string {
-  return join(getStateRoot(), 'pi-agent', 'sessions');
+  return getDurableSessionsDir();
 }
 
 function parseJsonLine(rawLine: string): RawLine | null {

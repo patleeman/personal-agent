@@ -213,12 +213,9 @@ describe('sync module', () => {
     await module.handleEvent(createEvent('sync.run.requested'), context);
 
     const gitattributes = readFileSync(join(repoDir, '.gitattributes'), 'utf-8');
-    expect(gitattributes).toContain('pi-agent/state/conversation-attention/*.json text eol=lf merge=personal-agent-conversation-attention');
-    expect(gitattributes).toContain('pi-agent/deferred-resumes-state.json text eol=lf merge=personal-agent-deferred-resumes');
-    expect(readGitOutput(repoDir, ['config', '--get', 'merge.personal-agent-conversation-attention.driver']))
-      .toContain('sync merge-conversation-attention %O %A %B');
-    expect(readGitOutput(repoDir, ['config', '--get', 'merge.personal-agent-deferred-resumes.driver']))
-      .toContain('sync merge-deferred-resumes %O %A %B');
+    expect(gitattributes).toContain('pi-agent/sessions/**/*.jsonl text eol=lf merge=union');
+    expect(gitattributes).not.toContain('pi-agent/state/conversation-attention');
+    expect(gitattributes).not.toContain('pi-agent/deferred-resumes-state.json');
 
     const commitCount = Number.parseInt(readGitOutput(repoDir, ['rev-list', '--count', 'HEAD']), 10);
     expect(commitCount).toBe(2);

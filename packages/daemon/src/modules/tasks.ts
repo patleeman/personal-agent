@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { dirname, join, resolve } from 'path';
 import {
   createProjectActivityEntry,
+  getDurableSessionsDir,
   setActivityConversationLinks,
   writeProfileActivityEntry,
 } from '@personal-agent/core';
@@ -144,11 +145,11 @@ export interface TasksModuleDependencies {
 
 /**
  * Find Pi session IDs that were created within a ±5 minute window of a task run.
- * Sessions live at <stateRoot>/pi-agent/sessions/<cwd-slug>/<ts>_<uuid>.jsonl.
+ * Sessions live at <stateRoot>/sync/pi-agent/sessions/<cwd-slug>/<ts>_<uuid>.jsonl.
  */
 function findRelatedSessionIds(stateRoot: string, startedAt: string, endedAt: string): string[] {
   try {
-    const sessionsBase = join(stateRoot, 'pi-agent', 'sessions');
+    const sessionsBase = getDurableSessionsDir(stateRoot);
     if (!existsSync(sessionsBase)) return [];
 
     const startMs = new Date(startedAt).getTime() - 60_000;   // 1 min before
@@ -381,24 +382,6 @@ function ensureTaskRecord(taskState: TaskStateFile, task: ParsedTaskDefinition):
   return created;
 }
 
-function inferRepoRootFromTaskFile(filePath: string, profile: string): string | undefined {
-  const normalizedPath = resolve(filePath).replace(/\\/g, '/');
-  const marker = `/profiles/${profile}/agent/tasks/`;
-  const markerIndex = normalizedPath.indexOf(marker);
-
-  if (markerIndex >= 0) {
-    return normalizedPath.slice(0, markerIndex) || '/';
-  }
-
-  const fallbackMarker = `/profiles/${profile}/agent/tasks`;
-  const fallbackIndex = normalizedPath.indexOf(fallbackMarker);
-  if (fallbackIndex >= 0) {
-    return normalizedPath.slice(0, fallbackIndex) || '/';
-  }
-
-  return undefined;
-}
-
 function shouldQueueTaskNotification(task: ParsedTaskDefinition, status: TaskRunOutcomeStatus): boolean {
   if (!task.output) {
     return false;
@@ -542,15 +525,8 @@ export function createTasksModule(
       relatedConversationIds?: string[];
     },
   ): void => {
-    const repoRoot = inferRepoRootFromTaskFile(task.filePath, task.profile);
-    if (!repoRoot) {
-      context.logger.warn(`unable to infer repo root for task activity id=${task.id} file=${task.filePath}`);
-      return;
-    }
-
     writeProfileActivityEntry({
       stateRoot: context.paths.stateRoot,
-      repoRoot,
       profile: task.profile,
       entry: createProjectActivityEntry({
         id: activity.activityId,

@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { getProfilesRoot } from '@personal-agent/core';
+import { getDurableTasksDir, getProfilesRoot } from '@personal-agent/core';
 import {
   getDaemonConfigFilePath,
   getDaemonStatus,
@@ -39,8 +39,8 @@ function normalizePath(value: string): string {
   return resolve(value).replace(/\\/g, '/').replace(/\/+$/, '');
 }
 
-export function resolveProfileTaskDir(_repoRoot: string, profile: string): string {
-  return resolve(getProfilesRoot(), profile, 'agent', 'tasks');
+export function resolveProfileTaskDir(_repoRoot: string, _profile: string): string {
+  return getDurableTasksDir();
 }
 
 export function classifyRepoManagedTaskDir(taskDir: string | undefined, repoRoot: string): 'missing' | 'profiles-root' | 'profile-task-dir' | 'other' {

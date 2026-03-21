@@ -20,9 +20,11 @@ function writeFile(path: string, content: string): void {
 }
 
 beforeEach(() => {
+  const stateRoot = createTempDir('pa-web-memory-state-');
   process.env = {
     ...originalEnv,
-    PERSONAL_AGENT_STATE_ROOT: createTempDir('pa-web-memory-state-'),
+    PERSONAL_AGENT_STATE_ROOT: stateRoot,
+    PERSONAL_AGENT_PROFILES_ROOT: join(stateRoot, 'sync', 'profiles'),
   };
 });
 
@@ -70,7 +72,7 @@ function createToolContext() {
 }
 
 function memoryPath(memoryName: string): string {
-  return join(process.env.PERSONAL_AGENT_STATE_ROOT as string, 'profiles', '_memory', memoryName, 'MEMORY.md');
+  return join(process.env.PERSONAL_AGENT_STATE_ROOT as string, 'sync', 'memory', memoryName, 'MEMORY.md');
 }
 
 describe('memory agent extension', () => {

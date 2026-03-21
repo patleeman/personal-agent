@@ -2,7 +2,7 @@
 
 `personal-agent` supports git-backed cross-machine sync for durable state.
 
-Use this when you want profiles, memory, tasks, projects, and session state to follow you across devices.
+Use this when you want portable durable resources and conversation session history to follow you across devices without syncing machine-local runtime state.
 
 ## What sync does
 
@@ -14,14 +14,20 @@ After setup, the daemon periodically runs git sync in the background and the Web
 
 The managed sync repo tracks these roots:
 
-- `profiles/**`
-- `pi-agent/**`
-- `config/**` (setup seeds `config/config.json`)
+- `profiles/*.json`
+- `agents/**`
+- `settings/**`
+- `models/**`
+- `skills/**`
+- `memory/**`
+- `tasks/**`
+- `projects/**`
+- `pi-agent/sessions/**`
 
-Machine-local runtime files are kept outside the sync repo under `~/.local/state/personal-agent/pi-agent-runtime/**`.
-That includes auth, settings, models, generated `AGENTS.md` / `SYSTEM.md` / `APPEND_SYSTEM.md`, `bin/**`, and the session index.
+Machine-local runtime files stay out of the synced surface.
+That includes inbox/read-state, conversation attention, deferred resumes, checkpoints, daemon state, gateway state, auth, generated `AGENTS.md` / `SYSTEM.md` / `APPEND_SYSTEM.md`, `bin/**`, and the session index.
 
-`config/daemon.json`, `config/gateway.json`, and `config/web.json` remain machine-local by default.
+`config/config.json`, `config/daemon.json`, `config/gateway.json`, and `config/web.json` remain machine-local by default.
 
 ## First-time setup (first machine)
 

@@ -96,10 +96,8 @@ describe('sync conversation attention merge command', () => {
     });
   });
 
-  it('declares the managed gitattributes rule for conversation attention files', () => {
-    expect(syncRepoGitattributes()).toContain(
-      'pi-agent/state/conversation-attention/*.json text eol=lf merge=personal-agent-conversation-attention',
-    );
+  it('does not sync conversation attention state by managed gitattributes', () => {
+    expect(syncRepoGitattributes()).not.toContain('pi-agent/state/conversation-attention');
   });
 });
 
@@ -203,9 +201,7 @@ describe('sync deferred resumes merge command', () => {
     });
   });
 
-  it('declares the managed gitattributes rule for deferred resume state', () => {
-    expect(syncRepoGitattributes()).toContain(
-      'pi-agent/deferred-resumes-state.json text eol=lf merge=personal-agent-deferred-resumes',
-    );
+  it('does not sync deferred resume state by managed gitattributes', () => {
+    expect(syncRepoGitattributes()).not.toContain('pi-agent/deferred-resumes-state.json');
   });
 });

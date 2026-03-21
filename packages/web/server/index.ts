@@ -1,7 +1,7 @@
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, watch, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, normalize, relative } from 'node:path';
+import { basename, dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
@@ -96,6 +96,7 @@ import { createActivityAgentExtension } from './activityAgentExtension.js';
 import { createConversationTodoAgentExtension } from './conversationTodoAgentExtension.js';
 import { createConversationAutomationPromptExtension } from './conversationAutomationPromptExtension.js';
 import { createWaitForUserAgentExtension } from './waitForUserAgentExtension.js';
+import { createAskUserQuestionAgentExtension } from './askUserQuestionAgentExtension.js';
 import { createRunAgentExtension } from './runAgentExtension.js';
 import { createMemoryAgentExtension } from './memoryAgentExtension.js';
 import {
@@ -211,6 +212,9 @@ import {
   getConversationExecutionTarget,
   getConversationProjectLink,
   getExecutionTarget,
+  getDurableAgentsDir,
+  getDurableProfilesDir,
+  getSyncRoot,
   getProfilesRoot,
   getStateRoot,
   loadMemoryDocs,
@@ -230,8 +234,8 @@ import {
   markConversationAttentionRead,
   markConversationAttentionUnread,
   getMemoryDocsDir,
+  getDurableSessionsDir,
   getPiAgentRuntimeDir,
-  getPiAgentStateDir,
   migrateLegacyProfileMemoryDirs,
   readConversationAttachmentDownload,
   readMcpConfig,
@@ -320,7 +324,7 @@ const REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? DEFAULT_REPO_ROOT;
 const PROCESS_CWD = process.cwd();
 const AGENT_DIR = getPiAgentRuntimeDir();
 const AUTH_FILE = join(AGENT_DIR, 'auth.json');
-const SESSIONS_DIR = join(getPiAgentStateDir(), 'sessions');
+const SESSIONS_DIR = getDurableSessionsDir();
 const TASK_STATE_FILE = getScheduledTaskStateFilePath();
 const PROFILE_CONFIG_FILE = getProfileConfigFilePath();
 const DEFERRED_RESUME_POLL_MS = 3_000;
@@ -577,6 +581,7 @@ function buildLiveSessionExtensionFactories() {
       stateRoot: getStateRoot(),
       getCurrentProfile,
     }),
+    createAskUserQuestionAgentExtension(),
     createRunAgentExtension(),
     createMemoryAgentExtension(),
     createArtifactAgentExtension({
@@ -7801,21 +7806,43 @@ function pathIsWithin(pathValue: string, dirValue: string): boolean {
 }
 
 function inferSkillSource(skillPath: string, profile: string): string {
-  const profileSkillDir = join(getProfilesRoot(), profile, 'agent', 'skills');
-  if (profile !== 'shared' && pathIsWithin(skillPath, profileSkillDir)) {
+  const frontmatter = parseFrontmatter(skillPath);
+  const profiles = Array.isArray(frontmatter.profiles)
+    ? frontmatter.profiles.map((value) => String(value).trim()).filter(Boolean)
+    : [];
+
+  if (profiles.length === 1 && profiles[0] === profile) {
     return profile;
   }
 
-  const sharedSkillDirs = [
-    join(getProfilesRoot(), 'shared', 'agent', 'skills'),
-    join(REPO_ROOT, 'skills'),
-  ];
+  return 'shared';
+}
 
-  if (sharedSkillDirs.some((dir) => pathIsWithin(skillPath, dir))) {
-    return 'shared';
+function listSkillDefinitionFiles(skillDir: string): string[] {
+  if (!existsSync(skillDir)) {
+    return [];
   }
 
-  return 'shared';
+  const output: string[] = [];
+  const stack = [normalize(skillDir)];
+
+  while (stack.length > 0) {
+    const current = stack.pop() as string;
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const fullPath = join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+        continue;
+      }
+
+      if (entry.isFile() && entry.name === 'SKILL.md') {
+        output.push(fullPath);
+      }
+    }
+  }
+
+  output.sort();
+  return output;
 }
 
 function listSkillsForProfile(profile = getCurrentProfile()): SkillItem[] {
@@ -7827,16 +7854,7 @@ function listSkillsForProfile(profile = getCurrentProfile()): SkillItem[] {
   const seenPaths = new Set<string>();
 
   for (const dir of resolved.skillDirs) {
-    if (!existsSync(dir)) {
-      continue;
-    }
-
-    for (const name of readdirSync(dir)) {
-      const skillMd = join(dir, name, 'SKILL.md');
-      if (!existsSync(skillMd)) {
-        continue;
-      }
-
+    for (const skillMd of listSkillDefinitionFiles(dir)) {
       const normalizedPath = normalize(skillMd);
       if (seenPaths.has(normalizedPath)) {
         continue;
@@ -7846,7 +7864,7 @@ function listSkillsForProfile(profile = getCurrentProfile()): SkillItem[] {
       const fm = parseFrontmatter(skillMd);
       skills.push({
         source: inferSkillSource(skillMd, profile),
-        name: String(fm.name ?? name),
+        name: String(fm.name ?? basename(dirname(skillMd))),
         description: String(fm.description ?? ''),
         path: skillMd,
         recentSessionCount: 0,
@@ -7863,21 +7881,39 @@ function listSkillsForCurrentProfile(): SkillItem[] {
   return listSkillsForProfile(getCurrentProfile());
 }
 
+function inferAgentSource(filePath: string, profile: string): string {
+  const normalizedBase = basename(filePath).replace(/\.[^.]+$/, '');
+  if (normalizedBase === profile || normalizedBase.startsWith(`${profile}-`)) {
+    return profile;
+  }
+
+  return 'shared';
+}
+
 function listProfileAgentItems(): AgentsItem[] {
   const items: AgentsItem[] = [];
+  const seenPaths = new Set<string>();
 
   for (const profile of listAvailableProfiles()) {
-    const filePath = join(getProfilesRoot(), profile, 'agent', 'AGENTS.md');
-    if (!existsSync(filePath)) {
-      continue;
-    }
-
-    items.push({
-      source: profile,
-      path: filePath,
-      exists: true,
-      content: readFileSync(filePath, 'utf-8'),
+    const resolved = resolveResourceProfile(profile, {
+      repoRoot: REPO_ROOT,
+      profilesRoot: getProfilesRoot(),
     });
+
+    for (const filePath of resolved.agentsFiles) {
+      const normalizedPath = normalize(filePath);
+      if (seenPaths.has(normalizedPath)) {
+        continue;
+      }
+      seenPaths.add(normalizedPath);
+
+      items.push({
+        source: inferAgentSource(filePath, profile),
+        path: filePath,
+        exists: existsSync(filePath),
+        content: existsSync(filePath) ? readFileSync(filePath, 'utf-8') : undefined,
+      });
+    }
   }
 
   return items;
@@ -7960,26 +7996,16 @@ function buildRecentReadUsage(trackedPaths: string[]): Map<string, MemoryUsageSu
 app.get('/api/memory', (req, res) => {
   try {
     const profile = resolveRequestedProfileFromQuery(req) as string;
-    const sharedAgentsCandidates = [
-      join(getProfilesRoot(), 'shared', 'agent', 'AGENTS.md'),
-      join(getRepoDefaultsAgentDir(REPO_ROOT), 'AGENTS.md'),
-    ];
-    const sharedPath = sharedAgentsCandidates.find((candidate) => existsSync(candidate)) ?? sharedAgentsCandidates[0];
-    const profilePath = join(getProfilesRoot(), profile, 'agent', 'AGENTS.md');
-    const agentsMd: AgentsItem[] = [{
-      source: 'shared',
-      path: sharedPath,
-      exists: existsSync(sharedPath),
-      content: existsSync(sharedPath) ? readFileSync(sharedPath, 'utf-8') : undefined,
-    }];
-    if (profile !== 'shared') {
-      agentsMd.push({
-        source: profile,
-        path: profilePath,
-        exists: existsSync(profilePath),
-        content: existsSync(profilePath) ? readFileSync(profilePath, 'utf-8') : undefined,
-      });
-    }
+    const resolvedProfile = resolveResourceProfile(profile, {
+      repoRoot: REPO_ROOT,
+      profilesRoot: getProfilesRoot(),
+    });
+    const agentsMd: AgentsItem[] = resolvedProfile.agentsFiles.map((filePath) => ({
+      source: inferAgentSource(filePath, profile),
+      path: filePath,
+      exists: existsSync(filePath),
+      content: existsSync(filePath) ? readFileSync(filePath, 'utf-8') : undefined,
+    }));
 
     const skills = listSkillsForProfile(profile);
     const memoryDocs = listMemoryDocs();
@@ -8027,10 +8053,10 @@ app.get('/api/memory/file', (req, res) => {
     const filePath = req.query.path as string;
     if (!filePath) { res.status(400).json({ error: 'path required' }); return; }
 
-    const profilesRoot = getProfilesRoot();
+    const syncRoot = getSyncRoot();
     const allowed = filePath.endsWith('.md') && (
       pathIsWithin(filePath, REPO_ROOT)
-      || pathIsWithin(filePath, profilesRoot)
+      || pathIsWithin(filePath, syncRoot)
     );
 
     if (!allowed) {
@@ -8053,10 +8079,10 @@ app.post('/api/memory/file', (req, res) => {
     const { path: filePath, content } = req.body as { path: string; content: string };
     if (!filePath || content === undefined) { res.status(400).json({ error: 'path and content required' }); return; }
 
-    const profilesRoot = getProfilesRoot();
+    const syncRoot = getSyncRoot();
     const allowed = filePath.endsWith('.md') && (
       pathIsWithin(filePath, REPO_ROOT)
-      || pathIsWithin(filePath, profilesRoot)
+      || pathIsWithin(filePath, syncRoot)
     );
 
     if (!allowed) {

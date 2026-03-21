@@ -37,6 +37,7 @@ export interface ProjectRequirementsDocument {
 
 export interface ProjectDocument {
   id: string;
+  ownerProfile: string;
   createdAt: string;
   updatedAt: string;
   archivedAt?: string;
@@ -316,6 +317,7 @@ function formatProjectPlan(plan: ProjectPlanDocument): Record<string, unknown> {
 
 export function createInitialProject(input: {
   id: string;
+  ownerProfile: string;
   title: string;
   description: string;
   repoRoot?: string;
@@ -330,6 +332,7 @@ export function createInitialProject(input: {
 
   return {
     id: assertNonEmptyText(input.id, 'Project id'),
+    ownerProfile: assertNonEmptyText(input.ownerProfile, 'Project ownerProfile'),
     createdAt,
     updatedAt,
     title,
@@ -360,6 +363,7 @@ export function formatProject(document: ProjectDocument): string {
 
   const output: Record<string, unknown> = {
     id: assertNonEmptyText(document.id, 'Project id'),
+    ownerProfile: assertNonEmptyText(document.ownerProfile, 'Project ownerProfile'),
     createdAt: assertNonEmptyText(document.createdAt, 'Project createdAt'),
     updatedAt: assertNonEmptyText(document.updatedAt, 'Project updatedAt'),
     ...(normalizeOptionalText(document.archivedAt, 'Project archivedAt')
@@ -428,6 +432,7 @@ export function parseProject(yaml: string): ProjectDocument {
 
   return {
     id: readRequiredYamlString(object, 'id', 'Project'),
+    ownerProfile: readOptionalYamlString(object, 'ownerProfile', 'Project') ?? 'shared',
     createdAt: readRequiredYamlString(object, 'createdAt', 'Project'),
     updatedAt: readRequiredYamlString(object, 'updatedAt', 'Project'),
     archivedAt: readOptionalYamlString(object, 'archivedAt', 'Project'),

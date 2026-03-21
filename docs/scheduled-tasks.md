@@ -27,11 +27,11 @@ Do not confuse scheduled tasks with:
 
 Recommended location:
 
-- `~/.local/state/personal-agent/profiles/<active-profile>/agent/tasks/*.task.md`
+- `~/.local/state/personal-agent/sync/tasks/*.task.md`
 
 Only files ending in `.task.md` are discovered automatically.
 
-If daemon config does not override the task directory, discovery defaults to the active profile's task directory.
+If daemon config does not override the task directory, discovery defaults to the shared durable task directory and filters by each task file's `profile` frontmatter.
 
 ## What a task file looks like
 

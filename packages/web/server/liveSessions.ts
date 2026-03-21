@@ -6,8 +6,8 @@
 import { appendFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  getDurableSessionsDir,
   getPiAgentRuntimeDir,
-  getPiAgentStateDir,
 } from '@personal-agent/core';
 import {
   AgentSession,
@@ -49,7 +49,7 @@ import { logInfo, logWarn } from './logging.js';
 
 const AGENT_DIR = getPiAgentRuntimeDir();
 const SETTINGS_FILE = join(AGENT_DIR, 'settings.json');
-const SESSIONS_DIR = join(getPiAgentStateDir(), 'sessions');
+const SESSIONS_DIR = getDurableSessionsDir();
 
 export function resolvePersistentSessionDir(cwd: string): string {
   const safePath = `--${cwd.replace(/^[/\\]/, '').replace(/[/\\:]/g, '-')}--`;

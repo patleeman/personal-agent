@@ -1640,6 +1640,22 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     });
   }, []);
 
+  const replyToAskUserQuestion = useCallback((reply: string) => {
+    const normalizedReply = reply.trim();
+    const currentInput = textareaRef.current?.value ?? input;
+    setSlashIdx(0);
+    setMentionIdx(0);
+    if (normalizedReply.length > 0) {
+      const nextInput = !currentInput.trim()
+        ? normalizedReply
+        : currentInput.includes(normalizedReply)
+          ? currentInput
+          : `${currentInput.trimEnd()}\n\n${normalizedReply}`;
+      setInput(nextInput);
+    }
+    moveComposerCaretToEnd();
+  }, [input, moveComposerCaretToEnd, setInput]);
+
   const navigateComposerHistory = useCallback((direction: 'older' | 'newer') => {
     if (composerHistory.length === 0) {
       return false;
@@ -3413,6 +3429,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               activeArtifactId={selectedArtifactId}
               onOpenRun={openRun}
               activeRunId={selectedRunId}
+              onReplyToQuestion={replyToAskUserQuestion}
               onResumeConversation={conversationResumeState.canResume ? resumeConversation : undefined}
               resumeConversationBusy={resumeConversationBusy}
               resumeConversationTitle={conversationResumeState.title}
@@ -3505,6 +3522,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     openArtifact,
     openRun,
     realMessages,
+    replyToAskUserQuestion,
     requestedFocusMessageIndex,
     remoteConnectBusy,
     remoteConnectionPending,

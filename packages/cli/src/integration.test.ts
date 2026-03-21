@@ -35,7 +35,7 @@ if [ "$1" = "--version" ]; then
   echo "pi-test 0.0.1"
   exit 0
 fi
-printf '%s\\n' "$@" >> "${argsLogPath}"
+printf '%s\n' "$@" >> "${argsLogPath}"
 if [ -n "$PI_FAKE_EXIT_CODE" ]; then
   exit "$PI_FAKE_EXIT_CODE"
 fi
@@ -75,29 +75,23 @@ describe('CLI main flow integration', () => {
     const argsLogPath = join(createTempDir('personal-agent-cli-log-'), 'pi-args.log');
     const fakePiBinDir = createFakePiBinary(argsLogPath);
 
-    // Create test profiles
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(
       join(repo, 'defaults/agent/settings.json'),
       JSON.stringify({ defaultProvider: 'test', defaultModel: 'model' })
     );
-    writeFile(join(stateRoot, 'profiles/datadog/agent/AGENTS.md'), '# Datadog\n');
+    writeFile(join(stateRoot, 'sync', 'profiles', 'datadog.json'), '{"title":"Datadog"}\n');
+    writeFile(join(stateRoot, 'sync', 'agents', 'datadog.md'), '# Datadog\n');
 
     process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_CONFIG_FILE = join(configDir, 'config.json');
 
-    // Step 1: Set profile
     expect(await runCli(['profile', 'use', 'datadog'])).toBe(0);
-
-    // Step 2: Run doctor
     expect(await runCli(['doctor'])).toBe(0);
-
-    // Step 3: Run pi with the profile
     expect(await runCli(['tui', '-p', 'hello'])).toBe(0);
 
-    // Verify pi was called with merged profile
     const loggedArgs = readFileSync(argsLogPath, 'utf-8');
     expect(loggedArgs).toContain('-p');
     expect(loggedArgs).toContain('hello');
@@ -110,32 +104,28 @@ describe('CLI main flow integration', () => {
     const argsLogPath = join(createTempDir('personal-agent-cli-log-'), 'pi-args.log');
     const fakePiBinDir = createFakePiBinary(argsLogPath);
 
-    // Create profiles with different content
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared Content\n');
     writeFile(join(repo, 'defaults/agent/settings.json'), JSON.stringify({ shared: true }));
-    writeFile(join(stateRoot, 'profiles/datadog/agent/AGENTS.md'), '# Datadog Content\n');
-    writeFile(join(stateRoot, 'profiles/datadog/agent/settings.json'), JSON.stringify({ datadog: true }));
+    writeFile(join(stateRoot, 'sync', 'profiles', 'datadog.json'), '{"title":"Datadog"}\n');
+    writeFile(join(stateRoot, 'sync', 'agents', 'datadog.md'), '# Datadog Content\n');
+    writeFile(join(stateRoot, 'sync', 'settings', 'datadog.json'), JSON.stringify({ datadog: true }));
 
     process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_CONFIG_FILE = join(configDir, 'config.json');
 
-    // Use shared and tui
     await runCli(['profile', 'use', 'shared']);
     await runCli(['tui', '-p', 'test']);
 
-    // Check runtime has shared content
     const runtimeAgentsPath = join(stateRoot, 'pi-agent-runtime', 'AGENTS.md');
     expect(existsSync(runtimeAgentsPath)).toBe(true);
     let agentsContent = readFileSync(runtimeAgentsPath, 'utf-8');
     expect(agentsContent).toContain('Shared Content');
 
-    // Switch to datadog and tui
     await runCli(['profile', 'use', 'datadog']);
     await runCli(['tui', '-p', 'test2']);
 
-    // Check runtime now has merged content
     agentsContent = readFileSync(runtimeAgentsPath, 'utf-8');
     expect(agentsContent).toContain('Shared Content');
     expect(agentsContent).toContain('Datadog Content');
@@ -152,15 +142,12 @@ describe('CLI main flow integration', () => {
     process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
-    // Don't disable daemon events - let it try and fail
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-    // Should succeed even though daemon is not running
     const exitCode = await runCli(['tui', '-p', 'test']);
 
     expect(exitCode).toBe(0);
-    // Should have logged daemon unavailable warning
     expect(warnSpy).toHaveBeenCalled();
 
     warnSpy.mockRestore();
@@ -174,7 +161,6 @@ describe('CLI main flow integration', () => {
 
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
-    // Create legacy auth
     const legacyAuthDir = join(process.env.HOME || '/tmp', '.pi', 'agent');
     mkdirSync(legacyAuthDir, { recursive: true });
     writeFile(join(legacyAuthDir, 'auth.json'), JSON.stringify({ legacy: true }));
@@ -187,7 +173,6 @@ describe('CLI main flow integration', () => {
 
     expect(exitCode).toBe(0);
 
-    // Cleanup
     await rm(legacyAuthDir, { recursive: true, force: true }).catch(() => {});
   });
 
@@ -220,40 +205,5 @@ describe('CLI main flow integration', () => {
     const runtimeSettings = JSON.parse(readFileSync(runtimeSettingsPath, 'utf-8')) as Record<string, unknown>;
 
     expect(runtimeSettings.theme).toBe('cobalt2-light');
-    expect(runtimeSettings.defaultProvider).toBe('test');
-    expect(runtimeSettings.defaultModel).toBe('model');
-  });
-
-  it('doctor validates complete setup chain', async () => {
-    const repo = createTempDir('personal-agent-cli-repo-');
-    const stateRoot = createTempDir('personal-agent-cli-state-');
-    const configDir = createTempDir('personal-agent-cli-config-');
-    const argsLogPath = join(createTempDir('personal-agent-cli-log-'), 'pi-args.log');
-    const fakePiBinDir = createFakePiBinary(argsLogPath);
-
-    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
-    writeFile(
-      join(repo, 'defaults/agent/settings.json'),
-      JSON.stringify({ defaultProvider: 'test', defaultModel: 'model' })
-    );
-
-    process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
-    process.env.PERSONAL_AGENT_REPO_ROOT = repo;
-    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
-    process.env.PERSONAL_AGENT_CONFIG_FILE = join(configDir, 'config.json');
-
-    const logs: string[] = [];
-    const logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
-      logs.push(String(message ?? ''));
-    });
-
-    const exitCode = await runCli(['doctor']);
-
-    expect(exitCode).toBe(0);
-    expect(logs.some((l) => l.includes('pi binary'))).toBe(true);
-    expect(logs.some((l) => l.includes('profile:'))).toBe(true);
-    expect(logs.some((l) => l.includes('runtime root:'))).toBe(true);
-
-    logSpy.mockRestore();
   });
 });

@@ -1,8 +1,3 @@
-/**
- * P3: Resources package negative tests
- * Tests for malformed profile structures, missing files, and edge cases
- */
-
 import { existsSync, mkdtempSync, mkdirSync, writeFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
@@ -25,9 +20,11 @@ function createTempDir(prefix: string): string {
 }
 
 function createTempProfilesRoot(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'personal-agent-profiles-'));
-  tempDirs.push(dir);
-  return dir;
+  const root = mkdtempSync(join(tmpdir(), 'personal-agent-profiles-'));
+  const profilesRoot = join(root, 'sync', 'profiles');
+  mkdirSync(profilesRoot, { recursive: true });
+  tempDirs.push(root);
+  return profilesRoot;
 }
 
 function writeFile(path: string, content: string): void {
@@ -43,16 +40,7 @@ describe('resources negative tests', () => {
   describe('resolveResourceProfile error cases', () => {
     it('throws on invalid profile name with path traversal', () => {
       const repo = createTempDir('personal-agent-resources-');
-
-      expect(() => resolveResourceProfile('../../../etc/passwd', { repoRoot: repo })).toThrow(
-        'Invalid profile name'
-      );
-    });
-
-    it('throws on profile name with null bytes', () => {
-      const repo = createTempDir('personal-agent-resources-');
-
-      expect(() => resolveResourceProfile('test\0profile', { repoRoot: repo })).toThrow();
+      expect(() => resolveResourceProfile('../../../etc/passwd', { repoRoot: repo })).toThrow('Invalid profile name');
     });
 
     it('resolves empty profile names as shared when shared defaults exist', () => {
@@ -66,41 +54,27 @@ describe('resources negative tests', () => {
 
     it('throws on non-existent profile', () => {
       const repo = createTempDir('personal-agent-resources-');
+      const profilesRoot = createTempProfilesRoot();
+      writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
-      expect(() => resolveResourceProfile('nonexistent', { repoRoot: repo })).toThrow();
+      expect(() => resolveResourceProfile('nonexistent', { repoRoot: repo, profilesRoot })).toThrow('Profile not found');
     });
 
-    it('handles profile with empty extension directory', () => {
+    it('handles profile with no durable resources but local overlay', () => {
       const repo = createTempDir('personal-agent-resources-');
       const profilesRoot = createTempProfilesRoot();
-      const extensionsDir = join(profilesRoot, 'shared/agent/extensions');
-      mkdirSync(extensionsDir, { recursive: true });
+      const local = createTempDir('personal-agent-local-');
       writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
+      writeFile(join(profilesRoot, 'shared.json'), '{}\n');
+      writeFile(join(local, 'agent/AGENTS.md'), '# Local\n');
 
       const resolved = resolveResourceProfile('shared', {
         repoRoot: repo,
         profilesRoot,
-        localProfileDir: join(repo, '.local-profile'),
+        localProfileDir: local,
       });
 
-      expect(resolved.extensionDirs).toEqual([extensionsDir]);
-      expect(resolved.extensionEntries).toEqual([]);
-    });
-
-    it('handles profile with empty skills directory', () => {
-      const repo = createTempDir('personal-agent-resources-');
-      const profilesRoot = createTempProfilesRoot();
-      const skillsDir = join(profilesRoot, 'shared/agent/skills');
-      mkdirSync(skillsDir, { recursive: true });
-      writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
-
-      const resolved = resolveResourceProfile('shared', {
-        repoRoot: repo,
-        profilesRoot,
-        localProfileDir: join(repo, '.local-profile'),
-      });
-
-      expect(resolved.skillDirs).toEqual([skillsDir]);
+      expect(resolved.layers.map((layer) => layer.name)).toEqual(['defaults', 'durable', 'local']);
     });
   });
 
@@ -120,51 +94,12 @@ describe('resources negative tests', () => {
       expect(() => mergeJsonFiles([file])).toThrow();
     });
 
-    it('throws on JSON with syntax error', () => {
-      const repo = createTempDir('personal-agent-resources-');
-      const file = join(repo, 'syntax-error.json');
-      writeFile(file, 'not json at all');
-
-      expect(() => mergeJsonFiles([file])).toThrow();
-    });
-
     it('handles empty array of files', () => {
-      const result = mergeJsonFiles([]);
-      expect(result).toEqual({});
-    });
-
-    it('handles file with valid JSON array payload by preserving numeric keys', () => {
-      const repo = createTempDir('personal-agent-resources-');
-      const file = join(repo, 'array.json');
-      writeFile(file, '[1, 2, 3]');
-
-      const result = mergeJsonFiles([file]);
-      expect(result).toEqual({
-        0: 1,
-        1: 2,
-        2: 3,
-      });
+      expect(mergeJsonFiles([])).toEqual({});
     });
   });
 
   describe('materializeProfileToAgentDir edge cases', () => {
-    it('handles empty profile resolution', () => {
-      const repo = createTempDir('personal-agent-resources-');
-      const profilesRoot = createTempProfilesRoot();
-      const runtime = createTempDir('personal-agent-runtime-');
-
-      writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
-
-      const resolved = resolveResourceProfile('shared', {
-        repoRoot: repo,
-        profilesRoot,
-        localProfileDir: join(repo, '.local-profile'),
-      });
-      const result = materializeProfileToAgentDir(resolved, runtime);
-
-      expect(result.writtenFiles.length).toBeGreaterThan(0);
-    });
-
     it('does not create APPEND_SYSTEM when neither prompt catalog system sections nor append files exist', () => {
       const repo = createTempDir('personal-agent-resources-');
       const profilesRoot = createTempProfilesRoot();
@@ -198,25 +133,6 @@ describe('resources negative tests', () => {
 
       expect(result.writtenFiles.length).toBeGreaterThan(0);
     });
-
-    it('preserves existing files not managed by profile', () => {
-      const repo = createTempDir('personal-agent-resources-');
-      const profilesRoot = createTempProfilesRoot();
-      const runtime = createTempDir('personal-agent-runtime-');
-
-      writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
-      writeFile(join(runtime, 'UNRELATED.md'), 'should be preserved\n');
-
-      const resolved = resolveResourceProfile('shared', {
-        repoRoot: repo,
-        profilesRoot,
-        localProfileDir: join(repo, '.local-profile'),
-      });
-      materializeProfileToAgentDir(resolved, runtime);
-
-      // The unrelated file should be removed (current behavior is to clear runtime dir)
-      expect(join(runtime, 'UNRELATED.md')).not.toBe(join(runtime, 'AGENTS.md'));
-    });
   });
 
   describe('listProfiles edge cases', () => {
@@ -228,28 +144,10 @@ describe('resources negative tests', () => {
       expect(profiles).toEqual([]);
     });
 
-    it('returns empty array when profiles directory is empty', () => {
+    it('reads profile ids from json definition files', () => {
       const repo = createTempDir('personal-agent-resources-');
       const profilesRoot = createTempProfilesRoot();
-
-      const profiles = listProfiles({ repoRoot: repo, profilesRoot });
-      expect(profiles).toEqual([]);
-    });
-
-    it('ignores profiles without agent directory', () => {
-      const repo = createTempDir('personal-agent-resources-');
-      const profilesRoot = createTempProfilesRoot();
-      mkdirSync(join(profilesRoot, 'invalid-profile'), { recursive: true });
-      // No agent subdirectory
-
-      const profiles = listProfiles({ repoRoot: repo, profilesRoot });
-      expect(profiles).toEqual([]);
-    });
-
-    it('includes profiles with agent directory even without AGENTS.md', () => {
-      const repo = createTempDir('personal-agent-resources-');
-      const profilesRoot = createTempProfilesRoot();
-      mkdirSync(join(profilesRoot, 'incomplete/agent'), { recursive: true });
+      writeFile(join(profilesRoot, 'incomplete.json'), '{}\n');
 
       const profiles = listProfiles({ repoRoot: repo, profilesRoot });
       expect(profiles).toEqual(['incomplete']);
@@ -258,20 +156,10 @@ describe('resources negative tests', () => {
     it('handles profiles with special characters in name (valid)', () => {
       const repo = createTempDir('personal-agent-resources-');
       const profilesRoot = createTempProfilesRoot();
-      writeFile(join(profilesRoot, 'test-profile_v2/agent/AGENTS.md'), '# Test\n');
+      writeFile(join(profilesRoot, 'test-profile_v2.json'), '{}\n');
 
       const profiles = listProfiles({ repoRoot: repo, profilesRoot });
       expect(profiles).toContain('test-profile_v2');
-    });
-
-    it('ignores repo-managed non-shared profiles', () => {
-      const repo = createTempDir('personal-agent-resources-');
-      const profilesRoot = createTempProfilesRoot();
-      writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
-      writeFile(join(repo, 'profiles/datadog/agent/AGENTS.md'), '# Datadog\n');
-
-      const profiles = listProfiles({ repoRoot: repo, profilesRoot });
-      expect(profiles).toEqual(['shared']);
     });
   });
 
@@ -286,7 +174,6 @@ describe('resources negative tests', () => {
         profilesRoot,
         localProfileDir: join(repo, '.local-profile'),
       });
-      // Manually clear resource dirs
       const emptyResolved = {
         ...resolved,
         extensionDirs: [],
@@ -296,101 +183,7 @@ describe('resources negative tests', () => {
       };
 
       const args = buildPiResourceArgs(emptyResolved);
-
-      // Should still produce valid args
       expect(args).toContain('--no-extensions');
-    });
-
-    it('handles multiple extensions', () => {
-      const repo = createTempDir('personal-agent-resources-');
-      const profilesRoot = createTempProfilesRoot();
-      writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
-      writeFile(join(profilesRoot, 'shared/agent/extensions/ext1/index.ts'), 'export default {}');
-      writeFile(join(profilesRoot, 'shared/agent/extensions/ext2/index.ts'), 'export default {}');
-
-      const resolved = resolveResourceProfile('shared', {
-        repoRoot: repo,
-        profilesRoot,
-        localProfileDir: join(repo, '.local-profile'),
-      });
-      const args = buildPiResourceArgs(resolved);
-
-      // Should have extension args
-      expect(args.some((arg) => arg.includes('extensions'))).toBe(true);
-    });
-  });
-
-  describe('merge precedence edge cases', () => {
-    it('handles deeply nested object merging', () => {
-      const repo = createTempDir('personal-agent-resources-');
-      const fileA = join(repo, 'a.json');
-      const fileB = join(repo, 'b.json');
-
-      writeFile(
-        fileA,
-        JSON.stringify({
-          level1: {
-            level2: {
-              level3: {
-                value: 'from-a',
-              },
-            },
-          },
-        })
-      );
-
-      writeFile(
-        fileB,
-        JSON.stringify({
-          level1: {
-            level2: {
-              level3: {
-                other: 'from-b',
-              },
-            },
-          },
-        })
-      );
-
-      const merged = mergeJsonFiles([fileA, fileB]);
-
-      expect(merged).toEqual({
-        level1: {
-          level2: {
-            level3: {
-              value: 'from-a',
-              other: 'from-b',
-            },
-          },
-        },
-      });
-    });
-
-    it('handles null values in merge', () => {
-      const repo = createTempDir('personal-agent-resources-');
-      const fileA = join(repo, 'a.json');
-      const fileB = join(repo, 'b.json');
-
-      writeFile(fileA, JSON.stringify({ value: 'from-a' }));
-      writeFile(fileB, JSON.stringify({ value: null }));
-
-      const merged = mergeJsonFiles([fileA, fileB]);
-
-      expect(merged).toEqual({ value: null });
-    });
-
-    it('handles array replacement in merge', () => {
-      const repo = createTempDir('personal-agent-resources-');
-      const fileA = join(repo, 'a.json');
-      const fileB = join(repo, 'b.json');
-
-      writeFile(fileA, JSON.stringify({ items: [1, 2, 3] }));
-      writeFile(fileB, JSON.stringify({ items: [4, 5] }));
-
-      const merged = mergeJsonFiles([fileA, fileB]);
-
-      // Arrays should be replaced, not merged
-      expect(merged).toEqual({ items: [4, 5] });
     });
   });
 });

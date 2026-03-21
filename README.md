@@ -137,7 +137,7 @@ pa tasks list --status active
 pa tasks list --json --status completed
 pa tasks show <id>
 pa tasks validate --all
-pa tasks validate ~/.local/state/personal-agent/profiles/<profile>/agent/tasks/example.task.md
+pa tasks validate ~/.local/state/personal-agent/sync/tasks/example.task.md
 pa tasks logs <id> --tail 120
 ```
 
@@ -196,10 +196,9 @@ When daemon is unavailable, clients warn and continue (non-fatal).
 
 ## Extensions
 
-Pi extensions are auto-discovered from repo and profile layers:
+Pi extensions are auto-discovered from repo and local overlay layers:
 
 - `extensions/*`
-- `~/.local/state/personal-agent/profiles/<profile>/agent/extensions/*`
 - `~/.local/state/personal-agent/config/local/extensions/*`
 
 Extensions with `package.json` dependencies are auto-installed on first use.
@@ -291,7 +290,7 @@ Profile resources resolve from:
 
 - `defaults/agent` for repo-managed shared default profile files
 - repo built-ins from `extensions/` and `themes/`
-- `~/.local/state/personal-agent/profiles/<profile>/agent` for mutable profile resources, including skills
+- synced durable roots under `~/.local/state/personal-agent/sync/{profiles,agents,settings,models,skills,memory,tasks,projects}`
 
 Optional local overlay:
 

@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { getPiAgentStateDir } from '@personal-agent/core';
+import { getDurableSessionsDir } from '@personal-agent/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ensureSessionFileExists,
@@ -1329,7 +1329,7 @@ describe('event translation', () => {
 describe('session directory resolution', () => {
   it('stores web-created sessions under cwd-specific subdirectories', () => {
     expect(resolvePersistentSessionDir('/Users/patrick/workingdir/personal-agent')).toBe(
-      join(getPiAgentStateDir(), 'sessions', '--Users-patrick-workingdir-personal-agent--'),
+      join(getDurableSessionsDir(), '--Users-patrick-workingdir-personal-agent--'),
     );
   });
 });

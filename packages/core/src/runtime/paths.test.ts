@@ -9,6 +9,17 @@ import {
   getLocalProfileDir,
   getProfilesRoot,
   getStateRoot,
+  getSyncRoot,
+  getDurablePiAgentDir,
+  getDurableSessionsDir,
+  getDurableProfilesDir,
+  getDurableAgentsDir,
+  getDurableSettingsDir,
+  getDurableModelsDir,
+  getDurableSkillsDir,
+  getDurableMemoryDir,
+  getDurableTasksDir,
+  getDurableProjectsDir,
   resolveStatePaths,
   isPathInRepo,
   validateStatePathsOutsideRepo,
@@ -85,7 +96,18 @@ describe('profile and config path helpers', () => {
     process.env.PERSONAL_AGENT_STATE_ROOT = '/runtime/state';
 
     expect(getConfigRoot()).toBe('/runtime/state/config');
-    expect(getProfilesRoot()).toBe('/runtime/state/profiles');
+    expect(getProfilesRoot()).toBe('/runtime/state/sync/profiles');
+    expect(getSyncRoot()).toBe('/runtime/state/sync');
+    expect(getDurablePiAgentDir()).toBe('/runtime/state/sync/pi-agent');
+    expect(getDurableSessionsDir()).toBe('/runtime/state/sync/pi-agent/sessions');
+    expect(getDurableProfilesDir()).toBe('/runtime/state/sync/profiles');
+    expect(getDurableAgentsDir()).toBe('/runtime/state/sync/agents');
+    expect(getDurableSettingsDir()).toBe('/runtime/state/sync/settings');
+    expect(getDurableModelsDir()).toBe('/runtime/state/sync/models');
+    expect(getDurableSkillsDir()).toBe('/runtime/state/sync/skills');
+    expect(getDurableMemoryDir()).toBe('/runtime/state/sync/memory');
+    expect(getDurableTasksDir()).toBe('/runtime/state/sync/tasks');
+    expect(getDurableProjectsDir()).toBe('/runtime/state/sync/projects');
     expect(getLocalProfileDir()).toBe('/runtime/state/config/local');
   });
 

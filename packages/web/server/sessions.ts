@@ -15,7 +15,7 @@
 
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
-import { getPiAgentRuntimeDir, getPiAgentStateDir } from '@personal-agent/core';
+import { getDurableSessionsDir, getPiAgentRuntimeDir } from '@personal-agent/core';
 import {
   SessionManager,
   type SessionEntry,
@@ -25,7 +25,7 @@ import {
   type SessionContextUsageSnapshot,
 } from './sessionContextUsage.js';
 
-export const DEFAULT_SESSIONS_DIR = join(getPiAgentStateDir(), 'sessions');
+export const DEFAULT_SESSIONS_DIR = getDurableSessionsDir();
 export const SESSIONS_DIR = DEFAULT_SESSIONS_DIR;
 export const DEFAULT_SESSIONS_INDEX_FILE = join(getPiAgentRuntimeDir(), 'session-meta-index.json');
 export const SESSIONS_INDEX_FILE = DEFAULT_SESSIONS_INDEX_FILE;

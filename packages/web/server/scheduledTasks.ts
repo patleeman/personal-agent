@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { getProfilesRoot } from '@personal-agent/core';
+import { getDurableTasksDir } from '@personal-agent/core';
 import {
   loadDaemonConfig,
   parseTaskDefinition,
@@ -92,8 +92,8 @@ export function getScheduledTaskStateFilePath(): string {
   return join(resolveDaemonPaths(loadDaemonConfig().ipc.socketPath).root, 'task-state.json');
 }
 
-export function taskDirForProfile(profile: string): string {
-  return join(getProfilesRoot(), profile, 'agent', 'tasks');
+export function taskDirForProfile(_profile: string): string {
+  return getDurableTasksDir();
 }
 
 export function listScheduledTaskDefinitionFiles(taskDir: string): string[] {
@@ -197,12 +197,19 @@ export function loadScheduledTasksForProfile(profile: string): LoadedScheduledTa
 
   for (const filePath of listScheduledTaskDefinitionFiles(taskDir)) {
     try {
-      tasks.push(readParsedTaskDefinition(filePath, readFileSync(filePath, 'utf-8')));
+      const parsed = readParsedTaskDefinition(filePath, readFileSync(filePath, 'utf-8'));
+      if (parsed.profile !== profile) {
+        continue;
+      }
+      tasks.push(parsed);
     } catch (error) {
-      parseErrors.push({
-        filePath,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes(`profile`) || message.length > 0) {
+        parseErrors.push({
+          filePath,
+          error: message,
+        });
+      }
     }
   }
 
