@@ -2,20 +2,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import {
-  appendChecklistPresetItems,
   checklistDraftItemsToTemplateItems,
-  createChecklistDraftItem,
   type ChecklistDraftItem,
-  summarizeChecklistText,
   toChecklistDraftItems,
 } from '../checklists';
 import { useApi } from '../hooks';
 import type { ConversationAutomationWorkflowPreset } from '../types';
-import { ErrorState, LoadingState, Pill, ToolbarButton, cx } from './ui';
+import { ChecklistComposer, ChecklistItemList } from './ChecklistEditor';
+import { ErrorState, LoadingState, Pill, ToolbarButton } from './ui';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50';
-const SELECT_CLASS = `${INPUT_CLASS} pr-10`;
-const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[88px] resize-y leading-relaxed`;
 
 function createDraftId(prefix: 'preset'): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -49,26 +45,6 @@ function clonePreset(preset: ConversationAutomationWorkflowPreset): Conversation
   };
 }
 
-function moveDraftItem(items: ChecklistDraftItem[], itemId: string, targetItemId: string): ChecklistDraftItem[] {
-  if (itemId === targetItemId) {
-    return items;
-  }
-
-  const sourceIndex = items.findIndex((item) => item.id === itemId);
-  const targetIndex = items.findIndex((item) => item.id === targetItemId);
-  if (sourceIndex < 0 || targetIndex < 0) {
-    return items;
-  }
-
-  const next = [...items];
-  const [moved] = next.splice(sourceIndex, 1);
-  if (!moved) {
-    return items;
-  }
-  next.splice(targetIndex, 0, moved);
-  return next;
-}
-
 export function AutomationPresetPanel({
   presetId,
   creatingNew,
@@ -87,9 +63,6 @@ export function AutomationPresetPanel({
   const [initializedKey, setInitializedKey] = useState<string | null>(null);
   const [presetNameDraft, setPresetNameDraft] = useState('');
   const [draftItems, setDraftItems] = useState<ChecklistDraftItem[]>([]);
-  const [appendOpen, setAppendOpen] = useState(false);
-  const [appendPresetId, setAppendPresetId] = useState('');
-  const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<'save' | 'delete' | 'default' | null>(null);
 
@@ -103,7 +76,7 @@ export function AutomationPresetPanel({
     items: toChecklistDraftItems(selectedPreset?.items ?? []),
   }), [selectedPreset]);
   const editorDirty = JSON.stringify({ name: presetNameDraft, items: draftItems }) !== baseline;
-  const appendPresets = useMemo(
+  const availablePresets = useMemo(
     () => (data?.presetLibrary.presets ?? []).filter((preset) => preset.id !== selectedPreset?.id),
     [data?.presetLibrary.presets, selectedPreset?.id],
   );
@@ -115,8 +88,6 @@ export function AutomationPresetPanel({
 
     setPresetNameDraft(creatingNew ? 'New preset' : (selectedPreset?.name ?? ''));
     setDraftItems(creatingNew ? [] : toChecklistDraftItems(selectedPreset?.items ?? []));
-    setAppendOpen(false);
-    setAppendPresetId('');
     setActionError(null);
     setPendingAction(null);
     setInitializedKey(panelKey);
@@ -226,125 +197,48 @@ export function AutomationPresetPanel({
         </div>
         <input
           value={presetNameDraft}
-          onChange={(event) => setPresetNameDraft(event.target.value)}
+          onChange={(event) => {
+            setPresetNameDraft(event.target.value);
+            if (actionError) {
+              setActionError(null);
+            }
+          }}
           placeholder="Preset name"
           className={INPUT_CLASS}
         />
       </div>
 
       <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="ui-section-label">Todo list</p>
-            <p className="mt-1 text-[12px] text-secondary">Ordered preset items for the agent.</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <ToolbarButton onClick={() => setAppendOpen((value) => !value)} disabled={pendingAction !== null}>
-              Add preset
-            </ToolbarButton>
-            <ToolbarButton
-              onClick={() => setDraftItems((current) => [...current, createChecklistDraftItem()])}
-              disabled={pendingAction !== null}
-            >
-              + Add item
-            </ToolbarButton>
-          </div>
+        <div>
+          <p className="ui-section-label">Todo list</p>
+          <p className="mt-1 text-[12px] text-secondary">Ordered preset items for the agent.</p>
         </div>
 
-        {appendOpen && (
-          <div className="border-t border-border-subtle/70 pt-3">
-            {appendPresets.length === 0 ? (
-              <p className="text-[11px] text-dim">No other presets available yet.</p>
-            ) : (
-              <div className="flex flex-wrap items-center gap-2">
-                <select
-                  value={appendPresetId}
-                  onChange={(event) => setAppendPresetId(event.target.value)}
-                  className={cx(SELECT_CLASS, 'min-w-0 flex-1')}
-                  disabled={pendingAction !== null}
-                >
-                  <option value="">Select preset</option>
-                  {appendPresets.map((preset) => (
-                    <option key={preset.id} value={preset.id}>
-                      {preset.name} · {preset.items.length} {preset.items.length === 1 ? 'item' : 'items'}
-                    </option>
-                  ))}
-                </select>
-                <ToolbarButton
-                  onClick={() => {
-                    const preset = appendPresets.find((candidate) => candidate.id === appendPresetId);
-                    if (!preset) {
-                      return;
-                    }
-                    setDraftItems((current) => appendChecklistPresetItems(current, preset));
-                    setAppendOpen(false);
-                    setAppendPresetId('');
-                  }}
-                  disabled={pendingAction !== null || !appendPresetId}
-                >
-                  Add
-                </ToolbarButton>
-              </div>
-            )}
-          </div>
-        )}
+        <div className="border-t border-border-subtle/70">
+          <ChecklistItemList
+            items={draftItems}
+            textDisabled={pendingAction !== null}
+            structureDisabled={pendingAction !== null}
+            emptyState="Nothing here yet. Add the first preset item below."
+            onChange={(nextItems) => {
+              setDraftItems(nextItems);
+              if (actionError) {
+                setActionError(null);
+              }
+            }}
+          />
+        </div>
 
-        {draftItems.length === 0 ? (
-          <p className="border-t border-border-subtle/70 pt-3 text-[12px] text-dim">No items yet.</p>
-        ) : (
-          <div className="divide-y divide-border-subtle/70 border-t border-border-subtle/70">
-            {draftItems.map((item, index) => (
-              <div
-                key={item.id}
-                className={cx('grid gap-3 px-0 py-3 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-start', draggingItemId === item.id && 'opacity-60')}
-                onDragOver={(event) => {
-                  if (!draggingItemId || draggingItemId === item.id) {
-                    return;
-                  }
-                  event.preventDefault();
-                }}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  if (!draggingItemId) {
-                    return;
-                  }
-                  setDraftItems((current) => moveDraftItem(current, draggingItemId, item.id));
-                  setDraggingItemId(null);
-                }}
-              >
-                <button
-                  type="button"
-                  draggable={pendingAction === null}
-                  onDragStart={() => setDraggingItemId(item.id)}
-                  onDragEnd={() => setDraggingItemId(null)}
-                  className="mt-2 flex h-8 w-8 items-center justify-center rounded-lg border border-border-default bg-base text-[12px] text-dim"
-                  title="Drag to reorder"
-                >
-                  ⋮⋮
-                </button>
-
-                <div className="min-w-0 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] uppercase tracking-[0.14em] text-dim">Item {index + 1}</span>
-                    <span className="text-[10px] uppercase tracking-[0.14em] text-dim">{summarizeChecklistText(item.text)}</span>
-                  </div>
-                  <textarea
-                    value={item.text}
-                    onChange={(event) => setDraftItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, text: event.target.value } : candidate))}
-                    placeholder="Type anything the agent should do. You can use /skill:..., slash commands, or plain text."
-                    className={TEXTAREA_CLASS}
-                  />
-                </div>
-
-                <div className="flex items-center gap-1 justify-self-start lg:justify-self-end lg:pt-2">
-                  <ToolbarButton onClick={() => setDraftItems((current) => current.filter((candidate) => candidate.id !== item.id))} className="text-danger">
-                    Remove
-                  </ToolbarButton>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        <ChecklistComposer
+          currentItems={draftItems}
+          skills={data.skills}
+          presets={availablePresets}
+          disabled={pendingAction !== null}
+          onAdd={(nextItems) => {
+            setDraftItems(nextItems);
+          }}
+          onErrorChange={setActionError}
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-2 border-t border-border-subtle/70 pt-3">
