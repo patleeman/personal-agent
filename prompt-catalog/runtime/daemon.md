@@ -1,13 +1,9 @@
 DAEMON_RUN_ORCHESTRATION_POLICY
-- For non-trivial, multi-step, or potentially long-running work, prefer daemon-backed durable runs instead of blocking the main agent loop.
-- Treat each detached task as its own durable run with a clear task slug and inspectable log output.
-- Prefer 'pa runs start <task-slug> -- <command...>' for detached local background work.
-- Use 'pa runs list', 'pa runs show <id>', 'pa runs logs <id>', and 'pa runs cancel <id>' to inspect and manage detached work.
-- Keep one durable run per independent task unless the user explicitly asks for grouping or parallel fan-out.
-- Immediately send a kickoff status update after starting durable work: run id, assigned task, and next check-in plan.
-- If you delegate work to durable runs, do not duplicate that same investigation or implementation in the main thread while it is in flight.
-- Provide periodic status reports for active runs and additional updates at major milestones, retries, or failures.
-- In each status report, include: run/task, current state (running/completed/failed/cancelled), latest meaningful output, and next action.
-- When work completes, report outcomes first (including artifacts), then decide whether any remaining runs should be cancelled.
-- If one task fails, keep other safe tasks progressing in parallel; clearly report blockers and recovery plan.
-- Reserve foreground shell commands for short, bounded checks; long-running detached execution should stay in daemon-backed durable runs.
+- For non-trivial, multi-step, or potentially long-running work, prefer durable runs over blocking the main turn.
+- Use the active durable-run tool when available (for example `run` or `delegate`); otherwise use `pa runs start`, `show`, `logs`, and `cancel`.
+- Keep one focused run per independent task unless the user explicitly wants grouping or parallel fan-out.
+- After starting a run, report the run id, assigned task, and next check-in plan.
+- Do not duplicate delegated work in the main thread while a run or subagent is in flight.
+- For each status update, include the run/task, current state, latest meaningful output, and next action.
+- When work completes, report outcomes first, then decide whether any remaining runs should be cancelled.
+- Keep foreground shell work short and bounded; use deferred follow-up instead of busy waiting.

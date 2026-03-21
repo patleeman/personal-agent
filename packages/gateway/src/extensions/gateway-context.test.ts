@@ -42,8 +42,8 @@ describe('gateway context extension', () => {
     expect(result?.systemPrompt).toContain('base system prompt');
     expect(result?.systemPrompt).toContain('GATEWAY_RUNTIME_CONTEXT');
     expect(result?.systemPrompt).toContain('Telegram-specific capabilities:');
-    expect(result?.systemPrompt).toContain('Do NOT include code snippets');
-    expect(result?.systemPrompt).toContain('do not include local file paths unless asked');
+    expect(result?.systemPrompt).toContain('Keep replies chat-sized and easy to scan.');
+    expect(result?.systemPrompt).toContain('Avoid code blocks, command transcripts, local file paths, and tool internals unless the user asks for them.');
     expect(result?.systemPrompt).toContain('/regenerate');
     expect(result?.systemPrompt).toContain('/clear');
     expect(result?.systemPrompt).not.toContain('/sleep');

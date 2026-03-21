@@ -298,7 +298,7 @@ function buildMemoryTemplateVariables(options: {
     : '- Global memory dir: unavailable';
 
   const memoryRetrievalSection = options.activeMemoryDir
-    ? '- At task start, apply the active AGENTS policy first, then load only the skills and memory packages relevant to the current request.\n- Retrieval order: AGENTS.md for durable policy/facts, skills for reusable workflows/tactics, shared memory packages for durable knowledge/context.\n- Prefer targeted retrieval over broad scans; do not read the whole memory directory unless the task genuinely requires it.\n- Prefer `pa memory list` to inventory available memories.\n- Prefer `pa memory find --text <query>` and/or `--tag`, `--type`, `--status` to locate relevant memories quickly.\n- Use `pa memory show <id>` to inspect a specific memory package by id.\n- Use `pa memory new <id> ...` to create a new memory package with a valid MEMORY.md scaffold when needed.\n- Use `pa memory lint` after creating or heavily editing memories.'
+    ? '- Load only the AGENTS, skills, and memory packages relevant to the request.\n- Retrieval order: AGENTS.md for durable policy, skills for reusable workflows, shared memory packages for durable knowledge.\n- Prefer targeted lookup over broad scans; do not read the whole memory directory unless the task genuinely requires it.\n- Prefer the memory tool when available; otherwise use `pa memory list/find/show/new/lint`.\n- Find/show before new; lint after creating or heavily editing memories.'
     : '- Shared memory packages are unavailable; rely on AGENTS, skills, and repo docs instead.';
 
   const availableMemoriesSection = buildAvailableMemoriesSection(options.cwd, options.activeMemoryDir);
