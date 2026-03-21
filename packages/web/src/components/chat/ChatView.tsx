@@ -1,4 +1,4 @@
-import React, { Children, cloneElement, isValidElement, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type ReactNode, type RefObject } from 'react';
+import React, { Children, cloneElement, isValidElement, memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type ReactNode, type RefObject } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { parseSkillBlock, type ParsedSkillBlock } from '../../skillBlock';
 import remarkBreaks from 'remark-breaks';
@@ -155,22 +155,26 @@ function MarkdownCodeBlock({ children }: { children: ReactNode }) {
   );
 }
 
-function renderMarkdownText(text: string) {
+function MarkdownText({ text }: { text: string }) {
+  const footnoteId = useId();
+  const footnotePrefix = `chat-${footnoteId.replace(/[^a-zA-Z0-9_-]+/g, '-')}-`;
+
   return (
     <div className="ui-markdown">
       <ReactMarkdown
         remarkPlugins={MARKDOWN_REMARK_PLUGINS}
+        remarkRehypeOptions={{ clobberPrefix: footnotePrefix }}
         components={{
-          h1: ({ children }) => <h1>{renderChildrenWithMentions(children)}</h1>,
-          h2: ({ children }) => <h2>{renderChildrenWithMentions(children)}</h2>,
-          h3: ({ children }) => <h3>{renderChildrenWithMentions(children)}</h3>,
-          h4: ({ children }) => <h4>{renderChildrenWithMentions(children)}</h4>,
-          h5: ({ children }) => <h5>{renderChildrenWithMentions(children)}</h5>,
-          h6: ({ children }) => <h6>{renderChildrenWithMentions(children)}</h6>,
-          p: ({ children }) => <p>{renderChildrenWithMentions(children)}</p>,
-          li: ({ children }) => <li>{renderChildrenWithMentions(children)}</li>,
-          th: ({ children, style }) => <th style={style}>{renderChildrenWithMentions(children)}</th>,
-          td: ({ children, style }) => <td style={style}>{renderChildrenWithMentions(children)}</td>,
+          h1: ({ children, node: _node, ...props }) => <h1 {...props}>{renderChildrenWithMentions(children)}</h1>,
+          h2: ({ children, node: _node, ...props }) => <h2 {...props}>{renderChildrenWithMentions(children)}</h2>,
+          h3: ({ children, node: _node, ...props }) => <h3 {...props}>{renderChildrenWithMentions(children)}</h3>,
+          h4: ({ children, node: _node, ...props }) => <h4 {...props}>{renderChildrenWithMentions(children)}</h4>,
+          h5: ({ children, node: _node, ...props }) => <h5 {...props}>{renderChildrenWithMentions(children)}</h5>,
+          h6: ({ children, node: _node, ...props }) => <h6 {...props}>{renderChildrenWithMentions(children)}</h6>,
+          p: ({ children, node: _node, ...props }) => <p {...props}>{renderChildrenWithMentions(children)}</p>,
+          li: ({ children, node: _node, ...props }) => <li {...props}>{renderChildrenWithMentions(children)}</li>,
+          th: ({ children, node: _node, ...props }) => <th {...props}>{renderChildrenWithMentions(children)}</th>,
+          td: ({ children, node: _node, ...props }) => <td {...props}>{renderChildrenWithMentions(children)}</td>,
           a: ({ href, children, title }) => {
             const isExternal = typeof href === 'string' && !href.startsWith('#');
             return (
@@ -207,6 +211,10 @@ function renderMarkdownText(text: string) {
       </ReactMarkdown>
     </div>
   );
+}
+
+function renderMarkdownText(text: string) {
+  return <MarkdownText text={text} />;
 }
 
 function parseSkillContentSections(content: string): { relativeTo: string | null; body: string } {

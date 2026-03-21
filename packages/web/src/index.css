@@ -394,6 +394,23 @@
     @apply mt-4 border-t border-border-subtle pt-3;
   }
 
+  .ui-markdown .footnotes ol {
+    @apply mt-2;
+  }
+
+  .ui-markdown .footnotes p,
+  .ui-markdown .footnotes li {
+    @apply text-[12px] text-secondary;
+  }
+
+  .ui-markdown [data-footnote-ref] {
+    @apply no-underline;
+  }
+
+  .ui-markdown [data-footnote-backref] {
+    @apply ml-1 no-underline text-dim;
+  }
+
   .ui-markdown sup {
     @apply text-[10px];
   }

@@ -1,4 +1,4 @@
-import { type FormEventHandler, type ReactNode } from 'react';
+import { useId, type FormEventHandler, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
@@ -13,10 +13,14 @@ import { EmptyState, Pill, ToolbarButton } from './ui';
 const INPUT_CLASS = 'w-full rounded-xl border border-border-default bg-base px-4 py-3 text-[15px] leading-relaxed text-primary focus:outline-none focus:border-accent/60';
 
 function ProjectMarkdown({ body, className }: { body: string; className?: string }) {
+  const footnoteId = useId();
+  const footnotePrefix = `project-${footnoteId.replace(/[^a-zA-Z0-9_-]+/g, '-')}-`;
+
   return (
     <div className={className ?? 'ui-markdown max-w-none text-[14px]'}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks]}
+        remarkRehypeOptions={{ clobberPrefix: footnotePrefix }}
         components={{
           code: ({ className: codeClassName, children }) => <InlineMarkdownCode className={codeClassName}>{children}</InlineMarkdownCode>,
         }}

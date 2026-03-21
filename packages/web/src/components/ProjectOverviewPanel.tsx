@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
@@ -54,10 +55,14 @@ function taskPriority(status: string): number {
 }
 
 function MarkdownSection({ content }: { content: string }) {
+  const footnoteId = useId();
+  const footnotePrefix = `project-overview-${footnoteId.replace(/[^a-zA-Z0-9_-]+/g, '-')}-`;
+
   return (
     <div className="ui-markdown max-w-none">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks]}
+        remarkRehypeOptions={{ clobberPrefix: footnotePrefix }}
         components={{
           code: ({ className, children }) => <InlineMarkdownCode className={className}>{children}</InlineMarkdownCode>,
         }}
