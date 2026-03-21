@@ -65,6 +65,31 @@ function ensureDirectorySymlink(linkPath: string, targetPath: string): void {
   }
 
   const relativeTarget = relative(dirname(linkPath), targetPath);
+
+  try {
+    symlinkSync(relativeTarget, linkPath, 'dir');
+    return;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== 'EEXIST') {
+      throw error;
+    }
+  }
+
+  const racedExisting = lstatSyncSafe(linkPath);
+  if (racedExisting?.isSymbolicLink()) {
+    const existingTarget = resolve(dirname(linkPath), readlinkSync(linkPath));
+    if (existingTarget === targetPath) {
+      return;
+    }
+
+    unlinkSync(linkPath);
+  } else if (racedExisting) {
+    rmSync(linkPath, { recursive: true, force: true });
+  } else {
+    return;
+  }
+
   symlinkSync(relativeTarget, linkPath, 'dir');
 }
 
