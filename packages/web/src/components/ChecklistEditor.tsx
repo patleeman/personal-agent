@@ -14,6 +14,8 @@ import { IconButton, cx } from './ui';
 const ITEM_TEXTAREA_CLASS = 'w-full min-h-[24px] resize-none border-0 bg-transparent px-0 py-0 text-[14px] leading-6 text-primary placeholder:text-dim/70 focus:outline-none disabled:opacity-50';
 const COMPOSER_TEXTAREA_CLASS = 'min-w-0 flex-1 bg-transparent text-[13px] leading-5 text-primary placeholder:text-dim outline-none resize-none disabled:cursor-default disabled:text-dim';
 const ITEM_PLACEHOLDER = 'Type anything the agent should do. You can use /skill:..., slash commands, or plain text.';
+const ITEM_PREVIEW_LINE_COUNT = 3;
+const ITEM_FALLBACK_LINE_HEIGHT_PX = 24;
 
 interface TodoComposerMenuItem {
   key: string;
@@ -373,6 +375,7 @@ export function ChecklistComposer({
             className={COMPOSER_TEXTAREA_CLASS}
             placeholder={placeholder}
             title="Type / to insert a skill or preset"
+            aria-label="Add checklist item"
             style={{ minHeight: '20px', maxHeight: '96px' }}
           />
 
@@ -386,6 +389,90 @@ export function ChecklistComposer({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ChecklistItemTextField({
+  item,
+  checked,
+  supportText,
+  disabled,
+  onChange,
+  onBlur,
+}: {
+  item: ChecklistDraftItem;
+  checked: boolean;
+  supportText?: string | null;
+  disabled: boolean;
+  onChange: (nextText: string) => void;
+  onBlur: () => void;
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
+
+  useEffect(() => {
+    const element = textareaRef.current;
+    if (!element) {
+      return;
+    }
+
+    element.style.height = 'auto';
+    const computedLineHeight = Number.parseFloat(window.getComputedStyle(element).lineHeight);
+    const lineHeight = Number.isFinite(computedLineHeight) ? computedLineHeight : ITEM_FALLBACK_LINE_HEIGHT_PX;
+    const collapsedHeight = Math.ceil(lineHeight * ITEM_PREVIEW_LINE_COUNT);
+    const fullHeight = element.scrollHeight;
+    const nextOverflowing = fullHeight > collapsedHeight + 1;
+    const nextHeight = expanded ? fullHeight : Math.min(fullHeight, collapsedHeight);
+
+    setOverflowing((current) => (current === nextOverflowing ? current : nextOverflowing));
+    if (!nextOverflowing && expanded) {
+      setExpanded(false);
+    }
+
+    element.style.height = `${Math.max(nextHeight, lineHeight)}px`;
+  }, [expanded, item.text]);
+
+  return (
+    <div className="min-w-0">
+      <textarea
+        ref={textareaRef}
+        value={item.text}
+        rows={1}
+        onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
+        onFocus={() => {
+          if (overflowing) {
+            setExpanded(true);
+          }
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            (event.currentTarget as HTMLTextAreaElement).blur();
+          }
+        }}
+        placeholder={ITEM_PLACEHOLDER}
+        aria-label="Checklist item"
+        className={cx(
+          ITEM_TEXTAREA_CLASS,
+          !expanded && overflowing && 'overflow-hidden',
+          checked && 'text-dim line-through decoration-border-default/70',
+        )}
+        disabled={disabled}
+      />
+      {overflowing && (
+        <button
+          type="button"
+          className="ui-action-button mt-1 text-[11px]"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((current) => !current)}
+        >
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+      {supportText && <p className="mt-0.5 break-words text-[11px] text-dim">{supportText}</p>}
     </div>
   );
 }
@@ -425,7 +512,6 @@ export function ChecklistItemList({
         const active = Boolean(state.active);
         const locked = Boolean(state.locked);
         const supportText = state.supportText;
-        const rows = Math.min(6, Math.max(1, item.text.split('\n').length || 1));
 
         return (
           <div
@@ -461,6 +547,7 @@ export function ChecklistItemList({
               onDragEnd={() => setDraggingItemId(null)}
               className="mt-1 inline-flex h-5 w-4 items-center justify-center text-dim/55 opacity-0 transition hover:text-secondary focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 disabled:opacity-20"
               title="Drag to reorder"
+              aria-label="Drag to reorder"
               disabled={locked || structureDisabled}
             >
               <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor" aria-hidden="true">
@@ -496,30 +583,16 @@ export function ChecklistItemList({
               </button>
             )}
 
-            <div className="min-w-0">
-              <textarea
-                value={item.text}
-                rows={rows}
-                onChange={(event) => {
-                  const nextText = event.target.value;
-                  onChange(items.map((candidate) => candidate.id === item.id ? { ...candidate, text: nextText } : candidate));
-                }}
-                onBlur={() => { void onCommit?.(items); }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    (event.currentTarget as HTMLTextAreaElement).blur();
-                  }
-                }}
-                placeholder={ITEM_PLACEHOLDER}
-                className={cx(
-                  ITEM_TEXTAREA_CLASS,
-                  checked && 'text-dim line-through decoration-border-default/70',
-                )}
-                disabled={locked || textDisabled}
-              />
-              {supportText && <p className="mt-0.5 break-words text-[11px] text-dim">{supportText}</p>}
-            </div>
+            <ChecklistItemTextField
+              item={item}
+              checked={checked}
+              supportText={supportText}
+              disabled={locked || textDisabled}
+              onChange={(nextText) => {
+                onChange(items.map((candidate) => candidate.id === item.id ? { ...candidate, text: nextText } : candidate));
+              }}
+              onBlur={() => { void onCommit?.(items); }}
+            />
 
             <IconButton
               compact
