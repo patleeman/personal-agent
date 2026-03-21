@@ -13,6 +13,7 @@ function hasRelevantAutomationState(document: ReturnType<typeof loadConversation
 
 export function createConversationAutomationPromptExtension(options: {
   stateRoot?: string;
+  settingsFile?: string;
   getCurrentProfile: () => string;
 }): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
@@ -22,6 +23,7 @@ export function createConversationAutomationPromptExtension(options: {
       const conversationId = sessionManager.getSessionId();
       const document = loadConversationAutomationState({
         stateRoot: options.stateRoot,
+        settingsFile: options.settingsFile,
         profile,
         conversationId,
       }).document;

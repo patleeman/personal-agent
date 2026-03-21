@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,7 +15,7 @@ function createTempDir(prefix: string): string {
   return dir;
 }
 
-function registerBeforeAgentStartHandler(stateRoot: string) {
+function registerBeforeAgentStartHandler(stateRoot: string, settingsFile?: string) {
   let handler:
     | ((event: { systemPrompt?: string }, ctx: {
       sessionManager: {
@@ -27,6 +27,7 @@ function registerBeforeAgentStartHandler(stateRoot: string) {
 
   createConversationAutomationPromptExtension({
     stateRoot,
+    settingsFile,
     getCurrentProfile: () => 'datadog',
   })({
     on: (event: string, registered: typeof handler) => {
@@ -124,6 +125,41 @@ describe('conversation automation prompt extension', () => {
 
     expect(result?.systemPrompt).toContain('<conversation-automation-policy>');
     expect(result?.systemPrompt).not.toContain('item-1');
+    expect(result?.message).toBeUndefined();
+  });
+
+  it('inherits default workflow presets from settings when no per-conversation state file exists', () => {
+    const stateRoot = createTempDir('pa-web-automation-prompt-');
+    const settingsFile = join(stateRoot, 'settings.json');
+    const handler = registerBeforeAgentStartHandler(stateRoot, settingsFile);
+
+    writeFileSync(settingsFile, JSON.stringify({
+      webUi: {
+        conversationAutomation: {
+          workflowPresets: {
+            presets: [{
+              id: 'preset-default',
+              name: 'Post-conversation Checklist',
+              updatedAt: '2026-03-21T12:00:00.000Z',
+              items: [{
+                id: 'item-default-1',
+                kind: 'instruction',
+                label: 'Run workflow-checkpoint if code changed',
+                text: 'If you made code changes, run /skill:workflow-checkpoint once complete.',
+              }],
+            }],
+            defaultPresetIds: ['preset-default'],
+          },
+        },
+      },
+    }, null, 2));
+
+    const result = handler({ systemPrompt: 'base system prompt' }, createContext());
+
+    expect(result?.systemPrompt).toContain('base system prompt');
+    expect(result?.systemPrompt).toContain('<conversation-automation-policy>');
+    expect(result?.systemPrompt).toContain('Conversation automation uses the todo_list tool for secondary bookkeeping behind the user message.');
+    expect(result?.systemPrompt).not.toContain('item-default-1');
     expect(result?.message).toBeUndefined();
   });
 
