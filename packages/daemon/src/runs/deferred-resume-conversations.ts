@@ -92,6 +92,9 @@ async function saveDeferredResumeConversationRunState(
   const conversationId = resolveConversationId(input);
   const createdAt = normalizeTimestamp(existingManifest?.createdAt ?? existingStatus?.createdAt ?? input.createdAt ?? input.updatedAt);
   const updatedAt = normalizeTimestamp(input.updatedAt);
+  const completedAt = input.status === 'completed' || input.status === 'failed' || input.status === 'cancelled'
+    ? normalizeTimestamp(input.completedAt ?? input.updatedAt)
+    : undefined;
 
   if (!existingManifest) {
     saveDurableRunManifest(paths.manifestPath, createDurableRunManifest({
@@ -127,6 +130,7 @@ async function saveDeferredResumeConversationRunState(
     updatedAt,
     activeAttempt: existingStatus?.activeAttempt ?? (input.status === 'completed' ? 1 : 0),
     startedAt: existingStatus?.startedAt,
+    completedAt,
     checkpointKey: input.step,
     lastError: input.lastError,
   }));
@@ -147,7 +151,7 @@ async function saveDeferredResumeConversationRunState(
       ...(input.profile ? { profile: input.profile } : {}),
       ...(input.cwd ? { cwd: input.cwd } : {}),
       ...(input.lastError ? { lastError: input.lastError } : {}),
-      ...(input.completedAt ? { completedAt: normalizeTimestamp(input.completedAt) } : {}),
+      ...(completedAt ? { completedAt } : {}),
     },
   });
 
@@ -168,7 +172,7 @@ async function saveDeferredResumeConversationRunState(
     await appendDurableRunEvent(paths.eventsPath, {
       version: 1,
       runId,
-      timestamp: normalizeTimestamp(input.completedAt ?? updatedAt),
+      timestamp: completedAt ?? updatedAt,
       type: 'run.completed',
       payload: {
         deferredResumeId: input.deferredResumeId,

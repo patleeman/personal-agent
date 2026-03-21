@@ -3,6 +3,14 @@ import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  createDurableRunManifest,
+  createInitialDurableRunStatus,
+  resolveDurableRunPaths,
+  resolveDurableRunsRoot,
+  saveDurableRunManifest,
+  saveDurableRunStatus,
+} from '@personal-agent/daemon';
 import { runCli } from './index.js';
 
 const originalEnv = process.env;
@@ -277,6 +285,79 @@ Failed task.
     expect(payload.tasks[0]).toMatchObject({ id: 'failed', status: 'error' });
     expect(payload.sections.completed).toHaveLength(1);
     expect(payload.sections.completed[0]).toMatchObject({ id: 'completed', status: 'completed' });
+
+    logSpy.mockRestore();
+  });
+
+  it('finds task logs from durable run directories when runtime state lacks a lastLogPath', async () => {
+    const stateRoot = createTempDir('personal-agent-cli-state-');
+    const configDir = createTempDir('personal-agent-cli-config-');
+    const taskDir = createTempDir('personal-agent-cli-tasks-');
+
+    const daemonConfigPath = join(configDir, 'daemon.json');
+    writeFile(
+      daemonConfigPath,
+      JSON.stringify({
+        modules: {
+          tasks: {
+            taskDir,
+          },
+        },
+      }),
+    );
+
+    const taskPath = join(taskDir, 'nightly.task.md');
+    writeFile(
+      taskPath,
+      `---
+id: nightly
+cron: "0 7 * * *"
+---
+Nightly task.
+`,
+    );
+
+    const runsRoot = resolveDurableRunsRoot(join(stateRoot, 'daemon'));
+    const runPaths = resolveDurableRunPaths(runsRoot, 'task-nightly-2026-03-02T10-00-10-000Z-abcd1234');
+    saveDurableRunManifest(runPaths.manifestPath, createDurableRunManifest({
+      id: 'task-nightly-2026-03-02T10-00-10-000Z-abcd1234',
+      kind: 'scheduled-task',
+      resumePolicy: 'rerun',
+      createdAt: '2026-03-02T10:00:00.000Z',
+      spec: {
+        taskId: 'nightly',
+      },
+      source: {
+        type: 'scheduled-task',
+        id: 'nightly',
+        filePath: taskPath,
+      },
+    }));
+    saveDurableRunStatus(runPaths.statusPath, createInitialDurableRunStatus({
+      runId: 'task-nightly-2026-03-02T10-00-10-000Z-abcd1234',
+      status: 'completed',
+      createdAt: '2026-03-02T10:00:00.000Z',
+      updatedAt: '2026-03-02T10:00:10.000Z',
+      activeAttempt: 1,
+      startedAt: '2026-03-02T10:00:01.000Z',
+      completedAt: '2026-03-02T10:00:10.000Z',
+    }));
+    writeFile(runPaths.outputLogPath, 'nightly durable output\n');
+
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_DAEMON_CONFIG = daemonConfigPath;
+
+    const logs: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
+      logs.push(String(message ?? ''));
+    });
+
+    const exitCode = await runCli(['--plain', 'tasks', 'logs', 'nightly']);
+
+    expect(exitCode).toBe(0);
+    expect(logs.some((line) => line.includes('Task logs: nightly'))).toBe(true);
+    expect(logs.some((line) => line.includes(runPaths.outputLogPath))).toBe(true);
+    expect(logs.some((line) => line.includes('nightly durable output'))).toBe(true);
 
     logSpy.mockRestore();
   });

@@ -1,5 +1,5 @@
 import { createServer, type Server } from 'node:http';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,6 +11,7 @@ const { childProcessMocks, gatewayMocks } = vi.hoisted(() => ({
   },
   gatewayMocks: {
     getWebUiServiceStatus: vi.fn(),
+    syncWebUiTailscaleServe: vi.fn(),
   },
 }));
 
@@ -27,6 +28,7 @@ vi.mock('@personal-agent/gateway', async () => {
   return {
     ...actual,
     getWebUiServiceStatus: gatewayMocks.getWebUiServiceStatus,
+    syncWebUiTailscaleServe: gatewayMocks.syncWebUiTailscaleServe,
   };
 });
 
@@ -90,6 +92,8 @@ beforeEach(() => {
     port,
     url: `http://localhost:${port}`,
   }));
+  gatewayMocks.syncWebUiTailscaleServe.mockReset();
+  gatewayMocks.syncWebUiTailscaleServe.mockImplementation(() => undefined);
 });
 
 afterEach(async () => {
@@ -175,5 +179,36 @@ describe('ui foreground launch', () => {
     );
 
     logSpy.mockRestore();
+  });
+
+  it('preserves unknown web config fields when CLI updates port and tailscale settings', async () => {
+    const repoRoot = createFakeWebRepo();
+    const stateRoot = createTempDir('pa-ui-foreground-state-');
+    const configDir = createTempDir('pa-ui-config-');
+    const configPath = join(configDir, 'web.json');
+    process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_WEB_CONFIG_FILE = configPath;
+
+    writeFileSync(configPath, JSON.stringify({
+      port: 3741,
+      useTailscaleServe: true,
+      resumeFallbackPrompt: 'Pick up from the last useful checkpoint.',
+      webOnlySetting: {
+        enabled: true,
+      },
+    }, null, 2));
+
+    const exitCode = await runCli(['ui', '--port', '4810', '--no-tailscale-serve']);
+
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(readFileSync(configPath, 'utf-8'))).toEqual({
+      port: 4810,
+      useTailscaleServe: false,
+      resumeFallbackPrompt: 'Pick up from the last useful checkpoint.',
+      webOnlySetting: {
+        enabled: true,
+      },
+    });
   });
 });

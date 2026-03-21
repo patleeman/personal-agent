@@ -1,8 +1,9 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
-import { composePromptCatalogDirectory } from './prompt-catalog.js';
+import { getLocalProfileDir as getCanonicalLocalProfileDir } from '@personal-agent/core';
 import { homedir } from 'os';
 import { dirname, isAbsolute, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import { composePromptCatalogDirectory } from './prompt-catalog.js';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 
@@ -245,13 +246,13 @@ function extractPackageSource(entry: unknown): string | undefined {
 }
 
 export function resolveLocalProfileDir(options: ResolveProfileOptions = {}): string {
-  const explicit = options.localProfileDir ?? process.env.PERSONAL_AGENT_LOCAL_PROFILE_DIR;
+  const explicit = options.localProfileDir;
 
   if (typeof explicit === 'string' && explicit.trim().length > 0) {
     return resolve(expandHomePath(explicit.trim()));
   }
 
-  return join(getDefaultStateRoot(), 'config', 'local');
+  return getCanonicalLocalProfileDir();
 }
 
 export function resolveLocalProfileSettingsFilePath(options: ResolveProfileOptions = {}): string {

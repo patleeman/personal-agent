@@ -179,15 +179,6 @@ function findRelatedSessionIds(stateRoot: string, startedAt: string, endedAt: st
   }
 }
 
-function sanitizePathSegment(value: string): string {
-  const sanitized = value
-    .replace(/[^a-zA-Z0-9._-]+/g, '-')
-    .replace(/^-+/, '')
-    .replace(/-+$/, '');
-
-  return sanitized.length > 0 ? sanitized : 'task';
-}
-
 function sanitizeActivityIdSegment(value: string): string {
   const sanitized = value
     .replace(/[^a-zA-Z0-9-_]+/g, '-')
@@ -474,7 +465,6 @@ export function createTasksModule(
   let stopping = false;
   let tickInProgress = false;
   let stateFile = '';
-  let runsRoot = '';
   let durableRunsRoot = '';
   let moduleStartedAtMs = 0;
   let taskState = createEmptyTaskState();
@@ -854,6 +844,7 @@ export function createTasksModule(
         updatedAt: finishedAt,
         activeAttempt: record.lastAttemptCount ?? 0,
         startedAt,
+        completedAt: finishedAt,
       }));
 
       await appendDurableRunEvent(durableRun.runPaths.eventsPath, {
@@ -921,6 +912,7 @@ export function createTasksModule(
         updatedAt: finishedAt,
         activeAttempt: record.lastAttemptCount ?? 0,
         startedAt,
+        completedAt: finishedAt,
         lastError: record.lastError,
       }));
 
@@ -1146,11 +1138,6 @@ export function createTasksModule(
           rmSync(record.filePath, { force: true });
         }
 
-        const taskRunDir = join(runsRoot, sanitizePathSegment(record.id));
-        if (existsSync(taskRunDir)) {
-          rmSync(taskRunDir, { recursive: true, force: true });
-        }
-
         delete taskState.tasks[key];
         context.logger.info(`reaped resolved one-time task id=${record.id} status=${record.oneTimeResolvedStatus ?? 'unknown'}`);
       } catch (error) {
@@ -1327,11 +1314,9 @@ export function createTasksModule(
     async start(context): Promise<void> {
       moduleStartedAtMs = now().getTime();
       stateFile = join(context.paths.root, 'task-state.json');
-      runsRoot = join(context.paths.root, 'task-runs');
       durableRunsRoot = resolveDurableRunsRoot(context.paths.root);
 
       mkdirSync(taskDir, { recursive: true, mode: 0o700 });
-      mkdirSync(runsRoot, { recursive: true, mode: 0o700 });
       mkdirSync(durableRunsRoot, { recursive: true, mode: 0o700 });
 
       taskState = loadTaskState(stateFile, context.logger);
@@ -1373,7 +1358,7 @@ export function createTasksModule(
       return {
         taskDir,
         stateFile,
-        runsRoot,
+        runsRoot: durableRunsRoot,
         durableRunsRoot,
         knownTasks: state.knownTasks,
         parseErrors: state.parseErrors,

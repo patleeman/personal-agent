@@ -126,7 +126,6 @@ export interface LintMemoryDocsResult {
 
 function resolveMemoryContext(options: ResolveMemoryDocsOptions = {}): { memoryDir: string } {
   const profilesRoot = options.profilesRoot ?? getProfilesRoot();
-  migrateLegacyProfileMemoryDirs({ profilesRoot });
 
   return {
     memoryDir: getMemoryDocsDir({ profilesRoot }),
@@ -916,6 +915,8 @@ export function createMemoryDoc(input: CreateMemoryDocInput, options: ResolveMem
 
   const updated = input.updated?.trim() || currentDateYyyyMmDd();
   validateMemoryUpdated(updated);
+
+  migrateLegacyProfileMemoryDirs(options);
 
   const context = resolveMemoryContext(options);
   mkdirSync(context.memoryDir, { recursive: true });

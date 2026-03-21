@@ -21,6 +21,15 @@ export function getStateRoot() {
   return configuredStateRoot ? path.resolve(configuredStateRoot) : getDefaultStateRoot();
 }
 
+export function getProfilesRoot() {
+  const configuredProfilesRoot = normalizedEnvPath(process.env.PERSONAL_AGENT_PROFILES_ROOT);
+  return configuredProfilesRoot ? path.resolve(configuredProfilesRoot) : path.resolve(getStateRoot(), 'profiles');
+}
+
+export function getPiAgentSessionsRoot() {
+  return path.resolve(getStateRoot(), 'pi-agent', 'sessions');
+}
+
 export function getConversationMaintenanceIndexPath(profile) {
   const normalizedProfile = typeof profile === 'string' ? profile.trim() : '';
   if (!normalizedProfile) {

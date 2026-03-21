@@ -310,6 +310,51 @@ describe('durable run store', () => {
     ]);
   });
 
+  it('keeps queued and waiting manual background runs as attention on recovery scan', () => {
+    const runsRoot = createTempDir('durable-runs-store-scan-manual-background-');
+
+    const queuedPaths = resolveDurableRunPaths(runsRoot, 'run-background-queued');
+    saveDurableRunManifest(queuedPaths.manifestPath, createDurableRunManifest({
+      id: 'run-background-queued',
+      kind: 'background-run',
+      resumePolicy: 'manual',
+      createdAt: '2026-03-12T18:00:00Z',
+    }));
+    saveDurableRunStatus(queuedPaths.statusPath, createInitialDurableRunStatus({
+      runId: 'run-background-queued',
+      status: 'queued',
+      createdAt: '2026-03-12T18:00:00Z',
+      activeAttempt: 0,
+    }));
+
+    const waitingPaths = resolveDurableRunPaths(runsRoot, 'run-background-waiting');
+    saveDurableRunManifest(waitingPaths.manifestPath, createDurableRunManifest({
+      id: 'run-background-waiting',
+      kind: 'background-run',
+      resumePolicy: 'manual',
+      createdAt: '2026-03-12T18:01:00Z',
+    }));
+    saveDurableRunStatus(waitingPaths.statusPath, createInitialDurableRunStatus({
+      runId: 'run-background-waiting',
+      status: 'waiting',
+      createdAt: '2026-03-12T18:01:00Z',
+      activeAttempt: 0,
+    }));
+
+    expect(scanDurableRunsForRecovery(runsRoot)).toEqual([
+      expect.objectContaining({
+        runId: 'run-background-queued',
+        problems: [],
+        recoveryAction: 'attention',
+      }),
+      expect.objectContaining({
+        runId: 'run-background-waiting',
+        problems: [],
+        recoveryAction: 'attention',
+      }),
+    ]);
+  });
+
   it('treats terminal runs as not needing recovery', () => {
     const runsRoot = createTempDir('durable-runs-store-scan-terminal-');
     const paths = resolveDurableRunPaths(runsRoot, 'run-complete');

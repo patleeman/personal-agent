@@ -69,6 +69,7 @@ function getAuthFileCandidates(): string[] {
 			: join(homedir(), ".local", "state", "personal-agent"));
 
 	return [
+		join(stateRoot, "pi-agent-runtime", "auth.json"),
 		join(stateRoot, "pi-agent", "auth.json"),
 		join(homedir(), ".pi", "agent", "auth.json"),
 	];

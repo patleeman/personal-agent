@@ -21,8 +21,6 @@ extensions/
 │   └── index.ts
 ├── daemon-run-orchestration-prompt/
 │   └── index.ts
-├── prompt-reminders/
-│   └── index.ts
 ├── web-tools/
 │   └── index.ts
 └── package.json

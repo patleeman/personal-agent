@@ -50,6 +50,8 @@ import {
   pingDaemon,
   readDaemonPid,
   resolveDaemonPaths,
+  resolveDurableRunsRoot,
+  scanDurableRunsForRecovery,
   startDaemonDetached,
   stopDaemonGracefully,
   parseTaskDefinition,
@@ -172,6 +174,10 @@ interface WebUiConfig {
   useTailscaleServe: boolean;
 }
 
+function isWebUiConfigRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function getWebUiConfigFilePath(): string {
   const explicit = process.env.PERSONAL_AGENT_WEB_CONFIG_FILE;
   if (explicit && explicit.trim().length > 0) {
@@ -198,27 +204,34 @@ function parseWebUiEnvBool(value: string | undefined): boolean | undefined {
   return value === 'true' ? true : value === 'false' ? false : undefined;
 }
 
-function readWebUiConfig(): WebUiConfig {
+function readRawWebUiConfig(): Record<string, unknown> {
   const filePath = getWebUiConfigFilePath();
-  const envOverride = parseWebUiEnvBool(process.env.PERSONAL_AGENT_WEB_TAILSCALE_SERVE);
 
   if (!existsSync(filePath)) {
-    return { port: DEFAULT_WEB_UI_PORT, useTailscaleServe: envOverride ?? false };
+    return {};
   }
 
   try {
-    const parsed = JSON.parse(readFileSync(filePath, 'utf-8')) as { port?: unknown; useTailscaleServe?: unknown };
-    return {
-      port: normalizeWebUiPort(parsed.port),
-      useTailscaleServe: envOverride ?? normalizeWebUiBool(parsed.useTailscaleServe),
-    };
+    const parsed = JSON.parse(readFileSync(filePath, 'utf-8')) as unknown;
+    return isWebUiConfigRecord(parsed) ? parsed : {};
   } catch {
-    return { port: DEFAULT_WEB_UI_PORT, useTailscaleServe: envOverride ?? false };
+    return {};
   }
+}
+
+function readWebUiConfig(): WebUiConfig {
+  const envOverride = parseWebUiEnvBool(process.env.PERSONAL_AGENT_WEB_TAILSCALE_SERVE);
+  const parsed = readRawWebUiConfig();
+
+  return {
+    port: normalizeWebUiPort(parsed.port),
+    useTailscaleServe: envOverride ?? normalizeWebUiBool(parsed.useTailscaleServe),
+  };
 }
 
 function writeWebUiConfig(config: WebUiConfig): void {
   const filePath = getWebUiConfigFilePath();
+  const raw = readRawWebUiConfig();
   const current = readWebUiConfig();
   const next = {
     port: normalizeWebUiPort(config.port),
@@ -228,6 +241,7 @@ function writeWebUiConfig(config: WebUiConfig): void {
   mkdirSync(dirname(filePath), { recursive: true });
   writeFileSync(filePath, `${JSON.stringify(
     {
+      ...raw,
       ...current,
       ...next,
     },
@@ -1297,6 +1311,7 @@ function printTasksModuleStatus(module: DaemonStatus['modules'][0], configuredTa
     taskDir?: string;
     stateFile?: string;
     runsRoot?: string;
+    durableRunsRoot?: string;
     knownTasks?: number;
     parseErrors?: number;
     runningTasks?: number;
@@ -1322,8 +1337,9 @@ function printTasksModuleStatus(module: DaemonStatus['modules'][0], configuredTa
     console.log(keyValue('Task state file', detail.stateFile, 4));
   }
 
-  if (detail?.runsRoot) {
-    console.log(keyValue('Task runs directory', detail.runsRoot, 4));
+  const runsRoot = detail?.durableRunsRoot ?? detail?.runsRoot;
+  if (runsRoot) {
+    console.log(keyValue('Durable runs directory', runsRoot, 4));
   }
 
   if (typeof detail?.knownTasks === 'number') {
@@ -2288,7 +2304,7 @@ function resolveTaskRuntimePaths(config: ReturnType<typeof loadDaemonConfig>): {
   return {
     taskDir: config.modules.tasks.taskDir,
     stateFile: join(daemonPaths.root, 'task-state.json'),
-    runsRoot: join(daemonPaths.root, 'task-runs'),
+    runsRoot: resolveDurableRunsRoot(daemonPaths.root),
   };
 }
 
@@ -2442,23 +2458,40 @@ function parseTaskTailCount(raw: string): number {
   return count;
 }
 
-function sanitizeTaskRunDirectoryName(value: string): string {
-  const sanitized = value
-    .replace(/[^a-zA-Z0-9._-]+/g, '-')
-    .replace(/^-+/, '')
-    .replace(/-+$/, '');
-
-  return sanitized.length > 0 ? sanitized : 'task';
-}
-
-function findLatestTaskLogFile(taskRunDir: string): string | undefined {
-  if (!existsSync(taskRunDir)) {
-    return undefined;
+function listLogFiles(rootDir: string): string[] {
+  if (!existsSync(rootDir)) {
+    return [];
   }
 
-  const entries = readdirSync(taskRunDir, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.log'))
-    .map((entry) => join(taskRunDir, entry.name));
+  const output: string[] = [];
+  const stack = [rootDir];
+
+  while (stack.length > 0) {
+    const current = stack.pop() as string;
+    const entries = readdirSync(current, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = join(current, entry.name);
+
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+        continue;
+      }
+
+      if (entry.isFile() && entry.name.endsWith('.log')) {
+        output.push(fullPath);
+      }
+    }
+  }
+
+  return output;
+}
+
+function findLatestTaskLogFile(runsRoot: string, taskId: string): string | undefined {
+  const entries = scanDurableRunsForRecovery(runsRoot)
+    .filter((run) => run.manifest?.kind === 'scheduled-task')
+    .filter((run) => run.manifest?.source?.id === taskId || run.manifest?.spec.taskId === taskId)
+    .flatMap((run) => listLogFiles(run.paths.root));
 
   if (entries.length === 0) {
     return undefined;
@@ -2877,8 +2910,7 @@ async function tasksCommand(args: string[]): Promise<number> {
     let logPath = runtimeState[task.key]?.lastLogPath;
 
     if (!logPath || !existsSync(logPath)) {
-      const taskRunDir = join(paths.runsRoot, sanitizeTaskRunDirectoryName(task.id));
-      logPath = findLatestTaskLogFile(taskRunDir);
+      logPath = findLatestTaskLogFile(paths.runsRoot, task.id);
     }
 
     if (!logPath || !existsSync(logPath)) {
