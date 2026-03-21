@@ -4124,6 +4124,11 @@ interface StoredTelegramPendingMessage {
   message: TelegramMessageLike;
 }
 
+interface StoredTelegramCompletedInboundMessageIds {
+  version: 1;
+  chats: Record<string, number[]>;
+}
+
 interface LoadedTelegramPendingMessage {
   id: string;
   message: TelegramMessageLike;
@@ -4497,6 +4502,85 @@ function acknowledgeTelegramPendingMessage(inboxDir: string, id: string): void {
   }
 
   unlinkSync(filePath);
+}
+
+function getTelegramCompletedInboundMessageIdsPath(inboxDir: string): string {
+  return join(inboxDir, '_state', 'completed-inbound-message-ids.json');
+}
+
+function loadTelegramCompletedInboundMessageIds(filePath: string): Map<string, number[]> {
+  if (!existsSync(filePath)) {
+    return new Map<string, number[]>();
+  }
+
+  try {
+    const raw = readFileSync(filePath, 'utf-8').trim();
+    if (raw.length === 0) {
+      return new Map<string, number[]>();
+    }
+
+    const parsed = JSON.parse(raw) as Partial<StoredTelegramCompletedInboundMessageIds>;
+    if (parsed.version !== 1 || !parsed.chats || typeof parsed.chats !== 'object') {
+      return new Map<string, number[]>();
+    }
+
+    const completed = new Map<string, number[]>();
+
+    for (const [chatId, rawMessageIds] of Object.entries(parsed.chats)) {
+      const normalizedChatId = chatId.trim();
+      if (normalizedChatId.length === 0 || !Array.isArray(rawMessageIds)) {
+        continue;
+      }
+
+      const messageIds: number[] = [];
+      for (const rawMessageId of rawMessageIds) {
+        if (typeof rawMessageId !== 'number' || !Number.isSafeInteger(rawMessageId) || rawMessageId <= 0) {
+          continue;
+        }
+
+        if (messageIds.includes(rawMessageId)) {
+          continue;
+        }
+
+        messageIds.push(rawMessageId);
+      }
+
+      if (messageIds.length === 0) {
+        continue;
+      }
+
+      if (messageIds.length > TELEGRAM_MAX_TRACKED_CHAT_MESSAGE_IDS) {
+        messageIds.splice(0, messageIds.length - TELEGRAM_MAX_TRACKED_CHAT_MESSAGE_IDS);
+      }
+
+      completed.set(normalizedChatId, messageIds);
+    }
+
+    return completed;
+  } catch {
+    return new Map<string, number[]>();
+  }
+}
+
+function writeTelegramCompletedInboundMessageIds(filePath: string, messageIdsByChat: Map<string, number[]>): void {
+  mkdirSync(dirname(filePath), { recursive: true });
+
+  const chats: Record<string, number[]> = {};
+  for (const [chatId, messageIds] of messageIdsByChat.entries()) {
+    const normalizedChatId = chatId.trim();
+    if (normalizedChatId.length === 0 || messageIds.length === 0) {
+      continue;
+    }
+
+    chats[normalizedChatId] = [...messageIds];
+  }
+
+  const payload: StoredTelegramCompletedInboundMessageIds = {
+    version: 1,
+    chats,
+  };
+
+  writeFileSync(filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf-8');
 }
 
 interface RetryAsyncOptions {
@@ -5250,7 +5334,20 @@ function trackTelegramConversationMessageId(
   messageIdsByConversation.set(conversationId, tracked);
 }
 
-function trackSeenTelegramChatMessageId(
+function hasTrackedTelegramChatMessageId(
+  messageIdsByChat: Map<string, number[]>,
+  chatId: string,
+  messageId: number | undefined,
+): boolean {
+  if (typeof messageId !== 'number' || !Number.isSafeInteger(messageId) || messageId <= 0) {
+    return false;
+  }
+
+  const tracked = messageIdsByChat.get(chatId) ?? [];
+  return tracked.includes(messageId);
+}
+
+function rememberTelegramChatMessageId(
   messageIdsByChat: Map<string, number[]>,
   chatId: string,
   messageId: number | undefined,
@@ -5261,7 +5358,7 @@ function trackSeenTelegramChatMessageId(
 
   const tracked = messageIdsByChat.get(chatId) ?? [];
   if (tracked.includes(messageId)) {
-    return true;
+    return false;
   }
 
   tracked.push(messageId);
@@ -5271,6 +5368,19 @@ function trackSeenTelegramChatMessageId(
   }
 
   messageIdsByChat.set(chatId, tracked);
+  return true;
+}
+
+function trackSeenTelegramChatMessageId(
+  messageIdsByChat: Map<string, number[]>,
+  chatId: string,
+  messageId: number | undefined,
+): boolean {
+  if (hasTrackedTelegramChatMessageId(messageIdsByChat, chatId, messageId)) {
+    return true;
+  }
+
+  rememberTelegramChatMessageId(messageIdsByChat, chatId, messageId);
   return false;
 }
 
@@ -6400,6 +6510,12 @@ export function createQueuedTelegramMessageHandler(
   const recentMessageIdsByConversation = new Map<string, number[]>();
   const maxPendingPerChat = options.maxPendingPerChat ?? DEFAULT_MAX_PENDING_PER_CHAT;
   const durableInboxDir = options.durableInboxDir;
+  const completedMessageIdsPath = durableInboxDir
+    ? getTelegramCompletedInboundMessageIdsPath(durableInboxDir)
+    : undefined;
+  const completedMessageIdsByChat = completedMessageIdsPath
+    ? loadTelegramCompletedInboundMessageIds(completedMessageIdsPath)
+    : new Map<string, number[]>();
   const conversationSessionOverrides = new Map<string, string>();
 
   const resolveConversationSessionFile = (input: {
@@ -6456,6 +6572,23 @@ export function createQueuedTelegramMessageHandler(
       acknowledgeTelegramPendingMessage(durableInboxDir, pendingMessageId);
     } catch (error) {
       console.error(`[telegram] failed to acknowledge durable message ${pendingMessageId}:`, error);
+    }
+  };
+
+  const markCompletedInboundMessage = (chatId: string, messageId: number | undefined): void => {
+    if (!completedMessageIdsPath) {
+      return;
+    }
+
+    const added = rememberTelegramChatMessageId(completedMessageIdsByChat, chatId, messageId);
+    if (!added) {
+      return;
+    }
+
+    try {
+      writeTelegramCompletedInboundMessageIds(completedMessageIdsPath, completedMessageIdsByChat);
+    } catch (error) {
+      console.error(`[telegram:${chatId}] failed to persist completed inbound message ${String(messageId)}:`, error);
     }
   };
 
@@ -6535,6 +6668,11 @@ export function createQueuedTelegramMessageHandler(
     const messageThreadId = normalizeTelegramMessageThreadId(message.message_thread_id);
     const conversationId = buildTelegramConversationId(chatId, messageThreadId);
 
+    if (hasTrackedTelegramChatMessageId(completedMessageIdsByChat, chatId, message.message_id)) {
+      acknowledgePendingMessage(pendingMessageId);
+      return false;
+    }
+
     if (trackSeenTelegramChatMessageId(seenMessageIdsByChat, chatId, message.message_id)) {
       acknowledgePendingMessage(pendingMessageId);
       return false;
@@ -6570,17 +6708,22 @@ export function createQueuedTelegramMessageHandler(
           (task) => trackRunTask(conversationId, task),
         );
 
-        if (pendingMessageId && durableInboxDir) {
-          void processing.completion
+        if (pendingMessageId || completedMessageIdsPath) {
+          const finalizeCompletion = processing.completion
             .then(() => {
+              markCompletedInboundMessage(chatId, message.message_id);
               acknowledgePendingMessage(pendingMessageId);
             })
             .catch((error) => {
-              console.error(
-                `[telegram:${conversationId}] durable message ${pendingMessageId} not acknowledged; will retry after restart:`,
-                error,
-              );
+              if (pendingMessageId) {
+                console.error(
+                  `[telegram:${conversationId}] durable message ${pendingMessageId} not finalized; will retry after restart:`,
+                  error,
+                );
+              }
             });
+
+          trackRunTask(conversationId, finalizeCompletion);
         }
       } finally {
         const nextPending = (pendingPerConversation.get(conversationId) ?? 1) - 1;
@@ -6625,11 +6768,15 @@ export function createQueuedTelegramMessageHandler(
       }
 
       const pendingMessages = loadTelegramPendingMessages(durableInboxDir);
+      let replayedCount = 0;
+
       for (const pendingMessage of pendingMessages) {
-        queueMessage(pendingMessage.message, pendingMessage.id, true);
+        if (queueMessage(pendingMessage.message, pendingMessage.id, true)) {
+          replayedCount += 1;
+        }
       }
 
-      return pendingMessages.length;
+      return replayedCount;
     },
 
     async waitForIdle(chatId?: string): Promise<void> {
@@ -6841,7 +6988,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     }
   };
 
-  const bot = new TelegramBot(effectiveConfig.token, { polling: true });
+  const bot = new TelegramBot(effectiveConfig.token, { polling: false });
 
   const allowlist = effectiveConfig.allowlist;
   const allowedUserIds = effectiveConfig.allowedUserIds ?? new Set<string>();
@@ -8728,6 +8875,8 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     console.log(gatewayWarning(`Recovered ${recoveredPendingMessages} pending telegram message(s) from durable inbox.`));
     logSystem('telegram', `Recovered ${recoveredPendingMessages} pending message(s) from durable inbox`);
   }
+
+  await bot.startPolling();
 
   let daemonNotificationFlushInFlight = false;
 

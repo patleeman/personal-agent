@@ -37,6 +37,10 @@ function createTempDir(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
+function listPendingDurableInboxFiles(dir: string): string[] {
+  return readdirSync(dir).filter((entry) => entry.endsWith('.json'));
+}
+
 interface TestRunPromptInput {
   prompt: string;
   sessionFile: string;
@@ -2062,12 +2066,12 @@ describe('queued telegram message handler', () => {
       });
 
       handler.handleMessage({ chat: { id: 1 }, message_id: 101, text: 'hello' });
-      expect(readdirSync(durableInboxDir).length).toBe(1);
+      expect(listPendingDurableInboxFiles(durableInboxDir)).toHaveLength(1);
 
       resolveRun?.('done');
       await handler.waitForIdle('1');
 
-      expect(readdirSync(durableInboxDir).length).toBe(0);
+      expect(listPendingDurableInboxFiles(durableInboxDir)).toHaveLength(0);
     } finally {
       rmSync(durableInboxDir, { recursive: true, force: true });
     }
@@ -2109,7 +2113,7 @@ describe('queued telegram message handler', () => {
         },
       });
 
-      expect(readdirSync(durableInboxDir)).toHaveLength(0);
+      expect(listPendingDurableInboxFiles(durableInboxDir)).toHaveLength(0);
 
       resolveRun?.('done');
       await handler.waitForIdle('1');
@@ -2143,7 +2147,7 @@ describe('queued telegram message handler', () => {
       await handler.waitForIdle();
 
       expect(runPrompt).not.toHaveBeenCalled();
-      expect(readdirSync(durableInboxDir)).toHaveLength(0);
+      expect(listPendingDurableInboxFiles(durableInboxDir)).toHaveLength(0);
     } finally {
       rmSync(durableInboxDir, { recursive: true, force: true });
     }
@@ -2188,7 +2192,64 @@ describe('queued telegram message handler', () => {
 
       const firstCall = runPrompt.mock.calls[0]?.[0] as { prompt: string };
       expect(firstCall.prompt).toBe('replayed message');
-      expect(readdirSync(durableInboxDir).length).toBe(0);
+      expect(listPendingDurableInboxFiles(durableInboxDir)).toHaveLength(0);
+    } finally {
+      rmSync(durableInboxDir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not replay already-completed durable telegram messages after restart', async () => {
+    const durableInboxDir = createTempDir('gateway-telegram-replay-completed-');
+
+    try {
+      const sendMessage = vi.fn(async () => undefined);
+      const sendChatAction = vi.fn(async () => undefined);
+      const runPrompt = vi.fn(async ({ prompt }: { prompt: string }) => `reply:${prompt}`);
+
+      const firstHandler = createQueuedTelegramMessageHandler({
+        allowlist: new Set(['1']),
+        profileName: 'shared',
+        agentDir: '/tmp/agent',
+        telegramSessionDir: '/tmp/sessions',
+        workingDirectory: '/tmp/work',
+        sendMessage,
+        sendChatAction,
+        durableInboxDir,
+        createConversationController: createTestConversationControllerFactory(runPrompt),
+      });
+
+      firstHandler.handleMessage({ chat: { id: 1 }, message_id: 404, text: 'first delivery' });
+      await firstHandler.waitForIdle('1');
+
+      const replayedMessage = {
+        version: 1,
+        storedAt: new Date().toISOString(),
+        message: {
+          chat: { id: 1 },
+          message_id: 404,
+          text: 'first delivery',
+        },
+      };
+      writeFileSync(join(durableInboxDir, 'pending.json'), `${JSON.stringify(replayedMessage)}\n`, 'utf-8');
+
+      const restartedHandler = createQueuedTelegramMessageHandler({
+        allowlist: new Set(['1']),
+        profileName: 'shared',
+        agentDir: '/tmp/agent',
+        telegramSessionDir: '/tmp/sessions',
+        workingDirectory: '/tmp/work',
+        sendMessage,
+        sendChatAction,
+        durableInboxDir,
+        createConversationController: createTestConversationControllerFactory(runPrompt),
+      });
+
+      const recovered = restartedHandler.replayPendingMessages();
+      expect(recovered).toBe(0);
+      await restartedHandler.waitForIdle('1');
+
+      expect(runPrompt).toHaveBeenCalledTimes(1);
+      expect(listPendingDurableInboxFiles(durableInboxDir)).toHaveLength(0);
     } finally {
       rmSync(durableInboxDir, { recursive: true, force: true });
     }
