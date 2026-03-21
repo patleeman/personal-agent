@@ -890,6 +890,9 @@ export interface RemoteConversationConnectionState {
   updatedAt: string | null;
 }
 
+export type RemoteConversationConnectionStreamEvent =
+  | { type: 'snapshot'; data: RemoteConversationConnectionState };
+
 export interface AppStatus {
   profile: string;
   repoRoot: string;
@@ -963,6 +966,9 @@ export interface ProviderOAuthLoginState {
   createdAt: string;
   updatedAt: string;
 }
+
+export type ProviderOAuthLoginStreamEvent =
+  | { type: 'snapshot'; data: ProviderOAuthLoginState };
 
 export interface ConversationTitleSettingsState {
   enabled: boolean;

@@ -4,7 +4,7 @@ import { ChatView } from '../components/chat/ChatView';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput } from '../types';
+import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, RemoteConversationConnectionStreamEvent } from '../types';
 import { useApi } from '../hooks';
 import { useSessionDetail } from '../hooks/useSessions';
 import { normalizePendingQueueItems, useSessionStream } from '../hooks/useSessionStream';
@@ -1470,25 +1470,28 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const executionSelectionBusy = executionTargetBusy;
 
   useEffect(() => {
-    if (!id || !selectedExecutionTargetId) {
+    if (!id || draft) {
       return;
     }
 
-    void remoteConversationConnectionState.refetch({ resetLoading: false });
+    const stream = new EventSource(`/api/conversations/${encodeURIComponent(id)}/remote-connection/events`);
+    stream.onmessage = (event) => {
+      let payload: RemoteConversationConnectionStreamEvent;
+      try {
+        payload = JSON.parse(event.data) as RemoteConversationConnectionStreamEvent;
+      } catch {
+        return;
+      }
 
-    const state = remoteConversationConnectionState.data?.state;
-    if (!remoteConnectBusy && state !== 'installing' && state !== 'connecting') {
-      return;
-    }
-
-    const interval = window.setInterval(() => {
-      void remoteConversationConnectionState.refetch({ resetLoading: false });
-    }, 1000);
+      if (payload.type === 'snapshot') {
+        remoteConversationConnectionState.replaceData(payload.data);
+      }
+    };
 
     return () => {
-      window.clearInterval(interval);
+      stream.close();
     };
-  }, [id, remoteConnectBusy, remoteConversationConnectionState.data?.state, remoteConversationConnectionState.refetch, selectedExecutionTargetId]);
+  }, [draft, id, remoteConversationConnectionState.replaceData]);
 
   const refetchConversationAttachments = useCallback(async () => {
     if (!id) {

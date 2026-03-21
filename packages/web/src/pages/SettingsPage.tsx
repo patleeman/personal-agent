@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatContextWindowLabel, formatThinkingLevelLabel } from '../conversationHeader';
 import { api } from '../api';
 import { useApi } from '../hooks';
 import { THINKING_LEVEL_OPTIONS, groupModelsByProvider } from '../modelPreferences';
 import { resetStoredConversationUiState, resetStoredLayoutPreferences } from '../localSettings';
 import { type ThemePreference, useTheme } from '../theme';
-import type { ModelState, ProviderAuthSummary, ProviderOAuthLoginState } from '../types';
+import type { ModelState, ProviderAuthSummary, ProviderOAuthLoginState, ProviderOAuthLoginStreamEvent } from '../types';
 import { PageHeader, PageHeading, SectionLabel, ToolbarButton, cx } from '../components/ui';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary focus:outline-none focus:border-accent/60 disabled:opacity-50';
@@ -158,6 +158,7 @@ export function SettingsPage() {
   const [oauthAction, setOauthAction] = useState<'start' | 'submit' | 'cancel' | null>(null);
   const [oauthInputValue, setOauthInputValue] = useState('');
   const [oauthError, setOauthError] = useState<string | null>(null);
+  const oauthTerminalStateKeyRef = useRef<string | null>(null);
   const [resetting, setResetting] = useState<'layout' | 'conversation' | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
 
@@ -241,57 +242,60 @@ export function SettingsPage() {
       return;
     }
 
-    let cancelled = false;
     const loginId = oauthLoginState.id;
-
-    const poll = async () => {
+    const stream = new EventSource(`/api/provider-auth/oauth/${encodeURIComponent(loginId)}/events`);
+    stream.onmessage = (event) => {
+      let payload: ProviderOAuthLoginStreamEvent;
       try {
-        const latest = await api.providerOAuthLogin(loginId);
-        if (cancelled) {
-          return;
-        }
+        payload = JSON.parse(event.data) as ProviderOAuthLoginStreamEvent;
+      } catch {
+        return;
+      }
 
-        setOauthLoginState(latest);
-
-        if (latest.status === 'completed') {
-          setOauthAction(null);
-          setOauthError(null);
-          setOauthInputValue('');
-          setProviderCredentialNotice(`Logged in to ${latest.providerName}.`);
-          await Promise.all([
-            refetchProviderAuth({ resetLoading: false }),
-            refetchModels({ resetLoading: false }),
-          ]);
-          return;
-        }
-
-        if (latest.status === 'failed') {
-          setOauthAction(null);
-          setOauthError(latest.error || `OAuth login failed for ${latest.provider}.`);
-          return;
-        }
-
-        if (latest.status === 'cancelled') {
-          setOauthAction(null);
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setOauthAction(null);
-          setOauthError(error instanceof Error ? error.message : String(error));
-        }
+      if (payload.type === 'snapshot') {
+        setOauthLoginState(payload.data);
       }
     };
 
-    void poll();
-    const interval = window.setInterval(() => {
-      void poll();
-    }, 1_500);
-
     return () => {
-      cancelled = true;
-      window.clearInterval(interval);
+      stream.close();
     };
-  }, [oauthLoginState?.id, oauthLoginState?.status, refetchModels, refetchProviderAuth]);
+  }, [oauthLoginState?.id, oauthLoginState?.status]);
+
+  useEffect(() => {
+    if (!oauthLoginState?.id) {
+      oauthTerminalStateKeyRef.current = null;
+      return;
+    }
+
+    if (oauthLoginState.status === 'running') {
+      oauthTerminalStateKeyRef.current = null;
+      return;
+    }
+
+    const terminalKey = `${oauthLoginState.id}:${oauthLoginState.status}:${oauthLoginState.updatedAt}`;
+    if (oauthTerminalStateKeyRef.current === terminalKey) {
+      return;
+    }
+
+    oauthTerminalStateKeyRef.current = terminalKey;
+    setOauthAction(null);
+
+    if (oauthLoginState.status === 'completed') {
+      setOauthError(null);
+      setOauthInputValue('');
+      setProviderCredentialNotice(`Logged in to ${oauthLoginState.providerName}.`);
+      void Promise.all([
+        refetchProviderAuth({ resetLoading: false }),
+        refetchModels({ resetLoading: false }),
+      ]);
+      return;
+    }
+
+    if (oauthLoginState.status === 'failed') {
+      setOauthError(oauthLoginState.error || `OAuth login failed for ${oauthLoginState.provider}.`);
+    }
+  }, [oauthLoginState, refetchModels, refetchProviderAuth]);
 
   const selectedProviderLogin = oauthLoginState && selectedProvider && oauthLoginState.provider === selectedProvider.id
     ? oauthLoginState

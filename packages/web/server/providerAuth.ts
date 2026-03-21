@@ -54,9 +54,56 @@ interface ProviderOAuthLoginRun extends ProviderOAuthLoginState {
 
 const OAUTH_LOGIN_RETENTION_MS = 30 * 60_000;
 const oauthLoginRuns = new Map<string, ProviderOAuthLoginRun>();
+const oauthLoginListeners = new Map<string, Set<(state: ProviderOAuthLoginState) => void>>();
+const oauthLoginGlobalListeners = new Set<(state: ProviderOAuthLoginState) => void>();
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function notifyOAuthLoginListeners(run: ProviderOAuthLoginRun): void {
+  const state = toPublicLoginState(run);
+  const listeners = oauthLoginListeners.get(run.id);
+
+  if (listeners) {
+    for (const listener of [...listeners]) {
+      listener(state);
+    }
+  }
+
+  for (const listener of [...oauthLoginGlobalListeners]) {
+    listener(state);
+  }
+}
+
+export function subscribeProviderOAuthLogin(loginId: string, listener: (state: ProviderOAuthLoginState) => void): () => void {
+  const normalizedLoginId = loginId.trim();
+  if (!normalizedLoginId) {
+    return () => {};
+  }
+
+  const listeners = oauthLoginListeners.get(normalizedLoginId) ?? new Set<(state: ProviderOAuthLoginState) => void>();
+  listeners.add(listener);
+  oauthLoginListeners.set(normalizedLoginId, listeners);
+
+  return () => {
+    const currentListeners = oauthLoginListeners.get(normalizedLoginId);
+    if (!currentListeners) {
+      return;
+    }
+
+    currentListeners.delete(listener);
+    if (currentListeners.size === 0) {
+      oauthLoginListeners.delete(normalizedLoginId);
+    }
+  };
+}
+
+export function subscribeProviderOAuthLogins(listener: (state: ProviderOAuthLoginState) => void): () => void {
+  oauthLoginGlobalListeners.add(listener);
+  return () => {
+    oauthLoginGlobalListeners.delete(listener);
+  };
 }
 
 function createLoginId(): string {
@@ -197,6 +244,7 @@ function createPromptAwaiter(run: ProviderOAuthLoginRun, prompt: ProviderOAuthPr
   rejectPendingInput(run, 'Login prompt superseded.');
   run.prompt = prompt;
   run.updatedAt = nowIso();
+  notifyOAuthLoginListeners(run);
 
   return new Promise<string>((resolve, reject) => {
     if (run.abortController.signal.aborted) {
@@ -243,6 +291,7 @@ function pruneOAuthLoginRuns(): void {
 
     if (now - updatedAtMs > OAUTH_LOGIN_RETENTION_MS) {
       oauthLoginRuns.delete(id);
+      oauthLoginListeners.delete(id);
     }
   }
 }
@@ -253,6 +302,7 @@ function finalizeOAuthLogin(run: ProviderOAuthLoginRun, status: ProviderOAuthLog
   run.status = status;
   run.error = error;
   run.updatedAt = nowIso();
+  notifyOAuthLoginListeners(run);
 }
 
 function appendProgress(run: ProviderOAuthLoginRun, message: string): void {
@@ -263,6 +313,7 @@ function appendProgress(run: ProviderOAuthLoginRun, message: string): void {
 
   run.progress = [...run.progress, normalized].slice(-12);
   run.updatedAt = nowIso();
+  notifyOAuthLoginListeners(run);
 }
 
 function isOAuthCredential(credential: ReturnType<AuthStorage['get']>): credential is OAuthCredential {
@@ -314,6 +365,7 @@ export function startProviderOAuthLogin(authFile: string, providerInput: string)
       run.authUrl = info.url;
       run.authInstructions = typeof info.instructions === 'string' ? info.instructions : '';
       run.updatedAt = nowIso();
+      notifyOAuthLoginListeners(run);
     },
     onPrompt: async (prompt) => {
       const state = toPromptState(prompt, false);
@@ -386,6 +438,7 @@ export function submitProviderOAuthLoginInput(loginId: string, valueInput: strin
   run.pendingInput = null;
   run.prompt = null;
   run.updatedAt = nowIso();
+  notifyOAuthLoginListeners(run);
   pendingInput.resolve(value);
 
   return toPublicLoginState(run);
