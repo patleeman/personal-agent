@@ -57,6 +57,7 @@ export function InboxPage() {
   const { tabs, archivedSessions, openSession, loading: conversationsLoading, refetch: refetchSessions } = useConversations();
   const [filter, setFilter] = useState<'all' | 'unread'>('unread');
   const [markingAll, setMarkingAll] = useState(false);
+  const [clearingInbox, setClearingInbox] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [startingActivityId, setStartingActivityId] = useState<string | null>(null);
@@ -148,6 +149,28 @@ export function InboxPage() {
     }
   }, [allItems.length, attentionConversations, refreshInbox, standaloneActivities]);
 
+  const clearInbox = useCallback(async () => {
+    if (allItems.length === 0) {
+      return;
+    }
+
+    const confirmed = window.confirm('Clear the inbox? This deletes standalone activity items and marks archived conversations as read.');
+    if (!confirmed) {
+      return;
+    }
+
+    setActionError(null);
+    setClearingInbox(true);
+    try {
+      await api.clearInbox();
+      await refreshInbox();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setClearingInbox(false);
+    }
+  }, [allItems.length, refreshInbox]);
+
   const openActivityConversation = useCallback((conversationId: string) => {
     setActionError(null);
     openSession(conversationId);
@@ -194,16 +217,25 @@ export function InboxPage() {
                 </button>
               </div>
             )}
+            {allItems.length > 0 && (
+              <ToolbarButton
+                onClick={() => { void clearInbox(); }}
+                disabled={clearingInbox}
+                className="text-[11px]"
+              >
+                {clearingInbox ? 'Clearing…' : 'Clear inbox'}
+              </ToolbarButton>
+            )}
             {unreadCount > 0 && (
               <ToolbarButton
                 onClick={markAllRead}
-                disabled={markingAll}
+                disabled={markingAll || clearingInbox}
                 className="text-[11px]"
               >
                 {markingAll ? 'Marking…' : 'Mark all read'}
               </ToolbarButton>
             )}
-            <ToolbarButton onClick={() => { void refreshInbox(); }}>↻ Refresh</ToolbarButton>
+            <ToolbarButton onClick={() => { void refreshInbox(); }} disabled={clearingInbox}>↻ Refresh</ToolbarButton>
           </>
         )}
       >

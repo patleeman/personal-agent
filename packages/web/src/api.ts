@@ -280,6 +280,7 @@ export const api = {
 
   // ── Activity count ────────────────────────────────────────────────────────
   activityCount: () => get<{ count: number }>('/activity/count'),
+  clearInbox: () => post<{ ok: boolean; deletedActivityIds: string[]; clearedConversationIds: string[] }>('/inbox/clear'),
   markActivityRead: (id: string, read = true) =>
     patch<{ ok: boolean }>(`/activity/${encodeURIComponent(id)}`, { read }),
   startActivityConversation: (id: string) =>
