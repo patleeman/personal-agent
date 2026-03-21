@@ -39,6 +39,8 @@ function setLiveEntry(
     autoTitleRequested: entry.autoTitleRequested ?? false,
     lastContextUsageJson: entry.lastContextUsageJson ?? null,
     lastQueueStateJson: entry.lastQueueStateJson ?? null,
+    pendingHiddenTurnCustomTypes: entry.pendingHiddenTurnCustomTypes ?? [],
+    activeHiddenTurnCustomType: entry.activeHiddenTurnCustomType ?? null,
     ...(entry.lastDurableRunState ? { lastDurableRunState: entry.lastDurableRunState } : {}),
     ...(entry.contextUsageTimer ? { contextUsageTimer: entry.contextUsageTimer } : {}),
     session: entry.session as LiveRegistryEntry['session'],
