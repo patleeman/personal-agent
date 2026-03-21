@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync, lstatSync, readlinkSync } from 'fs';
+import { existsSync, lstatSync, readlinkSync, symlinkSync } from 'fs';
 import { mkdtemp, rm, mkdir, chmod, readFile, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { dirname, join, resolve } from 'path';
@@ -344,5 +344,26 @@ describe('preparePiAgentDir', () => {
     expect(await readFile(join(getDurableSessionsDir(statePaths.root), '--tmp-project--', '2026-03-21T18-00-00-000Z_local.jsonl'), 'utf-8'))
       .toContain('local-session');
     expect(await readFile(durableSessionFile, 'utf-8')).toContain('synced-session');
+  });
+
+  it('replaces a broken legacy runtime sessions symlink', async () => {
+    const statePaths: RuntimeStatePaths = {
+      root: join(tempDir, 'state'),
+      auth: join(tempDir, 'state', 'auth'),
+      session: join(tempDir, 'state', 'session'),
+      cache: join(tempDir, 'state', 'cache'),
+    };
+
+    const runtimeSessionsDir = join(statePaths.root, 'pi-agent-runtime', 'sessions');
+    await mkdir(dirname(runtimeSessionsDir), { recursive: true });
+    symlinkSync('../pi-agent/sessions', runtimeSessionsDir, 'dir');
+
+    const result = await preparePiAgentDir({
+      statePaths,
+      copyLegacyAuth: false,
+    });
+
+    expect(lstatSync(result.sessionsDir).isSymbolicLink()).toBe(true);
+    expect(resolve(dirname(result.sessionsDir), readlinkSync(result.sessionsDir))).toBe(getDurableSessionsDir(statePaths.root));
   });
 });
