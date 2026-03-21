@@ -4058,6 +4058,51 @@ function toGatewayNotificationEventPayload(notification: GatewayNotification): R
   };
 }
 
+function readGatewayNotificationRequeueOverride(error: unknown): GatewayNotification | undefined {
+  if (!error || typeof error !== 'object') {
+    return undefined;
+  }
+
+  const candidate = (error as { requeueNotification?: unknown }).requeueNotification;
+  if (!candidate || typeof candidate !== 'object') {
+    return undefined;
+  }
+
+  const notification = candidate as Partial<GatewayNotification>;
+  if (
+    notification.gateway !== 'telegram'
+    || typeof notification.id !== 'string'
+    || typeof notification.createdAt !== 'string'
+    || typeof notification.source !== 'string'
+    || typeof notification.destinationId !== 'string'
+    || typeof notification.message !== 'string'
+  ) {
+    return undefined;
+  }
+
+  return {
+    id: notification.id,
+    createdAt: notification.createdAt,
+    source: notification.source,
+    gateway: 'telegram',
+    destinationId: notification.destinationId,
+    ...(typeof notification.messageThreadId === 'number' ? { messageThreadId: notification.messageThreadId } : {}),
+    message: notification.message,
+    ...(typeof notification.taskId === 'string' ? { taskId: notification.taskId } : {}),
+    ...(notification.status === 'success' || notification.status === 'failed' ? { status: notification.status } : {}),
+    ...(typeof notification.logPath === 'string' ? { logPath: notification.logPath } : {}),
+  };
+}
+
+function withGatewayNotificationRequeueOverride(
+  error: unknown,
+  notification: GatewayNotification,
+): Error & { requeueNotification: GatewayNotification } {
+  const normalized = toError(error) as Error & { requeueNotification: GatewayNotification };
+  normalized.requeueNotification = notification;
+  return normalized;
+}
+
 export async function flushGatewayNotifications(
   options: FlushGatewayNotificationsOptions,
 ): Promise<number> {
@@ -4089,7 +4134,7 @@ export async function flushGatewayNotifications(
         `Failed to deliver daemon ${options.gateway} notification ${notification.id}: ${(error as Error).message}`,
       ));
 
-      await requeueNotification(notification);
+      await requeueNotification(readGatewayNotificationRequeueOverride(error) ?? notification);
       break;
     }
   }
@@ -8927,8 +8972,23 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
           normalizeTelegramMessageThreadId(notification.messageThreadId),
         );
 
-        for (const chunk of chunks) {
-          const sent = await sendTelegramFormattedMessage(sendTelegramMessageWithRetry, chatId, chunk, threadedOptions);
+        for (let index = 0; index < chunks.length; index += 1) {
+          const chunk = chunks[index] ?? '';
+
+          let sent;
+          try {
+            sent = await sendTelegramFormattedMessage(sendTelegramMessageWithRetry, chatId, chunk, threadedOptions);
+          } catch (error) {
+            if (index > 0) {
+              throw withGatewayNotificationRequeueOverride(error, {
+                ...notification,
+                message: chunks.slice(index).join(''),
+              });
+            }
+
+            throw error;
+          }
+
           const sentMessageId = toTelegramSentMessageId(sent);
           if (typeof sentMessageId === 'number') {
             trackScheduledReplyContext(chatId, sentMessageId, notification);
