@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api } from '../api';
 import { useApi } from '../hooks';
+import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import type { GatewayLogTail } from '../types';
 import { timeAgo } from '../utils';
 import { ErrorState, LoadingState, PageHeader, PageHeading, SectionLabel, ToolbarButton } from '../components/ui';
@@ -86,9 +87,11 @@ function LogTailBlock({ label, log }: { label: string; log: GatewayLogTail | und
 }
 
 export function DaemonPage() {
-  const { data, loading, error, refetch } = useApi(api.daemon);
+  const { data, loading, error, refetch, replaceData } = useApi(api.daemon);
   const [serviceAction, setServiceAction] = useState<'install' | 'start' | 'restart' | 'stop' | 'uninstall' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  useInvalidateOnTopics(['daemon'], refetch);
 
   async function handleServiceAction(action: 'install' | 'start' | 'restart' | 'stop' | 'uninstall') {
     if (serviceAction || !data) return;
@@ -97,17 +100,16 @@ export function DaemonPage() {
     setActionError(null);
     try {
       if (action === 'install') {
-        await api.installDaemonService();
+        replaceData(await api.installDaemonService());
       } else if (action === 'start') {
-        await api.startDaemonService();
+        replaceData(await api.startDaemonService());
       } else if (action === 'restart') {
-        await api.restartDaemonService();
+        replaceData(await api.restartDaemonService());
       } else if (action === 'stop') {
-        await api.stopDaemonService();
+        replaceData(await api.stopDaemonService());
       } else {
-        await api.uninstallDaemonService();
+        replaceData(await api.uninstallDaemonService());
       }
-      await refetch({ resetLoading: false });
     } catch (serviceError) {
       setActionError(serviceError instanceof Error ? serviceError.message : String(serviceError));
     } finally {

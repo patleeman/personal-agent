@@ -9,6 +9,19 @@ import { startAppEventMonitor, stopAppEventMonitor, subscribeAppEvents } from '.
 
 const originalEnv = process.env;
 const tempDirs: string[] = [];
+const ALL_TOPICS = [
+  'activity',
+  'projects',
+  'sessions',
+  'tasks',
+  'runs',
+  'automation',
+  'daemon',
+  'gateway',
+  'sync',
+  'webUi',
+  'executionTargets',
+] as const;
 
 function createTempDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix));
@@ -106,8 +119,8 @@ describe('app event monitor', () => {
     currentProfile = 'other';
     writeFileSync(profileConfigFile, '{"defaultProfile":"other"}\n', 'utf-8');
 
-    await waitFor(() => events.some((event) => event.type === 'invalidate' && event.topics.length === 6));
-    expect(events.some((event) => event.type === 'invalidate' && event.topics.includes('automation'))).toBe(true);
+    await waitFor(() => events.some((event) => event.type === 'invalidate' && event.topics.length === ALL_TOPICS.length));
+    expect(events.some((event) => event.type === 'invalidate' && ALL_TOPICS.every((topic) => event.topics.includes(topic)))).toBe(true);
     unsubscribe();
   });
 });

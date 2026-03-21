@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { useApi } from '../hooks';
+import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
+import { useSseConnection } from '../contexts';
 import type { GatewayLogTail, WebUiBadReleaseSummary, WebUiReleaseSummary } from '../types';
 import { timeAgo } from '../utils';
 import { ErrorState, LoadingState, PageHeader, PageHeading, SectionLabel, ToolbarButton } from '../components/ui';
@@ -35,14 +37,6 @@ function serviceStatusText(input: {
   if (input.running) return 'running';
   if (input.installed) return 'stopped';
   return 'not installed';
-}
-
-function releaseKey(release: WebUiReleaseSummary | undefined): string {
-  if (!release) {
-    return 'none';
-  }
-
-  return [release.slot, release.revision ?? '', release.builtAt].join(':');
 }
 
 function StatBlock({
@@ -149,7 +143,8 @@ function LogTailBlock({ label, log }: { label: string; log: GatewayLogTail | und
 }
 
 export function WebUiPage() {
-  const { data, loading, error, refetch } = useApi(api.webUiState);
+  const { data, loading, error, refetch, replaceData } = useApi(api.webUiState);
+  const { status: sseStatus } = useSseConnection();
   const [serviceAction, setServiceAction] = useState<'install' | 'start' | 'stop' | 'uninstall' | null>(null);
   const [deploymentAction, setDeploymentAction] = useState<'rollback' | 'mark-bad' | null>(null);
   const [configAction, setConfigAction] = useState(false);
@@ -159,57 +154,59 @@ export function WebUiPage() {
   const [applicationRestarting, setApplicationRestarting] = useState(false);
   const [applicationRestartMessage, setApplicationRestartMessage] = useState<string | null>(null);
   const [applicationRestartError, setApplicationRestartError] = useState<string | null>(null);
-  const restartMonitorRef = useRef<number | null>(null);
+  const restartTimeoutRef = useRef<number | null>(null);
+  const restartReconnectRef = useRef<{ sawDisconnect: boolean } | null>(null);
 
   function clearApplicationRestartMonitor() {
-    if (restartMonitorRef.current !== null) {
-      window.clearTimeout(restartMonitorRef.current);
-      restartMonitorRef.current = null;
+    if (restartTimeoutRef.current !== null) {
+      window.clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
     }
+
+    restartReconnectRef.current = null;
   }
 
-  function startApplicationRestartMonitor(previousReleaseKey: string) {
+  function startApplicationRestartMonitor() {
     clearApplicationRestartMonitor();
-
-    let sawFailure = false;
-    let attempts = 0;
-
-    const poll = async () => {
-      attempts += 1;
-
-      try {
-        const next = await api.webUiState();
-        const nextReleaseKey = releaseKey(next.service.deployment?.activeRelease);
-
-        if (sawFailure || nextReleaseKey !== previousReleaseKey) {
-          clearApplicationRestartMonitor();
-          window.location.reload();
-          return;
-        }
-      } catch {
-        sawFailure = true;
-      }
-
-      if (attempts >= 120) {
-        clearApplicationRestartMonitor();
-        setApplicationRestarting(false);
-        setApplicationRestartMessage('Restart is taking longer than expected. Refresh in a moment to check the new build.');
-        return;
-      }
-
-      restartMonitorRef.current = window.setTimeout(() => {
-        void poll();
-      }, 2500);
+    restartReconnectRef.current = {
+      sawDisconnect: sseStatus !== 'open',
     };
-
-    restartMonitorRef.current = window.setTimeout(() => {
-      void poll();
-    }, 2500);
+    restartTimeoutRef.current = window.setTimeout(() => {
+      restartTimeoutRef.current = null;
+      restartReconnectRef.current = null;
+      setApplicationRestarting(false);
+      setApplicationRestartMessage('Restart is taking longer than expected. Refresh in a moment to check the new build.');
+    }, 300_000);
   }
 
   useEffect(() => () => {
     clearApplicationRestartMonitor();
   }, []);
+
+  useInvalidateOnTopics(['webUi'], refetch);
+
+  useEffect(() => {
+    if (!applicationRestarting) {
+      return;
+    }
+
+    const monitor = restartReconnectRef.current;
+    if (!monitor) {
+      return;
+    }
+
+    if (sseStatus !== 'open') {
+      monitor.sawDisconnect = true;
+      return;
+    }
+
+    if (!monitor.sawDisconnect) {
+      return;
+    }
+
+    clearApplicationRestartMonitor();
+    window.location.reload();
+  }, [applicationRestarting, sseStatus]);
 
   useEffect(() => {
     if (!data) {
@@ -229,15 +226,14 @@ export function WebUiPage() {
     setDeploymentMessage(null);
     try {
       if (action === 'install') {
-        await api.installWebUiService();
+        replaceData(await api.installWebUiService());
       } else if (action === 'start') {
-        await api.startWebUiService();
+        replaceData(await api.startWebUiService());
       } else if (action === 'stop') {
-        await api.stopWebUiService();
+        replaceData(await api.stopWebUiService());
       } else {
-        await api.uninstallWebUiService();
+        replaceData(await api.uninstallWebUiService());
       }
-      await refetch({ resetLoading: false });
     } catch (serviceError) {
       setActionError(serviceError instanceof Error ? serviceError.message : String(serviceError));
     } finally {
@@ -253,8 +249,7 @@ export function WebUiPage() {
     setActionError(null);
     setDeploymentMessage(null);
     try {
-      await api.setWebUiConfig({ useTailscaleServe: next });
-      await refetch({ resetLoading: false });
+      replaceData(await api.setWebUiConfig({ useTailscaleServe: next }));
       setDeploymentMessage(`Tailscale Serve ${next ? 'enabled' : 'disabled'} for localhost:${data.service.port}.`);
     } catch (configErr) {
       setActionError(configErr instanceof Error ? configErr.message : String(configErr));
@@ -272,8 +267,7 @@ export function WebUiPage() {
     setActionError(null);
     setDeploymentMessage(null);
     try {
-      await api.setWebUiConfig({ resumeFallbackPrompt: resumeFallbackPromptDraft });
-      await refetch({ resetLoading: false });
+      replaceData(await api.setWebUiConfig({ resumeFallbackPrompt: resumeFallbackPromptDraft }));
       setDeploymentMessage('Saved conversation resume fallback prompt.');
     } catch (configErr) {
       setActionError(configErr instanceof Error ? configErr.message : String(configErr));
@@ -299,10 +293,9 @@ export function WebUiPage() {
     setApplicationRestarting(true);
 
     try {
-      const previousReleaseKey = releaseKey(data.service.deployment?.activeRelease);
       const result = await api.restartApplication();
       setApplicationRestartMessage(`${result.message} This page will reload when the new release is live, and Inbox will get an unread completion item after blue/green cutover.`);
-      startApplicationRestartMonitor(previousReleaseKey);
+      startApplicationRestartMonitor();
     } catch (restartError) {
       setApplicationRestarting(false);
       setApplicationRestartError(restartError instanceof Error ? restartError.message : String(restartError));
@@ -326,8 +319,7 @@ export function WebUiPage() {
     setActionError(null);
     setDeploymentMessage(null);
     try {
-      await api.rollbackWebUiService();
-      await refetch({ resetLoading: false });
+      replaceData(await api.rollbackWebUiService());
       setDeploymentMessage(`Rolled back to ${target.slot}${target.revision ? ` (${target.revision})` : ''}.`);
     } catch (deploymentError) {
       setActionError(deploymentError instanceof Error ? deploymentError.message : String(deploymentError));
@@ -353,8 +345,7 @@ export function WebUiPage() {
     setActionError(null);
     setDeploymentMessage(null);
     try {
-      await api.markBadWebUiRelease();
-      await refetch({ resetLoading: false });
+      replaceData(await api.markBadWebUiRelease());
       setDeploymentMessage(`Marked ${target.revision ?? target.slot} as bad.`);
     } catch (deploymentError) {
       setActionError(deploymentError instanceof Error ? deploymentError.message : String(deploymentError));

@@ -2,6 +2,8 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
+import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
+import { useSseConnection } from '../contexts';
 import type { DaemonState, ExecutionTargetSummary, GatewayLogTail, SyncState, WebUiReleaseSummary } from '../types';
 import { timeAgo } from '../utils';
 import { EmptyState, ErrorState, LoadingState, PageHeader, PageHeading, SectionLabel, ToolbarButton } from '../components/ui';
@@ -57,14 +59,6 @@ function syncSummaryToneClass(data: SyncState): string {
   if (!data.daemon.connected) return 'text-warning';
   if (!data.git.hasRepo) return 'text-warning';
   return 'text-success';
-}
-
-function releaseKey(release: WebUiReleaseSummary | undefined): string {
-  if (!release) {
-    return 'none';
-  }
-
-  return [release.slot, release.revision ?? '', release.builtAt].join(':');
 }
 
 function serializeTargetMappings(target: ExecutionTargetSummary | null): string {
@@ -170,6 +164,7 @@ export function SystemPage() {
   const gateway = useApi(api.gateway);
   const webUi = useApi(api.webUiState);
   const executionTargets = useApi(api.executionTargets);
+  const { status: sseStatus } = useSseConnection();
   const [showTargetEditor, setShowTargetEditor] = useState(false);
   const [editingTargetId, setEditingTargetId] = useState<string | null>(null);
   const [targetDraft, setTargetDraft] = useState({
@@ -193,7 +188,8 @@ export function SystemPage() {
   const [componentAction, setComponentAction] = useState<ComponentAction | null>(null);
   const [componentMessage, setComponentMessage] = useState<string | null>(null);
   const [componentError, setComponentError] = useState<string | null>(null);
-  const actionMonitorRef = useRef<number | null>(null);
+  const actionTimeoutRef = useRef<number | null>(null);
+  const restartReconnectRef = useRef<{ action: 'application' | 'web-ui'; sawDisconnect: boolean } | null>(null);
 
   const refreshAll = useCallback(async (resetLoading = false) => {
     await Promise.all([
@@ -206,111 +202,66 @@ export function SystemPage() {
   }, [daemon.refetch, executionTargets.refetch, gateway.refetch, sync.refetch, webUi.refetch]);
 
   function clearActionMonitor() {
-    if (actionMonitorRef.current !== null) {
-      window.clearTimeout(actionMonitorRef.current);
-      actionMonitorRef.current = null;
+    if (actionTimeoutRef.current !== null) {
+      window.clearTimeout(actionTimeoutRef.current);
+      actionTimeoutRef.current = null;
     }
+
+    restartReconnectRef.current = null;
   }
 
-  function startApplicationMonitor(previousReleaseKey: string) {
+  function startApplicationMonitor() {
     clearActionMonitor();
-
-    let sawFailure = false;
-    let attempts = 0;
-
-    const poll = async () => {
-      attempts += 1;
-
-      try {
-        const next = await api.webUiState();
-        const nextReleaseKey = releaseKey(next.service.deployment?.activeRelease);
-
-        if (sawFailure || nextReleaseKey !== previousReleaseKey) {
-          clearActionMonitor();
-          window.location.reload();
-          return;
-        }
-      } catch {
-        sawFailure = true;
-      }
-
-      if (attempts >= 120) {
-        clearActionMonitor();
-        setApplicationAction(null);
-        setApplicationMessage('The requested application action is taking longer than expected. Refresh in a moment to check the new release.');
-        return;
-      }
-
-      actionMonitorRef.current = window.setTimeout(() => {
-        void poll();
-      }, 2500);
+    restartReconnectRef.current = {
+      action: 'application',
+      sawDisconnect: sseStatus !== 'open',
     };
-
-    actionMonitorRef.current = window.setTimeout(() => {
-      void poll();
-    }, 2500);
+    actionTimeoutRef.current = window.setTimeout(() => {
+      actionTimeoutRef.current = null;
+      restartReconnectRef.current = null;
+      setApplicationAction(null);
+      setApplicationMessage('The requested application action is taking longer than expected. Refresh in a moment to check the new release.');
+    }, 300_000);
   }
 
   function startWebUiRestartMonitor() {
     clearActionMonitor();
-
-    let sawFailure = false;
-    let attempts = 0;
-
-    const poll = async () => {
-      attempts += 1;
-
-      try {
-        await api.webUiState();
-
-        if (sawFailure) {
-          clearActionMonitor();
-          window.location.reload();
-          return;
-        }
-
-        if (attempts >= 3) {
-          clearActionMonitor();
-          setComponentAction(null);
-          setComponentMessage('Managed web UI restart completed.');
-          await refreshAll(false);
-          return;
-        }
-      } catch {
-        sawFailure = true;
-      }
-
-      if (attempts >= 120) {
-        clearActionMonitor();
-        setComponentAction(null);
-        setComponentMessage('The managed web UI restart is taking longer than expected. Refresh in a moment to check status.');
-        return;
-      }
-
-      actionMonitorRef.current = window.setTimeout(() => {
-        void poll();
-      }, 2500);
+    restartReconnectRef.current = {
+      action: 'web-ui',
+      sawDisconnect: sseStatus !== 'open',
     };
-
-    actionMonitorRef.current = window.setTimeout(() => {
-      void poll();
-    }, 2500);
+    actionTimeoutRef.current = window.setTimeout(() => {
+      actionTimeoutRef.current = null;
+      restartReconnectRef.current = null;
+      setComponentAction(null);
+      setComponentMessage('The managed web UI restart is taking longer than expected. Refresh in a moment to check status.');
+    }, 300_000);
   }
+
+  useInvalidateOnTopics(['daemon', 'sync', 'gateway', 'webUi', 'executionTargets', 'runs'], refreshAll);
+
+  useEffect(() => {
+    const monitor = restartReconnectRef.current;
+    if (!monitor) {
+      return;
+    }
+
+    if (sseStatus !== 'open') {
+      monitor.sawDisconnect = true;
+      return;
+    }
+
+    if (!monitor.sawDisconnect) {
+      return;
+    }
+
+    clearActionMonitor();
+    window.location.reload();
+  }, [sseStatus]);
 
   useEffect(() => () => {
     clearActionMonitor();
   }, []);
-
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      if (applicationAction || componentAction) {
-        return;
-      }
-      void refreshAll(false);
-    }, 20_000);
-
-    return () => window.clearInterval(id);
-  }, [applicationAction, componentAction, refreshAll]);
 
   const combinedWarnings = useMemo(() => {
     return [
@@ -440,12 +391,11 @@ export function SystemPage() {
     setComponentMessage(null);
 
     try {
-      const previousReleaseKey = releaseKey(webUi.data.service.deployment?.activeRelease);
       const result = action === 'update'
         ? await api.updateApplication()
         : await api.restartApplication();
       setApplicationMessage(`${result.message} This page will reload when the new release is live, and Inbox will get an unread completion item after blue/green cutover.`);
-      startApplicationMonitor(previousReleaseKey);
+      startApplicationMonitor();
     } catch (error) {
       setApplicationAction(null);
       setApplicationError(error instanceof Error ? error.message : String(error));
@@ -472,17 +422,16 @@ export function SystemPage() {
       }
 
       if (action === 'restart-daemon') {
-        await api.restartDaemonService();
+        daemon.replaceData(await api.restartDaemonService());
         setComponentMessage('Requested a daemon restart. Status refreshed below.');
       } else if (action === 'restart-gateway') {
-        await api.restartGateway();
+        gateway.replaceData(await api.restartGateway());
         setComponentMessage('Requested a gateway restart. Status refreshed below.');
       } else {
-        await api.runSync();
+        sync.replaceData(await api.runSync());
         setComponentMessage('Requested an immediate sync run. Status refreshed below.');
       }
 
-      await refreshAll(false);
       setComponentAction(null);
     } catch (error) {
       setComponentError(error instanceof Error ? error.message : String(error));

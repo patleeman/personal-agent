@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { useApi } from '../hooks';
+import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { timeAgo } from '../utils';
 import { ErrorState, LoadingState, PageHeader, PageHeading, SectionLabel, ToolbarButton } from '../components/ui';
 
@@ -44,7 +45,7 @@ function StatBlock({
 }
 
 export function SyncPage() {
-  const { data, loading, error, refetch } = useApi(api.sync);
+  const { data, loading, error, refetch, replaceData } = useApi(api.sync);
   const [runningSync, setRunningSync] = useState(false);
   const [runningSetup, setRunningSetup] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -55,13 +56,7 @@ export function SyncPage() {
   const [setupRepoDir, setSetupRepoDir] = useState('');
   const [setupSeedKey, setSetupSeedKey] = useState<string | null>(null);
 
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      void refetch({ resetLoading: false });
-    }, 20_000);
-
-    return () => window.clearInterval(id);
-  }, [refetch]);
+  useInvalidateOnTopics(['sync'], refetch);
 
   useEffect(() => {
     if (!data) {
@@ -87,8 +82,7 @@ export function SyncPage() {
     setSetupNotice(null);
 
     try {
-      await api.runSync();
-      await refetch({ resetLoading: false });
+      replaceData(await api.runSync());
     } catch (runError) {
       setActionError(runError instanceof Error ? runError.message : String(runError));
     } finally {
@@ -117,13 +111,12 @@ export function SyncPage() {
     setSetupNotice(null);
 
     try {
-      await api.setupSync({
+      replaceData(await api.setupSync({
         repoUrl,
         branch,
         mode: setupMode,
         repoDir: repoDir.length > 0 ? repoDir : undefined,
-      });
-      await refetch({ resetLoading: false });
+      }));
       setSetupNotice('Sync setup completed. Automatic background sync is now configured.');
     } catch (setupError) {
       setActionError(setupError instanceof Error ? setupError.message : String(setupError));
