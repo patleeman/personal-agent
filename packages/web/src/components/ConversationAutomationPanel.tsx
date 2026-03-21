@@ -16,6 +16,8 @@ import { ErrorState, LoadingState, SurfacePanel } from './ui';
 
 type PendingAction = 'save' | 'toggle' | null;
 
+const conversationAutomationCache = new Map<string, ConversationAutomationResponse>();
+
 function buildProgressLabel(automation: ConversationAutomationResponse['automation']): string {
   if (automation.items.length === 0) {
     return 'No items';
@@ -73,8 +75,8 @@ function buildItemSupportText(item: ConversationAutomationTodoItem, active: bool
 }
 
 export function ConversationAutomationPanel({ conversationId }: { conversationId: string }) {
-  const [data, setData] = useState<ConversationAutomationResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<ConversationAutomationResponse | null>(() => conversationAutomationCache.get(conversationId) ?? null);
+  const [loading, setLoading] = useState(() => !conversationAutomationCache.has(conversationId));
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [draftItems, setDraftItems] = useState<ChecklistDraftItem[]>([]);
@@ -86,8 +88,9 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
     let receivedStreamSnapshot = false;
     let stream: EventSource | null = null;
 
-    setData(null);
-    setLoading(true);
+    const cached = conversationAutomationCache.get(conversationId) ?? null;
+    setData(cached);
+    setLoading(!cached);
     setError(null);
 
     const applyData = (nextData: ConversationAutomationResponse, source: 'fetch' | 'stream') => {
@@ -101,6 +104,7 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
         return;
       }
 
+      conversationAutomationCache.set(conversationId, nextData);
       setData(nextData);
       setLoading(false);
       setError(null);
@@ -148,6 +152,9 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
     setPendingAction(null);
     setDraftKey(null);
     setDraftItems([]);
+    setData(conversationAutomationCache.get(conversationId) ?? null);
+    setLoading(!conversationAutomationCache.has(conversationId));
+    setError(null);
   }, [conversationId]);
 
   useEffect(() => {
@@ -208,6 +215,7 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
     const saved = await api.updateConversationPlan(conversationId, {
       items: checklistDraftItemsToTemplateItems(nextItems),
     });
+    conversationAutomationCache.set(conversationId, saved);
     setData(saved);
     setDraftItems(toChecklistDraftItems(saved.automation.items));
     setDraftKey(buildDraftKey(saved.automation.items));
@@ -230,6 +238,7 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
     setPendingAction('toggle');
     try {
       const saved = await api.setConversationPlanItemStatus(conversationId, itemId, checked);
+      conversationAutomationCache.set(conversationId, saved);
       setData(saved);
     } catch (nextError) {
       setActionError(nextError instanceof Error ? nextError.message : String(nextError));

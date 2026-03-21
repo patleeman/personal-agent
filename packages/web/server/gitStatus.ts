@@ -13,6 +13,9 @@ export interface GitStatusSummary {
   linesDeleted: number;
 }
 
+const GIT_STATUS_CACHE_TTL_MS = 3_000;
+const gitStatusSummaryCache = new Map<string, { fetchedAt: number; summary: GitStatusSummary | null }>();
+
 function runGitCommand(args: string[], cwd: string): string {
   return execFileSync('git', args, {
     cwd,
@@ -128,8 +131,14 @@ export function readGitRepoInfo(cwd: string): GitRepoInfo | null {
 }
 
 export function readGitStatusSummary(cwd: string): GitStatusSummary | null {
+  const cached = gitStatusSummaryCache.get(cwd);
+  if (cached && (Date.now() - cached.fetchedAt) <= GIT_STATUS_CACHE_TTL_MS) {
+    return cached.summary;
+  }
+
   const repo = readGitRepoInfo(cwd);
   if (!repo) {
+    gitStatusSummaryCache.set(cwd, { fetchedAt: Date.now(), summary: null });
     return null;
   }
 
@@ -148,10 +157,13 @@ export function readGitStatusSummary(cwd: string): GitStatusSummary | null {
       })();
   const untrackedSummary = readUntrackedDiffSummary(cwd);
 
-  return {
+  const summary = {
     branch,
     changeCount,
     linesAdded: trackedSummary.linesAdded + untrackedSummary.linesAdded,
     linesDeleted: trackedSummary.linesDeleted + untrackedSummary.linesDeleted,
-  };
+  } satisfies GitStatusSummary;
+
+  gitStatusSummaryCache.set(cwd, { fetchedAt: Date.now(), summary });
+  return summary;
 }
