@@ -20,7 +20,8 @@ import {
   type AgentSessionEvent,
   type ExtensionFactory,
 } from '@mariozechner/pi-coding-agent';
-import { invalidateAppTopics, publishAppEvent } from './appEvents.js';
+import { publishAppEvent } from './appEvents.js';
+import { notifyConversationAutomationChanged } from './conversationAutomationEvents.js';
 import {
   generateConversationTitle,
   hasAssistantTitleSourceMessage,
@@ -851,7 +852,7 @@ function saveConversationAutomation(entry: LiveEntry, document: ConversationAuto
     profile: resolveConversationAutomationProfile(),
     document,
   });
-  invalidateAppTopics('automation');
+  notifyConversationAutomationChanged(entry.sessionId);
   return saved;
 }
 

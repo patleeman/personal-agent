@@ -7,7 +7,7 @@ import {
   updateConversationAutomationItemStatus,
   writeConversationAutomationState,
 } from './conversationAutomation.js';
-import { invalidateAppTopics } from './appEvents.js';
+import { notifyConversationAutomationChanged } from './conversationAutomationEvents.js';
 
 const TODO_LIST_ACTION_VALUES = ['list', 'add', 'complete', 'block', 'fail', 'reopen'] as const;
 
@@ -164,7 +164,7 @@ export function createConversationTodoAgentExtension(options: {
 
             document = appendConversationAutomationItems(document, [nextItem], updatedAt);
             writeConversationAutomationState({ stateRoot: options.stateRoot, profile, document });
-            invalidateAppTopics('automation');
+            notifyConversationAutomationChanged(conversationId);
 
             const addedItem = document.items.at(-1);
             const addedDetail = addedItem
@@ -190,7 +190,7 @@ export function createConversationTodoAgentExtension(options: {
               resultReason: readOptionalString(params.reason) ?? 'Completed.',
             });
             writeConversationAutomationState({ stateRoot: options.stateRoot, profile, document });
-            invalidateAppTopics('automation');
+            notifyConversationAutomationChanged(conversationId);
 
             return {
               content: [{ type: 'text' as const, text: `Marked todo item ${itemId} completed.` }],
@@ -211,7 +211,7 @@ export function createConversationTodoAgentExtension(options: {
               enabled: false,
             });
             writeConversationAutomationState({ stateRoot: options.stateRoot, profile, document });
-            invalidateAppTopics('automation');
+            notifyConversationAutomationChanged(conversationId);
 
             return {
               content: [{ type: 'text' as const, text: `Marked todo item ${itemId} blocked.` }],
@@ -232,7 +232,7 @@ export function createConversationTodoAgentExtension(options: {
               enabled: false,
             });
             writeConversationAutomationState({ stateRoot: options.stateRoot, profile, document });
-            invalidateAppTopics('automation');
+            notifyConversationAutomationChanged(conversationId);
 
             return {
               content: [{ type: 'text' as const, text: `Marked todo item ${itemId} failed.` }],
@@ -252,7 +252,7 @@ export function createConversationTodoAgentExtension(options: {
               enabled: params.resume === true ? true : document.enabled,
             });
             writeConversationAutomationState({ stateRoot: options.stateRoot, profile, document });
-            invalidateAppTopics('automation');
+            notifyConversationAutomationChanged(conversationId);
 
             return {
               content: [{ type: 'text' as const, text: `Reopened todo item ${itemId} and later items.` }],

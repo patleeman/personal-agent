@@ -7,6 +7,7 @@ import express from 'express';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
 import { listSessions, readSessionBlock, readSessionBlocks, readSessionImageAsset, readSessionSearchText, readSessionTree, renameStoredSession } from './sessions.js';
 import { invalidateAppTopics, startAppEventMonitor, subscribeAppEvents, type AppEventTopic } from './appEvents.js';
+import { notifyConversationAutomationChanged, subscribeConversationAutomation } from './conversationAutomationEvents.js';
 import { resolveConversationCwd, resolveRequestedCwd } from './conversationCwd.js';
 import { pickFolder } from './folderPicker.js';
 import { readGitStatusSummary } from './gitStatus.js';
@@ -2968,7 +2969,7 @@ function saveConversationAutomationDocument(document: Parameters<typeof writeCon
     profile: getCurrentProfile(),
     document,
   });
-  invalidateAppTopics('automation');
+  notifyConversationAutomationChanged(document.conversationId);
   return saved;
 }
 
@@ -2999,7 +3000,7 @@ function migrateDraftConversationPlan(profile: string, conversationId: string): 
     rmSync(draftPath, { force: true });
   }
 
-  invalidateAppTopics('automation');
+  notifyConversationAutomationChanged(conversationId);
 }
 
 function validateConversationAutomationTemplateItems(items: unknown, availableSkillNames: Set<string>): asserts items is Array<{
@@ -5913,6 +5914,67 @@ app.get('/api/live-sessions/:id/context', (req, res) => {
       : null,
     userMessages,
     relatedProjectIds,
+  });
+});
+
+app.get('/api/conversations/:id/plan/events', (req, res) => {
+  const conversationId = req.params.id;
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+  res.write('retry: 1000\n\n');
+
+  let closed = false;
+  let writeQueue = Promise.resolve();
+
+  const writeEvent = (event: { type: 'snapshot'; data: Awaited<ReturnType<typeof buildConversationAutomationResponse>> }) => {
+    if (closed) {
+      return;
+    }
+
+    res.write(`data: ${JSON.stringify(event)}\n\n`);
+  };
+
+  const enqueueWrite = (task: () => Promise<void> | void) => {
+    writeQueue = writeQueue
+      .then(async () => {
+        if (closed) {
+          return;
+        }
+
+        await task();
+      })
+      .catch((error) => {
+        logWarn('conversation automation event stream write failed', {
+          conversationId,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      });
+  };
+
+  const writeSnapshot = async () => {
+    const data = await buildConversationAutomationResponse(conversationId);
+    writeEvent({ type: 'snapshot', data });
+  };
+
+  enqueueWrite(writeSnapshot);
+
+  const heartbeat = setInterval(() => {
+    if (!closed) {
+      res.write(': heartbeat\n\n');
+    }
+  }, 15_000);
+  const unsubscribe = subscribeConversationAutomation(conversationId, () => {
+    enqueueWrite(writeSnapshot);
+  });
+
+  req.on('close', () => {
+    closed = true;
+    clearInterval(heartbeat);
+    unsubscribe();
   });
 });
 
