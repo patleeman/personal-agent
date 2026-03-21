@@ -321,6 +321,47 @@ describe('flushGatewayNotifications', () => {
     expect(requeueNotification).toHaveBeenCalledTimes(1);
     expect(requeueNotification).toHaveBeenCalledWith(notification);
   });
+
+  it('requeues only the unsent remainder when delivery fails after partial progress', async () => {
+    const notification = {
+      id: 'notification-1',
+      createdAt: new Date().toISOString(),
+      source: 'module:tasks',
+      gateway: 'telegram' as const,
+      destinationId: '123',
+      message: 'x'.repeat(5000),
+      taskId: 'stretch-break',
+      status: 'success' as const,
+    };
+
+    const chunks = splitTelegramMessage(notification.message);
+    const unsentTail = chunks.slice(1).join('');
+
+    const pullNotifications = vi.fn(async () => [notification]);
+    const deliverNotification = vi.fn(async () => {
+      throw Object.assign(new Error('network down'), {
+        requeueNotification: {
+          ...notification,
+          message: unsentTail,
+        },
+      });
+    });
+    const requeueNotification = vi.fn(async () => undefined);
+
+    const deliveredCount = await flushGatewayNotifications({
+      gateway: 'telegram',
+      pullNotifications,
+      deliverNotification,
+      requeueNotification,
+    });
+
+    expect(deliveredCount).toBe(0);
+    expect(requeueNotification).toHaveBeenCalledTimes(1);
+    expect(requeueNotification).toHaveBeenCalledWith({
+      ...notification,
+      message: unsentTail,
+    });
+  });
 });
 
 describe('parseGatewayCliArgs', () => {
