@@ -503,10 +503,23 @@ function describeConversationTreeMessage(entry: SessionEntry): Omit<Conversation
   return null;
 }
 
+const HIDDEN_TRANSCRIPT_TURN_CUSTOM_TYPES = new Set([
+  'conversation_automation_item',
+  'conversation_automation_review',
+  'conversation_automation_post_turn_review',
+]);
+
+function shouldHideTranscriptDescendants(message: DisplayMessageEntryLike['message']): boolean {
+  return message.role === 'custom'
+    && message.display === false
+    && typeof message.customType === 'string'
+    && HIDDEN_TRANSCRIPT_TURN_CUSTOM_TYPES.has(message.customType);
+}
+
 function collectHiddenTranscriptEntryIds(messages: DisplayMessageEntryLike[]): Set<string> {
   const hiddenRoots = new Set(
     messages
-      .filter((message) => message.message.role === 'custom' && message.message.display === false)
+      .filter((message) => shouldHideTranscriptDescendants(message.message))
       .map((message) => message.id),
   );
   if (hiddenRoots.size === 0) {
