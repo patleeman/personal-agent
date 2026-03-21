@@ -13,7 +13,12 @@ import { appendComposerHistory, readComposerHistory } from '../composerHistory';
 import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversationArtifacts';
 import { createConversationLiveRunId, getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversationRuns';
 import { formatContextBreakdownLabel, formatContextUsageLabel, formatContextWindowLabel, formatLiveSessionLabel, formatThinkingLevelLabel } from '../conversationHeader';
-import { isConversationScrolledToBottom, shouldShowScrollToBottomControl } from '../conversationScroll';
+import {
+  getConversationTailBlockKey,
+  isConversationScrolledToBottom,
+  shouldAutoScrollToStreamingTail,
+  shouldShowScrollToBottomControl,
+} from '../conversationScroll';
 import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE } from '../conversationTitle';
 import { emitConversationProjectsChanged, CONVERSATION_PROJECTS_CHANGED_EVENT } from '../conversationProjectEvents';
 import { displayBlockToMessageBlock } from '../messageBlocks';
@@ -1064,6 +1069,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [pendingInitialPrompt, setPendingInitialPrompt] = useState<PendingConversationPrompt | null>(null);
   const pendingInitialPromptSessionIdRef = useRef<string | null>(null);
   const pinnedInitialPromptScrollSessionIdRef = useRef<string | null>(null);
+  const pinnedInitialPromptTailKeyRef = useRef<string | null>(null);
 
   // Input state
   const [input, setInputState] = useReloadState<string>({
@@ -1201,12 +1207,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       setPendingInitialPrompt(null);
       pendingInitialPromptSessionIdRef.current = null;
       pinnedInitialPromptScrollSessionIdRef.current = null;
+      pinnedInitialPromptTailKeyRef.current = null;
       return;
     }
 
     setPendingInitialPrompt(readPendingConversationPrompt(id));
     pendingInitialPromptSessionIdRef.current = null;
     pinnedInitialPromptScrollSessionIdRef.current = null;
+    pinnedInitialPromptTailKeyRef.current = null;
   }, [draft, id]);
 
   // Pending steer/followup queue as reported by the live session.
@@ -1773,7 +1781,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       scrollTop: el.scrollTop,
       clientHeight: el.clientHeight,
     }));
-  }, [id, messageCount]);
+  }, [id, messageCount, realMessages]);
 
   useLayoutEffect(() => {
     const pendingRestore = pendingPrependRestoreRef.current;
@@ -1813,6 +1821,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   // finished its initial render pass. Long conversations can keep adjusting
   // scrollHeight for a few frames while windowing/chunk measurements settle.
   const initialScrollSessionIdRef = useRef<string | null>(null);
+  const streamingTailAutoScrollKeyRef = useRef<string | null>(null);
   useLayoutEffect(() => {
     if (!id || !realMessages?.length || !scrollRef.current || sessionLoading) {
       return;
@@ -1894,22 +1903,51 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return () => window.removeEventListener('keydown', handler);
   }, [showTree, stream]);
 
-  // Auto-scroll when streaming changes the current tail block.
-  // Text deltas usually mutate the last streamed block in place, so keying on
-  // blocks.length only follows new blocks and misses most of the live output.
+  // Auto-scroll only when streaming introduces a new tail block. That keeps the
+  // start of the latest assistant message in view instead of chasing every token
+  // to the bottom while the same block grows.
   useLayoutEffect(() => {
-    if (!stream.isStreaming) return;
-    if (atBottom && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const tailBlock = realMessages?.[realMessages.length - 1];
+    const tailKey = getConversationTailBlockKey(tailBlock);
+
+    if (!stream.isStreaming) {
+      streamingTailAutoScrollKeyRef.current = tailKey;
+      return;
     }
-  }, [stream.blocks, stream.isStreaming, atBottom]);
+
+    if (!atBottom || !scrollRef.current) {
+      streamingTailAutoScrollKeyRef.current = tailKey;
+      return;
+    }
+
+    if (!shouldAutoScrollToStreamingTail(streamingTailAutoScrollKeyRef.current, tailBlock)) {
+      return;
+    }
+
+    streamingTailAutoScrollKeyRef.current = tailKey;
+    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    setAtBottom(true);
+  }, [atBottom, realMessages, stream.isStreaming]);
 
   // Forked/new conversations with a queued initial prompt should stay pinned to
-  // the newest message until that first turn finishes, even if the initial load
-  // briefly leaves the scroll position at the top.
+  // the bottom only until that queued user block lands and the assistant starts
+  // its response. After that, let the transcript stay put so the response can be
+  // read from the top while it streams.
   useLayoutEffect(() => {
     if (!id || pinnedInitialPromptScrollSessionIdRef.current !== id || !scrollRef.current) {
       return;
+    }
+
+    const tailBlock = realMessages?.[realMessages.length - 1];
+    const tailKey = getConversationTailBlockKey(tailBlock);
+    if (pinnedInitialPromptTailKeyRef.current) {
+      if (tailKey && tailKey !== pinnedInitialPromptTailKeyRef.current) {
+        pinnedInitialPromptScrollSessionIdRef.current = null;
+        pinnedInitialPromptTailKeyRef.current = null;
+        return;
+      }
+    } else if (tailBlock?.type === 'user' && tailKey) {
+      pinnedInitialPromptTailKeyRef.current = tailKey;
     }
 
     const el = scrollRef.current;
@@ -1924,7 +1962,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return () => {
       window.cancelAnimationFrame(animationFrame);
     };
-  }, [id, realMessages, stream.isStreaming]);
+  }, [id, realMessages]);
 
   // Focus input on navigation
   useEffect(() => { textareaRef.current?.focus(); }, [id]);
@@ -1934,6 +1972,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     if (prevStreamingRef.current && !stream.isStreaming) {
       if (pinnedInitialPromptScrollSessionIdRef.current === id) {
         pinnedInitialPromptScrollSessionIdRef.current = null;
+        pinnedInitialPromptTailKeyRef.current = null;
       }
       void refetchConversationProjects({ resetLoading: false });
     }
@@ -2037,6 +2076,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     pendingInitialPromptSessionIdRef.current = id;
     pinnedInitialPromptScrollSessionIdRef.current = id;
+    pinnedInitialPromptTailKeyRef.current = null;
     setPendingInitialPrompt(null);
 
     void stream.send(
@@ -2051,6 +2091,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }).catch((error) => {
       pendingInitialPromptSessionIdRef.current = null;
       pinnedInitialPromptScrollSessionIdRef.current = null;
+      pinnedInitialPromptTailKeyRef.current = null;
       persistPendingConversationPrompt(id, claimedInitialPrompt);
       setPendingInitialPrompt(claimedInitialPrompt);
       persistForkPromptDraft(id, claimedInitialPrompt.text);
