@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-
 import { api } from './api';
 import { Layout } from './components/Layout';
 import { InboxPage } from './pages/InboxPage';
+import { fetchSessionsSnapshot } from './sessionSnapshot';
 import {
   AppDataContext,
   AppEventsContext,
@@ -11,7 +12,6 @@ import {
   SseConnectionContext,
 } from './contexts';
 import { ThemeProvider } from './theme';
-import { applyLiveSessionState, buildSyntheticLiveSessionMeta } from './sessionIndicators';
 import type {
   ActivitySnapshot,
   AppEvent,
@@ -25,16 +25,6 @@ import type {
 function LegacyTaskRoutesRedirect() {
   const { id } = useParams<{ id?: string }>();
   return <Navigate to={id ? `/scheduled/${id}` : '/scheduled'} replace />;
-}
-
-async function fetchSessionsSnapshot(): Promise<SessionMeta[]> {
-  const [jsonl, live] = await Promise.all([api.sessions(), api.liveSessions()]);
-  const jsonlIds = new Set(jsonl.map((session) => session.id));
-  const syntheticLive: SessionMeta[] = live
-    .filter((entry) => !jsonlIds.has(entry.id))
-    .map((entry) => buildSyntheticLiveSessionMeta(entry));
-
-  return [...syntheticLive, ...applyLiveSessionState(jsonl, live)];
 }
 
 const TasksPage = lazy(() => import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })));

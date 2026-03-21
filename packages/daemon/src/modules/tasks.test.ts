@@ -282,6 +282,7 @@ describe('tasks module scheduling', () => {
     expect(loadDurableRunStatus(runPaths.statusPath)).toMatchObject({
       status: 'completed',
       activeAttempt: 1,
+      completedAt: '2026-03-02T10:00:10.000Z',
     });
     expect(readFileSync(runPaths.outputLogPath, 'utf-8')).toContain('nightly output');
 
@@ -343,6 +344,7 @@ describe('tasks module scheduling', () => {
     expect(loadDurableRunStatus(runPaths.statusPath)).toMatchObject({
       runId: requestedRunId,
       status: 'completed',
+      completedAt: '2026-03-02T10:00:00.000Z',
     });
 
     await module.stop?.(context);
@@ -930,6 +932,17 @@ This run should fail
       destinationId: 'channel-1',
       taskId: 'failing',
       status: 'failed',
+    });
+
+    const runsRoot = resolveDurableRunsRoot(stateRoot);
+    const runIds = readdirSync(runsRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+
+    expect(runIds).toHaveLength(1);
+    expect(loadDurableRunStatus(resolveDurableRunPaths(runsRoot, runIds[0] as string).statusPath)).toMatchObject({
+      status: 'failed',
+      completedAt: '2026-03-02T10:00:10.000Z',
     });
 
     await module.stop?.(context);

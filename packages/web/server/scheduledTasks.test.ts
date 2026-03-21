@@ -2,22 +2,31 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   buildScheduledTaskMarkdown,
   inferTaskProfileFromFilePath,
+  loadScheduledTasksForProfile,
   readScheduledTaskFileMetadata,
+  resolveScheduledTaskForProfile,
   taskBelongsToProfile,
+  taskDirForProfile,
 } from './scheduledTasks.js';
 
 const tempDirs: string[] = [];
+const originalEnv = process.env;
+
+beforeEach(() => {
+  process.env = { ...originalEnv, PERSONAL_AGENT_STATE_ROOT: createTempDir('pa-web-scheduled-tasks-state-') };
+});
 
 afterEach(async () => {
+  process.env = originalEnv;
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
-function createTempDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'pa-web-scheduled-tasks-'));
+function createTempDir(prefix = 'pa-web-scheduled-tasks-'): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
   tempDirs.push(dir);
   return dir;
 }
@@ -66,6 +75,51 @@ describe('scheduledTasks', () => {
         targets: [{ gateway: 'telegram', chatId: '123', messageThreadId: 45 }],
       },
     })).toBe(`---\nid: "daily-status"\nenabled: true\ncron: "11 */4 * * *"\nprofile: "assistant"\nmodel: "openai-codex/gpt-5.4"\ncwd: "~/agent-workspace"\ntimeoutSeconds: 900\noutput:\n  when: success\n  targets:\n    - gateway: telegram\n      chatId: "123"\n      messageThreadId: 45\n---\nRun maintenance.\n`);
+  });
+
+  it('loads parsed tasks and runtime state for a profile', () => {
+    const tasksDir = taskDirForProfile('assistant');
+    mkdirSync(tasksDir, { recursive: true });
+
+    const validFilePath = join(tasksDir, 'daily.task.md');
+    const invalidFilePath = join(tasksDir, 'broken.task.md');
+    writeFileSync(validFilePath, `---\ncron: "0 9 * * *"\n---\nDaily task\n`);
+    writeFileSync(invalidFilePath, `---\ncron: "0 9 * *"\n---\nBroken task\n`);
+
+    const daemonDir = join(process.env.PERSONAL_AGENT_STATE_ROOT!, 'daemon');
+    mkdirSync(daemonDir, { recursive: true });
+    writeFileSync(join(daemonDir, 'task-state.json'), JSON.stringify({
+      tasks: {
+        [validFilePath]: {
+          id: 'daily',
+          filePath: validFilePath,
+          running: true,
+          lastStatus: 'success',
+          lastAttemptCount: 2,
+        },
+      },
+    }));
+
+    const loaded = loadScheduledTasksForProfile('assistant');
+
+    expect(loaded.taskDir).toBe(tasksDir);
+    expect(loaded.tasks.map((task) => task.id)).toEqual(['daily']);
+    expect(loaded.parseErrors).toEqual([
+      expect.objectContaining({ filePath: invalidFilePath, error: expect.any(String) }),
+    ]);
+    expect(loaded.runtimeEntries).toEqual([
+      expect.objectContaining({
+        id: 'daily',
+        filePath: validFilePath,
+        running: true,
+        lastStatus: 'success',
+        lastAttemptCount: 2,
+      }),
+    ]);
+
+    const resolved = resolveScheduledTaskForProfile('assistant', 'daily');
+    expect(resolved.task.filePath).toBe(validFilePath);
+    expect(resolved.runtime).toEqual(expect.objectContaining({ running: true, lastStatus: 'success' }));
   });
 
   it('filters repo-managed tasks by the current profile', () => {

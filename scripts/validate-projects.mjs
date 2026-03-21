@@ -9,6 +9,8 @@ import {
   resolveProjectPaths,
 } from '@personal-agent/core';
 
+const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
+
 function printUsage() {
   console.log(`Usage:
   node scripts/validate-projects.mjs --profile <profile> [--project <projectId>] [--json]
@@ -117,6 +119,8 @@ function listProfiles() {
 
   return readdirSync(profilesRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
+    .filter((entry) => PROFILE_NAME_PATTERN.test(entry.name))
+    .filter((entry) => existsSync(resolve(profilesRoot, entry.name, 'agent')))
     .map((entry) => entry.name)
     .sort((left, right) => left.localeCompare(right));
 }

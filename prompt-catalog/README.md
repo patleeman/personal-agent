@@ -16,7 +16,6 @@ This catalog currently holds:
 - shared system prompt sections (`system/`)
 - runtime mode blocks (`runtime/`)
 - utility prompts (`utilities/`)
-- reminder review notes (`reminders/`)
 
 Important:
 
@@ -33,7 +32,6 @@ prompt-catalog/
   system/
   runtime/
   utilities/
-  reminders/
 ```
 
 ## Authoring rules

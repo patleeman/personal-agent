@@ -6,7 +6,12 @@ import os from 'node:os';
 
 import yaml from 'js-yaml';
 
-import { ensureConversationMaintenanceIndexPath, getStateRoot } from './paths.mjs';
+import {
+  ensureConversationMaintenanceIndexPath,
+  getPiAgentSessionsRoot,
+  getProfilesRoot,
+  getStateRoot,
+} from './paths.mjs';
 
 function printUsage() {
   console.error(`Usage:
@@ -15,7 +20,7 @@ function printUsage() {
 Options:
   --profile <name>            Profile name (required)
   --index <path>              Processed index JSON path (default: <state-root>/conversation-maintenance/<profile>/processed-conversations.json)
-  --sessions-root <path>      Sessions root (default: ~/.local/state/personal-agent/pi-agent/sessions)
+  --sessions-root <path>      Sessions root (default: <state-root>/pi-agent/sessions)
   --days <n>                  Rolling window size in days (default: 7)
   --timezone <IANA tz>        Timezone for date windowing (default: America/New_York)
   --help                      Show this help
@@ -210,8 +215,7 @@ function extractMarkdownBody(raw) {
   };
 }
 
-async function loadScheduledTaskPromptIndex(stateRoot) {
-  const profilesRoot = path.join(stateRoot, 'profiles');
+async function loadScheduledTaskPromptIndex(profilesRoot) {
   const taskFiles = await listFilesWithSuffix(profilesRoot, '.task.md');
   const promptIndex = new Map();
 
@@ -329,8 +333,9 @@ async function main() {
       }
     : await ensureConversationMaintenanceIndexPath(profile);
   const indexPath = resolvedIndex.indexPath;
-  const sessionsRoot = asAbsolute(args['sessions-root'] ?? '~/.local/state/personal-agent/pi-agent/sessions');
   const stateRoot = getStateRoot();
+  const profilesRoot = getProfilesRoot();
+  const sessionsRoot = asAbsolute(args['sessions-root'] ?? getPiAgentSessionsRoot());
 
   const now = new Date();
   const todayLocal = localDateString(now, timezone);
@@ -339,7 +344,7 @@ async function main() {
 
   const [sessionFiles, scheduledTaskPromptIndex] = await Promise.all([
     listFilesWithSuffix(sessionsRoot, '.jsonl'),
-    loadScheduledTaskPromptIndex(stateRoot),
+    loadScheduledTaskPromptIndex(profilesRoot),
   ]);
 
   const scanErrors = [];
@@ -418,6 +423,7 @@ async function main() {
       end: windowEnd,
     },
     stateRoot,
+    profilesRoot,
     sessionsRoot,
     indexPath,
     index: {

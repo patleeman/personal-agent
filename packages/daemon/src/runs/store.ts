@@ -278,10 +278,6 @@ function determineRecoveryAction(
     return 'none';
   }
 
-  if (status.status === 'queued' || status.status === 'waiting') {
-    return 'resume';
-  }
-
   if (manifest.resumePolicy === 'continue') {
     return 'resume';
   }

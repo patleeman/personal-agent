@@ -12,7 +12,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'r
 import { api } from '../api';
 import { LiveTitlesContext, useAppData, useSseConnection } from '../contexts';
 import { NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversationTitle';
-import { applyLiveSessionState, buildSyntheticLiveSessionMeta } from '../sessionIndicators';
+import { fetchSessionsSnapshot } from '../sessionSnapshot';
 import {
   closeConversationTab,
   moveConversationTab,
@@ -23,8 +23,6 @@ import {
   readOpenSessionIds,
   readPinnedSessionIds,
   replaceConversationLayout,
-  replaceOpenConversationTabs,
-  replacePinnedConversationTabs,
   syncOpenConversationTabsToServer,
   type ConversationLayout,
   type ConversationShelf,
@@ -33,16 +31,6 @@ import {
 } from '../sessionTabs';
 import type { SessionMeta } from '../types';
 import { resolveSessionLineageAutoOpen } from '../sessionLineage';
-
-async function fetchSessionsSnapshot(): Promise<SessionMeta[]> {
-  const [jsonl, live] = await Promise.all([api.sessions(), api.liveSessions()]);
-  const jsonlIds = new Set(jsonl.map((session) => session.id));
-  const syntheticLive: SessionMeta[] = live
-    .filter((entry) => !jsonlIds.has(entry.id))
-    .map((entry) => buildSyntheticLiveSessionMeta(entry));
-
-  return [...syntheticLive, ...applyLiveSessionState(jsonl, live)];
-}
 
 function applyLayoutState(layout: ConversationLayout, setters: {
   setOpenIds: (ids: string[]) => void;
@@ -141,16 +129,6 @@ export function useConversations() {
   const unpinSession = useCallback((id: string, options: { open?: boolean } = {}) => {
     const nextLayout = unpinConversationTab(id, options);
     applyLayoutState(nextLayout, { setOpenIds, setPinnedIds });
-  }, []);
-
-  const reorderSessions = useCallback((ids: string[]) => {
-    setOpenIds(replaceOpenConversationTabs(ids));
-    setPinnedIds(readPinnedSessionIds());
-  }, []);
-
-  const reorderPinnedSessions = useCallback((ids: string[]) => {
-    setPinnedIds(replacePinnedConversationTabs(ids));
-    setOpenIds(readOpenSessionIds());
   }, []);
 
   const moveSession = useCallback((
@@ -254,8 +232,6 @@ export function useConversations() {
     closeSession,
     pinSession,
     unpinSession,
-    reorderSessions,
-    reorderPinnedSessions,
     moveSession,
     loading,
     refetch,

@@ -1,7 +1,7 @@
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, watch, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, normalize, relative } from 'node:path';
+import { dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
@@ -69,7 +69,6 @@ import {
   suppressMonitoredServiceAttention,
   writeInternalAttentionEntry,
 } from './internalAttention.js';
-import { readSavedThemePreferences, writeSavedThemePreferences, type ThemeMode } from './themePreferences.js';
 import { readSavedWebUiPreferences, writeSavedWebUiPreferences } from './webUiPreferences.js';
 import { DEFAULT_RUNTIME_SETTINGS_FILE, persistSettingsWrite } from './settingsPersistence.js';
 import {
@@ -81,8 +80,12 @@ import {
 import { syncDaemonTaskScopeToProfile } from './daemonProfileSync.js';
 import {
   buildScheduledTaskMarkdown,
+  getScheduledTaskStateFilePath,
+  loadScheduledTasksForProfile,
   readScheduledTaskFileMetadata,
-  taskBelongsToProfile,
+  resolveScheduledTaskForProfile,
+  taskDirForProfile,
+  validateScheduledTaskDefinition,
   type TaskRuntimeEntry,
 } from './scheduledTasks.js';
 import { createProjectAgentExtension } from './projectAgentExtension.js';
@@ -260,7 +263,6 @@ import {
   markDeferredResumeConversationRunReady,
   markDeferredResumeConversationRunRetryScheduled,
   parsePendingOperation,
-  parseTaskDefinition,
   resolveDaemonPaths,
   startScheduledTaskRun,
   startBackgroundRun,
@@ -301,7 +303,6 @@ import {
   exportProjectSharePackage,
 } from './projectPackages.js';
 import { generateProjectBrief } from './projectBriefs.js';
-import { openLocalPathOnHost } from './localPathOpener.js';
 import {
   activateDueDeferredResumesForSessionFile,
   cancelDeferredResumeForSessionFile,
@@ -320,7 +321,7 @@ const PROCESS_CWD = process.cwd();
 const AGENT_DIR = getPiAgentRuntimeDir();
 const AUTH_FILE = join(AGENT_DIR, 'auth.json');
 const SESSIONS_DIR = join(getPiAgentStateDir(), 'sessions');
-const TASK_STATE_FILE = join(getStateRoot(), 'daemon', 'task-state.json');
+const TASK_STATE_FILE = getScheduledTaskStateFilePath();
 const PROFILE_CONFIG_FILE = getProfileConfigFilePath();
 const DEFERRED_RESUME_POLL_MS = 3_000;
 const DEFERRED_RESUME_RETRY_DELAY_MS = 30_000;
@@ -1095,108 +1096,43 @@ async function listMemoryWorkItems(): Promise<MemoryWorkItem[]> {
   return [...items, ...pendingStates].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
-function loadTaskStateEntries(): TaskRuntimeEntry[] {
-  if (!existsSync(TASK_STATE_FILE)) {
-    return [];
-  }
-
-  const taskState = JSON.parse(readFileSync(TASK_STATE_FILE, 'utf-8')) as { tasks?: Record<string, unknown> };
-  return Object.values(taskState.tasks ?? {}) as TaskRuntimeEntry[];
-}
-
-function taskDirForProfile(profile: string): string {
-  return join(getProfilesRoot(), profile, 'agent', 'tasks');
-}
-
-function listTaskDefinitionFiles(taskDir: string): string[] {
-  if (!existsSync(taskDir)) {
-    return [];
-  }
-
-  const output: string[] = [];
-  const stack = [taskDir];
-
-  while (stack.length > 0) {
-    const current = stack.pop() as string;
-    const entries = readdirSync(current, { withFileTypes: true });
-
-    for (const entry of entries) {
-      const fullPath = join(current, entry.name);
-      if (entry.isDirectory()) {
-        stack.push(fullPath);
-        continue;
-      }
-
-      if (entry.isFile() && entry.name.endsWith('.task.md')) {
-        output.push(fullPath);
-      }
+function findCurrentProfileTask(taskId: string) {
+  try {
+    return resolveScheduledTaskForProfile(getCurrentProfile(), taskId);
+  } catch (error) {
+    if (error instanceof Error && error.message === `Task not found: ${taskId}`) {
+      return undefined;
     }
+
+    throw error;
   }
-
-  output.sort();
-  return output;
-}
-
-function findCurrentProfileTaskEntry(taskId: string): TaskRuntimeEntry | undefined {
-  const currentProfile = getCurrentProfile();
-  const runtimeEntries = loadTaskStateEntries().filter((task) => taskBelongsToProfile(task, currentProfile));
-  const matchedRuntime = runtimeEntries.find((task) => task.id === taskId);
-  if (matchedRuntime) {
-    return matchedRuntime;
-  }
-
-  for (const filePath of listTaskDefinitionFiles(taskDirForProfile(currentProfile))) {
-    try {
-      const metadata = readScheduledTaskFileMetadata(filePath);
-      if (metadata.id !== taskId) {
-        continue;
-      }
-
-      return {
-        id: metadata.id,
-        filePath,
-        scheduleType: metadata.scheduleType,
-        running: false,
-      };
-    } catch {
-      continue;
-    }
-  }
-
-  return undefined;
 }
 
 function listTasksForCurrentProfile() {
-  const currentProfile = getCurrentProfile();
-  const runtimeEntries = loadTaskStateEntries().filter((task) => taskBelongsToProfile(task, currentProfile));
-  const runtimeByFilePath = new Map(runtimeEntries.map((task) => [task.filePath, task]));
-  const runtimeById = new Map(runtimeEntries.map((task) => [task.id, task]));
-  const tasks = listTaskDefinitionFiles(taskDirForProfile(currentProfile)).flatMap((filePath) => {
-    try {
-      const metadata = readScheduledTaskFileMetadata(filePath);
-      const runtime = runtimeByFilePath.get(filePath) ?? runtimeById.get(metadata.id);
-      return [{
-        id: metadata.id,
-        filePath,
-        scheduleType: metadata.scheduleType,
-        running: runtime?.running ?? false,
-        enabled: metadata.enabled,
-        cron: metadata.cron,
-        at: metadata.at,
-        prompt: metadata.prompt,
-        model: metadata.model,
-        lastStatus: runtime?.lastStatus,
-        lastRunAt: runtime?.lastRunAt,
-        lastSuccessAt: runtime?.lastSuccessAt,
-        lastAttemptCount: runtime?.lastAttemptCount,
-      }];
-    } catch {
-      return [];
-    }
-  });
+  const loaded = loadScheduledTasksForProfile(getCurrentProfile());
+  const runtimeByFilePath = new Map(loaded.runtimeEntries.map((task) => [task.filePath, task]));
+  const runtimeById = new Map(
+    loaded.runtimeEntries.flatMap((task) => task.id ? [[task.id, task] as const] : []),
+  );
 
-  tasks.sort((left, right) => left.id.localeCompare(right.id) || left.filePath.localeCompare(right.filePath));
-  return tasks;
+  return loaded.tasks.map((task) => {
+    const runtime = loaded.runtimeState[task.key] ?? runtimeByFilePath.get(task.filePath) ?? runtimeById.get(task.id);
+    return {
+      id: task.id,
+      filePath: task.filePath,
+      scheduleType: task.schedule.type,
+      running: runtime?.running ?? false,
+      enabled: task.enabled,
+      cron: task.schedule.type === 'cron' ? task.schedule.expression : undefined,
+      at: task.schedule.type === 'at' ? task.schedule.at : undefined,
+      prompt: task.prompt.split('\n')[0]?.slice(0, 120) ?? '',
+      model: task.modelRef,
+      lastStatus: runtime?.lastStatus,
+      lastRunAt: runtime?.lastRunAt,
+      lastSuccessAt: runtime?.lastSuccessAt,
+      lastAttemptCount: runtime?.lastAttemptCount,
+    };
+  });
 }
 
 function readRequiredTaskId(value: unknown): string {
@@ -1212,12 +1148,14 @@ function readRequiredTaskId(value: unknown): string {
   return normalized;
 }
 
-function buildTaskDetailResponse(entry: TaskRuntimeEntry) {
-  const metadata = readScheduledTaskFileMetadata(entry.filePath);
+function buildTaskDetailResponse(task: { filePath: string }, runtime?: TaskRuntimeEntry) {
+  const metadata = readScheduledTaskFileMetadata(task.filePath);
   return {
-    ...entry,
+    ...(runtime ?? {}),
     id: metadata.id,
+    filePath: task.filePath,
     scheduleType: metadata.scheduleType,
+    running: runtime?.running ?? false,
     enabled: metadata.enabled,
     cron: metadata.cron,
     at: metadata.at,
@@ -2891,22 +2829,6 @@ function listAvailableModelDefinitions() {
   return models;
 }
 
-function listAvailableThemeIds(): string[] {
-  try {
-    const profile = resolveResourceProfile(getCurrentProfile(), {
-      repoRoot: REPO_ROOT,
-      profilesRoot: getProfilesRoot(),
-    });
-    const ids = profile.themeEntries
-      .map((entry) => basename(entry, '.json').trim())
-      .filter((entry) => entry.length > 0);
-
-    return [...new Set(ids)].sort((left, right) => left.localeCompare(right));
-  } catch {
-    return [];
-  }
-}
-
 async function buildConversationAutomationResponse(conversationId: string) {
   const profile = getCurrentProfile();
   const loaded = loadConversationAutomationState({
@@ -3731,51 +3653,6 @@ app.get('/api/tools/mcp/servers/:server/tools/:tool', async (_req, res) => {
   }
 });
 
-app.get('/api/agent-theme', (_req, res) => {
-  try {
-    const saved = readSavedThemePreferences(SETTINGS_FILE);
-    res.json({
-      ...saved,
-      themes: listAvailableThemeIds(),
-    });
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.patch('/api/agent-theme', (req, res) => {
-  try {
-    const { themeMode, themeDark, themeLight } = req.body as {
-      themeMode?: ThemeMode;
-      themeDark?: string;
-      themeLight?: string;
-    };
-
-    if (themeMode === undefined && themeDark === undefined && themeLight === undefined) {
-      res.status(400).json({ error: 'themeMode, themeDark, or themeLight required' });
-      return;
-    }
-
-    persistSettingsWrite((settingsFile) => {
-      writeSavedThemePreferences({ themeMode, themeDark, themeLight }, settingsFile);
-    }, {
-      runtimeSettingsFile: SETTINGS_FILE,
-    });
-
-    res.json({ ok: true });
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
 app.get('/api/web-ui/open-conversations', (_req, res) => {
   try {
     const saved = readSavedWebUiPreferences(SETTINGS_FILE);
@@ -3914,8 +3791,9 @@ app.post('/api/tasks', (req, res) => {
     const profile = getCurrentProfile();
     const taskId = readRequiredTaskId(body.taskId);
     const filePath = join(taskDirForProfile(profile), `${taskId}.task.md`);
+    const loaded = loadScheduledTasksForProfile(profile);
 
-    if (existsSync(filePath) || listTasksForCurrentProfile().some((task) => task.id === taskId)) {
+    if (existsSync(filePath) || loaded.tasks.some((task) => task.id === taskId)) {
       res.status(409).json({ error: `Task already exists: ${taskId}` });
       return;
     }
@@ -3932,23 +3810,16 @@ app.post('/api/tasks', (req, res) => {
       prompt: body.prompt ?? '',
     });
 
-    parseTaskDefinition({
-      filePath,
-      rawContent: content,
-      defaultTimeoutSeconds: loadDaemonConfig().modules.tasks.defaultTimeoutSeconds,
-    });
+    validateScheduledTaskDefinition(filePath, content);
 
     mkdirSync(dirname(filePath), { recursive: true });
     writeFileSync(filePath, content, 'utf-8');
     invalidateAppTopics('tasks');
+
+    const savedTask = resolveScheduledTaskForProfile(profile, taskId);
     res.status(201).json({
       ok: true,
-      task: buildTaskDetailResponse({
-        id: taskId,
-        filePath,
-        scheduleType: body.at ? 'at' : 'cron',
-        running: false,
-      }),
+      task: buildTaskDetailResponse(savedTask.task, savedTask.runtime),
     });
   } catch (err) {
     logError('request handler error', {
@@ -3970,49 +3841,49 @@ app.patch('/api/tasks/:id', (req, res) => {
       timeoutSeconds?: number | null;
       prompt?: string;
     };
-    const entry = findCurrentProfileTaskEntry(req.params.id);
-    if (!entry) { res.status(404).json({ error: 'Task not found' }); return; }
+    const resolvedTask = findCurrentProfileTask(req.params.id);
+    if (!resolvedTask) { res.status(404).json({ error: 'Task not found' }); return; }
 
     const requestedKeys = Object.keys(body).filter((key) => body[key as keyof typeof body] !== undefined);
     const enabled = body.enabled;
     const toggleOnly = requestedKeys.length === 1 && requestedKeys[0] === 'enabled' && typeof enabled === 'boolean';
 
     if (toggleOnly) {
-      let content = readFileSync(entry.filePath, 'utf-8');
+      let content = readFileSync(resolvedTask.task.filePath, 'utf-8');
       if (/enabled:\s*(true|false)/.test(content)) {
         content = content.replace(/enabled:\s*(true|false)/, `enabled: ${enabled}`);
       } else {
         content = content.replace(/^---\n/, `---\nenabled: ${enabled}\n`);
       }
-      writeFileSync(entry.filePath, content, 'utf-8');
+      writeFileSync(resolvedTask.task.filePath, content, 'utf-8');
       invalidateAppTopics('tasks');
-      res.json({ ok: true, task: buildTaskDetailResponse(entry) });
+
+      const updatedTask = resolveScheduledTaskForProfile(getCurrentProfile(), resolvedTask.task.id);
+      res.json({ ok: true, task: buildTaskDetailResponse(updatedTask.task, updatedTask.runtime) });
       return;
     }
 
-    const metadata = readScheduledTaskFileMetadata(entry.filePath);
+    const schedule = resolvedTask.task.schedule;
     const nextContent = buildScheduledTaskMarkdown({
-      taskId: entry.id,
-      profile: metadata.profile ?? getCurrentProfile(),
-      enabled: body.enabled ?? metadata.enabled,
-      cron: body.cron !== undefined ? body.cron : metadata.cron,
-      at: body.at !== undefined ? body.at : metadata.at,
-      model: body.model !== undefined ? body.model : metadata.model,
-      cwd: body.cwd !== undefined ? body.cwd : metadata.cwd,
-      timeoutSeconds: body.timeoutSeconds !== undefined ? body.timeoutSeconds : metadata.timeoutSeconds,
-      prompt: body.prompt ?? metadata.promptBody,
-      output: metadata.output,
+      taskId: resolvedTask.task.id,
+      profile: resolvedTask.task.profile,
+      enabled: body.enabled ?? resolvedTask.task.enabled,
+      cron: body.cron !== undefined ? body.cron : schedule.type === 'cron' ? schedule.expression : undefined,
+      at: body.at !== undefined ? body.at : schedule.type === 'at' ? schedule.at : undefined,
+      model: body.model !== undefined ? body.model : resolvedTask.task.modelRef,
+      cwd: body.cwd !== undefined ? body.cwd : resolvedTask.task.cwd,
+      timeoutSeconds: body.timeoutSeconds !== undefined ? body.timeoutSeconds : resolvedTask.task.timeoutSeconds,
+      prompt: body.prompt ?? resolvedTask.task.prompt,
+      output: resolvedTask.task.output,
     });
 
-    parseTaskDefinition({
-      filePath: entry.filePath,
-      rawContent: nextContent,
-      defaultTimeoutSeconds: loadDaemonConfig().modules.tasks.defaultTimeoutSeconds,
-    });
+    validateScheduledTaskDefinition(resolvedTask.task.filePath, nextContent);
 
-    writeFileSync(entry.filePath, nextContent, 'utf-8');
+    writeFileSync(resolvedTask.task.filePath, nextContent, 'utf-8');
     invalidateAppTopics('tasks');
-    res.json({ ok: true, task: buildTaskDetailResponse(entry) });
+
+    const updatedTask = resolveScheduledTaskForProfile(getCurrentProfile(), resolvedTask.task.id);
+    res.json({ ok: true, task: buildTaskDetailResponse(updatedTask.task, updatedTask.runtime) });
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -4024,12 +3895,12 @@ app.patch('/api/tasks/:id', (req, res) => {
 
 app.get('/api/tasks/:id/log', (req, res) => {
   try {
-    const entry = findCurrentProfileTaskEntry(req.params.id);
-    if (!entry?.lastLogPath || !existsSync(entry.lastLogPath)) {
+    const resolvedTask = findCurrentProfileTask(req.params.id);
+    if (!resolvedTask?.runtime?.lastLogPath || !existsSync(resolvedTask.runtime.lastLogPath)) {
       res.status(404).json({ error: 'No log available' }); return;
     }
-    const log = readFileSync(entry.lastLogPath, 'utf-8');
-    res.json({ log, path: entry.lastLogPath });
+    const log = readFileSync(resolvedTask.runtime.lastLogPath, 'utf-8');
+    res.json({ log, path: resolvedTask.runtime.lastLogPath });
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -4041,10 +3912,10 @@ app.get('/api/tasks/:id/log', (req, res) => {
 
 app.get('/api/tasks/:id', (req, res) => {
   try {
-    const entry = findCurrentProfileTaskEntry(req.params.id);
-    if (!entry) { res.status(404).json({ error: 'Task not found' }); return; }
+    const resolvedTask = findCurrentProfileTask(req.params.id);
+    if (!resolvedTask) { res.status(404).json({ error: 'Task not found' }); return; }
 
-    res.json(buildTaskDetailResponse(entry));
+    res.json(buildTaskDetailResponse(resolvedTask.task, resolvedTask.runtime));
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -4057,15 +3928,11 @@ app.get('/api/tasks/:id', (req, res) => {
 /** Run a task immediately — queues a daemon-backed durable run */
 app.post('/api/tasks/:id/run', async (req, res) => {
   try {
-    const entry = findCurrentProfileTaskEntry(req.params.id);
-    if (!entry) { res.status(404).json({ error: 'Task not found' }); return; }
+    const resolvedTask = findCurrentProfileTask(req.params.id);
+    if (!resolvedTask) { res.status(404).json({ error: 'Task not found' }); return; }
+    if (!resolvedTask.task.prompt.trim()) { res.status(400).json({ error: 'Task has no prompt body' }); return; }
 
-    const metadata = readScheduledTaskFileMetadata(entry.filePath);
-    const fileContent = metadata.fileContent;
-    const afterFrontmatter = fileContent.replace(/^---\n[\s\S]*?\n---\n?/, '').trim();
-    if (!afterFrontmatter) { res.status(400).json({ error: 'Task has no prompt body' }); return; }
-
-    const result = await startScheduledTaskRun(entry.filePath);
+    const result = await startScheduledTaskRun(resolvedTask.task.filePath);
     if (!result.accepted) {
       res.status(503).json({ error: result.reason ?? 'Could not start the task run.' });
       return;
@@ -7644,25 +7511,6 @@ app.post('/api/folder-picker', (req, res) => {
       prompt: 'Choose working directory',
     });
     res.json(result);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
-  }
-});
-
-app.post('/api/local-path/open', (req, res) => {
-  try {
-    const { path } = req.body as { path?: string };
-    if (!path) {
-      res.status(400).json({ error: 'path required' });
-      return;
-    }
-
-    const normalizedPath = openLocalPathOnHost(path);
-    res.json({ ok: true, path: normalizedPath });
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),

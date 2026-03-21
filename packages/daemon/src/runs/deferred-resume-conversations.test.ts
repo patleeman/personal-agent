@@ -134,6 +134,7 @@ describe('deferred resume conversation durable runs', () => {
       recoveryAction: 'none',
       status: expect.objectContaining({
         status: 'completed',
+        completedAt: '2026-03-12T13:11:30.000Z',
       }),
       checkpoint: expect.objectContaining({
         step: 'deferred-resume.completed',
@@ -192,6 +193,7 @@ describe('deferred resume conversation durable runs', () => {
       recoveryAction: 'none',
       status: expect.objectContaining({
         status: 'cancelled',
+        completedAt: '2026-03-12T14:01:00.000Z',
         lastError: 'Cancelled by user',
       }),
       checkpoint: expect.objectContaining({

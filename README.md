@@ -211,7 +211,6 @@ Built-in extensions in this repo:
 - `deferred-resume` - Resume this same TUI session later after a delay
 - `web-tools` - Web search/integration
 - `daemon-run-orchestration-prompt` - System-prompt policy for daemon-backed background orchestration and status reporting
-- `prompt-reminders` - Lightweight prompt-time reminders for code-reference and similar review tasks
 
 See `docs/skills-and-capabilities.md` for a user-facing overview of skills and runtime capabilities.
 
