@@ -1,3 +1,5 @@
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import {
@@ -11,6 +13,32 @@ import { invalidateAppTopics } from './appEvents.js';
 
 const ARTIFACT_ACTION_VALUES = ['save', 'get', 'list', 'delete'] as const;
 const ARTIFACT_KIND_VALUES = ['html', 'mermaid', 'latex'] as const;
+const WHITE_PAPER_TEMPLATE_PATH = join(
+  homedir(),
+  '.local',
+  'state',
+  'personal-agent',
+  'profiles',
+  'shared',
+  'agent',
+  'skills',
+  'workflow-codebase-walkthrough',
+  'assets',
+  'report-template.html',
+);
+const WHITE_PAPER_GUIDE_PATH = join(
+  homedir(),
+  '.local',
+  'state',
+  'personal-agent',
+  'profiles',
+  'shared',
+  'agent',
+  'skills',
+  'workflow-codebase-walkthrough',
+  'references',
+  'artifact-output.md',
+);
 
 type ArtifactAction = (typeof ARTIFACT_ACTION_VALUES)[number];
 
@@ -77,6 +105,8 @@ export function createArtifactAgentExtension(options: {
       promptGuidelines: [
         'Use this tool when the user asks for a rendered artifact in the web UI, or when rendering would explain an idea more clearly than plain chat (for example, Mermaid diagrams or HTML mockups).',
         'Use kind=html for self-contained interactive artifacts, kind=mermaid for diagrams, and kind=latex for raw LaTeX source, including full document-style reports when appropriate.',
+        `For report-style HTML artifacts, read and adapt the shared white-paper template at ${WHITE_PAPER_TEMPLATE_PATH} and the companion guidance at ${WHITE_PAPER_GUIDE_PATH}.`,
+        'Default white-paper/report HTML to a self-contained LaTeX.css-style single-column reading layout with calm typography; think internal memo or technical report, not dashboard or landing page chrome.',
         'Reuse the same artifactId when iterating on an existing artifact so the chat stub and artifact panel stay linked.',
         'Keep HTML self-contained; do not rely on external network resources unless the user explicitly asks for that tradeoff.',
       ],
