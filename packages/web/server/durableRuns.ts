@@ -16,6 +16,16 @@ import {
 } from '@personal-agent/daemon';
 import { decorateRemoteExecutionRun } from './remoteExecution.js';
 
+const LIST_DURABLE_RUNS_CACHE_TTL_MS = 1_500;
+
+let durableRunsListCache:
+  | {
+      expiresAt: number;
+      value: (ListDurableRunsResult & { runsRoot: string }) | null;
+      promise: Promise<ListDurableRunsResult & { runsRoot: string }> | null;
+    }
+  | null = null;
+
 function isDaemonUnavailable(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
@@ -79,30 +89,61 @@ function readTailText(filePath: string | undefined, maxLines = 120, maxBytes = 6
 }
 
 export async function listDurableRuns(): Promise<ListDurableRunsResult & { runsRoot: string }> {
-  const runsRoot = resolveRunsRoot();
-
-  try {
-    if (await pingDaemon()) {
-      const result = await listDurableRunsFromDaemon();
-      return {
-        ...result,
-        runsRoot,
-      };
-    }
-  } catch (error) {
-    if (!isDaemonUnavailable(error)) {
-      throw error;
-    }
+  const now = Date.now();
+  if (durableRunsListCache?.value && durableRunsListCache.expiresAt > now) {
+    return durableRunsListCache.value;
   }
 
-  const scannedAt = new Date().toISOString();
-  const runs = scanDurableRunsForRecovery(runsRoot);
-  return {
-    scannedAt,
-    runs,
-    summary: summarizeScannedDurableRuns(runs),
-    runsRoot,
+  if (durableRunsListCache?.promise) {
+    return durableRunsListCache.promise;
+  }
+
+  const request = (async () => {
+    const runsRoot = resolveRunsRoot();
+
+    try {
+      if (await pingDaemon()) {
+        const result = await listDurableRunsFromDaemon();
+        return {
+          ...result,
+          runsRoot,
+        };
+      }
+    } catch (error) {
+      if (!isDaemonUnavailable(error)) {
+        throw error;
+      }
+    }
+
+    const scannedAt = new Date().toISOString();
+    const runs = scanDurableRunsForRecovery(runsRoot);
+    return {
+      scannedAt,
+      runs,
+      summary: summarizeScannedDurableRuns(runs),
+      runsRoot,
+    };
+  })();
+
+  durableRunsListCache = {
+    expiresAt: now + LIST_DURABLE_RUNS_CACHE_TTL_MS,
+    value: durableRunsListCache?.value ?? null,
+    promise: request,
   };
+
+  return request
+    .then((result) => {
+      durableRunsListCache = {
+        expiresAt: Date.now() + LIST_DURABLE_RUNS_CACHE_TTL_MS,
+        value: result,
+        promise: null,
+      };
+      return result;
+    })
+    .catch((error) => {
+      durableRunsListCache = null;
+      throw error;
+    });
 }
 
 export async function getDurableRun(runId: string): Promise<(GetDurableRunResult & { runsRoot: string }) | undefined> {

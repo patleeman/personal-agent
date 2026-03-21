@@ -149,6 +149,38 @@ describe('sessions', () => {
     ]);
   });
 
+  it('invalidates cached archived transcript detail when the session file changes', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    writeSessionFile({
+      sessionsDir,
+      sessionId: 'session-cache',
+      title: 'Cache invalidation test',
+      assistantTexts: ['Reply 1'],
+    });
+
+    expect(readSessionBlocks('session-cache', { tailBlocks: 2 })?.blocks.map((block) => block.type === 'text' ? block.text : block.type)).toEqual([
+      'user',
+      'Reply 1',
+    ]);
+
+    writeSessionFile({
+      sessionsDir,
+      sessionId: 'session-cache',
+      title: 'Cache invalidation test',
+      assistantTexts: ['Reply 1', 'Reply 2'],
+    });
+
+    const detail = readSessionBlocks('session-cache', { tailBlocks: 2 });
+    expect(detail?.totalBlocks).toBe(3);
+    expect(detail?.blockOffset).toBe(1);
+    expect(detail?.blocks.map((block) => block.type === 'text' ? block.text : block.type)).toEqual([
+      'Reply 1',
+      'Reply 2',
+    ]);
+  });
+
   it('serves persisted session images through routes instead of inline data urls', () => {
     const sessionsDir = createTempSessionsDir();
     configureSessionEnv(sessionsDir);

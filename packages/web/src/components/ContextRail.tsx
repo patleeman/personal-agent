@@ -29,10 +29,11 @@ import {
 import { useApi } from '../hooks';
 import { useDurableRunStream } from '../hooks/useDurableRunStream';
 import { useConversations } from '../hooks/useConversations';
+import { fetchSessionDetailCached } from '../hooks/useSessions';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { buildCapabilityCards, buildIdentitySummary, buildKnowledgeSections, buildMemoryPageSummary } from '../memoryOverview';
 import { emitMemoriesChanged } from '../memoryDocEvents';
-import type { ActivityEntry, ConversationExecutionState, DurableRunDetailResult, DurableRunRecord, LiveSessionContext, ProjectDetail, ProjectRecord, RemoteFolderListing } from '../types';
+import type { ActivityEntry, ConversationExecutionState, DurableRunDetailResult, LiveSessionContext, ProjectDetail, ProjectRecord, RemoteFolderListing } from '../types';
 import { formatDate, kindMeta, timeAgo } from '../utils';
 import { useAppData, useAppEvents } from '../contexts';
 import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
@@ -55,6 +56,59 @@ function suspendRailPanel(element: React.ReactNode, label = 'Loading…') {
       {element}
     </Suspense>
   );
+}
+
+const CONVERSATION_RAIL_CACHE_TTL_MS = 5_000;
+
+type ConversationRailCacheEntry<T> = {
+  data: T;
+  fetchedAt: number;
+  versionKey: string;
+};
+
+const liveSessionContextCache = new Map<string, ConversationRailCacheEntry<LiveSessionContext>>();
+const liveSessionContextInflight = new Map<string, Promise<LiveSessionContext>>();
+const conversationExecutionCache = new Map<string, ConversationRailCacheEntry<ConversationExecutionState>>();
+const conversationExecutionInflight = new Map<string, Promise<ConversationExecutionState>>();
+
+function isConversationRailCacheFresh<T>(
+  entry: ConversationRailCacheEntry<T> | null | undefined,
+  versionKey: string,
+  ttlMs = CONVERSATION_RAIL_CACHE_TTL_MS,
+): boolean {
+  return Boolean(entry)
+    && entry?.versionKey === versionKey
+    && (Date.now() - entry.fetchedAt) <= ttlMs;
+}
+
+function fetchConversationRailCacheEntry<T>(input: {
+  cache: Map<string, ConversationRailCacheEntry<T>>;
+  inflight: Map<string, Promise<T>>;
+  key: string;
+  versionKey: string;
+  fetcher: () => Promise<T>;
+}): Promise<T> {
+  const inflightKey = `${input.key}::${input.versionKey}`;
+  const inflight = input.inflight.get(inflightKey);
+  if (inflight) {
+    return inflight;
+  }
+
+  const request = input.fetcher()
+    .then((data) => {
+      input.cache.set(input.key, {
+        data,
+        fetchedAt: Date.now(),
+        versionKey: input.versionKey,
+      });
+      return data;
+    })
+    .finally(() => {
+      input.inflight.delete(inflightKey);
+    });
+
+  input.inflight.set(inflightKey, request);
+  return request;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -820,17 +874,14 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { versions } = useAppEvents();
-  const { tasks, sessions } = useAppData();
+  const { tasks, sessions, runs, projects: projectSnapshot } = useAppData();
   const [data, setData] = useState<LiveSessionContext | null>(null);
   const [execution, setExecution] = useState<ConversationExecutionState | null>(null);
-  const [allProjects, setAllProjects] = useState<ProjectRecord[]>([]);
+  const [fallbackProjects, setFallbackProjects] = useState<ProjectRecord[]>([]);
   const [focusedProjectId, setFocusedProjectId] = useState('');
   const [attachProjectId, setAttachProjectId] = useState('');
   const [focusedProject, setFocusedProject] = useState<ProjectDetail | null>(null);
   const [detectedRunMentions, setDetectedRunMentions] = useState<ReturnType<typeof collectConversationRunMentions>>([]);
-  const [runRecordsById, setRunRecordsById] = useState<Map<string, DurableRunRecord>>(new Map());
-  const [runsLoading, setRunsLoading] = useState(true);
-  const [runsError, setRunsError] = useState<string | null>(null);
   const [runsExpanded, setRunsExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -848,38 +899,74 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const [remotePickerError, setRemotePickerError] = useState<string | null>(null);
   const [remotePickerListing, setRemotePickerListing] = useState<RemoteFolderListing | null>(null);
 
+  const allProjects = projectSnapshot ?? fallbackProjects;
+  const runRecordsById = useMemo(
+    () => new Map((runs?.runs ?? []).map((run) => [run.runId, run] as const)),
+    [runs],
+  );
+  const runsLoading = runs === null;
+  const runsError = null;
+  const liveContextVersionKey = `${versions.sessions}`;
+  const executionVersionKey = `${versions.executionTargets}:${versions.runs}`;
+
   const load = useCallback(() => {
     let cancelled = false;
-    setLoading(true);
+    const cachedContext = liveSessionContextCache.get(id) ?? null;
+    const cachedExecution = conversationExecutionCache.get(id) ?? null;
+    const hasFreshContext = isConversationRailCacheFresh(cachedContext, liveContextVersionKey);
+    const hasFreshExecution = isConversationRailCacheFresh(cachedExecution, executionVersionKey);
+
+    setData(cachedContext?.data ?? null);
+    setExecution(cachedExecution?.data ?? null);
+    setLoading(!cachedContext);
     setError(false);
-    Promise.all([api.liveSessionContext(id), api.projects(), api.conversationExecution(id)])
-      .then(([context, projects, nextExecution]) => {
-        if (cancelled) return;
+
+    const contextPromise = hasFreshContext && cachedContext
+      ? Promise.resolve(cachedContext.data)
+      : fetchConversationRailCacheEntry({
+          cache: liveSessionContextCache,
+          inflight: liveSessionContextInflight,
+          key: id,
+          versionKey: liveContextVersionKey,
+          fetcher: () => api.liveSessionContext(id),
+        });
+    const executionPromise = hasFreshExecution && cachedExecution
+      ? Promise.resolve(cachedExecution.data)
+      : fetchConversationRailCacheEntry({
+          cache: conversationExecutionCache,
+          inflight: conversationExecutionInflight,
+          key: id,
+          versionKey: executionVersionKey,
+          fetcher: () => api.conversationExecution(id),
+        });
+    const projectsPromise = projectSnapshot !== null
+      ? Promise.resolve(projectSnapshot)
+      : api.projects();
+
+    Promise.all([contextPromise, executionPromise, projectsPromise])
+      .then(([context, nextExecution, nextProjects]) => {
+        if (cancelled) {
+          return;
+        }
+
+        if (projectSnapshot === null) {
+          setFallbackProjects(nextProjects);
+        }
+
         setData(context);
         setExecution(nextExecution);
-        setAllProjects(projects);
         setLoading(false);
       })
       .catch(() => {
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
+
         setError(true);
         setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [id]);
-
-  const loadRuns = useCallback(async () => {
-    setRunsLoading(true);
-    try {
-      const result = await api.runs();
-      setRunRecordsById(new Map(result.runs.map((run) => [run.runId, run] as const)));
-      setRunsError(null);
-    } catch (nextError) {
-      setRunsError(nextError instanceof Error ? nextError.message : 'Could not load run metadata.');
-    } finally {
-      setRunsLoading(false);
-    }
-  }, []);
+  }, [executionVersionKey, id, liveContextVersionKey, projectSnapshot]);
 
   const runLookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
   const isSessionRunning = Boolean(sessions?.find((session) => session.id === id)?.isRunning);
@@ -887,9 +974,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const autoExpandedConnectedRunsConversationIdRef = useRef<string | null>(null);
 
   useEffect(() => load(), [load]);
-  useEffect(() => {
-    void loadRuns();
-  }, [id, loadRuns, versions.runs]);
 
   useEffect(() => {
     runMentionsLastFetchedAtRef.current = 0;
@@ -907,7 +991,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     runMentionsLastFetchedAtRef.current = now;
     let cancelled = false;
 
-    api.sessionDetail(id, { tailBlocks: 400 })
+    fetchSessionDetailCached(id, { tailBlocks: 400 }, versions.sessions)
       .then((detail) => {
         if (cancelled) {
           return;
@@ -1283,8 +1367,8 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     }
   }
 
-  if (loading) return <div className="px-4 py-4 text-[12px] text-dim animate-pulse">Loading…</div>;
-  if (error) return <div className="px-4 py-4 text-[12px] text-dim/60">Unable to load context.</div>;
+  if (loading && !data && !execution) return <div className="px-4 py-4 text-[12px] text-dim animate-pulse">Loading…</div>;
+  if (error && !data && !execution) return <div className="px-4 py-4 text-[12px] text-dim/60">Unable to load context.</div>;
   if (!data) return null;
 
   const gitChangeLabel = data.git

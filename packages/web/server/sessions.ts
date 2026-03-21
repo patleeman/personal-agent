@@ -183,6 +183,11 @@ interface CachedSessionMeta {
   meta: SessionMeta;
 }
 
+interface CachedSessionDetail {
+  signature: string;
+  detail: SessionDetail;
+}
+
 interface PersistentSessionIndexEntry {
   filePath: string;
   signature: string;
@@ -196,9 +201,12 @@ interface PersistentSessionIndexDocument {
 }
 
 const sessionMetaCache = new Map<string, CachedSessionMeta>();
+const sessionDetailCache = new Map<string, CachedSessionDetail>();
 let sessionFileById = new Map<string, string>();
 let loadedPersistentIndexKey: string | null = null;
 let persistedIndexJson: string | null = null;
+
+const MAX_SESSION_DETAIL_CACHE_ENTRIES = 24;
 
 // ── Parsing ────────────────────────────────────────────────────────────────────
 
@@ -1222,6 +1230,7 @@ function resolveSessionMeta(sessionId: string): SessionMeta | null {
 
 export function clearSessionCaches(): void {
   sessionMetaCache.clear();
+  sessionDetailCache.clear();
   sessionFileById.clear();
   loadedPersistentIndexKey = null;
   persistedIndexJson = null;
@@ -1408,7 +1417,35 @@ function resolveTailBlockLimit(tailBlocks: number | undefined, totalBlocks: numb
   return Math.min(tailBlocks, totalBlocks);
 }
 
+function buildSessionDetailCacheKey(filePath: string, tailBlocks?: number): string {
+  return `${filePath}::${tailBlocks ?? 'all'}`;
+}
+
+function trimSessionDetailCache(): void {
+  while (sessionDetailCache.size > MAX_SESSION_DETAIL_CACHE_ENTRIES) {
+    const oldestKey = sessionDetailCache.keys().next().value;
+    if (!oldestKey) {
+      break;
+    }
+
+    sessionDetailCache.delete(oldestKey);
+  }
+}
+
 export function readSessionBlocksByFile(filePath: string, options?: { tailBlocks?: number }): SessionDetail | null {
+  const signature = getFileSignature(filePath);
+  if (!signature) {
+    return null;
+  }
+
+  const cacheKey = buildSessionDetailCacheKey(filePath, options?.tailBlocks);
+  const cachedDetail = sessionDetailCache.get(cacheKey);
+  if (cachedDetail?.signature === signature) {
+    sessionDetailCache.delete(cacheKey);
+    sessionDetailCache.set(cacheKey, cachedDetail);
+    return cachedDetail.detail;
+  }
+
   const meta = readCachedSessionMeta(filePath, resolveSessionFileCwdSlug(filePath));
   if (!meta) return null;
 
@@ -1423,13 +1460,17 @@ export function readSessionBlocksByFile(filePath: string, options?: { tailBlocks
     ? deferHeavyBlockContent(slicedBlocks, blockOffset, totalBlocks)
     : slicedBlocks;
 
-  return {
+  const detail = {
     meta,
     blocks,
     blockOffset,
     totalBlocks,
     contextUsage: readSessionContextUsageFromEntries(manager.getEntries()),
-  };
+  } satisfies SessionDetail;
+
+  sessionDetailCache.set(cacheKey, { signature, detail });
+  trimSessionDetailCache();
+  return detail;
 }
 
 export function readSessionBlocks(sessionId: string, options?: { tailBlocks?: number }): SessionDetail | null {
