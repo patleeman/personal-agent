@@ -20,7 +20,10 @@ afterEach(async () => {
 
 function registerArtifactTool(stateRoot: string) {
   let registeredTool:
-    | { execute: (...args: unknown[]) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }> }
+    | {
+      execute: (...args: unknown[]) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }>;
+      promptGuidelines?: string[];
+    }
     | undefined;
 
   createArtifactAgentExtension({
@@ -28,7 +31,10 @@ function registerArtifactTool(stateRoot: string) {
     getCurrentProfile: () => 'datadog',
   })({
     registerTool: (tool: unknown) => {
-      registeredTool = tool as { execute: (...args: unknown[]) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }> };
+      registeredTool = tool as {
+        execute: (...args: unknown[]) => Promise<{ isError?: boolean; content: Array<{ text?: string }>; details?: Record<string, unknown> }>;
+        promptGuidelines?: string[];
+      };
     },
   } as never);
 
@@ -60,6 +66,18 @@ function createToolContext(conversationId = 'conv-123') {
 }
 
 describe('artifact agent extension', () => {
+  it('advertises the shared white-paper report template for html artifacts', () => {
+    const repoRoot = createTempRepo();
+    const stateRoot = join(repoRoot, '.state');
+    const artifactTool = registerArtifactTool(stateRoot);
+    const guidelines = artifactTool.promptGuidelines?.join('\n') ?? '';
+
+    expect(guidelines).toContain('white-paper template');
+    expect(guidelines).toContain('report-template.html');
+    expect(guidelines).toContain('artifact-output.md');
+    expect(guidelines).toContain('LaTeX.css-style single-column');
+  });
+
   it('saves and updates conversation artifacts', async () => {
     const repoRoot = createTempRepo();
     const stateRoot = join(repoRoot, '.state');

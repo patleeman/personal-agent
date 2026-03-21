@@ -151,4 +151,40 @@ describe('ProjectOverviewPanel', () => {
     expect(html).not.toContain('>Open<');
     expect(html).not.toContain('>Copy<');
   });
+
+  it('renders markdown footnotes with isolated ids across overview sections', () => {
+    const html = renderToString(
+      <MemoryRouter>
+        <ProjectOverviewPanel
+          project={createProjectDetail({
+            brief: {
+              path: '/tmp/sidebar-refresh/BRIEF.md',
+              updatedAt: '2026-03-16T09:30:00.000Z',
+              content: `# Sidebar refresh
+
+## Requirements
+
+Requirement note.[^1]
+
+[^1]: Requirements reference
+
+## Plan
+
+Plan note.[^1]
+
+[^1]: Plan reference`,
+            },
+          })}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('class="footnotes"');
+    expect(html).toContain('Requirements reference');
+    expect(html).toContain('Plan reference');
+
+    const footnoteIds = Array.from(html.matchAll(/id="([^"]*fn-1)"/g), (match) => match[1]);
+    expect(footnoteIds.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(footnoteIds).size).toBe(footnoteIds.length);
+  });
 });
