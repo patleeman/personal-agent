@@ -1,5 +1,5 @@
 import { copyFile, mkdir, stat } from 'fs/promises';
-import { cpSync, existsSync, lstatSync, readlinkSync, readdirSync, renameSync, rmSync, symlinkSync } from 'fs';
+import { cpSync, existsSync, lstatSync, readlinkSync, readdirSync, renameSync, rmSync, symlinkSync, unlinkSync } from 'fs';
 import { homedir } from 'os';
 import { dirname, join, relative, resolve } from 'path';
 import {
@@ -59,7 +59,7 @@ function ensureDirectorySymlink(linkPath: string, targetPath: string): void {
       return;
     }
 
-    rmSync(linkPath, { recursive: true, force: true });
+    unlinkSync(linkPath);
   } else if (existing) {
     rmSync(linkPath, { recursive: true, force: true });
   }
