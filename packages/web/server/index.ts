@@ -202,7 +202,15 @@ import {
   resolvePromptReferences,
 } from './promptReferences.js';
 import {
+  INBOX_RETENTION_MS,
+  listArchivedAttentionSessions,
+  listExpiredActivityRecords,
+  listExpiredAttentionSessions,
+  listStandaloneActivityRecords,
+} from './inbox.js';
+import {
   addConversationProjectLink,
+  clearActivityConversationLinks,
   deleteConversationArtifact,
   deleteConversationAttachment,
   ensureConversationAttentionBaselines,
@@ -658,6 +666,137 @@ function saveReadState(ids: Set<string>, stateRoot: string | undefined, profile 
   try {
     saveProfileActivityReadState({ repoRoot: REPO_ROOT, stateRoot, profile, ids });
   } catch { /* ignore */ }
+}
+
+const SETTINGS_FILE = DEFAULT_RUNTIME_SETTINGS_FILE;
+const INBOX_CULL_INTERVAL_MS = 5 * 60 * 1000;
+let cullingInbox = false;
+
+function readOpenConversationIds(): Set<string> {
+  try {
+    const saved = readSavedWebUiPreferences(SETTINGS_FILE);
+    return new Set([...saved.openConversationIds, ...saved.pinnedConversationIds]);
+  } catch {
+    return new Set();
+  }
+}
+
+function deleteActivityIdsForProfile(profile: string, activityIds: Iterable<string>): string[] {
+  const requestedIds = [...new Set(Array.from(activityIds)
+    .filter((activityId): activityId is string => typeof activityId === 'string')
+    .map((activityId) => activityId.trim())
+    .filter((activityId) => activityId.length > 0))];
+
+  if (requestedIds.length === 0) {
+    return [];
+  }
+
+  const requestedIdSet = new Set(requestedIds);
+  const deletedIds = new Set<string>();
+
+  for (const stateRoot of listActivityStateRoots()) {
+    const entries = listProfileActivityEntries({ repoRoot: REPO_ROOT, stateRoot, profile });
+    const matchingEntries = entries.filter(({ entry }) => requestedIdSet.has(entry.id));
+    if (matchingEntries.length === 0) {
+      continue;
+    }
+
+    for (const { path, entry } of matchingEntries) {
+      rmSync(path, { force: true });
+      clearActivityConversationLinks({ stateRoot, profile, activityId: entry.id });
+      deletedIds.add(entry.id);
+    }
+
+    const readState = loadReadState(stateRoot, profile);
+    let readStateChanged = false;
+    for (const { entry } of matchingEntries) {
+      readStateChanged = readState.delete(entry.id) || readStateChanged;
+    }
+    if (readStateChanged) {
+      saveReadState(readState, stateRoot, profile);
+    }
+  }
+
+  return [...deletedIds];
+}
+
+function markConversationSessionsRead(profile: string, sessions: Array<{ id: string; messageCount: number }>): string[] {
+  const dedupedSessions = [...new Map(sessions.map((session) => [session.id, session])).values()];
+
+  for (const session of dedupedSessions) {
+    markConversationAttentionRead({
+      profile,
+      conversationId: session.id,
+      messageCount: session.messageCount,
+    });
+  }
+
+  return dedupedSessions.map((session) => session.id);
+}
+
+function clearInboxForCurrentProfile() {
+  const profile = getCurrentProfile();
+  const sessions = listConversationSessionsSnapshot();
+  const activityRecords = listActivityRecordsForProfile(profile);
+  const standaloneActivities = listStandaloneActivityRecords(activityRecords, sessions.map((session) => session.id));
+  const archivedAttentionSessions = listArchivedAttentionSessions(sessions, readOpenConversationIds());
+  const deletedActivityIds = deleteActivityIdsForProfile(profile, standaloneActivities.map((record) => record.entry.id));
+  const clearedConversationIds = markConversationSessionsRead(profile, archivedAttentionSessions);
+
+  if (deletedActivityIds.length > 0 || clearedConversationIds.length > 0) {
+    invalidateAppTopics('activity', 'sessions');
+  }
+
+  return {
+    deletedActivityIds,
+    clearedConversationIds,
+  };
+}
+
+function cullExpiredInboxItems() {
+  if (cullingInbox) {
+    return { deletedActivityIds: [], clearedConversationIds: [] };
+  }
+
+  cullingInbox = true;
+
+  try {
+    const profile = getCurrentProfile();
+    const cutoffMs = Date.now() - INBOX_RETENTION_MS;
+    const expiredActivityIds = listExpiredActivityRecords(listActivityRecordsForProfile(profile), cutoffMs)
+      .map((record) => record.entry.id);
+    const deletedActivityIds = deleteActivityIdsForProfile(profile, expiredActivityIds);
+
+    const sessions = listConversationSessionsSnapshot();
+    const archivedAttentionSessions = listArchivedAttentionSessions(sessions, readOpenConversationIds());
+    const clearedConversationIds = markConversationSessionsRead(
+      profile,
+      listExpiredAttentionSessions(archivedAttentionSessions, cutoffMs),
+    );
+
+    if (deletedActivityIds.length > 0 || clearedConversationIds.length > 0) {
+      invalidateAppTopics('activity', 'sessions');
+    }
+
+    return {
+      deletedActivityIds,
+      clearedConversationIds,
+    };
+  } finally {
+    cullingInbox = false;
+  }
+}
+
+function startInboxCullLoop(): void {
+  void Promise.resolve().then(() => cullExpiredInboxItems()).catch((error) => {
+    logWarn(`Inbox cull failed: ${(error as Error).message}`);
+  });
+
+  setInterval(() => {
+    void Promise.resolve().then(() => cullExpiredInboxItems()).catch((error) => {
+      logWarn(`Inbox cull failed: ${(error as Error).message}`);
+    });
+  }, INBOX_CULL_INTERVAL_MS);
 }
 
 function summarizeUserMessageContent(content: unknown): { text: string; imageCount: number } {
@@ -2104,6 +2243,7 @@ function startConversationRecovery(): void {
 
 startDeferredResumeLoop();
 startConversationRecovery();
+startInboxCullLoop();
 
 async function buildSnapshotEvents(topics: AppEventTopic[]) {
   const uniqueTopics = [...new Set(topics)];
@@ -2725,7 +2865,24 @@ app.post('/api/web-ui/service/uninstall', (_req, res) => {
   }
 });
 
-// ── Activity ─────────────────────────────────────────────────────────────────
+// ── Activity / Inbox ─────────────────────────────────────────────────────────
+
+app.post('/api/inbox/clear', (_req, res) => {
+  try {
+    const result = clearInboxForCurrentProfile();
+    res.json({
+      ok: true,
+      deletedActivityIds: result.deletedActivityIds,
+      clearedConversationIds: result.clearedConversationIds,
+    });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
 
 app.get('/api/activity', (_req, res) => {
   try {
@@ -2866,8 +3023,6 @@ const BUILT_IN_MODELS = [
   { id: 'gemini-2.5-pro',     provider: 'google',       name: 'Gemini 2.5 Pro',      context: 1_000_000 },
   { id: 'gemini-3.1-pro-high',provider: 'google',       name: 'Gemini 3.1 Pro High', context: 1_000_000 },
 ];
-
-const SETTINGS_FILE = DEFAULT_RUNTIME_SETTINGS_FILE;
 
 function listAvailableModelDefinitions() {
   let models = BUILT_IN_MODELS;
@@ -5834,18 +5989,17 @@ app.post('/api/live-sessions/:id/abort', async (req, res) => {
 app.get('/api/live-sessions/:id/context', (req, res) => {
   const { id } = req.params;
 
-  // cwd: local live registry first, then remote live registry, then JSONL meta, then session list
+  // cwd: local live registry first, then remote live registry, then session list.
   const liveEntry = liveRegistry.get(id);
   const remoteLive = getRemoteLiveSessionMeta(id);
-  const detail = readSessionBlocks(id);
   const allSessions = listSessions();
   const sessionMeta = allSessions.find((session) => session.id === id);
-  const cwd = liveEntry?.cwd ?? remoteLive?.cwd ?? detail?.meta.cwd ?? sessionMeta?.cwd;
+  const cwd = liveEntry?.cwd ?? remoteLive?.cwd ?? sessionMeta?.cwd;
   if (!cwd) { res.status(404).json({ error: 'Session not found' }); return; }
 
   const gitSummary = remoteLive ? null : readGitStatusSummary(cwd);
 
-  // User messages: prefer local live in-memory messages (most up-to-date), otherwise use persisted transcript.
+  // User messages: prefer local live in-memory messages (most up-to-date), otherwise use a small persisted tail.
   let userMessages: { id: string; ts: string; text: string; imageCount: number }[] = [];
   if (liveEntry) {
     userMessages = liveEntry.session.agent.state.messages
@@ -5856,7 +6010,12 @@ app.get('/api/live-sessions/:id/context', (req, res) => {
         return { id: String(index), ts: new Date().toISOString(), text: text.slice(0, 300), imageCount };
       });
   } else {
-    userMessages = (detail?.blocks ?? [])
+    const recentTail = readSessionBlocks(id, { tailBlocks: 120 });
+    const recentTailUserMessages = (recentTail?.blocks ?? []).filter((block) => block.type === 'user');
+    const expandedTail = recentTail && recentTailUserMessages.length < 5 && recentTail.blockOffset > 0
+      ? readSessionBlocks(id, { tailBlocks: 400 })
+      : recentTail;
+    userMessages = (expandedTail?.blocks ?? [])
       .filter((block) => block.type === 'user')
       .slice(-5)
       .map((block) => ({
@@ -6188,6 +6347,7 @@ app.patch('/api/conversations/:id/execution', async (req, res) => {
       });
     }
 
+    invalidateAppTopics('executionTargets');
     res.json(await readConversationExecutionState(req.params.id));
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
