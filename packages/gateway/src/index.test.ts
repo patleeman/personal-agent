@@ -2305,6 +2305,47 @@ describe('queued telegram message handler', () => {
     expect(prompts).toEqual(['newer message first', 'older but unseen message second']);
   });
 
+  it('allows internal callback-style messages to bypass message id dedupe', async () => {
+    const sendMessage = vi.fn(async () => undefined);
+    const sendChatAction = vi.fn(async () => undefined);
+    const runPrompt = vi.fn(async ({ prompt }: { prompt: string }) => `reply:${prompt}`);
+
+    const handler = createQueuedTelegramMessageHandler({
+      allowlist: new Set(['1']),
+      profileName: 'shared',
+      agentDir: '/tmp/agent',
+      telegramSessionDir: '/tmp/sessions',
+      workingDirectory: '/tmp/work',
+      sendMessage,
+      sendChatAction,
+      createConversationController: createTestConversationControllerFactory(runPrompt),
+    });
+
+    handler.handleMessage({
+      chat: { id: 1 },
+      message_id: 700,
+      text: 'first callback action',
+      internal: {
+        durable: false,
+        skipMessageIdDedupe: true,
+      },
+    });
+    handler.handleMessage({
+      chat: { id: 1 },
+      message_id: 700,
+      text: 'second callback action',
+      internal: {
+        durable: false,
+        skipMessageIdDedupe: true,
+      },
+    });
+    await handler.waitForIdle('1');
+
+    expect(runPrompt).toHaveBeenCalledTimes(2);
+    const prompts = runPrompt.mock.calls.map((call) => (call[0] as { prompt: string }).prompt);
+    expect(prompts).toEqual(['first callback action', 'second callback action']);
+  });
+
   it('continues sending typing actions while a telegram run is active', async () => {
     vi.useFakeTimers();
 

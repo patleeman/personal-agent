@@ -306,6 +306,7 @@ export interface TelegramMessageLike {
     durable?: boolean;
     suppressFollowUpQueuedMessage?: boolean;
     bypassAccessChecks?: boolean;
+    skipMessageIdDedupe?: boolean;
   };
 }
 
@@ -6667,13 +6668,14 @@ export function createQueuedTelegramMessageHandler(
 
     const messageThreadId = normalizeTelegramMessageThreadId(message.message_thread_id);
     const conversationId = buildTelegramConversationId(chatId, messageThreadId);
+    const skipMessageIdDedupe = message.internal?.skipMessageIdDedupe === true;
 
-    if (hasTrackedTelegramChatMessageId(completedMessageIdsByChat, chatId, message.message_id)) {
+    if (!skipMessageIdDedupe && hasTrackedTelegramChatMessageId(completedMessageIdsByChat, chatId, message.message_id)) {
       acknowledgePendingMessage(pendingMessageId);
       return false;
     }
 
-    if (trackSeenTelegramChatMessageId(seenMessageIdsByChat, chatId, message.message_id)) {
+    if (!skipMessageIdDedupe && trackSeenTelegramChatMessageId(seenMessageIdsByChat, chatId, message.message_id)) {
       acknowledgePendingMessage(pendingMessageId);
       return false;
     }
@@ -7472,6 +7474,11 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
       return false;
     }
 
+    const numericChatId = Number(parsed.chatId);
+    if (!Number.isSafeInteger(numericChatId)) {
+      return false;
+    }
+
     const syntheticSender = buildSyntheticTelegramSender();
     if (allowedUserIds.size > 0 && !syntheticSender) {
       return false;
@@ -7479,7 +7486,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
     telegramHandlerRef.current.handleMessage({
       chat: {
-        id: Number(parsed.chatId),
+        id: numericChatId,
       },
       message_thread_id: parsed.messageThreadId,
       text: `/followup ${prompt}`,
@@ -8829,6 +8836,11 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
         return;
       }
 
+      if (!callbackMessage.chat || typeof callbackMessage.chat.id !== 'number' || !Number.isSafeInteger(callbackMessage.chat.id)) {
+        await answerTelegramCallbackQuery(callbackId);
+        return;
+      }
+
       const roomDecision = parseTelegramRoomAuthCallback(callbackData);
       if (roomDecision) {
         await handleRoomAuthorizationDecision(callbackId, query, roomDecision);
@@ -8862,6 +8874,10 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
             last_name: query.from.last_name,
           }
           : undefined,
+        internal: {
+          durable: false,
+          skipMessageIdDedupe: true,
+        },
       });
 
       await answerTelegramCallbackQuery(callbackId);
