@@ -95,13 +95,54 @@ export interface RemoteConversationConnectionState {
 
 export const remoteRegistry = new Map<string, RemoteLiveEntry>();
 const remoteConnectionStates = new Map<string, RemoteConversationConnectionState>();
+const remoteConnectionListeners = new Map<string, Set<() => void>>();
 
 function quoteShellArg(value: string): string {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
+export function notifyRemoteConversationConnectionChanged(conversationId: string): void {
+  const normalizedConversationId = conversationId.trim();
+  if (!normalizedConversationId) {
+    return;
+  }
+
+  const listeners = remoteConnectionListeners.get(normalizedConversationId);
+  if (!listeners) {
+    return;
+  }
+
+  for (const listener of [...listeners]) {
+    listener();
+  }
+}
+
+export function subscribeRemoteConversationConnection(conversationId: string, listener: () => void): () => void {
+  const normalizedConversationId = conversationId.trim();
+  if (!normalizedConversationId) {
+    return () => {};
+  }
+
+  const listeners = remoteConnectionListeners.get(normalizedConversationId) ?? new Set<() => void>();
+  listeners.add(listener);
+  remoteConnectionListeners.set(normalizedConversationId, listeners);
+
+  return () => {
+    const currentListeners = remoteConnectionListeners.get(normalizedConversationId);
+    if (!currentListeners) {
+      return;
+    }
+
+    currentListeners.delete(listener);
+    if (currentListeners.size === 0) {
+      remoteConnectionListeners.delete(normalizedConversationId);
+    }
+  };
+}
+
 function setRemoteConnectionState(state: RemoteConversationConnectionState): RemoteConversationConnectionState {
   remoteConnectionStates.set(state.conversationId, state);
+  notifyRemoteConversationConnectionChanged(state.conversationId);
   return state;
 }
 
@@ -1045,6 +1086,8 @@ export function readRemoteConversationBindingForConversation(options: { profile:
 
 export function clearRemoteConversationBindingForConversation(options: { profile: string; conversationId: string }): void {
   deleteRemoteConversationBinding(options);
+  remoteConnectionStates.delete(options.conversationId);
+  notifyRemoteConversationConnectionChanged(options.conversationId);
 }
 
 export function getRemoteConversationConnectionState(options: { profile: string; conversationId: string }): RemoteConversationConnectionState {

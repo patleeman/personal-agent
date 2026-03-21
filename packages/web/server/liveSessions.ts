@@ -20,7 +20,7 @@ import {
   type AgentSessionEvent,
   type ExtensionFactory,
 } from '@mariozechner/pi-coding-agent';
-import { publishAppEvent } from './appEvents.js';
+import { invalidateAppTopics, publishAppEvent } from './appEvents.js';
 import { notifyConversationAutomationChanged } from './conversationAutomationEvents.js';
 import {
   generateConversationTitle,

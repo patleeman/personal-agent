@@ -59,6 +59,8 @@ import {
   setProviderApiKey,
   startProviderOAuthLogin,
   submitProviderOAuthLoginInput,
+  subscribeProviderOAuthLogin,
+  subscribeProviderOAuthLogins,
 } from './providerAuth.js';
 import { readSavedConversationTitlePreferences, writeSavedConversationTitlePreferences } from './conversationTitlePreferences.js';
 import { logError, logInfo, logWarn, installProcessLogging, webRequestLoggingMiddleware } from './logging.js';
@@ -152,6 +154,7 @@ import {
   readRemoteConversationBindingForConversation,
   resumeRemoteLiveSession,
   stopRemoteLiveSession,
+  subscribeRemoteConversationConnection,
   subscribeRemoteLiveSession,
   syncRemoteConversationMirror,
 } from './remoteLiveSessions.js';
@@ -2185,6 +2188,12 @@ startAppEventMonitor({
   getCurrentProfile,
 });
 
+subscribeProviderOAuthLogins((login) => {
+  if (login.status === 'completed') {
+    reloadAllLiveSessionAuth();
+  }
+});
+
 createServiceAttentionMonitor({
   repoRoot: REPO_ROOT,
   stateRoot: resolveDaemonRoot(),
@@ -3306,10 +3315,6 @@ app.get('/api/provider-auth/oauth/:loginId', (req, res) => {
       return;
     }
 
-    if (login.status === 'completed') {
-      reloadAllLiveSessionAuth();
-    }
-
     res.json(login);
   } catch (err) {
     logError('request handler error', {
@@ -3318,6 +3323,45 @@ app.get('/api/provider-auth/oauth/:loginId', (req, res) => {
     });
     res.status(500).json({ error: String(err) });
   }
+});
+
+app.get('/api/provider-auth/oauth/:loginId/events', (req, res) => {
+  const loginId = req.params.loginId?.trim();
+  if (!loginId) {
+    res.status(400).json({ error: 'loginId required' });
+    return;
+  }
+
+  const initial = getProviderOAuthLoginState(loginId);
+  if (!initial) {
+    res.status(404).json({ error: `OAuth login not found: ${loginId}` });
+    return;
+  }
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+  res.write('retry: 1000\n\n');
+
+  const writeEvent = (event: { type: 'snapshot'; data: typeof initial }) => {
+    res.write(`data: ${JSON.stringify(event)}\n\n`);
+  };
+
+  writeEvent({ type: 'snapshot', data: initial });
+
+  const heartbeat = setInterval(() => {
+    res.write(': heartbeat\n\n');
+  }, 15_000);
+  const unsubscribe = subscribeProviderOAuthLogin(loginId, (login) => {
+    writeEvent({ type: 'snapshot', data: login });
+  });
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    unsubscribe();
+  });
 });
 
 app.post('/api/provider-auth/oauth/:loginId/input', (req, res) => {
@@ -3336,9 +3380,6 @@ app.post('/api/provider-auth/oauth/:loginId/input', (req, res) => {
     }
 
     const login = submitProviderOAuthLoginInput(loginId, value);
-    if (login.status === 'completed') {
-      reloadAllLiveSessionAuth();
-    }
     res.json(login);
   } catch (err) {
     logError('request handler error', {
@@ -6145,6 +6186,37 @@ app.get('/api/conversations/:id/remote-connection', (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
+});
+
+app.get('/api/conversations/:id/remote-connection/events', (req, res) => {
+  const conversationId = req.params.id;
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+  res.write('retry: 1000\n\n');
+
+  const writeSnapshot = () => {
+    const data = getRemoteConversationConnectionState({
+      profile: getCurrentProfile(),
+      conversationId,
+    });
+    res.write(`data: ${JSON.stringify({ type: 'snapshot', data })}\n\n`);
+  };
+
+  writeSnapshot();
+
+  const heartbeat = setInterval(() => {
+    res.write(': heartbeat\n\n');
+  }, 15_000);
+  const unsubscribe = subscribeRemoteConversationConnection(conversationId, writeSnapshot);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    unsubscribe();
+  });
 });
 
 app.patch('/api/conversations/:id/execution', async (req, res) => {

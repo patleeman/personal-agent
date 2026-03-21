@@ -2,8 +2,13 @@ import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createLocalMirrorSession, forkLocalMirrorSession } from './remoteLiveSessions.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  createLocalMirrorSession,
+  forkLocalMirrorSession,
+  notifyRemoteConversationConnectionChanged,
+  subscribeRemoteConversationConnection,
+} from './remoteLiveSessions.js';
 
 const originalEnv = process.env;
 const tempDirs: string[] = [];
@@ -27,6 +32,22 @@ afterEach(async () => {
 });
 
 describe('remote live sessions', () => {
+  it('notifies only listeners for the matching conversation', () => {
+    const matchingListener = vi.fn();
+    const otherListener = vi.fn();
+
+    const unsubscribeMatching = subscribeRemoteConversationConnection('conv-1', matchingListener);
+    const unsubscribeOther = subscribeRemoteConversationConnection('conv-2', otherListener);
+
+    notifyRemoteConversationConnectionChanged('conv-1');
+
+    expect(matchingListener).toHaveBeenCalledTimes(1);
+    expect(otherListener).not.toHaveBeenCalled();
+
+    unsubscribeOther();
+    unsubscribeMatching();
+  });
+
   it('creates a persisted local mirror session with the remote cwd', async () => {
     const result = await createLocalMirrorSession({ remoteCwd: '/home/bits/project' });
 
