@@ -143,6 +143,31 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('<code');
   });
 
+  it('renders markdown footnotes with isolated ids per message', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [
+        {
+          type: 'text',
+          ts: '2026-03-11T18:00:00.000Z',
+          text: 'First answer.[^1]\n\n[^1]: Alpha reference',
+        },
+        {
+          type: 'text',
+          ts: '2026-03-11T18:01:00.000Z',
+          text: 'Second answer.[^1]\n\n[^1]: Beta reference',
+        },
+      ],
+    }));
+
+    expect(html).toContain('class="footnotes"');
+    expect(html).toContain('Alpha reference');
+    expect(html).toContain('Beta reference');
+
+    const footnoteIds = Array.from(html.matchAll(/id="([^"]*fn-1)"/g), (match) => match[1]);
+    expect(footnoteIds.length).toBeGreaterThanOrEqual(2);
+    expect(new Set(footnoteIds).size).toBe(footnoteIds.length);
+  });
+
   it('renders a rewind action for user messages when rewinding is available', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: [{
