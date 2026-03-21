@@ -2123,6 +2123,7 @@ startAppEventMonitor({
   repoRoot: REPO_ROOT,
   sessionsDir: SESSIONS_DIR,
   taskStateFile: TASK_STATE_FILE,
+  profileConfigFile: PROFILE_CONFIG_FILE,
   getCurrentProfile,
 });
 
