@@ -72,9 +72,9 @@ describe('artifact agent extension', () => {
     const artifactTool = registerArtifactTool(stateRoot);
     const guidelines = artifactTool.promptGuidelines?.join('\n') ?? '';
 
-    expect(guidelines).toContain('white-paper template');
-    expect(guidelines).toContain('report-template.html');
-    expect(guidelines).toContain('artifact-output.md');
+    expect(guidelines).toContain('artifact-output white-paper reference');
+    expect(guidelines).toContain('artifact-output');
+    expect(guidelines).toContain('white-paper.md');
     expect(guidelines).toContain('LaTeX.css-style single-column');
   });
 
