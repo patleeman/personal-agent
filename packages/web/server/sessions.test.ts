@@ -441,6 +441,50 @@ describe('sessions', () => {
     ]);
   });
 
+  it('keeps assistant replies visible when hidden prompt context precedes the turn', () => {
+    const blocks = buildDisplayBlocksFromEntries([
+      {
+        id: 'user-1',
+        timestamp: '2026-03-12T16:00:00.000Z',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'Use the referenced project context.' }],
+        },
+      },
+      {
+        id: 'context-1',
+        parentId: 'user-1',
+        timestamp: '2026-03-12T16:00:01.000Z',
+        message: {
+          role: 'custom',
+          customType: 'referenced_context',
+          display: false,
+          content: [{ type: 'text', text: 'Referenced project: @foo' }],
+        },
+      },
+      {
+        id: 'assistant-1',
+        parentId: 'context-1',
+        timestamp: '2026-03-12T16:00:02.000Z',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Using the referenced project context now.' }],
+        },
+      },
+    ]);
+
+    expect(blocks).toEqual([
+      expect.objectContaining({
+        type: 'user',
+        text: 'Use the referenced project context.',
+      }),
+      expect.objectContaining({
+        type: 'text',
+        text: 'Using the referenced project context now.',
+      }),
+    ]);
+  });
+
   it('renames a stored conversation by appending session metadata', () => {
     const sessionsDir = createTempSessionsDir();
     configureSessionEnv(sessionsDir);
