@@ -326,9 +326,9 @@ The UI uses server-sent events for snapshots and updates.
 
 That means:
 
-- inbox, projects, sessions, tasks, and conversation todo state update live
+- inbox, projects, sessions, tasks, system status surfaces, and conversation todo state update live
 - you usually do not need to refresh manually
-- if the SSE connection drops, the UI will try to reconnect
+- if the SSE connection drops, the UI will try to reconnect, including during managed web UI restarts
 
 If live updates are offline, refresh buttons remain available on each page.
 

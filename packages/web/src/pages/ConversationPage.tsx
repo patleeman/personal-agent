@@ -6,6 +6,7 @@ import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditor
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
 import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, RemoteConversationConnectionStreamEvent } from '../types';
 import { useApi } from '../hooks';
+import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useSessionDetail } from '../hooks/useSessions';
 import { normalizePendingQueueItems, useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../api';
@@ -1437,6 +1438,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       cancelled = true;
     };
   }, [conversationRunId, draft, versions.sessions]);
+
+  useInvalidateOnTopics(['executionTargets'], executionTargetsState.refetch);
 
   useEffect(() => {
     if (versions.runs === 0) {

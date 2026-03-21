@@ -670,7 +670,18 @@ export interface ConversationTreeSnapshot {
   roots: ConversationTreeNode[];
 }
 
-export type AppEventTopic = 'activity' | 'projects' | 'sessions' | 'tasks' | 'runs' | 'automation';
+export type AppEventTopic =
+  | 'activity'
+  | 'projects'
+  | 'sessions'
+  | 'tasks'
+  | 'runs'
+  | 'automation'
+  | 'daemon'
+  | 'gateway'
+  | 'sync'
+  | 'webUi'
+  | 'executionTargets';
 
 export type AppEvent =
   | { type: 'connected' }

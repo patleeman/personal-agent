@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
+import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import type {
   GatewayAccessSummary,
   GatewayConfigUpdateInput,
@@ -312,7 +313,7 @@ function PendingRow({ pending }: { pending: GatewayPendingMessageSummary }) {
 
 export function GatewayPage() {
   const navigate = useNavigate();
-  const { data, loading, error, refetch } = useApi(api.gateway);
+  const { data, loading, error, refetch, replaceData } = useApi(api.gateway);
   const { data: profileState } = useApi(api.profiles);
   const [restarting, setRestarting] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
@@ -321,6 +322,8 @@ export function GatewayPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [configDraft, setConfigDraft] = useState<GatewayConfigDraft | null>(null);
+
+  useInvalidateOnTopics(['gateway'], refetch);
 
   const pendingCountByConversation = useMemo(() => {
     const counts = new Map<string, number>();
@@ -362,15 +365,14 @@ export function GatewayPage() {
     setActionNotice(null);
     try {
       if (action === 'install') {
-        await api.installGatewayService();
+        replaceData(await api.installGatewayService());
       } else if (action === 'start') {
-        await api.startGatewayService();
+        replaceData(await api.startGatewayService());
       } else if (action === 'stop') {
-        await api.stopGatewayService();
+        replaceData(await api.stopGatewayService());
       } else {
-        await api.uninstallGatewayService();
+        replaceData(await api.uninstallGatewayService());
       }
-      await refetch({ resetLoading: false });
     } catch (serviceError) {
       setActionError(serviceError instanceof Error ? serviceError.message : String(serviceError));
     } finally {
@@ -385,8 +387,7 @@ export function GatewayPage() {
     setActionError(null);
     setActionNotice(null);
     try {
-      await api.restartGateway();
-      await refetch({ resetLoading: false });
+      replaceData(await api.restartGateway());
     } catch (restartError) {
       setActionError(restartError instanceof Error ? restartError.message : String(restartError));
     } finally {
@@ -469,13 +470,13 @@ export function GatewayPage() {
 
     try {
       const savedState = await api.saveGatewayConfig(payload);
+      replaceData(savedState);
       setConfigDraft(buildConfigDraft(savedState));
       setActionNotice(
         savedState.service.running
           ? 'Saved gateway settings. Restart the running service to apply them.'
           : 'Saved gateway settings.',
       );
-      await refetch({ resetLoading: false });
     } catch (saveError) {
       setActionError(saveError instanceof Error ? saveError.message : String(saveError));
     } finally {

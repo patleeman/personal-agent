@@ -1,20 +1,36 @@
 import { existsSync, readdirSync, statSync, watch, type Dirent, type FSWatcher } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import {
+  getProfilesRoot,
+  getStateRoot,
   resolveActivityReadStatePath,
   resolveConversationAttentionStatePath,
-  getProfilesRoot,
   resolveDeferredResumeStateFile,
+  resolveExecutionTargetsFilePath,
   resolveProfileActivityConversationLinksDir,
   resolveProfileActivityDir,
   resolveProfileConversationArtifactsDir,
   resolveProfileConversationLinksDir,
   resolveProfileProjectsDir,
+  resolveStatePaths,
 } from '@personal-agent/core';
-import { loadDaemonConfig, resolveDaemonPaths, resolveDurableRunsRoot } from '@personal-agent/daemon';
+import { getDaemonConfigFilePath, loadDaemonConfig, resolveDaemonPaths, resolveDurableRunsRoot } from '@personal-agent/daemon';
+import { readGatewayConfigFilePath } from './gatewayConfig.js';
 import { logWarn } from './logging.js';
+import { resolveWebUiConfigFilePath } from './webUi.js';
 
-export type AppEventTopic = 'activity' | 'projects' | 'sessions' | 'tasks' | 'runs' | 'automation';
+export type AppEventTopic =
+  | 'activity'
+  | 'projects'
+  | 'sessions'
+  | 'tasks'
+  | 'runs'
+  | 'automation'
+  | 'daemon'
+  | 'gateway'
+  | 'sync'
+  | 'webUi'
+  | 'executionTargets';
 
 export type AppEvent =
   | { type: 'connected' }
@@ -47,7 +63,19 @@ interface AppEventWatchTarget {
   filterName?: string;
 }
 
-const ALL_TOPICS: AppEventTopic[] = ['activity', 'projects', 'sessions', 'tasks', 'runs', 'automation'];
+const ALL_TOPICS: AppEventTopic[] = [
+  'activity',
+  'projects',
+  'sessions',
+  'tasks',
+  'runs',
+  'automation',
+  'daemon',
+  'gateway',
+  'sync',
+  'webUi',
+  'executionTargets',
+];
 const listeners = new Set<AppEventListener>();
 let monitorStop: WatchStop | undefined;
 
@@ -131,7 +159,10 @@ function findNearestExistingDirectory(path: string): string {
 }
 
 function createTopicSources(options: AppEventMonitorOptions, profile: string): TopicSources {
-  const daemonRoot = resolveDaemonPaths(loadDaemonConfig().ipc.socketPath).root;
+  const daemonConfig = loadDaemonConfig();
+  const daemonPaths = resolveDaemonPaths(daemonConfig.ipc.socketPath);
+  const daemonRoot = daemonPaths.root;
+  const statePaths = resolveStatePaths();
   const activityDirs = [
     resolveProfileActivityDir({ profile }),
     resolveProfileActivityDir({ stateRoot: daemonRoot, profile }),
@@ -151,6 +182,10 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
   const runsRoot = resolveDurableRunsRoot(dirname(options.taskStateFile));
   const conversationAttentionStateFile = resolveConversationAttentionStatePath({ profile });
   const deferredResumeStateFile = resolveDeferredResumeStateFile();
+  const gatewayStateDir = join(statePaths.root, 'gateway');
+  const gatewaySessionDir = join(statePaths.session, 'telegram');
+  const syncRepoDir = daemonConfig.modules.sync?.repoDir;
+  const webStateDir = join(getStateRoot(), 'web');
 
   const activitySources: AppEventWatchSource[] = [
     ...activityDirs.map((path) => ({ path, kind: 'directory' as const })),
@@ -178,6 +213,26 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
     ],
     runs: [{ path: runsRoot, kind: 'directory' }],
     automation: [],
+    daemon: [
+      { path: getDaemonConfigFilePath(), kind: 'file' },
+      { path: daemonPaths.socketPath, kind: 'file' },
+    ],
+    gateway: [
+      { path: readGatewayConfigFilePath(), kind: 'file' },
+      { path: gatewayStateDir, kind: 'directory' },
+      { path: gatewaySessionDir, kind: 'directory' },
+    ],
+    sync: [
+      { path: getDaemonConfigFilePath(), kind: 'file' },
+      { path: daemonPaths.socketPath, kind: 'file' },
+      ...(syncRepoDir ? [{ path: syncRepoDir, kind: 'directory' as const }] : []),
+    ],
+    webUi: [
+      { path: resolveWebUiConfigFilePath(), kind: 'file' },
+      { path: join(webStateDir, 'deploy-state.json'), kind: 'file' },
+      { path: join(webStateDir, 'app-restart.lock.json'), kind: 'file' },
+    ],
+    executionTargets: [{ path: resolveExecutionTargetsFilePath(), kind: 'file' }],
   };
 }
 

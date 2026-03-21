@@ -535,7 +535,19 @@ async function setCurrentProfile(profile: string): Promise<string> {
   }
   writeSavedProfilePreferences(profile, PROFILE_CONFIG_FILE);
   await syncDaemonTaskScopeForProfile(profile);
-  invalidateAppTopics('activity', 'projects', 'tasks');
+  invalidateAppTopics(
+    'activity',
+    'projects',
+    'sessions',
+    'tasks',
+    'runs',
+    'automation',
+    'daemon',
+    'gateway',
+    'sync',
+    'webUi',
+    'executionTargets',
+  );
   return currentProfile;
 }
 
@@ -2317,7 +2329,9 @@ app.post('/api/gateway/config', (req, res) => {
     }
 
     suppressMonitoredServiceAttention('gateway');
-    res.json(saveGatewayConfigAndReadState(getCurrentProfile(), input));
+    const state = saveGatewayConfigAndReadState(getCurrentProfile(), input);
+    invalidateAppTopics('gateway');
+    res.json(state);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const status = message.startsWith('Unknown profile:') || message.includes('must be') || message.endsWith('is required')
@@ -2334,7 +2348,9 @@ app.post('/api/gateway/config', (req, res) => {
 app.post('/api/gateway/restart', (_req, res) => {
   try {
     suppressMonitoredServiceAttention('gateway');
-    res.json(restartGatewayAndReadState(getCurrentProfile()));
+    const state = restartGatewayAndReadState(getCurrentProfile());
+    invalidateAppTopics('gateway');
+    res.json(state);
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -2347,7 +2363,9 @@ app.post('/api/gateway/restart', (_req, res) => {
 app.post('/api/gateway/service/install', (_req, res) => {
   try {
     suppressMonitoredServiceAttention('gateway');
-    res.json(installGatewayAndReadState(getCurrentProfile()));
+    const state = installGatewayAndReadState(getCurrentProfile());
+    invalidateAppTopics('gateway');
+    res.json(state);
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -2360,7 +2378,9 @@ app.post('/api/gateway/service/install', (_req, res) => {
 app.post('/api/gateway/service/start', (_req, res) => {
   try {
     suppressMonitoredServiceAttention('gateway');
-    res.json(startGatewayAndReadState(getCurrentProfile()));
+    const state = startGatewayAndReadState(getCurrentProfile());
+    invalidateAppTopics('gateway');
+    res.json(state);
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -2373,7 +2393,9 @@ app.post('/api/gateway/service/start', (_req, res) => {
 app.post('/api/gateway/service/stop', (_req, res) => {
   try {
     suppressMonitoredServiceAttention('gateway');
-    res.json(stopGatewayAndReadState(getCurrentProfile()));
+    const state = stopGatewayAndReadState(getCurrentProfile());
+    invalidateAppTopics('gateway');
+    res.json(state);
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -2386,7 +2408,9 @@ app.post('/api/gateway/service/stop', (_req, res) => {
 app.post('/api/gateway/service/uninstall', (_req, res) => {
   try {
     suppressMonitoredServiceAttention('gateway');
-    res.json(uninstallGatewayAndReadState(getCurrentProfile()));
+    const state = uninstallGatewayAndReadState(getCurrentProfile());
+    invalidateAppTopics('gateway');
+    res.json(state);
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -2413,7 +2437,9 @@ app.get('/api/daemon', async (_req, res) => {
 app.post('/api/daemon/service/install', async (_req, res) => {
   try {
     suppressMonitoredServiceAttention('daemon');
-    res.json(await installDaemonServiceAndReadState());
+    const state = await installDaemonServiceAndReadState();
+    invalidateAppTopics('daemon', 'sync');
+    res.json(state);
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -2426,7 +2452,9 @@ app.post('/api/daemon/service/install', async (_req, res) => {
 app.post('/api/daemon/service/start', async (_req, res) => {
   try {
     suppressMonitoredServiceAttention('daemon');
-    res.json(await startDaemonServiceAndReadState());
+    const state = await startDaemonServiceAndReadState();
+    invalidateAppTopics('daemon', 'sync');
+    res.json(state);
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -2439,7 +2467,9 @@ app.post('/api/daemon/service/start', async (_req, res) => {
 app.post('/api/daemon/service/restart', async (_req, res) => {
   try {
     suppressMonitoredServiceAttention('daemon');
-    res.json(await restartDaemonServiceAndReadState());
+    const state = await restartDaemonServiceAndReadState();
+    invalidateAppTopics('daemon', 'sync');
+    res.json(state);
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -2452,7 +2482,9 @@ app.post('/api/daemon/service/restart', async (_req, res) => {
 app.post('/api/daemon/service/stop', async (_req, res) => {
   try {
     suppressMonitoredServiceAttention('daemon');
-    res.json(await stopDaemonServiceAndReadState());
+    const state = await stopDaemonServiceAndReadState();
+    invalidateAppTopics('daemon', 'sync');
+    res.json(state);
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -2465,7 +2497,9 @@ app.post('/api/daemon/service/stop', async (_req, res) => {
 app.post('/api/daemon/service/uninstall', async (_req, res) => {
   try {
     suppressMonitoredServiceAttention('daemon');
-    res.json(await uninstallDaemonServiceAndReadState());
+    const state = await uninstallDaemonServiceAndReadState();
+    invalidateAppTopics('daemon', 'sync');
+    res.json(state);
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -2491,7 +2525,9 @@ app.get('/api/sync', async (_req, res) => {
 
 app.post('/api/sync/run', async (_req, res) => {
   try {
-    res.json(await requestSyncRunAndReadState());
+    const state = await requestSyncRunAndReadState();
+    invalidateAppTopics('sync');
+    res.json(state);
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -2512,7 +2548,9 @@ app.post('/api/sync/setup', async (req, res) => {
   }
 
   try {
-    res.json(await setupSyncAndReadState(input));
+    const state = await setupSyncAndReadState(input);
+    invalidateAppTopics('sync');
+    res.json(state);
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -2538,7 +2576,9 @@ app.get('/api/web-ui/state', (_req, res) => {
 
 app.post('/api/web-ui/service/install', (_req, res) => {
   try {
-    res.json(installWebUiServiceAndReadState());
+    const state = installWebUiServiceAndReadState();
+    invalidateAppTopics('webUi');
+    res.json(state);
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -2550,7 +2590,9 @@ app.post('/api/web-ui/service/install', (_req, res) => {
 
 app.post('/api/web-ui/service/start', (_req, res) => {
   try {
-    res.json(startWebUiServiceAndReadState());
+    const state = startWebUiServiceAndReadState();
+    invalidateAppTopics('webUi');
+    res.json(state);
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -2580,6 +2622,7 @@ app.post('/api/web-ui/service/rollback', (req, res) => {
   try {
     const reason = typeof req.body?.reason === 'string' ? req.body.reason : undefined;
     const snapshot = rollbackWebUiServiceAndReadState({ reason });
+    invalidateAppTopics('webUi');
     try {
       writeInternalAttentionEntry({
         repoRoot: REPO_ROOT,
@@ -2617,6 +2660,7 @@ app.post('/api/web-ui/service/mark-bad', (req, res) => {
       : undefined;
     const reason = typeof req.body?.reason === 'string' ? req.body.reason : undefined;
     const snapshot = markBadWebUiReleaseAndReadState({ slot, reason });
+    invalidateAppTopics('webUi');
     try {
       writeInternalAttentionEntry({
         repoRoot: REPO_ROOT,
@@ -2649,7 +2693,9 @@ app.post('/api/web-ui/service/mark-bad', (req, res) => {
 
 app.post('/api/web-ui/service/stop', (_req, res) => {
   try {
-    res.json(stopWebUiServiceAndReadState());
+    const state = stopWebUiServiceAndReadState();
+    invalidateAppTopics('webUi');
+    res.json(state);
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -2661,7 +2707,9 @@ app.post('/api/web-ui/service/stop', (_req, res) => {
 
 app.post('/api/web-ui/service/uninstall', (_req, res) => {
   try {
-    res.json(uninstallWebUiServiceAndReadState());
+    const state = uninstallWebUiServiceAndReadState();
+    invalidateAppTopics('webUi');
+    res.json(state);
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -3745,6 +3793,7 @@ app.patch('/api/web-ui/config', (req, res) => {
       ...(resumeFallbackPrompt !== undefined ? { resumeFallbackPrompt } : {}),
     });
     const state = readWebUiState();
+    invalidateAppTopics('webUi');
 
     res.json({
       ...state,
@@ -4028,7 +4077,9 @@ app.post('/api/execution-targets', async (req, res) => {
     saveExecutionTarget({
       target: normalizeExecutionTargetInput(req.body),
     });
-    res.json(await readExecutionTargetsState());
+    const state = await readExecutionTargetsState();
+    invalidateAppTopics('executionTargets');
+    res.json(state);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(message.includes('required') || message.startsWith('Invalid execution target') ? 400 : 500).json({ error: message });
@@ -4043,7 +4094,9 @@ app.patch('/api/execution-targets/:id', async (req, res) => {
         id: req.params.id,
       },
     });
-    res.json(await readExecutionTargetsState());
+    const state = await readExecutionTargetsState();
+    invalidateAppTopics('executionTargets');
+    res.json(state);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(message.includes('required') || message.startsWith('Invalid execution target') ? 400 : 500).json({ error: message });
@@ -4057,7 +4110,9 @@ app.delete('/api/execution-targets/:id', async (req, res) => {
       return;
     }
 
-    res.json(await readExecutionTargetsState());
+    const state = await readExecutionTargetsState();
+    invalidateAppTopics('executionTargets');
+    res.json(state);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.status(message.startsWith('Invalid execution target') ? 400 : 500).json({ error: message });

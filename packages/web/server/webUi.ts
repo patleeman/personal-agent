@@ -121,7 +121,7 @@ function normalizeResumeFallbackPrompt(value: unknown): string {
   return normalized.length > 0 ? normalized : DEFAULT_RESUME_FALLBACK_PROMPT;
 }
 
-function resolveWebUiConfigFilePath(): string {
+export function resolveWebUiConfigFilePath(): string {
   const explicit = process.env.PERSONAL_AGENT_WEB_CONFIG_FILE;
   if (explicit && explicit.trim().length > 0) {
     return resolve(explicit);
