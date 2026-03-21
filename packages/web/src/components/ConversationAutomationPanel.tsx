@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
 import {
@@ -6,10 +6,9 @@ import {
   type ChecklistDraftItem,
   toChecklistDraftItems,
 } from '../checklists';
-import { useAppEvents } from '../contexts';
-import { useApi } from '../hooks';
 import type {
   ConversationAutomationResponse,
+  ConversationAutomationStreamEvent,
   ConversationAutomationTodoItem,
 } from '../types';
 import { ChecklistComposer, ChecklistItemList } from './ChecklistEditor';
@@ -39,6 +38,15 @@ function buildProgressLabel(automation: ConversationAutomationResponse['automati
   return `${completed}/${automation.items.length} complete`;
 }
 
+function buildDraftKey(items: ConversationAutomationResponse['automation']['items']): string {
+  return JSON.stringify(items.map((item) => ({
+    id: item.id,
+    text: toChecklistDraftItems([item])[0]?.text ?? '',
+    status: item.status,
+    updatedAt: item.updatedAt,
+  })));
+}
+
 function buildItemSupportText(item: ConversationAutomationTodoItem, active: boolean): string | null {
   const reason = item.resultReason?.trim();
   const genericCompletedReason = reason?.toLowerCase() === 'completed.';
@@ -65,24 +73,75 @@ function buildItemSupportText(item: ConversationAutomationTodoItem, active: bool
 }
 
 export function ConversationAutomationPanel({ conversationId }: { conversationId: string }) {
-  const { versions } = useAppEvents();
-  const fetcher = useCallback(() => api.conversationPlan(conversationId), [conversationId]);
-  const {
-    data,
-    loading,
-    refreshing,
-    error,
-    refetch,
-    replaceData,
-  } = useApi(fetcher, conversationId);
+  const [data, setData] = useState<ConversationAutomationResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [draftItems, setDraftItems] = useState<ChecklistDraftItem[]>([]);
   const [draftKey, setDraftKey] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
 
   useEffect(() => {
-    void refetch({ resetLoading: false });
-  }, [conversationId, refetch, versions.sessions]);
+    let closed = false;
+    let receivedStreamSnapshot = false;
+    let stream: EventSource | null = null;
+
+    setData(null);
+    setLoading(true);
+    setError(null);
+
+    const applyData = (nextData: ConversationAutomationResponse, source: 'fetch' | 'stream') => {
+      if (closed) {
+        return;
+      }
+
+      if (source === 'stream') {
+        receivedStreamSnapshot = true;
+      } else if (receivedStreamSnapshot) {
+        return;
+      }
+
+      setData(nextData);
+      setLoading(false);
+      setError(null);
+    };
+
+    void api.conversationPlan(conversationId)
+      .then((nextData) => {
+        applyData(nextData, 'fetch');
+      })
+      .catch((nextError) => {
+        if (closed || receivedStreamSnapshot) {
+          return;
+        }
+
+        setError(nextError instanceof Error ? nextError.message : String(nextError));
+        setLoading(false);
+      });
+
+    if (typeof EventSource !== 'undefined') {
+      stream = new EventSource(`/api/conversations/${encodeURIComponent(conversationId)}/plan/events`);
+      stream.onmessage = (event) => {
+        let payload: ConversationAutomationStreamEvent;
+        try {
+          payload = JSON.parse(event.data) as ConversationAutomationStreamEvent;
+        } catch {
+          return;
+        }
+
+        if (payload.type !== 'snapshot') {
+          return;
+        }
+
+        applyData(payload.data, 'stream');
+      };
+    }
+
+    return () => {
+      closed = true;
+      stream?.close();
+    };
+  }, [conversationId]);
 
   useEffect(() => {
     setActionError(null);
@@ -96,13 +155,7 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
       return;
     }
 
-    const nextKey = JSON.stringify(data.automation.items.map((item) => ({
-      id: item.id,
-      text: toChecklistDraftItems([item])[0]?.text ?? '',
-      status: item.status,
-      updatedAt: item.updatedAt,
-    })));
-
+    const nextKey = buildDraftKey(data.automation.items);
     if (nextKey === draftKey) {
       return;
     }
@@ -155,14 +208,9 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
     const saved = await api.updateConversationPlan(conversationId, {
       items: checklistDraftItemsToTemplateItems(nextItems),
     });
-    replaceData(saved);
+    setData(saved);
     setDraftItems(toChecklistDraftItems(saved.automation.items));
-    setDraftKey(JSON.stringify(saved.automation.items.map((item) => ({
-      id: item.id,
-      text: toChecklistDraftItems([item])[0]?.text ?? '',
-      status: item.status,
-      updatedAt: item.updatedAt,
-    }))));
+    setDraftKey(buildDraftKey(saved.automation.items));
   }
 
   async function handleCommitItems(nextItems: ChecklistDraftItem[]) {
@@ -182,7 +230,7 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
     setPendingAction('toggle');
     try {
       const saved = await api.setConversationPlanItemStatus(conversationId, itemId, checked);
-      replaceData(saved);
+      setData(saved);
     } catch (nextError) {
       setActionError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
@@ -199,7 +247,6 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
             {automation.items.length} {automation.items.length === 1 ? 'item' : 'items'}
             <span className="mx-1.5 opacity-40">·</span>
             {progressLabel}
-            {refreshing && <span className="ml-1.5">· refreshing…</span>}
           </p>
         </div>
         <Link to="/plans" className="ui-toolbar-button inline-flex shrink-0 items-center gap-1 text-[11px] text-accent" title="Edit presets">

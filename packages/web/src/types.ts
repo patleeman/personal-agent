@@ -1063,6 +1063,9 @@ export interface ConversationAutomationResponse {
   skills: ConversationAutomationSkillInfo[];
 }
 
+export type ConversationAutomationStreamEvent =
+  | { type: 'snapshot'; data: ConversationAutomationResponse };
+
 export interface ConversationAutomationWorkspaceState {
   presetLibrary: ConversationAutomationWorkflowPresetLibraryState;
   skills: ConversationAutomationSkillInfo[];

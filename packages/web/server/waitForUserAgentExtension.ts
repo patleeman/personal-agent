@@ -5,7 +5,7 @@ import {
   setConversationAutomationWaitingForUser,
   writeConversationAutomationState,
 } from './conversationAutomation.js';
-import { invalidateAppTopics } from './appEvents.js';
+import { notifyConversationAutomationChanged } from './conversationAutomationEvents.js';
 
 const WaitForUserToolParams = Type.Object({
   reason: Type.String({
@@ -44,7 +44,7 @@ export function createWaitForUserAgentExtension(options: {
           reason: params.reason,
         });
         writeConversationAutomationState({ stateRoot: options.stateRoot, profile, document });
-        invalidateAppTopics('automation');
+        notifyConversationAutomationChanged(conversationId);
 
         return {
           content: [{
