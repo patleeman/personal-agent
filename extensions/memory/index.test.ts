@@ -72,13 +72,15 @@ describe('memory extension', () => {
 
     expect(result?.systemPrompt).toContain('MEMORY_POLICY');
     expect(result?.systemPrompt).toContain('- active_profile: datadog');
-    expect(result?.systemPrompt).toContain('Profile + memory write targets (edit these locations directly):');
+    expect(result?.systemPrompt).toContain('## Write targets');
+    expect(result?.systemPrompt).toContain('Edit these locations directly:');
     expect(result?.systemPrompt).toContain(`- AGENTS.md edit target: ${join(stateRoot, 'profiles', 'datadog', 'agent', 'AGENTS.md')}`);
     expect(result?.systemPrompt).toContain(`- Skills dir: ${join(stateRoot, 'profiles', 'datadog', 'agent', 'skills')}`);
     expect(result?.systemPrompt).toContain(`- Scheduled tasks dir: ${join(stateRoot, 'profiles', 'datadog', 'agent', 'tasks')}`);
     expect(result?.systemPrompt).toContain(`- Global memory dir: ${join(stateRoot, 'profiles', '_memory')}`);
     expect(result?.systemPrompt).toContain(`- Memory package template: ${join(stateRoot, 'profiles', '_memory', '<memory-name>', 'MEMORY.md')}`);
     expect(result?.systemPrompt).toContain('Use active-profile AGENTS.md + skills and the shared memory packages store as the durable memory system.');
+    expect(result?.systemPrompt).toContain('Prefer the memory tool when available; otherwise use `pa memory list/find/show/new/lint`.');
     expect(result?.systemPrompt).toContain('<available_memories>');
     expect(result?.systemPrompt).toContain('<memory name="runpod"');
     expect(result?.systemPrompt).toContain('Provisioning notes for short-lived GPU pods.');

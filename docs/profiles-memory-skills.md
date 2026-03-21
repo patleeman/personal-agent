@@ -131,7 +131,7 @@ Examples:
 - a Git or release workflow
 - a browser-automation workflow
 
-Skills show up in the system prompt as lightweight name + description hints. The full `SKILL.md` loads on demand.
+Skills show up in the system prompt as lightweight name + description hints. Keep descriptions short and trigger-focused; detailed guidance belongs in the skill body. The full `SKILL.md` loads on demand.
 
 ## Memory packages: durable knowledge hubs
 
