@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
 import { join, resolve } from 'path';
-import { getConfigRoot, getProfilesRoot, getStateRoot } from '@personal-agent/core';
+import { getConfigRoot, getDurableTasksDir, getStateRoot, getSyncRoot } from '@personal-agent/core';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -49,8 +49,6 @@ export interface DaemonConfig {
 }
 
 const DEFAULT_DAEMON_CONFIG_FILE = join(getConfigRoot(), 'daemon.json');
-const DEFAULT_PERSONAL_AGENT_CONFIG_FILE = join(getConfigRoot(), 'config.json');
-const DEFAULT_PROFILE_NAME = 'shared';
 
 function expandHome(path: string): string {
   if (path === '~') {
@@ -64,58 +62,12 @@ function expandHome(path: string): string {
   return path;
 }
 
-function normalizeProfileName(value: unknown): string | undefined {
-  if (typeof value !== 'string') {
-    return undefined;
-  }
-
-  const trimmed = value.trim();
-  if (trimmed.length === 0) {
-    return undefined;
-  }
-
-  return /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/.test(trimmed) ? trimmed : undefined;
-}
-
-function getPersonalAgentConfigFilePath(): string {
-  const explicit = process.env.PERSONAL_AGENT_CONFIG_FILE;
-  if (explicit && explicit.trim().length > 0) {
-    return resolve(expandHome(explicit));
-  }
-
-  return DEFAULT_PERSONAL_AGENT_CONFIG_FILE;
-}
-
-function getActiveProfileName(): string {
-  const envProfile = normalizeProfileName(process.env.PERSONAL_AGENT_PROFILE);
-  if (envProfile) {
-    return envProfile;
-  }
-
-  const configPath = getPersonalAgentConfigFilePath();
-  if (!existsSync(configPath)) {
-    return DEFAULT_PROFILE_NAME;
-  }
-
-  try {
-    const parsed = JSON.parse(readFileSync(configPath, 'utf-8')) as unknown;
-    if (!isRecord(parsed)) {
-      return DEFAULT_PROFILE_NAME;
-    }
-
-    return normalizeProfileName(parsed.defaultProfile) ?? DEFAULT_PROFILE_NAME;
-  } catch {
-    return DEFAULT_PROFILE_NAME;
-  }
-}
-
 function getDefaultTasksDir(): string {
-  const profilesRoot = resolve(expandHome(getProfilesRoot()));
-  return join(profilesRoot, getActiveProfileName(), 'agent', 'tasks');
+  return getDurableTasksDir();
 }
 
 function getDefaultSyncRepoDir(): string {
-  return join(getStateRoot(), 'sync');
+  return getSyncRoot(getStateRoot());
 }
 
 export function getDefaultSyncModuleConfig(): SyncModuleConfig {

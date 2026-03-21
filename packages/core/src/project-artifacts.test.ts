@@ -40,6 +40,7 @@ describe('project artifacts', () => {
   it('creates the default project document', () => {
     const project = createInitialProject({
       id: 'artifact-model',
+      ownerProfile: 'assistant',
       title: 'Durable artifact model',
       description: 'Create a durable artifact model.',
       createdAt: '2026-03-10T12:00:00.000Z',
@@ -47,6 +48,7 @@ describe('project artifacts', () => {
 
     expect(project).toEqual({
       id: 'artifact-model',
+      ownerProfile: 'assistant',
       createdAt: '2026-03-10T12:00:00.000Z',
       updatedAt: '2026-03-10T12:00:00.000Z',
       title: 'Durable artifact model',
@@ -72,6 +74,7 @@ describe('project artifacts', () => {
   it('formats and parses project yaml as a round trip', () => {
     const document: ProjectDocument = {
       id: 'artifact-model',
+      ownerProfile: 'assistant',
       createdAt: '2026-03-10T12:00:00.000Z',
       updatedAt: '2026-03-10T13:00:00.000Z',
       archivedAt: '2026-03-10T14:00:00.000Z',
@@ -174,6 +177,7 @@ plan:
 
     expect(parseProject(yaml)).toEqual({
       id: 'artifact-model',
+      ownerProfile: 'shared',
       createdAt: '2026-03-10T12:00:00.000Z',
       updatedAt: '2026-03-10T12:00:00.000Z',
       title: 'Durable artifact model',
@@ -201,6 +205,7 @@ plan:
     const path = join(dir, 'PROJECT.yaml');
     const document = createInitialProject({
       id: 'artifact-model',
+      ownerProfile: 'assistant',
       title: 'Durable artifact model',
       description: 'Create a durable artifact model.',
       createdAt: '2026-03-10T12:00:00.000Z',

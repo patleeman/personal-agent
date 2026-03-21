@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs';
 import { basename, dirname, join, relative } from 'path';
 import { parseDocument, stringify } from 'yaml';
-import { getProfilesRoot } from './runtime/paths.js';
+import { getDurableProfilesDir } from './runtime/paths.js';
 import { getMemoryDocsDir, migrateLegacyProfileMemoryDirs, type ResolveMemoryDocsOptions } from './memory-docs.js';
 
 const MEMORY_FRONTMATTER_DELIMITER = '---';
@@ -125,7 +125,7 @@ export interface LintMemoryDocsResult {
 }
 
 function resolveMemoryContext(options: ResolveMemoryDocsOptions = {}): { memoryDir: string } {
-  const profilesRoot = options.profilesRoot ?? getProfilesRoot();
+  const profilesRoot = options.profilesRoot ?? getDurableProfilesDir();
 
   return {
     memoryDir: getMemoryDocsDir({ profilesRoot }),
@@ -536,6 +536,7 @@ function listMemoryDocFiles(memoryDir: string): MemoryDocFileLocation[] {
 }
 
 export function loadMemoryDocs(options: LoadMemoryDocsOptions = {}): LoadMemoryDocsResult {
+  migrateLegacyProfileMemoryDirs(options);
   const context = resolveMemoryContext(options);
   const files = listMemoryDocFiles(context.memoryDir);
   const docs: ParsedMemoryDoc[] = [];

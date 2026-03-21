@@ -3,7 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 import { Type } from '@sinclair/typebox';
 import type { ExtensionContext, ToolDefinition } from '@mariozechner/pi-coding-agent';
 import {
-  getProfilesRoot,
+  getDurableTasksDir,
   loadDeferredResumeState,
   parseDeferredResumeDelayMs,
   readSessionConversationId,
@@ -160,8 +160,8 @@ function readOptionalModelReference(value: string | undefined, label = 'model'):
   return normalized;
 }
 
-function taskDirForProfile(profile: string): string {
-  return join(getProfilesRoot(), profile, 'agent', 'tasks');
+function taskDirForProfile(_profile: string): string {
+  return getDurableTasksDir();
 }
 
 function listTaskDefinitionFiles(taskDir: string): string[] {
@@ -245,11 +245,15 @@ function loadParsedTasksForProfile(profile: string): {
 
   for (const filePath of listTaskDefinitionFiles(taskDir)) {
     try {
-      tasks.push(parseTaskDefinition({
+      const parsed = parseTaskDefinition({
         filePath,
         rawContent: readFileSync(filePath, 'utf-8'),
         defaultTimeoutSeconds: config.modules.tasks.defaultTimeoutSeconds,
-      }));
+      });
+      if (parsed.profile !== profile) {
+        continue;
+      }
+      tasks.push(parsed);
     } catch (error) {
       parseErrors.push({
         filePath,

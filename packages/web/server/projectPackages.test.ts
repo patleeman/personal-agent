@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import {
   createProjectActivityEntry,
+  getDurableSessionsDir,
   setConversationProjectLinks,
   writeProfileActivityEntry,
 } from '@personal-agent/core';
@@ -42,7 +43,7 @@ function sessionIndexPathFor(sessionsDir: string): string {
 function configureRuntimeEnv(rootDir: string): { repoRoot: string; stateRoot: string; sessionsDir: string } {
   const repoRoot = join(rootDir, 'repo');
   const stateRoot = join(rootDir, 'state');
-  const sessionsDir = join(stateRoot, 'pi-agent', 'sessions');
+  const sessionsDir = getDurableSessionsDir(stateRoot);
 
   process.env.PERSONAL_AGENT_PROFILES_ROOT = join(stateRoot, 'profiles');
   process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;

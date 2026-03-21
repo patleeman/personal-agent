@@ -485,7 +485,7 @@ function deriveNewHubId(existingDocs: ParsedMemoryDoc[], draft: DistilledConvers
 }
 
 function readHubDoc(memoryDir: string, id: string): ParsedMemoryDoc {
-  const refreshed = loadMemoryDocs({ profilesRoot: dirname(memoryDir) }).docs.find((doc) => doc.id === id);
+  const refreshed = loadMemoryDocs({ profilesRoot: join(dirname(memoryDir), 'profiles') }).docs.find((doc) => doc.id === id);
   if (!refreshed) {
     throw new Error(`Failed to load memory hub @${id}.`);
   }

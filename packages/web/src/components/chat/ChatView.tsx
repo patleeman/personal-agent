@@ -324,6 +324,7 @@ const TOOL_META: Record<string, { icon: string; label: string; color: string; to
   web_fetch:   { icon: '⌕',  label: 'web_fetch',       color: 'text-success border-success/25 bg-success/5',   tone: 'success' },
   screenshot:  { icon: '⊡',  label: 'screenshot',      color: 'text-secondary border-border-default bg-elevated', tone: 'muted' },
   artifact:    { icon: '◫',  label: 'artifact',        color: 'text-accent border-accent/25 bg-accent/5',      tone: 'accent' },
+  ask_user_question: { icon: '?', label: 'question',   color: 'text-warning border-warning/25 bg-warning/5',    tone: 'warning' },
   todo_list:   { icon: '☑',  label: 'todo_list',       color: 'text-warning border-warning/25 bg-warning/5',    tone: 'warning' },
   deferred_resume: { icon: '⏰', label: 'deferred_resume', color: 'text-warning border-warning/25 bg-warning/5', tone: 'warning' },
 };
@@ -467,6 +468,205 @@ function ArtifactToolBlock({
   );
 }
 
+interface AskUserQuestionPayload {
+  question: string;
+  details?: string;
+  options: string[];
+}
+
+interface AskUserQuestionState {
+  status: 'pending' | 'answered' | 'superseded';
+  answerBlock?: Extract<MessageBlock, { type: 'user' }>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function readNonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function readQuestionOptions(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const unique: string[] = [];
+  const seen = new Set<string>();
+
+  for (const candidate of value) {
+    if (typeof candidate !== 'string') {
+      continue;
+    }
+
+    const normalized = candidate.trim();
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+
+    seen.add(normalized);
+    unique.push(normalized);
+    if (unique.length >= 6) {
+      break;
+    }
+  }
+
+  return unique;
+}
+
+function readAskUserQuestionPayload(block: Extract<MessageBlock, { type: 'tool_use' }>): AskUserQuestionPayload | null {
+  const source = isRecord(block.details) && readNonEmptyString(block.details.question)
+    ? block.details
+    : block.input;
+
+  const question = readNonEmptyString(source.question);
+  if (!question) {
+    return null;
+  }
+
+  return {
+    question,
+    ...(readNonEmptyString(source.details) ? { details: readNonEmptyString(source.details) } : {}),
+    options: readQuestionOptions(source.options),
+  };
+}
+
+function describeAskUserQuestionState(messages: MessageBlock[] | undefined, messageIndex: number | undefined): AskUserQuestionState {
+  if (!messages || typeof messageIndex !== 'number') {
+    return { status: 'pending' };
+  }
+
+  for (let index = messageIndex + 1; index < messages.length; index += 1) {
+    const candidate = messages[index];
+    if (!candidate) {
+      continue;
+    }
+
+    if (candidate.type === 'user') {
+      return { status: 'answered', answerBlock: candidate };
+    }
+
+    if (candidate.type === 'tool_use' && candidate.tool === 'ask_user_question') {
+      return { status: 'superseded' };
+    }
+  }
+
+  return { status: 'pending' };
+}
+
+function summarizeAskUserQuestionAnswer(block: Extract<MessageBlock, { type: 'user' }> | undefined): string | null {
+  if (!block) {
+    return null;
+  }
+
+  const text = block.text.trim().replace(/\s+/g, ' ');
+  if (text.length > 0) {
+    return text.length > 180 ? `${text.slice(0, 179)}…` : text;
+  }
+
+  const imageCount = block.images?.length ?? 0;
+  if (imageCount > 0) {
+    return imageCount === 1 ? 'Sent 1 image attachment.' : `Sent ${imageCount} image attachments.`;
+  }
+
+  return null;
+}
+
+function AskUserQuestionToolBlock({
+  block,
+  payload,
+  state,
+  onReply,
+}: {
+  block: Extract<MessageBlock, { type: 'tool_use' }>;
+  payload: AskUserQuestionPayload;
+  state: AskUserQuestionState;
+  onReply?: (reply: string) => void;
+}) {
+  const isRunning = block.status === 'running' || !!block.running;
+  const answerPreview = summarizeAskUserQuestionAnswer(state.answerBlock);
+  const statusTone = state.status === 'answered'
+    ? 'success'
+    : state.status === 'superseded'
+      ? 'muted'
+      : 'warning';
+  const statusLabel = state.status === 'answered'
+    ? 'answered'
+    : state.status === 'superseded'
+      ? 'replaced'
+      : isRunning
+        ? 'asking…'
+        : 'waiting';
+
+  return (
+    <SurfacePanel
+      muted
+      className={cx(
+        'px-3.5 py-3 text-[12px] transition-colors',
+        state.status === 'pending' && 'border-warning/30 bg-warning/5',
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <div className="ui-chat-avatar mt-0.5">
+          <span className="ui-chat-avatar-mark">?</span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="text-[13px] font-medium text-primary">Question for you</span>
+            <Pill tone={statusTone}>{statusLabel}</Pill>
+          </div>
+          <p className="mt-2 text-[14px] leading-relaxed text-primary break-words">{payload.question}</p>
+          {payload.details && (
+            <p className="mt-2 text-[12px] leading-relaxed text-secondary break-words">{payload.details}</p>
+          )}
+
+          {state.status === 'pending' ? (
+            <div className="mt-3 space-y-2">
+              {payload.options.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {payload.options.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => onReply?.(option)}
+                      disabled={!onReply}
+                      className="ui-action-button text-[11px]"
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-3 text-[11px] text-dim">
+                {onReply
+                  ? <span>Use a quick reply or write a custom answer in the composer.</span>
+                  : <span>Reply in the conversation to continue.</span>}
+                {onReply && (
+                  <button
+                    type="button"
+                    onClick={() => onReply('')}
+                    className="text-accent transition-colors hover:text-accent/80"
+                  >
+                    Reply in Composer
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : answerPreview ? (
+            <div className="mt-3 space-y-1">
+              <p className="text-[10px] uppercase tracking-[0.14em] text-dim/65">Your reply</p>
+              <p className="text-[12px] leading-relaxed text-secondary break-words">{answerPreview}</p>
+            </div>
+          ) : state.status === 'superseded' ? (
+            <p className="mt-3 text-[11px] text-dim">A newer question was asked later in the conversation.</p>
+          ) : null}
+        </div>
+      </div>
+    </SurfacePanel>
+  );
+}
+
 function ToolBlock({
   block,
   autoOpen,
@@ -476,6 +676,9 @@ function ToolBlock({
   activeRunId,
   onHydrateMessage,
   hydratingMessageBlockIds,
+  messages,
+  messageIndex,
+  onReplyToQuestion,
 }: {
   block: Extract<MessageBlock, { type: 'tool_use' }>;
   autoOpen: boolean;
@@ -485,11 +688,19 @@ function ToolBlock({
   activeRunId?: string | null;
   onHydrateMessage?: (blockId: string) => Promise<void> | void;
   hydratingMessageBlockIds?: ReadonlySet<string>;
+  messages?: MessageBlock[];
+  messageIndex?: number;
+  onReplyToQuestion?: (reply: string) => void;
 }) {
   const [preference, setPreference] = useState<DisclosurePreference>('auto');
   const open = resolveDisclosureOpen(autoOpen, preference);
   const meta = toolMeta(block.tool);
   const artifact = readArtifactPresentation(block);
+  const askUserQuestion = readAskUserQuestionPayload(block);
+  const askUserQuestionState = useMemo(
+    () => describeAskUserQuestionState(messages, messageIndex),
+    [messageIndex, messages],
+  );
   const runIds = useMemo(() => extractDurableRunIdsFromBlock(block), [block]);
 
   if (artifact) {
@@ -499,6 +710,17 @@ function ToolBlock({
         artifact={artifact}
         onOpenArtifact={onOpenArtifact}
         activeArtifactId={activeArtifactId}
+      />
+    );
+  }
+
+  if (block.tool === 'ask_user_question' && askUserQuestion && !(block.status === 'error' || block.error)) {
+    return (
+      <AskUserQuestionToolBlock
+        block={block}
+        payload={askUserQuestion}
+        state={askUserQuestionState}
+        onReply={onReplyToQuestion}
       />
     );
   }
@@ -1471,6 +1693,7 @@ interface ChatViewProps {
   activeArtifactId?: string | null;
   onOpenRun?: (runId: string) => void;
   activeRunId?: string | null;
+  onReplyToQuestion?: (reply: string) => void;
   onResumeConversation?: () => Promise<void> | void;
   resumeConversationBusy?: boolean;
   resumeConversationTitle?: string | null;
@@ -1492,6 +1715,7 @@ export const ChatView = memo(function ChatView({
   activeArtifactId,
   onOpenRun,
   activeRunId,
+  onReplyToQuestion,
   onResumeConversation,
   resumeConversationBusy = false,
   resumeConversationTitle,
@@ -1645,7 +1869,7 @@ export const ChatView = memo(function ChatView({
     const block = item.block;
     const markerKind = block.type === 'user'
       ? 'user'
-      : block.type === 'text'
+      : block.type === 'text' || (block.type === 'tool_use' && block.tool === 'ask_user_question')
         ? 'assistant'
         : undefined;
     const absoluteIndex = messageIndexOffset + item.index;
@@ -1691,6 +1915,9 @@ export const ChatView = memo(function ChatView({
               activeRunId={activeRunId}
               onHydrateMessage={onHydrateMessage}
               hydratingMessageBlockIds={hydratingMessageBlockIds}
+              messages={messages}
+              messageIndex={item.index}
+              onReplyToQuestion={onReplyToQuestion}
             />
           );
         case 'subagent':
@@ -1723,7 +1950,7 @@ export const ChatView = memo(function ChatView({
         {el}
       </div>
     ) : null;
-  }, [activeArtifactId, activeRunId, contentVisibilityStyle, hydratingMessageBlockIds, isStreaming, messageIndexOffset, messages.length, onCheckpointMessage, onForkMessage, onHydrateMessage, onOpenArtifact, onOpenRun, onResumeConversation, onRewindMessage, renderItems.length, resumeConversationBusy, resumeConversationLabel, resumeConversationTitle]);
+  }, [activeArtifactId, activeRunId, contentVisibilityStyle, hydratingMessageBlockIds, isStreaming, messageIndexOffset, messages, messages.length, onCheckpointMessage, onForkMessage, onHydrateMessage, onOpenArtifact, onOpenRun, onReplyToQuestion, onResumeConversation, onRewindMessage, renderItems.length, resumeConversationBusy, resumeConversationLabel, resumeConversationTitle]);
 
   const visibleChunkRange = useMemo(() => {
     if (!shouldWindowTranscript || chunkLayouts.length === 0) {

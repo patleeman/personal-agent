@@ -39,6 +39,26 @@ describe('chat transcript items', () => {
     expect(isTraceConversationBlock(messages[1]!)).toBe(false);
   });
 
+  it('keeps ask_user_question tool blocks visible as standalone message items', () => {
+    const messages: MessageBlock[] = [
+      { type: 'text', ts: '2026-03-12T18:00:00.000Z', text: 'I need one clarification.' },
+      {
+        type: 'tool_use',
+        ts: '2026-03-12T18:00:01.000Z',
+        tool: 'ask_user_question',
+        input: { question: 'Which environment should I use?', options: ['staging', 'prod'] },
+        output: 'Asked the user: Which environment should I use?',
+        status: 'ok',
+      },
+    ];
+
+    const items = buildChatRenderItems(messages);
+
+    expect(items).toHaveLength(2);
+    expect(items.every((item) => item.type === 'message')).toBe(true);
+    expect(isTraceConversationBlock(messages[1]!)).toBe(false);
+  });
+
   it('summarizes trace categories, duration, and running/error state', () => {
     const summary = summarizeTraceCluster([
       { type: 'thinking', ts: '2026-03-12T18:00:00.000Z', text: 'Thinking…' },

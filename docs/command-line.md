@@ -328,11 +328,17 @@ The setup command moves syncable state under `<stateRoot>/sync`, configures the 
 
 Synced roots include:
 
-- `profiles/**`
-- `pi-agent/**` (durable sessions/state only)
-- `config/**` (setup seeds `config/config.json`; daemon/gateway/web config stay machine-local)
+- `profiles/*.json`
+- `agents/**`
+- `settings/**`
+- `models/**`
+- `skills/**`
+- `memory/**`
+- `tasks/**`
+- `projects/**`
+- `pi-agent/sessions/**`
 
-Machine-local runtime files such as auth, settings, generated prompt materialization, and `bin/**` live under `pi-agent-runtime/**` and are not synced.
+Machine-local runtime files such as auth, inbox state, conversation attention, deferred resumes, generated prompt materialization, and `bin/**` are not synced.
 
 See [Sync Guide](./sync.md).
 

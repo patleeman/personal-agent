@@ -15,7 +15,7 @@ import {
   ensureConversationAttentionBaselines,
   getActivityConversationLink,
   getConfigRoot,
-  getProfilesRoot,
+  getDurableProfilesDir,
   listProfileActivityEntries,
   listStoredSessions,
   loadProfileActivityReadState,
@@ -1255,7 +1255,7 @@ async function installCommand(args: string[]): Promise<number> {
   const profileName = parsed.local ? undefined : (parsed.profileName ?? resolveProfileName());
   const result = installPackageSource({
     repoRoot: getRepoRoot(),
-    profilesRoot: getProfilesRoot(),
+    profilesRoot: getDurableProfilesDir(),
     source: parsed.source,
     target,
     profileName,

@@ -1,25 +1,18 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
-import { getLocalProfileDir as getCanonicalLocalProfileDir } from '@personal-agent/core';
+import {
+  getDurableAgentsDir as getCanonicalDurableAgentsDir,
+  getDurableModelsDir as getCanonicalDurableModelsDir,
+  getDurableProfilesDir as getCanonicalDurableProfilesDir,
+  getDurableSettingsDir as getCanonicalDurableSettingsDir,
+  getDurableSkillsDir as getCanonicalDurableSkillsDir,
+  getLocalProfileDir as getCanonicalLocalProfileDir,
+} from '@personal-agent/core';
 import { homedir } from 'os';
-import { dirname, isAbsolute, join, resolve } from 'path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { composePromptCatalogDirectory } from './prompt-catalog.js';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
-
-function getDefaultStateRoot(): string {
-  const explicit = process.env.PERSONAL_AGENT_STATE_ROOT;
-  if (explicit && explicit.trim().length > 0) {
-    return resolve(expandHomePath(explicit.trim()));
-  }
-
-  const xdgStateHome = process.env.XDG_STATE_HOME;
-  if (xdgStateHome && xdgStateHome.trim().length > 0) {
-    return join(resolve(expandHomePath(xdgStateHome.trim())), 'personal-agent');
-  }
-
-  return join(homedir(), '.local', 'state', 'personal-agent');
-}
 
 export interface ProfileLayer {
   name: string;
@@ -144,22 +137,6 @@ function existingFile(path: string): string | undefined {
   return resolve(path);
 }
 
-function hasSharedLayerResources(agentDir: string): boolean {
-  const canonicalSharedEntries = [
-    'AGENTS.md',
-    'APPEND_SYSTEM.md',
-    'SYSTEM.md',
-    'settings.json',
-    'models.json',
-    'extensions',
-    'skills',
-    'prompts',
-    'themes',
-  ];
-
-  return canonicalSharedEntries.some((entry) => existsSync(join(agentDir, entry)));
-}
-
 function readSettingsObject(settingsPath: string): Record<string, unknown> {
   if (!existsSync(settingsPath)) {
     return {};
@@ -274,9 +251,13 @@ export function resolveLocalProfileSettingsFilePath(options: ResolveProfileOptio
   return join(localProfileDir, 'settings.json');
 }
 
+function settingsFileNameForProfile(profileName: string): string {
+  return profileName === 'shared' ? 'global.json' : `${profileName}.json`;
+}
+
 export function resolveProfileSettingsFilePath(profileName: string, options: ResolveProfileOptions = {}): string {
-  const resolvedProfile = resolveResourceProfile(profileName, options);
-  return join(resolvedProfile.profilesRoot, resolvedProfile.name, 'agent', 'settings.json');
+  validateProfileName(profileName || 'shared');
+  return join(getSettingsRoot(options), settingsFileNameForProfile(profileName || 'shared'));
 }
 
 function readConfiguredPackageEntries(settingsPath: string): unknown[] {
@@ -394,7 +375,27 @@ export function getProfilesRoot(options: ResolveProfileOptions = {}): string {
     return resolve(expandHomePath(explicit.trim()));
   }
 
-  return join(getDefaultStateRoot(), 'profiles');
+  return getCanonicalDurableProfilesDir();
+}
+
+function getSyncRootFromProfilesRoot(profilesRoot: string): string {
+  return dirname(resolve(profilesRoot));
+}
+
+function getAgentsRoot(options: ResolveProfileOptions = {}): string {
+  return getCanonicalDurableAgentsDir(getSyncRootFromProfilesRoot(getProfilesRoot(options)));
+}
+
+function getSettingsRoot(options: ResolveProfileOptions = {}): string {
+  return getCanonicalDurableSettingsDir(getSyncRootFromProfilesRoot(getProfilesRoot(options)));
+}
+
+function getModelsRoot(options: ResolveProfileOptions = {}): string {
+  return getCanonicalDurableModelsDir(getSyncRootFromProfilesRoot(getProfilesRoot(options)));
+}
+
+function getSkillsRoot(options: ResolveProfileOptions = {}): string {
+  return getCanonicalDurableSkillsDir(getSyncRootFromProfilesRoot(getProfilesRoot(options)));
 }
 
 function listProfilesInRoot(root: string): string[] {
@@ -403,9 +404,48 @@ function listProfilesInRoot(root: string): string[] {
   }
 
   return readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .filter((name) => existsSync(join(root, name, 'agent')));
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+    .map((entry) => entry.name.slice(0, -'.json'.length))
+    .filter((name) => /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/.test(name))
+    .sort((left, right) => left.localeCompare(right));
+}
+
+function rootHasSharedDurableResources(root: string, extensions: string[]): boolean {
+  if (!existsSync(root)) {
+    return false;
+  }
+
+  const stack = [root];
+  while (stack.length > 0) {
+    const current = stack.pop() as string;
+    const entries = readdirSync(current, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = join(current, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name === 'shared' || entry.name === 'global') {
+          return true;
+        }
+        stack.push(fullPath);
+        continue;
+      }
+
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      if (!extensions.some((extension) => entry.name.endsWith(extension))) {
+        continue;
+      }
+
+      const baseName = entry.name.replace(/\.[^.]+$/, '');
+      if (baseName === 'shared' || baseName === 'global') {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 export function listProfiles(options: ResolveProfileOptions = {}): string[] {
@@ -416,9 +456,13 @@ export function listProfiles(options: ResolveProfileOptions = {}): string[] {
   ]);
 
   const repoDefaultsAgentDir = existingDir(getRepoDefaultsAgentDir(repoRoot));
-  const mutableSharedAgentDir = existingDir(join(profilesRoot, 'shared', 'agent'));
-
-  if (repoDefaultsAgentDir || (mutableSharedAgentDir && hasSharedLayerResources(mutableSharedAgentDir))) {
+  if (
+    repoDefaultsAgentDir
+    || rootHasSharedDurableResources(getAgentsRoot(options), ['.md'])
+    || rootHasSharedDurableResources(getSettingsRoot(options), ['.json'])
+    || rootHasSharedDurableResources(getModelsRoot(options), ['.json'])
+    || existsSync(getSkillsRoot(options))
+  ) {
     profiles.add('shared');
   }
 
@@ -449,6 +493,166 @@ function collectLayerFiles(layers: ProfileLayer[], relativePath: string): string
     .filter((value): value is string => value !== undefined);
 
   return dedupe(files);
+}
+
+function isScopeAlias(value: string): boolean {
+  return value === 'shared' || value === 'global';
+}
+
+function normalizeProfilesSelector(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) {
+    const profiles = value
+      .filter((entry): entry is string => typeof entry === 'string')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+    return profiles.length > 0 ? profiles : undefined;
+  }
+
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return [value.trim()];
+  }
+
+  return undefined;
+}
+
+function parseSimpleFrontmatter(content: string): Record<string, unknown> {
+  const match = content.replace(/\r\n/g, '\n').match(/^---\n([\s\S]*?)\n---\n?/);
+  if (!match) {
+    return {};
+  }
+
+  const rawFrontmatter = match[1] ?? '';
+  const result: Record<string, unknown> = {};
+  const lines = rawFrontmatter.split('\n');
+
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index] ?? '';
+    const keyValue = line.match(/^([\w-]+):\s*(.*)$/);
+    if (!keyValue) {
+      index += 1;
+      continue;
+    }
+
+    const key = keyValue[1] as string;
+    const value = (keyValue[2] ?? '').trim();
+
+    if (value.length === 0) {
+      const items: string[] = [];
+      index += 1;
+      while (index < lines.length && /^\s+-\s+/.test(lines[index] ?? '')) {
+        items.push((lines[index] ?? '').replace(/^\s+-\s+/, '').trim().replace(/^["']|["']$/g, ''));
+        index += 1;
+      }
+      result[key] = items;
+      continue;
+    }
+
+    if (value.startsWith('[') && value.endsWith(']')) {
+      result[key] = value
+        .slice(1, -1)
+        .split(',')
+        .map((item) => item.trim().replace(/^["']|["']$/g, ''))
+        .filter((item) => item.length > 0);
+      index += 1;
+      continue;
+    }
+
+    result[key] = value.replace(/^["']|["']$/g, '');
+    index += 1;
+  }
+
+  return result;
+}
+
+function fileDirectScopeApplies(baseName: string, profileName: string, knownProfiles: Set<string>): boolean | undefined {
+  if (isScopeAlias(baseName) || baseName.startsWith('shared-') || baseName.startsWith('global-')) {
+    return true;
+  }
+
+  if (baseName === profileName || baseName.startsWith(`${profileName}-`)) {
+    return true;
+  }
+
+  for (const knownProfile of knownProfiles) {
+    if (baseName === knownProfile || baseName.startsWith(`${knownProfile}-`)) {
+      return false;
+    }
+  }
+
+  return undefined;
+}
+
+function relativePathAppliesToProfile(root: string, filePath: string, profileName: string, knownProfiles: Set<string>): boolean {
+  const relativePath = relative(root, filePath).replace(/\\/g, '/');
+  const segments = relativePath.split('/').filter((segment) => segment.length > 0);
+  const firstSegment = segments[0];
+
+  if (firstSegment && segments.length > 1 && (knownProfiles.has(firstSegment) || isScopeAlias(firstSegment))) {
+    return isScopeAlias(firstSegment) || firstSegment === profileName;
+  }
+
+  const baseName = basename(filePath).replace(/\.[^.]+$/, '');
+  const directScope = fileDirectScopeApplies(baseName, profileName, knownProfiles);
+  if (directScope !== undefined) {
+    return directScope;
+  }
+
+  return true;
+}
+
+function collectScopedFiles(root: string, extensions: string[], profileName: string, knownProfiles: Set<string>): string[] {
+  if (!existsSync(root)) {
+    return [];
+  }
+
+  const output: string[] = [];
+  const stack = [resolve(root)];
+
+  while (stack.length > 0) {
+    const current = stack.pop() as string;
+    const entries = readdirSync(current, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = join(current, entry.name);
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+        continue;
+      }
+
+      if (!entry.isFile()) {
+        continue;
+      }
+
+      if (!extensions.some((extension) => entry.name.endsWith(extension))) {
+        continue;
+      }
+
+      if (relativePathAppliesToProfile(root, fullPath, profileName, knownProfiles)) {
+        output.push(fullPath);
+      }
+    }
+  }
+
+  output.sort();
+  return dedupe(output);
+}
+
+function skillDefinitionAppliesToProfile(skillFile: string, root: string, profileName: string, knownProfiles: Set<string>): boolean {
+  const frontmatter = parseSimpleFrontmatter(readFileSync(skillFile, 'utf-8'));
+  const selector = normalizeProfilesSelector(frontmatter.profiles);
+  if (!selector || selector.length === 0) {
+    return relativePathAppliesToProfile(root, skillFile, profileName, knownProfiles);
+  }
+
+  return selector.some((entry) => entry === profileName || isScopeAlias(entry));
+}
+
+function collectScopedSkillDirs(root: string, profileName: string, knownProfiles: Set<string>): string[] {
+  const skillFiles = collectScopedFiles(root, ['.md'], profileName, knownProfiles)
+    .filter((filePath) => basename(filePath) === 'SKILL.md');
+
+  return dedupe(skillFiles.filter((filePath) => skillDefinitionAppliesToProfile(filePath, root, profileName, knownProfiles)).map((filePath) => dirname(filePath)));
 }
 
 function isExtensionEntrypointFile(name: string): boolean {
@@ -543,12 +747,34 @@ export function resolveResourceProfile(
 
   const repoRoot = getRepoRoot(options.repoRoot);
   const profilesRoot = getProfilesRoot(options);
+  const syncRoot = getSyncRootFromProfilesRoot(profilesRoot);
+  const declaredProfiles = listProfilesInRoot(profilesRoot);
+  if (profileName !== 'shared' && !declaredProfiles.includes(profileName)) {
+    throw new Error(
+      `Profile not found: ${profileName}. Checked ${join(profilesRoot, `${profileName}.json`)}`,
+    );
+  }
+
+  const knownProfiles = new Set<string>([
+    ...declaredProfiles,
+    profileName,
+    'shared',
+  ]);
 
   const repoDefaultsAgentDir = existingDir(getRepoDefaultsAgentDir(repoRoot));
-  const sharedAgentDirCandidate = existingDir(join(profilesRoot, 'shared', 'agent'));
-  const mutableSharedAgentDir = sharedAgentDirCandidate && hasSharedLayerResources(sharedAgentDirCandidate)
-    ? sharedAgentDirCandidate
-    : undefined;
+  const localBase = resolveLocalProfileDir(options);
+  const localAgentDir = existingDir(join(localBase, 'agent')) ?? existingDir(localBase);
+
+  const agentsRoot = getAgentsRoot(options);
+  const settingsRoot = getSettingsRoot(options);
+  const modelsRoot = getModelsRoot(options);
+  const skillsRoot = getSkillsRoot(options);
+
+  const durableAgentsFiles = collectScopedFiles(agentsRoot, ['.md'], profileName, knownProfiles)
+    .filter((filePath) => basename(filePath) !== 'SYSTEM.md' && basename(filePath) !== 'APPEND_SYSTEM.md');
+  const durableSettingsFiles = collectScopedFiles(settingsRoot, ['.json'], profileName, knownProfiles);
+  const durableModelsFiles = collectScopedFiles(modelsRoot, ['.json'], profileName, knownProfiles);
+  const durableSkillDirs = collectScopedSkillDirs(skillsRoot, profileName, knownProfiles);
 
   const layers: ProfileLayer[] = [];
 
@@ -556,49 +782,44 @@ export function resolveResourceProfile(
     layers.push({ name: 'defaults', agentDir: repoDefaultsAgentDir });
   }
 
-  if (mutableSharedAgentDir) {
-    layers.push({ name: 'shared', agentDir: resolve(mutableSharedAgentDir) });
+  if (
+    durableAgentsFiles.length > 0
+    || durableSettingsFiles.length > 0
+    || durableModelsFiles.length > 0
+    || durableSkillDirs.length > 0
+    || existsSync(join(profilesRoot, `${profileName}.json`))
+    || profileName === 'shared'
+  ) {
+    layers.push({ name: 'durable', agentDir: syncRoot });
   }
 
-  if (layers.length === 0) {
-    throw new Error(
-      `Shared defaults not found. Checked ${getRepoDefaultsAgentDir(repoRoot)} and ${join(profilesRoot, 'shared', 'agent')}`,
-    );
-  }
-
-  if (profileName !== 'shared') {
-    const overlayDir = existingDir(join(profilesRoot, profileName, 'agent'));
-
-    if (!overlayDir) {
-      throw new Error(
-        `Profile not found: ${profileName}. Checked ${join(profilesRoot, profileName, 'agent')}`,
-      );
-    }
-
-    layers.push({ name: profileName, agentDir: resolve(overlayDir) });
-  }
-
-  const localBase = resolveLocalProfileDir(options);
-  const localAgentDir = existingDir(join(localBase, 'agent')) ?? existingDir(localBase);
   if (localAgentDir) {
     layers.push({ name: 'local', agentDir: localAgentDir });
   }
 
+  if (layers.length === 0) {
+    throw new Error(
+      `Shared defaults not found. Checked ${getRepoDefaultsAgentDir(repoRoot)} and ${syncRoot}`,
+    );
+  }
+
+  const localLayers = layers.filter((layer) => layer.name === 'local');
   const systemPromptFile = [...layers]
     .reverse()
     .map((layer) => existingFile(join(layer.agentDir, 'SYSTEM.md')))
     .find((file): file is string => file !== undefined);
 
-  const resourceLayers = layers.filter((layer) => layer.name !== 'defaults');
-
   const extensionDirs = dedupe([
-    ...collectLayerDirs(resourceLayers, 'extensions'),
+    ...collectLayerDirs(localLayers, 'extensions'),
     ...collectRepoInternalExtensionDirs(repoRoot),
   ]);
-  const skillDirs = collectLayerDirs(resourceLayers, 'skills');
-  const promptDirs = collectLayerDirs(resourceLayers, 'prompts');
+  const skillDirs = dedupe([
+    ...durableSkillDirs,
+    ...collectLayerDirs(localLayers, 'skills'),
+  ]);
+  const promptDirs = collectLayerDirs(localLayers, 'prompts');
   const themeDirs = dedupe([
-    ...collectLayerDirs(resourceLayers, 'themes'),
+    ...collectLayerDirs(localLayers, 'themes'),
     ...collectRepoInternalThemeDirs(repoRoot),
   ]);
 
@@ -618,11 +839,23 @@ export function resolveResourceProfile(
     promptEntries,
     themeDirs,
     themeEntries,
-    agentsFiles: collectLayerFiles(layers, 'AGENTS.md'),
-    appendSystemFiles: collectLayerFiles(layers, 'APPEND_SYSTEM.md'),
+    agentsFiles: dedupe([
+      ...collectLayerFiles(repoDefaultsAgentDir ? [{ name: 'defaults', agentDir: repoDefaultsAgentDir }] : [], 'AGENTS.md'),
+      ...durableAgentsFiles,
+      ...collectLayerFiles(localLayers, 'AGENTS.md'),
+    ]),
+    appendSystemFiles: collectLayerFiles(layers.filter((layer) => layer.name !== 'durable'), 'APPEND_SYSTEM.md'),
     systemPromptFile,
-    settingsFiles: collectLayerFiles(layers, 'settings.json'),
-    modelsFiles: collectLayerFiles(layers, 'models.json'),
+    settingsFiles: dedupe([
+      ...collectLayerFiles(repoDefaultsAgentDir ? [{ name: 'defaults', agentDir: repoDefaultsAgentDir }] : [], 'settings.json'),
+      ...durableSettingsFiles,
+      ...collectLayerFiles(localLayers, 'settings.json'),
+    ]),
+    modelsFiles: dedupe([
+      ...collectLayerFiles(repoDefaultsAgentDir ? [{ name: 'defaults', agentDir: repoDefaultsAgentDir }] : [], 'models.json'),
+      ...durableModelsFiles,
+      ...collectLayerFiles(localLayers, 'models.json'),
+    ]),
   };
 }
 

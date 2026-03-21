@@ -6,7 +6,7 @@ import {
   readProject,
   writeProject,
 } from './project-artifacts.js';
-import { getProfilesRoot as getRuntimeProfilesRoot } from './runtime/paths.js';
+import { getDurableProjectsDir } from './runtime/paths.js';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 const PROJECT_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
@@ -95,6 +95,9 @@ export function listResolvedProjectRepoRoots(options: ListResolvedProjectRepoRoo
         profile: options.profile,
         projectId,
       }).projectFile);
+      if (project.ownerProfile !== options.profile) {
+        continue;
+      }
       const projectRepoRoot = resolveProjectRepoRoot({
         repoRoot: options.repoRoot,
         projectRepoRoot: project.repoRoot,
@@ -144,7 +147,7 @@ function formatIsoTimestamp(date: Date): string {
 
 export function resolveProfileProjectsDir(options: ResolveProjectOptions): string {
   validateProfileName(options.profile);
-  return join(getRuntimeProfilesRoot(), options.profile, 'agent', 'projects');
+  return getDurableProjectsDir();
 }
 
 export function resolveProjectPaths(options: ResolveProjectPathsOptions): ProjectPaths {
@@ -183,6 +186,18 @@ export function listProjectIds(options: ResolveProjectOptions): string[] {
   return entries
     .filter((entry) => entry.isDirectory() && PROJECT_ID_PATTERN.test(entry.name))
     .map((entry) => entry.name)
+    .filter((projectId) => {
+      try {
+        const project = readProject(resolveProjectPaths({
+          repoRoot: options.repoRoot,
+          profile: options.profile,
+          projectId,
+        }).projectFile);
+        return project.ownerProfile === options.profile;
+      } catch {
+        return true;
+      }
+    })
     .sort((left, right) => left.localeCompare(right));
 }
 
@@ -237,6 +252,7 @@ export function createProjectScaffold(
     paths.projectFile,
     createInitialProject({
       id: options.projectId,
+      ownerProfile: options.profile,
       title,
       description,
       createdAt: timestamp,
@@ -253,5 +269,13 @@ export function createProjectScaffold(
 
 export function projectExists(options: ResolveProjectPathsOptions): boolean {
   const paths = resolveProjectPaths(options);
-  return existsSync(paths.projectDir) && statSync(paths.projectDir).isDirectory();
+  if (!(existsSync(paths.projectDir) && statSync(paths.projectDir).isDirectory())) {
+    return false;
+  }
+
+  try {
+    return readProject(paths.projectFile).ownerProfile === options.profile;
+  } catch {
+    return false;
+  }
 }

@@ -22,12 +22,16 @@ Common repo-managed examples:
 - `extensions/**`
 - `themes/**`
 
-Mutable profile state defaults to the state home:
+Mutable durable resources default to the synced durable-state home:
 
-- `~/.local/state/personal-agent/profiles/<profile>/agent/AGENTS.md`
-- `~/.local/state/personal-agent/profiles/<profile>/agent/tasks/*.task.md`
-- `~/.local/state/personal-agent/profiles/<profile>/agent/projects/<projectId>/PROJECT.yaml`
-- shared global memories at `~/.local/state/personal-agent/profiles/_memory/<memory-name>/MEMORY.md`
+- `~/.local/state/personal-agent/sync/profiles/*.json`
+- `~/.local/state/personal-agent/sync/agents/**`
+- `~/.local/state/personal-agent/sync/settings/**`
+- `~/.local/state/personal-agent/sync/models/**`
+- `~/.local/state/personal-agent/sync/skills/**`
+- `~/.local/state/personal-agent/sync/memory/**`
+- `~/.local/state/personal-agent/sync/tasks/**`
+- `~/.local/state/personal-agent/sync/projects/**`
 
 ### Local runtime state
 
@@ -39,10 +43,10 @@ Common examples:
 
 - `~/.local/state/personal-agent/pi-agent-runtime/auth.json` (always machine-local)
 - `~/.local/state/personal-agent/pi-agent-runtime/AGENTS.md` (generated runtime prompt materialization, machine-local)
-- `~/.local/state/personal-agent/pi-agent/sessions/**` (synced when sync is enabled)
+- `~/.local/state/personal-agent/pi-agent/sessions/**` (optionally synced when sync is enabled)
 - `~/.local/state/personal-agent/daemon/**` (machine-local)
 - `~/.local/state/personal-agent/gateway/**` (machine-local)
-- inbox activity and read-state under `~/.local/state/personal-agent/pi-agent/state/inbox/**` (synced when sync is enabled)
+- inbox activity and read-state under `~/.local/state/personal-agent/pi-agent/state/inbox/**` (machine-local)
 - conversation-local link state such as conversation ↔ referenced project bindings
 
 Use local runtime state for:
@@ -107,13 +111,13 @@ See [Projects](./projects.md).
 
 ### Memory
 
-Memory is durable agent knowledge plus profile-specific behavior overlays.
+Memory is durable agent knowledge plus profile-aware behavior overlays.
 
 Use it for:
 
-- stable behavior rules in profile `AGENTS.md`
-- reusable workflows in profile `skills/`
-- shared durable notes, briefs, specs, and references in `profiles/_memory/<memory-name>/MEMORY.md` plus package-local `references/`
+- durable behavior fragments in `sync/agents/**`
+- reusable workflows in `sync/skills/**`
+- durable notes, briefs, specs, and references in `sync/memory/<memory-name>/MEMORY.md` plus package-local `references/`
 
 Memory is not the same as project state.
 

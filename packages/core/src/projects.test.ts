@@ -31,16 +31,17 @@ afterEach(async () => {
 function createTempRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'personal-agent-projects-'));
   tempDirs.push(dir);
-  process.env.PERSONAL_AGENT_PROFILES_ROOT = join(dir, 'profiles');
+  process.env.PERSONAL_AGENT_STATE_ROOT = dir;
+  process.env.PERSONAL_AGENT_PROFILES_ROOT = join(dir, 'sync', 'profiles');
   return dir;
 }
 
 describe('resolveProfileProjectsDir', () => {
-  it('returns the profile-scoped projects directory', () => {
+  it('returns the durable projects directory', () => {
     const repo = createTempRepo();
     const result = resolveProfileProjectsDir({ repoRoot: repo, profile: 'datadog' });
 
-    expect(result).toBe(join(repo, 'profiles', 'datadog', 'agent', 'projects'));
+    expect(result).toBe(join(repo, 'sync', 'projects'));
   });
 
   it('rejects invalid profile names', () => {
@@ -81,7 +82,7 @@ describe('resolveProjectPaths', () => {
       projectId: 'artifact-model',
     });
 
-    expect(paths.projectDir).toBe(join(repo, 'profiles', 'datadog', 'agent', 'projects', 'artifact-model'));
+    expect(paths.projectDir).toBe(join(repo, 'sync', 'projects', 'artifact-model'));
     expect(paths.projectFile).toBe(join(paths.projectDir, 'PROJECT.yaml'));
     expect(paths.briefFile).toBe(join(paths.projectDir, 'BRIEF.md'));
     expect(paths.tasksDir).toBe(join(paths.projectDir, 'tasks'));
@@ -99,7 +100,7 @@ describe('resolveProjectPaths', () => {
       taskId: 'implement-activity',
     });
 
-    expect(path).toBe(join(repo, 'profiles', 'datadog', 'agent', 'projects', 'artifact-model', 'tasks', 'implement-activity.yaml'));
+    expect(path).toBe(join(repo, 'sync', 'projects', 'artifact-model', 'tasks', 'implement-activity.yaml'));
   });
 });
 
@@ -162,7 +163,7 @@ describe('createProjectScaffold', () => {
     });
 
     expect(result.writtenFiles).toEqual([
-      join(repo, 'profiles', 'datadog', 'agent', 'projects', 'artifact-model', 'PROJECT.yaml'),
+      join(repo, 'sync', 'projects', 'artifact-model', 'PROJECT.yaml'),
     ]);
 
     expect(existsSync(result.paths.projectDir)).toBe(true);
@@ -173,6 +174,7 @@ describe('createProjectScaffold', () => {
 
     const projectFile = readFileSync(result.paths.projectFile, 'utf-8');
     expect(projectFile).toContain('id: artifact-model');
+    expect(projectFile).toContain('ownerProfile: datadog');
     expect(projectFile).toContain('title: Artifact model');
     expect(projectFile).toContain('description: Create a durable artifact model for ongoing work.');
     expect(projectFile).toContain('milestones: []');

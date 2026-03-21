@@ -143,6 +143,59 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('<code');
   });
 
+  it('renders ask_user_question tool calls as dedicated question cards with quick replies', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'tool_use',
+        ts: '2026-03-11T18:00:00.000Z',
+        tool: 'ask_user_question',
+        input: {
+          question: 'Which environment should I use?',
+          details: 'Pick one so I can continue.',
+          options: ['staging', 'prod'],
+        },
+        output: 'Asked the user: Which environment should I use?',
+        status: 'ok',
+      }],
+      onReplyToQuestion: () => undefined,
+    }));
+
+    expect(html).toContain('Question for you');
+    expect(html).toContain('Which environment should I use?');
+    expect(html).toContain('Pick one so I can continue.');
+    expect(html).toContain('staging');
+    expect(html).toContain('prod');
+    expect(html).toContain('Reply in Composer');
+    expect(html).not.toContain('Internal work');
+  });
+
+  it('shows the first user reply on answered question cards', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [
+        {
+          type: 'tool_use',
+          ts: '2026-03-11T18:00:00.000Z',
+          tool: 'ask_user_question',
+          input: {
+            question: 'Which environment should I use?',
+          },
+          output: 'Asked the user: Which environment should I use?',
+          status: 'ok',
+        },
+        {
+          type: 'user',
+          ts: '2026-03-11T18:00:05.000Z',
+          text: 'Use staging for this deploy.',
+        },
+      ],
+    }));
+
+    expect(html).toContain('answered');
+    expect(html).toContain('Your reply');
+    expect(html).toContain('Use staging for this deploy.');
+    expect(html).not.toContain('Reply in Composer');
+  });
+
   it('renders markdown footnotes with isolated ids per message', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: [

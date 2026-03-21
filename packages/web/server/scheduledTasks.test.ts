@@ -83,7 +83,7 @@ describe('scheduledTasks', () => {
 
     const validFilePath = join(tasksDir, 'daily.task.md');
     const invalidFilePath = join(tasksDir, 'broken.task.md');
-    writeFileSync(validFilePath, `---\ncron: "0 9 * * *"\n---\nDaily task\n`);
+    writeFileSync(validFilePath, `---\ncron: "0 9 * * *"\nprofile: "assistant"\n---\nDaily task\n`);
     writeFileSync(invalidFilePath, `---\ncron: "0 9 * *"\n---\nBroken task\n`);
 
     const daemonDir = join(process.env.PERSONAL_AGENT_STATE_ROOT!, 'daemon');

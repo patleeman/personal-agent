@@ -1,8 +1,10 @@
 import { copyFile, mkdir, stat } from 'fs/promises';
-import { cpSync, existsSync, lstatSync, readlinkSync, renameSync, rmSync, symlinkSync } from 'fs';
+import { cpSync, existsSync, lstatSync, readlinkSync, readdirSync, renameSync, rmSync, symlinkSync } from 'fs';
 import { homedir } from 'os';
 import { dirname, join, relative, resolve } from 'path';
 import {
+  getDurablePiAgentDir,
+  getDurableSessionsDir,
   getPiAgentRuntimeDir,
   getPiAgentStateDir,
   type RuntimeStatePaths,
@@ -106,24 +108,68 @@ function removeStaleRuntimeArtifactsFromStateDir(agentStateDir: string): void {
   }
 }
 
+function migrateLegacySessionsToDurableDir(legacySessionsDir: string, durableSessionsDir: string): void {
+  const legacyStats = lstatSyncSafe(legacySessionsDir);
+  if (!legacyStats || legacyStats.isSymbolicLink()) {
+    return;
+  }
+
+  if (!legacyStats.isDirectory()) {
+    rmSync(legacySessionsDir, { recursive: true, force: true });
+    return;
+  }
+
+  for (const entryName of readdirSync(legacySessionsDir)) {
+    const sourcePath = join(legacySessionsDir, entryName);
+    const targetPath = join(durableSessionsDir, entryName);
+    const targetStats = lstatSyncSafe(targetPath);
+
+    if (!targetStats) {
+      try {
+        renameSync(sourcePath, targetPath);
+      } catch {
+        cpSync(sourcePath, targetPath, { recursive: true, force: true });
+        rmSync(sourcePath, { recursive: true, force: true });
+      }
+      continue;
+    }
+
+    const sourceStats = lstatSyncSafe(sourcePath);
+    if (sourceStats?.isDirectory() && targetStats.isDirectory()) {
+      migrateLegacySessionsToDurableDir(sourcePath, targetPath);
+      rmSync(sourcePath, { recursive: true, force: true });
+      continue;
+    }
+
+    rmSync(sourcePath, { recursive: true, force: true });
+  }
+
+  if (readdirSync(legacySessionsDir).length === 0) {
+    rmSync(legacySessionsDir, { recursive: true, force: true });
+  }
+}
+
 export async function preparePiAgentDir(
   options: PreparePiAgentDirOptions,
 ): Promise<PreparePiAgentDirResult> {
   const legacyAgentDir = options.legacyAgentDir ?? join(homedir(), '.pi', 'agent');
   const copyLegacyAuth = options.copyLegacyAuth ?? true;
 
-  const agentStateDir = getPiAgentStateDir(options.statePaths.root);
+  const legacyLocalPiAgentDir = getPiAgentStateDir(options.statePaths.root);
+  const durablePiAgentDir = getDurablePiAgentDir(options.statePaths.root);
+  const durableSessionsDir = getDurableSessionsDir(options.statePaths.root);
   const agentDir = getPiAgentRuntimeDir(options.statePaths.root);
   const authFile = join(agentDir, 'auth.json');
   const sessionsDir = join(agentDir, 'sessions');
-  const durableSessionsDir = join(agentStateDir, 'sessions');
 
-  await mkdir(agentStateDir, { recursive: true, mode: 0o700 });
+  await mkdir(legacyLocalPiAgentDir, { recursive: true, mode: 0o700 });
+  await mkdir(durablePiAgentDir, { recursive: true, mode: 0o700 });
   await mkdir(durableSessionsDir, { recursive: true, mode: 0o700 });
   await mkdir(agentDir, { recursive: true, mode: 0o700 });
 
-  migrateRuntimeArtifactsToLocalAgentDir(agentStateDir, agentDir);
-  removeStaleRuntimeArtifactsFromStateDir(agentStateDir);
+  migrateRuntimeArtifactsToLocalAgentDir(durablePiAgentDir, agentDir);
+  removeStaleRuntimeArtifactsFromStateDir(durablePiAgentDir);
+  migrateLegacySessionsToDurableDir(join(legacyLocalPiAgentDir, 'sessions'), durableSessionsDir);
   ensureDirectorySymlink(sessionsDir, durableSessionsDir);
 
   let copiedLegacyAuth = false;

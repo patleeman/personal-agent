@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'fs';
 import { basename, dirname, join, resolve } from 'path';
 import { parseDocument, stringify } from 'yaml';
-import { getProfilesRoot } from './runtime/paths.js';
+import { getDurableMemoryDir, getDurableProfilesDir } from './runtime/paths.js';
 
 export interface ResolveMemoryDocsOptions {
   profilesRoot?: string;
@@ -18,11 +18,11 @@ export interface LegacyMemoryMigrationResult {
 }
 
 function resolveProfilesRootForMemory(options: ResolveMemoryDocsOptions = {}): string {
-  return resolve(options.profilesRoot ?? getProfilesRoot());
+  return resolve(options.profilesRoot ?? getDurableProfilesDir());
 }
 
 export function getMemoryDocsDir(options: ResolveMemoryDocsOptions = {}): string {
-  return join(resolveProfilesRootForMemory(options), '_memory');
+  return getDurableMemoryDir(dirname(resolveProfilesRootForMemory(options)));
 }
 
 function listLegacyProfileMemoryDirs(profilesRoot: string): string[] {

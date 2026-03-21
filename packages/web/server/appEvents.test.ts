@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { getConfigRoot, getPiAgentStateDir, getStateRoot } from '@personal-agent/core';
+import { getConfigRoot, getDurableSessionsDir, getStateRoot } from '@personal-agent/core';
 import type { AppEvent } from './appEvents.js';
 import { startAppEventMonitor, stopAppEventMonitor, subscribeAppEvents } from './appEvents.js';
 
@@ -57,7 +57,7 @@ afterEach(async () => {
 describe('app event monitor', () => {
   it('invalidates sessions when a session file changes', async () => {
     const repoRoot = createTempDir('pa-web-app-events-repo-');
-    const sessionsDir = join(getPiAgentStateDir(), 'sessions');
+    const sessionsDir = getDurableSessionsDir();
     const taskStateFile = join(getStateRoot(), 'daemon', 'task-state.json');
     const profileConfigFile = join(getConfigRoot(), 'profile.json');
     mkdirSync(sessionsDir, { recursive: true });
@@ -90,7 +90,7 @@ describe('app event monitor', () => {
 
   it('rebuilds watches and invalidates all topics when the active profile changes', async () => {
     const repoRoot = createTempDir('pa-web-app-events-repo-');
-    const sessionsDir = join(getPiAgentStateDir(), 'sessions');
+    const sessionsDir = getDurableSessionsDir();
     const taskStateFile = join(getStateRoot(), 'daemon', 'task-state.json');
     const profileConfigFile = join(getConfigRoot(), 'profile.json');
     mkdirSync(sessionsDir, { recursive: true });

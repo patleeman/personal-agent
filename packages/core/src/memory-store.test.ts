@@ -14,9 +14,11 @@ import {
 const tempDirs: string[] = [];
 
 function createTempDir(prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
-  tempDirs.push(dir);
-  return dir;
+  const root = mkdtempSync(join(tmpdir(), prefix));
+  const profilesRoot = join(root, 'sync', 'profiles');
+  mkdirSync(profilesRoot, { recursive: true });
+  tempDirs.push(root);
+  return profilesRoot;
 }
 
 function writeFile(path: string, content: string): void {
@@ -25,7 +27,7 @@ function writeFile(path: string, content: string): void {
 }
 
 function memoryPath(profilesRoot: string, memoryId: string): string {
-  return join(profilesRoot, '_memory', memoryId, 'MEMORY.md');
+  return join(profilesRoot, '..', 'memory', memoryId, 'MEMORY.md');
 }
 
 afterEach(async () => {
@@ -60,7 +62,7 @@ Hub doc.
     );
 
     writeFile(
-      join(profilesRoot, '_memory', 'personal-agent', 'references', 'web-ui.md'),
+      join(profilesRoot, '..', 'memory', 'personal-agent', 'references', 'web-ui.md'),
       `---
 name: web-ui
 description: Durable UI notes.
@@ -78,7 +80,7 @@ Keep the right rail visible and resizable.
     );
 
     writeFile(
-      join(profilesRoot, '_memory', 'personal-agent', 'references', 'state-model.md'),
+      join(profilesRoot, '..', 'memory', 'personal-agent', 'references', 'state-model.md'),
       `# Project state model
 
 Keep planning state durable.
@@ -99,7 +101,7 @@ Keep planning state durable.
     });
     expect(hub?.referencePaths).toHaveLength(2);
 
-    const references = loadMemoryPackageReferences(join(profilesRoot, '_memory', 'personal-agent'));
+    const references = loadMemoryPackageReferences(join(profilesRoot, '..', 'memory', 'personal-agent'));
     expect(references.map((reference) => reference.title)).toEqual(['Web UI preferences', 'Project state model']);
     expect(references[0]).toMatchObject({
       relativePath: 'references/web-ui.md',

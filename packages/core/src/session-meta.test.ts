@@ -4,6 +4,7 @@ import { tmpdir } from 'os';
 import { dirname, join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { listStoredSessions } from './session-meta.js';
+import { getDurableSessionsDir } from './runtime/paths.js';
 
 const tempDirs: string[] = [];
 
@@ -23,6 +24,12 @@ function writeFile(path: string, content: string): void {
 }
 
 describe('listStoredSessions', () => {
+  const originalEnv = process.env;
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
   it('reads session metadata from jsonl files newest-first by last activity', () => {
     const sessionsDir = createTempDir('personal-agent-session-meta-');
 
@@ -87,6 +94,29 @@ describe('listStoredSessions', () => {
       id: 'conv-named',
       title: 'Generated session title',
       messageCount: 2,
+    }));
+  });
+
+  it('defaults to the synced durable sessions directory for the active state root', () => {
+    const stateRoot = createTempDir('personal-agent-session-meta-state-');
+    process.env = {
+      ...originalEnv,
+      PERSONAL_AGENT_STATE_ROOT: stateRoot,
+    };
+
+    const sessionsDir = getDurableSessionsDir(stateRoot);
+    writeFile(
+      join(sessionsDir, '--Users-patrick-project', '2026-03-12T12-09-00-000Z_synced.jsonl'),
+      [
+        JSON.stringify({ type: 'session', id: 'conv-synced', timestamp: '2026-03-12T12:09:00.000Z', cwd: '/Users/patrick/project' }),
+        JSON.stringify({ type: 'message', timestamp: '2026-03-12T12:09:01.000Z', message: { role: 'user', content: [{ type: 'text', text: 'Loaded from synced root' }] } }),
+      ].join('\n') + '\n',
+    );
+
+    expect(listStoredSessions()[0]).toEqual(expect.objectContaining({
+      id: 'conv-synced',
+      file: join(sessionsDir, '--Users-patrick-project', '2026-03-12T12-09-00-000Z_synced.jsonl'),
+      title: 'Loaded from synced root',
     }));
   });
 });

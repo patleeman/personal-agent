@@ -16,11 +16,11 @@ Most users and agents should think about them this way:
 
 ## Skills
 
-Skills live in layered profile directories such as:
+Skills live in layered durable resource directories such as:
 
-- `~/.local/state/personal-agent/profiles/<profile>/agent/skills/`
+- `~/.local/state/personal-agent/sync/skills/`
 - local overlay skill dirs
-- optional shared-profile skill dirs when provided from mutable state
+- repo defaults and built-in runtime capabilities
 
 A skill is the right place for:
 

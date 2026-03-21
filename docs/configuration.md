@@ -27,7 +27,7 @@ Useful command:
 pa profile use assistant
 ```
 
-If git sync is set up, this file is typically a symlink into `~/.local/state/personal-agent/sync/config/config.json` so the default profile can sync across machines.
+This file is machine-local runtime config and is intentionally not part of the synced durable surface.
 
 ### `~/.local/state/personal-agent/config/daemon.json`
 
@@ -35,9 +35,9 @@ This configures the background daemon.
 
 Common reasons to edit it:
 
-- change task discovery path
 - change timeouts or retry behavior
 - change socket or queue settings
+- override task discovery only if you intentionally want a non-default task dir
 
 Example:
 
@@ -47,7 +47,7 @@ Example:
   "modules": {
     "tasks": {
       "enabled": true,
-      "taskDir": "~/.local/state/personal-agent/profiles/assistant/agent/tasks",
+      "taskDir": "~/.local/state/personal-agent/sync/tasks",
       "tickIntervalSeconds": 30,
       "maxRetries": 3,
       "defaultTimeoutSeconds": 1800
@@ -105,24 +105,22 @@ Because SSH destinations and path mappings are often machine-specific, this file
 
 ## Profile resource configuration
 
-Profile resources resolve from repo defaults plus mutable profile homes:
+Profile resources resolve from repo defaults plus synced durable roots:
 
 - repo shared defaults from `defaults/agent`
 - repo built-ins from `extensions/` and `themes/`
-- mutable profile resources from `~/.local/state/personal-agent/profiles/<profile>/agent` (including `skills/`)
+- synced durable resources under `~/.local/state/personal-agent/sync/`
 
-Common files:
+Common durable roots:
 
-- `settings.json`
-- `models.json`
-- `AGENTS.md`
-- `skills/`
+- `profiles/*.json`
+- `agents/**`
+- `settings/**`
+- `models/**`
+- `skills/**`
+- `memory/**`
 - `tasks/`
 - `projects/`
-- `themes/`
-- `extensions/`
-
-Shared global memories live at `~/.local/state/personal-agent/profiles/_memory/<memory-name>/MEMORY.md`.
 
 See [Profiles, Memory, and Skills](./profiles-memory-skills.md).
 
@@ -131,16 +129,15 @@ See [Profiles, Memory, and Skills](./profiles-memory-skills.md).
 Profile resources resolve in this order:
 
 1. repo `defaults/agent`
-2. mutable shared profile `~/.local/state/personal-agent/profiles/shared/agent` (when present)
-3. mutable profiles root `~/.local/state/personal-agent/profiles/<selected-profile>/agent`
-4. local overlay (`~/.local/state/personal-agent/config/local` by default)
+2. synced durable resources under `~/.local/state/personal-agent/sync/`
+3. local overlay (`~/.local/state/personal-agent/config/local` by default)
 
 Higher layers override lower layers where that makes sense.
 
 A simple way to think about it:
 
-- `shared` = common defaults
-- profile = persona or context-specific overrides
+- repo defaults = common built-in defaults
+- synced durable roots = shared or profile-targeted overrides
 - local overlay = machine-local additions
 
 ## Runtime state location
@@ -170,20 +167,22 @@ Canonical state-home layout:
 ~/.local/state/personal-agent/
 ├── sync/                      # git-synced durable state
 │   ├── profiles/
-│   │   ├── _memory/
-│   │   └── <profile>/agent/
-│   │       ├── projects/
-│   │       ├── tasks/
-│   │       └── activity/
-│   ├── pi-agent/
-│   │   ├── sessions/
-│   │   └── state/
-│   └── config/
-│       └── config.json
-├── profiles -> sync/profiles          # compatibility symlink
-├── pi-agent -> sync/pi-agent          # compatibility symlink
+│   ├── agents/
+│   ├── settings/
+│   ├── models/
+│   ├── skills/
+│   ├── memory/
+│   ├── tasks/
+│   ├── projects/
+│   └── pi-agent/
+│       └── sessions/
+├── profiles -> sync/profiles  # durable profile definitions
+├── pi-agent/                  # local runtime state
+│   ├── state/
+│   └── deferred-resumes-state.json
+├── pi-agent-runtime/          # generated runtime materialization
 ├── config/
-│   ├── config.json -> ../sync/config/config.json   # after sync setup
+│   ├── config.json
 │   ├── daemon.json
 │   ├── gateway.json
 │   └── web.json
@@ -206,11 +205,17 @@ Setup enables the daemon sync module and schedules periodic background sync.
 
 By default, sync tracks:
 
-- `profiles/**`
-- `pi-agent/**` (durable sessions/state only)
-- `config/**` (setup seeds `config/config.json`; `daemon.json`, `gateway.json`, and `web.json` stay machine-local by default)
+- `profiles/*.json`
+- `agents/**`
+- `settings/**`
+- `models/**`
+- `skills/**`
+- `memory/**`
+- `tasks/**`
+- `projects/**`
+- `pi-agent/sessions/**`
 
-Machine-local runtime files such as auth, settings, generated prompt materialization, and `bin/**` live under `pi-agent-runtime/**` and are not synced.
+Machine-local runtime files such as auth, inbox state, conversation attention, deferred resumes, generated prompt materialization, and `bin/**` are not synced.
 
 See [Sync Guide](./sync.md).
 
@@ -304,7 +309,7 @@ You can also adjust model, theme, and conversation title settings from the web U
 For most setups:
 
 1. set the default profile with `pa profile use <name>`
-2. keep profile behavior in `~/.local/state/personal-agent/profiles/**/agent` and shared durable knowledge in `~/.local/state/personal-agent/profiles/_memory/<memory-name>/MEMORY.md` (with repo defaults in `defaults/agent` and optional shared overlays in `~/.local/state/personal-agent/profiles/shared/agent`)
+2. keep durable behavior and knowledge in the synced roots under `~/.local/state/personal-agent/sync/` (with repo defaults in `defaults/agent` and optional machine-local additions in `~/.local/state/personal-agent/config/local`)
 3. keep daemon behavior in `daemon.json`
 4. use `pa gateway setup telegram` for gateway config
 5. keep secrets as 1Password references where possible; use env vars only when a component truly needs them

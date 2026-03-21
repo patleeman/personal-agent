@@ -81,7 +81,7 @@ export function getConfigRoot(): string {
  * Default mutable profiles root directory.
  */
 export function getDefaultProfilesRoot(): string {
-  return join(getStateRoot(), 'profiles');
+  return getDurableProfilesDir();
 }
 
 /**
@@ -92,6 +92,53 @@ export function getProfilesRoot(): string {
   return explicit && explicit.trim().length > 0
     ? expandHomePath(explicit.trim())
     : getDefaultProfilesRoot();
+}
+
+/**
+ * Root directory for git-backed synced durable state.
+ */
+export function getSyncRoot(stateRoot: string = getStateRoot()): string {
+  return join(stateRoot, 'sync');
+}
+
+export function getDurablePiAgentDir(stateRoot: string = getStateRoot()): string {
+  return join(getSyncRoot(stateRoot), 'pi-agent');
+}
+
+export function getDurableSessionsDir(stateRoot: string = getStateRoot()): string {
+  return join(getDurablePiAgentDir(stateRoot), 'sessions');
+}
+
+export function getDurableProfilesDir(syncRoot: string = getSyncRoot()): string {
+  return join(syncRoot, 'profiles');
+}
+
+export function getDurableAgentsDir(syncRoot: string = getSyncRoot()): string {
+  return join(syncRoot, 'agents');
+}
+
+export function getDurableSettingsDir(syncRoot: string = getSyncRoot()): string {
+  return join(syncRoot, 'settings');
+}
+
+export function getDurableModelsDir(syncRoot: string = getSyncRoot()): string {
+  return join(syncRoot, 'models');
+}
+
+export function getDurableSkillsDir(syncRoot: string = getSyncRoot()): string {
+  return join(syncRoot, 'skills');
+}
+
+export function getDurableMemoryDir(syncRoot: string = getSyncRoot()): string {
+  return join(syncRoot, 'memory');
+}
+
+export function getDurableTasksDir(syncRoot: string = getSyncRoot()): string {
+  return join(syncRoot, 'tasks');
+}
+
+export function getDurableProjectsDir(syncRoot: string = getSyncRoot()): string {
+  return join(syncRoot, 'projects');
 }
 
 /**

@@ -1,17 +1,16 @@
 # Profiles, Memory, and Skills
 
-Profiles are how `personal-agent` changes behavior, prompting, defaults, and reusable capabilities around a shared global memory store.
+Profiles are how `personal-agent` changes behavior, prompting, defaults, and reusable capabilities around a synced durable resource store.
 
-A profile is not just a name. It is the durable resource bundle the agent runs with, even though memories themselves are shared globally.
+A profile is not just a name. It is the durable resource bundle the agent runs with, selected from kind-based synced resources plus machine-local overlays.
 
 ## The layer model
 
 Resources resolve in this order:
 
 1. repo `defaults/agent` for shared default profile files
-2. mutable shared profile `~/.local/state/personal-agent/profiles/shared/agent` (when present)
-3. mutable profiles root `~/.local/state/personal-agent/profiles/<selected-profile>/agent`
-4. local overlay (`~/.local/state/personal-agent/config/local` by default)
+2. synced durable resource roots under `~/.local/state/personal-agent/sync/`
+3. local overlay (`~/.local/state/personal-agent/config/local` by default)
 
 In addition, repo built-ins are always available from:
 
@@ -20,32 +19,29 @@ In addition, repo built-ins are always available from:
 
 Think of it like this:
 
-- `shared` holds common default profile files and shared profile skills when present
 - repo built-ins hold product-shipped runtime capabilities
-- the selected profile adds persona- or context-specific behavior
+- synced durable roots hold shared and profile-targeted resources
+- the selected profile adds persona- or context-specific behavior through those resources
 - the local overlay is for machine-local additions
 
 ## What a profile can contain
 
-A profile layer can contain:
+The synced durable store can contain:
 
-- `AGENTS.md`
-- `settings.json`
-- `models.json`
-- `skills/`
-- `extensions/`
-- `prompts/`
-- `themes/`
-
-Non-shared profiles can also keep durable profile state in:
-
+- `profiles/*.json`
+- `agents/**`
+- `settings/**`
+- `models/**`
+- `skills/**`
+- `memory/**`
 - `tasks/*.task.md`
 - `projects/<projectId>/PROJECT.yaml`
-- `activity/*.md`
 
-Shared global memories live alongside profiles at:
+Repo built-ins still provide:
 
-- `~/.local/state/personal-agent/profiles/_memory/<memory-name>/MEMORY.md`
+- `extensions/`
+- `themes/`
+- prompt-catalog content
 
 ## Example layout
 
@@ -58,44 +54,31 @@ Shared global memories live alongside profiles at:
 └── themes/
 
 ~/.local/state/personal-agent/
-└── profiles/
-    ├── _memory/
-    │   ├── personal-agent/
-    │   │   ├── MEMORY.md
-    │   │   ├── references/
-    │   │   └── assets/
-    │   └── runpod/
-    │       └── MEMORY.md
-    ├── shared/
-    │   └── agent/
-    │       ├── settings.json
-    │       ├── models.json
-    │       ├── skills/
-    │       ├── extensions/
-    │       ├── prompts/
-    │       └── themes/
-    └── assistant/
-        └── agent/
-            ├── AGENTS.md
-            ├── settings.json
-            ├── tasks/
-            ├── projects/
-            └── activity/
+└── sync/
+    ├── profiles/
+    │   ├── assistant.json
+    │   └── datadog.json
+    ├── agents/
+    ├── settings/
+    ├── models/
+    ├── skills/
+    ├── memory/
+    ├── tasks/
+    └── projects/
 ```
 
 ## What belongs where
 
 | Place | Use it for |
 | --- | --- |
-| `AGENTS.md` | durable role, behavior rules, and operating policy |
+| `agents/**` | durable role, behavior rules, and operating policy fragments |
 | `skills/` | reusable workflows or domain-specific capabilities |
-| `profiles/_memory/<memory-name>/MEMORY.md` | shared durable knowledge hubs |
-| `profiles/_memory/<memory-name>/references/**` | detailed notes, distilled captures, and supporting breakdowns for that hub |
-| `profiles/_memory/<memory-name>/assets/**` | non-markdown assets used by that memory package |
+| `memory/<memory-name>/MEMORY.md` | shared durable knowledge hubs |
+| `memory/<memory-name>/references/**` | detailed notes, distilled captures, and supporting breakdowns for that hub |
+| `memory/<memory-name>/assets/**` | non-markdown assets used by that memory package |
 | `tasks/*.task.md` | scheduled automation |
 | `projects/` | long-running tracked work |
-| `activity/` | inbox items created by the system or by explicit inbox commands |
-| `settings.json` | default model, thinking, theme, and other runtime defaults |
+| `settings/**` | default model, thinking, theme, and other runtime defaults |
 
 ## `AGENTS.md`: durable identity and behavior
 
@@ -214,18 +197,18 @@ The main idea is:
 - **skills** are reusable workflows
 - **memories** are reusable knowledge hubs
 
-## Shared profile vs non-shared profiles
+## Shared resources vs profile-targeted resources
 
 Important convention:
 
-- `shared` is for common profile resources
-- non-shared profiles are where profile-local `AGENTS.md`, skills, tasks, projects, and activity live
-- durable memories live in the shared global memory store at `profiles/_memory/`
+- shared defaults can live in repo `defaults/agent` and shared-scoped durable files under `sync/`
+- profile-targeted durable resources are selected by filename or metadata applicability
+- durable memories live in the synced shared memory store at `sync/memory/`
 
 In particular:
 
-- there is no shared-profile `memory/` directory
-- profile-local `AGENTS.md` should live with the active non-shared profile
+- there is no profile-local `memory/` directory
+- behavior targeting belongs in durable `agents/**`, `settings/**`, `models/**`, and `skills/**`
 
 ## Memory vs project vs inbox
 

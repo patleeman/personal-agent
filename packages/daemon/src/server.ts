@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'child_process';
 import { createServer, type Server, type Socket } from 'net';
 import { createWriteStream, existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { getPiAgentStateDir } from '@personal-agent/core';
+import { getDurableSessionsDir } from '@personal-agent/core';
 import { looksLikePersonalAgentCliEntryPath } from './background-run-agent.js';
 import { EventBus } from './event-bus.js';
 import { createDaemonEvent, isDaemonEvent } from './events.js';
@@ -119,7 +119,7 @@ function quoteShellArg(value: string): string {
 }
 
 function resolveBackgroundRunSessionDir(runId: string): string {
-  return join(getPiAgentStateDir(), 'sessions', BACKGROUND_RUN_SESSIONS_DIR_NAME, runId);
+  return join(getDurableSessionsDir(), BACKGROUND_RUN_SESSIONS_DIR_NAME, runId);
 }
 
 function appendBackgroundRunSessionDir(input: {

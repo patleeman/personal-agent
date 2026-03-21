@@ -195,8 +195,8 @@ describe('tasks module scheduling', () => {
     await module.handleEvent(createTimerEvent(), context);
 
     await waitForCondition(() => {
-      const status = module.getStatus?.() as { totalRuns?: number };
-      return (status.totalRuns ?? 0) === 1;
+      const status = module.getStatus?.() as { totalRuns?: number; runningTasks?: number };
+      return (status.totalRuns ?? 0) === 1 && (status.runningTasks ?? 0) === 0;
     });
 
     expect(runTask).toHaveBeenCalledTimes(3);

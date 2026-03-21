@@ -8,10 +8,12 @@ import { saveCuratedDistilledConversationMemory, type DistilledConversationMemor
 
 const tempDirs: string[] = [];
 
-function createTempDir(prefix: string): string {
-  const dir = mkdtempSync(join(tmpdir(), prefix));
-  tempDirs.push(dir);
-  return dir;
+function createTempProfilesRoot(prefix: string): string {
+  const root = mkdtempSync(join(tmpdir(), prefix));
+  const profilesRoot = join(root, 'sync', 'profiles');
+  mkdirSync(profilesRoot, { recursive: true });
+  tempDirs.push(root);
+  return profilesRoot;
 }
 
 function writeFile(path: string, content: string): void {
@@ -24,11 +26,15 @@ afterEach(async () => {
 });
 
 function memoryPath(profilesRoot: string, memoryName: string): string {
-  return join(profilesRoot, '_memory', memoryName, 'MEMORY.md');
+  return join(profilesRoot, '..', 'memory', memoryName, 'MEMORY.md');
 }
 
 function referencePath(profilesRoot: string, memoryName: string, referenceName: string): string {
-  return join(profilesRoot, '_memory', memoryName, 'references', `${referenceName}.md`);
+  return join(profilesRoot, '..', 'memory', memoryName, 'references', `${referenceName}.md`);
+}
+
+function memoryDir(profilesRoot: string): string {
+  return join(profilesRoot, '..', 'memory');
 }
 
 function buildDraft(overrides: Partial<DistilledConversationMemoryDraft> = {}): DistilledConversationMemoryDraft {
@@ -51,7 +57,7 @@ At this checkpoint, the user intent was: tighten the memory browser around hubs,
 
 describe('conversation memory curation', () => {
   it('updates the strongest matching reference inside an existing hub package', () => {
-    const profilesRoot = createTempDir('pa-conversation-memory-match-');
+    const profilesRoot = createTempProfilesRoot('pa-conversation-memory-match-');
     writeFile(
       memoryPath(profilesRoot, 'personal-agent'),
       `---
@@ -104,7 +110,7 @@ metadata:
     expect(loaded.parseErrors).toHaveLength(0);
 
     const result = saveCuratedDistilledConversationMemory({
-      memoryDir: join(profilesRoot, '_memory'),
+      memoryDir: memoryDir(profilesRoot),
       existingDocs: loaded.docs,
       draft: buildDraft(),
       updated: '2026-03-18',
@@ -131,7 +137,7 @@ metadata:
   });
 
   it('creates a new reference inside the matching hub when no reference match is strong enough', () => {
-    const profilesRoot = createTempDir('pa-conversation-memory-create-ref-');
+    const profilesRoot = createTempProfilesRoot('pa-conversation-memory-create-ref-');
     writeFile(
       memoryPath(profilesRoot, 'personal-agent'),
       `---
@@ -163,7 +169,7 @@ Track deployment timings and release checks.
     expect(loaded.parseErrors).toHaveLength(0);
 
     const result = saveCuratedDistilledConversationMemory({
-      memoryDir: join(profilesRoot, '_memory'),
+      memoryDir: memoryDir(profilesRoot),
       existingDocs: loaded.docs,
       draft: buildDraft({
         title: 'General personal-agent follow-up',
@@ -195,13 +201,13 @@ Track deployment timings and release checks.
   });
 
   it('creates a new hub package before writing a reference when no matching hub exists', () => {
-    const profilesRoot = createTempDir('pa-conversation-memory-new-hub-');
+    const profilesRoot = createTempProfilesRoot('pa-conversation-memory-new-hub-');
 
     const loaded = loadMemoryDocs({ profilesRoot });
     expect(loaded.docs).toHaveLength(0);
 
     const result = saveCuratedDistilledConversationMemory({
-      memoryDir: join(profilesRoot, '_memory'),
+      memoryDir: memoryDir(profilesRoot),
       existingDocs: loaded.docs,
       draft: buildDraft({
         title: 'Runpod provisioning notes',

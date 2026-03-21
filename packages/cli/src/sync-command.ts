@@ -17,6 +17,7 @@ import { dirname, join, relative, resolve } from 'path';
 import {
   getPiAgentRuntimeDir,
   getStateRoot,
+  getSyncRoot,
   mergeConversationAttentionStateDocuments,
   mergeDeferredResumeStateDocuments,
 } from '@personal-agent/core';
@@ -34,9 +35,6 @@ import { bullet, dim, keyValue, section, success, warning } from './ui.js';
 const DEFAULT_SYNC_BRANCH = 'main';
 const DEFAULT_SYNC_REMOTE = 'origin';
 const DEFAULT_PROFILE_CONFIG_JSON = '{\n  "defaultProfile": "shared"\n}\n';
-const CONVERSATION_ATTENTION_MERGE_DRIVER = 'personal-agent-conversation-attention';
-const DEFERRED_RESUMES_MERGE_DRIVER = 'personal-agent-deferred-resumes';
-
 function syncUsageText(): string {
   return 'Usage: pa sync [status|run|setup|help] [args...]';
 }
@@ -91,43 +89,6 @@ function parseNumber(value: unknown, fallback: number): number {
   }
 
   return fallback;
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'"'"'`)}'`;
-}
-
-function resolveCurrentCliEntrypoint(): string {
-  const entrypoint = toOptionalString(process.argv[1]);
-  if (!entrypoint) {
-    throw new Error('Unable to resolve the current CLI entrypoint for sync merge driver setup.');
-  }
-
-  return resolve(entrypoint);
-}
-
-function buildConversationAttentionMergeDriverCommand(): string {
-  return [
-    shellQuote(process.execPath),
-    shellQuote(resolveCurrentCliEntrypoint()),
-    'sync',
-    'merge-conversation-attention',
-    '%O',
-    '%A',
-    '%B',
-  ].join(' ');
-}
-
-function buildDeferredResumesMergeDriverCommand(): string {
-  return [
-    shellQuote(process.execPath),
-    shellQuote(resolveCurrentCliEntrypoint()),
-    'sync',
-    'merge-deferred-resumes',
-    '%O',
-    '%A',
-    '%B',
-  ].join(' ');
 }
 
 function readJsonFileIfExists(path: string): unknown | undefined {
@@ -196,6 +157,35 @@ function lstatSyncSafe(path: string) {
   }
 }
 
+function movePathToTarget(sourcePath: string, targetPath: string): void {
+  if (!existsSync(sourcePath)) {
+    return;
+  }
+
+  ensureDirectory(dirname(targetPath));
+
+  if (!existsSync(targetPath)) {
+    renameSync(sourcePath, targetPath);
+    return;
+  }
+
+  const sourceIsDir = statSync(sourcePath).isDirectory();
+  const targetIsDir = statSync(targetPath).isDirectory();
+
+  if (sourceIsDir !== targetIsDir) {
+    throw new Error(`Cannot merge ${sourcePath} into ${targetPath}: type mismatch`);
+  }
+
+  if (sourceIsDir) {
+    cpSync(sourcePath, targetPath, { recursive: true, force: true });
+    rmSync(sourcePath, { recursive: true, force: true });
+    return;
+  }
+
+  cpSync(sourcePath, targetPath, { force: true });
+  rmSync(sourcePath, { force: true });
+}
+
 function movePathIntoSyncRoot(stateRoot: string, syncRoot: string, relativePath: string): void {
   const sourcePath = join(stateRoot, relativePath);
   const targetPath = join(syncRoot, relativePath);
@@ -210,28 +200,7 @@ function movePathIntoSyncRoot(stateRoot: string, syncRoot: string, relativePath:
     rmSync(sourcePath, { force: true });
   }
 
-  if (existsSync(sourcePath)) {
-    ensureDirectory(dirname(targetPath));
-
-    if (!existsSync(targetPath)) {
-      renameSync(sourcePath, targetPath);
-    } else {
-      const sourceIsDir = statSync(sourcePath).isDirectory();
-      const targetIsDir = statSync(targetPath).isDirectory();
-
-      if (sourceIsDir !== targetIsDir) {
-        throw new Error(`Cannot merge ${sourcePath} into ${targetPath}: type mismatch`);
-      }
-
-      if (sourceIsDir) {
-        cpSync(sourcePath, targetPath, { recursive: true, force: true });
-        rmSync(sourcePath, { recursive: true, force: true });
-      } else {
-        cpSync(sourcePath, targetPath, { force: true });
-        rmSync(sourcePath, { force: true });
-      }
-    }
-  }
+  movePathToTarget(sourcePath, targetPath);
 
   if (!existsSync(targetPath)) {
     if (relativePath.endsWith('.json')) {
@@ -243,6 +212,33 @@ function movePathIntoSyncRoot(stateRoot: string, syncRoot: string, relativePath:
   }
 
   ensureSymlink(sourcePath, targetPath);
+}
+
+function moveSyncedPiAgentLocalStateBack(stateRoot: string, syncRoot: string): void {
+  const localPiAgentDir = join(stateRoot, 'pi-agent');
+  const syncedPiAgentDir = join(syncRoot, 'pi-agent');
+
+  const localStats = lstatSyncSafe(localPiAgentDir);
+  if (localStats?.isSymbolicLink()) {
+    const existingTarget = resolve(dirname(localPiAgentDir), readlinkSync(localPiAgentDir));
+    if (existingTarget === syncedPiAgentDir) {
+      rmSync(localPiAgentDir, { force: true });
+    }
+  }
+
+  ensureDirectory(localPiAgentDir);
+  ensureDirectory(syncedPiAgentDir);
+
+  for (const entry of readdirSync(syncedPiAgentDir, { withFileTypes: true })) {
+    if (entry.name === 'sessions') {
+      continue;
+    }
+
+    movePathToTarget(
+      join(syncedPiAgentDir, entry.name),
+      join(localPiAgentDir, entry.name),
+    );
+  }
 }
 
 function readFileUtf8Safe(path: string): string | undefined {
@@ -295,38 +291,19 @@ function removeLegacySyncedDefaultProfileConfig(syncRoot: string): void {
 }
 
 function syncRepoGitignore(): string {
-  return `# personal-agent sync repo (managed by pa sync setup)\n\n*\n!.gitignore\n!.gitattributes\n!README.md\n\n# Whitelist durable-sync roots so new files/directories under them sync by default\n!profiles/\n!profiles/**\n\n!pi-agent/\n!pi-agent/**\n\n# Never sync machine-local runtime leftovers from older releases\n.DS_Store\n**/.DS_Store\npi-agent/AGENTS.md\npi-agent/APPEND_SYSTEM.md\npi-agent/SYSTEM.md\npi-agent/auth.json\npi-agent/models.json\npi-agent/settings.json\npi-agent/bin/\npi-agent/session-meta-index.json\n`;
+  return `# personal-agent sync repo (managed by pa sync setup)\n\n*\n!.gitignore\n!.gitattributes\n!README.md\n\n# Durable profile definitions\n!profiles/\nprofiles/*\n!profiles/*.json\n\n# Durable kind-based resources\n!agents/\n!agents/**\n!settings/\n!settings/**\n!models/\n!models/**\n!skills/\n!skills/**\n!memory/\n!memory/**\n!tasks/\n!tasks/**\n!projects/\n!projects/**\n\n# Portable conversation transcripts\n!pi-agent/\npi-agent/*\n!pi-agent/sessions/\n!pi-agent/sessions/**\n\n# Never sync machine-local runtime leftovers\n.DS_Store\n**/.DS_Store\n`;
 }
 
 export function syncRepoGitattributes(): string {
-  return `* text=auto\n\n# Append-only session JSONL transcripts merge best with union\npi-agent/sessions/**/*.jsonl text eol=lf merge=union\n\n# Conversation attention state should merge by per-conversation max/union semantics\npi-agent/state/conversation-attention/*.json text eol=lf merge=${CONVERSATION_ATTENTION_MERGE_DRIVER}\n\n# Deferred resume state should merge by resume id while preserving latest retry state\npi-agent/deferred-resumes-state.json text eol=lf merge=${DEFERRED_RESUMES_MERGE_DRIVER}\n`;
+  return `* text=auto\n\n# Append-only session JSONL transcripts merge best with union\npi-agent/sessions/**/*.jsonl text eol=lf merge=union\n`;
 }
 
-function configureManagedMergeDrivers(syncRoot: string): void {
-  runGit(syncRoot, [
-    'config',
-    `merge.${CONVERSATION_ATTENTION_MERGE_DRIVER}.name`,
-    'personal-agent conversation attention merge',
-  ]);
-  runGit(syncRoot, [
-    'config',
-    `merge.${CONVERSATION_ATTENTION_MERGE_DRIVER}.driver`,
-    buildConversationAttentionMergeDriverCommand(),
-  ]);
-  runGit(syncRoot, [
-    'config',
-    `merge.${DEFERRED_RESUMES_MERGE_DRIVER}.name`,
-    'personal-agent deferred resumes merge',
-  ]);
-  runGit(syncRoot, [
-    'config',
-    `merge.${DEFERRED_RESUMES_MERGE_DRIVER}.driver`,
-    buildDeferredResumesMergeDriverCommand(),
-  ]);
+function configureManagedMergeDrivers(_syncRoot: string): void {
+  // Session transcript merging uses git's built-in union driver only.
 }
 
 function syncRepoReadme(): string {
-  return `# personal-agent sync repo\n\nManaged by \`pa sync setup\`.\n\nThis repo tracks durable cross-machine state from sync roots:\n\n- \`profiles/**\`\n- \`pi-agent/**\` (durable sessions/state only)\n\nBuilt-in merge handling is configured for:\n\n- append-only session transcripts under \`pi-agent/sessions/**/*.jsonl\`\n- conversation attention state under \`pi-agent/state/conversation-attention/*.json\`\n- deferred resume state under \`pi-agent/deferred-resumes-state.json\`\n\nMachine-local runtime files such as auth, settings, generated prompt materialization, and package bins now live outside the sync repo under the local state root. Machine-local config (including \`config/config.json\` default profile selection) is intentionally not synced.\n`;
+  return `# personal-agent sync repo\n\nManaged by \`pa sync setup\`.\n\nThis repo tracks portable cross-machine state from sync roots:\n\n- \`profiles/*.json\`\n- \`agents/**\`\n- \`settings/**\`\n- \`models/**\`\n- \`skills/**\`\n- \`memory/**\`\n- \`tasks/**\`\n- \`projects/**\`\n- \`pi-agent/sessions/**\`\n\nBuilt-in merge handling is configured for:\n\n- append-only session transcripts under \`pi-agent/sessions/**/*.jsonl\`\n\nMachine-local runtime state such as inbox/read state, conversation attention, deferred resumes, checkpoints, auth, generated prompt materialization, daemon state, gateway state, and package bins stays outside the synced surface. Machine-local config (including \`config/config.json\` default profile selection) is intentionally not synced.\n`;
 }
 
 function migrateLegacyPiAgentRuntimeArtifacts(stateRoot: string, syncRoot: string): void {
@@ -372,7 +349,24 @@ function migrateLegacyPiAgentRuntimeArtifacts(stateRoot: string, syncRoot: strin
   }
 }
 
+function ensureManagedSyncRepoLayout(syncRoot: string): void {
+  for (const relativePath of [
+    'profiles',
+    'agents',
+    'settings',
+    'models',
+    'skills',
+    'memory',
+    'tasks',
+    'projects',
+    join('pi-agent', 'sessions'),
+  ]) {
+    ensureDirectory(join(syncRoot, relativePath));
+  }
+}
+
 function writeManagedSyncRepoFiles(syncRoot: string): void {
+  ensureManagedSyncRepoLayout(syncRoot);
   writeFileSync(join(syncRoot, '.gitignore'), syncRepoGitignore());
   writeFileSync(join(syncRoot, '.gitattributes'), syncRepoGitattributes());
   writeFileSync(join(syncRoot, 'README.md'), syncRepoReadme());
@@ -516,7 +510,7 @@ function parseSyncSetupArgs(args: string[]): {
     repoUrl: repoUrl.trim(),
     branch: branch.trim() || DEFAULT_SYNC_BRANCH,
     mode,
-    repoDir: repoDir ?? join(stateRoot, 'sync'),
+    repoDir: repoDir ?? getSyncRoot(stateRoot),
   };
 }
 
@@ -545,8 +539,9 @@ async function setupSyncCommand(args: string[]): Promise<number> {
 
   ensureDirectory(syncRoot);
   movePathIntoSyncRoot(stateRoot, syncRoot, 'profiles');
-  movePathIntoSyncRoot(stateRoot, syncRoot, 'pi-agent');
   migrateLegacyPiAgentRuntimeArtifacts(stateRoot, syncRoot);
+  moveSyncedPiAgentLocalStateBack(stateRoot, syncRoot);
+  movePathIntoSyncRoot(stateRoot, syncRoot, join('pi-agent', 'sessions'));
   const localProfileConfigPath = ensureLocalDefaultProfileConfig(stateRoot, syncRoot);
   removeLegacySyncedDefaultProfileConfig(syncRoot);
   writeManagedSyncRepoFiles(syncRoot);

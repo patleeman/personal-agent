@@ -58,7 +58,7 @@ describe('scheduled task agent extension', () => {
     expect(saved.isError).not.toBe(true);
     expect(saved.content[0]?.text).toContain('Saved scheduled task @daily-status');
 
-    const filePath = join(process.env.PERSONAL_AGENT_STATE_ROOT!, 'profiles', 'assistant', 'agent', 'tasks', 'daily-status.task.md');
+    const filePath = join(process.env.PERSONAL_AGENT_STATE_ROOT!, 'sync', 'tasks', 'daily-status.task.md');
     expect(existsSync(filePath)).toBe(true);
     expect(readFileSync(filePath, 'utf-8')).toContain('cron: "0 9 * * 1-5"');
 
