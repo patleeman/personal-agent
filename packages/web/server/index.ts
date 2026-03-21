@@ -575,6 +575,7 @@ function buildLiveSessionExtensionFactories() {
     }),
     createConversationAutomationPromptExtension({
       stateRoot: getStateRoot(),
+      settingsFile: SETTINGS_FILE,
       getCurrentProfile,
     }),
     createWaitForUserAgentExtension({
