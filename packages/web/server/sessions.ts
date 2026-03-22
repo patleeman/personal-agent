@@ -43,12 +43,26 @@ interface RawSessionRecord {
 
 interface RawModelChange {
   type: 'model_change';
+  id?: string;
+  parentId?: string | null;
+  timestamp?: string;
   provider?: string;
   modelId?: string;
 }
 
+interface RawThinkingLevelChange {
+  type: 'thinking_level_change';
+  id?: string;
+  parentId?: string | null;
+  timestamp?: string;
+  thinkingLevel?: string;
+}
+
 interface RawSessionInfo {
   type: 'session_info';
+  id?: string;
+  parentId?: string | null;
+  timestamp?: string;
   name?: string;
 }
 
@@ -114,17 +128,26 @@ interface RawBranchSummary {
   fromId: string;
 }
 
-type RawLine = RawSessionRecord | RawModelChange | RawSessionInfo | RawMessage | RawCustomMessage | RawCompaction | RawBranchSummary;
+type RawLine = RawSessionRecord | RawModelChange | RawThinkingLevelChange | RawSessionInfo | RawMessage | RawCustomMessage | RawCompaction | RawBranchSummary;
 type RawDisplayLine = RawMessage | RawCustomMessage | RawCompaction | RawBranchSummary;
 type PiSessionTreeNode = ReturnType<SessionManager['getTree']>[number];
 
-interface TailScanEntrySummary {
+interface TailScanDisplayEntrySummary {
+  kind: 'display';
   id: string;
   parentId: string | null;
   visibleBlockCount: number;
   hiddenRoot: boolean;
   rawLine: string;
 }
+
+interface TailScanLineageSummary {
+  kind: 'lineage';
+  id: string;
+  parentId: string | null;
+}
+
+type TailScanEntrySummary = TailScanDisplayEntrySummary | TailScanLineageSummary;
 
 // ── Public types ───────────────────────────────────────────────────────────────
 
@@ -361,18 +384,38 @@ function buildDisplayMessageEntryFromRawLine(line: RawDisplayLine): DisplayMessa
 
 function summarizeTailScanEntry(rawLine: string): TailScanEntrySummary | null {
   const sanitizedLine = sanitizeSessionLineForSummary(rawLine);
-  const parsed = parseJsonLine(sanitizedLine);
-  if (!parsed || !isRawDisplayLine(parsed)) {
+  const parsed = parseJsonLine(sanitizedLine) as unknown;
+  if (!parsed || typeof parsed !== 'object') {
     return null;
   }
 
-  const displayEntry = buildDisplayMessageEntryFromRawLine(parsed);
+  const id = 'id' in parsed && typeof parsed.id === 'string'
+    ? parsed.id
+    : null;
+  const parentId = 'parentId' in parsed && (typeof parsed.parentId === 'string' || parsed.parentId === null)
+    ? parsed.parentId
+    : undefined;
+
+  if (!id || parentId === undefined) {
+    return null;
+  }
+
+  if (!isRawDisplayLine(parsed as RawLine)) {
+    return {
+      kind: 'lineage',
+      id,
+      parentId,
+    };
+  }
+
+  const displayEntry = buildDisplayMessageEntryFromRawLine(parsed as RawDisplayLine);
   const visibleBlockCount = buildDisplayBlocksFromEntries([displayEntry]).length;
   const hiddenRoot = shouldHideTranscriptDescendants(displayEntry.message);
 
   return {
-    id: parsed.id,
-    parentId: parsed.parentId,
+    kind: 'display',
+    id,
+    parentId,
     visibleBlockCount,
     hiddenRoot,
     rawLine,
@@ -380,7 +423,7 @@ function summarizeTailScanEntry(rawLine: string): TailScanEntrySummary | null {
 }
 
 function tryReadSessionTailBlocksByFile(filePath: string, meta: SessionMeta, tailBlocks: number): SessionDetail | null {
-  const retained: TailScanEntrySummary[] = [];
+  const retained: TailScanDisplayEntrySummary[] = [];
   let pendingEntryId: string | null | undefined;
   let retainedVisibleBlockCount = 0;
   let droppedVisibleBlockCount = 0;
@@ -405,6 +448,10 @@ function tryReadSessionTailBlocksByFile(filePath: string, meta: SessionMeta, tai
       }
 
       pendingEntryId = summary.parentId;
+
+      if (summary.kind !== 'display') {
+        return pendingEntryId !== null;
+      }
 
       if (summary.hiddenRoot) {
         retained.length = 0;
