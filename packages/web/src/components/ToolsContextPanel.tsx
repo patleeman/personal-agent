@@ -9,8 +9,6 @@ import type {
   PackageSourceTargetState,
   ToolParameterSchema,
   ToolsState,
-  MemoryAgentsItem,
-  MemorySkillItem,
   DependentCliToolState,
 } from '../types';
 import { buildToolsSearch, parseToolsSelection, type ToolsRailSelection } from '../toolsSelection';
@@ -198,65 +196,6 @@ function RawSchema({ label, value }: { label: string; value: string }) {
       <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-lg bg-surface/70 px-3 py-2 text-[11px] leading-relaxed text-secondary">
         {value}
       </pre>
-    </div>
-  );
-}
-
-function AgentsDetailPanel({ item }: { item: MemoryAgentsItem }) {
-  return (
-    <div className="flex h-full flex-col">
-      <DetailHeader title={`${item.source} AGENTS.md`} meta={item.path} />
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <DetailBody>
-          <DetailRow label="Source" value={item.source} />
-          <DetailRow label="Path" value={<span className="font-mono text-[12px] text-secondary">{item.path}</span>} />
-          <div className="space-y-2 border-t border-border-subtle pt-4">
-            <p className="ui-section-label">Instructions</p>
-            {item.content ? <MarkdownPreview content={item.content} /> : <p className="ui-card-meta">This AGENTS.md file does not exist.</p>}
-          </div>
-        </DetailBody>
-      </div>
-    </div>
-  );
-}
-
-function SkillDetailPanel({ skill }: { skill: MemorySkillItem }) {
-  const fetcher = useCallback(() => api.memoryFile(skill.path), [skill.path]);
-  const { data, loading, refreshing, error, refetch } = useApi(fetcher, skill.path);
-
-  return (
-    <div className="flex h-full flex-col">
-      <DetailHeader
-        title={skill.name}
-        meta={skill.path}
-        actions={(
-          <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); }} disabled={refreshing}>
-            {refreshing ? 'Refreshing…' : '↻ Refresh'}
-          </ToolbarButton>
-        )}
-      />
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <DetailBody>
-          <DetailRow label="Source" value={skill.source} />
-          <DetailRow label="Path" value={<span className="font-mono text-[12px] text-secondary">{skill.path}</span>} />
-          <div className="space-y-2 border-t border-border-subtle pt-4">
-            <p className="ui-section-label">Summary</p>
-            <p className="text-[12px] leading-relaxed text-secondary">{skill.description || 'No description provided.'}</p>
-          </div>
-          <div className="space-y-2 border-t border-border-subtle pt-4">
-            <p className="ui-section-label">Definition</p>
-            {loading && !data ? (
-              <LoadingState label="Loading skill…" />
-            ) : error && !data ? (
-              <ErrorState message={`Failed to load skill: ${error}`} />
-            ) : data ? (
-              <MarkdownPreview content={data.content} />
-            ) : (
-              <p className="ui-card-meta">No skill content available.</p>
-            )}
-          </div>
-        </DetailBody>
-      </div>
     </div>
   );
 }
@@ -472,9 +411,6 @@ function renderSelectionPanel(input: {
   toolsState: ToolsState | null;
   toolsLoading: boolean;
   toolsError: string | null;
-  memoryData: Awaited<ReturnType<typeof api.memory>> | null;
-  memoryLoading: boolean;
-  memoryError: string | null;
   onSelect: (selection: ToolsRailSelection | null) => void;
 }): React.ReactNode {
   const {
@@ -482,35 +418,8 @@ function renderSelectionPanel(input: {
     toolsState,
     toolsLoading,
     toolsError,
-    memoryData,
-    memoryLoading,
-    memoryError,
     onSelect,
   } = input;
-
-  if (selection.kind === 'agents') {
-    if (memoryLoading && !memoryData) {
-      return <LoadingState label="Loading instructions…" className="px-4 py-4" />;
-    }
-    if (memoryError && !memoryData) {
-      return <ErrorState message={`Failed to load instructions: ${memoryError}`} className="px-4 py-4" />;
-    }
-
-    const item = memoryData?.agentsMd.find((candidate) => candidate.path === selection.path) ?? null;
-    return item ? <AgentsDetailPanel item={item} /> : <EmptyPrompt text="That AGENTS.md source is no longer available." />;
-  }
-
-  if (selection.kind === 'skill') {
-    if (memoryLoading && !memoryData) {
-      return <LoadingState label="Loading skills…" className="px-4 py-4" />;
-    }
-    if (memoryError && !memoryData) {
-      return <ErrorState message={`Failed to load skills: ${memoryError}`} className="px-4 py-4" />;
-    }
-
-    const skill = memoryData?.skills.find((candidate) => candidate.path === selection.path) ?? null;
-    return skill ? <SkillDetailPanel skill={skill} /> : <EmptyPrompt text="That skill is no longer available." />;
-  }
 
   if (toolsLoading && !toolsState) {
     return <LoadingState label="Loading tools…" className="px-4 py-4" />;
@@ -576,18 +485,12 @@ export function ToolsContextPanel() {
     loading: toolsLoading,
     error: toolsError,
   } = useApi(() => api.tools(viewProfile ? { profile: viewProfile } : undefined), `tools-context:${viewProfile ?? 'current'}`);
-  const {
-    data: memoryData,
-    loading: memoryLoading,
-    error: memoryError,
-  } = useApi(() => api.memory(viewProfile ? { profile: viewProfile } : undefined), `tools-memory-context:${viewProfile ?? 'current'}`);
-
   const handleSelect = useCallback((nextSelection: ToolsRailSelection | null) => {
     navigate(`/tools${buildToolsSearch(location.search, nextSelection)}`);
   }, [location.search, navigate]);
 
   if (!selection) {
-    return <EmptyPrompt text="Select an instruction, tool, package target, CLI, or MCP server to inspect it here." />;
+    return <EmptyPrompt text="Select a tool, package target, CLI, or MCP server to inspect it here." />;
   }
 
   return renderSelectionPanel({
@@ -595,9 +498,6 @@ export function ToolsContextPanel() {
     toolsState,
     toolsLoading,
     toolsError,
-    memoryData,
-    memoryLoading,
-    memoryError,
     onSelect: handleSelect,
   });
 }

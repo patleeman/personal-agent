@@ -187,7 +187,7 @@ describe('Sidebar', () => {
     expect(html).toContain('1 scheduled · next in 58s');
   });
 
-  it('shows an active run badge in the utility nav', () => {
+  it('shows the active run badge on the system nav item', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/inbox']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
@@ -211,11 +211,11 @@ describe('Sidebar', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Agent Runs</span><span class="ui-sidebar-nav-badge">3</span>');
+    expect(html).toContain('System</span><span class="ui-sidebar-nav-badge">3</span>');
     expect(html).toContain('3 active now · 1 conversation · 1 scheduled · 1 background.');
   });
 
-  it('renders primary nav above new chat and utility nav below conversations', () => {
+  it('renders the new primary navigation above the conversation workspace', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/inbox']}>
         <SseConnectionContext.Provider value={{ status: 'offline' }}>
@@ -239,12 +239,13 @@ describe('Sidebar', () => {
       </MemoryRouter>,
     );
 
-    expect(html.indexOf('Projects')).toBeLessThan(html.indexOf('Memories'));
-    expect(html.indexOf('Memories')).toBeLessThan(html.indexOf('Tools'));
-    expect(html.indexOf('Tools')).toBeLessThan(html.indexOf('New chat'));
+    expect(html.indexOf('Inbox')).toBeLessThan(html.indexOf('Conversations'));
+    expect(html.indexOf('Conversations')).toBeLessThan(html.indexOf('Knowledge Base'));
+    expect(html.indexOf('Knowledge Base')).toBeLessThan(html.indexOf('Capabilities'));
+    expect(html.indexOf('Capabilities')).toBeLessThan(html.indexOf('New chat'));
     expect(html.indexOf('New chat')).toBeLessThan(html.indexOf('Pinned'));
-    expect(html.indexOf('Open conversations')).toBeLessThan(html.indexOf('Agent Runs'));
-    expect(html.indexOf('Agent Runs')).toBeLessThan(html.indexOf('System'));
+    expect(html.indexOf('Pinned')).toBeLessThan(html.indexOf('Open conversations'));
+    expect(html.indexOf('Open conversations')).toBeLessThan(html.indexOf('System'));
     expect(html.indexOf('System')).toBeLessThan(html.indexOf('Settings'));
   });
 

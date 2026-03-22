@@ -8,7 +8,9 @@ export const RAIL_WIDTH_STORAGE_KEYS = {
   inbox: 'pa:rail-width:inbox',
   memory: 'pa:rail-width:memory',
   memories: 'pa:rail-width:memories',
+  knowledge: 'pa:rail-width:knowledge',
   tools: 'pa:rail-width:tools',
+  capabilities: 'pa:rail-width:capabilities',
   plans: 'pa:rail-width:plans',
   default: 'pa:rail-width:default',
 } as const;
@@ -68,10 +70,20 @@ export function getRailLayoutPrefs(pathname: string): RailLayoutPrefs {
         storageKey: RAIL_WIDTH_STORAGE_KEYS.memories,
         initialMainWidthRatio: 0.7,
       };
+    case 'knowledge':
+      return {
+        storageKey: RAIL_WIDTH_STORAGE_KEYS.knowledge,
+        initialWidth: 460,
+      };
     case 'tools':
       return {
         storageKey: RAIL_WIDTH_STORAGE_KEYS.tools,
         initialMainWidthRatio: 0.7,
+      };
+    case 'capabilities':
+      return {
+        storageKey: RAIL_WIDTH_STORAGE_KEYS.capabilities,
+        initialWidth: 420,
       };
     case 'plans':
       return {

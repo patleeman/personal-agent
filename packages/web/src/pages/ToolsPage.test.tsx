@@ -30,7 +30,7 @@ describe('ToolsPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders selectable tools and instruction sources that target the right-panel query params', () => {
+  it('renders selectable tools and the tool inspector query params', () => {
     vi.mocked(useApi)
       .mockReturnValueOnce({
         data: {
@@ -94,28 +94,6 @@ describe('ToolsPage', () => {
         refreshing: false,
         error: null,
         refetch: vi.fn(),
-      })
-      .mockReturnValueOnce({
-        data: {
-          profile: 'datadog',
-          agentsMd: [{
-            source: 'datadog',
-            path: '/tmp/AGENTS.md',
-            exists: true,
-            content: '# AGENTS',
-          }],
-          skills: [{
-            source: 'datadog',
-            name: 'dd-skill',
-            description: 'Datadog workflow skill.',
-            path: '/tmp/SKILL.md',
-          }],
-          memoryDocs: [],
-        },
-        loading: false,
-        refreshing: false,
-        error: null,
-        refetch: vi.fn(),
       });
 
     const html = renderToString(
@@ -126,8 +104,6 @@ describe('ToolsPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('href="/tools?inspect=agents&amp;path=%2Ftmp%2FAGENTS.md"');
-    expect(html).toContain('href="/tools?inspect=skill&amp;path=%2Ftmp%2FSKILL.md"');
     expect(html).toContain('href="/tools?inspect=tool&amp;name=project"');
     expect(html).toContain('ui-list-row-selected');
     expect(html).toContain('Brand-new conversation prompt');

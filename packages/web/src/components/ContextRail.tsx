@@ -13,6 +13,9 @@ import {
   buildDraftConversationExecutionTargetStorageKey,
   DRAFT_CONVERSATION_ID,
 } from '../draftConversation';
+import { persistForkPromptDraft } from '../forking';
+import { buildCapabilitiesSearch, getCapabilitiesPresetId, getCapabilitiesSection, getCapabilitiesTaskId, getCapabilitiesToolName } from '../capabilitiesSelection';
+import { buildKnowledgeSearch, getKnowledgeInstructionPath, getKnowledgeMemoryId, getKnowledgeProjectId, getKnowledgeSection, getKnowledgeSkillName } from '../knowledgeSelection';
 import { useReloadState } from '../reloadState';
 import {
   getRunConnections,
@@ -22,6 +25,7 @@ import {
   type RunPresentationLookups,
 } from '../runPresentation';
 import {
+  formatProjectStatus,
   isProjectArchived,
   pickAttachProjectId,
   pickFocusedProjectId,
@@ -31,16 +35,35 @@ import { useDurableRunStream } from '../hooks/useDurableRunStream';
 import { useConversations } from '../hooks/useConversations';
 import { fetchSessionDetailCached } from '../hooks/useSessions';
 import { displayBlockToMessageBlock } from '../messageBlocks';
-import { buildCapabilityCards, buildIdentitySummary, buildKnowledgeSections, buildMemoryPageSummary } from '../memoryOverview';
+import { buildCapabilityCards, buildIdentitySummary, buildKnowledgeSections, buildMemoryPageSummary, formatUsageLabel, humanizeSkillName } from '../memoryOverview';
 import { emitMemoriesChanged } from '../memoryDocEvents';
-import { getSystemComponentFromSearch, getSystemComponentLabel } from '../systemSelection';
-import type { ActivityEntry, ConversationExecutionState, DurableRunDetailResult, LiveSessionContext, ProjectDetail, ProjectRecord, RemoteFolderListing } from '../types';
+import { getSystemComponentFromSearch, getSystemComponentLabel, getSystemRunIdFromSearch } from '../systemSelection';
+import { formatTaskSchedule } from '../taskSchedule';
+import type {
+  ActivityEntry,
+  AgentToolInfo,
+  ConversationAutomationWorkflowPreset,
+  ConversationExecutionState,
+  DurableRunDetailResult,
+  LiveSessionContext,
+  MemoryAgentsItem,
+  MemoryData,
+  MemoryDocDetail,
+  MemoryDocItem,
+  MemorySkillItem,
+  ProjectDetail,
+  ProjectRecord,
+  RemoteFolderListing,
+  ScheduledTaskDetail,
+  ScheduledTaskSummary,
+} from '../types';
 import { formatDate, kindMeta, timeAgo } from '../utils';
 import { useAppData, useAppEvents } from '../contexts';
 import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
 import { CONVERSATION_PROJECTS_CHANGED_EVENT, emitConversationProjectsChanged } from '../conversationProjectEvents';
 import { closeConversationTab, ensureConversationTabOpen } from '../sessionTabs';
 import { completeConversationOpenPhase } from '../perfDiagnostics';
+import { sessionNeedsAttention } from '../sessionIndicators';
 import { ErrorState, IconButton, LoadingState, Pill, SurfacePanel } from './ui';
 import { ConversationAutomationPanel } from './ConversationAutomationPanel';
 import { SystemContextPanel } from './SystemContextPanel';
@@ -322,6 +345,8 @@ function runStatusText(detail: DurableRunDetailResult['run']): { text: string; c
   return { text: status ?? 'unknown', cls: 'text-dim' };
 }
 
+const MEMORY_DISTILL_RUN_SOURCE_TYPE = 'conversation-memory-distill';
+
 function formatRecoveryAction(action: string): string {
   switch (action) {
     case 'none': return 'stable';
@@ -331,6 +356,11 @@ function formatRecoveryAction(action: string): string {
     case 'invalid': return 'invalid';
     default: return action;
   }
+}
+
+function isRecoverableMemoryDistillRun(detail: DurableRunDetailResult['run']): boolean {
+  return detail.manifest?.source?.type === MEMORY_DISTILL_RUN_SOURCE_TYPE
+    && (detail.status?.status === 'failed' || detail.status?.status === 'interrupted');
 }
 
 function canCancelRun(detail: DurableRunDetailResult['run']): boolean {
@@ -347,12 +377,15 @@ function isRefreshingRun(detail: DurableRunDetailResult['run'] | null | undefine
   return status === 'queued' || status === 'waiting' || status === 'running' || status === 'recovering';
 }
 
-function RunContextPanel({ conversationId, runId }: { conversationId?: string; runId: string }) {
+function RunContextPanel({ conversationId, runId, simplified = false }: { conversationId?: string; runId: string; simplified?: boolean }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { tasks, sessions } = useAppData();
   const [cancelling, setCancelling] = useState(false);
   const [importingRemote, setImportingRemote] = useState(false);
+  const [retryingMemoryDistill, setRetryingMemoryDistill] = useState(false);
+  const [openingMemoryRecovery, setOpeningMemoryRecovery] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const lookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
   const {
     detail,
@@ -360,7 +393,7 @@ function RunContextPanel({ conversationId, runId }: { conversationId?: string; r
     loading,
     error,
     reconnect,
-  } = useDurableRunStream(runId, 120);
+  } = useDurableRunStream(runId, simplified ? 240 : 160);
 
   const closeRun = useCallback(() => {
     if (!conversationId) {
@@ -402,7 +435,7 @@ function RunContextPanel({ conversationId, runId }: { conversationId?: string; r
   const run = detail.run;
   const status = runStatusText(run);
   const headline = getRunHeadline(run, lookups);
-  const connections = getRunConnections(run, lookups);
+  const connections = getRunConnections(run, lookups).filter((connection) => connection.label !== 'Source file');
   const timeline = getRunTimeline(run);
   const showRecovery = run.recoveryAction !== 'none';
   const cancelable = canCancelRun(run);
@@ -410,201 +443,255 @@ function RunContextPanel({ conversationId, runId }: { conversationId?: string; r
   const currentConversationPath = conversationId ? `/conversations/${encodeURIComponent(conversationId)}` : null;
   const showConversationChrome = Boolean(conversationId);
   const remoteExecution = run.remoteExecution;
+  const recoverableMemoryDistill = isRecoverableMemoryDistillRun(run);
 
   async function handleImportRemote() {
     if (!remoteExecution || importingRemote || remoteExecution.importStatus !== 'ready') {
       return;
     }
 
+    setActionError(null);
     setImportingRemote(true);
     try {
       await api.importRemoteRun(run.runId);
       reconnect();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Could not import the remote run.');
     } finally {
       setImportingRemote(false);
     }
   }
 
+  async function handleRetryMemoryDistill() {
+    if (!recoverableMemoryDistill || retryingMemoryDistill) {
+      return;
+    }
+
+    setActionError(null);
+    setRetryingMemoryDistill(true);
+    try {
+      const result = await api.retryMemoryDistillRun(run.runId);
+      navigate(`/conversations/${encodeURIComponent(result.conversationId)}${setConversationRunIdInSearch('', result.runId)}`);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Could not retry the memory distillation run.');
+    } finally {
+      setRetryingMemoryDistill(false);
+    }
+  }
+
+  async function handleRecoverMemoryDistill() {
+    if (!recoverableMemoryDistill || openingMemoryRecovery) {
+      return;
+    }
+
+    setActionError(null);
+    setOpeningMemoryRecovery(true);
+    try {
+      const result = await api.recoverMemoryDistillRun(run.runId);
+      persistForkPromptDraft(
+        result.conversationId,
+        `Help me recover memory distillation run ${run.runId}. Inspect the failure, then either retry it or finish it manually.`,
+      );
+      navigate(`/conversations/${encodeURIComponent(result.conversationId)}`);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Could not open a recovery conversation for this memory distillation run.');
+    } finally {
+      setOpeningMemoryRecovery(false);
+    }
+  }
+
   return (
-    <div className="space-y-4 px-4 py-4 overflow-y-auto">
-      <div className={showConversationChrome ? 'flex items-center justify-between gap-2' : 'flex items-center justify-end gap-1.5'}>
-        {showConversationChrome && (
-          <button type="button" onClick={closeRun} className="ui-toolbar-button">
-            ← Conversation
-          </button>
-        )}
-        <div className="flex items-center gap-1.5">
-          <button type="button" onClick={reconnect} className="ui-toolbar-button">
-            ↻ Refresh
-          </button>
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="shrink-0 px-4 py-4 space-y-4">
+        <div className={showConversationChrome ? 'flex items-center justify-between gap-2' : 'flex items-center justify-end gap-1.5'}>
           {showConversationChrome && (
-            <Link to={`/runs/${encodeURIComponent(runId)}`} className="ui-toolbar-button text-accent" title="Open on the Agent Runs page">
-              Full page
-            </Link>
+            <button type="button" onClick={closeRun} className="ui-toolbar-button">
+              ← Conversation
+            </button>
           )}
-        </div>
-      </div>
-
-      <div className="space-y-1">
-        <p className="ui-card-title break-words">{headline.title}</p>
-        <p className="ui-card-meta flex flex-wrap items-center gap-1.5">
-          <span className={status.cls}>{status.text}</span>
-          <span className="opacity-40">·</span>
-          <span>{headline.summary}</span>
-          {showRecovery && (
-            <>
-              <span className="opacity-40">·</span>
-              <span>{formatRecoveryAction(run.recoveryAction)}</span>
-            </>
-          )}
-        </p>
-        <p className="text-[11px] font-mono text-dim break-all">{run.runId}</p>
-      </div>
-
-      {cancelable && (
-        <div className="flex items-center justify-between gap-2 rounded-lg border border-border-subtle bg-surface px-3 py-2.5">
-          <p className="text-[12px] text-secondary">This background run can still be cancelled.</p>
-          <button type="button" onClick={() => { void handleCancel(); }} disabled={cancelling} className="ui-toolbar-button text-danger">
-            {cancelling ? 'Cancelling…' : 'Cancel'}
-          </button>
-        </div>
-      )}
-
-      {remoteExecution && (
-        <div className="border-t border-border-subtle pt-3 space-y-2">
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1 min-w-0">
-              <p className="ui-section-label">Remote execution</p>
-              <p className="text-[13px] text-primary break-words">{remoteExecution.targetLabel}</p>
-              <p className="text-[12px] text-secondary break-words">{remoteExecution.remoteCwd}</p>
-            </div>
-            <div className="flex items-center gap-1.5">
-              {remoteExecution.transcriptAvailable && (
-                <a href={api.remoteRunTranscriptUrl(run.runId)} target="_blank" rel="noreferrer" className="ui-toolbar-button">
-                  Transcript
-                </a>
-              )}
-              {remoteExecution.importStatus === 'ready' && (
-                <button type="button" onClick={() => { void handleImportRemote(); }} disabled={importingRemote} className="ui-toolbar-button text-warning">
-                  {importingRemote ? 'Importing…' : 'Import'}
-                </button>
-              )}
-            </div>
+          <div className="flex items-center gap-1.5">
+            <button type="button" onClick={reconnect} className="ui-toolbar-button">
+              ↻ Refresh
+            </button>
           </div>
-          <p className="text-[12px] text-secondary break-words">{remoteExecution.prompt}</p>
-          <p className="text-[12px] text-secondary">
-            Import status: <span className={remoteExecution.importStatus === 'imported' ? 'text-success' : remoteExecution.importStatus === 'ready' ? 'text-warning' : remoteExecution.importStatus === 'failed' ? 'text-danger' : 'text-dim'}>{remoteExecution.importStatus}</span>
+        </div>
+
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="ui-card-title break-words">{headline.title}</p>
+            <Pill tone={status.cls === 'text-danger' ? 'danger' : status.cls === 'text-warning' ? 'warning' : status.cls === 'text-success' ? 'success' : 'muted'}>
+              {status.text}
+            </Pill>
+          </div>
+          <p className="ui-card-meta flex flex-wrap items-center gap-1.5">
+            <span>{headline.summary}</span>
+            {showRecovery && (
+              <>
+                <span className="opacity-40">·</span>
+                <span>{formatRecoveryAction(run.recoveryAction)}</span>
+              </>
+            )}
+            {timeline[0] && (
+              <>
+                <span className="opacity-40">·</span>
+                <span>{timeline[0].label} {timeAgo(timeline[0].at)}</span>
+              </>
+            )}
           </p>
-          {remoteExecution.importSummary && <p className="text-[12px] text-secondary break-words">{remoteExecution.importSummary}</p>}
-          {remoteExecution.importError && <p className="text-[12px] text-danger break-words">{remoteExecution.importError}</p>}
         </div>
-      )}
 
-      {connections.length > 0 && (
-        <div className="border-t border-border-subtle pt-3">
-          <p className="ui-section-label mb-2">Connected to</p>
-          <div className="space-y-2">
-            {connections.map((connection) => {
-              const isCurrentConversationConnection = currentConversationPath !== null
-                && connection.label.startsWith('Conversation')
-                && connection.to === currentConversationPath;
-              const detailText = isCurrentConversationConnection
-                ? ['Current conversation', connection.detail].filter((value): value is string => typeof value === 'string' && value.length > 0).join(' · ')
-                : connection.detail;
-              const connectionHref = connection.to
-                ? connection.to + (showConversationChrome && connection.label.startsWith('Conversation') ? closeSearch : '')
-                : null;
-
-              return (
-                <div key={connection.key} className="space-y-0.5">
-                  <p className="text-[11px] uppercase tracking-[0.12em] text-dim">{connection.label}</p>
-                  {isCurrentConversationConnection ? (
-                    <button
-                      type="button"
-                      onClick={closeRun}
-                      className="text-left text-[13px] text-accent hover:underline break-all"
-                      title="Return to the current conversation"
-                    >
-                      {connection.value}
-                    </button>
-                  ) : connectionHref ? (
-                    <Link to={connectionHref} className="text-[13px] text-accent hover:underline break-all">
-                      {connection.value}
-                    </Link>
-                  ) : (
-                    <p className="text-[13px] text-primary break-all">{connection.value}</p>
-                  )}
-                  {detailText && <p className="text-[12px] text-secondary break-words">{detailText}</p>}
-                </div>
-              );
-            })}
+        {cancelable && (
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-border-subtle bg-surface px-3 py-2.5">
+            <p className="text-[12px] text-secondary">This run can still be cancelled.</p>
+            <button type="button" onClick={() => { void handleCancel(); }} disabled={cancelling} className="ui-toolbar-button text-danger">
+              {cancelling ? 'Cancelling…' : 'Cancel'}
+            </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {timeline.length > 0 && (
-        <div className="border-t border-border-subtle pt-3">
-          <p className="ui-section-label mb-2">Timeline</p>
-          <div className="space-y-2">
-            {timeline.map((item) => (
-              <div key={item.label} className="flex items-baseline justify-between gap-3 text-[12px]">
-                <span className="text-dim uppercase tracking-[0.12em]">{item.label}</span>
-                <span className="text-primary text-right">{formatDate(item.at)}</span>
+        {recoverableMemoryDistill && (
+          <div className="space-y-2 rounded-lg border border-border-subtle bg-surface px-3 py-3">
+            <div className="space-y-1">
+              <p className="ui-section-label">Memory distillation recovery</p>
+              <p className="text-[12px] text-secondary">
+                Retry this failed distillation or open a recovery conversation with the source transcript and failure context loaded.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => { void handleRetryMemoryDistill(); }}
+                disabled={retryingMemoryDistill || openingMemoryRecovery}
+                className="ui-toolbar-button text-warning"
+              >
+                {retryingMemoryDistill ? 'Retrying…' : 'Retry distillation'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { void handleRecoverMemoryDistill(); }}
+                disabled={openingMemoryRecovery || retryingMemoryDistill}
+                className="ui-toolbar-button"
+              >
+                {openingMemoryRecovery ? 'Opening…' : 'Recover in conversation'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {remoteExecution && (
+          <div className="border-t border-border-subtle pt-3 space-y-2">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1 min-w-0">
+                <p className="ui-section-label">Remote execution</p>
+                <p className="text-[13px] text-primary break-words">{remoteExecution.targetLabel}</p>
+                <p className="text-[12px] text-secondary break-words">{remoteExecution.remoteCwd}</p>
               </div>
-            ))}
+              <div className="flex items-center gap-1.5">
+                {remoteExecution.transcriptAvailable && (
+                  <a href={api.remoteRunTranscriptUrl(run.runId)} target="_blank" rel="noreferrer" className="ui-toolbar-button">
+                    Transcript
+                  </a>
+                )}
+                {remoteExecution.importStatus === 'ready' && (
+                  <button type="button" onClick={() => { void handleImportRemote(); }} disabled={importingRemote} className="ui-toolbar-button text-warning">
+                    {importingRemote ? 'Importing…' : 'Import'}
+                  </button>
+                )}
+              </div>
+            </div>
+            {remoteExecution.prompt && <p className="text-[12px] text-secondary break-words">{remoteExecution.prompt}</p>}
+            {remoteExecution.importSummary && <p className="text-[12px] text-secondary break-words">{remoteExecution.importSummary}</p>}
+            {remoteExecution.importError && <p className="text-[12px] text-danger break-words">{remoteExecution.importError}</p>}
+          </div>
+        )}
+
+        {connections.length > 0 && (
+          <div className="border-t border-border-subtle pt-3">
+            <p className="ui-section-label mb-2">Connected to</p>
+            <div className="space-y-2">
+              {connections.map((connection) => {
+                const isCurrentConversationConnection = currentConversationPath !== null
+                  && connection.label.startsWith('Conversation')
+                  && connection.to === currentConversationPath;
+                const detailText = isCurrentConversationConnection
+                  ? ['Current conversation', connection.detail].filter((value): value is string => typeof value === 'string' && value.length > 0).join(' · ')
+                  : connection.detail;
+                const connectionHref = connection.to
+                  ? connection.to + (showConversationChrome && connection.label.startsWith('Conversation') ? closeSearch : '')
+                  : null;
+
+                return (
+                  <div key={connection.key} className="space-y-0.5">
+                    <p className="text-[11px] uppercase tracking-[0.12em] text-dim">{connection.label}</p>
+                    {isCurrentConversationConnection ? (
+                      <button
+                        type="button"
+                        onClick={closeRun}
+                        className="text-left text-[13px] text-accent hover:underline break-all"
+                        title="Return to the current conversation"
+                      >
+                        {connection.value}
+                      </button>
+                    ) : connectionHref ? (
+                      <Link to={connectionHref} className="text-[13px] text-accent hover:underline break-all">
+                        {connection.value}
+                      </Link>
+                    ) : (
+                      <p className="text-[13px] text-primary break-all">{connection.value}</p>
+                    )}
+                    {detailText && <p className="text-[12px] text-secondary break-words">{detailText}</p>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <div className="border-t border-border-subtle pt-3 grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <p className="ui-section-label">Run</p>
+            <p className="text-[13px] text-primary">{run.manifest?.kind ?? 'unknown kind'}</p>
+            {run.manifest?.source?.type && <p className="text-[12px] text-secondary">source {run.manifest.source.type}</p>}
+          </div>
+
+          <div className="space-y-1">
+            <p className="ui-section-label">Progress</p>
+            <p className="text-[13px] text-primary">attempt {run.status?.activeAttempt ?? 0}</p>
+            {run.checkpoint?.step && <p className="text-[12px] text-secondary">checkpoint {run.checkpoint.step}</p>}
           </div>
         </div>
-      )}
 
-      <div className="border-t border-border-subtle pt-3 grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1">
-          <p className="ui-section-label">Run state</p>
-          <p className="text-[13px] text-primary">{run.manifest?.kind ?? 'unknown kind'}</p>
-          {run.manifest?.resumePolicy && <p className="text-[12px] text-secondary">resume policy {run.manifest.resumePolicy}</p>}
-          {run.manifest?.source?.type && <p className="text-[12px] text-secondary">source {run.manifest.source.type}</p>}
-        </div>
+        {(run.status?.lastError || run.problems.length > 0) && (
+          <div className="border-t border-border-subtle pt-3 space-y-3">
+            {run.status?.lastError && (
+              <div className="space-y-1">
+                <p className="ui-section-label">Last error</p>
+                <p className="text-[12px] text-danger whitespace-pre-wrap break-words">{run.status.lastError}</p>
+              </div>
+            )}
+            {run.problems.length > 0 && (
+              <div className="space-y-1">
+                <p className="ui-section-label">Problems</p>
+                <div className="space-y-1 text-[12px] text-danger">
+                  {run.problems.map((problem) => (
+                    <p key={problem}>• {problem}</p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
-        <div className="space-y-1">
-          <p className="ui-section-label">Attempts</p>
-          <p className="text-[13px] text-primary">{run.status?.activeAttempt ?? 0}</p>
-          {run.checkpoint?.step && <p className="text-[12px] text-secondary">checkpoint {run.checkpoint.step}</p>}
-          {run.checkpoint?.cursor && <p className="text-[12px] text-secondary">cursor {run.checkpoint.cursor}</p>}
-        </div>
+        {actionError && <ErrorState message={actionError} />}
+        {error && <ErrorState message={error} />}
       </div>
 
-      {(run.status?.lastError || run.problems.length > 0) && (
-        <div className="border-t border-border-subtle pt-3 space-y-3">
-          {run.status?.lastError && (
-            <div className="space-y-1">
-              <p className="ui-section-label">Last error</p>
-              <p className="text-[12px] text-danger whitespace-pre-wrap break-words">{run.status.lastError}</p>
-            </div>
-          )}
-          {run.problems.length > 0 && (
-            <div className="space-y-1">
-              <p className="ui-section-label">Problems</p>
-              <div className="space-y-1 text-[12px] text-danger">
-                {run.problems.map((problem) => (
-                  <p key={problem}>• {problem}</p>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="border-t border-border-subtle pt-3 space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <p className="ui-section-label">Output log</p>
-          {log?.path && <p className="text-[10px] font-mono text-dim truncate">{log.path.split('/').slice(-2).join('/')}</p>}
-        </div>
-        <pre className="max-h-80 overflow-y-auto rounded-lg bg-elevated px-3 py-2.5 text-[11px] leading-relaxed text-secondary whitespace-pre-wrap break-all">
+      <div className="min-h-0 flex-1 border-t border-border-subtle px-4 pt-4 pb-4 flex flex-col gap-2">
+        <p className="ui-section-label shrink-0">Output log</p>
+        <pre className="min-h-0 flex-1 overflow-auto rounded-lg bg-elevated px-3 py-2.5 text-[11px] leading-relaxed text-secondary whitespace-pre-wrap break-words">
           {log?.log || '(empty)'}
         </pre>
       </div>
-
-      {error && <ErrorState message={error} />}
-      {conversationId && <p className="text-[10px] text-dim">This run belongs to the current conversation.</p>}
     </div>
   );
 }
@@ -1879,7 +1966,7 @@ function InboxItemContext({ id }: { id: string }) {
               <div className="space-y-1.5">
                 <p className="text-[11px] uppercase tracking-[0.12em] text-dim">Projects</p>
                 {entry.relatedProjectIds.map((projectId) => (
-                  <Link key={projectId} to={`/projects/${projectId}`} className="ui-card-meta font-mono text-accent hover:text-accent/80">
+                  <Link key={projectId} to={`/knowledge?section=projects&project=${encodeURIComponent(projectId)}`} className="ui-card-meta font-mono text-accent hover:text-accent/80">
                     {projectId}
                   </Link>
                 ))}
@@ -2509,6 +2596,767 @@ function MemoryOverviewContext() {
   );
 }
 
+function RailMetadataRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="ui-detail-row">
+      <span className="ui-detail-label">{label}</span>
+      <span className="ui-detail-value break-words">{value}</span>
+    </div>
+  );
+}
+
+function RailMarkdownPreview({ content, className }: { content: string; className?: string }) {
+  return (
+    <pre className={[
+      'overflow-x-auto whitespace-pre-wrap break-words text-[12px] leading-relaxed text-secondary',
+      className,
+    ].filter(Boolean).join(' ')}>
+      {content}
+    </pre>
+  );
+}
+
+function sortKnowledgeProjects(items: ProjectRecord[]): ProjectRecord[] {
+  return [...items].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt) || left.title.localeCompare(right.title));
+}
+
+function sortKnowledgeMemories(items: MemoryDocItem[]): MemoryDocItem[] {
+  return [...items].sort((left, right) => {
+    const leftTimestamp = left.updated ?? left.lastUsedAt ?? '';
+    const rightTimestamp = right.updated ?? right.lastUsedAt ?? '';
+    return rightTimestamp.localeCompare(leftTimestamp) || left.title.localeCompare(right.title);
+  });
+}
+
+function sortKnowledgeSkills(items: MemorySkillItem[]): MemorySkillItem[] {
+  return [...items].sort((left, right) => {
+    const leftUsage = Number(left.usedInLastSession) * 10 + (left.recentSessionCount ?? 0);
+    const rightUsage = Number(right.usedInLastSession) * 10 + (right.recentSessionCount ?? 0);
+    return rightUsage - leftUsage
+      || (right.lastUsedAt ?? '').localeCompare(left.lastUsedAt ?? '')
+      || humanizeSkillName(left.name).localeCompare(humanizeSkillName(right.name));
+  });
+}
+
+function sortCapabilityTasks(items: ScheduledTaskSummary[]): ScheduledTaskSummary[] {
+  return [...items].sort((left, right) => {
+    const leftWeight = Number(left.running) * 10 + Number(left.lastStatus === 'failure') * 5 + Number(left.enabled);
+    const rightWeight = Number(right.running) * 10 + Number(right.lastStatus === 'failure') * 5 + Number(right.enabled);
+    return rightWeight - leftWeight
+      || (right.lastRunAt ?? '').localeCompare(left.lastRunAt ?? '')
+      || left.id.localeCompare(right.id);
+  });
+}
+
+function sortCapabilityTools(items: AgentToolInfo[]): AgentToolInfo[] {
+  return [...items].sort((left, right) => Number(right.active) - Number(left.active) || left.name.localeCompare(right.name));
+}
+
+function toolParameterDetails(tool: Pick<AgentToolInfo, 'parameters'>): Array<{ name: string; required: boolean; description?: string; type?: string }> {
+  const properties = tool.parameters.properties ?? {};
+  const required = new Set(tool.parameters.required ?? []);
+
+  return Object.entries(properties).map(([name, schema]) => ({
+    name,
+    required: required.has(name),
+    description: schema.description,
+    type: typeof schema.type === 'string' ? schema.type : undefined,
+  }));
+}
+
+function taskStatusLabel(task: ScheduledTaskSummary): string {
+  if (task.running) return 'running';
+  if (task.lastStatus === 'failure') return 'failed';
+  if (task.lastStatus === 'success') return 'ok';
+  if (!task.enabled) return 'disabled';
+  return 'pending';
+}
+
+function ConversationsWorkspaceContext() {
+  const { pinnedSessions, tabs, archivedSessions, loading, refetch } = useConversations();
+  const attentionSessions = useMemo(
+    () => [...pinnedSessions, ...tabs, ...archivedSessions].filter((session) => sessionNeedsAttention(session)),
+    [archivedSessions, pinnedSessions, tabs],
+  );
+
+  if (loading) {
+    return <LoadingState label="Loading conversations…" className="px-4 py-4" />;
+  }
+
+  return (
+    <div className="px-4 py-4 space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <p className="ui-card-title">Workspace</p>
+          <p className="ui-card-meta">Browse pinned, open, and archived conversations from the main pane. Open a conversation to switch this rail into live session context.</p>
+        </div>
+        <button type="button" onClick={() => { void refetch({ resetLoading: false }); }} className="ui-toolbar-button shrink-0">↻ Refresh</button>
+      </div>
+
+      <div className="space-y-2">
+        <RailMetadataRow label="Pinned" value={pinnedSessions.length} />
+        <RailMetadataRow label="Open" value={tabs.length} />
+        <RailMetadataRow label="Archived" value={archivedSessions.length} />
+        <RailMetadataRow label="Attention" value={attentionSessions.length} />
+      </div>
+
+      <div className="space-y-2 border-t border-border-subtle pt-4">
+        <p className="ui-section-label">Needs attention</p>
+        {attentionSessions.length === 0 ? (
+          <p className="ui-card-meta">No conversations currently need review.</p>
+        ) : (
+          <div className="space-y-2">
+            {attentionSessions.slice(0, 5).map((session) => (
+              <Link key={session.id} to={`/conversations/${encodeURIComponent(session.id)}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
+                <p className="text-[12px] font-medium text-primary break-words">{session.title}</p>
+                <p className="ui-card-meta mt-1">{timeAgo(session.lastActivityAt ?? session.timestamp)} · {session.model?.split('/').pop() ?? 'model unknown'}</p>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-2 border-t border-border-subtle pt-4">
+        <p className="ui-section-label">Workspace samples</p>
+        {[
+          ...pinnedSessions.map((session) => ({ session, label: 'pinned' })),
+          ...tabs.map((session) => ({ session, label: 'open' })),
+        ].slice(0, 5).length === 0 ? (
+          <p className="ui-card-meta">No open conversations yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {[
+              ...pinnedSessions.map((session) => ({ session, label: 'pinned' })),
+              ...tabs.map((session) => ({ session, label: 'open' })),
+            ].slice(0, 5).map(({ session, label }) => (
+              <Link key={session.id} to={`/conversations/${encodeURIComponent(session.id)}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
+                <p className="text-[12px] font-medium text-primary break-words">{session.title}</p>
+                <p className="ui-card-meta mt-1">{label} · {timeAgo(session.lastActivityAt ?? session.timestamp)}</p>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function KnowledgeOverviewContext({
+  section,
+  memoryData,
+  projects,
+}: {
+  section: ReturnType<typeof getKnowledgeSection>;
+  memoryData: MemoryData | null;
+  projects: ProjectRecord[];
+}) {
+  const location = useLocation();
+  const activeProjects = projects.filter((project) => !isProjectArchived(project));
+  const memories = sortKnowledgeMemories(memoryData?.memoryDocs ?? []);
+  const skills = sortKnowledgeSkills(memoryData?.skills ?? []);
+  const instructions = (memoryData?.agentsMd ?? []).filter((item) => item.exists).sort((left, right) => left.source.localeCompare(right.source));
+  const identity = memoryData ? buildIdentitySummary(memoryData) : null;
+  const knowledge = memoryData ? buildKnowledgeSections(memoryData) : null;
+  const capabilityCards = memoryData ? buildCapabilityCards(memoryData) : [];
+
+  if (section === 'projects') {
+    return (
+      <div className="px-4 py-4 space-y-4">
+        <div className="space-y-1">
+          <p className="ui-card-title">Projects</p>
+          <p className="ui-card-meta">Select a project on the left to inspect its active plan, blockers, and linked work.</p>
+        </div>
+        <div className="space-y-2">
+          <RailMetadataRow label="Active" value={activeProjects.length} />
+          <RailMetadataRow label="Archived" value={projects.length - activeProjects.length} />
+        </div>
+        <div className="space-y-2 border-t border-border-subtle pt-4">
+          <p className="ui-section-label">Recently updated</p>
+          {projects.length === 0 ? <p className="ui-card-meta">No projects available.</p> : sortKnowledgeProjects(projects).slice(0, 5).map((project) => (
+            <Link key={project.id} to={`/knowledge${buildKnowledgeSearch(location.search, { section: 'projects', projectId: project.id })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
+              <p className="text-[12px] font-medium text-primary">{project.title}</p>
+              <p className="ui-card-meta mt-1">{formatProjectStatus(project.status)} · updated {timeAgo(project.updatedAt)}</p>
+            </Link>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (section === 'memories') {
+    return (
+      <div className="px-4 py-4 space-y-4">
+        <div className="space-y-1">
+          <p className="ui-card-title">Memories</p>
+          <p className="ui-card-meta">Select a memory package on the left to inspect its overview and package-local references.</p>
+        </div>
+        <div className="space-y-2">
+          <RailMetadataRow label="Packages" value={memories.length} />
+          <RailMetadataRow label="Recently used" value={memories.filter((item) => item.usedInLastSession).length} />
+        </div>
+        <div className="space-y-2 border-t border-border-subtle pt-4">
+          <p className="ui-section-label">Recent packages</p>
+          {memories.length === 0 ? <p className="ui-card-meta">No memory packages available.</p> : memories.slice(0, 5).map((memory) => (
+            <Link key={memory.id} to={`/knowledge${buildKnowledgeSearch(location.search, { section: 'memories', memoryId: memory.id })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
+              <p className="text-[12px] font-medium text-primary">{memory.title}</p>
+              <p className="ui-card-meta mt-1">@{memory.id}{memory.updated ? ` · updated ${timeAgo(memory.updated)}` : ''}</p>
+            </Link>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (section === 'skills') {
+    return (
+      <div className="px-4 py-4 space-y-4">
+        <div className="space-y-1">
+          <p className="ui-card-title">Skills</p>
+          <p className="ui-card-meta">Select a skill on the left to inspect when to use it and read its SKILL.md definition.</p>
+        </div>
+        <div className="space-y-2">
+          <RailMetadataRow label="Available" value={skills.length} />
+          <RailMetadataRow label="Used recently" value={skills.filter((item) => item.usedInLastSession).length} />
+        </div>
+        <div className="space-y-2 border-t border-border-subtle pt-4">
+          <p className="ui-section-label">Top workflows</p>
+          {capabilityCards.length === 0 ? <p className="ui-card-meta">No skills available.</p> : capabilityCards.slice(0, 5).map((card) => (
+            <Link key={card.item.name} to={`/knowledge${buildKnowledgeSearch(location.search, { section: 'skills', skillName: card.item.name })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
+              <p className="text-[12px] font-medium text-primary">{card.title}</p>
+              <p className="ui-card-meta mt-1">{card.usageLabel}</p>
+            </Link>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (section === 'instructions') {
+    return (
+      <div className="px-4 py-4 space-y-4">
+        <div className="space-y-1">
+          <p className="ui-card-title">Instructions</p>
+          <p className="ui-card-meta">Select an instruction source on the left to inspect the durable role and operating policy it contributes.</p>
+        </div>
+        <div className="space-y-2">
+          <RailMetadataRow label="Sources" value={instructions.length} />
+          <RailMetadataRow label="Rules" value={identity?.ruleCount ?? 0} />
+        </div>
+        <div className="space-y-2 border-t border-border-subtle pt-4">
+          <p className="ui-section-label">Loaded sources</p>
+          {instructions.length === 0 ? <p className="ui-card-meta">No instruction sources loaded.</p> : instructions.map((item) => (
+            <Link key={item.path} to={`/knowledge${buildKnowledgeSearch(location.search, { section: 'instructions', instructionPath: item.path })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
+              <p className="text-[12px] font-medium text-primary">{item.source}</p>
+              <p className="ui-card-meta mt-1 break-all">{item.path}</p>
+            </Link>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-4 py-4 space-y-4">
+      <div className="space-y-1">
+        <p className="ui-card-title">Knowledge Base</p>
+        <p className="ui-card-meta">Durable context lives here: projects, memory packages, skills, and instruction sources.</p>
+      </div>
+
+      <div className="space-y-2">
+        <RailMetadataRow label="Projects" value={activeProjects.length} />
+        <RailMetadataRow label="Memories" value={memories.length} />
+        <RailMetadataRow label="Skills" value={skills.length} />
+        <RailMetadataRow label="Instructions" value={instructions.length} />
+      </div>
+
+      {identity && (
+        <div className="space-y-2 border-t border-border-subtle pt-4">
+          <p className="ui-section-label">Identity</p>
+          <p className="ui-card-meta">{identity.role}</p>
+          <p className="ui-card-meta">{identity.ruleCount} durable behavior rules in effect.</p>
+        </div>
+      )}
+
+      {knowledge && (
+        <div className="space-y-2 border-t border-border-subtle pt-4">
+          <p className="ui-section-label">Recent knowledge</p>
+          {knowledge.recent.length === 0 ? <p className="ui-card-meta">No recent durable knowledge usage yet.</p> : knowledge.recent.slice(0, 4).map((item) => (
+            <Link key={item.item.id} to={`/knowledge${buildKnowledgeSearch(location.search, { section: 'memories', memoryId: item.item.id })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
+              <p className="text-[12px] font-medium text-primary">{item.title}</p>
+              <p className="ui-card-meta mt-1">{item.usageLabel}</p>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function KnowledgeProjectContext({ projectId }: { projectId: string }) {
+  const location = useLocation();
+  const viewProfile = useMemo(() => {
+    const value = new URLSearchParams(location.search).get(VIEW_PROFILE_SEARCH_PARAM)?.trim();
+    return value && value !== 'all' ? value : undefined;
+  }, [location.search]);
+  const fetcher = useCallback(() => api.projectById(projectId, viewProfile ? { profile: viewProfile } : undefined), [projectId, viewProfile]);
+  const { data, loading, error, refreshing, refetch } = useApi(fetcher, `knowledge-project-rail:${projectId}:${viewProfile ?? ''}`);
+
+  if (loading && !data) return <LoadingState label="Loading project…" className="px-4 py-4" />;
+  if (error && !data) return <ErrorState message={`Failed to load project: ${error}`} className="px-4 py-4" />;
+  if (!data) return <div className="px-4 py-4 text-[12px] text-dim">Project not found.</div>;
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="shrink-0 border-b border-border-subtle px-4 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <p className="ui-card-title">Project</p>
+            <p className="ui-card-meta">{data.project.title}</p>
+          </div>
+          <button type="button" onClick={() => { void refetch({ resetLoading: false }); }} disabled={refreshing} className="ui-toolbar-button shrink-0">
+            {refreshing ? 'Refreshing…' : '↻ Refresh'}
+          </button>
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        {suspendRailPanel(<ProjectOverviewPanel project={data} />, 'Loading project…')}
+      </div>
+    </div>
+  );
+}
+
+function KnowledgeMemoryContext({ memoryId }: { memoryId: string }) {
+  const { data, loading, error, refreshing, refetch } = useApi(() => api.memoryDoc(memoryId), `knowledge-memory-rail:${memoryId}`);
+
+  if (loading && !data) return <LoadingState label="Loading memory…" className="px-4 py-4" />;
+  if (error && !data) return <ErrorState message={`Failed to load memory: ${error}`} className="px-4 py-4" />;
+  if (!data) return <div className="px-4 py-4 text-[12px] text-dim">Memory not found.</div>;
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="shrink-0 space-y-4 border-b border-border-subtle px-4 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="ui-card-title break-words">{data.memory.title}</p>
+            <p className="ui-card-meta mt-1 font-mono">@{data.memory.id}</p>
+          </div>
+          <button type="button" onClick={() => { void refetch({ resetLoading: false }); }} disabled={refreshing} className="ui-toolbar-button shrink-0">
+            {refreshing ? 'Refreshing…' : '↻ Refresh'}
+          </button>
+        </div>
+        <div className="space-y-2">
+          <RailMetadataRow label="Type" value={data.memory.type ?? '—'} />
+          <RailMetadataRow label="Status" value={data.memory.status ?? '—'} />
+          <RailMetadataRow label="Updated" value={data.memory.updated ? timeAgo(data.memory.updated) : 'unknown'} />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link to={`/memories?memory=${encodeURIComponent(data.memory.id)}`} className="ui-toolbar-button">Open memory browser</Link>
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <div className="space-y-1.5">
+          <p className="ui-section-label">Summary</p>
+          <p className="ui-card-body">{data.memory.summary || 'No summary provided.'}</p>
+        </div>
+        <div className="space-y-2 border-t border-border-subtle pt-4">
+          <p className="ui-section-label">Overview</p>
+          <RailMarkdownPreview content={data.content} />
+        </div>
+        <div className="space-y-2 border-t border-border-subtle pt-4">
+          <p className="ui-section-label">References</p>
+          {data.references.length === 0 ? <p className="ui-card-meta">No package-local references yet.</p> : data.references.map((reference) => (
+            <div key={reference.path} className="space-y-0.5 rounded-lg border border-border-subtle bg-base px-3 py-2">
+              <p className="text-[12px] font-medium text-primary">{reference.title}</p>
+              <p className="ui-card-meta break-all">{reference.relativePath}</p>
+              {reference.summary && <p className="text-[12px] leading-relaxed text-secondary">{reference.summary}</p>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KnowledgeSkillContext({ skill }: { skill: MemorySkillItem }) {
+  const { data, loading, error, refreshing, refetch } = useApi(() => api.memoryFile(skill.path), `knowledge-skill-rail:${skill.path}`);
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="shrink-0 space-y-4 border-b border-border-subtle px-4 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="ui-card-title break-words">{humanizeSkillName(skill.name)}</p>
+            <p className="ui-card-meta mt-1">{skill.source}</p>
+          </div>
+          <button type="button" onClick={() => { void refetch({ resetLoading: false }); }} disabled={refreshing} className="ui-toolbar-button shrink-0">
+            {refreshing ? 'Refreshing…' : '↻ Refresh'}
+          </button>
+        </div>
+        <div className="space-y-2">
+          <RailMetadataRow label="Name" value={skill.name} />
+          <RailMetadataRow label="Usage" value={formatUsageLabel(skill.recentSessionCount, skill.lastUsedAt, skill.usedInLastSession, 'Not used recently')} />
+          <RailMetadataRow label="Path" value={<span className="font-mono break-all">{skill.path}</span>} />
+        </div>
+        {skill.description && <p className="ui-card-body">{skill.description}</p>}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        {loading && !data ? <LoadingState label="Loading skill…" className="px-0 py-0" /> : error && !data ? <ErrorState message={`Failed to load skill: ${error}`} className="px-0 py-0" /> : data?.content ? <RailMarkdownPreview content={data.content} /> : <p className="ui-card-meta">No skill definition content available.</p>}
+      </div>
+    </div>
+  );
+}
+
+function KnowledgeInstructionContext({ item }: { item: MemoryAgentsItem }) {
+  return (
+    <div className="px-4 py-4 space-y-4">
+      <div className="space-y-1">
+        <p className="ui-card-title break-words">{item.source}</p>
+        <p className="ui-card-meta break-all">{item.path}</p>
+      </div>
+      <div className="space-y-2">
+        <RailMetadataRow label="Source" value={item.source} />
+        <RailMetadataRow label="Path" value={<span className="font-mono break-all">{item.path}</span>} />
+      </div>
+      <div className="space-y-2 border-t border-border-subtle pt-4">
+        <p className="ui-section-label">Instructions</p>
+        {item.content ? <RailMarkdownPreview content={item.content} /> : <p className="ui-card-meta">This source exists but no content was loaded.</p>}
+      </div>
+    </div>
+  );
+}
+
+function KnowledgeContextPanel() {
+  const location = useLocation();
+  const section = getKnowledgeSection(location.search);
+  const selectedProjectId = getKnowledgeProjectId(location.search);
+  const selectedMemoryId = getKnowledgeMemoryId(location.search);
+  const selectedSkillName = getKnowledgeSkillName(location.search);
+  const selectedInstructionPath = getKnowledgeInstructionPath(location.search);
+  const memoryResult = useApi(api.memory, 'knowledge-rail-memory');
+  const projectsResult = useApi(api.projects, 'knowledge-rail-projects');
+
+  const memoryData = memoryResult.data ?? null;
+  const projects = sortKnowledgeProjects(projectsResult.data ?? []);
+  const skills = sortKnowledgeSkills(memoryData?.skills ?? []);
+  const instructions = (memoryData?.agentsMd ?? []).filter((item) => item.exists).sort((left, right) => left.source.localeCompare(right.source));
+  const selectedSkill = skills.find((item) => item.name === selectedSkillName) ?? null;
+  const selectedInstruction = instructions.find((item) => item.path === selectedInstructionPath) ?? null;
+
+  if (selectedProjectId) return <KnowledgeProjectContext projectId={selectedProjectId} />;
+  if (selectedMemoryId) return <KnowledgeMemoryContext memoryId={selectedMemoryId} />;
+  if (selectedSkill) return <KnowledgeSkillContext skill={selectedSkill} />;
+  if (selectedInstruction) return <KnowledgeInstructionContext item={selectedInstruction} />;
+  if (memoryResult.loading && !memoryData && projectsResult.loading && projects.length === 0) return <LoadingState label="Loading knowledge base…" className="px-4 py-4" />;
+  if (!memoryData && !projectsResult.data && (memoryResult.error || projectsResult.error)) {
+    return <ErrorState message={`Failed to load knowledge base: ${[memoryResult.error, projectsResult.error].filter(Boolean).join(' · ')}`} className="px-4 py-4" />;
+  }
+
+  return <KnowledgeOverviewContext section={section} memoryData={memoryData} projects={projects} />;
+}
+
+function CapabilitiesOverviewContext({
+  section,
+  presets,
+  defaultPresetIds,
+  tasks,
+  tools,
+  unavailableCliCount,
+  mcpServerCount,
+}: {
+  section: ReturnType<typeof getCapabilitiesSection>;
+  presets: ConversationAutomationWorkflowPreset[];
+  defaultPresetIds: string[];
+  tasks: ScheduledTaskSummary[];
+  tools: AgentToolInfo[];
+  unavailableCliCount: number;
+  mcpServerCount: number;
+}) {
+  const location = useLocation();
+  const activeTools = tools.filter((tool) => tool.active);
+  const failingTasks = tasks.filter((task) => task.lastStatus === 'failure');
+
+  if (section === 'presets') {
+    return (
+      <div className="px-4 py-4 space-y-4">
+        <div className="space-y-1">
+          <p className="ui-card-title">Todo Presets</p>
+          <p className="ui-card-meta">Select a preset on the left to inspect its ordered automation steps and defaults.</p>
+        </div>
+        <div className="space-y-2">
+          <RailMetadataRow label="Presets" value={presets.length} />
+          <RailMetadataRow label="Defaults" value={defaultPresetIds.length} />
+        </div>
+        <div className="space-y-2 border-t border-border-subtle pt-4">
+          <p className="ui-section-label">Defaults</p>
+          {defaultPresetIds.length === 0 ? <p className="ui-card-meta">No default presets configured.</p> : defaultPresetIds.map((presetId) => {
+            const preset = presets.find((item) => item.id === presetId);
+            if (!preset) {
+              return null;
+            }
+            return (
+              <Link key={preset.id} to={`/capabilities${buildCapabilitiesSearch(location.search, { section: 'presets', presetId: preset.id })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
+                <p className="text-[12px] font-medium text-primary">{preset.name}</p>
+                <p className="ui-card-meta mt-1">{preset.items.length} items</p>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  if (section === 'scheduled') {
+    return (
+      <div className="px-4 py-4 space-y-4">
+        <div className="space-y-1">
+          <p className="ui-card-title">Scheduled Tasks</p>
+          <p className="ui-card-meta">Select a task on the left to inspect its prompt, schedule, and recent runtime state.</p>
+        </div>
+        <div className="space-y-2">
+          <RailMetadataRow label="Enabled" value={tasks.filter((task) => task.enabled).length} />
+          <RailMetadataRow label="Running" value={tasks.filter((task) => task.running).length} />
+          <RailMetadataRow label="Failing" value={failingTasks.length} />
+        </div>
+        <div className="space-y-2 border-t border-border-subtle pt-4">
+          <p className="ui-section-label">Needs attention</p>
+          {failingTasks.length === 0 ? <p className="ui-card-meta">No scheduled tasks currently need attention.</p> : failingTasks.slice(0, 5).map((task) => (
+            <Link key={task.id} to={`/capabilities${buildCapabilitiesSearch(location.search, { section: 'scheduled', taskId: task.id })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
+              <p className="text-[12px] font-medium text-primary">{task.id}</p>
+              <p className="ui-card-meta mt-1">failed {task.lastRunAt ? timeAgo(task.lastRunAt) : 'recently'}</p>
+            </Link>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (section === 'tools') {
+    return (
+      <div className="px-4 py-4 space-y-4">
+        <div className="space-y-1">
+          <p className="ui-card-title">Tools</p>
+          <p className="ui-card-meta">Select a tool on the left to inspect its parameter schema and runtime role.</p>
+        </div>
+        <div className="space-y-2">
+          <RailMetadataRow label="Active tools" value={activeTools.length} />
+          <RailMetadataRow label="CLI issues" value={unavailableCliCount} />
+          <RailMetadataRow label="MCP servers" value={mcpServerCount} />
+        </div>
+        <div className="space-y-2 border-t border-border-subtle pt-4">
+          <p className="ui-section-label">Active by default</p>
+          {activeTools.length === 0 ? <p className="ui-card-meta">No active tools reported.</p> : activeTools.slice(0, 6).map((tool) => (
+            <Link key={tool.name} to={`/capabilities${buildCapabilitiesSearch(location.search, { section: 'tools', toolName: tool.name })}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
+              <p className="text-[12px] font-medium text-primary">{tool.name}</p>
+              <p className="ui-card-meta mt-1">{toolParameterDetails(tool).length} parameter{toolParameterDetails(tool).length === 1 ? '' : 's'}</p>
+            </Link>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-4 py-4 space-y-4">
+      <div className="space-y-1">
+        <p className="ui-card-title">Capabilities</p>
+        <p className="ui-card-meta">Presets, scheduled tasks, and tools define what the agent can execute and automate.</p>
+      </div>
+      <div className="space-y-2">
+        <RailMetadataRow label="Presets" value={presets.length} />
+        <RailMetadataRow label="Scheduled" value={tasks.filter((task) => task.enabled).length} />
+        <RailMetadataRow label="Tools" value={activeTools.length} />
+      </div>
+      <div className="space-y-2 border-t border-border-subtle pt-4">
+        <p className="ui-section-label">Current health</p>
+        <p className="ui-card-meta">{tasks.filter((task) => task.running).length} running scheduled task{tasks.filter((task) => task.running).length === 1 ? '' : 's'} · {failingTasks.length} failing · {unavailableCliCount} CLI issue{unavailableCliCount === 1 ? '' : 's'}.</p>
+      </div>
+    </div>
+  );
+}
+
+function CapabilitiesPresetContext({ preset, isDefault }: { preset: ConversationAutomationWorkflowPreset; isDefault: boolean }) {
+  return (
+    <div className="px-4 py-4 space-y-4">
+      <div className="space-y-1">
+        <p className="ui-card-title break-words">{preset.name}</p>
+        <p className="ui-card-meta">{preset.id}</p>
+      </div>
+      <div className="space-y-2">
+        <RailMetadataRow label="Items" value={preset.items.length} />
+        <RailMetadataRow label="Default" value={isDefault ? 'Yes' : 'No'} />
+        <RailMetadataRow label="Updated" value={preset.updatedAt ? new Date(preset.updatedAt).toLocaleString() : 'Saved in settings'} />
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Link to={`/plans?plan=${encodeURIComponent(preset.id)}`} className="ui-toolbar-button">Open preset editor</Link>
+      </div>
+      <div className="space-y-2 border-t border-border-subtle pt-4">
+        <p className="ui-section-label">Items</p>
+        {preset.items.map((item) => (
+          <div key={item.id} className="rounded-lg border border-border-subtle bg-base px-3 py-2">
+            <p className="text-[12px] font-medium text-primary">{item.label}</p>
+            <p className="ui-card-meta mt-1">{item.kind === 'instruction' ? item.text : `${item.skillName}${item.skillArgs ? ` ${item.skillArgs}` : ''}`}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CapabilitiesTaskContext({ taskId }: { taskId: string }) {
+  const navigate = useNavigate();
+  const { data, loading, error, refreshing, refetch } = useApi(() => api.taskDetail(taskId), `capabilities-task-rail:${taskId}`);
+  const [runningNow, setRunningNow] = useState(false);
+
+  const handleRunNow = useCallback(async () => {
+    if (!data || runningNow || data.running) {
+      return;
+    }
+
+    setRunningNow(true);
+    try {
+      const result = await api.runTaskNow(data.id);
+      await refetch({ resetLoading: false });
+      navigate(`/system?run=${encodeURIComponent(result.runId)}`);
+    } finally {
+      setRunningNow(false);
+    }
+  }, [data, navigate, refetch, runningNow]);
+
+  if (loading && !data) return <LoadingState label="Loading task…" className="px-4 py-4" />;
+  if (error && !data) return <ErrorState message={`Failed to load task: ${error}`} className="px-4 py-4" />;
+  if (!data) return <div className="px-4 py-4 text-[12px] text-dim">Task not found.</div>;
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="shrink-0 space-y-4 border-b border-border-subtle px-4 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="ui-card-title break-words">{data.id}</p>
+            <p className="ui-card-meta mt-1">{data.running ? 'running' : data.lastStatus ?? (data.enabled ? 'enabled' : 'disabled')}</p>
+          </div>
+          <button type="button" onClick={() => { void refetch({ resetLoading: false }); }} disabled={refreshing} className="ui-toolbar-button shrink-0">
+            {refreshing ? 'Refreshing…' : '↻ Refresh'}
+          </button>
+        </div>
+        <div className="space-y-2">
+          <RailMetadataRow label="Schedule" value={data.cron || data.at ? formatTaskSchedule(data) : 'manual only'} />
+          <RailMetadataRow label="Model" value={data.model ?? 'Default model'} />
+          <RailMetadataRow label="Cwd" value={<span className="font-mono break-all">{data.cwd ?? 'No cwd set'}</span>} />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => { void handleRunNow(); }} disabled={runningNow || data.running} className="ui-toolbar-button text-accent">
+            {runningNow ? 'Running…' : 'Run now'}
+          </button>
+          <Link to={`/scheduled/${encodeURIComponent(data.id)}`} className="ui-toolbar-button">Open task editor</Link>
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <div className="space-y-2">
+          <p className="ui-section-label">Prompt</p>
+          <RailMarkdownPreview content={data.prompt} />
+        </div>
+        <div className="space-y-2 border-t border-border-subtle pt-4">
+          <p className="ui-section-label">Task file</p>
+          <RailMarkdownPreview content={data.fileContent} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CapabilitiesToolContext({ tool }: { tool: AgentToolInfo }) {
+  const parameters = toolParameterDetails(tool);
+
+  return (
+    <div className="px-4 py-4 space-y-4">
+      <div className="space-y-1">
+        <p className="ui-card-title break-words">{tool.name}</p>
+        <p className="ui-card-meta">{tool.active ? 'Active by default' : 'Available on demand'}</p>
+      </div>
+      <p className="ui-card-body">{tool.description}</p>
+      <div className="space-y-2">
+        <RailMetadataRow label="Default" value={tool.active ? 'Yes' : 'No'} />
+        <RailMetadataRow label="Parameters" value={parameters.length} />
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Link to="/tools" className="ui-toolbar-button">Open full tools page</Link>
+      </div>
+      <div className="space-y-2 border-t border-border-subtle pt-4">
+        <p className="ui-section-label">Parameters</p>
+        {parameters.length === 0 ? <p className="ui-card-meta">No parameters.</p> : parameters.map((parameter) => (
+          <div key={parameter.name} className="rounded-lg border border-border-subtle bg-base px-3 py-2">
+            <p className="text-[12px] font-medium text-primary">{parameter.name}</p>
+            <p className="ui-card-meta mt-1">{parameter.required ? 'required' : 'optional'}{parameter.type ? ` · ${parameter.type}` : ''}</p>
+            {parameter.description && <p className="text-[12px] leading-relaxed text-secondary mt-1">{parameter.description}</p>}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CapabilitiesContextPanel() {
+  const location = useLocation();
+  const section = getCapabilitiesSection(location.search);
+  const selectedPresetId = getCapabilitiesPresetId(location.search);
+  const selectedTaskId = getCapabilitiesTaskId(location.search);
+  const selectedToolName = getCapabilitiesToolName(location.search);
+  const presetsResult = useApi(api.conversationPlansWorkspace, 'capabilities-rail-presets');
+  const tasksResult = useApi(api.tasks, 'capabilities-rail-tasks');
+  const toolsResult = useApi(api.tools, 'capabilities-rail-tools');
+
+  const presets = [...(presetsResult.data?.presetLibrary.presets ?? [])].sort((left, right) => (right.updatedAt ?? '').localeCompare(left.updatedAt ?? '') || left.name.localeCompare(right.name));
+  const tasks = sortCapabilityTasks(tasksResult.data ?? []);
+  const tools = sortCapabilityTools(toolsResult.data?.tools ?? []);
+  const defaultPresetIds = presetsResult.data?.presetLibrary.defaultPresetIds ?? [];
+  const selectedPreset = presets.find((item) => item.id === selectedPresetId) ?? null;
+  const selectedTool = tools.find((item) => item.name === selectedToolName) ?? null;
+
+  if (selectedPreset) return <CapabilitiesPresetContext preset={selectedPreset} isDefault={defaultPresetIds.includes(selectedPreset.id)} />;
+  if (selectedTaskId) return <CapabilitiesTaskContext taskId={selectedTaskId} />;
+  if (selectedTool) return <CapabilitiesToolContext tool={selectedTool} />;
+  if (presetsResult.loading && !presetsResult.data && tasksResult.loading && !tasksResult.data && toolsResult.loading && !toolsResult.data) {
+    return <LoadingState label="Loading capabilities…" className="px-4 py-4" />;
+  }
+  if (!presetsResult.data && !tasksResult.data && !toolsResult.data && (presetsResult.error || tasksResult.error || toolsResult.error)) {
+    return <ErrorState message={`Failed to load capabilities: ${[presetsResult.error, tasksResult.error, toolsResult.error].filter(Boolean).join(' · ')}`} className="px-4 py-4" />;
+  }
+
+  return (
+    <CapabilitiesOverviewContext
+      section={section}
+      presets={presets}
+      defaultPresetIds={defaultPresetIds}
+      tasks={tasks}
+      tools={tools}
+      unavailableCliCount={(toolsResult.data?.dependentCliTools ?? []).filter((tool) => !tool.binary.available).length}
+      mcpServerCount={toolsResult.data?.mcp.servers.length ?? 0}
+    />
+  );
+}
+
+function SettingsOverviewContext() {
+  return (
+    <div className="px-4 py-4 space-y-4">
+      <div className="space-y-1">
+        <p className="ui-card-title">Settings</p>
+        <p className="ui-card-meta">This page controls runtime defaults, profiles, layout preferences, and integration settings for the web UI.</p>
+      </div>
+
+      <div className="space-y-2">
+        <RailMetadataRow label="Profiles" value="Active profile, requested profile, and switching" />
+        <RailMetadataRow label="Defaults" value="Model, cwd, and new-session behavior" />
+        <RailMetadataRow label="Layout" value="Sidebar width, rail width, and reset actions" />
+      </div>
+
+      <div className="space-y-2 border-t border-border-subtle pt-4">
+        <p className="ui-section-label">What lives here</p>
+        <p className="ui-card-meta">Use Settings for stable preferences. Use System for live service state, runs, logs, and operational debugging.</p>
+      </div>
+    </div>
+  );
+}
+
 // ── Root ──────────────────────────────────────────────────────────────────────
 
 export function ContextRail() {
@@ -2566,6 +3414,12 @@ export function ContextRail() {
       <LiveSessionContextPanel id={id} />
     </div>
   );
+  if (section === 'conversations') return (
+    <div className="flex-1 overflow-y-auto flex flex-col">
+      <RailHeader label="Conversations" sub="workspace" />
+      <ConversationsWorkspaceContext />
+    </div>
+  );
 
   // Scheduled tasks
   if (creatingScheduledTask) return (
@@ -2584,20 +3438,6 @@ export function ContextRail() {
     <div className="flex-1 flex flex-col">
       <RailHeader label="Scheduled" />
       <EmptyPrompt text="Select a scheduled task or start a new one." />
-    </div>
-  );
-
-  // Agent runs
-  if (section === 'runs' && id) return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      <RailHeader label="Run" sub={id} />
-      <RunContextPanel runId={id} />
-    </div>
-  );
-  if (section === 'runs') return (
-    <div className="flex-1 flex flex-col">
-      <RailHeader label="Run" />
-      <EmptyPrompt text="Select a run to inspect it here." />
     </div>
   );
 
@@ -2694,14 +3534,67 @@ export function ContextRail() {
     );
   }
 
+  // Knowledge Base
+  if (section === 'knowledge') {
+    const knowledgeSection = getKnowledgeSection(location.search);
+    const projectId = getKnowledgeProjectId(location.search);
+    const memoryId = getKnowledgeMemoryId(location.search);
+    const skillName = getKnowledgeSkillName(location.search);
+    const instructionPath = getKnowledgeInstructionPath(location.search);
+    const knowledgeSub = projectId
+      ?? (memoryId ? `@${memoryId}` : null)
+      ?? skillName
+      ?? (instructionPath ? instructionPath.split('/').pop() ?? instructionPath : null)
+      ?? knowledgeSection;
+
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <RailHeader label="Knowledge Base" sub={knowledgeSub} />
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <KnowledgeContextPanel />
+        </div>
+      </div>
+    );
+  }
+
+  // Capabilities
+  if (section === 'capabilities') {
+    const capabilitiesSection = getCapabilitiesSection(location.search);
+    const presetId = getCapabilitiesPresetId(location.search);
+    const taskId = getCapabilitiesTaskId(location.search);
+    const toolName = getCapabilitiesToolName(location.search);
+    const capabilitiesSub = presetId ?? taskId ?? toolName ?? capabilitiesSection;
+
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <RailHeader label="Capabilities" sub={capabilitiesSub} />
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <CapabilitiesContextPanel />
+        </div>
+      </div>
+    );
+  }
+
   // System
   if (section === 'system') {
+    const runId = getSystemRunIdFromSearch(location.search);
     const componentId = getSystemComponentFromSearch(location.search);
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        <RailHeader label="System" sub={getSystemComponentLabel(componentId)} />
-        <div className="flex-1 overflow-y-auto">
-          <SystemContextPanel componentId={componentId} />
+        <RailHeader label="System" sub={runId ? 'Run' : getSystemComponentLabel(componentId)} />
+        <div className="min-h-0 flex-1">
+          {runId ? <RunContextPanel runId={runId} simplified /> : <SystemContextPanel componentId={componentId} />}
+        </div>
+      </div>
+    );
+  }
+
+  if (section === 'settings') {
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <RailHeader label="Settings" sub="preferences" />
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <SettingsOverviewContext />
         </div>
       </div>
     );

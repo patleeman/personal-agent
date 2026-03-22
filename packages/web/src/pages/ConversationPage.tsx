@@ -1710,6 +1710,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     });
   }, []);
 
+  useEffect(() => {
+    if (!pendingAskUserQuestion || input.length > 0 || attachments.length > 0 || drawingAttachments.length > 0) {
+      return;
+    }
+
+    moveComposerCaretToEnd();
+  }, [attachments.length, drawingAttachments.length, input.length, moveComposerCaretToEnd, pendingAskUserQuestionKey]);
+
   const submitAskUserQuestion = useCallback(async (
     presentation: AskUserQuestionPresentation,
     answers: AskUserQuestionAnswers,
@@ -2145,11 +2153,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    if (!shouldAutoScrollToStreamingTail(
-      streamingTailAutoScrollKeyRef.current,
-      tailBlock,
-      scrollPinnedToBottomRef.current,
-    )) {
+    if (!scrollPinnedToBottomRef.current) {
+      streamingTailAutoScrollKeyRef.current = tailKey;
+      return;
+    }
+
+    if (!shouldAutoScrollToStreamingTail(streamingTailAutoScrollKeyRef.current, tailBlock)) {
       return;
     }
 
@@ -3367,6 +3376,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           setConfirmedLive(true);
           stream.reconnect();
           setTimeout(() => {
+            if (scrollRef.current) {
+              scrollPinnedToBottomRef.current = true;
+              scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+            }
             void stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs)
               .then(async () => {
                 await refetchConversationProjects({ resetLoading: false });
@@ -3719,6 +3732,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               onOpenRun={openRun}
               activeRunId={selectedRunId}
               onSubmitAskUserQuestion={submitAskUserQuestion}
+              askUserQuestionDisplayMode="composer"
               onResumeConversation={conversationResumeState.canResume ? resumeConversation : undefined}
               resumeConversationBusy={resumeConversationBusy}
               resumeConversationTitle={conversationResumeState.title}

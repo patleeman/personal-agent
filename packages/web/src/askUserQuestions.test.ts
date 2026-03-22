@@ -2,9 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { MessageBlock } from './types';
 import {
   buildAskUserQuestionReplyText,
+  findPendingAskUserQuestion,
   isAskUserQuestionComplete,
+  moveAskUserQuestionIndex,
   readAskUserQuestionPresentation,
   resolveAskUserQuestionAnswerLabels,
+  resolveAskUserQuestionDefaultOptionIndex,
+  resolveAskUserQuestionNavigationHotkey,
+  resolveAskUserQuestionOptionHotkey,
 } from './askUserQuestions';
 
 describe('ask user questions', () => {
@@ -92,6 +97,45 @@ describe('ask user questions', () => {
     });
   });
 
+  it('finds the latest pending question before any later user reply', () => {
+    const pending = findPendingAskUserQuestion([
+      {
+        type: 'tool_use',
+        ts: '2026-03-21T00:00:00.000Z',
+        tool: 'ask_user_question',
+        input: { question: 'First?', options: ['A', 'B'] },
+        output: '',
+        status: 'ok',
+      },
+      {
+        type: 'tool_use',
+        ts: '2026-03-21T00:00:01.000Z',
+        tool: 'ask_user_question',
+        input: { question: 'Second?', options: ['C', 'D'] },
+        output: '',
+        status: 'ok',
+      },
+    ]);
+
+    expect(pending?.messageIndex).toBe(1);
+    expect(pending?.presentation.questions[0]?.label).toBe('Second?');
+    expect(findPendingAskUserQuestion([
+      {
+        type: 'tool_use',
+        ts: '2026-03-21T00:00:00.000Z',
+        tool: 'ask_user_question',
+        input: { question: 'Answered?', options: ['Yes', 'No'] },
+        output: '',
+        status: 'ok',
+      },
+      {
+        type: 'user',
+        ts: '2026-03-21T00:00:01.000Z',
+        text: 'Yes',
+      },
+    ])).toBeNull();
+  });
+
   it('formats single radio answers as a direct reply and multiple answers as a structured list', () => {
     const singleQuestion = {
       questions: [{
@@ -168,5 +212,34 @@ describe('ask user questions', () => {
       notify: ['email'],
     })).toBe(true);
     expect(resolveAskUserQuestionAnswerLabels(presentation.questions[1]!, ['telegram', 'email'])).toEqual(['Telegram', 'Email']);
+  });
+
+  it('resolves default option indices and wraps navigation indices', () => {
+    const question = {
+      id: 'target',
+      label: 'Choose a target',
+      style: 'radio' as const,
+      options: [
+        { value: 'staging', label: 'Staging' },
+        { value: 'prod', label: 'Production' },
+        { value: 'dev', label: 'Development' },
+      ],
+    };
+
+    expect(resolveAskUserQuestionDefaultOptionIndex(question, {})).toBe(0);
+    expect(resolveAskUserQuestionDefaultOptionIndex(question, { target: ['prod'] })).toBe(1);
+    expect(moveAskUserQuestionIndex(0, 3, -1)).toBe(2);
+    expect(moveAskUserQuestionIndex(2, 3, 1)).toBe(0);
+  });
+
+  it('resolves numeric selection and next/previous hotkeys', () => {
+    expect(resolveAskUserQuestionOptionHotkey('1')).toBe(0);
+    expect(resolveAskUserQuestionOptionHotkey('9')).toBe(8);
+    expect(resolveAskUserQuestionOptionHotkey('0')).toBe(-1);
+    expect(resolveAskUserQuestionNavigationHotkey('n')).toBe(1);
+    expect(resolveAskUserQuestionNavigationHotkey('j')).toBe(1);
+    expect(resolveAskUserQuestionNavigationHotkey('p')).toBe(-1);
+    expect(resolveAskUserQuestionNavigationHotkey('k')).toBe(-1);
+    expect(resolveAskUserQuestionNavigationHotkey('x')).toBe(0);
   });
 });

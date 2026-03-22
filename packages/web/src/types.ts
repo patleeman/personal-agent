@@ -691,7 +691,11 @@ export type AppEvent =
   | { type: 'projects_snapshot'; projects: ProjectRecord[] }
   | { type: 'sessions_snapshot'; sessions: SessionMeta[] }
   | { type: 'tasks_snapshot'; tasks: ScheduledTaskSummary[] }
-  | { type: 'runs_snapshot'; result: DurableRunListResult };
+  | { type: 'runs_snapshot'; result: DurableRunListResult }
+  | { type: 'daemon_snapshot'; state: DaemonState }
+  | { type: 'gateway_snapshot'; state: GatewayState }
+  | { type: 'sync_snapshot'; state: SyncState }
+  | { type: 'web_ui_snapshot'; state: WebUiState };
 
 // ── Live session ──────────────────────────────────────────────────────────────
 

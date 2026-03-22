@@ -126,75 +126,66 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       action: { kind: 'navigate', to: '/inbox' },
     },
     {
-      id: 'nav:memories',
+      id: 'nav:conversations',
       section: 'nav',
-      title: 'Memories',
-      subtitle: 'Search memory summaries and full memory content',
-      keywords: ['memory', 'knowledge', 'distilled', 'content', 'fuzzy'],
+      title: 'Conversations',
+      subtitle: 'Browse your full conversation workspace',
+      keywords: ['chat', 'sessions', 'open', 'archived', 'attention'],
       order: 2,
+      action: { kind: 'navigate', to: '/conversations' },
+    },
+    {
+      id: 'nav:knowledge',
+      section: 'nav',
+      title: 'Knowledge Base',
+      subtitle: 'Projects, memories, skills, and instructions in one place',
+      keywords: ['memory', 'knowledge', 'projects', 'skills', 'instructions', 'agents'],
+      order: 3,
+      action: { kind: 'navigate', to: '/knowledge' },
+    },
+    {
+      id: 'nav:capabilities',
+      section: 'nav',
+      title: 'Capabilities',
+      subtitle: 'Presets, scheduled tasks, and runtime tools',
+      keywords: ['automation', 'scheduled', 'tasks', 'tools', 'mcp', 'integrations'],
+      order: 4,
+      action: { kind: 'navigate', to: '/capabilities' },
+    },
+    {
+      id: 'nav:search-memories',
+      section: 'nav',
+      title: 'Search memories',
+      subtitle: 'Fuzzy search memory summaries and full memory content',
+      keywords: ['memory', 'knowledge', 'distilled', 'content', 'fuzzy'],
+      order: 5,
       action: { kind: 'setScope', scope: 'memories' },
     },
     {
       id: 'nav:archived',
       section: 'nav',
       title: 'Archived conversations',
-      subtitle: 'Fuzzy search archived user/assistant messages and restore chats',
+      subtitle: 'Fuzzy search archived user and assistant messages',
       keywords: ['archive', 'restore', 'history', 'messages', 'fuzzy'],
-      order: 3,
+      order: 6,
       action: { kind: 'setScope', scope: 'archived' },
-    },
-    {
-      id: 'nav:scheduled',
-      section: 'nav',
-      title: 'Scheduled',
-      subtitle: 'Browse recurring and one-off tasks',
-      keywords: ['tasks', 'plans'],
-      order: 4,
-      action: { kind: 'navigate', to: '/scheduled' },
-    },
-    {
-      id: 'nav:projects',
-      section: 'nav',
-      title: 'Projects',
-      subtitle: 'Browse durable work hubs',
-      keywords: ['project', 'work'],
-      order: 5,
-      action: { kind: 'navigate', to: '/projects' },
-    },
-    {
-      id: 'nav:tools',
-      section: 'nav',
-      title: 'Tools',
-      subtitle: 'Review tool configuration and MCP servers',
-      keywords: ['mcp', 'tooling'],
-      order: 7,
-      action: { kind: 'navigate', to: '/tools' },
     },
     {
       id: 'nav:system',
       section: 'nav',
       title: 'System',
-      subtitle: 'Inspect daemon, sync, gateway, and managed web UI status in one place',
-      keywords: ['daemon', 'sync', 'gateway', 'telegram', 'web ui', 'status', 'services'],
-      order: 8,
+      subtitle: 'Inspect services, logs, and background work',
+      keywords: ['daemon', 'sync', 'gateway', 'telegram', 'web ui', 'status', 'services', 'runs', 'background', 'executions'],
+      order: 7,
       action: { kind: 'navigate', to: '/system' },
-    },
-    {
-      id: 'nav:runs',
-      section: 'nav',
-      title: 'Agent Runs',
-      subtitle: 'Inspect scheduled, background, deferred, and recoverable runs',
-      keywords: ['runs', 'background', 'executions'],
-      order: 12,
-      action: { kind: 'navigate', to: '/runs' },
     },
     {
       id: 'nav:settings',
       section: 'nav',
       title: 'Settings',
-      subtitle: 'Adjust UI and model preferences',
+      subtitle: 'Adjust UI, profile, and model preferences',
       keywords: ['preferences', 'config'],
-      order: 13,
+      order: 8,
       action: { kind: 'navigate', to: '/settings' },
     },
   ];
@@ -331,7 +322,7 @@ function buildTaskItems(tasks: ScheduledTaskSummary[]): CommandPaletteItem<Comma
       meta: metaParts.join(' · '),
       keywords: [task.id, task.filePath, task.scheduleType, task.prompt, task.cron ?? '', task.model ?? '', task.lastStatus ?? ''],
       order: index,
-      action: { kind: 'navigate', to: `/scheduled/${encodeURIComponent(task.id)}` },
+      action: { kind: 'navigate', to: `/capabilities?section=scheduled&task=${encodeURIComponent(task.id)}` },
     };
   });
 }
@@ -379,7 +370,7 @@ function buildProjectItems(projects: ProjectRecord[]): CommandPaletteItem<Comman
         ...project.recentProgress,
       ],
       order: index,
-      action: { kind: 'navigate', to: `/projects/${encodeURIComponent(project.id)}` },
+      action: { kind: 'navigate', to: `/knowledge?section=projects&project=${encodeURIComponent(project.id)}` },
     };
   });
 }
@@ -507,7 +498,7 @@ export function CommandPalette() {
   }, [openPalette]);
 
   const openMemoryEditor = useCallback((memoryId: string) => {
-    navigate(`/memories?memory=${encodeURIComponent(memoryId)}`);
+    navigate(`/knowledge?section=memories&memory=${encodeURIComponent(memoryId)}`);
     closePalette();
   }, [closePalette, navigate]);
 

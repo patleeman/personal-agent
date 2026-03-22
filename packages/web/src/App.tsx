@@ -10,16 +10,21 @@ import {
   INITIAL_APP_EVENT_VERSIONS,
   LiveTitlesContext,
   SseConnectionContext,
+  SystemStatusContext,
 } from './contexts';
 import { ThemeProvider } from './theme';
 import type {
   ActivitySnapshot,
   AppEvent,
   AppEventTopic,
+  DaemonState,
   DurableRunListResult,
+  GatewayState,
   ProjectRecord,
   ScheduledTaskSummary,
   SessionMeta,
+  SyncState,
+  WebUiState,
 } from './types';
 
 function LegacyTaskRoutesRedirect() {
@@ -27,16 +32,19 @@ function LegacyTaskRoutesRedirect() {
   return <Navigate to={id ? `/scheduled/${id}` : '/scheduled'} replace />;
 }
 
+function LegacyRunsRoutesRedirect() {
+  const { id } = useParams<{ id?: string }>();
+  return <Navigate to={id ? `/system?run=${encodeURIComponent(id)}` : '/system'} replace />;
+}
+
 const TasksPage = lazy(() => import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })));
+const ConversationsPage = lazy(() => import('./pages/ConversationsPage').then((module) => ({ default: module.ConversationsPage })));
 const ConversationPage = lazy(() => import('./pages/ConversationPage').then((module) => ({ default: module.ConversationPage })));
-const GatewayPage = lazy(() => import('./pages/GatewayPage').then((module) => ({ default: module.GatewayPage })));
-const DaemonPage = lazy(() => import('./pages/DaemonPage').then((module) => ({ default: module.DaemonPage })));
-const SyncPage = lazy(() => import('./pages/SyncPage').then((module) => ({ default: module.SyncPage })));
-const RunsPage = lazy(() => import('./pages/RunsPage').then((module) => ({ default: module.RunsPage })));
 const SystemPage = lazy(() => import('./pages/SystemPage').then((module) => ({ default: module.SystemPage })));
-const WebUiPage = lazy(() => import('./pages/WebUiPage').then((module) => ({ default: module.WebUiPage })));
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage').then((module) => ({ default: module.ProjectsPage })));
 const AutomationPage = lazy(() => import('./pages/AutomationPage').then((module) => ({ default: module.AutomationPage })));
+const KnowledgeBasePage = lazy(() => import('./pages/KnowledgeBasePage').then((module) => ({ default: module.KnowledgeBasePage })));
+const CapabilitiesPage = lazy(() => import('./pages/CapabilitiesPage').then((module) => ({ default: module.CapabilitiesPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
 const ToolsPage = lazy(() => import('./pages/ToolsPage').then((module) => ({ default: module.ToolsPage })));
 const MemoriesPage = lazy(() => import('./pages/MemoriesPage').then((module) => ({ default: module.MemoriesPage })));
@@ -64,6 +72,10 @@ export function App() {
   const [sessions, setSessionsState] = useState<SessionMeta[] | null>(null);
   const [tasks, setTasksState] = useState<ScheduledTaskSummary[] | null>(null);
   const [runs, setRunsState] = useState<DurableRunListResult | null>(null);
+  const [daemon, setDaemonState] = useState<DaemonState | null>(null);
+  const [gateway, setGatewayState] = useState<GatewayState | null>(null);
+  const [sync, setSyncState] = useState<SyncState | null>(null);
+  const [webUi, setWebUiState] = useState<WebUiState | null>(null);
   const openedOnceRef = useRef(false);
 
   const setTitle = useCallback((id: string, title: string) => {
@@ -93,6 +105,22 @@ export function App() {
 
   const setRuns = useCallback((result: DurableRunListResult) => {
     setRunsState(result);
+  }, []);
+
+  const setDaemon = useCallback((state: DaemonState) => {
+    setDaemonState(state);
+  }, []);
+
+  const setGateway = useCallback((state: GatewayState) => {
+    setGatewayState(state);
+  }, []);
+
+  const setSync = useCallback((state: SyncState) => {
+    setSyncState(state);
+  }, []);
+
+  const setWebUi = useCallback((state: WebUiState) => {
+    setWebUiState(state);
   }, []);
 
   const bootstrapSnapshots = useCallback(async () => {
@@ -160,6 +188,18 @@ export function App() {
         case 'runs_snapshot':
           setRuns(payload.result);
           return;
+        case 'daemon_snapshot':
+          setDaemon(payload.state);
+          return;
+        case 'gateway_snapshot':
+          setGateway(payload.state);
+          return;
+        case 'sync_snapshot':
+          setSync(payload.state);
+          return;
+        case 'web_ui_snapshot':
+          setWebUi(payload.state);
+          return;
         case 'invalidate':
           setEventVersions((prev) => {
             const next = { ...prev };
@@ -187,46 +227,47 @@ export function App() {
       es.close();
       setSseStatus('offline');
     };
-  }, [bootstrapSnapshots, setActivity, setProjects, setRuns, setSessions, setTasks, setTitle]);
+  }, [bootstrapSnapshots, setActivity, setDaemon, setGateway, setProjects, setRuns, setSessions, setSync, setTasks, setTitle, setWebUi]);
 
   return (
     <AppEventsContext.Provider value={{ versions: eventVersions }}>
       <SseConnectionContext.Provider value={{ status: sseStatus }}>
         <AppDataContext.Provider value={{ activity, projects, sessions, tasks, runs, setActivity, setProjects, setSessions, setTasks, setRuns }}>
-          <LiveTitlesContext.Provider value={{ titles: titleMap, setTitle }}>
-            <ThemeProvider>
-              <BrowserRouter>
-                <Routes>
-                  <Route path="/" element={<Layout />}>
-                    <Route index element={<Navigate to="/inbox" replace />} />
-                    <Route path="conversations/new" element={suspendRoute(<ConversationPage draft />)} />
-                    <Route path="conversations/:id" element={suspendRoute(<ConversationPage />)} />
-                    <Route path="inbox" element={<InboxPage />} />
-                    <Route path="inbox/:id" element={<InboxPage />} />
-                    <Route path="system" element={suspendRoute(<SystemPage />)} />
-                    <Route path="gateway" element={suspendRoute(<GatewayPage />)} />
-                    <Route path="daemon" element={suspendRoute(<DaemonPage />)} />
-                    <Route path="sync" element={suspendRoute(<SyncPage />)} />
-                    <Route path="web-ui" element={suspendRoute(<WebUiPage />)} />
-                    <Route path="projects" element={suspendRoute(<ProjectsPage />)} />
-                    <Route path="projects/:id" element={suspendRoute(<ProjectsPage />)} />
-                    <Route path="plans" element={suspendRoute(<AutomationPage />)} />
-                    <Route path="memories" element={suspendRoute(<MemoriesPage />)} />
-                    <Route path="runs" element={suspendRoute(<RunsPage />)} />
-                    <Route path="runs/:id" element={suspendRoute(<RunsPage />)} />
-                    <Route path="scheduled" element={suspendRoute(<TasksPage />)} />
-                    <Route path="scheduled/:id" element={suspendRoute(<TasksPage />)} />
-                    <Route path="automations" element={<LegacyTaskRoutesRedirect />} />
-                    <Route path="automations/:id" element={<LegacyTaskRoutesRedirect />} />
-                    <Route path="tasks" element={<LegacyTaskRoutesRedirect />} />
-                    <Route path="tasks/:id" element={<LegacyTaskRoutesRedirect />} />
-                    <Route path="tools" element={suspendRoute(<ToolsPage />)} />
-                    <Route path="settings" element={suspendRoute(<SettingsPage />)} />
-                  </Route>
-                </Routes>
-              </BrowserRouter>
-            </ThemeProvider>
-          </LiveTitlesContext.Provider>
+          <SystemStatusContext.Provider value={{ daemon, gateway, sync, webUi, setDaemon, setGateway, setSync, setWebUi }}>
+            <LiveTitlesContext.Provider value={{ titles: titleMap, setTitle }}>
+              <ThemeProvider>
+                <BrowserRouter>
+                  <Routes>
+                    <Route path="/" element={<Layout />}>
+                      <Route index element={<Navigate to="/conversations" replace />} />
+                      <Route path="conversations" element={suspendRoute(<ConversationsPage />)} />
+                      <Route path="conversations/new" element={suspendRoute(<ConversationPage draft />)} />
+                      <Route path="conversations/:id" element={suspendRoute(<ConversationPage />)} />
+                      <Route path="inbox" element={<InboxPage />} />
+                      <Route path="inbox/:id" element={<InboxPage />} />
+                      <Route path="knowledge" element={suspendRoute(<KnowledgeBasePage />)} />
+                      <Route path="capabilities" element={suspendRoute(<CapabilitiesPage />)} />
+                      <Route path="system" element={suspendRoute(<SystemPage />)} />
+                      <Route path="projects" element={suspendRoute(<ProjectsPage />)} />
+                      <Route path="projects/:id" element={suspendRoute(<ProjectsPage />)} />
+                      <Route path="plans" element={suspendRoute(<AutomationPage />)} />
+                      <Route path="memories" element={suspendRoute(<MemoriesPage />)} />
+                      <Route path="runs" element={<LegacyRunsRoutesRedirect />} />
+                      <Route path="runs/:id" element={<LegacyRunsRoutesRedirect />} />
+                      <Route path="scheduled" element={suspendRoute(<TasksPage />)} />
+                      <Route path="scheduled/:id" element={suspendRoute(<TasksPage />)} />
+                      <Route path="automations" element={<LegacyTaskRoutesRedirect />} />
+                      <Route path="automations/:id" element={<LegacyTaskRoutesRedirect />} />
+                      <Route path="tasks" element={<LegacyTaskRoutesRedirect />} />
+                      <Route path="tasks/:id" element={<LegacyTaskRoutesRedirect />} />
+                      <Route path="tools" element={suspendRoute(<ToolsPage />)} />
+                      <Route path="settings" element={suspendRoute(<SettingsPage />)} />
+                    </Route>
+                  </Routes>
+                </BrowserRouter>
+              </ThemeProvider>
+            </LiveTitlesContext.Provider>
+          </SystemStatusContext.Provider>
         </AppDataContext.Provider>
       </SseConnectionContext.Provider>
     </AppEventsContext.Provider>

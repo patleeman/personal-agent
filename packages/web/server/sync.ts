@@ -83,7 +83,7 @@ export interface SyncSetupInput {
 
 const DEFAULT_SYNC_BRANCH = 'main';
 
-function readTailLines(filePath: string | undefined, maxLines = 80, maxBytes = 96 * 1024): string[] {
+function readTailLines(filePath: string | undefined, maxLines = 220, maxBytes = 256 * 1024): string[] {
   if (!filePath || !existsSync(filePath)) {
     return [];
   }
@@ -229,19 +229,13 @@ function readSyncGitSummary(repoDir: string, remote: string): SyncGitSummary {
     };
   }
 
-  const branch = runGit(normalizedRepoDir, ['rev-parse', '--abbrev-ref', 'HEAD'], true);
   const status = runGit(normalizedRepoDir, ['status', '--porcelain'], true);
-  const lastCommit = runGit(normalizedRepoDir, ['log', '-1', '--pretty=%h %ad %s', '--date=iso'], true);
-  const remoteUrl = runGit(normalizedRepoDir, ['remote', 'get-url', remote], true);
 
   return {
     hasRepo: true,
-    currentBranch: branch.code === 0 ? branch.stdout || undefined : undefined,
     dirtyEntries: status.code === 0
       ? (status.stdout.length > 0 ? status.stdout.split(/\r?\n/).filter((line) => line.trim().length > 0).length : 0)
       : undefined,
-    lastCommit: lastCommit.code === 0 ? lastCommit.stdout || undefined : undefined,
-    remoteUrl: remoteUrl.code === 0 ? remoteUrl.stdout || undefined : undefined,
   };
 }
 
@@ -332,7 +326,7 @@ export async function readSyncState(): Promise<SyncStateSnapshot> {
     daemon,
     log: {
       path: daemonPaths.logFile,
-      lines: readTailLines(daemonPaths.logFile).filter((line) => line.includes('[module:sync]') || line.includes('sync ')).slice(-60),
+      lines: readTailLines(daemonPaths.logFile).filter((line) => line.includes('[module:sync]') || line.includes('sync ')).slice(-160),
     },
   };
 }

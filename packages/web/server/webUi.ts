@@ -186,7 +186,7 @@ export function syncConfiguredWebUiTailscaleServe(enabled: boolean): void {
   });
 }
 
-function readTailLines(filePath: string | undefined, maxLines = 60, maxBytes = 64 * 1024): string[] {
+function readTailLines(filePath: string | undefined, maxLines = 160, maxBytes = 192 * 1024): string[] {
   if (!filePath || !existsSync(filePath)) {
     return [];
   }

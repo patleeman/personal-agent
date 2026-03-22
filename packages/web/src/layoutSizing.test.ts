@@ -35,9 +35,19 @@ describe('layout sizing helpers', () => {
       initialMainWidthRatio: 0.7,
     });
 
+    expect(getRailLayoutPrefs('/knowledge')).toEqual({
+      storageKey: 'pa:rail-width:knowledge',
+      initialWidth: 460,
+    });
+
     expect(getRailLayoutPrefs('/tools')).toEqual({
       storageKey: 'pa:rail-width:tools',
       initialMainWidthRatio: 0.7,
+    });
+
+    expect(getRailLayoutPrefs('/capabilities')).toEqual({
+      storageKey: 'pa:rail-width:capabilities',
+      initialWidth: 420,
     });
   });
 

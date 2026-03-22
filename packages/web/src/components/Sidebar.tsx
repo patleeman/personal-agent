@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ConversationStatusText } from './ConversationStatusText';
-import { Keycap } from './ui';
 import { api } from '../api';
-import { openCommandPalette } from '../commandPaletteEvents';
 import { buildDeferredResumeIndicatorText } from '../deferredResumeIndicator';
 import { useApi } from '../hooks';
 import { useConversations } from '../hooks/useConversations';
@@ -44,18 +42,11 @@ function Ico({ d, size = 16 }: { d: string; size?: number }) {
 
 const PATH = {
   inbox:    'M2.25 13.5h3.86a2.25 2.25 0 0 1 2.012 1.244l.256.512a2.25 2.25 0 0 0 2.013 1.244h3.218a2.25 2.25 0 0 0 2.013-1.244l.256-.512a2.25 2.25 0 0 1 2.013-1.244h3.859m-19.5.338V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 0 0-2.15-1.588H6.911a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.661Z',
-  search:   'M21 21l-4.35-4.35m1.6-5.15a6.75 6.75 0 1 1-13.5 0 6.75 6.75 0 0 1 13.5 0Z',
-  gateway:  'M7.5 7.5 3.75 12l3.75 4.5m9-9 3.75 4.5-3.75 4.5M20.25 12H3.75',
   automation: 'M6 6h5v5H6zM13 13h5v5h-5zM11 8.5h2M12 9.5v5M8.5 11v2M15.5 11v2',
-  daemon:   'M6 4.5h12A1.5 1.5 0 0 1 19.5 6v12a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V6A1.5 1.5 0 0 1 6 4.5Zm0 3.75h12M6 12h12M6 15.75h12',
-  sync:     'M4.5 12a7.5 7.5 0 0 1 12.803-5.303M19.5 12a7.5 7.5 0 0 1-12.803 5.303M16.5 3.75v3h-3m-3 10.5h3v3',
   system:   'M4.5 7.5h15m-15 4.5h15m-15 4.5h15M6.75 4.5h10.5A2.25 2.25 0 0 1 19.5 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25H6.75A2.25 2.25 0 0 1 4.5 17.25V6.75A2.25 2.25 0 0 1 6.75 4.5Z',
   web:      'M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5a2.25 2.25 0 0 1 2.25 2.25v7.5a2.25 2.25 0 0 1-2.25 2.25H13.5l-3 3v-3H6.75A2.25 2.25 0 0 1 4.5 14.25v-7.5Z',
-  projects: 'M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25a2.25 2.25 0 0 1-2.25-2.25v-2.25Z',
-  runs:     'M4.5 6.75h15M4.5 12h15M4.5 17.25h9m4.5-1.5 1.5 1.5 3-3',
   tasks:    'M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
   memory:      'M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25',
-  tools:       'M14.7 6.3a2.25 2.25 0 1 0 3 3L21 12.6l-2.4 2.4-3.3-3.3a2.25 2.25 0 1 0-3-3L3 18v3h3l9.3-9.3Z',
   settings:    'M10.5 6h3m-1.5-3v6m4.348-2.826 2.121 2.121m-12.728 0 2.121-2.121m8.486 8.486 2.121 2.121m-12.728 0 2.121-2.121M6 10.5H3m18 0h-3m-5.25 7.5v3m0-18v3',
   close:       'M6 18 18 6M6 6l12 12',
   pin:         'M12 17.25v4.5m0-4.5-4.243-4.243a1.5 1.5 0 0 1-.44-1.06V5.25L6.287 4.22A.75.75 0 0 1 6.818 3h10.364a.75.75 0 0 1 .53 1.28l-1.03 1.03v6.697a1.5 1.5 0 0 1-.44 1.06L12 17.25Z',
@@ -65,7 +56,6 @@ const PATH = {
 const SIDEBAR_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
 const SIDEBAR_PREVIOUS_CHAT_HOTKEY = 'Ctrl+Shift+[';
 const SIDEBAR_NEXT_CHAT_HOTKEY = 'Ctrl+Shift+]';
-const SIDEBAR_SEARCH_HOTKEY = '⌘K';
 
 function normalizeHotkeyKey(key: string): string {
   return key.length === 1 ? key.toLowerCase() : key;
@@ -115,50 +105,6 @@ function TopNavItem({
         </span>
       )}
     </NavLink>
-  );
-}
-
-function TopActionButton({
-  icon,
-  label,
-  badge,
-  shortcut,
-  isActive = false,
-  title,
-  onClick,
-}: {
-  icon: string;
-  label: string;
-  badge?: number | string | null;
-  shortcut?: string;
-  isActive?: boolean;
-  title?: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      aria-haspopup="dialog"
-      aria-expanded={isActive}
-      className={[
-        'ui-sidebar-nav-item w-full',
-        isActive && 'ui-sidebar-nav-item-active',
-      ].filter(Boolean).join(' ')}
-    >
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-        stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"
-        className="shrink-0 opacity-70">
-        <path d={icon} />
-      </svg>
-      <span className="flex-1 text-left truncate">{label}</span>
-      {shortcut ? (
-        <Keycap className="ml-auto shrink-0">{shortcut}</Keycap>
-      ) : badge != null ? (
-        <span className="ui-sidebar-nav-badge">{badge}</span>
-      ) : null}
-    </button>
   );
 }
 
@@ -381,33 +327,6 @@ function ShelfDropZone({
   );
 }
 
-function SidebarFooter({
-  activeRunCount,
-  agentRunsTitle,
-}: {
-  activeRunCount: number;
-  agentRunsTitle: string;
-}) {
-  return (
-    <div className="border-t border-border-subtle px-2 py-2 shrink-0 space-y-0.5">
-      <TopNavItem
-        to="/runs"
-        icon={PATH.runs}
-        label="Agent Runs"
-        badge={activeRunCount}
-        title={agentRunsTitle}
-      />
-      <TopNavItem
-        to="/system"
-        icon={PATH.system}
-        label="System"
-        title="Consolidated status for the daemon, sync, gateway, and managed web UI."
-      />
-      <TopNavItem to="/settings" icon={PATH.settings} label="Settings" />
-    </div>
-  );
-}
-
 // ── Sidebar ────────────────────────────────────────────────────────────────
 
 export function Sidebar() {
@@ -434,7 +353,6 @@ export function Sidebar() {
   } | null>(null);
   const allSessions = useMemo(() => [...pinnedSessions, ...tabs, ...archivedSessions], [archivedSessions, pinnedSessions, tabs]);
   const activeConversationId = useMemo(() => getActiveConversationId(location.pathname), [location.pathname]);
-  const plansTarget = '/plans';
   const attentionIds = useMemo(
     () => new Set(allSessions.filter((session) => sessionNeedsAttention(session)).map((session) => session.id)),
     [allSessions],
@@ -451,8 +369,8 @@ export function Sidebar() {
   }, [activity?.entries, allSessions]);
   const inboxCount = standaloneUnreadCount + archivedSessions.filter((session) => sessionNeedsAttention(session)).length;
   const activeRuns = useMemo(() => summarizeActiveRuns({ tasks, sessions, runs }), [runs, sessions, tasks]);
-  const agentRunsTitle = useMemo(() => {
-    const base = 'Daemon-backed agent runs: scheduled task runs, deferred resumes, and recoverable conversation runs.';
+  const systemTitle = useMemo(() => {
+    const base = 'System status, logs, and daemon-backed agent work in one place.';
     if (activeRuns.total === 0) {
       return base;
     }
@@ -664,7 +582,7 @@ export function Sidebar() {
       return;
     }
 
-    navigate('/inbox');
+    navigate('/conversations');
   }
 
   function handleCloseTab(sessionId: string) {
@@ -686,7 +604,7 @@ export function Sidebar() {
       return;
     }
 
-    navigate('/inbox');
+    navigate('/conversations');
   }
 
   function handlePinConversation(sessionId: string) {
@@ -722,16 +640,12 @@ export function Sidebar() {
       return;
     }
 
-    navigate('/inbox');
+    navigate('/conversations');
   }
 
   const handleNewConversation = useCallback(() => {
     navigate('/conversations/new');
   }, [navigate]);
-
-  const handleOpenSearch = useCallback(() => {
-    openCommandPalette();
-  }, []);
 
   const navigateOpenConversation = useCallback((direction: -1 | 1) => {
     if (tabs.length === 0) {
@@ -803,18 +717,9 @@ export function Sidebar() {
 
       <div className="pb-1 space-y-0.5">
         <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={inboxCount} />
-        <TopActionButton
-          icon={PATH.search}
-          label="Search"
-          shortcut={SIDEBAR_SEARCH_HOTKEY}
-          title={`Open unified search (${SIDEBAR_SEARCH_HOTKEY})`}
-          onClick={handleOpenSearch}
-        />
-        <TopNavItem to={plansTarget} icon={PATH.automation} label="Todo Presets" title="Open the full-page todo preset editor for the active conversation." />
-        <TopNavItem to="/scheduled" icon={PATH.tasks} label="Scheduled" />
-        <TopNavItem to="/projects" icon={PATH.projects} label="Projects" />
-        <TopNavItem to="/memories" icon={PATH.memory} label="Memories" />
-        <TopNavItem to="/tools" icon={PATH.tools} label="Tools" />
+        <TopNavItem to="/conversations" icon={PATH.web} label="Conversations" />
+        <TopNavItem to="/knowledge" icon={PATH.memory} label="Knowledge Base" />
+        <TopNavItem to="/capabilities" icon={PATH.automation} label="Capabilities" />
       </div>
 
       <div className="mx-3 border-t border-border-subtle my-2" />
@@ -955,7 +860,10 @@ export function Sidebar() {
         </div>
       </div>
 
-      <SidebarFooter activeRunCount={activeRuns.total} agentRunsTitle={agentRunsTitle} />
+      <div className="border-t border-border-subtle px-2 py-2 shrink-0 space-y-0.5">
+        <TopNavItem to="/system" icon={PATH.system} label="System" badge={activeRuns.total} title={systemTitle} />
+        <TopNavItem to="/settings" icon={PATH.settings} label="Settings" />
+      </div>
     </aside>
   );
 }

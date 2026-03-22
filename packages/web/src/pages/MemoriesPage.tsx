@@ -103,6 +103,13 @@ function memoryWorkItemLabel(item: MemoryWorkItem): string {
   }
 }
 
+function memoryWorkItemHref(item: MemoryWorkItem): string {
+  const base = `/conversations/${encodeURIComponent(item.conversationId)}`;
+  return item.runId.startsWith('state:')
+    ? base
+    : `${base}?run=${encodeURIComponent(item.runId)}`;
+}
+
 function formatReferenceCount(count: number | undefined): string {
   const normalized = count ?? 0;
   return `${normalized} ${normalized === 1 ? 'reference' : 'references'}`;
@@ -205,12 +212,12 @@ export function MemoriesPage() {
             {memoryQueue.length > 0 && (
               <div className="space-y-2">
                 <p className="ui-section-label">Memory work queue</p>
-                <p className="ui-card-meta">Conversation distillations that are still running or need attention.</p>
+                <p className="ui-card-meta">Memory distillation runs that are still active or did not finish cleanly.</p>
                 <div className="space-y-px">
                   {memoryQueue.map((item) => (
                     <ListLinkRow
                       key={item.runId}
-                      to={`/conversations/${encodeURIComponent(item.conversationId)}`}
+                      to={memoryWorkItemHref(item)}
                       leading={<span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${memoryWorkItemDotClass(item)}`} />}
                     >
                       <p className="ui-row-title">{item.conversationTitle}</p>
