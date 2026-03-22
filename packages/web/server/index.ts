@@ -11,6 +11,7 @@ import { notifyConversationAutomationChanged, subscribeConversationAutomation } 
 import { resolveConversationCwd, resolveRequestedCwd } from './conversationCwd.js';
 import { pickFolder } from './folderPicker.js';
 import { readGitStatusSummaryWithTelemetry, type GitStatusReadTelemetry } from './gitStatus.js';
+import { readWorkspaceFile, readWorkspaceSnapshot, writeWorkspaceFile } from './workspaceBrowser.js';
 import {
   installGatewayAndReadState,
   readGatewayState,
@@ -8343,6 +8344,83 @@ app.post('/api/folder-picker', (req, res) => {
       stack: err instanceof Error ? err.stack : undefined,
     });
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+app.get('/api/workspace', (req, res) => {
+  try {
+    const defaultWebCwd = getDefaultWebCwd();
+    const cwd = typeof req.query.cwd === 'string' && req.query.cwd.trim().length > 0
+      ? req.query.cwd
+      : defaultWebCwd;
+    const resolvedCwd = resolveRequestedCwd(cwd, defaultWebCwd) ?? defaultWebCwd;
+    res.json(readWorkspaceSnapshot(resolvedCwd));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.startsWith('Directory does not exist:') || message.startsWith('Not a directory:')
+      ? 400
+      : 500;
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(status).json({ error: message });
+  }
+});
+
+app.get('/api/workspace/file', (req, res) => {
+  try {
+    const defaultWebCwd = getDefaultWebCwd();
+    const cwd = typeof req.query.cwd === 'string' && req.query.cwd.trim().length > 0
+      ? req.query.cwd
+      : defaultWebCwd;
+    const path = typeof req.query.path === 'string' ? req.query.path.trim() : '';
+    if (!path) {
+      res.status(400).json({ error: 'path required' });
+      return;
+    }
+
+    const resolvedCwd = resolveRequestedCwd(cwd, defaultWebCwd) ?? defaultWebCwd;
+    res.json(readWorkspaceFile({ cwd: resolvedCwd, path }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message === 'path required' || message.startsWith('Directory does not exist:') || message.startsWith('Not a directory:') || message.startsWith('Path is outside the workspace root:')
+      ? 400
+      : 500;
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(status).json({ error: message });
+  }
+});
+
+app.post('/api/workspace/file', (req, res) => {
+  try {
+    const defaultWebCwd = getDefaultWebCwd();
+    const { cwd: requestedCwd, path, content } = req.body as { cwd?: string; path?: string; content?: string };
+    if (typeof path !== 'string' || path.trim().length === 0) {
+      res.status(400).json({ error: 'path required' });
+      return;
+    }
+
+    if (typeof content !== 'string') {
+      res.status(400).json({ error: 'content required' });
+      return;
+    }
+
+    const resolvedCwd = resolveRequestedCwd(requestedCwd, defaultWebCwd) ?? defaultWebCwd;
+    res.json(writeWorkspaceFile({ cwd: resolvedCwd, path, content }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message === 'path required' || message === 'content required' || message.startsWith('Directory does not exist:') || message.startsWith('Not a directory:') || message.startsWith('Path is outside the workspace root:')
+      ? 400
+      : 500;
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(status).json({ error: message });
   }
 });
 

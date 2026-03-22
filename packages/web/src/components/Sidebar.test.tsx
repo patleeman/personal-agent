@@ -240,7 +240,8 @@ describe('Sidebar', () => {
     );
 
     expect(html.indexOf('Inbox')).toBeLessThan(html.indexOf('Conversations'));
-    expect(html.indexOf('Conversations')).toBeLessThan(html.indexOf('Knowledge Base'));
+    expect(html.indexOf('Conversations')).toBeLessThan(html.indexOf('Workspace'));
+    expect(html.indexOf('Workspace')).toBeLessThan(html.indexOf('Knowledge Base'));
     expect(html.indexOf('Knowledge Base')).toBeLessThan(html.indexOf('Capabilities'));
     expect(html.indexOf('Capabilities')).toBeLessThan(html.indexOf('New chat'));
     expect(html.indexOf('New chat')).toBeLessThan(html.indexOf('Pinned'));

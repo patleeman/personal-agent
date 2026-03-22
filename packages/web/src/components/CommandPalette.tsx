@@ -135,12 +135,21 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       action: { kind: 'navigate', to: '/conversations' },
     },
     {
+      id: 'nav:workspace',
+      section: 'nav',
+      title: 'Workspace',
+      subtitle: 'Browse files, inspect changes, and edit code',
+      keywords: ['files', 'tree', 'editor', 'git', 'diff', 'workspace'],
+      order: 3,
+      action: { kind: 'navigate', to: '/workspace' },
+    },
+    {
       id: 'nav:knowledge',
       section: 'nav',
       title: 'Knowledge Base',
       subtitle: 'Projects, memories, skills, and instructions in one place',
       keywords: ['memory', 'knowledge', 'projects', 'skills', 'instructions', 'agents'],
-      order: 3,
+      order: 4,
       action: { kind: 'navigate', to: '/knowledge' },
     },
     {
@@ -149,7 +158,7 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       title: 'Capabilities',
       subtitle: 'Presets, scheduled tasks, and runtime tools',
       keywords: ['automation', 'scheduled', 'tasks', 'tools', 'mcp', 'integrations'],
-      order: 4,
+      order: 5,
       action: { kind: 'navigate', to: '/capabilities' },
     },
     {
@@ -158,7 +167,7 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       title: 'Search memories',
       subtitle: 'Fuzzy search memory summaries and full memory content',
       keywords: ['memory', 'knowledge', 'distilled', 'content', 'fuzzy'],
-      order: 5,
+      order: 6,
       action: { kind: 'setScope', scope: 'memories' },
     },
     {
@@ -167,7 +176,7 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       title: 'Archived conversations',
       subtitle: 'Fuzzy search archived user and assistant messages',
       keywords: ['archive', 'restore', 'history', 'messages', 'fuzzy'],
-      order: 6,
+      order: 7,
       action: { kind: 'setScope', scope: 'archived' },
     },
     {
@@ -176,7 +185,7 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       title: 'System',
       subtitle: 'Inspect services, logs, and background work',
       keywords: ['daemon', 'sync', 'gateway', 'telegram', 'web ui', 'status', 'services', 'runs', 'background', 'executions'],
-      order: 7,
+      order: 8,
       action: { kind: 'navigate', to: '/system' },
     },
     {
@@ -185,7 +194,7 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       title: 'Settings',
       subtitle: 'Adjust UI, profile, and model preferences',
       keywords: ['preferences', 'config'],
-      order: 8,
+      order: 9,
       action: { kind: 'navigate', to: '/settings' },
     },
   ];

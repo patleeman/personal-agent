@@ -6,6 +6,7 @@ It gives you one place to see:
 
 - inbox attention
 - conversations
+- workspace files and edits
 - projects
 - scheduled tasks
 - sync state
@@ -97,6 +98,7 @@ Use the UI when you want:
 
 - a persistent inbox
 - easy conversation browsing and branching
+- a repo-aware workspace browser and editor
 - project management backed by `PROJECT.yaml`
 - visibility into daemon, sync, and gateway state
 - a visual memory browser
@@ -151,6 +153,19 @@ From the deferred details row, you can also fire a scheduled resume immediately 
 Conversations can also carry lightweight automation.
 That automation is an ordered todo list of skill steps for that conversation.
 When the list finishes, the agent does one final review pass and can add more todo items through the todo-list tool before stopping.
+
+### Workspace
+
+The Workspace page is a local file browser and editor for the current codebase.
+
+You can:
+
+- browse a repo-root file tree from the right-hand panel while editing in the main pane
+- jump straight to changed files from git status
+- inspect a side-by-side word-level diff for the selected file
+- open the same workspace in VS Code when you want a fuller editor
+
+When the selected folder lives inside a git repo, the page automatically roots itself at the repo top level so the tree and changed-file list line up with git.
 
 ### Automation
 

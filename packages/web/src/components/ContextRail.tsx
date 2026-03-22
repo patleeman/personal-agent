@@ -75,6 +75,7 @@ const ScheduledTaskCreatePanel = lazy(() => import('./ScheduledTaskPanel').then(
 const ScheduledTaskPanel = lazy(() => import('./ScheduledTaskPanel').then((module) => ({ default: module.ScheduledTaskPanel })));
 const ToolsContextPanel = lazy(() => import('./ToolsContextPanel').then((module) => ({ default: module.ToolsContextPanel })));
 const AutomationPresetPanel = lazy(() => import('./AutomationPresetPanel').then((module) => ({ default: module.AutomationPresetPanel })));
+const WorkspaceRail = lazy(() => import('./WorkspaceRail').then((module) => ({ default: module.WorkspaceRail })));
 
 function suspendRailPanel(element: React.ReactNode, label = 'Loading…') {
   return (
@@ -1559,6 +1560,13 @@ function LiveSessionContextPanel({ id }: { id: string }) {
               </IconButton>
             </div>
           </div>
+          {!isRemoteConversation && (
+            <div className="flex justify-end">
+              <Link to={`/workspace?cwd=${encodeURIComponent(data.cwd)}`} className="ui-card-meta text-accent hover:text-accent/80">
+                Open workspace browser
+              </Link>
+            </div>
+          )}
           {remotePickerOpen && isRemoteConversation && (
             <RemoteFolderBrowser
               listing={remotePickerListing}
@@ -3529,6 +3537,18 @@ export function ContextRail() {
         <RailHeader label="Memory" />
         <div className="flex-1 overflow-y-auto">
           <MemoryOverviewContext />
+        </div>
+      </div>
+    );
+  }
+
+  // Workspace
+  if (section === 'workspace') {
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <RailHeader label="Workspace" sub="files" />
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {suspendRailPanel(<WorkspaceRail />, 'Loading workspace tree…')}
         </div>
       </div>
     );
