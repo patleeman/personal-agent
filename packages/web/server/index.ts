@@ -5,12 +5,12 @@ import { basename, dirname, join, normalize, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
-import { listSessions, readSessionBlock, readSessionBlocks, readSessionImageAsset, readSessionSearchText, readSessionTree, renameStoredSession } from './sessions.js';
+import { listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, readSessionSearchText, readSessionTree, renameStoredSession, type SessionDetailReadTelemetry } from './sessions.js';
 import { invalidateAppTopics, startAppEventMonitor, subscribeAppEvents, type AppEventTopic } from './appEvents.js';
 import { notifyConversationAutomationChanged, subscribeConversationAutomation } from './conversationAutomationEvents.js';
 import { resolveConversationCwd, resolveRequestedCwd } from './conversationCwd.js';
 import { pickFolder } from './folderPicker.js';
-import { readGitStatusSummary } from './gitStatus.js';
+import { readGitStatusSummaryWithTelemetry, type GitStatusReadTelemetry } from './gitStatus.js';
 import {
   installGatewayAndReadState,
   readGatewayState,
@@ -161,6 +161,7 @@ import {
   subscribeRemoteConversationConnection,
   subscribeRemoteLiveSession,
   syncRemoteConversationMirror,
+  type RemoteConversationMirrorSyncTelemetry,
 } from './remoteLiveSessions.js';
 import { recoverDurableLiveConversations } from './conversationRecovery.js';
 import {
@@ -183,7 +184,7 @@ import {
   migrateLocalConversationAutomationSettingsToProfile,
 } from './conversationAutomationProfileSettings.js';
 import { createWebLiveConversationRunId, syncWebLiveConversationRun } from './conversationRuns.js';
-import { cancelDurableRun, getDurableRun, getDurableRunLog, getDurableRunSnapshot, listDurableRuns } from './durableRuns.js';
+import { cancelDurableRun, getDurableRun, getDurableRunLog, getDurableRunSnapshot, listDurableRuns, listDurableRunsWithTelemetry, type DurableRunsListTelemetry } from './durableRuns.js';
 import {
   buildConversationExecutionState,
   buildExecutionTargetsState,
@@ -192,6 +193,7 @@ import {
   readRemoteExecutionRunConversationId,
   resolveRemoteExecutionCwd,
   submitRemoteExecutionRun,
+  type ConversationExecutionState,
 } from './remoteExecution.js';
 import {
   buildReferencedMemoryDocsContext,
@@ -797,6 +799,40 @@ function startInboxCullLoop(): void {
       logWarn(`Inbox cull failed: ${(error as Error).message}`);
     });
   }, INBOX_CULL_INTERVAL_MS);
+}
+
+interface ServerTimingMetric {
+  name: string;
+  durationMs: number;
+  description?: string;
+}
+
+function formatServerTimingMetric(metric: ServerTimingMetric): string {
+  const dur = Number.isFinite(metric.durationMs) ? Math.max(0, metric.durationMs) : 0;
+  const parts = [`${metric.name};dur=${dur.toFixed(1)}`];
+  if (metric.description) {
+    parts.push(`desc="${metric.description.replace(/"/g, '')}"`);
+  }
+  return parts.join(';');
+}
+
+function setServerTimingHeaders(res: express.Response, metrics: ServerTimingMetric[], meta?: Record<string, unknown>): void {
+  if (metrics.length > 0) {
+    res.setHeader('Server-Timing', metrics.map(formatServerTimingMetric).join(', '));
+  }
+
+  if (meta && Object.keys(meta).length > 0) {
+    res.setHeader('X-PA-Perf', JSON.stringify(meta));
+  }
+}
+
+function logSlowConversationPerf(label: string, fields: Record<string, unknown>): void {
+  const durationMs = typeof fields.durationMs === 'number' ? fields.durationMs : 0;
+  if (durationMs < 150) {
+    return;
+  }
+
+  logInfo(label, fields);
 }
 
 function summarizeUserMessageContent(content: unknown): { text: string; imageCount: number } {
@@ -2247,26 +2283,45 @@ startInboxCullLoop();
 
 async function buildSnapshotEvents(topics: AppEventTopic[]) {
   const uniqueTopics = [...new Set(topics)];
-  const events = await Promise.all(uniqueTopics.map(async (topic) => {
+  const events: unknown[] = [];
+
+  for (const topic of uniqueTopics) {
     switch (topic) {
       case 'activity': {
         const snapshot = getActivitySnapshotForCurrentProfile();
-        return { type: 'activity_snapshot' as const, entries: snapshot.entries, unreadCount: snapshot.unreadCount };
+        events.push({ type: 'activity_snapshot' as const, entries: snapshot.entries, unreadCount: snapshot.unreadCount });
+        break;
       }
       case 'projects':
-        return { type: 'projects_snapshot' as const, projects: listProjectsForCurrentProfile() };
+        events.push({ type: 'projects_snapshot' as const, projects: listProjectsForCurrentProfile() });
+        break;
       case 'sessions':
-        return { type: 'sessions_snapshot' as const, sessions: listConversationSessionsSnapshot() };
+        events.push({ type: 'sessions_snapshot' as const, sessions: listConversationSessionsSnapshot() });
+        break;
       case 'tasks':
-        return { type: 'tasks_snapshot' as const, tasks: listTasksForCurrentProfile() };
+        events.push({ type: 'tasks_snapshot' as const, tasks: listTasksForCurrentProfile() });
+        break;
       case 'runs':
-        return { type: 'runs_snapshot' as const, result: await listDurableRuns() };
+        events.push({ type: 'runs_snapshot' as const, result: await listDurableRuns() });
+        break;
+      case 'daemon':
+        events.push({ type: 'daemon_snapshot' as const, state: await readDaemonState() });
+        break;
+      case 'gateway':
+        events.push({ type: 'gateway_snapshot' as const, state: readGatewayState(getCurrentProfile()) });
+        break;
+      case 'sync':
+        events.push({ type: 'sync_snapshot' as const, state: await readSyncState() });
+        break;
+      case 'webUi':
+        events.push({ type: 'web_ui_snapshot' as const, state: readWebUiState() });
+        break;
       default:
-        return null;
+        break;
     }
-  }));
+  }
 
-  return events.filter((event): event is NonNullable<typeof event> => event !== null);
+  return events;
 }
 
 const DIST_DIR =
@@ -4207,18 +4262,29 @@ async function readExecutionTargetsState() {
   });
 }
 
-async function readConversationExecutionState(conversationId: string) {
+async function readConversationExecutionStateWithTelemetry(conversationId: string): Promise<{
+  state: ConversationExecutionState;
+  telemetry: DurableRunsListTelemetry;
+}> {
   const stored = getConversationExecutionTarget({
     profile: getCurrentProfile(),
     conversationId,
   });
+  const runs = await listDurableRunsWithTelemetry();
 
-  return buildConversationExecutionState({
-    conversationId,
-    targetId: stored?.targetId ?? null,
-    runs: (await listDurableRuns()).runs,
-    inspectSshBinary: inspectSshBinaryState,
-  });
+  return {
+    state: buildConversationExecutionState({
+      conversationId,
+      targetId: stored?.targetId ?? null,
+      runs: runs.result.runs,
+      inspectSshBinary: inspectSshBinaryState,
+    }),
+    telemetry: runs.telemetry,
+  };
+}
+
+async function readConversationExecutionState(conversationId: string) {
+  return (await readConversationExecutionStateWithTelemetry(conversationId)).state;
 }
 
 app.get('/api/execution-targets', async (_req, res) => {
@@ -4551,11 +4617,13 @@ app.get('/api/sessions', (_req, res) => {
 });
 
 app.get('/api/sessions/:id', async (req, res) => {
+  const startedAt = process.hrtime.bigint();
+
   try {
-    await syncRemoteConversationMirror({
+    const remoteMirror = await syncRemoteConversationMirror({
       profile: getCurrentProfile(),
       conversationId: req.params.id,
-    }).catch(() => undefined);
+    }).catch(() => ({ status: 'not-remote' as const, durationMs: 0 } satisfies RemoteConversationMirrorSyncTelemetry));
 
     const rawTailBlocks = Array.isArray(req.query.tailBlocks) ? req.query.tailBlocks[0] : req.query.tailBlocks;
     const parsedTailBlocks = typeof rawTailBlocks === 'string'
@@ -4567,9 +4635,33 @@ app.get('/api/sessions/:id', async (req, res) => {
       ? parsedTailBlocks as number
       : undefined;
 
-    const result = readSessionBlocks(req.params.id, tailBlocks ? { tailBlocks } : undefined);
-    if (!result) { res.status(404).json({ error: 'Session not found' }); return; }
-    res.json(result);
+    const sessionRead = readSessionBlocksWithTelemetry(req.params.id, tailBlocks ? { tailBlocks } : undefined);
+    if (!sessionRead.detail) { res.status(404).json({ error: 'Session not found' }); return; }
+
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+    setServerTimingHeaders(res, [
+      { name: 'remote_sync', durationMs: remoteMirror.durationMs, description: remoteMirror.status },
+      { name: 'session_read', durationMs: sessionRead.telemetry?.durationMs ?? 0, description: sessionRead.telemetry ? `${sessionRead.telemetry.cache}/${sessionRead.telemetry.loader}` : 'unknown' },
+      { name: 'total', durationMs },
+    ], {
+      route: 'session-detail',
+      conversationId: req.params.id,
+      ...(tailBlocks ? { tailBlocks } : {}),
+      remoteMirror,
+      sessionRead: sessionRead.telemetry,
+      durationMs,
+    });
+    logSlowConversationPerf('session detail request', {
+      conversationId: req.params.id,
+      durationMs,
+      ...(tailBlocks ? { tailBlocks } : {}),
+      remoteMirrorStatus: remoteMirror.status,
+      sessionReadCache: sessionRead.telemetry?.cache,
+      sessionReadLoader: sessionRead.telemetry?.loader,
+      sessionReadDurationMs: sessionRead.telemetry?.durationMs,
+    });
+
+    res.json(sessionRead.detail);
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -5987,6 +6079,7 @@ app.post('/api/live-sessions/:id/abort', async (req, res) => {
 
 /** Get token usage stats for a live session */
 app.get('/api/live-sessions/:id/context', (req, res) => {
+  const startedAt = process.hrtime.bigint();
   const { id } = req.params;
 
   // cwd: local live registry first, then remote live registry, then session list.
@@ -5997,10 +6090,15 @@ app.get('/api/live-sessions/:id/context', (req, res) => {
   const cwd = liveEntry?.cwd ?? remoteLive?.cwd ?? sessionMeta?.cwd;
   if (!cwd) { res.status(404).json({ error: 'Session not found' }); return; }
 
-  const gitSummary = remoteLive ? null : readGitStatusSummary(cwd);
+  const gitSummaryRead = remoteLive
+    ? { summary: null, telemetry: { cache: 'hit' as const, durationMs: 0, hasRepo: false } satisfies GitStatusReadTelemetry }
+    : readGitStatusSummaryWithTelemetry(cwd);
+  const gitSummary = gitSummaryRead.summary;
 
   // User messages: prefer local live in-memory messages (most up-to-date), otherwise use a small persisted tail.
   let userMessages: { id: string; ts: string; text: string; imageCount: number }[] = [];
+  let userMessageSource: 'live' | 'tail-120' | 'tail-400' | 'none' = liveEntry ? 'live' : 'none';
+  let userMessageReadTelemetry: SessionDetailReadTelemetry | null = null;
   if (liveEntry) {
     userMessages = liveEntry.session.agent.state.messages
       .filter((message) => message.role === 'user')
@@ -6010,12 +6108,14 @@ app.get('/api/live-sessions/:id/context', (req, res) => {
         return { id: String(index), ts: new Date().toISOString(), text: text.slice(0, 300), imageCount };
       });
   } else {
-    const recentTail = readSessionBlocks(id, { tailBlocks: 120 });
-    const recentTailUserMessages = (recentTail?.blocks ?? []).filter((block) => block.type === 'user');
-    const expandedTail = recentTail && recentTailUserMessages.length < 5 && recentTail.blockOffset > 0
-      ? readSessionBlocks(id, { tailBlocks: 400 })
+    const recentTail = readSessionBlocksWithTelemetry(id, { tailBlocks: 120 });
+    const recentTailUserMessages = (recentTail.detail?.blocks ?? []).filter((block) => block.type === 'user');
+    const expandedTail = recentTail.detail && recentTailUserMessages.length < 5 && recentTail.detail.blockOffset > 0
+      ? readSessionBlocksWithTelemetry(id, { tailBlocks: 400 })
       : recentTail;
-    userMessages = (expandedTail?.blocks ?? [])
+    userMessageSource = expandedTail === recentTail ? 'tail-120' : 'tail-400';
+    userMessageReadTelemetry = expandedTail.telemetry;
+    userMessages = (expandedTail.detail?.blocks ?? [])
       .filter((block) => block.type === 'user')
       .slice(-5)
       .map((block) => ({
@@ -6030,6 +6130,31 @@ app.get('/api/live-sessions/:id/context', (req, res) => {
     profile: getCurrentProfile(),
     conversationId: id,
   })?.relatedProjectIds ?? [];
+
+  const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+  setServerTimingHeaders(res, [
+    { name: 'git', durationMs: gitSummaryRead.telemetry.durationMs, description: remoteLive ? 'remote-skip' : gitSummaryRead.telemetry.cache },
+    { name: 'user_msgs', durationMs: userMessageReadTelemetry?.durationMs ?? 0, description: userMessageSource },
+    { name: 'total', durationMs },
+  ], {
+    route: 'live-session-context',
+    conversationId: id,
+    git: gitSummaryRead.telemetry,
+    userMessages: {
+      source: userMessageSource,
+      telemetry: userMessageReadTelemetry,
+      count: userMessages.length,
+    },
+    durationMs,
+  });
+  logSlowConversationPerf('live session context request', {
+    conversationId: id,
+    durationMs,
+    gitCache: gitSummaryRead.telemetry.cache,
+    userMessageSource,
+    userMessageReadDurationMs: userMessageReadTelemetry?.durationMs,
+    userMessageReadLoader: userMessageReadTelemetry?.loader,
+  });
 
   res.json({
     cwd,
@@ -6258,8 +6383,29 @@ app.post('/api/conversations/:id/plan/items/:itemId/status', async (req, res) =>
 });
 
 app.get('/api/conversations/:id/execution', async (req, res) => {
+  const startedAt = process.hrtime.bigint();
+
   try {
-    res.json(await readConversationExecutionState(req.params.id));
+    const execution = await readConversationExecutionStateWithTelemetry(req.params.id);
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+    setServerTimingHeaders(res, [
+      { name: 'runs', durationMs: execution.telemetry.durationMs, description: `${execution.telemetry.cache}/${execution.telemetry.source}` },
+      { name: 'total', durationMs },
+    ], {
+      route: 'conversation-execution',
+      conversationId: req.params.id,
+      runs: execution.telemetry,
+      durationMs,
+    });
+    logSlowConversationPerf('conversation execution request', {
+      conversationId: req.params.id,
+      durationMs,
+      runsCache: execution.telemetry.cache,
+      runsSource: execution.telemetry.source,
+      runsDurationMs: execution.telemetry.durationMs,
+    });
+
+    res.json(execution.state);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }

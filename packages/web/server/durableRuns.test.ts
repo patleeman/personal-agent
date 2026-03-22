@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { getDurableRun } from './durableRuns.js';
+import { getDurableRun, listDurableRunsWithTelemetry } from './durableRuns.js';
 import { PersonalAgentDaemon, type DaemonConfig } from '@personal-agent/daemon';
 
 const tempDirs: string[] = [];
@@ -45,6 +45,36 @@ describe('durable run reads', () => {
   afterEach(async () => {
     process.env = originalEnv;
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  });
+
+  it('reports cache telemetry when durable runs fall back to filesystem scanning', async () => {
+    const stateRoot = createTempDir('pa-web-durable-runs-cache-state-');
+    const daemonSocketDir = createTempDir('pa-web-durable-runs-cache-sock-');
+    const socketPath = join(daemonSocketDir, 'personal-agentd.sock');
+
+    process.env = {
+      ...originalEnv,
+      PERSONAL_AGENT_STATE_ROOT: stateRoot,
+      PERSONAL_AGENT_DAEMON_SOCKET_PATH: socketPath,
+    };
+
+    const firstRead = await listDurableRunsWithTelemetry();
+    expect(firstRead.result.runs).toEqual([]);
+    expect(firstRead.telemetry).toMatchObject({
+      cache: 'miss',
+      source: 'scan',
+      runCount: 0,
+    });
+    expect(firstRead.telemetry.durationMs).toBeGreaterThanOrEqual(0);
+
+    const secondRead = await listDurableRunsWithTelemetry();
+    expect(secondRead.result.runs).toEqual([]);
+    expect(secondRead.telemetry).toMatchObject({
+      cache: 'hit',
+      source: 'scan',
+      runCount: 0,
+    });
+    expect(secondRead.telemetry.durationMs).toBeGreaterThanOrEqual(0);
   });
 
   it('returns undefined instead of throwing when daemon reports a missing run', async () => {

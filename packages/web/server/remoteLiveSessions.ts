@@ -15,6 +15,7 @@ import {
 const LOCAL_PA_CLI_PATH = join(process.cwd(), 'packages', 'cli', 'dist', 'index.js');
 const REMOTE_BOOTSTRAP_FILE = 'bootstrap-session.jsonl';
 const REMOTE_IDLE_STOP_DELAY_MS = 60_000;
+const REMOTE_MIRROR_SYNC_TTL_MS = 5_000;
 
 type SseEvent =
   | { type: 'snapshot'; blocks: SessionDetail['blocks']; blockOffset: number; totalBlocks: number }
@@ -73,6 +74,11 @@ interface RemoteLiveEntry {
   idleTimer?: ReturnType<typeof setTimeout>;
 }
 
+export interface RemoteConversationMirrorSyncTelemetry {
+  status: 'synced-live' | 'synced-binding' | 'skipped-fresh' | 'not-remote';
+  durationMs: number;
+}
+
 export interface RemoteFolderEntry {
   name: string;
   path: string;
@@ -96,6 +102,7 @@ export interface RemoteConversationConnectionState {
 export const remoteRegistry = new Map<string, RemoteLiveEntry>();
 const remoteConnectionStates = new Map<string, RemoteConversationConnectionState>();
 const remoteConnectionListeners = new Map<string, Set<() => void>>();
+const remoteMirrorLastSyncedAt = new Map<string, number>();
 
 function quoteShellArg(value: string): string {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
@@ -541,6 +548,28 @@ function summarizeToolResult(result: unknown): { output: string; details?: unkno
   };
 }
 
+export function shouldSkipRemoteConversationMirrorSync(options: {
+  conversationId: string;
+  localSessionFile: string;
+  force?: boolean;
+  now?: number;
+}): boolean {
+  if (options.force) {
+    return false;
+  }
+
+  if (!existsSync(options.localSessionFile)) {
+    return false;
+  }
+
+  const lastSyncedAt = remoteMirrorLastSyncedAt.get(options.conversationId);
+  if (typeof lastSyncedAt !== 'number') {
+    return false;
+  }
+
+  return ((options.now ?? Date.now()) - lastSyncedAt) < REMOTE_MIRROR_SYNC_TTL_MS;
+}
+
 async function syncMirrorFromRemote(entry: RemoteLiveEntry): Promise<void> {
   if (!entry.remoteSessionFile) {
     return;
@@ -556,18 +585,48 @@ async function syncMirrorFromRemote(entry: RemoteLiveEntry): Promise<void> {
 
   const detail = readSessionBlocksByFile(entry.localSessionFile);
   entry.title = detail?.meta.title;
+  remoteMirrorLastSyncedAt.set(entry.conversationId, Date.now());
 }
 
-export async function syncRemoteConversationMirror(options: { profile: string; conversationId: string }): Promise<void> {
+export async function syncRemoteConversationMirror(options: { profile: string; conversationId: string; force?: boolean }): Promise<RemoteConversationMirrorSyncTelemetry> {
+  const startedAt = process.hrtime.bigint();
   const liveEntry = remoteRegistry.get(options.conversationId);
   if (liveEntry) {
+    if (shouldSkipRemoteConversationMirrorSync({
+      conversationId: options.conversationId,
+      localSessionFile: liveEntry.localSessionFile,
+      force: options.force,
+    })) {
+      return {
+        status: 'skipped-fresh',
+        durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+      };
+    }
+
     await syncMirrorFromRemote(liveEntry);
-    return;
+    return {
+      status: 'synced-live',
+      durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+    };
   }
 
   const binding = getRemoteConversationBinding(options);
   if (!binding?.remoteSessionFile) {
-    return;
+    return {
+      status: 'not-remote',
+      durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+    };
+  }
+
+  if (shouldSkipRemoteConversationMirrorSync({
+    conversationId: options.conversationId,
+    localSessionFile: binding.localSessionFile,
+    force: options.force,
+  })) {
+    return {
+      status: 'skipped-fresh',
+      durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+    };
   }
 
   const target = getExecutionTarget({ targetId: binding.targetId });
@@ -582,6 +641,11 @@ export async function syncRemoteConversationMirror(options: { profile: string; c
     remoteCwd: binding.remoteCwd,
     remoteContent,
   });
+  remoteMirrorLastSyncedAt.set(binding.conversationId, Date.now());
+  return {
+    status: 'synced-binding',
+    durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+  };
 }
 
 function scheduleIdleStop(entry: RemoteLiveEntry): void {

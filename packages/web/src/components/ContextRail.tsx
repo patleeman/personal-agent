@@ -33,14 +33,17 @@ import { fetchSessionDetailCached } from '../hooks/useSessions';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { buildCapabilityCards, buildIdentitySummary, buildKnowledgeSections, buildMemoryPageSummary } from '../memoryOverview';
 import { emitMemoriesChanged } from '../memoryDocEvents';
+import { getSystemComponentFromSearch, getSystemComponentLabel } from '../systemSelection';
 import type { ActivityEntry, ConversationExecutionState, DurableRunDetailResult, LiveSessionContext, ProjectDetail, ProjectRecord, RemoteFolderListing } from '../types';
 import { formatDate, kindMeta, timeAgo } from '../utils';
 import { useAppData, useAppEvents } from '../contexts';
 import { emitProjectsChanged, PROJECTS_CHANGED_EVENT } from '../projectEvents';
 import { CONVERSATION_PROJECTS_CHANGED_EVENT, emitConversationProjectsChanged } from '../conversationProjectEvents';
 import { closeConversationTab, ensureConversationTabOpen } from '../sessionTabs';
+import { completeConversationOpenPhase } from '../perfDiagnostics';
 import { ErrorState, IconButton, LoadingState, Pill, SurfacePanel } from './ui';
 import { ConversationAutomationPanel } from './ConversationAutomationPanel';
+import { SystemContextPanel } from './SystemContextPanel';
 
 const ConversationArtifactPanel = lazy(() => import('./ConversationArtifactPanel').then((module) => ({ default: module.ConversationArtifactPanel })));
 const ProjectDetailPanel = lazy(() => import('./ProjectDetailPanel').then((module) => ({ default: module.ProjectDetailPanel })));
@@ -109,6 +112,41 @@ function fetchConversationRailCacheEntry<T>(input: {
 
   input.inflight.set(inflightKey, request);
   return request;
+}
+
+export function prefetchConversationRailData(input: {
+  conversationId: string;
+  sessionsVersion: number;
+  runsVersion: number;
+  executionTargetsVersion: number;
+}): Promise<void> {
+  const liveContextVersionKey = `${input.sessionsVersion}`;
+  const executionVersionKey = `${input.executionTargetsVersion}:${input.runsVersion}`;
+  const cachedContext = liveSessionContextCache.get(input.conversationId) ?? null;
+  const cachedExecution = conversationExecutionCache.get(input.conversationId) ?? null;
+
+  const requests: Promise<unknown>[] = [];
+  if (!isConversationRailCacheFresh(cachedContext, liveContextVersionKey)) {
+    requests.push(fetchConversationRailCacheEntry({
+      cache: liveSessionContextCache,
+      inflight: liveSessionContextInflight,
+      key: input.conversationId,
+      versionKey: liveContextVersionKey,
+      fetcher: () => api.liveSessionContext(input.conversationId),
+    }));
+  }
+
+  if (!isConversationRailCacheFresh(cachedExecution, executionVersionKey)) {
+    requests.push(fetchConversationRailCacheEntry({
+      cache: conversationExecutionCache,
+      inflight: conversationExecutionInflight,
+      key: input.conversationId,
+      versionKey: executionVersionKey,
+      fetcher: () => api.conversationExecution(input.conversationId),
+    }));
+  }
+
+  return Promise.all(requests).then(() => undefined);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -974,6 +1012,23 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const autoExpandedConnectedRunsConversationIdRef = useRef<string | null>(null);
 
   useEffect(() => load(), [load]);
+
+  useEffect(() => {
+    if (loading || (!data && !execution && !error)) {
+      return;
+    }
+
+    const frame = requestAnimationFrame(() => {
+      completeConversationOpenPhase(id, 'rail', {
+        state: error ? 'error' : 'loaded',
+        hasContext: Boolean(data),
+        hasExecution: Boolean(execution),
+        userMessageCount: data?.userMessages.length ?? 0,
+      });
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [data, error, execution, id, loading]);
 
   useEffect(() => {
     runMentionsLastFetchedAtRef.current = 0;
@@ -2634,6 +2689,19 @@ export function ContextRail() {
         <RailHeader label="Memory" />
         <div className="flex-1 overflow-y-auto">
           <MemoryOverviewContext />
+        </div>
+      </div>
+    );
+  }
+
+  // System
+  if (section === 'system') {
+    const componentId = getSystemComponentFromSearch(location.search);
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <RailHeader label="System" sub={getSystemComponentLabel(componentId)} />
+        <div className="flex-1 overflow-y-auto">
+          <SystemContextPanel componentId={componentId} />
         </div>
       </div>
     );
