@@ -1,4 +1,4 @@
-import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationCwdChangeResult, ConversationExecutionState, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DisplayBlock, DurableRunDetailResult, DurableRunListResult, ExecutionTargetPathMapping, ExecutionTargetsState, FolderPickerResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, McpServerDetail, McpToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, MemoryWorkItem, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectDiagnostics, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteConversationConnectionState, RemoteFolderListing, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SyncState, ToolsState, WebUiState } from './types';
+import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationCwdChangeResult, ConversationExecutionState, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DisplayBlock, DurableRunDetailResult, DurableRunListResult, ExecutionTargetPathMapping, ExecutionTargetsState, FolderPickerResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, McpServerDetail, McpToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, MemoryWorkItem, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectDiagnostics, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteConversationConnectionState, RemoteFolderListing, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SyncState, ToolsState, WebUiState, WorkspaceFileDetail, WorkspaceSnapshot } from './types';
 import { recordApiTiming } from './perfDiagnostics';
 
 async function get<T>(path: string): Promise<T> {
@@ -279,6 +279,17 @@ export const api = {
     post<RemoteFolderListing>(`/execution-targets/${encodeURIComponent(targetId)}/folders`, { cwd, baseCwd }),
   run: (command: string, cwd?: string) =>
     post<{ output: string; exitCode: number }>('/run', { command, cwd }),
+  workspaceSnapshot: (cwd?: string) =>
+    get<WorkspaceSnapshot>(`/workspace${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''}`),
+  workspaceFile: (path: string, cwd?: string) => {
+    const params = new URLSearchParams({ path });
+    if (cwd) {
+      params.set('cwd', cwd);
+    }
+    return get<WorkspaceFileDetail>(`/workspace/file?${params.toString()}`);
+  },
+  workspaceFileSave: (path: string, content: string, cwd?: string) =>
+    post<WorkspaceFileDetail>('/workspace/file', { path, content, cwd }),
 
   // ── Memory browser ────────────────────────────────────────────────────────
   memory:         (options?: { profile?: string }) => get<MemoryData>(withViewProfile('/memory', options?.profile)),

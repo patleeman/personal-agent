@@ -752,6 +752,64 @@ export interface RemoteFolderListing {
   entries: RemoteFolderEntry[];
 }
 
+// ── Workspace browser ───────────────────────────────────────────────────────
+
+export type WorkspaceChangeKind =
+  | 'modified'
+  | 'added'
+  | 'deleted'
+  | 'renamed'
+  | 'copied'
+  | 'typechange'
+  | 'untracked'
+  | 'conflicted';
+
+export interface WorkspaceTreeNode {
+  name: string;
+  path: string;
+  relativePath: string;
+  kind: 'directory' | 'file';
+  exists: boolean;
+  change: WorkspaceChangeKind | null;
+  children?: WorkspaceTreeNode[];
+}
+
+export interface WorkspaceChangeEntry {
+  path: string;
+  relativePath: string;
+  exists: boolean;
+  change: WorkspaceChangeKind;
+}
+
+export interface WorkspaceSnapshot {
+  cwd: string;
+  root: string;
+  repoRoot: string | null;
+  branch: string | null;
+  focusPath: string | null;
+  fileCount: number;
+  changedCount: number;
+  truncated: boolean;
+  tree: WorkspaceTreeNode[];
+  changes: WorkspaceChangeEntry[];
+}
+
+export interface WorkspaceFileDetail {
+  cwd: string;
+  root: string;
+  repoRoot: string | null;
+  path: string;
+  relativePath: string;
+  exists: boolean;
+  sizeBytes: number;
+  binary: boolean;
+  tooLarge: boolean;
+  content: string | null;
+  originalContent: string | null;
+  change: WorkspaceChangeKind | null;
+  diff: string | null;
+}
+
 export interface LiveSessionMeta {
   id:          string;
   cwd:         string;

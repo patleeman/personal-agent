@@ -48,6 +48,7 @@ const CapabilitiesPage = lazy(() => import('./pages/CapabilitiesPage').then((mod
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
 const ToolsPage = lazy(() => import('./pages/ToolsPage').then((module) => ({ default: module.ToolsPage })));
 const MemoriesPage = lazy(() => import('./pages/MemoriesPage').then((module) => ({ default: module.MemoriesPage })));
+const WorkspacePage = lazy(() => import('./pages/WorkspacePage').then((module) => ({ default: module.WorkspacePage })));
 
 function suspendRoute(element: React.ReactNode) {
   return (
@@ -243,6 +244,7 @@ export function App() {
                       <Route path="conversations" element={suspendRoute(<ConversationsPage />)} />
                       <Route path="conversations/new" element={suspendRoute(<ConversationPage draft />)} />
                       <Route path="conversations/:id" element={suspendRoute(<ConversationPage />)} />
+                      <Route path="workspace" element={suspendRoute(<WorkspacePage />)} />
                       <Route path="inbox" element={<InboxPage />} />
                       <Route path="inbox/:id" element={<InboxPage />} />
                       <Route path="knowledge" element={suspendRoute(<KnowledgeBasePage />)} />

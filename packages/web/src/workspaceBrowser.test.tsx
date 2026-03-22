@@ -1,0 +1,71 @@
+import React from 'react';
+import { renderToString } from 'react-dom/server';
+import { describe, expect, it } from 'vitest';
+import { buildWorkspaceSearch, filterWorkspaceTree, WorkspaceWordDiffView } from './workspaceBrowser';
+import type { WorkspaceTreeNode } from './types';
+
+(globalThis as typeof globalThis & { React?: typeof React }).React = React;
+
+const TREE: WorkspaceTreeNode[] = [
+  {
+    name: 'src',
+    path: '/tmp/project/src',
+    relativePath: 'src',
+    kind: 'directory',
+    exists: true,
+    change: null,
+    children: [
+      {
+        name: 'index.ts',
+        path: '/tmp/project/src/index.ts',
+        relativePath: 'src/index.ts',
+        kind: 'file',
+        exists: true,
+        change: 'modified',
+      },
+      {
+        name: 'clean.ts',
+        path: '/tmp/project/src/clean.ts',
+        relativePath: 'src/clean.ts',
+        kind: 'file',
+        exists: true,
+        change: null,
+      },
+    ],
+  },
+];
+
+describe('buildWorkspaceSearch', () => {
+  it('updates cwd and file params while preserving unrelated search params', () => {
+    expect(buildWorkspaceSearch('?foo=bar&cwd=/tmp/old&file=src/old.ts', {
+      cwd: '/tmp/new',
+      file: 'src/new.ts',
+    })).toBe('?foo=bar&cwd=%2Ftmp%2Fnew&file=src%2Fnew.ts');
+  });
+});
+
+describe('filterWorkspaceTree', () => {
+  it('keeps only changed files when changedOnly is enabled', () => {
+    expect(filterWorkspaceTree(TREE, { query: '', changedOnly: true })).toEqual([
+      expect.objectContaining({
+        relativePath: 'src',
+        children: [expect.objectContaining({ relativePath: 'src/index.ts' })],
+      }),
+    ]);
+  });
+});
+
+describe('WorkspaceWordDiffView', () => {
+  it('renders a side-by-side word diff with old and new columns', () => {
+    const html = renderToString(
+      <WorkspaceWordDiffView originalContent={'export const value = 1;\n'} currentContent={'export const result = 2;\n'} />,
+    );
+
+    expect(html).toContain('Original');
+    expect(html).toContain('Current');
+    expect(html).toContain('value');
+    expect(html).toContain('result');
+    expect(html).toContain('bg-danger/12');
+    expect(html).toContain('bg-teal/12');
+  });
+});
