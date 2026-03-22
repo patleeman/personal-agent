@@ -273,6 +273,37 @@ describe('sessions', () => {
     ]);
   });
 
+  it('keeps later user turns visible in archived tails after hidden automation turns', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    const dir = join(sessionsDir, '--tmp-project--');
+    mkdirSync(dir, { recursive: true });
+    const filePath = join(dir, '2026-03-11T12-00-00-000Z_session-tail-user-after-hidden.jsonl');
+    writeFileSync(filePath, [
+      JSON.stringify({ type: 'session', version: 3, id: 'session-tail-user-after-hidden', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
+      JSON.stringify({ type: 'model_change', id: 'uah-model', parentId: null, timestamp: '2026-03-11T12:00:00.000Z', modelId: 'test-model' }),
+      JSON.stringify({ type: 'message', id: 'uah-user-1', parentId: 'uah-model', timestamp: '2026-03-11T12:00:01.000Z', message: { role: 'user', content: 'First prompt' } }),
+      JSON.stringify({ type: 'message', id: 'uah-assistant-1', parentId: 'uah-user-1', timestamp: '2026-03-11T12:00:02.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }] } }),
+      JSON.stringify({ type: 'custom_message', id: 'uah-hidden-1', parentId: 'uah-assistant-1', timestamp: '2026-03-11T12:00:03.000Z', customType: 'conversation_automation_post_turn_review', content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }], display: false }),
+      JSON.stringify({ type: 'message', id: 'uah-assistant-2', parentId: 'uah-hidden-1', timestamp: '2026-03-11T12:00:04.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Hidden automation reply' }] } }),
+      JSON.stringify({ type: 'message', id: 'uah-tool-1', parentId: 'uah-assistant-2', timestamp: '2026-03-11T12:00:05.000Z', message: { role: 'toolResult', toolCallId: 'call-1', toolName: 'wait_for_user', content: [{ type: 'text', text: 'Waiting for user.' }] } }),
+      JSON.stringify({ type: 'message', id: 'uah-assistant-3', parentId: 'uah-tool-1', timestamp: '2026-03-11T12:00:06.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Still hidden automation summary.' }] } }),
+      JSON.stringify({ type: 'message', id: 'uah-user-2', parentId: 'uah-assistant-3', timestamp: '2026-03-11T12:00:07.000Z', message: { role: 'user', content: 'Second prompt' } }),
+      JSON.stringify({ type: 'message', id: 'uah-assistant-4', parentId: 'uah-user-2', timestamp: '2026-03-11T12:00:08.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Second answer' }] } }),
+    ].join('\n') + '\n');
+
+    const detail = readSessionBlocks('session-tail-user-after-hidden', { tailBlocks: 400 });
+    expect(detail?.totalBlocks).toBe(4);
+    expect(detail?.blockOffset).toBe(0);
+    expect(detail?.blocks).toEqual([
+      expect.objectContaining({ type: 'user', text: 'First prompt' }),
+      expect.objectContaining({ type: 'text', text: 'First answer' }),
+      expect.objectContaining({ type: 'user', text: 'Second prompt' }),
+      expect.objectContaining({ type: 'text', text: 'Second answer' }),
+    ]);
+  });
+
   it('keeps walking backward through non-display parent links when reading archived tails', () => {
     const sessionsDir = createTempSessionsDir();
     configureSessionEnv(sessionsDir);
