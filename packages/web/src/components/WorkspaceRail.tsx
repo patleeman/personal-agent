@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
+import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import {
   buildInitialExpandedPaths,
   buildWorkspaceSearch,
@@ -18,6 +19,7 @@ import { isWorkspaceEditorDirty, subscribeWorkspaceChanged, subscribeWorkspaceEd
 import { ErrorState, LoadingState, Pill, ToolbarButton } from './ui';
 
 const INPUT_CLASS = 'w-full rounded-md border border-border-default bg-base px-2.5 py-1.5 text-[11px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
+const WORKSPACE_REFRESH_THROTTLE_MS = 1000;
 
 export function WorkspaceRail() {
   const location = useLocation();
@@ -28,6 +30,7 @@ export function WorkspaceRail() {
   const [showChangedOnly, setShowChangedOnly] = useState(false);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
   const [dirty, setDirty] = useState(() => isWorkspaceEditorDirty());
+  const lastWorkspaceRefreshAtRef = useRef(0);
 
   const snapshotApi = useApi(() => api.workspaceSnapshot(requestedCwd ?? undefined), requestedCwd ?? 'default');
   const snapshot = snapshotApi.data;
@@ -37,6 +40,17 @@ export function WorkspaceRail() {
     void refreshSnapshot({ resetLoading: false });
   }), [refreshSnapshot]);
 
+  const handleWorkspaceInvalidation = useCallback(async () => {
+    const now = Date.now();
+    if ((now - lastWorkspaceRefreshAtRef.current) < WORKSPACE_REFRESH_THROTTLE_MS) {
+      return snapshot;
+    }
+
+    lastWorkspaceRefreshAtRef.current = now;
+    return refreshSnapshot({ resetLoading: false });
+  }, [refreshSnapshot, snapshot]);
+
+  useInvalidateOnTopics(['workspace'], handleWorkspaceInvalidation);
   useEffect(() => subscribeWorkspaceEditorDirty(setDirty), []);
 
   useEffect(() => {

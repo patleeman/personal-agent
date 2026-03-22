@@ -681,7 +681,8 @@ export type AppEventTopic =
   | 'gateway'
   | 'sync'
   | 'webUi'
-  | 'executionTargets';
+  | 'executionTargets'
+  | 'workspace';
 
 export type AppEvent =
   | { type: 'connected' }

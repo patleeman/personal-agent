@@ -46,6 +46,7 @@ export const INITIAL_APP_EVENT_VERSIONS: AppEventVersions = {
   sync: 0,
   webUi: 0,
   executionTargets: 0,
+  workspace: 0,
 };
 
 export interface AppEventsContextValue {

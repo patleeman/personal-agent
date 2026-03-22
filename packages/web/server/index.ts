@@ -11,7 +11,7 @@ import { notifyConversationAutomationChanged, subscribeConversationAutomation } 
 import { resolveConversationCwd, resolveRequestedCwd } from './conversationCwd.js';
 import { pickFolder } from './folderPicker.js';
 import { readGitStatusSummaryWithTelemetry, type GitStatusReadTelemetry } from './gitStatus.js';
-import { readWorkspaceFile, readWorkspaceSnapshot, writeWorkspaceFile } from './workspaceBrowser.js';
+import { readWorkspaceFile, readWorkspaceSnapshot, retainWorkspaceWatch, writeWorkspaceFile } from './workspaceBrowser.js';
 import {
   installGatewayAndReadState,
   readGatewayState,
@@ -8354,7 +8354,9 @@ app.get('/api/workspace', (req, res) => {
       ? req.query.cwd
       : defaultWebCwd;
     const resolvedCwd = resolveRequestedCwd(cwd, defaultWebCwd) ?? defaultWebCwd;
-    res.json(readWorkspaceSnapshot(resolvedCwd));
+    const snapshot = readWorkspaceSnapshot(resolvedCwd);
+    retainWorkspaceWatch(snapshot.root);
+    res.json(snapshot);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const status = message.startsWith('Directory does not exist:') || message.startsWith('Not a directory:')
@@ -8381,7 +8383,9 @@ app.get('/api/workspace/file', (req, res) => {
     }
 
     const resolvedCwd = resolveRequestedCwd(cwd, defaultWebCwd) ?? defaultWebCwd;
-    res.json(readWorkspaceFile({ cwd: resolvedCwd, path }));
+    const detail = readWorkspaceFile({ cwd: resolvedCwd, path });
+    retainWorkspaceWatch(detail.root);
+    res.json(detail);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const status = message === 'path required' || message.startsWith('Directory does not exist:') || message.startsWith('Not a directory:') || message.startsWith('Path is outside the workspace root:')
@@ -8410,7 +8414,10 @@ app.post('/api/workspace/file', (req, res) => {
     }
 
     const resolvedCwd = resolveRequestedCwd(requestedCwd, defaultWebCwd) ?? defaultWebCwd;
-    res.json(writeWorkspaceFile({ cwd: resolvedCwd, path, content }));
+    const detail = writeWorkspaceFile({ cwd: resolvedCwd, path, content });
+    retainWorkspaceWatch(detail.root);
+    invalidateAppTopics('workspace');
+    res.json(detail);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const status = message === 'path required' || message === 'content required' || message.startsWith('Directory does not exist:') || message.startsWith('Not a directory:') || message.startsWith('Path is outside the workspace root:')
