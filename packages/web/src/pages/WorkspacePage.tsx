@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import type { Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import { oneDark } from '@codemirror/theme-one-dark';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
@@ -195,13 +194,10 @@ export function WorkspacePage() {
   }, [fileDetail, handleSave, selectedFilePath]);
 
   const editorExtensions = useMemo(() => {
-    const extensions: Extension[] = [editorChromeTheme(), EditorView.lineWrapping];
+    const extensions: Extension[] = [editorChromeTheme(theme === 'dark'), EditorView.lineWrapping];
     const languageExtension = selectedFilePath ? languageExtensionForPath(selectedFilePath) : null;
     if (languageExtension) {
       extensions.push(languageExtension);
-    }
-    if (theme === 'dark') {
-      extensions.push(oneDark);
     }
     return extensions;
   }, [selectedFilePath, theme]);
@@ -395,12 +391,14 @@ export function WorkspacePage() {
                   <EmptyState title="Editor unavailable" body={blockedReason} />
                 </div>
               ) : (
-                <CodeMirror
-                  value={draftContent}
-                  onChange={setDraftContent}
-                  extensions={editorExtensions}
-                  className="h-full"
-                />
+                <div className="h-full bg-panel">
+                  <CodeMirror
+                    value={draftContent}
+                    onChange={setDraftContent}
+                    extensions={editorExtensions}
+                    className="h-full"
+                  />
+                </div>
               )}
             </div>
 

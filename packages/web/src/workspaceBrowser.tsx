@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { css } from '@codemirror/lang-css';
 import { html } from '@codemirror/lang-html';
 import { javascript } from '@codemirror/lang-javascript';
@@ -8,14 +9,15 @@ import { json } from '@codemirror/lang-json';
 import { markdown } from '@codemirror/lang-markdown';
 import { python } from '@codemirror/lang-python';
 import { yaml } from '@codemirror/lang-yaml';
+import { tags } from '@lezer/highlight';
 import { diffLines, diffWordsWithSpace } from 'diff';
 import type { WorkspaceChangeKind, WorkspaceTreeNode } from './types';
 
 export const WORKSPACE_CWD_SEARCH_PARAM = 'cwd';
 export const WORKSPACE_FILE_SEARCH_PARAM = 'file';
 
-const TREE_ROW_CLASS = 'group flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors';
-const TREE_ROW_IDLE_CLASS = 'text-secondary hover:bg-surface hover:text-primary';
+const TREE_ROW_CLASS = 'group flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[11px] leading-5 transition-colors';
+const TREE_ROW_IDLE_CLASS = 'text-secondary hover:bg-surface/80 hover:text-primary';
 const TREE_ROW_ACTIVE_CLASS = 'bg-accent/10 text-primary';
 
 export function readWorkspaceCwdFromSearch(search: string): string | null {
@@ -262,47 +264,142 @@ export function languageExtensionForPath(path: string): Extension | null {
   return null;
 }
 
-export function editorChromeTheme(): Extension {
-  return EditorView.theme({
-    '&': {
-      height: '100%',
-      backgroundColor: 'transparent',
-      fontSize: '13px',
-    },
-    '.cm-scroller': {
-      fontFamily: '"JetBrains Mono Variable", "JetBrains Mono", monospace',
-      lineHeight: '1.7',
-    },
-    '.cm-content': {
-      minHeight: '100%',
-      padding: '18px 20px',
-    },
-    '.cm-gutters': {
-      minHeight: '100%',
-      border: 'none',
-      backgroundColor: 'transparent',
-    },
-    '.cm-activeLine, .cm-activeLineGutter': {
-      backgroundColor: 'rgba(120, 131, 155, 0.08)',
-    },
-    '.cm-focused': {
-      outline: 'none',
-    },
-    '.cm-cursor': {
-      borderLeftWidth: '2px',
-    },
+export function countVisibleTreeFiles(nodes: WorkspaceTreeNode[]): number {
+  return nodes.reduce((count, node) => {
+    if (node.kind === 'file') {
+      return count + 1;
+    }
+
+    return count + countVisibleTreeFiles(node.children ?? []);
+  }, 0);
+}
+
+export function collectDirectoryPaths(nodes: WorkspaceTreeNode[]): string[] {
+  return nodes.flatMap((node) => {
+    if (node.kind !== 'directory') {
+      return [];
+    }
+
+    return [node.relativePath, ...collectDirectoryPaths(node.children ?? [])];
   });
+}
+
+function countChangedDescendants(node: WorkspaceTreeNode): number {
+  if (node.kind === 'file') {
+    return node.change ? 1 : 0;
+  }
+
+  return (node.children ?? []).reduce((count, child) => count + countChangedDescendants(child), 0);
+}
+
+export function editorChromeTheme(isDark: boolean): Extension {
+  const highlightTheme = HighlightStyle.define([
+    { tag: [tags.keyword, tags.controlKeyword, tags.operatorKeyword, tags.modifier], color: isDark ? 'rgb(224 152 48)' : 'rgb(149 90 16)', fontWeight: '600' },
+    { tag: [tags.atom, tags.bool, tags.number, tags.integer, tags.float], color: isDark ? 'rgb(91 144 204)' : 'rgb(30 90 150)' },
+    { tag: [tags.string, tags.special(tags.string), tags.regexp], color: isDark ? 'rgb(61 168 168)' : 'rgb(26 120 120)' },
+    { tag: [tags.comment, tags.lineComment, tags.blockComment], color: 'rgb(var(--color-dim))', fontStyle: 'italic' },
+    { tag: [tags.typeName, tags.className, tags.namespace, tags.definition(tags.typeName)], color: isDark ? 'rgb(242 239 232)' : 'rgb(28 26 20)', fontWeight: '600' },
+    { tag: [tags.variableName, tags.propertyName, tags.attributeName], color: 'rgb(var(--color-primary))' },
+    { tag: [tags.definition(tags.variableName), tags.function(tags.variableName), tags.labelName], color: isDark ? 'rgb(242 239 232)' : 'rgb(28 26 20)', fontWeight: '600' },
+    { tag: [tags.punctuation, tags.separator, tags.bracket], color: 'rgb(var(--color-secondary))' },
+    { tag: [tags.meta, tags.docString], color: 'rgb(var(--color-dim))' },
+    { tag: tags.invalid, color: 'rgb(var(--color-danger))' },
+  ]);
+
+  return [
+    EditorView.theme({
+      '&': {
+        height: '100%',
+        color: 'rgb(var(--color-primary))',
+        backgroundColor: 'rgb(var(--color-panel))',
+        fontSize: '12px',
+      },
+      '.cm-scroller': {
+        fontFamily: '"JetBrains Mono Variable", "JetBrains Mono", monospace',
+        lineHeight: '1.65',
+        backgroundColor: 'rgb(var(--color-panel))',
+      },
+      '.cm-content': {
+        minHeight: '100%',
+        padding: '14px 16px',
+        caretColor: 'rgb(var(--color-accent))',
+      },
+      '.cm-gutters': {
+        minHeight: '100%',
+        border: 'none',
+        borderRight: '1px solid rgb(var(--color-border-subtle))',
+        backgroundColor: isDark ? 'rgb(60 57 51)' : 'rgb(237 233 226)',
+        color: 'rgb(var(--color-dim))',
+      },
+      '.cm-lineNumbers .cm-gutterElement': {
+        padding: '0 10px 0 6px',
+      },
+      '.cm-activeLine, .cm-activeLineGutter': {
+        backgroundColor: isDark ? 'rgb(224 152 48 / 0.09)' : 'rgb(149 90 16 / 0.055)',
+      },
+      '.cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection': {
+        backgroundColor: isDark ? 'rgb(224 152 48 / 0.18)' : 'rgb(149 90 16 / 0.13)',
+      },
+      '.cm-focused': {
+        outline: 'none',
+      },
+      '.cm-cursor, .cm-dropCursor': {
+        borderLeftColor: 'rgb(var(--color-accent))',
+        borderLeftWidth: '2px',
+      },
+      '.cm-tooltip, .cm-panels, .cm-completionInfo': {
+        backgroundColor: 'rgb(var(--color-surface))',
+        borderColor: 'rgb(var(--color-border-default))',
+        color: 'rgb(var(--color-primary))',
+      },
+      '.cm-tooltip-autocomplete > ul > li[aria-selected]': {
+        backgroundColor: isDark ? 'rgb(224 152 48 / 0.12)' : 'rgb(149 90 16 / 0.08)',
+        color: 'rgb(var(--color-primary))',
+      },
+      '.cm-searchMatch': {
+        backgroundColor: isDark ? 'rgb(224 152 48 / 0.14)' : 'rgb(149 90 16 / 0.10)',
+        outline: '1px solid rgb(var(--color-border-default))',
+      },
+      '.cm-matchingBracket, .cm-nonmatchingBracket': {
+        backgroundColor: isDark ? 'rgb(91 144 204 / 0.12)' : 'rgb(30 90 150 / 0.10)',
+        outline: '1px solid rgb(var(--color-border-subtle))',
+      },
+    }, { dark: isDark }),
+    syntaxHighlighting(highlightTheme),
+  ];
+}
+
+function TreeChevron({ expanded }: { expanded: boolean }) {
+  return <span className="w-3 shrink-0 text-center text-dim">{expanded ? '▾' : '▸'}</span>;
+}
+
+function FolderTreeIcon({ open }: { open: boolean }) {
+  return (
+    <svg className={[ 'h-3 w-3 shrink-0', open ? 'text-accent' : 'text-dim' ].join(' ')} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2.75 5.75a1.25 1.25 0 0 1 1.25-1.25h3.18a1.25 1.25 0 0 1 .88.36l.96.97a1.25 1.25 0 0 0 .88.36h5.1a1.25 1.25 0 0 1 1.25 1.25v6.75a1.25 1.25 0 0 1-1.25 1.25H4a1.25 1.25 0 0 1-1.25-1.25V5.75Z" />
+      <path d="M2.75 7.5h13.5" />
+    </svg>
+  );
+}
+
+function FileTreeIcon({ deleted }: { deleted: boolean }) {
+  return (
+    <svg className={[ 'h-3 w-3 shrink-0', deleted ? 'text-danger' : 'text-secondary' ].join(' ')} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M6 2.75h5.25L15.5 7v10.25A1.25 1.25 0 0 1 14.25 18.5h-8.5A1.25 1.25 0 0 1 4.5 17.25V4A1.25 1.25 0 0 1 5.75 2.75H6Z" />
+      <path d="M11.25 2.75V7h4.25" />
+    </svg>
+  );
 }
 
 export function TreeRowChange({ change }: { change: WorkspaceChangeKind | null }) {
   if (!change) {
-    return <span className="w-4 shrink-0" aria-hidden="true" />;
+    return <span className="h-4 w-4 shrink-0" aria-hidden="true" />;
   }
 
   return (
-    <span className="w-4 shrink-0 text-center" title={changeLabel(change)}>
+    <span className="h-4 w-4 shrink-0 text-center" title={changeLabel(change)}>
       <span className={[
-        'inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-semibold',
+        'inline-flex h-4 w-4 items-center justify-center rounded text-[9px] font-semibold',
         changeTone(change) === 'danger'
           ? 'bg-danger/12 text-danger'
           : changeTone(change) === 'teal'
@@ -323,17 +420,15 @@ export function WorkspaceTreeView({
   expandedPaths,
   onToggle,
   onSelect,
-  depth = 0,
 }: {
   nodes: WorkspaceTreeNode[];
   selectedPath: string | null;
   expandedPaths: Set<string>;
   onToggle: (path: string) => void;
   onSelect: (path: string) => void;
-  depth?: number;
 }) {
   return (
-    <div className="space-y-0.5">
+    <div className="space-y-px">
       {nodes.map((node) => {
         const isSelected = node.kind === 'file' && node.relativePath === selectedPath;
         const isExpanded = node.kind === 'directory' && expandedPaths.has(node.relativePath);
@@ -343,50 +438,59 @@ export function WorkspaceTreeView({
           !node.exists && 'opacity-70',
         ].filter(Boolean).join(' ');
 
-        return (
-          <div key={node.relativePath || node.name}>
-            {node.kind === 'directory' ? (
+        if (node.kind === 'directory') {
+          const changedChildren = countChangedDescendants(node);
+          return (
+            <div key={node.relativePath || node.name}>
               <button
                 type="button"
                 className={rowClassName}
-                style={{ paddingLeft: `${8 + depth * 14}px` }}
                 onClick={() => onToggle(node.relativePath)}
                 title={node.path}
               >
-                <span className="w-4 shrink-0 text-center text-dim">{isExpanded ? '▾' : '▸'}</span>
-                <TreeRowChange change={null} />
-                <span className="truncate">{node.name}</span>
+                <TreeChevron expanded={isExpanded} />
+                <FolderTreeIcon open={isExpanded} />
+                <span className="min-w-0 flex-1 truncate">{node.name}</span>
+                {changedChildren > 0 && (
+                  <span className="shrink-0 rounded bg-warning/10 px-1 py-0.5 text-[9px] font-semibold text-warning">
+                    {changedChildren}
+                  </span>
+                )}
               </button>
-            ) : (
-              <button
-                type="button"
-                className={rowClassName}
-                style={{ paddingLeft: `${8 + depth * 14}px` }}
-                onClick={() => onSelect(node.relativePath)}
-                title={node.path}
-              >
-                <span className="w-4 shrink-0 text-center text-dim">·</span>
-                <TreeRowChange change={node.change} />
-                <span className={[
-                  'truncate',
-                  !node.exists && 'line-through',
-                ].filter(Boolean).join(' ')}>
-                  {node.name}
-                </span>
-              </button>
-            )}
 
-            {node.kind === 'directory' && isExpanded && (node.children?.length ?? 0) > 0 && (
-              <WorkspaceTreeView
-                nodes={node.children ?? []}
-                selectedPath={selectedPath}
-                expandedPaths={expandedPaths}
-                onToggle={onToggle}
-                onSelect={onSelect}
-                depth={depth + 1}
-              />
-            )}
-          </div>
+              {isExpanded && (node.children?.length ?? 0) > 0 && (
+                <div className="ml-2.5 border-l border-border-subtle/70 pl-1.5">
+                  <WorkspaceTreeView
+                    nodes={node.children ?? []}
+                    selectedPath={selectedPath}
+                    expandedPaths={expandedPaths}
+                    onToggle={onToggle}
+                    onSelect={onSelect}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        return (
+          <button
+            key={node.relativePath || node.name}
+            type="button"
+            className={rowClassName}
+            onClick={() => onSelect(node.relativePath)}
+            title={node.path}
+          >
+            <span className="w-3 shrink-0" aria-hidden="true" />
+            <FileTreeIcon deleted={!node.exists} />
+            <span className={[
+              'min-w-0 flex-1 truncate font-mono',
+              !node.exists && 'line-through',
+            ].filter(Boolean).join(' ')}>
+              {node.name}
+            </span>
+            <TreeRowChange change={node.change} />
+          </button>
         );
       })}
     </div>

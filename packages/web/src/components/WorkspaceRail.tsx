@@ -5,19 +5,19 @@ import { useApi } from '../hooks';
 import {
   buildInitialExpandedPaths,
   buildWorkspaceSearch,
+  collectDirectoryPaths,
+  countVisibleTreeFiles,
   filterWorkspaceTree,
   parentPaths,
   readWorkspaceCwdFromSearch,
   readWorkspaceFileFromSearch,
   summarizeChanges,
-  TreeRowChange,
   WorkspaceTreeView,
 } from '../workspaceBrowser';
 import { isWorkspaceEditorDirty, subscribeWorkspaceChanged, subscribeWorkspaceEditorDirty } from '../workspaceEvents';
 import { ErrorState, LoadingState, Pill, ToolbarButton } from './ui';
 
-const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[12px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
-const ROW_CLASS = 'group flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors text-secondary hover:bg-surface hover:text-primary';
+const INPUT_CLASS = 'w-full rounded-md border border-border-default bg-base px-2.5 py-1.5 text-[11px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
 
 export function WorkspaceRail() {
   const location = useLocation();
@@ -61,11 +61,8 @@ export function WorkspaceRail() {
     () => filterWorkspaceTree(snapshot?.tree ?? [], { query: treeQuery, changedOnly: showChangedOnly }),
     [showChangedOnly, snapshot?.tree, treeQuery],
   );
-
-  const visibleChanges = useMemo(() => {
-    const normalizedQuery = treeQuery.trim().toLowerCase();
-    return (snapshot?.changes ?? []).filter((entry) => !normalizedQuery || entry.relativePath.toLowerCase().includes(normalizedQuery));
-  }, [snapshot?.changes, treeQuery]);
+  const visibleFileCount = useMemo(() => countVisibleTreeFiles(filteredTree), [filteredTree]);
+  const visibleDirectoryPaths = useMemo(() => collectDirectoryPaths(filteredTree), [filteredTree]);
 
   const confirmDiscardIfNeeded = useCallback(() => {
     if (!isWorkspaceEditorDirty()) {
@@ -99,6 +96,14 @@ export function WorkspaceRail() {
     });
   }, []);
 
+  const handleExpandAll = useCallback(() => {
+    setExpandedPaths(new Set(visibleDirectoryPaths));
+  }, [visibleDirectoryPaths]);
+
+  const handleCollapseAll = useCallback(() => {
+    setExpandedPaths(new Set(parentPaths(selectedFilePath)));
+  }, [selectedFilePath]);
+
   if (snapshotApi.loading && !snapshot) {
     return <LoadingState label="Loading workspace tree…" className="h-full justify-center" />;
   }
@@ -113,83 +118,57 @@ export function WorkspaceRail() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="shrink-0 px-4 py-4 space-y-3 border-b border-border-subtle">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
+      <div className="shrink-0 border-b border-border-subtle px-3 py-3 space-y-2.5">
+        <div className="space-y-0.5">
+          <div className="flex items-center gap-1.5">
             <p className="ui-card-title">Workspace tree</p>
             <Pill tone={snapshot.changedCount > 0 ? 'warning' : 'muted'}>{summarizeChanges(snapshot.changedCount)}</Pill>
             {dirty && <Pill tone="warning">unsaved</Pill>}
           </div>
-          <p className="ui-card-meta break-all">{snapshot.root}</p>
+          <p className="break-all text-[11px] text-dim">{snapshot.root}</p>
         </div>
 
-        <div className="space-y-2">
-          <input
-            value={treeQuery}
-            onChange={(event) => setTreeQuery(event.target.value)}
-            placeholder="Filter files by path"
-            className={INPUT_CLASS}
-            spellCheck={false}
-          />
-          <div className="flex items-center justify-between gap-2">
-            <button
-              type="button"
-              className={showChangedOnly ? 'ui-pill ui-pill-accent' : 'ui-pill ui-pill-muted'}
-              onClick={() => setShowChangedOnly((value) => !value)}
-            >
-              {showChangedOnly ? 'Changed only' : 'All files'}
-            </button>
-            <ToolbarButton onClick={() => { void refreshSnapshot({ resetLoading: false }); }} disabled={snapshotApi.refreshing}>
-              {snapshotApi.refreshing ? 'Refreshing…' : '↻ Refresh'}
-            </ToolbarButton>
-          </div>
+        <input
+          value={treeQuery}
+          onChange={(event) => setTreeQuery(event.target.value)}
+          placeholder="Filter files by path"
+          className={INPUT_CLASS}
+          spellCheck={false}
+        />
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            className={showChangedOnly ? 'ui-pill ui-pill-accent' : 'ui-pill ui-pill-muted'}
+            onClick={() => setShowChangedOnly((value) => !value)}
+          >
+            {showChangedOnly ? 'Changed only' : 'All files'}
+          </button>
+          <ToolbarButton onClick={handleExpandAll} disabled={visibleDirectoryPaths.length === 0}>
+            Expand all
+          </ToolbarButton>
+          <ToolbarButton onClick={handleCollapseAll} disabled={visibleDirectoryPaths.length === 0}>
+            Collapse
+          </ToolbarButton>
+          <ToolbarButton onClick={() => { void refreshSnapshot({ resetLoading: false }); }} disabled={snapshotApi.refreshing} className="ml-auto">
+            {snapshotApi.refreshing ? 'Refreshing…' : '↻ Refresh'}
+          </ToolbarButton>
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-5">
-        <section className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <p className="ui-section-label">Changed files</p>
-            <span className="text-[11px] text-dim">{snapshot.changedCount}</span>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="shrink-0 border-b border-border-subtle px-3 py-1.5 text-[10px] text-dim">
+          <div className="flex items-center justify-between gap-3">
+            <span>{visibleFileCount} visible {visibleFileCount === 1 ? 'file' : 'files'}</span>
+            {selectedFilePath && (
+              <span className="max-w-[12rem] truncate font-mono text-[10px]" title={selectedFilePath}>{selectedFilePath}</span>
+            )}
           </div>
-          {snapshot.changedCount === 0 ? (
-            <p className="text-[12px] text-dim">No current git changes.</p>
-          ) : visibleChanges.length === 0 ? (
-            <p className="text-[12px] text-dim">No changed files match the current filter.</p>
-          ) : (
-            <div className="space-y-0.5">
-              {visibleChanges.map((entry) => (
-                <button
-                  key={entry.relativePath}
-                  type="button"
-                  className={[
-                    ROW_CLASS,
-                    entry.relativePath === selectedFilePath && 'bg-accent/10 text-primary',
-                    !entry.exists && 'opacity-70',
-                  ].filter(Boolean).join(' ')}
-                  onClick={() => applySelection(entry.relativePath)}
-                  title={entry.path}
-                >
-                  <TreeRowChange change={entry.change} />
-                  <span className={[
-                    'flex-1 truncate font-mono',
-                    !entry.exists && 'line-through',
-                  ].filter(Boolean).join(' ')}>
-                    {entry.relativePath}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
+        </div>
 
-        <section className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <p className="ui-section-label">File tree</p>
-            <span className="text-[11px] text-dim">{filteredTree.length}</span>
-          </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
           {filteredTree.length === 0 ? (
-            <p className="text-[12px] text-dim">No files match the current filter.</p>
+            <p className="px-1 text-[11px] text-dim">No files match the current filter.</p>
           ) : (
             <WorkspaceTreeView
               nodes={filteredTree}
@@ -199,10 +178,11 @@ export function WorkspaceRail() {
               onSelect={applySelection}
             />
           )}
+
           {snapshot.truncated && (
-            <p className="text-[11px] text-dim">Large folder view truncated after the first 3000 files.</p>
+            <p className="mt-2 px-1 text-[10px] text-dim">Large folder view truncated after the first 3000 files.</p>
           )}
-        </section>
+        </div>
       </div>
     </div>
   );
