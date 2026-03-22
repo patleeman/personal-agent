@@ -10,6 +10,7 @@ import {
   planDelegateCompletionBatching,
   registerGatewayCliCommands,
   splitTelegramMessage,
+  updateTelegramSyntheticAutoResumeState,
 } from './index.js';
 
 const originalEnv = process.env;
@@ -194,6 +195,57 @@ describe('splitTelegramMessage', () => {
       const fenceCount = (chunk.match(/```/g) ?? []).length;
       expect(fenceCount % 2).toBe(0);
     }
+  });
+});
+
+describe('updateTelegramSyntheticAutoResumeState', () => {
+  it('marks a conversation when a synthetic auto-resume follow-up is injected', () => {
+    const conversations = new Set<string>();
+
+    const conversationId = updateTelegramSyntheticAutoResumeState(conversations, {
+      chat: { id: 123 },
+      text: '/followup continue',
+      internal: {
+        syntheticAutoResume: true,
+      },
+    });
+
+    expect(conversationId).toBe('123');
+    expect([...conversations]).toEqual(['123']);
+  });
+
+  it('clears the synthetic auto-resume marker when a normal message arrives in that conversation', () => {
+    const conversations = new Set<string>(['123::thread:7']);
+
+    const conversationId = updateTelegramSyntheticAutoResumeState(conversations, {
+      chat: { id: 123 },
+      message_thread_id: 7,
+      text: 'thanks, continue',
+    });
+
+    expect(conversationId).toBe('123::thread:7');
+    expect(conversations.size).toBe(0);
+  });
+
+  it('tracks thread conversations independently', () => {
+    const conversations = new Set<string>();
+
+    updateTelegramSyntheticAutoResumeState(conversations, {
+      chat: { id: 123 },
+      message_thread_id: 7,
+      text: '/followup continue',
+      internal: {
+        syntheticAutoResume: true,
+      },
+    });
+
+    updateTelegramSyntheticAutoResumeState(conversations, {
+      chat: { id: 123 },
+      message_thread_id: 8,
+      text: 'human reply',
+    });
+
+    expect([...conversations]).toEqual(['123::thread:7']);
   });
 });
 
