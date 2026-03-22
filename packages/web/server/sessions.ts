@@ -804,6 +804,7 @@ function collectHiddenTranscriptEntryIds(messages: DisplayMessageEntryLike[]): S
   }
 
   const parentById = new Map(messages.map((message) => [message.id, message.parentId ?? null] as const));
+  const messageById = new Map(messages.map((message) => [message.id, message.message] as const));
   const hiddenById = new Map<string, boolean>();
 
   const isHidden = (id: string | undefined): boolean => {
@@ -813,6 +814,13 @@ function collectHiddenTranscriptEntryIds(messages: DisplayMessageEntryLike[]): S
     if (hiddenById.has(id)) {
       return hiddenById.get(id) ?? false;
     }
+
+    const message = messageById.get(id);
+    if (message?.role === 'user') {
+      hiddenById.set(id, false);
+      return false;
+    }
+
     if (hiddenRoots.has(id)) {
       hiddenById.set(id, true);
       return true;

@@ -595,6 +595,105 @@ describe('sessions', () => {
     ]);
   });
 
+  it('shows later user turns after hidden automation descendants', () => {
+    const blocks = buildDisplayBlocksFromEntries([
+      {
+        id: 'user-1',
+        timestamp: '2026-03-12T16:00:00.000Z',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'First visible user message.' }],
+        },
+      },
+      {
+        id: 'assistant-1',
+        parentId: 'user-1',
+        timestamp: '2026-03-12T16:00:01.000Z',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'First visible assistant reply.' }],
+        },
+      },
+      {
+        id: 'hidden-1',
+        parentId: 'assistant-1',
+        timestamp: '2026-03-12T16:00:02.000Z',
+        message: {
+          role: 'custom',
+          customType: 'conversation_automation_post_turn_review',
+          display: false,
+          content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }],
+        },
+      },
+      {
+        id: 'assistant-2',
+        parentId: 'hidden-1',
+        timestamp: '2026-03-12T16:00:03.000Z',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Hidden automation reply.' }],
+        },
+      },
+      {
+        id: 'tool-1',
+        parentId: 'assistant-2',
+        timestamp: '2026-03-12T16:00:04.000Z',
+        message: {
+          role: 'toolResult',
+          toolCallId: 'call-1',
+          toolName: 'wait_for_user',
+          content: [{ type: 'text', text: 'Waiting for user.' }],
+        },
+      },
+      {
+        id: 'assistant-3',
+        parentId: 'tool-1',
+        timestamp: '2026-03-12T16:00:05.000Z',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Still hidden automation summary.' }],
+        },
+      },
+      {
+        id: 'user-2',
+        parentId: 'assistant-3',
+        timestamp: '2026-03-12T16:00:06.000Z',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'Second visible user message.' }],
+        },
+      },
+      {
+        id: 'assistant-4',
+        parentId: 'user-2',
+        timestamp: '2026-03-12T16:00:07.000Z',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Second visible assistant reply.' }],
+        },
+      },
+    ]);
+
+    expect(blocks).toEqual([
+      expect.objectContaining({
+        type: 'user',
+        text: 'First visible user message.',
+      }),
+      expect.objectContaining({
+        type: 'text',
+        text: 'First visible assistant reply.',
+      }),
+      expect.objectContaining({
+        type: 'user',
+        text: 'Second visible user message.',
+      }),
+      expect.objectContaining({
+        type: 'text',
+        text: 'Second visible assistant reply.',
+      }),
+    ]);
+  });
+
   it('keeps assistant replies visible when hidden prompt context precedes the turn', () => {
     const blocks = buildDisplayBlocksFromEntries([
       {
