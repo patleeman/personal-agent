@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import type { Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
+import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useTheme } from '../theme';
 import type { WorkspaceFileDetail } from '../types';
 import {
@@ -26,6 +27,7 @@ import { emitWorkspaceChanged, setWorkspaceEditorDirty } from '../workspaceEvent
 import { EmptyState, ErrorState, LoadingState, PageHeader, PageHeading, Pill, ToolbarButton } from '../components/ui';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
+const WORKSPACE_REFRESH_THROTTLE_MS = 1000;
 
 function fileBlockedReason(detail: WorkspaceFileDetail | null): string | null {
   if (!detail) {
@@ -79,8 +81,10 @@ export function WorkspacePage() {
   const [draftContent, setDraftContent] = useState('');
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [externalChangePending, setExternalChangePending] = useState(false);
   const [workspaceActionBusy, setWorkspaceActionBusy] = useState(false);
   const [workspaceActionError, setWorkspaceActionError] = useState<string | null>(null);
+  const lastWorkspaceRefreshAtRef = useRef(0);
 
   useEffect(() => {
     setCwdDraft(requestedCwd ?? snapshot?.cwd ?? '');
@@ -110,11 +114,13 @@ export function WorkspacePage() {
     if (fileDetail?.content !== null && fileDetail?.content !== undefined) {
       setDraftContent(fileDetail.content);
       setSaveError(null);
+      setExternalChangePending(false);
       return;
     }
 
     setDraftContent('');
     setSaveError(null);
+    setExternalChangePending(false);
   }, [fileDetail?.path, fileDetail?.content]);
 
   const draftDirty = useMemo(
@@ -224,6 +230,38 @@ export function WorkspacePage() {
   );
   const currentDiffContent = fileDetail?.exists ? draftContent : '';
   const showingFileLoadingState = Boolean(selectedFilePath && fileApi.loading && fileDetail?.relativePath !== selectedFilePath);
+
+  const handleWorkspaceInvalidation = useCallback(async () => {
+    const now = Date.now();
+    if ((now - lastWorkspaceRefreshAtRef.current) < WORKSPACE_REFRESH_THROTTLE_MS) {
+      return null;
+    }
+
+    lastWorkspaceRefreshAtRef.current = now;
+
+    if (draftDirty) {
+      setExternalChangePending(true);
+      await snapshotApi.refetch({ resetLoading: false });
+      return null;
+    }
+
+    const snapshotPromise = snapshotApi.refetch({ resetLoading: false });
+    if (!selectedFilePath) {
+      setExternalChangePending(false);
+      return snapshotPromise;
+    }
+
+    const [, nextFile] = await Promise.all([
+      snapshotPromise,
+      fileApi.refetch({ resetLoading: false }),
+    ]);
+    if (nextFile) {
+      setExternalChangePending(false);
+    }
+    return nextFile;
+  }, [draftDirty, fileApi, selectedFilePath, snapshotApi]);
+
+  useInvalidateOnTopics(['workspace'], handleWorkspaceInvalidation);
 
   const openWorkspaceSearch = useCallback((patch: { cwd?: string | null; file?: string | null }, replace = false) => {
     navigate(`/workspace${buildWorkspaceSearch(location.search, patch)}`, { replace });
@@ -383,6 +421,11 @@ export function WorkspacePage() {
                 </div>
               </div>
               {saveError && <p className="mt-2 text-[12px] text-danger">{saveError}</p>}
+              {externalChangePending && !saveError && (
+                <p className="mt-2 text-[12px] text-warning">
+                  Files changed on disk. Save or reload this file to sync with the latest workspace state.
+                </p>
+              )}
             </div>
 
             <div className="min-h-0 flex-1 overflow-hidden">

@@ -30,7 +30,8 @@ export type AppEventTopic =
   | 'gateway'
   | 'sync'
   | 'webUi'
-  | 'executionTargets';
+  | 'executionTargets'
+  | 'workspace';
 
 export type AppEvent =
   | { type: 'connected' }
@@ -75,6 +76,7 @@ const ALL_TOPICS: AppEventTopic[] = [
   'sync',
   'webUi',
   'executionTargets',
+  'workspace',
 ];
 const listeners = new Set<AppEventListener>();
 let monitorStop: WatchStop | undefined;
@@ -233,6 +235,7 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
       { path: join(webStateDir, 'app-restart.lock.json'), kind: 'file' },
     ],
     executionTargets: [{ path: resolveExecutionTargetsFilePath(), kind: 'file' }],
+    workspace: [],
   };
 }
 

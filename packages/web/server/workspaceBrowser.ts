@@ -1,7 +1,9 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, watch, writeFileSync, type Dirent, type FSWatcher } from 'node:fs';
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
+import { invalidateAppTopics } from './appEvents.js';
 import { readGitRepoInfo, readGitStatusSummary } from './gitStatus.js';
+import { logWarn } from './logging.js';
 
 export type WorkspaceChangeKind =
   | 'modified'
@@ -61,6 +63,11 @@ export interface WorkspaceFileDetail {
 
 const MAX_TEXT_FILE_BYTES = 512 * 1024;
 const MAX_FALLBACK_FILE_COUNT = 3_000;
+const WORKSPACE_INVALIDATION_DEBOUNCE_MS = 250;
+const WORKSPACE_INVALIDATION_COOLDOWN_MS = 1_500;
+const WORKSPACE_EVENT_DEDUP_WINDOW_MS = 2_000;
+const WORKSPACE_WATCH_STALE_MS = 5 * 60 * 1000;
+const WORKSPACE_WATCH_PRUNE_INTERVAL_MS = 60 * 1000;
 const SKIPPED_DIRECTORY_NAMES = new Set([
   '.git',
   'node_modules',
@@ -86,6 +93,230 @@ interface MutableWorkspaceTreeNode {
   exists: boolean;
   change: WorkspaceChangeKind | null;
   children?: Map<string, MutableWorkspaceTreeNode>;
+}
+
+interface WorkspaceWatchEntry {
+  stop: () => void;
+  lastSeenAt: number;
+}
+
+const workspaceWatchers = new Map<string, WorkspaceWatchEntry>();
+const recentWorkspaceEventFingerprints = new Map<string, number>();
+let workspaceWatchPruneTimer: ReturnType<typeof setInterval> | undefined;
+let workspaceInvalidateTimer: ReturnType<typeof setTimeout> | undefined;
+let lastWorkspaceInvalidatedAt = 0;
+
+function flushWorkspaceInvalidation(): void {
+  workspaceInvalidateTimer = undefined;
+
+  const elapsedSinceLastInvalidate = Date.now() - lastWorkspaceInvalidatedAt;
+  if (elapsedSinceLastInvalidate < WORKSPACE_INVALIDATION_COOLDOWN_MS) {
+    workspaceInvalidateTimer = setTimeout(
+      flushWorkspaceInvalidation,
+      WORKSPACE_INVALIDATION_COOLDOWN_MS - elapsedSinceLastInvalidate,
+    );
+    return;
+  }
+
+  lastWorkspaceInvalidatedAt = Date.now();
+  invalidateAppTopics('workspace');
+}
+
+function queueWorkspaceInvalidation(): void {
+  if (workspaceInvalidateTimer) {
+    clearTimeout(workspaceInvalidateTimer);
+  }
+
+  workspaceInvalidateTimer = setTimeout(flushWorkspaceInvalidation, WORKSPACE_INVALIDATION_DEBOUNCE_MS);
+}
+
+function normalizeWorkspaceWatchFilename(filename: string | Buffer | null | undefined): string {
+  return typeof filename === 'string'
+    ? filename
+    : Buffer.isBuffer(filename)
+      ? filename.toString('utf-8')
+      : '';
+}
+
+function shouldSkipWorkspaceWatchPath(filename: string | Buffer | null | undefined): boolean {
+  const normalized = normalizeWorkspaceWatchFilename(filename);
+  if (!normalized) {
+    return false;
+  }
+
+  return normalized
+    .split(/[\\/]+/)
+    .some((segment) => SKIPPED_DIRECTORY_NAMES.has(segment) || segment === '.DS_Store');
+}
+
+function shouldProcessWorkspaceWatchEvent(directory: string, filename: string | Buffer | null | undefined): boolean {
+  if (shouldSkipWorkspaceWatchPath(filename)) {
+    return false;
+  }
+
+  const normalizedFilename = normalizeWorkspaceWatchFilename(filename);
+  if (!normalizedFilename) {
+    return true;
+  }
+
+  const targetPath = resolve(directory, normalizedFilename);
+  let fingerprint = `${targetPath}:missing`;
+  try {
+    if (existsSync(targetPath)) {
+      const stats = statSync(targetPath);
+      fingerprint = `${targetPath}:${stats.isDirectory() ? 'dir' : 'file'}:${stats.mtimeMs}:${stats.size}`;
+    }
+  } catch {
+    fingerprint = `${targetPath}:unknown`;
+  }
+  const now = Date.now();
+
+  for (const [existingFingerprint, seenAt] of recentWorkspaceEventFingerprints) {
+    if ((now - seenAt) < WORKSPACE_EVENT_DEDUP_WINDOW_MS) {
+      continue;
+    }
+
+    recentWorkspaceEventFingerprints.delete(existingFingerprint);
+  }
+
+  const previousSeenAt = recentWorkspaceEventFingerprints.get(fingerprint);
+  recentWorkspaceEventFingerprints.set(fingerprint, now);
+  return !previousSeenAt || (now - previousSeenAt) >= WORKSPACE_EVENT_DEDUP_WINDOW_MS;
+}
+
+function collectWorkspaceWatchDirectories(root: string): string[] {
+  const directories: string[] = [];
+  const stack = [root];
+
+  while (stack.length > 0) {
+    const current = stack.pop() as string;
+    directories.push(current);
+
+    let entries: Dirent[];
+    try {
+      entries = readdirSync(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.isSymbolicLink() || SKIPPED_DIRECTORY_NAMES.has(entry.name)) {
+        continue;
+      }
+
+      stack.push(resolve(current, entry.name));
+    }
+  }
+
+  directories.sort((left, right) => left.localeCompare(right));
+  return directories;
+}
+
+function startWorkspaceTreeWatch(root: string, onChange: () => void): () => void {
+  const watchers = new Map<string, FSWatcher>();
+  let syncTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const scheduleSync = () => {
+    if (syncTimer) {
+      return;
+    }
+
+    syncTimer = setTimeout(() => {
+      syncTimer = undefined;
+      sync();
+    }, WORKSPACE_INVALIDATION_DEBOUNCE_MS);
+  };
+
+  const sync = () => {
+    const nextDirectories = new Set(collectWorkspaceWatchDirectories(root));
+
+    for (const [directory, watcher] of watchers) {
+      if (nextDirectories.has(directory)) {
+        continue;
+      }
+
+      watcher.close();
+      watchers.delete(directory);
+    }
+
+    for (const directory of nextDirectories) {
+      if (watchers.has(directory)) {
+        continue;
+      }
+
+      try {
+        const watcher = watch(directory, { persistent: false }, (_eventType, filename) => {
+          if (!shouldProcessWorkspaceWatchEvent(directory, filename)) {
+            return;
+          }
+
+          onChange();
+          scheduleSync();
+        });
+        watchers.set(directory, watcher);
+      } catch (error) {
+        logWarn('workspace watch registration failed', {
+          path: directory,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  };
+
+  sync();
+
+  return () => {
+    if (syncTimer) {
+      clearTimeout(syncTimer);
+      syncTimer = undefined;
+    }
+
+    for (const watcher of watchers.values()) {
+      watcher.close();
+    }
+    watchers.clear();
+  };
+}
+
+function pruneWorkspaceWatches(): void {
+  const now = Date.now();
+  for (const [root, entry] of workspaceWatchers) {
+    if ((now - entry.lastSeenAt) < WORKSPACE_WATCH_STALE_MS) {
+      continue;
+    }
+
+    entry.stop();
+    workspaceWatchers.delete(root);
+  }
+
+  if (workspaceWatchers.size === 0 && workspaceWatchPruneTimer) {
+    clearInterval(workspaceWatchPruneTimer);
+    workspaceWatchPruneTimer = undefined;
+  }
+}
+
+function ensureWorkspaceWatchPruner(): void {
+  if (workspaceWatchPruneTimer) {
+    return;
+  }
+
+  workspaceWatchPruneTimer = setInterval(pruneWorkspaceWatches, WORKSPACE_WATCH_PRUNE_INTERVAL_MS);
+}
+
+export function retainWorkspaceWatch(root: string): void {
+  const normalizedRoot = realpathSync(root);
+  const existing = workspaceWatchers.get(normalizedRoot);
+  if (existing) {
+    existing.lastSeenAt = Date.now();
+    return;
+  }
+
+  workspaceWatchers.set(normalizedRoot, {
+    stop: startWorkspaceTreeWatch(normalizedRoot, queueWorkspaceInvalidation),
+    lastSeenAt: Date.now(),
+  });
+  ensureWorkspaceWatchPruner();
+  pruneWorkspaceWatches();
 }
 
 function runGitCommand(args: string[], cwd: string): string {
