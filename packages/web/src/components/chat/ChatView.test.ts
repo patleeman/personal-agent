@@ -143,30 +143,119 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('<code');
   });
 
-  it('renders ask_user_question tool calls as dedicated question cards with quick replies', () => {
+  it('renders ask_user_question tool calls as questionnaire cards with navigation and submit', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: [{
         type: 'tool_use',
         ts: '2026-03-11T18:00:00.000Z',
         tool: 'ask_user_question',
-        input: {
-          question: 'Which environment should I use?',
-          details: 'Pick one so I can continue.',
-          options: ['staging', 'prod'],
+        input: {},
+        details: {
+          action: 'ask_user_question',
+          conversationId: 'conv-123',
+          details: 'Pick the configuration before I continue.',
+          questions: [
+            {
+              id: 'target',
+              label: 'Which environment should I use?',
+              style: 'radio',
+              options: ['staging', 'prod'],
+            },
+            {
+              id: 'notify',
+              label: 'Which notifications should I enable?',
+              style: 'check',
+              options: ['Email', 'Telegram'],
+            },
+          ],
         },
-        output: 'Asked the user: Which environment should I use?',
+        output: 'Asked the user 2 questions.',
         status: 'ok',
       }],
-      onReplyToQuestion: () => undefined,
+      onSubmitAskUserQuestion: () => undefined,
+    }));
+
+    expect(html).toContain('Questions for you');
+    expect(html).toContain('Pick the configuration before I continue.');
+    expect(html).toContain('Which environment should I use?');
+    expect(html).toContain('Which notifications should I enable?');
+    expect(html).toContain('0/2 answered');
+    expect(html).toContain('role="tab"');
+    expect(html).toContain('role="radio"');
+    expect(html).toContain('aria-keyshortcuts="1"');
+    expect(html).toContain('✓ Submit →');
+    expect(html).toContain('1-9 selects + next · n/p switches questions · ↑/↓ moves · Esc exits · send a normal message to skip');
+    expect(html).not.toContain('Internal work');
+  });
+
+  it('renders pending ask_user_question tool calls as compact transcript summaries in composer mode', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'tool_use',
+        ts: '2026-03-11T18:00:00.000Z',
+        tool: 'ask_user_question',
+        input: {},
+        details: {
+          action: 'ask_user_question',
+          conversationId: 'conv-123',
+          details: 'Pick the configuration before I continue.',
+          questions: [
+            {
+              id: 'target',
+              label: 'Which environment should I use?',
+              style: 'radio',
+              options: ['staging', 'prod'],
+            },
+            {
+              id: 'notify',
+              label: 'Which notifications should I enable?',
+              style: 'check',
+              options: ['Email', 'Telegram'],
+            },
+          ],
+        },
+        output: 'Asked the user 2 questions.',
+        status: 'ok',
+      }],
+      askUserQuestionDisplayMode: 'composer',
+      onSubmitAskUserQuestion: () => undefined,
+    }));
+
+    expect(html).toContain('Questions for you');
+    expect(html).toContain('Which environment should I use?');
+    expect(html).toContain('Which notifications should I enable?');
+    expect(html).toContain('Answer using the composer below. Type 1-9 to select, or send a normal message to skip.');
+    expect(html).not.toContain('role="radio"');
+    expect(html).not.toContain('✓ Submit →');
+  });
+
+  it('renders check-style ask_user_question options as checkboxes', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'tool_use',
+        ts: '2026-03-11T18:00:00.000Z',
+        tool: 'ask_user_question',
+        input: {},
+        details: {
+          action: 'ask_user_question',
+          conversationId: 'conv-123',
+          questions: [{
+            id: 'notify',
+            label: 'Which notifications should I enable?',
+            style: 'check',
+            options: ['Email', 'Telegram'],
+          }],
+        },
+        output: 'Asked the user a question.',
+        status: 'ok',
+      }],
+      onSubmitAskUserQuestion: () => undefined,
     }));
 
     expect(html).toContain('Question for you');
-    expect(html).toContain('Which environment should I use?');
-    expect(html).toContain('Pick one so I can continue.');
-    expect(html).toContain('staging');
-    expect(html).toContain('prod');
-    expect(html).toContain('Reply in Composer');
-    expect(html).not.toContain('Internal work');
+    expect(html).toContain('Which notifications should I enable?');
+    expect(html).toContain('role="checkbox"');
+    expect(html).toContain('✓ Submit →');
   });
 
   it('shows the first user reply on answered question cards', () => {

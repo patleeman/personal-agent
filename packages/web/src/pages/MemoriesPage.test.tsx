@@ -120,7 +120,38 @@ describe('MemoriesPage', () => {
     expect(html).toContain('Memory work queue');
     expect(html).toContain('Refactor memory pipeline');
     expect(html).toContain('run-123');
+    expect(html).toContain('/conversations/conv-123?run=run-123');
+  });
+
+  it('keeps state-only queue items linked to the conversation when no durable run exists', () => {
+    vi.mocked(useApi).mockReturnValue({
+      data: {
+        memories: [],
+        memoryQueue: [{
+          conversationId: 'conv-123',
+          conversationTitle: 'Refactor memory pipeline',
+          runId: 'state:conv-123',
+          status: 'failed',
+          createdAt: '2026-03-17T12:00:00.000Z',
+          updatedAt: '2026-03-17T12:05:00.000Z',
+        }],
+      },
+      loading: false,
+      refreshing: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/memories']}>
+        <Routes>
+          <Route path="/memories" element={<MemoriesPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
     expect(html).toContain('/conversations/conv-123');
+    expect(html).not.toContain('/conversations/conv-123?run=state%3Aconv-123');
   });
 
   it('shows the empty state when there are no memory packages', () => {

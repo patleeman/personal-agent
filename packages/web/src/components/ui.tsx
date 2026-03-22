@@ -210,7 +210,7 @@ export function ListButtonRow({
   ...props
 }: BaseRowProps & ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
-    <button type={type} className={rowClass(selected, className)} {...props}>
+    <button type={type} className={cx('w-full text-left', rowClass(selected, className))} {...props}>
       {leading}
       <div className="flex-1 min-w-0">{children}</div>
       {trailing}

@@ -3,13 +3,17 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { loadDeferredResumeState, saveDeferredResumeState, scheduleDeferredResume } from '@personal-agent/core';
 import {
   DEFAULT_DEFERRED_RESUME_PROMPT,
+  activateDueBackgroundRunDeferredResumesForSessionFile,
   activateDueDeferredResumesForSessionFile,
   cancelDeferredResumeForSessionFile,
   completeDeferredResumeForSessionFile,
   fireDeferredResumeNowForSessionFile,
+  isBackgroundRunDeferredResumeId,
   listDeferredResumesForSessionFile,
+  listReadyBackgroundRunDeferredResumesForSessionFile,
   retryDeferredResumeForSessionFile,
   scheduleDeferredResumeForSessionFile,
 } from './deferredResumes.js';
@@ -211,6 +215,51 @@ describe('deferredResumes', () => {
       expect.objectContaining({ id: first.id, status: 'scheduled', attempts: 1 }),
       expect.objectContaining({ id: second.id, prompt: 'second', status: 'scheduled' }),
     ]);
+  });
+
+  it('activates and lists only background-run deferred resumes', async () => {
+    const stateRoot = createTempDir('pa-web-deferred-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const sessionFile = '/tmp/sessions/background.jsonl';
+
+    const state = loadDeferredResumeState();
+    scheduleDeferredResume(state, {
+      id: 'resume_run_background-1',
+      sessionFile,
+      prompt: 'Durable run run-1 has finished.',
+      dueAt: '2026-03-12T13:00:30.000Z',
+      createdAt: '2026-03-12T13:00:00.000Z',
+      attempts: 0,
+    });
+    scheduleDeferredResume(state, {
+      id: 'resume_manual_1',
+      sessionFile,
+      prompt: 'manual resume',
+      dueAt: '2026-03-12T13:00:30.000Z',
+      createdAt: '2026-03-12T13:00:00.000Z',
+      attempts: 0,
+    });
+    saveDeferredResumeState(state);
+
+    expect(isBackgroundRunDeferredResumeId('resume_run_background-1')).toBe(true);
+    expect(isBackgroundRunDeferredResumeId('resume_manual_1')).toBe(false);
+
+    const activated = await activateDueBackgroundRunDeferredResumesForSessionFile({
+      sessionFile,
+      at: new Date('2026-03-12T13:00:31.000Z'),
+      conversationId: 'conv-background',
+    });
+
+    expect(activated).toEqual([
+      expect.objectContaining({ id: 'resume_run_background-1', status: 'ready' }),
+    ]);
+    expect(listReadyBackgroundRunDeferredResumesForSessionFile(sessionFile)).toEqual([
+      expect.objectContaining({ id: 'resume_run_background-1', status: 'ready' }),
+    ]);
+    expect(listDeferredResumesForSessionFile(sessionFile)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'resume_run_background-1', status: 'ready' }),
+      expect.objectContaining({ id: 'resume_manual_1', status: 'scheduled' }),
+    ]));
   });
 
   it('rejects invalid delays', async () => {

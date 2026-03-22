@@ -2,12 +2,8 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AppDataContext, SseConnectionContext, SystemStatusContext } from '../contexts.js';
 import { SystemPage } from './SystemPage.js';
-import { useApi } from '../hooks';
-
-vi.mock('../hooks', () => ({
-  useApi: vi.fn(),
-}));
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
@@ -30,204 +26,220 @@ describe('SystemPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders individual subsystem reset controls on the system page', () => {
-    const refetch = vi.fn();
-
-    vi.mocked(useApi)
-      .mockReturnValueOnce({
-        data: {
-          warnings: [],
-          service: {
-            platform: 'launchd',
-            identifier: 'io.test.daemon',
-            manifestPath: '/tmp/io.test.daemon.plist',
-            installed: true,
-            running: true,
-          },
-          runtime: {
-            running: true,
-            socketPath: '/tmp/personal-agentd.sock',
-            pid: 123,
-            startedAt: '2026-03-18T17:00:00.000Z',
-            moduleCount: 4,
-            queueDepth: 0,
-            maxQueueDepth: 1000,
-          },
-          log: {
-            path: '/tmp/daemon.log',
-            lines: [],
-          },
-        },
-        loading: false,
-        refreshing: false,
-        error: null,
-        refetch,
-      })
-      .mockReturnValueOnce({
-        data: {
-          warnings: [],
-          config: {
-            enabled: true,
-            repoDir: '/tmp/sync',
-            remote: 'origin',
-            branch: 'main',
-            intervalSeconds: 120,
-            autoResolveWithAgent: true,
-            conflictResolverTaskSlug: 'sync-conflict-resolver',
-            resolverCooldownMinutes: 30,
-            autoResolveErrorsWithAgent: true,
-            errorResolverTaskSlug: 'sync-error-resolver',
-            errorResolverCooldownMinutes: 30,
-          },
-          git: {
-            hasRepo: true,
-            dirtyEntries: 0,
-            lastCommit: 'abc123 2026-03-18 sync ready',
-            remoteUrl: 'git@example.com:state.git',
-          },
-          daemon: {
-            connected: true,
-            moduleLoaded: true,
-            moduleEnabled: true,
-            moduleDetail: {
-              running: false,
-              lastRunAt: '2026-03-18T17:01:00.000Z',
-              lastSuccessAt: '2026-03-18T17:01:10.000Z',
-              lastCommitAt: '2026-03-18T17:01:12.000Z',
-              lastConflictFiles: [],
-            },
-          },
-          log: {
-            path: '/tmp/daemon.log',
-            lines: [],
-          },
-        },
-        loading: false,
-        refreshing: false,
-        error: null,
-        refetch,
-      })
-      .mockReturnValueOnce({
-        data: {
-          provider: 'telegram',
-          currentProfile: 'datadog',
-          configuredProfile: 'datadog',
-          configFilePath: '/tmp/gateway.json',
-          envOverrideKeys: [],
-          warnings: [],
-          service: {
-            provider: 'telegram',
-            platform: 'launchd',
-            identifier: 'io.test.gateway',
-            manifestPath: '/tmp/io.test.gateway.plist',
-            installed: true,
-            running: true,
-          },
-          access: {
-            tokenConfigured: true,
-            tokenSource: 'plain',
-            allowlistChatIds: [],
-            allowedUserIds: [],
-            blockedUserIds: [],
-          },
-          conversations: [],
-          pendingMessages: [],
-          gatewayLog: {
-            path: '/tmp/gateway.log',
-            lines: [],
-          },
-        },
-        loading: false,
-        refreshing: false,
-        error: null,
-        refetch,
-      })
-      .mockReturnValueOnce({
-        data: {
-          warnings: [],
-          service: {
-            platform: 'launchd',
-            identifier: 'io.test.web-ui',
-            manifestPath: '/tmp/io.test.web-ui.plist',
-            installed: true,
-            running: true,
-            repoRoot: '/repo',
-            port: 3741,
-            url: 'http://localhost:3741',
-            tailscaleServe: false,
-            resumeFallbackPrompt: 'Resume the conversation from the latest durable state.',
-            deployment: {
-              stablePort: 3741,
-              activeSlot: 'green',
-              activeRelease: {
-                slot: 'green',
-                slotDir: '/tmp/web-ui/green',
-                distDir: '/tmp/web-ui/green/dist',
-                serverDir: '/tmp/web-ui/green/server',
-                serverEntryFile: '/tmp/web-ui/green/server/index.js',
-                sourceRepoRoot: '/repo',
-                builtAt: '2026-03-18T17:00:00.000Z',
-                revision: '123abc',
-              },
-              badReleases: [],
-            },
-          },
-          log: {
-            path: '/tmp/web-ui.log',
-            lines: [],
-          },
-        },
-        loading: false,
-        refreshing: false,
-        error: null,
-        refetch,
-      })
-      .mockReturnValueOnce({
-        data: {
-          targets: [{
-            id: 'gpu-box',
-            label: 'GPU Box',
-            transport: 'ssh',
-            sshDestination: 'gpu-box',
-            cwdMappings: [],
-            createdAt: '2026-03-18T17:00:00.000Z',
-            updatedAt: '2026-03-18T17:00:00.000Z',
-            activeRunCount: 1,
-            readyImportCount: 1,
-          }],
-          sshBinary: {
-            available: true,
-            command: 'ssh',
-            path: '/usr/bin/ssh',
-            version: 'OpenSSH_9.7p1',
-          },
-          summary: {
-            totalTargets: 1,
-            activeRemoteRuns: 1,
-            readyImports: 1,
-          },
-        },
-        loading: false,
-        refreshing: false,
-        error: null,
-        refetch,
-      });
-
+  it('renders a compact core-services list on the system page', () => {
     const html = renderToString(
-      <MemoryRouter initialEntries={['/system']}>
-        <Routes>
-          <Route path="/system" element={<SystemPage />} />
-        </Routes>
+      <MemoryRouter initialEntries={['/system?component=sync']}>
+        <SseConnectionContext.Provider value={{ status: 'open' }}>
+          <AppDataContext.Provider value={{
+            activity: null,
+            projects: null,
+            sessions: [{
+              id: 'conv-123',
+              file: '/tmp/conv-123.jsonl',
+              timestamp: '2026-03-18T00:00:00.000Z',
+              cwd: '/repo',
+              cwdSlug: 'repo',
+              model: 'openai/gpt-5.4',
+              title: 'Fix runs navigation',
+              messageCount: 6,
+            }],
+            tasks: null,
+            runs: {
+              scannedAt: '2026-03-18T00:02:00.000Z',
+              runsRoot: '/tmp/runs',
+              summary: { total: 1, recoveryActions: {}, statuses: { waiting: 1 } },
+              runs: [{
+                runId: 'conversation-live-conv-123',
+                paths: {
+                  root: '/tmp/runs/conversation-live-conv-123',
+                  manifestPath: '/tmp/runs/conversation-live-conv-123/manifest.json',
+                  statusPath: '/tmp/runs/conversation-live-conv-123/status.json',
+                  checkpointPath: '/tmp/runs/conversation-live-conv-123/checkpoint.json',
+                  eventsPath: '/tmp/runs/conversation-live-conv-123/events.jsonl',
+                  outputLogPath: '/tmp/runs/conversation-live-conv-123/output.log',
+                  resultPath: '/tmp/runs/conversation-live-conv-123/result.json',
+                },
+                manifest: {
+                  version: 1,
+                  id: 'conversation-live-conv-123',
+                  kind: 'conversation',
+                  resumePolicy: 'continue',
+                  createdAt: '2026-03-18T00:00:00.000Z',
+                  spec: { conversationId: 'conv-123' },
+                  source: { type: 'web-live-session', id: 'conv-123', filePath: '/tmp/conv-123.jsonl' },
+                },
+                status: {
+                  version: 1,
+                  runId: 'conversation-live-conv-123',
+                  status: 'waiting',
+                  createdAt: '2026-03-18T00:00:00.000Z',
+                  updatedAt: '2026-03-18T00:01:00.000Z',
+                  activeAttempt: 1,
+                },
+                checkpoint: {
+                  version: 1,
+                  runId: 'conversation-live-conv-123',
+                  updatedAt: '2026-03-18T00:01:00.000Z',
+                  step: 'web-live-session.waiting',
+                  payload: { conversationId: 'conv-123', title: 'Fix runs navigation' },
+                },
+                problems: [],
+                recoveryAction: 'none',
+              }],
+            },
+            setActivity: vi.fn(),
+            setProjects: vi.fn(),
+            setSessions: vi.fn(),
+            setTasks: vi.fn(),
+            setRuns: vi.fn(),
+          }}>
+          <SystemStatusContext.Provider value={{
+            daemon: {
+              warnings: [],
+              service: {
+                platform: 'launchd',
+                identifier: 'io.test.daemon',
+                manifestPath: '/tmp/io.test.daemon.plist',
+                installed: true,
+                running: true,
+              },
+              runtime: {
+                running: true,
+                socketPath: '/tmp/personal-agentd.sock',
+                pid: 123,
+                startedAt: '2026-03-18T17:00:00.000Z',
+                moduleCount: 4,
+                queueDepth: 0,
+                maxQueueDepth: 1000,
+              },
+              log: {
+                path: '/tmp/daemon.log',
+                lines: [],
+              },
+            },
+            sync: {
+              warnings: [],
+              config: {
+                enabled: true,
+                repoDir: '/tmp/sync',
+                remote: 'origin',
+                branch: 'main',
+                intervalSeconds: 120,
+                autoResolveWithAgent: true,
+                conflictResolverTaskSlug: 'sync-conflict-resolver',
+                resolverCooldownMinutes: 30,
+                autoResolveErrorsWithAgent: true,
+                errorResolverTaskSlug: 'sync-error-resolver',
+                errorResolverCooldownMinutes: 30,
+              },
+              git: {
+                hasRepo: true,
+                dirtyEntries: 1,
+              },
+              daemon: {
+                connected: true,
+                moduleLoaded: true,
+                moduleEnabled: true,
+                moduleDetail: {
+                  running: false,
+                  lastRunAt: '2026-03-18T17:01:00.000Z',
+                  lastSuccessAt: '2026-03-18T17:01:10.000Z',
+                  lastCommitAt: '2026-03-18T17:01:12.000Z',
+                  lastConflictFiles: [],
+                },
+              },
+              log: {
+                path: '/tmp/daemon.log',
+                lines: [],
+              },
+            },
+            gateway: {
+              provider: 'telegram',
+              currentProfile: 'assistant',
+              configuredProfile: 'assistant',
+              configFilePath: '/tmp/gateway.json',
+              envOverrideKeys: [],
+              warnings: [],
+              service: {
+                provider: 'telegram',
+                platform: 'launchd',
+                identifier: 'io.test.gateway',
+                manifestPath: '/tmp/io.test.gateway.plist',
+                installed: true,
+                running: true,
+              },
+              access: {
+                tokenConfigured: true,
+                tokenSource: 'plain',
+                allowlistChatIds: ['123'],
+                allowedUserIds: [],
+                blockedUserIds: [],
+              },
+              conversations: [],
+              pendingMessages: [],
+              gatewayLog: {
+                path: '/tmp/gateway.log',
+                lines: [],
+              },
+            },
+            webUi: {
+              warnings: [],
+              service: {
+                platform: 'launchd',
+                identifier: 'io.test.web-ui',
+                manifestPath: '/tmp/io.test.web-ui.plist',
+                installed: true,
+                running: true,
+                repoRoot: '/repo',
+                port: 3741,
+                url: 'http://localhost:3741',
+                tailscaleServe: false,
+                resumeFallbackPrompt: 'Resume the conversation from the latest durable state.',
+                deployment: {
+                  stablePort: 3741,
+                  activeSlot: 'green',
+                  activeRelease: {
+                    slot: 'green',
+                    slotDir: '/tmp/web-ui/green',
+                    distDir: '/tmp/web-ui/green/dist',
+                    serverDir: '/tmp/web-ui/green/server',
+                    serverEntryFile: '/tmp/web-ui/green/server/index.js',
+                    sourceRepoRoot: '/repo',
+                    builtAt: '2026-03-18T17:00:00.000Z',
+                    revision: '123abc',
+                  },
+                  badReleases: [],
+                },
+              },
+              log: {
+                path: '/tmp/web-ui.log',
+                lines: [],
+              },
+            },
+            setDaemon: vi.fn(),
+            setGateway: vi.fn(),
+            setSync: vi.fn(),
+            setWebUi: vi.fn(),
+          }}>
+            <Routes>
+              <Route path="/system" element={<SystemPage />} />
+            </Routes>
+          </SystemStatusContext.Provider>
+          </AppDataContext.Provider>
+        </SseConnectionContext.Provider>
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Restart web UI');
-    expect(html).toContain('Restart daemon');
-    expect(html).toContain('Restart gateway');
-    expect(html).toContain('Run sync now');
-    expect(html).toContain('Execution targets');
-    expect(html).toContain('GPU Box');
-    expect(html).toContain('Add target');
-    expect(html).not.toContain('Save target');
+    expect(html).toContain('Update + restart');
+    expect(html).toContain('Restart everything');
+    expect(html).toContain('Core services');
+    expect(html).toContain('Web UI');
+    expect(html).toContain('Daemon');
+    expect(html).toContain('Gateway');
+    expect(html).toContain('Sync');
+    expect(html).toContain('1 local file changed in the sync repo');
+    expect(html).toContain('via SSE');
+    expect(html).toContain('Agent work');
+    expect(html).toContain('Fix runs navigation');
   });
 });

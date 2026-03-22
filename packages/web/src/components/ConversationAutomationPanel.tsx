@@ -288,7 +288,7 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
             {progressLabel}
           </p>
         </div>
-        <Link to="/plans" className="ui-toolbar-button inline-flex shrink-0 items-center gap-1 text-[11px] text-accent" title="Edit presets">
+        <Link to="/capabilities?section=presets" className="ui-toolbar-button inline-flex shrink-0 items-center gap-1 text-[11px] text-accent" title="Edit presets">
           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M3 6h18" />
             <path d="M7 12h10" />

@@ -1,6 +1,4 @@
 export type ToolsRailSelection =
-  | { kind: 'agents'; path: string }
-  | { kind: 'skill'; path: string }
   | { kind: 'tool'; name: string }
   | { kind: 'package-target'; target: 'profile' | 'local'; profileName?: string }
   | { kind: 'cli'; id: string }
@@ -8,7 +6,6 @@ export type ToolsRailSelection =
   | { kind: 'mcp-tool'; server: string; tool: string };
 
 const INSPECT_PARAM = 'inspect';
-const PATH_PARAM = 'path';
 const NAME_PARAM = 'name';
 const TARGET_PARAM = 'target';
 const PROFILE_PARAM = 'profile';
@@ -18,7 +15,6 @@ const TOOL_PARAM = 'tool';
 
 const TOOL_SELECTION_PARAMS = [
   INSPECT_PARAM,
-  PATH_PARAM,
   NAME_PARAM,
   TARGET_PARAM,
   PROFILE_PARAM,
@@ -32,14 +28,6 @@ export function parseToolsSelection(search: string): ToolsRailSelection | null {
   const inspect = params.get(INSPECT_PARAM)?.trim();
 
   switch (inspect) {
-    case 'agents': {
-      const path = params.get(PATH_PARAM)?.trim();
-      return path ? { kind: 'agents', path } : null;
-    }
-    case 'skill': {
-      const path = params.get(PATH_PARAM)?.trim();
-      return path ? { kind: 'skill', path } : null;
-    }
     case 'tool': {
       const name = params.get(NAME_PARAM)?.trim();
       return name ? { kind: 'tool', name } : null;
@@ -86,10 +74,6 @@ export function buildToolsSearch(currentSearch: string, selection: ToolsRailSele
     params.set(INSPECT_PARAM, selection.kind);
 
     switch (selection.kind) {
-      case 'agents':
-      case 'skill':
-        params.set(PATH_PARAM, selection.path);
-        break;
       case 'tool':
         params.set(NAME_PARAM, selection.name);
         break;
@@ -124,9 +108,6 @@ export function getToolsSelectionKey(selection: ToolsRailSelection | null): stri
   }
 
   switch (selection.kind) {
-    case 'agents':
-    case 'skill':
-      return `${selection.kind}:${selection.path}`;
     case 'tool':
       return `tool:${selection.name}`;
     case 'package-target':

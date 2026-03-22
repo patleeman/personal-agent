@@ -4,8 +4,6 @@ import { buildToolsSearch, getToolsSelectionKey, parseToolsSelection } from './t
 describe('toolsSelection', () => {
   it('parses supported tool rail selections from search params', () => {
     expect(parseToolsSelection('?inspect=tool&name=project')).toEqual({ kind: 'tool', name: 'project' });
-    expect(parseToolsSelection('?inspect=agents&path=%2Ftmp%2FAGENTS.md')).toEqual({ kind: 'agents', path: '/tmp/AGENTS.md' });
-    expect(parseToolsSelection('?inspect=skill&path=%2Ftmp%2FSKILL.md')).toEqual({ kind: 'skill', path: '/tmp/SKILL.md' });
     expect(parseToolsSelection('?inspect=package-target&target=profile&profile=datadog')).toEqual({
       kind: 'package-target',
       target: 'profile',

@@ -21,6 +21,12 @@ export interface AskUserQuestionPresentation {
   questions: AskUserQuestionPrompt[];
 }
 
+export interface PendingAskUserQuestion {
+  block: Extract<MessageBlock, { type: 'tool_use' }>;
+  messageIndex: number;
+  presentation: AskUserQuestionPresentation;
+}
+
 export type AskUserQuestionAnswers = Record<string, string[]>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -207,6 +213,40 @@ export function isAskUserQuestionComplete(
   return presentation.questions.every((question) => (answers[question.id]?.length ?? 0) > 0);
 }
 
+export function findPendingAskUserQuestion(messages: MessageBlock[] | undefined): PendingAskUserQuestion | null {
+  if (!messages) {
+    return null;
+  }
+
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const block = messages[index];
+    if (!block) {
+      continue;
+    }
+
+    if (block.type === 'user') {
+      return null;
+    }
+
+    if (block.type !== 'tool_use' || block.tool !== 'ask_user_question' || block.status === 'error' || block.error) {
+      continue;
+    }
+
+    const presentation = readAskUserQuestionPresentation(block);
+    if (!presentation) {
+      continue;
+    }
+
+    return {
+      block,
+      messageIndex: index,
+      presentation,
+    };
+  }
+
+  return null;
+}
+
 export function resolveAskUserQuestionAnswerLabels(
   question: AskUserQuestionPrompt,
   selectedValues: string[],
@@ -231,6 +271,44 @@ export function resolveAskUserQuestionAnswerLabels(
   }
 
   return labels;
+}
+
+export function resolveAskUserQuestionDefaultOptionIndex(
+  question: AskUserQuestionPrompt,
+  answers: AskUserQuestionAnswers,
+): number {
+  if (question.options.length === 0) {
+    return -1;
+  }
+
+  const selectedValues = answers[question.id] ?? [];
+  const selectedIndex = question.options.findIndex((option) => selectedValues.includes(option.value));
+  return selectedIndex >= 0 ? selectedIndex : 0;
+}
+
+export function moveAskUserQuestionIndex(currentIndex: number, total: number, direction: -1 | 1): number {
+  if (total <= 0) {
+    return -1;
+  }
+
+  return (currentIndex + direction + total) % total;
+}
+
+export function resolveAskUserQuestionOptionHotkey(key: string): number {
+  return /^[1-9]$/.test(key) ? Number(key) - 1 : -1;
+}
+
+export function resolveAskUserQuestionNavigationHotkey(key: string): -1 | 0 | 1 {
+  const normalized = key.trim().toLowerCase();
+  if (normalized === 'n' || normalized === 'j') {
+    return 1;
+  }
+
+  if (normalized === 'p' || normalized === 'k') {
+    return -1;
+  }
+
+  return 0;
 }
 
 export function buildAskUserQuestionReplyText(

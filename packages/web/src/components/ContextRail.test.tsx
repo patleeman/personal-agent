@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AppDataContext } from '../contexts.js';
+import { AppDataContext, SystemStatusContext } from '../contexts.js';
 import { useApi } from '../hooks.js';
 import { useConversations } from '../hooks/useConversations.js';
 import { useDurableRunStream } from '../hooks/useDurableRunStream.js';
@@ -152,7 +152,6 @@ describe('ContextRail run detail', () => {
 
     expect(html).toContain('← Conversation');
     expect(html).toContain('Current conversation');
-    expect(html).toContain('This run belongs to the current conversation.');
     expect(html).not.toContain('href="/conversations/conv-123"');
   });
 
@@ -227,7 +226,7 @@ describe('ContextRail run detail', () => {
     expect(html).toContain('Target conversation');
   });
 
-  it('opens run details in the runs rail without conversation-only chrome', () => {
+  it('opens run details in the system rail without conversation-only chrome', () => {
     vi.mocked(useDurableRunStream).mockReturnValue({
       detail: createDetail(),
       log: { path: '/tmp/runs/conversation-live-conv-123/output.log', log: '' },
@@ -237,7 +236,7 @@ describe('ContextRail run detail', () => {
     });
 
     const html = renderToString(
-      <MemoryRouter initialEntries={['/runs/conversation-live-conv-123']}>
+      <MemoryRouter initialEntries={['/system?run=conversation-live-conv-123']}>
         <AppDataContext.Provider value={{
           activity: null,
           projects: null,
@@ -321,6 +320,66 @@ describe('ContextRail run detail', () => {
     expect(html).toContain('references/personal-agent-web-ui-preferences.md');
   });
 
+  it('renders system details and logs in the context rail on the system page', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/system?component=daemon']}>
+        <AppDataContext.Provider value={{
+          activity: null,
+          projects: null,
+          sessions: [createSession()],
+          tasks: null,
+          runs: null,
+          setActivity: vi.fn(),
+          setProjects: vi.fn(),
+          setSessions: vi.fn(),
+          setTasks: vi.fn(),
+          setRuns: vi.fn(),
+        }}>
+          <SystemStatusContext.Provider value={{
+            daemon: {
+              warnings: [],
+              service: {
+                platform: 'launchd',
+                identifier: 'io.test.daemon',
+                manifestPath: '/tmp/io.test.daemon.plist',
+                installed: true,
+                running: true,
+              },
+              runtime: {
+                running: true,
+                socketPath: '/tmp/personal-agentd.sock',
+                pid: 123,
+                startedAt: '2026-03-18T17:00:00.000Z',
+                moduleCount: 4,
+                queueDepth: 0,
+                maxQueueDepth: 1000,
+              },
+              log: {
+                path: '/tmp/daemon.log',
+                lines: ['daemon ready'],
+              },
+            },
+            gateway: null,
+            sync: null,
+            webUi: null,
+            setDaemon: vi.fn(),
+            setGateway: vi.fn(),
+            setSync: vi.fn(),
+            setWebUi: vi.fn(),
+          }}>
+            <ContextRail />
+          </SystemStatusContext.Provider>
+        </AppDataContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('System');
+    expect(html).toContain('Daemon');
+    expect(html).toContain('Restart daemon');
+    expect(html).toContain('Recent log');
+    expect(html).toContain('daemon ready');
+  });
+
   it('shows working directory before the todo list on the draft conversation rail', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/conversations/new']}>
@@ -344,5 +403,218 @@ describe('ContextRail run detail', () => {
     expect(html.indexOf('Working Directory')).toBeGreaterThanOrEqual(0);
     expect(html.indexOf('Todo list')).toBeGreaterThanOrEqual(0);
     expect(html.indexOf('Working Directory')).toBeLessThan(html.indexOf('Todo list'));
+  });
+
+  it('renders the conversations workspace in the rail on the conversations index page', () => {
+    vi.mocked(useConversations).mockReturnValue({
+      pinnedSessions: [createSession({ id: 'pinned-1', title: 'Pinned session' })],
+      tabs: [createSession({ id: 'open-1', title: 'Open session' })],
+      archivedSessions: [createSession({ id: 'archived-1', title: 'Archived session' })],
+      loading: false,
+      refetch: vi.fn(),
+      openSession: vi.fn(),
+      closeSession: vi.fn(),
+      pinSession: vi.fn(),
+      unpinSession: vi.fn(),
+    } as never);
+
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/conversations']}>
+        <AppDataContext.Provider value={{
+          activity: null,
+          projects: null,
+          sessions: [createSession()],
+          tasks: null,
+          runs: null,
+          setActivity: vi.fn(),
+          setProjects: vi.fn(),
+          setSessions: vi.fn(),
+          setTasks: vi.fn(),
+          setRuns: vi.fn(),
+        }}>
+          <ContextRail />
+        </AppDataContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Workspace');
+    expect(html).toContain('Pinned');
+    expect(html).toContain('Archived');
+    expect(html).toContain('Pinned session');
+  });
+
+  it('renders selected knowledge-base memory details in the rail', () => {
+    vi.mocked(useApi).mockImplementation((_, key) => {
+      if (key === 'knowledge-rail-memory') {
+        return {
+          data: {
+            profile: 'shared',
+            agentsMd: [],
+            skills: [],
+            memoryDocs: [{
+              id: 'personal-agent',
+              title: 'Personal-agent knowledge hub',
+              summary: 'Durable knowledge hub for personal-agent.',
+              tags: ['personal-agent'],
+              path: '/tmp/personal-agent/MEMORY.md',
+              type: 'project',
+              status: 'active',
+              updated: '2026-03-18T12:00:00.000Z',
+            }],
+          },
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+      if (key === 'knowledge-rail-projects') {
+        return {
+          data: [],
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+      if (key === 'knowledge-memory-rail:personal-agent') {
+        return {
+          data: {
+            memory: {
+              id: 'personal-agent',
+              title: 'Personal-agent knowledge hub',
+              summary: 'Durable knowledge hub for personal-agent.',
+              tags: ['personal-agent'],
+              path: '/tmp/personal-agent/MEMORY.md',
+              type: 'project',
+              status: 'active',
+              updated: '2026-03-18T12:00:00.000Z',
+            },
+            content: '# Personal-agent knowledge hub',
+            references: [{
+              title: 'Web UI preferences',
+              summary: 'Durable UI notes.',
+              tags: ['personal-agent'],
+              path: '/tmp/personal-agent/references/prefs.md',
+              relativePath: 'references/prefs.md',
+            }],
+          },
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+
+      return {
+        data: null,
+        loading: false,
+        refreshing: false,
+        error: null,
+        refetch: vi.fn(),
+      };
+    });
+
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/knowledge?section=memories&memory=personal-agent']}>
+        <AppDataContext.Provider value={{
+          activity: null,
+          projects: null,
+          sessions: [createSession()],
+          tasks: null,
+          runs: null,
+          setActivity: vi.fn(),
+          setProjects: vi.fn(),
+          setSessions: vi.fn(),
+          setTasks: vi.fn(),
+          setRuns: vi.fn(),
+        }}>
+          <ContextRail />
+        </AppDataContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Personal-agent knowledge hub');
+    expect(html).toContain('Open memory browser');
+    expect(html).toContain('references/prefs.md');
+  });
+
+  it('renders selected capability tool details in the rail', () => {
+    vi.mocked(useApi).mockImplementation((_, key) => {
+      if (key === 'capabilities-rail-presets') {
+        return {
+          data: { presetLibrary: { presets: [], defaultPresetIds: [] } },
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+      if (key === 'capabilities-rail-tasks') {
+        return {
+          data: [],
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+      if (key === 'capabilities-rail-tools') {
+        return {
+          data: {
+            tools: [{
+              name: 'read',
+              description: 'Read a file from disk.',
+              active: true,
+              parameters: {
+                type: 'object',
+                properties: {
+                  path: { type: 'string', description: 'File path' },
+                },
+                required: ['path'],
+              },
+            }],
+            dependentCliTools: [],
+            mcp: { servers: [] },
+          },
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+
+      return {
+        data: null,
+        loading: false,
+        refreshing: false,
+        error: null,
+        refetch: vi.fn(),
+      };
+    });
+
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/capabilities?section=tools&tool=read']}>
+        <AppDataContext.Provider value={{
+          activity: null,
+          projects: null,
+          sessions: [createSession()],
+          tasks: null,
+          runs: null,
+          setActivity: vi.fn(),
+          setProjects: vi.fn(),
+          setSessions: vi.fn(),
+          setTasks: vi.fn(),
+          setRuns: vi.fn(),
+        }}>
+          <ContextRail />
+        </AppDataContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Read a file from disk.');
+    expect(html).toContain('Open full tools page');
+    expect(html).toContain('path');
+    expect(html).toContain('required');
   });
 });

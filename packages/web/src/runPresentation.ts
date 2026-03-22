@@ -1,6 +1,7 @@
 import type { DurableRunListResult, DurableRunRecord, RemoteExecutionRunSummary, ScheduledTaskSummary, SessionMeta } from './types';
 
 const REMOTE_EXECUTION_RUN_SOURCE_TYPE = 'conversation-remote-run';
+const CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE = 'conversation-memory-distill';
 
 export interface RunPresentationLookups {
   tasks?: ScheduledTaskSummary[] | null;
@@ -161,10 +162,13 @@ function conversationLabel(run: DurableRunRecord, lookups: RunPresentationLookup
   const isConversationRun = run.manifest?.kind === 'conversation'
     || sourceType === 'web-live-session'
     || sourceType === 'deferred-resume'
-    || sourceType === REMOTE_EXECUTION_RUN_SOURCE_TYPE;
+    || sourceType === REMOTE_EXECUTION_RUN_SOURCE_TYPE
+    || sourceType === CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE;
 
   if (isConversationRun) {
-    const conversationId = sourceType === 'web-live-session' || sourceType === REMOTE_EXECUTION_RUN_SOURCE_TYPE
+    const conversationId = sourceType === 'web-live-session'
+      || sourceType === REMOTE_EXECUTION_RUN_SOURCE_TYPE
+      || sourceType === CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE
       ? run.manifest?.source?.id ?? readSpec(run, 'conversationId') ?? readCheckpoint(run, 'conversationId')
       : readCheckpoint(run, 'conversationId') ?? readSpec(run, 'conversationId');
     const title = readCheckpoint(run, 'title') ?? sessionById(lookups, conversationId)?.title;
@@ -303,6 +307,17 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
     return { title: headline, summary };
   }
 
+  if (run.manifest?.source?.type === CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE) {
+    const { title, conversationId } = conversationLabel(run, lookups);
+    const requestedTitle = excerpt(readCheckpoint(run, 'title') ?? readSpec(run, 'title'));
+    const sourceLabel = title ?? conversationId;
+    const headline = requestedTitle ?? (sourceLabel ? `Distill memory: ${sourceLabel}` : 'Distill durable memory');
+    return {
+      title: headline,
+      summary: 'Conversation memory distillation',
+    };
+  }
+
   if (run.manifest?.kind === 'background-run' || run.manifest?.source?.type === 'background-run') {
     const agentPrompt = excerpt(readNestedSpec(run, 'agent', 'prompt') ?? readNestedCheckpoint(run, 'agent', 'prompt'));
     const shellCommand = excerpt(readSpec(run, 'shellCommand') ?? readCheckpoint(run, 'shellCommand'));
@@ -339,7 +354,7 @@ export function getRunConnections(run: DurableRunRecord, lookups: RunPresentatio
         key: `task:${taskId}`,
         label: 'Scheduled task',
         value: taskId,
-        to: `/scheduled/${encodeURIComponent(taskId)}`,
+        to: `/capabilities?section=scheduled&task=${encodeURIComponent(taskId)}`,
         detail: excerpt(task?.prompt) ?? task?.filePath ?? run.manifest?.source?.filePath,
       });
     }

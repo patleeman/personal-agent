@@ -130,6 +130,7 @@ import {
   promptSession as promptLocalSession,
   restoreQueuedMessage,
   queuePromptContext,
+  appendVisibleCustomMessage,
   kickConversationAutomation,
   compactSession,
   reloadSessionResources,
@@ -318,11 +319,14 @@ import {
 } from './projectPackages.js';
 import { generateProjectBrief } from './projectBriefs.js';
 import {
+  activateDueBackgroundRunDeferredResumesForSessionFile,
   activateDueDeferredResumesForSessionFile,
   cancelDeferredResumeForSessionFile,
   completeDeferredResumeForSessionFile,
   fireDeferredResumeNowForSessionFile,
+  isBackgroundRunDeferredResumeId,
   listDeferredResumesForSessionFile,
+  listReadyBackgroundRunDeferredResumesForSessionFile,
   retryDeferredResumeForSessionFile,
   scheduleDeferredResumeForSessionFile,
   type DeferredResumeSummary,
@@ -1094,6 +1098,152 @@ interface ConversationMemoryDistillRunInput {
   emitActivity?: boolean;
 }
 
+interface ResolvedConversationMemoryDistillRunInput {
+  conversationId: string;
+  checkpointId: string;
+  mode: ConversationMemoryMaintenanceMode;
+  trigger: ConversationMemoryMaintenanceTrigger;
+  title?: string;
+  summary?: string;
+  tags?: string[];
+  emitActivity: boolean;
+}
+
+const MEMORY_DISTILL_RECOVERY_CUSTOM_TYPE = 'memory_distill_recovery';
+
+function readOptionalRecordString(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function readOptionalRecordBoolean(record: Record<string, unknown>, key: string): boolean | undefined {
+  const value = record[key];
+  return typeof value === 'boolean' ? value : undefined;
+}
+
+function readOptionalRecordStringArray(record: Record<string, unknown>, key: string): string[] | undefined {
+  const value = record[key];
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const normalized = value
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function readConversationMemoryDistillRunInputFromRun(
+  run: Awaited<ReturnType<typeof listDurableRuns>>['runs'][number],
+  profile: string,
+): ResolvedConversationMemoryDistillRunInput | null {
+  if (run.manifest?.kind !== 'background-run' || run.manifest.source?.type !== CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE) {
+    return null;
+  }
+
+  const conversationId = typeof run.manifest.source.id === 'string' ? run.manifest.source.id.trim() : '';
+  if (!conversationId) {
+    return null;
+  }
+
+  const payload = isRecord(run.checkpoint?.payload) ? run.checkpoint.payload : {};
+  const maintenanceState = readConversationMemoryMaintenanceState({ profile, conversationId });
+  const checkpointId = readOptionalRecordString(payload, 'checkpointId')
+    ?? maintenanceState?.runningCheckpointId
+    ?? maintenanceState?.latestCheckpointId;
+
+  if (!checkpointId) {
+    return null;
+  }
+
+  const modeValue = readOptionalRecordString(payload, 'mode');
+  const mode: ConversationMemoryMaintenanceMode = modeValue === 'manual'
+    ? 'manual'
+    : modeValue === 'auto'
+      ? 'auto'
+      : maintenanceState?.latestMode ?? 'auto';
+  const triggerValue = readOptionalRecordString(payload, 'trigger');
+  const trigger: ConversationMemoryMaintenanceTrigger = triggerValue === 'manual' || triggerValue === 'auto_compaction_end' || triggerValue === 'turn_end'
+    ? triggerValue
+    : maintenanceState?.latestTrigger ?? 'turn_end';
+
+  return {
+    conversationId,
+    checkpointId,
+    mode,
+    trigger,
+    title: readOptionalRecordString(payload, 'title'),
+    summary: readOptionalRecordString(payload, 'summary'),
+    tags: readOptionalRecordStringArray(payload, 'tags'),
+    emitActivity: readOptionalRecordBoolean(payload, 'emitActivity') ?? false,
+  };
+}
+
+function formatConversationMemoryCheckpointAnchor(snapshot: Awaited<ReturnType<typeof readConversationCheckpointSnapshotFromState>> | null): string | undefined {
+  if (!snapshot) {
+    return undefined;
+  }
+
+  return `${snapshot.anchor.role} at ${new Date(snapshot.anchor.timestamp).toLocaleString()} — ${snapshot.anchor.preview}`;
+}
+
+function buildConversationMemoryDistillRecoveryVisibleMessage(input: {
+  runId: string;
+  status: string;
+  sourceConversationId: string;
+  sourceConversationTitle?: string;
+  checkpointId: string;
+  anchorLabel?: string;
+  error?: string;
+}): string {
+  return [
+    `Run ${input.runId} did not finish its memory distillation.`,
+    `Status: ${input.status}`,
+    `Source conversation: ${input.sourceConversationTitle ?? input.sourceConversationId}`,
+    `Checkpoint: ${input.checkpointId}`,
+    input.anchorLabel ? `Anchor: ${input.anchorLabel}` : undefined,
+    input.error ? `Last error: ${input.error}` : undefined,
+    '',
+    'Use this branch to inspect the failure and steer a retry or manual fix.',
+  ].filter((line): line is string => Boolean(line)).join('\n');
+}
+
+function buildConversationMemoryDistillRecoveryHiddenContext(input: {
+  runId: string;
+  status: string;
+  sourceConversationId: string;
+  sourceConversationTitle?: string;
+  checkpointId: string;
+  anchorLabel?: string;
+  title?: string;
+  summary?: string;
+  tags?: string[];
+  error?: string;
+}): string {
+  return [
+    'You are helping recover a conversation memory distillation that did not complete cleanly.',
+    '',
+    'This conversation is a fork of the source conversation, so the relevant transcript history is already available above.',
+    '',
+    'Recovery target:',
+    `- runId: ${input.runId}`,
+    `- status: ${input.status}`,
+    `- source conversation: ${input.sourceConversationTitle ?? input.sourceConversationId}`,
+    `- checkpointId: ${input.checkpointId}`,
+    input.anchorLabel ? `- anchor: ${input.anchorLabel}` : undefined,
+    input.title ? `- requested title: ${input.title}` : undefined,
+    input.summary ? `- requested summary: ${input.summary}` : undefined,
+    input.tags && input.tags.length > 0 ? `- requested tags: ${input.tags.join(', ')}` : undefined,
+    input.error ? `- last error: ${input.error}` : undefined,
+    '',
+    'Help the user inspect the failure, decide whether to retry the distillation, and if needed manually finish the durable memory update.',
+    `If you need the raw log, inspect durable run ${input.runId}.`,
+    'Prefer targeted fixes over broad rewrites.',
+  ].filter((line): line is string => Boolean(line)).join('\n');
+}
+
 function resolveConversationMemoryDistillRunnerPath(): string {
   return join(REPO_ROOT, 'packages/web/dist-server/distillConversationMemoryRun.js');
 }
@@ -1136,6 +1286,16 @@ async function startConversationMemoryDistillRun(input: ConversationMemoryDistil
     source: {
       type: CONVERSATION_MEMORY_DISTILL_RUN_SOURCE_TYPE,
       id: input.conversationId,
+    },
+    checkpointPayload: {
+      conversationId: input.conversationId,
+      checkpointId: input.checkpointId,
+      mode: input.mode,
+      trigger: input.trigger,
+      ...(input.title ? { title: input.title } : {}),
+      ...(input.summary ? { summary: input.summary } : {}),
+      ...(input.tags && input.tags.length > 0 ? { tags: input.tags } : {}),
+      emitActivity: input.emitActivity ?? false,
     },
   });
 }
@@ -1415,6 +1575,65 @@ function listDeferredResumeSummariesBySessionFile(): Map<string, DeferredResumeS
   }
 
   return summariesBySessionFile;
+}
+
+function buildBackgroundRunHiddenContext(entries: DeferredResumeSummary[]): string {
+  if (entries.length === 0) {
+    return '';
+  }
+
+  const lines = [
+    'Background run completions became available since the previous explicit user turn.',
+    'Use this as hidden context only. Do not treat it as a standalone follow-up instruction.',
+  ];
+
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
+    lines.push(
+      '',
+      entries.length === 1 ? 'Completion:' : `Completion ${index + 1}:`,
+      entry.prompt,
+    );
+  }
+
+  return lines.join('\n');
+}
+
+async function completeDeliveredBackgroundRunDeferredResumes(input: {
+  entries: DeferredResumeSummary[];
+  sessionFile: string;
+  conversationId: string;
+  cwd?: string;
+}): Promise<void> {
+  if (input.entries.length === 0) {
+    return;
+  }
+
+  const daemonRoot = resolveDaemonRoot();
+  for (const entry of input.entries) {
+    const completedEntry = completeDeferredResumeForSessionFile({
+      sessionFile: input.sessionFile,
+      id: entry.id,
+    });
+    if (!completedEntry) {
+      continue;
+    }
+
+    await completeDeferredResumeConversationRun({
+      daemonRoot,
+      deferredResumeId: completedEntry.id,
+      sessionFile: completedEntry.sessionFile,
+      prompt: completedEntry.prompt,
+      dueAt: completedEntry.dueAt,
+      createdAt: completedEntry.createdAt,
+      readyAt: completedEntry.readyAt,
+      completedAt: new Date().toISOString(),
+      conversationId: input.conversationId,
+      ...(input.cwd ? { cwd: input.cwd } : {}),
+    });
+  }
+
+  invalidateAppTopics('sessions');
 }
 
 function decorateSessionsWithAttention<T extends {
@@ -2144,7 +2363,8 @@ async function flushLiveDeferredResumes(): Promise<void> {
 
       const readyEntries = listDeferredResumesForSessionFile(session.sessionFile)
         .filter((entry) => entry.status === 'ready');
-      for (const readyEntry of readyEntries) {
+      const autoDeliveredEntries = readyEntries.filter((entry) => !isBackgroundRunDeferredResumeId(entry.id));
+      for (const readyEntry of autoDeliveredEntries) {
         const liveEntry = liveRegistry.get(session.id);
         if (!liveEntry) {
           break;
@@ -4583,6 +4803,208 @@ app.post('/api/runs/:id/import', async (req, res) => {
   }
 });
 
+app.post('/api/runs/:id/memory-distill/retry', async (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const detail = await getDurableRun(req.params.id);
+    if (!detail) {
+      res.status(404).json({ error: 'Run not found' });
+      return;
+    }
+
+    const run = detail.run;
+    const distillInput = readConversationMemoryDistillRunInputFromRun(run, profile);
+    if (!distillInput) {
+      res.status(409).json({ error: 'This run is not a memory distillation run.' });
+      return;
+    }
+
+    if (run.status?.status !== 'failed' && run.status?.status !== 'interrupted') {
+      res.status(409).json({ error: 'Only failed or interrupted memory distillation runs can be retried.' });
+      return;
+    }
+
+    const existing = await readConversationMemoryDistillRunState(distillInput.conversationId);
+    if (existing.running) {
+      res.status(409).json({ error: 'A memory distillation is already running for this conversation.' });
+      return;
+    }
+
+    const result = await startConversationMemoryDistillRun({
+      conversationId: distillInput.conversationId,
+      profile,
+      checkpointId: distillInput.checkpointId,
+      mode: distillInput.mode,
+      trigger: distillInput.trigger,
+      title: distillInput.title,
+      summary: distillInput.summary,
+      tags: distillInput.tags,
+      emitActivity: distillInput.emitActivity,
+    });
+
+    if (!result.accepted || !result.runId) {
+      markConversationMemoryMaintenanceRunFailed({
+        profile,
+        conversationId: distillInput.conversationId,
+        checkpointId: distillInput.checkpointId,
+        error: result.reason ?? 'Could not retry conversation memory distillation.',
+      });
+      res.status(500).json({ error: result.reason ?? 'Could not retry conversation memory distillation.' });
+      return;
+    }
+
+    markConversationMemoryMaintenanceRunStarted({
+      profile,
+      conversationId: distillInput.conversationId,
+      checkpointId: distillInput.checkpointId,
+      runId: result.runId,
+    });
+
+    invalidateAppTopics('runs');
+    res.status(202).json({
+      accepted: true,
+      conversationId: distillInput.conversationId,
+      runId: result.runId,
+      status: 'queued',
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.includes('not found')
+      ? 404
+      : message.includes('already running') || message.includes('not a memory distillation run') || message.includes('Only failed or interrupted')
+        ? 409
+        : 500;
+    res.status(status).json({ error: message });
+  }
+});
+
+app.post('/api/runs/:id/memory-distill/recover', async (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const detail = await getDurableRun(req.params.id);
+    if (!detail) {
+      res.status(404).json({ error: 'Run not found' });
+      return;
+    }
+
+    const run = detail.run;
+    const distillInput = readConversationMemoryDistillRunInputFromRun(run, profile);
+    if (!distillInput) {
+      res.status(409).json({ error: 'This run is not a memory distillation run.' });
+      return;
+    }
+
+    if (run.status?.status !== 'failed' && run.status?.status !== 'interrupted') {
+      res.status(409).json({ error: 'Only failed or interrupted memory distillation runs can be recovered in a conversation.' });
+      return;
+    }
+
+    const maintenanceState = readConversationMemoryMaintenanceState({
+      profile,
+      conversationId: distillInput.conversationId,
+    });
+    const sessionFile = resolveConversationSessionFile(distillInput.conversationId)
+      ?? maintenanceState?.latestSessionFile
+      ?? run.manifest?.source?.filePath;
+
+    if (!sessionFile || !existsSync(sessionFile)) {
+      res.status(404).json({ error: 'Conversation not found for this memory distillation run.' });
+      return;
+    }
+
+    const sourceSession = listConversationSessionsSnapshot().find((session) => session.id === distillInput.conversationId);
+    const cwd = sourceSession?.cwd
+      ?? maintenanceState?.latestCwd
+      ?? SessionManager.open(sessionFile).getCwd();
+    const created = await createSessionFromExisting(sessionFile, cwd, {
+      ...buildLiveSessionResourceOptions(),
+      extensionFactories: buildLiveSessionExtensionFactories(),
+    });
+
+    const sourceLabel = sourceSession?.title ?? maintenanceState?.latestConversationTitle ?? distillInput.conversationId;
+    renameSession(created.id, `Recover memory distillation: ${sourceLabel}`);
+
+    const relatedProjectIds = getConversationProjectLink({
+      profile,
+      conversationId: distillInput.conversationId,
+    })?.relatedProjectIds ?? [];
+    if (relatedProjectIds.length > 0) {
+      setConversationProjectLinks({
+        profile,
+        conversationId: created.id,
+        relatedProjectIds,
+      });
+    }
+
+    let checkpointSnapshot: ReturnType<typeof readConversationCheckpointSnapshotFromState> | null = null;
+    try {
+      checkpointSnapshot = readConversationCheckpointSnapshotFromState({
+        profile,
+        conversationId: distillInput.conversationId,
+        checkpointId: distillInput.checkpointId,
+      });
+    } catch {
+      checkpointSnapshot = null;
+    }
+
+    const anchorLabel = formatConversationMemoryCheckpointAnchor(checkpointSnapshot);
+    const errorMessage = run.status?.lastError;
+    await appendVisibleCustomMessage(
+      created.id,
+      MEMORY_DISTILL_RECOVERY_CUSTOM_TYPE,
+      buildConversationMemoryDistillRecoveryVisibleMessage({
+        runId: run.runId,
+        status: run.status?.status ?? 'unknown',
+        sourceConversationId: distillInput.conversationId,
+        sourceConversationTitle: sourceSession?.title ?? maintenanceState?.latestConversationTitle,
+        checkpointId: distillInput.checkpointId,
+        anchorLabel,
+        error: errorMessage,
+      }),
+      {
+        runId: run.runId,
+        status: run.status?.status ?? 'unknown',
+        sourceConversationId: distillInput.conversationId,
+        checkpointId: distillInput.checkpointId,
+        ...(anchorLabel ? { anchor: anchorLabel } : {}),
+      },
+    );
+    await queuePromptContext(
+      created.id,
+      MEMORY_DISTILL_RECOVERY_CUSTOM_TYPE,
+      buildConversationMemoryDistillRecoveryHiddenContext({
+        runId: run.runId,
+        status: run.status?.status ?? 'unknown',
+        sourceConversationId: distillInput.conversationId,
+        sourceConversationTitle: sourceSession?.title ?? maintenanceState?.latestConversationTitle,
+        checkpointId: distillInput.checkpointId,
+        anchorLabel,
+        title: distillInput.title,
+        summary: distillInput.summary,
+        tags: distillInput.tags,
+        error: errorMessage,
+      }),
+    );
+
+    invalidateAppTopics('projects', 'sessions', 'runs');
+    res.status(201).json({
+      ok: true,
+      runId: run.runId,
+      conversationId: created.id,
+      sessionFile: created.sessionFile,
+      cwd,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.includes('not found')
+      ? 404
+      : message.includes('not a memory distillation run') || message.includes('Only failed or interrupted')
+        ? 409
+        : 500;
+    res.status(status).json({ error: message });
+  }
+});
+
 app.get('/api/runs/:id/remote-transcript', async (req, res) => {
   try {
     const detail = await getDurableRun(req.params.id);
@@ -5855,6 +6277,23 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
     }
 
     const isRemoteLive = isRemoteLiveSession(id);
+    const liveEntry = !isRemoteLive ? liveRegistry.get(id) : undefined;
+    const remoteLive = isRemoteLive ? getRemoteLiveSessionMeta(id) : null;
+    const sessionFile = liveEntry?.session.sessionFile ?? remoteLive?.sessionFile;
+    const backgroundRunActivations = sessionFile
+      ? await activateDueBackgroundRunDeferredResumesForSessionFile({
+          sessionFile,
+          conversationId: id,
+        })
+      : [];
+    const backgroundRunContextEntries = sessionFile
+      ? listReadyBackgroundRunDeferredResumesForSessionFile(sessionFile)
+      : [];
+    const backgroundRunHiddenContext = buildBackgroundRunHiddenContext(backgroundRunContextEntries);
+    if (backgroundRunActivations.length > 0) {
+      invalidateAppTopics('sessions');
+    }
+
     const automationBeforePrompt = loadConversationAutomationState({
       profile: getCurrentProfile(),
       conversationId: id,
@@ -5871,6 +6310,7 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
       referencedMemoryDocs.length > 0 ? buildReferencedMemoryDocsContext(referencedMemoryDocs, REPO_ROOT) : '',
       referencedSkills.length > 0 ? buildReferencedSkillsContext(referencedSkills, REPO_ROOT) : '',
       referencedProfiles.length > 0 ? buildReferencedProfilesContext(referencedProfiles, REPO_ROOT) : '',
+      backgroundRunHiddenContext,
     ].filter(Boolean);
 
     const hiddenContext = queuedContextBlocks.join('\n\n');
@@ -5879,7 +6319,6 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
       await queuePromptContext(id, 'referenced_context', hiddenContext);
     }
 
-    const liveEntry = liveRegistry.get(id);
     if (!isRemoteLive && liveEntry?.session.sessionFile) {
       await syncWebLiveConversationRun({
         conversationId: id,
@@ -5937,7 +6376,26 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
         })
       : promptLocalSession(id, text, behavior, promptImages);
 
-    promptPromise.catch(async (err) => {
+    void promptPromise.then(async () => {
+      if (!sessionFile || backgroundRunContextEntries.length === 0) {
+        return;
+      }
+
+      try {
+        await completeDeliveredBackgroundRunDeferredResumes({
+          entries: backgroundRunContextEntries,
+          sessionFile,
+          conversationId: id,
+          cwd: liveEntry?.cwd ?? remoteLive?.cwd,
+        });
+      } catch (error) {
+        logError('background run context completion error', {
+          sessionId: id,
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+      }
+    }).catch(async (err) => {
       if (!isRemoteLive && liveEntry?.session.sessionFile) {
         await syncWebLiveConversationRun({
           conversationId: id,
