@@ -273,6 +273,36 @@ describe('sessions', () => {
     ]);
   });
 
+  it('keeps walking backward through non-display parent links when reading archived tails', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    const dir = join(sessionsDir, '--tmp-project--');
+    mkdirSync(dir, { recursive: true });
+    const filePath = join(dir, '2026-03-11T12-00-00-000Z_session-tail-lineage.jsonl');
+    writeFileSync(filePath, [
+      JSON.stringify({ type: 'session', version: 3, id: 'session-tail-lineage', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
+      JSON.stringify({ type: 'model_change', id: 'lineage-model', parentId: null, timestamp: '2026-03-11T12:00:00.000Z', modelId: 'test-model' }),
+      JSON.stringify({ type: 'message', id: 'lineage-user-1', parentId: 'lineage-model', timestamp: '2026-03-11T12:00:01.000Z', message: { role: 'user', content: 'First prompt' } }),
+      JSON.stringify({ type: 'message', id: 'lineage-assistant-1', parentId: 'lineage-user-1', timestamp: '2026-03-11T12:00:02.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }] } }),
+      JSON.stringify({ type: 'message', id: 'lineage-user-2', parentId: 'lineage-assistant-1', timestamp: '2026-03-11T12:00:03.000Z', message: { role: 'user', content: 'Second prompt' } }),
+      JSON.stringify({ type: 'session_info', id: 'lineage-session-info', parentId: 'lineage-user-2', timestamp: '2026-03-11T12:00:04.000Z', name: 'Renamed session' }),
+      JSON.stringify({ type: 'message', id: 'lineage-assistant-2', parentId: 'lineage-session-info', timestamp: '2026-03-11T12:00:05.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Second answer' }] } }),
+      JSON.stringify({ type: 'custom_message', id: 'lineage-hidden-1', parentId: 'lineage-assistant-2', timestamp: '2026-03-11T12:00:06.000Z', customType: 'conversation_automation_post_turn_review', content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }], display: false }),
+      JSON.stringify({ type: 'message', id: 'lineage-hidden-assistant-1', parentId: 'lineage-hidden-1', timestamp: '2026-03-11T12:00:07.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Hidden assistant reply' }] } }),
+    ].join('\n') + '\n');
+
+    const detail = readSessionBlocks('session-tail-lineage', { tailBlocks: 400 });
+    expect(detail?.totalBlocks).toBe(4);
+    expect(detail?.blockOffset).toBe(0);
+    expect(detail?.blocks).toEqual([
+      expect.objectContaining({ type: 'user', text: 'First prompt' }),
+      expect.objectContaining({ type: 'text', text: 'First answer' }),
+      expect.objectContaining({ type: 'user', text: 'Second prompt' }),
+      expect.objectContaining({ type: 'text', text: 'Second answer' }),
+    ]);
+  });
+
   it('serves persisted session images through routes instead of inline data urls', () => {
     const sessionsDir = createTempSessionsDir();
     configureSessionEnv(sessionsDir);
