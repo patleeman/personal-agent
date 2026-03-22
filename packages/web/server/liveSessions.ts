@@ -117,6 +117,7 @@ interface LiveEntry {
   contextUsageTimer?: ReturnType<typeof setTimeout>;
   pendingHiddenTurnCustomTypes: string[];
   activeHiddenTurnCustomType: string | null;
+  lastHandledAutomationCompletionKey?: string | null;
 }
 
 export interface LiveSessionLifecycleEvent {
@@ -1016,33 +1017,68 @@ function readLastConversationEntries(entry: LiveEntry) {
 }
 
 function readLastAssistantConversationMessage(entry: LiveEntry): {
+  entryId?: string;
+  entryIndex: number;
+  timestamp?: string | number;
   stopReason?: string;
   errorMessage?: string;
 } | null {
   const entries = readLastConversationEntries(entry);
 
   for (let index = entries.length - 1; index >= 0; index -= 1) {
-    const candidate = entries[index];
+    const candidate = entries[index] as {
+      type?: string;
+      id?: string;
+      timestamp?: string | number;
+      message?: {
+        role?: string;
+        timestamp?: string | number;
+        stopReason?: string;
+        errorMessage?: string;
+      };
+    } | undefined;
     if (candidate?.type !== 'message') {
       continue;
     }
 
-    const message = candidate.message as {
-      role?: string;
-      stopReason?: string;
-      errorMessage?: string;
-    } | undefined;
+    const message = candidate.message;
     if (!message || message.role !== 'assistant') {
       continue;
     }
 
     return {
+      entryIndex: index,
+      ...(candidate.id ? { entryId: candidate.id } : {}),
+      ...(typeof candidate.timestamp === 'string' || typeof candidate.timestamp === 'number'
+        ? { timestamp: candidate.timestamp }
+        : typeof message.timestamp === 'string' || typeof message.timestamp === 'number'
+          ? { timestamp: message.timestamp }
+          : {}),
       ...(message.stopReason ? { stopReason: message.stopReason } : {}),
       ...(message.errorMessage ? { errorMessage: message.errorMessage } : {}),
     };
   }
 
   return null;
+}
+
+function buildConversationAutomationCompletionKey(entry: LiveEntry): string | null {
+  const lastAssistantMessage = readLastAssistantConversationMessage(entry);
+  if (!lastAssistantMessage) {
+    return null;
+  }
+
+  const stableId = lastAssistantMessage.entryId ?? `index:${lastAssistantMessage.entryIndex}`;
+  const timestamp = typeof lastAssistantMessage.timestamp === 'string' || typeof lastAssistantMessage.timestamp === 'number'
+    ? String(lastAssistantMessage.timestamp)
+    : '';
+
+  return [
+    stableId,
+    timestamp,
+    lastAssistantMessage.stopReason ?? '',
+    lastAssistantMessage.errorMessage ?? '',
+  ].join('|');
 }
 
 function didLastAssistantReplyCompleteSuccessfully(entry: LiveEntry): boolean {
@@ -1112,7 +1148,7 @@ function summarizeConversationAutomationState(document: ConversationAutomationDo
 
 export async function kickConversationAutomation(
   sessionId: string,
-  trigger: 'manual' | 'turn_end' = 'manual',
+  trigger: 'manual' | 'turn_end' | 'agent_end' = 'manual',
 ): Promise<void> {
   const entry = registry.get(sessionId);
   if (!entry || entry.session.isStreaming || automationProcessingSessions.has(sessionId)) {
@@ -1121,10 +1157,21 @@ export async function kickConversationAutomation(
 
   automationProcessingSessions.add(sessionId);
   try {
-    const didAutomationAuthorLastTurn = trigger === 'turn_end'
+    const isCompletionTrigger = trigger === 'turn_end' || trigger === 'agent_end';
+    const completionKey = isCompletionTrigger
+      ? buildConversationAutomationCompletionKey(entry)
+      : null;
+    if (isCompletionTrigger && !completionKey) {
+      return;
+    }
+    if (completionKey && entry.lastHandledAutomationCompletionKey === completionKey) {
+      return;
+    }
+
+    const didAutomationAuthorLastTurn = isCompletionTrigger
       ? didTurnEndFromConversationAutomation(entry)
       : false;
-    const shouldContinueAfterTurnEnd = trigger === 'turn_end'
+    const shouldContinueAfterTurnEnd = isCompletionTrigger
       ? didAutomationAuthorLastTurn
       : true;
     let document = loadConversationAutomationState({
@@ -1132,18 +1179,18 @@ export async function kickConversationAutomation(
       conversationId: sessionId,
       settingsFile: SETTINGS_FILE,
     }).document;
-    const lastTurn = trigger === 'turn_end'
+    const lastTurn = isCompletionTrigger
       ? readLastNonAssistantConversationTurn(entry)
       : null;
-    const lastAssistantMessage = trigger === 'turn_end'
+    const lastAssistantMessage = isCompletionTrigger
       ? readLastAssistantConversationMessage(entry)
       : null;
-    const didLastAssistantReplySucceed = trigger === 'turn_end'
+    const didLastAssistantReplySucceed = isCompletionTrigger
       ? didLastAssistantReplyCompleteSuccessfully(entry)
       : false;
 
-    if (trigger === 'turn_end' && document.enabled) {
-      logInfo('automation turn_end evaluation', {
+    if (isCompletionTrigger && document.enabled) {
+      logInfo('automation completion evaluation', {
         sessionId,
         trigger,
         lastTurnRole: lastTurn?.role ?? null,
@@ -1168,7 +1215,7 @@ export async function kickConversationAutomation(
     }
 
     if (
-      trigger === 'turn_end'
+      isCompletionTrigger
       && !didAutomationAuthorLastTurn
       && !didTurnEndFromConversationAutomationPostTurnReview(entry)
       && didLastAssistantReplySucceed
@@ -1184,23 +1231,26 @@ export async function kickConversationAutomation(
         );
         logInfo('queued automation post-turn review', {
           sessionId,
+          trigger,
           ...summarizeConversationAutomationState(document),
         });
       } catch (error) {
         logWarn('failed to queue automation post-turn review', {
           sessionId,
+          trigger,
           error: error instanceof Error ? { message: error.message, stack: error.stack } : String(error),
           ...summarizeConversationAutomationState(document),
         });
       }
+      entry.lastHandledAutomationCompletionKey = completionKey ?? null;
       return;
     }
 
-    if (trigger === 'turn_end' && shouldContinueAfterTurnEnd && document.activeItemId) {
+    if (isCompletionTrigger && shouldContinueAfterTurnEnd && document.activeItemId) {
       document = maybeFinalizeConversationAutomationTodoItem(entry, document, new Date().toISOString());
       document = saveConversationAutomation(entry, document);
       entry.currentTurnError = null;
-    } else if (trigger === 'turn_end' && shouldContinueAfterTurnEnd && document.review?.status === 'running') {
+    } else if (isCompletionTrigger && shouldContinueAfterTurnEnd && document.review?.status === 'running') {
       document = maybeFinalizeConversationAutomationReview(entry, document, new Date().toISOString());
       document = saveConversationAutomation(entry, document);
       entry.currentTurnError = null;
@@ -1280,6 +1330,10 @@ export async function kickConversationAutomation(
         saveConversationAutomation(entry, document);
       }
       break;
+    }
+
+    if (completionKey) {
+      entry.lastHandledAutomationCompletionKey = completionKey;
     }
   } finally {
     automationProcessingSessions.delete(sessionId);
@@ -1416,6 +1470,7 @@ function wireSession(
     currentTurnError: null,
     pendingHiddenTurnCustomTypes: [],
     activeHiddenTurnCustomType: null,
+    lastHandledAutomationCompletionKey: null,
   };
   registry.set(id, entry);
   invalidateAppTopics('sessions');
@@ -1448,7 +1503,11 @@ function wireSession(
     }
 
     if (event.type === 'agent_end') {
+      if (!entry.activeHiddenTurnCustomType) {
+        maybeAutoTitleConversation(entry);
+      }
       void syncDurableConversationRun(entry, 'waiting');
+      void kickConversationAutomation(entry.sessionId, 'agent_end');
     }
 
     if (event.type === 'message_end' && event.message.role === 'assistant') {
@@ -1498,7 +1557,7 @@ function wireSession(
       broadcast(entry, sse);
     }
 
-    if (event.type === 'turn_end' && entry.activeHiddenTurnCustomType) {
+    if ((event.type === 'turn_end' || event.type === 'agent_end') && entry.activeHiddenTurnCustomType) {
       entry.activeHiddenTurnCustomType = null;
     }
   });
