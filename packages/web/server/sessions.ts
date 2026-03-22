@@ -138,7 +138,7 @@ interface TailScanDisplayEntrySummary {
   parentId: string | null;
   visibleBlockCount: number;
   hiddenRoot: boolean;
-  rawLine: string;
+  displayEntry: DisplayMessageEntryLike;
 }
 
 interface TailScanLineageSummary {
@@ -418,15 +418,13 @@ function summarizeTailScanEntry(rawLine: string): TailScanEntrySummary | null {
     parentId,
     visibleBlockCount,
     hiddenRoot,
-    rawLine,
+    displayEntry,
   };
 }
 
 function tryReadSessionTailBlocksByFile(filePath: string, meta: SessionMeta, tailBlocks: number): SessionDetail | null {
-  const retained: TailScanDisplayEntrySummary[] = [];
+  const branchDisplayEntries: TailScanDisplayEntrySummary[] = [];
   let pendingEntryId: string | null | undefined;
-  let retainedVisibleBlockCount = 0;
-  let droppedVisibleBlockCount = 0;
 
   try {
     readFileLinesReverse(filePath, (rawLine) => {
@@ -449,29 +447,8 @@ function tryReadSessionTailBlocksByFile(filePath: string, meta: SessionMeta, tai
 
       pendingEntryId = summary.parentId;
 
-      if (summary.kind !== 'display') {
-        return pendingEntryId !== null;
-      }
-
-      if (summary.hiddenRoot) {
-        retained.length = 0;
-        retainedVisibleBlockCount = 0;
-        droppedVisibleBlockCount = 0;
-        return pendingEntryId !== null;
-      }
-
-      retained.push(summary);
-      retainedVisibleBlockCount += summary.visibleBlockCount;
-
-      while (retained.length > 0) {
-        const oldest = retained[retained.length - 1];
-        if (!oldest || (retainedVisibleBlockCount - oldest.visibleBlockCount) < tailBlocks) {
-          break;
-        }
-
-        retained.pop();
-        retainedVisibleBlockCount -= oldest.visibleBlockCount;
-        droppedVisibleBlockCount += oldest.visibleBlockCount;
+      if (summary.kind === 'display') {
+        branchDisplayEntries.push(summary);
       }
 
       return pendingEntryId !== null;
@@ -480,14 +457,67 @@ function tryReadSessionTailBlocksByFile(filePath: string, meta: SessionMeta, tai
     return null;
   }
 
+  const chronologicalDisplayEntries = branchDisplayEntries.slice().reverse();
+  const hiddenEntryIds = collectHiddenTranscriptEntryIds(
+    chronologicalDisplayEntries.map((entry) => entry.displayEntry),
+  );
+  const visibleEntries = chronologicalDisplayEntries.filter((entry) => !hiddenEntryIds.has(entry.id));
+  const totalBlocks = visibleEntries.reduce((sum, entry) => sum + entry.visibleBlockCount, 0);
+  const tailBlockLimit = Math.min(tailBlocks, totalBlocks);
+
+  const retained: TailScanDisplayEntrySummary[] = [];
+  let retainedVisibleBlockCount = 0;
+
+  for (let index = visibleEntries.length - 1; index >= 0; index -= 1) {
+    const entry = visibleEntries[index];
+    if (!entry) {
+      continue;
+    }
+
+    retained.unshift(entry);
+    retainedVisibleBlockCount += entry.visibleBlockCount;
+
+    if (retainedVisibleBlockCount >= tailBlockLimit) {
+      break;
+    }
+  }
+
+  const droppedVisibleBlockCount = Math.max(0, totalBlocks - retainedVisibleBlockCount);
+  const retainedIds = new Set(retained.map((entry) => entry.id));
+  const retainedRawLines = new Map<string, string>();
+
+  try {
+    readFileLinesReverse(filePath, (rawLine) => {
+      if (!rawLine.trim()) {
+        return retainedIds.size > 0;
+      }
+
+      const sanitizedLine = sanitizeSessionLineForSummary(rawLine);
+      const parsed = parseJsonLine(sanitizedLine) as unknown;
+      if (!parsed || typeof parsed !== 'object' || !(('id' in parsed) && typeof parsed.id === 'string')) {
+        return retainedIds.size > 0;
+      }
+
+      const id = parsed.id;
+      if (!retainedIds.has(id)) {
+        return retainedIds.size > 0;
+      }
+
+      retainedRawLines.set(id, rawLine);
+      retainedIds.delete(id);
+      return retainedIds.size > 0;
+    });
+  } catch {
+    return null;
+  }
+
   const detailEntries = retained
-    .slice()
-    .reverse()
-    .map((entry) => parseJsonLine(entry.rawLine))
+    .map((entry) => retainedRawLines.get(entry.id))
+    .filter((line): line is string => typeof line === 'string')
+    .map((line) => parseJsonLine(line))
     .filter((entry): entry is RawDisplayLine => entry !== null && isRawDisplayLine(entry))
     .map((entry) => buildDisplayMessageEntryFromRawLine(entry));
 
-  const totalBlocks = droppedVisibleBlockCount + retainedVisibleBlockCount;
   const rebasedBlocks = rebaseDisplayBlockIds(buildDisplayBlocksFromEntries(detailEntries), droppedVisibleBlockCount);
   const blocksWithAssets = decorateSessionAssetUrls(rebasedBlocks, meta.id);
   const blocks = droppedVisibleBlockCount > 0
