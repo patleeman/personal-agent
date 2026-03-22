@@ -4,7 +4,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { countGitStatusEntries, parseGitNumstat, readGitRepoInfo, readGitStatusSummary } from './gitStatus.js';
+import { countGitStatusEntries, parseGitNumstat, readGitRepoInfo, readGitStatusSummary, readGitStatusSummaryWithTelemetry } from './gitStatus.js';
 
 const tempDirs: string[] = [];
 
@@ -70,6 +70,37 @@ describe('readGitStatusSummary', () => {
       root: expect.stringContaining(`/pa-web-git-repo-info-`),
       name: expect.stringContaining('pa-web-git-repo-info-'),
     }));
+  });
+
+  it('reports cache telemetry for repeated git status reads', () => {
+    const dir = createTempDir('pa-web-git-repo-cache-');
+    runGit(['init'], dir);
+
+    writeFileSync(join(dir, 'tracked.txt'), 'one\n');
+    runGit(['add', '.'], dir);
+    runGit(['-c', 'user.name=Test', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', 'commit', '-m', 'init'], dir);
+
+    writeFileSync(join(dir, 'tracked.txt'), 'one\ntwo\n');
+
+    const firstRead = readGitStatusSummaryWithTelemetry(dir);
+    expect(firstRead.summary).toMatchObject({
+      changeCount: 1,
+      linesAdded: 1,
+      linesDeleted: 0,
+    });
+    expect(firstRead.telemetry).toMatchObject({
+      cache: 'miss',
+      hasRepo: true,
+    });
+    expect(firstRead.telemetry.durationMs).toBeGreaterThanOrEqual(0);
+
+    const secondRead = readGitStatusSummaryWithTelemetry(dir);
+    expect(secondRead.summary).toEqual(firstRead.summary);
+    expect(secondRead.telemetry).toMatchObject({
+      cache: 'hit',
+      hasRepo: true,
+    });
+    expect(secondRead.telemetry.durationMs).toBeGreaterThanOrEqual(0);
   });
 
   it('summarizes staged, unstaged, and untracked changes', () => {

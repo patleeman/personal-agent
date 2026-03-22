@@ -13,7 +13,7 @@
  *   toolResult   → toolCallId, toolName, content: [{type:'text', text}|{type:'image', data, mimeType}]
  */
 
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 import { getDurableSessionsDir, getPiAgentRuntimeDir } from '@personal-agent/core';
 import {
@@ -114,8 +114,17 @@ interface RawBranchSummary {
   fromId: string;
 }
 
-type RawLine = RawSessionRecord | RawModelChange | RawSessionInfo | RawMessage | RawCustomMessage | RawCompaction | RawBranchSummary | { type: string };
+type RawLine = RawSessionRecord | RawModelChange | RawSessionInfo | RawMessage | RawCustomMessage | RawCompaction | RawBranchSummary;
+type RawDisplayLine = RawMessage | RawCustomMessage | RawCompaction | RawBranchSummary;
 type PiSessionTreeNode = ReturnType<SessionManager['getTree']>[number];
+
+interface TailScanEntrySummary {
+  id: string;
+  parentId: string | null;
+  visibleBlockCount: number;
+  hiddenRoot: boolean;
+  rawLine: string;
+}
 
 // ── Public types ───────────────────────────────────────────────────────────────
 
@@ -141,6 +150,16 @@ export interface SessionDetail {
   blockOffset: number;
   totalBlocks: number;
   contextUsage: SessionContextUsageSnapshot | null;
+}
+
+export interface SessionDetailReadTelemetry {
+  cache: 'hit' | 'miss';
+  loader: 'fast-tail' | 'full';
+  durationMs: number;
+  requestedTailBlocks?: number;
+  totalBlocks: number;
+  blockOffset: number;
+  contextUsageIncluded: boolean;
 }
 
 export interface ConversationTreeNode {
@@ -232,6 +251,209 @@ function parseJsonLine(rawLine: string): RawLine | null {
   } catch {
     return null;
   }
+}
+
+function isRawDisplayLine(line: RawLine): line is RawDisplayLine {
+  return line.type === 'message'
+    || line.type === 'custom_message'
+    || line.type === 'compaction'
+    || line.type === 'branch_summary';
+}
+
+const SESSION_SUMMARY_SANITIZE_PATTERN = /"(content|data|text|thinking|summary|errorMessage)":"((?:\\.|[^"\\])*)"/g;
+const REVERSE_READ_CHUNK_BYTES = 64 * 1024;
+
+function sanitizeSessionLineForSummary(rawLine: string): string {
+  return rawLine.replace(SESSION_SUMMARY_SANITIZE_PATTERN, (_match, field: string, value: string) => {
+    if (field === 'data') {
+      return `"${field}":""`;
+    }
+
+    return `"${field}":"${value.length > 0 ? 'x' : ''}"`;
+  });
+}
+
+function readFileLinesReverse(filePath: string, visit: (line: string) => boolean | void): void {
+  const stats = statSync(filePath);
+  if (stats.size <= 0) {
+    return;
+  }
+
+  const fd = openSync(filePath, 'r');
+  const buffer = Buffer.alloc(REVERSE_READ_CHUNK_BYTES);
+  let position = stats.size;
+  let remainder = '';
+
+  try {
+    while (position > 0) {
+      const readLength = Math.min(REVERSE_READ_CHUNK_BYTES, position);
+      position -= readLength;
+      readSync(fd, buffer, 0, readLength, position);
+      const chunk = buffer.toString('utf-8', 0, readLength);
+      const combined = chunk + remainder;
+      const lines = combined.split('\n');
+      remainder = lines.shift() ?? '';
+
+      for (let index = lines.length - 1; index >= 0; index -= 1) {
+        if (visit(lines[index]?.replace(/\r$/, '') ?? '') === false) {
+          return;
+        }
+      }
+    }
+
+    if (remainder.length > 0) {
+      visit(remainder.replace(/\r$/, ''));
+    }
+  } finally {
+    closeSync(fd);
+  }
+}
+
+function buildDisplayMessageEntryFromRawLine(line: RawDisplayLine): DisplayMessageEntryLike {
+  if (line.type === 'message') {
+    return {
+      id: line.id,
+      parentId: line.parentId,
+      timestamp: line.timestamp,
+      message: line.message,
+    };
+  }
+
+  if (line.type === 'custom_message') {
+    return {
+      id: line.id,
+      parentId: line.parentId,
+      timestamp: line.timestamp,
+      message: {
+        role: 'custom',
+        content: line.content,
+        details: line.details,
+        customType: line.customType,
+        display: line.display,
+      },
+    };
+  }
+
+  if (line.type === 'compaction') {
+    return {
+      id: line.id,
+      parentId: line.parentId,
+      timestamp: line.timestamp,
+      message: {
+        role: 'compactionSummary',
+        summary: line.summary,
+        tokensBefore: line.tokensBefore,
+      },
+    };
+  }
+
+  return {
+    id: line.id,
+    parentId: line.parentId,
+    timestamp: line.timestamp,
+    message: {
+      role: 'branchSummary',
+      summary: line.summary,
+      fromId: line.fromId,
+    },
+  };
+}
+
+function summarizeTailScanEntry(rawLine: string): TailScanEntrySummary | null {
+  const sanitizedLine = sanitizeSessionLineForSummary(rawLine);
+  const parsed = parseJsonLine(sanitizedLine);
+  if (!parsed || !isRawDisplayLine(parsed)) {
+    return null;
+  }
+
+  const displayEntry = buildDisplayMessageEntryFromRawLine(parsed);
+  const visibleBlockCount = buildDisplayBlocksFromEntries([displayEntry]).length;
+  const hiddenRoot = shouldHideTranscriptDescendants(displayEntry.message);
+
+  return {
+    id: parsed.id,
+    parentId: parsed.parentId,
+    visibleBlockCount,
+    hiddenRoot,
+    rawLine,
+  };
+}
+
+function tryReadSessionTailBlocksByFile(filePath: string, meta: SessionMeta, tailBlocks: number): SessionDetail | null {
+  const retained: TailScanEntrySummary[] = [];
+  let pendingEntryId: string | null | undefined;
+  let retainedVisibleBlockCount = 0;
+  let droppedVisibleBlockCount = 0;
+
+  try {
+    readFileLinesReverse(filePath, (rawLine) => {
+      if (!rawLine.trim()) {
+        return;
+      }
+
+      const summary = summarizeTailScanEntry(rawLine);
+      if (!summary) {
+        return;
+      }
+
+      if (pendingEntryId === undefined) {
+        pendingEntryId = summary.id;
+      }
+
+      if (summary.id !== pendingEntryId) {
+        return;
+      }
+
+      pendingEntryId = summary.parentId;
+
+      if (summary.hiddenRoot) {
+        retained.length = 0;
+        retainedVisibleBlockCount = 0;
+        droppedVisibleBlockCount = 0;
+        return pendingEntryId !== null;
+      }
+
+      retained.push(summary);
+      retainedVisibleBlockCount += summary.visibleBlockCount;
+
+      while (retained.length > 0) {
+        const oldest = retained[retained.length - 1];
+        if (!oldest || (retainedVisibleBlockCount - oldest.visibleBlockCount) < tailBlocks) {
+          break;
+        }
+
+        retained.pop();
+        retainedVisibleBlockCount -= oldest.visibleBlockCount;
+        droppedVisibleBlockCount += oldest.visibleBlockCount;
+      }
+
+      return pendingEntryId !== null;
+    });
+  } catch {
+    return null;
+  }
+
+  const detailEntries = retained
+    .slice()
+    .reverse()
+    .map((entry) => parseJsonLine(entry.rawLine))
+    .filter((entry): entry is RawDisplayLine => entry !== null && isRawDisplayLine(entry))
+    .map((entry) => buildDisplayMessageEntryFromRawLine(entry));
+
+  const totalBlocks = droppedVisibleBlockCount + retainedVisibleBlockCount;
+  const rebasedBlocks = rebaseDisplayBlockIds(buildDisplayBlocksFromEntries(detailEntries), droppedVisibleBlockCount);
+  const blocksWithAssets = decorateSessionAssetUrls(rebasedBlocks, meta.id);
+  const blocks = droppedVisibleBlockCount > 0
+    ? deferHeavyBlockContent(blocksWithAssets, droppedVisibleBlockCount, totalBlocks)
+    : blocksWithAssets;
+
+  return {
+    meta,
+    blocks,
+    blockOffset: droppedVisibleBlockCount,
+    totalBlocks,
+    contextUsage: null,
+  };
 }
 
 export interface DisplayMessageEntryLike {
@@ -748,6 +970,39 @@ function buildDisplayBlocksWithEntryAnchors(messages: DisplayMessageEntryLike[])
 
 function buildSessionUserImagePath(sessionId: string, blockId: string, imageIndex: number): string {
   return `/api/sessions/${encodeURIComponent(sessionId)}/blocks/${encodeURIComponent(blockId)}/images/${imageIndex}`;
+}
+
+function rewriteIndexedBlockId(blockId: string, kind: 'm' | 't' | 'x' | 'c' | 'e' | 'i', absoluteIndex: number): string {
+  return blockId.replace(new RegExp(`-${kind}\\d+$`), `-${kind}${absoluteIndex}`);
+}
+
+function rebaseDisplayBlockIds(blocks: DisplayBlock[], blockOffset: number): DisplayBlock[] {
+  if (blockOffset <= 0) {
+    return blocks;
+  }
+
+  return blocks.map((block, index) => {
+    const absoluteIndex = blockOffset + index;
+
+    switch (block.type) {
+      case 'context':
+        return { ...block, id: rewriteIndexedBlockId(block.id, 'm', absoluteIndex) };
+      case 'thinking':
+        return { ...block, id: rewriteIndexedBlockId(block.id, 't', absoluteIndex) };
+      case 'text':
+        return { ...block, id: rewriteIndexedBlockId(block.id, 'x', absoluteIndex) };
+      case 'tool_use':
+        return { ...block, id: rewriteIndexedBlockId(block.id, 'c', absoluteIndex) };
+      case 'error':
+        return { ...block, id: rewriteIndexedBlockId(block.id, 'e', absoluteIndex) };
+      case 'image':
+        return block.alt === 'Injected context image'
+          ? { ...block, id: rewriteIndexedBlockId(block.id, 'i', absoluteIndex) }
+          : block;
+      default:
+        return block;
+    }
+  });
 }
 
 function buildSessionBlockImagePath(sessionId: string, blockId: string): string {
@@ -1432,10 +1687,14 @@ function trimSessionDetailCache(): void {
   }
 }
 
-export function readSessionBlocksByFile(filePath: string, options?: { tailBlocks?: number }): SessionDetail | null {
+export function readSessionBlocksByFileWithTelemetry(
+  filePath: string,
+  options?: { tailBlocks?: number },
+): { detail: SessionDetail | null; telemetry: SessionDetailReadTelemetry | null } {
+  const startedAt = process.hrtime.bigint();
   const signature = getFileSignature(filePath);
   if (!signature) {
-    return null;
+    return { detail: null, telemetry: null };
   }
 
   const cacheKey = buildSessionDetailCacheKey(filePath, options?.tailBlocks);
@@ -1443,11 +1702,43 @@ export function readSessionBlocksByFile(filePath: string, options?: { tailBlocks
   if (cachedDetail?.signature === signature) {
     sessionDetailCache.delete(cacheKey);
     sessionDetailCache.set(cacheKey, cachedDetail);
-    return cachedDetail.detail;
+    return {
+      detail: cachedDetail.detail,
+      telemetry: {
+        cache: 'hit',
+        loader: cachedDetail.detail.contextUsage === null && typeof options?.tailBlocks === 'number' ? 'fast-tail' : 'full',
+        durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+        ...(typeof options?.tailBlocks === 'number' ? { requestedTailBlocks: options.tailBlocks } : {}),
+        totalBlocks: cachedDetail.detail.totalBlocks,
+        blockOffset: cachedDetail.detail.blockOffset,
+        contextUsageIncluded: cachedDetail.detail.contextUsage !== null,
+      },
+    };
   }
 
   const meta = readCachedSessionMeta(filePath, resolveSessionFileCwdSlug(filePath));
-  if (!meta) return null;
+  if (!meta) return { detail: null, telemetry: null };
+
+  const requestedTailBlocks = options?.tailBlocks;
+  const fastTailDetail = typeof requestedTailBlocks === 'number' && requestedTailBlocks > 0
+    ? tryReadSessionTailBlocksByFile(meta.file, meta, requestedTailBlocks)
+    : null;
+  if (fastTailDetail) {
+    sessionDetailCache.set(cacheKey, { signature, detail: fastTailDetail });
+    trimSessionDetailCache();
+    return {
+      detail: fastTailDetail,
+      telemetry: {
+        cache: 'miss',
+        loader: 'fast-tail',
+        durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+        ...(typeof requestedTailBlocks === 'number' ? { requestedTailBlocks } : {}),
+        totalBlocks: fastTailDetail.totalBlocks,
+        blockOffset: fastTailDetail.blockOffset,
+        contextUsageIncluded: false,
+      },
+    };
+  }
 
   const manager = SessionManager.open(meta.file);
   const branchEntries = buildDisplayMessageEntriesFromSessionEntries(manager.getBranch());
@@ -1470,12 +1761,34 @@ export function readSessionBlocksByFile(filePath: string, options?: { tailBlocks
 
   sessionDetailCache.set(cacheKey, { signature, detail });
   trimSessionDetailCache();
-  return detail;
+  return {
+    detail,
+    telemetry: {
+      cache: 'miss',
+      loader: 'full',
+      durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+      ...(typeof options?.tailBlocks === 'number' ? { requestedTailBlocks: options.tailBlocks } : {}),
+      totalBlocks: detail.totalBlocks,
+      blockOffset: detail.blockOffset,
+      contextUsageIncluded: true,
+    },
+  };
+}
+
+export function readSessionBlocksByFile(filePath: string, options?: { tailBlocks?: number }): SessionDetail | null {
+  return readSessionBlocksByFileWithTelemetry(filePath, options).detail;
+}
+
+export function readSessionBlocksWithTelemetry(
+  sessionId: string,
+  options?: { tailBlocks?: number },
+): { detail: SessionDetail | null; telemetry: SessionDetailReadTelemetry | null } {
+  const meta = resolveSessionMeta(sessionId);
+  return meta ? readSessionBlocksByFileWithTelemetry(meta.file, options) : { detail: null, telemetry: null };
 }
 
 export function readSessionBlocks(sessionId: string, options?: { tailBlocks?: number }): SessionDetail | null {
-  const meta = resolveSessionMeta(sessionId);
-  return meta ? readSessionBlocksByFile(meta.file, options) : null;
+  return readSessionBlocksWithTelemetry(sessionId, options).detail;
 }
 
 export function readSessionBlock(sessionId: string, blockId: string): DisplayBlock | null {

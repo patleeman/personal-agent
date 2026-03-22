@@ -17,6 +17,34 @@ import { ErrorState, LoadingState, SurfacePanel } from './ui';
 type PendingAction = 'save' | 'toggle' | null;
 
 const conversationAutomationCache = new Map<string, ConversationAutomationResponse>();
+const conversationAutomationInflight = new Map<string, Promise<ConversationAutomationResponse>>();
+
+export function prefetchConversationAutomation(
+  conversationId: string,
+  options?: { force?: boolean },
+): Promise<ConversationAutomationResponse> {
+  const cached = conversationAutomationCache.get(conversationId);
+  if (!options?.force && cached) {
+    return Promise.resolve(cached);
+  }
+
+  const inflight = conversationAutomationInflight.get(conversationId);
+  if (inflight) {
+    return inflight;
+  }
+
+  const request = api.conversationPlan(conversationId)
+    .then((data) => {
+      conversationAutomationCache.set(conversationId, data);
+      return data;
+    })
+    .finally(() => {
+      conversationAutomationInflight.delete(conversationId);
+    });
+
+  conversationAutomationInflight.set(conversationId, request);
+  return request;
+}
 
 function buildProgressLabel(automation: ConversationAutomationResponse['automation']): string {
   if (automation.items.length === 0) {
@@ -110,7 +138,7 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
       setError(null);
     };
 
-    void api.conversationPlan(conversationId)
+    void prefetchConversationAutomation(conversationId)
       .then((nextData) => {
         applyData(nextData, 'fetch');
       })
@@ -216,6 +244,7 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
       items: checklistDraftItemsToTemplateItems(nextItems),
     });
     conversationAutomationCache.set(conversationId, saved);
+    conversationAutomationInflight.delete(conversationId);
     setData(saved);
     setDraftItems(toChecklistDraftItems(saved.automation.items));
     setDraftKey(buildDraftKey(saved.automation.items));
@@ -239,6 +268,7 @@ export function ConversationAutomationPanel({ conversationId }: { conversationId
     try {
       const saved = await api.setConversationPlanItemStatus(conversationId, itemId, checked);
       conversationAutomationCache.set(conversationId, saved);
+      conversationAutomationInflight.delete(conversationId);
       setData(saved);
     } catch (nextError) {
       setActionError(nextError instanceof Error ? nextError.message : String(nextError));

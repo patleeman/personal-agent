@@ -13,6 +13,12 @@ export interface GitStatusSummary {
   linesDeleted: number;
 }
 
+export interface GitStatusReadTelemetry {
+  cache: 'hit' | 'miss';
+  durationMs: number;
+  hasRepo: boolean;
+}
+
 const GIT_STATUS_CACHE_TTL_MS = 3_000;
 const gitStatusSummaryCache = new Map<string, { fetchedAt: number; summary: GitStatusSummary | null }>();
 
@@ -130,16 +136,34 @@ export function readGitRepoInfo(cwd: string): GitRepoInfo | null {
   }
 }
 
-export function readGitStatusSummary(cwd: string): GitStatusSummary | null {
+export function readGitStatusSummaryWithTelemetry(cwd: string): {
+  summary: GitStatusSummary | null;
+  telemetry: GitStatusReadTelemetry;
+} {
+  const startedAt = process.hrtime.bigint();
   const cached = gitStatusSummaryCache.get(cwd);
   if (cached && (Date.now() - cached.fetchedAt) <= GIT_STATUS_CACHE_TTL_MS) {
-    return cached.summary;
+    return {
+      summary: cached.summary,
+      telemetry: {
+        cache: 'hit',
+        durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+        hasRepo: cached.summary !== null,
+      },
+    };
   }
 
   const repo = readGitRepoInfo(cwd);
   if (!repo) {
     gitStatusSummaryCache.set(cwd, { fetchedAt: Date.now(), summary: null });
-    return null;
+    return {
+      summary: null,
+      telemetry: {
+        cache: 'miss',
+        durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+        hasRepo: false,
+      },
+    };
   }
 
   const branch = runGitCommandAllowFailure(['branch', '--show-current'], cwd).stdout.trim() || null;
@@ -165,5 +189,16 @@ export function readGitStatusSummary(cwd: string): GitStatusSummary | null {
   } satisfies GitStatusSummary;
 
   gitStatusSummaryCache.set(cwd, { fetchedAt: Date.now(), summary });
-  return summary;
+  return {
+    summary,
+    telemetry: {
+      cache: 'miss',
+      durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+      hasRepo: true,
+    },
+  };
+}
+
+export function readGitStatusSummary(cwd: string): GitStatusSummary | null {
+  return readGitStatusSummaryWithTelemetry(cwd).summary;
 }

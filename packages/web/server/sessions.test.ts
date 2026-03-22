@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, un
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { buildDisplayBlocksFromEntries, clearSessionCaches, listSessions, readSessionBlock, readSessionBlocks, readSessionImageAsset, readSessionTree, renameStoredSession } from './sessions.js';
+import { buildDisplayBlocksFromEntries, clearSessionCaches, listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, readSessionTree, renameStoredSession } from './sessions.js';
 
 const originalEnv = process.env;
 const tempDirs: string[] = [];
@@ -149,6 +149,44 @@ describe('sessions', () => {
     ]);
   });
 
+  it('reports cache and loader telemetry for archived transcript tail reads', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    writeSessionFile({
+      sessionsDir,
+      sessionId: 'session-telemetry',
+      title: 'Telemetry test',
+      assistantTexts: ['Reply 1', 'Reply 2', 'Reply 3'],
+    });
+
+    const firstRead = readSessionBlocksWithTelemetry('session-telemetry', { tailBlocks: 2 });
+    expect(firstRead.detail?.blocks.map((block) => block.type === 'text' ? block.text : block.type)).toEqual([
+      'Reply 2',
+      'Reply 3',
+    ]);
+    expect(firstRead.telemetry).toMatchObject({
+      cache: 'miss',
+      loader: 'fast-tail',
+      requestedTailBlocks: 2,
+      totalBlocks: 4,
+      blockOffset: 2,
+      contextUsageIncluded: false,
+    });
+    expect(firstRead.telemetry?.durationMs).toBeGreaterThanOrEqual(0);
+
+    const secondRead = readSessionBlocksWithTelemetry('session-telemetry', { tailBlocks: 2 });
+    expect(secondRead.telemetry).toMatchObject({
+      cache: 'hit',
+      loader: 'fast-tail',
+      requestedTailBlocks: 2,
+      totalBlocks: 4,
+      blockOffset: 2,
+      contextUsageIncluded: false,
+    });
+    expect(secondRead.telemetry?.durationMs).toBeGreaterThanOrEqual(0);
+  });
+
   it('invalidates cached archived transcript detail when the session file changes', () => {
     const sessionsDir = createTempSessionsDir();
     configureSessionEnv(sessionsDir);
@@ -178,6 +216,60 @@ describe('sessions', () => {
     expect(detail?.blocks.map((block) => block.type === 'text' ? block.text : block.type)).toEqual([
       'Reply 1',
       'Reply 2',
+    ]);
+  });
+
+  it('keeps exact tail counts when archived sessions include compaction summaries', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    const dir = join(sessionsDir, '--tmp-project--');
+    mkdirSync(dir, { recursive: true });
+    const filePath = join(dir, '2026-03-11T12-00-00-000Z_session-tail-compaction.jsonl');
+    writeFileSync(filePath, [
+      JSON.stringify({ type: 'session', version: 3, id: 'session-tail-compaction', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
+      JSON.stringify({ type: 'model_change', id: 'session-tail-compaction-model', parentId: null, timestamp: '2026-03-11T12:00:00.000Z', modelId: 'test-model' }),
+      JSON.stringify({ type: 'message', id: 'c-user-1', parentId: null, timestamp: '2026-03-11T12:00:00.000Z', message: { role: 'user', content: 'Before compaction' } }),
+      JSON.stringify({ type: 'message', id: 'c-assistant-1', parentId: 'c-user-1', timestamp: '2026-03-11T12:00:01.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Older reply' }] } }),
+      JSON.stringify({ type: 'message', id: 'c-user-2', parentId: 'c-assistant-1', timestamp: '2026-03-11T12:00:02.000Z', message: { role: 'user', content: 'Keep this prompt' } }),
+      JSON.stringify({ type: 'message', id: 'c-assistant-2', parentId: 'c-user-2', timestamp: '2026-03-11T12:00:03.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Keep this reply' }] } }),
+      JSON.stringify({ type: 'compaction', id: 'c-compaction-1', parentId: 'c-assistant-2', timestamp: '2026-03-11T12:00:04.000Z', summary: 'Compacted.', firstKeptEntryId: 'c-user-2', tokensBefore: 1234 }),
+      JSON.stringify({ type: 'message', id: 'c-user-3', parentId: 'c-compaction-1', timestamp: '2026-03-11T12:00:05.000Z', message: { role: 'user', content: 'Continue after compaction' } }),
+      JSON.stringify({ type: 'message', id: 'c-assistant-3', parentId: 'c-user-3', timestamp: '2026-03-11T12:00:06.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Newest reply' }] } }),
+    ].join('\n') + '\n');
+
+    const detail = readSessionBlocks('session-tail-compaction', { tailBlocks: 2 });
+    expect(detail?.totalBlocks).toBe(7);
+    expect(detail?.blockOffset).toBe(5);
+    expect(detail?.blocks).toEqual([
+      expect.objectContaining({ type: 'user', text: 'Continue after compaction' }),
+      expect.objectContaining({ type: 'text', text: 'Newest reply' }),
+    ]);
+  });
+
+  it('keeps hidden archived automation turns out of the visible tail', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    const dir = join(sessionsDir, '--tmp-project--');
+    mkdirSync(dir, { recursive: true });
+    const filePath = join(dir, '2026-03-11T12-00-00-000Z_session-tail-hidden.jsonl');
+    writeFileSync(filePath, [
+      JSON.stringify({ type: 'session', version: 3, id: 'session-tail-hidden', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
+      JSON.stringify({ type: 'model_change', id: 'session-tail-hidden-model', parentId: null, timestamp: '2026-03-11T12:00:00.000Z', modelId: 'test-model' }),
+      JSON.stringify({ type: 'message', id: 'h-user-1', parentId: null, timestamp: '2026-03-11T12:00:00.000Z', message: { role: 'user', content: 'Visible prompt' } }),
+      JSON.stringify({ type: 'message', id: 'h-assistant-1', parentId: 'h-user-1', timestamp: '2026-03-11T12:00:01.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Visible answer' }] } }),
+      JSON.stringify({ type: 'custom_message', id: 'h-hidden-1', parentId: 'h-assistant-1', timestamp: '2026-03-11T12:00:02.000Z', customType: 'conversation_automation_post_turn_review', content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }], display: false }),
+      JSON.stringify({ type: 'message', id: 'h-assistant-2', parentId: 'h-hidden-1', timestamp: '2026-03-11T12:00:03.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Hidden assistant reply' }] } }),
+      JSON.stringify({ type: 'message', id: 'h-tool-1', parentId: 'h-assistant-2', timestamp: '2026-03-11T12:00:04.000Z', message: { role: 'toolResult', toolCallId: 'call-1', toolName: 'todo_list', content: [{ type: 'text', text: '{"action":"list"}' }] } }),
+    ].join('\n') + '\n');
+
+    const detail = readSessionBlocks('session-tail-hidden', { tailBlocks: 5 });
+    expect(detail?.totalBlocks).toBe(2);
+    expect(detail?.blockOffset).toBe(0);
+    expect(detail?.blocks).toEqual([
+      expect.objectContaining({ type: 'user', text: 'Visible prompt' }),
+      expect.objectContaining({ type: 'text', text: 'Visible answer' }),
     ]);
   });
 

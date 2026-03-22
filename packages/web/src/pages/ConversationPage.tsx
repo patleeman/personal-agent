@@ -34,6 +34,16 @@ import { parseConversationSlashCommand, type ConversationSlashCommand } from '..
 import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../slashMenu';
 import { buildMentionItems, filterMentionItems, resolveMentionItems, type MentionItem } from '../conversationMentions';
 import { buildDeferredResumeIndicatorText, compareDeferredResumes, describeDeferredResumeStatus } from '../deferredResumeIndicator';
+import {
+  buildAskUserQuestionReplyText,
+  findPendingAskUserQuestion,
+  isAskUserQuestionComplete,
+  moveAskUserQuestionIndex,
+  resolveAskUserQuestionDefaultOptionIndex,
+  resolveAskUserQuestionOptionHotkey,
+  type AskUserQuestionAnswers,
+  type AskUserQuestionPresentation,
+} from '../askUserQuestions';
 import { buildConversationComposerStorageKey, persistForkPromptDraft, resolveForkEntryForMessage, resolveSessionEntryIdFromBlockId } from '../forking';
 import {
   beginDraftConversationAttachmentsMutation,
@@ -64,8 +74,8 @@ import {
   resolveConversationComposerSubmitState,
 } from '../conversationComposerSubmit';
 import { useReloadState } from '../reloadState';
-import { applyLiveSessionState, buildSyntheticLiveSessionMeta } from '../sessionIndicators';
 import { ensureConversationTabOpen } from '../sessionTabs';
+import { completeConversationOpenPhase, ensureConversationOpenStart } from '../perfDiagnostics';
 import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSceneFromBlob, parseExcalidrawSceneFromSourceData, serializeExcalidrawScene } from '../excalidrawUtils';
 
 const ConversationTree = lazy(() => import('../components/ConversationTree').then((module) => ({ default: module.ConversationTree })));
@@ -725,6 +735,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const navigate = useNavigate();
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
   const selectedRunId = getConversationRunIdFromSearch(location.search);
+  const { versions } = useAppEvents();
+  const { projects, tasks, sessions, setProjects, setSessions } = useAppData();
 
   const openArtifact = useCallback((artifactId: string) => {
     if (selectedArtifactId === artifactId) {
@@ -767,19 +779,39 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [draft, id]);
 
   // ── Live session detection ─────────────────────────────────────────────────
-  // Always attempt SSE connection — useSessionStream handles 404 gracefully.
+  const sessionSnapshot = useMemo(
+    () => (id ? sessions?.find((session) => session.id === id) ?? null : null),
+    [id, sessions],
+  );
   // We use a confirmed-live flag only for lightweight session-state labeling.
   const [confirmedLive, setConfirmedLive] = useState<boolean | null>(null);
 
   const [historicalTailBlocks, setHistoricalTailBlocks] = useState(INITIAL_HISTORICAL_TAIL_BLOCKS);
+  const shouldSubscribeToLiveStream = Boolean(id) && (!sessionSnapshot || sessionSnapshot.isRunning);
 
-  // ── Pi SDK stream — attempt connection immediately for all sessions ───────
-  const stream = useSessionStream(id ?? null, { tailBlocks: historicalTailBlocks });
+  // ── Pi SDK stream — only subscribe when the session is likely live/unknown ─
+  const stream = useSessionStream(id ?? null, {
+    tailBlocks: historicalTailBlocks,
+    enabled: shouldSubscribeToLiveStream,
+  });
 
-  // Confirm live status via API (for session-state labeling, not for stream)
+  useLayoutEffect(() => {
+    if (!id || draft) {
+      return;
+    }
+
+    ensureConversationOpenStart(id, 'route');
+  }, [draft, id]);
+
+  // Confirm live status via the session snapshot when possible, otherwise probe the API.
   useEffect(() => {
     if (!id) {
       setConfirmedLive(false);
+      return;
+    }
+
+    if (sessionSnapshot) {
+      setConfirmedLive(Boolean(sessionSnapshot.isRunning));
       return;
     }
 
@@ -787,7 +819,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     api.liveSession(id)
       .then(r => setConfirmedLive(r.live))
       .catch(() => setConfirmedLive(false));
-  }, [id]);
+  }, [id, sessionSnapshot]);
 
   // Session is "live" if SSE connected (has blocks) OR API confirms it
   const isLiveSession = stream.blocks.length > 0 || stream.isStreaming || confirmedLive === true;
@@ -880,6 +912,23 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const showHistoricalLoadMore = historicalHasOlderBlocks;
   const messageIndexOffset = historicalBlockOffset;
   const messageCount = realMessages?.length ?? 0;
+  const pendingAskUserQuestion = useMemo(
+    () => findPendingAskUserQuestion(realMessages),
+    [realMessages],
+  );
+  const pendingAskUserQuestionKey = useMemo(() => {
+    if (!pendingAskUserQuestion) {
+      return '';
+    }
+
+    const blockKey = pendingAskUserQuestion.block.id ?? `${pendingAskUserQuestion.messageIndex}`;
+    const questionKey = pendingAskUserQuestion.presentation.questions.map((question) => question.id).join('|');
+    return `${blockKey}:${questionKey}`;
+  }, [pendingAskUserQuestion]);
+  const [composerQuestionIndex, setComposerQuestionIndex] = useState(0);
+  const [composerQuestionOptionIndex, setComposerQuestionOptionIndex] = useState(0);
+  const [composerQuestionAnswers, setComposerQuestionAnswers] = useState<AskUserQuestionAnswers>({});
+  const [composerQuestionSubmitting, setComposerQuestionSubmitting] = useState(false);
   const artifactAutoOpenSeededRef = useRef(false);
   const artifactAutoOpenStartedAtRef = useRef(new Date().toISOString());
   const [showTree, setShowTree] = useState(false);
@@ -1097,6 +1146,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [composerAltHeld, setComposerAltHeld] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
+  // Keep track of whether the user intentionally left the viewport pinned.
+  // Streaming growth alone should not disable the next auto-scroll transition.
+  const scrollPinnedToBottomRef = useRef(true);
   const [draftExecutionTargetId, setDraftExecutionTargetId] = useState<string | null>(() => readDraftConversationExecutionTarget());
   const [executionTargetBusy, setExecutionTargetBusy] = useState(false);
   const composerHistoryScopeId = draft ? null : id ?? null;
@@ -1266,8 +1318,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         }),
     id ?? 'draft-remote-connection',
   );
-  const { versions } = useAppEvents();
-  const { projects, tasks, sessions, runs, setProjects, setSessions, setRuns } = useAppData();
   const conversationRunId = useMemo(() => (id ? createConversationLiveRunId(id) : null), [id]);
   const [conversationRun, setConversationRun] = useState<DurableRunRecord | null>(null);
   const [resumeConversationBusy, setResumeConversationBusy] = useState(false);
@@ -1301,6 +1351,26 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     scrollHeight: number;
     scrollTop: number;
   } | null>(null);
+
+  useEffect(() => {
+    setComposerQuestionIndex(0);
+    setComposerQuestionOptionIndex(0);
+    setComposerQuestionAnswers({});
+    setComposerQuestionSubmitting(false);
+  }, [pendingAskUserQuestionKey]);
+
+  const composerActiveQuestion = pendingAskUserQuestion?.presentation.questions[
+    Math.max(0, Math.min(composerQuestionIndex, (pendingAskUserQuestion?.presentation.questions.length ?? 1) - 1))
+  ] ?? null;
+
+  useEffect(() => {
+    if (!composerActiveQuestion) {
+      setComposerQuestionOptionIndex(0);
+      return;
+    }
+
+    setComposerQuestionOptionIndex(resolveAskUserQuestionDefaultOptionIndex(composerActiveQuestion, composerQuestionAnswers));
+  }, [composerActiveQuestion, composerQuestionAnswers]);
 
   const loadOlderMessages = useCallback((targetMessageIndex?: number, options?: { automatic?: boolean }) => {
     if (!id || sessionLoading || historicalTotalBlocks <= 0) {
@@ -1640,21 +1710,149 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     });
   }, []);
 
-  const replyToAskUserQuestion = useCallback((reply: string) => {
-    const normalizedReply = reply.trim();
-    const currentInput = textareaRef.current?.value ?? input;
-    setSlashIdx(0);
-    setMentionIdx(0);
-    if (normalizedReply.length > 0) {
-      const nextInput = !currentInput.trim()
-        ? normalizedReply
-        : currentInput.includes(normalizedReply)
-          ? currentInput
-          : `${currentInput.trimEnd()}\n\n${normalizedReply}`;
-      setInput(nextInput);
+  const submitAskUserQuestion = useCallback(async (
+    presentation: AskUserQuestionPresentation,
+    answers: AskUserQuestionAnswers,
+  ) => {
+    const textToSend = buildAskUserQuestionReplyText(presentation, answers).trim();
+    if (!textToSend) {
+      return;
     }
+
+    if (!id) {
+      showNotice('danger', 'Question replies require an existing conversation.', 4000);
+      return;
+    }
+
+    const requestedBehavior = isLiveSession && stream.isStreaming ? 'steer' : undefined;
+    const queuedBehavior = normalizeConversationComposerBehavior(requestedBehavior, stream.isStreaming);
+
+    try {
+      if (isLiveSession) {
+        await stream.send(textToSend, queuedBehavior);
+        await refetchConversationProjects({ resetLoading: false });
+        emitConversationProjectsChanged(id);
+        setTimeout(() => {
+          if (scrollRef.current) {
+            scrollPinnedToBottomRef.current = true;
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
+        }, 50);
+        return;
+      }
+
+      if (!visibleSessionDetail) {
+        showNotice('danger', 'Conversation is still loading. Try again in a moment.', 4000);
+        return;
+      }
+
+      await api.resumeSession(visibleSessionDetail.meta.file);
+      setConfirmedLive(true);
+      stream.reconnect();
+      await new Promise((resolve) => window.setTimeout(resolve, 150));
+      await stream.send(textToSend, queuedBehavior);
+      await refetchConversationProjects({ resetLoading: false });
+      emitConversationProjectsChanged(id);
+      setTimeout(() => {
+        if (scrollRef.current) {
+          scrollPinnedToBottomRef.current = true;
+          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+        }
+      }, 50);
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+      throw error;
+    }
+  }, [id, isLiveSession, refetchConversationProjects, showNotice, stream, visibleSessionDetail]);
+
+  const composerQuestionAnsweredCount = pendingAskUserQuestion
+    ? pendingAskUserQuestion.presentation.questions.filter((question) => (composerQuestionAnswers[question.id]?.length ?? 0) > 0).length
+    : 0;
+  const composerQuestionCanSubmit = pendingAskUserQuestion
+    ? isAskUserQuestionComplete(pendingAskUserQuestion.presentation, composerQuestionAnswers)
+    : false;
+
+  const activateComposerQuestion = useCallback((index: number) => {
+    if (!pendingAskUserQuestion) {
+      return;
+    }
+
+    const nextIndex = Math.max(0, Math.min(index, pendingAskUserQuestion.presentation.questions.length - 1));
+    const nextQuestion = pendingAskUserQuestion.presentation.questions[nextIndex];
+    const nextOptionIndex = resolveAskUserQuestionDefaultOptionIndex(nextQuestion, composerQuestionAnswers);
+    setComposerQuestionIndex(nextIndex);
+    setComposerQuestionOptionIndex(nextOptionIndex >= 0 ? nextOptionIndex : 0);
     moveComposerCaretToEnd();
-  }, [input, moveComposerCaretToEnd, setInput]);
+  }, [composerQuestionAnswers, moveComposerCaretToEnd, pendingAskUserQuestion]);
+
+  const advanceComposerQuestionAfterAnswer = useCallback((questionIndex: number, nextAnswers: AskUserQuestionAnswers) => {
+    if (!pendingAskUserQuestion) {
+      return;
+    }
+
+    const nextQuestionIndex = questionIndex + 1;
+    if (nextQuestionIndex < pendingAskUserQuestion.presentation.questions.length) {
+      const nextQuestion = pendingAskUserQuestion.presentation.questions[nextQuestionIndex];
+      const nextOptionIndex = resolveAskUserQuestionDefaultOptionIndex(nextQuestion, nextAnswers);
+      setComposerQuestionIndex(nextQuestionIndex);
+      setComposerQuestionOptionIndex(nextOptionIndex >= 0 ? nextOptionIndex : 0);
+    }
+
+    moveComposerCaretToEnd();
+  }, [moveComposerCaretToEnd, pendingAskUserQuestion]);
+
+  const handleComposerQuestionOptionSelect = useCallback((questionIndex: number, optionIndex: number) => {
+    if (!pendingAskUserQuestion || composerQuestionSubmitting) {
+      return;
+    }
+
+    const question = pendingAskUserQuestion.presentation.questions[questionIndex];
+    const option = question?.options[optionIndex];
+    if (!question || !option) {
+      return;
+    }
+
+    setComposerQuestionOptionIndex(optionIndex);
+
+    if (question.style === 'check') {
+      const currentValues = composerQuestionAnswers[question.id] ?? [];
+      const alreadySelected = currentValues.includes(option.value);
+      const nextValues = alreadySelected
+        ? currentValues.filter((candidate) => candidate !== option.value)
+        : [...currentValues, option.value];
+      const nextAnswers = {
+        ...composerQuestionAnswers,
+        [question.id]: nextValues,
+      };
+
+      setComposerQuestionAnswers(nextAnswers);
+      if (!alreadySelected) {
+        advanceComposerQuestionAfterAnswer(questionIndex, nextAnswers);
+      }
+      return;
+    }
+
+    const nextAnswers = {
+      ...composerQuestionAnswers,
+      [question.id]: [option.value],
+    };
+    setComposerQuestionAnswers(nextAnswers);
+    advanceComposerQuestionAfterAnswer(questionIndex, nextAnswers);
+  }, [advanceComposerQuestionAfterAnswer, composerQuestionAnswers, composerQuestionSubmitting, pendingAskUserQuestion]);
+
+  const submitComposerQuestionIfReady = useCallback(async () => {
+    if (!pendingAskUserQuestion || !composerQuestionCanSubmit || composerQuestionSubmitting) {
+      return false;
+    }
+
+    setComposerQuestionSubmitting(true);
+    try {
+      await submitAskUserQuestion(pendingAskUserQuestion.presentation, composerQuestionAnswers);
+      return true;
+    } finally {
+      setComposerQuestionSubmitting(false);
+    }
+  }, [composerQuestionAnswers, composerQuestionCanSubmit, composerQuestionSubmitting, pendingAskUserQuestion, submitAskUserQuestion]);
 
   const navigateComposerHistory = useCallback((direction: 'older' | 'newer') => {
     if (composerHistory.length === 0) {
@@ -1768,11 +1966,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     const el = scrollRef.current;
     if (!el) return;
 
-    setAtBottom(isConversationScrolledToBottom({
+    const nextAtBottom = isConversationScrolledToBottom({
       scrollHeight: el.scrollHeight,
       scrollTop: el.scrollTop,
       clientHeight: el.clientHeight,
-    }));
+    });
+    scrollPinnedToBottomRef.current = nextAtBottom;
+    setAtBottom(nextAtBottom);
 
     if (historicalHasOlderBlocks && !sessionLoading && el.scrollTop <= HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX) {
       loadOlderMessages();
@@ -1788,12 +1988,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   useLayoutEffect(() => {
     if (!messageCount) {
+      scrollPinnedToBottomRef.current = true;
       setAtBottom(true);
       return;
     }
 
     const el = scrollRef.current;
     if (!el) {
+      scrollPinnedToBottomRef.current = true;
       setAtBottom(true);
       return;
     }
@@ -1862,6 +2064,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     const settleScroll = () => {
       animationFrame = 0;
       const nextScrollHeight = el.scrollHeight;
+      scrollPinnedToBottomRef.current = true;
       el.scrollTop = nextScrollHeight;
       setAtBottom(true);
       frameCount += 1;
@@ -1937,19 +2140,24 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    if (!atBottom || !scrollRef.current) {
+    if (!scrollRef.current) {
       streamingTailAutoScrollKeyRef.current = tailKey;
       return;
     }
 
-    if (!shouldAutoScrollToStreamingTail(streamingTailAutoScrollKeyRef.current, tailBlock)) {
+    if (!shouldAutoScrollToStreamingTail(
+      streamingTailAutoScrollKeyRef.current,
+      tailBlock,
+      scrollPinnedToBottomRef.current,
+    )) {
       return;
     }
 
     streamingTailAutoScrollKeyRef.current = tailKey;
+    scrollPinnedToBottomRef.current = true;
     scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     setAtBottom(true);
-  }, [atBottom, realMessages, stream.isStreaming]);
+  }, [realMessages, stream.isStreaming]);
 
   // Forked/new conversations with a queued initial prompt should stay pinned to
   // the bottom only until that queued user block lands and the assistant starts
@@ -1974,6 +2182,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     const el = scrollRef.current;
     const scrollToBottom = () => {
+      scrollPinnedToBottomRef.current = true;
       el.scrollTop = el.scrollHeight;
       setAtBottom(true);
     };
@@ -2327,10 +2536,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   function openDrawingEditor() {
     setEditingDrawingLocalId('__new__');
-  }
-
-  function openDrawingsPicker() {
-    setDrawingsPickerOpen(true);
   }
 
   function closeDrawingEditor() {
@@ -3151,6 +3356,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
         setTimeout(() => {
           if (scrollRef.current) {
+            scrollPinnedToBottomRef.current = true;
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
           }
         }, 50);
@@ -3307,6 +3513,71 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       }
     }
 
+    const canUseComposerQuestionHotkeys = Boolean(pendingAskUserQuestion)
+      && !composerQuestionSubmitting
+      && input.length === 0
+      && attachments.length === 0
+      && drawingAttachments.length === 0
+      && !e.ctrlKey
+      && !e.metaKey
+      && !e.altKey
+      && !e.nativeEvent.isComposing;
+
+    if (canUseComposerQuestionHotkeys) {
+      if (e.key === 'ArrowDown' && composerActiveQuestion) {
+        e.preventDefault();
+        setComposerQuestionOptionIndex((current) => moveAskUserQuestionIndex(current, composerActiveQuestion.options.length, 1));
+        return;
+      }
+
+      if (e.key === 'ArrowUp' && composerActiveQuestion) {
+        e.preventDefault();
+        setComposerQuestionOptionIndex((current) => moveAskUserQuestionIndex(current, composerActiveQuestion.options.length, -1));
+        return;
+      }
+
+      const optionHotkeyIndex = resolveAskUserQuestionOptionHotkey(e.key);
+      if (composerActiveQuestion && optionHotkeyIndex >= 0 && optionHotkeyIndex < composerActiveQuestion.options.length) {
+        e.preventDefault();
+        handleComposerQuestionOptionSelect(composerQuestionIndex, optionHotkeyIndex);
+        return;
+      }
+
+      const questionDirection = e.key === 'Tab'
+        ? (e.shiftKey ? -1 : 1)
+        : e.key === 'ArrowRight'
+          ? 1
+          : e.key === 'ArrowLeft'
+            ? -1
+            : 0;
+      if (questionDirection !== 0) {
+        const pendingPresentation = pendingAskUserQuestion?.presentation;
+        if (!pendingPresentation) {
+          return;
+        }
+
+        e.preventDefault();
+        if (questionDirection > 0) {
+          if (composerQuestionIndex < pendingPresentation.questions.length - 1) {
+            activateComposerQuestion(composerQuestionIndex + 1);
+          }
+        } else {
+          activateComposerQuestion(Math.max(0, composerQuestionIndex - 1));
+        }
+        return;
+      }
+
+      if ((e.key === 'Enter' || e.key === ' ') && !e.shiftKey) {
+        e.preventDefault();
+        if (composerQuestionCanSubmit) {
+          await submitComposerQuestionIfReady();
+        } else if (composerActiveQuestion?.options.length) {
+          handleComposerQuestionOptionSelect(composerQuestionIndex, composerQuestionOptionIndex);
+        }
+        return;
+      }
+    }
+
     if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       if (canNavigateComposerHistory(e.currentTarget, e.key) && navigateComposerHistory(e.key === 'ArrowUp' ? 'older' : 'newer')) {
         e.preventDefault();
@@ -3392,6 +3663,24 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const showConversationLoadingState = !hasRenderableMessages
     && (sessionLoading || hydratingLiveConversation || hydratingRemoteConversation || remoteConnectionPending);
 
+  useEffect(() => {
+    if (!id || draft || showConversationLoadingState) {
+      return;
+    }
+
+    const frame = requestAnimationFrame(() => {
+      completeConversationOpenPhase(id, 'content', {
+        renderState: hasRenderableMessages ? 'messages' : sessionError ? 'error' : 'empty',
+        messageCount: realMessages?.length ?? 0,
+        sessionLoading,
+        isLiveSession,
+        hasStreamSnapshot: stream.hasSnapshot,
+      });
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [draft, hasRenderableMessages, id, isLiveSession, realMessages?.length, sessionError, sessionLoading, showConversationLoadingState, stream.hasSnapshot]);
+
   const transcriptPane = useMemo(() => (
     <div className="relative flex-1 min-h-0">
       <div ref={scrollRef} className="conversation-scroll-shell h-full overflow-y-auto overflow-x-hidden">
@@ -3429,7 +3718,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               activeArtifactId={selectedArtifactId}
               onOpenRun={openRun}
               activeRunId={selectedRunId}
-              onReplyToQuestion={replyToAskUserQuestion}
+              onSubmitAskUserQuestion={submitAskUserQuestion}
               onResumeConversation={conversationResumeState.canResume ? resumeConversation : undefined}
               resumeConversationBusy={resumeConversationBusy}
               resumeConversationTitle={conversationResumeState.title}
@@ -3482,7 +3771,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         )}
         {showScrollToBottomControl && (
           <button
-            onClick={() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })}
+            onClick={() => {
+              if (!scrollRef.current) {
+                return;
+              }
+              scrollPinnedToBottomRef.current = true;
+              scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+            }}
             className="sticky bottom-4 left-1/2 -translate-x-1/2 ui-pill ui-pill-muted shadow-md"
           >
             ↓ scroll to bottom
@@ -3522,7 +3817,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     openArtifact,
     openRun,
     realMessages,
-    replyToAskUserQuestion,
+    submitAskUserQuestion,
     requestedFocusMessageIndex,
     remoteConnectBusy,
     remoteConnectionPending,
@@ -3962,6 +4257,102 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               </>
             )}
 
+            {pendingAskUserQuestion && composerActiveQuestion && (
+              <div className="border-b border-border-subtle px-3 py-2.5">
+                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                  <span className="ui-section-label">Answer below</span>
+                  <Pill tone="warning">{composerQuestionAnsweredCount}/{pendingAskUserQuestion.presentation.questions.length}</Pill>
+                  {composerQuestionCanSubmit && (
+                    <button
+                      type="button"
+                      onClick={() => { void submitComposerQuestionIfReady(); }}
+                      disabled={composerQuestionSubmitting}
+                      className="ui-action-button px-1 py-0.5 text-[10px] text-accent disabled:opacity-40"
+                    >
+                      {composerQuestionSubmitting ? 'Submitting…' : '✓ Submit →'}
+                    </button>
+                  )}
+                </div>
+
+                {pendingAskUserQuestion.presentation.questions.length > 1 && (
+                  <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1">
+                    {pendingAskUserQuestion.presentation.questions.map((question, index) => {
+                      const answered = (composerQuestionAnswers[question.id]?.length ?? 0) > 0;
+                      const active = index === composerQuestionIndex;
+                      return (
+                        <button
+                          key={question.id}
+                          type="button"
+                          onClick={() => activateComposerQuestion(index)}
+                          className={cx(
+                            'ui-action-button min-w-0 px-1 py-0.5 text-[10px]',
+                            active
+                              ? 'text-primary'
+                              : answered
+                                ? 'text-secondary'
+                                : 'text-dim',
+                          )}
+                        >
+                          <span aria-hidden="true" className={cx('shrink-0 text-[10px]', answered ? 'text-success' : active ? 'text-accent' : 'text-dim/70')}>
+                            {answered ? '✓' : active ? '•' : '○'}
+                          </span>
+                          <span className="truncate">{question.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="mt-1.5">
+                  <p className="text-[12px] font-medium text-primary break-words">{composerActiveQuestion.label}</p>
+                  {composerActiveQuestion.details && (
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-secondary break-words">{composerActiveQuestion.details}</p>
+                  )}
+                </div>
+
+                <div
+                  className="mt-1 -mx-0.5"
+                  role={composerActiveQuestion.style === 'check' ? 'group' : 'radiogroup'}
+                  aria-label={composerActiveQuestion.label}
+                >
+                  {composerActiveQuestion.options.map((option, optionIndex) => {
+                    const selectedValues = composerQuestionAnswers[composerActiveQuestion.id] ?? [];
+                    const checked = selectedValues.includes(option.value);
+                    const active = optionIndex === composerQuestionOptionIndex;
+                    const indicator = composerActiveQuestion.style === 'check'
+                      ? (checked ? '☑' : '☐')
+                      : (checked ? '◉' : '◯');
+                    return (
+                      <button
+                        key={`${composerActiveQuestion.id}:${option.value}`}
+                        type="button"
+                        disabled={composerQuestionSubmitting}
+                        onClick={() => handleComposerQuestionOptionSelect(composerQuestionIndex, optionIndex)}
+                        className={cx(
+                          'ui-list-row -mx-0.5 w-full items-start gap-2 px-2.5 py-1 text-left disabled:opacity-40',
+                          checked || active ? 'ui-list-row-selected' : 'ui-list-row-hover',
+                        )}
+                      >
+                        <span className={cx('mt-px w-8 shrink-0 text-[11px]', checked || active ? 'text-accent' : 'text-dim')} aria-hidden="true">
+                          {optionIndex + 1}. {indicator}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="ui-row-title block break-words">{option.label}</span>
+                          {option.details && (
+                            <span className="ui-row-summary block break-words">{option.details}</span>
+                          )}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <p className="mt-1.5 text-[10px] text-dim">
+                  Type 1-9 to select · Tab/Shift+Tab or ←/→ switches questions · ↑/↓ moves · Enter selects or submits · type a normal message to skip
+                </p>
+              </div>
+            )}
+
             {/* Textarea */}
             <div className="flex items-end gap-2 px-3 py-2.5">
               <input
@@ -4013,8 +4404,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 rows={1}
                 disabled={composerDisabled}
                 className="flex-1 bg-transparent text-sm text-primary placeholder:text-dim outline-none resize-none leading-relaxed disabled:cursor-default disabled:text-dim"
-                placeholder={remoteConversationRequiresConnect ? 'Connect to the remote workspace to continue…' : 'Message… (/ for commands, @ to reference projects, tasks, knowledge, and profiles)'}
-                title="Ctrl+C clears the composer. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts."
+                placeholder={remoteConversationRequiresConnect
+                  ? 'Connect to the remote workspace to continue…'
+                  : pendingAskUserQuestion
+                    ? 'Type 1-9 to answer, Tab or ←/→ to move, or write a normal message to skip…'
+                    : 'Message… (/ for commands, @ to reference projects, tasks, knowledge, and profiles)'}
+                title={pendingAskUserQuestion
+                  ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
+                  : 'Ctrl+C clears the composer. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}
                 style={{ minHeight: '24px', maxHeight: '160px' }}
               />
 

@@ -1,7 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import type { MessageBlock } from '../types';
 import type { StreamState } from './useSessionStream';
-import { INITIAL_STREAM_STATE, normalizePendingQueueItems, selectVisibleStreamState, shouldReplaceOptimisticUserBlock } from './useSessionStream';
+import { INITIAL_STREAM_STATE, normalizePendingQueueItems, resolveSessionStreamSubscriptionId, selectVisibleStreamState, shouldReplaceOptimisticUserBlock } from './useSessionStream';
+
+describe('resolveSessionStreamSubscriptionId', () => {
+  it('disables the live stream subscription when explicitly turned off', () => {
+    expect(resolveSessionStreamSubscriptionId('session-a', { enabled: false })).toBeNull();
+  });
+
+  it('keeps the requested session id when streaming is enabled', () => {
+    expect(resolveSessionStreamSubscriptionId('session-a', { enabled: true })).toBe('session-a');
+    expect(resolveSessionStreamSubscriptionId('session-a')).toBe('session-a');
+  });
+});
 
 describe('normalizePendingQueueItems', () => {
   it('keeps only string queue entries', () => {

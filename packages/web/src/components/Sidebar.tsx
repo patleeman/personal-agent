@@ -26,6 +26,7 @@ import {
   shouldShowDraftConversationTab,
 } from '../draftConversation';
 import { getSidebarBrandLabel } from '../sidebarBrand';
+import { markConversationOpenStart } from '../perfDiagnostics';
 import { buildNestedSessionRows } from '../sessionLineage';
 import { summarizeActiveRuns } from '../runPresentation';
 import { timeAgo } from '../utils';
@@ -225,6 +226,12 @@ function OpenTab({
     canDrag ? 'Drag to move' : undefined,
   ].filter((value): value is string => Boolean(value)).join(' · ') || undefined;
 
+  const markOpenStart = useCallback(() => {
+    if (!isActive) {
+      markConversationOpenStart(session.id, 'sidebar-tab');
+    }
+  }, [isActive, session.id]);
+
   return (
     <div
       className="relative"
@@ -255,6 +262,16 @@ function OpenTab({
         ].filter(Boolean).join(' ')}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
+        onMouseDown={(event) => {
+          if (event.button === 0 && !(event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)) {
+            markOpenStart();
+          }
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            markOpenStart();
+          }
+        }}
         title={title}
       >
         <span

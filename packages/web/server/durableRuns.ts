@@ -18,11 +18,19 @@ import { decorateRemoteExecutionRun } from './remoteExecution.js';
 
 const LIST_DURABLE_RUNS_CACHE_TTL_MS = 1_500;
 
+export interface DurableRunsListTelemetry {
+  cache: 'hit' | 'inflight' | 'miss';
+  source: 'daemon' | 'scan';
+  durationMs: number;
+  runCount: number;
+}
+
 let durableRunsListCache:
   | {
       expiresAt: number;
       value: (ListDurableRunsResult & { runsRoot: string }) | null;
       promise: Promise<ListDurableRunsResult & { runsRoot: string }> | null;
+      source: DurableRunsListTelemetry['source'] | null;
     }
   | null = null;
 
@@ -88,21 +96,44 @@ function readTailText(filePath: string | undefined, maxLines = 120, maxBytes = 6
   }
 }
 
-export async function listDurableRuns(): Promise<ListDurableRunsResult & { runsRoot: string }> {
+export async function listDurableRunsWithTelemetry(): Promise<{
+  result: ListDurableRunsResult & { runsRoot: string };
+  telemetry: DurableRunsListTelemetry;
+}> {
+  const startedAt = process.hrtime.bigint();
   const now = Date.now();
   if (durableRunsListCache?.value && durableRunsListCache.expiresAt > now) {
-    return durableRunsListCache.value;
+    return {
+      result: durableRunsListCache.value,
+      telemetry: {
+        cache: 'hit',
+        source: durableRunsListCache.source ?? 'scan',
+        durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+        runCount: durableRunsListCache.value.runs.length,
+      },
+    };
   }
 
   if (durableRunsListCache?.promise) {
-    return durableRunsListCache.promise;
+    const result = await durableRunsListCache.promise;
+    return {
+      result,
+      telemetry: {
+        cache: 'inflight',
+        source: durableRunsListCache.source ?? 'scan',
+        durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+        runCount: result.runs.length,
+      },
+    };
   }
 
+  let source: DurableRunsListTelemetry['source'] = 'scan';
   const request = (async () => {
     const runsRoot = resolveRunsRoot();
 
     try {
       if (await pingDaemon()) {
+        source = 'daemon';
         const result = await listDurableRunsFromDaemon();
         return {
           ...result,
@@ -115,6 +146,7 @@ export async function listDurableRuns(): Promise<ListDurableRunsResult & { runsR
       }
     }
 
+    source = 'scan';
     const scannedAt = new Date().toISOString();
     const runs = scanDurableRunsForRecovery(runsRoot);
     return {
@@ -129,21 +161,34 @@ export async function listDurableRuns(): Promise<ListDurableRunsResult & { runsR
     expiresAt: now + LIST_DURABLE_RUNS_CACHE_TTL_MS,
     value: durableRunsListCache?.value ?? null,
     promise: request,
+    source: durableRunsListCache?.source ?? null,
   };
 
-  return request
-    .then((result) => {
-      durableRunsListCache = {
-        expiresAt: Date.now() + LIST_DURABLE_RUNS_CACHE_TTL_MS,
-        value: result,
-        promise: null,
-      };
-      return result;
-    })
-    .catch((error) => {
-      durableRunsListCache = null;
-      throw error;
-    });
+  try {
+    const result = await request;
+    durableRunsListCache = {
+      expiresAt: Date.now() + LIST_DURABLE_RUNS_CACHE_TTL_MS,
+      value: result,
+      promise: null,
+      source,
+    };
+    return {
+      result,
+      telemetry: {
+        cache: 'miss',
+        source,
+        durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+        runCount: result.runs.length,
+      },
+    };
+  } catch (error) {
+    durableRunsListCache = null;
+    throw error;
+  }
+}
+
+export async function listDurableRuns(): Promise<ListDurableRunsResult & { runsRoot: string }> {
+  return (await listDurableRunsWithTelemetry()).result;
 }
 
 export async function getDurableRun(runId: string): Promise<(GetDurableRunResult & { runsRoot: string }) | undefined> {

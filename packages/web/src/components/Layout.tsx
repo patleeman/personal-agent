@@ -1,11 +1,15 @@
-import { Component, useRef, useState, useCallback, useEffect, type ReactNode } from 'react';
+import { Component, useRef, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { CommandPalette } from './CommandPalette';
-import { ContextRail } from './ContextRail';
+import { ContextRail, prefetchConversationRailData } from './ContextRail';
 import { Sidebar } from './Sidebar';
 import { getConversationArtifactIdFromSearch } from '../conversationArtifacts';
 import { clampPanelWidth, getArtifactRailTargetWidth, getRailInitialWidth, getRailLayoutPrefs, getRailMaxWidth } from '../layoutSizing';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../localSettings';
+import { useAppData, useAppEvents } from '../contexts';
+import { OPEN_SESSIONS_CHANGED_EVENT, readConversationLayout } from '../sessionTabs';
+import { fetchSessionDetailCached } from '../hooks/useSessions';
+import { prefetchConversationAutomation } from './ConversationAutomationPanel';
 
 // ── Resize hook ───────────────────────────────────────────────────────────────
 
@@ -184,8 +188,205 @@ function useViewportWidth() {
   return viewportWidth;
 }
 
+const OPEN_TAB_WARM_TAIL_BLOCKS = 400;
+const OPEN_TAB_WARM_START_DELAY_MS = 150;
+const OPEN_TAB_WARM_INTERLEAVE_MS = 30;
+
+function getActiveConversationId(pathname: string): string | null {
+  const parts = pathname.split('/').filter(Boolean);
+  return parts[0] === 'conversations' && parts[1] && parts[1] !== 'new'
+    ? parts[1]
+    : null;
+}
+
+function buildWarmConversationSignature(session: {
+  file: string;
+  messageCount: number;
+  lastActivityAt?: string;
+  isRunning?: boolean;
+} | null | undefined): string {
+  if (!session) {
+    return 'missing';
+  }
+
+  return [
+    session.file,
+    session.messageCount,
+    session.lastActivityAt ?? '',
+    session.isRunning ? 'running' : 'idle',
+  ].join('|');
+}
+
+function useWarmOpenConversationTabs(pathname: string): void {
+  const { versions } = useAppEvents();
+  const { sessions } = useAppData();
+  const [layout, setLayout] = useState(() => readConversationLayout());
+  const activeConversationId = getActiveConversationId(pathname);
+  const sessionSignaturesRef = useRef(new Map<string, string>());
+
+  useEffect(() => {
+    function handleConversationLayoutChanged() {
+      setLayout(readConversationLayout());
+    }
+
+    window.addEventListener(OPEN_SESSIONS_CHANGED_EVENT, handleConversationLayoutChanged);
+    return () => window.removeEventListener(OPEN_SESSIONS_CHANGED_EVENT, handleConversationLayoutChanged);
+  }, []);
+
+  const openConversationIds = useMemo(() => {
+    const seen = new Set<string>();
+    const ids: string[] = [];
+
+    for (const id of [...layout.pinnedSessionIds, ...layout.sessionIds]) {
+      if (!id || seen.has(id)) {
+        continue;
+      }
+
+      seen.add(id);
+      ids.push(id);
+    }
+
+    return ids;
+  }, [layout.pinnedSessionIds, layout.sessionIds]);
+
+  const sessionsById = useMemo(
+    () => new Map((sessions ?? []).map((session) => [session.id, session] as const)),
+    [sessions],
+  );
+
+  useEffect(() => {
+    const openIdSet = new Set(openConversationIds);
+    for (const cachedId of [...sessionSignaturesRef.current.keys()]) {
+      if (!openIdSet.has(cachedId)) {
+        sessionSignaturesRef.current.delete(cachedId);
+      }
+    }
+  }, [openConversationIds]);
+
+  useEffect(() => {
+    const idsToWarm = openConversationIds
+      .filter((conversationId) => conversationId !== activeConversationId)
+      .filter((conversationId) => sessions !== null ? sessionsById.has(conversationId) : true)
+      .filter((conversationId) => {
+        const nextSignature = buildWarmConversationSignature(sessionsById.get(conversationId) ?? null);
+        const previousSignature = sessionSignaturesRef.current.get(conversationId);
+        if (previousSignature === nextSignature) {
+          return false;
+        }
+
+        sessionSignaturesRef.current.set(conversationId, nextSignature);
+        return true;
+      });
+
+    if (idsToWarm.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        for (const conversationId of idsToWarm) {
+          if (cancelled) {
+            return;
+          }
+
+          await Promise.allSettled([
+            fetchSessionDetailCached(conversationId, { tailBlocks: OPEN_TAB_WARM_TAIL_BLOCKS }, versions.sessions),
+            prefetchConversationRailData({
+              conversationId,
+              sessionsVersion: versions.sessions,
+              runsVersion: versions.runs,
+              executionTargetsVersion: versions.executionTargets,
+            }),
+            prefetchConversationAutomation(conversationId),
+          ]);
+
+          if (cancelled) {
+            return;
+          }
+
+          await new Promise((resolve) => window.setTimeout(resolve, OPEN_TAB_WARM_INTERLEAVE_MS));
+        }
+      })();
+    }, OPEN_TAB_WARM_START_DELAY_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.executionTargets, versions.runs, versions.sessions]);
+
+  useEffect(() => {
+    if (versions.executionTargets === 0 && versions.runs === 0) {
+      return;
+    }
+
+    const idsToWarm = openConversationIds
+      .filter((conversationId) => conversationId !== activeConversationId)
+      .filter((conversationId) => sessions !== null ? sessionsById.has(conversationId) : true);
+    if (idsToWarm.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        for (const conversationId of idsToWarm) {
+          if (cancelled) {
+            return;
+          }
+
+          await prefetchConversationRailData({
+            conversationId,
+            sessionsVersion: versions.sessions,
+            runsVersion: versions.runs,
+            executionTargetsVersion: versions.executionTargets,
+          }).catch(() => undefined);
+        }
+      })();
+    }, OPEN_TAB_WARM_START_DELAY_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.executionTargets, versions.runs, versions.sessions]);
+
+  useEffect(() => {
+    if (versions.automation === 0) {
+      return;
+    }
+
+    const idsToWarm = openConversationIds
+      .filter((conversationId) => conversationId !== activeConversationId)
+      .filter((conversationId) => sessions !== null ? sessionsById.has(conversationId) : true);
+    if (idsToWarm.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        for (const conversationId of idsToWarm) {
+          if (cancelled) {
+            return;
+          }
+
+          await prefetchConversationAutomation(conversationId, { force: true }).catch(() => undefined);
+        }
+      })();
+    }, OPEN_TAB_WARM_START_DELAY_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.automation]);
+}
+
 export function Layout() {
   const location = useLocation();
+  useWarmOpenConversationTabs(location.pathname);
   const viewportWidth = useViewportWidth();
   const sidebar = useResize({ initial: 224, min: 160, max: 320, storageKey: SIDEBAR_WIDTH_STORAGE_KEY, side: 'left'  });
   const railMinWidth = 160;

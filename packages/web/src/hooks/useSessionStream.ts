@@ -77,13 +77,21 @@ export function shouldReplaceOptimisticUserBlock(previous: MessageBlock | undefi
   return previousImageCount === nextImageCount && nextSkillBlock.name.trim().toLowerCase() === previousSkillName;
 }
 
-export function useSessionStream(sessionId: string | null, options?: { tailBlocks?: number }) {
+export function resolveSessionStreamSubscriptionId(
+  sessionId: string | null,
+  options?: { enabled?: boolean },
+): string | null {
+  return options?.enabled === false ? null : sessionId;
+}
+
+export function useSessionStream(sessionId: string | null, options?: { tailBlocks?: number; enabled?: boolean }) {
   const [state, setState] = useState<StreamState>(INITIAL_STREAM_STATE);
   const [connectVersion, setConnectVersion] = useState(0);
   // Mutable refs to avoid stale closures in the SSE handler
   const blocksRef = useRef<MessageBlock[]>([]);
   const streamingRef = useRef(false);
-  const stateSessionIdRef = useRef<string | null>(sessionId);
+  const requestedSessionId = resolveSessionStreamSubscriptionId(sessionId, options);
+  const stateSessionIdRef = useRef<string | null>(requestedSessionId);
 
   const send = useCallback(async (
     text: string,
@@ -134,14 +142,14 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
   }, [sessionId]);
 
   useEffect(() => {
-    stateSessionIdRef.current = sessionId;
+    stateSessionIdRef.current = requestedSessionId;
     blocksRef.current = [];
     streamingRef.current = false;
     setState(INITIAL_STREAM_STATE);
-  }, [sessionId]);
+  }, [requestedSessionId]);
 
   useEffect(() => {
-    if (!sessionId) return;
+    if (!requestedSessionId) return;
 
     let es: EventSource;
     let closed = false;
@@ -152,7 +160,7 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
         params.set('tailBlocks', String(options.tailBlocks));
       }
       const query = params.toString();
-      es = new EventSource(`/api/live-sessions/${sessionId}/events${query ? `?${query}` : ''}`);
+      es = new EventSource(`/api/live-sessions/${requestedSessionId}/events${query ? `?${query}` : ''}`);
 
       es.onmessage = (e: MessageEvent<string>) => {
         if (closed) return;
@@ -167,7 +175,7 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
         if (closed) return;
         es.close();
         // Check if 404 (session not live) — don't retry in that case
-        fetch(`/api/live-sessions/${sessionId}`)
+        fetch(`/api/live-sessions/${requestedSessionId}`)
           .then(r => {
             if (!closed && r.ok) setTimeout(connect, 2_000); // retry if still live
           })
@@ -181,9 +189,9 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
       closed = true;
       es?.close();
     };
-  }, [connectVersion, options?.tailBlocks, sessionId]);
+  }, [connectVersion, options?.tailBlocks, requestedSessionId]);
 
-  const visibleState = selectVisibleStreamState(state, stateSessionIdRef.current, sessionId);
+  const visibleState = selectVisibleStreamState(state, stateSessionIdRef.current, requestedSessionId);
 
   return { ...visibleState, send, abort, reconnect };
 }
