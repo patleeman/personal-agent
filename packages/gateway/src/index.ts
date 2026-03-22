@@ -307,6 +307,7 @@ export interface TelegramMessageLike {
     suppressFollowUpQueuedMessage?: boolean;
     bypassAccessChecks?: boolean;
     skipMessageIdDedupe?: boolean;
+    syntheticAutoResume?: boolean;
   };
 }
 
@@ -711,6 +712,29 @@ function buildTelegramConversationId(chatId: string, messageThreadId: number | u
   }
 
   return `${chatId}::thread:${messageThreadId}`;
+}
+
+export function updateTelegramSyntheticAutoResumeState(
+  conversations: Set<string>,
+  message: TelegramMessageLike,
+): string | undefined {
+  const chatId = toTelegramChatIdString(message.chat.id);
+  if (!chatId) {
+    return undefined;
+  }
+
+  const conversationId = buildTelegramConversationId(
+    chatId,
+    normalizeTelegramMessageThreadId(message.message_thread_id),
+  );
+
+  if (message.internal?.syntheticAutoResume === true) {
+    conversations.add(conversationId);
+  } else {
+    conversations.delete(conversationId);
+  }
+
+  return conversationId;
 }
 
 function parseTelegramConversationId(conversationId: string): {
@@ -7487,6 +7511,21 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
   const runWatches = new Map<string, TelegramRunWatch>();
   let runWatchPollInFlight = false;
   const telegramHandlerRef: { current?: QueuedTelegramMessageHandler } = {};
+  const syntheticAutoResumeConversations = new Set<string>();
+  const RECURSIVE_AUTO_RESUME_SUPPRESSED_MESSAGE = 'Auto-resume was suppressed because this conversation is already continuing from an automatic follow-up. Reply in this conversation to continue.';
+
+  const routeTelegramMessageToHandler = (message: TelegramMessageLike): boolean => {
+    if (!telegramHandlerRef.current) {
+      return false;
+    }
+
+    updateTelegramSyntheticAutoResumeState(syntheticAutoResumeConversations, message);
+    telegramHandlerRef.current.handleMessage(message);
+    return true;
+  };
+
+  const shouldSuppressRecursiveSyntheticAutoResume = (conversationId: string): boolean =>
+    syntheticAutoResumeConversations.has(conversationId);
 
   const buildSyntheticTelegramSender = (): TelegramUserLike | undefined => {
     const syntheticSenderId = [...allowedUserIds]
@@ -7510,10 +7549,6 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
   };
 
   const dispatchSyntheticTelegramFollowUp = (conversationId: string, prompt: string): boolean => {
-    if (!telegramHandlerRef.current) {
-      return false;
-    }
-
     const parsed = parseTelegramConversationId(conversationId);
     if (!parsed) {
       return false;
@@ -7529,7 +7564,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
       return false;
     }
 
-    telegramHandlerRef.current.handleMessage({
+    return routeTelegramMessageToHandler({
       chat: {
         id: numericChatId,
       },
@@ -7540,9 +7575,9 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
         durable: false,
         suppressFollowUpQueuedMessage: true,
         bypassAccessChecks: true,
+        syntheticAutoResume: true,
       },
     });
-    return true;
   };
 
   interface GatewayDelegateWatch {
@@ -7687,6 +7722,15 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
       return;
     }
 
+    if (shouldSuppressRecursiveSyntheticAutoResume(watch.conversationId)) {
+      await sendTelegramMessageToConversation(
+        watch.chatId,
+        watch.messageThreadId,
+        `${completionMessage}\n\n${RECURSIVE_AUTO_RESUME_SUPPRESSED_MESSAGE}`,
+      );
+      return;
+    }
+
     const followUpPrompt = await buildDelegateFollowUpPrompt(watch);
     const resumed = dispatchSyntheticTelegramFollowUp(watch.conversationId, followUpPrompt);
     if (!resumed) {
@@ -7713,8 +7757,18 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
     }
 
     const completionMessage = await buildDelegateBatchCompletionMessage(orderedWatches);
-    const followUpPrompt = await buildDelegateBatchFollowUpPrompt(orderedWatches);
     const firstWatch = orderedWatches[0]!;
+
+    if (shouldSuppressRecursiveSyntheticAutoResume(conversationId)) {
+      await sendTelegramMessageToConversation(
+        firstWatch.chatId,
+        firstWatch.messageThreadId,
+        `${completionMessage}\n\n${RECURSIVE_AUTO_RESUME_SUPPRESSED_MESSAGE}`,
+      );
+      return;
+    }
+
+    const followUpPrompt = await buildDelegateBatchFollowUpPrompt(orderedWatches);
     const resumed = dispatchSyntheticTelegramFollowUp(conversationId, followUpPrompt);
 
     if (!resumed) {
@@ -7839,7 +7893,10 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
       const messageThreadId = parsedConversation?.messageThreadId;
 
       try {
-        const resumed = dispatchSyntheticTelegramFollowUp(conversationId, record.prompt);
+        const shouldSuppressAutoResume = shouldSuppressRecursiveSyntheticAutoResume(conversationId);
+        const resumed = shouldSuppressAutoResume
+          ? false
+          : dispatchSyntheticTelegramFollowUp(conversationId, record.prompt);
 
         if (!resumed) {
           if (typeof chatId !== 'number' || !Number.isFinite(chatId)) {
@@ -7849,7 +7906,9 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
           await sendTelegramMessageToConversation(
             chatId,
             messageThreadId,
-            `Deferred follow-up due:\n\n${record.prompt}`,
+            shouldSuppressAutoResume
+              ? `Deferred follow-up is ready, but auto-resume was suppressed because this conversation is already continuing from an automatic follow-up.\n\n${record.prompt}`
+              : `Deferred follow-up due:\n\n${record.prompt}`,
           );
         }
 
@@ -8069,14 +8128,23 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
     if (group.notifyMode === 'resume' && !group.resumeTriggered) {
       group.resumeTriggered = true;
-      const resumed = dispatchInternalFollowUp(group);
 
-      if (!resumed) {
+      if (shouldSuppressRecursiveSyntheticAutoResume(group.targetConversationId)) {
         await sendTelegramMessageToConversation(
           group.targetChatId,
           group.targetMessageThreadId,
-          'Unable to auto-resume: no authorized synthetic sender is configured. Reply in this thread to continue.',
+          'Auto-resume was suppressed because this conversation is already continuing from an automatic follow-up. Reply in this thread to continue.',
         );
+      } else {
+        const resumed = dispatchInternalFollowUp(group);
+
+        if (!resumed) {
+          await sendTelegramMessageToConversation(
+            group.targetChatId,
+            group.targetMessageThreadId,
+            'Unable to auto-resume: no authorized synthetic sender is configured. Reply in this thread to continue.',
+          );
+        }
       }
     }
 
@@ -8693,7 +8761,9 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
 
   telegramHandlerRef.current = handler;
 
-  bot.on('message', handler.handleMessage);
+  bot.on('message', (message: TelegramMessageLike) => {
+    routeTelegramMessageToHandler(message);
+  });
 
   bot.on('polling_error', (error: unknown) => {
     console.error(gatewayWarning(`Telegram polling error: ${error instanceof Error ? error.message : String(error)}`));
@@ -8901,7 +8971,7 @@ export async function startTelegramBridge(config?: TelegramBridgeConfig): Promis
         return;
       }
 
-      handler.handleMessage({
+      routeTelegramMessageToHandler({
         chat: {
           id: callbackMessage.chat.id,
           type: callbackMessage.chat.type,
