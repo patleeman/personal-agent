@@ -10,6 +10,7 @@ import {
   resolveAskUserQuestionDefaultOptionIndex,
   resolveAskUserQuestionNavigationHotkey,
   resolveAskUserQuestionOptionHotkey,
+  shouldAdvanceAskUserQuestionAfterSelection,
 } from './askUserQuestions';
 
 describe('ask user questions', () => {
@@ -230,6 +231,32 @@ describe('ask user questions', () => {
     expect(resolveAskUserQuestionDefaultOptionIndex(question, { target: ['prod'] })).toBe(1);
     expect(moveAskUserQuestionIndex(0, 3, -1)).toBe(2);
     expect(moveAskUserQuestionIndex(2, 3, 1)).toBe(0);
+  });
+
+  it('only auto-advances checkbox questions after every option is selected', () => {
+    const radioQuestion = {
+      id: 'target',
+      label: 'Choose a target',
+      style: 'radio' as const,
+      options: [
+        { value: 'staging', label: 'Staging' },
+        { value: 'prod', label: 'Production' },
+      ],
+    };
+    const checkQuestion = {
+      id: 'notify',
+      label: 'Select notifications',
+      style: 'check' as const,
+      options: [
+        { value: 'email', label: 'Email' },
+        { value: 'telegram', label: 'Telegram' },
+      ],
+    };
+
+    expect(shouldAdvanceAskUserQuestionAfterSelection(radioQuestion, ['prod'])).toBe(true);
+    expect(shouldAdvanceAskUserQuestionAfterSelection(checkQuestion, ['email'])).toBe(false);
+    expect(shouldAdvanceAskUserQuestionAfterSelection(checkQuestion, ['email', 'telegram'])).toBe(true);
+    expect(shouldAdvanceAskUserQuestionAfterSelection(checkQuestion, [])).toBe(false);
   });
 
   it('resolves numeric selection and next/previous hotkeys', () => {
