@@ -24,6 +24,7 @@ describe('renderFilePathTextFragments', () => {
     );
 
     expect(html).toContain('data-file-path-link="packages/web/src/App.tsx"');
+    expect(html).toContain('aria-label="Open packages/web/src/App.tsx"');
     expect(html).toContain('Touch ');
   });
 });
