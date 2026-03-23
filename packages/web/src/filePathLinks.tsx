@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import { looksLikeLocalFilesystemPath } from './localPaths';
 
 export type FilePathButtonVariant = 'text' | 'code' | 'pre';
@@ -195,13 +195,37 @@ export function FilePathButton({
     return displayText;
   }
 
+  function openFilePath() {
+    onOpenFilePath(path);
+  }
+
+  function handleMouseDown(event: ReactMouseEvent<HTMLButtonElement>) {
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.preventDefault();
+    openFilePath();
+  }
+
+  function handleClick(event: ReactMouseEvent<HTMLButtonElement>) {
+    if (event.detail !== 0) {
+      event.preventDefault();
+      return;
+    }
+
+    event.preventDefault();
+    openFilePath();
+  }
+
   return (
     <button
       type="button"
       data-file-path-link={path}
-      title={`Open ${path}`}
+      aria-label={`Open ${path}`}
       className={filePathButtonClassName(variant)}
-      onClick={() => onOpenFilePath(path)}
+      onMouseDown={handleMouseDown}
+      onClick={handleClick}
       style={{
         textDecoration: 'underline',
         textUnderlineOffset: '0.18em',
