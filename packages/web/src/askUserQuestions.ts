@@ -213,6 +213,21 @@ export function isAskUserQuestionComplete(
   return presentation.questions.every((question) => (answers[question.id]?.length ?? 0) > 0);
 }
 
+export function shouldAdvanceAskUserQuestionAfterSelection(
+  question: AskUserQuestionPrompt,
+  selectedValues: string[],
+): boolean {
+  if (question.style === 'radio') {
+    return selectedValues.length > 0;
+  }
+
+  if (question.options.length === 0 || selectedValues.length === 0) {
+    return false;
+  }
+
+  return question.options.every((option) => selectedValues.includes(option.value));
+}
+
 export function findPendingAskUserQuestion(messages: MessageBlock[] | undefined): PendingAskUserQuestion | null {
   if (!messages) {
     return null;
