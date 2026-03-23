@@ -394,9 +394,24 @@ function readContextUsagePayload(session: AgentSession): LiveContextUsage | null
 
 function normalizeQueuedPromptBehavior(
   behavior: 'steer' | 'followUp' | undefined,
-  isStreaming: boolean,
+  options: { isStreaming: boolean; hasHiddenTurnQueued: boolean },
 ): 'steer' | 'followUp' | undefined {
-  return isStreaming ? behavior : undefined;
+  if (options.isStreaming) {
+    return behavior ?? 'followUp';
+  }
+
+  if (options.hasHiddenTurnQueued) {
+    return behavior ?? 'followUp';
+  }
+
+  return undefined;
+}
+
+function hasQueuedOrActiveHiddenTurn(entry: Pick<LiveEntry, 'pendingHiddenTurnCustomTypes' | 'activeHiddenTurnCustomType'>): boolean {
+  const pendingHiddenTurnCustomTypes = Array.isArray(entry.pendingHiddenTurnCustomTypes)
+    ? entry.pendingHiddenTurnCustomTypes
+    : [];
+  return Boolean(entry.activeHiddenTurnCustomType) || pendingHiddenTurnCustomTypes.length > 0;
 }
 
 function readQueueState(session: AgentSession): { steering: string[]; followUp: string[] } {
@@ -1919,7 +1934,7 @@ export function subscribe(
   }
   listener({ type: 'context_usage', usage: readContextUsagePayload(entry.session) });
   listener({ type: 'queue_state', ...readQueueState(entry.session) });
-  if (entry.session.isStreaming) {
+  if (entry.session.isStreaming && !entry.activeHiddenTurnCustomType) {
     listener({ type: 'agent_start' });
   }
 
@@ -1970,7 +1985,15 @@ async function triggerHiddenPrompt(
   }
 
   ensureHiddenTurnState(entry);
-  entry.pendingHiddenTurnCustomTypes.push(customType);
+  const activateImmediately = !entry.session.isStreaming
+    && !entry.activeHiddenTurnCustomType
+    && entry.pendingHiddenTurnCustomTypes.length === 0;
+
+  if (activateImmediately) {
+    entry.activeHiddenTurnCustomType = customType;
+  } else {
+    entry.pendingHiddenTurnCustomTypes.push(customType);
+  }
 
   try {
     await entry.session.sendCustomMessage({
@@ -1983,6 +2006,9 @@ async function triggerHiddenPrompt(
       triggerTurn: true,
     });
   } catch (error) {
+    if (activateImmediately && entry.activeHiddenTurnCustomType === customType) {
+      entry.activeHiddenTurnCustomType = null;
+    }
     const index = entry.pendingHiddenTurnCustomTypes.lastIndexOf(customType);
     if (index >= 0) {
       entry.pendingHiddenTurnCustomTypes.splice(index, 1);
@@ -2061,7 +2087,10 @@ export async function promptSession(
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
   const { session } = entry;
-  const normalizedBehavior = normalizeQueuedPromptBehavior(behavior, session.isStreaming);
+  const normalizedBehavior = normalizeQueuedPromptBehavior(behavior, {
+    isStreaming: session.isStreaming,
+    hasHiddenTurnQueued: hasQueuedOrActiveHiddenTurn(entry),
+  });
   const hasImages = Boolean(images && images.length > 0);
 
   const runPrompt = async (allowImages: boolean): Promise<void> => {

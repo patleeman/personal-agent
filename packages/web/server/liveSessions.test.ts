@@ -230,6 +230,37 @@ describe('live session subscriptions', () => {
     expect(events[4]).toEqual({ type: 'agent_start' });
   });
 
+  it('does not replay agent_start while a hidden turn is active', () => {
+    const events: SseEvent[] = [];
+
+    setLiveEntry('session-hidden-streaming', {
+      sessionId: 'session-hidden-streaming',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Hidden streaming',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      activeHiddenTurnCustomType: 'conversation_automation_post_turn_review',
+      session: {
+        state: {
+          messages: [],
+          streamMessage: null,
+        },
+        getContextUsage: () => null,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+        isStreaming: true,
+      },
+    });
+
+    subscribe('session-hidden-streaming', (event) => {
+      events.push(event);
+    });
+
+    expect(events).not.toContainEqual({ type: 'agent_start' });
+  });
+
   it('merges persisted history into truncated live snapshots', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
     tempDirs.push(dir);
@@ -1275,6 +1306,67 @@ describe('promptSession', () => {
     expect(prompt).not.toHaveBeenCalled();
     expect(steer).not.toHaveBeenCalled();
     expect(followUp).toHaveBeenCalledWith('continue working');
+  });
+
+  it('defaults to a queued follow-up when the session is already streaming', async () => {
+    const prompt = vi.fn(async () => undefined);
+    const steer = vi.fn(async () => undefined);
+    const followUp = vi.fn(async () => undefined);
+
+    setLiveEntry('session-streaming-default-followup', {
+      sessionId: 'session-streaming-default-followup',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Streaming default follow-up',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamMessage: null },
+        getContextUsage: () => null,
+        isStreaming: true,
+        prompt,
+        steer,
+        followUp,
+      },
+    });
+
+    await promptSession('session-streaming-default-followup', 'keep going');
+
+    expect(prompt).not.toHaveBeenCalled();
+    expect(steer).not.toHaveBeenCalled();
+    expect(followUp).toHaveBeenCalledWith('keep going');
+  });
+
+  it('queues follow-up prompts while a hidden turn is pending even before streaming starts', async () => {
+    const prompt = vi.fn(async () => undefined);
+    const steer = vi.fn(async () => undefined);
+    const followUp = vi.fn(async () => undefined);
+
+    setLiveEntry('session-hidden-pending-followup', {
+      sessionId: 'session-hidden-pending-followup',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Hidden pending follow-up',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      pendingHiddenTurnCustomTypes: ['conversation_automation_post_turn_review'],
+      session: {
+        state: { messages: [], streamMessage: null },
+        getContextUsage: () => null,
+        isStreaming: false,
+        prompt,
+        steer,
+        followUp,
+      },
+    });
+
+    await promptSession('session-hidden-pending-followup', 'my missing message');
+
+    expect(prompt).not.toHaveBeenCalled();
+    expect(steer).not.toHaveBeenCalled();
+    expect(followUp).toHaveBeenCalledWith('my missing message');
   });
 });
 
