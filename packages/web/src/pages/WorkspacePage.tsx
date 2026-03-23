@@ -38,17 +38,15 @@ export function WorkspacePage() {
   );
   const fileDetail = fileApi.data;
 
-  const selectedFilePath = useMemo(() => {
-    if (fileDetail?.relativePath) {
-      return fileDetail.relativePath;
-    }
-
+  const normalizedRequestedFilePath = useMemo(() => {
     if (!snapshot || !requestedFilePath) {
       return requestedFilePath;
     }
 
     return normalizeWorkspaceRequestedFilePath(snapshot.root, requestedFilePath);
-  }, [fileDetail?.relativePath, requestedFilePath, snapshot]);
+  }, [requestedFilePath, snapshot?.root]);
+
+  const selectedFilePath = fileDetail?.relativePath ?? normalizedRequestedFilePath;
 
   const [cwdDraft, setCwdDraft] = useState(requestedCwd ?? '');
   const [draftContent, setDraftContent] = useState('');
@@ -92,10 +90,14 @@ export function WorkspacePage() {
   }, [fileApi.loading, fileDetail, openWorkspaceSearch, requestedFilePath, selectedFilePath, snapshot]);
 
   useEffect(() => {
-    if (fileDetail?.relativePath && requestedFilePath && fileDetail.relativePath !== requestedFilePath) {
+    if (fileApi.loading || !fileDetail?.relativePath || !normalizedRequestedFilePath) {
+      return;
+    }
+
+    if (fileDetail.relativePath !== normalizedRequestedFilePath) {
       openWorkspaceSearch({ file: fileDetail.relativePath }, true);
     }
-  }, [fileDetail?.relativePath, openWorkspaceSearch, requestedFilePath]);
+  }, [fileApi.loading, fileDetail?.relativePath, normalizedRequestedFilePath, openWorkspaceSearch]);
 
   useEffect(() => {
     if (fileDetail?.content !== null && fileDetail?.content !== undefined) {
@@ -199,7 +201,7 @@ export function WorkspacePage() {
     ].join(' · ');
   }, [snapshot]);
 
-  const showingFileLoadingState = Boolean(selectedFilePath && fileApi.loading && fileDetail?.relativePath !== selectedFilePath);
+  const showingFileLoadingState = Boolean(normalizedRequestedFilePath && fileApi.loading && fileDetail?.relativePath !== normalizedRequestedFilePath);
 
   const handleWorkspaceInvalidation = useCallback(async () => {
     const now = Date.now();
