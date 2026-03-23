@@ -7,6 +7,7 @@ import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../c
 import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, RemoteConversationConnectionStreamEvent } from '../types';
 import { useApi } from '../hooks';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
+import { useConversationScroll } from '../hooks/useConversationScroll';
 import { useSessionDetail } from '../hooks/useSessions';
 import { normalizePendingQueueItems, useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../api';
@@ -15,9 +16,8 @@ import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConve
 import { createConversationLiveRunId, getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversationRuns';
 import { formatContextBreakdownLabel, formatContextUsageLabel, formatContextWindowLabel, formatLiveSessionLabel, formatThinkingLevelLabel } from '../conversationHeader';
 import {
+  getConversationInitialScrollKey,
   getConversationTailBlockKey,
-  isConversationScrolledToBottom,
-  shouldAutoScrollToStreamingTail,
   shouldShowScrollToBottomControl,
 } from '../conversationScroll';
 import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE } from '../conversationTitle';
@@ -88,8 +88,6 @@ const HISTORICAL_TAIL_BLOCKS_JUMP_PADDING = 40;
 const MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS = 1200;
 const HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX = 1400;
 const HISTORICAL_BACKGROUND_PREFETCH_DELAY_MS = 800;
-const INITIAL_SCROLL_STABLE_FRAME_COUNT = 2;
-const INITIAL_SCROLL_MAX_FRAMES = 45;
 const MAX_CONVERSATION_RAIL_BLOCKS = 240;
 
 // ── Model picker ──────────────────────────────────────────────────────────────
@@ -865,7 +863,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   useEffect(() => {
     setHistoricalTailBlocks(INITIAL_HISTORICAL_TAIL_BLOCKS);
-    pendingPrependRestoreRef.current = null;
   }, [id]);
 
   // ── Existing session data (read-only JSONL) ───────────────────────────────
@@ -951,6 +948,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const showHistoricalLoadMore = historicalHasOlderBlocks;
   const messageIndexOffset = historicalBlockOffset;
   const messageCount = realMessages?.length ?? 0;
+  const initialScrollKey = useMemo(() => getConversationInitialScrollKey(id ?? null, {
+    isLiveSession,
+    hasLiveSnapshot: stream.hasSnapshot,
+  }), [id, isLiveSession, stream.hasSnapshot]);
   const pendingAskUserQuestion = useMemo(
     () => findPendingAskUserQuestion(realMessages),
     [realMessages],
@@ -1184,10 +1185,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [drawingsError, setDrawingsError] = useState<string | null>(null);
   const [composerAltHeld, setComposerAltHeld] = useState(false);
   const [dragOver, setDragOver] = useState(false);
-  const [atBottom, setAtBottom] = useState(true);
-  // Keep track of whether the user intentionally left the viewport pinned.
-  // Streaming growth alone should not disable the next auto-scroll transition.
-  const scrollPinnedToBottomRef = useRef(true);
   const [draftExecutionTargetId, setDraftExecutionTargetId] = useState<string | null>(() => readDraftConversationExecutionTarget());
   const [executionTargetBusy, setExecutionTargetBusy] = useState(false);
   const composerHistoryScopeId = draft ? null : id ?? null;
@@ -1385,11 +1382,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const deferredResumeAutoResumeKeyRef = useRef<string | null>(null);
   const pendingJumpMessageIndexRef = useRef<number | null>(null);
   const [requestedFocusMessageIndex, setRequestedFocusMessageIndex] = useState<number | null>(null);
-  const pendingPrependRestoreRef = useRef<{
-    sessionId: string;
-    scrollHeight: number;
-    scrollTop: number;
-  } | null>(null);
 
   useEffect(() => {
     setComposerQuestionIndex(0);
@@ -1410,6 +1402,21 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     setComposerQuestionOptionIndex(resolveAskUserQuestionDefaultOptionIndex(composerActiveQuestion, composerQuestionAnswers));
   }, [composerActiveQuestion, composerQuestionAnswers]);
+
+  const {
+    atBottom,
+    syncScrollStateFromDom,
+    scrollToBottom,
+    capturePrependRestore,
+  } = useConversationScroll({
+    conversationId: id ?? null,
+    messages: realMessages,
+    scrollRef,
+    sessionLoading,
+    isStreaming: stream.isStreaming,
+    initialScrollKey,
+    prependRestoreKey: historicalBlockOffset,
+  });
 
   const loadOlderMessages = useCallback((targetMessageIndex?: number, options?: { automatic?: boolean }) => {
     if (!id || sessionLoading || historicalTotalBlocks <= 0) {
@@ -1432,17 +1439,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    const scrollEl = scrollRef.current;
-    if (scrollEl && targetMessageIndex === undefined) {
-      pendingPrependRestoreRef.current = {
-        sessionId: id,
-        scrollHeight: scrollEl.scrollHeight,
-        scrollTop: scrollEl.scrollTop,
-      };
+    if (targetMessageIndex === undefined) {
+      capturePrependRestore();
     }
 
     setHistoricalTailBlocks(nextTailBlocks);
-  }, [historicalTailBlocks, historicalTotalBlocks, id, sessionLoading]);
+  }, [capturePrependRestore, historicalTailBlocks, historicalTotalBlocks, id, sessionLoading]);
 
   // Derive menu states
   const slashInput = useMemo(() => parseSlashInput(input), [input]);
@@ -1783,11 +1785,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         await stream.send(textToSend, queuedBehavior);
         await refetchConversationProjects({ resetLoading: false });
         emitConversationProjectsChanged(id);
-        setTimeout(() => {
-          if (scrollRef.current) {
-            scrollPinnedToBottomRef.current = true;
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-          }
+        window.setTimeout(() => {
+          scrollToBottom();
         }, 50);
         return;
       }
@@ -1804,17 +1803,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       await stream.send(textToSend, queuedBehavior);
       await refetchConversationProjects({ resetLoading: false });
       emitConversationProjectsChanged(id);
-      setTimeout(() => {
-        if (scrollRef.current) {
-          scrollPinnedToBottomRef.current = true;
-          scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-        }
+      window.setTimeout(() => {
+        scrollToBottom();
       }, 50);
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
       throw error;
     }
-  }, [id, isLiveSession, refetchConversationProjects, showNotice, stream, visibleSessionDetail]);
+  }, [id, isLiveSession, refetchConversationProjects, scrollToBottom, showNotice, stream, visibleSessionDetail]);
 
   const composerQuestionAnsweredCount = pendingAskUserQuestion
     ? pendingAskUserQuestion.presentation.questions.filter((question) => (composerQuestionAnswers[question.id]?.length ?? 0) > 0).length
@@ -2014,65 +2010,24 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   // Scroll tracking
   const handleScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
+    syncScrollStateFromDom();
 
-    const nextAtBottom = isConversationScrolledToBottom({
-      scrollHeight: el.scrollHeight,
-      scrollTop: el.scrollTop,
-      clientHeight: el.clientHeight,
-    });
-    scrollPinnedToBottomRef.current = nextAtBottom;
-    setAtBottom(nextAtBottom);
+    const el = scrollRef.current;
+    if (!el) {
+      return;
+    }
 
     if (historicalHasOlderBlocks && !sessionLoading && el.scrollTop <= HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX) {
       loadOlderMessages();
     }
-  }, [historicalHasOlderBlocks, loadOlderMessages, sessionLoading]);
+  }, [historicalHasOlderBlocks, loadOlderMessages, sessionLoading, syncScrollStateFromDom]);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    el.addEventListener('scroll', handleScroll);
+    el.addEventListener('scroll', handleScroll, { passive: true });
     return () => el.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);
-
-  useLayoutEffect(() => {
-    if (!messageCount) {
-      scrollPinnedToBottomRef.current = true;
-      setAtBottom(true);
-      return;
-    }
-
-    const el = scrollRef.current;
-    if (!el) {
-      scrollPinnedToBottomRef.current = true;
-      setAtBottom(true);
-      return;
-    }
-
-    setAtBottom(isConversationScrolledToBottom({
-      scrollHeight: el.scrollHeight,
-      scrollTop: el.scrollTop,
-      clientHeight: el.clientHeight,
-    }));
-  }, [id, messageCount, realMessages]);
-
-  useLayoutEffect(() => {
-    const pendingRestore = pendingPrependRestoreRef.current;
-    if (!pendingRestore || !id || pendingRestore.sessionId !== id || pendingJumpMessageIndexRef.current !== null) {
-      return;
-    }
-
-    const el = scrollRef.current;
-    if (!el) {
-      return;
-    }
-
-    const delta = el.scrollHeight - pendingRestore.scrollHeight;
-    el.scrollTop = pendingRestore.scrollTop + Math.max(0, delta);
-    pendingPrependRestoreRef.current = null;
-  }, [historicalBlockOffset, id, realMessages]);
 
   useEffect(() => {
     if (!id || sessionLoading || !historicalHasOlderBlocks || historicalTailBlocks >= Math.min(historicalTotalBlocks, MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS)) {
@@ -2091,58 +2046,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       window.clearTimeout(timeoutId);
     };
   }, [historicalHasOlderBlocks, historicalTailBlocks, historicalTotalBlocks, id, isLiveSession, loadOlderMessages, sessionLoading, stream.isStreaming]);
-
-  // Scroll to the newest message once per conversation after the transcript has
-  // finished its initial render pass. Long conversations can keep adjusting
-  // scrollHeight for a few frames while windowing/chunk measurements settle.
-  const initialScrollSessionIdRef = useRef<string | null>(null);
-  const streamingTailAutoScrollKeyRef = useRef<string | null>(null);
-  useLayoutEffect(() => {
-    if (!id || !realMessages?.length || !scrollRef.current || sessionLoading) {
-      return;
-    }
-
-    if (initialScrollSessionIdRef.current === id) {
-      return;
-    }
-
-    const el = scrollRef.current;
-    let animationFrame = 0;
-    let lastScrollHeight = -1;
-    let stableFrames = 0;
-    let frameCount = 0;
-
-    const settleScroll = () => {
-      animationFrame = 0;
-      const nextScrollHeight = el.scrollHeight;
-      scrollPinnedToBottomRef.current = true;
-      el.scrollTop = nextScrollHeight;
-      setAtBottom(true);
-      frameCount += 1;
-
-      if (nextScrollHeight === lastScrollHeight) {
-        stableFrames += 1;
-      } else {
-        lastScrollHeight = nextScrollHeight;
-        stableFrames = 0;
-      }
-
-      if (stableFrames >= INITIAL_SCROLL_STABLE_FRAME_COUNT || frameCount >= INITIAL_SCROLL_MAX_FRAMES) {
-        initialScrollSessionIdRef.current = id;
-        return;
-      }
-
-      animationFrame = window.requestAnimationFrame(settleScroll);
-    };
-
-    settleScroll();
-
-    return () => {
-      if (animationFrame !== 0) {
-        window.cancelAnimationFrame(animationFrame);
-      }
-    };
-  }, [id, realMessages, sessionLoading]);
 
   // Esc aborts an active run. Esc+Esc still opens the tree when idle.
   useEffect(() => {
@@ -2179,38 +2082,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return () => window.removeEventListener('keydown', handler);
   }, [showTree, stream]);
 
-  // Auto-scroll only when streaming introduces a new tail block. That keeps the
-  // start of the latest assistant message in view instead of chasing every token
-  // to the bottom while the same block grows.
-  useLayoutEffect(() => {
-    const tailBlock = realMessages?.[realMessages.length - 1];
-    const tailKey = getConversationTailBlockKey(tailBlock);
-
-    if (!stream.isStreaming) {
-      streamingTailAutoScrollKeyRef.current = tailKey;
-      return;
-    }
-
-    if (!scrollRef.current) {
-      streamingTailAutoScrollKeyRef.current = tailKey;
-      return;
-    }
-
-    if (!scrollPinnedToBottomRef.current) {
-      streamingTailAutoScrollKeyRef.current = tailKey;
-      return;
-    }
-
-    if (!shouldAutoScrollToStreamingTail(streamingTailAutoScrollKeyRef.current, tailBlock)) {
-      return;
-    }
-
-    streamingTailAutoScrollKeyRef.current = tailKey;
-    scrollPinnedToBottomRef.current = true;
-    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    setAtBottom(true);
-  }, [realMessages, stream.isStreaming]);
-
   // Forked/new conversations with a queued initial prompt should stay pinned to
   // the bottom only until that queued user block lands and the assistant starts
   // its response. After that, let the transcript stay put so the response can be
@@ -2232,20 +2103,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       pinnedInitialPromptTailKeyRef.current = tailKey;
     }
 
-    const el = scrollRef.current;
-    const scrollToBottom = () => {
-      scrollPinnedToBottomRef.current = true;
-      el.scrollTop = el.scrollHeight;
-      setAtBottom(true);
+    const pinToBottom = () => {
+      scrollToBottom();
     };
 
-    scrollToBottom();
-    const animationFrame = window.requestAnimationFrame(scrollToBottom);
+    pinToBottom();
+    const animationFrame = window.requestAnimationFrame(pinToBottom);
 
     return () => {
       window.cancelAnimationFrame(animationFrame);
     };
-  }, [id, realMessages]);
+  }, [id, realMessages, scrollToBottom]);
 
   // Focus input on navigation
   useEffect(() => { textareaRef.current?.focus(); }, [id]);
@@ -3406,11 +3274,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         emitConversationProjectsChanged(id);
         await refetchConversationAttachments();
 
-        setTimeout(() => {
-          if (scrollRef.current) {
-            scrollPinnedToBottomRef.current = true;
-            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-          }
+        window.setTimeout(() => {
+          scrollToBottom();
         }, 50);
       } else if (visibleSessionDetail) {
         try {
@@ -3418,11 +3283,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           await api.resumeSession(visibleSessionDetail.meta.file);
           setConfirmedLive(true);
           stream.reconnect();
-          setTimeout(() => {
-            if (scrollRef.current) {
-              scrollPinnedToBottomRef.current = true;
-              scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-            }
+          window.setTimeout(() => {
+            scrollToBottom();
             void stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs)
               .then(async () => {
                 await refetchConversationProjects({ resetLoading: false });
@@ -3829,11 +3691,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         {showScrollToBottomControl && (
           <button
             onClick={() => {
-              if (!scrollRef.current) {
-                return;
-              }
-              scrollPinnedToBottomRef.current = true;
-              scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+              scrollToBottom({ behavior: 'smooth' });
             }}
             className="sticky bottom-4 left-1/2 -translate-x-1/2 ui-pill ui-pill-muted shadow-md"
           >
