@@ -194,7 +194,7 @@ function EmptyPrompt({ text }: { text: string }) {
   );
 }
 
-const MAX_VISIBLE_WORKING_TREE_CHANGES = 8;
+const MAX_VISIBLE_WORKING_TREE_CHANGES = 5;
 
 function buildWorkspaceLink(cwd: string, file?: string | null): string {
   const params = new URLSearchParams();
@@ -244,10 +244,8 @@ function WorkingTreeChangeMark({ change }: { change: WorkspaceChangeKind }) {
         : 'bg-warning/12 text-warning';
 
   return (
-    <span className="h-4 w-4 shrink-0 text-center">
-      <span className={`inline-flex h-4 w-4 items-center justify-center rounded text-[9px] font-semibold ${toneClass}`}>
-        {workingTreeChangeShortLabel(change)}
-      </span>
+    <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-semibold leading-none ${toneClass}`}>
+      {workingTreeChangeShortLabel(change)}
     </span>
   );
 }
@@ -1047,6 +1045,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const [focusedProject, setFocusedProject] = useState<ProjectDetail | null>(null);
   const [detectedRunMentions, setDetectedRunMentions] = useState<ReturnType<typeof collectConversationRunMentions>>([]);
   const [runsExpanded, setRunsExpanded] = useState(false);
+  const [workingTreeExpanded, setWorkingTreeExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [linkBusy, setLinkBusy] = useState(false);
@@ -1203,6 +1202,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     setRemotePickerError(null);
     setRemotePickerListing(null);
     setRunsExpanded(false);
+    setWorkingTreeExpanded(false);
   }, [id]);
 
   useEffect(() => {
@@ -1556,8 +1556,12 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     ? (data.git.changeCount === 0 ? 'working tree clean' : `${data.git.changeCount} ${data.git.changeCount === 1 ? 'change' : 'changes'}`)
     : null;
   const workspaceBrowserLink = isRemoteConversation ? null : buildWorkspaceLink(data.cwd);
-  const visibleWorkingTreeChanges = (data.git?.changes ?? []).slice(0, MAX_VISIBLE_WORKING_TREE_CHANGES);
-  const hiddenWorkingTreeChangeCount = Math.max(0, (data.git?.changes.length ?? 0) - visibleWorkingTreeChanges.length);
+  const workingTreeChanges = data.git?.changes ?? [];
+  const visibleWorkingTreeChanges = workingTreeExpanded
+    ? workingTreeChanges
+    : workingTreeChanges.slice(0, MAX_VISIBLE_WORKING_TREE_CHANGES);
+  const hiddenWorkingTreeChangeCount = Math.max(0, workingTreeChanges.length - MAX_VISIBLE_WORKING_TREE_CHANGES);
+  const canToggleWorkingTreeChanges = workingTreeChanges.length > MAX_VISIBLE_WORKING_TREE_CHANGES;
 
   return (
     <div className="space-y-5 px-4 py-4">
@@ -1697,26 +1701,32 @@ function LiveSessionContextPanel({ id }: { id: string }) {
             </form>
           )}
           {!isRemoteConversation && visibleWorkingTreeChanges.length > 0 && (
-            <div className="space-y-1">
-              <div className="flex items-center justify-between gap-2">
-                <p className="ui-section-label">Changed files</p>
-                {hiddenWorkingTreeChangeCount > 0 && (
-                  <span className="ui-card-meta">+{hiddenWorkingTreeChangeCount} more</span>
-                )}
-              </div>
+            <div className="space-y-1.5">
+              <p className="ui-section-label">Changed files</p>
               <div className="space-y-px">
                 {visibleWorkingTreeChanges.map(({ relativePath, change }) => (
                   <Link
                     key={`${change}:${relativePath}`}
                     to={buildWorkspaceLink(data.cwd, relativePath)}
-                    className="group flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors hover:bg-surface/80"
+                    className="group grid grid-cols-[1rem,minmax(0,1fr)] items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-surface/80"
                     title={`Open ${relativePath} in the workspace editor`}
                   >
                     <WorkingTreeChangeMark change={change} />
-                    <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-secondary group-hover:text-primary">{relativePath}</span>
+                    <span className="min-w-0 truncate font-mono text-[10px] leading-4 text-secondary group-hover:text-primary">{relativePath}</span>
                   </Link>
                 ))}
               </div>
+              {canToggleWorkingTreeChanges && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    className="ui-toolbar-button text-accent"
+                    onClick={() => setWorkingTreeExpanded((value) => !value)}
+                  >
+                    {workingTreeExpanded ? 'Show less' : `Show ${hiddenWorkingTreeChangeCount} more`}
+                  </button>
+                </div>
+              )}
             </div>
           )}
           {(openCwdError || changeCwdError) && (
