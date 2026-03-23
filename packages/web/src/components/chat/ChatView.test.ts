@@ -184,7 +184,7 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('role="radio"');
     expect(html).toContain('aria-keyshortcuts="1"');
     expect(html).toContain('✓ Submit →');
-    expect(html).toContain('1-9 selects + next · n/p switches questions · ↑/↓ moves · Esc exits · send a normal message to skip');
+    expect(html).toContain('1-9 selects · n/p switches questions · ↑/↓ moves · Esc exits · send a normal message to skip');
     expect(html).not.toContain('Internal work');
   });
 

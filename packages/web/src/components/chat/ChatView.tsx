@@ -12,12 +12,14 @@ import {
   resolveAskUserQuestionDefaultOptionIndex,
   resolveAskUserQuestionNavigationHotkey,
   resolveAskUserQuestionOptionHotkey,
+  shouldAdvanceAskUserQuestionAfterSelection,
   type AskUserQuestionAnswers,
   type AskUserQuestionPresentation,
 } from '../../askUserQuestions';
 import type { MessageBlock } from '../../types';
 import { timeAgo } from '../../utils';
 import { extractMarkdownTextContent, InlineMarkdownCode } from '../MarkdownInlineCode';
+import { FilePathButton, FilePathPreformattedText, normalizeDetectedFilePath, renderFilePathTextFragments } from '../../filePathLinks';
 import { buildChatRenderItems, type ChatRenderItem, type TraceClusterSummary, type TraceClusterSummaryCategory, type TraceConversationBlock } from './transcriptItems.js';
 import { Pill, SurfacePanel, cx } from '../ui';
 
@@ -61,13 +63,17 @@ function splitMentionFragments(text: string): Array<{ text: string; mention: boo
   return fragments;
 }
 
-function renderMentionFragments(text: string): ReactNode[] {
+function renderEnhancedTextFragments(text: string, onOpenFilePath?: (path: string) => void): ReactNode[] {
   return splitMentionFragments(text).map((fragment, index) => {
     if (fragment.mention) {
       return <MentionPill key={`${fragment.text}-${index}`} text={fragment.text} />;
     }
 
-    return <React.Fragment key={`${index}-${fragment.text}`}>{fragment.text}</React.Fragment>;
+    return (
+      <React.Fragment key={`${index}-${fragment.text}`}>
+        {renderFilePathTextFragments(fragment.text, { onOpenFilePath, keyPrefix: `fragment-${index}` })}
+      </React.Fragment>
+    );
   });
 }
 
@@ -125,10 +131,10 @@ function extractMarkdownCodeBlock(children: ReactNode): { className?: string; co
   return { content: extractMarkdownTextContent(children).replace(/\n$/, '') };
 }
 
-function renderChildrenWithMentions(children: ReactNode): ReactNode {
+function renderChildrenWithMentions(children: ReactNode, onOpenFilePath?: (path: string) => void): ReactNode {
   return Children.map(children, (child, index) => {
     if (typeof child === 'string') {
-      return <React.Fragment key={index}>{renderMentionFragments(child)}</React.Fragment>;
+      return <React.Fragment key={index}>{renderEnhancedTextFragments(child, onOpenFilePath)}</React.Fragment>;
     }
 
     if (typeof child === 'number' || typeof child === 'bigint') {
@@ -149,23 +155,25 @@ function renderChildrenWithMentions(children: ReactNode): ReactNode {
       return child;
     }
 
-    return cloneElement(child as ReactElement<{ children?: ReactNode }>, undefined, renderChildrenWithMentions(props.children));
+    return cloneElement(child as ReactElement<{ children?: ReactNode }>, undefined, renderChildrenWithMentions(props.children, onOpenFilePath));
   });
 }
 
-function MarkdownCodeBlock({ children }: { children: ReactNode }) {
+function MarkdownCodeBlock({ children, onOpenFilePath }: { children: ReactNode; onOpenFilePath?: (path: string) => void }) {
   const { className, content } = extractMarkdownCodeBlock(children);
 
   return (
     <div className="ui-markdown-code-block">
-      <pre>
-        <code className={className}>{content}</code>
-      </pre>
+      <FilePathPreformattedText
+        text={content}
+        onOpenFilePath={onOpenFilePath}
+        className="whitespace-pre-wrap break-all"
+      />
     </div>
   );
 }
 
-function MarkdownText({ text }: { text: string }) {
+function MarkdownText({ text, onOpenFilePath }: { text: string; onOpenFilePath?: (path: string) => void }) {
   const footnoteId = useId();
   const footnotePrefix = `chat-${footnoteId.replace(/[^a-zA-Z0-9_-]+/g, '-')}-`;
 
@@ -175,17 +183,23 @@ function MarkdownText({ text }: { text: string }) {
         remarkPlugins={MARKDOWN_REMARK_PLUGINS}
         remarkRehypeOptions={{ clobberPrefix: footnotePrefix }}
         components={{
-          h1: ({ children, node: _node, ...props }) => <h1 {...props}>{renderChildrenWithMentions(children)}</h1>,
-          h2: ({ children, node: _node, ...props }) => <h2 {...props}>{renderChildrenWithMentions(children)}</h2>,
-          h3: ({ children, node: _node, ...props }) => <h3 {...props}>{renderChildrenWithMentions(children)}</h3>,
-          h4: ({ children, node: _node, ...props }) => <h4 {...props}>{renderChildrenWithMentions(children)}</h4>,
-          h5: ({ children, node: _node, ...props }) => <h5 {...props}>{renderChildrenWithMentions(children)}</h5>,
-          h6: ({ children, node: _node, ...props }) => <h6 {...props}>{renderChildrenWithMentions(children)}</h6>,
-          p: ({ children, node: _node, ...props }) => <p {...props}>{renderChildrenWithMentions(children)}</p>,
-          li: ({ children, node: _node, ...props }) => <li {...props}>{renderChildrenWithMentions(children)}</li>,
-          th: ({ children, node: _node, ...props }) => <th {...props}>{renderChildrenWithMentions(children)}</th>,
-          td: ({ children, node: _node, ...props }) => <td {...props}>{renderChildrenWithMentions(children)}</td>,
+          h1: ({ children, node: _node, ...props }) => <h1 {...props}>{renderChildrenWithMentions(children, onOpenFilePath)}</h1>,
+          h2: ({ children, node: _node, ...props }) => <h2 {...props}>{renderChildrenWithMentions(children, onOpenFilePath)}</h2>,
+          h3: ({ children, node: _node, ...props }) => <h3 {...props}>{renderChildrenWithMentions(children, onOpenFilePath)}</h3>,
+          h4: ({ children, node: _node, ...props }) => <h4 {...props}>{renderChildrenWithMentions(children, onOpenFilePath)}</h4>,
+          h5: ({ children, node: _node, ...props }) => <h5 {...props}>{renderChildrenWithMentions(children, onOpenFilePath)}</h5>,
+          h6: ({ children, node: _node, ...props }) => <h6 {...props}>{renderChildrenWithMentions(children, onOpenFilePath)}</h6>,
+          p: ({ children, node: _node, ...props }) => <p {...props}>{renderChildrenWithMentions(children, onOpenFilePath)}</p>,
+          li: ({ children, node: _node, ...props }) => <li {...props}>{renderChildrenWithMentions(children, onOpenFilePath)}</li>,
+          th: ({ children, node: _node, ...props }) => <th {...props}>{renderChildrenWithMentions(children, onOpenFilePath)}</th>,
+          td: ({ children, node: _node, ...props }) => <td {...props}>{renderChildrenWithMentions(children, onOpenFilePath)}</td>,
           a: ({ href, children, title }) => {
+            const filePath = typeof href === 'string' ? normalizeDetectedFilePath(href) : null;
+            if (filePath && onOpenFilePath) {
+              const label = extractMarkdownTextContent(children).trim() || href || filePath;
+              return <FilePathButton path={filePath} displayText={label} onOpenFilePath={onOpenFilePath} />;
+            }
+
             const isExternal = typeof href === 'string' && !href.startsWith('#');
             return (
               <a
@@ -203,8 +217,8 @@ function MarkdownText({ text }: { text: string }) {
               <table>{children}</table>
             </div>
           ),
-          pre: ({ children }) => <MarkdownCodeBlock>{children}</MarkdownCodeBlock>,
-          code: ({ className, children }) => <InlineMarkdownCode className={className}>{children}</InlineMarkdownCode>,
+          pre: ({ children }) => <MarkdownCodeBlock onOpenFilePath={onOpenFilePath}>{children}</MarkdownCodeBlock>,
+          code: ({ className, children }) => <InlineMarkdownCode className={className} onOpenFilePath={onOpenFilePath}>{children}</InlineMarkdownCode>,
           img: ({ src, alt, title }) => src
             ? <img src={src} alt={alt ?? ''} title={title} loading="lazy" />
             : <span className="text-dim">{alt ?? 'image'}</span>,
@@ -223,8 +237,8 @@ function MarkdownText({ text }: { text: string }) {
   );
 }
 
-function renderMarkdownText(text: string) {
-  return <MarkdownText text={text} />;
+function renderMarkdownText(text: string, onOpenFilePath?: (path: string) => void) {
+  return <MarkdownText text={text} onOpenFilePath={onOpenFilePath} />;
 }
 
 function parseSkillContentSections(content: string): { relativeTo: string | null; body: string } {
@@ -242,9 +256,11 @@ function parseSkillContentSections(content: string): { relativeTo: string | null
 function SkillInvocationCard({
   skillBlock,
   className,
+  onOpenFilePath,
 }: {
   skillBlock: ParsedSkillBlock;
   className?: string;
+  onOpenFilePath?: (path: string) => void;
 }) {
   const { relativeTo, body } = parseSkillContentSections(skillBlock.content);
 
@@ -256,28 +272,28 @@ function SkillInvocationCard({
       </summary>
       <div className="ui-skill-invocation-body">
         {relativeTo && <p className="ui-skill-invocation-meta">References resolve relative to {relativeTo}</p>}
-        {renderMarkdownText(`**${skillBlock.name}**\n\n${body}`)}
+        {renderMarkdownText(`**${skillBlock.name}**\n\n${body}`, onOpenFilePath)}
       </div>
     </details>
   );
 }
 
-function renderSkillAwareText(text: string) {
+function renderSkillAwareText(text: string, onOpenFilePath?: (path: string) => void) {
   const skillBlock = parseSkillBlock(text);
   if (!skillBlock) {
-    return renderMarkdownText(text);
+    return renderMarkdownText(text, onOpenFilePath);
   }
 
   return (
     <div className="space-y-3">
-      <SkillInvocationCard skillBlock={skillBlock} />
-      {skillBlock.userMessage && renderMarkdownText(skillBlock.userMessage)}
+      <SkillInvocationCard skillBlock={skillBlock} onOpenFilePath={onOpenFilePath} />
+      {skillBlock.userMessage && renderMarkdownText(skillBlock.userMessage, onOpenFilePath)}
     </div>
   );
 }
 
-export function renderText(text: string) {
-  return renderSkillAwareText(text);
+export function renderText(text: string, options?: { onOpenFilePath?: (path: string) => void }) {
+  return renderSkillAwareText(text, options?.onOpenFilePath);
 }
 
 function formatSummaryPreviewLine(line: string) {
@@ -658,12 +674,15 @@ function AskUserQuestionToolBlock({
       return;
     }
 
+    const nextValues = [value];
     const nextAnswers = {
       ...answers,
-      [question.id]: [value],
+      [question.id]: nextValues,
     };
     setAnswers(nextAnswers);
-    advanceAfterAnswer(questionIndex, nextAnswers);
+    if (shouldAdvanceAskUserQuestionAfterSelection(question, nextValues)) {
+      advanceAfterAnswer(questionIndex, nextAnswers);
+    }
   }, [advanceAfterAnswer, answers, presentation.questions]);
 
   const applyCheckAnswer = useCallback((questionIndex: number, value: string) => {
@@ -683,7 +702,7 @@ function AskUserQuestionToolBlock({
     };
 
     setAnswers(nextAnswers);
-    if (!alreadySelected) {
+    if (shouldAdvanceAskUserQuestionAfterSelection(question, nextValues)) {
       advanceAfterAnswer(questionIndex, nextAnswers);
     }
   }, [advanceAfterAnswer, answers, presentation.questions]);
@@ -1015,7 +1034,7 @@ function AskUserQuestionToolBlock({
                 )}
 
                 <p className="mt-2.5 text-[10px] text-dim">
-                  1-9 selects + next · n/p switches questions · ↑/↓ moves · Esc exits · send a normal message to skip
+                  1-9 selects · n/p switches questions · ↑/↓ moves · Esc exits · send a normal message to skip
                 </p>
               </>
             )
@@ -1040,6 +1059,7 @@ function ToolBlock({
   activeArtifactId,
   onOpenRun,
   activeRunId,
+  onOpenFilePath,
   onHydrateMessage,
   hydratingMessageBlockIds,
   messages,
@@ -1053,6 +1073,7 @@ function ToolBlock({
   activeArtifactId?: string | null;
   onOpenRun?: (runId: string) => void;
   activeRunId?: string | null;
+  onOpenFilePath?: (path: string) => void;
   onHydrateMessage?: (blockId: string) => Promise<void> | void;
   hydratingMessageBlockIds?: ReadonlySet<string>;
   messages?: MessageBlock[];
@@ -1164,9 +1185,11 @@ function ToolBlock({
         <div className="border-t border-inherit">
           <div className="px-3 py-2.5 bg-black/5">
             <p className="text-[10px] uppercase tracking-wider opacity-40 mb-1">input</p>
-            <pre className="whitespace-pre-wrap break-all text-[11px] leading-relaxed opacity-75">
-              {JSON.stringify(block.input, null, 2)}
-            </pre>
+            <FilePathPreformattedText
+              text={JSON.stringify(block.input, null, 2)}
+              onOpenFilePath={onOpenFilePath}
+              className="whitespace-pre-wrap break-all text-[11px] leading-relaxed opacity-75"
+            />
           </div>
           {(isRunning || output || outputDeferred) && (
             <div className={cx('px-3 py-2.5', isRunning && output && 'max-h-40 overflow-y-auto')}>
@@ -1186,9 +1209,11 @@ function ToolBlock({
                 )}
               </div>
               {output ? (
-                <pre className="whitespace-pre-wrap break-all text-[11px] leading-relaxed opacity-75">
-                  {output}
-                </pre>
+                <FilePathPreformattedText
+                  text={output}
+                  onOpenFilePath={onOpenFilePath}
+                  className="whitespace-pre-wrap break-all text-[11px] leading-relaxed opacity-75"
+                />
               ) : isRunning ? (
                 <p className="text-[11px] italic leading-relaxed opacity-55">Waiting for output…</p>
               ) : outputDeferred ? (
@@ -1288,6 +1313,7 @@ function TraceClusterBlock({
   activeArtifactId,
   onOpenRun,
   activeRunId,
+  onOpenFilePath,
   onResume,
   resumeBusy,
   resumeTitle,
@@ -1300,6 +1326,7 @@ function TraceClusterBlock({
   activeArtifactId?: string | null;
   onOpenRun?: (runId: string) => void;
   activeRunId?: string | null;
+  onOpenFilePath?: (path: string) => void;
   onResume?: () => Promise<void> | void;
   resumeBusy?: boolean;
   resumeTitle?: string | null;
@@ -1382,12 +1409,13 @@ function TraceClusterBlock({
                     activeArtifactId={activeArtifactId}
                     onOpenRun={onOpenRun}
                     activeRunId={activeRunId}
+                    onOpenFilePath={onOpenFilePath}
                   />
                 );
               case 'subagent':
                 return <SubagentBlock key={`subagent-${index}`} block={block} />;
               case 'error':
-                return <ErrorBlock key={`error-${index}`} block={block} />;
+                return <ErrorBlock key={`error-${index}`} block={block} onOpenFilePath={onOpenFilePath} />;
               default:
                 return null;
             }
@@ -1543,12 +1571,14 @@ function ErrorBlock({
   resumeBusy,
   resumeTitle,
   resumeLabel,
+  onOpenFilePath,
 }: {
   block: Extract<MessageBlock, { type: 'error' }>;
   onResume?: () => Promise<void> | void;
   resumeBusy?: boolean;
   resumeTitle?: string | null;
   resumeLabel?: string;
+  onOpenFilePath?: (path: string) => void;
 }) {
   return (
     <SurfacePanel className="border-danger/30 bg-danger/5 px-3 py-2.5 text-[12px] font-mono flex gap-2 items-start">
@@ -1556,7 +1586,7 @@ function ErrorBlock({
       <div className="flex-1 min-w-0 space-y-2">
         <div>
           {block.tool && <span className="text-danger/70 font-semibold">{block.tool} · </span>}
-          <span className="text-danger/85 leading-relaxed">{block.message}</span>
+          <span className="text-danger/85 leading-relaxed">{renderFilePathTextFragments(block.message, { onOpenFilePath, keyPrefix: 'error' })}</span>
         </div>
         <ResumeConversationAction
           onResume={onResume}
@@ -1724,12 +1754,14 @@ function UserMessage({
   onRewind,
   onHydrateMessage,
   hydratingMessageBlockIds,
+  onOpenFilePath,
 }: {
   block: Extract<MessageBlock, { type: 'user' }>;
   onCheckpoint?: () => Promise<void> | void;
   onRewind?: () => Promise<void> | void;
   onHydrateMessage?: (blockId: string) => Promise<void> | void;
   hydratingMessageBlockIds?: ReadonlySet<string>;
+  onOpenFilePath?: (path: string) => void;
 }) {
   const hasText = block.text.trim().length > 0;
   const skillBlock = hasText ? parseSkillBlock(block.text) : null;
@@ -1765,12 +1797,12 @@ function UserMessage({
           )}
           {skillBlock ? (
             <div className="space-y-2 px-1.5 pb-0.5">
-              <SkillInvocationCard skillBlock={skillBlock} className="ui-skill-invocation-user" />
-              {skillBlock.userMessage && renderMarkdownText(skillBlock.userMessage)}
+              <SkillInvocationCard skillBlock={skillBlock} className="ui-skill-invocation-user" onOpenFilePath={onOpenFilePath} />
+              {skillBlock.userMessage && renderMarkdownText(skillBlock.userMessage, onOpenFilePath)}
             </div>
           ) : hasText ? (
             <div className="px-1.5 pb-0.5">
-              {renderMarkdownText(block.text)}
+              {renderMarkdownText(block.text, onOpenFilePath)}
             </div>
           ) : null}
         </div>
@@ -1787,12 +1819,14 @@ function AssistantMessage({
   onFork,
   onRewind,
   onCheckpoint,
+  onOpenFilePath,
   showCursor = false,
 }: {
   block: Extract<MessageBlock, { type: 'text' }>;
   onFork?: () => Promise<void> | void;
   onRewind?: () => Promise<void> | void;
   onCheckpoint?: () => Promise<void> | void;
+  onOpenFilePath?: (path: string) => void;
   showCursor?: boolean;
 }) {
   const shouldShowCursor = showCursor || !!block.streaming;
@@ -1804,7 +1838,7 @@ function AssistantMessage({
       </div>
       <div className="flex-1 min-w-0 space-y-1.5">
         <div className="ui-message-card-assistant text-primary space-y-1">
-          {renderText(block.text)}
+          {renderText(block.text, { onOpenFilePath })}
           {shouldShowCursor && (
             <span
               className="inline-block w-[2px] h-[14px] bg-accent ml-0.5 rounded-sm"
@@ -1823,8 +1857,10 @@ function AssistantMessage({
 
 function ContextMessage({
   block,
+  onOpenFilePath,
 }: {
   block: Extract<MessageBlock, { type: 'context' }>;
+  onOpenFilePath?: (path: string) => void;
 }) {
   const label = formatInjectedContextLabel(block.customType);
 
@@ -1840,7 +1876,7 @@ function ContextMessage({
           <p className="ui-message-meta">{timeAgo(block.ts)}</p>
         </div>
         <div className="pt-2 text-primary">
-          {renderText(block.text)}
+          {renderText(block.text, { onOpenFilePath })}
         </div>
       </div>
     </div>
@@ -1849,8 +1885,10 @@ function ContextMessage({
 
 function SummaryMessage({
   block,
+  onOpenFilePath,
 }: {
   block: Extract<MessageBlock, { type: 'summary' }>;
+  onOpenFilePath?: (path: string) => void;
 }) {
   const isCompaction = block.kind === 'compaction';
   const label = isCompaction ? 'Context compacted' : 'Branch summary';
@@ -1890,7 +1928,7 @@ function SummaryMessage({
               {shouldCollapse && !expanded ? (
                 <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-primary">{previewText}</p>
               ) : (
-                renderText(block.text)
+                renderText(block.text, { onOpenFilePath })
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-0.5">
@@ -2062,6 +2100,7 @@ interface ChatViewProps {
   activeArtifactId?: string | null;
   onOpenRun?: (runId: string) => void;
   activeRunId?: string | null;
+  onOpenFilePath?: (path: string) => void;
   onSubmitAskUserQuestion?: (presentation: AskUserQuestionPresentation, answers: AskUserQuestionAnswers) => Promise<void> | void;
   askUserQuestionDisplayMode?: 'inline' | 'composer';
   onResumeConversation?: () => Promise<void> | void;
@@ -2085,6 +2124,7 @@ export const ChatView = memo(function ChatView({
   activeArtifactId,
   onOpenRun,
   activeRunId,
+  onOpenFilePath,
   onSubmitAskUserQuestion,
   askUserQuestionDisplayMode = 'inline',
   onResumeConversation,
@@ -2228,6 +2268,7 @@ export const ChatView = memo(function ChatView({
             activeArtifactId={activeArtifactId}
             onOpenRun={onOpenRun}
             activeRunId={activeRunId}
+            onOpenFilePath={onOpenFilePath}
             onResume={isTailItem ? onResumeConversation : undefined}
             resumeBusy={resumeConversationBusy}
             resumeTitle={resumeConversationTitle}
@@ -2257,6 +2298,7 @@ export const ChatView = memo(function ChatView({
               onRewind={onRewindMessage ? () => onRewindMessage(absoluteIndex) : undefined}
               onHydrateMessage={onHydrateMessage}
               hydratingMessageBlockIds={hydratingMessageBlockIds}
+              onOpenFilePath={onOpenFilePath}
             />
           );
         case 'text':
@@ -2267,12 +2309,13 @@ export const ChatView = memo(function ChatView({
               onCheckpoint={onCheckpointMessage ? () => onCheckpointMessage(block, absoluteIndex) : undefined}
               onRewind={onRewindMessage ? () => onRewindMessage(absoluteIndex) : undefined}
               onFork={onForkMessage ? () => onForkMessage(absoluteIndex) : undefined}
+              onOpenFilePath={onOpenFilePath}
             />
           );
         case 'context':
-          return <ContextMessage block={block} />;
+          return <ContextMessage block={block} onOpenFilePath={onOpenFilePath} />;
         case 'summary':
-          return <SummaryMessage block={block} />;
+          return <SummaryMessage block={block} onOpenFilePath={onOpenFilePath} />;
         case 'thinking':
           return <ThinkingBlock block={block} autoOpen={autoOpen} />;
         case 'tool_use':
@@ -2284,6 +2327,7 @@ export const ChatView = memo(function ChatView({
               activeArtifactId={activeArtifactId}
               onOpenRun={onOpenRun}
               activeRunId={activeRunId}
+              onOpenFilePath={onOpenFilePath}
               onHydrateMessage={onHydrateMessage}
               hydratingMessageBlockIds={hydratingMessageBlockIds}
               messages={messages}
@@ -2304,6 +2348,7 @@ export const ChatView = memo(function ChatView({
               resumeBusy={resumeConversationBusy}
               resumeTitle={resumeConversationTitle}
               resumeLabel={resumeConversationLabel}
+              onOpenFilePath={onOpenFilePath}
             />
           );
         default:
@@ -2322,7 +2367,7 @@ export const ChatView = memo(function ChatView({
         {el}
       </div>
     ) : null;
-  }, [activeArtifactId, activeRunId, askUserQuestionDisplayMode, contentVisibilityStyle, hydratingMessageBlockIds, isStreaming, messageIndexOffset, messages, messages.length, onCheckpointMessage, onForkMessage, onHydrateMessage, onOpenArtifact, onOpenRun, onSubmitAskUserQuestion, onResumeConversation, onRewindMessage, renderItems.length, resumeConversationBusy, resumeConversationLabel, resumeConversationTitle]);
+  }, [activeArtifactId, activeRunId, askUserQuestionDisplayMode, contentVisibilityStyle, hydratingMessageBlockIds, isStreaming, messageIndexOffset, messages, messages.length, onCheckpointMessage, onForkMessage, onHydrateMessage, onOpenArtifact, onOpenFilePath, onOpenRun, onSubmitAskUserQuestion, onResumeConversation, onRewindMessage, renderItems.length, resumeConversationBusy, resumeConversationLabel, resumeConversationTitle]);
 
   const visibleChunkRange = useMemo(() => {
     if (!shouldWindowTranscript || chunkLayouts.length === 0) {

@@ -1,73 +1,54 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import CodeMirror from '@uiw/react-codemirror';
-import type { Extension } from '@codemirror/state';
-import { unifiedMergeView } from '@codemirror/merge';
-import { EditorView } from '@codemirror/view';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { WorkspaceFileContent } from '../components/WorkspaceFileContent';
+import { EmptyState, ErrorState, LoadingState, PageHeader, PageHeading, Pill, ToolbarButton } from '../components/ui';
 import { useApi } from '../hooks';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
-import { useTheme } from '../theme';
-import type { WorkspaceFileDetail } from '../types';
 import {
   baseName,
   buildWorkspaceSearch,
   changeLabel,
   changeTone,
-  editorChromeTheme,
   flattenFiles,
   formatFileSize,
-  languageExtensionForPath,
+  normalizeWorkspaceRequestedFilePath,
   readWorkspaceCwdFromSearch,
   readWorkspaceFileFromSearch,
   summarizeChanges,
   treeContainsPath,
 } from '../workspaceBrowser';
 import { emitWorkspaceChanged, setWorkspaceEditorDirty } from '../workspaceEvents';
-import { EmptyState, ErrorState, LoadingState, PageHeader, PageHeading, Pill, ToolbarButton } from '../components/ui';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-default bg-base px-3 py-2 text-[13px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
 const WORKSPACE_REFRESH_THROTTLE_MS = 1000;
 
-function fileBlockedReason(detail: WorkspaceFileDetail | null): string | null {
-  if (!detail) {
-    return null;
-  }
-
-  if (detail.binary) {
-    return 'This file looks binary and cannot be edited here yet.';
-  }
-
-  if (detail.tooLarge) {
-    return `This file is larger than ${formatFileSize(512 * 1024)} and was not loaded into the editor.`;
-  }
-
-  if (!detail.exists) {
-    return 'This file was deleted in the working tree. Review the diff below to inspect the removal.';
-  }
-
-  return null;
-}
-
-function RawDiffFallback({ diff }: { diff: string }) {
-  return <pre className="max-h-[24rem] overflow-auto rounded-xl border border-border-subtle bg-surface/30 px-4 py-3 font-mono text-[11px] leading-6 text-secondary whitespace-pre-wrap break-words">{diff}</pre>;
-}
-
 export function WorkspacePage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { theme } = useTheme();
 
   const requestedCwd = useMemo(() => readWorkspaceCwdFromSearch(location.search), [location.search]);
-  const selectedFilePath = useMemo(() => readWorkspaceFileFromSearch(location.search), [location.search]);
+  const requestedFilePath = useMemo(() => readWorkspaceFileFromSearch(location.search), [location.search]);
 
   const snapshotApi = useApi(() => api.workspaceSnapshot(requestedCwd ?? undefined), requestedCwd ?? 'default');
   const snapshot = snapshotApi.data;
-  const fileApi = useApi<WorkspaceFileDetail | null>(
-    () => (selectedFilePath ? api.workspaceFile(selectedFilePath, snapshot?.cwd ?? requestedCwd ?? undefined) : Promise.resolve(null)),
-    `${snapshot?.root ?? 'no-root'}::${selectedFilePath ?? 'no-file'}`,
+  const fileApi = useApi(
+    () => (requestedFilePath ? api.workspaceFile(requestedFilePath, snapshot?.cwd ?? requestedCwd ?? undefined) : Promise.resolve(null)),
+    `${snapshot?.root ?? 'no-root'}::${requestedFilePath ?? 'no-file'}`,
   );
   const fileDetail = fileApi.data;
+
+  const selectedFilePath = useMemo(() => {
+    if (fileDetail?.relativePath) {
+      return fileDetail.relativePath;
+    }
+
+    if (!snapshot || !requestedFilePath) {
+      return requestedFilePath;
+    }
+
+    return normalizeWorkspaceRequestedFilePath(snapshot.root, requestedFilePath);
+  }, [fileDetail?.relativePath, requestedFilePath, snapshot]);
 
   const [cwdDraft, setCwdDraft] = useState(requestedCwd ?? '');
   const [draftContent, setDraftContent] = useState('');
@@ -78,6 +59,10 @@ export function WorkspacePage() {
   const [workspaceActionError, setWorkspaceActionError] = useState<string | null>(null);
   const lastWorkspaceRefreshAtRef = useRef(0);
 
+  const openWorkspaceSearch = useCallback((patch: { cwd?: string | null; file?: string | null }, replace = false) => {
+    navigate(`/workspace${buildWorkspaceSearch(location.search, patch)}`, { replace });
+  }, [location.search, navigate]);
+
   useEffect(() => {
     setCwdDraft(requestedCwd ?? snapshot?.cwd ?? '');
   }, [requestedCwd, snapshot?.cwd]);
@@ -87,20 +72,30 @@ export function WorkspacePage() {
       return;
     }
 
+    if (requestedFilePath && fileApi.loading && !fileDetail) {
+      return;
+    }
+
     if (selectedFilePath && treeContainsPath(snapshot.tree, selectedFilePath)) {
       return;
     }
 
     const fallbackPath = snapshot.changes[0]?.relativePath ?? flattenFiles(snapshot.tree)[0]?.relativePath ?? null;
     if (fallbackPath) {
-      navigate(`/workspace${buildWorkspaceSearch(location.search, { file: fallbackPath })}`, { replace: true });
+      openWorkspaceSearch({ file: fallbackPath }, true);
       return;
     }
 
-    if (selectedFilePath) {
-      navigate(`/workspace${buildWorkspaceSearch(location.search, { file: null })}`, { replace: true });
+    if (requestedFilePath) {
+      openWorkspaceSearch({ file: null }, true);
     }
-  }, [location.search, navigate, selectedFilePath, snapshot]);
+  }, [fileApi.loading, fileDetail, openWorkspaceSearch, requestedFilePath, selectedFilePath, snapshot]);
+
+  useEffect(() => {
+    if (fileDetail?.relativePath && requestedFilePath && fileDetail.relativePath !== requestedFilePath) {
+      openWorkspaceSearch({ file: fileDetail.relativePath }, true);
+    }
+  }, [fileDetail?.relativePath, openWorkspaceSearch, requestedFilePath]);
 
   useEffect(() => {
     if (fileDetail?.content !== null && fileDetail?.content !== undefined) {
@@ -119,21 +114,6 @@ export function WorkspacePage() {
     () => fileDetail?.content !== null && fileDetail?.content !== undefined && draftContent !== fileDetail.content,
     [draftContent, fileDetail],
   );
-  const inlineDiffOriginalContent = useMemo(() => {
-    if (!fileDetail || fileDetail.binary || fileDetail.tooLarge || !fileDetail.exists) {
-      return null;
-    }
-
-    if (fileDetail.originalContent !== null) {
-      return fileDetail.originalContent;
-    }
-
-    if (draftDirty && fileDetail.content !== null) {
-      return fileDetail.content;
-    }
-
-    return null;
-  }, [draftDirty, fileDetail]);
 
   useEffect(() => {
     setWorkspaceEditorDirty(draftDirty);
@@ -206,25 +186,6 @@ export function WorkspacePage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [fileDetail, handleSave, selectedFilePath]);
 
-  const editorExtensions = useMemo(() => {
-    const extensions: Extension[] = [editorChromeTheme(theme === 'dark'), EditorView.lineWrapping];
-    const languageExtension = selectedFilePath ? languageExtensionForPath(selectedFilePath) : null;
-    if (languageExtension) {
-      extensions.push(languageExtension);
-    }
-    if (inlineDiffOriginalContent !== null) {
-      extensions.push(unifiedMergeView({
-        original: inlineDiffOriginalContent,
-        gutter: true,
-        highlightChanges: true,
-        allowInlineDiffs: true,
-        syntaxHighlightDeletions: false,
-        mergeControls: false,
-      }));
-    }
-    return extensions;
-  }, [inlineDiffOriginalContent, selectedFilePath, theme]);
-
   const workspaceMeta = useMemo(() => {
     if (!snapshot) {
       return 'Loading workspace…';
@@ -238,27 +199,6 @@ export function WorkspacePage() {
     ].join(' · ');
   }, [snapshot]);
 
-  const blockedReason = fileBlockedReason(fileDetail);
-  const inlineDiffDescription = useMemo(() => {
-    if (inlineDiffOriginalContent === null || !fileDetail) {
-      return null;
-    }
-
-    if (fileDetail.originalContent !== null) {
-      if (fileDetail.change === 'added' || fileDetail.change === 'untracked') {
-        return draftDirty
-          ? 'Inline diff markers show your draft as a new file against an empty baseline.'
-          : 'Inline diff markers show this file as a new addition against an empty baseline.';
-      }
-
-      return draftDirty
-        ? 'Inline diff markers compare your draft with the committed baseline.'
-        : 'Inline diff markers compare this file with the committed baseline.';
-    }
-
-    return 'Inline diff markers show unsaved edits against the last saved file on disk.';
-  }, [draftDirty, fileDetail, inlineDiffOriginalContent]);
-  const showRawDiffFallback = Boolean(fileDetail?.diff) && inlineDiffOriginalContent === null;
   const showingFileLoadingState = Boolean(selectedFilePath && fileApi.loading && fileDetail?.relativePath !== selectedFilePath);
 
   const handleWorkspaceInvalidation = useCallback(async () => {
@@ -292,10 +232,6 @@ export function WorkspacePage() {
   }, [draftDirty, fileApi, selectedFilePath, snapshotApi]);
 
   useInvalidateOnTopics(['workspace'], handleWorkspaceInvalidation);
-
-  const openWorkspaceSearch = useCallback((patch: { cwd?: string | null; file?: string | null }, replace = false) => {
-    navigate(`/workspace${buildWorkspaceSearch(location.search, patch)}`, { replace });
-  }, [location.search, navigate]);
 
   const handleWorkspaceSubmit = useCallback((event?: React.FormEvent) => {
     event?.preventDefault();
@@ -456,38 +392,15 @@ export function WorkspacePage() {
                   Files changed on disk. Save or reload this file to sync with the latest workspace state.
                 </p>
               )}
-              {inlineDiffDescription && <p className="mt-2 text-[11px] text-dim">{inlineDiffDescription}</p>}
             </div>
 
-            <div className="min-h-0 flex-1 overflow-hidden">
-              {blockedReason ? (
-                <div className="flex h-full items-center justify-center px-8 py-10">
-                  <EmptyState title="Editor unavailable" body={blockedReason} />
-                </div>
-              ) : (
-                <div className="h-full bg-panel">
-                  <CodeMirror
-                    value={draftContent}
-                    onChange={setDraftContent}
-                    extensions={editorExtensions}
-                    className="h-full"
-                  />
-                </div>
-              )}
-            </div>
-
-            {showRawDiffFallback && (
-              <div className="shrink-0 border-t border-border-subtle bg-surface/20 px-4 py-3 space-y-3">
-                <div className="space-y-1">
-                  <p className="ui-section-label">Patch</p>
-                  <p className="text-[11px] text-dim">
-                    The inline editor diff is unavailable for this file, so the raw patch is shown instead.
-                  </p>
-                </div>
-
-                <RawDiffFallback diff={fileDetail.diff ?? ''} />
-              </div>
-            )}
+            <WorkspaceFileContent
+              detail={fileDetail}
+              value={draftContent}
+              draftDirty={draftDirty}
+              onChange={setDraftContent}
+              onOpenFilePath={(nextPath) => openWorkspaceSearch({ file: nextPath })}
+            />
           </div>
         )}
       </div>

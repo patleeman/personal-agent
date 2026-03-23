@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync, watch, writeFileSync, type Dirent, type FSWatcher } from 'node:fs';
+import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { invalidateAppTopics } from './appEvents.js';
 import { readGitRepoInfo, readGitStatusSummary } from './gitStatus.js';
@@ -63,6 +64,23 @@ export interface WorkspaceFileDetail {
 
 const MAX_TEXT_FILE_BYTES = 512 * 1024;
 const MAX_FALLBACK_FILE_COUNT = 3_000;
+const WORKSPACE_PREVIEW_MIME_TYPES = new Map<string, string>([
+  ['.png', 'image/png'],
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+  ['.gif', 'image/gif'],
+  ['.webp', 'image/webp'],
+  ['.svg', 'image/svg+xml'],
+  ['.bmp', 'image/bmp'],
+  ['.ico', 'image/x-icon'],
+  ['.pdf', 'application/pdf'],
+  ['.mp4', 'video/mp4'],
+  ['.webm', 'video/webm'],
+  ['.mov', 'video/quicktime'],
+  ['.mp3', 'audio/mpeg'],
+  ['.wav', 'audio/wav'],
+  ['.ogg', 'audio/ogg'],
+]);
 const WORKSPACE_INVALIDATION_DEBOUNCE_MS = 250;
 const WORKSPACE_INVALIDATION_COOLDOWN_MS = 1_500;
 const WORKSPACE_EVENT_DEDUP_WINDOW_MS = 2_000;
@@ -721,8 +739,19 @@ function readWorkspaceDiff(repoRoot: string | null, relativePath: string, change
   return null;
 }
 
+function resolveRequestedWorkspaceFilePath(root: string, filePath: string): string {
+  const normalizedPath = filePath.trim();
+  if (normalizedPath.startsWith('~/')) {
+    return resolve(homedir(), normalizedPath.slice(2));
+  }
+
+  return isAbsolute(normalizedPath)
+    ? resolve(normalizedPath)
+    : resolve(root, normalizedPath);
+}
+
 function resolveWorkspaceFilePath(root: string, filePath: string): { absolutePath: string; relativePath: string } {
-  const absolutePath = resolve(root, filePath);
+  const absolutePath = resolveRequestedWorkspaceFilePath(root, filePath);
   if (!isInsideRoot(root, absolutePath)) {
     throw new Error(`Path is outside the workspace root: ${filePath}`);
   }
@@ -811,6 +840,26 @@ export function writeWorkspaceFile(input: { cwd: string; path: string; content: 
   mkdirSync(dirname(absolutePath), { recursive: true });
   writeFileSync(absolutePath, input.content, 'utf-8');
   return readWorkspaceFile({ cwd: workspace.cwd, path: absolutePath });
+}
+
+export function readWorkspacePreviewAsset(input: { cwd: string; path: string }): { filePath: string; mimeType: string; root: string } {
+  const workspace = resolveWorkspaceRoot(input.cwd);
+  const { absolutePath } = resolveWorkspaceFilePath(workspace.root, input.path);
+  if (!existsSync(absolutePath)) {
+    throw new Error(`File does not exist: ${input.path}`);
+  }
+
+  const normalizedPath = absolutePath.toLowerCase();
+  const mimeType = [...WORKSPACE_PREVIEW_MIME_TYPES.entries()].find(([extension]) => normalizedPath.endsWith(extension))?.[1] ?? null;
+  if (!mimeType) {
+    throw new Error('Preview unavailable for this file type.');
+  }
+
+  return {
+    filePath: absolutePath,
+    mimeType,
+    root: workspace.root,
+  };
 }
 
 export function workspaceRootLabel(snapshot: WorkspaceSnapshot): string {

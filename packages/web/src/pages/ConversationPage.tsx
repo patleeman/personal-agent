@@ -2,6 +2,7 @@ import { Suspense, lazy, useState, useRef, useEffect, useLayoutEffect, useCallba
 import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { ChatView } from '../components/chat/ChatView';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
+import { ConversationFileModal } from '../components/ConversationFileModal';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
 import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationTreeSnapshot, DeferredResumeSummary, DurableRunRecord, ExecutionTargetSummary, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, RemoteConversationConnectionStreamEvent } from '../types';
@@ -13,6 +14,7 @@ import { normalizePendingQueueItems, useSessionStream } from '../hooks/useSessio
 import { api } from '../api';
 import { appendComposerHistory, readComposerHistory } from '../composerHistory';
 import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversationArtifacts';
+import { getConversationFileTargetFromSearch, resolveConversationFileTarget, setConversationFileTargetInSearch } from '../conversationFiles';
 import { createConversationLiveRunId, getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversationRuns';
 import { formatContextBreakdownLabel, formatContextUsageLabel, formatContextWindowLabel, formatLiveSessionLabel, formatThinkingLevelLabel } from '../conversationHeader';
 import {
@@ -24,6 +26,7 @@ import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE } from '../conversa
 import { emitConversationProjectsChanged, CONVERSATION_PROJECTS_CHANGED_EVENT } from '../conversationProjectEvents';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { THINKING_LEVEL_OPTIONS, groupModelsByProvider } from '../modelPreferences';
+import { buildWorkspaceSearch } from '../workspaceBrowser';
 import { useAppData, useAppEvents, useLiveTitles } from '../contexts';
 import { filterModelPickerItems } from '../modelPicker';
 import { emitProjectsChanged } from '../projectEvents';
@@ -41,6 +44,7 @@ import {
   moveAskUserQuestionIndex,
   resolveAskUserQuestionDefaultOptionIndex,
   resolveAskUserQuestionOptionHotkey,
+  shouldAdvanceAskUserQuestionAfterSelection,
   type AskUserQuestionAnswers,
   type AskUserQuestionPresentation,
 } from '../askUserQuestions';
@@ -772,6 +776,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const navigate = useNavigate();
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
   const selectedRunId = getConversationRunIdFromSearch(location.search);
+  const selectedFileTarget = getConversationFileTargetFromSearch(location.search);
   const { versions } = useAppEvents();
   const { projects, tasks, sessions, setProjects, setSessions } = useAppData();
 
@@ -1580,6 +1585,37 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     location: selectedExecutionTarget ? 'remote' as const : 'local' as const,
     target: selectedExecutionTarget,
   }), [id, selectedExecutionTarget, selectedExecutionTargetId]);
+  const openConversationFilePath = useCallback((path: string) => {
+    const target = resolveConversationFileTarget(path, currentSessionMeta?.cwd ?? null);
+    if (!target) {
+      return;
+    }
+
+    if (selectedFileTarget && target.cwd === selectedFileTarget.cwd && target.file === selectedFileTarget.file) {
+      return;
+    }
+
+    navigate({
+      pathname: location.pathname,
+      search: setConversationFileTargetInSearch(location.search, target),
+    });
+  }, [currentSessionMeta?.cwd, location.pathname, location.search, navigate, selectedFileTarget]);
+  const closeConversationFile = useCallback(() => {
+    if (!selectedFileTarget) {
+      return;
+    }
+
+    navigate({
+      pathname: location.pathname,
+      search: setConversationFileTargetInSearch(location.search, null),
+    });
+  }, [location.pathname, location.search, navigate, selectedFileTarget]);
+  const selectedFileWorkspaceHref = useMemo(
+    () => selectedFileTarget
+      ? `/workspace${buildWorkspaceSearch('', { cwd: selectedFileTarget.cwd, file: selectedFileTarget.file })}`
+      : '/workspace',
+    [selectedFileTarget],
+  );
   const executionEnvironmentSummary = useMemo(
     () => buildExecutionEnvironmentSummary(selectedExecutionTarget),
     [selectedExecutionTarget],
@@ -1873,18 +1909,21 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       };
 
       setComposerQuestionAnswers(nextAnswers);
-      if (!alreadySelected) {
+      if (shouldAdvanceAskUserQuestionAfterSelection(question, nextValues)) {
         advanceComposerQuestionAfterAnswer(questionIndex, nextAnswers);
       }
       return;
     }
 
+    const nextValues = [option.value];
     const nextAnswers = {
       ...composerQuestionAnswers,
-      [question.id]: [option.value],
+      [question.id]: nextValues,
     };
     setComposerQuestionAnswers(nextAnswers);
-    advanceComposerQuestionAfterAnswer(questionIndex, nextAnswers);
+    if (shouldAdvanceAskUserQuestionAfterSelection(question, nextValues)) {
+      advanceComposerQuestionAfterAnswer(questionIndex, nextAnswers);
+    }
   }, [advanceComposerQuestionAfterAnswer, composerQuestionAnswers, composerQuestionSubmitting, pendingAskUserQuestion]);
 
   const submitComposerQuestionIfReady = useCallback(async () => {
@@ -3636,6 +3675,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               activeArtifactId={selectedArtifactId}
               onOpenRun={openRun}
               activeRunId={selectedRunId}
+              onOpenFilePath={!draft && !selectedExecutionTargetId ? openConversationFilePath : undefined}
               onSubmitAskUserQuestion={submitAskUserQuestion}
               askUserQuestionDisplayMode="composer"
               onResumeConversation={conversationResumeState.canResume ? resumeConversation : undefined}
@@ -3731,6 +3771,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     messageIndexOffset,
     openArtifact,
     openRun,
+    openConversationFilePath,
     realMessages,
     submitAskUserQuestion,
     requestedFocusMessageIndex,
@@ -3743,6 +3784,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     resumeConversationBusy,
     saveMemoryFromMessage,
     selectedArtifactId,
+    selectedExecutionTargetId,
     selectedRunId,
     sessionLoading,
     shouldRenderConversationRail,
@@ -4381,6 +4423,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             onClose={() => setDrawingsPickerOpen(false)}
           />
         </Suspense>
+      )}
+
+      {selectedFileTarget && (
+        <ConversationFileModal
+          target={selectedFileTarget}
+          workspaceHref={selectedFileWorkspaceHref}
+          onClose={closeConversationFile}
+          onOpenFilePath={openConversationFilePath}
+        />
       )}
 
       {/* Session tree overlay */}

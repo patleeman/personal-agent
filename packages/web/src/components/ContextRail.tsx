@@ -2,6 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversationArtifacts';
+import { buildConversationFileHref } from '../conversationFiles';
 import {
   collectConversationRunMentions,
   createConversationLiveRunId,
@@ -1707,9 +1708,9 @@ function LiveSessionContextPanel({ id }: { id: string }) {
                 {visibleWorkingTreeChanges.map(({ relativePath, change }) => (
                   <Link
                     key={`${change}:${relativePath}`}
-                    to={buildWorkspaceLink(data.cwd, relativePath)}
+                    to={buildConversationFileHref(location.pathname, location.search, { cwd: data.cwd, file: relativePath })}
                     className="group grid grid-cols-[1rem,minmax(0,1fr)] items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-surface/80"
-                    title={`Open ${relativePath} in the workspace editor`}
+                    title={`Open ${relativePath} in the conversation file viewer`}
                   >
                     <WorkingTreeChangeMark change={change} />
                     <span className="min-w-0 truncate font-mono text-[10px] leading-4 text-secondary group-hover:text-primary">{relativePath}</span>

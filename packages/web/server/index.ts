@@ -11,7 +11,7 @@ import { notifyConversationAutomationChanged, subscribeConversationAutomation } 
 import { resolveConversationCwd, resolveRequestedCwd } from './conversationCwd.js';
 import { pickFolder } from './folderPicker.js';
 import { readGitStatusSummaryWithTelemetry, type GitStatusReadTelemetry } from './gitStatus.js';
-import { readWorkspaceFile, readWorkspaceSnapshot, retainWorkspaceWatch, writeWorkspaceFile } from './workspaceBrowser.js';
+import { readWorkspaceFile, readWorkspacePreviewAsset, readWorkspaceSnapshot, retainWorkspaceWatch, writeWorkspaceFile } from './workspaceBrowser.js';
 import {
   installGatewayAndReadState,
   readGatewayState,
@@ -8353,6 +8353,41 @@ app.get('/api/workspace/file', (req, res) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const status = message === 'path required' || message.startsWith('Directory does not exist:') || message.startsWith('Not a directory:') || message.startsWith('Path is outside the workspace root:')
+      ? 400
+      : 500;
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(status).json({ error: message });
+  }
+});
+
+app.get('/api/workspace/file/asset', (req, res) => {
+  try {
+    const defaultWebCwd = getDefaultWebCwd();
+    const cwd = typeof req.query.cwd === 'string' && req.query.cwd.trim().length > 0
+      ? req.query.cwd
+      : defaultWebCwd;
+    const path = typeof req.query.path === 'string' ? req.query.path.trim() : '';
+    if (!path) {
+      res.status(400).json({ error: 'path required' });
+      return;
+    }
+
+    const resolvedCwd = resolveRequestedCwd(cwd, defaultWebCwd) ?? defaultWebCwd;
+    const asset = readWorkspacePreviewAsset({ cwd: resolvedCwd, path });
+    retainWorkspaceWatch(asset.root);
+    res.type(asset.mimeType);
+    res.sendFile(asset.filePath);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message === 'path required'
+      || message === 'Preview unavailable for this file type.'
+      || message.startsWith('File does not exist:')
+      || message.startsWith('Directory does not exist:')
+      || message.startsWith('Not a directory:')
+      || message.startsWith('Path is outside the workspace root:')
       ? 400
       : 500;
     logError('request handler error', {

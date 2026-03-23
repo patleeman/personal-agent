@@ -16,9 +16,37 @@ import type { WorkspaceChangeKind, WorkspaceTreeNode } from './types';
 export const WORKSPACE_CWD_SEARCH_PARAM = 'cwd';
 export const WORKSPACE_FILE_SEARCH_PARAM = 'file';
 
+export type WorkspaceFilePreviewKind = 'image' | 'video' | 'audio' | 'pdf';
+
 const TREE_ROW_CLASS = 'group flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[12px] leading-5 transition-colors';
 const TREE_ROW_IDLE_CLASS = 'text-secondary hover:bg-surface/80 hover:text-primary';
 const TREE_ROW_ACTIVE_CLASS = 'bg-accent/10 text-primary';
+const WORKSPACE_PREVIEW_KIND_BY_EXTENSION = new Map<string, WorkspaceFilePreviewKind>([
+  ['.png', 'image'],
+  ['.jpg', 'image'],
+  ['.jpeg', 'image'],
+  ['.gif', 'image'],
+  ['.webp', 'image'],
+  ['.svg', 'image'],
+  ['.bmp', 'image'],
+  ['.ico', 'image'],
+  ['.pdf', 'pdf'],
+  ['.mp4', 'video'],
+  ['.webm', 'video'],
+  ['.mov', 'video'],
+  ['.mp3', 'audio'],
+  ['.wav', 'audio'],
+  ['.ogg', 'audio'],
+]);
+
+function normalizePathSeparators(path: string): string {
+  return path.replace(/\\/g, '/');
+}
+
+function isAbsoluteWorkspacePath(path: string): boolean {
+  const normalized = normalizePathSeparators(path);
+  return normalized.startsWith('/') || /^[A-Za-z]:\//.test(normalized);
+}
 
 export function readWorkspaceCwdFromSearch(search: string): string | null {
   return new URLSearchParams(search).get(WORKSPACE_CWD_SEARCH_PARAM)?.trim() || null;
@@ -26,6 +54,48 @@ export function readWorkspaceCwdFromSearch(search: string): string | null {
 
 export function readWorkspaceFileFromSearch(search: string): string | null {
   return new URLSearchParams(search).get(WORKSPACE_FILE_SEARCH_PARAM)?.trim() || null;
+}
+
+export function normalizeWorkspaceRequestedFilePath(root: string, requestedPath: string | null | undefined): string | null {
+  const trimmed = requestedPath?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const normalizedRoot = normalizePathSeparators(root).replace(/\/+$/, '');
+  const normalizedRequested = normalizePathSeparators(trimmed).replace(/^\.\//, '');
+
+  if (normalizedRequested.startsWith(`${normalizedRoot}/`)) {
+    return normalizedRequested.slice(normalizedRoot.length + 1);
+  }
+
+  if (isAbsoluteWorkspacePath(normalizedRequested) || normalizedRequested.startsWith('~/')) {
+    return normalizedRequested;
+  }
+
+  return normalizedRequested;
+}
+
+export function buildWorkspaceFileAssetUrl(path: string, cwd?: string | null): string {
+  const params = new URLSearchParams({ path });
+  const normalizedCwd = cwd?.trim() ?? '';
+  if (normalizedCwd) {
+    params.set('cwd', normalizedCwd);
+  }
+
+  return `/api/workspace/file/asset?${params.toString()}`;
+}
+
+export function getWorkspaceFilePreviewKind(path: string): WorkspaceFilePreviewKind | null {
+  const normalized = path.toLowerCase();
+
+  for (const [extension, kind] of WORKSPACE_PREVIEW_KIND_BY_EXTENSION) {
+    if (normalized.endsWith(extension)) {
+      return kind;
+    }
+  }
+
+  return null;
 }
 
 export function buildWorkspaceSearch(locationSearch: string, patch: {
@@ -365,6 +435,17 @@ export function editorChromeTheme(isDark: boolean): Extension {
       '.cm-matchingBracket, .cm-nonmatchingBracket': {
         backgroundColor: isDark ? 'rgb(91 144 204 / 0.12)' : 'rgb(30 90 150 / 0.10)',
         outline: '1px solid rgb(var(--color-border-subtle))',
+      },
+      '&.cm-mergeView .cm-changedText, &.cm-mergeView .cm-deletedText, &.cm-mergeView .cm-insertedLine, &.cm-mergeView .cm-deletedLine, &.cm-mergeView .cm-deletedLine del': {
+        textDecoration: 'none',
+      },
+      '&.cm-merge-b .cm-changedText': {
+        background: isDark ? 'rgb(61 168 168 / 0.18)' : 'rgb(26 120 120 / 0.14)',
+        borderRadius: '2px',
+      },
+      '&.cm-merge-a .cm-changedText, .cm-deletedChunk .cm-deletedText': {
+        background: isDark ? 'rgb(210 96 96 / 0.18)' : 'rgb(186 66 66 / 0.14)',
+        borderRadius: '2px',
       },
     }, { dark: isDark }),
     syntaxHighlighting(highlightTheme),
