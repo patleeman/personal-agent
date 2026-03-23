@@ -167,14 +167,16 @@ export function normalizeDetectedFilePath(rawValue: string): string | null {
 }
 
 function filePathButtonClassName(variant: FilePathButtonVariant): string {
+  const baseClassName = 'inline-block align-baseline appearance-none border-0 bg-transparent p-0 m-0 cursor-pointer text-left transition-colors focus:outline-none';
+
   switch (variant) {
     case 'code':
-      return 'inline rounded bg-elevated px-1 py-0.5 font-mono text-[0.82em] text-accent transition-colors hover:bg-elevated/80 hover:text-primary';
+      return `${baseClassName} rounded bg-elevated px-1 py-0.5 font-mono text-[0.82em] text-accent hover:bg-elevated/80 hover:text-primary`;
     case 'pre':
-      return 'inline bg-transparent p-0 font-inherit text-accent transition-colors hover:text-primary';
+      return `${baseClassName} text-accent hover:text-primary`;
     case 'text':
     default:
-      return 'inline bg-transparent p-0 font-mono text-accent transition-colors hover:text-primary';
+      return `${baseClassName} font-mono text-accent hover:text-primary`;
   }
 }
 
@@ -200,7 +202,11 @@ export function FilePathButton({
       title={`Open ${path}`}
       className={filePathButtonClassName(variant)}
       onClick={() => onOpenFilePath(path)}
-      style={{ font: 'inherit', textDecoration: 'underline', textUnderlineOffset: '0.18em', textDecorationColor: 'rgb(var(--color-accent) / 0.32)' }}
+      style={{
+        textDecoration: 'underline',
+        textUnderlineOffset: '0.18em',
+        textDecorationColor: 'rgb(var(--color-accent) / 0.32)',
+      }}
     >
       {displayText}
     </button>
