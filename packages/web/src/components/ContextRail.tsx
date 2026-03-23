@@ -1151,7 +1151,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     setPickCwdBusy(false);
     setChangeCwdBusy(false);
     setChangeCwdError(null);
-    setOpenCwdError(null);
     setRemotePickerOpen(false);
     setRemotePickerBusy(false);
     setRemotePickerError(null);
@@ -1406,7 +1405,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     }
 
     setPickCwdBusy(true);
-    setOpenCwdError(null);
     setChangeCwdError(null);
     try {
       if (remoteTargetId) {
