@@ -1,8 +1,6 @@
 import {
   activateDeferredResume,
   activateDueDeferredResumes,
-  getDueScheduledSessionDeferredResumeEntries,
-  getReadySessionDeferredResumeEntries,
   getSessionDeferredResumeEntries,
   loadDeferredResumeState,
   parseDeferredResumeDelayMs,
@@ -22,7 +20,6 @@ import {
 } from '@personal-agent/daemon';
 
 export const DEFAULT_DEFERRED_RESUME_PROMPT = 'Continue from where you left off and keep going.';
-const BACKGROUND_RUN_DEFERRED_RESUME_PREFIX = 'resume_run_';
 
 function resolveDaemonRoot(): string {
   return resolveDaemonPaths(loadDaemonConfig().ipc.socketPath).root;
@@ -56,20 +53,9 @@ function toSummary(record: DeferredResumeRecord): DeferredResumeSummary {
   };
 }
 
-export function isBackgroundRunDeferredResumeId(id: string): boolean {
-  return id.startsWith(BACKGROUND_RUN_DEFERRED_RESUME_PREFIX);
-}
-
 export function listDeferredResumesForSessionFile(sessionFile: string): DeferredResumeSummary[] {
   const state = loadDeferredResumeState();
   return getSessionDeferredResumeEntries(state, sessionFile).map(toSummary);
-}
-
-export function listReadyBackgroundRunDeferredResumesForSessionFile(sessionFile: string): DeferredResumeSummary[] {
-  const state = loadDeferredResumeState();
-  return getReadySessionDeferredResumeEntries(state, sessionFile)
-    .filter((entry) => isBackgroundRunDeferredResumeId(entry.id))
-    .map(toSummary);
 }
 
 export function activateDueDeferredResumesForSessionFile(input: {
@@ -84,54 +70,6 @@ export function activateDueDeferredResumesForSessionFile(input: {
 
   if (activated.length > 0) {
     saveDeferredResumeState(state);
-  }
-
-  return activated.map(toSummary);
-}
-
-export async function activateDueBackgroundRunDeferredResumesForSessionFile(input: {
-  sessionFile: string;
-  at?: Date;
-  conversationId?: string;
-}): Promise<DeferredResumeSummary[]> {
-  const state = loadDeferredResumeState();
-  const at = input.at ?? new Date();
-  const dueEntries = getDueScheduledSessionDeferredResumeEntries(state, input.sessionFile, at)
-    .filter((entry) => isBackgroundRunDeferredResumeId(entry.id));
-
-  if (dueEntries.length === 0) {
-    return [];
-  }
-
-  const activated: DeferredResumeRecord[] = [];
-  for (const entry of dueEntries) {
-    const activatedEntry = activateDeferredResume(state, {
-      id: entry.id,
-      at,
-    });
-    if (activatedEntry) {
-      activated.push(activatedEntry);
-    }
-  }
-
-  if (activated.length === 0) {
-    return [];
-  }
-
-  saveDeferredResumeState(state);
-  const daemonRoot = resolveDaemonRoot();
-  const conversationId = input.conversationId ?? readSessionConversationId(input.sessionFile);
-  for (const entry of activated) {
-    await markDeferredResumeConversationRunReady({
-      daemonRoot,
-      deferredResumeId: entry.id,
-      sessionFile: entry.sessionFile,
-      prompt: entry.prompt,
-      dueAt: entry.dueAt,
-      createdAt: entry.createdAt,
-      readyAt: entry.readyAt ?? at.toISOString(),
-      ...(conversationId ? { conversationId } : {}),
-    });
   }
 
   return activated.map(toSummary);
