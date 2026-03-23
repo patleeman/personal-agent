@@ -275,13 +275,17 @@ import {
 } from '@personal-agent/resources';
 import {
   completeDeferredResumeConversationRun,
+  listPendingBackgroundRunResults,
   loadDaemonConfig,
+  markBackgroundRunResultsDelivered,
   markDeferredResumeConversationRunReady,
   markDeferredResumeConversationRunRetryScheduled,
   parsePendingOperation,
   resolveDaemonPaths,
+  resolveDurableRunsRoot,
   startScheduledTaskRun,
   startBackgroundRun,
+  type BackgroundRunResultSummary,
 } from '@personal-agent/daemon';
 import {
   addProjectMilestone,
@@ -320,14 +324,11 @@ import {
 } from './projectPackages.js';
 import { generateProjectBrief } from './projectBriefs.js';
 import {
-  activateDueBackgroundRunDeferredResumesForSessionFile,
   activateDueDeferredResumesForSessionFile,
   cancelDeferredResumeForSessionFile,
   completeDeferredResumeForSessionFile,
   fireDeferredResumeNowForSessionFile,
-  isBackgroundRunDeferredResumeId,
   listDeferredResumesForSessionFile,
-  listReadyBackgroundRunDeferredResumesForSessionFile,
   retryDeferredResumeForSessionFile,
   scheduleDeferredResumeForSessionFile,
   type DeferredResumeSummary,
@@ -1578,7 +1579,7 @@ function listDeferredResumeSummariesBySessionFile(): Map<string, DeferredResumeS
   return summariesBySessionFile;
 }
 
-function buildBackgroundRunHiddenContext(entries: DeferredResumeSummary[]): string {
+function buildBackgroundRunHiddenContext(entries: BackgroundRunResultSummary[]): string {
   if (entries.length === 0) {
     return '';
   }
@@ -1598,43 +1599,6 @@ function buildBackgroundRunHiddenContext(entries: DeferredResumeSummary[]): stri
   }
 
   return lines.join('\n');
-}
-
-async function completeDeliveredBackgroundRunDeferredResumes(input: {
-  entries: DeferredResumeSummary[];
-  sessionFile: string;
-  conversationId: string;
-  cwd?: string;
-}): Promise<void> {
-  if (input.entries.length === 0) {
-    return;
-  }
-
-  const daemonRoot = resolveDaemonRoot();
-  for (const entry of input.entries) {
-    const completedEntry = completeDeferredResumeForSessionFile({
-      sessionFile: input.sessionFile,
-      id: entry.id,
-    });
-    if (!completedEntry) {
-      continue;
-    }
-
-    await completeDeferredResumeConversationRun({
-      daemonRoot,
-      deferredResumeId: completedEntry.id,
-      sessionFile: completedEntry.sessionFile,
-      prompt: completedEntry.prompt,
-      dueAt: completedEntry.dueAt,
-      createdAt: completedEntry.createdAt,
-      readyAt: completedEntry.readyAt,
-      completedAt: new Date().toISOString(),
-      conversationId: input.conversationId,
-      ...(input.cwd ? { cwd: input.cwd } : {}),
-    });
-  }
-
-  invalidateAppTopics('sessions');
 }
 
 function decorateSessionsWithAttention<T extends {
@@ -2364,8 +2328,7 @@ async function flushLiveDeferredResumes(): Promise<void> {
 
       const readyEntries = listDeferredResumesForSessionFile(session.sessionFile)
         .filter((entry) => entry.status === 'ready');
-      const autoDeliveredEntries = readyEntries.filter((entry) => !isBackgroundRunDeferredResumeId(entry.id));
-      for (const readyEntry of autoDeliveredEntries) {
+      for (const readyEntry of readyEntries) {
         const liveEntry = liveRegistry.get(session.id);
         if (!liveEntry) {
           break;
@@ -6281,19 +6244,14 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
     const liveEntry = !isRemoteLive ? liveRegistry.get(id) : undefined;
     const remoteLive = isRemoteLive ? getRemoteLiveSessionMeta(id) : null;
     const sessionFile = liveEntry?.session.sessionFile ?? remoteLive?.sessionFile;
-    const backgroundRunActivations = sessionFile
-      ? await activateDueBackgroundRunDeferredResumesForSessionFile({
+    const daemonRunsRoot = resolveDurableRunsRoot(resolveDaemonRoot());
+    const backgroundRunContextEntries = sessionFile
+      ? listPendingBackgroundRunResults({
+          runsRoot: daemonRunsRoot,
           sessionFile,
-          conversationId: id,
         })
       : [];
-    const backgroundRunContextEntries = sessionFile
-      ? listReadyBackgroundRunDeferredResumesForSessionFile(sessionFile)
-      : [];
     const backgroundRunHiddenContext = buildBackgroundRunHiddenContext(backgroundRunContextEntries);
-    if (backgroundRunActivations.length > 0) {
-      invalidateAppTopics('sessions');
-    }
 
     const automationBeforePrompt = loadConversationAutomationState({
       profile: getCurrentProfile(),
@@ -6383,12 +6341,14 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
       }
 
       try {
-        await completeDeliveredBackgroundRunDeferredResumes({
-          entries: backgroundRunContextEntries,
+        const deliveredIds = markBackgroundRunResultsDelivered({
+          runsRoot: daemonRunsRoot,
           sessionFile,
-          conversationId: id,
-          cwd: liveEntry?.cwd ?? remoteLive?.cwd,
+          resultIds: backgroundRunContextEntries.map((entry) => entry.id),
         });
+        if (deliveredIds.length > 0) {
+          invalidateAppTopics('runs');
+        }
       } catch (error) {
         logError('background run context completion error', {
           sessionId: id,

@@ -62,6 +62,12 @@ export {
   type StartBackgroundRunRecord,
 } from './runs/background-runs.js';
 export {
+  listPendingBackgroundRunResults,
+  markBackgroundRunResultsDelivered,
+  surfaceBackgroundRunResultsIfReady,
+  type BackgroundRunResultSummary,
+} from './runs/background-run-deferred-resumes.js';
+export {
   buildBackgroundAgentArgv,
   looksLikePersonalAgentCliEntryPath,
   type BackgroundRunAgentSpec,

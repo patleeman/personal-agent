@@ -15,6 +15,7 @@ import { PersonalAgentDaemon } from './server.js';
 import type { DaemonConfig } from './config.js';
 import { resolveDaemonPaths } from './paths.js';
 import { createDurableRunManifest, createInitialDurableRunStatus, resolveDurableRunsRoot, resolveDurableRunPaths, saveDurableRunManifest, saveDurableRunStatus, scanDurableRun } from './runs/store.js';
+import { listPendingBackgroundRunResults } from './runs/background-run-deferred-resumes.js';
 
 const tempDirs: string[] = [];
 const originalEnv = { ...process.env };
@@ -330,7 +331,7 @@ describe('daemon IPC integration', () => {
     expect(existsSync(run?.paths.resultPath as string)).toBe(true);
   });
 
-  it('creates a ready deferred resume when a resumable background run finishes', async () => {
+  it('surfaces a pending background-run result when a resumable background run finishes', async () => {
     daemon = new PersonalAgentDaemon(config);
     await daemon.start();
 
@@ -358,25 +359,21 @@ describe('daemon IPC integration', () => {
     const runsRoot = resolveDurableRunsRoot(resolveDaemonPaths(config.ipc.socketPath).root);
 
     await waitFor(() => scanDurableRun(runsRoot, runId)?.status?.status === 'completed');
-    await waitFor(() => Object.values(loadDeferredResumeState().resumes).some((entry) => entry.sessionFile === sessionFile && entry.status === 'ready'));
+    await waitFor(() => listPendingBackgroundRunResults({ runsRoot, sessionFile }).length === 1);
 
-    const resumes = Object.values(loadDeferredResumeState().resumes)
-      .filter((entry) => entry.sessionFile === sessionFile);
-
-    expect(resumes).toHaveLength(1);
-    expect(resumes[0]).toMatchObject({
-      sessionFile,
-      status: 'ready',
-    });
-    expect(resumes[0]?.prompt).toContain(runId);
-    expect(resumes[0]?.prompt).toContain('Use run get/logs');
+    const results = listPendingBackgroundRunResults({ runsRoot, sessionFile });
+    expect(results).toHaveLength(1);
+    expect(Object.values(loadDeferredResumeState().resumes)).toHaveLength(0);
+    expect(results[0]?.runIds).toEqual([runId]);
+    expect(results[0]?.prompt).toContain(runId);
+    expect(results[0]?.prompt).toContain('Use run get/logs');
 
     const run = scanDurableRun(runsRoot, runId);
     const payload = run?.checkpoint?.payload as Record<string, unknown> | undefined;
-    expect((payload?.backgroundRunResume as { deferredResumeId?: string } | undefined)?.deferredResumeId).toBe(resumes[0]?.id);
+    expect((payload?.backgroundRunResume as { batchId?: string } | undefined)?.batchId).toBe(results[0]?.id);
   });
 
-  it('creates a delegate-style deferred resume for gateway delegate runs', async () => {
+  it('surfaces a delegate-style pending result for gateway delegate runs', async () => {
     daemon = new PersonalAgentDaemon(config);
     await daemon.start();
 
@@ -402,15 +399,14 @@ describe('daemon IPC integration', () => {
     });
 
     expect(response.ok).toBe(true);
-    await waitFor(() => Object.values(loadDeferredResumeState().resumes).some((entry) => entry.sessionFile === sessionFile && entry.status === 'ready'));
+    const runsRoot = resolveDurableRunsRoot(resolveDaemonPaths(config.ipc.socketPath).root);
+    await waitFor(() => listPendingBackgroundRunResults({ runsRoot, sessionFile }).length === 1);
 
-    const resumes = Object.values(loadDeferredResumeState().resumes)
-      .filter((entry) => entry.sessionFile === sessionFile);
-
-    expect(resumes).toHaveLength(1);
-    expect(resumes[0]?.prompt).toContain('Original delegated task:');
-    expect(resumes[0]?.prompt).toContain('Review the failing build and summarize the fix.');
-    expect(resumes[0]?.prompt).toContain('Use delegate get/logs');
+    const results = listPendingBackgroundRunResults({ runsRoot, sessionFile });
+    expect(results).toHaveLength(1);
+    expect(results[0]?.prompt).toContain('Original delegated task:');
+    expect(results[0]?.prompt).toContain('Review the failing build and summarize the fix.');
+    expect(results[0]?.prompt).toContain('Use delegate get/logs');
   });
 
   it('batches resumable background runs until the last active run for the session stops', async () => {
@@ -457,17 +453,15 @@ describe('daemon IPC integration', () => {
     const fastRunId = (fastResponse.result as { runId: string }).runId;
 
     await waitFor(() => scanDurableRun(runsRoot, fastRunId)?.status?.status === 'completed');
-    expect(Object.values(loadDeferredResumeState().resumes)).toHaveLength(0);
+    expect(listPendingBackgroundRunResults({ runsRoot, sessionFile })).toEqual([]);
 
     await waitFor(() => scanDurableRun(runsRoot, slowRunId)?.status?.status === 'completed');
-    await waitFor(() => Object.values(loadDeferredResumeState().resumes).some((entry) => entry.sessionFile === sessionFile && entry.status === 'ready'));
+    await waitFor(() => listPendingBackgroundRunResults({ runsRoot, sessionFile }).length === 1);
 
-    const resumes = Object.values(loadDeferredResumeState().resumes)
-      .filter((entry) => entry.sessionFile === sessionFile);
-
-    expect(resumes).toHaveLength(1);
-    expect(resumes[0]?.prompt).toContain(slowRunId);
-    expect(resumes[0]?.prompt).toContain(fastRunId);
+    const results = listPendingBackgroundRunResults({ runsRoot, sessionFile });
+    expect(results).toHaveLength(1);
+    expect(results[0]?.prompt).toContain(slowRunId);
+    expect(results[0]?.prompt).toContain(fastRunId);
   });
 
   it('cancels a durable background run', async () => {

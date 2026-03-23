@@ -1,17 +1,6 @@
 import { createHash } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
 import {
-  activateDeferredResume,
-  loadDeferredResumeState,
-  saveDeferredResumeState,
-  scheduleDeferredResume,
-  type DeferredResumeRecord,
-} from '@personal-agent/core';
-import {
-  markDeferredResumeConversationRunReady,
-  scheduleDeferredResumeConversationRun,
-} from './deferred-resume-conversations.js';
-import {
   loadDurableRunCheckpoint,
   resolveDurableRunPaths,
   saveDurableRunCheckpoint,
@@ -27,10 +16,20 @@ const BATCH_RUN_LOG_TAIL_LINES = 20;
 const MAX_TASK_PROMPT_LENGTH = 2_000;
 const MAX_COMMAND_LENGTH = 500;
 
+export interface BackgroundRunResultSummary {
+  id: string;
+  sessionFile: string;
+  prompt: string;
+  surfacedAt: string;
+  runIds: string[];
+}
+
 type EligibleBackgroundRun = {
   run: ScannedDurableRun;
   sessionFile: string;
-  surfacedDeferredResumeId?: string;
+  surfacedBatchId?: string;
+  surfacedAt?: string;
+  deliveredAt?: string;
   taskPrompt?: string;
 };
 
@@ -75,13 +74,15 @@ function resolveEligibleBackgroundRun(run: ScannedDurableRun): EligibleBackgroun
   }
 
   const surfaced = isRecord(payload.backgroundRunResume)
-    ? readOptionalString(payload.backgroundRunResume.deferredResumeId)
+    ? payload.backgroundRunResume
     : undefined;
 
   return {
     run,
     sessionFile,
-    surfacedDeferredResumeId: surfaced,
+    surfacedBatchId: readOptionalString(surfaced?.batchId),
+    surfacedAt: readOptionalString(surfaced?.surfacedAt),
+    deliveredAt: readOptionalString(surfaced?.deliveredAt),
     taskPrompt: trimText(readOptionalString(payload.taskPrompt), MAX_TASK_PROMPT_LENGTH),
   };
 }
@@ -275,7 +276,7 @@ function buildDelegateBatchPrompt(runs: EligibleBackgroundRun[]): string {
   return lines.join('\n');
 }
 
-function buildBackgroundRunResumePrompt(runs: EligibleBackgroundRun[]): string {
+function buildBackgroundRunResultPrompt(runs: EligibleBackgroundRun[]): string {
   const orderedRuns = sortRuns(runs);
   const allDelegates = orderedRuns.every((run) => run.run.manifest?.source?.type === 'gateway-delegate');
 
@@ -290,34 +291,16 @@ function buildBackgroundRunResumePrompt(runs: EligibleBackgroundRun[]): string {
     : buildGenericBatchPrompt(orderedRuns);
 }
 
-function createBackgroundRunDeferredResumeId(sessionFile: string, runIds: string[]): string {
+function createBackgroundRunResultBatchId(sessionFile: string, runIds: string[]): string {
   const hash = createHash('sha1')
     .update(`${sessionFile}\n${runIds.sort().join('\n')}`)
     .digest('hex')
     .slice(0, 16);
 
-  return `resume_run_${hash}`;
+  return `result_run_${hash}`;
 }
 
-function toReadyDeferredResumeRecord(input: {
-  sessionFile: string;
-  id: string;
-  prompt: string;
-  now: string;
-}): DeferredResumeRecord {
-  return {
-    id: input.id,
-    sessionFile: input.sessionFile,
-    prompt: input.prompt,
-    dueAt: input.now,
-    createdAt: input.now,
-    attempts: 0,
-    status: 'ready',
-    readyAt: input.now,
-  };
-}
-
-function markRunsSurfaced(runsRoot: string, runs: EligibleBackgroundRun[], deferredResumeId: string, surfacedAt: string): void {
+function markRunsSurfaced(runsRoot: string, runs: EligibleBackgroundRun[], batchId: string, surfacedAt: string): void {
   for (const run of runs) {
     const paths = resolveDurableRunPaths(runsRoot, run.run.runId);
     const checkpoint = loadDurableRunCheckpoint(paths.checkpointPath);
@@ -332,7 +315,7 @@ function markRunsSurfaced(runsRoot: string, runs: EligibleBackgroundRun[], defer
       payload: {
         ...payload,
         backgroundRunResume: {
-          deferredResumeId,
+          batchId,
           surfacedAt,
         },
       },
@@ -340,12 +323,119 @@ function markRunsSurfaced(runsRoot: string, runs: EligibleBackgroundRun[], defer
   }
 }
 
-export async function scheduleBackgroundRunDeferredResumeIfReady(input: {
-  daemonRoot: string;
+function collectBackgroundRunResultBatches(input: {
+  runsRoot: string;
+  sessionFile: string;
+}): Map<string, EligibleBackgroundRun[]> {
+  const batches = new Map<string, EligibleBackgroundRun[]>();
+
+  for (const run of scanDurableRunsForRecovery(input.runsRoot)) {
+    const eligible = resolveEligibleBackgroundRun(run);
+    if (!eligible || eligible.sessionFile !== input.sessionFile) {
+      continue;
+    }
+
+    if (!eligible.surfacedBatchId || eligible.deliveredAt || !isStoppedStatus(eligible.run.status?.status)) {
+      continue;
+    }
+
+    const existing = batches.get(eligible.surfacedBatchId);
+    if (existing) {
+      existing.push(eligible);
+      continue;
+    }
+
+    batches.set(eligible.surfacedBatchId, [eligible]);
+  }
+
+  return batches;
+}
+
+export function listPendingBackgroundRunResults(input: {
+  runsRoot: string;
+  sessionFile: string;
+}): BackgroundRunResultSummary[] {
+  return Array.from(collectBackgroundRunResultBatches(input).entries())
+    .map(([batchId, runs]) => ({
+      id: batchId,
+      sessionFile: input.sessionFile,
+      prompt: buildBackgroundRunResultPrompt(runs),
+      surfacedAt: runs
+        .map((run) => run.surfacedAt)
+        .filter((value): value is string => typeof value === 'string')
+        .sort()[0] ?? '',
+      runIds: runs.map((run) => run.run.runId).sort(),
+    }))
+    .sort((left, right) => {
+      const surfacedCompare = left.surfacedAt.localeCompare(right.surfacedAt);
+      if (surfacedCompare !== 0) {
+        return surfacedCompare;
+      }
+
+      return left.id.localeCompare(right.id);
+    });
+}
+
+export function markBackgroundRunResultsDelivered(input: {
+  runsRoot: string;
+  sessionFile: string;
+  resultIds: string[];
+  deliveredAt?: string;
+}): string[] {
+  const resultIds = Array.from(new Set(
+    input.resultIds
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0),
+  ));
+  if (resultIds.length === 0) {
+    return [];
+  }
+
+  const targetIds = new Set(resultIds);
+  const deliveredAt = new Date(input.deliveredAt ?? Date.now()).toISOString();
+  const marked = new Set<string>();
+
+  for (const run of scanDurableRunsForRecovery(input.runsRoot)) {
+    const eligible = resolveEligibleBackgroundRun(run);
+    if (!eligible || eligible.sessionFile !== input.sessionFile || !eligible.surfacedBatchId || !targetIds.has(eligible.surfacedBatchId)) {
+      continue;
+    }
+
+    const paths = resolveDurableRunPaths(input.runsRoot, run.runId);
+    const checkpoint = loadDurableRunCheckpoint(paths.checkpointPath);
+    const payload = readCheckpointPayload(checkpoint);
+    const marker = isRecord(payload.backgroundRunResume) ? payload.backgroundRunResume : undefined;
+    const surfacedAt = readOptionalString(marker?.surfacedAt);
+    if (!surfacedAt) {
+      continue;
+    }
+
+    saveDurableRunCheckpoint(paths.checkpointPath, {
+      version: 1,
+      runId: run.runId,
+      updatedAt: deliveredAt,
+      step: checkpoint?.step ?? run.status?.checkpointKey,
+      cursor: checkpoint?.cursor,
+      payload: {
+        ...payload,
+        backgroundRunResume: {
+          batchId: eligible.surfacedBatchId,
+          surfacedAt,
+          deliveredAt,
+        },
+      },
+    });
+    marked.add(eligible.surfacedBatchId);
+  }
+
+  return Array.from(marked).sort();
+}
+
+export async function surfaceBackgroundRunResultsIfReady(input: {
   runsRoot: string;
   triggerRunId: string;
   now?: Date;
-}): Promise<{ deferredResumeId?: string; surfacedRunIds: string[] }> {
+}): Promise<{ resultId?: string; surfacedRunIds: string[] }> {
   const triggerRun = scanDurableRun(input.runsRoot, input.triggerRunId);
   const trigger = triggerRun ? resolveEligibleBackgroundRun(triggerRun) : undefined;
   if (!trigger) {
@@ -369,73 +459,19 @@ export async function scheduleBackgroundRunDeferredResumeIfReady(input: {
 
   const stoppedRuns = eligibleRuns
     .filter((run) => isStoppedStatus(run.run.status?.status))
-    .filter((run) => !run.surfacedDeferredResumeId);
+    .filter((run) => !run.surfacedBatchId);
 
   if (stoppedRuns.length === 0) {
     return { surfacedRunIds: [] };
   }
 
   const surfacedRunIds = stoppedRuns.map((run) => run.run.runId).sort();
-  const now = new Date(input.now ?? Date.now());
-  const nowIso = now.toISOString();
-  const deferredResumeId = createBackgroundRunDeferredResumeId(trigger.sessionFile, surfacedRunIds);
-  const prompt = buildBackgroundRunResumePrompt(stoppedRuns);
-  const state = loadDeferredResumeState();
-  const existing = state.resumes[deferredResumeId];
-
-  if (!existing) {
-    scheduleDeferredResume(state, {
-      id: deferredResumeId,
-      sessionFile: trigger.sessionFile,
-      prompt,
-      dueAt: nowIso,
-      createdAt: nowIso,
-      attempts: 0,
-    });
-  }
-
-  const readyRecord = existing?.status === 'ready'
-    ? {
-      ...existing,
-      prompt,
-      sessionFile: trigger.sessionFile,
-      dueAt: existing.dueAt,
-      createdAt: existing.createdAt,
-      readyAt: existing.readyAt ?? nowIso,
-    }
-    : (activateDeferredResume(state, { id: deferredResumeId, at: now })
-      ?? toReadyDeferredResumeRecord({
-        sessionFile: trigger.sessionFile,
-        id: deferredResumeId,
-        prompt,
-        now: nowIso,
-      }));
-
-  state.resumes[deferredResumeId] = readyRecord;
-  saveDeferredResumeState(state);
-
-  await scheduleDeferredResumeConversationRun({
-    daemonRoot: input.daemonRoot,
-    deferredResumeId,
-    sessionFile: readyRecord.sessionFile,
-    prompt: readyRecord.prompt,
-    dueAt: readyRecord.dueAt,
-    createdAt: readyRecord.createdAt,
-  });
-  await markDeferredResumeConversationRunReady({
-    daemonRoot: input.daemonRoot,
-    deferredResumeId,
-    sessionFile: readyRecord.sessionFile,
-    prompt: readyRecord.prompt,
-    dueAt: readyRecord.dueAt,
-    createdAt: readyRecord.createdAt,
-    readyAt: readyRecord.readyAt ?? nowIso,
-  });
-
-  markRunsSurfaced(input.runsRoot, stoppedRuns, deferredResumeId, nowIso);
+  const surfacedAt = new Date(input.now ?? Date.now()).toISOString();
+  const resultId = createBackgroundRunResultBatchId(trigger.sessionFile, surfacedRunIds);
+  markRunsSurfaced(input.runsRoot, stoppedRuns, resultId, surfacedAt);
 
   return {
-    deferredResumeId,
+    resultId,
     surfacedRunIds,
   };
 }
