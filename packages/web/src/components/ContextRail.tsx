@@ -290,16 +290,6 @@ function XIcon({ className }: { className?: string }) {
   );
 }
 
-function ExternalLinkIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14.25 4.5h5.25v5.25" />
-      <path d="M19.5 4.5 10.5 13.5" />
-      <path d="M19.5 13.5v4.125A1.875 1.875 0 0 1 17.625 19.5H6.375A1.875 1.875 0 0 1 4.5 17.625V6.375A1.875 1.875 0 0 1 6.375 4.5H10.5" />
-    </svg>
-  );
-}
-
 function RemoteFolderBrowser({
   listing,
   loading,
@@ -769,8 +759,6 @@ function DraftConversationContextPanel() {
   const [changingCwd, setChangingCwd] = useState(false);
   const [requestedCwd, setRequestedCwd] = useState(draftCwd);
   const [pickCwdBusy, setPickCwdBusy] = useState(false);
-  const [openCwdBusy, setOpenCwdBusy] = useState(false);
-  const [openCwdError, setOpenCwdError] = useState<string | null>(null);
   const [changeCwdError, setChangeCwdError] = useState<string | null>(null);
   const [remotePickerOpen, setRemotePickerOpen] = useState(false);
   const [remotePickerBusy, setRemotePickerBusy] = useState(false);
@@ -819,7 +807,6 @@ function DraftConversationContextPanel() {
     }
 
     setPickCwdBusy(true);
-    setOpenCwdError(null);
     setChangeCwdError(null);
     try {
       if (draftTargetId) {
@@ -851,28 +838,8 @@ function DraftConversationContextPanel() {
     setChangingCwd(false);
   }
 
-  async function openCwdInVscode() {
-    if (!hasExplicitCwd || openCwdBusy || isRemoteDraft) {
-      return;
-    }
-
-    setOpenCwdBusy(true);
-    setOpenCwdError(null);
-    try {
-      const result = await api.run('code --reuse-window . || open -a "Visual Studio Code" .', draftCwd);
-      if (result.exitCode !== 0) {
-        throw new Error(result.output.trim() || 'Unable to open VS Code.');
-      }
-    } catch {
-      setOpenCwdError('Could not open VS Code.');
-    } finally {
-      setOpenCwdBusy(false);
-    }
-  }
-
   function startChangingCwd() {
     setRequestedCwd(draftCwd);
-    setOpenCwdError(null);
     setChangeCwdError(null);
     setRemotePickerOpen(false);
     setChangingCwd(true);
@@ -896,7 +863,6 @@ function DraftConversationContextPanel() {
   function clearExplicitCwd() {
     clearDraftCwd();
     setRequestedCwd('');
-    setOpenCwdError(null);
     setChangeCwdError(null);
     setRemotePickerOpen(false);
     setRemotePickerError(null);
@@ -943,16 +909,6 @@ function DraftConversationContextPanel() {
                 aria-label="Enter the working directory manually"
               >
                 <PencilIcon />
-              </IconButton>
-              <IconButton
-                compact
-                onClick={() => { void openCwdInVscode(); }}
-                disabled={!hasExplicitCwd || openCwdBusy || pickCwdBusy || remotePickerBusy || isRemoteDraft}
-                title={isRemoteDraft ? 'Open the remote workspace directly from the remote host instead.' : openCwdBusy ? 'Opening VS Code…' : 'Open the draft working directory in VS Code'}
-                aria-label="Open the draft working directory in VS Code"
-                className="shrink-0"
-              >
-                <ExternalLinkIcon className={openCwdBusy ? 'animate-pulse' : undefined} />
               </IconButton>
             </div>
           </div>
@@ -1020,8 +976,8 @@ function DraftConversationContextPanel() {
               </div>
             </form>
           )}
-          {(openCwdError || changeCwdError) && (
-            <p className="text-[11px] text-danger/80">{changeCwdError ?? openCwdError}</p>
+          {changeCwdError && (
+            <p className="text-[11px] text-danger/80">{changeCwdError}</p>
           )}
         </SurfacePanel>
       </Section>
@@ -1052,8 +1008,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const [linkBusy, setLinkBusy] = useState(false);
   const [focusedLoading, setFocusedLoading] = useState(false);
   const [pickCwdBusy, setPickCwdBusy] = useState(false);
-  const [openCwdBusy, setOpenCwdBusy] = useState(false);
-  const [openCwdError, setOpenCwdError] = useState<string | null>(null);
   const [changingCwd, setChangingCwd] = useState(false);
   const [requestedCwd, setRequestedCwd] = useState('');
   const [changeCwdBusy, setChangeCwdBusy] = useState(false);
@@ -1476,30 +1430,12 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     }
   }
 
-  async function openCwdInVscode() {
-    if (!data || openCwdBusy || isRemoteConversation) return;
-
-    setOpenCwdBusy(true);
-    setOpenCwdError(null);
-    try {
-      const result = await api.run('code --reuse-window . || open -a "Visual Studio Code" .', data.cwd);
-      if (result.exitCode !== 0) {
-        throw new Error(result.output.trim() || 'Unable to open VS Code.');
-      }
-    } catch {
-      setOpenCwdError('Could not open VS Code.');
-    } finally {
-      setOpenCwdBusy(false);
-    }
-  }
-
   function startChangingCwd() {
     if (!data || changeCwdBusy || pickCwdBusy || remotePickerBusy) {
       return;
     }
 
     setRequestedCwd(data.cwd);
-    setOpenCwdError(null);
     setChangeCwdError(null);
     setRemotePickerOpen(false);
     setChangingCwd(true);
@@ -1523,7 +1459,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     }
 
     setChangeCwdBusy(true);
-    setOpenCwdError(null);
     setChangeCwdError(null);
 
     try {
@@ -1589,16 +1524,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
                 aria-label="Enter the working directory manually"
               >
                 <PencilIcon />
-              </IconButton>
-              <IconButton
-                compact
-                onClick={() => { void openCwdInVscode(); }}
-                disabled={openCwdBusy || pickCwdBusy || changeCwdBusy || remotePickerBusy || isRemoteConversation}
-                title={isRemoteConversation ? 'Open the remote workspace directly from the remote host instead.' : openCwdBusy ? 'Opening VS Code…' : 'Open current working directory in VS Code'}
-                aria-label="Open current working directory in VS Code"
-                className="shrink-0"
-              >
-                <ExternalLinkIcon className={openCwdBusy ? 'animate-pulse' : undefined} />
               </IconButton>
             </div>
           </div>
@@ -1730,8 +1655,8 @@ function LiveSessionContextPanel({ id }: { id: string }) {
               )}
             </div>
           )}
-          {(openCwdError || changeCwdError) && (
-            <p className="text-[11px] text-danger/80">{changeCwdError ?? openCwdError}</p>
+          {changeCwdError && (
+            <p className="text-[11px] text-danger/80">{changeCwdError}</p>
           )}
         </SurfacePanel>
       </Section>

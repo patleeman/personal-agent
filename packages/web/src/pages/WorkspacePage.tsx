@@ -273,38 +273,14 @@ export function WorkspacePage() {
     }
   }, [draftDirty, openWorkspaceSearch, requestedCwd, snapshot?.cwd, workspaceActionBusy]);
 
-  const handleOpenInVscode = useCallback(async () => {
-    if (!snapshot || workspaceActionBusy) {
-      return;
-    }
-
-    setWorkspaceActionBusy(true);
-    setWorkspaceActionError(null);
-    try {
-      const result = await api.run('code --reuse-window . || open -a "Visual Studio Code" .', snapshot.root);
-      if (result.exitCode !== 0) {
-        throw new Error(result.output.trim() || 'Unable to open VS Code.');
-      }
-    } catch (error) {
-      setWorkspaceActionError(error instanceof Error ? error.message : 'Could not open VS Code.');
-    } finally {
-      setWorkspaceActionBusy(false);
-    }
-  }, [snapshot, workspaceActionBusy]);
-
   return (
     <div className="flex h-full min-h-0 flex-col">
       <PageHeader
         className="flex-wrap items-start gap-y-3"
         actions={(
-          <>
-            <ToolbarButton onClick={() => { void snapshotApi.refetch({ resetLoading: false }); }} disabled={snapshotApi.refreshing || saveBusy}>
-              {snapshotApi.refreshing ? 'Refreshing…' : '↻ Refresh'}
-            </ToolbarButton>
-            <ToolbarButton onClick={() => { void handleOpenInVscode(); }} disabled={!snapshot || workspaceActionBusy}>
-              {workspaceActionBusy ? 'Working…' : 'Open in VS Code'}
-            </ToolbarButton>
-          </>
+          <ToolbarButton onClick={() => { void snapshotApi.refetch({ resetLoading: false }); }} disabled={snapshotApi.refreshing || saveBusy}>
+            {snapshotApi.refreshing ? 'Refreshing…' : '↻ Refresh'}
+          </ToolbarButton>
         )}
       >
         <PageHeading title="Workspace" meta={workspaceMeta} />
