@@ -53,24 +53,48 @@ describe('conversation scroll helpers', () => {
     })).toBe('text:2026-03-21T10:00:00.000Z');
   });
 
-  it('auto-scrolls only when the streaming tail changes to a new block', () => {
+  it('auto-scrolls while the streaming tail continues to grow in place', () => {
     const previousTailKey = 'text:2026-03-21T10:00:00.000Z';
 
     expect(shouldAutoScrollToStreamingTail(previousTailKey, {
       type: 'text',
       ts: '2026-03-21T10:00:00.000Z',
       text: 'Longer streamed text',
-    })).toBe(false);
+    })).toBe(true);
 
-    expect(shouldAutoScrollToStreamingTail(previousTailKey, {
+    expect(shouldAutoScrollToStreamingTail('thinking:2026-03-21T10:00:01.000Z', {
+      type: 'thinking',
+      ts: '2026-03-21T10:00:01.000Z',
+      text: 'More reasoning',
+    })).toBe(true);
+
+    expect(shouldAutoScrollToStreamingTail('tool_use:tool-call-1', {
       type: 'tool_use',
       ts: '2026-03-21T10:00:02.000Z',
       tool: 'bash',
       input: {},
-      output: '',
+      output: 'more output',
       status: 'running',
       _toolCallId: 'tool-call-1',
     })).toBe(true);
+
+    expect(shouldAutoScrollToStreamingTail(previousTailKey, {
+      type: 'summary',
+      ts: '2026-03-21T10:00:00.000Z',
+      kind: 'compaction',
+      title: 'Summary',
+      text: 'Same block',
+      id: 'summary-1',
+    })).toBe(true);
+
+    expect(shouldAutoScrollToStreamingTail('summary:summary-1', {
+      type: 'summary',
+      ts: '2026-03-21T10:00:00.000Z',
+      kind: 'compaction',
+      title: 'Summary',
+      text: 'Same block',
+      id: 'summary-1',
+    })).toBe(false);
   });
 
   it('never shows the scroll-to-bottom control for empty conversations', () => {
