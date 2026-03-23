@@ -700,10 +700,16 @@ export type AppEvent =
 
 // ── Live session ──────────────────────────────────────────────────────────────
 
+export interface GitWorkingTreeChange {
+  relativePath: string;
+  change: WorkspaceChangeKind;
+}
+
 export interface GitWorkingTreeSummary {
   changeCount: number;
   linesAdded: number;
   linesDeleted: number;
+  changes: GitWorkingTreeChange[];
 }
 
 export interface LiveSessionContext {

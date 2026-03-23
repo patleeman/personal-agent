@@ -56,6 +56,7 @@ import type {
   RemoteFolderListing,
   ScheduledTaskDetail,
   ScheduledTaskSummary,
+  WorkspaceChangeKind,
 } from '../types';
 import { formatDate, kindMeta, timeAgo } from '../utils';
 import { useAppData, useAppEvents } from '../contexts';
@@ -141,10 +142,11 @@ function fetchConversationRailCacheEntry<T>(input: {
 export function prefetchConversationRailData(input: {
   conversationId: string;
   sessionsVersion: number;
+  workspaceVersion: number;
   runsVersion: number;
   executionTargetsVersion: number;
 }): Promise<void> {
-  const liveContextVersionKey = `${input.sessionsVersion}`;
+  const liveContextVersionKey = `${input.sessionsVersion}:${input.workspaceVersion}`;
   const executionVersionKey = `${input.executionTargetsVersion}:${input.runsVersion}`;
   const cachedContext = liveSessionContextCache.get(input.conversationId) ?? null;
   const cachedExecution = conversationExecutionCache.get(input.conversationId) ?? null;
@@ -189,6 +191,64 @@ function EmptyPrompt({ text }: { text: string }) {
     <div className="flex-1 flex items-center justify-center px-4 py-8">
       <p className="text-[12px] text-dim text-center">{text}</p>
     </div>
+  );
+}
+
+const MAX_VISIBLE_WORKING_TREE_CHANGES = 8;
+
+function buildWorkspaceLink(cwd: string, file?: string | null): string {
+  const params = new URLSearchParams();
+  const normalizedCwd = cwd.trim();
+  const normalizedFile = file?.trim() ?? '';
+
+  if (normalizedCwd) {
+    params.set('cwd', normalizedCwd);
+  }
+
+  if (normalizedFile) {
+    params.set('file', normalizedFile);
+  }
+
+  const search = params.toString();
+  return `/workspace${search ? `?${search}` : ''}`;
+}
+
+function workingTreeChangeShortLabel(change: WorkspaceChangeKind): string {
+  switch (change) {
+    case 'modified':
+      return 'M';
+    case 'added':
+      return 'A';
+    case 'deleted':
+      return 'D';
+    case 'renamed':
+      return 'R';
+    case 'copied':
+      return 'C';
+    case 'typechange':
+      return 'T';
+    case 'untracked':
+      return '?';
+    case 'conflicted':
+      return '!';
+  }
+}
+
+function WorkingTreeChangeMark({ change }: { change: WorkspaceChangeKind }) {
+  const toneClass = change === 'deleted' || change === 'conflicted'
+    ? 'bg-danger/12 text-danger'
+    : change === 'added' || change === 'untracked'
+      ? 'bg-teal/12 text-teal'
+      : change === 'renamed' || change === 'copied'
+        ? 'bg-accent/12 text-accent'
+        : 'bg-warning/12 text-warning';
+
+  return (
+    <span className="h-4 w-4 shrink-0 text-center">
+      <span className={`inline-flex h-4 w-4 items-center justify-center rounded text-[9px] font-semibold ${toneClass}`}>
+        {workingTreeChangeShortLabel(change)}
+      </span>
+    </span>
   );
 }
 
@@ -1032,7 +1092,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   );
   const runsLoading = runs === null;
   const runsError = null;
-  const liveContextVersionKey = `${versions.sessions}`;
+  const liveContextVersionKey = `${versions.sessions}:${versions.workspace}`;
   const executionVersionKey = `${versions.executionTargets}:${versions.runs}`;
 
   const load = useCallback(() => {
@@ -1515,8 +1575,11 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   if (!data) return null;
 
   const gitChangeLabel = data.git
-    ? `${data.git.changeCount} ${data.git.changeCount === 1 ? 'change' : 'changes'}`
+    ? (data.git.changeCount === 0 ? 'working tree clean' : `${data.git.changeCount} ${data.git.changeCount === 1 ? 'change' : 'changes'}`)
     : null;
+  const workspaceBrowserLink = isRemoteConversation ? null : buildWorkspaceLink(data.cwd);
+  const visibleWorkingTreeChanges = (data.git?.changes ?? []).slice(0, MAX_VISIBLE_WORKING_TREE_CHANGES);
+  const hiddenWorkingTreeChangeCount = Math.max(0, (data.git?.changes.length ?? 0) - visibleWorkingTreeChanges.length);
 
   return (
     <div className="space-y-5 px-4 py-4">
@@ -1526,9 +1589,9 @@ function LiveSessionContextPanel({ id }: { id: string }) {
 
       <Section title="Working Directory">
         <SurfacePanel muted className="px-3 py-3 space-y-2.5">
-          <div className="space-y-2">
-            <p className="ui-card-body min-w-0 overflow-x-auto whitespace-nowrap pr-1 font-mono text-primary" title={data.cwd}>{data.cwd}</p>
-            <div className="flex items-center justify-end gap-0.5">
+          <div className="flex items-start gap-2">
+            <p className="ui-card-body min-w-0 flex-1 overflow-x-auto whitespace-nowrap pr-1 font-mono text-primary" title={data.cwd}>{data.cwd}</p>
+            <div className="flex shrink-0 items-center gap-0.5">
               <IconButton
                 compact
                 onClick={() => { void pickAndSubmitCwd(); }}
@@ -1560,11 +1623,38 @@ function LiveSessionContextPanel({ id }: { id: string }) {
               </IconButton>
             </div>
           </div>
-          {!isRemoteConversation && (
-            <div className="flex justify-end">
-              <Link to={`/workspace?cwd=${encodeURIComponent(data.cwd)}`} className="ui-card-meta text-accent hover:text-accent/80">
-                Open workspace browser
-              </Link>
+          {(data.branch || data.git || workspaceBrowserLink) && (
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-secondary">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                {data.branch && (
+                  <div className="flex items-center gap-2">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-teal shrink-0">
+                      <line x1="6" y1="3" x2="6" y2="15" />
+                      <circle cx="18" cy="6" r="3" />
+                      <circle cx="6" cy="18" r="3" />
+                      <path d="M18 9a9 9 0 0 1-9 9" />
+                    </svg>
+                    <Pill tone="teal" mono>{data.branch}</Pill>
+                  </div>
+                )}
+                {data.git && (
+                  <span className="font-mono text-dim">
+                    {gitChangeLabel}
+                    {data.git.changeCount > 0 && (
+                      <>
+                        {' '}
+                        <span className="text-success">+{data.git.linesAdded}</span>{' '}
+                        <span className="text-danger">-{data.git.linesDeleted}</span>
+                      </>
+                    )}
+                  </span>
+                )}
+              </div>
+              {workspaceBrowserLink && (
+                <Link to={workspaceBrowserLink} className="ui-toolbar-button shrink-0 text-accent">
+                  Open workspace browser
+                </Link>
+              )}
             </div>
           )}
           {remotePickerOpen && isRemoteConversation && (
@@ -1632,26 +1722,27 @@ function LiveSessionContextPanel({ id }: { id: string }) {
               </div>
             </form>
           )}
-          {(data.branch || data.git) && (
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-secondary">
-              {data.branch && (
-                <div className="flex items-center gap-2">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-teal shrink-0">
-                    <line x1="6" y1="3" x2="6" y2="15" />
-                    <circle cx="18" cy="6" r="3" />
-                    <circle cx="6" cy="18" r="3" />
-                    <path d="M18 9a9 9 0 0 1-9 9" />
-                  </svg>
-                  <Pill tone="teal" mono>{data.branch}</Pill>
-                </div>
-              )}
-              {data.git && (
-                <span className="font-mono text-dim">
-                  {gitChangeLabel}{' '}
-                  <span className="text-success">+{data.git.linesAdded}</span>{' '}
-                  <span className="text-danger">-{data.git.linesDeleted}</span>
-                </span>
-              )}
+          {!isRemoteConversation && visibleWorkingTreeChanges.length > 0 && (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <p className="ui-section-label">Changed files</p>
+                {hiddenWorkingTreeChangeCount > 0 && (
+                  <span className="ui-card-meta">+{hiddenWorkingTreeChangeCount} more</span>
+                )}
+              </div>
+              <div className="space-y-px">
+                {visibleWorkingTreeChanges.map(({ relativePath, change }) => (
+                  <Link
+                    key={`${change}:${relativePath}`}
+                    to={buildWorkspaceLink(data.cwd, relativePath)}
+                    className="group flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors hover:bg-surface/80"
+                    title={`Open ${relativePath} in the workspace editor`}
+                  >
+                    <WorkingTreeChangeMark change={change} />
+                    <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-secondary group-hover:text-primary">{relativePath}</span>
+                  </Link>
+                ))}
+              </div>
             </div>
           )}
           {(openCwdError || changeCwdError) && (

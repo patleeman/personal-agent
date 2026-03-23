@@ -6623,6 +6623,10 @@ app.get('/api/live-sessions/:id/context', (req, res) => {
           changeCount: gitSummary.changeCount,
           linesAdded: gitSummary.linesAdded,
           linesDeleted: gitSummary.linesDeleted,
+          changes: gitSummary.changes.map((change) => ({
+            relativePath: change.relativePath,
+            change: change.change,
+          })),
         }
       : null,
     userMessages,
