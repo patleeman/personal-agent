@@ -161,6 +161,7 @@ export interface SessionMeta {
   title: string;         // session display name or derived fallback title
   messageCount: number;
   isRunning?: boolean;
+  isLive?: boolean;
   lastActivityAt?: string;
   parentSessionFile?: string;
   parentSessionId?: string;

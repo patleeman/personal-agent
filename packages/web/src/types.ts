@@ -607,6 +607,7 @@ export interface SessionMeta {
   title: string;
   messageCount: number;
   isRunning?: boolean;
+  isLive?: boolean;
   lastActivityAt?: string;
   parentSessionFile?: string;
   parentSessionId?: string;
@@ -818,11 +819,19 @@ export interface WorkspaceFileDetail {
 }
 
 export interface LiveSessionMeta {
-  id:          string;
-  cwd:         string;
-  sessionFile: string;
-  title?:      string;
-  isStreaming: boolean;
+  id:                   string;
+  cwd:                  string;
+  sessionFile:          string;
+  title?:               string;
+  isStreaming:          boolean;
+  hasPendingHiddenTurn?: boolean;
+}
+
+export interface QueuedPromptPreview {
+  id: string;
+  text: string;
+  imageCount: number;
+  restorable?: boolean;
 }
 
 // ── SSE events from /api/live-sessions/:id/events ────────────────────────────
@@ -833,7 +842,7 @@ export type SseEvent =
   | { type: 'agent_end' }
   | { type: 'turn_end' }
   | { type: 'user_message';    block: Extract<DisplayBlock, { type: 'user' }> }
-  | { type: 'queue_state';     steering: string[]; followUp: string[] }
+  | { type: 'queue_state';     steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] }
   | { type: 'text_delta';      delta: string }
   | { type: 'thinking_delta';  delta: string }
   | { type: 'tool_start';      toolCallId: string; toolName: string; args: Record<string, unknown> }

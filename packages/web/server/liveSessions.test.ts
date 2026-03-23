@@ -9,6 +9,7 @@ import {
   isPlaceholderConversationTitle,
   patchSessionManagerPersistence,
   promptSession,
+  submitPromptSession,
   queuePromptContext,
   registry,
   reloadAllLiveSessionAuth,
@@ -983,6 +984,7 @@ describe('live session subscriptions', () => {
         sessionFile: '/tmp/workspace/session-2.jsonl',
         title: 'Keep this sidebar title fresh',
         isStreaming: false,
+        hasPendingHiddenTurn: false,
       },
     ]);
   });
@@ -1121,6 +1123,43 @@ describe('live session subscriptions', () => {
 });
 
 describe('queued prompt restore', () => {
+  it('describes image-only queued prompts without a fake attachment placeholder', () => {
+    setLiveEntry('session-image-only-queue', {
+      sessionId: 'session-image-only-queue',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Image only queued prompt',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamMessage: null },
+        getContextUsage: () => null,
+        getSteeringMessages: () => [''],
+        getFollowUpMessages: () => [],
+        isStreaming: true,
+        agent: {
+          steeringQueue: [{
+            role: 'user',
+            content: [{ type: 'image', data: 'b64-image', mimeType: 'image/png' }],
+          }],
+          followUpQueue: [],
+        },
+      },
+    });
+
+    const events: SseEvent[] = [];
+    subscribe('session-image-only-queue', (event) => {
+      events.push(event);
+    });
+
+    expect(events).toContainEqual({
+      type: 'queue_state',
+      steering: [{ id: 'steer-0', text: '1 image attachment', imageCount: 1 }],
+      followUp: [],
+    });
+  });
+
   it('restores a queued prompt back to the composer payload without disturbing other queued items', () => {
     const steeringMessages = ['first queued prompt', 'second queued prompt'];
     const steeringQueue = [
@@ -1181,7 +1220,11 @@ describe('queued prompt restore', () => {
       },
       { role: 'custom', content: 'more hidden steer context' },
     ]);
-    expect(events).toContainEqual({ type: 'queue_state', steering: ['first queued prompt'], followUp: [] });
+    expect(events).toContainEqual({
+      type: 'queue_state',
+      steering: [{ id: 'steer-0', text: 'first queued prompt', imageCount: 0 }],
+      followUp: [],
+    });
   });
 });
 
@@ -1244,6 +1287,61 @@ describe('queuePromptContext', () => {
     }, {
       deliverAs: 'nextTurn',
     });
+  });
+});
+
+describe('submitPromptSession', () => {
+  it('returns after the prompt is accepted instead of waiting for full completion', async () => {
+    const listeners = new Set<(event: AgentSessionEvent) => void>();
+    let resolvePrompt: (() => void) | null = null;
+    let completionResolved = false;
+
+    setLiveEntry('session-submit-started', {
+      sessionId: 'session-submit-started',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Started prompt',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamMessage: null },
+        getContextUsage: () => null,
+        isStreaming: false,
+        subscribe(listener: (event: AgentSessionEvent) => void) {
+          listeners.add(listener);
+          return () => listeners.delete(listener);
+        },
+        prompt: vi.fn(async () => {
+          listeners.forEach((listener) => {
+            listener(asAgentSessionEvent({
+              type: 'message_start',
+              message: {
+                role: 'user',
+                content: [{ type: 'text', text: 'hello there' }],
+                timestamp: 1,
+              },
+            }));
+          });
+
+          await new Promise<void>((resolve) => {
+            resolvePrompt = resolve;
+          });
+          completionResolved = true;
+        }),
+      },
+    });
+
+    const submitted = await submitPromptSession('session-submit-started', 'hello there');
+    expect(submitted.acceptedAs).toBe('started');
+    void submitted.completion.then(() => {
+      completionResolved = true;
+    });
+    expect(completionResolved).toBe(false);
+
+    resolvePrompt?.();
+    await submitted.completion;
+    expect(completionResolved).toBe(true);
   });
 });
 

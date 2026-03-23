@@ -18,6 +18,7 @@ export function buildSyntheticLiveSessionMeta(
     title: normalizeConversationTitle(liveSession.title) ?? NEW_CONVERSATION_TITLE,
     messageCount: 0,
     isRunning: liveSession.isStreaming,
+    isLive: true,
   };
 }
 
@@ -32,7 +33,7 @@ export function applyLiveSessionState(
     const isRunning = Boolean(liveSession?.isStreaming);
     const title = normalizeConversationTitle(liveSession?.title) ?? session.title;
 
-    if (session.isRunning === isRunning && session.title === title) {
+    if (session.isRunning === isRunning && session.title === title && session.isLive === Boolean(liveSession)) {
       return session;
     }
 
@@ -40,6 +41,7 @@ export function applyLiveSessionState(
       ...session,
       title,
       isRunning,
+      isLive: Boolean(liveSession),
     };
   });
 }

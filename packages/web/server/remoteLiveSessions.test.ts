@@ -7,7 +7,9 @@ import {
   createLocalMirrorSession,
   forkLocalMirrorSession,
   notifyRemoteConversationConnectionChanged,
+  remoteRegistry,
   subscribeRemoteConversationConnection,
+  subscribeRemoteLiveSession,
 } from './remoteLiveSessions.js';
 
 const originalEnv = process.env;
@@ -28,6 +30,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   process.env = originalEnv;
+  remoteRegistry.clear();
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
@@ -69,5 +72,58 @@ describe('remote live sessions', () => {
     const content = readFileSync(forked.sessionFile, 'utf-8');
     expect(content).toContain('/srv/other-project');
     expect(content.match(/"type":"session"/g)?.length).toBe(1);
+  });
+
+  it('refreshes remote queued prompt state on subscribe', async () => {
+    const mirror = await createLocalMirrorSession({ remoteCwd: '/home/bits/project' });
+    const events: Array<Record<string, unknown>> = [];
+
+    remoteRegistry.set('conv-remote', {
+      conversationId: 'conv-remote',
+      profile: 'datadog',
+      target: {
+        id: 'gpu-box',
+        label: 'GPU Box',
+        transport: 'ssh',
+        sshDestination: 'patrick@gpu-box',
+        cwdMappings: [],
+        createdAt: '2026-03-23T00:00:00.000Z',
+        updatedAt: '2026-03-23T00:00:00.000Z',
+      },
+      remoteCwd: '/home/bits/project',
+      localSessionFile: mirror.sessionFile,
+      rpc: {
+        child: {} as never,
+        start: vi.fn(async () => undefined),
+        stop: vi.fn(async () => undefined),
+        getState: vi.fn(async () => ({ pendingMessageCount: 2 })),
+        prompt: vi.fn(async () => undefined),
+        steer: vi.fn(async () => undefined),
+        followUp: vi.fn(async () => undefined),
+        abort: vi.fn(async () => undefined),
+        onEvent: vi.fn(() => () => {}),
+        onExit: vi.fn(() => () => {}),
+      },
+      listeners: new Set(),
+      isStreaming: false,
+      pendingMessageCount: 0,
+    });
+
+    subscribeRemoteLiveSession('conv-remote', (event) => {
+      events.push(event as Record<string, unknown>);
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(events).toContainEqual({
+      type: 'queue_state',
+      steering: [],
+      followUp: [{
+        id: 'remote-pending',
+        text: '2 queued remote prompts',
+        imageCount: 0,
+        restorable: false,
+      }],
+    });
   });
 });

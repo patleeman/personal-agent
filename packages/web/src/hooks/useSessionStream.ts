@@ -3,9 +3,8 @@
  * a growing MessageBlock list in real time.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { MessageBlock, PromptAttachmentRefInput, PromptImageInput, SessionContextUsage, SseEvent } from '../types';
+import type { MessageBlock, PromptAttachmentRefInput, PromptImageInput, QueuedPromptPreview, SessionContextUsage, SseEvent } from '../types';
 import { api } from '../api';
-import { normalizeConversationComposerBehavior } from '../conversationComposerSubmit';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { parseSkillBlock } from '../skillBlock';
 
@@ -20,7 +19,7 @@ export interface StreamState {
   tokens: { input: number; output: number; total: number } | null;
   cost: number | null;
   contextUsage: SessionContextUsage | null;
-  pendingQueue: { steering: string[]; followUp: string[] };
+  pendingQueue: { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] };
 }
 
 export const INITIAL_STREAM_STATE: StreamState = {
@@ -37,10 +36,114 @@ export const INITIAL_STREAM_STATE: StreamState = {
   pendingQueue: { steering: [], followUp: [] },
 };
 
-export function normalizePendingQueueItems(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string')
-    : [];
+let optimisticPendingQueueItemCounter = 0;
+
+function createOptimisticPendingQueueItem(text: string): QueuedPromptPreview {
+  optimisticPendingQueueItemCounter += 1;
+  return {
+    id: `optimistic-${optimisticPendingQueueItemCounter}`,
+    text,
+    imageCount: 0,
+  };
+}
+
+export function normalizePendingQueueItems(value: unknown): QueuedPromptPreview[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((item): QueuedPromptPreview[] => {
+    if (typeof item === 'string') {
+      return [createOptimisticPendingQueueItem(item)];
+    }
+
+    if (!item || typeof item !== 'object') {
+      return [];
+    }
+
+    const candidate = item as Partial<QueuedPromptPreview>;
+    const id = typeof candidate.id === 'string' && candidate.id.trim().length > 0
+      ? candidate.id.trim()
+      : createOptimisticPendingQueueItem(typeof candidate.text === 'string' ? candidate.text : '').id;
+    const text = typeof candidate.text === 'string' && candidate.text.trim().length > 0
+      ? candidate.text.trim()
+      : '(empty queued prompt)';
+    const imageCount = Number.isInteger(candidate.imageCount) && Number(candidate.imageCount) > 0
+      ? Number(candidate.imageCount)
+      : 0;
+
+    return [{
+      id,
+      text,
+      imageCount,
+      ...(typeof candidate.restorable === 'boolean' ? { restorable: candidate.restorable } : {}),
+    }];
+  });
+}
+
+export function appendPendingQueueItem(
+  state: StreamState,
+  behavior: 'steer' | 'followUp',
+  text: string,
+): StreamState {
+  if (behavior === 'steer') {
+    return {
+      ...state,
+      pendingQueue: {
+        ...state.pendingQueue,
+        steering: [...state.pendingQueue.steering, createOptimisticPendingQueueItem(text)],
+      },
+    };
+  }
+
+  return {
+    ...state,
+    pendingQueue: {
+      ...state.pendingQueue,
+      followUp: [...state.pendingQueue.followUp, createOptimisticPendingQueueItem(text)],
+    },
+  };
+}
+
+export function removePendingQueueItem(
+  state: StreamState,
+  behavior: 'steer' | 'followUp',
+  text: string,
+): StreamState {
+  const key = behavior === 'steer' ? 'steering' : 'followUp';
+  const queue = state.pendingQueue[key];
+  const index = queue.findLastIndex((item) => item.text === text);
+  if (index < 0) {
+    return state;
+  }
+
+  return {
+    ...state,
+    pendingQueue: {
+      ...state.pendingQueue,
+      [key]: queue.filter((_, itemIndex) => itemIndex !== index),
+    },
+  };
+}
+
+export function removeOptimisticUserBlock(
+  state: StreamState,
+  optimisticBlockId: string,
+): StreamState {
+  if (!optimisticBlockId.trim()) {
+    return state;
+  }
+
+  const blocks = state.blocks.filter((block) => block.id !== optimisticBlockId);
+  if (blocks.length === state.blocks.length) {
+    return state;
+  }
+
+  return {
+    ...state,
+    blocks,
+    totalBlocks: Math.max(0, state.blockOffset + blocks.length),
+  };
 }
 
 export function selectVisibleStreamState(
@@ -101,9 +204,9 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
   ) => {
     if (!sessionId) return;
 
-    const normalizedBehavior = normalizeConversationComposerBehavior(behavior, streamingRef.current);
+    let optimisticUserBlockId: string | null = null;
 
-    if (!normalizedBehavior) {
+    if (!behavior) {
       const ts = new Date().toISOString();
       const userBlock: MessageBlock = {
         type: 'user',
@@ -121,11 +224,27 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
             }
           : {}),
       };
+      optimisticUserBlockId = userBlock.id ?? null;
       blocksRef.current = [...blocksRef.current, userBlock];
       setState((s) => ({ ...s, blocks: blocksRef.current }));
+    } else {
+      setState((s) => appendPendingQueueItem(s, behavior, text));
     }
 
-    await api.promptSession(sessionId, text, normalizedBehavior, images, attachmentRefs);
+    try {
+      await api.promptSession(sessionId, text, behavior, images, attachmentRefs);
+    } catch (error) {
+      if (behavior) {
+        setState((s) => removePendingQueueItem(s, behavior, text));
+      } else if (optimisticUserBlockId) {
+        setState((s) => {
+          const next = removeOptimisticUserBlock(s, optimisticUserBlockId ?? '');
+          blocksRef.current = next.blocks;
+          return next;
+        });
+      }
+      throw error;
+    }
   }, [sessionId]);
 
   const abort = useCallback(async () => {

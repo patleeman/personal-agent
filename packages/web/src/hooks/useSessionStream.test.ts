@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { MessageBlock } from '../types';
 import type { StreamState } from './useSessionStream';
-import { INITIAL_STREAM_STATE, normalizePendingQueueItems, resolveSessionStreamSubscriptionId, selectVisibleStreamState, shouldReplaceOptimisticUserBlock } from './useSessionStream';
+import {
+  appendPendingQueueItem,
+  INITIAL_STREAM_STATE,
+  normalizePendingQueueItems,
+  removeOptimisticUserBlock,
+  removePendingQueueItem,
+  resolveSessionStreamSubscriptionId,
+  selectVisibleStreamState,
+  shouldReplaceOptimisticUserBlock,
+} from './useSessionStream';
 
 describe('resolveSessionStreamSubscriptionId', () => {
   it('disables the live stream subscription when explicitly turned off', () => {
@@ -15,13 +24,74 @@ describe('resolveSessionStreamSubscriptionId', () => {
 });
 
 describe('normalizePendingQueueItems', () => {
-  it('keeps only string queue entries', () => {
-    expect(normalizePendingQueueItems(['first', 2, null, 'second'])).toEqual(['first', 'second']);
+  it('normalizes string queue entries into structured previews', () => {
+    expect(normalizePendingQueueItems(['first', 2, null, 'second'])).toEqual([
+      { id: expect.any(String), text: 'first', imageCount: 0 },
+      { id: expect.any(String), text: 'second', imageCount: 0 },
+    ]);
+  });
+
+  it('preserves structured queue previews from the server', () => {
+    expect(normalizePendingQueueItems([{ id: 'steer-0', text: 'draft (+1 image)', imageCount: 1 }])).toEqual([
+      { id: 'steer-0', text: 'draft (+1 image)', imageCount: 1 },
+    ]);
   });
 
   it('falls back to an empty queue for non-array payloads', () => {
     expect(normalizePendingQueueItems(undefined)).toEqual([]);
     expect(normalizePendingQueueItems({ steering: ['bad-shape'] })).toEqual([]);
+  });
+});
+
+describe('pending queue optimistic updates', () => {
+  it('removes a failed optimistic user block by id', () => {
+    const state: StreamState = {
+      ...INITIAL_STREAM_STATE,
+      blocks: [
+        { type: 'user', id: 'user-1', ts: '2026-03-23T00:00:00.000Z', text: 'hello' },
+        { type: 'text', id: 'assistant-1', ts: '2026-03-23T00:00:01.000Z', text: 'hi' },
+        { type: 'user', id: 'user-2', ts: '2026-03-23T00:00:02.000Z', text: 'failed send' },
+      ],
+      totalBlocks: 3,
+    };
+
+    expect(removeOptimisticUserBlock(state, 'user-2')).toEqual({
+      ...state,
+      blocks: [
+        { type: 'user', id: 'user-1', ts: '2026-03-23T00:00:00.000Z', text: 'hello' },
+        { type: 'text', id: 'assistant-1', ts: '2026-03-23T00:00:01.000Z', text: 'hi' },
+      ],
+      totalBlocks: 2,
+    });
+  });
+
+  it('appends queued follow-up text immediately', () => {
+    expect(appendPendingQueueItem(INITIAL_STREAM_STATE, 'followUp', 'queued follow-up').pendingQueue).toEqual({
+      steering: [],
+      followUp: [{ id: expect.any(String), text: 'queued follow-up', imageCount: 0 }],
+    });
+  });
+
+  it('removes only the most recent matching optimistic queue item', () => {
+    const state: StreamState = {
+      ...INITIAL_STREAM_STATE,
+      pendingQueue: {
+        steering: [{ id: 'steer-1', text: 'first steer', imageCount: 0 }],
+        followUp: [
+          { id: 'dup-1', text: 'duplicate', imageCount: 0 },
+          { id: 'stable-1', text: 'stable', imageCount: 0 },
+          { id: 'dup-2', text: 'duplicate', imageCount: 0 },
+        ],
+      },
+    };
+
+    expect(removePendingQueueItem(state, 'followUp', 'duplicate').pendingQueue).toEqual({
+      steering: [{ id: 'steer-1', text: 'first steer', imageCount: 0 }],
+      followUp: [
+        { id: 'dup-1', text: 'duplicate', imageCount: 0 },
+        { id: 'stable-1', text: 'stable', imageCount: 0 },
+      ],
+    });
   });
 });
 

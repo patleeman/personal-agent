@@ -72,13 +72,19 @@ export interface LiveContextUsage {
   segments?: LiveContextUsageSegment[];
 }
 
+export interface QueuedPromptPreview {
+  id: string;
+  text: string;
+  imageCount: number;
+}
+
 export type SseEvent =
   | { type: 'snapshot';        blocks: DisplayBlock[]; blockOffset: number; totalBlocks: number }
   | { type: 'agent_start' }
   | { type: 'agent_end' }
   | { type: 'turn_end' }
   | { type: 'user_message';    block: Extract<DisplayBlock, { type: 'user' }> }
-  | { type: 'queue_state';     steering: string[]; followUp: string[] }
+  | { type: 'queue_state';     steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] }
   | { type: 'text_delta';      delta: string }
   | { type: 'thinking_delta';  delta: string }
   | { type: 'tool_start';      toolCallId: string; toolName: string; args: unknown }
@@ -414,17 +420,77 @@ function hasQueuedOrActiveHiddenTurn(entry: Pick<LiveEntry, 'pendingHiddenTurnCu
   return Boolean(entry.activeHiddenTurnCustomType) || pendingHiddenTurnCustomTypes.length > 0;
 }
 
-function readQueueState(session: AgentSession): { steering: string[]; followUp: string[] } {
+function formatQueuedPromptPreviewText(text: string, imageCount: number): string {
+  const normalizedText = text.trim();
+  if (normalizedText && imageCount > 0) {
+    return `${normalizedText} (+${imageCount} image${imageCount === 1 ? '' : 's'})`;
+  }
+
+  if (normalizedText) {
+    return normalizedText;
+  }
+
+  if (imageCount > 0) {
+    return `${imageCount} image attachment${imageCount === 1 ? '' : 's'}`;
+  }
+
+  return '(empty queued prompt)';
+}
+
+function buildQueuedPromptPreview(
+  queueType: 'steer' | 'followUp',
+  index: number,
+  text: string,
+  imageCount: number,
+): QueuedPromptPreview {
+  return {
+    id: `${queueType}-${index}`,
+    text: formatQueuedPromptPreviewText(text, imageCount),
+    imageCount,
+  };
+}
+
+function readQueuedPromptPreviews(
+  queueType: 'steer' | 'followUp',
+  visibleQueue: string[],
+  internalQueue: InternalQueuedAgentMessage[] | undefined,
+): QueuedPromptPreview[] {
+  if (!Array.isArray(internalQueue)) {
+    return visibleQueue.map((text, index) => buildQueuedPromptPreview(queueType, index, text, 0));
+  }
+
+  const previews: QueuedPromptPreview[] = [];
+  let fallbackIndex = 0;
+
+  for (const queuedMessage of internalQueue) {
+    if (queuedMessage?.role !== 'user') {
+      continue;
+    }
+
+    const extracted = extractQueuedPromptContent(queuedMessage, visibleQueue[fallbackIndex] ?? '');
+    previews.push(buildQueuedPromptPreview(queueType, previews.length, extracted.text, extracted.images.length));
+    fallbackIndex += 1;
+  }
+
+  if (previews.length > 0 || visibleQueue.length === 0) {
+    return previews;
+  }
+
+  return visibleQueue.map((text, index) => buildQueuedPromptPreview(queueType, index, text, 0));
+}
+
+function readQueueState(session: AgentSession): { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] } {
   const steer = typeof session.getSteeringMessages === 'function'
     ? session.getSteeringMessages()
     : [];
   const followUp = typeof session.getFollowUpMessages === 'function'
     ? session.getFollowUpMessages()
     : [];
+  const internalAgent = session.agent as unknown as InternalAgentQueues | undefined;
 
   return {
-    steering: [...steer],
-    followUp: [...followUp],
+    steering: readQueuedPromptPreviews('steer', [...steer], internalAgent?.steeringQueue),
+    followUp: readQueuedPromptPreviews('followUp', [...followUp], internalAgent?.followUpQueue),
   };
 }
 
@@ -1667,6 +1733,7 @@ export function getLiveSessions() {
     sessionFile: entry.session.sessionFile ?? '',
     title: resolveEntryTitle(entry),
     isStreaming: entry.session.isStreaming,
+    hasPendingHiddenTurn: hasQueuedOrActiveHiddenTurn(entry),
   }));
 }
 
@@ -2078,29 +2145,33 @@ export async function appendVisibleCustomMessage(
   invalidateAppTopics('sessions');
 }
 
-export async function promptSession(
-  sessionId: string,
-  text: string,
+function resolvePromptBehavior(
+  entry: LiveEntry,
   behavior?: 'steer' | 'followUp',
-  images?: PromptImageAttachment[],
-): Promise<void> {
-  const entry = registry.get(sessionId);
-  if (!entry) throw new Error(`Session ${sessionId} is not live`);
-  const { session } = entry;
-  const normalizedBehavior = normalizeQueuedPromptBehavior(behavior, {
-    isStreaming: session.isStreaming,
+): 'steer' | 'followUp' | undefined {
+  return normalizeQueuedPromptBehavior(behavior, {
+    isStreaming: entry.session.isStreaming,
     hasHiddenTurnQueued: hasQueuedOrActiveHiddenTurn(entry),
   });
+}
+
+async function runPromptOnLiveEntry(
+  entry: LiveEntry,
+  text: string,
+  behavior: 'steer' | 'followUp' | undefined,
+  images?: PromptImageAttachment[],
+): Promise<void> {
+  const { session } = entry;
   const hasImages = Boolean(images && images.length > 0);
 
   const runPrompt = async (allowImages: boolean): Promise<void> => {
-    if (normalizedBehavior === 'steer') {
+    if (behavior === 'steer') {
       await (allowImages && hasImages ? session.steer(text, images) : session.steer(text));
       broadcastQueueState(entry, true);
       return;
     }
 
-    if (normalizedBehavior === 'followUp') {
+    if (behavior === 'followUp') {
       await (allowImages && hasImages ? session.followUp(text, images) : session.followUp(text));
       broadcastQueueState(entry, true);
       return;
@@ -2120,6 +2191,85 @@ export async function promptSession(
   }
 }
 
+export async function promptSession(
+  sessionId: string,
+  text: string,
+  behavior?: 'steer' | 'followUp',
+  images?: PromptImageAttachment[],
+): Promise<void> {
+  const entry = registry.get(sessionId);
+  if (!entry) throw new Error(`Session ${sessionId} is not live`);
+  await runPromptOnLiveEntry(entry, text, resolvePromptBehavior(entry, behavior), images);
+}
+
+export async function submitPromptSession(
+  sessionId: string,
+  text: string,
+  behavior?: 'steer' | 'followUp',
+  images?: PromptImageAttachment[],
+): Promise<{ acceptedAs: 'started' | 'queued'; completion: Promise<void> }> {
+  const entry = registry.get(sessionId);
+  if (!entry) throw new Error(`Session ${sessionId} is not live`);
+
+  const normalizedBehavior = resolvePromptBehavior(entry, behavior);
+  if (normalizedBehavior === 'steer' || normalizedBehavior === 'followUp') {
+    await runPromptOnLiveEntry(entry, text, normalizedBehavior, images);
+    return {
+      acceptedAs: 'queued',
+      completion: Promise.resolve(),
+    };
+  }
+
+  let settled = false;
+  let unsubscribe: (() => void) | null = null;
+  const accepted = new Promise<void>((resolve, reject) => {
+    const finish = (handler: () => void) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      unsubscribe?.();
+      unsubscribe = null;
+      handler();
+    };
+
+    unsubscribe = entry.session.subscribe((event) => {
+      if (event.type === 'message_start' && event.message.role === 'user') {
+        finish(resolve);
+        return;
+      }
+
+      if (event.type === 'agent_start' || event.type === 'agent_end' || event.type === 'turn_end') {
+        finish(resolve);
+        return;
+      }
+
+      if (event.type === 'message_end' && event.message.role === 'assistant') {
+        const errorMessage = getAssistantErrorDisplayMessage(event.message);
+        if (errorMessage) {
+          finish(() => reject(new Error(errorMessage)));
+        }
+      }
+    });
+  });
+
+  const completion = runPromptOnLiveEntry(entry, text, normalizedBehavior, images);
+  void completion.finally(() => {
+    if (!settled) {
+      settled = true;
+      unsubscribe?.();
+      unsubscribe = null;
+    }
+  });
+
+  await Promise.race([accepted, completion]);
+  return {
+    acceptedAs: 'started',
+    completion,
+  };
+}
+
 export function restoreQueuedMessage(
   sessionId: string,
   behavior: 'steer' | 'followUp',
@@ -2134,29 +2284,34 @@ export function restoreQueuedMessage(
   const visibleQueue = (behavior === 'steer'
     ? entry.session.getSteeringMessages()
     : entry.session.getFollowUpMessages()) as string[];
-
-  if (index >= visibleQueue.length) {
-    throw new Error('Queued message not found');
-  }
-
-  const [fallbackText] = visibleQueue.splice(index, 1);
   const internalAgent = entry.session.agent as unknown as InternalAgentQueues;
   const internalQueue = behavior === 'steer'
     ? internalAgent.steeringQueue
     : internalAgent.followUpQueue;
 
   if (!Array.isArray(internalQueue)) {
-    visibleQueue.splice(index, 0, fallbackText ?? '');
-    throw new Error('Queued message restore is unavailable for this session');
+    if (index >= visibleQueue.length) {
+      throw new Error('Queued prompt changed before it could be restored. Try again.');
+    }
+
+    throw new Error('Queued prompt restore is unavailable for this session.');
+  }
+
+  const preview = readQueuedPromptPreviews(behavior, [...visibleQueue], internalQueue)[index];
+  if (!preview) {
+    throw new Error('Queued prompt changed before it could be restored. Try again.');
   }
 
   const removed = removeQueuedUserMessage(internalQueue, index);
   if (!removed) {
-    visibleQueue.splice(index, 0, fallbackText ?? '');
-    throw new Error('Queued message not found');
+    throw new Error('Queued prompt changed before it could be restored. Try again.');
   }
 
-  const restored = extractQueuedPromptContent(removed, fallbackText ?? '');
+  if (index < visibleQueue.length) {
+    visibleQueue.splice(index, 1);
+  }
+
+  const restored = extractQueuedPromptContent(removed, preview.text);
   broadcastQueueState(entry, true);
   return restored;
 }

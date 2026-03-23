@@ -22,6 +22,7 @@ describe('sessionIndicators', () => {
       title: 'New Conversation',
       messageCount: 0,
       isRunning: true,
+      isLive: true,
     });
   });
 
@@ -57,10 +58,12 @@ describe('sessionIndicators', () => {
       {
         ...sessions[0],
         isRunning: true,
+        isLive: true,
       },
       {
         ...sessions[1],
         isRunning: false,
+        isLive: true,
       },
     ]);
   });
