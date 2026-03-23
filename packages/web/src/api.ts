@@ -506,7 +506,7 @@ export const api = {
     images?: PromptImageInput[],
     attachmentRefs?: PromptAttachmentRefInput[],
   ) =>
-    post<{ ok: boolean }>(`/live-sessions/${id}/prompt`, {
+    post<{ ok: boolean; accepted: boolean; delivery: 'started' | 'queued' }>(`/live-sessions/${id}/prompt`, {
       text,
       behavior,
       images: images?.map((image) => ({

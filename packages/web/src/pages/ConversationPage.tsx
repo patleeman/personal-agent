@@ -89,6 +89,44 @@ const ExcalidrawEditorModal = lazy(() => import('../components/ExcalidrawEditorM
 
 const INITIAL_HISTORICAL_TAIL_BLOCKS = 400;
 const HISTORICAL_TAIL_BLOCKS_STEP = 400;
+
+export function shouldEnableConversationLiveStream(
+  conversationId: string | null | undefined,
+  confirmedLive: boolean | null,
+): boolean {
+  return Boolean(conversationId) && confirmedLive !== false;
+}
+
+export function resolveConversationLiveSession(input: {
+  streamBlockCount: number;
+  isStreaming: boolean;
+  confirmedLive: boolean | null;
+}): boolean {
+  return input.streamBlockCount > 0 || input.isStreaming || input.confirmedLive === true;
+}
+
+export function shouldShowMissingConversationState(input: {
+  draft: boolean;
+  conversationId: string | null | undefined;
+  sessionsLoaded: boolean;
+  confirmedLive: boolean | null;
+  sessionLoading: boolean;
+  hasVisibleSessionDetail: boolean;
+  hasSavedConversationSessionFile: boolean;
+  hasPendingInitialPrompt: boolean;
+  hasExecutionTarget: boolean;
+}): boolean {
+  return !input.draft
+    && Boolean(input.conversationId)
+    && input.sessionsLoaded
+    && input.confirmedLive === false
+    && !input.sessionLoading
+    && !input.hasVisibleSessionDetail
+    && !input.hasSavedConversationSessionFile
+    && !input.hasPendingInitialPrompt
+    && !input.hasExecutionTarget;
+}
+
 const HISTORICAL_TAIL_BLOCKS_JUMP_PADDING = 40;
 const MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS = 1200;
 const HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX = 1400;
@@ -826,14 +864,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     () => (id ? sessions?.find((session) => session.id === id) ?? null : null),
     [id, sessions],
   );
+  const sessionsLoaded = sessions !== null;
   // We use a confirmed-live flag only for lightweight session-state labeling.
   const [confirmedLive, setConfirmedLive] = useState<boolean | null>(null);
   const [liveSessionHasPendingHiddenTurn, setLiveSessionHasPendingHiddenTurn] = useState(false);
 
   const [historicalTailBlocks, setHistoricalTailBlocks] = useState(INITIAL_HISTORICAL_TAIL_BLOCKS);
-  const shouldSubscribeToLiveStream = Boolean(id) && (!sessionSnapshot || sessionSnapshot.isRunning);
+  const shouldSubscribeToLiveStream = shouldEnableConversationLiveStream(id, confirmedLive);
 
-  // ── Pi SDK stream — only subscribe when the session is likely live/unknown ─
+  // ── Pi SDK stream — stay subscribed until we know the conversation is not live ─
   const stream = useSessionStream(id ?? null, {
     tailBlocks: historicalTailBlocks,
     enabled: shouldSubscribeToLiveStream,
@@ -855,13 +894,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    if (sessionSnapshot && !sessionSnapshot.isRunning) {
+    if (sessionSnapshot?.isLive === false) {
       setConfirmedLive(false);
       setLiveSessionHasPendingHiddenTurn(false);
       return;
     }
 
-    setConfirmedLive(sessionSnapshot ? true : null);
+    setConfirmedLive(sessionSnapshot?.isLive === true ? true : null);
     let cancelled = false;
 
     api.liveSession(id)
@@ -878,7 +917,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           return;
         }
 
-        if (!sessionSnapshot) {
+        if (sessionsLoaded && sessionSnapshot?.isLive !== true) {
           setConfirmedLive(false);
         }
         setLiveSessionHasPendingHiddenTurn(false);
@@ -887,10 +926,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [id, sessionSnapshot]);
+  }, [id, sessionSnapshot, sessionsLoaded]);
 
-  // Session is "live" if SSE connected (has blocks) OR API confirms it
-  const isLiveSession = stream.blocks.length > 0 || stream.isStreaming || confirmedLive === true;
+  const isLiveSession = resolveConversationLiveSession({
+    streamBlockCount: stream.blocks.length,
+    isStreaming: stream.isStreaming,
+    confirmedLive,
+  });
   const allowQueuedPrompts = stream.isStreaming || liveSessionHasPendingHiddenTurn;
   const defaultComposerBehavior = stream.isStreaming
     ? 'steer'
@@ -966,15 +1008,19 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     const followUpQueue = normalizePendingQueueItems(stream.pendingQueue?.followUp);
 
     return [
-      ...steeringQueue.map((text, index) => ({
-        id: `steer-${index}`,
-        text: text.trim() || '(queued attachment)',
+      ...steeringQueue.map((item, index) => ({
+        id: item.id,
+        text: item.text,
+        imageCount: item.imageCount,
+        restorable: item.restorable !== false,
         type: 'steer' as const,
         queueIndex: index,
       })),
-      ...followUpQueue.map((text, index) => ({
-        id: `followup-${index}`,
-        text: text.trim() || '(queued attachment)',
+      ...followUpQueue.map((item, index) => ({
+        id: item.id,
+        text: item.text,
+        imageCount: item.imageCount,
+        restorable: item.restorable !== false,
         type: 'followUp' as const,
         queueIndex: index,
       })),
@@ -1868,7 +1914,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       await api.resumeSession(visibleSessionDetail.meta.file);
       setConfirmedLive(true);
       stream.reconnect();
-      await new Promise((resolve) => window.setTimeout(resolve, 150));
       await stream.send(textToSend, queuedBehavior);
       await refetchConversationProjects({ resetLoading: false });
       emitConversationProjectsChanged(id);
@@ -3365,20 +3410,19 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           await api.resumeSession(visibleSessionDetail.meta.file);
           setConfirmedLive(true);
           stream.reconnect();
+          await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs);
+          await refetchConversationProjects({ resetLoading: false });
+          emitConversationProjectsChanged(id);
+          await refetchConversationAttachments();
           window.setTimeout(() => {
             scrollToBottom();
-            void stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs)
-              .then(async () => {
-                await refetchConversationProjects({ resetLoading: false });
-                emitConversationProjectsChanged(id);
-                await refetchConversationAttachments();
-              })
-              .catch((error) => {
-                console.error('Send after auto-resume failed:', error);
-              });
-          }, 150);
+          }, 50);
         } catch (error) {
           console.error('Auto-resume failed:', error);
+          setInput(inputSnapshot);
+          setAttachments(pendingImageAttachments);
+          setDrawingAttachments(pendingDrawingAttachments);
+          showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
         }
       }
     } catch (error) {
@@ -3846,14 +3890,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     title,
   ]);
 
-  const missingConversation = !draft
-    && Boolean(id)
-    && confirmedLive === false
-    && !sessionLoading
-    && !visibleSessionDetail
-    && !savedConversationSessionFile
-    && !pendingInitialPrompt
-    && !selectedExecutionTargetId;
+  const missingConversation = shouldShowMissingConversationState({
+    draft,
+    conversationId: id,
+    sessionsLoaded,
+    confirmedLive,
+    sessionLoading,
+    hasVisibleSessionDetail: Boolean(visibleSessionDetail),
+    hasSavedConversationSessionFile: Boolean(savedConversationSessionFile),
+    hasPendingInitialPrompt: Boolean(pendingInitialPrompt),
+    hasExecutionTarget: Boolean(selectedExecutionTargetId),
+  });
 
   if (missingConversation) {
     return (
@@ -4157,15 +4204,19 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                       {msg.type === 'steer' ? '⤵ steer' : '↷ followup'}
                     </Pill>
                     <span className="flex-1 text-[11px] text-secondary truncate">{msg.text}</span>
-                    <button
-                      type="button"
-                      onClick={() => { void restoreQueuedPromptToComposer(msg.type, msg.queueIndex); }}
-                      className="shrink-0 text-[11px] text-dim transition-colors hover:text-primary"
-                      title="Restore this queued prompt to the composer"
-                      aria-label="Restore queued prompt to the composer"
-                    >
-                      restore
-                    </button>
+                    {msg.restorable !== false ? (
+                      <button
+                        type="button"
+                        onClick={() => { void restoreQueuedPromptToComposer(msg.type, msg.queueIndex); }}
+                        className="shrink-0 text-[11px] text-dim transition-colors hover:text-primary"
+                        title="Restore this queued prompt to the composer"
+                        aria-label="Restore queued prompt to the composer"
+                      >
+                        restore
+                      </button>
+                    ) : (
+                      <span className="shrink-0 text-[11px] text-dim/70">remote</span>
+                    )}
                   </div>
                 ))}
               </div>

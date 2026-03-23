@@ -129,6 +129,7 @@ import {
   isLive as isLocalLive,
   subscribe as subscribeLocal,
   promptSession as promptLocalSession,
+  submitPromptSession as submitLocalPromptSession,
   restoreQueuedMessage,
   queuePromptContext,
   appendVisibleCustomMessage,
@@ -156,7 +157,7 @@ import {
   getRemoteLiveSessionMeta,
   isRemoteLiveSession,
   listRemoteLiveSessions,
-  promptRemoteLiveSession,
+  submitRemoteLiveSessionPrompt,
   readRemoteConversationBindingForConversation,
   resumeRemoteLiveSession,
   stopRemoteLiveSession,
@@ -1666,6 +1667,7 @@ function listConversationSessionsSnapshot() {
       title: entry.title || 'New Conversation',
       messageCount: 0,
       isRunning: entry.isStreaming,
+      isLive: true,
       lastActivityAt: new Date().toISOString(),
       needsAttention: false,
       attentionUnreadMessageCount: 0,
@@ -1682,6 +1684,7 @@ function listConversationSessionsSnapshot() {
         ...session,
         title: liveEntry?.title || session.title,
         isRunning: Boolean(liveEntry?.isStreaming),
+        isLive: Boolean(liveEntry),
       };
     }),
   ];
@@ -6318,22 +6321,22 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
       return;
     }
 
-    // Don't await — streaming response goes over SSE
     const promptImages = images?.map((image) => ({
       type: 'image' as const,
       data: image.data,
       mimeType: image.mimeType,
       ...(image.name ? { name: image.name } : {}),
     }));
-    const promptPromise = isRemoteLive
-      ? promptRemoteLiveSession({
+    const submittedPrompt = isRemoteLive
+      ? await submitRemoteLiveSessionPrompt({
           conversationId: id,
           text,
           behavior,
           images: promptImages,
           ...(hiddenContext ? { hiddenContext } : {}),
         })
-      : promptLocalSession(id, text, behavior, promptImages);
+      : await submitLocalPromptSession(id, text, behavior, promptImages);
+    const promptPromise = submittedPrompt.completion;
 
     void promptPromise.then(async () => {
       if (!sessionFile || backgroundRunContextEntries.length === 0) {
@@ -6377,6 +6380,8 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
     });
     res.json({
       ok: true,
+      accepted: true,
+      delivery: submittedPrompt.acceptedAs,
       relatedProjectIds,
       referencedTaskIds: promptReferences.taskIds,
       referencedMemoryDocIds: promptReferences.memoryDocIds,
@@ -6413,11 +6418,16 @@ app.post('/api/live-sessions/:id/dequeue', (req, res) => {
     const restored = restoreQueuedMessage(req.params.id, behavior, index as number);
     res.json({ ok: true, ...restored });
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
+      message,
       stack: err instanceof Error ? err.stack : undefined,
     });
-    res.status(500).json({ error: String(err) });
+    const status = message.includes('Queued prompt changed before it could be restored')
+      || message.includes('Queued prompt restore is unavailable')
+      ? 409
+      : 500;
+    res.status(status).json({ error: message });
   }
 });
 

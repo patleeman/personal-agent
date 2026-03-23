@@ -3,9 +3,57 @@ import { renderToString } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ExecutionTargetSummary } from '../types.js';
-import { ConversationPage, DraftExecutionTargetSelector } from './ConversationPage.js';
+import {
+  ConversationPage,
+  DraftExecutionTargetSelector,
+  resolveConversationLiveSession,
+  shouldEnableConversationLiveStream,
+  shouldShowMissingConversationState,
+} from './ConversationPage.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
+
+describe('conversation live state helpers', () => {
+  it('keeps the live stream enabled until the conversation is confirmed not live', () => {
+    expect(shouldEnableConversationLiveStream('conv-123', null)).toBe(true);
+    expect(shouldEnableConversationLiveStream('conv-123', true)).toBe(true);
+    expect(shouldEnableConversationLiveStream('conv-123', false)).toBe(false);
+    expect(shouldEnableConversationLiveStream(null, null)).toBe(false);
+  });
+
+  it('treats a conversation as live when either the stream or probe confirms it', () => {
+    expect(resolveConversationLiveSession({ streamBlockCount: 0, isStreaming: false, confirmedLive: null })).toBe(false);
+    expect(resolveConversationLiveSession({ streamBlockCount: 1, isStreaming: false, confirmedLive: null })).toBe(true);
+    expect(resolveConversationLiveSession({ streamBlockCount: 0, isStreaming: true, confirmedLive: null })).toBe(true);
+    expect(resolveConversationLiveSession({ streamBlockCount: 0, isStreaming: false, confirmedLive: true })).toBe(true);
+  });
+
+  it('does not show the missing state until session discovery has loaded', () => {
+    expect(shouldShowMissingConversationState({
+      draft: false,
+      conversationId: 'conv-123',
+      sessionsLoaded: false,
+      confirmedLive: false,
+      sessionLoading: false,
+      hasVisibleSessionDetail: false,
+      hasSavedConversationSessionFile: false,
+      hasPendingInitialPrompt: false,
+      hasExecutionTarget: false,
+    })).toBe(false);
+
+    expect(shouldShowMissingConversationState({
+      draft: false,
+      conversationId: 'conv-123',
+      sessionsLoaded: true,
+      confirmedLive: false,
+      sessionLoading: false,
+      hasVisibleSessionDetail: false,
+      hasSavedConversationSessionFile: false,
+      hasPendingInitialPrompt: false,
+      hasExecutionTarget: false,
+    })).toBe(true);
+  });
+});
 
 describe('ConversationPage', () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;

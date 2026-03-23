@@ -17,13 +17,20 @@ const REMOTE_BOOTSTRAP_FILE = 'bootstrap-session.jsonl';
 const REMOTE_IDLE_STOP_DELAY_MS = 60_000;
 const REMOTE_MIRROR_SYNC_TTL_MS = 5_000;
 
+interface QueuedPromptPreview {
+  id: string;
+  text: string;
+  imageCount: number;
+  restorable?: boolean;
+}
+
 type SseEvent =
   | { type: 'snapshot'; blocks: SessionDetail['blocks']; blockOffset: number; totalBlocks: number }
   | { type: 'agent_start' }
   | { type: 'agent_end' }
   | { type: 'turn_end' }
   | { type: 'user_message'; block: Extract<SessionDetail['blocks'][number], { type: 'user' }> }
-  | { type: 'queue_state'; steering: string[]; followUp: string[] }
+  | { type: 'queue_state'; steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] }
   | { type: 'text_delta'; delta: string }
   | { type: 'thinking_delta'; delta: string }
   | { type: 'tool_start'; toolCallId: string; toolName: string; args: Record<string, unknown> }
@@ -45,6 +52,7 @@ interface RpcState {
   sessionFile?: string;
   isStreaming?: boolean;
   sessionName?: string;
+  pendingMessageCount?: number;
 }
 
 interface RemoteRpcClient {
@@ -71,6 +79,7 @@ interface RemoteLiveEntry {
   listeners: Set<LiveListener>;
   title?: string;
   isStreaming: boolean;
+  pendingMessageCount: number;
   idleTimer?: ReturnType<typeof setTimeout>;
 }
 
@@ -526,9 +535,40 @@ function buildSnapshot(sessionFile: string, tailBlocks?: number): SseEvent {
   };
 }
 
+function buildRemoteQueueState(entry: Pick<RemoteLiveEntry, 'pendingMessageCount'>): Extract<SseEvent, { type: 'queue_state' }> {
+  if (entry.pendingMessageCount <= 0) {
+    return { type: 'queue_state', steering: [], followUp: [] };
+  }
+
+  const label = entry.pendingMessageCount === 1
+    ? '1 queued remote prompt'
+    : `${entry.pendingMessageCount} queued remote prompts`;
+
+  return {
+    type: 'queue_state',
+    steering: [],
+    followUp: [{
+      id: 'remote-pending',
+      text: label,
+      imageCount: 0,
+      restorable: false,
+    }],
+  };
+}
+
 function emit(entry: RemoteLiveEntry, event: SseEvent): void {
   for (const listener of entry.listeners) {
     listener(event);
+  }
+}
+
+async function refreshRemoteQueueState(entry: RemoteLiveEntry, options: { emitUpdate?: boolean } = {}): Promise<void> {
+  const state = await entry.rpc.getState();
+  entry.pendingMessageCount = Number.isInteger(state.pendingMessageCount) && Number(state.pendingMessageCount) > 0
+    ? Number(state.pendingMessageCount)
+    : 0;
+  if (options.emitUpdate) {
+    emit(entry, buildRemoteQueueState(entry));
   }
 }
 
@@ -665,13 +705,15 @@ function attachRpcEventForwarding(entry: RemoteLiveEntry): void {
     if (type === 'agent_start') {
       entry.isStreaming = true;
       emit(entry, { type: 'agent_start' });
+      void refreshRemoteQueueState(entry, { emitUpdate: true }).catch(() => undefined);
       return;
     }
 
     if (type === 'agent_end') {
       entry.isStreaming = false;
       void syncMirrorFromRemote(entry)
-        .then(() => {
+        .then(async () => {
+          await refreshRemoteQueueState(entry, { emitUpdate: true });
           emit(entry, buildSnapshot(entry.localSessionFile));
           emit(entry, { type: 'turn_end' });
           emit(entry, { type: 'agent_end' });
@@ -828,6 +870,9 @@ async function startRemoteEntry(options: {
       rpc,
       listeners: new Set(),
       isStreaming: Boolean(state.isStreaming),
+      pendingMessageCount: Number.isInteger(state.pendingMessageCount) && Number(state.pendingMessageCount) > 0
+        ? Number(state.pendingMessageCount)
+        : 0,
       ...(typeof state.sessionName === 'string' && state.sessionName.trim() ? { title: state.sessionName.trim() } : {}),
     };
 
@@ -1049,7 +1094,7 @@ export function isRemoteLiveSession(conversationId: string): boolean {
   return remoteRegistry.has(conversationId);
 }
 
-export function getRemoteLiveSessionMeta(conversationId: string): { id: string; cwd: string; sessionFile: string; title?: string; isStreaming: boolean } | null {
+export function getRemoteLiveSessionMeta(conversationId: string): { id: string; cwd: string; sessionFile: string; title?: string; isStreaming: boolean; hasPendingHiddenTurn: boolean } | null {
   const entry = remoteRegistry.get(conversationId);
   if (!entry) {
     return null;
@@ -1061,16 +1106,18 @@ export function getRemoteLiveSessionMeta(conversationId: string): { id: string; 
     sessionFile: entry.localSessionFile,
     ...(entry.title ? { title: entry.title } : {}),
     isStreaming: entry.isStreaming,
+    hasPendingHiddenTurn: false,
   };
 }
 
-export function listRemoteLiveSessions(): Array<{ id: string; cwd: string; sessionFile: string; title?: string; isStreaming: boolean }> {
+export function listRemoteLiveSessions(): Array<{ id: string; cwd: string; sessionFile: string; title?: string; isStreaming: boolean; hasPendingHiddenTurn: boolean }> {
   return Array.from(remoteRegistry.values()).map((entry) => ({
     id: entry.conversationId,
     cwd: entry.remoteCwd,
     sessionFile: entry.localSessionFile,
     ...(entry.title ? { title: entry.title } : {}),
     isStreaming: entry.isStreaming,
+    hasPendingHiddenTurn: false,
   }));
 }
 
@@ -1083,7 +1130,8 @@ export function subscribeRemoteLiveSession(conversationId: string, listener: Liv
   clearTimeout(entry.idleTimer);
   entry.listeners.add(listener);
   listener(buildSnapshot(entry.localSessionFile, options?.tailBlocks));
-  listener({ type: 'queue_state', steering: [], followUp: [] });
+  listener(buildRemoteQueueState(entry));
+  void refreshRemoteQueueState(entry, { emitUpdate: true }).catch(() => undefined);
   if (entry.isStreaming) {
     listener({ type: 'agent_start' });
   }
@@ -1092,6 +1140,33 @@ export function subscribeRemoteLiveSession(conversationId: string, listener: Liv
     entry.listeners.delete(listener);
     scheduleIdleStop(entry);
   };
+}
+
+async function runRemotePrompt(entry: RemoteLiveEntry, options: {
+  text: string;
+  behavior?: 'steer' | 'followUp';
+  images?: Array<{ type: 'image'; data: string; mimeType: string; name?: string }>;
+  hiddenContext?: string;
+}): Promise<void> {
+  clearTimeout(entry.idleTimer);
+  const promptText = options.hiddenContext ? `${options.hiddenContext}\n\n${options.text}` : options.text;
+  if (!options.behavior) {
+    appendLocalUserMessage(entry.localSessionFile, options.text);
+  }
+
+  if (options.behavior === 'steer') {
+    await entry.rpc.steer(promptText, options.images);
+    await refreshRemoteQueueState(entry, { emitUpdate: true });
+    return;
+  }
+
+  if (options.behavior === 'followUp') {
+    await entry.rpc.followUp(promptText, options.images);
+    await refreshRemoteQueueState(entry, { emitUpdate: true });
+    return;
+  }
+
+  await entry.rpc.prompt(promptText, options.images);
 }
 
 export async function promptRemoteLiveSession(options: {
@@ -1106,23 +1181,73 @@ export async function promptRemoteLiveSession(options: {
     throw new Error(`Session ${options.conversationId} is not live`);
   }
 
-  clearTimeout(entry.idleTimer);
-  const promptText = options.hiddenContext ? `${options.hiddenContext}\n\n${options.text}` : options.text;
-  if (!options.behavior) {
-    appendLocalUserMessage(entry.localSessionFile, options.text);
+  await runRemotePrompt(entry, options);
+}
+
+export async function submitRemoteLiveSessionPrompt(options: {
+  conversationId: string;
+  text: string;
+  behavior?: 'steer' | 'followUp';
+  images?: Array<{ type: 'image'; data: string; mimeType: string; name?: string }>;
+  hiddenContext?: string;
+}): Promise<{ acceptedAs: 'started' | 'queued'; completion: Promise<void> }> {
+  const entry = remoteRegistry.get(options.conversationId);
+  if (!entry) {
+    throw new Error(`Session ${options.conversationId} is not live`);
   }
 
-  if (options.behavior === 'steer') {
-    await entry.rpc.steer(promptText, options.images);
-    return;
+  if (options.behavior === 'steer' || options.behavior === 'followUp') {
+    await runRemotePrompt(entry, options);
+    return {
+      acceptedAs: 'queued',
+      completion: Promise.resolve(),
+    };
   }
 
-  if (options.behavior === 'followUp') {
-    await entry.rpc.followUp(promptText, options.images);
-    return;
-  }
+  let settled = false;
+  let unsubscribeEvent: (() => void) | null = null;
+  let unsubscribeExit: (() => void) | null = null;
+  const accepted = new Promise<void>((resolve, reject) => {
+    const finish = (handler: () => void) => {
+      if (settled) {
+        return;
+      }
 
-  await entry.rpc.prompt(promptText, options.images);
+      settled = true;
+      unsubscribeEvent?.();
+      unsubscribeExit?.();
+      unsubscribeEvent = null;
+      unsubscribeExit = null;
+      handler();
+    };
+
+    unsubscribeEvent = entry.rpc.onEvent((event) => {
+      const type = typeof event.type === 'string' ? event.type : '';
+      if (type === 'agent_start' || type === 'agent_end') {
+        finish(resolve);
+      }
+    });
+    unsubscribeExit = entry.rpc.onExit((error) => {
+      finish(() => reject(new Error(error || 'Remote workspace disconnected.')));
+    });
+  });
+
+  const completion = runRemotePrompt(entry, options);
+  void completion.finally(() => {
+    if (!settled) {
+      settled = true;
+      unsubscribeEvent?.();
+      unsubscribeExit?.();
+      unsubscribeEvent = null;
+      unsubscribeExit = null;
+    }
+  });
+
+  await Promise.race([accepted, completion]);
+  return {
+    acceptedAs: 'started',
+    completion,
+  };
 }
 
 export async function abortRemoteLiveSession(conversationId: string): Promise<void> {

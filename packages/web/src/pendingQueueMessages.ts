@@ -3,6 +3,7 @@ import type { MessageBlock } from './types';
 export type PendingQueuePreviewItem = {
   id: string;
   text: string;
+  imageCount?: number;
   type: 'steer' | 'followUp';
   queueIndex: number;
 };
