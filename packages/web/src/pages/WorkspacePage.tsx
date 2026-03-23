@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import type { Extension } from '@codemirror/state';
+import { unifiedMergeView } from '@codemirror/merge';
 import { EditorView } from '@codemirror/view';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
@@ -21,7 +22,6 @@ import {
   readWorkspaceFileFromSearch,
   summarizeChanges,
   treeContainsPath,
-  WorkspaceWordDiffView,
 } from '../workspaceBrowser';
 import { emitWorkspaceChanged, setWorkspaceEditorDirty } from '../workspaceEvents';
 import { EmptyState, ErrorState, LoadingState, PageHeader, PageHeading, Pill, ToolbarButton } from '../components/ui';
@@ -50,15 +50,7 @@ function fileBlockedReason(detail: WorkspaceFileDetail | null): string | null {
 }
 
 function RawDiffFallback({ diff }: { diff: string }) {
-  return (
-    <div className="rounded-xl border border-border-subtle bg-surface/30 overflow-hidden">
-      <div className="border-b border-border-subtle bg-surface/70 px-4 py-2">
-        <p className="ui-section-label">Raw diff fallback</p>
-        <p className="text-[11px] text-dim">Word-level rendering was unavailable for this diff, so the unified patch is shown instead.</p>
-      </div>
-      <pre className="max-h-[24rem] overflow-auto px-4 py-3 font-mono text-[11px] leading-6 text-secondary whitespace-pre-wrap break-words">{diff}</pre>
-    </div>
-  );
+  return <pre className="max-h-[24rem] overflow-auto rounded-xl border border-border-subtle bg-surface/30 px-4 py-3 font-mono text-[11px] leading-6 text-secondary whitespace-pre-wrap break-words">{diff}</pre>;
 }
 
 export function WorkspacePage() {
@@ -127,6 +119,21 @@ export function WorkspacePage() {
     () => fileDetail?.content !== null && fileDetail?.content !== undefined && draftContent !== fileDetail.content,
     [draftContent, fileDetail],
   );
+  const inlineDiffOriginalContent = useMemo(() => {
+    if (!fileDetail || fileDetail.binary || fileDetail.tooLarge || !fileDetail.exists) {
+      return null;
+    }
+
+    if (fileDetail.originalContent !== null) {
+      return fileDetail.originalContent;
+    }
+
+    if (draftDirty && fileDetail.content !== null) {
+      return fileDetail.content;
+    }
+
+    return null;
+  }, [draftDirty, fileDetail]);
 
   useEffect(() => {
     setWorkspaceEditorDirty(draftDirty);
@@ -205,8 +212,18 @@ export function WorkspacePage() {
     if (languageExtension) {
       extensions.push(languageExtension);
     }
+    if (inlineDiffOriginalContent !== null) {
+      extensions.push(unifiedMergeView({
+        original: inlineDiffOriginalContent,
+        gutter: true,
+        highlightChanges: true,
+        allowInlineDiffs: true,
+        syntaxHighlightDeletions: false,
+        mergeControls: false,
+      }));
+    }
     return extensions;
-  }, [selectedFilePath, theme]);
+  }, [inlineDiffOriginalContent, selectedFilePath, theme]);
 
   const workspaceMeta = useMemo(() => {
     if (!snapshot) {
@@ -222,13 +239,26 @@ export function WorkspacePage() {
   }, [snapshot]);
 
   const blockedReason = fileBlockedReason(fileDetail);
-  const canRenderWordDiff = Boolean(
-    fileDetail
-    && fileDetail.change
-    && fileDetail.originalContent !== null
-    && (fileDetail.content !== null || !fileDetail.exists),
-  );
-  const currentDiffContent = fileDetail?.exists ? draftContent : '';
+  const inlineDiffDescription = useMemo(() => {
+    if (inlineDiffOriginalContent === null || !fileDetail) {
+      return null;
+    }
+
+    if (fileDetail.originalContent !== null) {
+      if (fileDetail.change === 'added' || fileDetail.change === 'untracked') {
+        return draftDirty
+          ? 'Inline diff markers show your draft as a new file against an empty baseline.'
+          : 'Inline diff markers show this file as a new addition against an empty baseline.';
+      }
+
+      return draftDirty
+        ? 'Inline diff markers compare your draft with the committed baseline.'
+        : 'Inline diff markers compare this file with the committed baseline.';
+    }
+
+    return 'Inline diff markers show unsaved edits against the last saved file on disk.';
+  }, [draftDirty, fileDetail, inlineDiffOriginalContent]);
+  const showRawDiffFallback = Boolean(fileDetail?.diff) && inlineDiffOriginalContent === null;
   const showingFileLoadingState = Boolean(selectedFilePath && fileApi.loading && fileDetail?.relativePath !== selectedFilePath);
 
   const handleWorkspaceInvalidation = useCallback(async () => {
@@ -426,6 +456,7 @@ export function WorkspacePage() {
                   Files changed on disk. Save or reload this file to sync with the latest workspace state.
                 </p>
               )}
+              {inlineDiffDescription && <p className="mt-2 text-[11px] text-dim">{inlineDiffDescription}</p>}
             </div>
 
             <div className="min-h-0 flex-1 overflow-hidden">
@@ -445,22 +476,16 @@ export function WorkspacePage() {
               )}
             </div>
 
-            {(fileDetail.change || fileDetail.diff) && (
+            {showRawDiffFallback && (
               <div className="shrink-0 border-t border-border-subtle bg-surface/20 px-4 py-3 space-y-3">
                 <div className="space-y-1">
-                  <p className="ui-section-label">Diff</p>
+                  <p className="ui-section-label">Patch</p>
                   <p className="text-[11px] text-dim">
-                    {draftDirty
-                      ? 'Word-level diff compares the last saved file on disk with the committed baseline. Save to update it.'
-                      : 'Word-level diff compares the current file with the committed baseline.'}
+                    The inline editor diff is unavailable for this file, so the raw patch is shown instead.
                   </p>
                 </div>
 
-                {canRenderWordDiff
-                  ? <WorkspaceWordDiffView originalContent={fileDetail.originalContent ?? ''} currentContent={fileDetail.exists ? currentDiffContent : ''} />
-                  : fileDetail.diff
-                    ? <RawDiffFallback diff={fileDetail.diff} />
-                    : <p className="text-[12px] text-dim">No diff available for this file.</p>}
+                <RawDiffFallback diff={fileDetail.diff ?? ''} />
               </div>
             )}
           </div>

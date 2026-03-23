@@ -18,7 +18,7 @@ import {
 import { isWorkspaceEditorDirty, subscribeWorkspaceChanged, subscribeWorkspaceEditorDirty } from '../workspaceEvents';
 import { ErrorState, LoadingState, Pill, ToolbarButton } from './ui';
 
-const INPUT_CLASS = 'w-full rounded-md border border-border-default bg-base px-2.5 py-1.5 text-[11px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
+const INPUT_CLASS = 'w-full rounded-md border border-border-default bg-base px-2.5 py-1.5 text-[12px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
 const WORKSPACE_REFRESH_THROTTLE_MS = 1000;
 
 export function WorkspaceRail() {
@@ -139,7 +139,7 @@ export function WorkspaceRail() {
             <Pill tone={snapshot.changedCount > 0 ? 'warning' : 'muted'}>{summarizeChanges(snapshot.changedCount)}</Pill>
             {dirty && <Pill tone="warning">unsaved</Pill>}
           </div>
-          <p className="break-all text-[11px] text-dim">{snapshot.root}</p>
+          <p className="break-all text-[12px] text-dim">{snapshot.root}</p>
         </div>
 
         <input
@@ -171,18 +171,18 @@ export function WorkspaceRail() {
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="shrink-0 border-b border-border-subtle px-3 py-1.5 text-[10px] text-dim">
+        <div className="shrink-0 border-b border-border-subtle px-3 py-1.5 text-[11px] text-dim">
           <div className="flex items-center justify-between gap-3">
             <span>{visibleFileCount} visible {visibleFileCount === 1 ? 'file' : 'files'}</span>
             {selectedFilePath && (
-              <span className="max-w-[12rem] truncate font-mono text-[10px]" title={selectedFilePath}>{selectedFilePath}</span>
+              <span className="max-w-[12rem] truncate text-[11px]" title={selectedFilePath}>{selectedFilePath}</span>
             )}
           </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
           {filteredTree.length === 0 ? (
-            <p className="px-1 text-[11px] text-dim">No files match the current filter.</p>
+            <p className="px-1 text-[12px] text-dim">No files match the current filter.</p>
           ) : (
             <WorkspaceTreeView
               nodes={filteredTree}
@@ -194,7 +194,7 @@ export function WorkspaceRail() {
           )}
 
           {snapshot.truncated && (
-            <p className="mt-2 px-1 text-[10px] text-dim">Large folder view truncated after the first 3000 files.</p>
+            <p className="mt-2 px-1 text-[11px] text-dim">Large folder view truncated after the first 3000 files.</p>
           )}
         </div>
       </div>
