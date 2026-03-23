@@ -16,7 +16,7 @@ import type { WorkspaceChangeKind, WorkspaceTreeNode } from './types';
 export const WORKSPACE_CWD_SEARCH_PARAM = 'cwd';
 export const WORKSPACE_FILE_SEARCH_PARAM = 'file';
 
-const TREE_ROW_CLASS = 'group flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[11px] leading-5 transition-colors';
+const TREE_ROW_CLASS = 'group flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[12px] leading-5 transition-colors';
 const TREE_ROW_IDLE_CLASS = 'text-secondary hover:bg-surface/80 hover:text-primary';
 const TREE_ROW_ACTIVE_CLASS = 'bg-accent/10 text-primary';
 
@@ -294,13 +294,13 @@ function countChangedDescendants(node: WorkspaceTreeNode): number {
 
 export function editorChromeTheme(isDark: boolean): Extension {
   const highlightTheme = HighlightStyle.define([
-    { tag: [tags.keyword, tags.controlKeyword, tags.operatorKeyword, tags.modifier], color: isDark ? 'rgb(224 152 48)' : 'rgb(149 90 16)', fontWeight: '600' },
+    { tag: [tags.keyword, tags.controlKeyword, tags.operatorKeyword, tags.modifier], color: isDark ? 'rgb(224 152 48)' : 'rgb(149 90 16)' },
     { tag: [tags.atom, tags.bool, tags.number, tags.integer, tags.float], color: isDark ? 'rgb(91 144 204)' : 'rgb(30 90 150)' },
     { tag: [tags.string, tags.special(tags.string), tags.regexp], color: isDark ? 'rgb(61 168 168)' : 'rgb(26 120 120)' },
     { tag: [tags.comment, tags.lineComment, tags.blockComment], color: 'rgb(var(--color-dim))', fontStyle: 'italic' },
-    { tag: [tags.typeName, tags.className, tags.namespace, tags.definition(tags.typeName)], color: isDark ? 'rgb(242 239 232)' : 'rgb(28 26 20)', fontWeight: '600' },
+    { tag: [tags.typeName, tags.className, tags.namespace, tags.definition(tags.typeName)], color: isDark ? 'rgb(242 239 232)' : 'rgb(28 26 20)' },
     { tag: [tags.variableName, tags.propertyName, tags.attributeName], color: 'rgb(var(--color-primary))' },
-    { tag: [tags.definition(tags.variableName), tags.function(tags.variableName), tags.labelName], color: isDark ? 'rgb(242 239 232)' : 'rgb(28 26 20)', fontWeight: '600' },
+    { tag: [tags.definition(tags.variableName), tags.function(tags.variableName), tags.labelName], color: isDark ? 'rgb(242 239 232)' : 'rgb(28 26 20)' },
     { tag: [tags.punctuation, tags.separator, tags.bracket], color: 'rgb(var(--color-secondary))' },
     { tag: [tags.meta, tags.docString], color: 'rgb(var(--color-dim))' },
     { tag: tags.invalid, color: 'rgb(var(--color-danger))' },
@@ -313,10 +313,12 @@ export function editorChromeTheme(isDark: boolean): Extension {
         color: 'rgb(var(--color-primary))',
         backgroundColor: 'rgb(var(--color-panel))',
         fontSize: '12px',
+        fontWeight: '400',
       },
       '.cm-scroller': {
         fontFamily: '"JetBrains Mono Variable", "JetBrains Mono", monospace',
         lineHeight: '1.65',
+        fontWeight: '400',
         backgroundColor: 'rgb(var(--color-panel))',
       },
       '.cm-content': {
@@ -452,7 +454,7 @@ export function WorkspaceTreeView({
                 <FolderTreeIcon open={isExpanded} />
                 <span className="min-w-0 flex-1 truncate">{node.name}</span>
                 {changedChildren > 0 && (
-                  <span className="shrink-0 rounded bg-warning/10 px-1 py-0.5 text-[9px] font-semibold text-warning">
+                  <span className="shrink-0 rounded bg-warning/10 px-1 py-0.5 text-[10px] font-semibold text-warning">
                     {changedChildren}
                   </span>
                 )}
@@ -484,7 +486,7 @@ export function WorkspaceTreeView({
             <span className="w-3 shrink-0" aria-hidden="true" />
             <FileTreeIcon deleted={!node.exists} />
             <span className={[
-              'min-w-0 flex-1 truncate font-mono',
+              'min-w-0 flex-1 truncate',
               !node.exists && 'line-through',
             ].filter(Boolean).join(' ')}>
               {node.name}
