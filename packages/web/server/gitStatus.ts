@@ -6,11 +6,27 @@ export interface GitRepoInfo {
   name: string;
 }
 
+export type GitStatusChangeKind =
+  | 'modified'
+  | 'added'
+  | 'deleted'
+  | 'renamed'
+  | 'copied'
+  | 'typechange'
+  | 'untracked'
+  | 'conflicted';
+
+export interface GitStatusChange {
+  relativePath: string;
+  change: GitStatusChangeKind;
+}
+
 export interface GitStatusSummary {
   branch: string | null;
   changeCount: number;
   linesAdded: number;
   linesDeleted: number;
+  changes: GitStatusChange[];
 }
 
 export interface GitStatusReadTelemetry {
@@ -117,6 +133,78 @@ function hasHeadCommit(cwd: string): boolean {
   return runGitCommandAllowFailure(['rev-parse', '--verify', 'HEAD'], cwd).exitCode === 0;
 }
 
+function normalizeGitStatusChange(code: string): GitStatusChangeKind | null {
+  if (code === '??') {
+    return 'untracked';
+  }
+
+  if (code.includes('U')) {
+    return 'conflicted';
+  }
+
+  if (code.includes('R')) {
+    return 'renamed';
+  }
+
+  if (code.includes('C')) {
+    return 'copied';
+  }
+
+  if (code.includes('D')) {
+    return 'deleted';
+  }
+
+  if (code.includes('A')) {
+    return 'added';
+  }
+
+  if (code.includes('T')) {
+    return 'typechange';
+  }
+
+  if (code.includes('M')) {
+    return 'modified';
+  }
+
+  return null;
+}
+
+function normalizeGitStatusPath(statusLine: string, change: GitStatusChangeKind | null): string {
+  const rawPath = statusLine.slice(3).trim();
+  if ((change === 'renamed' || change === 'copied') && rawPath.includes(' -> ')) {
+    return rawPath.split(' -> ').at(-1)?.trim() ?? rawPath;
+  }
+
+  return rawPath;
+}
+
+function readGitStatusChanges(cwd: string): GitStatusChange[] {
+  const output = runGitCommandAllowFailure(['status', '--porcelain=v1', '--untracked-files=all'], cwd).stdout;
+  const result = new Map<string, GitStatusChangeKind>();
+
+  for (const line of output.split('\n')) {
+    if (line.length < 4) {
+      continue;
+    }
+
+    const change = normalizeGitStatusChange(line.slice(0, 2));
+    if (!change) {
+      continue;
+    }
+
+    const relativePath = normalizeGitStatusPath(line, change);
+    if (!relativePath) {
+      continue;
+    }
+
+    result.set(relativePath, change);
+  }
+
+  return [...result.entries()]
+    .sort((left, right) => left[0].localeCompare(right[0]))
+    .map(([relativePath, change]) => ({ relativePath, change }));
+}
+
 export function readGitRepoInfo(cwd: string): GitRepoInfo | null {
   try {
     const isWorkTree = runGitCommand(['rev-parse', '--is-inside-work-tree'], cwd).trim();
@@ -166,26 +254,28 @@ export function readGitStatusSummaryWithTelemetry(cwd: string): {
     };
   }
 
-  const branch = runGitCommandAllowFailure(['branch', '--show-current'], cwd).stdout.trim() || null;
-  const changeCount = countGitStatusEntries(runGitCommand(['status', '--porcelain=v1'], cwd));
-  const trackedSummary = hasHeadCommit(cwd)
-    ? parseGitNumstat(runGitCommand(['diff', '--numstat', 'HEAD'], cwd))
+  const repoRoot = repo.root;
+  const branch = runGitCommandAllowFailure(['branch', '--show-current'], repoRoot).stdout.trim() || null;
+  const changes = readGitStatusChanges(repoRoot);
+  const trackedSummary = hasHeadCommit(repoRoot)
+    ? parseGitNumstat(runGitCommand(['diff', '--numstat', 'HEAD'], repoRoot))
     : (() => {
-        const stagedSummary = parseGitNumstat(runGitCommand(['diff', '--cached', '--numstat'], cwd));
-        const unstagedSummary = parseGitNumstat(runGitCommand(['diff', '--numstat'], cwd));
+        const stagedSummary = parseGitNumstat(runGitCommand(['diff', '--cached', '--numstat'], repoRoot));
+        const unstagedSummary = parseGitNumstat(runGitCommand(['diff', '--numstat'], repoRoot));
 
         return {
           linesAdded: stagedSummary.linesAdded + unstagedSummary.linesAdded,
           linesDeleted: stagedSummary.linesDeleted + unstagedSummary.linesDeleted,
         };
       })();
-  const untrackedSummary = readUntrackedDiffSummary(cwd);
+  const untrackedSummary = readUntrackedDiffSummary(repoRoot);
 
   const summary = {
     branch,
-    changeCount,
+    changeCount: changes.length,
     linesAdded: trackedSummary.linesAdded + untrackedSummary.linesAdded,
     linesDeleted: trackedSummary.linesDeleted + untrackedSummary.linesDeleted,
+    changes,
   } satisfies GitStatusSummary;
 
   gitStatusSummaryCache.set(cwd, { fetchedAt: Date.now(), summary });

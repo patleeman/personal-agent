@@ -87,6 +87,9 @@ describe('readGitStatusSummary', () => {
       changeCount: 1,
       linesAdded: 1,
       linesDeleted: 0,
+      changes: [
+        { relativePath: 'tracked.txt', change: 'modified' },
+      ],
     });
     expect(firstRead.telemetry).toMatchObject({
       cache: 'miss',
@@ -125,6 +128,11 @@ describe('readGitStatusSummary', () => {
       changeCount: 3,
       linesAdded: 4,
       linesDeleted: 1,
+      changes: expect.arrayContaining([
+        { relativePath: 'deleted.txt', change: 'modified' },
+        { relativePath: 'tracked.txt', change: 'modified' },
+        { relativePath: 'untracked.txt', change: 'untracked' },
+      ]),
     });
     expect(summary?.branch).toEqual(expect.any(String));
   });
