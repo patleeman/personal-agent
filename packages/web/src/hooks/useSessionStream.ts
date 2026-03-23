@@ -187,6 +187,14 @@ export function resolveSessionStreamSubscriptionId(
   return options?.enabled === false ? null : sessionId;
 }
 
+export function shouldRetrySessionStreamAfterError(status?: number): boolean {
+  if (typeof status !== 'number') {
+    return true;
+  }
+
+  return status >= 500;
+}
+
 export function useSessionStream(sessionId: string | null, options?: { tailBlocks?: number; enabled?: boolean }) {
   const [state, setState] = useState<StreamState>(INITIAL_STREAM_STATE);
   const [connectVersion, setConnectVersion] = useState(0);
@@ -293,12 +301,17 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
       es.onerror = () => {
         if (closed) return;
         es.close();
-        // Check if 404 (session not live) — don't retry in that case
         fetch(`/api/live-sessions/${requestedSessionId}`)
-          .then(r => {
-            if (!closed && r.ok) setTimeout(connect, 2_000); // retry if still live
+          .then((response) => {
+            if (!closed && (response.ok || shouldRetrySessionStreamAfterError(response.status))) {
+              setTimeout(connect, 2_000);
+            }
           })
-          .catch(() => { /* not live, stop */ });
+          .catch(() => {
+            if (!closed && shouldRetrySessionStreamAfterError()) {
+              setTimeout(connect, 2_000);
+            }
+          });
       };
     }
 
