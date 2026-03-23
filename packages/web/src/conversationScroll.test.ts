@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getConversationInitialScrollKey,
   getConversationTailBlockKey,
   isConversationScrolledToBottom,
   shouldAutoScrollToStreamingTail,
@@ -7,6 +8,23 @@ import {
 } from './conversationScroll.js';
 
 describe('conversation scroll helpers', () => {
+  it('uses a provisional initial-scroll key until a live snapshot arrives', () => {
+    expect(getConversationInitialScrollKey('conv-123', {
+      isLiveSession: true,
+      hasLiveSnapshot: false,
+    })).toBe('conv-123:provisional');
+
+    expect(getConversationInitialScrollKey('conv-123', {
+      isLiveSession: true,
+      hasLiveSnapshot: true,
+    })).toBe('conv-123:settled');
+
+    expect(getConversationInitialScrollKey('conv-123', {
+      isLiveSession: false,
+      hasLiveSnapshot: false,
+    })).toBe('conv-123:settled');
+  });
+
   it('treats the viewport as pinned when it is within the bottom threshold', () => {
     expect(isConversationScrolledToBottom({
       scrollHeight: 1200,

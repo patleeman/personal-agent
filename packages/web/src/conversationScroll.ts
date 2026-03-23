@@ -8,6 +8,17 @@ export interface ConversationScrollMetrics {
   clientHeight: number;
 }
 
+export function getConversationInitialScrollKey(
+  conversationId: string | null | undefined,
+  options: { isLiveSession: boolean; hasLiveSnapshot: boolean },
+): string | null {
+  if (!conversationId) {
+    return null;
+  }
+
+  return `${conversationId}:${options.isLiveSession && !options.hasLiveSnapshot ? 'provisional' : 'settled'}`;
+}
+
 export function isConversationScrolledToBottom(
   metrics: ConversationScrollMetrics,
   thresholdPx = DEFAULT_SCROLL_TO_BOTTOM_THRESHOLD_PX,
