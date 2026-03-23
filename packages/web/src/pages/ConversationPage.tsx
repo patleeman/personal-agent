@@ -278,8 +278,33 @@ interface ContextBarProps {
   model?: string;
   thinkingLevel?: string;
   tokens?: TokenCounts;
+  executionLabel?: string;
+  executionTitle?: string;
+  executionRemote?: boolean;
   activePreference?: 'model' | 'thinking' | null;
   onOpenPreferences?: (preference: 'model' | 'thinking') => void;
+}
+
+function buildExecutionEnvironmentSummary(target: ExecutionTargetSummary | null): {
+  label: string;
+  title: string;
+  remote: boolean;
+} {
+  if (!target) {
+    return {
+      label: 'local',
+      title: 'Local agent',
+      remote: false,
+    };
+  }
+
+  return {
+    label: target.label,
+    title: [target.label, target.sshDestination, target.description]
+      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      .join(' · '),
+    remote: true,
+  };
 }
 
 const CONTEXT_SEGMENT_STYLES: Record<ContextUsageSegment['key'], string> = {
@@ -295,6 +320,9 @@ function ContextBar({
   model,
   thinkingLevel,
   tokens,
+  executionLabel,
+  executionTitle,
+  executionRemote = false,
   activePreference = null,
   onOpenPreferences,
 }: ContextBarProps) {
@@ -389,6 +417,17 @@ function ContextBar({
           </span>
           <span className="font-mono text-dim tabular-nums">{formatContextUsageLabel(total, win)}</span>
         </span>
+        {executionLabel && (
+          <>
+            <span className="h-3.5 w-px shrink-0 bg-border-subtle/70" aria-hidden="true" />
+            <span className="inline-flex min-w-0 items-baseline gap-1.5 overflow-hidden whitespace-nowrap" title={executionTitle}>
+              <span className="uppercase tracking-[0.14em] text-dim/65">env</span>
+              <span className={cx('min-w-0 max-w-[12rem] truncate font-mono', executionRemote ? 'text-accent/85' : 'text-dim')}>
+                {executionLabel}
+              </span>
+            </span>
+          </>
+        )}
       </div>
     </div>
   );
@@ -1539,6 +1578,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     location: selectedExecutionTarget ? 'remote' as const : 'local' as const,
     target: selectedExecutionTarget,
   }), [id, selectedExecutionTarget, selectedExecutionTargetId]);
+  const executionEnvironmentSummary = useMemo(
+    () => buildExecutionEnvironmentSummary(selectedExecutionTarget),
+    [selectedExecutionTarget],
+  );
   const replaceConversationExecution = conversationExecutionState.replaceData;
   const executionSelectionBusy = executionTargetBusy;
 
@@ -3894,15 +3937,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             ) : (
               <>
                 {stream.isStreaming && (
-                  <>
-                    <span className="inline-flex items-center gap-1.5 text-accent">
-                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent animate-pulse" />
-                      running
-                    </span>
-                    <button onClick={() => stream.abort()} className="text-danger transition-colors hover:text-danger/80">
-                      stop
-                    </button>
-                  </>
+                  <span className="inline-flex items-center gap-1.5 text-accent">
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent animate-pulse" />
+                    running
+                  </span>
                 )}
                 {!stream.isStreaming && remoteConversationRequiresConnect && (
                   <button
@@ -3913,17 +3951,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     className="text-accent transition-colors hover:text-accent/80 disabled:cursor-default disabled:text-dim"
                   >
                     {remoteConnectBusy ? 'connecting…' : 'connect'}
-                  </button>
-                )}
-                {!stream.isStreaming && !remoteConversationRequiresConnect && conversationResumeState.canResume && (
-                  <button
-                    type="button"
-                    onClick={() => { void resumeConversation(); }}
-                    disabled={resumeConversationBusy}
-                    title={conversationResumeState.title ?? 'Resume this conversation'}
-                    className="text-accent transition-colors hover:text-accent/80 disabled:cursor-default disabled:text-dim"
-                  >
-                    {resumeConversationBusy ? 'opening…' : (conversationResumeState.actionLabel ?? 'resume')}
                   </button>
                 )}
                 {!stream.isStreaming && remoteConnectionPending && (
@@ -3985,6 +4012,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               model={currentModel || model}
               thinkingLevel={currentThinkingLevel}
               tokens={sessionTokens}
+              executionLabel={executionEnvironmentSummary.label}
+              executionTitle={executionEnvironmentSummary.title}
+              executionRemote={executionEnvironmentSummary.remote}
               activePreference={headerPreference}
               onOpenPreferences={openHeaderPreference}
             />
@@ -4429,21 +4459,38 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 style={{ minHeight: '24px', maxHeight: '160px' }}
               />
 
-              {composerHasContent && (
-                <div className="shrink-0 mb-0.5">
-                  <button
-                    onClick={(event) => {
-                      const behavior = resolveConversationComposerSubmitState(
-                        stream.isStreaming,
-                        composerAltHeld || event.altKey,
-                      ).behavior;
-                      void submitComposer(behavior);
-                    }}
-                    disabled={composerDisabled}
-                    className="ui-pill ui-pill-solid-accent disabled:cursor-default disabled:opacity-60"
-                  >
-                    {composerSubmit.label}
-                  </button>
+              {(stream.isStreaming || composerHasContent) && (
+                <div className="shrink-0 mb-0.5 flex items-center gap-1.5">
+                  {stream.isStreaming && (
+                    <button
+                      type="button"
+                      onClick={() => { void stream.abort(); }}
+                      className="ui-pill ui-pill-danger disabled:cursor-default disabled:opacity-60"
+                      title="Stop current response"
+                      aria-label="Stop current response"
+                    >
+                      <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                        <rect x="3.25" y="3.25" width="9.5" height="9.5" rx="1.2" />
+                      </svg>
+                      Stop
+                    </button>
+                  )}
+                  {composerHasContent && (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        const behavior = resolveConversationComposerSubmitState(
+                          stream.isStreaming,
+                          composerAltHeld || event.altKey,
+                        ).behavior;
+                        void submitComposer(behavior);
+                      }}
+                      disabled={composerDisabled}
+                      className="ui-pill ui-pill-solid-accent disabled:cursor-default disabled:opacity-60"
+                    >
+                      {composerSubmit.label}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
