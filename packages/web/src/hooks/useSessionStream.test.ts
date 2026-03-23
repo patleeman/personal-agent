@@ -10,6 +10,7 @@ import {
   resolveSessionStreamSubscriptionId,
   selectVisibleStreamState,
   shouldReplaceOptimisticUserBlock,
+  shouldRetrySessionStreamAfterError,
 } from './useSessionStream';
 
 describe('resolveSessionStreamSubscriptionId', () => {
@@ -20,6 +21,19 @@ describe('resolveSessionStreamSubscriptionId', () => {
   it('keeps the requested session id when streaming is enabled', () => {
     expect(resolveSessionStreamSubscriptionId('session-a', { enabled: true })).toBe('session-a');
     expect(resolveSessionStreamSubscriptionId('session-a')).toBe('session-a');
+  });
+});
+
+describe('shouldRetrySessionStreamAfterError', () => {
+  it('retries when the probe fails or the server errors', () => {
+    expect(shouldRetrySessionStreamAfterError()).toBe(true);
+    expect(shouldRetrySessionStreamAfterError(500)).toBe(true);
+    expect(shouldRetrySessionStreamAfterError(503)).toBe(true);
+  });
+
+  it('does not retry when the session is definitively gone', () => {
+    expect(shouldRetrySessionStreamAfterError(404)).toBe(false);
+    expect(shouldRetrySessionStreamAfterError(400)).toBe(false);
   });
 });
 
