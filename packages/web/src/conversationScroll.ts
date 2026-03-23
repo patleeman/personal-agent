@@ -48,7 +48,17 @@ export function shouldAutoScrollToStreamingTail(
   nextTailBlock: MessageBlock | null | undefined,
 ): boolean {
   const nextTailKey = getConversationTailBlockKey(nextTailBlock);
-  return nextTailKey !== null && nextTailKey !== previousTailKey;
+  if (nextTailKey === null) {
+    return false;
+  }
+
+  if (nextTailKey !== previousTailKey) {
+    return true;
+  }
+
+  return nextTailBlock?.type === 'text'
+    || nextTailBlock?.type === 'thinking'
+    || nextTailBlock?.type === 'tool_use';
 }
 
 export function shouldShowScrollToBottomControl(messageCount: number, atBottom: boolean): boolean {

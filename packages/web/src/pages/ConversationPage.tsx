@@ -72,6 +72,7 @@ import {
   readPendingConversationPrompt,
   type PendingConversationPrompt,
 } from '../pendingConversationPrompt';
+import { appendPendingQueueBlocks } from '../pendingQueueMessages';
 import { getConversationResumeState } from '../conversationResume';
 import {
   normalizeConversationComposerBehavior,
@@ -827,6 +828,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   );
   // We use a confirmed-live flag only for lightweight session-state labeling.
   const [confirmedLive, setConfirmedLive] = useState<boolean | null>(null);
+  const [liveSessionHasPendingHiddenTurn, setLiveSessionHasPendingHiddenTurn] = useState(false);
 
   const [historicalTailBlocks, setHistoricalTailBlocks] = useState(INITIAL_HISTORICAL_TAIL_BLOCKS);
   const shouldSubscribeToLiveStream = Boolean(id) && (!sessionSnapshot || sessionSnapshot.isRunning);
@@ -845,26 +847,56 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     ensureConversationOpenStart(id, 'route');
   }, [draft, id]);
 
-  // Confirm live status via the session snapshot when possible, otherwise probe the API.
+  // Confirm live status via the session snapshot and probe for live-only queue state.
   useEffect(() => {
     if (!id) {
       setConfirmedLive(false);
+      setLiveSessionHasPendingHiddenTurn(false);
       return;
     }
 
-    if (sessionSnapshot) {
-      setConfirmedLive(Boolean(sessionSnapshot.isRunning));
+    if (sessionSnapshot && !sessionSnapshot.isRunning) {
+      setConfirmedLive(false);
+      setLiveSessionHasPendingHiddenTurn(false);
       return;
     }
 
-    setConfirmedLive(null);
+    setConfirmedLive(sessionSnapshot ? true : null);
+    let cancelled = false;
+
     api.liveSession(id)
-      .then(r => setConfirmedLive(r.live))
-      .catch(() => setConfirmedLive(false));
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+
+        setConfirmedLive(response.live);
+        setLiveSessionHasPendingHiddenTurn(response.live && response.hasPendingHiddenTurn === true);
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+
+        if (!sessionSnapshot) {
+          setConfirmedLive(false);
+        }
+        setLiveSessionHasPendingHiddenTurn(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [id, sessionSnapshot]);
 
   // Session is "live" if SSE connected (has blocks) OR API confirms it
   const isLiveSession = stream.blocks.length > 0 || stream.isStreaming || confirmedLive === true;
+  const allowQueuedPrompts = stream.isStreaming || liveSessionHasPendingHiddenTurn;
+  const defaultComposerBehavior = stream.isStreaming
+    ? 'steer'
+    : liveSessionHasPendingHiddenTurn
+      ? 'followUp'
+      : undefined;
 
   useEffect(() => {
     setHistoricalTailBlocks(INITIAL_HISTORICAL_TAIL_BLOCKS);
@@ -928,21 +960,42 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     })
   ), [hydratedHistoricalBlocks, stream.blocks]);
 
+  // Pending steer/followup queue as reported by the live session.
+  const pendingQueue = useMemo(() => {
+    const steeringQueue = normalizePendingQueueItems(stream.pendingQueue?.steering);
+    const followUpQueue = normalizePendingQueueItems(stream.pendingQueue?.followUp);
+
+    return [
+      ...steeringQueue.map((text, index) => ({
+        id: `steer-${index}`,
+        text: text.trim() || '(queued attachment)',
+        type: 'steer' as const,
+        queueIndex: index,
+      })),
+      ...followUpQueue.map((text, index) => ({
+        id: `followup-${index}`,
+        text: text.trim() || '(queued attachment)',
+        type: 'followUp' as const,
+        queueIndex: index,
+      })),
+    ];
+  }, [stream.pendingQueue?.followUp, stream.pendingQueue?.steering]);
+
   // Live sessions hydrate from the SSE snapshot; until that arrives, fall back to
   // JSONL + live deltas only when we have at least one source of blocks.
   const realMessages = useMemo<MessageBlock[] | undefined>(() => {
     if (isLiveSession) {
-      if (stream.hasSnapshot) {
-        return visibleStreamBlocks;
-      }
+      const liveMessages = stream.hasSnapshot
+        ? visibleStreamBlocks
+        : ((baseMessages.length > 0 || visibleStreamBlocks.length > 0)
+            ? [...baseMessages, ...visibleStreamBlocks]
+            : undefined);
 
-      return (baseMessages.length > 0 || visibleStreamBlocks.length > 0)
-        ? [...baseMessages, ...visibleStreamBlocks]
-        : undefined;
+      return appendPendingQueueBlocks(liveMessages, pendingQueue);
     }
 
     return visibleSessionDetail ? baseMessages : undefined;
-  }, [baseMessages, isLiveSession, stream.hasSnapshot, visibleSessionDetail, visibleStreamBlocks]);
+  }, [baseMessages, isLiveSession, pendingQueue, stream.hasSnapshot, visibleSessionDetail, visibleStreamBlocks]);
   const historicalBlockOffset = stream.hasSnapshot
     ? stream.blockOffset
     : (visibleSessionDetail?.blockOffset ?? 0);
@@ -1311,26 +1364,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     pinnedInitialPromptTailKeyRef.current = null;
   }, [draft, id]);
 
-  // Pending steer/followup queue as reported by the live session.
-  const pendingQueue = useMemo(() => {
-    const steeringQueue = normalizePendingQueueItems(stream.pendingQueue?.steering);
-    const followUpQueue = normalizePendingQueueItems(stream.pendingQueue?.followUp);
-
-    return [
-      ...steeringQueue.map((text, index) => ({
-        id: `steer-${index}`,
-        text: text.trim() || '(queued attachment)',
-        type: 'steer' as const,
-        queueIndex: index,
-      })),
-      ...followUpQueue.map((text, index) => ({
-        id: `followup-${index}`,
-        text: text.trim() || '(queued attachment)',
-        type: 'followUp' as const,
-        queueIndex: index,
-      })),
-    ];
-  }, [stream.pendingQueue?.followUp, stream.pendingQueue?.steering]);
   const prevStreamingRef = useRef(false);
   const { data: memoryData, refetch: refetchMemoryData } = useApi(api.memory);
   const { data: profileState } = useApi(api.profiles);
@@ -1813,8 +1846,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    const requestedBehavior = isLiveSession && stream.isStreaming ? 'steer' : undefined;
-    const queuedBehavior = normalizeConversationComposerBehavior(requestedBehavior, stream.isStreaming);
+    const requestedBehavior = isLiveSession ? defaultComposerBehavior : undefined;
+    const queuedBehavior = normalizeConversationComposerBehavior(requestedBehavior, allowQueuedPrompts);
 
     try {
       if (isLiveSession) {
@@ -1846,7 +1879,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
       throw error;
     }
-  }, [id, isLiveSession, refetchConversationProjects, scrollToBottom, showNotice, stream, visibleSessionDetail]);
+  }, [
+    allowQueuedPrompts,
+    defaultComposerBehavior,
+    id,
+    isLiveSession,
+    refetchConversationProjects,
+    scrollToBottom,
+    showNotice,
+    stream,
+    visibleSessionDetail,
+  ]);
 
   const composerQuestionAnsweredCount = pendingAskUserQuestion
     ? pendingAskUserQuestion.presentation.questions.filter((question) => (composerQuestionAnswers[question.id]?.length ?? 0) > 0).length
@@ -2271,7 +2314,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     void stream.send(
       claimedInitialPrompt.text,
-      normalizeConversationComposerBehavior(claimedInitialPrompt.behavior, stream.isStreaming),
+      normalizeConversationComposerBehavior(claimedInitialPrompt.behavior, allowQueuedPrompts),
       claimedInitialPrompt.images,
       claimedInitialPrompt.attachmentRefs,
     ).then(async () => {
@@ -2292,8 +2335,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     draft,
     id,
     pendingInitialPrompt,
+    allowQueuedPrompts,
     stream.hasSnapshot,
-    stream.isStreaming,
     stream.send,
     refetchConversationProjects,
     showNotice,
@@ -3235,8 +3278,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       setDrawingAttachments([]);
       setDrawingsError(null);
 
-      const requestedBehavior = behavior ?? (isLiveSession && stream.isStreaming ? 'steer' : undefined);
-      const queuedBehavior = normalizeConversationComposerBehavior(requestedBehavior, stream.isStreaming);
+      const requestedBehavior = behavior ?? (isLiveSession ? defaultComposerBehavior : undefined);
+      const queuedBehavior = normalizeConversationComposerBehavior(requestedBehavior, allowQueuedPrompts);
       const remoteTargetId = conversationExecution.targetId;
 
       if (remoteTargetId && pendingDrawingAttachments.length > 0) {
@@ -3544,7 +3587,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     if (e.key === 'Enter' && e.altKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
-      await submitComposer(resolveConversationComposerSubmitState(stream.isStreaming, true).behavior);
+      await submitComposer(resolveConversationComposerSubmitState(
+        stream.isStreaming,
+        true,
+        liveSessionHasPendingHiddenTurn,
+      ).behavior);
       return;
     }
 
@@ -3574,7 +3621,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }
 
   const composerHasContent = input.trim().length > 0 || attachments.length > 0 || drawingAttachments.length > 0;
-  const composerSubmit = resolveConversationComposerSubmitState(stream.isStreaming, composerAltHeld);
+  const composerSubmit = resolveConversationComposerSubmitState(
+    stream.isStreaming,
+    composerAltHeld,
+    liveSessionHasPendingHiddenTurn,
+  );
   const showScrollToBottomControl = shouldShowScrollToBottomControl(messageCount, atBottom);
   const hasRenderableMessages = (realMessages?.length ?? 0) > 0;
   const remoteConversationRequiresConnect = Boolean(selectedExecutionTargetId)
@@ -4382,6 +4433,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                         const behavior = resolveConversationComposerSubmitState(
                           stream.isStreaming,
                           composerAltHeld || event.altKey,
+                          liveSessionHasPendingHiddenTurn,
                         ).behavior;
                         void submitComposer(behavior);
                       }}
