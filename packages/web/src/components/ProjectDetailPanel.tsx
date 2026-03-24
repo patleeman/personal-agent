@@ -68,9 +68,55 @@ interface DetailSectionProps {
   meta?: React.ReactNode;
   actions?: React.ReactNode;
   children: React.ReactNode;
+  collapsible?: boolean;
+  defaultOpen?: boolean;
+  forceOpen?: boolean;
+  collapsedPreview?: React.ReactNode;
+  resetKey?: string;
 }
 
-function detailSection({ id, title, meta, actions, children }: DetailSectionProps) {
+function previewLine(value: string): string | null {
+  for (const rawLine of value.split('\n')) {
+    const trimmed = rawLine.trim();
+    if (trimmed.length === 0) {
+      continue;
+    }
+
+    return trimmed
+      .replace(/^#{1,6}\s+/, '')
+      .replace(/^[-*+]\s+/, '')
+      .replace(/^\d+\.\s+/, '')
+      .trim();
+  }
+
+  return null;
+}
+
+function DetailSection({
+  id,
+  title,
+  meta,
+  actions,
+  children,
+  collapsible = false,
+  defaultOpen = true,
+  forceOpen = false,
+  collapsedPreview,
+  resetKey,
+}: DetailSectionProps) {
+  const [open, setOpen] = useState(defaultOpen);
+  const contentId = `${id}-content`;
+
+  useEffect(() => {
+    setOpen(defaultOpen);
+  }, [defaultOpen, resetKey]);
+
+  useEffect(() => {
+    if (forceOpen) {
+      setOpen(true);
+    }
+  }, [forceOpen]);
+
   return (
     <section id={id} className="border-t border-border-subtle pt-8 space-y-5 scroll-mt-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -78,15 +124,28 @@ function detailSection({ id, title, meta, actions, children }: DetailSectionProp
         <div className="flex items-center gap-3 flex-wrap">
           {meta && <div className="ui-card-meta">{meta}</div>}
           {actions}
+          {collapsible && (
+            <button
+              type="button"
+              onClick={() => setOpen((value) => !value)}
+              className={ACTION_BUTTON_CLASS}
+              aria-expanded={open}
+              aria-controls={contentId}
+            >
+              {open ? 'Hide' : 'Show'}
+            </button>
+          )}
         </div>
       </div>
-      {children}
+      {open ? (
+        <div id={contentId}>{children}</div>
+      ) : collapsedPreview ? (
+        <p id={contentId} className="max-w-4xl text-[13px] leading-relaxed text-secondary">
+          {collapsedPreview}
+        </p>
+      ) : null}
     </section>
   );
-}
-
-function DetailSection(props: DetailSectionProps) {
-  return detailSection(props);
 }
 
 export function ProjectDetailPanel({
@@ -164,6 +223,36 @@ export function ProjectDetailPanel({
   const completionSummaryContent = (record.completionSummary ?? '').trim() || projectDocument.completionSummary.trim();
   const activityItems = useMemo(() => buildActivityItems(project), [project]);
   const topLevelError = archiveError ?? deleteError;
+  const latestActivityItem = activityItems.length > 0 ? activityItems[activityItems.length - 1] : null;
+  const latestActivityLabel = latestActivityItem
+    ? latestActivityItem.kind === 'conversation'
+      ? latestActivityItem.conversation.title
+      : latestActivityItem.entry.title
+    : null;
+  const requirementsPreview = goal || acceptanceCriteria[0] || previewLine(requirementsFallbackContent) || 'Capture the goal and definition of done.';
+  const planPreview = record.currentFocus?.trim()
+    || blockers[0]
+    || recentProgress[0]
+    || (currentMilestone ? `Current milestone: ${currentMilestone.title}` : null)
+    || previewLine(planContent)
+    || 'Break the work into milestones and tasks.';
+  const completionPreview = previewLine(completionSummaryContent)
+    || (record.status === 'completed'
+      ? 'Capture what shipped, what changed, and any follow-up work.'
+      : 'No completion summary yet.');
+  const timelinePreview = latestActivityLabel
+    ? `Latest activity: ${latestActivityLabel}`
+    : 'No project timeline yet.';
+  const handoffPreview = project.brief
+    ? 'Narrative brief with requirements, plan, and completion notes.'
+    : 'No handoff doc yet.';
+  const projectRecordPreview = record.summary.trim() || record.repoRoot?.trim() || 'Structured metadata and raw PROJECT.yaml.';
+  const notesPreview = project.noteCount > 0
+    ? `${project.noteCount} durable ${project.noteCount === 1 ? 'note' : 'notes'} across decisions, questions, and checkpoints.`
+    : 'No notes yet.';
+  const filesPreview = project.attachmentCount + project.artifactCount > 0
+    ? `${project.attachmentCount} ${project.attachmentCount === 1 ? 'attachment' : 'attachments'} · ${project.artifactCount} ${project.artifactCount === 1 ? 'artifact' : 'artifacts'}`
+    : 'No attachments or artifacts yet.';
   const projectApiOptions = useMemo(() => ({ profile: projectProfile }), [projectProfile]);
 
   useEffect(() => {
@@ -795,6 +884,10 @@ export function ProjectDetailPanel({
         id="project-requirements"
         title="Requirements"
         actions={<button type="button" onClick={openProjectEditor} className={ACTION_BUTTON_CLASS}>Edit fields</button>}
+        collapsible
+        defaultOpen
+        collapsedPreview={requirementsPreview}
+        resetKey={record.id}
       >
         <ProjectRequirementsContent
           goal={goal}
@@ -807,6 +900,11 @@ export function ProjectDetailPanel({
         id="project-plan"
         title="Plan"
         meta={`${done}/${total} complete · ${pct}%`}
+        collapsible
+        defaultOpen
+        forceOpen={milestoneEditor !== null || taskEditor !== null}
+        collapsedPreview={planPreview}
+        resetKey={record.id}
         actions={(
           <>
             <button type="button" onClick={() => openTaskAdd()} className={ACTION_BUTTON_CLASS} disabled={taskBusy}>
@@ -926,6 +1024,10 @@ export function ProjectDetailPanel({
         title="Completion summary"
         meta={record.status === 'completed' ? 'project completed' : formatProjectStatus(record.status)}
         actions={<button type="button" onClick={openProjectEditor} className={ACTION_BUTTON_CLASS}>Edit fields</button>}
+        collapsible
+        defaultOpen={record.status === 'completed' || completionSummaryContent.length > 0}
+        collapsedPreview={completionPreview}
+        resetKey={record.id}
       >
         <ProjectCompletionContent status={record.status} content={completionSummaryContent} />
       </DetailSection>
@@ -934,6 +1036,10 @@ export function ProjectDetailPanel({
         id="project-timeline"
         title="Timeline"
         meta={`${activityItems.length} ${activityItems.length === 1 ? 'event' : 'events'}`}
+        collapsible
+        defaultOpen={false}
+        collapsedPreview={timelinePreview}
+        resetKey={record.id}
       >
         <ProjectActivityContent items={activityItems} />
       </DetailSection>
@@ -942,6 +1048,11 @@ export function ProjectDetailPanel({
         id="project-handoff"
         title="Handoff doc"
         meta={project.brief ? `updated ${timeAgo(project.brief.updatedAt)}` : 'No handoff doc yet'}
+        collapsible
+        defaultOpen={false}
+        forceOpen={briefEditing}
+        collapsedPreview={handoffPreview}
+        resetKey={record.id}
         actions={(
           <>
             <button type="button" onClick={() => { void regenerateBrief(); }} className={ACTION_BUTTON_CLASS} disabled={briefBusy}>
@@ -978,6 +1089,11 @@ export function ProjectDetailPanel({
       <DetailSection
         id="project-record"
         title="Project record"
+        collapsible
+        defaultOpen={false}
+        forceOpen={editingProject || rawProjectOpen}
+        collapsedPreview={projectRecordPreview}
+        resetKey={record.id}
         actions={(
           <>
             <button
@@ -1050,6 +1166,11 @@ export function ProjectDetailPanel({
         id="project-notes"
         title="Notes"
         meta={`${project.noteCount} notes`}
+        collapsible
+        defaultOpen={false}
+        forceOpen={noteEditor !== null}
+        collapsedPreview={notesPreview}
+        resetKey={record.id}
         actions={(
           <button type="button" onClick={openNoteAdd} className={ACTION_BUTTON_CLASS} disabled={noteBusy}>
             + Add note
@@ -1071,6 +1192,10 @@ export function ProjectDetailPanel({
         id="project-files"
         title="Files"
         meta={`${project.attachmentCount} attachments · ${project.artifactCount} artifacts`}
+        collapsible
+        defaultOpen={false}
+        collapsedPreview={filesPreview}
+        resetKey={record.id}
       >
         <ProjectFilesContent
           uploadForm={fileUploadForm}
