@@ -1,4 +1,4 @@
-import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationCwdChangeResult, ConversationExecutionState, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DisplayBlock, DurableRunDetailResult, DurableRunListResult, ExecutionTargetPathMapping, ExecutionTargetsState, FolderPickerResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, McpServerDetail, McpToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, MemoryWorkItem, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectDiagnostics, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteConversationConnectionState, RemoteFolderListing, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SyncState, ToolsState, WebUiState, WorkspaceFileDetail, WorkspaceSnapshot } from './types';
+import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationCwdChangeResult, ConversationExecutionState, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DisplayBlock, DurableRunDetailResult, DurableRunListResult, ExecutionTargetPathMapping, ExecutionTargetsState, FolderPickerResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, McpServerDetail, McpToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, MemoryWorkItem, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectDiagnostics, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteConversationConnectionState, RemoteFolderListing, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SyncState, ToolsState, WebUiState, WorkspaceCommitDraftResult, WorkspaceFileDetail, WorkspaceGitCommitResult, WorkspaceGitDiffDetail, WorkspaceGitScope, WorkspaceGitStatusSummary, WorkspaceSnapshot } from './types';
 import { recordApiTiming } from './perfDiagnostics';
 
 async function get<T>(path: string): Promise<T> {
@@ -281,6 +281,27 @@ export const api = {
     post<{ output: string; exitCode: number }>('/run', { command, cwd }),
   workspaceSnapshot: (cwd?: string) =>
     get<WorkspaceSnapshot>(`/workspace${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''}`),
+  workspaceGitStatus: (cwd?: string) =>
+    get<WorkspaceGitStatusSummary>(`/workspace/git-status${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''}`),
+  workspaceGitDiff: (path: string, scope: WorkspaceGitScope, cwd?: string) => {
+    const params = new URLSearchParams({ path, scope });
+    if (cwd) {
+      params.set('cwd', cwd);
+    }
+    return get<WorkspaceGitDiffDetail>(`/workspace/git-diff?${params.toString()}`);
+  },
+  workspaceGitStage: (path: string, cwd?: string) =>
+    post<WorkspaceGitStatusSummary>('/workspace/git/stage', { path, cwd }),
+  workspaceGitUnstage: (path: string, cwd?: string) =>
+    post<WorkspaceGitStatusSummary>('/workspace/git/unstage', { path, cwd }),
+  workspaceGitStageAll: (cwd?: string) =>
+    post<WorkspaceGitStatusSummary>('/workspace/git/stage-all', { cwd }),
+  workspaceGitUnstageAll: (cwd?: string) =>
+    post<WorkspaceGitStatusSummary>('/workspace/git/unstage-all', { cwd }),
+  workspaceGitDraftCommitMessage: (cwd?: string) =>
+    post<WorkspaceCommitDraftResult>('/workspace/git/draft-commit-message', { cwd }),
+  workspaceGitCommit: (message: string, cwd?: string) =>
+    post<WorkspaceGitCommitResult>('/workspace/git/commit', { message, cwd }),
   workspaceFile: (path: string, cwd?: string) => {
     const params = new URLSearchParams({ path });
     if (cwd) {

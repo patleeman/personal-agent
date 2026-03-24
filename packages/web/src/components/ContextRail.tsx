@@ -38,6 +38,7 @@ import { fetchSessionDetailCached } from '../hooks/useSessions';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { buildCapabilityCards, buildIdentitySummary, buildKnowledgeSections, buildMemoryPageSummary, formatUsageLabel, humanizeSkillName } from '../memoryOverview';
 import { emitMemoriesChanged } from '../memoryDocEvents';
+import { buildWorkspacePath, readWorkspaceModeFromPathname } from '../workspaceBrowser';
 import { getSystemComponentFromSearch, getSystemComponentLabel, getSystemRunIdFromSearch } from '../systemSelection';
 import { formatTaskSchedule } from '../taskSchedule';
 import type {
@@ -209,7 +210,7 @@ function buildWorkspaceLink(cwd: string, file?: string | null): string {
   }
 
   const search = params.toString();
-  return `/workspace${search ? `?${search}` : ''}`;
+  return buildWorkspacePath('files', search ? `?${search}` : '');
 }
 
 function workingTreeChangeShortLabel(change: WorkspaceChangeKind): string {
@@ -3626,11 +3627,12 @@ export function ContextRail() {
 
   // Workspace
   if (section === 'workspace') {
+    const workspaceMode = readWorkspaceModeFromPathname(location.pathname);
     return (
       <div className="flex-1 flex flex-col overflow-hidden">
-        <RailHeader label="Workspace" sub="files" />
+        <RailHeader label="Workspace" sub={workspaceMode} />
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {suspendRailPanel(<WorkspaceRail />, 'Loading workspace tree…')}
+          {suspendRailPanel(<WorkspaceRail />, workspaceMode === 'changes' ? 'Loading changes…' : 'Loading workspace tree…')}
         </div>
       </div>
     );

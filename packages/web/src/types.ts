@@ -818,6 +818,62 @@ export interface WorkspaceFileDetail {
   diff: string | null;
 }
 
+export type WorkspaceGitScope = 'staged' | 'unstaged' | 'untracked' | 'conflicted';
+
+export interface WorkspaceGitStatusEntry {
+  path: string;
+  relativePath: string;
+  exists: boolean;
+  stagedChange: WorkspaceChangeKind | null;
+  unstagedChange: WorkspaceChangeKind | null;
+  oldRelativePath: string | null;
+}
+
+export interface WorkspaceGitStatusSummary {
+  cwd: string;
+  root: string;
+  repoRoot: string | null;
+  branch: string | null;
+  focusPath: string | null;
+  stagedCount: number;
+  unstagedCount: number;
+  untrackedCount: number;
+  conflictedCount: number;
+  entries: WorkspaceGitStatusEntry[];
+}
+
+export interface WorkspaceGitDiffDetail {
+  cwd: string;
+  root: string;
+  repoRoot: string;
+  branch: string | null;
+  path: string;
+  relativePath: string;
+  exists: boolean;
+  scope: WorkspaceGitScope;
+  change: WorkspaceChangeKind | null;
+  oldRelativePath: string | null;
+  diff: string;
+}
+
+export interface WorkspaceCommitDraftResult {
+  subject: string;
+  body: string | null;
+  message: string;
+  source: 'ai' | 'fallback';
+  notice: string | null;
+}
+
+export interface WorkspaceGitCommitResult {
+  cwd: string;
+  root: string;
+  repoRoot: string;
+  branch: string | null;
+  commitSha: string;
+  subject: string;
+  body: string | null;
+}
+
 export interface LiveSessionMeta {
   id:                   string;
   cwd:                  string;

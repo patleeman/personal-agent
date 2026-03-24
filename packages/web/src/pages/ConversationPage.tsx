@@ -1694,8 +1694,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [location.pathname, location.search, navigate, selectedFileTarget]);
   const selectedFileWorkspaceHref = useMemo(
     () => selectedFileTarget
-      ? `/workspace${buildWorkspaceSearch('', { cwd: selectedFileTarget.cwd, file: selectedFileTarget.file })}`
-      : '/workspace',
+      ? `/workspace/files${buildWorkspaceSearch('', { cwd: selectedFileTarget.cwd, file: selectedFileTarget.file })}`
+      : '/workspace/files',
     [selectedFileTarget],
   );
   const executionEnvironmentSummary = useMemo(

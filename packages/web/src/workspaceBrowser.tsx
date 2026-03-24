@@ -11,11 +11,13 @@ import { python } from '@codemirror/lang-python';
 import { yaml } from '@codemirror/lang-yaml';
 import { tags } from '@lezer/highlight';
 import { diffLines, diffWordsWithSpace } from 'diff';
-import type { WorkspaceChangeKind, WorkspaceTreeNode } from './types';
+import type { WorkspaceChangeKind, WorkspaceTreeNode, WorkspaceGitScope } from './types';
 
 export const WORKSPACE_CWD_SEARCH_PARAM = 'cwd';
 export const WORKSPACE_FILE_SEARCH_PARAM = 'file';
+export const WORKSPACE_CHANGE_SCOPE_SEARCH_PARAM = 'changeScope';
 
+export type WorkspaceMode = 'files' | 'changes';
 export type WorkspaceFilePreviewKind = 'image' | 'video' | 'audio' | 'pdf';
 
 const TREE_ROW_CLASS = 'group flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[12px] leading-5 transition-colors';
@@ -54,6 +56,21 @@ export function readWorkspaceCwdFromSearch(search: string): string | null {
 
 export function readWorkspaceFileFromSearch(search: string): string | null {
   return new URLSearchParams(search).get(WORKSPACE_FILE_SEARCH_PARAM)?.trim() || null;
+}
+
+export function readWorkspaceChangeScopeFromSearch(search: string): WorkspaceGitScope | null {
+  const value = new URLSearchParams(search).get(WORKSPACE_CHANGE_SCOPE_SEARCH_PARAM)?.trim() || null;
+  return value === 'staged' || value === 'unstaged' || value === 'untracked' || value === 'conflicted'
+    ? value
+    : null;
+}
+
+export function readWorkspaceModeFromPathname(pathname: string): WorkspaceMode {
+  return pathname.startsWith('/workspace/changes') ? 'changes' : 'files';
+}
+
+export function buildWorkspacePath(mode: WorkspaceMode, search = ''): string {
+  return `/workspace/${mode}${search}`;
 }
 
 export function normalizeWorkspaceRequestedFilePath(root: string, requestedPath: string | null | undefined): string | null {
@@ -101,6 +118,7 @@ export function getWorkspaceFilePreviewKind(path: string): WorkspaceFilePreviewK
 export function buildWorkspaceSearch(locationSearch: string, patch: {
   cwd?: string | null;
   file?: string | null;
+  changeScope?: WorkspaceGitScope | null;
 }): string {
   const params = new URLSearchParams(locationSearch);
 
@@ -119,6 +137,14 @@ export function buildWorkspaceSearch(locationSearch: string, patch: {
       params.set(WORKSPACE_FILE_SEARCH_PARAM, nextFile);
     } else {
       params.delete(WORKSPACE_FILE_SEARCH_PARAM);
+    }
+  }
+
+  if (patch.changeScope !== undefined) {
+    if (patch.changeScope) {
+      params.set(WORKSPACE_CHANGE_SCOPE_SEARCH_PARAM, patch.changeScope);
+    } else {
+      params.delete(WORKSPACE_CHANGE_SCOPE_SEARCH_PARAM);
     }
   }
 

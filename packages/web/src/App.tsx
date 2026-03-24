@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { api } from './api';
 import { Layout } from './components/Layout';
 import { InboxPage } from './pages/InboxPage';
@@ -37,6 +37,11 @@ function LegacyRunsRoutesRedirect() {
   return <Navigate to={id ? `/system?run=${encodeURIComponent(id)}` : '/system'} replace />;
 }
 
+function WorkspaceRouteRedirect() {
+  const location = useLocation();
+  return <Navigate to={{ pathname: '/workspace/files', search: location.search }} replace />;
+}
+
 const TasksPage = lazy(() => import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })));
 const ConversationsPage = lazy(() => import('./pages/ConversationsPage').then((module) => ({ default: module.ConversationsPage })));
 const ConversationPage = lazy(() => import('./pages/ConversationPage').then((module) => ({ default: module.ConversationPage })));
@@ -49,6 +54,7 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage').then((module) => 
 const ToolsPage = lazy(() => import('./pages/ToolsPage').then((module) => ({ default: module.ToolsPage })));
 const MemoriesPage = lazy(() => import('./pages/MemoriesPage').then((module) => ({ default: module.MemoriesPage })));
 const WorkspacePage = lazy(() => import('./pages/WorkspacePage').then((module) => ({ default: module.WorkspacePage })));
+const WorkspaceChangesPage = lazy(() => import('./pages/WorkspaceChangesPage').then((module) => ({ default: module.WorkspaceChangesPage })));
 
 function suspendRoute(element: React.ReactNode) {
   return (
@@ -244,7 +250,9 @@ export function App() {
                       <Route path="conversations" element={suspendRoute(<ConversationsPage />)} />
                       <Route path="conversations/new" element={suspendRoute(<ConversationPage draft />)} />
                       <Route path="conversations/:id" element={suspendRoute(<ConversationPage />)} />
-                      <Route path="workspace" element={suspendRoute(<WorkspacePage />)} />
+                      <Route path="workspace" element={<WorkspaceRouteRedirect />} />
+                      <Route path="workspace/files" element={suspendRoute(<WorkspacePage />)} />
+                      <Route path="workspace/changes" element={suspendRoute(<WorkspaceChangesPage />)} />
                       <Route path="inbox" element={<InboxPage />} />
                       <Route path="inbox/:id" element={<InboxPage />} />
                       <Route path="system" element={suspendRoute(<SystemPage />)} />

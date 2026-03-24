@@ -11,7 +11,21 @@ import { notifyConversationAutomationChanged, subscribeConversationAutomation } 
 import { resolveConversationCwd, resolveRequestedCwd } from './conversationCwd.js';
 import { pickFolder } from './folderPicker.js';
 import { readGitStatusSummaryWithTelemetry, type GitStatusReadTelemetry } from './gitStatus.js';
-import { readWorkspaceFile, readWorkspacePreviewAsset, readWorkspaceSnapshot, retainWorkspaceWatch, writeWorkspaceFile } from './workspaceBrowser.js';
+import {
+  commitWorkspaceGitChanges,
+  readWorkspaceFile,
+  readWorkspaceGitDiff,
+  readWorkspaceGitDraftSource,
+  readWorkspaceGitStatus,
+  readWorkspacePreviewAsset,
+  readWorkspaceSnapshot,
+  retainWorkspaceWatch,
+  stageAllWorkspaceGitChanges,
+  stageWorkspaceGitPath,
+  unstageAllWorkspaceGitChanges,
+  unstageWorkspaceGitPath,
+  writeWorkspaceFile,
+} from './workspaceBrowser.js';
 import {
   installGatewayAndReadState,
   readGatewayState,
@@ -72,6 +86,7 @@ import {
 } from './internalAttention.js';
 import { readSavedWebUiPreferences, writeSavedWebUiPreferences } from './webUiPreferences.js';
 import { DEFAULT_RUNTIME_SETTINGS_FILE, persistSettingsWrite } from './settingsPersistence.js';
+import { draftWorkspaceCommitMessage } from './workspaceCommitDraft.js';
 import {
   getProfileConfigFilePath,
   readSavedProfilePreferences,
@@ -8334,6 +8349,244 @@ app.get('/api/workspace', (req, res) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const status = message.startsWith('Directory does not exist:') || message.startsWith('Not a directory:')
+      ? 400
+      : 500;
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(status).json({ error: message });
+  }
+});
+
+app.get('/api/workspace/git-status', (req, res) => {
+  try {
+    const defaultWebCwd = getDefaultWebCwd();
+    const cwd = typeof req.query.cwd === 'string' && req.query.cwd.trim().length > 0
+      ? req.query.cwd
+      : defaultWebCwd;
+    const resolvedCwd = resolveRequestedCwd(cwd, defaultWebCwd) ?? defaultWebCwd;
+    const summary = readWorkspaceGitStatus(resolvedCwd);
+    retainWorkspaceWatch(summary.root);
+    res.json(summary);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.startsWith('Directory does not exist:') || message.startsWith('Not a directory:')
+      ? 400
+      : 500;
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(status).json({ error: message });
+  }
+});
+
+app.get('/api/workspace/git-diff', (req, res) => {
+  try {
+    const defaultWebCwd = getDefaultWebCwd();
+    const cwd = typeof req.query.cwd === 'string' && req.query.cwd.trim().length > 0
+      ? req.query.cwd
+      : defaultWebCwd;
+    const path = typeof req.query.path === 'string' ? req.query.path.trim() : '';
+    const scope = typeof req.query.scope === 'string' ? req.query.scope.trim() : '';
+    if (!path) {
+      res.status(400).json({ error: 'path required' });
+      return;
+    }
+
+    if (scope !== 'staged' && scope !== 'unstaged' && scope !== 'untracked' && scope !== 'conflicted') {
+      res.status(400).json({ error: 'scope required' });
+      return;
+    }
+
+    const resolvedCwd = resolveRequestedCwd(cwd, defaultWebCwd) ?? defaultWebCwd;
+    const detail = readWorkspaceGitDiff({ cwd: resolvedCwd, path, scope });
+    retainWorkspaceWatch(detail.root);
+    res.json(detail);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message === 'path required'
+      || message === 'scope required'
+      || message === 'Git repository required.'
+      || message.startsWith('Directory does not exist:')
+      || message.startsWith('Not a directory:')
+      || message.startsWith('Path is outside the workspace root:')
+      || message.startsWith('Git status entry not found for path:')
+      || message.startsWith('No staged change found for path:')
+      || message.startsWith('No unstaged change found for path:')
+      || message.startsWith('No untracked change found for path:')
+      || message.startsWith('No conflicted change found for path:')
+      ? 400
+      : 500;
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(status).json({ error: message });
+  }
+});
+
+app.post('/api/workspace/git/stage', (req, res) => {
+  try {
+    const defaultWebCwd = getDefaultWebCwd();
+    const { cwd: requestedCwd, path } = req.body as { cwd?: string; path?: string };
+    if (typeof path !== 'string' || path.trim().length === 0) {
+      res.status(400).json({ error: 'path required' });
+      return;
+    }
+
+    const resolvedCwd = resolveRequestedCwd(requestedCwd, defaultWebCwd) ?? defaultWebCwd;
+    const summary = stageWorkspaceGitPath({ cwd: resolvedCwd, path });
+    retainWorkspaceWatch(summary.root);
+    invalidateAppTopics('workspace');
+    res.json(summary);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message === 'path required'
+      || message === 'Git repository required.'
+      || message.startsWith('Directory does not exist:')
+      || message.startsWith('Not a directory:')
+      || message.startsWith('Path is outside the workspace root:')
+      ? 400
+      : 500;
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(status).json({ error: message });
+  }
+});
+
+app.post('/api/workspace/git/unstage', (req, res) => {
+  try {
+    const defaultWebCwd = getDefaultWebCwd();
+    const { cwd: requestedCwd, path } = req.body as { cwd?: string; path?: string };
+    if (typeof path !== 'string' || path.trim().length === 0) {
+      res.status(400).json({ error: 'path required' });
+      return;
+    }
+
+    const resolvedCwd = resolveRequestedCwd(requestedCwd, defaultWebCwd) ?? defaultWebCwd;
+    const summary = unstageWorkspaceGitPath({ cwd: resolvedCwd, path });
+    retainWorkspaceWatch(summary.root);
+    invalidateAppTopics('workspace');
+    res.json(summary);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message === 'path required'
+      || message === 'Git repository required.'
+      || message.startsWith('Directory does not exist:')
+      || message.startsWith('Not a directory:')
+      || message.startsWith('Path is outside the workspace root:')
+      ? 400
+      : 500;
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(status).json({ error: message });
+  }
+});
+
+app.post('/api/workspace/git/stage-all', (req, res) => {
+  try {
+    const defaultWebCwd = getDefaultWebCwd();
+    const { cwd: requestedCwd } = req.body as { cwd?: string };
+    const resolvedCwd = resolveRequestedCwd(requestedCwd, defaultWebCwd) ?? defaultWebCwd;
+    const summary = stageAllWorkspaceGitChanges(resolvedCwd);
+    retainWorkspaceWatch(summary.root);
+    invalidateAppTopics('workspace');
+    res.json(summary);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message === 'Git repository required.'
+      || message.startsWith('Directory does not exist:')
+      || message.startsWith('Not a directory:')
+      ? 400
+      : 500;
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(status).json({ error: message });
+  }
+});
+
+app.post('/api/workspace/git/unstage-all', (req, res) => {
+  try {
+    const defaultWebCwd = getDefaultWebCwd();
+    const { cwd: requestedCwd } = req.body as { cwd?: string };
+    const resolvedCwd = resolveRequestedCwd(requestedCwd, defaultWebCwd) ?? defaultWebCwd;
+    const summary = unstageAllWorkspaceGitChanges(resolvedCwd);
+    retainWorkspaceWatch(summary.root);
+    invalidateAppTopics('workspace');
+    res.json(summary);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message === 'Git repository required.'
+      || message.startsWith('Directory does not exist:')
+      || message.startsWith('Not a directory:')
+      ? 400
+      : 500;
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(status).json({ error: message });
+  }
+});
+
+app.post('/api/workspace/git/draft-commit-message', async (req, res) => {
+  try {
+    const defaultWebCwd = getDefaultWebCwd();
+    const { cwd: requestedCwd } = req.body as { cwd?: string };
+    const resolvedCwd = resolveRequestedCwd(requestedCwd, defaultWebCwd) ?? defaultWebCwd;
+    const draft = await draftWorkspaceCommitMessage({
+      draftSource: readWorkspaceGitDraftSource(resolvedCwd),
+      authFile: AUTH_FILE,
+      settingsFile: SETTINGS_FILE,
+    });
+    res.json(draft);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message === 'Git repository required.'
+      || message === 'No staged changes available for commit drafting.'
+      || message.startsWith('Directory does not exist:')
+      || message.startsWith('Not a directory:')
+      ? 400
+      : 500;
+    logError('request handler error', {
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(status).json({ error: message });
+  }
+});
+
+app.post('/api/workspace/git/commit', (req, res) => {
+  try {
+    const defaultWebCwd = getDefaultWebCwd();
+    const { cwd: requestedCwd, message } = req.body as { cwd?: string; message?: string };
+    if (typeof message !== 'string' || message.trim().length === 0) {
+      res.status(400).json({ error: 'message required' });
+      return;
+    }
+
+    const resolvedCwd = resolveRequestedCwd(requestedCwd, defaultWebCwd) ?? defaultWebCwd;
+    const result = commitWorkspaceGitChanges({ cwd: resolvedCwd, message });
+    retainWorkspaceWatch(result.root);
+    invalidateAppTopics('workspace');
+    res.json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message === 'message required'
+      || message === 'Git repository required.'
+      || message === 'Resolve conflicts before committing.'
+      || message === 'Stage at least one change before committing.'
+      || message === 'Commit message subject is required.'
+      || message.startsWith('Directory does not exist:')
+      || message.startsWith('Not a directory:')
       ? 400
       : 500;
     logError('request handler error', {
