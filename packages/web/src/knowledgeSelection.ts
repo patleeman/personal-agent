@@ -31,6 +31,10 @@ export function getKnowledgeInstructionPath(search: string): string | null {
   return new URLSearchParams(search).get(KNOWLEDGE_INSTRUCTION_QUERY_PARAM)?.trim() || null;
 }
 
+export function getKnowledgeLandingPath(search: string): string | null {
+  return getKnowledgeSection(search) === 'overview' ? '/projects' : null;
+}
+
 export function buildKnowledgeSearch(currentSearch: string, updates: {
   section?: KnowledgeSection;
   projectId?: string | null;

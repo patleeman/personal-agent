@@ -148,6 +148,14 @@
     @apply ml-auto min-w-[18px] rounded-full bg-accent/15 px-1.5 py-0.5 text-center text-[10px] font-semibold tabular-nums text-accent;
   }
 
+  .ui-sidebar-subnav-item {
+    @apply block px-3 py-1.5 mx-1 rounded-lg text-[12px] text-dim transition-colors hover:bg-elevated/40 hover:text-secondary;
+  }
+
+  .ui-sidebar-subnav-item-active {
+    @apply bg-elevated/60 text-primary;
+  }
+
   .ui-sidebar-session-row {
     @apply relative flex items-start gap-2.5 px-3 py-2 rounded-lg mx-1 text-secondary transition-colors hover:bg-elevated/60 hover:text-primary;
   }

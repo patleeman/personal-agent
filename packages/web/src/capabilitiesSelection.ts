@@ -26,6 +26,10 @@ export function getCapabilitiesToolName(search: string): string | null {
   return new URLSearchParams(search).get(CAPABILITIES_TOOL_QUERY_PARAM)?.trim() || null;
 }
 
+export function getCapabilitiesLandingPath(search: string): string | null {
+  return getCapabilitiesSection(search) === 'overview' ? '/plans' : null;
+}
+
 export function buildCapabilitiesSearch(currentSearch: string, updates: {
   section?: CapabilitySection;
   presetId?: string | null;
