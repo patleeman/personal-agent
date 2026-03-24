@@ -1030,6 +1030,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     ];
   }, [stream.pendingQueue?.followUp, stream.pendingQueue?.steering]);
 
+  const [pendingInitialPrompt, setPendingInitialPrompt] = useState<PendingConversationPrompt | null>(null);
+  const pendingInitialPromptSessionIdRef = useRef<string | null>(null);
+  const pinnedInitialPromptScrollSessionIdRef = useRef<string | null>(null);
+  const pinnedInitialPromptTailKeyRef = useRef<string | null>(null);
+
   // Live sessions hydrate from the SSE snapshot; until that arrives, fall back to
   // JSONL + live deltas only when we have at least one source of blocks.
   const realMessages = useMemo<MessageBlock[] | undefined>(() => {
@@ -1264,10 +1269,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     : id
       ? buildConversationComposerStorageKey(id)
       : null;
-  const [pendingInitialPrompt, setPendingInitialPrompt] = useState<PendingConversationPrompt | null>(null);
-  const pendingInitialPromptSessionIdRef = useRef<string | null>(null);
-  const pinnedInitialPromptScrollSessionIdRef = useRef<string | null>(null);
-  const pinnedInitialPromptTailKeyRef = useRef<string | null>(null);
 
   // Input state
   const [input, setInputState] = useReloadState<string>({
