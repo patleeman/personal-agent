@@ -1,12 +1,10 @@
-import { copyFile, mkdir, stat } from 'fs/promises';
-import { existsSync, lstatSync, readlinkSync, readdirSync, renameSync, rmSync, symlinkSync, unlinkSync } from 'fs';
-import { homedir } from 'os';
+import { mkdir, stat } from 'fs/promises';
+import { lstatSync, readlinkSync, rmSync, symlinkSync, unlinkSync } from 'fs';
 import { dirname, join, relative, resolve } from 'path';
 import {
   getDurablePiAgentDir,
   getDurableSessionsDir,
   getPiAgentRuntimeDir,
-  getPiAgentStateDir,
   type RuntimeStatePaths,
 } from './paths.js';
 
