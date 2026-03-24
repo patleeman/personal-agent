@@ -827,7 +827,10 @@ function ReferencedProjectModal({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        <div
+          className="min-h-0 flex-1 overflow-y-auto py-4 pl-4 pr-5"
+          style={{ scrollbarGutter: 'stable' }}
+        >
           {loading && !project && <LoadingState label="Loading project…" className="justify-center" />}
           {!loading && project && (
             <LinkedProjectOverviewPanel
