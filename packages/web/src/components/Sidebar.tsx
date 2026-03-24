@@ -27,8 +27,6 @@ import { getSidebarBrandLabel } from '../sidebarBrand';
 import { markConversationOpenStart } from '../perfDiagnostics';
 import { buildNestedSessionRows } from '../sessionLineage';
 import { summarizeActiveRuns } from '../runPresentation';
-import { getCapabilitiesSection } from '../capabilitiesSelection';
-import { getKnowledgeSection } from '../knowledgeSelection';
 import { timeAgo } from '../utils';
 
 // ── Icons ──────────────────────────────────────────────────────────────────
@@ -432,27 +430,22 @@ export function Sidebar() {
   } | null>(null);
   const allSessions = useMemo(() => [...pinnedSessions, ...tabs, ...archivedSessions], [archivedSessions, pinnedSessions, tabs]);
   const activeConversationId = useMemo(() => getActiveConversationId(location.pathname), [location.pathname]);
-  const knowledgeSection = useMemo(() => getKnowledgeSection(location.search), [location.search]);
-  const capabilitiesSection = useMemo(() => getCapabilitiesSection(location.search), [location.search]);
   const [knowledgeExpanded, setKnowledgeExpanded] = useState(true);
   const [capabilitiesExpanded, setCapabilitiesExpanded] = useState(true);
-  const knowledgeProjectsActive = location.pathname.startsWith('/projects') || (location.pathname === '/knowledge' && knowledgeSection === 'projects');
-  const knowledgeMemoriesActive = location.pathname.startsWith('/memories') || (location.pathname === '/knowledge' && knowledgeSection === 'memories');
-  const knowledgeSkillsActive = location.pathname === '/knowledge' && knowledgeSection === 'skills';
-  const knowledgeInstructionsActive = location.pathname === '/knowledge' && knowledgeSection === 'instructions';
-  const knowledgeGroupActive = location.pathname === '/knowledge'
-    || knowledgeProjectsActive
+  const knowledgeProjectsActive = location.pathname.startsWith('/projects');
+  const knowledgeMemoriesActive = location.pathname.startsWith('/memories');
+  const knowledgeSkillsActive = location.pathname.startsWith('/skills');
+  const knowledgeInstructionsActive = location.pathname.startsWith('/instructions');
+  const knowledgeGroupActive = knowledgeProjectsActive
     || knowledgeMemoriesActive
     || knowledgeSkillsActive
     || knowledgeInstructionsActive;
-  const capabilitiesPresetsActive = location.pathname.startsWith('/plans') || (location.pathname === '/capabilities' && capabilitiesSection === 'presets');
+  const capabilitiesPresetsActive = location.pathname.startsWith('/plans');
   const capabilitiesScheduledActive = location.pathname.startsWith('/scheduled')
     || location.pathname.startsWith('/tasks')
-    || location.pathname.startsWith('/automations')
-    || (location.pathname === '/capabilities' && capabilitiesSection === 'scheduled');
-  const capabilitiesToolsActive = location.pathname.startsWith('/tools') || (location.pathname === '/capabilities' && capabilitiesSection === 'tools');
-  const capabilitiesGroupActive = location.pathname === '/capabilities'
-    || capabilitiesPresetsActive
+    || location.pathname.startsWith('/automations');
+  const capabilitiesToolsActive = location.pathname.startsWith('/tools');
+  const capabilitiesGroupActive = capabilitiesPresetsActive
     || capabilitiesScheduledActive
     || capabilitiesToolsActive;
   const attentionIds = useMemo(
@@ -843,8 +836,8 @@ export function Sidebar() {
         >
           <SidebarSubNavItem to="/projects" label="Projects" active={knowledgeProjectsActive} />
           <SidebarSubNavItem to="/memories" label="Memories" active={knowledgeMemoriesActive} />
-          <SidebarSubNavItem to="/knowledge?section=skills" label="Skills" active={knowledgeSkillsActive} />
-          <SidebarSubNavItem to="/knowledge?section=instructions" label="Instructions" active={knowledgeInstructionsActive} />
+          <SidebarSubNavItem to="/skills" label="Skills" active={knowledgeSkillsActive} />
+          <SidebarSubNavItem to="/instructions" label="Instructions" active={knowledgeInstructionsActive} />
         </SidebarNavGroup>
         <SidebarNavGroup
           icon={PATH.automation}

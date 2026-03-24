@@ -144,22 +144,67 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       action: { kind: 'navigate', to: '/workspace' },
     },
     {
-      id: 'nav:knowledge',
+      id: 'nav:projects',
       section: 'nav',
-      title: 'Knowledge Base',
-      subtitle: 'Projects, memories, skills, and instructions in one place',
-      keywords: ['memory', 'knowledge', 'projects', 'skills', 'instructions', 'agents'],
+      title: 'Projects',
+      subtitle: 'Browse durable work hubs and plans',
+      keywords: ['knowledge', 'workspaces', 'milestones', 'tasks'],
       order: 4,
-      action: { kind: 'navigate', to: '/knowledge' },
+      action: { kind: 'navigate', to: '/projects' },
     },
     {
-      id: 'nav:capabilities',
+      id: 'nav:memories',
       section: 'nav',
-      title: 'Capabilities',
-      subtitle: 'Presets, scheduled tasks, and runtime tools',
-      keywords: ['automation', 'scheduled', 'tasks', 'tools', 'mcp', 'integrations'],
+      title: 'Memories',
+      subtitle: 'Browse durable knowledge packages',
+      keywords: ['memory', 'knowledge', 'distilled', 'references'],
       order: 5,
-      action: { kind: 'navigate', to: '/capabilities' },
+      action: { kind: 'navigate', to: '/memories' },
+    },
+    {
+      id: 'nav:skills',
+      section: 'nav',
+      title: 'Skills',
+      subtitle: 'Browse reusable workflows',
+      keywords: ['knowledge', 'skills', 'workflows', 'procedures'],
+      order: 6,
+      action: { kind: 'navigate', to: '/skills' },
+    },
+    {
+      id: 'nav:instructions',
+      section: 'nav',
+      title: 'Instructions',
+      subtitle: 'Browse AGENTS and durable behavior sources',
+      keywords: ['knowledge', 'agents', 'instructions', 'policy'],
+      order: 7,
+      action: { kind: 'navigate', to: '/instructions' },
+    },
+    {
+      id: 'nav:plans',
+      section: 'nav',
+      title: 'Todo Presets',
+      subtitle: 'Browse reusable automation presets',
+      keywords: ['automation', 'presets', 'todo', 'workflow'],
+      order: 8,
+      action: { kind: 'navigate', to: '/plans' },
+    },
+    {
+      id: 'nav:scheduled',
+      section: 'nav',
+      title: 'Scheduled Tasks',
+      subtitle: 'Browse unattended automation',
+      keywords: ['automation', 'scheduled', 'tasks', 'cron'],
+      order: 9,
+      action: { kind: 'navigate', to: '/scheduled' },
+    },
+    {
+      id: 'nav:tools',
+      section: 'nav',
+      title: 'Tools',
+      subtitle: 'Inspect runtime tools and integrations',
+      keywords: ['tools', 'mcp', 'integrations', 'capabilities'],
+      order: 10,
+      action: { kind: 'navigate', to: '/tools' },
     },
     {
       id: 'nav:search-memories',
@@ -167,7 +212,7 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       title: 'Search memories',
       subtitle: 'Fuzzy search memory summaries and full memory content',
       keywords: ['memory', 'knowledge', 'distilled', 'content', 'fuzzy'],
-      order: 6,
+      order: 11,
       action: { kind: 'setScope', scope: 'memories' },
     },
     {
@@ -176,7 +221,7 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       title: 'Archived conversations',
       subtitle: 'Fuzzy search archived user and assistant messages',
       keywords: ['archive', 'restore', 'history', 'messages', 'fuzzy'],
-      order: 7,
+      order: 12,
       action: { kind: 'setScope', scope: 'archived' },
     },
     {
@@ -185,7 +230,7 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       title: 'System',
       subtitle: 'Inspect services, logs, and background work',
       keywords: ['daemon', 'sync', 'gateway', 'telegram', 'web ui', 'status', 'services', 'runs', 'background', 'executions'],
-      order: 8,
+      order: 13,
       action: { kind: 'navigate', to: '/system' },
     },
     {
@@ -194,7 +239,7 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       title: 'Settings',
       subtitle: 'Adjust UI, profile, and model preferences',
       keywords: ['preferences', 'config'],
-      order: 9,
+      order: 14,
       action: { kind: 'navigate', to: '/settings' },
     },
   ];
@@ -331,7 +376,7 @@ function buildTaskItems(tasks: ScheduledTaskSummary[]): CommandPaletteItem<Comma
       meta: metaParts.join(' · '),
       keywords: [task.id, task.filePath, task.scheduleType, task.prompt, task.cron ?? '', task.model ?? '', task.lastStatus ?? ''],
       order: index,
-      action: { kind: 'navigate', to: `/capabilities?section=scheduled&task=${encodeURIComponent(task.id)}` },
+      action: { kind: 'navigate', to: `/scheduled/${encodeURIComponent(task.id)}` },
     };
   });
 }
@@ -379,7 +424,9 @@ function buildProjectItems(projects: ProjectRecord[]): CommandPaletteItem<Comman
         ...project.recentProgress,
       ],
       order: index,
-      action: { kind: 'navigate', to: `/knowledge?section=projects&project=${encodeURIComponent(project.id)}` },
+      action: { kind: 'navigate', to: project.profile
+        ? `/projects/${encodeURIComponent(project.id)}?viewProfile=${encodeURIComponent(project.profile)}`
+        : `/projects/${encodeURIComponent(project.id)}` },
     };
   });
 }
@@ -507,7 +554,7 @@ export function CommandPalette() {
   }, [openPalette]);
 
   const openMemoryEditor = useCallback((memoryId: string) => {
-    navigate(`/knowledge?section=memories&memory=${encodeURIComponent(memoryId)}`);
+    navigate(`/memories?memory=${encodeURIComponent(memoryId)}`);
     closePalette();
   }, [closePalette, navigate]);
 

@@ -1,8 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { api } from './api';
-import { getCapabilitiesLandingPath } from './capabilitiesSelection';
-import { getKnowledgeLandingPath } from './knowledgeSelection';
 import { Layout } from './components/Layout';
 import { InboxPage } from './pages/InboxPage';
 import { fetchSessionsSnapshot } from './sessionSnapshot';
@@ -39,26 +37,14 @@ function LegacyRunsRoutesRedirect() {
   return <Navigate to={id ? `/system?run=${encodeURIComponent(id)}` : '/system'} replace />;
 }
 
-function KnowledgeRoute() {
-  const location = useLocation();
-  const redirectPath = getKnowledgeLandingPath(location.search);
-  return redirectPath ? <Navigate to={redirectPath} replace /> : <KnowledgeBasePage />;
-}
-
-function CapabilitiesRoute() {
-  const location = useLocation();
-  const redirectPath = getCapabilitiesLandingPath(location.search);
-  return redirectPath ? <Navigate to={redirectPath} replace /> : <CapabilitiesPage />;
-}
-
 const TasksPage = lazy(() => import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })));
 const ConversationsPage = lazy(() => import('./pages/ConversationsPage').then((module) => ({ default: module.ConversationsPage })));
 const ConversationPage = lazy(() => import('./pages/ConversationPage').then((module) => ({ default: module.ConversationPage })));
 const SystemPage = lazy(() => import('./pages/SystemPage').then((module) => ({ default: module.SystemPage })));
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage').then((module) => ({ default: module.ProjectsPage })));
 const AutomationPage = lazy(() => import('./pages/AutomationPage').then((module) => ({ default: module.AutomationPage })));
-const KnowledgeBasePage = lazy(() => import('./pages/KnowledgeBasePage').then((module) => ({ default: module.KnowledgeBasePage })));
-const CapabilitiesPage = lazy(() => import('./pages/CapabilitiesPage').then((module) => ({ default: module.CapabilitiesPage })));
+const SkillsPage = lazy(() => import('./pages/SkillsPage').then((module) => ({ default: module.SkillsPage })));
+const InstructionsPage = lazy(() => import('./pages/InstructionsPage').then((module) => ({ default: module.InstructionsPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
 const ToolsPage = lazy(() => import('./pages/ToolsPage').then((module) => ({ default: module.ToolsPage })));
 const MemoriesPage = lazy(() => import('./pages/MemoriesPage').then((module) => ({ default: module.MemoriesPage })));
@@ -261,13 +247,13 @@ export function App() {
                       <Route path="workspace" element={suspendRoute(<WorkspacePage />)} />
                       <Route path="inbox" element={<InboxPage />} />
                       <Route path="inbox/:id" element={<InboxPage />} />
-                      <Route path="knowledge" element={suspendRoute(<KnowledgeRoute />)} />
-                      <Route path="capabilities" element={suspendRoute(<CapabilitiesRoute />)} />
                       <Route path="system" element={suspendRoute(<SystemPage />)} />
                       <Route path="projects" element={suspendRoute(<ProjectsPage />)} />
                       <Route path="projects/:id" element={suspendRoute(<ProjectsPage />)} />
-                      <Route path="plans" element={suspendRoute(<AutomationPage />)} />
                       <Route path="memories" element={suspendRoute(<MemoriesPage />)} />
+                      <Route path="skills" element={suspendRoute(<SkillsPage />)} />
+                      <Route path="instructions" element={suspendRoute(<InstructionsPage />)} />
+                      <Route path="plans" element={suspendRoute(<AutomationPage />)} />
                       <Route path="runs" element={<LegacyRunsRoutesRedirect />} />
                       <Route path="runs/:id" element={<LegacyRunsRoutesRedirect />} />
                       <Route path="scheduled" element={suspendRoute(<TasksPage />)} />

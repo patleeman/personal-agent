@@ -49,13 +49,11 @@ import type {
   LiveSessionContext,
   MemoryAgentsItem,
   MemoryData,
-  MemoryDocDetail,
   MemoryDocItem,
   MemorySkillItem,
   ProjectDetail,
   ProjectRecord,
   RemoteFolderListing,
-  ScheduledTaskDetail,
   ScheduledTaskSummary,
   WorkspaceChangeKind,
 } from '../types';
@@ -1973,7 +1971,7 @@ function InboxItemContext({ id }: { id: string }) {
               <div className="space-y-1.5">
                 <p className="text-[11px] uppercase tracking-[0.12em] text-dim">Projects</p>
                 {entry.relatedProjectIds.map((projectId) => (
-                  <Link key={projectId} to={`/knowledge?section=projects&project=${encodeURIComponent(projectId)}`} className="ui-card-meta font-mono text-accent hover:text-accent/80">
+                  <Link key={projectId} to={`/projects/${encodeURIComponent(projectId)}`} className="ui-card-meta font-mono text-accent hover:text-accent/80">
                     {projectId}
                   </Link>
                 ))}
@@ -2671,14 +2669,6 @@ function toolParameterDetails(tool: Pick<AgentToolInfo, 'parameters'>): Array<{ 
   }));
 }
 
-function taskStatusLabel(task: ScheduledTaskSummary): string {
-  if (task.running) return 'running';
-  if (task.lastStatus === 'failure') return 'failed';
-  if (task.lastStatus === 'success') return 'ok';
-  if (!task.enabled) return 'disabled';
-  return 'pending';
-}
-
 function ConversationsWorkspaceContext() {
   const { pinnedSessions, tabs, archivedSessions, loading, refetch } = useConversations();
   const attentionSessions = useMemo(
@@ -3027,6 +3017,74 @@ function KnowledgeInstructionContext({ item }: { item: MemoryAgentsItem }) {
       <div className="space-y-2 border-t border-border-subtle pt-4">
         <p className="ui-section-label">Instructions</p>
         {item.content ? <RailMarkdownPreview content={item.content} /> : <p className="ui-card-meta">This source exists but no content was loaded.</p>}
+      </div>
+    </div>
+  );
+}
+
+function SkillsContextPanel() {
+  const location = useLocation();
+  const selectedSkillName = getKnowledgeSkillName(location.search);
+  const { data, loading, error } = useApi(api.memory, 'skills-rail-memory');
+  const skills = sortKnowledgeSkills(data?.skills ?? []);
+  const selectedSkill = skills.find((item) => item.name === selectedSkillName) ?? null;
+  const recentlyUsedSkills = skills.filter((item) => item.usedInLastSession || (item.recentSessionCount ?? 0) > 0);
+
+  if (selectedSkill) return <KnowledgeSkillContext skill={selectedSkill} />;
+  if (loading && !data) return <LoadingState label="Loading skills…" className="px-4 py-4" />;
+  if (error && !data) return <ErrorState message={`Failed to load skills: ${error}`} className="px-4 py-4" />;
+
+  return (
+    <div className="px-4 py-4 space-y-4">
+      <div className="space-y-1">
+        <p className="ui-card-title">Skills</p>
+        <p className="ui-card-meta">Select a skill on the left to inspect its definition and usage guidance.</p>
+      </div>
+      <div className="space-y-2">
+        <RailMetadataRow label="Skills" value={skills.length} />
+        <RailMetadataRow label="Recently used" value={recentlyUsedSkills.length} />
+      </div>
+      <div className="space-y-2 border-t border-border-subtle pt-4">
+        <p className="ui-section-label">Recently used</p>
+        {recentlyUsedSkills.length === 0 ? <p className="ui-card-meta">No skills have been used recently.</p> : recentlyUsedSkills.slice(0, 5).map((skill) => (
+          <Link key={skill.name} to={`/skills?skill=${encodeURIComponent(skill.name)}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
+            <p className="text-[12px] font-medium text-primary">{humanizeSkillName(skill.name)}</p>
+            <p className="ui-card-meta mt-1">{formatUsageLabel(skill.recentSessionCount, skill.lastUsedAt, skill.usedInLastSession, 'Not used recently')}</p>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function InstructionsContextPanel() {
+  const location = useLocation();
+  const selectedInstructionPath = getKnowledgeInstructionPath(location.search);
+  const { data, loading, error } = useApi(api.memory, 'instructions-rail-memory');
+  const instructions = (data?.agentsMd ?? []).filter((item) => item.exists).sort((left, right) => left.source.localeCompare(right.source) || left.path.localeCompare(right.path));
+  const selectedInstruction = instructions.find((item) => item.path === selectedInstructionPath) ?? null;
+
+  if (selectedInstruction) return <KnowledgeInstructionContext item={selectedInstruction} />;
+  if (loading && !data) return <LoadingState label="Loading instructions…" className="px-4 py-4" />;
+  if (error && !data) return <ErrorState message={`Failed to load instructions: ${error}`} className="px-4 py-4" />;
+
+  return (
+    <div className="px-4 py-4 space-y-4">
+      <div className="space-y-1">
+        <p className="ui-card-title">Instructions</p>
+        <p className="ui-card-meta">Select a source on the left to inspect the durable instructions loaded for the active profile.</p>
+      </div>
+      <div className="space-y-2">
+        <RailMetadataRow label="Sources" value={instructions.length} />
+      </div>
+      <div className="space-y-2 border-t border-border-subtle pt-4">
+        <p className="ui-section-label">Loaded sources</p>
+        {instructions.length === 0 ? <p className="ui-card-meta">No instruction sources are currently loaded.</p> : instructions.slice(0, 5).map((item) => (
+          <Link key={item.path} to={`/instructions?instruction=${encodeURIComponent(item.path)}`} className="block rounded-lg border border-border-subtle bg-base px-3 py-2 hover:bg-elevated/60">
+            <p className="text-[12px] font-medium text-primary">{item.source}</p>
+            <p className="ui-card-meta mt-1 break-all">{item.path}</p>
+          </Link>
+        ))}
       </div>
     </div>
   );
@@ -3501,6 +3559,31 @@ export function ContextRail() {
       <div className="flex-1 flex flex-col">
         <RailHeader label="Memory" />
         <EmptyPrompt text="Select a memory package to inspect its MEMORY.md, relationships, and package-local references." />
+      </div>
+    );
+  }
+
+  if (section === 'skills') {
+    const skillName = getKnowledgeSkillName(location.search);
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <RailHeader label="Skills" sub={skillName ?? undefined} />
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <SkillsContextPanel />
+        </div>
+      </div>
+    );
+  }
+
+  if (section === 'instructions') {
+    const instructionPath = getKnowledgeInstructionPath(location.search);
+    const instructionSub = instructionPath ? instructionPath.split('/').pop() ?? instructionPath : undefined;
+    return (
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <RailHeader label="Instructions" sub={instructionSub} />
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <InstructionsContextPanel />
+        </div>
       </div>
     );
   }

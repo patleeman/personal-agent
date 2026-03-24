@@ -35,7 +35,12 @@ describe('layout sizing helpers', () => {
       initialMainWidthRatio: 0.7,
     });
 
-    expect(getRailLayoutPrefs('/knowledge')).toEqual({
+    expect(getRailLayoutPrefs('/skills')).toEqual({
+      storageKey: 'pa:rail-width:knowledge',
+      initialWidth: 460,
+    });
+
+    expect(getRailLayoutPrefs('/instructions')).toEqual({
       storageKey: 'pa:rail-width:knowledge',
       initialWidth: 460,
     });
@@ -45,9 +50,9 @@ describe('layout sizing helpers', () => {
       initialMainWidthRatio: 0.7,
     });
 
-    expect(getRailLayoutPrefs('/capabilities')).toEqual({
-      storageKey: 'pa:rail-width:capabilities',
-      initialWidth: 420,
+    expect(getRailLayoutPrefs('/plans')).toEqual({
+      storageKey: 'pa:rail-width:plans',
+      initialMainWidthRatio: 0.7,
     });
   });
 

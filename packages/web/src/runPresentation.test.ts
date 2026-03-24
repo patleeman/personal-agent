@@ -84,7 +84,7 @@ describe('runPresentation', () => {
         key: 'task:daily-report',
         label: 'Scheduled task',
         value: 'daily-report',
-        to: '/capabilities?section=scheduled&task=daily-report',
+        to: '/scheduled/daily-report',
         detail: 'Summarize yesterday and today.',
       },
       {
@@ -289,7 +289,7 @@ describe('runPresentation', () => {
       }],
     })).toMatchObject({
       label: 'Scheduled task',
-      to: '/capabilities?section=scheduled&task=daily-report',
+      to: '/scheduled/daily-report',
     });
     expect(getRunPrimaryActionLabel(getRunPrimaryConnection(scheduledRun))).toBe('Open task');
 

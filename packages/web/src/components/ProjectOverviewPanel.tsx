@@ -84,8 +84,8 @@ export function ProjectOverviewPanel({
 }) {
   const record = project.project;
   const projectHref = record.profile
-    ? `/knowledge?section=projects&project=${encodeURIComponent(record.id)}&viewProfile=${encodeURIComponent(record.profile)}`
-    : `/knowledge?section=projects&project=${encodeURIComponent(record.id)}`;
+    ? `/projects/${encodeURIComponent(record.id)}?viewProfile=${encodeURIComponent(record.profile)}`
+    : `/projects/${encodeURIComponent(record.id)}`;
   const status = formatProjectStatus(record.status);
   const blockers = record.blockers.filter((blocker) => blocker.trim().length > 0);
   const acceptanceCriteria = record.requirements.acceptanceCriteria.filter((item) => item.trim().length > 0);
