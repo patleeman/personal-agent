@@ -50,6 +50,18 @@ export interface CreateProjectScaffoldResult {
   writtenFiles: string[];
 }
 
+interface DurableProjectPaths {
+  repoRoot: string;
+  projectsDir: string;
+  projectDir: string;
+  projectFile: string;
+  briefFile: string;
+  tasksDir: string;
+  notesDir: string;
+  attachmentsDir: string;
+  artifactsDir: string;
+}
+
 function getRepoRoot(repoRoot?: string): string {
   return resolve(repoRoot ?? process.env.PERSONAL_AGENT_REPO_ROOT ?? process.cwd());
 }
@@ -90,14 +102,7 @@ export function listResolvedProjectRepoRoots(options: ListResolvedProjectRepoRoo
 
   for (const projectId of options.projectIds) {
     try {
-      const project = readProject(resolveProjectPaths({
-        repoRoot: options.repoRoot,
-        profile: options.profile,
-        projectId,
-      }).projectFile);
-      if (project.ownerProfile !== options.profile) {
-        continue;
-      }
+      const project = readProject(resolveDurableProjectPaths(options.repoRoot, projectId).projectFile);
       const projectRepoRoot = resolveProjectRepoRoot({
         repoRoot: options.repoRoot,
         projectRepoRoot: project.repoRoot,
@@ -150,20 +155,17 @@ export function resolveProfileProjectsDir(options: ResolveProjectOptions): strin
   return getDurableProjectsDir();
 }
 
-export function resolveProjectPaths(options: ResolveProjectPathsOptions): ProjectPaths {
-  validateProfileName(options.profile);
-  validateProjectId(options.projectId);
+function resolveDurableProjectPaths(repoRoot?: string, projectId?: string): DurableProjectPaths {
+  if (projectId) {
+    validateProjectId(projectId);
+  }
 
-  const repoRoot = getRepoRoot(options.repoRoot);
-  const projectsDir = resolveProfileProjectsDir({
-    repoRoot,
-    profile: options.profile,
-  });
-  const projectDir = join(projectsDir, options.projectId);
+  const normalizedRepoRoot = getRepoRoot(repoRoot);
+  const projectsDir = getDurableProjectsDir();
+  const projectDir = projectId ? join(projectsDir, projectId) : projectsDir;
 
   return {
-    repoRoot,
-    profile: options.profile,
+    repoRoot: normalizedRepoRoot,
     projectsDir,
     projectDir,
     projectFile: join(projectDir, 'PROJECT.yaml'),
@@ -175,6 +177,34 @@ export function resolveProjectPaths(options: ResolveProjectPathsOptions): Projec
   };
 }
 
+export function resolveProjectPaths(options: ResolveProjectPathsOptions): ProjectPaths {
+  validateProfileName(options.profile);
+
+  const paths = resolveDurableProjectPaths(options.repoRoot, options.projectId);
+
+  return {
+    ...paths,
+    profile: options.profile,
+  };
+}
+
+export function listAllProjectIds(options: { repoRoot?: string } = {}): string[] {
+  const { projectsDir } = resolveDurableProjectPaths(options.repoRoot);
+
+  if (!existsSync(projectsDir)) {
+    return [];
+  }
+
+  return readdirSync(projectsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && PROJECT_ID_PATTERN.test(entry.name))
+    .map((entry) => entry.name)
+    .sort((left, right) => left.localeCompare(right));
+}
+
+export function readProjectOwnerProfile(options: { repoRoot?: string; projectId: string }): string {
+  return readProject(resolveDurableProjectPaths(options.repoRoot, options.projectId).projectFile).ownerProfile;
+}
+
 export function listProjectIds(options: ResolveProjectOptions): string[] {
   const projectsDir = resolveProfileProjectsDir(options);
 
@@ -182,23 +212,17 @@ export function listProjectIds(options: ResolveProjectOptions): string[] {
     return [];
   }
 
-  const entries = readdirSync(projectsDir, { withFileTypes: true });
-  return entries
-    .filter((entry) => entry.isDirectory() && PROJECT_ID_PATTERN.test(entry.name))
-    .map((entry) => entry.name)
+  return listAllProjectIds({ repoRoot: options.repoRoot })
     .filter((projectId) => {
       try {
-        const project = readProject(resolveProjectPaths({
+        return readProjectOwnerProfile({
           repoRoot: options.repoRoot,
-          profile: options.profile,
           projectId,
-        }).projectFile);
-        return project.ownerProfile === options.profile;
+        }) === options.profile;
       } catch {
         return true;
       }
-    })
-    .sort((left, right) => left.localeCompare(right));
+    });
 }
 
 export function resolveProjectTaskPath(options: ResolveProjectTaskPathOptions): string {

@@ -5,9 +5,11 @@ import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createProjectScaffold,
+  listAllProjectIds,
   listProjectIds,
   listResolvedProjectRepoRoots,
   projectExists,
+  readProjectOwnerProfile,
   resolveProfileProjectsDir,
   resolveProjectPaths,
   resolveProjectRepoRoot,
@@ -148,6 +150,28 @@ describe('listResolvedProjectRepoRoots', () => {
       projectIds: ['alpha', 'beta'],
     })).toEqual([join(repo, '..', 'workspace', 'alpha')]);
   });
+
+  it('resolves repo roots for referenced projects owned by another profile', () => {
+    const repo = createTempRepo();
+    const project = createProjectScaffold({
+      repoRoot: repo,
+      profile: 'assistant',
+      projectId: 'shared-objective',
+      title: 'Shared objective',
+      description: 'Shared objective',
+    });
+
+    writeFileSync(project.paths.projectFile, readFileSync(project.paths.projectFile, 'utf-8').replace(
+      'summary: Project created. Capture the durable requirements, plan, and next steps as the work takes shape.',
+      'repoRoot: ../workspace/shared-objective\nsummary: Project created. Capture the durable requirements, plan, and next steps as the work takes shape.',
+    ));
+
+    expect(listResolvedProjectRepoRoots({
+      repoRoot: repo,
+      profile: 'datadog',
+      projectIds: ['shared-objective'],
+    })).toEqual([join(repo, '..', 'workspace', 'shared-objective')]);
+  });
 });
 
 describe('createProjectScaffold', () => {
@@ -240,6 +264,45 @@ describe('createProjectScaffold', () => {
   });
 });
 
+describe('listAllProjectIds', () => {
+  it('returns every durable project id regardless of owner profile', () => {
+    const repo = createTempRepo();
+
+    createProjectScaffold({
+      repoRoot: repo,
+      profile: 'assistant',
+      projectId: 'assistant-project',
+      title: 'Assistant objective',
+      description: 'Assistant objective',
+    });
+    createProjectScaffold({
+      repoRoot: repo,
+      profile: 'datadog',
+      projectId: 'datadog-project',
+      title: 'Datadog objective',
+      description: 'Datadog objective',
+    });
+
+    expect(listAllProjectIds({ repoRoot: repo })).toEqual(['assistant-project', 'datadog-project']);
+  });
+});
+
+describe('readProjectOwnerProfile', () => {
+  it('returns the durable owner profile for a project id', () => {
+    const repo = createTempRepo();
+
+    createProjectScaffold({
+      repoRoot: repo,
+      profile: 'assistant',
+      projectId: 'assistant-project',
+      title: 'Assistant objective',
+      description: 'Assistant objective',
+    });
+
+    expect(readProjectOwnerProfile({ repoRoot: repo, projectId: 'assistant-project' })).toBe('assistant');
+  });
+});
+
 describe('listProjectIds', () => {
   it('returns sorted project directories and ignores files', () => {
     const repo = createTempRepo();
@@ -264,6 +327,27 @@ describe('listProjectIds', () => {
     writeFileSync(join(projectsDir, 'bad name'), 'ignore me\n');
 
     expect(listProjectIds({ repoRoot: repo, profile: 'datadog' })).toEqual(['alpha', 'zebra']);
+  });
+
+  it('filters out projects owned by other profiles', () => {
+    const repo = createTempRepo();
+
+    createProjectScaffold({
+      repoRoot: repo,
+      profile: 'assistant',
+      projectId: 'assistant-project',
+      title: 'Assistant objective',
+      description: 'Assistant objective',
+    });
+    createProjectScaffold({
+      repoRoot: repo,
+      profile: 'datadog',
+      projectId: 'datadog-project',
+      title: 'Datadog objective',
+      description: 'Datadog objective',
+    });
+
+    expect(listProjectIds({ repoRoot: repo, profile: 'datadog' })).toEqual(['datadog-project']);
   });
 });
 

@@ -773,6 +773,76 @@ function LinkedProjectOverviewPanel({
   );
 }
 
+function ReferencedProjectModal({
+  projectId,
+  project,
+  loading,
+  onClose,
+  onRemove,
+  removeDisabled = false,
+}: {
+  projectId: string;
+  project: ProjectDetail | null;
+  loading: boolean;
+  onClose: () => void;
+  onRemove?: () => void;
+  removeDisabled?: boolean;
+}) {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  const modalLabel = project ? `${project.project.title} (${project.project.id})` : projectId;
+
+  return (
+    <div
+      className="ui-overlay-backdrop"
+      style={{ background: 'rgb(0 0 0 / 0.55)', backdropFilter: 'blur(2px)' }}
+      onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Referenced project: ${modalLabel}`}
+        className="ui-dialog-shell"
+        style={{ maxWidth: 'min(980px, calc(100vw - 3rem))', maxHeight: 'calc(100vh - 5rem)' }}
+      >
+        <div className="shrink-0 border-b border-border-subtle px-4 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 space-y-1">
+              <p className="ui-section-label">Referenced project</p>
+              <p className="truncate text-[13px] text-primary" title={modalLabel}>{modalLabel}</p>
+            </div>
+            <button type="button" onClick={onClose} className="ui-toolbar-button">
+              Close
+            </button>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+          {loading && !project && <LoadingState label="Loading project…" className="justify-center" />}
+          {!loading && project && (
+            <LinkedProjectOverviewPanel
+              project={project}
+              onRemove={onRemove}
+              removeDisabled={removeDisabled}
+            />
+          )}
+          {!loading && !project && <ErrorState message="Unable to load this project." />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DraftConversationContextPanel() {
   const [draftCwd, setDraftCwd, clearDraftCwd] = useReloadState<string>({
     storageKey: buildDraftConversationCwdStorageKey(),
@@ -1024,10 +1094,11 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const { tasks, sessions, runs, projects: projectSnapshot } = useAppData();
   const [data, setData] = useState<LiveSessionContext | null>(null);
   const [execution, setExecution] = useState<ConversationExecutionState | null>(null);
-  const [fallbackProjects, setFallbackProjects] = useState<ProjectRecord[]>([]);
+  const [referenceableProjects, setReferenceableProjects] = useState<ProjectRecord[] | null>(projectSnapshot);
   const [focusedProjectId, setFocusedProjectId] = useState('');
   const [attachProjectId, setAttachProjectId] = useState('');
   const [focusedProject, setFocusedProject] = useState<ProjectDetail | null>(null);
+  const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [detectedRunMentions, setDetectedRunMentions] = useState<ReturnType<typeof collectConversationRunMentions>>([]);
   const [runsExpanded, setRunsExpanded] = useState(false);
   const [workingTreeExpanded, setWorkingTreeExpanded] = useState(false);
@@ -1045,7 +1116,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const [remotePickerError, setRemotePickerError] = useState<string | null>(null);
   const [remotePickerListing, setRemotePickerListing] = useState<RemoteFolderListing | null>(null);
 
-  const allProjects = projectSnapshot ?? fallbackProjects;
+  const allProjects = referenceableProjects ?? projectSnapshot ?? [];
   const runRecordsById = useMemo(
     () => new Map((runs?.runs ?? []).map((run) => [run.runId, run] as const)),
     [runs],
@@ -1085,18 +1156,10 @@ function LiveSessionContextPanel({ id }: { id: string }) {
           versionKey: executionVersionKey,
           fetcher: () => api.conversationExecution(id),
         });
-    const projectsPromise = projectSnapshot !== null
-      ? Promise.resolve(projectSnapshot)
-      : api.projects();
-
-    Promise.all([contextPromise, executionPromise, projectsPromise])
-      .then(([context, nextExecution, nextProjects]) => {
+    Promise.all([contextPromise, executionPromise])
+      .then(([context, nextExecution]) => {
         if (cancelled) {
           return;
-        }
-
-        if (projectSnapshot === null) {
-          setFallbackProjects(nextProjects);
         }
 
         setData(context);
@@ -1112,7 +1175,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [executionVersionKey, id, liveContextVersionKey, projectSnapshot]);
+  }, [executionVersionKey, id, liveContextVersionKey]);
 
   const runLookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
   const isSessionRunning = Boolean(sessions?.find((session) => session.id === id)?.isRunning);
@@ -1120,6 +1183,32 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const autoExpandedConnectedRunsConversationIdRef = useRef<string | null>(null);
 
   useEffect(() => load(), [load]);
+
+  useEffect(() => {
+    if (projectSnapshot !== null && referenceableProjects === null) {
+      setReferenceableProjects(projectSnapshot);
+    }
+  }, [projectSnapshot, referenceableProjects]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    api.projects({ profile: 'all' })
+      .then((projects) => {
+        if (!cancelled) {
+          setReferenceableProjects(projects);
+        }
+      })
+      .catch(() => {
+        if (!cancelled && projectSnapshot !== null) {
+          setReferenceableProjects(projectSnapshot);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectSnapshot, versions.projects]);
 
   useEffect(() => {
     if (loading || (!data && !execution && !error)) {
@@ -1185,6 +1274,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     setRemotePickerListing(null);
     setRunsExpanded(false);
     setWorkingTreeExpanded(false);
+    setProjectModalOpen(false);
   }, [id]);
 
   useEffect(() => {
@@ -1212,6 +1302,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const isRemoteConversation = typeof remoteTargetId === 'string' && remoteTargetId.length > 0;
   const availableProjects = allProjects.filter((project) => !relatedProjectIds.includes(project.id) && !isProjectArchived(project));
   const availableProjectIds = availableProjects.map((project) => project.id);
+  const focusedProjectRecord = allProjects.find((project) => project.id === focusedProjectId) ?? null;
   const selectedAttachProject = availableProjects.find((project) => project.id === attachProjectId) ?? null;
   const selectedRunId = getConversationRunIdFromSearch(location.search);
   const currentConversationRunId = createConversationLiveRunId(id);
@@ -1341,6 +1432,16 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   }, [focusedProjectId, relatedProjectIds]);
 
   useEffect(() => {
+    if (!projectModalOpen) {
+      return;
+    }
+
+    if (!focusedProjectId || !relatedProjectIds.includes(focusedProjectId)) {
+      setProjectModalOpen(false);
+    }
+  }, [focusedProjectId, projectModalOpen, relatedProjectIds]);
+
+  useEffect(() => {
     const nextAttachProjectId = pickAttachProjectId(availableProjectIds, attachProjectId);
     if (nextAttachProjectId !== attachProjectId) {
       setAttachProjectId(nextAttachProjectId);
@@ -1357,7 +1458,11 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     }
 
     setFocusedLoading(true);
-    api.projectById(focusedProjectId)
+    setFocusedProject((current) => (current?.project.id === focusedProjectId ? current : null));
+    api.projectById(
+      focusedProjectId,
+      focusedProjectRecord?.profile ? { profile: focusedProjectRecord.profile } : undefined,
+    )
       .then((detail) => {
         if (cancelled) return;
         setFocusedProject(detail);
@@ -1370,7 +1475,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
       });
 
     return () => { cancelled = true; };
-  }, [focusedProjectId]);
+  }, [focusedProjectId, focusedProjectRecord?.profile]);
 
   async function attachSelectedProject() {
     if (!attachProjectId || linkBusy) return;
@@ -1693,31 +1798,43 @@ function LiveSessionContextPanel({ id }: { id: string }) {
 
       <Section title="Referenced projects">
         <div className="space-y-3">
-          {relatedProjectIds.length > 1 && (
-            <div className="flex flex-wrap items-center gap-2">
+          {relatedProjectIds.length > 0 && (
+            <div className="space-y-2">
               {relatedProjectIds.map((projectId) => {
-                const isFocused = projectId === focusedProjectId;
+                const projectRecord = allProjects.find((project) => project.id === projectId) ?? null;
+                const isSelected = projectModalOpen && projectId === focusedProjectId;
                 return (
                   <button
                     key={projectId}
-                    onClick={() => setFocusedProjectId(projectId)}
-                    className={isFocused ? 'ui-pill ui-pill-accent font-mono max-w-full truncate' : 'ui-pill ui-pill-muted font-mono hover:text-primary max-w-full truncate'}
-                    title={`Focus referenced project ${projectId}`}
+                    type="button"
+                    onClick={() => {
+                      setFocusedProjectId(projectId);
+                      setProjectModalOpen(true);
+                    }}
+                    className={isSelected ? 'w-full rounded-lg border border-accent/25 bg-accent/10 px-3 py-2.5 text-left transition-colors' : 'w-full rounded-lg border border-border-subtle bg-surface px-3 py-2.5 text-left transition-colors hover:border-accent/25 hover:bg-elevated/70'}
+                    title={projectRecord ? `Open ${projectRecord.title} (${projectId})` : `Open referenced project ${projectId}`}
                   >
-                    {projectId}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[12px] font-medium text-primary">{projectRecord?.title ?? projectId}</p>
+                        <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-secondary">
+                          <span className="font-mono">@{projectId}</span>
+                          {projectRecord?.profile && (
+                            <>
+                              <span className="opacity-35">·</span>
+                              <span>profile {projectRecord.profile}</span>
+                            </>
+                          )}
+                        </p>
+                      </div>
+                      <span className={isSelected ? 'shrink-0 text-[10px] uppercase tracking-[0.14em] text-accent' : 'shrink-0 text-[10px] uppercase tracking-[0.14em] text-dim'}>
+                        {isSelected ? 'open' : 'view'}
+                      </span>
+                    </div>
                   </button>
                 );
               })}
             </div>
-          )}
-
-          {focusedLoading && <div className="text-[12px] text-dim animate-pulse">Loading project…</div>}
-          {!focusedLoading && focusedProject && (
-            <LinkedProjectOverviewPanel
-              project={focusedProject}
-              onRemove={() => { void removeLinkedProject(focusedProject.project.id); }}
-              removeDisabled={linkBusy}
-            />
           )}
 
           {availableProjects.length > 0 && (
@@ -1729,10 +1846,12 @@ function LiveSessionContextPanel({ id }: { id: string }) {
                   onChange={(event) => setAttachProjectId(event.target.value)}
                   className="flex-1 truncate bg-base border border-border-subtle rounded-lg px-2.5 py-2 text-[12px] text-secondary focus:outline-none focus:border-accent/60"
                   aria-label="Reference project"
-                  title={selectedAttachProject ? `${selectedAttachProject.title} (${selectedAttachProject.id})${selectedAttachProject.description ? ` — ${selectedAttachProject.description}` : ''}` : ''}
+                  title={selectedAttachProject ? `${selectedAttachProject.title} (${selectedAttachProject.id}${selectedAttachProject.profile ? ` · ${selectedAttachProject.profile}` : ''})${selectedAttachProject.description ? ` — ${selectedAttachProject.description}` : ''}` : ''}
                 >
                   {availableProjects.map((project) => (
-                    <option key={project.id} value={project.id}>{project.title}</option>
+                    <option key={`${project.profile ?? 'current'}:${project.id}`} value={project.id}>
+                      {project.title} ({project.id}{project.profile ? ` · ${project.profile}` : ''})
+                    </option>
                   ))}
                 </select>
                 <button
@@ -1842,6 +1961,17 @@ function LiveSessionContextPanel({ id }: { id: string }) {
           )}
         </div>
       </Section>
+
+      {projectModalOpen && focusedProjectId && (
+        <ReferencedProjectModal
+          projectId={focusedProjectId}
+          project={focusedProject?.project.id === focusedProjectId ? focusedProject : null}
+          loading={focusedLoading}
+          onClose={() => setProjectModalOpen(false)}
+          onRemove={() => { void removeLinkedProject(focusedProjectId); setProjectModalOpen(false); }}
+          removeDisabled={linkBusy}
+        />
+      )}
     </div>
   );
 }

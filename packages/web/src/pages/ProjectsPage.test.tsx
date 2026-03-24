@@ -41,13 +41,25 @@ describe('ProjectsPage', () => {
       projects: null,
       sessions: null,
       tasks: null,
+      runs: null,
       setActivity: vi.fn(),
       setProjects: vi.fn(),
       setSessions: vi.fn(),
       setTasks: vi.fn(),
+      setRuns: vi.fn(),
     });
 
     vi.mocked(useApi)
+      .mockReturnValueOnce({
+        data: {
+          currentProfile: 'assistant',
+          profiles: ['assistant', 'datadog'],
+        },
+        loading: false,
+        refreshing: false,
+        error: null,
+        refetch: vi.fn(),
+      })
       .mockReturnValueOnce({
         data: [],
         loading: false,
@@ -92,13 +104,25 @@ describe('ProjectsPage', () => {
       projects: null,
       sessions: null,
       tasks: null,
+      runs: null,
       setActivity: vi.fn(),
       setProjects: vi.fn(),
       setSessions: vi.fn(),
       setTasks: vi.fn(),
+      setRuns: vi.fn(),
     });
 
     vi.mocked(useApi)
+      .mockReturnValueOnce({
+        data: {
+          currentProfile: 'assistant',
+          profiles: ['assistant', 'datadog'],
+        },
+        loading: false,
+        refreshing: false,
+        error: null,
+        refetch: vi.fn(),
+      })
       .mockReturnValueOnce({
         data: [
           {
@@ -158,6 +182,7 @@ describe('ProjectsPage', () => {
     expect(html).toContain('Archived');
     expect(html).toContain('Active project');
     expect(html).not.toContain('Archived project');
-    expect(html).toContain('1<!-- --> archived');
+    expect(html).toContain('1 archived');
+    expect(html).toContain('Profile');
   });
 });
