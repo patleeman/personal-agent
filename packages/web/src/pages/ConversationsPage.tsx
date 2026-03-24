@@ -10,6 +10,7 @@ import {
   getRunMoment,
   getRunSortTimestamp,
   isRunInProgress,
+  runNeedsAttention,
   type RunPresentationLookups,
 } from '../runPresentation';
 import { sessionNeedsAttention } from '../sessionIndicators';
@@ -70,7 +71,7 @@ function conversationFilterLabel(filter: ConversationFilter): string {
 function conversationFilterDescription(filter: ConversationFilter): string {
   switch (filter) {
     case 'attention':
-      return 'Needs review includes unread conversation updates plus durable runs waiting on resume, rerun, import recovery, or manual review.';
+      return 'Needs review includes unread conversation updates plus durable runs waiting on resume, rerun, import recovery, or manual review. Use read to clear items you have already handled.';
     case 'archived':
       return 'Archived keeps closed conversations visible, including linked runs that are still active or waiting on you.';
     case 'all':
@@ -204,7 +205,7 @@ function runStatusTone(run: DurableRunRecord): PillTone {
   if (run.problems.length > 0 || run.recoveryAction === 'invalid' || status === 'failed' || status === 'interrupted' || getRunImportState(run) === 'failed') {
     return 'danger';
   }
-  if (run.recoveryAction === 'resume' || run.recoveryAction === 'rerun' || status === 'recovering' || getRunImportState(run) === 'ready') {
+  if (run.recoveryAction === 'resume' || run.recoveryAction === 'rerun' || run.recoveryAction === 'attention' || status === 'recovering' || getRunImportState(run) === 'ready') {
     return 'warning';
   }
   if (status === 'running') {
@@ -222,7 +223,7 @@ function runStatusLabel(run: DurableRunRecord): string {
   if (run.problems.length > 0 || run.recoveryAction === 'invalid' || status === 'failed' || status === 'interrupted' || getRunImportState(run) === 'failed') {
     return 'issue';
   }
-  if (run.recoveryAction === 'resume' || run.recoveryAction === 'rerun' || status === 'recovering' || getRunImportState(run) === 'ready') {
+  if (run.recoveryAction === 'resume' || run.recoveryAction === 'rerun' || run.recoveryAction === 'attention' || status === 'recovering' || getRunImportState(run) === 'ready') {
     return 'review';
   }
   if (status === 'running') {
@@ -247,19 +248,6 @@ function formatRecoveryAction(action: string): string {
     default:
       return action;
   }
-}
-
-function runNeedsReview(run: DurableRunRecord): boolean {
-  const status = run.status?.status;
-  return run.problems.length > 0
-    || run.recoveryAction === 'resume'
-    || run.recoveryAction === 'rerun'
-    || run.recoveryAction === 'invalid'
-    || status === 'failed'
-    || status === 'interrupted'
-    || status === 'recovering'
-    || getRunImportState(run) === 'ready'
-    || getRunImportState(run) === 'failed';
 }
 
 function workspaceLabel(workspace: ConversationWorkspaceState): string {
@@ -473,9 +461,13 @@ function SectionBlock({
 function ConversationWorkBlock({
   items,
   onOpen,
+  onMarkRead,
+  busyRunId,
 }: {
   items: ConversationWorkItem[];
   onOpen: (item: ConversationWorkItem) => void;
+  onMarkRead: (runId: string) => void;
+  busyRunId: string | null;
 }) {
   const reviewCount = items.filter((item) => item.needsReview).length;
   const activeCount = items.filter((item) => item.active).length;
@@ -504,7 +496,25 @@ function ConversationWorkBlock({
             key={item.key}
             onClick={() => onOpen(item)}
             leading={<span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${item.tone === 'danger' ? 'bg-danger' : item.tone === 'warning' ? 'bg-warning' : item.tone === 'accent' ? 'bg-accent animate-pulse' : item.tone === 'success' ? 'bg-success' : 'bg-border-default'}`} />}
-            trailing={<span className="mt-0.5 text-[11px] font-mono text-dim transition-colors group-hover:text-secondary">open</span>}
+            trailing={(
+              <div className="mt-0.5 flex shrink-0 items-center gap-3">
+                {item.needsReview && item.runId && (
+                  <button
+                    type="button"
+                    className={INLINE_ACTION_CLASS}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onMarkRead(item.runId as string);
+                    }}
+                    disabled={busyRunId === item.runId}
+                    title="Mark run as reviewed"
+                  >
+                    {busyRunId === item.runId ? '…' : 'read'}
+                  </button>
+                )}
+                <span className="text-[11px] font-mono text-dim transition-colors group-hover:text-secondary">open</span>
+              </div>
+            )}
           >
             <div className="flex flex-wrap items-center gap-2">
               <p className="ui-row-title">{item.title}</p>
@@ -521,7 +531,7 @@ function ConversationWorkBlock({
 
 export function ConversationsPage() {
   const navigate = useNavigate();
-  const { runs, sessions } = useAppData();
+  const { runs, sessions, setRuns } = useAppData();
   const {
     pinnedIds,
     openIds,
@@ -538,7 +548,8 @@ export function ConversationsPage() {
   const [searchParams] = useSearchParams();
   const filter = parseConversationFilter(searchParams.get('filter'));
   const [query, setQuery] = useState('');
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [busyConversationId, setBusyConversationId] = useState<string | null>(null);
+  const [busyRunId, setBusyRunId] = useState<string | null>(null);
 
   const pinned = useMemo(() => filterSectionSessions('pinned', pinnedSessions, filter, query), [filter, pinnedSessions, query]);
   const open = useMemo(() => filterSectionSessions('open', tabs, filter, query), [filter, query, tabs]);
@@ -561,7 +572,7 @@ export function ConversationsPage() {
     const runItems: Array<ConversationWorkItem & { sortTimestamp: string }> = [];
 
     for (const run of runs?.runs ?? []) {
-      if (!runNeedsReview(run) && !isRunInProgress(run)) {
+      if (!runNeedsAttention(run) && !isRunInProgress(run)) {
         continue;
       }
 
@@ -616,7 +627,7 @@ export function ConversationsPage() {
         statusLabel,
         tone: runStatusTone(run),
         searchText,
-        needsReview: runNeedsReview(run),
+        needsReview: runNeedsAttention(run),
         active: isRunInProgress(run),
         sortTimestamp: getRunSortTimestamp(run),
       });
@@ -694,18 +705,32 @@ export function ConversationsPage() {
   }, [navigate, openSession]);
 
   const handleMarkRead = useCallback(async (sessionId: string) => {
-    if (busyId) {
+    if (busyConversationId) {
       return;
     }
 
-    setBusyId(sessionId);
+    setBusyConversationId(sessionId);
     try {
       await api.markConversationAttentionRead(sessionId);
       await refetch();
     } finally {
-      setBusyId(null);
+      setBusyConversationId(null);
     }
-  }, [busyId, refetch]);
+  }, [busyConversationId, refetch]);
+
+  const handleMarkRunRead = useCallback(async (runId: string) => {
+    if (busyRunId) {
+      return;
+    }
+
+    setBusyRunId(runId);
+    try {
+      await api.markDurableRunAttentionRead(runId);
+      setRuns(await api.runs());
+    } finally {
+      setBusyRunId(null);
+    }
+  }, [busyRunId, setRuns]);
 
   return (
     <div className="flex h-full flex-col">
@@ -771,6 +796,8 @@ export function ConversationsPage() {
                   <ConversationWorkBlock
                     items={visibleConversationWorkItems}
                     onOpen={handleOpenWorkItem}
+                    onMarkRead={handleMarkRunRead}
+                    busyRunId={busyRunId}
                   />
                 )}
 
@@ -786,7 +813,7 @@ export function ConversationsPage() {
                     onUnpin={unpinSession}
                     onClose={closeSession}
                     onMarkRead={handleMarkRead}
-                    busyId={busyId}
+                    busyId={busyConversationId}
                   />
                 )}
 
@@ -802,7 +829,7 @@ export function ConversationsPage() {
                     onUnpin={unpinSession}
                     onClose={closeSession}
                     onMarkRead={handleMarkRead}
-                    busyId={busyId}
+                    busyId={busyConversationId}
                   />
                 )}
 
@@ -818,7 +845,7 @@ export function ConversationsPage() {
                     onUnpin={unpinSession}
                     onClose={closeSession}
                     onMarkRead={handleMarkRead}
-                    busyId={busyId}
+                    busyId={busyConversationId}
                   />
                 )}
               </div>

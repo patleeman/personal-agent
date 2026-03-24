@@ -9,6 +9,7 @@ import {
   getRunPrimaryConnection,
   getRunSortTimestamp,
   isRunInProgress,
+  runNeedsAttention,
   summarizeActiveRuns,
   type RunPresentationLookups,
 } from '../runPresentation';
@@ -208,7 +209,7 @@ function runStatusTone(run: DurableRunRecord): PillTone {
   if (run.problems.length > 0 || run.recoveryAction === 'invalid' || status === 'failed' || status === 'interrupted' || getRunImportState(run) === 'failed') {
     return 'danger';
   }
-  if (run.recoveryAction === 'resume' || run.recoveryAction === 'rerun' || status === 'recovering' || getRunImportState(run) === 'ready') {
+  if (run.recoveryAction === 'resume' || run.recoveryAction === 'rerun' || run.recoveryAction === 'attention' || status === 'recovering' || getRunImportState(run) === 'ready') {
     return 'warning';
   }
   if (status === 'running' || status === 'completed') {
@@ -223,7 +224,7 @@ function runStatusLabel(run: DurableRunRecord): string {
   if (run.problems.length > 0 || run.recoveryAction === 'invalid' || status === 'failed' || status === 'interrupted' || getRunImportState(run) === 'failed') {
     return 'issue';
   }
-  if (run.recoveryAction === 'resume' || run.recoveryAction === 'rerun' || status === 'recovering' || getRunImportState(run) === 'ready') {
+  if (run.recoveryAction === 'resume' || run.recoveryAction === 'rerun' || run.recoveryAction === 'attention' || status === 'recovering' || getRunImportState(run) === 'ready') {
     return 'review';
   }
   if (status === 'running') {
@@ -248,19 +249,6 @@ function formatRecoveryAction(action: string): string {
     default:
       return action;
   }
-}
-
-function runNeedsAttention(run: DurableRunRecord): boolean {
-  const status = run.status?.status;
-  return run.problems.length > 0
-    || run.recoveryAction === 'resume'
-    || run.recoveryAction === 'rerun'
-    || run.recoveryAction === 'invalid'
-    || status === 'failed'
-    || status === 'interrupted'
-    || status === 'recovering'
-    || getRunImportState(run) === 'ready'
-    || getRunImportState(run) === 'failed';
 }
 
 function runMomentLabel(run: DurableRunRecord): string | null {
@@ -297,7 +285,7 @@ function buildFeaturedRuns(runRecords: DurableRunRecord[], selectedRunId: string
     return getRunSortTimestamp(right).localeCompare(getRunSortTimestamp(left));
   });
 
-  const attention = sorted.filter(runNeedsAttention);
+  const attention = sorted.filter((run) => runNeedsAttention(run));
   const active = sorted.filter((run) => isRunInProgress(run) && !runNeedsAttention(run));
   const recentFinished = sorted.filter((run) => !runNeedsAttention(run) && !isRunInProgress(run)).slice(0, 8);
 
@@ -494,7 +482,7 @@ export function SystemPage() {
     return next;
   }, [runs]);
   const activeRunSummary = useMemo(() => summarizeActiveRuns({ tasks, sessions, runs }), [runs, sessions, tasks]);
-  const runAttentionCount = useMemo(() => runRecords.filter(runNeedsAttention).length, [runRecords]);
+  const runAttentionCount = useMemo(() => runRecords.filter((run) => runNeedsAttention(run)).length, [runRecords]);
   const featuredRuns = useMemo(() => buildFeaturedRuns(runRecords, selectedRunId), [runRecords, selectedRunId]);
   const visibleRuns = useMemo(() => featuredRuns.slice(0, showMoreRuns ? 16 : 8), [featuredRuns, showMoreRuns]);
 

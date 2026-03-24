@@ -303,6 +303,8 @@ export const api = {
   durableRun: (id: string) => get<DurableRunDetailResult>(`/runs/${encodeURIComponent(id)}`),
   durableRunLog: (id: string, tail?: number) =>
     get<{ log: string; path: string }>(`/runs/${encodeURIComponent(id)}/log${tail ? `?tail=${encodeURIComponent(String(tail))}` : ''}`),
+  markDurableRunAttentionRead: (id: string, read = true) =>
+    patch<{ ok: boolean }>(`/runs/${encodeURIComponent(id)}/attention`, { read }),
   cancelDurableRun: (id: string) => post<{ cancelled: boolean; runId: string }>(`/runs/${encodeURIComponent(id)}/cancel`),
   retryMemoryDistillRun: (id: string) => post<{ accepted: true; conversationId: string; runId: string; status: string }>(`/runs/${encodeURIComponent(id)}/memory-distill/retry`),
   recoverMemoryDistillRun: (id: string) => post<{ ok: true; runId: string; conversationId: string; sessionFile: string; cwd: string }>(`/runs/${encodeURIComponent(id)}/memory-distill/recover`),

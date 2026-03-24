@@ -10,6 +10,7 @@ import {
   getRunPrimaryConnection,
   getRunSortTimestamp,
   getRunTimeline,
+  runNeedsAttention,
   summarizeActiveRuns,
 } from './runPresentation';
 import type { DurableRunRecord, ScheduledTaskSummary, SessionMeta } from './types';
@@ -627,6 +628,25 @@ describe('runPresentation', () => {
       background: 1,
       other: 0,
     });
+  });
+
+  it('treats dismissed attention states as reviewed until the run changes again', () => {
+    const run = createRun({
+      status: {
+        version: 1,
+        runId: 'run-123',
+        status: 'failed',
+        createdAt: '2026-03-12T20:30:00.000Z',
+        updatedAt: '2026-03-12T20:35:00.000Z',
+        activeAttempt: 1,
+        startedAt: '2026-03-12T20:31:00.000Z',
+        completedAt: '2026-03-12T20:35:00.000Z',
+      },
+    });
+
+    expect(runNeedsAttention(run)).toBe(true);
+    expect(runNeedsAttention({ ...run, attentionDismissed: true })).toBe(false);
+    expect(runNeedsAttention({ ...run, attentionDismissed: true }, { includeDismissed: true })).toBe(true);
   });
 
   it('prefers completion time for run timing and timeline', () => {

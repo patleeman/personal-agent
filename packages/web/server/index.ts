@@ -202,7 +202,8 @@ import {
   migrateLocalConversationAutomationSettingsToProfile,
 } from './conversationAutomationProfileSettings.js';
 import { createWebLiveConversationRunId, syncWebLiveConversationRun } from './conversationRuns.js';
-import { cancelDurableRun, getDurableRun, getDurableRunLog, getDurableRunSnapshot, listDurableRuns, listDurableRunsWithTelemetry, type DurableRunsListTelemetry } from './durableRuns.js';
+import { cancelDurableRun, clearDurableRunsListCache, getDurableRun, getDurableRunLog, getDurableRunSnapshot, listDurableRuns, listDurableRunsWithTelemetry, type DurableRunsListTelemetry } from './durableRuns.js';
+import { getDurableRunAttentionSignature } from './durableRunAttention.js';
 import {
   buildConversationExecutionState,
   buildExecutionTargetsState,
@@ -261,6 +262,8 @@ import {
   loadProfileActivityReadState,
   markConversationAttentionRead,
   markConversationAttentionUnread,
+  markDurableRunAttentionRead,
+  markDurableRunAttentionUnread,
   getMemoryDocsDir,
   getDurableSessionsDir,
   getPiAgentRuntimeDir,
@@ -4582,6 +4585,37 @@ app.get('/api/runs/:id', async (req, res) => {
     }
 
     res.json(result);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+app.patch('/api/runs/:id/attention', async (req, res) => {
+  try {
+    const { read } = req.body as { read?: boolean };
+    const result = await getDurableRun(req.params.id);
+    if (!result) {
+      res.status(404).json({ error: 'Run not found' });
+      return;
+    }
+
+    const attentionSignature = getDurableRunAttentionSignature(result.run);
+    if (read === false) {
+      markDurableRunAttentionUnread({ runId: req.params.id });
+    } else if (attentionSignature) {
+      markDurableRunAttentionRead({
+        runId: req.params.id,
+        attentionSignature,
+      });
+    }
+
+    clearDurableRunsListCache();
+    invalidateAppTopics('runs');
+    res.json({ ok: true });
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
