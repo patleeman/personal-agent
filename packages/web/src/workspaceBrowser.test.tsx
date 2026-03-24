@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { buildWorkspacePath, buildWorkspaceSearch, filterWorkspaceTree, readWorkspaceModeFromPathname, WorkspaceWordDiffView } from './workspaceBrowser';
+import { buildWorkspacePath, buildWorkspaceSearch, filterWorkspaceTree, readWorkspaceModeFromPathname, syncWorkspaceExpandedPaths, WorkspaceWordDiffView } from './workspaceBrowser';
 import type { WorkspaceTreeNode } from './types';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -30,6 +30,24 @@ const TREE: WorkspaceTreeNode[] = [
         kind: 'file',
         exists: true,
         change: null,
+      },
+      {
+        name: 'prompts',
+        path: '/tmp/project/src/prompts',
+        relativePath: 'src/prompts',
+        kind: 'directory',
+        exists: true,
+        change: null,
+        children: [
+          {
+            name: 'prompt.md',
+            path: '/tmp/project/src/prompts/prompt.md',
+            relativePath: 'src/prompts/prompt.md',
+            kind: 'file',
+            exists: true,
+            change: null,
+          },
+        ],
       },
     ],
   },
@@ -66,6 +84,38 @@ describe('filterWorkspaceTree', () => {
         children: [expect.objectContaining({ relativePath: 'src/index.ts' })],
       }),
     ]);
+  });
+});
+
+describe('syncWorkspaceExpandedPaths', () => {
+  it('preserves manually expanded directories when selecting another file', () => {
+    const next = syncWorkspaceExpandedPaths({
+      previousPaths: new Set(['src', 'src/prompts']),
+      snapshot: {
+        tree: TREE,
+        focusPath: null,
+        changes: [],
+      },
+      selectedFilePath: 'src/clean.ts',
+      reset: false,
+    });
+
+    expect([...next]).toEqual(['src', 'src/prompts']);
+  });
+
+  it('expands the selected file path when the selection is inside a nested folder', () => {
+    const next = syncWorkspaceExpandedPaths({
+      previousPaths: new Set(['src']),
+      snapshot: {
+        tree: TREE,
+        focusPath: null,
+        changes: [],
+      },
+      selectedFilePath: 'src/prompts/prompt.md',
+      reset: false,
+    });
+
+    expect([...next]).toEqual(['src', 'src/prompts']);
   });
 });
 
