@@ -18,7 +18,7 @@ describe('looksLikeLocalFilesystemPath', () => {
   it('does not mistake bare slash commands for local filesystem paths', () => {
     expect(looksLikeLocalFilesystemPath('/model')).toBe(false);
     expect(looksLikeLocalFilesystemPath('/resume')).toBe(false);
-    expect(looksLikeLocalFilesystemPath('/skill:best-practices-react')).toBe(false);
+    expect(looksLikeLocalFilesystemPath('/skill:react')).toBe(false);
     expect(looksLikeLocalFilesystemPath('/api')).toBe(false);
   });
 });

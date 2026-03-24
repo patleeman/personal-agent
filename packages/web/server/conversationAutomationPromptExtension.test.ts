@@ -138,8 +138,8 @@ describe('conversation automation prompt extension', () => {
               items: [{
                 id: 'item-default-1',
                 kind: 'instruction',
-                label: 'Run workflow-checkpoint if code changed',
-                text: 'If you made code changes, run /skill:workflow-checkpoint once complete.',
+                label: 'Run checkpoint if code changed',
+                text: 'If you made code changes, run /skill:checkpoint once complete.',
               }],
             }],
             defaultPresetIds: ['preset-default'],
@@ -152,7 +152,7 @@ describe('conversation automation prompt extension', () => {
 
     expect(result?.systemPrompt).toContain('<conversation-automation-policy>');
     expect(result?.systemPrompt).toContain('<system-reminder source="conversation-automation" priority="low">');
-    expect(result?.systemPrompt).toContain('/skill:workflow-checkpoint');
+    expect(result?.systemPrompt).toContain('/skill:checkpoint');
   });
 
   it('keeps only the policy in the system prompt while automation is waiting for the user', () => {

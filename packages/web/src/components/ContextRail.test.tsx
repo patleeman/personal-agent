@@ -516,10 +516,10 @@ describe('ContextRail run detail', () => {
             agentsMd: [],
             memoryDocs: [],
             skills: [{
-              name: 'workflow-tdd-feature',
+              name: 'tdd-feature',
               description: 'Build a feature with test-driven development.',
               source: 'shared',
-              path: '/tmp/workflow-tdd-feature/SKILL.md',
+              path: '/tmp/tdd-feature/SKILL.md',
               recentSessionCount: 2,
               lastUsedAt: '2026-03-18T12:00:00.000Z',
               usedInLastSession: true,
@@ -531,9 +531,9 @@ describe('ContextRail run detail', () => {
           refetch: vi.fn(),
         };
       }
-      if (key === 'knowledge-skill-rail:/tmp/workflow-tdd-feature/SKILL.md') {
+      if (key === 'knowledge-skill-rail:/tmp/tdd-feature/SKILL.md') {
         return {
-          data: { content: '# Workflow TDD feature' },
+          data: { content: '# TDD feature' },
           loading: false,
           refreshing: false,
           error: null,
@@ -551,7 +551,7 @@ describe('ContextRail run detail', () => {
     });
 
     const html = renderToString(
-      <MemoryRouter initialEntries={['/skills?skill=workflow-tdd-feature']}>
+      <MemoryRouter initialEntries={['/skills?skill=tdd-feature']}>
         <AppDataContext.Provider value={{
           activity: null,
           projects: null,
@@ -571,7 +571,7 @@ describe('ContextRail run detail', () => {
 
     expect(html).toContain('TDD Feature');
     expect(html).toContain('Build a feature with test-driven development.');
-    expect(html).toContain('/tmp/workflow-tdd-feature/SKILL.md');
+    expect(html).toContain('/tmp/tdd-feature/SKILL.md');
   });
 
   it('renders selected instruction details in the rail', () => {

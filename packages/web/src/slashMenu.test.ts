@@ -5,13 +5,13 @@ import type { MemorySkillItem } from './types';
 const SKILLS: MemorySkillItem[] = [
   {
     source: 'shared',
-    name: 'best-practices-react',
+    name: 'react',
     description: 'React and Next.js performance optimization guidelines.',
     path: '/tmp/react/SKILL.md',
   },
   {
     source: 'shared',
-    name: 'best-practices-frontend-design',
+    name: 'frontend-design',
     description: 'Create distinctive, production-grade frontend interfaces.',
     path: '/tmp/frontend/SKILL.md',
   },
@@ -38,20 +38,20 @@ describe('buildSlashMenuItems', () => {
   it('returns skill entries when the query targets skills', () => {
     const items = buildSlashMenuItems('/ski', SKILLS);
     expect(items.map((item) => item.displayCmd)).toEqual([
-      '/skill:best-practices-frontend-design',
-      '/skill:best-practices-react',
+      '/skill:frontend-design',
+      '/skill:react',
     ]);
     expect(items.every((item) => item.kind === 'skill')).toBe(true);
   });
 
   it('fuzzy-filters skills by name after /skill:', () => {
-    const items = buildSlashMenuItems('/skill:bpr', SKILLS);
-    expect(items[0]?.displayCmd).toBe('/skill:best-practices-react');
+    const items = buildSlashMenuItems('/skill:rea', SKILLS);
+    expect(items[0]?.displayCmd).toBe('/skill:react');
   });
 
   it('fuzzy-finds skills without requiring the /skill: prefix', () => {
-    const items = buildSlashMenuItems('/bpr', SKILLS);
-    expect(items[0]?.displayCmd).toBe('/skill:best-practices-react');
+    const items = buildSlashMenuItems('/reac', SKILLS);
+    expect(items[0]?.displayCmd).toBe('/skill:react');
   });
 
   it('does not flood the default slash menu with every skill when only / is typed', () => {

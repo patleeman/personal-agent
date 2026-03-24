@@ -2076,15 +2076,15 @@ describe('queued telegram message handler', () => {
       workingDirectory: '/tmp/work',
       sendMessage,
       sendChatAction,
-      skillSlashCommandMap: new Map([['skill_best_practices_react', 'best-practices-react']]),
+      skillSlashCommandMap: new Map([['skill_react', 'react']]),
       createConversationController: createTestConversationControllerFactory(runPrompt),
     });
 
-    handler.handleMessage({ chat: { id: 1 }, text: '/skill_best_practices_react' });
+    handler.handleMessage({ chat: { id: 1 }, text: '/skill_react' });
     await handler.waitForIdle('1');
 
     const firstCall = runPrompt.mock.calls[0]?.[0] as { prompt: string };
-    expect(firstCall.prompt).toBe('/skill:best-practices-react');
+    expect(firstCall.prompt).toBe('/skill:react');
     expect(sendChatAction).toHaveBeenCalledWith(1, 'typing');
   });
 
