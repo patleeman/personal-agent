@@ -2531,6 +2531,7 @@ const DIST_DIR =
   join(dirname(fileURLToPath(import.meta.url)), '../dist');
 
 const app = express();
+app.set('etag', false);
 app.use(express.json({ limit: '25mb' }));
 app.use(webRequestLoggingMiddleware);
 

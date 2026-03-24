@@ -5,17 +5,20 @@ export interface ConversationComposerSubmitState {
 
 export function normalizeConversationComposerBehavior(
   behavior: 'steer' | 'followUp' | undefined,
-  isStreaming: boolean,
+  allowQueuedPrompts: boolean,
 ): 'steer' | 'followUp' | undefined {
-  return isStreaming ? behavior : undefined;
+  return allowQueuedPrompts ? behavior : undefined;
 }
 
 export function resolveConversationComposerSubmitState(
   isStreaming: boolean,
   altKeyHeld: boolean,
+  queuesFollowUpsWhenIdle = false,
 ): ConversationComposerSubmitState {
   if (!isStreaming) {
-    return { label: 'Send' };
+    return queuesFollowUpsWhenIdle
+      ? { label: 'Follow up', behavior: 'followUp' }
+      : { label: 'Send' };
   }
 
   if (altKeyHeld) {
