@@ -443,41 +443,9 @@ describe('ContextRail run detail', () => {
     expect(html).toContain('Pinned session');
   });
 
-  it('renders selected knowledge-base memory details in the rail', () => {
+  it('renders selected memory details in the rail', () => {
     vi.mocked(useApi).mockImplementation((_, key) => {
-      if (key === 'knowledge-rail-memory') {
-        return {
-          data: {
-            profile: 'shared',
-            agentsMd: [],
-            skills: [],
-            memoryDocs: [{
-              id: 'personal-agent',
-              title: 'Personal-agent knowledge hub',
-              summary: 'Durable knowledge hub for personal-agent.',
-              tags: ['personal-agent'],
-              path: '/tmp/personal-agent/MEMORY.md',
-              type: 'project',
-              status: 'active',
-              updated: '2026-03-18T12:00:00.000Z',
-            }],
-          },
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-      if (key === 'knowledge-rail-projects') {
-        return {
-          data: [],
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-      if (key === 'knowledge-memory-rail:personal-agent') {
+      if (key === 'personal-agent') {
         return {
           data: {
             memory: {
@@ -516,7 +484,7 @@ describe('ContextRail run detail', () => {
     });
 
     const html = renderToString(
-      <MemoryRouter initialEntries={['/knowledge?section=memories&memory=personal-agent']}>
+      <MemoryRouter initialEntries={['/memories?memory=personal-agent']}>
         <AppDataContext.Provider value={{
           activity: null,
           projects: null,
@@ -535,47 +503,91 @@ describe('ContextRail run detail', () => {
     );
 
     expect(html).toContain('Personal-agent knowledge hub');
-    expect(html).toContain('Open memory browser');
+    expect(html).toContain('MEMORY.md');
     expect(html).toContain('references/prefs.md');
   });
 
-  it('renders selected capability tool details in the rail', () => {
+  it('renders selected skill details in the rail', () => {
     vi.mocked(useApi).mockImplementation((_, key) => {
-      if (key === 'capabilities-rail-presets') {
-        return {
-          data: { presetLibrary: { presets: [], defaultPresetIds: [] } },
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-      if (key === 'capabilities-rail-tasks') {
-        return {
-          data: [],
-          loading: false,
-          refreshing: false,
-          error: null,
-          refetch: vi.fn(),
-        };
-      }
-      if (key === 'capabilities-rail-tools') {
+      if (key === 'skills-rail-memory') {
         return {
           data: {
-            tools: [{
-              name: 'read',
-              description: 'Read a file from disk.',
-              active: true,
-              parameters: {
-                type: 'object',
-                properties: {
-                  path: { type: 'string', description: 'File path' },
-                },
-                required: ['path'],
-              },
+            profile: 'shared',
+            agentsMd: [],
+            memoryDocs: [],
+            skills: [{
+              name: 'workflow-tdd-feature',
+              description: 'Build a feature with test-driven development.',
+              source: 'shared',
+              path: '/tmp/workflow-tdd-feature/SKILL.md',
+              recentSessionCount: 2,
+              lastUsedAt: '2026-03-18T12:00:00.000Z',
+              usedInLastSession: true,
             }],
-            dependentCliTools: [],
-            mcp: { servers: [] },
+          },
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+      if (key === 'knowledge-skill-rail:/tmp/workflow-tdd-feature/SKILL.md') {
+        return {
+          data: { content: '# Workflow TDD feature' },
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+        };
+      }
+
+      return {
+        data: null,
+        loading: false,
+        refreshing: false,
+        error: null,
+        refetch: vi.fn(),
+      };
+    });
+
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/skills?skill=workflow-tdd-feature']}>
+        <AppDataContext.Provider value={{
+          activity: null,
+          projects: null,
+          sessions: [createSession()],
+          tasks: null,
+          runs: null,
+          setActivity: vi.fn(),
+          setProjects: vi.fn(),
+          setSessions: vi.fn(),
+          setTasks: vi.fn(),
+          setRuns: vi.fn(),
+        }}>
+          <ContextRail />
+        </AppDataContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('TDD Feature');
+    expect(html).toContain('Build a feature with test-driven development.');
+    expect(html).toContain('/tmp/workflow-tdd-feature/SKILL.md');
+  });
+
+  it('renders selected instruction details in the rail', () => {
+    vi.mocked(useApi).mockImplementation((_, key) => {
+      if (key === 'instructions-rail-memory') {
+        return {
+          data: {
+            profile: 'shared',
+            memoryDocs: [],
+            skills: [],
+            agentsMd: [{
+              source: 'shared/AGENTS.md',
+              path: '/tmp/shared/AGENTS.md',
+              exists: true,
+              content: '# Shared instructions',
+            }],
           },
           loading: false,
           refreshing: false,
@@ -594,7 +606,7 @@ describe('ContextRail run detail', () => {
     });
 
     const html = renderToString(
-      <MemoryRouter initialEntries={['/capabilities?section=tools&tool=read']}>
+      <MemoryRouter initialEntries={['/instructions?instruction=%2Ftmp%2Fshared%2FAGENTS.md']}>
         <AppDataContext.Provider value={{
           activity: null,
           projects: null,
@@ -612,9 +624,8 @@ describe('ContextRail run detail', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Read a file from disk.');
-    expect(html).toContain('Open full tools page');
-    expect(html).toContain('path');
-    expect(html).toContain('required');
+    expect(html).toContain('shared/AGENTS.md');
+    expect(html).toContain('/tmp/shared/AGENTS.md');
+    expect(html).toContain('Shared instructions');
   });
 });

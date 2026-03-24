@@ -71,6 +71,8 @@ export function getRailLayoutPrefs(pathname: string): RailLayoutPrefs {
         initialMainWidthRatio: 0.7,
       };
     case 'knowledge':
+    case 'skills':
+    case 'instructions':
       return {
         storageKey: RAIL_WIDTH_STORAGE_KEYS.knowledge,
         initialWidth: 460,

@@ -354,7 +354,7 @@ export function getRunConnections(run: DurableRunRecord, lookups: RunPresentatio
         key: `task:${taskId}`,
         label: 'Scheduled task',
         value: taskId,
-        to: `/capabilities?section=scheduled&task=${encodeURIComponent(taskId)}`,
+        to: `/scheduled/${encodeURIComponent(taskId)}`,
         detail: excerpt(task?.prompt) ?? task?.filePath ?? run.manifest?.source?.filePath,
       });
     }
