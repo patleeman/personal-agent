@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { useAppData } from '../contexts';
 import { useConversations } from '../hooks/useConversations';
@@ -36,18 +36,80 @@ type ConversationWorkItem = {
   active: boolean;
 };
 
-const FILTER_OPTIONS: Array<{ value: ConversationFilter; label: string }> = [
-  { value: 'open', label: 'Open' },
-  { value: 'attention', label: 'Needs review' },
-  { value: 'archived', label: 'Archived' },
-  { value: 'all', label: 'All' },
-];
-
 const INPUT_CLASS = 'w-full max-w-xl rounded-lg border border-border-default bg-base px-3 py-2 text-[14px] text-primary placeholder:text-dim focus:outline-none focus:border-accent/60';
 const INLINE_ACTION_CLASS = 'text-[11px] font-mono text-dim transition-colors hover:text-accent disabled:opacity-40';
 
 function normalizeQuery(query: string): string {
   return query.trim().toLowerCase();
+}
+
+function parseConversationFilter(value: string | null): ConversationFilter {
+  switch (value) {
+    case 'attention':
+    case 'archived':
+    case 'all':
+      return value;
+    default:
+      return 'open';
+  }
+}
+
+function conversationFilterLabel(filter: ConversationFilter): string {
+  switch (filter) {
+    case 'attention':
+      return 'Needs review';
+    case 'archived':
+      return 'Archived';
+    case 'all':
+      return 'All conversations';
+    default:
+      return 'Open';
+  }
+}
+
+function conversationFilterDescription(filter: ConversationFilter): string {
+  switch (filter) {
+    case 'attention':
+      return 'Needs review includes unread conversation updates plus durable runs waiting on resume, rerun, import recovery, or manual review.';
+    case 'archived':
+      return 'Archived keeps closed conversations visible, including linked runs that are still active or waiting on you.';
+    case 'all':
+      return 'Use this page to browse your full conversation workspace, including archived conversations and linked durable runs.';
+    default:
+      return 'Open focuses on pinned and open conversations. Workspace-wide review counts in the header can still include archived or imported durable runs.';
+  }
+}
+
+function emptyStateCopy(filter: ConversationFilter, hasWorkspaceConversations: boolean): { title: string; body: string } {
+  if (!hasWorkspaceConversations) {
+    return {
+      title: 'No conversations yet.',
+      body: 'Start a new chat to create your first conversation.',
+    };
+  }
+
+  switch (filter) {
+    case 'attention':
+      return {
+        title: 'Nothing needs review right now.',
+        body: 'Unread conversation updates and linked runs waiting on you will show up here.',
+      };
+    case 'archived':
+      return {
+        title: 'No archived conversations.',
+        body: 'Archive a conversation from the open workspace to keep it here without deleting it.',
+      };
+    case 'all':
+      return {
+        title: 'No conversations in this view.',
+        body: 'Try a broader search or switch back to the open workspace from the sidebar.',
+      };
+    default:
+      return {
+        title: 'No open conversations.',
+        body: 'Your remaining conversations may already be archived. Use the sidebar to switch views or start a new chat.',
+      };
+  }
 }
 
 function matchesConversation(session: SessionMeta, query: string): boolean {
@@ -259,6 +321,10 @@ function filterConversationWorkItems(items: ConversationWorkItem[], filter: Conv
     return matched.filter((item) => item.workspace === 'archived');
   }
 
+  if (filter === 'open') {
+    return matched.filter((item) => item.workspace === 'pinned' || item.workspace === 'open');
+  }
+
   return matched;
 }
 
@@ -423,11 +489,12 @@ function ConversationWorkBlock({
   return (
     <section className="space-y-2 border-t border-border-subtle pt-5 first:border-t-0 first:pt-0">
       <div className="space-y-1">
-        <p className="ui-section-label">Runs</p>
+        <p className="ui-section-label">Conversation runs</p>
         <p className="ui-card-meta">
           {summaryParts.length > 0
             ? summaryParts.join(' · ')
             : 'Only active runs or runs waiting on you show up here.'}
+          {' '}These are durable run states linked back to conversations, including archived or imported work when it matches the current view.
         </p>
       </div>
 
@@ -468,7 +535,8 @@ export function ConversationsPage() {
     refetch,
     loading,
   } = useConversations();
-  const [filter, setFilter] = useState<ConversationFilter>('open');
+  const [searchParams] = useSearchParams();
+  const filter = parseConversationFilter(searchParams.get('filter'));
   const [query, setQuery] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -490,84 +558,89 @@ export function ConversationsPage() {
     [sessions],
   );
   const conversationWorkItems = useMemo<ConversationWorkItem[]>(() => {
-    const runItems = [...(runs?.runs ?? [])]
-      .filter((run) => runNeedsReview(run) || isRunInProgress(run))
-      .map((run) => {
-        const conversationId = readConversationIdFromRun(run, lookups);
-        if (!conversationId) {
-          return null;
-        }
+    const runItems: Array<ConversationWorkItem & { sortTimestamp: string }> = [];
 
-        const session = sessionsById.get(conversationId) ?? null;
-        const headline = getRunHeadline(run, lookups);
-        const workspace: ConversationWorkspaceState = pinnedIdSet.has(conversationId)
-          ? 'pinned'
-          : openIdSet.has(conversationId)
-            ? 'open'
-            : session
-              ? 'archived'
-              : 'unknown';
-        const statusLabel = runStatusLabel(run);
-        const moment = getRunMoment(run);
-        const title = session?.title ?? conversationId;
-        const summary = buildConversationWorkSummary(title, headline);
-        const recoveryLabel = formatRecoveryAction(run.recoveryAction);
-        const metaParts = [
-          moment.at ? `${moment.label} ${timeAgo(moment.at)}` : '',
-          workspaceLabel(workspace),
-        ];
-        if (run.recoveryAction !== 'none' && recoveryLabel !== statusLabel) {
-          metaParts.push(recoveryLabel);
-        }
-        if (run.problems.length > 0) {
-          metaParts.push(`${run.problems.length} issue${run.problems.length === 1 ? '' : 's'}`);
-        }
-        const searchText = [
-          title,
-          conversationId,
-          run.runId,
-          summary,
-          headline.summary,
-          session?.cwd,
-          session?.cwdSlug,
-          session?.model,
-        ].filter((value): value is string => typeof value === 'string' && value.length > 0).join('\n').toLowerCase();
+    for (const run of runs?.runs ?? []) {
+      if (!runNeedsReview(run) && !isRunInProgress(run)) {
+        continue;
+      }
 
-        return {
-          key: run.runId,
-          conversationId,
-          runId: run.runId,
-          workspace,
-          title,
-          summary,
-          meta: metaParts.filter(Boolean).join(' · '),
-          statusLabel,
-          tone: runStatusTone(run),
-          searchText,
-          needsReview: runNeedsReview(run),
-          active: isRunInProgress(run),
-          sortTimestamp: getRunSortTimestamp(run),
-        };
-      })
-      .filter((item): item is ConversationWorkItem & { sortTimestamp: string } => item !== null)
-      .sort((left, right) => {
-        const leftNeedsReview = left.needsReview ? 1 : 0;
-        const rightNeedsReview = right.needsReview ? 1 : 0;
-        if (leftNeedsReview !== rightNeedsReview) {
-          return rightNeedsReview - leftNeedsReview;
-        }
+      const conversationId = readConversationIdFromRun(run, lookups);
+      if (!conversationId) {
+        continue;
+      }
 
-        const leftActive = left.active ? 1 : 0;
-        const rightActive = right.active ? 1 : 0;
-        if (leftActive !== rightActive) {
-          return rightActive - leftActive;
-        }
+      const session = sessionsById.get(conversationId) ?? null;
+      const headline = getRunHeadline(run, lookups);
+      const workspace: ConversationWorkspaceState = pinnedIdSet.has(conversationId)
+        ? 'pinned'
+        : openIdSet.has(conversationId)
+          ? 'open'
+          : session
+            ? 'archived'
+            : 'unknown';
+      const statusLabel = runStatusLabel(run);
+      const moment = getRunMoment(run);
+      const title = session?.title ?? conversationId;
+      const summary = buildConversationWorkSummary(title, headline);
+      const recoveryLabel = formatRecoveryAction(run.recoveryAction);
+      const metaParts = [
+        moment.at ? `${moment.label} ${timeAgo(moment.at)}` : '',
+        workspaceLabel(workspace),
+      ];
+      if (run.recoveryAction !== 'none' && recoveryLabel !== statusLabel) {
+        metaParts.push(recoveryLabel);
+      }
+      if (run.problems.length > 0) {
+        metaParts.push(`${run.problems.length} issue${run.problems.length === 1 ? '' : 's'}`);
+      }
+      const searchText = [
+        title,
+        conversationId,
+        run.runId,
+        summary,
+        headline.summary,
+        session?.cwd,
+        session?.cwdSlug,
+        session?.model,
+      ].filter((value): value is string => typeof value === 'string' && value.length > 0).join('\n').toLowerCase();
 
-        return right.sortTimestamp.localeCompare(left.sortTimestamp) || left.title.localeCompare(right.title);
-      })
-      .map(({ sortTimestamp: _sortTimestamp, ...item }) => item);
+      runItems.push({
+        key: run.runId,
+        conversationId,
+        runId: run.runId,
+        workspace,
+        title,
+        summary,
+        meta: metaParts.filter(Boolean).join(' · '),
+        statusLabel,
+        tone: runStatusTone(run),
+        searchText,
+        needsReview: runNeedsReview(run),
+        active: isRunInProgress(run),
+        sortTimestamp: getRunSortTimestamp(run),
+      });
+    }
 
-    const coveredConversationIds = new Set(runItems.filter((item) => item.active).map((item) => item.conversationId));
+    runItems.sort((left, right) => {
+      const leftNeedsReview = left.needsReview ? 1 : 0;
+      const rightNeedsReview = right.needsReview ? 1 : 0;
+      if (leftNeedsReview !== rightNeedsReview) {
+        return rightNeedsReview - leftNeedsReview;
+      }
+
+      const leftActive = left.active ? 1 : 0;
+      const rightActive = right.active ? 1 : 0;
+      if (leftActive !== rightActive) {
+        return rightActive - leftActive;
+      }
+
+      return right.sortTimestamp.localeCompare(left.sortTimestamp) || left.title.localeCompare(right.title);
+    });
+
+    const sortedRunItems = runItems.map(({ sortTimestamp: _sortTimestamp, ...item }) => item);
+
+    const coveredConversationIds = new Set(sortedRunItems.filter((item) => item.active).map((item) => item.conversationId));
     const archivedRunningItems = sortSessions(archivedSessions)
       .filter((session) => session.isRunning && !coveredConversationIds.has(session.id))
       .map((session) => ({
@@ -585,7 +658,7 @@ export function ConversationsPage() {
         active: true,
       }));
 
-    return [...runItems, ...archivedRunningItems];
+    return [...sortedRunItems, ...archivedRunningItems];
   }, [archivedSessions, lookups, openIdSet, pinnedIdSet, runs?.runs, sessionsById]);
   const visibleConversationWorkItems = useMemo(
     () => filterConversationWorkItems(conversationWorkItems, filter, query),
@@ -601,6 +674,8 @@ export function ConversationsPage() {
   );
   const hasVisibleConversationWork = visibleConversationWorkItems.length > 0;
   const hasVisibleContent = totalVisible > 0 || hasVisibleConversationWork;
+  const hasWorkspaceConversations = pinnedSessions.length + tabs.length + archivedSessions.length > 0;
+  const filteredEmptyState = emptyStateCopy(filter, hasWorkspaceConversations);
 
   const handleOpen = useCallback((sessionId: string, options?: { restore?: boolean }) => {
     if (options?.restore) {
@@ -626,7 +701,7 @@ export function ConversationsPage() {
     setBusyId(sessionId);
     try {
       await api.markConversationAttentionRead(sessionId);
-      await refetch({ resetLoading: false });
+      await refetch();
     } finally {
       setBusyId(null);
     }
@@ -639,7 +714,7 @@ export function ConversationsPage() {
         actions={(
           <>
             <ToolbarButton onClick={() => navigate('/conversations/new')}>+ New chat</ToolbarButton>
-            <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); }}>
+            <ToolbarButton onClick={() => { void refetch(); }}>
               ↻ Refresh
             </ToolbarButton>
           </>
@@ -651,7 +726,7 @@ export function ConversationsPage() {
             <>
               {pinnedSessions.length} pinned · {tabs.length} open · {archivedSessions.length} archived
               {totalAttention > 0 && <span className="ml-2 text-warning">· {totalAttention} conversation{totalAttention === 1 ? '' : 's'} need review</span>}
-              {conversationRunReviewCount > 0 && <span className="ml-2 text-warning">· {conversationRunReviewCount} run{conversationRunReviewCount === 1 ? '' : 's'} need review</span>}
+              {conversationRunReviewCount > 0 && <span className="ml-2 text-warning">· {conversationRunReviewCount} linked run{conversationRunReviewCount === 1 ? '' : 's'} need review workspace-wide</span>}
               {archivedRunningConversationCount > 0 && <span className="ml-2 text-secondary">· {archivedRunningConversationCount} archived still running</span>}
             </>
           )}
@@ -662,21 +737,9 @@ export function ConversationsPage() {
         {loading ? <LoadingState label="Loading conversations…" /> : (
           <div className="space-y-5 pb-5">
             <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="ui-segmented-control" role="group" aria-label="Conversation filter">
-                  {FILTER_OPTIONS.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setFilter(option.value)}
-                      className={filter === option.value ? 'ui-segmented-button ui-segmented-button-active' : 'ui-segmented-button'}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-                <span className="ui-card-meta">Use ⌘K for global jump/search.</span>
-              </div>
+              <p className="ui-card-meta">
+                View: {conversationFilterLabel(filter)} · Switch views from the sidebar. Use ⌘K for global jump/search.
+              </p>
 
               <input
                 value={query}
@@ -690,16 +753,16 @@ export function ConversationsPage() {
               <p className="ui-card-meta">
                 {query.trim()
                   ? `Showing ${totalVisible} matching ${totalVisible === 1 ? 'conversation' : 'conversations'} across ${visibleSectionCount} ${visibleSectionCount === 1 ? 'section' : 'sections'}${hasVisibleConversationWork ? `, plus ${visibleConversationWorkItems.length} active or review work item${visibleConversationWorkItems.length === 1 ? '' : 's'}` : ''}.`
-                  : 'Use this page to browse your full conversation workspace, not just the tabs currently visible in the sidebar.'}
+                  : conversationFilterDescription(filter)}
               </p>
             </div>
 
             {!hasVisibleContent ? (
               <EmptyState
-                title={query.trim() ? 'No conversations match that search.' : 'No conversations yet.'}
+                title={query.trim() ? 'No conversations match that search.' : filteredEmptyState.title}
                 body={query.trim()
                   ? 'Try a broader search across titles, IDs, cwd, model names, and active run details.'
-                  : 'Start a new chat to create your first conversation.'}
+                  : filteredEmptyState.body}
                 action={<ToolbarButton onClick={() => navigate('/conversations/new')}>Start a conversation</ToolbarButton>}
               />
             ) : (

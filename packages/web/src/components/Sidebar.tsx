@@ -200,6 +200,17 @@ function getActiveConversationId(pathname: string): string | null {
   return decodeURIComponent(match[1]);
 }
 
+function parseConversationFilter(value: string | null): 'open' | 'attention' | 'archived' | 'all' {
+  switch (value) {
+    case 'attention':
+    case 'archived':
+    case 'all':
+      return value;
+    default:
+      return 'open';
+  }
+}
+
 // ── Conversation shelf rows ───────────────────────────────────────────────
 
 function OpenTab({
@@ -430,6 +441,16 @@ export function Sidebar() {
   } | null>(null);
   const allSessions = useMemo(() => [...pinnedSessions, ...tabs, ...archivedSessions], [archivedSessions, pinnedSessions, tabs]);
   const activeConversationId = useMemo(() => getActiveConversationId(location.pathname), [location.pathname]);
+  const conversationsGroupActive = location.pathname.startsWith('/conversations');
+  const conversationsListActive = location.pathname === '/conversations';
+  const conversationFilter = useMemo(
+    () => parseConversationFilter(new URLSearchParams(location.search).get('filter')),
+    [location.search],
+  );
+  const conversationsOpenActive = conversationsListActive && conversationFilter === 'open';
+  const conversationsAttentionActive = conversationsListActive && conversationFilter === 'attention';
+  const conversationsArchivedActive = conversationsListActive && conversationFilter === 'archived';
+  const conversationsAllActive = conversationsListActive && conversationFilter === 'all';
   const workspaceFilesActive = location.pathname.startsWith('/workspace/files') || location.pathname === '/workspace';
   const workspaceChangesActive = location.pathname.startsWith('/workspace/changes');
   const workspaceGroupActive = workspaceFilesActive || workspaceChangesActive;
@@ -449,6 +470,7 @@ export function Sidebar() {
   const capabilitiesGroupActive = capabilitiesPresetsActive
     || capabilitiesScheduledActive
     || capabilitiesToolsActive;
+  const [conversationsExpanded, setConversationsExpanded] = useState(conversationsGroupActive);
   const [workspaceExpanded, setWorkspaceExpanded] = useState(workspaceGroupActive);
   const [knowledgeExpanded, setKnowledgeExpanded] = useState(knowledgeGroupActive);
   const [capabilitiesExpanded, setCapabilitiesExpanded] = useState(capabilitiesGroupActive);
@@ -576,6 +598,10 @@ export function Sidebar() {
       // Ignore optimistic attention-clear failures; SSE or manual refresh can recover.
     });
   }, [activeConversationId, allSessions]);
+
+  useEffect(() => {
+    setConversationsExpanded(conversationsGroupActive);
+  }, [conversationsGroupActive]);
 
   useEffect(() => {
     setWorkspaceExpanded(workspaceGroupActive);
@@ -828,7 +854,19 @@ export function Sidebar() {
 
       <div className="pb-1 space-y-0.5">
         <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={inboxCount} />
-        <TopNavItem to="/conversations" icon={PATH.web} label="Conversations" />
+        <SidebarNavGroup
+          icon={PATH.web}
+          label="Conversations"
+          title="Browse open, review, archived, or all conversations."
+          active={conversationsGroupActive}
+          expanded={conversationsExpanded}
+          onToggle={() => setConversationsExpanded((current) => !current)}
+        >
+          <SidebarSubNavItem to="/conversations" label="Open" active={conversationsOpenActive} />
+          <SidebarSubNavItem to="/conversations?filter=attention" label="Needs review" active={conversationsAttentionActive} />
+          <SidebarSubNavItem to="/conversations?filter=archived" label="Archived" active={conversationsArchivedActive} />
+          <SidebarSubNavItem to="/conversations?filter=all" label="All" active={conversationsAllActive} />
+        </SidebarNavGroup>
         <SidebarNavGroup
           icon={PATH.workspace}
           label="Workspace"

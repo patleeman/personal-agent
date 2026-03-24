@@ -254,6 +254,36 @@ describe('Sidebar', () => {
     expect(html).not.toContain('Todo Presets');
   });
 
+  it('expands the active conversations section to reveal conversation workspace views', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/conversations?filter=attention']}>
+        <SseConnectionContext.Provider value={{ status: 'offline' }}>
+          <AppDataContext.Provider value={{
+            activity: { entries: [], unreadCount: 0 },
+            projects: null,
+            sessions: [createSession()],
+            tasks: null,
+            runs: null,
+            setActivity: () => {},
+            setProjects: () => {},
+            setSessions: () => {},
+            setTasks: () => {},
+            setRuns: () => {},
+          }}>
+            <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: () => {} }}>
+              <Sidebar />
+            </LiveTitlesContext.Provider>
+          </AppDataContext.Provider>
+        </SseConnectionContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Needs review');
+    expect(html).toContain('Archived');
+    expect(html).toContain('href="/conversations?filter=attention"');
+    expect(html).toContain('ui-sidebar-subnav-item ui-sidebar-subnav-item-active');
+  });
+
   it('expands the active workspace section to reveal files and changes routes', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/workspace/changes']}>

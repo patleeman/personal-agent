@@ -90,7 +90,7 @@ describe('ConversationsPage', () => {
     vi.clearAllMocks();
   });
 
-  it('surfaces active/review conversation work, including archived conversations still running', () => {
+  it('surfaces active/review conversation work, including archived conversations still running, in the all view', () => {
     const openSession = vi.fn();
     vi.mocked(useConversations).mockReturnValue({
       pinnedIds: [],
@@ -102,6 +102,80 @@ describe('ConversationsPage', () => {
         createSession({ id: 'archived-running', title: 'Archived but still running', isRunning: true }),
       ],
       openSession,
+      closeSession: vi.fn(),
+      pinSession: vi.fn(),
+      unpinSession: vi.fn(),
+      refetch: vi.fn(),
+      loading: false,
+    } as never);
+
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/conversations?filter=all']}>
+        <AppDataContext.Provider value={{
+          activity: null,
+          projects: null,
+          sessions: [
+            createSession({ id: 'open-1', title: 'Open conversation' }),
+            createSession({ id: 'conv-123', title: 'Needs review conversation' }),
+            createSession({ id: 'archived-running', title: 'Archived but still running', isRunning: true }),
+          ],
+          tasks: null,
+          runs: {
+            scannedAt: '2026-03-18T00:02:00.000Z',
+            runsRoot: '/tmp/runs',
+            summary: { total: 1, recoveryActions: { resume: 1 }, statuses: { recovering: 1 } },
+            runs: [
+              createConversationRun({
+                runId: 'conversation-live-conv-123',
+                manifest: {
+                  version: 1,
+                  id: 'conversation-live-conv-123',
+                  kind: 'conversation',
+                  resumePolicy: 'continue',
+                  createdAt: '2026-03-18T00:00:00.000Z',
+                  spec: { conversationId: 'conv-123' },
+                  source: { type: 'web-live-session', id: 'conv-123', filePath: '/tmp/conv-123.jsonl' },
+                },
+                checkpoint: {
+                  version: 1,
+                  runId: 'conversation-live-conv-123',
+                  updatedAt: '2026-03-18T00:01:00.000Z',
+                  step: 'web-live-session.waiting',
+                  payload: { conversationId: 'conv-123', title: 'Needs review conversation' },
+                },
+              }),
+            ],
+          },
+          setActivity: vi.fn(),
+          setProjects: vi.fn(),
+          setSessions: vi.fn(),
+          setTasks: vi.fn(),
+          setRuns: vi.fn(),
+        }}>
+          <ConversationsPage />
+        </AppDataContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Conversation runs');
+    expect(html).toContain('Needs review conversation');
+    expect(html).toContain('Needs review');
+    expect(html).toContain('archived');
+    expect(html).toContain('Archived but still running');
+    expect(html).toContain('Still running after you archived it.');
+  });
+
+  it('keeps archived conversation work out of the default open view', () => {
+    vi.mocked(useConversations).mockReturnValue({
+      pinnedIds: [],
+      openIds: ['open-1'],
+      pinnedSessions: [],
+      tabs: [createSession({ id: 'open-1', title: 'Open conversation' })],
+      archivedSessions: [
+        createSession({ id: 'conv-123', title: 'Needs review conversation' }),
+        createSession({ id: 'archived-running', title: 'Archived but still running', isRunning: true }),
+      ],
+      openSession: vi.fn(),
       closeSession: vi.fn(),
       pinSession: vi.fn(),
       unpinSession: vi.fn(),
@@ -157,11 +231,9 @@ describe('ConversationsPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Runs');
-    expect(html).toContain('Needs review conversation');
-    expect(html).toContain('Needs review');
-    expect(html).toContain('archived');
-    expect(html).toContain('Archived but still running');
-    expect(html).toContain('Still running after you archived it.');
+    expect(html).toContain('Switch views from the sidebar.');
+    expect(html).not.toContain('Conversation runs');
+    expect(html).not.toContain('Needs review conversation');
+    expect(html).not.toContain('Archived but still running');
   });
 });
