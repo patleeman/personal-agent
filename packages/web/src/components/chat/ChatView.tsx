@@ -173,7 +173,7 @@ function MarkdownCodeBlock({ children, onOpenFilePath }: { children: ReactNode; 
   );
 }
 
-function MarkdownText({ text, onOpenFilePath }: { text: string; onOpenFilePath?: (path: string) => void }) {
+const MarkdownText = memo(function MarkdownText({ text, onOpenFilePath }: { text: string; onOpenFilePath?: (path: string) => void }) {
   const footnoteId = useId();
   const footnotePrefix = `chat-${footnoteId.replace(/[^a-zA-Z0-9_-]+/g, '-')}-`;
 
@@ -235,7 +235,7 @@ function MarkdownText({ text, onOpenFilePath }: { text: string; onOpenFilePath?:
       </ReactMarkdown>
     </div>
   );
-}
+});
 
 function renderMarkdownText(text: string, onOpenFilePath?: (path: string) => void) {
   return <MarkdownText text={text} onOpenFilePath={onOpenFilePath} />;

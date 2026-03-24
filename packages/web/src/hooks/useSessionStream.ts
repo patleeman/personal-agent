@@ -2,7 +2,7 @@
  * useSessionStream — subscribes to a live Pi session SSE endpoint and builds
  * a growing MessageBlock list in real time.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MessageBlock, PromptAttachmentRefInput, PromptImageInput, QueuedPromptPreview, SessionContextUsage, SseEvent } from '../types';
 import { api } from '../api';
 import { displayBlockToMessageBlock } from '../messageBlocks';
@@ -325,7 +325,7 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
 
   const visibleState = selectVisibleStreamState(state, stateSessionIdRef.current, requestedSessionId);
 
-  return { ...visibleState, send, abort, reconnect };
+  return useMemo(() => ({ ...visibleState, send, abort, reconnect }), [visibleState, send, abort, reconnect]);
 }
 
 // ── Event → block reducer ─────────────────────────────────────────────────────

@@ -877,6 +877,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     tailBlocks: historicalTailBlocks,
     enabled: shouldSubscribeToLiveStream,
   });
+  const streamSend = stream.send;
+  const streamAbort = stream.abort;
+  const streamReconnect = stream.reconnect;
 
   useLayoutEffect(() => {
     if (!id || draft) {
@@ -1897,7 +1900,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     try {
       if (isLiveSession) {
-        await stream.send(textToSend, queuedBehavior);
+        await streamSend(textToSend, queuedBehavior);
         await refetchConversationProjects({ resetLoading: false });
         emitConversationProjectsChanged(id);
         window.setTimeout(() => {
@@ -1913,8 +1916,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
       await api.resumeSession(visibleSessionDetail.meta.file);
       setConfirmedLive(true);
-      stream.reconnect();
-      await stream.send(textToSend, queuedBehavior);
+      streamReconnect();
+      await streamSend(textToSend, queuedBehavior);
       await refetchConversationProjects({ resetLoading: false });
       emitConversationProjectsChanged(id);
       window.setTimeout(() => {
@@ -1932,7 +1935,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     refetchConversationProjects,
     scrollToBottom,
     showNotice,
-    stream,
+    streamReconnect,
+    streamSend,
     visibleSessionDetail,
   ]);
 
@@ -2193,7 +2197,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       if (stream.isStreaming) {
         e.preventDefault();
         lastEsc = 0;
-        void stream.abort();
+        void streamAbort();
         return;
       }
 
@@ -2207,7 +2211,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [showTree, stream]);
+  }, [showTree, stream.isStreaming, streamAbort]);
 
   // Forked/new conversations with a queued initial prompt should stay pinned to
   // the bottom only until that queued user block lands and the assistant starts
@@ -2402,9 +2406,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     const resumed = await api.resumeSession(savedConversationSessionFile);
     setConfirmedLive(true);
-    stream.reconnect();
+    streamReconnect();
     return resumed.id;
-  }, [id, isLiveSession, savedConversationSessionFile, stream]);
+  }, [id, isLiveSession, savedConversationSessionFile, streamReconnect]);
 
   const rewindConversationFromMessage = useCallback(async (messageIndex: number) => {
     if (!id || !realMessages) {
@@ -2867,7 +2871,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     try {
       await api.resumeSession(savedConversationSessionFile);
       setConfirmedLive(true);
-      stream.reconnect();
+      streamReconnect();
       await remoteConversationConnectionState.refetch({ resetLoading: false });
       showNotice('accent', 'Connected to the remote workspace.');
     } catch (error) {
@@ -2875,7 +2879,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } finally {
       setRemoteConnectBusy(false);
     }
-  }, [draft, id, remoteConnectBusy, remoteConversationConnectionState, savedConversationSessionFile, selectedExecutionTargetId, showNotice, stream]);
+  }, [draft, id, remoteConnectBusy, remoteConversationConnectionState, savedConversationSessionFile, selectedExecutionTargetId, showNotice, streamReconnect]);
 
   const resumeConversation = useCallback(async () => {
     if (!id || draft || resumeConversationBusy) {
@@ -2953,7 +2957,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
-  async function handleExecutionTargetSelect(targetId: string | null) {
+  const handleExecutionTargetSelect = useCallback(async (targetId: string | null) => {
     if (executionSelectionBusy) {
       return;
     }
@@ -2978,7 +2982,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } finally {
       setExecutionTargetBusy(false);
     }
-  }
+  }, [draft, executionSelectionBusy, id, replaceConversationExecution, showNotice]);
 
   async function handleProjectSlashCommand(command: ProjectSlashCommand) {
     try {
