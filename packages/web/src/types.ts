@@ -340,6 +340,8 @@ export interface DurableRunRecord {
   recoveryAction: string;
   location?: 'local' | 'remote';
   remoteExecution?: RemoteExecutionRunSummary;
+  attentionDismissed?: boolean;
+  attentionSignature?: string | null;
 }
 
 export interface DurableRunsSummary {

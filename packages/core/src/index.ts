@@ -23,6 +23,9 @@ export * from './activity-conversation-links.js';
 // Conversation attention exports
 export * from './conversation-attention.js';
 
+// Durable run attention exports
+export * from './durable-run-attention.js';
+
 // Deferred resume state exports
 export * from './deferred-resume.js';
 

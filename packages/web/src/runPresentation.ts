@@ -44,6 +44,23 @@ export function isRunInProgress(run: DurableRunRecord): boolean {
   return status === 'running' || status === 'recovering';
 }
 
+export function runNeedsAttention(run: DurableRunRecord, options?: { includeDismissed?: boolean }): boolean {
+  const status = run.status?.status;
+  const importState = getRunImportState(run);
+  const needsAttention = run.problems.length > 0
+    || run.recoveryAction === 'resume'
+    || run.recoveryAction === 'rerun'
+    || run.recoveryAction === 'attention'
+    || run.recoveryAction === 'invalid'
+    || status === 'failed'
+    || status === 'interrupted'
+    || status === 'recovering'
+    || importState === 'ready'
+    || importState === 'failed';
+
+  return options?.includeDismissed ? needsAttention : needsAttention && !run.attentionDismissed;
+}
+
 export function summarizeActiveRuns(input: {
   tasks?: ScheduledTaskSummary[] | null;
   sessions?: SessionMeta[] | null;

@@ -15,6 +15,7 @@ import {
   type ScannedDurableRun,
 } from '@personal-agent/daemon';
 import { decorateRemoteExecutionRun } from './remoteExecution.js';
+import { decorateDurableRunAttention, decorateDurableRunsAttention } from './durableRunAttention.js';
 
 const LIST_DURABLE_RUNS_CACHE_TTL_MS = 1_500;
 
@@ -33,6 +34,10 @@ let durableRunsListCache:
       source: DurableRunsListTelemetry['source'] | null;
     }
   | null = null;
+
+export function clearDurableRunsListCache(): void {
+  durableRunsListCache = null;
+}
 
 function isDaemonUnavailable(error: unknown): boolean {
   if (!(error instanceof Error)) {
@@ -60,7 +65,11 @@ function resolveRunsRoot(): string {
 }
 
 function decorateRuns<T extends ScannedDurableRun>(runs: T[]) {
-  return runs.map((run) => decorateRemoteExecutionRun(run));
+  return decorateDurableRunsAttention(runs.map((run) => decorateRemoteExecutionRun(run)));
+}
+
+function decorateRun<T extends ScannedDurableRun>(run: T) {
+  return decorateDurableRunAttention(decorateRemoteExecutionRun(run));
 }
 
 function readTailText(filePath: string | undefined, maxLines = 120, maxBytes = 64 * 1024): string {
@@ -137,6 +146,7 @@ export async function listDurableRunsWithTelemetry(): Promise<{
         const result = await listDurableRunsFromDaemon();
         return {
           ...result,
+          runs: decorateRuns(result.runs),
           runsRoot,
         };
       }
@@ -151,7 +161,7 @@ export async function listDurableRunsWithTelemetry(): Promise<{
     const runs = scanDurableRunsForRecovery(runsRoot);
     return {
       scannedAt,
-      runs,
+      runs: decorateRuns(runs),
       summary: summarizeScannedDurableRuns(runs),
       runsRoot,
     };
@@ -199,6 +209,7 @@ export async function getDurableRun(runId: string): Promise<(GetDurableRunResult
       const result = await getDurableRunFromDaemon(runId);
       return {
         ...result,
+        run: decorateRun(result.run),
         runsRoot,
       };
     }
@@ -219,7 +230,7 @@ export async function getDurableRun(runId: string): Promise<(GetDurableRunResult
 
   return {
     scannedAt: new Date().toISOString(),
-    run,
+    run: decorateRun(run),
     runsRoot,
   };
 }

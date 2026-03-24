@@ -407,8 +407,9 @@ function isRefreshingRun(detail: DurableRunDetailResult['run'] | null | undefine
 function RunContextPanel({ conversationId, runId, simplified = false }: { conversationId?: string; runId: string; simplified?: boolean }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { tasks, sessions } = useAppData();
+  const { tasks, sessions, setRuns } = useAppData();
   const [cancelling, setCancelling] = useState(false);
+  const [markingReviewed, setMarkingReviewed] = useState(false);
   const [importingRemote, setImportingRemote] = useState(false);
   const [retryingMemoryDistill, setRetryingMemoryDistill] = useState(false);
   const [openingMemoryRecovery, setOpeningMemoryRecovery] = useState(false);
@@ -444,6 +445,24 @@ function RunContextPanel({ conversationId, runId, simplified = false }: { conver
       reconnect();
     } finally {
       setCancelling(false);
+    }
+  }
+
+  async function handleMarkReviewed() {
+    if (!detail || markingReviewed || !detail.run.attentionSignature) {
+      return;
+    }
+
+    setActionError(null);
+    setMarkingReviewed(true);
+    try {
+      await api.markDurableRunAttentionRead(detail.run.runId);
+      setRuns(await api.runs());
+      reconnect();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Could not mark the run as reviewed.');
+    } finally {
+      setMarkingReviewed(false);
     }
   }
 
@@ -537,6 +556,16 @@ function RunContextPanel({ conversationId, runId, simplified = false }: { conver
             </button>
           )}
           <div className="flex items-center gap-1.5">
+            {run.attentionSignature && (
+              <button
+                type="button"
+                onClick={() => { void handleMarkReviewed(); }}
+                disabled={markingReviewed || run.attentionDismissed}
+                className="ui-toolbar-button"
+              >
+                {run.attentionDismissed ? 'Reviewed' : markingReviewed ? 'Reviewing…' : 'Mark reviewed'}
+              </button>
+            )}
             <button type="button" onClick={reconnect} className="ui-toolbar-button">
               ↻ Refresh
             </button>
