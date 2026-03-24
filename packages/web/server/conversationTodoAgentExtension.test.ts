@@ -77,7 +77,7 @@ describe('conversation todo agent extension', () => {
         items: [createConversationAutomationTodoItem({
           id: 'item-1',
           label: 'Checkpoint changes',
-          skillName: 'workflow-checkpoint',
+          skillName: 'checkpoint',
           now: '2026-03-20T12:00:00.000Z',
         })],
       },
@@ -116,7 +116,7 @@ describe('conversation todo agent extension', () => {
           ...createConversationAutomationTodoItem({
             id: 'item-1',
             label: 'Checkpoint changes',
-            skillName: 'workflow-checkpoint',
+            skillName: 'checkpoint',
             now: '2026-03-20T12:00:00.000Z',
           }),
           status: 'running',
@@ -152,7 +152,7 @@ describe('conversation todo agent extension', () => {
         items: [createConversationAutomationTodoItem({
           id: 'item-1',
           label: 'Checkpoint changes',
-          skillName: 'workflow-checkpoint',
+          skillName: 'checkpoint',
           now: '2026-03-20T12:00:00.000Z',
         })],
       },

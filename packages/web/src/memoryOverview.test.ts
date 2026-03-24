@@ -28,9 +28,9 @@ const MEMORY_DATA: MemoryData = {
   skills: [
     {
       source: 'shared',
-      name: 'workflow-create-pr',
+      name: 'create-pr',
       description: 'Create a PR from the current branch.',
-      path: '/state/profiles/shared/agent/skills/workflow-create-pr/SKILL.md',
+      path: '/state/profiles/shared/agent/skills/create-pr/SKILL.md',
       recentSessionCount: 1,
       lastUsedAt: '2026-03-11T12:00:00.000Z',
       usedInLastSession: true,
@@ -92,8 +92,8 @@ describe('memory overview helpers', () => {
   });
 
   it('humanizes skill names for capability cards', () => {
-    expect(humanizeSkillName('workflow-create-pr')).toBe('Create PR');
-    expect(humanizeSkillName('best-practices-react')).toBe('React Best Practices');
+    expect(humanizeSkillName('create-pr')).toBe('Create PR');
+    expect(humanizeSkillName('react')).toBe('React');
     expect(humanizeSkillName('dd-oncall')).toBe('On-call');
   });
 

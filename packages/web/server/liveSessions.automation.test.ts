@@ -123,8 +123,8 @@ describe('conversation automation live-session integration', () => {
     const sendCustomMessage = vi.fn(async () => undefined);
     const item = createConversationAutomationTodoItem({
       id: 'item-1',
-      label: 'workflow-checkpoint',
-      skillName: 'workflow-checkpoint',
+      label: 'checkpoint',
+      skillName: 'checkpoint',
       skillArgs: 'commit only my files',
       now: '2026-03-18T12:00:00.000Z',
     });
@@ -164,7 +164,7 @@ describe('conversation automation live-session integration', () => {
 
     expect(sendCustomMessage).toHaveBeenCalledWith({
       customType: 'conversation_automation_item',
-      content: expect.stringContaining('/skill:workflow-checkpoint commit only my files'),
+      content: expect.stringContaining('/skill:checkpoint commit only my files'),
       display: false,
       details: undefined,
     }, {
@@ -189,7 +189,7 @@ describe('conversation automation live-session integration', () => {
     expect(updated.items[0]).toMatchObject({
       id: 'item-1',
       status: 'running',
-      skillName: 'workflow-checkpoint',
+      skillName: 'checkpoint',
     });
     expect(updated.enabled).toBe(true);
   });
@@ -290,8 +290,8 @@ describe('conversation automation live-session integration', () => {
     const runningItem = {
       ...createConversationAutomationTodoItem({
         id: 'item-1',
-        label: 'workflow-checkpoint',
-        skillName: 'workflow-checkpoint',
+        label: 'checkpoint',
+        skillName: 'checkpoint',
         now: '2026-03-18T12:00:00.000Z',
       }),
       status: 'running' as const,
@@ -360,8 +360,8 @@ describe('conversation automation live-session integration', () => {
     const sendCustomMessage = vi.fn(async () => undefined);
     const pendingItem = createConversationAutomationTodoItem({
       id: 'item-1',
-      label: 'workflow-checkpoint',
-      skillName: 'workflow-checkpoint',
+      label: 'checkpoint',
+      skillName: 'checkpoint',
       now: '2026-03-18T12:00:00.000Z',
     });
 
@@ -422,8 +422,8 @@ describe('conversation automation live-session integration', () => {
     const sendCustomMessage = vi.fn(async () => undefined);
     const pendingItem = createConversationAutomationTodoItem({
       id: 'item-1',
-      label: 'workflow-checkpoint',
-      skillName: 'workflow-checkpoint',
+      label: 'checkpoint',
+      skillName: 'checkpoint',
       now: '2026-03-18T12:00:00.000Z',
     });
 
@@ -484,8 +484,8 @@ describe('conversation automation live-session integration', () => {
     const sendCustomMessage = vi.fn(async () => undefined);
     const pendingItem = createConversationAutomationTodoItem({
       id: 'item-1',
-      label: 'workflow-checkpoint',
-      skillName: 'workflow-checkpoint',
+      label: 'checkpoint',
+      skillName: 'checkpoint',
       now: '2026-03-18T12:00:00.000Z',
     });
 
@@ -536,8 +536,8 @@ describe('conversation automation live-session integration', () => {
     const sendCustomMessage = vi.fn(async () => undefined);
     const pendingItem = createConversationAutomationTodoItem({
       id: 'item-1',
-      label: 'workflow-checkpoint',
-      skillName: 'workflow-checkpoint',
+      label: 'checkpoint',
+      skillName: 'checkpoint',
       now: '2026-03-18T12:00:00.000Z',
     });
 
@@ -589,8 +589,8 @@ describe('conversation automation live-session integration', () => {
     const sendCustomMessage = vi.fn(async () => undefined);
     const pendingItem = createConversationAutomationTodoItem({
       id: 'item-1',
-      label: 'workflow-checkpoint',
-      skillName: 'workflow-checkpoint',
+      label: 'checkpoint',
+      skillName: 'checkpoint',
       now: '2026-03-18T12:00:00.000Z',
     });
 
@@ -644,8 +644,8 @@ describe('conversation automation live-session integration', () => {
     const completedItem = {
       ...createConversationAutomationTodoItem({
         id: 'item-1',
-        label: 'workflow-checkpoint',
-        skillName: 'workflow-checkpoint',
+        label: 'checkpoint',
+        skillName: 'checkpoint',
         now: '2026-03-18T12:00:00.000Z',
       }),
       status: 'completed' as const,
@@ -709,8 +709,8 @@ describe('conversation automation live-session integration', () => {
     const completedItem = {
       ...createConversationAutomationTodoItem({
         id: 'item-1',
-        label: 'workflow-checkpoint',
-        skillName: 'workflow-checkpoint',
+        label: 'checkpoint',
+        skillName: 'checkpoint',
         now: '2026-03-18T12:00:00.000Z',
       }),
       status: 'completed' as const,

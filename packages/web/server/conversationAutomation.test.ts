@@ -53,8 +53,8 @@ describe('conversationAutomation state', () => {
         items: [{
           id: 'item-default-1',
           kind: 'skill',
-          label: 'workflow-checkpoint',
-          skillName: 'workflow-checkpoint',
+          label: 'checkpoint',
+          skillName: 'checkpoint',
         }],
       }],
     }, settingsFile);
@@ -76,8 +76,8 @@ describe('conversationAutomation state', () => {
       enabled: true,
       items: [
         expect.objectContaining({
-          label: 'workflow-checkpoint',
-          skillName: 'workflow-checkpoint',
+          label: 'checkpoint',
+          skillName: 'checkpoint',
           status: 'pending',
         }),
       ],
@@ -103,8 +103,8 @@ describe('conversationAutomation state', () => {
         items: [{
           id: 'item-default-1',
           kind: 'skill',
-          label: 'workflow-checkpoint',
-          skillName: 'workflow-checkpoint',
+          label: 'checkpoint',
+          skillName: 'checkpoint',
         }],
       }],
     }, settingsFile);
@@ -143,7 +143,7 @@ describe('conversationAutomation state', () => {
           id: 'item-b-1',
           kind: 'skill',
           label: 'checkpoint',
-          skillName: 'workflow-checkpoint',
+          skillName: 'checkpoint',
         }],
       }],
     }, settingsFile);
@@ -177,8 +177,8 @@ describe('conversationAutomation state', () => {
               prompt: 'Pass only when the latest assistant message requests a checkpoint.',
               skills: [{
                 id: 'skill-default-1',
-                label: 'workflow-checkpoint',
-                skillName: 'workflow-checkpoint',
+                label: 'checkpoint',
+                skillName: 'checkpoint',
               }],
             }],
           },
@@ -203,8 +203,8 @@ describe('conversationAutomation state', () => {
         items: [{
           id: 'skill-default-1',
           kind: 'skill',
-          label: 'workflow-checkpoint',
-          skillName: 'workflow-checkpoint',
+          label: 'checkpoint',
+          skillName: 'checkpoint',
         }],
       }],
     });
@@ -214,8 +214,8 @@ describe('conversationAutomation state', () => {
     const stateRoot = createTempDir('pa-conversation-automation-');
     const checkpointItem = createConversationAutomationTodoItem({
       id: 'item-1',
-      label: 'workflow-checkpoint',
-      skillName: 'workflow-checkpoint',
+      label: 'checkpoint',
+      skillName: 'checkpoint',
       skillArgs: 'commit only my files',
       now: '2026-03-18T12:00:00.000Z',
     });
@@ -248,13 +248,13 @@ describe('conversationAutomation state', () => {
     expect(loaded.document.items).toEqual([
       expect.objectContaining({
         id: 'item-1',
-        label: 'workflow-checkpoint',
-        skillName: 'workflow-checkpoint',
+        label: 'checkpoint',
+        skillName: 'checkpoint',
         skillArgs: 'commit only my files',
         status: 'pending',
       }),
     ]);
-    expect(buildConversationAutomationItemPrompt(loaded.document.items[0]!)).toContain('/skill:workflow-checkpoint commit only my files');
+    expect(buildConversationAutomationItemPrompt(loaded.document.items[0]!)).toContain('/skill:checkpoint commit only my files');
     expect(buildConversationAutomationItemPrompt(loaded.document.items[0]!)).toContain('Resolve this todo with todo_list using itemId "item-1".');
     expect(buildConversationAutomationItemPrompt(loaded.document.items[0]!)).toContain('{"action":"complete","itemId":"item-1"}');
   });
@@ -269,8 +269,8 @@ describe('conversationAutomation state', () => {
       items: [{
         ...createConversationAutomationTodoItem({
           id: 'item-1',
-          label: 'workflow-checkpoint',
-          skillName: 'workflow-checkpoint',
+          label: 'checkpoint',
+          skillName: 'checkpoint',
           now: '2026-03-18T12:00:00.000Z',
         }),
         status: 'running',
@@ -319,8 +319,8 @@ describe('conversationAutomation state', () => {
         {
           ...createConversationAutomationTodoItem({
             id: 'item-1',
-            label: 'workflow-checkpoint',
-            skillName: 'workflow-checkpoint',
+            label: 'checkpoint',
+            skillName: 'checkpoint',
             now: '2026-03-18T12:00:00.000Z',
           }),
           status: 'completed' as const,
@@ -360,8 +360,8 @@ describe('conversationAutomation state', () => {
     const first = {
       ...createConversationAutomationTodoItem({
         id: 'item-1',
-        label: 'workflow-checkpoint',
-        skillName: 'workflow-checkpoint',
+        label: 'checkpoint',
+        skillName: 'checkpoint',
         now: '2026-03-18T12:00:00.000Z',
       }),
       status: 'completed' as const,
@@ -416,8 +416,8 @@ describe('conversationAutomation state', () => {
     const item = {
       ...createConversationAutomationTodoItem({
         id: 'item-1',
-        label: 'workflow-checkpoint',
-        skillName: 'workflow-checkpoint',
+        label: 'checkpoint',
+        skillName: 'checkpoint',
         now: '2026-03-18T12:00:00.000Z',
       }),
       status: 'completed' as const,
@@ -460,8 +460,8 @@ describe('conversationAutomation state', () => {
         items: [{
           id: 'item-default-1',
           kind: 'skill',
-          label: 'workflow-checkpoint',
-          skillName: 'workflow-checkpoint',
+          label: 'checkpoint',
+          skillName: 'checkpoint',
         }],
       }],
     }, settingsFile);
@@ -508,8 +508,8 @@ describe('conversationAutomation state', () => {
         {
           id: 'skill-1',
           kind: 'skill',
-          label: 'workflow-checkpoint',
-          skillName: 'workflow-checkpoint',
+          label: 'checkpoint',
+          skillName: 'checkpoint',
           status: 'completed',
           createdAt: '2026-03-18T12:00:00.000Z',
           updatedAt: '2026-03-18T12:00:20.000Z',
@@ -548,14 +548,14 @@ describe('conversationAutomation state', () => {
       label: item.label,
       status: item.status,
     }))).toEqual([
-      { id: 'skill-1', label: 'workflow-checkpoint', status: 'completed' },
+      { id: 'skill-1', label: 'checkpoint', status: 'completed' },
       { id: 'skill-2', label: 'subagent-code-review', status: 'running' },
     ]);
     expect(templateTodoItemFromRuntimeItem(loaded.document.items[0]!)).toEqual({
       id: 'skill-1',
       kind: 'skill',
-      label: 'workflow-checkpoint',
-      skillName: 'workflow-checkpoint',
+      label: 'checkpoint',
+      skillName: 'checkpoint',
     });
   });
 

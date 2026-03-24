@@ -140,14 +140,14 @@ describe('shouldReplaceOptimisticUserBlock', () => {
     const previous: MessageBlock = {
       type: 'user',
       ts: '2026-03-19T12:00:00.000Z',
-      text: '/skill:workflow-checkpoint commit only my files',
+      text: '/skill:checkpoint commit only my files',
     };
     const next: MessageBlock = {
       type: 'user',
       ts: '2026-03-19T12:00:01.000Z',
       text: [
-        '<skill name="workflow-checkpoint" location="/state/profiles/shared/agent/skills/workflow-checkpoint/SKILL.md">',
-        'References are relative to /state/profiles/shared/agent/skills/workflow-checkpoint.',
+        '<skill name="checkpoint" location="/state/profiles/shared/agent/skills/checkpoint/SKILL.md">',
+        'References are relative to /state/profiles/shared/agent/skills/checkpoint.',
         '</skill>',
       ].join('\n'),
     };
@@ -165,8 +165,8 @@ describe('shouldReplaceOptimisticUserBlock', () => {
       type: 'user',
       ts: '2026-03-19T12:00:01.000Z',
       text: [
-        '<skill name="workflow-checkpoint" location="/state/profiles/shared/agent/skills/workflow-checkpoint/SKILL.md">',
-        'References are relative to /state/profiles/shared/agent/skills/workflow-checkpoint.',
+        '<skill name="checkpoint" location="/state/profiles/shared/agent/skills/checkpoint/SKILL.md">',
+        'References are relative to /state/profiles/shared/agent/skills/checkpoint.',
         '</skill>',
       ].join('\n'),
     };

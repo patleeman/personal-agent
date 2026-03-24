@@ -370,8 +370,8 @@ describe('chat view streaming disclosure', () => {
         type: 'user',
         ts: '2026-03-11T18:00:00.000Z',
         text: [
-          '<skill name="workflow-checkpoint" location="/state/profiles/shared/agent/skills/workflow-checkpoint/SKILL.md">',
-          'References are relative to /state/profiles/shared/agent/skills/workflow-checkpoint.',
+          '<skill name="checkpoint" location="/state/profiles/shared/agent/skills/checkpoint/SKILL.md">',
+          'References are relative to /state/profiles/shared/agent/skills/checkpoint.',
           '',
           '# Checkpoint',
           '',
@@ -381,10 +381,10 @@ describe('chat view streaming disclosure', () => {
       }],
     }));
 
-    expect(html).toContain('workflow-checkpoint');
-    expect(html).toContain('References resolve relative to /state/profiles/shared/agent/skills/workflow-checkpoint');
+    expect(html).toContain('checkpoint');
+    expect(html).toContain('References resolve relative to /state/profiles/shared/agent/skills/checkpoint');
     expect(html).not.toContain('&lt;skill name=');
-    expect(html).not.toContain('location=&quot;/state/profiles/shared/agent/skills/workflow-checkpoint/SKILL.md&quot;');
+    expect(html).not.toContain('location=&quot;/state/profiles/shared/agent/skills/checkpoint/SKILL.md&quot;');
   });
 
   it('renders compaction summaries as system events instead of assistant bubbles', () => {
