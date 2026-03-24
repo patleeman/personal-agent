@@ -1,5 +1,5 @@
 import { isComposerHistoryStorageKey } from './composerHistory';
-import { RAIL_WIDTH_STORAGE_KEYS } from './layoutSizing';
+import { isRailWidthStorageKey } from './layoutSizing';
 
 export const THEME_STORAGE_KEY = 'pa-theme';
 export const OPEN_SESSION_IDS_STORAGE_KEY = 'pa:open-session-ids';
@@ -35,9 +35,7 @@ function removeStoredItemsMatching(predicate: (key: string) => boolean): void {
 
 export function resetStoredLayoutPreferences(): void {
   removeStoredItem(SIDEBAR_WIDTH_STORAGE_KEY);
-  for (const key of Object.values(RAIL_WIDTH_STORAGE_KEYS)) {
-    removeStoredItem(key);
-  }
+  removeStoredItemsMatching(isRailWidthStorageKey);
 }
 
 export function resetStoredConversationUiState(): void {

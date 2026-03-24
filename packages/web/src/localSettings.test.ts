@@ -4,6 +4,8 @@ import {
   CONVERSATION_SEEN_MESSAGE_COUNT_STORAGE_KEY,
   OPEN_SESSION_IDS_STORAGE_KEY,
   resetStoredConversationUiState,
+  resetStoredLayoutPreferences,
+  SIDEBAR_WIDTH_STORAGE_KEY,
 } from './localSettings';
 
 function createStorage(): Storage {
@@ -48,6 +50,22 @@ describe('localSettings', () => {
     expect(localStorage.getItem(CONVERSATION_SEEN_MESSAGE_COUNT_STORAGE_KEY)).toBeNull();
     expect(localStorage.getItem(buildComposerHistoryStorageKey('session-1'))).toBeNull();
     expect(localStorage.getItem(buildComposerHistoryStorageKey())).toBeNull();
+    expect(localStorage.getItem('pa:keep-me')).toBe('yes');
+  });
+
+  it('clears the saved sidebar width and all per-page rail widths', () => {
+    localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, '224');
+    localStorage.setItem('pa:rail-width:skills', '460');
+    localStorage.setItem('pa:rail-width:instructions', '520');
+    localStorage.setItem('pa:rail-width:knowledge', '480');
+    localStorage.setItem('pa:keep-me', 'yes');
+
+    resetStoredLayoutPreferences();
+
+    expect(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY)).toBeNull();
+    expect(localStorage.getItem('pa:rail-width:skills')).toBeNull();
+    expect(localStorage.getItem('pa:rail-width:instructions')).toBeNull();
+    expect(localStorage.getItem('pa:rail-width:knowledge')).toBeNull();
     expect(localStorage.getItem('pa:keep-me')).toBe('yes');
   });
 });

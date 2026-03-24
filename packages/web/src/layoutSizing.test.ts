@@ -36,18 +36,33 @@ describe('layout sizing helpers', () => {
     });
 
     expect(getRailLayoutPrefs('/skills')).toEqual({
-      storageKey: 'pa:rail-width:knowledge',
+      storageKey: 'pa:rail-width:skills',
       initialWidth: 460,
     });
 
     expect(getRailLayoutPrefs('/instructions')).toEqual({
-      storageKey: 'pa:rail-width:knowledge',
+      storageKey: 'pa:rail-width:instructions',
       initialWidth: 460,
     });
 
     expect(getRailLayoutPrefs('/tools')).toEqual({
       storageKey: 'pa:rail-width:tools',
       initialMainWidthRatio: 0.7,
+    });
+
+    expect(getRailLayoutPrefs('/workspace/files')).toEqual({
+      storageKey: 'pa:rail-width:workspace-files',
+      initialWidth: 380,
+    });
+
+    expect(getRailLayoutPrefs('/workspace/changes')).toEqual({
+      storageKey: 'pa:rail-width:workspace-changes',
+      initialWidth: 380,
+    });
+
+    expect(getRailLayoutPrefs('/settings')).toEqual({
+      storageKey: 'pa:rail-width:settings',
+      initialWidth: 380,
     });
 
     expect(getRailLayoutPrefs('/plans')).toEqual({

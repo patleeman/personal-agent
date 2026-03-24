@@ -1,19 +1,50 @@
 export const RESIZE_HANDLE_WIDTH = 5;
+export const RAIL_WIDTH_STORAGE_KEY_PREFIX = 'pa:rail-width:';
 
-export const RAIL_WIDTH_STORAGE_KEYS = {
-  projects: 'pa:rail-width:projects',
-  scheduled: 'pa:rail-width:scheduled',
-  runs: 'pa:rail-width:runs',
-  conversations: 'pa:rail-width:conversations',
-  inbox: 'pa:rail-width:inbox',
-  memory: 'pa:rail-width:memory',
-  memories: 'pa:rail-width:memories',
-  knowledge: 'pa:rail-width:knowledge',
-  tools: 'pa:rail-width:tools',
-  capabilities: 'pa:rail-width:capabilities',
-  plans: 'pa:rail-width:plans',
-  default: 'pa:rail-width:default',
-} as const;
+export function buildRailWidthStorageKey(pageKey: string): string {
+  return `${RAIL_WIDTH_STORAGE_KEY_PREFIX}${pageKey}`;
+}
+
+export function isRailWidthStorageKey(key: string): boolean {
+  return key.startsWith(RAIL_WIDTH_STORAGE_KEY_PREFIX);
+}
+
+export function getRailPageKey(pathname: string): string {
+  const parts = pathname.split('/').filter(Boolean);
+  const section = parts[0] ?? 'default';
+
+  switch (section) {
+    case 'workspace':
+      if (parts[1] === 'changes') {
+        return 'workspace-changes';
+      }
+      if (parts[1] === 'files') {
+        return 'workspace-files';
+      }
+      return 'workspace';
+    case 'projects':
+    case 'scheduled':
+    case 'runs':
+    case 'conversations':
+    case 'inbox':
+    case 'system':
+    case 'memories':
+    case 'skills':
+    case 'instructions':
+    case 'plans':
+    case 'tools':
+    case 'settings':
+    case 'memory':
+    case 'knowledge':
+    case 'capabilities':
+      return section;
+    case 'automations':
+    case 'tasks':
+      return 'scheduled';
+    default:
+      return 'default';
+  }
+}
 
 export interface RailLayoutPrefs {
   storageKey: string;
@@ -30,71 +61,55 @@ export function clampPanelWidth(width: number, min: number, max: number): number
 }
 
 export function getRailLayoutPrefs(pathname: string): RailLayoutPrefs {
-  const section = pathname.split('/').filter(Boolean)[0] ?? 'default';
+  const pageKey = getRailPageKey(pathname);
 
-  switch (section) {
+  switch (pageKey) {
     case 'projects':
       return {
-        storageKey: RAIL_WIDTH_STORAGE_KEYS.projects,
+        storageKey: buildRailWidthStorageKey(pageKey),
         initialWidth: 560,
       };
     case 'scheduled':
-    case 'automations':
-    case 'tasks':
       return {
-        storageKey: RAIL_WIDTH_STORAGE_KEYS.scheduled,
+        storageKey: buildRailWidthStorageKey(pageKey),
         initialWidth: 380,
       };
     case 'runs':
+    case 'capabilities':
       return {
-        storageKey: RAIL_WIDTH_STORAGE_KEYS.runs,
+        storageKey: buildRailWidthStorageKey(pageKey),
         initialWidth: 420,
       };
     case 'conversations':
-      return {
-        storageKey: RAIL_WIDTH_STORAGE_KEYS.conversations,
-        initialWidth: 380,
-      };
     case 'inbox':
-      return {
-        storageKey: RAIL_WIDTH_STORAGE_KEYS.inbox,
-        initialWidth: 380,
-      };
     case 'memory':
+    case 'knowledge':
+    case 'workspace':
+    case 'workspace-files':
+    case 'workspace-changes':
+    case 'system':
+    case 'settings':
+    case 'default':
       return {
-        storageKey: RAIL_WIDTH_STORAGE_KEYS.memory,
+        storageKey: buildRailWidthStorageKey(pageKey),
         initialWidth: 380,
       };
     case 'memories':
+    case 'tools':
+    case 'plans':
       return {
-        storageKey: RAIL_WIDTH_STORAGE_KEYS.memories,
+        storageKey: buildRailWidthStorageKey(pageKey),
         initialMainWidthRatio: 0.7,
       };
-    case 'knowledge':
     case 'skills':
     case 'instructions':
       return {
-        storageKey: RAIL_WIDTH_STORAGE_KEYS.knowledge,
+        storageKey: buildRailWidthStorageKey(pageKey),
         initialWidth: 460,
-      };
-    case 'tools':
-      return {
-        storageKey: RAIL_WIDTH_STORAGE_KEYS.tools,
-        initialMainWidthRatio: 0.7,
-      };
-    case 'capabilities':
-      return {
-        storageKey: RAIL_WIDTH_STORAGE_KEYS.capabilities,
-        initialWidth: 420,
-      };
-    case 'plans':
-      return {
-        storageKey: RAIL_WIDTH_STORAGE_KEYS.plans,
-        initialMainWidthRatio: 0.7,
       };
     default:
       return {
-        storageKey: RAIL_WIDTH_STORAGE_KEYS.default,
+        storageKey: buildRailWidthStorageKey(pageKey),
         initialWidth: 380,
       };
   }
