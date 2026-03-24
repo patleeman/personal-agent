@@ -24,7 +24,7 @@ import type { DaemonState, DurableRunRecord, GatewayState, SyncState, WebUiState
 import { timeAgo } from '../utils';
 import { ListLinkRow, LoadingState, PageHeader, PageHeading, Pill, ToolbarButton, type PillTone } from '../components/ui';
 
-type SystemRowState = 'loading' | 'healthy' | 'attention' | 'offline' | 'disabled' | 'unavailable';
+type SystemRowState = 'loading' | 'healthy' | 'issue' | 'offline' | 'disabled' | 'unavailable';
 
 type SystemRowItem = {
   id: SystemComponentId;
@@ -91,7 +91,7 @@ function buildWebUiItem(data: WebUiState | null): SystemRowItem {
   return {
     id: 'web-ui',
     label: 'Web UI',
-    state: warningCount > 0 ? 'attention' : data.service.running ? 'healthy' : 'offline',
+    state: warningCount > 0 ? 'issue' : data.service.running ? 'healthy' : 'offline',
     tone: warningCount > 0 ? 'warning' : data.service.running ? 'success' : 'muted',
     summary,
     meta: [
@@ -124,7 +124,7 @@ function buildDaemonItem(data: DaemonState | null): SystemRowItem {
   return {
     id: 'daemon',
     label: 'Daemon',
-    state: data.warnings.length > 0 ? 'attention' : data.runtime.running ? 'healthy' : 'offline',
+    state: data.warnings.length > 0 ? 'issue' : data.runtime.running ? 'healthy' : 'offline',
     tone: data.warnings.length > 0 ? 'warning' : data.runtime.running ? 'success' : 'muted',
     summary,
     meta: [
@@ -156,7 +156,7 @@ function buildGatewayItem(data: GatewayState | null): SystemRowItem {
   return {
     id: 'gateway',
     label: 'Gateway',
-    state: data.warnings.length > 0 ? 'attention' : data.service.running ? 'healthy' : 'offline',
+    state: data.warnings.length > 0 ? 'issue' : data.service.running ? 'healthy' : 'offline',
     tone: data.warnings.length > 0 ? 'warning' : data.service.running ? 'success' : 'muted',
     summary,
     meta: [
@@ -185,7 +185,7 @@ function buildSyncItem(data: SyncState | null): SystemRowItem {
   const syncState: SystemRowState = !data.config.enabled
     ? 'disabled'
     : data.warnings.length > 0 || !data.daemon.connected || !data.git.hasRepo
-      ? 'attention'
+      ? 'issue'
       : 'healthy';
 
   return {
@@ -221,18 +221,18 @@ function runStatusLabel(run: DurableRunRecord): string {
   const status = run.status?.status;
 
   if (run.problems.length > 0 || run.recoveryAction === 'invalid' || status === 'failed' || status === 'interrupted' || getRunImportState(run) === 'failed') {
-    return 'attention';
+    return 'issue';
   }
   if (run.recoveryAction === 'resume' || run.recoveryAction === 'rerun' || status === 'recovering' || getRunImportState(run) === 'ready') {
-    return 'needs review';
+    return 'review';
   }
   if (status === 'running') {
     return 'running';
   }
   if (status === 'completed') {
-    return 'completed';
+    return 'done';
   }
-  return status ?? 'waiting';
+  return 'queued';
 }
 
 function formatRecoveryAction(action: string): string {
@@ -244,7 +244,7 @@ function formatRecoveryAction(action: string): string {
     case 'invalid':
       return 'invalid';
     case 'attention':
-      return 'needs attention';
+      return 'manual review';
     default:
       return action;
   }
@@ -266,6 +266,18 @@ function runNeedsAttention(run: DurableRunRecord): boolean {
 function runMomentLabel(run: DurableRunRecord): string | null {
   const moment = getRunMoment(run);
   return moment.at ? `${moment.label} ${timeAgo(moment.at)}` : null;
+}
+
+function isGenericRunSummary(summary: string): boolean {
+  return /^(Live conversation|Background run|Scheduled task|Deferred resume|Remote execution)( · .+)?$/.test(summary)
+    || summary === 'Conversation memory distillation'
+    || summary === 'Shell run'
+    || summary === 'Workflow'
+    || summary === 'Run';
+}
+
+function buildRunSummary(headline: ReturnType<typeof getRunHeadline>): string | null {
+  return isGenericRunSummary(headline.summary) ? null : headline.summary;
 }
 
 function buildFeaturedRuns(runRecords: DurableRunRecord[], selectedRunId: string | null): DurableRunRecord[] {
@@ -491,7 +503,7 @@ export function SystemPage() {
     ? explicitComponent
     : getSystemComponentFromSearch(location.search);
   const canManageApplication = webUi?.service.installed ?? false;
-  const attentionItems = items.filter((item) => ['attention', 'offline', 'unavailable'].includes(item.state) && item.attention);
+  const attentionItems = items.filter((item) => ['issue', 'offline', 'unavailable'].includes(item.state) && item.attention);
   const attentionCount = attentionItems.length;
   const disabledCount = items.filter((item) => item.state === 'disabled').length;
   const allReady = items.every((item) => item.state !== 'loading');
@@ -535,11 +547,11 @@ export function SystemPage() {
           title="System"
           meta={(
             <>
-              4 core services
+              4 services
               {!allReady
                 ? <span className="ml-2 text-secondary">· loading latest state</span>
                 : attentionCount > 0
-                  ? <span className="ml-2 text-warning">· {attentionCount} need attention</span>
+                  ? <span className="ml-2 text-warning">· {attentionCount} issue{attentionCount === 1 ? '' : 's'}</span>
                   : disabledCount > 0
                     ? <span className="ml-2 text-secondary">· {disabledCount} disabled</span>
                     : <span className="ml-2 text-success">· all healthy</span>}
@@ -572,7 +584,7 @@ export function SystemPage() {
             )}
 
             <section className="space-y-2">
-              <p className="ui-section-label">Overview</p>
+              <p className="ui-section-label">Summary</p>
               {attentionItems.length > 0 ? (
                 <div className="space-y-1.5">
                   {attentionItems.map((item) => (
@@ -594,8 +606,8 @@ export function SystemPage() {
 
             <section className="space-y-2 border-t border-border-subtle pt-5">
               <div className="space-y-1">
-                <p className="ui-section-label">Core services</p>
-                <p className="ui-card-meta">One row per service. Keep this list glanceable; use the right pane for logs.</p>
+                <p className="ui-section-label">Services</p>
+                <p className="ui-card-meta">One row per service. Use the right pane for logs and controls.</p>
               </div>
 
               <div className="space-y-px">
@@ -607,7 +619,7 @@ export function SystemPage() {
                     leading={<span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${toneDotClass(item.tone)}`} />}
                     trailing={(
                       <span className={`mt-0.5 text-[11px] font-mono ${selectedRunId === null && selectedComponent === item.id ? 'text-accent' : 'text-dim group-hover:text-secondary'}`}>
-                        inspect
+                        details
                       </span>
                     )}
                   >
@@ -624,8 +636,8 @@ export function SystemPage() {
 
             <section className="space-y-2 border-t border-border-subtle pt-5">
               <div className="space-y-1">
-                <p className="ui-section-label">Agent work</p>
-                <p className="ui-card-meta">Only the most relevant runs are shown here: active work, runs that need review, and a few recent finishes.</p>
+                <p className="ui-section-label">Runs</p>
+                <p className="ui-card-meta">Active work, runs that need review, and a few recent finishes.</p>
               </div>
 
               {runs === null ? (
@@ -645,9 +657,11 @@ export function SystemPage() {
                         ? 'conversation'
                         : primaryConnection?.label?.toLowerCase();
                       const selected = selectedRunId === run.runId;
-                      const metaParts = [statusLabel, moment, connectionLabel].filter((value): value is string => typeof value === 'string' && value.length > 0);
-                      if (run.recoveryAction !== 'none' && run.recoveryAction !== statusLabel) {
-                        metaParts.push(formatRecoveryAction(run.recoveryAction));
+                      const summary = buildRunSummary(headline);
+                      const recoveryLabel = formatRecoveryAction(run.recoveryAction);
+                      const metaParts = [moment, connectionLabel].filter((value): value is string => typeof value === 'string' && value.length > 0);
+                      if (run.recoveryAction !== 'none' && recoveryLabel !== statusLabel) {
+                        metaParts.push(recoveryLabel);
                       }
                       if (run.problems.length > 0) {
                         metaParts.push(`${run.problems.length} issue${run.problems.length === 1 ? '' : 's'}`);
@@ -661,7 +675,7 @@ export function SystemPage() {
                           leading={<span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${toneDotClass(tone)}`} />}
                           trailing={(
                             <span className={`mt-0.5 text-[11px] font-mono ${selected ? 'text-accent' : 'text-dim group-hover:text-secondary'}`}>
-                              inspect
+                              details
                             </span>
                           )}
                         >
@@ -669,7 +683,7 @@ export function SystemPage() {
                             <p className="ui-row-title">{headline.title}</p>
                             <Pill tone={tone}>{statusLabel}</Pill>
                           </div>
-                          <p className="ui-row-summary">{headline.summary}</p>
+                          {summary && <p className="ui-row-summary">{summary}</p>}
                           {metaParts.length > 0 && <p className="ui-row-meta break-words">{metaParts.join(' · ')}</p>}
                         </ListLinkRow>
                       );

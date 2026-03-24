@@ -27,7 +27,7 @@ type ConversationWorkItem = {
   runId: string | null;
   workspace: ConversationWorkspaceState;
   title: string;
-  summary: string;
+  summary: string | null;
   meta: string;
   statusLabel: string;
   tone: PillTone;
@@ -38,7 +38,7 @@ type ConversationWorkItem = {
 
 const FILTER_OPTIONS: Array<{ value: ConversationFilter; label: string }> = [
   { value: 'open', label: 'Open' },
-  { value: 'attention', label: 'Needs attention' },
+  { value: 'attention', label: 'Needs review' },
   { value: 'archived', label: 'Archived' },
   { value: 'all', label: 'All' },
 ];
@@ -96,27 +96,17 @@ function sectionDotClass(session: SessionMeta, section: ConversationSection): st
   return 'bg-teal';
 }
 
-function sectionMeta(session: SessionMeta, section: ConversationSection): string {
+function sectionMeta(session: SessionMeta): string {
   const parts: string[] = [];
   const timestamp = session.lastActivityAt ?? session.timestamp;
 
-  if (section === 'pinned') {
-    parts.push('pinned');
-  } else if (section === 'open') {
-    parts.push('open');
-  } else {
-    parts.push('archived');
-  }
-
   if (session.isRunning) {
     parts.push('running');
+  } else if (sessionNeedsAttention(session)) {
+    parts.push('review');
   }
 
-  if (sessionNeedsAttention(session)) {
-    parts.push('needs attention');
-  }
-
-  parts.push(timeAgo(timestamp));
+  parts.push(`updated ${timeAgo(timestamp)}`);
 
   if (session.model) {
     parts.push(session.model.split('/').pop() ?? session.model);
@@ -168,18 +158,18 @@ function runStatusLabel(run: DurableRunRecord): string {
   const status = run.status?.status;
 
   if (run.problems.length > 0 || run.recoveryAction === 'invalid' || status === 'failed' || status === 'interrupted' || getRunImportState(run) === 'failed') {
-    return 'attention';
+    return 'issue';
   }
   if (run.recoveryAction === 'resume' || run.recoveryAction === 'rerun' || status === 'recovering' || getRunImportState(run) === 'ready') {
-    return 'needs review';
+    return 'review';
   }
   if (status === 'running') {
     return 'running';
   }
   if (status === 'completed') {
-    return 'completed';
+    return 'done';
   }
-  return status ?? 'waiting';
+  return 'queued';
 }
 
 function formatRecoveryAction(action: string): string {
@@ -191,7 +181,7 @@ function formatRecoveryAction(action: string): string {
     case 'invalid':
       return 'invalid';
     case 'attention':
-      return 'needs attention';
+      return 'manual review';
     default:
       return action;
   }
@@ -213,14 +203,30 @@ function runNeedsReview(run: DurableRunRecord): boolean {
 function workspaceLabel(workspace: ConversationWorkspaceState): string {
   switch (workspace) {
     case 'pinned':
-      return 'pinned conversation';
+      return 'pinned';
     case 'open':
-      return 'open conversation';
+      return 'open';
     case 'archived':
-      return 'archived conversation';
+      return 'archived';
     default:
       return 'conversation';
   }
+}
+
+function isGenericRunSummary(summary: string): boolean {
+  return /^(Live conversation|Background run|Scheduled task|Deferred resume|Remote execution)( · .+)?$/.test(summary)
+    || summary === 'Conversation memory distillation'
+    || summary === 'Shell run'
+    || summary === 'Workflow'
+    || summary === 'Run';
+}
+
+function buildConversationWorkSummary(title: string, headline: ReturnType<typeof getRunHeadline>): string | null {
+  if (headline.title !== title) {
+    return headline.title;
+  }
+
+  return isGenericRunSummary(headline.summary) ? null : headline.summary;
 }
 
 function readConversationIdFromRun(run: DurableRunRecord, lookups: RunPresentationLookups): string | null {
@@ -328,7 +334,7 @@ function SectionBlock({
                           onMarkRead(session.id);
                         }}
                         disabled={busyId === session.id}
-                        title="Mark attention as read"
+                        title="Mark as reviewed"
                       >
                         {busyId === session.id ? '…' : 'read'}
                       </button>
@@ -388,7 +394,7 @@ function SectionBlock({
               >
                 <p className="ui-row-title">{session.title}</p>
                 <p className="ui-row-summary">{session.messageCount} {session.messageCount === 1 ? 'message' : 'messages'}</p>
-                <p className="ui-row-meta break-words">{sectionMeta(session, section)}</p>
+                <p className="ui-row-meta break-words">{sectionMeta(session)}</p>
               </ListButtonRow>
             );
           })}
@@ -417,11 +423,11 @@ function ConversationWorkBlock({
   return (
     <section className="space-y-2 border-t border-border-subtle pt-5 first:border-t-0 first:pt-0">
       <div className="space-y-1">
-        <p className="ui-section-label">Conversation work</p>
+        <p className="ui-section-label">Runs</p>
         <p className="ui-card-meta">
           {summaryParts.length > 0
             ? summaryParts.join(' · ')
-            : 'Runs tied to conversations that are still active or need review.'}
+            : 'Only active runs or runs waiting on you show up here.'}
         </p>
       </div>
 
@@ -431,13 +437,13 @@ function ConversationWorkBlock({
             key={item.key}
             onClick={() => onOpen(item)}
             leading={<span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${item.tone === 'danger' ? 'bg-danger' : item.tone === 'warning' ? 'bg-warning' : item.tone === 'accent' ? 'bg-accent animate-pulse' : item.tone === 'success' ? 'bg-success' : 'bg-border-default'}`} />}
-            trailing={<span className="mt-0.5 text-[11px] font-mono text-dim transition-colors group-hover:text-secondary">inspect</span>}
+            trailing={<span className="mt-0.5 text-[11px] font-mono text-dim transition-colors group-hover:text-secondary">open</span>}
           >
             <div className="flex flex-wrap items-center gap-2">
               <p className="ui-row-title">{item.title}</p>
               <Pill tone={item.tone}>{item.statusLabel}</Pill>
             </div>
-            <p className="ui-row-summary">{item.summary}</p>
+            {item.summary && <p className="ui-row-summary">{item.summary}</p>}
             <p className="ui-row-meta break-words">{item.meta}</p>
           </ListButtonRow>
         ))}
@@ -503,19 +509,19 @@ export function ConversationsPage() {
               : 'unknown';
         const statusLabel = runStatusLabel(run);
         const moment = getRunMoment(run);
+        const title = session?.title ?? conversationId;
+        const summary = buildConversationWorkSummary(title, headline);
+        const recoveryLabel = formatRecoveryAction(run.recoveryAction);
         const metaParts = [
-          statusLabel,
           moment.at ? `${moment.label} ${timeAgo(moment.at)}` : '',
           workspaceLabel(workspace),
         ];
-        if (run.recoveryAction !== 'none' && run.recoveryAction !== statusLabel) {
-          metaParts.push(formatRecoveryAction(run.recoveryAction));
+        if (run.recoveryAction !== 'none' && recoveryLabel !== statusLabel) {
+          metaParts.push(recoveryLabel);
         }
         if (run.problems.length > 0) {
           metaParts.push(`${run.problems.length} issue${run.problems.length === 1 ? '' : 's'}`);
         }
-        const title = session?.title ?? conversationId;
-        const summary = headline.title !== title ? headline.title : headline.summary;
         const searchText = [
           title,
           conversationId,
@@ -570,8 +576,8 @@ export function ConversationsPage() {
         runId: null,
         workspace: 'archived' as const,
         title: session.title,
-        summary: 'Conversation still running after it was closed.',
-        meta: ['running', workspaceLabel('archived'), timeAgo(session.lastActivityAt ?? session.timestamp), session.model?.split('/').pop() ?? session.model, session.cwdSlug].filter((value): value is string => typeof value === 'string' && value.length > 0).join(' · '),
+        summary: 'Still running after you archived it.',
+        meta: ['archived', `updated ${timeAgo(session.lastActivityAt ?? session.timestamp)}`, session.model?.split('/').pop() ?? session.model, session.cwdSlug].filter((value): value is string => typeof value === 'string' && value.length > 0).join(' · '),
         statusLabel: 'running',
         tone: 'accent' as const,
         searchText: [session.title, session.id, session.cwd, session.cwdSlug, session.model, 'running archived conversation'].filter((value): value is string => typeof value === 'string' && value.length > 0).join('\n').toLowerCase(),
@@ -644,7 +650,7 @@ export function ConversationsPage() {
           meta={(
             <>
               {pinnedSessions.length} pinned · {tabs.length} open · {archivedSessions.length} archived
-              {totalAttention > 0 && <span className="ml-2 text-warning">· {totalAttention} need attention</span>}
+              {totalAttention > 0 && <span className="ml-2 text-warning">· {totalAttention} conversation{totalAttention === 1 ? '' : 's'} need review</span>}
               {conversationRunReviewCount > 0 && <span className="ml-2 text-warning">· {conversationRunReviewCount} run{conversationRunReviewCount === 1 ? '' : 's'} need review</span>}
               {archivedRunningConversationCount > 0 && <span className="ml-2 text-secondary">· {archivedRunningConversationCount} archived still running</span>}
             </>
@@ -709,7 +715,7 @@ export function ConversationsPage() {
                   <SectionBlock
                     label="Pinned"
                     summary={sectionSummary('pinned', pinned.length)}
-                    emptyLabel={filter === 'attention' ? 'No pinned conversations need attention.' : 'No pinned conversations in this view.'}
+                    emptyLabel={filter === 'attention' ? 'No pinned conversations need review.' : 'No pinned conversations in this view.'}
                     sessions={pinned}
                     section="pinned"
                     onOpen={handleOpen}
@@ -725,7 +731,7 @@ export function ConversationsPage() {
                   <SectionBlock
                     label="Open"
                     summary={sectionSummary('open', open.length)}
-                    emptyLabel={filter === 'attention' ? 'No open conversations need attention.' : 'No open conversations in this view.'}
+                    emptyLabel={filter === 'attention' ? 'No open conversations need review.' : 'No open conversations in this view.'}
                     sessions={open}
                     section="open"
                     onOpen={handleOpen}
@@ -741,7 +747,7 @@ export function ConversationsPage() {
                   <SectionBlock
                     label="Archived"
                     summary={sectionSummary('archived', archived.length)}
-                    emptyLabel={filter === 'attention' ? 'No archived conversations need attention.' : 'No archived conversations in this view.'}
+                    emptyLabel={filter === 'attention' ? 'No archived conversations need review.' : 'No archived conversations in this view.'}
                     sessions={archived}
                     section="archived"
                     onOpen={handleOpen}

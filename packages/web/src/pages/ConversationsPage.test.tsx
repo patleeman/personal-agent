@@ -157,11 +157,11 @@ describe('ConversationsPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Conversation work');
+    expect(html).toContain('Runs');
     expect(html).toContain('Needs review conversation');
-    expect(html).toContain('needs review');
-    expect(html).toContain('archived conversation');
+    expect(html).toContain('Needs review');
+    expect(html).toContain('archived');
     expect(html).toContain('Archived but still running');
-    expect(html).toContain('Conversation still running after it was closed.');
+    expect(html).toContain('Still running after you archived it.');
   });
 });

@@ -38,7 +38,7 @@ function systemTone(running: boolean, warningCount: number, error?: string): Pil
 
 function systemLabel(running: boolean, warningCount: number, error?: string): string {
   if (error || warningCount > 0) {
-    return 'attention';
+    return 'issue';
   }
 
   return running ? 'healthy' : 'offline';
@@ -62,7 +62,7 @@ function syncLabel(data: SyncState): string {
   }
 
   if (data.warnings.length > 0 || !data.daemon.connected || !data.git.hasRepo) {
-    return 'attention';
+    return 'issue';
   }
 
   return 'healthy';
@@ -346,7 +346,7 @@ export function SystemContextPanel({ componentId }: { componentId: SystemCompone
 
         {panel.warnings.length > 0 && (
           <div className="space-y-2 border-t border-border-subtle pt-4">
-            <p className="ui-section-label">Attention</p>
+            <p className="ui-section-label">Warnings</p>
             <div className="space-y-1.5">
               {panel.warnings.map((warning) => (
                 <p key={warning} className="text-[12px] text-warning leading-relaxed">{warning}</p>
@@ -370,7 +370,7 @@ export function SystemContextPanel({ componentId }: { componentId: SystemCompone
 
       <div className="min-h-0 flex-1 border-t border-border-subtle px-4 pt-4 pb-4 flex flex-col gap-2">
         <div className="shrink-0 space-y-1">
-          <p className="ui-section-label">Recent log</p>
+          <p className="ui-section-label">Log</p>
           <p className="text-[10px] font-mono text-dim break-all">{shortLogLabel(panel.log.path)}</p>
         </div>
         <pre className="min-h-0 flex-1 overflow-auto rounded-lg bg-surface/70 px-3 py-3 text-[11px] leading-relaxed text-secondary whitespace-pre">

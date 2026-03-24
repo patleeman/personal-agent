@@ -376,7 +376,7 @@ describe('ContextRail run detail', () => {
     expect(html).toContain('System');
     expect(html).toContain('Daemon');
     expect(html).toContain('Restart daemon');
-    expect(html).toContain('Recent log');
+    expect(html).toContain('Log');
     expect(html).toContain('daemon ready');
   });
 
@@ -437,7 +437,7 @@ describe('ContextRail run detail', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Workspace');
+    expect(html).toContain('Overview');
     expect(html).toContain('Pinned');
     expect(html).toContain('Archived');
     expect(html).toContain('Pinned session');

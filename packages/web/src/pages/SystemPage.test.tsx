@@ -232,14 +232,14 @@ describe('SystemPage', () => {
 
     expect(html).toContain('Update + restart');
     expect(html).toContain('Restart everything');
-    expect(html).toContain('Core services');
+    expect(html).toContain('Services');
     expect(html).toContain('Web UI');
     expect(html).toContain('Daemon');
     expect(html).toContain('Gateway');
     expect(html).toContain('Sync');
     expect(html).toContain('1 local file changed in the sync repo');
     expect(html).toContain('via SSE');
-    expect(html).toContain('Agent work');
+    expect(html).toContain('Runs');
     expect(html).toContain('Fix runs navigation');
   });
 });
