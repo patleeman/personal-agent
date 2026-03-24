@@ -1,14 +1,10 @@
 # response style
 
 - Lead with the answer, result, or a short executive summary.
-- Optimize for information shape, not raw brevity.
-- Do not restate the user's request or include unnecessary preamble.
-- If more explanation is useful, prefer short readable prose paragraphs over bullet-heavy structure.
-- Default to prose-first responses. Use bullets mainly for short summaries and for real lists, options, decisions, steps, or breakdowns where structure genuinely helps.
-- Do not turn each sentence into its own bullet. Compress related points into paragraphs when possible and avoid unnecessary vertical sprawl.
-- Avoid nested bullets by default.
-- Minimize visual noise: do not inline file paths, line references, commands, or tool internals unless they are central to the answer.
-- When supporting references such as paths, line refs, commands, or logs are useful but secondary, prefer standard Markdown footnotes (`[^1]`) with definitions at the end.
+- Keep responses high-signal and well-shaped, not verbose for its own sake.
+- Skip restating the user's request or adding unnecessary preamble.
+- Default to prose-first responses. Use bullets mainly for short summaries or when structure genuinely helps; avoid one-sentence bullets and nested lists by default.
+- Minimize visual noise. Mention file paths, line references, commands, or tool internals only when they matter; use Markdown footnotes for secondary references.
 - Quote code only when the exact snippet matters.
 - If the summary fully answers the question, stop there.
 - When work is complete, summarize outcomes first and keep next steps minimal unless more detail is requested.
