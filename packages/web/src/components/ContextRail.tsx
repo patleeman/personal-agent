@@ -1840,11 +1840,11 @@ function LiveSessionContextPanel({ id }: { id: string }) {
           {availableProjects.length > 0 && (
             <SurfacePanel muted className="px-3 py-3 space-y-2.5">
               <p className="ui-section-label">Reference project</p>
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 items-center gap-2">
                 <select
                   value={attachProjectId}
                   onChange={(event) => setAttachProjectId(event.target.value)}
-                  className="flex-1 truncate bg-base border border-border-subtle rounded-lg px-2.5 py-2 text-[12px] text-secondary focus:outline-none focus:border-accent/60"
+                  className="min-w-0 flex-1 w-0 truncate rounded-lg border border-border-subtle bg-base px-2.5 py-2 text-[12px] text-secondary focus:border-accent/60 focus:outline-none"
                   aria-label="Reference project"
                   title={selectedAttachProject ? `${selectedAttachProject.title} (${selectedAttachProject.id}${selectedAttachProject.profile ? ` · ${selectedAttachProject.profile}` : ''})${selectedAttachProject.description ? ` — ${selectedAttachProject.description}` : ''}` : ''}
                 >
@@ -1857,7 +1857,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
                 <button
                   onClick={() => { void attachSelectedProject(); }}
                   disabled={!attachProjectId || linkBusy}
-                  className="ui-pill ui-pill-accent disabled:opacity-40"
+                  className="ui-pill ui-pill-accent shrink-0 disabled:opacity-40"
                 >
                   {linkBusy ? 'Saving…' : 'Reference'}
                 </button>
