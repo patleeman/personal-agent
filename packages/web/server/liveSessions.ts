@@ -1174,6 +1174,17 @@ function didLastAssistantReplyCompleteSuccessfully(entry: LiveEntry): boolean {
   return !lastAssistantMessage.errorMessage?.trim();
 }
 
+function countUserConversationMessages(entry: LiveEntry): number {
+  return readLastConversationEntries(entry).reduce((count, candidate) => {
+    if (candidate?.type !== 'message') {
+      return count;
+    }
+
+    const message = candidate.message as { role?: string } | undefined;
+    return message?.role === 'user' ? count + 1 : count;
+  }, 0);
+}
+
 function readLastNonAssistantConversationTurn(entry: LiveEntry): { role: string; customType?: string } | null {
   const entries = readLastConversationEntries(entry);
 
@@ -1266,6 +1277,9 @@ export async function kickConversationAutomation(
     const lastAssistantMessage = isCompletionTrigger
       ? readLastAssistantConversationMessage(entry)
       : null;
+    const userMessageCount = isCompletionTrigger
+      ? countUserConversationMessages(entry)
+      : 0;
     const didLastAssistantReplySucceed = isCompletionTrigger
       ? didLastAssistantReplyCompleteSuccessfully(entry)
       : false;
@@ -1278,6 +1292,7 @@ export async function kickConversationAutomation(
         lastTurnCustomType: lastTurn?.customType ?? null,
         lastAssistantStopReason: lastAssistantMessage?.stopReason ?? null,
         lastAssistantErrorMessage: lastAssistantMessage?.errorMessage ?? null,
+        userMessageCount,
         didLastAssistantReplySucceed,
         didAutomationAuthorLastTurn,
         didAutomationPostTurnReviewLastTurn: didTurnEndFromConversationAutomationPostTurnReview(entry),
@@ -1299,6 +1314,7 @@ export async function kickConversationAutomation(
       isCompletionTrigger
       && !didAutomationAuthorLastTurn
       && !didTurnEndFromConversationAutomationPostTurnReview(entry)
+      && userMessageCount > 1
       && didLastAssistantReplySucceed
       && shouldStartConversationAutomationPostTurnReview(document)
     ) {

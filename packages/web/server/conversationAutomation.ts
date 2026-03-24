@@ -1131,6 +1131,7 @@ export function buildConversationAutomationPostTurnReviewPrompt(
     'This hidden follow-up turn is for checklist bookkeeping only. Do not start implementation work or continue the main task here.',
     'Use todo_list with {"action":"list"} to inspect the current items.',
     'Resolve items only if they are now complete, not applicable, blocked, or failed.',
+    'Do not clear future-facing conditional reminders just because they have not triggered yet; leave them pending unless this turn definitively satisfied them or made them permanently irrelevant.',
     'If additional automation work is required, use todo_list with {"action":"add",...} to add the needed follow-up items.',
     'If more automation work depends on user input, call wait_for_user with a short reason.',
     'If nothing needs to change, reply briefly.',
