@@ -3492,7 +3492,6 @@ async function prepareGatewayRuntime(profileName: string): Promise<PreparedGatew
 
   const runtime = await preparePiAgentDir({
     statePaths,
-    copyLegacyAuth: true,
   });
 
   materializeProfileToAgentDir(resolvedProfile, runtime.agentDir);

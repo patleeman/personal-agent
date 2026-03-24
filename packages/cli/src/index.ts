@@ -706,7 +706,6 @@ async function preparePiLaunch(
 
   const runtime = await preparePiAgentDir({
     statePaths,
-    copyLegacyAuth: true,
   });
 
   materializeProfileToAgentDir(resolvedProfile, runtime.agentDir);
@@ -981,7 +980,6 @@ async function doctor(options: DoctorOptions = {}): Promise<number> {
     return 1;
   }
 
-  const runtime = await preparePiAgentDir({ statePaths, copyLegacyAuth: true });
   materializeProfileToAgentDir(resolvedProfile, runtime.agentDir);
 
   const runtimeAuth = runtime.authFile;
