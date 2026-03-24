@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState, type DragEvent, type ReactNode } from 'react';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ConversationStatusText } from './ConversationStatusText';
 import { api } from '../api';
 import { buildDeferredResumeIndicatorText } from '../deferredResumeIndicator';
@@ -27,6 +27,8 @@ import { getSidebarBrandLabel } from '../sidebarBrand';
 import { markConversationOpenStart } from '../perfDiagnostics';
 import { buildNestedSessionRows } from '../sessionLineage';
 import { summarizeActiveRuns } from '../runPresentation';
+import { getCapabilitiesSection } from '../capabilitiesSelection';
+import { getKnowledgeSection } from '../knowledgeSelection';
 import { timeAgo } from '../utils';
 
 // ── Icons ──────────────────────────────────────────────────────────────────
@@ -52,6 +54,8 @@ const PATH = {
   close:       'M6 18 18 6M6 6l12 12',
   pin:         'M12 17.25v4.5m0-4.5-4.243-4.243a1.5 1.5 0 0 1-.44-1.06V5.25L6.287 4.22A.75.75 0 0 1 6.818 3h10.364a.75.75 0 0 1 .53 1.28l-1.03 1.03v6.697a1.5 1.5 0 0 1-.44 1.06L12 17.25Z',
   unpin:       'M12 4.5v10.5m0 0-3-3m3 3 3-3M5.25 19.5h13.5',
+  chevronDown: 'M6 9l6 6 6-6',
+  chevronRight: 'M9 6l6 6-6 6',
 };
 
 const SIDEBAR_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
@@ -106,6 +110,80 @@ function TopNavItem({
         </span>
       )}
     </NavLink>
+  );
+}
+
+function SidebarNavGroup({
+  icon,
+  label,
+  title,
+  active,
+  expanded,
+  onToggle,
+  children,
+}: {
+  icon: string;
+  label: string;
+  title?: string;
+  active?: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="space-y-0.5">
+      <button
+        type="button"
+        title={title}
+        aria-expanded={expanded}
+        onClick={onToggle}
+        className={[
+          'ui-sidebar-nav-item w-full text-left',
+          active && 'ui-sidebar-nav-item-active',
+        ].filter(Boolean).join(' ')}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"
+          className="shrink-0 opacity-70">
+          <path d={icon} />
+        </svg>
+        <span className="flex-1">{label}</span>
+        <span className="shrink-0 text-dim/70">
+          <Ico d={expanded ? PATH.chevronDown : PATH.chevronRight} size={12} />
+        </span>
+      </button>
+      {expanded && (
+        <div className="ml-4 border-l border-border-subtle/80 pl-2">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SidebarSubNavItem({
+  to,
+  label,
+  active,
+  title,
+}: {
+  to: string;
+  label: string;
+  active?: boolean;
+  title?: string;
+}) {
+  return (
+    <Link
+      to={to}
+      title={title}
+      aria-current={active ? 'page' : undefined}
+      className={[
+        'ui-sidebar-subnav-item',
+        active && 'ui-sidebar-subnav-item-active',
+      ].filter(Boolean).join(' ')}
+    >
+      {label}
+    </Link>
   );
 }
 
@@ -354,6 +432,29 @@ export function Sidebar() {
   } | null>(null);
   const allSessions = useMemo(() => [...pinnedSessions, ...tabs, ...archivedSessions], [archivedSessions, pinnedSessions, tabs]);
   const activeConversationId = useMemo(() => getActiveConversationId(location.pathname), [location.pathname]);
+  const knowledgeSection = useMemo(() => getKnowledgeSection(location.search), [location.search]);
+  const capabilitiesSection = useMemo(() => getCapabilitiesSection(location.search), [location.search]);
+  const [knowledgeExpanded, setKnowledgeExpanded] = useState(true);
+  const [capabilitiesExpanded, setCapabilitiesExpanded] = useState(true);
+  const knowledgeProjectsActive = location.pathname.startsWith('/projects') || (location.pathname === '/knowledge' && knowledgeSection === 'projects');
+  const knowledgeMemoriesActive = location.pathname.startsWith('/memories') || (location.pathname === '/knowledge' && knowledgeSection === 'memories');
+  const knowledgeSkillsActive = location.pathname === '/knowledge' && knowledgeSection === 'skills';
+  const knowledgeInstructionsActive = location.pathname === '/knowledge' && knowledgeSection === 'instructions';
+  const knowledgeGroupActive = location.pathname === '/knowledge'
+    || knowledgeProjectsActive
+    || knowledgeMemoriesActive
+    || knowledgeSkillsActive
+    || knowledgeInstructionsActive;
+  const capabilitiesPresetsActive = location.pathname.startsWith('/plans') || (location.pathname === '/capabilities' && capabilitiesSection === 'presets');
+  const capabilitiesScheduledActive = location.pathname.startsWith('/scheduled')
+    || location.pathname.startsWith('/tasks')
+    || location.pathname.startsWith('/automations')
+    || (location.pathname === '/capabilities' && capabilitiesSection === 'scheduled');
+  const capabilitiesToolsActive = location.pathname.startsWith('/tools') || (location.pathname === '/capabilities' && capabilitiesSection === 'tools');
+  const capabilitiesGroupActive = location.pathname === '/capabilities'
+    || capabilitiesPresetsActive
+    || capabilitiesScheduledActive
+    || capabilitiesToolsActive;
   const attentionIds = useMemo(
     () => new Set(allSessions.filter((session) => sessionNeedsAttention(session)).map((session) => session.id)),
     [allSessions],
@@ -478,6 +579,18 @@ export function Sidebar() {
       // Ignore optimistic attention-clear failures; SSE or manual refresh can recover.
     });
   }, [activeConversationId, allSessions]);
+
+  useEffect(() => {
+    if (knowledgeGroupActive) {
+      setKnowledgeExpanded(true);
+    }
+  }, [knowledgeGroupActive]);
+
+  useEffect(() => {
+    if (capabilitiesGroupActive) {
+      setCapabilitiesExpanded(true);
+    }
+  }, [capabilitiesGroupActive]);
 
   function clearDragState() {
     setDraggingSessionId(null);
@@ -720,8 +833,31 @@ export function Sidebar() {
         <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={inboxCount} />
         <TopNavItem to="/conversations" icon={PATH.web} label="Conversations" />
         <TopNavItem to="/workspace" icon={PATH.workspace} label="Workspace" />
-        <TopNavItem to="/knowledge" icon={PATH.memory} label="Knowledge Base" />
-        <TopNavItem to="/capabilities" icon={PATH.automation} label="Capabilities" />
+        <SidebarNavGroup
+          icon={PATH.memory}
+          label="Knowledge Base"
+          title="Browse durable context sources."
+          active={knowledgeGroupActive}
+          expanded={knowledgeExpanded}
+          onToggle={() => setKnowledgeExpanded((current) => !current)}
+        >
+          <SidebarSubNavItem to="/projects" label="Projects" active={knowledgeProjectsActive} />
+          <SidebarSubNavItem to="/memories" label="Memories" active={knowledgeMemoriesActive} />
+          <SidebarSubNavItem to="/knowledge?section=skills" label="Skills" active={knowledgeSkillsActive} />
+          <SidebarSubNavItem to="/knowledge?section=instructions" label="Instructions" active={knowledgeInstructionsActive} />
+        </SidebarNavGroup>
+        <SidebarNavGroup
+          icon={PATH.automation}
+          label="Capabilities"
+          title="Browse automation surfaces and runtime tools."
+          active={capabilitiesGroupActive}
+          expanded={capabilitiesExpanded}
+          onToggle={() => setCapabilitiesExpanded((current) => !current)}
+        >
+          <SidebarSubNavItem to="/plans" label="Todo Presets" active={capabilitiesPresetsActive} />
+          <SidebarSubNavItem to="/scheduled" label="Scheduled Tasks" active={capabilitiesScheduledActive} />
+          <SidebarSubNavItem to="/tools" label="Tools" active={capabilitiesToolsActive} />
+        </SidebarNavGroup>
       </div>
 
       <div className="mx-3 border-t border-border-subtle my-2" />

@@ -1,6 +1,8 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { api } from './api';
+import { getCapabilitiesLandingPath } from './capabilitiesSelection';
+import { getKnowledgeLandingPath } from './knowledgeSelection';
 import { Layout } from './components/Layout';
 import { InboxPage } from './pages/InboxPage';
 import { fetchSessionsSnapshot } from './sessionSnapshot';
@@ -35,6 +37,18 @@ function LegacyTaskRoutesRedirect() {
 function LegacyRunsRoutesRedirect() {
   const { id } = useParams<{ id?: string }>();
   return <Navigate to={id ? `/system?run=${encodeURIComponent(id)}` : '/system'} replace />;
+}
+
+function KnowledgeRoute() {
+  const location = useLocation();
+  const redirectPath = getKnowledgeLandingPath(location.search);
+  return redirectPath ? <Navigate to={redirectPath} replace /> : <KnowledgeBasePage />;
+}
+
+function CapabilitiesRoute() {
+  const location = useLocation();
+  const redirectPath = getCapabilitiesLandingPath(location.search);
+  return redirectPath ? <Navigate to={redirectPath} replace /> : <CapabilitiesPage />;
 }
 
 const TasksPage = lazy(() => import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })));
@@ -247,8 +261,8 @@ export function App() {
                       <Route path="workspace" element={suspendRoute(<WorkspacePage />)} />
                       <Route path="inbox" element={<InboxPage />} />
                       <Route path="inbox/:id" element={<InboxPage />} />
-                      <Route path="knowledge" element={suspendRoute(<KnowledgeBasePage />)} />
-                      <Route path="capabilities" element={suspendRoute(<CapabilitiesPage />)} />
+                      <Route path="knowledge" element={suspendRoute(<KnowledgeRoute />)} />
+                      <Route path="capabilities" element={suspendRoute(<CapabilitiesRoute />)} />
                       <Route path="system" element={suspendRoute(<SystemPage />)} />
                       <Route path="projects" element={suspendRoute(<ProjectsPage />)} />
                       <Route path="projects/:id" element={suspendRoute(<ProjectsPage />)} />
