@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { buildWorkspaceSearch, filterWorkspaceTree, WorkspaceWordDiffView } from './workspaceBrowser';
+import { buildWorkspacePath, buildWorkspaceSearch, filterWorkspaceTree, readWorkspaceModeFromPathname, WorkspaceWordDiffView } from './workspaceBrowser';
 import type { WorkspaceTreeNode } from './types';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -40,7 +40,21 @@ describe('buildWorkspaceSearch', () => {
     expect(buildWorkspaceSearch('?foo=bar&cwd=/tmp/old&file=src/old.ts', {
       cwd: '/tmp/new',
       file: 'src/new.ts',
-    })).toBe('?foo=bar&cwd=%2Ftmp%2Fnew&file=src%2Fnew.ts');
+      changeScope: 'staged',
+    })).toBe('?foo=bar&cwd=%2Ftmp%2Fnew&file=src%2Fnew.ts&changeScope=staged');
+  });
+});
+
+describe('workspace routes', () => {
+  it('builds nested workspace paths for files and changes', () => {
+    expect(buildWorkspacePath('files')).toBe('/workspace/files');
+    expect(buildWorkspacePath('changes', '?cwd=/tmp/repo')).toBe('/workspace/changes?cwd=/tmp/repo');
+  });
+
+  it('reads the active workspace mode from the pathname', () => {
+    expect(readWorkspaceModeFromPathname('/workspace/files')).toBe('files');
+    expect(readWorkspaceModeFromPathname('/workspace/changes')).toBe('changes');
+    expect(readWorkspaceModeFromPathname('/workspace')).toBe('files');
   });
 });
 

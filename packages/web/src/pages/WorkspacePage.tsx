@@ -7,6 +7,7 @@ import { useApi } from '../hooks';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import {
   baseName,
+  buildWorkspacePath,
   buildWorkspaceSearch,
   changeLabel,
   changeTone,
@@ -58,7 +59,7 @@ export function WorkspacePage() {
   const lastWorkspaceRefreshAtRef = useRef(0);
 
   const openWorkspaceSearch = useCallback((patch: { cwd?: string | null; file?: string | null }, replace = false) => {
-    navigate(`/workspace${buildWorkspaceSearch(location.search, patch)}`, { replace });
+    navigate(buildWorkspacePath('files', buildWorkspaceSearch(location.search, patch)), { replace });
   }, [location.search, navigate]);
 
   useEffect(() => {

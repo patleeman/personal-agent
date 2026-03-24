@@ -430,8 +430,9 @@ export function Sidebar() {
   } | null>(null);
   const allSessions = useMemo(() => [...pinnedSessions, ...tabs, ...archivedSessions], [archivedSessions, pinnedSessions, tabs]);
   const activeConversationId = useMemo(() => getActiveConversationId(location.pathname), [location.pathname]);
-  const [knowledgeExpanded, setKnowledgeExpanded] = useState(true);
-  const [capabilitiesExpanded, setCapabilitiesExpanded] = useState(true);
+  const workspaceFilesActive = location.pathname.startsWith('/workspace/files') || location.pathname === '/workspace';
+  const workspaceChangesActive = location.pathname.startsWith('/workspace/changes');
+  const workspaceGroupActive = workspaceFilesActive || workspaceChangesActive;
   const knowledgeProjectsActive = location.pathname.startsWith('/projects');
   const knowledgeMemoriesActive = location.pathname.startsWith('/memories');
   const knowledgeSkillsActive = location.pathname.startsWith('/skills');
@@ -448,6 +449,9 @@ export function Sidebar() {
   const capabilitiesGroupActive = capabilitiesPresetsActive
     || capabilitiesScheduledActive
     || capabilitiesToolsActive;
+  const [workspaceExpanded, setWorkspaceExpanded] = useState(workspaceGroupActive);
+  const [knowledgeExpanded, setKnowledgeExpanded] = useState(knowledgeGroupActive);
+  const [capabilitiesExpanded, setCapabilitiesExpanded] = useState(capabilitiesGroupActive);
   const attentionIds = useMemo(
     () => new Set(allSessions.filter((session) => sessionNeedsAttention(session)).map((session) => session.id)),
     [allSessions],
@@ -574,15 +578,15 @@ export function Sidebar() {
   }, [activeConversationId, allSessions]);
 
   useEffect(() => {
-    if (knowledgeGroupActive) {
-      setKnowledgeExpanded(true);
-    }
+    setWorkspaceExpanded(workspaceGroupActive);
+  }, [workspaceGroupActive]);
+
+  useEffect(() => {
+    setKnowledgeExpanded(knowledgeGroupActive);
   }, [knowledgeGroupActive]);
 
   useEffect(() => {
-    if (capabilitiesGroupActive) {
-      setCapabilitiesExpanded(true);
-    }
+    setCapabilitiesExpanded(capabilitiesGroupActive);
   }, [capabilitiesGroupActive]);
 
   function clearDragState() {
@@ -825,7 +829,17 @@ export function Sidebar() {
       <div className="pb-1 space-y-0.5">
         <TopNavItem to="/inbox" icon={PATH.inbox} label="Inbox" badge={inboxCount} />
         <TopNavItem to="/conversations" icon={PATH.web} label="Conversations" />
-        <TopNavItem to="/workspace" icon={PATH.workspace} label="Workspace" />
+        <SidebarNavGroup
+          icon={PATH.workspace}
+          label="Workspace"
+          title="Browse files or review git changes in the current workspace."
+          active={workspaceGroupActive}
+          expanded={workspaceExpanded}
+          onToggle={() => setWorkspaceExpanded((current) => !current)}
+        >
+          <SidebarSubNavItem to="/workspace/files" label="Files" active={workspaceFilesActive} />
+          <SidebarSubNavItem to="/workspace/changes" label="Changes" active={workspaceChangesActive} />
+        </SidebarNavGroup>
         <SidebarNavGroup
           icon={PATH.memory}
           label="Knowledge Base"

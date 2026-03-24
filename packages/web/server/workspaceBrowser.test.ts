@@ -4,7 +4,16 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { readWorkspaceFile, readWorkspaceSnapshot, writeWorkspaceFile } from './workspaceBrowser.js';
+import {
+  commitWorkspaceGitChanges,
+  readWorkspaceFile,
+  readWorkspaceGitDiff,
+  readWorkspaceGitStatus,
+  readWorkspaceSnapshot,
+  stageWorkspaceGitPath,
+  unstageWorkspaceGitPath,
+  writeWorkspaceFile,
+} from './workspaceBrowser.js';
 
 const tempDirs: string[] = [];
 
@@ -105,6 +114,68 @@ describe('readWorkspaceFile', () => {
     writeFileSync(join(dir, 'local.txt'), 'ok\n');
 
     expect(() => readWorkspaceFile({ cwd: dir, path: '../outside.txt' })).toThrow('outside the workspace root');
+  });
+});
+
+describe('readWorkspaceGitStatus', () => {
+  it('separates staged, unstaged, and untracked changes for the same repo', () => {
+    const dir = createTempDir('pa-web-workspace-git-status-');
+    runGit(['init'], dir);
+
+    writeFileSync(join(dir, 'tracked.ts'), 'export const value = 1;\n');
+    writeFileSync(join(dir, 'notes.md'), '# Notes\n');
+    runGit(['add', '.'], dir);
+    runGit(['-c', 'user.name=Test', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', 'commit', '-m', 'init'], dir);
+
+    writeFileSync(join(dir, 'tracked.ts'), 'export const value = 2;\n');
+    runGit(['add', 'tracked.ts'], dir);
+    writeFileSync(join(dir, 'tracked.ts'), 'export const value = 3;\n');
+    writeFileSync(join(dir, 'draft.ts'), 'export const draft = true;\n');
+
+    const summary = readWorkspaceGitStatus(dir);
+
+    expect(summary).toMatchObject({
+      stagedCount: 1,
+      unstagedCount: 1,
+      untrackedCount: 1,
+      conflictedCount: 0,
+    });
+    expect(summary.entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ relativePath: 'tracked.ts', stagedChange: 'modified', unstagedChange: 'modified' }),
+      expect.objectContaining({ relativePath: 'draft.ts', stagedChange: null, unstagedChange: 'untracked' }),
+    ]));
+  });
+});
+
+describe('workspace git mutations', () => {
+  it('stages, unstages, diffs, and commits changes', () => {
+    const dir = createTempDir('pa-web-workspace-git-mutations-');
+    runGit(['init'], dir);
+
+    writeFileSync(join(dir, 'tracked.ts'), 'export const value = 1;\n');
+    runGit(['add', '.'], dir);
+    runGit(['-c', 'user.name=Test', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', 'commit', '-m', 'init'], dir);
+
+    writeFileSync(join(dir, 'tracked.ts'), 'export const value = 2;\n');
+
+    let summary = stageWorkspaceGitPath({ cwd: dir, path: 'tracked.ts' });
+    expect(summary.stagedCount).toBe(1);
+    expect(summary.entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ relativePath: 'tracked.ts', stagedChange: 'modified', unstagedChange: null }),
+    ]));
+
+    const stagedDiff = readWorkspaceGitDiff({ cwd: dir, path: 'tracked.ts', scope: 'staged' });
+    expect(stagedDiff.diff).toContain('+export const value = 2;');
+
+    summary = unstageWorkspaceGitPath({ cwd: dir, path: 'tracked.ts' });
+    expect(summary.unstagedCount).toBe(1);
+    expect(summary.stagedCount).toBe(0);
+
+    stageWorkspaceGitPath({ cwd: dir, path: 'tracked.ts' });
+    const commit = commitWorkspaceGitChanges({ cwd: dir, message: 'Update tracked value' });
+    expect(commit.subject).toBe('Update tracked value');
+    expect(runGit(['log', '--format=%s', '-1'], dir).trim()).toBe('Update tracked value');
+    expect(readWorkspaceGitStatus(dir).stagedCount).toBe(0);
   });
 });
 

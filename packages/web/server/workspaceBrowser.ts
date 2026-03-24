@@ -62,6 +62,62 @@ export interface WorkspaceFileDetail {
   diff: string | null;
 }
 
+export type WorkspaceGitScope = 'staged' | 'unstaged' | 'untracked' | 'conflicted';
+
+export interface WorkspaceGitStatusEntry {
+  path: string;
+  relativePath: string;
+  exists: boolean;
+  stagedChange: WorkspaceChangeKind | null;
+  unstagedChange: WorkspaceChangeKind | null;
+  oldRelativePath: string | null;
+}
+
+export interface WorkspaceGitStatusSummary {
+  cwd: string;
+  root: string;
+  repoRoot: string | null;
+  branch: string | null;
+  focusPath: string | null;
+  stagedCount: number;
+  unstagedCount: number;
+  untrackedCount: number;
+  conflictedCount: number;
+  entries: WorkspaceGitStatusEntry[];
+}
+
+export interface WorkspaceGitDiffDetail {
+  cwd: string;
+  root: string;
+  repoRoot: string;
+  branch: string | null;
+  path: string;
+  relativePath: string;
+  exists: boolean;
+  scope: WorkspaceGitScope;
+  change: WorkspaceChangeKind | null;
+  oldRelativePath: string | null;
+  diff: string;
+}
+
+export interface WorkspaceGitCommitResult {
+  cwd: string;
+  root: string;
+  repoRoot: string;
+  branch: string | null;
+  commitSha: string;
+  subject: string;
+  body: string | null;
+}
+
+export interface WorkspaceGitDraftSource {
+  entries: Array<{
+    relativePath: string;
+    change: WorkspaceChangeKind;
+  }>;
+  diff: string;
+}
+
 const MAX_TEXT_FILE_BYTES = 512 * 1024;
 const MAX_FALLBACK_FILE_COUNT = 3_000;
 const WORKSPACE_PREVIEW_MIME_TYPES = new Map<string, string>([
@@ -346,22 +402,29 @@ function runGitCommand(args: string[], cwd: string): string {
   });
 }
 
-function runGitCommandAllowFailure(args: string[], cwd: string): { stdout: string; exitCode: number } {
+function runGitCommandAllowFailure(args: string[], cwd: string): { stdout: string; stderr: string; exitCode: number } {
   try {
     return {
       stdout: runGitCommand(args, cwd),
+      stderr: '',
       exitCode: 0,
     };
   } catch (error) {
-    const childError = error as { stdout?: string | Buffer; status?: number };
+    const childError = error as { stdout?: string | Buffer; stderr?: string | Buffer; status?: number };
     const stdout = typeof childError.stdout === 'string'
       ? childError.stdout
       : Buffer.isBuffer(childError.stdout)
         ? childError.stdout.toString('utf-8')
         : '';
+    const stderr = typeof childError.stderr === 'string'
+      ? childError.stderr
+      : Buffer.isBuffer(childError.stderr)
+        ? childError.stderr.toString('utf-8')
+        : '';
 
     return {
       stdout,
+      stderr,
       exitCode: childError.status ?? 1,
     };
   }
@@ -739,6 +802,262 @@ function readWorkspaceDiff(repoRoot: string | null, relativePath: string, change
   return null;
 }
 
+function normalizeWorkspaceStatusChar(code: string): WorkspaceChangeKind | null {
+  switch (code) {
+    case 'M':
+      return 'modified';
+    case 'A':
+      return 'added';
+    case 'D':
+      return 'deleted';
+    case 'R':
+      return 'renamed';
+    case 'C':
+      return 'copied';
+    case 'T':
+      return 'typechange';
+    default:
+      return null;
+  }
+}
+
+function isWorkspaceConflictStatus(code: string): boolean {
+  return code.includes('U') || ['DD', 'AA'].includes(code);
+}
+
+function parseWorkspaceStatusPaths(statusLine: string, change: WorkspaceChangeKind | null): {
+  relativePath: string;
+  oldRelativePath: string | null;
+} {
+  const rawPath = statusLine.slice(3).trim();
+  if ((change === 'renamed' || change === 'copied') && rawPath.includes(' -> ')) {
+    const [oldRelativePath, relativePath] = rawPath.split(' -> ').map((value) => value.trim());
+    return {
+      relativePath: relativePath || rawPath,
+      oldRelativePath: oldRelativePath || null,
+    };
+  }
+
+  return {
+    relativePath: rawPath,
+    oldRelativePath: null,
+  };
+}
+
+function readWorkspaceGitStatusEntries(workspace: WorkspaceRootResolution): WorkspaceGitStatusEntry[] {
+  if (!workspace.repoRoot) {
+    return [];
+  }
+
+  const output = runGitCommandAllowFailure(['status', '--porcelain=v1', '--untracked-files=all'], workspace.repoRoot).stdout;
+  const entries: WorkspaceGitStatusEntry[] = [];
+
+  for (const line of output.split('\n')) {
+    if (line.length < 4) {
+      continue;
+    }
+
+    const code = line.slice(0, 2);
+    if (code === '??') {
+      const { relativePath } = parseWorkspaceStatusPaths(line, 'untracked');
+      if (!relativePath) {
+        continue;
+      }
+
+      entries.push({
+        path: resolve(workspace.root, relativePath),
+        relativePath,
+        exists: existsSync(resolve(workspace.root, relativePath)),
+        stagedChange: null,
+        unstagedChange: 'untracked',
+        oldRelativePath: null,
+      });
+      continue;
+    }
+
+    if (isWorkspaceConflictStatus(code)) {
+      const { relativePath } = parseWorkspaceStatusPaths(line, 'conflicted');
+      if (!relativePath) {
+        continue;
+      }
+
+      entries.push({
+        path: resolve(workspace.root, relativePath),
+        relativePath,
+        exists: existsSync(resolve(workspace.root, relativePath)),
+        stagedChange: 'conflicted',
+        unstagedChange: 'conflicted',
+        oldRelativePath: null,
+      });
+      continue;
+    }
+
+    const stagedChange = normalizeWorkspaceStatusChar(code[0] ?? '');
+    const unstagedChange = normalizeWorkspaceStatusChar(code[1] ?? '');
+    const pathChange = stagedChange === 'renamed' || stagedChange === 'copied'
+      ? stagedChange
+      : unstagedChange;
+    const { relativePath, oldRelativePath } = parseWorkspaceStatusPaths(line, pathChange ?? null);
+    if (!relativePath) {
+      continue;
+    }
+
+    entries.push({
+      path: resolve(workspace.root, relativePath),
+      relativePath,
+      exists: existsSync(resolve(workspace.root, relativePath)),
+      stagedChange,
+      unstagedChange,
+      oldRelativePath,
+    });
+  }
+
+  return entries.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+}
+
+function countWorkspaceGitEntries(entries: WorkspaceGitStatusEntry[]): {
+  stagedCount: number;
+  unstagedCount: number;
+  untrackedCount: number;
+  conflictedCount: number;
+} {
+  let stagedCount = 0;
+  let unstagedCount = 0;
+  let untrackedCount = 0;
+  let conflictedCount = 0;
+
+  for (const entry of entries) {
+    const conflicted = entry.stagedChange === 'conflicted' || entry.unstagedChange === 'conflicted';
+    if (conflicted) {
+      conflictedCount += 1;
+      continue;
+    }
+
+    if (entry.stagedChange) {
+      stagedCount += 1;
+    }
+
+    if (entry.unstagedChange === 'untracked') {
+      untrackedCount += 1;
+      continue;
+    }
+
+    if (entry.unstagedChange) {
+      unstagedCount += 1;
+    }
+  }
+
+  return {
+    stagedCount,
+    unstagedCount,
+    untrackedCount,
+    conflictedCount,
+  };
+}
+
+function requireWorkspaceRepo(workspace: WorkspaceRootResolution): string {
+  if (!workspace.repoRoot) {
+    throw new Error('Git repository required.');
+  }
+
+  return workspace.repoRoot;
+}
+
+function buildWorkspaceGitStatusSummary(workspace: WorkspaceRootResolution): WorkspaceGitStatusSummary {
+  const entries = readWorkspaceGitStatusEntries(workspace);
+  const counts = countWorkspaceGitEntries(entries);
+
+  return {
+    cwd: workspace.cwd,
+    root: workspace.root,
+    repoRoot: workspace.repoRoot,
+    branch: workspace.branch,
+    focusPath: workspace.focusPath,
+    stagedCount: counts.stagedCount,
+    unstagedCount: counts.unstagedCount,
+    untrackedCount: counts.untrackedCount,
+    conflictedCount: counts.conflictedCount,
+    entries,
+  };
+}
+
+function resolveWorkspaceGitScopeChange(entry: WorkspaceGitStatusEntry, scope: WorkspaceGitScope): WorkspaceChangeKind | null {
+  switch (scope) {
+    case 'staged':
+      return entry.stagedChange;
+    case 'unstaged':
+    case 'untracked':
+    case 'conflicted':
+      return entry.unstagedChange;
+  }
+}
+
+function readWorkspaceGitDiffText(repoRoot: string, relativePath: string, scope: WorkspaceGitScope, exists: boolean): string {
+  if (scope === 'staged') {
+    return runGitCommandAllowFailure(['diff', '--no-ext-diff', '--cached', '--unified=3', '--', relativePath], repoRoot).stdout;
+  }
+
+  if (scope === 'unstaged') {
+    return runGitCommandAllowFailure(['diff', '--no-ext-diff', '--unified=3', '--', relativePath], repoRoot).stdout;
+  }
+
+  if (scope === 'untracked') {
+    return exists
+      ? runGitCommandAllowFailure(['diff', '--no-index', '--no-ext-diff', '--unified=3', '--', '/dev/null', relativePath], repoRoot).stdout
+      : '';
+  }
+
+  const combinedConflictDiff = runGitCommandAllowFailure(['diff', '--no-ext-diff', '--cc', '--unified=3', '--', relativePath], repoRoot).stdout;
+  if (combinedConflictDiff.trim().length > 0) {
+    return combinedConflictDiff;
+  }
+
+  const fallbackConflictDiff = runGitCommandAllowFailure(['diff', '--no-ext-diff', '--unified=3', '--', relativePath], repoRoot).stdout;
+  if (fallbackConflictDiff.trim().length > 0) {
+    return fallbackConflictDiff;
+  }
+
+  return exists ? (readFileSync(resolve(repoRoot, relativePath), 'utf-8')) : '';
+}
+
+function requireWorkspaceGitEntry(input: {
+  workspace: WorkspaceRootResolution;
+  relativePath: string;
+}): WorkspaceGitStatusEntry {
+  const entry = readWorkspaceGitStatusEntries(input.workspace).find((candidate) => candidate.relativePath === input.relativePath) ?? null;
+  if (!entry) {
+    throw new Error(`Git status entry not found for path: ${input.relativePath}`);
+  }
+
+  return entry;
+}
+
+function runWorkspaceGitMutation(args: string[], repoRoot: string, fallbackError: string): void {
+  const result = runGitCommandAllowFailure(args, repoRoot);
+  if (result.exitCode === 0) {
+    return;
+  }
+
+  const message = result.stderr.trim() || result.stdout.trim() || fallbackError;
+  throw new Error(message);
+}
+
+function splitCommitMessage(message: string): { subject: string; body: string | null } {
+  const normalized = message.replace(/\r\n/g, '\n').trim();
+  const lines = normalized.split('\n');
+  const subject = lines.shift()?.trim() ?? '';
+  const body = lines.join('\n').trim();
+
+  if (!subject) {
+    throw new Error('Commit message subject is required.');
+  }
+
+  return {
+    subject,
+    body: body.length > 0 ? body : null,
+  };
+}
+
 function resolveRequestedWorkspaceFilePath(root: string, filePath: string): string {
   const normalizedPath = filePath.trim();
   if (normalizedPath.startsWith('~/')) {
@@ -840,6 +1159,135 @@ export function writeWorkspaceFile(input: { cwd: string; path: string; content: 
   mkdirSync(dirname(absolutePath), { recursive: true });
   writeFileSync(absolutePath, input.content, 'utf-8');
   return readWorkspaceFile({ cwd: workspace.cwd, path: absolutePath });
+}
+
+export function readWorkspaceGitStatus(cwd: string): WorkspaceGitStatusSummary {
+  const workspace = resolveWorkspaceRoot(cwd);
+  return buildWorkspaceGitStatusSummary(workspace);
+}
+
+export function readWorkspaceGitDiff(input: {
+  cwd: string;
+  path: string;
+  scope: WorkspaceGitScope;
+}): WorkspaceGitDiffDetail {
+  const workspace = resolveWorkspaceRoot(input.cwd);
+  const repoRoot = requireWorkspaceRepo(workspace);
+  const { absolutePath, relativePath } = resolveWorkspaceFilePath(workspace.root, input.path);
+  const entry = requireWorkspaceGitEntry({ workspace, relativePath });
+  const change = resolveWorkspaceGitScopeChange(entry, input.scope);
+
+  if (!change) {
+    throw new Error(`No ${input.scope} change found for path: ${relativePath}`);
+  }
+
+  return {
+    cwd: workspace.cwd,
+    root: workspace.root,
+    repoRoot,
+    branch: workspace.branch,
+    path: absolutePath,
+    relativePath,
+    exists: existsSync(absolutePath),
+    scope: input.scope,
+    change,
+    oldRelativePath: entry.oldRelativePath,
+    diff: readWorkspaceGitDiffText(repoRoot, relativePath, input.scope, existsSync(absolutePath)),
+  };
+}
+
+export function stageWorkspaceGitPath(input: { cwd: string; path: string }): WorkspaceGitStatusSummary {
+  const workspace = resolveWorkspaceRoot(input.cwd);
+  const repoRoot = requireWorkspaceRepo(workspace);
+  const { relativePath } = resolveWorkspaceFilePath(workspace.root, input.path);
+  runWorkspaceGitMutation(['add', '--', relativePath], repoRoot, 'Could not stage file.');
+  return buildWorkspaceGitStatusSummary(workspace);
+}
+
+export function unstageWorkspaceGitPath(input: { cwd: string; path: string }): WorkspaceGitStatusSummary {
+  const workspace = resolveWorkspaceRoot(input.cwd);
+  const repoRoot = requireWorkspaceRepo(workspace);
+  const { relativePath } = resolveWorkspaceFilePath(workspace.root, input.path);
+
+  if (hasHeadCommit(repoRoot)) {
+    runWorkspaceGitMutation(['restore', '--staged', '--', relativePath], repoRoot, 'Could not unstage file.');
+  } else {
+    runWorkspaceGitMutation(['rm', '--cached', '--quiet', '--force', '--', relativePath], repoRoot, 'Could not unstage file.');
+  }
+
+  return buildWorkspaceGitStatusSummary(workspace);
+}
+
+export function stageAllWorkspaceGitChanges(cwd: string): WorkspaceGitStatusSummary {
+  const workspace = resolveWorkspaceRoot(cwd);
+  const repoRoot = requireWorkspaceRepo(workspace);
+  runWorkspaceGitMutation(['add', '-A'], repoRoot, 'Could not stage all changes.');
+  return buildWorkspaceGitStatusSummary(workspace);
+}
+
+export function unstageAllWorkspaceGitChanges(cwd: string): WorkspaceGitStatusSummary {
+  const workspace = resolveWorkspaceRoot(cwd);
+  const repoRoot = requireWorkspaceRepo(workspace);
+
+  if (hasHeadCommit(repoRoot)) {
+    runWorkspaceGitMutation(['restore', '--staged', '.'], repoRoot, 'Could not unstage all changes.');
+  } else {
+    runWorkspaceGitMutation(['rm', '--cached', '-r', '--quiet', '--force', '.'], repoRoot, 'Could not unstage all changes.');
+  }
+
+  return buildWorkspaceGitStatusSummary(workspace);
+}
+
+export function readWorkspaceGitDraftSource(cwd: string): WorkspaceGitDraftSource {
+  const workspace = resolveWorkspaceRoot(cwd);
+  const repoRoot = requireWorkspaceRepo(workspace);
+  const summary = buildWorkspaceGitStatusSummary(workspace);
+  const entries = summary.entries
+    .filter((entry) => entry.stagedChange && entry.stagedChange !== 'conflicted')
+    .map((entry) => ({
+      relativePath: entry.relativePath,
+      change: entry.stagedChange as WorkspaceChangeKind,
+    }));
+
+  if (entries.length === 0) {
+    throw new Error('No staged changes available for commit drafting.');
+  }
+
+  return {
+    entries,
+    diff: runGitCommandAllowFailure(['diff', '--no-ext-diff', '--cached', '--unified=3'], repoRoot).stdout,
+  };
+}
+
+export function commitWorkspaceGitChanges(input: { cwd: string; message: string }): WorkspaceGitCommitResult {
+  const workspace = resolveWorkspaceRoot(input.cwd);
+  const repoRoot = requireWorkspaceRepo(workspace);
+  const summary = buildWorkspaceGitStatusSummary(workspace);
+  if (summary.conflictedCount > 0) {
+    throw new Error('Resolve conflicts before committing.');
+  }
+  if (summary.stagedCount === 0) {
+    throw new Error('Stage at least one change before committing.');
+  }
+
+  const { subject, body } = splitCommitMessage(input.message);
+  const args = ['commit', '--quiet', '-m', subject];
+  if (body) {
+    args.push('-m', body);
+  }
+
+  runWorkspaceGitMutation(args, repoRoot, 'Could not create commit.');
+  const commitSha = runGitCommand(['rev-parse', 'HEAD'], repoRoot).trim();
+
+  return {
+    cwd: workspace.cwd,
+    root: workspace.root,
+    repoRoot,
+    branch: workspace.branch,
+    commitSha,
+    subject,
+    body,
+  };
 }
 
 export function readWorkspacePreviewAsset(input: { cwd: string; path: string }): { filePath: string; mimeType: string; root: string } {

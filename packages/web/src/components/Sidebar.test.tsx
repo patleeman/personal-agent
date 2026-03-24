@@ -215,7 +215,7 @@ describe('Sidebar', () => {
     expect(html).toContain('3 active now · 1 conversation · 1 scheduled · 1 background.');
   });
 
-  it('renders the new primary navigation above the conversation workspace', () => {
+  it('keeps sidebar sections collapsed by default on unrelated pages', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/inbox']}>
         <SseConnectionContext.Provider value={{ status: 'offline' }}>
@@ -242,19 +242,45 @@ describe('Sidebar', () => {
     expect(html.indexOf('Inbox')).toBeLessThan(html.indexOf('Conversations'));
     expect(html.indexOf('Conversations')).toBeLessThan(html.indexOf('Workspace'));
     expect(html.indexOf('Workspace')).toBeLessThan(html.indexOf('Knowledge Base'));
-    expect(html.indexOf('Knowledge Base')).toBeLessThan(html.indexOf('Projects'));
-    expect(html.indexOf('Projects')).toBeLessThan(html.indexOf('Memories'));
-    expect(html.indexOf('Memories')).toBeLessThan(html.indexOf('Skills'));
-    expect(html.indexOf('Skills')).toBeLessThan(html.indexOf('Instructions'));
-    expect(html.indexOf('Instructions')).toBeLessThan(html.indexOf('Capabilities'));
-    expect(html.indexOf('Capabilities')).toBeLessThan(html.indexOf('Todo Presets'));
-    expect(html.indexOf('Todo Presets')).toBeLessThan(html.indexOf('Scheduled Tasks'));
-    expect(html.indexOf('Scheduled Tasks')).toBeLessThan(html.indexOf('Tools'));
-    expect(html.indexOf('Tools')).toBeLessThan(html.indexOf('New chat'));
+    expect(html.indexOf('Knowledge Base')).toBeLessThan(html.indexOf('Capabilities'));
+    expect(html.indexOf('Capabilities')).toBeLessThan(html.indexOf('New chat'));
     expect(html.indexOf('New chat')).toBeLessThan(html.indexOf('Pinned'));
     expect(html.indexOf('Pinned')).toBeLessThan(html.indexOf('Open conversations'));
     expect(html.indexOf('Open conversations')).toBeLessThan(html.indexOf('System'));
     expect(html.indexOf('System')).toBeLessThan(html.indexOf('Settings'));
+    expect(html).not.toContain('Files');
+    expect(html).not.toContain('Changes');
+    expect(html).not.toContain('Projects');
+    expect(html).not.toContain('Todo Presets');
+  });
+
+  it('expands the active workspace section to reveal files and changes routes', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/workspace/changes']}>
+        <SseConnectionContext.Provider value={{ status: 'offline' }}>
+          <AppDataContext.Provider value={{
+            activity: { entries: [], unreadCount: 0 },
+            projects: null,
+            sessions: [createSession()],
+            tasks: null,
+            runs: null,
+            setActivity: () => {},
+            setProjects: () => {},
+            setSessions: () => {},
+            setTasks: () => {},
+            setRuns: () => {},
+          }}>
+            <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: () => {} }}>
+              <Sidebar />
+            </LiveTitlesContext.Provider>
+          </AppDataContext.Provider>
+        </SseConnectionContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Files');
+    expect(html).toContain('Changes');
+    expect(html).toContain('ui-sidebar-subnav-item ui-sidebar-subnav-item-active');
   });
 
   it('nests child conversations under their parent conversation when run lineage is available', () => {
