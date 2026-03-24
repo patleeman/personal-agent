@@ -350,6 +350,7 @@ export function SystemPage() {
   const [showMoreRuns, setShowMoreRuns] = useState(false);
   const actionTimeoutRef = useRef<number | null>(null);
   const restartReconnectRef = useRef<{ sawDisconnect: boolean } | null>(null);
+  const attemptedInitialLoadRef = useRef(false);
 
   const refreshAll = useCallback(async (mode: 'initial' | 'manual' = 'manual') => {
     if (mode === 'initial') {
@@ -398,6 +399,11 @@ export function SystemPage() {
       return;
     }
 
+    if (attemptedInitialLoadRef.current) {
+      return;
+    }
+
+    attemptedInitialLoadRef.current = true;
     let cancelled = false;
 
     void (async () => {

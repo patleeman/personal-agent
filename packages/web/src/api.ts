@@ -2,7 +2,7 @@ import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, Convers
 import { recordApiTiming } from './perfDiagnostics';
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch('/api' + path);
+  const res = await fetch('/api' + path, { cache: 'no-store' });
   recordApiTiming('/api' + path, res);
   if (!res.ok) throw new Error(await readApiError(res));
   return res.json() as Promise<T>;
