@@ -2601,7 +2601,7 @@ app.get('/api/events', (req, res) => {
 
   writeEvent({ type: 'connected' });
   enqueueWrite(async () => {
-    await writeSnapshotEvents(['activity', 'projects', 'sessions', 'tasks', 'runs']);
+    await writeSnapshotEvents(['activity', 'projects', 'sessions', 'tasks', 'daemon', 'gateway', 'sync', 'webUi', 'runs']);
   });
 
   const heartbeat = setInterval(() => {

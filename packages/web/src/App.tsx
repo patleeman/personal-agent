@@ -132,12 +132,16 @@ export function App() {
 
   const bootstrapSnapshots = useCallback(async () => {
     try {
-      const [activityEntries, projectItems, sessionItems, taskItems, runResult] = await Promise.all([
+      const [activityEntries, projectItems, sessionItems, taskItems, runResult, daemonState, gatewayState, syncState, webUiState] = await Promise.all([
         api.activity(),
         api.projects(),
         fetchSessionsSnapshot(),
         api.tasks(),
         api.runs(),
+        api.daemon(),
+        api.gateway(),
+        api.sync(),
+        api.webUiState(),
       ]);
 
       setActivity({
@@ -148,10 +152,14 @@ export function App() {
       setSessions(sessionItems);
       setTasks(taskItems);
       setRuns(runResult);
+      setDaemon(daemonState);
+      setGateway(gatewayState);
+      setSync(syncState);
+      setWebUi(webUiState);
     } catch {
       // Ignore bootstrap failures — manual refresh + SSE reconnect remain available.
     }
-  }, [setActivity, setProjects, setRuns, setSessions, setTasks]);
+  }, [setActivity, setDaemon, setGateway, setProjects, setRuns, setSessions, setSync, setTasks, setWebUi]);
 
   useEffect(() => {
     const es = new EventSource('/api/events');
