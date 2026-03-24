@@ -673,6 +673,7 @@ describe('conversationAutomation state', () => {
     expect(prompt).toContain('This hidden follow-up turn is for checklist bookkeeping only.');
     expect(prompt).toContain('Do not start implementation work or continue the main task here.');
     expect(prompt).toContain('Use todo_list with {"action":"list"}');
+    expect(prompt).toContain('Do not clear future-facing conditional reminders just because they have not triggered yet');
     expect(prompt).toContain('If more automation work depends on user input, call wait_for_user');
     expect(prompt).toContain('Inspect the broken todo reminder flow and fix it.');
   });

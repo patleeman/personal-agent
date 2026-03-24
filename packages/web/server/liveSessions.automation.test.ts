@@ -72,6 +72,39 @@ function buildTurnEntriesWithAssistant(
   ];
 }
 
+function buildMultiUserTurnEntriesWithAssistant(
+  options: { assistantStopReason?: string; assistantErrorMessage?: string } = {},
+) {
+  return [
+    {
+      type: 'message',
+      message: {
+        role: 'user',
+      },
+    },
+    {
+      type: 'message',
+      message: {
+        role: 'assistant',
+      },
+    },
+    {
+      type: 'message',
+      message: {
+        role: 'user',
+      },
+    },
+    {
+      type: 'message',
+      message: {
+        role: 'assistant',
+        ...(options.assistantStopReason ? { stopReason: options.assistantStopReason } : {}),
+        ...(options.assistantErrorMessage ? { errorMessage: options.assistantErrorMessage } : {}),
+      },
+    },
+  ];
+}
+
 afterEach(() => {
   registry.clear();
   process.env.PERSONAL_AGENT_STATE_ROOT = originalStateRoot;
@@ -319,7 +352,7 @@ describe('conversation automation live-session integration', () => {
     expect(prompt).not.toHaveBeenCalled();
   });
 
-  it('queues a bookkeeping review after a normal user turn when pending items remain', async () => {
+  it('does not queue a bookkeeping review on the first user turn', async () => {
     const stateRoot = createTempDir('pa-live-automation-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
@@ -358,6 +391,68 @@ describe('conversation automation live-session integration', () => {
         sendCustomMessage,
         sessionManager: {
           getEntries: () => buildTurnEntriesWithAssistant('user'),
+        },
+        modelRegistry: {
+          getAvailable: () => [],
+          getApiKey: vi.fn(),
+        },
+      },
+    });
+
+    await kickConversationAutomation('conv-123', 'turn_end');
+
+    const updated = getConversationAutomationState({
+      profile: 'datadog',
+      stateRoot,
+      conversationId: 'conv-123',
+    });
+    expect(updated.activeItemId).toBeUndefined();
+    expect(updated.items[0]).toMatchObject({
+      id: 'item-1',
+      status: 'pending',
+    });
+    expect(sendCustomMessage).not.toHaveBeenCalled();
+  });
+
+  it('queues a bookkeeping review after a later user turn when pending items remain', async () => {
+    const stateRoot = createTempDir('pa-live-automation-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
+
+    const sendCustomMessage = vi.fn(async () => undefined);
+    const pendingItem = createConversationAutomationTodoItem({
+      id: 'item-1',
+      label: 'workflow-checkpoint',
+      skillName: 'workflow-checkpoint',
+      now: '2026-03-18T12:00:00.000Z',
+    });
+
+    writeConversationAutomationState({
+      profile: 'datadog',
+      stateRoot,
+      document: {
+        version: 4,
+        conversationId: 'conv-123',
+        updatedAt: '2026-03-18T12:00:15.000Z',
+        enabled: true,
+        items: [pendingItem],
+      },
+    });
+
+    setLiveEntry('conv-123', {
+      title: 'Automation conversation',
+      currentTurnError: null,
+      session: {
+        state: { messages: [], streamMessage: null },
+        agent: { state: { messages: [] } },
+        getContextUsage: () => null,
+        isStreaming: false,
+        prompt: vi.fn(async () => undefined),
+        steer: vi.fn(async () => undefined),
+        followUp: vi.fn(async () => undefined),
+        sendCustomMessage,
+        sessionManager: {
+          getEntries: () => buildMultiUserTurnEntriesWithAssistant(),
         },
         modelRegistry: {
           getAvailable: () => [],
@@ -436,7 +531,7 @@ describe('conversation automation live-session integration', () => {
         followUp: vi.fn(async () => undefined),
         sendCustomMessage,
         sessionManager: {
-          getEntries: () => buildTurnEntriesWithAssistant('user'),
+          getEntries: () => buildMultiUserTurnEntriesWithAssistant(),
         },
         modelRegistry: {
           getAvailable: () => [],
@@ -497,7 +592,7 @@ describe('conversation automation live-session integration', () => {
         followUp: vi.fn(async () => undefined),
         sendCustomMessage,
         sessionManager: {
-          getEntries: () => buildTurnEntriesWithAssistant('user'),
+          getEntries: () => buildMultiUserTurnEntriesWithAssistant(),
         },
         modelRegistry: {
           getAvailable: () => [],
@@ -550,7 +645,7 @@ describe('conversation automation live-session integration', () => {
         followUp: vi.fn(async () => undefined),
         sendCustomMessage,
         sessionManager: {
-          getEntries: () => buildTurnEntriesWithAssistant('user', {
+          getEntries: () => buildMultiUserTurnEntriesWithAssistant({
             assistantStopReason: 'aborted',
           }),
         },

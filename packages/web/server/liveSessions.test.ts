@@ -1293,7 +1293,9 @@ describe('queuePromptContext', () => {
 describe('submitPromptSession', () => {
   it('returns after the prompt is accepted instead of waiting for full completion', async () => {
     const listeners = new Set<(event: AgentSessionEvent) => void>();
-    let resolvePrompt: (() => void) | null = null;
+    let resolvePrompt: () => void = () => {
+      throw new Error('prompt resolver not set');
+    };
     let completionResolved = false;
 
     setLiveEntry('session-submit-started', {
@@ -1339,7 +1341,7 @@ describe('submitPromptSession', () => {
     });
     expect(completionResolved).toBe(false);
 
-    resolvePrompt?.();
+    resolvePrompt();
     await submitted.completion;
     expect(completionResolved).toBe(true);
   });
