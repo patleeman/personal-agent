@@ -318,7 +318,6 @@ export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<Task
 
     const runtime = await preparePiAgentDir({
       statePaths,
-      copyLegacyAuth: true,
     });
 
     materializeProfileToAgentDir(resolvedProfile, runtime.agentDir);
