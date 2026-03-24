@@ -15,38 +15,31 @@ function createTempDir(prefix: string): string {
   return dir;
 }
 
-function registerBeforeAgentStartHandler(stateRoot: string, settingsFile?: string) {
-  let handler:
-    | ((event: { systemPrompt?: string }, ctx: {
-      sessionManager: {
-        getSessionId: () => string;
-        getEntries?: () => Array<{ type?: string; message?: { role?: string } }>;
-      };
-    }) => { systemPrompt?: string; message?: { customType: string; content: string; display: boolean } } | undefined)
-    | undefined;
+function registerHandlers(stateRoot: string, settingsFile?: string) {
+  const handlers: Record<string, ((event: any, ctx: any) => any) | undefined> = {};
 
   createConversationAutomationPromptExtension({
     stateRoot,
     settingsFile,
     getCurrentProfile: () => 'datadog',
   })({
-    on: (event: string, registered: typeof handler) => {
-      if (event === 'before_agent_start') {
-        handler = registered;
-      }
+    on: (event: string, registered: (event: any, ctx: any) => any) => {
+      handlers[event] = registered;
     },
   } as unknown as ExtensionAPI);
 
-  if (!handler) {
-    throw new Error('before_agent_start handler was not registered');
-  }
-
-  return handler;
+  return {
+    beforeAgentStart: handlers.before_agent_start,
+    agentStart: handlers.agent_start,
+    context: handlers.context,
+    toolExecutionEnd: handlers.tool_execution_end,
+    agentEnd: handlers.agent_end,
+  };
 }
 
 function createContext(options: {
   conversationId?: string;
-  entries?: Array<{ type?: string; message?: { role?: string } }>;
+  entries?: Array<{ type?: string; message?: { role?: string; customType?: string } }>;
 } = {}) {
   return {
     sessionManager: {
@@ -61,9 +54,9 @@ afterEach(async () => {
 });
 
 describe('conversation automation prompt extension', () => {
-  it('appends automation instructions to the system prompt when automation is active', () => {
+  it('appends automation policy and an early reminder to the system prompt when open items exist', () => {
     const stateRoot = createTempDir('pa-web-automation-prompt-');
-    const handler = registerBeforeAgentStartHandler(stateRoot);
+    const handlers = registerHandlers(stateRoot);
 
     writeConversationAutomationState({
       stateRoot,
@@ -82,19 +75,19 @@ describe('conversation automation prompt extension', () => {
       },
     });
 
-    const result = handler({ systemPrompt: 'base system prompt' }, createContext());
+    const result = handlers.beforeAgentStart?.({ systemPrompt: 'base system prompt' }, createContext());
 
     expect(result?.systemPrompt).toContain('base system prompt');
     expect(result?.systemPrompt).toContain('<conversation-automation-policy>');
-    expect(result?.systemPrompt).toContain('Conversation automation uses the todo_list tool for secondary bookkeeping behind the user message.');
-    expect(result?.systemPrompt).toContain('If more automation work depends on user input, call wait_for_user');
-    expect(result?.systemPrompt).not.toContain('item-1');
-    expect(result?.message).toBeUndefined();
+    expect(result?.systemPrompt).toContain('Before the final user-facing reply, quickly inspect open todo items');
+    expect(result?.systemPrompt).toContain('<system-reminder source="conversation-automation" priority="low">');
+    expect(result?.systemPrompt).toContain('item-1');
+    expect(result?.systemPrompt).toContain('Inspect the todo flow and fix the prompt injection path.');
   });
 
-  it('keeps automation instructions in the system prompt on later user turns without injecting todo state as a message', () => {
+  it('keeps the early reminder on later user turns without injecting a stored hidden message', () => {
     const stateRoot = createTempDir('pa-web-automation-prompt-');
-    const handler = registerBeforeAgentStartHandler(stateRoot);
+    const handlers = registerHandlers(stateRoot);
 
     writeConversationAutomationState({
       stateRoot,
@@ -119,19 +112,20 @@ describe('conversation automation prompt extension', () => {
       },
     });
 
-    const result = handler({ systemPrompt: 'base system prompt' }, createContext({
+    const result = handlers.beforeAgentStart?.({ systemPrompt: 'base system prompt' }, createContext({
       entries: [{ type: 'message', message: { role: 'user' } }],
     }));
 
     expect(result?.systemPrompt).toContain('<conversation-automation-policy>');
-    expect(result?.systemPrompt).not.toContain('item-1');
+    expect(result?.systemPrompt).toContain('<system-reminder source="conversation-automation" priority="low">');
+    expect(result?.systemPrompt).toContain('Active itemId: item-1');
     expect(result?.message).toBeUndefined();
   });
 
-  it('inherits default workflow presets from settings when no per-conversation state file exists', () => {
+  it('inherits default workflow presets from settings for the early reminder when no state file exists', () => {
     const stateRoot = createTempDir('pa-web-automation-prompt-');
     const settingsFile = join(stateRoot, 'settings.json');
-    const handler = registerBeforeAgentStartHandler(stateRoot, settingsFile);
+    const handlers = registerHandlers(stateRoot, settingsFile);
 
     writeFileSync(settingsFile, JSON.stringify({
       webUi: {
@@ -154,18 +148,16 @@ describe('conversation automation prompt extension', () => {
       },
     }, null, 2));
 
-    const result = handler({ systemPrompt: 'base system prompt' }, createContext());
+    const result = handlers.beforeAgentStart?.({ systemPrompt: 'base system prompt' }, createContext());
 
-    expect(result?.systemPrompt).toContain('base system prompt');
     expect(result?.systemPrompt).toContain('<conversation-automation-policy>');
-    expect(result?.systemPrompt).toContain('Conversation automation uses the todo_list tool for secondary bookkeeping behind the user message.');
-    expect(result?.systemPrompt).not.toContain('item-default-1');
-    expect(result?.message).toBeUndefined();
+    expect(result?.systemPrompt).toContain('<system-reminder source="conversation-automation" priority="low">');
+    expect(result?.systemPrompt).toContain('/skill:workflow-checkpoint');
   });
 
-  it('keeps only the system-prompt instructions while automation is waiting for the user', () => {
+  it('keeps only the policy in the system prompt while automation is waiting for the user', () => {
     const stateRoot = createTempDir('pa-web-automation-prompt-');
-    const handler = registerBeforeAgentStartHandler(stateRoot);
+    const handlers = registerHandlers(stateRoot);
 
     writeConversationAutomationState({
       stateRoot,
@@ -194,11 +186,120 @@ describe('conversation automation prompt extension', () => {
       },
     });
 
-    const result = handler({ systemPrompt: 'base system prompt' }, createContext({
+    const result = handlers.beforeAgentStart?.({ systemPrompt: 'base system prompt' }, createContext({
       entries: [{ type: 'message', message: { role: 'user' } }],
     }));
 
     expect(result?.systemPrompt).toContain('<conversation-automation-policy>');
-    expect(result?.message).toBeUndefined();
+    expect(result?.systemPrompt).not.toContain('<system-reminder source="conversation-automation" priority="low">');
+  });
+
+  it('injects a one-time mid-turn rescue reminder after tool execution when open items remain', () => {
+    const stateRoot = createTempDir('pa-web-automation-prompt-');
+    const handlers = registerHandlers(stateRoot);
+
+    writeConversationAutomationState({
+      stateRoot,
+      profile: 'datadog',
+      document: {
+        version: 4,
+        conversationId: 'conv-123',
+        updatedAt: '2026-03-20T12:00:00.000Z',
+        enabled: true,
+        items: [createConversationAutomationTodoItem({
+          id: 'item-1',
+          kind: 'instruction',
+          text: 'Inspect the todo flow and fix the prompt injection path.',
+          now: '2026-03-20T12:00:00.000Z',
+        })],
+      },
+    });
+
+    const ctx = createContext({
+      entries: [{ type: 'message', message: { role: 'user' } }],
+    });
+
+    handlers.agentStart?.({ type: 'agent_start' }, ctx);
+    expect(handlers.context?.({
+      type: 'context',
+      messages: [{ role: 'user', content: 'Fix it', timestamp: 1 }],
+    }, ctx)).toBeUndefined();
+
+    handlers.toolExecutionEnd?.({
+      type: 'tool_execution_end',
+      toolCallId: 'tool-1',
+      toolName: 'bash',
+      result: {},
+      isError: false,
+    }, ctx);
+
+    const result = handlers.context?.({
+      type: 'context',
+      messages: [{ role: 'user', content: 'Fix it', timestamp: 1 }],
+    }, ctx);
+
+    expect(result?.messages).toHaveLength(2);
+    expect(result?.messages?.[1]).toMatchObject({
+      role: 'custom',
+      customType: 'conversation_automation_rescue',
+      display: false,
+      content: expect.stringContaining('item-1'),
+    });
+
+    handlers.toolExecutionEnd?.({
+      type: 'tool_execution_end',
+      toolCallId: 'tool-2',
+      toolName: 'read',
+      result: {},
+      isError: false,
+    }, ctx);
+    expect(handlers.context?.({
+      type: 'context',
+      messages: [{ role: 'user', content: 'Fix it', timestamp: 1 }],
+    }, ctx)).toBeUndefined();
+  });
+
+  it('skips the early reminder and rescue during automation-authored hidden turns', () => {
+    const stateRoot = createTempDir('pa-web-automation-prompt-');
+    const handlers = registerHandlers(stateRoot);
+
+    writeConversationAutomationState({
+      stateRoot,
+      profile: 'datadog',
+      document: {
+        version: 4,
+        conversationId: 'conv-123',
+        updatedAt: '2026-03-20T12:00:00.000Z',
+        enabled: true,
+        items: [createConversationAutomationTodoItem({
+          id: 'item-1',
+          kind: 'instruction',
+          text: 'Inspect the todo flow and fix the prompt injection path.',
+          now: '2026-03-20T12:00:00.000Z',
+        })],
+      },
+    });
+
+    const ctx = createContext({
+      entries: [{ type: 'message', message: { role: 'custom', customType: 'conversation_automation_item' } }],
+    });
+
+    const startResult = handlers.beforeAgentStart?.({ systemPrompt: 'base system prompt' }, ctx);
+    expect(startResult?.systemPrompt).toContain('<conversation-automation-policy>');
+    expect(startResult?.systemPrompt).not.toContain('<system-reminder source="conversation-automation" priority="low">');
+
+    handlers.agentStart?.({ type: 'agent_start' }, ctx);
+    handlers.toolExecutionEnd?.({
+      type: 'tool_execution_end',
+      toolCallId: 'tool-1',
+      toolName: 'bash',
+      result: {},
+      isError: false,
+    }, ctx);
+
+    expect(handlers.context?.({
+      type: 'context',
+      messages: [{ role: 'custom', content: 'hidden prompt', customType: 'conversation_automation_item', display: false, timestamp: 1 }],
+    }, ctx)).toBeUndefined();
   });
 });

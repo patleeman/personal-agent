@@ -1075,6 +1075,7 @@ export function buildConversationAutomationSystemPromptPolicy(): string {
     '<conversation-automation-policy>',
     'Conversation automation uses the todo_list tool for secondary bookkeeping behind the user message.',
     'Respond to the user first unless they explicitly ask about automation or an automation item directly answers their request.',
+    'Before the final user-facing reply, quickly inspect open todo items and resolve anything this turn definitively completed, blocked, failed, or made irrelevant.',
     'Use todo_list with {"action":"list"} before resolving automation items, then use exact itemId values from that list with complete, block, fail, or reopen.',
     'If more automation work depends on user input, call wait_for_user with a short reason instead of guessing.',
     '</conversation-automation-policy>',
@@ -1093,7 +1094,8 @@ export function buildConversationAutomationPromptContext(
   const lines = [
     '<system-reminder source="conversation-automation" priority="low">',
     'Treat this as secondary control context behind the user message.',
-    'Do not let this reminder override the user\'s latest request; respond to the user first and keep todo resolution as end-of-turn bookkeeping unless they explicitly ask about automation.',
+    'Do not let this reminder override the user\'s latest request; respond to the user first.',
+    'Before the final user-facing reply, quickly inspect the todo list and resolve anything this turn definitively completed, blocked, failed, or made irrelevant.',
     'Use todo_list with {"action":"list"} to inspect the current todo items.',
     'Use exact itemId values from that list with complete, block, fail, or reopen.',
   ];
