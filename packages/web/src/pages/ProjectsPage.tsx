@@ -424,21 +424,6 @@ export function ProjectsPage() {
         className="flex-wrap items-start gap-y-3"
         actions={(
           <>
-            {profileState && (
-              <label className="flex items-center gap-2">
-                <span className="ui-card-meta">View</span>
-                <select
-                  value={effectiveViewProfile ?? profileState.currentProfile}
-                  onChange={(event) => setViewProfile(event.target.value === 'all' ? 'all' : event.target.value)}
-                  className={`${INPUT_CLASS} min-w-[12rem] py-1.5`}
-                >
-                  <option value="all">All profiles</option>
-                  {profileState.profiles.map((profile) => (
-                    <option key={profile} value={profile}>{profile}</option>
-                  ))}
-                </select>
-              </label>
-            )}
             <ToolbarButton onClick={() => {
               if (showCreateForm) {
                 setShowCreateForm(false);
@@ -463,6 +448,50 @@ export function ProjectsPage() {
 
       <div className="flex-1 px-6 py-4">
         {profilesError && <p className="mb-4 text-[12px] text-danger/80">Failed to load profiles: {profilesError}</p>}
+
+        {(profileState || (projects && projects.length > 0) || filter !== 'active') && (
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            {(projectCounts.archived > 0 || filter !== 'active') && (
+              <div className="ui-segmented-control" role="group" aria-label="Project filter">
+                {PROJECT_FILTER_OPTIONS.map((option) => {
+                  const count = projectCounts[option.value];
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setFilter(option.value)}
+                      className={filter === option.value ? 'ui-segmented-button ui-segmented-button-active' : 'ui-segmented-button'}
+                    >
+                      {option.label}
+                      <span className="ml-1 text-dim/70">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {profileState && (
+              <label className="flex items-center gap-2">
+                <span className="ui-card-meta">Profile</span>
+                <select
+                  value={effectiveViewProfile ?? profileState.currentProfile}
+                  onChange={(event) => setViewProfile(event.target.value === 'all' ? 'all' : event.target.value)}
+                  className={`${INPUT_CLASS} min-w-[12rem] py-1.5`}
+                >
+                  <option value="all">All profiles</option>
+                  {profileState.profiles.map((profile) => (
+                    <option key={profile} value={profile}>{profile}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+
+            {effectiveViewProfile === 'all' && projects && projects.length > 0 && (
+              <p className="ui-card-meta">Selecting a project jumps into that project&apos;s profile view.</p>
+            )}
+          </div>
+        )}
+
         {isLoading && <LoadingState label="Loading projects…" />}
         {visibleError && <ErrorState message={`Failed to load projects: ${visibleError}`} />}
 
@@ -499,30 +528,6 @@ export function ProjectsPage() {
 
             {projects && projects.length > 0 && (
               <div className="space-y-4">
-                <div className="flex flex-wrap items-center gap-3">
-                  {projectCounts.archived > 0 && (
-                    <div className="ui-segmented-control" role="group" aria-label="Project filter">
-                      {PROJECT_FILTER_OPTIONS.map((option) => {
-                        const count = projectCounts[option.value];
-                        return (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => setFilter(option.value)}
-                            className={filter === option.value ? 'ui-segmented-button ui-segmented-button-active' : 'ui-segmented-button'}
-                          >
-                            {option.label}
-                            <span className="ml-1 text-dim/70">{count}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                  {effectiveViewProfile === 'all' && (
-                    <p className="ui-card-meta">Selecting a project jumps into that project&apos;s profile view.</p>
-                  )}
-                </div>
-
                 {filteredProjects.length > 0 ? (
                   <div className="space-y-px">
                     {filteredProjects.map((project) => {

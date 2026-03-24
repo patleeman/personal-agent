@@ -255,6 +255,7 @@ import {
   inspectMcpServer,
   inspectMcpTool,
   listProfileActivityEntries,
+  listAllProjectIds,
   listProjectIds,
   createProjectActivityEntry,
   listDeferredResumeRecords,
@@ -270,6 +271,7 @@ import {
   migrateLegacyProfileMemoryDirs,
   readConversationAttachmentDownload,
   readMcpConfig,
+  readProjectOwnerProfile,
   removeConversationProjectLink,
   resolveConversationAttachmentPromptFiles,
   resolveProjectPaths,
@@ -3194,7 +3196,7 @@ app.post('/api/activity/:id/start', async (req, res) => {
     const requestedRelatedProjectIds = Array.isArray(entry.relatedProjectIds)
       ? entry.relatedProjectIds.filter((projectId): projectId is string => typeof projectId === 'string' && projectId.trim().length > 0)
       : [];
-    const availableProjectIds = new Set(listProjectIds({ repoRoot: REPO_ROOT, profile }));
+    const availableProjectIds = new Set(listReferenceableProjectIds());
     const relatedProjectIds = requestedRelatedProjectIds.filter((projectId) => availableProjectIds.has(projectId));
     const cwd = resolveConversationCwd({
       repoRoot: REPO_ROOT,
@@ -5658,7 +5660,7 @@ app.post('/api/memories/:memoryId/start', async (req, res) => {
     const requestedRelatedProjectIds = Array.isArray(loadedMemory.metadata.related_project_ids)
       ? loadedMemory.metadata.related_project_ids.filter((projectId): projectId is string => typeof projectId === 'string' && projectId.trim().length > 0)
       : [];
-    const availableProjectIds = new Set(listProjectIds({ repoRoot: REPO_ROOT, profile }));
+    const availableProjectIds = new Set(listReferenceableProjectIds());
     const relatedProjectIds = requestedRelatedProjectIds.filter((projectId) => availableProjectIds.has(projectId));
 
     if (relatedProjectIds.length > 0) {
@@ -5713,10 +5715,11 @@ app.post('/api/live-sessions', async (req, res) => {
   try {
     const body = req.body as { cwd?: string; referencedProjectIds?: string[]; text?: string; targetId?: string | null };
     const profile = getCurrentProfile();
+    const availableProjectIds = listReferenceableProjectIds();
     const inferredReferencedProjectIds = body.text
       ? resolvePromptReferences({
           text: body.text,
-          availableProjectIds: listProjectIds({ repoRoot: REPO_ROOT, profile }),
+          availableProjectIds,
           tasks: [],
           memoryDocs: [],
           skills: [],
@@ -5724,7 +5727,7 @@ app.post('/api/live-sessions', async (req, res) => {
         }).projectIds
       : [];
     const referencedProjectIds = body.referencedProjectIds && body.referencedProjectIds.length > 0
-      ? body.referencedProjectIds
+      ? body.referencedProjectIds.filter((projectId) => availableProjectIds.includes(projectId))
       : inferredReferencedProjectIds;
     const cwd = resolveConversationCwd({
       repoRoot: REPO_ROOT,
@@ -6084,7 +6087,7 @@ app.get('/api/live-sessions/:id/events', (req, res) => {
 
 function syncConversationProjectReferences(conversationId: string, mentionedProjectIds: string[]): string[] {
   const profile = getCurrentProfile();
-  const availableProjectIds = listProjectIds({ repoRoot: REPO_ROOT, profile });
+  const availableProjectIds = listReferenceableProjectIds();
   const availableProjectIdSet = new Set(availableProjectIds);
   const existingProjectIds = (getConversationProjectLink({
     profile,
@@ -6108,11 +6111,12 @@ function syncConversationProjectReferences(conversationId: string, mentionedProj
 }
 
 function buildReferencedProjectsContext(projectIds: string[]): string {
-  const profile = getCurrentProfile();
+  const currentProfile = getCurrentProfile();
   const lines = projectIds.map((projectId) => {
+    const projectProfile = readProjectProfileById(projectId) ?? currentProfile;
     const paths = resolveProjectPaths({
       repoRoot: REPO_ROOT,
-      profile,
+      profile: projectProfile,
       projectId,
     });
     const lineParts = [`- @${projectId}: ${relative(REPO_ROOT, paths.projectFile)}`];
@@ -6120,9 +6124,12 @@ function buildReferencedProjectsContext(projectIds: string[]): string {
     try {
       const detail = readProjectDetailFromProject({
         repoRoot: REPO_ROOT,
-        profile,
+        profile: projectProfile,
         projectId,
       });
+      if (projectProfile !== currentProfile) {
+        lineParts.push(`  profile: ${projectProfile}`);
+      }
       lineParts.push(`  title: ${detail.project.title}`);
       lineParts.push(`  description: ${detail.project.description}`);
       lineParts.push(`  summary: ${detail.project.summary}`);
@@ -6266,7 +6273,7 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
     }));
     const promptReferences = resolvePromptReferences({
       text,
-      availableProjectIds: listProjectIds({ repoRoot: REPO_ROOT, profile: currentProfile }),
+      availableProjectIds: listReferenceableProjectIds(),
       tasks,
       memoryDocs,
       skills,
@@ -7760,6 +7767,18 @@ function readProjectIndexForSelection(profile: string | 'all') {
 
 function listProjectsForCurrentProfile() {
   return readProjectIndexForSelection(getCurrentProfile()).projects;
+}
+
+function listReferenceableProjectIds(): string[] {
+  return listAllProjectIds({ repoRoot: REPO_ROOT });
+}
+
+function readProjectProfileById(projectId: string): string | null {
+  try {
+    return readProjectOwnerProfile({ repoRoot: REPO_ROOT, projectId });
+  } catch {
+    return null;
+  }
 }
 
 function projectErrorStatus(error: unknown): number {
