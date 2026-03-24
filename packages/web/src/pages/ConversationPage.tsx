@@ -72,7 +72,7 @@ import {
   readPendingConversationPrompt,
   type PendingConversationPrompt,
 } from '../pendingConversationPrompt';
-import { appendPendingQueueBlocks } from '../pendingQueueMessages';
+import { appendPendingInitialPromptBlock, appendPendingQueueBlocks } from '../pendingQueueMessages';
 import { getConversationResumeState } from '../conversationResume';
 import {
   normalizeConversationComposerBehavior,
@@ -1039,12 +1039,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         : ((baseMessages.length > 0 || visibleStreamBlocks.length > 0)
             ? [...baseMessages, ...visibleStreamBlocks]
             : undefined);
+      const liveMessagesWithPendingInitialPrompt = appendPendingInitialPromptBlock(liveMessages, pendingInitialPrompt);
 
-      return appendPendingQueueBlocks(liveMessages, pendingQueue);
+      return appendPendingQueueBlocks(liveMessagesWithPendingInitialPrompt, pendingQueue);
     }
 
     return visibleSessionDetail ? baseMessages : undefined;
-  }, [baseMessages, isLiveSession, pendingQueue, stream.hasSnapshot, visibleSessionDetail, visibleStreamBlocks]);
+  }, [baseMessages, isLiveSession, pendingInitialPrompt, pendingQueue, stream.hasSnapshot, visibleSessionDetail, visibleStreamBlocks]);
   const historicalBlockOffset = stream.hasSnapshot
     ? stream.blockOffset
     : (visibleSessionDetail?.blockOffset ?? 0);
