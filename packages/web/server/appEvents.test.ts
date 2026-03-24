@@ -21,6 +21,7 @@ const ALL_TOPICS = [
   'sync',
   'webUi',
   'executionTargets',
+  'workspace',
 ] as const;
 
 function createTempDir(prefix: string): string {

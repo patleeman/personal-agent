@@ -341,7 +341,6 @@ export function SystemPage() {
     setSync,
     setWebUi,
   } = useSystemStatus();
-  const [initialLoading, setInitialLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [applicationAction, setApplicationAction] = useState<'restart' | 'update' | null>(null);
@@ -349,15 +348,10 @@ export function SystemPage() {
   const [applicationError, setApplicationError] = useState<string | null>(null);
   const [showMoreRuns, setShowMoreRuns] = useState(false);
   const actionTimeoutRef = useRef<number | null>(null);
-  const restartReconnectRef = useRef<{ sawDisconnect: boolean } | null>(null);
-  const attemptedInitialLoadRef = useRef(false);
+  const restartReconnectRef = useRef<{ sawDisconnect: boolean; baselineRevision: string | null; baselineSlot: string | null } | null>(null);
 
-  const refreshAll = useCallback(async (mode: 'initial' | 'manual' = 'manual') => {
-    if (mode === 'initial') {
-      setInitialLoading(true);
-    } else {
-      setRefreshing(true);
-    }
+  const refreshAll = useCallback(async () => {
+    setRefreshing(true);
     setRefreshError(null);
 
     const errors: string[] = [];
@@ -389,37 +383,9 @@ export function SystemPage() {
         setRefreshError(errors.join(' · '));
       }
     } finally {
-      setInitialLoading(false);
       setRefreshing(false);
     }
   }, [setDaemon, setGateway, setRuns, setSync, setWebUi]);
-
-  useEffect(() => {
-    if (daemon && gateway && sync && webUi && runs) {
-      return;
-    }
-
-    if (attemptedInitialLoadRef.current) {
-      return;
-    }
-
-    attemptedInitialLoadRef.current = true;
-    let cancelled = false;
-
-    void (async () => {
-      try {
-        await refreshAll('initial');
-      } catch {
-        if (!cancelled) {
-          setInitialLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [daemon, gateway, refreshAll, runs, sync, webUi]);
 
   function clearActionMonitor() {
     if (actionTimeoutRef.current !== null) {
@@ -434,6 +400,8 @@ export function SystemPage() {
     clearActionMonitor();
     restartReconnectRef.current = {
       sawDisconnect: sseStatus !== 'open',
+      baselineRevision: webUi?.service.deployment?.activeRelease?.revision ?? null,
+      baselineSlot: webUi?.service.deployment?.activeSlot ?? null,
     };
     actionTimeoutRef.current = window.setTimeout(() => {
       actionTimeoutRef.current = null;
@@ -454,13 +422,18 @@ export function SystemPage() {
       return;
     }
 
-    if (!monitor.sawDisconnect) {
+    const currentRevision = webUi?.service.deployment?.activeRelease?.revision ?? null;
+    const currentSlot = webUi?.service.deployment?.activeSlot ?? null;
+    const revisionChanged = currentRevision !== null && currentRevision !== monitor.baselineRevision;
+    const slotChanged = currentSlot !== null && currentSlot !== monitor.baselineSlot;
+
+    if (!monitor.sawDisconnect && !revisionChanged && !slotChanged) {
       return;
     }
 
     clearActionMonitor();
     window.location.reload();
-  }, [sseStatus]);
+  }, [sseStatus, webUi]);
 
   useEffect(() => () => {
     clearActionMonitor();
@@ -543,7 +516,7 @@ export function SystemPage() {
             >
               {applicationAction === 'restart' ? 'Restart requested…' : 'Restart everything'}
             </ToolbarButton>
-            <ToolbarButton onClick={() => { void refreshAll('manual'); }} disabled={applicationAction !== null || refreshing}>
+            <ToolbarButton onClick={() => { void refreshAll(); }} disabled={applicationAction !== null || refreshing}>
               {refreshing ? 'Refreshing…' : '↻ Refresh'}
             </ToolbarButton>
           </>
@@ -572,10 +545,9 @@ export function SystemPage() {
       </PageHeader>
 
       <div className="flex-1 overflow-y-auto px-6 py-4">
-        {initialLoading && !allReady && <LoadingState label="Loading system status…" />}
+        {!allReady && sseStatus !== 'open' && <LoadingState label="Loading system status…" />}
 
-        {(!initialLoading || allReady) && (
-          <div className="space-y-6 pb-5">
+        <div className="space-y-6 pb-5">
             {(applicationMessage || applicationError || refreshError || !canManageApplication) && (
               <div className="space-y-1">
                 {!canManageApplication && webUi && (
@@ -707,7 +679,6 @@ export function SystemPage() {
               )}
             </section>
           </div>
-        )}
       </div>
     </div>
   );
