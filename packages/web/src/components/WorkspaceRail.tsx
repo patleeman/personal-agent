@@ -4,7 +4,6 @@ import { api } from '../api';
 import { useApi } from '../hooks';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import {
-  buildInitialExpandedPaths,
   buildWorkspacePath,
   buildWorkspaceSearch,
   changeShortLabel,
@@ -12,12 +11,14 @@ import {
   collectDirectoryPaths,
   countVisibleTreeFiles,
   filterWorkspaceTree,
+  normalizeWorkspaceRequestedFilePath,
   parentPaths,
   readWorkspaceChangeScopeFromSearch,
   readWorkspaceCwdFromSearch,
   readWorkspaceFileFromSearch,
   readWorkspaceModeFromPathname,
   summarizeChanges,
+  syncWorkspaceExpandedPaths,
   WorkspaceTreeView,
 } from '../workspaceBrowser';
 import type { WorkspaceChangeKind, WorkspaceGitScope, WorkspaceGitStatusSummary } from '../types';
@@ -84,11 +85,25 @@ function groupGitRows(rows: WorkspaceGitRow[]): Array<{ key: WorkspaceGitScope; 
   ].filter((group) => group.rows.length > 0);
 }
 
+function stringSetsEqual(left: Set<string>, right: Set<string>): boolean {
+  if (left.size !== right.size) {
+    return false;
+  }
+
+  for (const value of left) {
+    if (!right.has(value)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function WorkspaceFilesRail() {
   const location = useLocation();
   const navigate = useNavigate();
   const requestedCwd = useMemo(() => readWorkspaceCwdFromSearch(location.search), [location.search]);
-  const selectedFilePath = useMemo(() => readWorkspaceFileFromSearch(location.search), [location.search]);
+  const requestedFilePath = useMemo(() => readWorkspaceFileFromSearch(location.search), [location.search]);
   const [treeQuery, setTreeQuery] = useState('');
   const [showChangedOnly, setShowChangedOnly] = useState(false);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
@@ -98,6 +113,14 @@ function WorkspaceFilesRail() {
   const snapshotApi = useApi(() => api.workspaceSnapshot(requestedCwd ?? undefined), requestedCwd ?? 'default');
   const snapshot = snapshotApi.data;
   const refreshSnapshot = snapshotApi.refetch;
+  const selectedFilePath = useMemo(() => {
+    if (!snapshot || !requestedFilePath) {
+      return requestedFilePath;
+    }
+
+    return normalizeWorkspaceRequestedFilePath(snapshot.root, requestedFilePath);
+  }, [requestedFilePath, snapshot?.root]);
+  const expansionSeedRef = useRef<string | null>(null);
 
   useEffect(() => subscribeWorkspaceChanged(() => {
     void refreshSnapshot({ resetLoading: false });
@@ -117,22 +140,21 @@ function WorkspaceFilesRail() {
   useEffect(() => subscribeWorkspaceEditorDirty(setDirty), []);
 
   useEffect(() => {
-    setExpandedPaths(buildInitialExpandedPaths(snapshot, selectedFilePath));
-  }, [snapshot?.root, snapshot, selectedFilePath]);
-
-  useEffect(() => {
-    if (!selectedFilePath) {
-      return;
-    }
+    const expansionSeed = snapshot ? `${snapshot.root}::${snapshot.focusPath ?? ''}` : null;
+    const reset = expansionSeedRef.current !== expansionSeed;
+    expansionSeedRef.current = expansionSeed;
 
     setExpandedPaths((prev) => {
-      const next = new Set(prev);
-      for (const path of parentPaths(selectedFilePath)) {
-        next.add(path);
-      }
-      return next;
+      const next = syncWorkspaceExpandedPaths({
+        previousPaths: prev,
+        snapshot,
+        selectedFilePath,
+        reset,
+      });
+
+      return stringSetsEqual(prev, next) ? prev : next;
     });
-  }, [selectedFilePath]);
+  }, [selectedFilePath, snapshot]);
 
   const filteredTree = useMemo(
     () => filterWorkspaceTree(snapshot?.tree ?? [], { query: treeQuery, changedOnly: showChangedOnly }),

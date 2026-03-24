@@ -300,6 +300,40 @@ export function buildInitialExpandedPaths(snapshot: {
   return expanded;
 }
 
+export function syncWorkspaceExpandedPaths(input: {
+  previousPaths: Iterable<string>;
+  snapshot: {
+    tree: WorkspaceTreeNode[];
+    focusPath: string | null;
+    changes: Array<{ relativePath: string }>;
+  } | null;
+  selectedFilePath: string | null;
+  reset: boolean;
+}): Set<string> {
+  if (!input.snapshot) {
+    return new Set();
+  }
+
+  if (input.reset) {
+    return buildInitialExpandedPaths(input.snapshot, input.selectedFilePath);
+  }
+
+  const visibleDirectoryPaths = new Set(collectDirectoryPaths(input.snapshot.tree));
+  const expanded = new Set<string>();
+
+  for (const path of input.previousPaths) {
+    if (visibleDirectoryPaths.has(path)) {
+      expanded.add(path);
+    }
+  }
+
+  for (const path of parentPaths(input.selectedFilePath)) {
+    expanded.add(path);
+  }
+
+  return expanded;
+}
+
 export function filterWorkspaceTree(nodes: WorkspaceTreeNode[], options: {
   query: string;
   changedOnly: boolean;
