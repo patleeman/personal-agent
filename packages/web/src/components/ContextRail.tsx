@@ -380,7 +380,7 @@ function formatRecoveryAction(action: string): string {
     case 'none': return 'stable';
     case 'resume': return 'resume';
     case 'rerun': return 'rerun';
-    case 'attention': return 'needs attention';
+    case 'attention': return 'manual review';
     case 'invalid': return 'invalid';
     default: return action;
   }
@@ -2694,8 +2694,8 @@ function ConversationsWorkspaceContext() {
     <div className="px-4 py-4 space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
-          <p className="ui-card-title">Workspace</p>
-          <p className="ui-card-meta">Browse pinned, open, and archived conversations from the main pane. Open a conversation to switch this rail into live session context.</p>
+          <p className="ui-card-title">Overview</p>
+          <p className="ui-card-meta">Browse pinned, open, and archived conversations in the main pane. Open one to switch this rail back into live session context.</p>
         </div>
         <button type="button" onClick={() => { void refetch({ resetLoading: false }); }} className="ui-toolbar-button shrink-0">↻ Refresh</button>
       </div>
@@ -2704,11 +2704,11 @@ function ConversationsWorkspaceContext() {
         <RailMetadataRow label="Pinned" value={pinnedSessions.length} />
         <RailMetadataRow label="Open" value={tabs.length} />
         <RailMetadataRow label="Archived" value={archivedSessions.length} />
-        <RailMetadataRow label="Attention" value={attentionSessions.length} />
+        <RailMetadataRow label="Needs review" value={attentionSessions.length} />
       </div>
 
       <div className="space-y-2 border-t border-border-subtle pt-4">
-        <p className="ui-section-label">Needs attention</p>
+        <p className="ui-section-label">Needs review</p>
         {attentionSessions.length === 0 ? (
           <p className="ui-card-meta">No conversations currently need review.</p>
         ) : (
@@ -2724,7 +2724,7 @@ function ConversationsWorkspaceContext() {
       </div>
 
       <div className="space-y-2 border-t border-border-subtle pt-4">
-        <p className="ui-section-label">Workspace samples</p>
+        <p className="ui-section-label">Open now</p>
         {[
           ...pinnedSessions.map((session) => ({ session, label: 'pinned' })),
           ...tabs.map((session) => ({ session, label: 'open' })),
