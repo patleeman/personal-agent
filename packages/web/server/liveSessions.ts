@@ -28,7 +28,6 @@ import {
 } from './conversationAutoTitle.js';
 import {
   buildConversationAutomationItemPrompt,
-  buildConversationAutomationPostTurnReviewPrompt,
   buildConversationAutomationReviewPrompt,
   loadConversationAutomationState,
   writeConversationAutomationState,
@@ -1067,14 +1066,6 @@ function interruptConversationAutomationStep(
   return document;
 }
 
-function shouldStartConversationAutomationPostTurnReview(document: ConversationAutomationDocument): boolean {
-  if (!document.enabled || document.waitingForUser || document.activeItemId || document.review?.status === 'running') {
-    return false;
-  }
-
-  return document.items.some((item) => item.status === 'pending') || document.review?.status === 'pending';
-}
-
 function shouldStartConversationAutomationReview(document: ConversationAutomationDocument): boolean {
   if (document.items.length === 0 || hasFailedConversationAutomationTodoItem(document) || document.waitingForUser) {
     return false;
@@ -1220,11 +1211,6 @@ function didTurnEndFromConversationAutomation(entry: LiveEntry): boolean {
     && (turn.customType === 'conversation_automation_item' || turn.customType === 'conversation_automation_review');
 }
 
-function didTurnEndFromConversationAutomationPostTurnReview(entry: LiveEntry): boolean {
-  const turn = readLastNonAssistantConversationTurn(entry);
-  return turn?.role === 'custom' && turn.customType === 'conversation_automation_post_turn_review';
-}
-
 function summarizeConversationAutomationState(document: ConversationAutomationDocument): Record<string, unknown> {
   return {
     enabled: document.enabled,
@@ -1295,7 +1281,6 @@ export async function kickConversationAutomation(
         userMessageCount,
         didLastAssistantReplySucceed,
         didAutomationAuthorLastTurn,
-        didAutomationPostTurnReviewLastTurn: didTurnEndFromConversationAutomationPostTurnReview(entry),
         ...summarizeConversationAutomationState(document),
       });
     }
@@ -1308,39 +1293,6 @@ export async function kickConversationAutomation(
       );
       document = saveConversationAutomation(entry, document);
       entry.currentTurnError = null;
-    }
-
-    if (
-      isCompletionTrigger
-      && !didAutomationAuthorLastTurn
-      && !didTurnEndFromConversationAutomationPostTurnReview(entry)
-      && userMessageCount > 1
-      && didLastAssistantReplySucceed
-      && shouldStartConversationAutomationPostTurnReview(document)
-    ) {
-      try {
-        entry.currentTurnError = null;
-        await triggerHiddenPrompt(
-          sessionId,
-          'conversation_automation_post_turn_review',
-          buildConversationAutomationPostTurnReviewPrompt(document),
-          'followUp',
-        );
-        logInfo('queued automation post-turn review', {
-          sessionId,
-          trigger,
-          ...summarizeConversationAutomationState(document),
-        });
-      } catch (error) {
-        logWarn('failed to queue automation post-turn review', {
-          sessionId,
-          trigger,
-          error: error instanceof Error ? { message: error.message, stack: error.stack } : String(error),
-          ...summarizeConversationAutomationState(document),
-        });
-      }
-      entry.lastHandledAutomationCompletionKey = completionKey ?? null;
-      return;
     }
 
     if (isCompletionTrigger && shouldContinueAfterTurnEnd && document.activeItemId) {

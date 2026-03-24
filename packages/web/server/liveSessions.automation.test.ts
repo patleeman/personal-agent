@@ -414,7 +414,7 @@ describe('conversation automation live-session integration', () => {
     expect(sendCustomMessage).not.toHaveBeenCalled();
   });
 
-  it('queues a bookkeeping review after a later user turn when pending items remain', async () => {
+  it('does not queue a bookkeeping follow-up after a later user turn when pending items remain', async () => {
     const stateRoot = createTempDir('pa-live-automation-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
@@ -473,27 +473,10 @@ describe('conversation automation live-session integration', () => {
       id: 'item-1',
       status: 'pending',
     });
-    expect(sendCustomMessage).toHaveBeenCalledWith({
-      customType: 'conversation_automation_post_turn_review',
-      content: expect.stringContaining('Review the automation todo list after the assistant\'s user-facing reply.'),
-      display: false,
-      details: undefined,
-    }, {
-      deliverAs: 'followUp',
-      triggerTurn: true,
-    });
-    expect(sendCustomMessage).toHaveBeenCalledWith({
-      customType: 'conversation_automation_post_turn_review',
-      content: expect.stringContaining('checklist bookkeeping only'),
-      display: false,
-      details: undefined,
-    }, {
-      deliverAs: 'followUp',
-      triggerTurn: true,
-    });
+    expect(sendCustomMessage).not.toHaveBeenCalled();
   });
 
-  it('queues a bookkeeping review on agent_end when turn_end is unavailable', async () => {
+  it('does not queue a bookkeeping follow-up on agent_end when turn_end is unavailable', async () => {
     const stateRoot = createTempDir('pa-live-automation-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
@@ -542,19 +525,10 @@ describe('conversation automation live-session integration', () => {
 
     await kickConversationAutomation('conv-123', 'agent_end');
 
-    expect(sendCustomMessage).toHaveBeenCalledTimes(1);
-    expect(sendCustomMessage).toHaveBeenCalledWith({
-      customType: 'conversation_automation_post_turn_review',
-      content: expect.stringContaining('Review the automation todo list after the assistant\'s user-facing reply.'),
-      display: false,
-      details: undefined,
-    }, {
-      deliverAs: 'followUp',
-      triggerTurn: true,
-    });
+    expect(sendCustomMessage).not.toHaveBeenCalled();
   });
 
-  it('does not queue the same bookkeeping review twice when both turn_end and agent_end fire', async () => {
+  it('does not queue a bookkeeping follow-up when both turn_end and agent_end fire', async () => {
     const stateRoot = createTempDir('pa-live-automation-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
@@ -604,7 +578,7 @@ describe('conversation automation live-session integration', () => {
     await kickConversationAutomation('conv-123', 'turn_end');
     await kickConversationAutomation('conv-123', 'agent_end');
 
-    expect(sendCustomMessage).toHaveBeenCalledTimes(1);
+    expect(sendCustomMessage).not.toHaveBeenCalled();
   });
 
   it('does not start post-turn review after an aborted assistant reply', async () => {
@@ -648,58 +622,6 @@ describe('conversation automation live-session integration', () => {
           getEntries: () => buildMultiUserTurnEntriesWithAssistant({
             assistantStopReason: 'aborted',
           }),
-        },
-        modelRegistry: {
-          getAvailable: () => [],
-          getApiKey: vi.fn(),
-        },
-      },
-    });
-
-    await kickConversationAutomation('conv-123', 'turn_end');
-
-    expect(sendCustomMessage).not.toHaveBeenCalled();
-  });
-
-  it('does not continue automation after a bookkeeping review turn', async () => {
-    const stateRoot = createTempDir('pa-live-automation-');
-    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
-    process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
-
-    const sendCustomMessage = vi.fn(async () => undefined);
-    const pendingItem = createConversationAutomationTodoItem({
-      id: 'item-1',
-      label: 'workflow-checkpoint',
-      skillName: 'workflow-checkpoint',
-      now: '2026-03-18T12:00:00.000Z',
-    });
-
-    writeConversationAutomationState({
-      profile: 'datadog',
-      stateRoot,
-      document: {
-        version: 4,
-        conversationId: 'conv-123',
-        updatedAt: '2026-03-18T12:00:15.000Z',
-        enabled: true,
-        items: [pendingItem],
-      },
-    });
-
-    setLiveEntry('conv-123', {
-      title: 'Automation conversation',
-      currentTurnError: null,
-      session: {
-        state: { messages: [], streamMessage: null },
-        agent: { state: { messages: [] } },
-        getContextUsage: () => null,
-        isStreaming: false,
-        prompt: vi.fn(async () => undefined),
-        steer: vi.fn(async () => undefined),
-        followUp: vi.fn(async () => undefined),
-        sendCustomMessage,
-        sessionManager: {
-          getEntries: () => buildTurnEntries('custom', 'conversation_automation_post_turn_review'),
         },
         modelRegistry: {
           getAvailable: () => [],
