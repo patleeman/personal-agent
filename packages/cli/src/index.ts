@@ -960,8 +960,10 @@ async function doctor(options: DoctorOptions = {}): Promise<number> {
     return 1;
   }
 
+  let runtime: Awaited<ReturnType<typeof preparePiAgentDir>>;
   try {
     await bootstrapStateOrThrow(statePaths);
+    runtime = await preparePiAgentDir({ statePaths });
   } catch (error) {
     const message = (error as Error).message;
     const hint = 'Check filesystem permissions for state directories';
