@@ -34,10 +34,18 @@ export function WorkspacePage() {
   const snapshotApi = useApi(() => api.workspaceSnapshot(requestedCwd ?? undefined), requestedCwd ?? 'default');
   const snapshot = snapshotApi.data;
   const fileApi = useApi(
-    () => (requestedFilePath ? api.workspaceFile(requestedFilePath, snapshot?.cwd ?? requestedCwd ?? undefined) : Promise.resolve(null)),
+    async () => {
+      if (!requestedFilePath) {
+        return null;
+      }
+
+      const detail = await api.workspaceFile(requestedFilePath, snapshot?.cwd ?? requestedCwd ?? undefined);
+      return { requestedFilePath, detail };
+    },
     `${snapshot?.root ?? 'no-root'}::${requestedFilePath ?? 'no-file'}`,
   );
-  const fileDetail = fileApi.data;
+  const fileDetail = fileApi.data?.detail ?? null;
+  const fileDetailMatchesRequest = fileApi.data?.requestedFilePath === requestedFilePath;
 
   const normalizedRequestedFilePath = useMemo(() => {
     if (!snapshot || !requestedFilePath) {
@@ -47,7 +55,13 @@ export function WorkspacePage() {
     return normalizeWorkspaceRequestedFilePath(snapshot.root, requestedFilePath);
   }, [requestedFilePath, snapshot?.root]);
 
-  const selectedFilePath = fileDetail?.relativePath ?? normalizedRequestedFilePath;
+  const selectedFilePath = useMemo(() => {
+    if (normalizedRequestedFilePath && (!fileDetailMatchesRequest || fileDetail?.relativePath !== normalizedRequestedFilePath)) {
+      return normalizedRequestedFilePath;
+    }
+
+    return fileDetail?.relativePath ?? normalizedRequestedFilePath;
+  }, [fileDetail?.relativePath, fileDetailMatchesRequest, normalizedRequestedFilePath]);
 
   const [cwdDraft, setCwdDraft] = useState(requestedCwd ?? '');
   const [draftContent, setDraftContent] = useState('');
@@ -91,14 +105,14 @@ export function WorkspacePage() {
   }, [fileApi.loading, fileDetail, openWorkspaceSearch, requestedFilePath, selectedFilePath, snapshot]);
 
   useEffect(() => {
-    if (fileApi.loading || !fileDetail?.relativePath || !normalizedRequestedFilePath) {
+    if (fileApi.loading || !fileDetailMatchesRequest || !fileDetail?.relativePath || !normalizedRequestedFilePath) {
       return;
     }
 
     if (fileDetail.relativePath !== normalizedRequestedFilePath) {
       openWorkspaceSearch({ file: fileDetail.relativePath }, true);
     }
-  }, [fileApi.loading, fileDetail?.relativePath, normalizedRequestedFilePath, openWorkspaceSearch]);
+  }, [fileApi.loading, fileDetail?.relativePath, fileDetailMatchesRequest, normalizedRequestedFilePath, openWorkspaceSearch]);
 
   useEffect(() => {
     if (fileDetail?.content !== null && fileDetail?.content !== undefined) {
@@ -148,7 +162,7 @@ export function WorkspacePage() {
     setSaveError(null);
     try {
       const saved = await api.workspaceFileSave(selectedFilePath, draftContent, snapshot?.cwd ?? requestedCwd ?? undefined);
-      fileApi.replaceData(saved);
+      fileApi.replaceData({ requestedFilePath: requestedFilePath ?? selectedFilePath, detail: saved });
       await snapshotApi.refetch({ resetLoading: false });
       emitWorkspaceChanged();
     } catch (error) {
@@ -202,7 +216,10 @@ export function WorkspacePage() {
     ].join(' · ');
   }, [snapshot]);
 
-  const showingFileLoadingState = Boolean(normalizedRequestedFilePath && fileApi.loading && fileDetail?.relativePath !== normalizedRequestedFilePath);
+  const showingFileLoadingState = Boolean(
+    normalizedRequestedFilePath
+      && (!fileDetailMatchesRequest || fileApi.loading || fileDetail?.relativePath !== normalizedRequestedFilePath),
+  );
 
   const handleWorkspaceInvalidation = useCallback(async () => {
     const now = Date.now();

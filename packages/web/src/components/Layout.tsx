@@ -444,7 +444,7 @@ export function Layout() {
 
           <>
             <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
-            <div style={{ width: railWidth }} className="flex-shrink-0 flex flex-col overflow-hidden select-text">
+            <div style={{ width: railWidth }} className="relative z-10 flex-shrink-0 flex flex-col overflow-hidden select-text">
               <ContextRail />
             </div>
           </>

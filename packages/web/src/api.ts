@@ -1,15 +1,52 @@
 import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationCwdChangeResult, ConversationExecutionState, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DisplayBlock, DurableRunDetailResult, DurableRunListResult, ExecutionTargetPathMapping, ExecutionTargetsState, FolderPickerResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, McpServerDetail, McpToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, MemoryWorkItem, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectDiagnostics, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteConversationConnectionState, RemoteFolderListing, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SyncState, ToolsState, WebUiState, WorkspaceCommitDraftResult, WorkspaceFileDetail, WorkspaceGitCommitResult, WorkspaceGitDiffDetail, WorkspaceGitScope, WorkspaceGitStatusSummary, WorkspaceSnapshot } from './types';
 import { recordApiTiming } from './perfDiagnostics';
 
+// ── Retry helpers for transient network errors (e.g. server restarts) ────────
+
+const RETRY_DELAYS_MS = [1_000, 2_000, 4_000];
+
+function isTransientNetworkError(error: unknown): boolean {
+  if (error instanceof TypeError && /failed to fetch|network|ECONNREFUSED|ECONNRESET/i.test(error.message)) {
+    return true;
+  }
+
+  return false;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWithRetry(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      return await fetch(input, init);
+    } catch (error) {
+      lastError = error;
+      if (!isTransientNetworkError(error) || attempt >= RETRY_DELAYS_MS.length) {
+        throw error;
+      }
+
+      await sleep(RETRY_DELAYS_MS[attempt] as number);
+    }
+  }
+
+  throw lastError;
+}
+
+// ── API helpers ──────────────────────────────────────────────────────────────
+
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch('/api' + path, { cache: 'no-store' });
+  const res = await fetchWithRetry('/api' + path, { cache: 'no-store' });
   recordApiTiming('/api' + path, res);
   if (!res.ok) throw new Error(await readApiError(res));
   return res.json() as Promise<T>;
 }
 
 async function post<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch('/api' + path, {
+  const res = await fetchWithRetry('/api' + path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -20,7 +57,7 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
 }
 
 async function patch<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch('/api' + path, {
+  const res = await fetchWithRetry('/api' + path, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -31,7 +68,7 @@ async function patch<T>(path: string, body?: unknown): Promise<T> {
 }
 
 async function del<T>(path: string): Promise<T> {
-  const res = await fetch('/api' + path, { method: 'DELETE' });
+  const res = await fetchWithRetry('/api' + path, { method: 'DELETE' });
   recordApiTiming('/api' + path, res);
   if (!res.ok) throw new Error(await readApiError(res));
   return res.json() as Promise<T>;
