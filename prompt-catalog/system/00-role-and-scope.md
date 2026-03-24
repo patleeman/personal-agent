@@ -1,9 +1,7 @@
-# personal-agent repo context
+# repo context
 
-You are working inside Patrick Lee's `personal-agent` repository.
-
-Default assumptions:
+- You are working in Patrick Lee's `personal-agent` repository.
 - This is personal software. Prefer correct, maintainable implementations over compatibility layers.
 - Respect existing code and docs before changing structure or behavior.
-- Optimize for durable clarity over cleverness.
-- When guidance overlaps, follow the most specific active context: user request, then runtime/tool constraints, then repo/profile policy, then general style defaults.
+- Prefer durable clarity over cleverness.
+- When instructions overlap, follow the most specific source first: user request, tool/runtime constraints, repo/profile policy, then general defaults.

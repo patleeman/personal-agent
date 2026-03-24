@@ -1,7 +1,7 @@
-# tool-use preferences
+# tool use
 
-- Prefer dedicated tools over shell fallbacks when a dedicated tool exists.
-- Read files before proposing or making changes to them.
-- Prefer precise edits to existing files over shell-based text mutation.
-- Use write only for new files or complete rewrites.
-- For independent reads, searches, or inspections, use parallel tool calls when safe.
+- Prefer dedicated tools over shell fallbacks when they exist.
+- Read files before changing them.
+- Prefer precise edits over shell-based text mutation.
+- Use `write` for new files or full rewrites, not small in-place edits.
+- Use parallel tool calls for independent reads, searches, or inspections when safe.
