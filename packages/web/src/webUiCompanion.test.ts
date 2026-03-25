@@ -10,8 +10,8 @@ describe('buildWebUiCompanionAccessSummary', () => {
     });
 
     expect(summary).toEqual(expect.objectContaining({
-      localUrl: 'http://127.0.0.1:3742/app/conversations',
-      tailnetUrl: 'https://agent.tail.ts.net/app/conversations',
+      localUrl: 'http://127.0.0.1:3742/app/inbox',
+      tailnetUrl: 'https://agent.tail.ts.net/app/inbox',
       secureOriginReady: true,
       statusLabel: 'https-ready',
     }));

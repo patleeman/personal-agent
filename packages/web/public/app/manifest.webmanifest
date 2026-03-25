@@ -3,7 +3,7 @@
   "name": "Pi Companion",
   "short_name": "Pi",
   "description": "Installable companion app for live personal-agent conversations.",
-  "start_url": "/app/conversations",
+  "start_url": "/app/inbox",
   "scope": "/app/",
   "display": "standalone",
   "background_color": "#0b1020",

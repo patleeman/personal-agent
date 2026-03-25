@@ -78,8 +78,12 @@ const MemoriesPage = lazy(() => import('./pages/MemoriesPage').then((module) => 
 const WorkspacePage = lazy(() => import('./pages/WorkspacePage').then((module) => ({ default: module.WorkspacePage })));
 const WorkspaceChangesPage = lazy(() => import('./pages/WorkspaceChangesPage').then((module) => ({ default: module.WorkspaceChangesPage })));
 const CompanionLayout = lazy(() => import('./companion/CompanionLayout').then((module) => ({ default: module.CompanionLayout })));
+const CompanionInboxPage = lazy(() => import('./companion/CompanionInboxPage').then((module) => ({ default: module.CompanionInboxPage })));
 const CompanionConversationsPage = lazy(() => import('./companion/CompanionConversationsPage').then((module) => ({ default: module.CompanionConversationsPage })));
 const CompanionConversationPage = lazy(() => import('./companion/CompanionConversationPage').then((module) => ({ default: module.CompanionConversationPage })));
+const CompanionTasksPage = lazy(() => import('./companion/CompanionTasksPage').then((module) => ({ default: module.CompanionTasksPage })));
+const CompanionTaskDetailPage = lazy(() => import('./companion/CompanionTaskDetailPage').then((module) => ({ default: module.CompanionTaskDetailPage })));
+const CompanionSystemPage = lazy(() => import('./companion/CompanionSystemPage').then((module) => ({ default: module.CompanionSystemPage })));
 const CompanionProjectsPage = lazy(() => import('./companion/CompanionProjectsPage').then((module) => ({ default: module.CompanionProjectsPage })));
 const CompanionProjectDetailPage = lazy(() => import('./companion/CompanionProjectDetailPage').then((module) => ({ default: module.CompanionProjectDetailPage })));
 const CompanionMemoriesPage = lazy(() => import('./companion/CompanionMemoriesPage').then((module) => ({ default: module.CompanionMemoriesPage })));
@@ -425,9 +429,13 @@ export function App() {
                 <BrowserRouter>
                   <Routes>
                     <Route path="app/*" element={suspendRoute(<CompanionRouteValidationBoundary />)}>
-                      <Route index element={<Navigate to="/app/conversations" replace />} />
+                      <Route index element={<Navigate to="/app/inbox" replace />} />
+                      <Route path="inbox" element={suspendRoute(<CompanionInboxPage />)} />
                       <Route path="conversations" element={suspendRoute(<CompanionConversationsPage />)} />
                       <Route path="conversations/:id" element={suspendRoute(<CompanionConversationPage />)} />
+                      <Route path="tasks" element={suspendRoute(<CompanionTasksPage />)} />
+                      <Route path="tasks/:id" element={suspendRoute(<CompanionTaskDetailPage />)} />
+                      <Route path="system" element={suspendRoute(<CompanionSystemPage />)} />
                       <Route path="projects" element={suspendRoute(<CompanionProjectsPage />)} />
                       <Route path="projects/:id" element={suspendRoute(<CompanionProjectDetailPage />)} />
                       <Route path="memories" element={suspendRoute(<CompanionMemoriesPage />)} />
