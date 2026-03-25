@@ -1,6 +1,7 @@
-import { type ReactNode, useCallback, useMemo, useState } from 'react';
+import { type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { cx } from '../components/ui';
 import { getConversationDisplayTitle } from '../conversationTitle';
 import { useAppData, useLiveTitles, useSseConnection } from '../contexts';
 import { useApi } from '../hooks';
@@ -56,6 +57,20 @@ function connectionStatusDotClass(status: SseConnectionStatus): string {
       return 'bg-dim/70';
   }
 }
+
+const COMPANION_TAP_HIGHLIGHT_COLOR = 'rgba(var(--color-accent) / 0.14)';
+const COMPANION_TOUCH_BUTTON_STYLE = {
+  WebkitTapHighlightColor: COMPANION_TAP_HIGHLIGHT_COLOR,
+  touchAction: 'manipulation',
+} as const;
+const COMPANION_TOUCH_ROW_STYLE = {
+  WebkitTapHighlightColor: COMPANION_TAP_HIGHLIGHT_COLOR,
+  touchAction: 'pan-y',
+} as const;
+const SESSION_MESSAGE_COUNT_FORMATTER = new Intl.NumberFormat();
+const COMPANION_ROW_SWIPE_SLOP = 12;
+const COMPANION_ROW_SWIPE_REVEAL_THRESHOLD = 48;
+const COMPANION_ROW_SWIPE_HIDE_THRESHOLD = 28;
 
 function buildCompanionOverviewLabel(input: {
   total: number;
@@ -146,7 +161,8 @@ function HeaderIconButton({
       disabled={disabled}
       aria-label={label}
       title={label}
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border-default bg-surface text-secondary transition-colors hover:border-accent/40 hover:text-primary disabled:cursor-default disabled:opacity-45"
+      className="flex h-10 w-10 shrink-0 select-none items-center justify-center rounded-full border border-border-default bg-surface text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/40 hover:text-primary active:scale-[0.97] active:border-accent/45 active:text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45 disabled:cursor-default disabled:opacity-45"
+      style={COMPANION_TOUCH_BUTTON_STYLE}
     >
       {children}
     </button>
@@ -228,18 +244,249 @@ function buildSessionFlags(session: SessionMeta): string[] {
   return flags;
 }
 
+export function getCompanionConversationRowSwipeIntent(input: {
+  deltaX: number;
+  deltaY: number;
+  actionsRevealed: boolean;
+}): 'none' | 'reveal' | 'hide' {
+  const horizontalDelta = Math.abs(input.deltaX);
+  const verticalDelta = Math.abs(input.deltaY);
+
+  if (horizontalDelta < COMPANION_ROW_SWIPE_SLOP || horizontalDelta <= verticalDelta) {
+    return 'none';
+  }
+
+  if (!input.actionsRevealed && input.deltaX <= -COMPANION_ROW_SWIPE_REVEAL_THRESHOLD) {
+    return 'reveal';
+  }
+
+  if (input.actionsRevealed && input.deltaX >= COMPANION_ROW_SWIPE_HIDE_THRESHOLD) {
+    return 'hide';
+  }
+
+  return 'none';
+}
+
+function CompanionConversationRow({
+  session,
+  inWorkspace,
+  actionBusy,
+  actionsRevealed,
+  onSetArchived,
+  onToggleActions,
+}: {
+  session: SessionMeta;
+  inWorkspace: boolean;
+  actionBusy: boolean;
+  actionsRevealed: boolean;
+  onSetArchived: (sessionId: string, archived: boolean) => void;
+  onToggleActions: (open: boolean) => void;
+}) {
+  const gestureRef = useRef<{ pointerId: number; startX: number; startY: number } | null>(null);
+  const suppressClickRef = useRef(false);
+  const flags = buildSessionFlags(session);
+  const titleText = getConversationDisplayTitle(session.title);
+  const archiveActionLabel = inWorkspace ? 'Archive' : 'Open';
+  const formattedMessageCount = SESSION_MESSAGE_COUNT_FORMATTER.format(session.messageCount);
+  const messageCountLabel = `${formattedMessageCount} ${session.messageCount === 1 ? 'message' : 'messages'}`;
+  const actionsId = `companion-conversation-actions-${session.id}`;
+  const toggleActionsLabel = `${actionsRevealed ? 'Hide' : 'Show'} actions for ${titleText}`;
+
+  const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLAnchorElement>) => {
+    if (event.pointerType === 'mouse' || event.button !== 0) {
+      return;
+    }
+
+    suppressClickRef.current = false;
+    gestureRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+    };
+  }, []);
+
+  const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLAnchorElement>) => {
+    const gesture = gestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const deltaX = event.clientX - gesture.startX;
+    const deltaY = event.clientY - gesture.startY;
+    if (Math.abs(deltaX) > COMPANION_ROW_SWIPE_SLOP && Math.abs(deltaX) > Math.abs(deltaY)) {
+      suppressClickRef.current = true;
+    }
+  }, []);
+
+  const handlePointerUp = useCallback((event: ReactPointerEvent<HTMLAnchorElement>) => {
+    const gesture = gestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const intent = getCompanionConversationRowSwipeIntent({
+      deltaX: event.clientX - gesture.startX,
+      deltaY: event.clientY - gesture.startY,
+      actionsRevealed,
+    });
+
+    if (intent === 'reveal') {
+      suppressClickRef.current = true;
+      onToggleActions(true);
+    } else if (intent === 'hide') {
+      suppressClickRef.current = true;
+      onToggleActions(false);
+    }
+
+    gestureRef.current = null;
+  }, [actionsRevealed, onToggleActions]);
+
+  const handlePointerCancel = useCallback(() => {
+    gestureRef.current = null;
+    suppressClickRef.current = false;
+  }, []);
+
+  const handleConversationClick = useCallback((event: ReactMouseEvent<HTMLAnchorElement>) => {
+    if (suppressClickRef.current) {
+      event.preventDefault();
+      suppressClickRef.current = false;
+      return;
+    }
+
+    if (actionsRevealed) {
+      event.preventDefault();
+      onToggleActions(false);
+    }
+  }, [actionsRevealed, onToggleActions]);
+
+  return (
+    <div className="relative overflow-hidden border-b border-border-subtle last:border-b-0">
+      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-4">
+        <div id={actionsId} role="group" aria-label={`Actions for ${titleText}`} className="pointer-events-none">
+          <button
+            type="button"
+            onClick={() => {
+              onToggleActions(false);
+              onSetArchived(session.id, inWorkspace);
+            }}
+            disabled={!actionsRevealed || actionBusy}
+            aria-label={`${archiveActionLabel} conversation`}
+            title={`${archiveActionLabel} conversation`}
+            className={cx(
+              'pointer-events-auto flex h-[3.5rem] w-[4.5rem] select-none flex-col items-center justify-center gap-1 rounded-[1.1rem] text-[10px] font-medium leading-none transition-[transform,background-color,color,opacity] duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45 disabled:pointer-events-none disabled:opacity-40',
+              inWorkspace
+                ? 'bg-warning/12 text-warning hover:bg-warning/18 active:scale-[0.97]'
+                : 'bg-success/12 text-success hover:bg-success/18 active:scale-[0.97]',
+            )}
+            style={COMPANION_TOUCH_BUTTON_STYLE}
+          >
+            {inWorkspace ? (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 6h18" />
+                <path d="M6 10v8h12v-8" />
+                <path d="m8 10 4 4 4-4" />
+                <path d="M12 4v9" />
+              </svg>
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M3 18h18" />
+                <path d="M6 6v8h12V6" />
+                <path d="m8 10 4-4 4 4" />
+                <path d="M12 20V7" />
+              </svg>
+            )}
+            <span>{archiveActionLabel}</span>
+          </button>
+        </div>
+      </div>
+
+      <div className={cx(
+        'relative flex items-start gap-1 bg-base px-4 py-2.5 transition-transform duration-150 ease-out',
+        actionsRevealed ? '-translate-x-[5rem]' : 'translate-x-0',
+      )}>
+        <Link
+          to={buildCompanionConversationPath(session.id)}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          onClick={handleConversationClick}
+          className="min-w-0 flex-1 select-none rounded-[1.1rem] px-1 py-1 transition-[transform,color,background-color] duration-150 hover:text-primary active:scale-[0.99] active:bg-elevated/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45"
+          style={COMPANION_TOUCH_ROW_STYLE}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h3 className="truncate text-[15px] font-medium leading-tight text-primary">{titleText}</h3>
+                {session.attentionUnreadMessageCount && session.attentionUnreadMessageCount > 0 ? (
+                  <span className="shrink-0 text-[10.5px] font-mono text-warning">+{session.attentionUnreadMessageCount}</span>
+                ) : null}
+              </div>
+              {flags.length > 0 ? (
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] text-dim/85">
+                  {flags.map((flag) => (
+                    <span key={flag} className="uppercase tracking-[0.12em]">{flag}</span>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="shrink-0 text-right text-[10.5px] text-dim tabular-nums">
+              <div>{formatSessionActivityAt(session)}</div>
+              <div className="mt-1 inline-flex items-center justify-end gap-1">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M7 18.5c-2.2 0-4-1.7-4-3.8V7.8C3 5.7 4.8 4 7 4h10c2.2 0 4 1.7 4 3.8v6.9c0 2.1-1.8 3.8-4 3.8H11l-4 2.5v-2.5H7Z" />
+                </svg>
+                <span aria-label={messageCountLabel}>{formattedMessageCount}</span>
+              </div>
+            </div>
+          </div>
+        </Link>
+
+        <button
+          type="button"
+          onClick={() => onToggleActions(!actionsRevealed)}
+          aria-label={toggleActionsLabel}
+          aria-controls={actionsId}
+          aria-expanded={actionsRevealed}
+          title={toggleActionsLabel}
+          className="mt-0.5 flex h-9 w-9 shrink-0 select-none items-center justify-center rounded-full text-dim transition-[transform,color,background-color] duration-150 hover:bg-elevated hover:text-primary active:scale-[0.97] active:bg-elevated/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45"
+          style={COMPANION_TOUCH_BUTTON_STYLE}
+        >
+          {actionsRevealed ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 6 6 18" />
+              <path d="m6 6 12 12" />
+            </svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="1.5" />
+              <circle cx="19" cy="12" r="1.5" />
+              <circle cx="5" cy="12" r="1.5" />
+            </svg>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function SessionSection({
   title,
   sessions,
   workspaceSessionIds,
   actionBusyId,
+  revealedActionId,
   onSetArchived,
+  onRevealActions,
 }: {
   title: string;
   sessions: SessionMeta[];
   workspaceSessionIds: ReadonlySet<string> | null;
   actionBusyId: string | null;
+  revealedActionId: string | null;
   onSetArchived: (sessionId: string, archived: boolean) => void;
+  onRevealActions: (sessionId: string | null) => void;
 }) {
   if (sessions.length === 0) {
     return null;
@@ -249,71 +496,17 @@ function SessionSection({
     <section className="pt-5 first:pt-0">
       <h2 className="px-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-dim/70">{title}</h2>
       <div className="mt-2 border-y border-border-subtle">
-        {sessions.map((session) => {
-          const flags = buildSessionFlags(session);
-          const titleText = getConversationDisplayTitle(session.title);
-          const inWorkspace = workspaceSessionIds?.has(session.id) ?? false;
-          const archiveActionLabel = inWorkspace ? 'Archive' : 'Open';
-          const archiveActionBusy = actionBusyId === session.id;
-
-          return (
-            <div key={session.id} className="border-b border-border-subtle px-4 py-3.5 last:border-b-0">
-              <div className="flex items-start gap-3">
-                <Link
-                  to={buildCompanionConversationPath(session.id)}
-                  className="min-w-0 flex-1 transition-colors hover:text-primary"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="truncate text-[15px] font-medium leading-tight text-primary">{titleText}</h3>
-                        {session.attentionUnreadMessageCount && session.attentionUnreadMessageCount > 0 ? (
-                          <span className="shrink-0 text-[11px] font-mono text-warning">+{session.attentionUnreadMessageCount}</span>
-                        ) : null}
-                      </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-dim">
-                        {flags.map((flag) => (
-                          <span key={flag} className="uppercase tracking-[0.12em] text-dim/85">{flag}</span>
-                        ))}
-                        <span>{session.messageCount} {session.messageCount === 1 ? 'message' : 'messages'}</span>
-                        <span>{formatSessionActivityAt(session)}</span>
-                      </div>
-                    </div>
-                    <span className="pt-0.5 text-accent" aria-hidden="true">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="m9 6 6 6-6 6" />
-                      </svg>
-                    </span>
-                  </div>
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => onSetArchived(session.id, inWorkspace)}
-                  disabled={archiveActionBusy}
-                  aria-label={archiveActionBusy ? `${archiveActionLabel} conversation` : `${archiveActionLabel} conversation`}
-                  title={archiveActionBusy ? `${archiveActionLabel} conversation` : `${archiveActionLabel} conversation`}
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border-default text-secondary transition-colors hover:border-accent/35 hover:text-primary disabled:cursor-default disabled:opacity-45"
-                >
-                  {inWorkspace ? (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M3 6h18" />
-                      <path d="M6 10v8h12v-8" />
-                      <path d="m8 10 4 4 4-4" />
-                      <path d="M12 4v9" />
-                    </svg>
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="M3 18h18" />
-                      <path d="M6 6v8h12V6" />
-                      <path d="m8 10 4-4 4 4" />
-                      <path d="M12 20V7" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-            </div>
-          );
-        })}
+        {sessions.map((session) => (
+          <CompanionConversationRow
+            key={session.id}
+            session={session}
+            inWorkspace={workspaceSessionIds?.has(session.id) ?? false}
+            actionBusy={actionBusyId === session.id}
+            actionsRevealed={revealedActionId === session.id}
+            onSetArchived={onSetArchived}
+            onToggleActions={(open) => onRevealActions(open ? session.id : null)}
+          />
+        ))}
       </div>
     </section>
   );
@@ -336,6 +529,7 @@ export function CompanionConversationsPage() {
   } = useCompanionLayoutContext();
   const [creating, setCreating] = useState(false);
   const [actionBusyId, setActionBusyId] = useState<string | null>(null);
+  const [revealedActionId, setRevealedActionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const {
     data: openTabs,
@@ -390,6 +584,7 @@ export function CompanionConversationsPage() {
       return;
     }
 
+    setRevealedActionId((current) => (current === sessionId ? null : current));
     setActionBusyId(sessionId);
     setError(null);
     try {
@@ -480,15 +675,15 @@ export function CompanionConversationsPage() {
             </div>
           ) : (
             <>
-              <SessionSection title="Live now" sessions={liveSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} onSetArchived={handleSetArchived} />
-              <SessionSection title="Needs review" sessions={needsReviewSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} onSetArchived={handleSetArchived} />
+              <SessionSection title="Live now" sessions={liveSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onRevealActions={setRevealedActionId} />
+              <SessionSection title="Needs review" sessions={needsReviewSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onRevealActions={setRevealedActionId} />
               {workspaceSectionsKnown ? (
                 <>
-                  <SessionSection title="Active workspace" sessions={activeSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} onSetArchived={handleSetArchived} />
-                  <SessionSection title="Archived" sessions={archivedSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} onSetArchived={handleSetArchived} />
+                  <SessionSection title="Active workspace" sessions={activeSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onRevealActions={setRevealedActionId} />
+                  <SessionSection title="Archived" sessions={archivedSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onRevealActions={setRevealedActionId} />
                 </>
               ) : (
-                <SessionSection title={liveSessions.length > 0 || needsReviewSessions.length > 0 ? 'Recent' : 'Conversations'} sessions={recentSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} onSetArchived={handleSetArchived} />
+                <SessionSection title={liveSessions.length > 0 || needsReviewSessions.length > 0 ? 'Recent' : 'Conversations'} sessions={recentSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onRevealActions={setRevealedActionId} />
               )}
             </>
           )}
