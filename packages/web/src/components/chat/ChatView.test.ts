@@ -143,6 +143,26 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('<code');
   });
 
+  it('renders linked runs as left-aligned action rows instead of inline inspect ids', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'tool_use',
+        ts: '2026-03-11T18:00:00.000Z',
+        tool: 'bash',
+        input: { command: 'npm --prefix packages/web run start' },
+        output: 'Inspect pa runs show run-continuous-conversations-next-chunk-ui-2026-03-25T00-53-25-347Z-903aa31b',
+        status: 'running',
+      }],
+      isStreaming: true,
+      onOpenRun: () => undefined,
+    }));
+
+    expect(html).toContain('Open Background Run');
+    expect(html).toContain('Continuous conversations next chunk ui');
+    expect(html).toContain('text-left');
+    expect(html).toContain('linked run');
+  });
+
   it('renders ask_user_question tool calls as questionnaire cards with navigation and submit', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: [{

@@ -1052,6 +1052,68 @@ function AskUserQuestionToolBlock({
   );
 }
 
+function summarizeLinkedRunTail(value: string): string | null {
+  let segments = value
+    .split('-')
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0);
+
+  const timestampIndex = segments.findIndex((segment) => /^\d{4}$/.test(segment) || /^\d{4}T\d+/i.test(segment));
+  if (timestampIndex >= 0) {
+    segments = segments.slice(0, timestampIndex);
+  }
+
+  while (segments.length > 0) {
+    const last = segments[segments.length - 1] ?? '';
+    if (/^[a-f0-9]{6,}$/i.test(last) || /^\d+$/.test(last)) {
+      segments = segments.slice(0, -1);
+      continue;
+    }
+    break;
+  }
+
+  const summary = segments.join(' ').trim();
+  if (!summary) {
+    return null;
+  }
+
+  const compact = summary.replace(/\s+/g, '');
+  if (/^[a-f0-9]+$/i.test(compact) && compact.length >= 8) {
+    return null;
+  }
+
+  return summary.charAt(0).toUpperCase() + summary.slice(1);
+}
+
+function describeLinkedRun(runId: string): { title: string; detail: string | null } {
+  if (runId.startsWith('conversation-live-')) {
+    return { title: 'Conversation Run', detail: null };
+  }
+
+  if (runId.startsWith('conversation-deferred-resume-')) {
+    return { title: 'Deferred Resume', detail: null };
+  }
+
+  if (runId.startsWith('task-')) {
+    return {
+      title: 'Scheduled Task',
+      detail: summarizeLinkedRunTail(runId.slice('task-'.length)),
+    };
+  }
+
+  if (runId.startsWith('run-')) {
+    return {
+      title: 'Background Run',
+      detail: summarizeLinkedRunTail(runId.slice('run-'.length)),
+    };
+  }
+
+  return {
+    title: 'Linked Run',
+    detail: summarizeLinkedRunTail(runId),
+  };
+}
+
 function ToolBlock({
   block,
   autoOpen,
@@ -1157,27 +1219,45 @@ function ToolBlock({
       </button>
 
       {runIds.length > 0 && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-inherit bg-black/5 px-3 py-2 text-[11px]">
-          <span className="uppercase tracking-[0.14em] opacity-40">runs</span>
-          {runIds.map((runId) => {
-            const isActiveRun = activeRunId === runId;
-            return (
-              <button
-                key={runId}
-                type="button"
-                onClick={() => { onOpenRun?.(runId); }}
-                disabled={!onOpenRun}
-                className={cx(
-                  'font-mono transition-colors',
-                  isActiveRun ? 'text-primary' : 'text-accent hover:text-accent/80',
-                  !onOpenRun && 'cursor-default text-dim',
-                )}
-                title={runId}
-              >
-                {isActiveRun ? 'opened' : 'inspect'} {runId}
-              </button>
-            );
-          })}
+        <div className="border-t border-inherit bg-black/5 px-3 py-2.5 text-[11px] font-sans">
+          <p className="mb-1.5 uppercase tracking-[0.14em] opacity-40">
+            {runIds.length === 1 ? 'linked run' : 'linked runs'}
+          </p>
+          <div className="space-y-1.5">
+            {runIds.map((runId) => {
+              const isActiveRun = activeRunId === runId;
+              const linkedRun = describeLinkedRun(runId);
+              const headline = isActiveRun
+                ? `Opened ${linkedRun.title}`
+                : onOpenRun
+                  ? `Open ${linkedRun.title}`
+                  : linkedRun.title;
+              return (
+                <button
+                  key={runId}
+                  type="button"
+                  onClick={() => { onOpenRun?.(runId); }}
+                  disabled={!onOpenRun}
+                  className={cx(
+                    'w-full rounded-md px-2.5 py-2 text-left transition-colors',
+                    onOpenRun ? 'hover:bg-black/5' : 'cursor-default',
+                    isActiveRun ? 'bg-black/10 text-primary' : 'text-accent',
+                    !onOpenRun && 'text-dim',
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium leading-4 text-current">{headline}</p>
+                      {linkedRun.detail && (
+                        <p className="mt-1 truncate text-[10px] leading-4 text-secondary/80">{linkedRun.detail}</p>
+                      )}
+                    </div>
+                    <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] opacity-45">{isActiveRun ? 'open' : onOpenRun ? 'show' : 'linked'}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
