@@ -7,6 +7,7 @@ import { useApi } from '../hooks.js';
 import type { SessionMeta } from '../types.js';
 import {
   CompanionConversationsPage,
+  getCompanionConversationRowSwipeIntent,
   partitionCompanionSessions,
   sortCompanionSessions,
 } from './CompanionConversationsPage.js';
@@ -61,21 +62,52 @@ describe('partitionCompanionSessions', () => {
   });
 });
 
+describe('getCompanionConversationRowSwipeIntent', () => {
+  it('reveals actions after a strong left swipe', () => {
+    expect(getCompanionConversationRowSwipeIntent({ deltaX: -64, deltaY: 8, actionsRevealed: false })).toBe('reveal');
+  });
+
+  it('hides actions after a right swipe when the row is already open', () => {
+    expect(getCompanionConversationRowSwipeIntent({ deltaX: 36, deltaY: 6, actionsRevealed: true })).toBe('hide');
+  });
+
+  it('ignores mostly vertical gestures', () => {
+    expect(getCompanionConversationRowSwipeIntent({ deltaX: -70, deltaY: 88, actionsRevealed: false })).toBe('none');
+  });
+});
+
 describe('CompanionConversationsPage', () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
   const originalConsoleError = console.error;
 
   beforeEach(() => {
-    vi.mocked(useApi).mockReturnValue({
-      data: {
-        sessionIds: ['active-1'],
-        pinnedSessionIds: [],
-      },
-      loading: false,
-      refreshing: false,
-      error: null,
-      refetch: vi.fn(),
-      replaceData: vi.fn(),
+    vi.mocked(useApi).mockImplementation((_, cacheKey) => {
+      if (cacheKey === 'companion-auth-session') {
+        return {
+          data: {
+            session: {
+              deviceLabel: 'Test companion',
+            },
+          },
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+          replaceData: vi.fn(),
+        };
+      }
+
+      return {
+        data: {
+          sessionIds: ['active-1'],
+          pinnedSessionIds: [],
+        },
+        loading: false,
+        refreshing: false,
+        error: null,
+        refetch: vi.fn(),
+        replaceData: vi.fn(),
+      };
     });
 
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((message?: unknown, ...args: unknown[]) => {
@@ -140,6 +172,7 @@ describe('CompanionConversationsPage', () => {
     expect(html).toContain('Archived transcript');
     expect(html).toContain('aria-label="Archive conversation"');
     expect(html).toContain('aria-label="Open conversation"');
+    expect(html).toContain('aria-label="Show actions for Stored transcript"');
     expect(html).not.toContain('--Users-patrick-workingdir-personal-agent--');
     expect(html.indexOf('Live title from stream')).toBeLessThan(html.indexOf('Review me'));
     expect(html.indexOf('Review me')).toBeLessThan(html.indexOf('Stored transcript'));
