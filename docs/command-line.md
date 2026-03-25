@@ -328,7 +328,7 @@ Synced roots include:
 - `projects/**`
 - `pi-agent/sessions/**`
 
-Machine-local runtime files such as auth, inbox state, conversation attention, deferred resumes, generated prompt materialization, and `bin/**` are not synced.
+Machine-local runtime files such as auth, inbox state, deferred resumes, generated prompt materialization, and `bin/**` are not synced. Conversation attention read-state is synced so “needs review” follows across machines.
 
 See [Sync Guide](./sync.md).
 

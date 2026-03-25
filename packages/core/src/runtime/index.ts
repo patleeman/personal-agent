@@ -20,6 +20,7 @@ export {
   getSyncRoot,
   getDurablePiAgentDir,
   getDurableSessionsDir,
+  getDurableConversationAttentionDir,
   getDurableProfilesDir,
   getDurableAgentsDir,
   getDurableSettingsDir,

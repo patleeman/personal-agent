@@ -12,6 +12,7 @@ import {
   getSyncRoot,
   getDurablePiAgentDir,
   getDurableSessionsDir,
+  getDurableConversationAttentionDir,
   getDurableProfilesDir,
   getDurableAgentsDir,
   getDurableSettingsDir,
@@ -100,6 +101,7 @@ describe('profile and config path helpers', () => {
     expect(getSyncRoot()).toBe('/runtime/state/sync');
     expect(getDurablePiAgentDir()).toBe('/runtime/state/sync/pi-agent');
     expect(getDurableSessionsDir()).toBe('/runtime/state/sync/pi-agent/sessions');
+    expect(getDurableConversationAttentionDir()).toBe('/runtime/state/sync/pi-agent/state/conversation-attention');
     expect(getDurableProfilesDir()).toBe('/runtime/state/sync/profiles');
     expect(getDurableAgentsDir()).toBe('/runtime/state/sync/agents');
     expect(getDurableSettingsDir()).toBe('/runtime/state/sync/settings');

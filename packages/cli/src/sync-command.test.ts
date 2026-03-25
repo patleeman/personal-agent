@@ -96,8 +96,9 @@ describe('sync conversation attention merge command', () => {
     });
   });
 
-  it('does not sync conversation attention state by managed gitattributes', () => {
-    expect(syncRepoGitattributes()).not.toContain('pi-agent/state/conversation-attention');
+  it('syncs conversation attention state with a semantic merge driver', () => {
+    expect(syncRepoGitattributes()).toContain('pi-agent/state/conversation-attention/*.json');
+    expect(syncRepoGitattributes()).toContain('merge=personal-agent-conversation-attention');
   });
 });
 

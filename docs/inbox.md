@@ -152,7 +152,7 @@ A conversation can need attention because of either:
 - new messages since it was last marked read, or
 - unread linked activity newer than the conversation's last read timestamp
 
-When the user opens a conversation in the web UI, the conversation attention state is cleared automatically.
+When the user opens a conversation in the web UI, the conversation attention state is cleared automatically and that read state syncs across machines.
 
 ### Standalone activity in the web UI
 
@@ -276,13 +276,13 @@ These links let an activity item point to one or more conversations without forc
 
 ### Conversation attention state
 
-Local mutable conversation attention state lives at:
+Durable synced conversation attention state lives at:
 
-- `~/.local/state/personal-agent/pi-agent/state/conversation-attention/<profile>.json`
+- `~/.local/state/personal-agent/sync/pi-agent/state/conversation-attention/<profile>.json`
 
 This state tracks the conversation's acknowledged message count and last attention-read timestamp.
 
-It is used to determine whether a conversation should surface in the inbox.
+It is used to determine whether a conversation should surface in the inbox across machines.
 
 ---
 

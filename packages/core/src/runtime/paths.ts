@@ -109,6 +109,10 @@ export function getDurableSessionsDir(stateRoot: string = getStateRoot()): strin
   return join(getDurablePiAgentDir(stateRoot), 'sessions');
 }
 
+export function getDurableConversationAttentionDir(stateRoot: string = getStateRoot()): string {
+  return join(getDurablePiAgentDir(stateRoot), 'state', 'conversation-attention');
+}
+
 export function getDurableProfilesDir(syncRoot: string = getSyncRoot()): string {
   return join(syncRoot, 'profiles');
 }

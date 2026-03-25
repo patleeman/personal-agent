@@ -2,7 +2,7 @@
 
 `personal-agent` supports git-backed cross-machine sync for durable state.
 
-Use this when you want portable durable resources and conversation session history to follow you across devices without syncing machine-local runtime state.
+Use this when you want portable durable resources, conversation session history, and conversation read state to follow you across devices without syncing the rest of machine-local runtime state.
 
 ## What sync does
 
@@ -23,9 +23,10 @@ The managed sync repo tracks these roots:
 - `tasks/**`
 - `projects/**`
 - `pi-agent/sessions/**`
+- `pi-agent/state/conversation-attention/**`
 
 Machine-local runtime files stay out of the synced surface.
-That includes inbox/read-state, conversation attention, deferred resumes, checkpoints, daemon state, auth, generated `AGENTS.md` / `SYSTEM.md` / `APPEND_SYSTEM.md`, `bin/**`, and the session index.
+That includes inbox/read-state, deferred resumes, checkpoints, daemon state, auth, generated `AGENTS.md` / `SYSTEM.md` / `APPEND_SYSTEM.md`, `bin/**`, and the session index.
 
 `config/config.json`, `config/daemon.json`, and `config/web.json` remain machine-local by default.
 
