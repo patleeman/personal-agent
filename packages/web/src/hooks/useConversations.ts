@@ -1,8 +1,9 @@
 /**
  * Arc-style tab model:
- *   - pinnedIds         (localStorage + settings) = conversations always visible above open tabs
- *   - openIds           (localStorage + settings) = active workspace tabs below the pinned shelf
- *   - archivedSessions  = all other sessions, restored on demand
+ *   - pinnedIds               (localStorage + settings) = conversations always visible above open tabs
+ *   - openIds                 (localStorage + settings) = active workspace tabs below the pinned shelf
+ *   - archivedConversationIds (localStorage + settings) = conversations explicitly archived out of live/review focus
+ *   - archivedSessions        = all other sessions, restored on demand
  *
  * Restoring an archived conversation calls openSession() → adds to openIds → tab appears.
  * × on an open tab calls closeSession() → removed from openIds → back to the archive.
@@ -19,6 +20,7 @@ import {
   OPEN_SESSIONS_CHANGED_EVENT,
   openConversationTab,
   pinConversationTab,
+  readArchivedSessionIds,
   readConversationLayout,
   readOpenSessionIds,
   readPinnedSessionIds,
@@ -35,9 +37,11 @@ import { resolveSessionLineageAutoOpen } from '../sessionLineage';
 function applyLayoutState(layout: ConversationLayout, setters: {
   setOpenIds: (ids: string[]) => void;
   setPinnedIds: (ids: string[]) => void;
+  setArchivedConversationIds: (ids: string[]) => void;
 }) {
   setters.setOpenIds(layout.sessionIds);
   setters.setPinnedIds(layout.pinnedSessionIds);
+  setters.setArchivedConversationIds(layout.archivedSessionIds);
 }
 
 function buildPlaceholderSessionMeta(id: string, title?: string): SessionMeta {
@@ -57,6 +61,7 @@ function buildPlaceholderSessionMeta(id: string, title?: string): SessionMeta {
 export function useConversations() {
   const [openIds, setOpenIds] = useState(() => readOpenSessionIds());
   const [pinnedIds, setPinnedIds] = useState(() => readPinnedSessionIds());
+  const [archivedConversationIds, setArchivedConversationIds] = useState(() => readArchivedSessionIds());
   const { titles: liveTitles } = useContext(LiveTitlesContext);
   const { sessions, runs, setSessions } = useAppData();
   const { status: sseStatus } = useSseConnection();
@@ -66,7 +71,7 @@ export function useConversations() {
   useEffect(() => {
     function handleConversationLayoutChanged() {
       const layout = readConversationLayout();
-      applyLayoutState(layout, { setOpenIds, setPinnedIds });
+      applyLayoutState(layout, { setOpenIds, setPinnedIds, setArchivedConversationIds });
     }
 
     window.addEventListener(OPEN_SESSIONS_CHANGED_EVENT, handleConversationLayoutChanged);
@@ -77,24 +82,24 @@ export function useConversations() {
     let cancelled = false;
     const localLayout = readConversationLayout();
 
-    if (localLayout.sessionIds.length > 0 || localLayout.pinnedSessionIds.length > 0) {
-      syncOpenConversationTabsToServer(localLayout.sessionIds, localLayout.pinnedSessionIds);
+    if (localLayout.sessionIds.length > 0 || localLayout.pinnedSessionIds.length > 0 || localLayout.archivedSessionIds.length > 0) {
+      syncOpenConversationTabsToServer(localLayout.sessionIds, localLayout.pinnedSessionIds, localLayout.archivedSessionIds);
       return;
     }
 
     void api.openConversationTabs()
-      .then(({ sessionIds, pinnedSessionIds }) => {
-        if (cancelled || (sessionIds.length === 0 && pinnedSessionIds.length === 0)) {
+      .then(({ sessionIds, pinnedSessionIds, archivedSessionIds }) => {
+        if (cancelled || (sessionIds.length === 0 && pinnedSessionIds.length === 0 && archivedSessionIds.length === 0)) {
           return;
         }
 
         const currentLayout = readConversationLayout();
-        if (currentLayout.sessionIds.length > 0 || currentLayout.pinnedSessionIds.length > 0) {
+        if (currentLayout.sessionIds.length > 0 || currentLayout.pinnedSessionIds.length > 0 || currentLayout.archivedSessionIds.length > 0) {
           return;
         }
 
-        const nextLayout = replaceConversationLayout({ sessionIds, pinnedSessionIds });
-        applyLayoutState(nextLayout, { setOpenIds, setPinnedIds });
+        const nextLayout = replaceConversationLayout({ sessionIds, pinnedSessionIds, archivedSessionIds });
+        applyLayoutState(nextLayout, { setOpenIds, setPinnedIds, setArchivedConversationIds });
       })
       .catch(() => {
         // Ignore bootstrap failures and keep the browser-local fallback.
@@ -114,21 +119,23 @@ export function useConversations() {
   const openSession = useCallback((id: string) => {
     setOpenIds(openConversationTab(id));
     setPinnedIds(readPinnedSessionIds());
+    setArchivedConversationIds(readArchivedSessionIds());
   }, []);
 
   const closeSession = useCallback((id: string) => {
     setOpenIds(closeConversationTab(id));
     setPinnedIds(readPinnedSessionIds());
+    setArchivedConversationIds(readArchivedSessionIds());
   }, []);
 
   const pinSession = useCallback((id: string) => {
     const nextLayout = pinConversationTab(id);
-    applyLayoutState(nextLayout, { setOpenIds, setPinnedIds });
+    applyLayoutState(nextLayout, { setOpenIds, setPinnedIds, setArchivedConversationIds });
   }, []);
 
   const unpinSession = useCallback((id: string, options: { open?: boolean } = {}) => {
     const nextLayout = unpinConversationTab(id, options);
-    applyLayoutState(nextLayout, { setOpenIds, setPinnedIds });
+    applyLayoutState(nextLayout, { setOpenIds, setPinnedIds, setArchivedConversationIds });
   }, []);
 
   const moveSession = useCallback((
@@ -138,7 +145,7 @@ export function useConversations() {
     position?: OpenConversationDropPosition,
   ) => {
     const nextLayout = moveConversationTab(sessionId, targetSection, targetSessionId, position);
-    applyLayoutState(nextLayout, { setOpenIds, setPinnedIds });
+    applyLayoutState(nextLayout, { setOpenIds, setPinnedIds, setArchivedConversationIds });
   }, []);
 
   const runsById = useMemo(
@@ -178,7 +185,7 @@ export function useConversations() {
       sessionIds: result.nextOpenIds,
       pinnedSessionIds: result.nextPinnedIds,
     });
-    applyLayoutState(nextLayout, { setOpenIds, setPinnedIds });
+    applyLayoutState(nextLayout, { setOpenIds, setPinnedIds, setArchivedConversationIds });
   }, [openIds, pinnedIds, runsById, sessions]);
 
   const withTitles = (sessions ?? []).map((session) => {
@@ -225,6 +232,7 @@ export function useConversations() {
   return {
     pinnedIds,
     openIds,
+    archivedConversationIds,
     pinnedSessions,
     tabs,
     archivedSessions,

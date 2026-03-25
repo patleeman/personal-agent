@@ -3031,10 +3031,18 @@ function toolParameterDetails(tool: Pick<AgentToolInfo, 'parameters'>): Array<{ 
 }
 
 function ConversationsWorkspaceContext() {
-  const { pinnedSessions, tabs, archivedSessions, loading, refetch } = useConversations();
+  const { pinnedSessions, tabs, archivedSessions, archivedConversationIds = [], loading, refetch } = useConversations();
+  const archivedConversationIdSet = useMemo(
+    () => new Set(archivedConversationIds),
+    [archivedConversationIds],
+  );
   const attentionSessions = useMemo(
-    () => [...pinnedSessions, ...tabs, ...archivedSessions].filter((session) => sessionNeedsAttention(session)),
-    [archivedSessions, pinnedSessions, tabs],
+    () => [
+      ...pinnedSessions,
+      ...tabs,
+      ...archivedSessions.filter((session) => !archivedConversationIdSet.has(session.id)),
+    ].filter((session) => sessionNeedsAttention(session)),
+    [archivedConversationIdSet, archivedSessions, pinnedSessions, tabs],
   );
 
   if (loading) {

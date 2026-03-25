@@ -60,6 +60,17 @@ describe('partitionCompanionSessions', () => {
     expect(sections.archived.map((session) => session.id)).toEqual(['archived-1']);
     expect(sections.recent).toEqual([]);
   });
+
+  it('lets explicit archived state win over live and review buckets', () => {
+    const sections = partitionCompanionSessions([
+      createSession({ id: 'live-1', title: 'Live conversation', isLive: true }),
+      createSession({ id: 'review-1', title: 'Needs review', needsAttention: true }),
+    ], new Set(['live-1', 'review-1']), new Set(['live-1', 'review-1']));
+
+    expect(sections.live).toEqual([]);
+    expect(sections.needsReview).toEqual([]);
+    expect(sections.archived.map((session) => session.id)).toEqual(['live-1', 'review-1']);
+  });
 });
 
 describe('getCompanionConversationRowSwipeIntent', () => {

@@ -288,9 +288,9 @@ export const api = {
   conversationPlanDefaults: () => get<ConversationAutomationPreferencesState>('/conversation-plans/defaults'),
   updateConversationPlanDefaults: (input: { defaultEnabled: boolean }) =>
     patch<ConversationAutomationPreferencesState>('/conversation-plans/defaults', input),
-  openConversationTabs: () => get<{ sessionIds: string[]; pinnedSessionIds: string[] }>('/web-ui/open-conversations'),
-  setOpenConversationTabs: (sessionIds: string[], pinnedSessionIds: string[] = []) =>
-    patch<{ ok: boolean; sessionIds: string[]; pinnedSessionIds: string[] }>('/web-ui/open-conversations', { sessionIds, pinnedSessionIds }),
+  openConversationTabs: () => get<{ sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[] }>('/web-ui/open-conversations'),
+  setOpenConversationTabs: (sessionIds: string[], pinnedSessionIds: string[] = [], archivedSessionIds: string[] = []) =>
+    patch<{ ok: boolean; sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[] }>('/web-ui/open-conversations', { sessionIds, pinnedSessionIds, archivedSessionIds }),
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
   tasks: () => get<ScheduledTaskSummary[]>('/tasks'),

@@ -1,10 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { OPEN_SESSION_IDS_STORAGE_KEY, PINNED_SESSION_IDS_STORAGE_KEY } from './localSettings';
+import {
+  ARCHIVED_SESSION_IDS_STORAGE_KEY,
+  OPEN_SESSION_IDS_STORAGE_KEY,
+  PINNED_SESSION_IDS_STORAGE_KEY,
+} from './localSettings';
 import {
   closeConversationTab,
   ensureConversationTabOpen,
   moveConversationToSection,
   pinConversationTab,
+  readArchivedSessionIds,
   readConversationLayout,
   readOpenSessionIds,
   readPinnedSessionIds,
@@ -66,16 +71,19 @@ describe('sessionTabs', () => {
     vi.unstubAllGlobals();
   });
 
-  it('sanitizes stored open and pinned session ids', () => {
+  it('sanitizes stored open, pinned, and archived session ids', () => {
     localStorage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify([' session-1 ', '', null, 'session-2', 'session-3']));
     localStorage.setItem(PINNED_SESSION_IDS_STORAGE_KEY, JSON.stringify(['session-2', ' session-4 ', 'session-2']));
+    localStorage.setItem(ARCHIVED_SESSION_IDS_STORAGE_KEY, JSON.stringify(['session-3', 'session-4', ' session-5 ', 'session-5']));
 
     expect(readConversationLayout()).toEqual({
       sessionIds: ['session-1', 'session-3'],
       pinnedSessionIds: ['session-2', 'session-4'],
+      archivedSessionIds: ['session-5'],
     });
     expect(readOpenSessionIds()).toEqual(['session-1', 'session-3']);
     expect(readPinnedSessionIds()).toEqual(['session-2', 'session-4']);
+    expect(readArchivedSessionIds()).toEqual(['session-5']);
   });
 
   it('opens a conversation tab once even when asked repeatedly', () => {
@@ -85,6 +93,7 @@ describe('sessionTabs', () => {
     expect([...ensureConversationTabOpen(' session-1 ')]).toEqual(['session-1']);
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
     expect([...readOpenSessionIds()]).toEqual(['session-1']);
+    expect([...readArchivedSessionIds()]).toEqual([]);
   });
 
   it('does not reopen a conversation that is already pinned', () => {
@@ -96,18 +105,21 @@ describe('sessionTabs', () => {
     expect(readConversationLayout()).toEqual({
       sessionIds: ['session-1'],
       pinnedSessionIds: ['session-2'],
+      archivedSessionIds: [],
     });
   });
 
   it('replaces the local open tab set from a durable snapshot', () => {
     expect([...replaceOpenConversationTabs([' session-2 ', 'session-1', 'session-2'])]).toEqual(['session-2', 'session-1']);
     expect([...readOpenSessionIds()]).toEqual(['session-2', 'session-1']);
+    expect([...readArchivedSessionIds()]).toEqual([]);
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
   });
 
   it('replaces the local pinned conversation set', () => {
     expect([...replacePinnedConversationTabs([' session-2 ', 'session-1', 'session-2'])]).toEqual(['session-2', 'session-1']);
     expect([...readPinnedSessionIds()]).toEqual(['session-2', 'session-1']);
+    expect([...readArchivedSessionIds()]).toEqual([]);
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
   });
 
@@ -138,21 +150,25 @@ describe('sessionTabs', () => {
     ]);
   });
 
-  it('moves conversations between the open and pinned shelves', () => {
+  it('moves conversations between the open and pinned shelves while preserving archived overrides', () => {
     expect(moveConversationToSection({
       sessionIds: ['session-1', 'session-2'],
       pinnedSessionIds: ['session-3'],
+      archivedSessionIds: ['session-4'],
     }, 'session-2', 'pinned', 'session-3', 'before')).toEqual({
       sessionIds: ['session-1'],
       pinnedSessionIds: ['session-2', 'session-3'],
+      archivedSessionIds: ['session-4'],
     });
 
     expect(moveConversationToSection({
       sessionIds: ['session-1'],
       pinnedSessionIds: ['session-2', 'session-3'],
+      archivedSessionIds: ['session-4'],
     }, 'session-2', 'open', 'session-1', 'after')).toEqual({
       sessionIds: ['session-1', 'session-2'],
       pinnedSessionIds: ['session-3'],
+      archivedSessionIds: ['session-4'],
     });
   });
 
@@ -163,6 +179,7 @@ describe('sessionTabs', () => {
     expect(pinConversationTab('session-2')).toEqual({
       sessionIds: ['session-1'],
       pinnedSessionIds: ['session-2'],
+      archivedSessionIds: [],
     });
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
   });
@@ -174,6 +191,7 @@ describe('sessionTabs', () => {
     expect(unpinConversationTab('session-2')).toEqual({
       sessionIds: ['session-1', 'session-2'],
       pinnedSessionIds: [],
+      archivedSessionIds: [],
     });
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
   });
@@ -185,6 +203,7 @@ describe('sessionTabs', () => {
     expect(unpinConversationTab('session-2', { open: false })).toEqual({
       sessionIds: ['session-1'],
       pinnedSessionIds: [],
+      archivedSessionIds: ['session-2'],
     });
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
   });
@@ -198,7 +217,11 @@ describe('sessionTabs', () => {
 
     expect([...closeConversationTab('session-1')]).toEqual([]);
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
-    expect([...readOpenSessionIds()]).toEqual([]);
+    expect(readConversationLayout()).toEqual({
+      sessionIds: [],
+      pinnedSessionIds: [],
+      archivedSessionIds: ['session-1'],
+    });
   });
 
   it('can archive and reopen a conversation regardless of whether it was open or pinned', () => {
@@ -208,6 +231,7 @@ describe('sessionTabs', () => {
     expect(setConversationArchivedState('session-2', true)).toEqual({
       sessionIds: ['session-1'],
       pinnedSessionIds: [],
+      archivedSessionIds: ['session-2'],
     });
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
 
@@ -215,6 +239,19 @@ describe('sessionTabs', () => {
     expect(setConversationArchivedState('session-2', false)).toEqual({
       sessionIds: ['session-1', 'session-2'],
       pinnedSessionIds: [],
+      archivedSessionIds: [],
+    });
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('can explicitly archive a conversation that is not currently in the workspace', () => {
+    replaceConversationLayout({ sessionIds: ['session-1'], pinnedSessionIds: [] });
+    dispatchEvent.mockReset();
+
+    expect(setConversationArchivedState('session-3', true)).toEqual({
+      sessionIds: ['session-1'],
+      pinnedSessionIds: [],
+      archivedSessionIds: ['session-3'],
     });
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
   });

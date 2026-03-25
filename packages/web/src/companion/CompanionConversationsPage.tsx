@@ -182,6 +182,7 @@ export function sortCompanionSessions(sessions: SessionMeta[]): SessionMeta[] {
 export function partitionCompanionSessions(
   sessions: SessionMeta[],
   workspaceSessionIds: ReadonlySet<string> | null,
+  archivedSessionIds: ReadonlySet<string> = new Set(),
 ): {
   live: SessionMeta[];
   needsReview: SessionMeta[];
@@ -196,6 +197,11 @@ export function partitionCompanionSessions(
   const recent: SessionMeta[] = [];
 
   for (const session of sessions) {
+    if (archivedSessionIds.has(session.id)) {
+      archived.push(session);
+      continue;
+    }
+
     if (session.isLive) {
       live.push(session);
       continue;
@@ -293,28 +299,41 @@ function setCompanionConversationArchivedStateInList(
     workspaceSessionIdSet.add(sessionId);
   }
 
-  let nextArchived = archivedWithoutSession;
-  let nextActive = activeWithoutSession;
+  const destination = archived
+    ? 'archived'
+    : session.isLive
+      ? 'live'
+      : session.needsAttention
+        ? 'needsReview'
+        : workspaceSessionIdSet.has(sessionId)
+          ? 'active'
+          : 'archived';
 
-  if (!session.isLive && !session.needsAttention) {
-    if (workspaceSessionIdSet.has(sessionId)) {
-      nextActive = sortCompanionSessions([...activeWithoutSession, session]);
-    } else {
-      nextArchived = sortCompanionSessions([...archivedWithoutSession, session]);
-      if (current.archived.length < current.archivedTotal) {
-        nextArchived = nextArchived.slice(0, current.archived.length);
-      }
-    }
+  const nextLive = destination === 'live'
+    ? sortCompanionSessions([...liveWithoutSession, session])
+    : liveWithoutSession;
+  const nextNeedsReview = destination === 'needsReview'
+    ? sortCompanionSessions([...needsReviewWithoutSession, session])
+    : needsReviewWithoutSession;
+  const nextActive = destination === 'active'
+    ? sortCompanionSessions([...activeWithoutSession, session])
+    : activeWithoutSession;
+  let nextArchived = destination === 'archived'
+    ? sortCompanionSessions([...archivedWithoutSession, session])
+    : archivedWithoutSession;
+
+  if (destination === 'archived' && current.archived.length < current.archivedTotal) {
+    nextArchived = nextArchived.slice(0, current.archived.length);
   }
 
   const wasArchived = current.archived.some((entry) => entry.id === sessionId);
-  const willBeArchived = !session.isLive && !session.needsAttention && !workspaceSessionIdSet.has(sessionId);
+  const willBeArchived = destination === 'archived';
   const nextArchivedTotal = Math.max(0, current.archivedTotal + Number(willBeArchived) - Number(wasArchived));
 
   return {
     ...current,
-    live: liveWithoutSession.length === current.live.length ? current.live : sortCompanionSessions([...liveWithoutSession, session]),
-    needsReview: needsReviewWithoutSession.length === current.needsReview.length ? current.needsReview : sortCompanionSessions([...needsReviewWithoutSession, session]),
+    live: nextLive,
+    needsReview: nextNeedsReview,
     active: nextActive,
     archived: nextArchived,
     archivedTotal: nextArchivedTotal,

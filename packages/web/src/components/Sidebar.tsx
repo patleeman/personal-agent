@@ -428,6 +428,7 @@ export function Sidebar() {
     pinnedSessions,
     tabs,
     archivedSessions,
+    archivedConversationIds = [],
     closeSession,
     pinSession,
     unpinSession,
@@ -480,6 +481,10 @@ export function Sidebar() {
     () => new Set(allSessions.filter((session) => sessionNeedsAttention(session)).map((session) => session.id)),
     [allSessions],
   );
+  const archivedConversationIdSet = useMemo(
+    () => new Set(archivedConversationIds),
+    [archivedConversationIds],
+  );
   const standaloneUnreadCount = useMemo(() => {
     const knownConversationIds = new Set(allSessions.map((session) => session.id));
     return (activity?.entries ?? []).filter((entry) => {
@@ -490,7 +495,9 @@ export function Sidebar() {
       return !(entry.relatedConversationIds ?? []).some((conversationId) => knownConversationIds.has(conversationId));
     }).length;
   }, [activity?.entries, allSessions]);
-  const inboxCount = standaloneUnreadCount + archivedSessions.filter((session) => sessionNeedsAttention(session)).length;
+  const inboxCount = standaloneUnreadCount + archivedSessions.filter((session) => {
+    return sessionNeedsAttention(session) && !archivedConversationIdSet.has(session.id);
+  }).length;
   const activeRuns = useMemo(() => summarizeActiveRuns({ tasks, sessions, runs }), [runs, sessions, tasks]);
   const systemTitle = useMemo(() => {
     const base = 'System status, logs, and daemon-backed agent work in one place.';

@@ -1825,6 +1825,7 @@ function listCompanionConversationSections(options?: { archivedOffset?: number; 
     ...saved.pinnedConversationIds,
   ];
   const workspaceSessionIdSet = new Set(workspaceSessionIds);
+  const archivedSessionIdSet = new Set(saved.archivedConversationIds);
   const sessions = sortSessionsForCompanionList(listConversationSessionsSnapshot());
   const live: typeof sessions = [];
   const needsReview: typeof sessions = [];
@@ -1832,6 +1833,11 @@ function listCompanionConversationSections(options?: { archivedOffset?: number; 
   const archived: typeof sessions = [];
 
   for (const session of sessions) {
+    if (archivedSessionIdSet.has(session.id)) {
+      archived.push(session);
+      continue;
+    }
+
     if (session.isLive) {
       live.push(session);
       continue;
@@ -4392,6 +4398,7 @@ function handleOpenConversationLayoutReadRequest(_req: express.Request, res: exp
     res.json({
       sessionIds: saved.openConversationIds,
       pinnedSessionIds: saved.pinnedConversationIds,
+      archivedSessionIds: saved.archivedConversationIds,
     });
   } catch (err) {
     logError('request handler error', {
@@ -4404,9 +4411,10 @@ function handleOpenConversationLayoutReadRequest(_req: express.Request, res: exp
 
 function handleOpenConversationLayoutWriteRequest(req: express.Request, res: express.Response) {
   try {
-    const { sessionIds, pinnedSessionIds } = req.body as {
+    const { sessionIds, pinnedSessionIds, archivedSessionIds } = req.body as {
       sessionIds?: string[];
       pinnedSessionIds?: string[];
+      archivedSessionIds?: string[];
     };
 
     if (sessionIds !== undefined && !Array.isArray(sessionIds)) {
@@ -4419,8 +4427,13 @@ function handleOpenConversationLayoutWriteRequest(req: express.Request, res: exp
       return;
     }
 
-    if (sessionIds === undefined && pinnedSessionIds === undefined) {
-      res.status(400).json({ error: 'sessionIds or pinnedSessionIds required' });
+    if (archivedSessionIds !== undefined && !Array.isArray(archivedSessionIds)) {
+      res.status(400).json({ error: 'archivedSessionIds must be an array when provided' });
+      return;
+    }
+
+    if (sessionIds === undefined && pinnedSessionIds === undefined && archivedSessionIds === undefined) {
+      res.status(400).json({ error: 'sessionIds, pinnedSessionIds, or archivedSessionIds required' });
       return;
     }
 
@@ -4428,6 +4441,7 @@ function handleOpenConversationLayoutWriteRequest(req: express.Request, res: exp
       (settingsFile) => writeSavedWebUiPreferences({
         openConversationIds: sessionIds,
         pinnedConversationIds: pinnedSessionIds,
+        archivedConversationIds: archivedSessionIds,
       }, settingsFile),
       { runtimeSettingsFile: SETTINGS_FILE },
     );
@@ -4436,6 +4450,7 @@ function handleOpenConversationLayoutWriteRequest(req: express.Request, res: exp
       ok: true,
       sessionIds: saved.openConversationIds,
       pinnedSessionIds: saved.pinnedConversationIds,
+      archivedSessionIds: saved.archivedConversationIds,
     });
   } catch (err) {
     logError('request handler error', {
