@@ -14,6 +14,7 @@ import type {
   MessageBlock,
   SseConnectionStatus,
 } from '../types';
+import { COMPANION_CONVERSATIONS_PATH } from './routes';
 
 interface CompanionLiveStateInput {
   streamBlockCount: number;
@@ -353,7 +354,7 @@ export function CompanionConversationPage() {
         <p className="mt-3 max-w-md text-[14px] leading-relaxed text-secondary">
           This conversation is no longer available from the companion app.
         </p>
-        <Link to="/app/conversations" className="ui-action-button mt-5">
+        <Link to={COMPANION_CONVERSATIONS_PATH} className="ui-action-button mt-5">
           Back to conversations
         </Link>
       </div>
@@ -365,7 +366,7 @@ export function CompanionConversationPage() {
       <header className="border-b border-border-subtle bg-base/95 backdrop-blur">
         <div className="mx-auto flex w-full max-w-3xl flex-col px-4 pb-4 pt-[calc(env(safe-area-inset-top)+0.875rem)]">
           <div className="flex items-center justify-between gap-3">
-            <Link to="/app/conversations" className="text-[13px] text-accent transition-colors hover:text-accent/80">
+            <Link to={COMPANION_CONVERSATIONS_PATH} className="text-[13px] text-accent transition-colors hover:text-accent/80">
               ← Conversations
             </Link>
             <span className="text-[11px] uppercase tracking-[0.14em] text-dim/80">{formatConnectionStatus(status)}</span>
@@ -468,7 +469,7 @@ export function CompanionConversationPage() {
             </>
           ) : (
             <p className="text-[12px] leading-relaxed text-secondary">
-              This transcript is read-only right now. <Link to="/app/conversations" className="text-accent">Start a new live conversation</Link> from the companion list when you want to continue.
+              This transcript is read-only right now. <Link to={COMPANION_CONVERSATIONS_PATH} className="text-accent">Start a new live conversation</Link> from the companion list when you want to continue.
             </p>
           )}
         </div>
