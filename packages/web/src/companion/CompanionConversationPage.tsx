@@ -61,6 +61,13 @@ export function resolveCompanionControlState({
   };
 }
 
+export function shouldShowCompanionConversationStatusBanner(input: {
+  isLiveSession: boolean;
+  needsTakeover: boolean;
+}): boolean {
+  return !input.isLiveSession || input.needsTakeover;
+}
+
 function formatConnectionStatus(status: SseConnectionStatus): string {
   switch (status) {
     case 'open':
@@ -71,6 +78,19 @@ function formatConnectionStatus(status: SseConnectionStatus): string {
       return 'offline';
     default:
       return 'connecting';
+  }
+}
+
+function connectionStatusDotClass(status: SseConnectionStatus): string {
+  switch (status) {
+    case 'open':
+      return 'bg-success';
+    case 'reconnecting':
+      return 'bg-warning';
+    case 'offline':
+      return 'bg-danger';
+    default:
+      return 'bg-dim/70';
   }
 }
 
@@ -126,7 +146,7 @@ function buildBannerDetail(input: {
   presence: LiveSessionPresenceState;
 }): string {
   if (!input.isLiveSession) {
-    return 'This conversation is not live right now. You can read the transcript here and start a new live conversation from the companion list.';
+    return 'Read-only here. Start a new live conversation from the list when you want to continue.';
   }
 
   if (input.controllingThisSurface) {
@@ -134,11 +154,11 @@ function buildBannerDetail(input: {
       return `${input.mirroredViewerCount} other ${input.mirroredViewerCount === 1 ? 'surface is' : 'surfaces are'} mirroring live.`;
     }
 
-    return 'Other surfaces will stay mirrored and read-only until they explicitly take over.';
+    return 'Other surfaces stay mirrored until they explicitly take over.';
   }
 
   if (input.needsTakeover || input.presence.controllerSurfaceId) {
-    return 'Take over here to send messages or stop the current turn from this device.';
+    return 'Take over to reply or stop the current turn from this device.';
   }
 
   return 'Waiting for controller state…';
@@ -280,6 +300,10 @@ export function CompanionConversationPage() {
     mirroredViewerCount,
     presence: stream.presence,
   });
+  const showStatusBanner = shouldShowCompanionConversationStatusBanner({
+    isLiveSession,
+    needsTakeover: controlState.needsTakeover,
+  });
 
   useEffect(() => {
     const scrollElement = scrollRef.current;
@@ -386,17 +410,20 @@ export function CompanionConversationPage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="border-b border-border-subtle bg-base/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-3xl flex-col px-4 pb-4 pt-[calc(env(safe-area-inset-top)+0.875rem)]">
+        <div className="mx-auto flex w-full max-w-3xl flex-col px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.625rem)]">
           <div className="flex items-center justify-between gap-3">
-            <Link to={COMPANION_CONVERSATIONS_PATH} className="text-[13px] text-accent transition-colors hover:text-accent/80">
-              ← Conversations
+            <Link to={COMPANION_CONVERSATIONS_PATH} className="text-[12px] text-accent transition-colors hover:text-accent/80">
+              ← Chats
             </Link>
-            <span className="text-[11px] uppercase tracking-[0.14em] text-dim/80">{formatConnectionStatus(status)}</span>
+            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.16em] text-dim/80">
+              <span className={`h-1.5 w-1.5 rounded-full ${connectionStatusDotClass(status)}`} />
+              {formatConnectionStatus(status)}
+            </span>
           </div>
-          <div className="mt-4 flex items-start gap-3">
+          <div className="mt-3 flex items-start gap-3">
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-[24px] font-semibold tracking-tight text-primary">{title}</h1>
-              <p className="mt-1 text-[12px] text-secondary">
+              <h1 className="text-[20px] font-semibold leading-tight tracking-tight text-primary">{title}</h1>
+              <p className="mt-1 text-[11px] text-secondary">
                 {executionLabel} · {isLiveSession ? 'live conversation' : 'saved transcript'}
               </p>
             </div>
@@ -405,23 +432,25 @@ export function CompanionConversationPage() {
                 type="button"
                 onClick={() => { void handleTakeover(); }}
                 disabled={takeoverBusy}
-                className="ui-action-button shrink-0"
+                className="shrink-0 rounded-xl border border-border-default bg-surface px-3 py-2 text-[12px] font-medium text-primary transition-colors hover:border-accent/40 disabled:cursor-default disabled:opacity-50"
               >
-                {takeoverBusy ? 'Taking over…' : 'Take over here'}
+                {takeoverBusy ? 'Taking over…' : 'Take over'}
               </button>
             ) : null}
           </div>
-          <div className="mt-4 rounded-2xl bg-surface px-4 py-3">
-            <p className="text-[13px] font-medium text-primary">{bannerTitle}</p>
-            <p className="mt-1 text-[12px] leading-relaxed text-secondary">{bannerDetail}</p>
-          </div>
+          {showStatusBanner ? (
+            <div className="mt-3 rounded-xl bg-surface px-3 py-2.5">
+              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-dim/80">{bannerTitle}</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-secondary">{bannerDetail}</p>
+            </div>
+          ) : null}
           {actionError || stream.error ? (
-            <p className="mt-3 text-[12px] text-danger">{actionError ?? stream.error}</p>
+            <p className="mt-2 text-[11px] text-danger">{actionError ?? stream.error}</p>
           ) : null}
         </div>
       </header>
 
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
           <CompanionConversationTodos
             conversationId={id}

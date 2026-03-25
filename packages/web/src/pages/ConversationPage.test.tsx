@@ -8,6 +8,7 @@ import {
   DraftExecutionTargetSelector,
   resolveConversationLiveSession,
   shouldEnableConversationLiveStream,
+  shouldShowConversationTakeoverBanner,
   shouldShowMissingConversationState,
 } from './ConversationPage.js';
 
@@ -26,6 +27,13 @@ describe('conversation live state helpers', () => {
     expect(resolveConversationLiveSession({ streamBlockCount: 1, isStreaming: false, confirmedLive: null })).toBe(true);
     expect(resolveConversationLiveSession({ streamBlockCount: 0, isStreaming: true, confirmedLive: null })).toBe(true);
     expect(resolveConversationLiveSession({ streamBlockCount: 0, isStreaming: false, confirmedLive: true })).toBe(true);
+  });
+
+  it('shows the takeover banner only while this surface is mirrored read-only', () => {
+    expect(shouldShowConversationTakeoverBanner({ draft: false, isLiveSession: true, conversationNeedsTakeover: true })).toBe(true);
+    expect(shouldShowConversationTakeoverBanner({ draft: false, isLiveSession: true, conversationNeedsTakeover: false })).toBe(false);
+    expect(shouldShowConversationTakeoverBanner({ draft: true, isLiveSession: true, conversationNeedsTakeover: true })).toBe(false);
+    expect(shouldShowConversationTakeoverBanner({ draft: false, isLiveSession: false, conversationNeedsTakeover: true })).toBe(false);
   });
 
   it('does not show the missing state until session discovery has loaded', () => {

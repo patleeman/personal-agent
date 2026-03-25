@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useOutletContext } from 'react-router-dom';
+import { cx } from '../components/ui';
 import { useAppData } from '../contexts';
 import { useCompanionNotifications } from './useCompanionNotifications';
 import {
@@ -46,6 +47,41 @@ function readNavigatorStandalone(): boolean {
   }
 
   return Boolean((navigator as Navigator & { standalone?: boolean }).standalone);
+}
+
+function ChatsIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={active ? 'text-primary' : 'text-dim'} aria-hidden="true">
+      <path d="M7 18.5c-2.2 0-4-1.7-4-3.8V7.8C3 5.7 4.8 4 7 4h10c2.2 0 4 1.7 4 3.8v6.9c0 2.1-1.8 3.8-4 3.8H11l-4 2.5v-2.5H7Z" />
+    </svg>
+  );
+}
+
+function ProjectsIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={active ? 'text-primary' : 'text-dim'} aria-hidden="true">
+      <path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h3l1.7 2H18a2.5 2.5 0 0 1 2.5 2.5v7A2.5 2.5 0 0 1 18 19H6a2.5 2.5 0 0 1-2.5-2.5v-9Z" />
+      <path d="M3.5 9h17" />
+    </svg>
+  );
+}
+
+function MemoriesIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={active ? 'text-primary' : 'text-dim'} aria-hidden="true">
+      <path d="M6 4.5h8a3 3 0 0 1 3 3v12l-5-2.6-5 2.6v-15Z" />
+      <path d="M9 8h5" />
+      <path d="M9 11h5" />
+    </svg>
+  );
+}
+
+function SkillsIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={active ? 'text-primary' : 'text-dim'} aria-hidden="true">
+      <path d="m12 3 1.8 4.7L18.5 9l-4 2.9 1.5 4.6L12 13.7 8 16.5l1.5-4.6L5.5 9l4.7-1.3L12 3Z" />
+    </svg>
+  );
 }
 
 export function useCompanionLayoutContext() {
@@ -197,16 +233,17 @@ export function CompanionLayout() {
     notificationPermission,
     requestNotificationPermission,
   }), [deferredPrompt, installBusy, notificationPermission, promptInstall, requestNotificationPermission, secureContext, standalone]);
+
   const showPrimaryNav = !location.pathname.startsWith(`${COMPANION_CONVERSATIONS_PATH}/`);
   const navItems = [
-    { to: COMPANION_CONVERSATIONS_PATH, label: 'Chats', end: false },
-    { to: COMPANION_PROJECTS_PATH, label: 'Projects', end: true },
-    { to: COMPANION_MEMORIES_PATH, label: 'Memories', end: true },
-    { to: COMPANION_SKILLS_PATH, label: 'Skills', end: true },
+    { to: COMPANION_CONVERSATIONS_PATH, label: 'Chats', end: false, ariaLabel: 'Open chats', Icon: ChatsIcon },
+    { to: COMPANION_PROJECTS_PATH, label: 'Projects', end: true, ariaLabel: 'Open projects', Icon: ProjectsIcon },
+    { to: COMPANION_MEMORIES_PATH, label: 'Memory', end: true, ariaLabel: 'Open memories', Icon: MemoriesIcon },
+    { to: COMPANION_SKILLS_PATH, label: 'Skills', end: true, ariaLabel: 'Open skills', Icon: SkillsIcon },
   ];
 
   return (
-    <div className="flex h-screen flex-col bg-base text-primary">
+    <div className="flex min-h-screen flex-col bg-base text-primary" style={{ minHeight: '100dvh', height: '100dvh' }}>
       {!secureContext ? (
         <div className="bg-warning/10 px-4 py-2 text-[12px] text-warning">
           Installability and notifications need HTTPS. Open the companion app through your Tailscale HTTPS host for the full PWA experience.
@@ -216,18 +253,25 @@ export function CompanionLayout() {
         <Outlet context={contextValue} />
       </div>
       {showPrimaryNav ? (
-        <nav className="border-t border-border-subtle bg-base/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 backdrop-blur">
-          <div className="mx-auto flex w-full max-w-3xl items-center justify-around gap-1">
+        <nav className="shrink-0 border-t border-border-subtle bg-base/95 px-3 pb-[calc(env(safe-area-inset-bottom)+0.625rem)] pt-2 backdrop-blur-xl">
+          <div className="mx-auto grid w-full max-w-sm grid-cols-4 gap-1.5">
             {navItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
                 end={item.end}
-                className={({ isActive }) => (
-                  `flex min-w-0 flex-1 items-center justify-center rounded-xl px-2 py-2 text-[12px] font-medium transition-colors ${isActive ? 'bg-surface text-primary' : 'text-dim hover:text-primary'}`
+                aria-label={item.ariaLabel}
+                className={({ isActive }) => cx(
+                  'flex min-w-0 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-[10px] font-medium transition-colors',
+                  isActive ? 'bg-surface text-primary' : 'text-dim hover:text-primary',
                 )}
               >
-                {item.label}
+                {({ isActive }) => (
+                  <>
+                    <item.Icon active={isActive} />
+                    <span className="leading-none">{item.label}</span>
+                  </>
+                )}
               </NavLink>
             ))}
           </div>
