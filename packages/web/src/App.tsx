@@ -1,7 +1,8 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
-import { resolveCompanionRouteRedirect } from './companion/routes';
+import { COMPANION_APP_PATH, resolveCompanionRouteRedirect } from './companion/routes';
 import { api } from './api';
+import { buildApiPath } from './apiBase';
 import { Layout } from './components/Layout';
 import { InboxPage } from './pages/InboxPage';
 import { fetchSessionsSnapshot } from './sessionSnapshot';
@@ -21,7 +22,6 @@ import type {
   DaemonState,
   DesktopAuthSessionState,
   DurableRunListResult,
-  GatewayState,
   ProjectRecord,
   ScheduledTaskSummary,
   SessionMeta,
@@ -53,6 +53,15 @@ function CompanionRouteValidationBoundary() {
   }
 
   return <CompanionLayout />;
+}
+
+function isCompanionBrowserRoute(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  return window.location.pathname === COMPANION_APP_PATH
+    || window.location.pathname.startsWith(`${COMPANION_APP_PATH}/`);
 }
 
 const TasksPage = lazy(() => import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })));
@@ -186,7 +195,6 @@ export function App() {
   const [tasks, setTasksState] = useState<ScheduledTaskSummary[] | null>(null);
   const [runs, setRunsState] = useState<DurableRunListResult | null>(null);
   const [daemon, setDaemonState] = useState<DaemonState | null>(null);
-  const [gateway, setGatewayState] = useState<GatewayState | null>(null);
   const [sync, setSyncState] = useState<SyncState | null>(null);
   const [webUi, setWebUiState] = useState<WebUiState | null>(null);
   const openedOnceRef = useRef(false);
@@ -224,10 +232,6 @@ export function App() {
     setDaemonState(state);
   }, []);
 
-  const setGateway = useCallback((state: GatewayState) => {
-    setGatewayState(state);
-  }, []);
-
   const setSync = useCallback((state: SyncState) => {
     setSyncState(state);
   }, []);
@@ -237,14 +241,14 @@ export function App() {
   }, []);
 
   const bootstrapSnapshots = useCallback(async () => {
-    const [activityEntries, projectItems, sessionItems, taskItems, runResult, daemonState, gatewayState, syncState, webUiState] = await Promise.allSettled([
+    const companionRoute = isCompanionBrowserRoute();
+    const [activityEntries, projectItems, sessionItems, taskItems, runResult, daemonState, syncState, webUiState] = await Promise.allSettled([
       api.activity(),
       api.projects(),
-      fetchSessionsSnapshot(),
+      companionRoute ? Promise.resolve<SessionMeta[] | null>(null) : fetchSessionsSnapshot(),
       api.tasks(),
       api.runs(),
       api.daemon(),
-      api.gateway(),
       api.sync(),
       api.webUiState(),
     ]);
@@ -260,7 +264,7 @@ export function App() {
       setProjects(projectItems.value);
     }
 
-    if (sessionItems.status === 'fulfilled') {
+    if (sessionItems.status === 'fulfilled' && sessionItems.value) {
       setSessions(sessionItems.value);
     }
 
@@ -276,10 +280,6 @@ export function App() {
       setDaemon(daemonState.value);
     }
 
-    if (gatewayState.status === 'fulfilled') {
-      setGateway(gatewayState.value);
-    }
-
     if (syncState.status === 'fulfilled') {
       setSync(syncState.value);
     }
@@ -287,7 +287,7 @@ export function App() {
     if (webUiState.status === 'fulfilled') {
       setWebUi(webUiState.value);
     }
-  }, [setActivity, setDaemon, setGateway, setProjects, setRuns, setSessions, setSync, setTasks, setWebUi]);
+  }, [setActivity, setDaemon, setProjects, setRuns, setSessions, setSync, setTasks, setWebUi]);
 
   useEffect(() => {
     let cancelled = false;
@@ -316,7 +316,7 @@ export function App() {
       return;
     }
 
-    const es = new EventSource('/api/events');
+    const es = new EventSource(buildApiPath('/events'));
     const bootstrapTimer = window.setTimeout(() => {
       if (!openedOnceRef.current) {
         setSseStatus('offline');
@@ -349,6 +349,14 @@ export function App() {
           setProjects(payload.projects);
           return;
         case 'sessions_snapshot':
+          if (isCompanionBrowserRoute()) {
+            setEventVersions((prev) => ({
+              ...prev,
+              sessions: prev.sessions + 1,
+            }));
+            return;
+          }
+
           setSessions(payload.sessions);
           return;
         case 'tasks_snapshot':
@@ -359,9 +367,6 @@ export function App() {
           return;
         case 'daemon_snapshot':
           setDaemon(payload.state);
-          return;
-        case 'gateway_snapshot':
-          setGateway(payload.state);
           return;
         case 'sync_snapshot':
           setSync(payload.state);
@@ -396,7 +401,7 @@ export function App() {
       es.close();
       setSseStatus('offline');
     };
-  }, [bootstrapSnapshots, desktopAccessGranted, setActivity, setDaemon, setGateway, setProjects, setRuns, setSessions, setSync, setTasks, setTitle, setWebUi]);
+  }, [bootstrapSnapshots, desktopAccessGranted, setActivity, setDaemon, setProjects, setRuns, setSessions, setSync, setTasks, setTitle, setWebUi]);
 
   if (desktopAuth === null) {
     return (
@@ -414,7 +419,7 @@ export function App() {
     <AppEventsContext.Provider value={{ versions: eventVersions }}>
       <SseConnectionContext.Provider value={{ status: sseStatus }}>
         <AppDataContext.Provider value={{ activity, projects, sessions, tasks, runs, setActivity, setProjects, setSessions, setTasks, setRuns }}>
-          <SystemStatusContext.Provider value={{ daemon, gateway, sync, webUi, setDaemon, setGateway, setSync, setWebUi }}>
+          <SystemStatusContext.Provider value={{ daemon, sync, webUi, setDaemon, setSync, setWebUi }}>
             <LiveTitlesContext.Provider value={{ titles: titleMap, setTitle }}>
               <ThemeProvider>
                 <BrowserRouter>

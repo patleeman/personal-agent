@@ -9,7 +9,7 @@ This guide gets `personal-agent` into a usable state quickly.
 - profiles and reusable resources live in git
 - mutable runtime state stays local
 - the daemon handles background automation
-- the web UI and Telegram gateway expose the same underlying agent system
+- the web UI and CLI expose the same underlying agent system
 
 ## Prerequisites
 
@@ -75,7 +75,6 @@ The daemon is recommended if you use:
 
 - scheduled tasks
 - deferred resume
-- gateway notifications
 - always-on background automation
 
 Recommended:
@@ -115,7 +114,6 @@ The web UI is the easiest place to explore:
 - Projects
 - Scheduled tasks
 - Sync state
-- Gateway state
 - Memory
 - Settings
 
@@ -152,26 +150,6 @@ Or send a one-off prompt:
 ```bash
 pa tui -p "Summarize my current profile"
 ```
-
-## Optional: set up Telegram
-
-Telegram is the current gateway provider.
-
-Interactive setup:
-
-```bash
-pa gateway setup telegram
-```
-
-Recommended for 24/7 use:
-
-```bash
-pa gateway service install telegram
-```
-
-This installs the managed gateway service and also ensures the daemon is provisioned.
-
-See [Gateway Guide](./gateway.md).
 
 ## First things to try
 

@@ -56,7 +56,6 @@ describe('scheduledTasks', () => {
       timeoutSeconds: 1800,
       prompt: 'Summarize the last run.',
       promptBody: 'Summarize the last run.\nInclude the top blockers.',
-      output: undefined,
     });
   });
 
@@ -70,11 +69,7 @@ describe('scheduledTasks', () => {
       cwd: '~/agent-workspace',
       timeoutSeconds: 900,
       prompt: 'Run maintenance.',
-      output: {
-        when: 'success',
-        targets: [{ gateway: 'telegram', chatId: '123', messageThreadId: 45 }],
-      },
-    })).toBe(`---\nid: "daily-status"\nenabled: true\ncron: "11 */4 * * *"\nprofile: "assistant"\nmodel: "openai-codex/gpt-5.4"\ncwd: "~/agent-workspace"\ntimeoutSeconds: 900\noutput:\n  when: success\n  targets:\n    - gateway: telegram\n      chatId: "123"\n      messageThreadId: 45\n---\nRun maintenance.\n`);
+    })).toBe(`---\nid: "daily-status"\nenabled: true\ncron: "11 */4 * * *"\nprofile: "assistant"\nmodel: "openai-codex/gpt-5.4"\ncwd: "~/agent-workspace"\ntimeoutSeconds: 900\n---\nRun maintenance.\n`);
   });
 
   it('loads parsed tasks and runtime state for a profile', () => {

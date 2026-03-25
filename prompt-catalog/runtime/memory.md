@@ -13,7 +13,7 @@ Edit these locations directly:
 {{memory_section}}
 
 ## PA documentation
-Read these when the user asks about pa/personal-agent, CLI, daemon, gateway, tasks, profiles, or extensions:
+Read these when the user asks about pa/personal-agent, CLI, daemon, tasks, profiles, or extensions:
 - Docs folder: {{docs_dir}}
 - Start with docs index: {{docs_index}}
 - Follow markdown cross-references before implementing.

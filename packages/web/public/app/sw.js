@@ -41,6 +41,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  if (url.pathname === '/app/api' || url.pathname.startsWith('/app/api/')) {
+    return;
+  }
+
   if (event.request.mode === 'navigate' && (url.pathname === '/app' || url.pathname.startsWith('/app/'))) {
     event.respondWith(handleCompanionNavigation(event.request));
     return;

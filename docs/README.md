@@ -10,7 +10,6 @@ It explains how to use the system and how to think about its durable features:
 - memory
 - scheduled tasks
 - daemon-backed background work
-- Telegram gateway
 - git-backed cross-machine sync
 - profiles and shared behavior
 
@@ -31,7 +30,6 @@ These docs intentionally focus on product behavior and daily use. They are not p
 - [Scheduled Tasks](./scheduled-tasks.md)
 - [Daemon and Background Automation](./daemon.md)
 - [Sync Guide (`pa sync`)](./sync.md)
-- [Gateway Guide (`pa gateway`)](./gateway.md)
 - [Skills and Runtime Capabilities](./skills-and-capabilities.md)
 
 ## Reference
@@ -50,7 +48,6 @@ These docs intentionally focus on product behavior and daily use. They are not p
 | Store durable behavior, knowledge, or reusable workflows | profiles, AGENTS, memory packages, skills | shared repo defaults + synced durable resources under `~/.local/state/personal-agent/sync/{profiles,agents,settings,models,skills,memory}/**` |
 | Run automation on a schedule | scheduled task + daemon | `~/.local/state/personal-agent/sync/tasks/*.task.md` + local daemon state |
 | Keep durable state in sync across machines | sync (`pa sync`) | git remote + `~/.local/state/personal-agent/sync/**` |
-| Talk to the same agent through Telegram | gateway | local gateway state + the active profile |
 
 ## Read this if you are an agent
 

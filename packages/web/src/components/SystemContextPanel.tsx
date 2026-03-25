@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { useSystemStatus } from '../contexts';
 import { getSystemComponentLabel, type SystemComponentId } from '../systemSelection';
-import type { DaemonState, GatewayState, SyncState, WebUiState } from '../types';
+import type { DaemonState, SyncState, WebUiState } from '../types';
 import { timeAgo } from '../utils';
 import { buildWebUiCompanionAccessSummary } from '../webUiCompanion';
 import { useApi } from '../hooks';
@@ -11,7 +11,6 @@ import { ErrorState, LoadingState, Pill, ToolbarButton, type PillTone } from './
 type SystemPanelData =
   | { kind: 'web-ui'; data: WebUiState }
   | { kind: 'daemon'; data: DaemonState }
-  | { kind: 'gateway'; data: GatewayState }
   | { kind: 'sync'; data: SyncState };
 
 function pluralize(count: number, singular: string, plural = `${singular}s`): string {
@@ -146,34 +145,6 @@ function buildPanel(selected: SystemPanelData) {
           { label: 'Started', value: data.runtime.startedAt ? timeAgo(data.runtime.startedAt) : '—' },
         ],
         emptyLogLabel: 'No recent daemon log lines.',
-      };
-    }
-    case 'gateway': {
-      const { data } = selected;
-      const running = data.service.running;
-
-      return {
-        title: 'Gateway',
-        description: 'Telegram bridge, tracked conversations, and queued message delivery.',
-        tone: systemTone(running, data.warnings.length, data.service.error),
-        status: systemLabel(running, data.warnings.length, data.service.error),
-        warnings: data.warnings,
-        log: data.gatewayLog,
-        actionLabel: 'Restart gateway',
-        actionDisabled: !data.service.installed || !data.service.running,
-        actionDisabledReason: !data.service.installed
-          ? 'Install the gateway service before restarting it.'
-          : !data.service.running
-            ? 'Start the gateway service before restarting it.'
-            : null,
-        details: [
-          { label: 'Service', value: data.service.running ? 'running' : data.service.installed ? 'stopped' : 'not installed' },
-          { label: 'Profile', value: data.currentProfile },
-          { label: 'Queue', value: `${data.pendingMessages.length} pending` },
-          { label: 'Chats', value: `${data.conversations.length} tracked` },
-          { label: 'Allowlist', value: `${data.access.allowlistChatIds.length} chat${data.access.allowlistChatIds.length === 1 ? '' : 's'}` },
-        ],
-        emptyLogLabel: 'No recent gateway log lines.',
       };
     }
     case 'sync': {
@@ -320,11 +291,9 @@ function CompanionPairingSection({ data }: { data: WebUiState }) {
 export function SystemContextPanel({ componentId }: { componentId: SystemComponentId }) {
   const {
     daemon,
-    gateway,
     sync,
     webUi,
     setDaemon,
-    setGateway,
     setSync,
     setWebUi,
   } = useSystemStatus();
@@ -344,12 +313,10 @@ export function SystemContextPanel({ componentId }: { componentId: SystemCompone
         return webUi ? { kind: 'web-ui', data: webUi } : null;
       case 'daemon':
         return daemon ? { kind: 'daemon', data: daemon } : null;
-      case 'gateway':
-        return gateway ? { kind: 'gateway', data: gateway } : null;
       case 'sync':
         return sync ? { kind: 'sync', data: sync } : null;
     }
-  }, [componentId, daemon, gateway, sync, webUi]);
+  }, [componentId, daemon, sync, webUi]);
 
   const panel = useMemo(() => (selected ? buildPanel(selected) : null), [selected]);
 
@@ -369,9 +336,6 @@ export function SystemContextPanel({ componentId }: { componentId: SystemCompone
         case 'daemon':
           setDaemon(await api.daemon());
           break;
-        case 'gateway':
-          setGateway(await api.gateway());
-          break;
         case 'sync':
           setSync(await api.sync());
           break;
@@ -381,7 +345,7 @@ export function SystemContextPanel({ componentId }: { componentId: SystemCompone
     } finally {
       setRefreshing(false);
     }
-  }, [componentId, refreshing, setDaemon, setGateway, setSync, setWebUi]);
+  }, [componentId, refreshing, setDaemon, setSync, setWebUi]);
 
   const handleAction = useCallback(async () => {
     if (actionBusy || !selected) {
@@ -404,11 +368,6 @@ export function SystemContextPanel({ componentId }: { componentId: SystemCompone
           setMessage('Requested a daemon restart.');
           break;
         }
-        case 'gateway': {
-          setGateway(await api.restartGateway());
-          setMessage('Requested a gateway restart.');
-          break;
-        }
         case 'sync': {
           setSync(await api.runSync());
           setMessage('Requested an immediate sync run.');
@@ -420,7 +379,7 @@ export function SystemContextPanel({ componentId }: { componentId: SystemCompone
     } finally {
       setActionBusy(false);
     }
-  }, [actionBusy, selected, setDaemon, setGateway, setSync]);
+  }, [actionBusy, selected, setDaemon, setSync]);
 
   const handleToggleWebUiTailscale = useCallback(async () => {
     if (actionBusy || !selected || selected.kind !== 'web-ui') {

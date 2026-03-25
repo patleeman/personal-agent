@@ -58,30 +58,6 @@ Example:
 
 See [Daemon and Background Automation](./daemon.md) and [Scheduled Tasks](./scheduled-tasks.md).
 
-### `~/.local/state/personal-agent/config/gateway.json`
-
-This stores gateway setup, typically written by:
-
-```bash
-pa gateway setup telegram
-```
-
-Use it for:
-
-- gateway profile
-- gateway default model
-- Telegram token
-- allowlisted chats
-- allowed user ids
-- blocked user ids
-- gateway cwd and queue limits
-
-Saved gateway settings are read from this file rather than per-setting environment-variable overrides.
-
-You can write this file either with `pa gateway setup telegram` or from the web UI Gateway page. The web UI also supports saving `op://...` 1Password references for supported gateway values.
-
-See [Gateway Guide](./gateway.md).
-
 ### `~/.local/state/personal-agent/config/execution-targets.json`
 
 This stores machine-local execution targets for remote conversation offload.
@@ -153,7 +129,6 @@ This includes:
 - auth
 - live/saved session state
 - daemon state and logs
-- gateway spools and logs
 - conversation-local bindings
 
 Do not point runtime state inside the git repo.
@@ -184,10 +159,8 @@ Canonical state-home layout:
 ├── config/
 │   ├── config.json
 │   ├── daemon.json
-│   ├── gateway.json
 │   └── web.json
 ├── daemon/
-├── gateway/
 ├── web/
 └── logs/
 ```
@@ -240,10 +213,6 @@ See [Sync Guide](./sync.md).
 - `PERSONAL_AGENT_DAEMON_CONFIG` — alternate daemon config file
 - `PERSONAL_AGENT_DAEMON_SOCKET_PATH` — default daemon socket path
 - `PERSONAL_AGENT_DISABLE_DAEMON_EVENTS=1` — disable daemon integration explicitly
-
-### Gateway
-
-- `PERSONAL_AGENT_GATEWAY_CONFIG_FILE` — alternate gateway config file
 
 ### Web UI
 
@@ -311,8 +280,7 @@ For most setups:
 1. set the default profile with `pa profile use <name>`
 2. keep durable behavior and knowledge in the synced roots under `~/.local/state/personal-agent/sync/` (with repo defaults in `defaults/agent` and optional machine-local additions in `~/.local/state/personal-agent/config/local`)
 3. keep daemon behavior in `daemon.json`
-4. use `pa gateway setup telegram` for gateway config
-5. keep secrets as 1Password references where possible; use env vars only when a component truly needs them
+4. keep secrets as 1Password references where possible; use env vars only when a component truly needs them
 
 ## Related docs
 
@@ -320,5 +288,4 @@ For most setups:
 - [Profiles, Memory, and Skills](./profiles-memory-skills.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
 - [Sync Guide](./sync.md)
-- [Gateway Guide](./gateway.md)
 - [Troubleshooting](./troubleshooting.md)

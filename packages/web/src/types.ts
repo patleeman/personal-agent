@@ -363,108 +363,9 @@ export interface DurableRunDetailResult {
   run: DurableRunRecord;
 }
 
-export interface GatewayServiceSummary {
-  provider: 'telegram';
-  platform: string;
-  identifier: string;
-  manifestPath: string;
-  installed: boolean;
-  running: boolean;
-  logFile?: string;
-  error?: string;
-  daemonService?: {
-    identifier: string;
-    manifestPath: string;
-    installed: boolean;
-    running: boolean;
-    logFile?: string;
-  };
-}
-
-export type GatewayTokenSource = 'missing' | 'plain' | 'one-password';
-
-export interface GatewayAccessSummary {
-  tokenConfigured: boolean;
-  tokenSource: GatewayTokenSource;
-  tokenPreview?: string;
-  defaultModel?: string;
-  allowlistChatIds: string[];
-  allowedUserIds: string[];
-  blockedUserIds: string[];
-  workingDirectory?: string;
-  maxPendingPerChat?: number;
-  toolActivityStream?: boolean;
-  clearRecentMessagesOnNew?: boolean;
-}
-
-export interface GatewayWorkTopicSummary {
-  sourceConversationId: string;
-  workConversationId: string;
-  topicName: string;
-  updatedAt: string;
-}
-
-export interface GatewayConversationSummary {
-  conversationId: string;
-  label: string;
-  chatId: string;
-  messageThreadId?: number;
-  sessionFile: string;
-  sessionMissing: boolean;
-  sessionOverride: boolean;
-  title: string;
-  messageCount: number;
-  model: string;
-  cwd: string;
-  lastActivityAt: string;
-  bindingUpdatedAt?: string;
-  workTopic?: GatewayWorkTopicSummary;
-  sourceWorkTopic?: GatewayWorkTopicSummary;
-}
-
-export interface GatewayPendingMessageSummary {
-  id: string;
-  storedAt: string;
-  conversationId: string;
-  chatId: string;
-  messageThreadId?: number;
-  senderLabel?: string;
-  preview: string;
-  hasMedia: boolean;
-}
-
-export interface GatewayLogTail {
+export interface LogTail {
   path?: string;
   lines: string[];
-}
-
-export interface GatewayState {
-  provider: 'telegram';
-  currentProfile: string;
-  configuredProfile: string;
-  configFilePath: string;
-  envOverrideKeys: string[];
-  warnings: string[];
-  service: GatewayServiceSummary;
-  access: GatewayAccessSummary;
-  conversations: GatewayConversationSummary[];
-  pendingMessages: GatewayPendingMessageSummary[];
-  gatewayLog: GatewayLogTail;
-  daemonLog?: GatewayLogTail;
-}
-
-export interface GatewayConfigUpdateInput {
-  profile: string;
-  defaultModel?: string;
-  token?: string;
-  clearToken?: boolean;
-  allowlistChatIds: string[];
-  allowedUserIds: string[];
-  blockedUserIds: string[];
-  workingDirectory?: string | null;
-  maxPendingPerChat?: number | null;
-  toolActivityStream: boolean;
-  clearRecentMessagesOnNew: boolean;
 }
 
 export interface DaemonServiceSummary {
@@ -491,7 +392,7 @@ export interface DaemonState {
   warnings: string[];
   service: DaemonServiceSummary;
   runtime: DaemonRuntimeSummary;
-  log: GatewayLogTail;
+  log: LogTail;
 }
 
 export interface SyncConfigSummary {
@@ -542,7 +443,7 @@ export interface SyncState {
   config: SyncConfigSummary;
   git: SyncGitSummary;
   daemon: SyncDaemonSummary;
-  log: GatewayLogTail;
+  log: LogTail;
 }
 
 export interface WebUiReleaseSummary {
@@ -596,7 +497,7 @@ export interface WebUiServiceSummary {
 export interface WebUiState {
   warnings: string[];
   service: WebUiServiceSummary;
-  log: GatewayLogTail;
+  log: LogTail;
 }
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
@@ -622,6 +523,18 @@ export interface SessionMeta {
   attentionUnreadActivityCount?: number;
   attentionActivityIds?: string[];
   deferredResumes?: DeferredResumeSummary[];
+}
+
+export interface CompanionConversationListResult {
+  live: SessionMeta[];
+  needsReview: SessionMeta[];
+  active: SessionMeta[];
+  archived: SessionMeta[];
+  archivedTotal: number;
+  archivedOffset: number;
+  archivedLimit: number;
+  hasMoreArchived: boolean;
+  workspaceSessionIds: string[];
 }
 
 export type DisplayBlock =
@@ -683,7 +596,6 @@ export type AppEventTopic =
   | 'runs'
   | 'automation'
   | 'daemon'
-  | 'gateway'
   | 'sync'
   | 'webUi'
   | 'executionTargets'
@@ -699,7 +611,6 @@ export type AppEvent =
   | { type: 'tasks_snapshot'; tasks: ScheduledTaskSummary[] }
   | { type: 'runs_snapshot'; result: DurableRunListResult }
   | { type: 'daemon_snapshot'; state: DaemonState }
-  | { type: 'gateway_snapshot'; state: GatewayState }
   | { type: 'sync_snapshot'; state: SyncState }
   | { type: 'web_ui_snapshot'; state: WebUiState };
 

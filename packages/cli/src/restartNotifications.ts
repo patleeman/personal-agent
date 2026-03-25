@@ -2,7 +2,7 @@ import {
   createProjectActivityEntry,
   writeProfileActivityEntry,
 } from '@personal-agent/core';
-import { getWebUiServiceStatus } from '@personal-agent/gateway';
+import { getWebUiServiceStatus } from '@personal-agent/services';
 import { getRepoRoot } from '@personal-agent/resources';
 
 export interface RestartCompletionInboxEntryInput {
@@ -12,8 +12,6 @@ export interface RestartCompletionInboxEntryInput {
   requestedAt?: string;
   daemonStatus: string;
   webUiStatus: string;
-  restartedGatewayServices: string[];
-  skippedGatewayServices: string[];
 }
 
 export interface RestartFailureInboxEntryInput {
@@ -32,8 +30,6 @@ export interface UpdateCompletionInboxEntryInput {
   requestedAt?: string;
   daemonStatus: string;
   webUiStatus: string;
-  restartedGatewayServices: string[];
-  skippedGatewayServices: string[];
 }
 
 export interface UpdateFailureInboxEntryInput {
@@ -79,10 +75,6 @@ function sanitizeActivityIdSegment(value: string): string {
 
 function buildTimestampKey(value: string): string {
   return sanitizeActivityIdSegment(value.replace(/[.:]/g, '-'));
-}
-
-function formatList(values: string[]): string {
-  return values.length > 0 ? values.join(', ') : 'none';
 }
 
 function resolveEffectiveRepoRoot(repoRoot?: string): string {
@@ -164,8 +156,6 @@ function buildApplicationCompletionDetails(input: {
   intro: string;
   daemonStatus: string;
   webUiStatus: string;
-  restartedGatewayServices: string[];
-  skippedGatewayServices: string[];
   activeSlot?: 'blue' | 'green';
   activeRevision?: string;
   serviceUrl?: string;
@@ -178,8 +168,6 @@ function buildApplicationCompletionDetails(input: {
     `- Completed: ${input.completedAt}`,
     `- Web UI: ${input.webUiStatus}`,
     `- Daemon: ${input.daemonStatus}`,
-    `- Gateway services restarted: ${formatList(input.restartedGatewayServices)}`,
-    `- Gateway services skipped: ${formatList(input.skippedGatewayServices)}`,
     input.activeSlot ? `- Active slot: ${input.activeSlot}` : undefined,
     input.activeRevision ? `- Active release: ${input.activeRevision}` : undefined,
     input.serviceUrl ? `- URL: ${input.serviceUrl}` : undefined,
@@ -231,8 +219,6 @@ export function writeRestartCompletionInboxEntry(input: RestartCompletionInboxEn
       intro: 'Managed web UI blue/green cutover is complete.',
       daemonStatus: input.daemonStatus,
       webUiStatus: input.webUiStatus,
-      restartedGatewayServices: input.restartedGatewayServices,
-      skippedGatewayServices: input.skippedGatewayServices,
       activeSlot: serviceContext.activeSlot,
       activeRevision: serviceContext.activeRevision,
       serviceUrl: serviceContext.serviceUrl,
@@ -287,8 +273,6 @@ export function writeUpdateCompletionInboxEntry(input: UpdateCompletionInboxEntr
       intro: 'Managed application update and web UI blue/green cutover are complete.',
       daemonStatus: input.daemonStatus,
       webUiStatus: input.webUiStatus,
-      restartedGatewayServices: input.restartedGatewayServices,
-      skippedGatewayServices: input.skippedGatewayServices,
       activeSlot: serviceContext.activeSlot,
       activeRevision: serviceContext.activeRevision,
       serviceUrl: serviceContext.serviceUrl,

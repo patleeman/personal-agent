@@ -1,4 +1,4 @@
-export const SYSTEM_COMPONENT_IDS = ['web-ui', 'daemon', 'gateway', 'sync'] as const;
+export const SYSTEM_COMPONENT_IDS = ['web-ui', 'daemon', 'sync'] as const;
 
 export type SystemComponentId = (typeof SYSTEM_COMPONENT_IDS)[number];
 
@@ -9,7 +9,6 @@ const SYSTEM_COMPONENT_SET = new Set<string>(SYSTEM_COMPONENT_IDS);
 const SYSTEM_COMPONENT_LABELS: Record<SystemComponentId, string> = {
   'web-ui': 'Web UI',
   daemon: 'Daemon',
-  gateway: 'Gateway',
   sync: 'Sync',
 };
 

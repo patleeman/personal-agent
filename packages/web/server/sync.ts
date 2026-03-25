@@ -16,7 +16,7 @@ import {
 } from '@personal-agent/daemon';
 import { getRepoRoot } from '@personal-agent/resources';
 
-interface GatewayLogTail {
+interface LogTail {
   path?: string;
   lines: string[];
 }
@@ -69,7 +69,7 @@ export interface SyncStateSnapshot {
   config: SyncConfigSummary;
   git: SyncGitSummary;
   daemon: SyncDaemonSummary;
-  log: GatewayLogTail;
+  log: LogTail;
 }
 
 export type SyncSetupMode = 'fresh' | 'bootstrap';

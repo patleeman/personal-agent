@@ -16,10 +16,8 @@ import {
 } from './scheduledTasks.js';
 
 const SCHEDULED_TASK_ACTION_VALUES = ['list', 'get', 'save', 'delete', 'validate', 'run'] as const;
-const TASK_OUTPUT_WHEN_VALUES = ['success', 'failure', 'always'] as const;
 
 type ScheduledTaskAction = (typeof SCHEDULED_TASK_ACTION_VALUES)[number];
-type TaskOutputWhen = (typeof TASK_OUTPUT_WHEN_VALUES)[number];
 
 const ScheduledTaskToolParams = Type.Object({
   action: Type.Union(SCHEDULED_TASK_ACTION_VALUES.map((value) => Type.Literal(value))),
@@ -32,11 +30,6 @@ const ScheduledTaskToolParams = Type.Object({
   cwd: Type.Optional(Type.String({ description: 'Working directory for the task.' })),
   timeoutSeconds: Type.Optional(Type.Number({ minimum: 1, description: 'Per-run timeout in seconds.' })),
   prompt: Type.Optional(Type.String({ description: 'Task prompt body.' })),
-  outputWhen: Type.Optional(Type.Union(TASK_OUTPUT_WHEN_VALUES.map((value) => Type.Literal(value)))),
-  outputTargets: Type.Optional(Type.Array(Type.Object({
-    chatId: Type.String({ minLength: 1 }),
-    messageThreadId: Type.Optional(Type.Number()),
-  }), { description: 'Optional Telegram delivery targets for output routing.' })),
 });
 
 function readRequiredString(value: string | undefined, label: string): string {
@@ -115,33 +108,6 @@ function formatTaskDetail(task: ParsedTaskDefinition, runtime: TaskRuntimeEntry 
   return lines.join('\n');
 }
 
-function buildTaskOutput(input: {
-  outputWhen?: TaskOutputWhen;
-  outputTargets?: Array<{ chatId: string; messageThreadId?: number }>;
-  existingOutput?: ParsedTaskDefinition['output'];
-}): ParsedTaskDefinition['output'] | undefined {
-  const targets = input.outputTargets
-    ? input.outputTargets.map((target) => ({
-        gateway: 'telegram' as const,
-        chatId: target.chatId,
-        ...(target.messageThreadId !== undefined ? { messageThreadId: target.messageThreadId } : {}),
-      }))
-    : input.existingOutput?.targets.map((target) => ({
-        gateway: 'telegram' as const,
-        chatId: target.chatId,
-        ...(target.messageThreadId !== undefined ? { messageThreadId: target.messageThreadId } : {}),
-      }));
-
-  if (!targets || targets.length === 0) {
-    return undefined;
-  }
-
-  return {
-    when: input.outputWhen ?? input.existingOutput?.when ?? 'success',
-    targets,
-  };
-}
-
 function fileNameForTaskId(taskId: string): string {
   return `${taskId}.task.md`;
 }
@@ -209,11 +175,6 @@ export function createScheduledTaskAgentExtension(options: {
                 cwd: params.cwd ?? existing?.cwd,
                 timeoutSeconds: params.timeoutSeconds ?? existing?.timeoutSeconds,
                 prompt: params.prompt ?? existing?.prompt ?? '',
-                output: buildTaskOutput({
-                  outputWhen: params.outputWhen,
-                  outputTargets: params.outputTargets,
-                  existingOutput: existing?.output,
-                }),
               });
               const filePath = existing?.filePath ?? join(taskDirForProfile(profile), fileNameForTaskId(taskId));
               validateScheduledTaskDefinition(filePath, content);

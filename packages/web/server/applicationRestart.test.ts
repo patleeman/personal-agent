@@ -13,7 +13,7 @@ vi.mock('node:child_process', () => ({
   spawn: spawnMock,
 }));
 
-vi.mock('@personal-agent/gateway', () => ({
+vi.mock('@personal-agent/services', () => ({
   getWebUiServiceStatus: getWebUiServiceStatusMock,
 }));
 

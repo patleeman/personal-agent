@@ -2,7 +2,7 @@
 
 `personal-agentd` is the shared background process behind unattended behavior.
 
-If you care about scheduled tasks, deferred work, or durable gateway notifications, you usually want the daemon running.
+If you care about scheduled tasks, deferred work, or durable background automation, you usually want the daemon running.
 
 ## What the daemon does
 
@@ -12,16 +12,14 @@ The daemon is responsible for background automation such as:
 - deferred resume handling
 - git-backed durable-state sync
 - background maintenance
-- routing task notifications to the gateway
 
-It lets the CLI, web UI, and gateway stay relatively thin while one process handles long-lived background work.
+It lets the CLI and web UI stay relatively thin while one process handles long-lived background work.
 
 ## When you need it
 
 You should keep the daemon on if you use:
 
 - scheduled tasks
-- Telegram task output routing
 - deferred resume
 - git-backed cross-machine sync
 - always-on background workflows
@@ -47,7 +45,7 @@ Handles periodic housekeeping such as log cleanup.
 
 Discovers and runs `*.task.md` files.
 
-This module is what powers scheduled task runs, retries, logs, and gateway output routing.
+This module is what powers scheduled task runs, retries, and logs.
 
 See [Scheduled Tasks](./scheduled-tasks.md).
 
@@ -139,12 +137,6 @@ The daemon discovers task files and executes them.
 
 Without the daemon, scheduled tasks do not run.
 
-### Gateway
-
-The gateway can pull daemon-backed notifications and surface background results into Telegram.
-
-Installing the gateway managed service also provisions the daemon.
-
 ### Inbox
 
 Scheduled task and deferred-resume events can create durable local inbox activity.
@@ -178,5 +170,4 @@ Think of the daemon as the system's background engine:
 - [Scheduled Tasks](./scheduled-tasks.md)
 - [Sync Guide](./sync.md)
 - [Inbox and Activity](./inbox.md)
-- [Gateway Guide](./gateway.md)
 - [Configuration](./configuration.md)

@@ -27,16 +27,6 @@ import {
   writeWorkspaceFile,
 } from './workspaceBrowser.js';
 import {
-  installGatewayAndReadState,
-  readGatewayState,
-  restartGatewayAndReadState,
-  saveGatewayConfigAndReadState,
-  startGatewayAndReadState,
-  stopGatewayAndReadState,
-  uninstallGatewayAndReadState,
-} from './gateway.js';
-import { parseGatewayConfigUpdateInput } from './gatewayConfig.js';
-import {
   installDaemonServiceAndReadState,
   readDaemonState,
   restartDaemonServiceAndReadState,
@@ -654,7 +644,6 @@ async function setCurrentProfile(profile: string): Promise<string> {
     'runs',
     'automation',
     'daemon',
-    'gateway',
     'sync',
     'webUi',
     'executionTargets',
@@ -1779,6 +1768,104 @@ function listConversationSessionsSnapshot() {
   ];
 }
 
+function parseSessionActivityAt(session: { lastActivityAt?: string; timestamp: string }): number {
+  const timestamp = session.lastActivityAt ?? session.timestamp;
+  const parsed = Date.parse(timestamp);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function sortSessionsForCompanionList<T extends {
+  isLive?: boolean;
+  needsAttention?: boolean;
+  isRunning?: boolean;
+  lastActivityAt?: string;
+  timestamp: string;
+}>(sessions: T[]): T[] {
+  return [...sessions].sort((left, right) => {
+    if (Boolean(left.isLive) !== Boolean(right.isLive)) {
+      return left.isLive ? -1 : 1;
+    }
+
+    if (Boolean(left.needsAttention) !== Boolean(right.needsAttention)) {
+      return left.needsAttention ? -1 : 1;
+    }
+
+    if (Boolean(left.isRunning) !== Boolean(right.isRunning)) {
+      return left.isRunning ? -1 : 1;
+    }
+
+    return parseSessionActivityAt(right) - parseSessionActivityAt(left);
+  });
+}
+
+function parseBoundedIntegerQueryValue(
+  rawValue: unknown,
+  defaultValue: number,
+  { min = 0, max = Number.MAX_SAFE_INTEGER }: { min?: number; max?: number } = {},
+): number {
+  const firstValue = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+  const parsed = typeof firstValue === 'string'
+    ? Number.parseInt(firstValue, 10)
+    : typeof firstValue === 'number'
+      ? firstValue
+      : Number.NaN;
+
+  if (!Number.isInteger(parsed)) {
+    return defaultValue;
+  }
+
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function listCompanionConversationSections(options?: { archivedOffset?: number; archivedLimit?: number }) {
+  const saved = readSavedWebUiPreferences(SETTINGS_FILE);
+  const workspaceSessionIds = [
+    ...saved.openConversationIds,
+    ...saved.pinnedConversationIds,
+  ];
+  const workspaceSessionIdSet = new Set(workspaceSessionIds);
+  const sessions = sortSessionsForCompanionList(listConversationSessionsSnapshot());
+  const live: typeof sessions = [];
+  const needsReview: typeof sessions = [];
+  const active: typeof sessions = [];
+  const archived: typeof sessions = [];
+
+  for (const session of sessions) {
+    if (session.isLive) {
+      live.push(session);
+      continue;
+    }
+
+    if (session.needsAttention) {
+      needsReview.push(session);
+      continue;
+    }
+
+    if (workspaceSessionIdSet.has(session.id)) {
+      active.push(session);
+      continue;
+    }
+
+    archived.push(session);
+  }
+
+  const archivedOffset = Math.min(options?.archivedOffset ?? 0, archived.length);
+  const archivedLimit = Math.max(1, options?.archivedLimit ?? 30);
+  const nextArchived = archived.slice(archivedOffset, archivedOffset + archivedLimit);
+
+  return {
+    live,
+    needsReview,
+    active,
+    archived: nextArchived,
+    archivedTotal: archived.length,
+    archivedOffset,
+    archivedLimit,
+    hasMoreArchived: archivedOffset + nextArchived.length < archived.length,
+    workspaceSessionIds,
+  };
+}
+
 function resolveConversationSessionFile(conversationId: string): string | undefined {
   const liveEntry = liveRegistry.get(conversationId);
   if (liveEntry) {
@@ -2583,9 +2670,6 @@ async function buildSnapshotEvents(topics: AppEventTopic[]) {
       case 'daemon':
         events.push({ type: 'daemon_snapshot' as const, state: await readDaemonState() });
         break;
-      case 'gateway':
-        events.push({ type: 'gateway_snapshot' as const, state: readGatewayState(getCurrentProfile()) });
-        break;
       case 'sync':
         events.push({ type: 'sync_snapshot' as const, state: await readSyncState() });
         break;
@@ -2763,6 +2847,11 @@ for (const serverApp of [app, companionApp]) {
   serverApp.use(enforceSameOriginUnsafeRequests);
 }
 
+companionApp.use('/app/api', (req, _res, next) => {
+  req.url = `/api${req.url}`;
+  next();
+});
+
 const companionAuthExchangeRateLimit = createInMemoryRateLimit({
   windowMs: 60_000,
   maxRequests: 10,
@@ -2789,7 +2878,6 @@ createServiceAttentionMonitor({
   stateRoot: resolveDaemonRoot(),
   getCurrentProfile,
   readDaemonState,
-  readGatewayState,
   logger: {
     warn: (message, fields) => logWarn(message, fields),
   },
@@ -2892,7 +2980,7 @@ app.get('/api/events', (req, res) => {
 
   writeEvent({ type: 'connected' });
   enqueueWrite(async () => {
-    await writeSnapshotEvents(['activity', 'projects', 'sessions', 'tasks', 'daemon', 'gateway', 'sync', 'webUi', 'runs']);
+    await writeSnapshotEvents(['activity', 'projects', 'sessions', 'tasks', 'daemon', 'sync', 'webUi', 'runs']);
   });
 
   const heartbeat = setInterval(() => {
@@ -2997,120 +3085,6 @@ app.post('/api/application/update', (_req, res) => {
         ? 400
         : 500;
     res.status(status).json({ error: message });
-  }
-});
-
-// ── Gateway ──────────────────────────────────────────────────────────────────
-
-app.get('/api/gateway', (_req, res) => {
-  try {
-    res.json(readGatewayState(getCurrentProfile()));
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.post('/api/gateway/config', (req, res) => {
-  try {
-    const input = parseGatewayConfigUpdateInput(req.body);
-    if (!listAvailableProfiles().includes(input.profile)) {
-      res.status(400).json({ error: `Unknown profile: ${input.profile}` });
-      return;
-    }
-
-    suppressMonitoredServiceAttention('gateway');
-    const state = saveGatewayConfigAndReadState(getCurrentProfile(), input);
-    invalidateAppTopics('gateway');
-    res.json(state);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const status = message.startsWith('Unknown profile:') || message.includes('must be') || message.endsWith('is required')
-      ? 400
-      : 500;
-    logError('request handler error', {
-      message,
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(status).json({ error: message });
-  }
-});
-
-app.post('/api/gateway/restart', (_req, res) => {
-  try {
-    suppressMonitoredServiceAttention('gateway');
-    const state = restartGatewayAndReadState(getCurrentProfile());
-    invalidateAppTopics('gateway');
-    res.json(state);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.post('/api/gateway/service/install', (_req, res) => {
-  try {
-    suppressMonitoredServiceAttention('gateway');
-    const state = installGatewayAndReadState(getCurrentProfile());
-    invalidateAppTopics('gateway');
-    res.json(state);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.post('/api/gateway/service/start', (_req, res) => {
-  try {
-    suppressMonitoredServiceAttention('gateway');
-    const state = startGatewayAndReadState(getCurrentProfile());
-    invalidateAppTopics('gateway');
-    res.json(state);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.post('/api/gateway/service/stop', (_req, res) => {
-  try {
-    suppressMonitoredServiceAttention('gateway');
-    const state = stopGatewayAndReadState(getCurrentProfile());
-    invalidateAppTopics('gateway');
-    res.json(state);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
-
-app.post('/api/gateway/service/uninstall', (_req, res) => {
-  try {
-    suppressMonitoredServiceAttention('gateway');
-    const state = uninstallGatewayAndReadState(getCurrentProfile());
-    invalidateAppTopics('gateway');
-    res.json(state);
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
   }
 });
 
@@ -4249,7 +4223,7 @@ app.get('/api/tools', async (req, res) => {
         name: '1Password CLI',
         description: 'Resolves op:// secret references used by personal-agent features and extensions.',
         configuredBy: 'PERSONAL_AGENT_OP_BIN',
-        usedBy: ['op:// secret references', 'web-tools extension', 'gateway secret resolution'],
+        usedBy: ['op:// secret references', 'web-tools extension'],
         binary: inspectCliBinary({ command: onePasswordCommand, cwd: REPO_ROOT }),
       },
     ];
@@ -4679,7 +4653,6 @@ app.patch('/api/tasks/:id', (req, res) => {
       cwd: body.cwd !== undefined ? body.cwd : resolvedTask.task.cwd,
       timeoutSeconds: body.timeoutSeconds !== undefined ? body.timeoutSeconds : resolvedTask.task.timeoutSeconds,
       prompt: body.prompt ?? resolvedTask.task.prompt,
-      output: resolvedTask.task.output,
     });
 
     validateScheduledTaskDefinition(resolvedTask.task.filePath, nextContent);
@@ -5384,6 +5357,20 @@ app.get('/api/runs/:id/remote-transcript', async (req, res) => {
 
 // ── Sessions (read-only JSONL) ────────────────────────────────────────────────
 
+function handleCompanionConversationListRequest(req: express.Request, res: express.Response) {
+  try {
+    const archivedOffset = parseBoundedIntegerQueryValue(req.query.archivedOffset, 0);
+    const archivedLimit = parseBoundedIntegerQueryValue(req.query.archivedLimit, 30, { min: 1, max: 100 });
+    res.json(listCompanionConversationSections({ archivedOffset, archivedLimit }));
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+}
+
 app.get('/api/sessions', (_req, res) => {
   try {
     res.json(decorateSessionsWithAttention(getCurrentProfile(), listSessions()));
@@ -5395,6 +5382,8 @@ app.get('/api/sessions', (_req, res) => {
     res.status(500).json({ error: String(err) });
   }
 });
+
+app.get('/api/companion/conversations', handleCompanionConversationListRequest);
 
 app.get('/api/sessions/:id', async (req, res) => {
   const startedAt = process.hrtime.bigint();
@@ -9862,6 +9851,8 @@ companionApp.get('/api/sessions', (_req, res) => {
   }
 });
 
+companionApp.get('/api/companion/conversations', handleCompanionConversationListRequest);
+
 companionApp.get('/api/sessions/:id', async (req, res) => {
   const startedAt = process.hrtime.bigint();
 
@@ -10532,12 +10523,7 @@ if (existsSync(DIST_DIR)) {
   companionApp.use('/assets', express.static(DIST_ASSETS_DIR));
   companionApp.use('/app', express.static(COMPANION_DIST_DIR));
   companionApp.get('/', (_req, res) => {
-    res.type('html').send(
-      '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>personal-agent companion</title></head><body><script>'
-      + 'const path=window.location.pathname==="/"?"/app":window.location.pathname.replace(/\\/+$/,"");'
-      + 'window.location.replace(`${path}/conversations${window.location.search}${window.location.hash}`);'
-      + '</script><noscript><meta http-equiv="refresh" content="0;url=/app/conversations"></noscript></body></html>',
-    );
+    res.redirect('/app/conversations');
   });
   companionApp.use(express.static(COMPANION_DIST_DIR, { index: false }));
   companionApp.get('*', (req, res, next) => {

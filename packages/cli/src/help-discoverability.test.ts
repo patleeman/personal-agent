@@ -78,18 +78,6 @@ describe('subcommand help discoverability', () => {
       argv: ['daemon', 'service', '--help'],
       expected: ['Daemon service', 'pa daemon service install', 'Supported platforms'],
     },
-    {
-      argv: ['gateway', '--help'],
-      expected: ['Gateway commands', 'pa gateway help', 'pa gateway telegram [setup|start|send|help]'],
-    },
-    {
-      argv: ['gateway', 'service', '--help'],
-      expected: ['Gateway service', 'pa gateway service install [provider]', 'Supported platforms'],
-    },
-    {
-      argv: ['gateway', 'telegram', '--help'],
-      expected: ['Gateway · Telegram', 'pa gateway telegram setup', 'pa gateway service install telegram'],
-    },
   ])('shows useful help for $argv', async ({ argv, expected }) => {
     const logs = captureLogs();
 

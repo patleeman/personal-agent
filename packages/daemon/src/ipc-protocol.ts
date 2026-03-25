@@ -2,8 +2,6 @@ import type {
   DaemonEvent,
   DaemonStatus,
   EmitResult,
-  GatewayNotificationProvider,
-  PullGatewayNotificationsResult,
   ListDurableRunsResult,
   GetDurableRunResult,
   StartScheduledTaskRunResult,
@@ -34,13 +32,6 @@ export interface StopRequest {
 export interface PingRequest {
   id: string;
   type: 'ping';
-}
-
-export interface PullGatewayNotificationsRequest {
-  id: string;
-  type: 'notifications.pull';
-  gateway: GatewayNotificationProvider;
-  limit?: number;
 }
 
 export interface ListDurableRunsRequest {
@@ -88,7 +79,6 @@ export type DaemonRequest =
   | StatusRequest
   | StopRequest
   | PingRequest
-  | PullGatewayNotificationsRequest
   | ListDurableRunsRequest
   | GetDurableRunRequest
   | StartScheduledTaskRunRequest
@@ -105,7 +95,6 @@ export interface DaemonSuccessResponse {
     | DaemonStatus
     | { stopping: boolean }
     | { pong: true }
-    | PullGatewayNotificationsResult
     | ListDurableRunsResult
     | GetDurableRunResult
     | StartScheduledTaskRunResult
@@ -129,34 +118,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function hasId(value: Record<string, unknown>): value is Record<string, unknown> & { id: string } {
   return typeof value.id === 'string' && value.id.length > 0;
-}
-
-function isGatewayNotificationProvider(value: unknown): value is GatewayNotificationProvider {
-  return value === 'telegram';
-}
-
-function readOptionalLimit(value: unknown): number | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isInteger(value) || value <= 0) {
-    throw new Error('notifications.pull limit must be a positive integer');
-  }
-
-  return value;
-}
-
-function readOptionalPositiveInteger(value: unknown, label: string): number | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isInteger(value) || value <= 0) {
-    throw new Error(`${label} must be a positive integer`);
-  }
-
-  return value;
 }
 
 function readRequiredString(value: unknown, label: string): string {
@@ -205,41 +166,6 @@ function readBackgroundRunAgent(value: unknown): StartBackgroundRunRequestInput[
   };
 }
 
-function readBackgroundRunNotification(value: unknown): StartBackgroundRunRequestInput['notification'] {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (!isRecord(value)) {
-    throw new Error('runs.startBackground notification must be an object when provided');
-  }
-
-  const gateway = readRequiredString(value.gateway, 'runs.startBackground notification.gateway');
-  if (gateway !== 'telegram') {
-    throw new Error('runs.startBackground notification.gateway must be telegram');
-  }
-
-  const destinationId = readRequiredString(value.destinationId, 'runs.startBackground notification.destinationId');
-  const mode = readRequiredString(value.mode, 'runs.startBackground notification.mode');
-  if (mode !== 'none' && mode !== 'message' && mode !== 'resume') {
-    throw new Error('runs.startBackground notification.mode must be none, message, or resume');
-  }
-
-  const messageThreadId = readOptionalPositiveInteger(
-    value.messageThreadId,
-    'runs.startBackground notification.messageThreadId',
-  );
-  const resumeConversationId = readOptionalString(value.resumeConversationId);
-
-  return {
-    gateway: 'telegram',
-    destinationId,
-    ...(messageThreadId !== undefined ? { messageThreadId } : {}),
-    mode,
-    ...(resumeConversationId ? { resumeConversationId } : {}),
-  };
-}
-
 function readBackgroundRunInput(value: unknown): StartBackgroundRunRequestInput {
   if (!isRecord(value)) {
     throw new Error('runs.startBackground input must be an object');
@@ -265,7 +191,6 @@ function readBackgroundRunInput(value: unknown): StartBackgroundRunRequestInput 
     : undefined;
   const shellCommand = readOptionalString(value.shellCommand);
   const agent = readBackgroundRunAgent(value.agent);
-  const notification = readBackgroundRunNotification(value.notification);
 
   return {
     taskSlug: readRequiredString(value.taskSlug, 'runs.startBackground taskSlug'),
@@ -282,7 +207,6 @@ function readBackgroundRunInput(value: unknown): StartBackgroundRunRequestInput 
           },
         }
       : {}),
-    ...(notification ? { notification } : {}),
     ...(manifestMetadata ? { manifestMetadata } : {}),
     ...(checkpointPayload ? { checkpointPayload } : {}),
   };
@@ -335,19 +259,6 @@ export function parseRequest(raw: string): DaemonRequest {
       id: parsed.id,
       type: 'emit',
       event: parsed.event as DaemonEvent,
-    };
-  }
-
-  if (parsed.type === 'notifications.pull') {
-    if (!isGatewayNotificationProvider(parsed.gateway)) {
-      throw new Error('notifications.pull gateway must be telegram');
-    }
-
-    return {
-      id: parsed.id,
-      type: 'notifications.pull',
-      gateway: parsed.gateway,
-      limit: readOptionalLimit(parsed.limit),
     };
   }
 

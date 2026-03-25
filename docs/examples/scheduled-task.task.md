@@ -6,12 +6,6 @@ profile: "assistant"
 model: "openai-codex/gpt-5.4"
 cwd: "~/agent-workspace"
 timeoutSeconds: 1800
-output:
-  when: success
-  targets:
-    - gateway: telegram
-      chatId: "123456789"
-      messageThreadId: 22
 ---
 Summarize yesterday's work from git history and open TODOs.
 Return:

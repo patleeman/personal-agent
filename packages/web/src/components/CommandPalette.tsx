@@ -238,7 +238,7 @@ function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
       section: 'nav',
       title: 'System',
       subtitle: 'Inspect services, logs, and background work',
-      keywords: ['daemon', 'sync', 'gateway', 'telegram', 'web ui', 'status', 'services', 'runs', 'background', 'executions'],
+      keywords: ['daemon', 'sync', 'web ui', 'status', 'services', 'runs', 'background', 'executions'],
       order: 13,
       action: { kind: 'navigate', to: '/system' },
     },

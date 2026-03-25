@@ -7,7 +7,7 @@ export default defineConfig({
       '@personal-agent/core': resolve(process.cwd(), 'packages/core/src/index.ts'),
       '@personal-agent/daemon': resolve(process.cwd(), 'packages/daemon/src/index.ts'),
       '@personal-agent/resources': resolve(process.cwd(), 'packages/resources/src/index.ts'),
-      '@personal-agent/gateway': resolve(process.cwd(), 'packages/gateway/src/index.ts'),
+      '@personal-agent/services': resolve(process.cwd(), 'packages/services/src/index.ts'),
     },
   },
   test: {
@@ -30,7 +30,7 @@ export default defineConfig({
         '**/dist/**',
         'packages/**/src/**/types.ts',
         'packages/cli/src/index.ts',
-        'packages/gateway/src/index.ts',
+        'packages/services/src/index.ts',
       ],
       reporter: ['text', 'text-summary', 'json-summary'],
     },

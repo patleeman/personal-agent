@@ -33,21 +33,6 @@ export interface AtTaskSchedule {
 
 export type ParsedTaskSchedule = CronTaskSchedule | AtTaskSchedule;
 
-export type TaskOutputWhen = 'success' | 'failure' | 'always';
-
-export interface ParsedTaskOutputTargetTelegram {
-  gateway: 'telegram';
-  chatId: string;
-  messageThreadId?: number;
-}
-
-export type ParsedTaskOutputTarget = ParsedTaskOutputTargetTelegram;
-
-export interface ParsedTaskOutput {
-  when: TaskOutputWhen;
-  targets: ParsedTaskOutputTarget[];
-}
-
 export interface ParsedTaskDefinition {
   key: string;
   filePath: string;
@@ -60,7 +45,6 @@ export interface ParsedTaskDefinition {
   modelRef?: string;
   cwd?: string;
   timeoutSeconds: number;
-  output?: ParsedTaskOutput;
 }
 
 interface ParseTaskDefinitionOptions {
@@ -242,151 +226,6 @@ function readTimeoutSeconds(attributes: Record<string, unknown>, defaultTimeoutS
   }
 
   throw new Error('Frontmatter key timeoutSeconds must be a positive integer');
-}
-
-function parseOutputWhen(value: unknown): TaskOutputWhen {
-  if (value === undefined || value === null) {
-    return 'success';
-  }
-
-  if (typeof value !== 'string') {
-    throw new Error('Frontmatter key output.when must be success, failure, or always');
-  }
-
-  const normalized = value.trim().toLowerCase();
-  if (normalized === 'success' || normalized === 'failure' || normalized === 'always') {
-    return normalized;
-  }
-
-  throw new Error('Frontmatter key output.when must be success, failure, or always');
-}
-
-function parseOutputDestinationId(
-  target: Record<string, unknown>,
-  singularKey: string,
-  pluralKey: string,
-  label: string,
-): string[] {
-  const singularRaw = target[singularKey];
-  const pluralRaw = target[pluralKey];
-
-  if (singularRaw !== undefined && pluralRaw !== undefined) {
-    throw new Error(`Frontmatter key output.targets[].${singularKey} cannot be combined with ${pluralKey}`);
-  }
-
-  if (singularRaw !== undefined) {
-    const id = readOptionalString(target, singularKey);
-    if (!id) {
-      throw new Error(`Frontmatter key output.targets[].${singularKey} must be a non-empty string`);
-    }
-
-    return [id];
-  }
-
-  if (!Array.isArray(pluralRaw)) {
-    throw new Error(`Frontmatter key output.targets[].${label} destination is required`);
-  }
-
-  const ids = pluralRaw
-    .map((entry) => (typeof entry === 'string' || typeof entry === 'number' || typeof entry === 'bigint'
-      ? String(entry).trim()
-      : ''))
-    .filter((entry) => entry.length > 0);
-
-  if (ids.length === 0) {
-    throw new Error(`Frontmatter key output.targets[].${pluralKey} must include at least one destination`);
-  }
-
-  return ids;
-}
-
-function parseOutputMessageThreadId(target: Record<string, unknown>): number | undefined {
-  const raw = getAttribute(target, 'messageThreadId');
-
-  if (raw === undefined || raw === null || raw === '') {
-    return undefined;
-  }
-
-  if (typeof raw === 'number') {
-    if (!Number.isInteger(raw) || raw <= 0) {
-      throw new Error('Frontmatter key output.targets[].messageThreadId must be a positive integer');
-    }
-
-    return raw;
-  }
-
-  if (typeof raw === 'bigint') {
-    if (raw <= 0n || raw > BigInt(Number.MAX_SAFE_INTEGER)) {
-      throw new Error('Frontmatter key output.targets[].messageThreadId must be a positive integer');
-    }
-
-    return Number(raw);
-  }
-
-  if (typeof raw === 'string' && /^\d+$/.test(raw.trim())) {
-    const parsed = Number.parseInt(raw.trim(), 10);
-    if (parsed > 0) {
-      return parsed;
-    }
-  }
-
-  throw new Error('Frontmatter key output.targets[].messageThreadId must be a positive integer');
-}
-
-function parseOutputTarget(rawTarget: unknown): ParsedTaskOutputTarget[] {
-  if (!isRecord(rawTarget)) {
-    throw new Error('Frontmatter key output.targets[] entries must be objects');
-  }
-
-  const gatewayRaw = readOptionalString(rawTarget, 'gateway');
-  if (!gatewayRaw) {
-    throw new Error('Frontmatter key output.targets[].gateway is required');
-  }
-
-  const gateway = gatewayRaw.toLowerCase();
-
-  if (gateway === 'telegram') {
-    const chatIds = parseOutputDestinationId(rawTarget, 'chatId', 'chatIds', 'telegram');
-    const messageThreadId = parseOutputMessageThreadId(rawTarget);
-
-    return chatIds.map((chatId) => ({
-      gateway: 'telegram' as const,
-      chatId,
-      ...(messageThreadId !== undefined ? { messageThreadId } : {}),
-    }));
-  }
-
-  throw new Error(`Unsupported output target gateway: ${gatewayRaw}`);
-}
-
-function readOutput(attributes: Record<string, unknown>): ParsedTaskOutput | undefined {
-  const raw = getAttribute(attributes, 'output');
-
-  if (raw === undefined || raw === null) {
-    return undefined;
-  }
-
-  if (!isRecord(raw)) {
-    throw new Error('Frontmatter key output must be an object');
-  }
-
-  const when = parseOutputWhen(raw.when);
-  const targetsRaw = raw.targets;
-
-  if (!Array.isArray(targetsRaw)) {
-    throw new Error('Frontmatter key output.targets must be an array');
-  }
-
-  const targets = targetsRaw.flatMap((target) => parseOutputTarget(target));
-
-  if (targets.length === 0) {
-    throw new Error('Frontmatter key output.targets must include at least one target');
-  }
-
-  return {
-    when,
-    targets,
-  };
 }
 
 function parseCronNumber(raw: string, min: number, max: number, label: string, allowSunday7 = false): number {
@@ -609,6 +448,5 @@ export function parseTaskDefinition(options: ParseTaskDefinitionOptions): Parsed
     modelRef,
     cwd,
     timeoutSeconds: readTimeoutSeconds(section.attributes, options.defaultTimeoutSeconds),
-    output: readOutput(section.attributes),
   };
 }

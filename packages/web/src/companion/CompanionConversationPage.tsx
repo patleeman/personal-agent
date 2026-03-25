@@ -6,7 +6,7 @@ import { cx } from '../components/ui';
 import { useApi } from '../hooks';
 import { readConversationLayout, setConversationArchivedState } from '../sessionTabs';
 import { getConversationDisplayTitle } from '../conversationTitle';
-import { useAppData, useLiveTitles, useSseConnection } from '../contexts';
+import { useLiveTitles, useSseConnection } from '../contexts';
 import { useSessionDetail } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversationArtifacts';
@@ -243,15 +243,9 @@ export function CompanionConversationPage() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
   const navigate = useNavigate();
-  const { sessions } = useAppData();
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
   const { titles } = useLiveTitles();
   const { status } = useSseConnection();
-  const sessionSnapshot = useMemo(
-    () => (id ? sessions?.find((session) => session.id === id) ?? null : null),
-    [id, sessions],
-  );
-  const sessionsLoaded = sessions !== null;
   const [confirmedLive, setConfirmedLive] = useState<boolean | null>(null);
   const [execution, setExecution] = useState<ConversationExecutionState | null>(null);
   const [draft, setDraft] = useState('');
@@ -280,12 +274,7 @@ export function CompanionConversationPage() {
       return;
     }
 
-    if (sessionSnapshot?.isLive === false) {
-      setConfirmedLive(false);
-      return;
-    }
-
-    setConfirmedLive(sessionSnapshot?.isLive === true ? true : null);
+    setConfirmedLive(null);
     let cancelled = false;
 
     api.liveSession(id)
@@ -295,7 +284,7 @@ export function CompanionConversationPage() {
         }
       })
       .catch(() => {
-        if (!cancelled && sessionsLoaded && sessionSnapshot?.isLive !== true) {
+        if (!cancelled) {
           setConfirmedLive(false);
         }
       });
@@ -303,7 +292,7 @@ export function CompanionConversationPage() {
     return () => {
       cancelled = true;
     };
-  }, [id, sessionSnapshot, sessionsLoaded]);
+  }, [id]);
 
   useEffect(() => {
     if (!id) {
@@ -379,13 +368,11 @@ export function CompanionConversationPage() {
   const title = getConversationDisplayTitle(
     stream.title,
     titles.get(id ?? ''),
-    sessionSnapshot?.title,
     sessionDetail?.meta.title,
   );
   const executionLabel = buildExecutionLabel(execution);
   const composerDisabled = !isLiveSession || controlState.needsTakeover || stream.isStreaming || submitting;
   const missingConversation = Boolean(id)
-    && sessionsLoaded
     && confirmedLive === false
     && !sessionLoading
     && !sessionDetail;

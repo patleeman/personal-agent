@@ -5,16 +5,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { childProcessMocks, gatewayMocks, daemonMocks, healthMocks } = vi.hoisted(() => ({
+const { childProcessMocks, serviceMocks, daemonMocks, healthMocks } = vi.hoisted(() => ({
   childProcessMocks: {
     spawn: vi.fn(),
     spawnSync: vi.fn(),
   },
-  gatewayMocks: {
+  serviceMocks: {
     getManagedDaemonServiceStatus: vi.fn(),
     getWebUiServiceStatus: vi.fn(),
     installWebUiService: vi.fn(),
-    restartGatewayServiceIfInstalled: vi.fn(),
     restartManagedDaemonServiceIfInstalled: vi.fn(),
   },
   daemonMocks: {
@@ -35,15 +34,14 @@ vi.mock('child_process', async () => {
   };
 });
 
-vi.mock('@personal-agent/gateway', async () => {
-  const actual = await vi.importActual<typeof import('@personal-agent/gateway')>('@personal-agent/gateway');
+vi.mock('@personal-agent/services', async () => {
+  const actual = await vi.importActual<typeof import('@personal-agent/services')>('@personal-agent/services');
   return {
     ...actual,
-    getManagedDaemonServiceStatus: gatewayMocks.getManagedDaemonServiceStatus,
-    getWebUiServiceStatus: gatewayMocks.getWebUiServiceStatus,
-    installWebUiService: gatewayMocks.installWebUiService,
-    restartGatewayServiceIfInstalled: gatewayMocks.restartGatewayServiceIfInstalled,
-    restartManagedDaemonServiceIfInstalled: gatewayMocks.restartManagedDaemonServiceIfInstalled,
+    getManagedDaemonServiceStatus: serviceMocks.getManagedDaemonServiceStatus,
+    getWebUiServiceStatus: serviceMocks.getWebUiServiceStatus,
+    installWebUiService: serviceMocks.installWebUiService,
+    restartManagedDaemonServiceIfInstalled: serviceMocks.restartManagedDaemonServiceIfInstalled,
   };
 });
 
@@ -129,15 +127,15 @@ beforeEach(() => {
     return { status: 0, stdout: '', stderr: '' };
   });
 
-  gatewayMocks.getManagedDaemonServiceStatus.mockReset();
-  gatewayMocks.getManagedDaemonServiceStatus.mockReturnValue({
+  serviceMocks.getManagedDaemonServiceStatus.mockReset();
+  serviceMocks.getManagedDaemonServiceStatus.mockReturnValue({
     identifier: 'mock-daemon',
     manifestPath: '/tmp/mock-daemon',
     installed: false,
     running: false,
   });
-  gatewayMocks.getWebUiServiceStatus.mockReset();
-  gatewayMocks.getWebUiServiceStatus.mockReturnValue({
+  serviceMocks.getWebUiServiceStatus.mockReset();
+  serviceMocks.getWebUiServiceStatus.mockReturnValue({
     identifier: 'mock-web-ui',
     manifestPath: '/tmp/mock-web-ui',
     installed: true,
@@ -146,12 +144,10 @@ beforeEach(() => {
     port: 3741,
     url: 'http://127.0.0.1:3741',
   });
-  gatewayMocks.installWebUiService.mockReset();
-  gatewayMocks.installWebUiService.mockImplementation(() => undefined);
-  gatewayMocks.restartGatewayServiceIfInstalled.mockReset();
-  gatewayMocks.restartGatewayServiceIfInstalled.mockImplementation(() => undefined);
-  gatewayMocks.restartManagedDaemonServiceIfInstalled.mockReset();
-  gatewayMocks.restartManagedDaemonServiceIfInstalled.mockImplementation(() => undefined);
+  serviceMocks.installWebUiService.mockReset();
+  serviceMocks.installWebUiService.mockImplementation(() => undefined);
+  serviceMocks.restartManagedDaemonServiceIfInstalled.mockReset();
+  serviceMocks.restartManagedDaemonServiceIfInstalled.mockImplementation(() => undefined);
 
   daemonMocks.startDaemonDetached.mockReset();
   daemonMocks.startDaemonDetached.mockImplementation(async () => undefined);

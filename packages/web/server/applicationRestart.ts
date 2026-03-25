@@ -10,7 +10,7 @@ import {
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { getStateRoot } from '@personal-agent/core';
-import { getWebUiServiceStatus } from '@personal-agent/gateway';
+import { getWebUiServiceStatus } from '@personal-agent/services';
 
 const RESTART_LOCK_MAX_AGE_MS = 30 * 60 * 1000;
 

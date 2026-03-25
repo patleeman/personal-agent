@@ -34,8 +34,6 @@ import type {
   DaemonPaths,
   DaemonStatus,
   EventPayload,
-  GatewayNotification,
-  GatewayNotificationProvider,
   GetDurableRunResult,
   ListDurableRunsResult,
   StartScheduledTaskRunResult,
@@ -76,13 +74,7 @@ const LEVELS: Record<LogLevel, number> = {
   error: 40,
 };
 
-const DEFAULT_NOTIFICATION_PULL_LIMIT = 20;
-const MAX_NOTIFICATION_PULL_LIMIT = 100;
 const BACKGROUND_RUN_SESSIONS_DIR_NAME = '__runs';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
 
 function looksLikePaCommand(binary: string | undefined): boolean {
   const normalized = binary?.trim().toLowerCase();
@@ -165,88 +157,6 @@ function appendBackgroundRunSessionDir(input: {
   };
 }
 
-function isGatewayProvider(value: unknown): value is GatewayNotificationProvider {
-  return value === 'telegram';
-}
-
-function toOptionalString(value: unknown): string | undefined {
-  if (typeof value !== 'string') {
-    return undefined;
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}
-
-function toOptionalPositiveInteger(value: unknown): number | undefined {
-  if (typeof value === 'number') {
-    if (!Number.isInteger(value) || value <= 0) {
-      return undefined;
-    }
-
-    return value;
-  }
-
-  if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
-    const parsed = Number.parseInt(value.trim(), 10);
-    return parsed > 0 ? parsed : undefined;
-  }
-
-  return undefined;
-}
-
-function normalizeNotificationPullLimit(limit?: number): number {
-  if (!limit || !Number.isFinite(limit)) {
-    return DEFAULT_NOTIFICATION_PULL_LIMIT;
-  }
-
-  const normalized = Math.floor(limit);
-  if (normalized <= 0) {
-    return DEFAULT_NOTIFICATION_PULL_LIMIT;
-  }
-
-  return Math.min(normalized, MAX_NOTIFICATION_PULL_LIMIT);
-}
-
-function parseGatewayNotification(event: { id: string; source: string; timestamp: string; payload: EventPayload }): GatewayNotification | undefined {
-  if (!isRecord(event.payload)) {
-    return undefined;
-  }
-
-  const gateway = event.payload.gateway;
-  if (!isGatewayProvider(gateway)) {
-    return undefined;
-  }
-
-  const destinationId = toOptionalString(event.payload.destinationId);
-  const message = toOptionalString(event.payload.message);
-
-  if (!destinationId || !message) {
-    return undefined;
-  }
-
-  const taskId = toOptionalString(event.payload.taskId);
-  const statusRaw = toOptionalString(event.payload.status);
-  const status = statusRaw === 'success' || statusRaw === 'failed' ? statusRaw : undefined;
-  const createdAt = toOptionalString(event.payload.createdAt) ?? event.timestamp;
-  const messageThreadId = gateway === 'telegram'
-    ? toOptionalPositiveInteger(event.payload.messageThreadId)
-    : undefined;
-
-  return {
-    id: event.id,
-    createdAt,
-    source: event.source,
-    gateway,
-    destinationId,
-    ...(messageThreadId !== undefined ? { messageThreadId } : {}),
-    message,
-    taskId,
-    status,
-    logPath: toOptionalString(event.payload.logPath),
-  };
-}
-
 export class PersonalAgentDaemon {
   private readonly config: DaemonConfig;
   private readonly paths: DaemonPaths;
@@ -255,7 +165,6 @@ export class PersonalAgentDaemon {
   private readonly startedAt: string;
   private readonly pid: number;
   private readonly modules: ModuleRuntime[];
-  private readonly pendingGatewayNotifications: GatewayNotification[] = [];
   private readonly activeBackgroundRuns = new Map<string, ActiveBackgroundRunHandle>();
   private readonly socketTraces = new WeakMap<Socket, IpcSocketTrace>();
 
@@ -275,20 +184,6 @@ export class PersonalAgentDaemon {
       onHandlerError: (event, error) => {
         this.log('error', `event handler failed type=${event.type} id=${event.id} error=${error.message}`);
       },
-    });
-
-    this.bus.subscribe('gateway.notification', (event) => {
-      const notification = parseGatewayNotification(event);
-      if (!notification) {
-        this.log('warn', `invalid gateway.notification payload id=${event.id}`);
-        return;
-      }
-
-      if (this.pendingGatewayNotifications.length >= this.config.queue.maxDepth) {
-        this.pendingGatewayNotifications.shift();
-      }
-
-      this.pendingGatewayNotifications.push(notification);
     });
 
     this.modules = createBuiltinModules(config)
@@ -572,17 +467,6 @@ export class PersonalAgentDaemon {
 
     if (request.type === 'status') {
       this.respond(socket, { id: request.id, ok: true, result: this.getStatus() });
-      return;
-    }
-
-    if (request.type === 'notifications.pull') {
-      this.respond(socket, {
-        id: request.id,
-        ok: true,
-        result: {
-          notifications: this.pullGatewayNotifications(request.gateway, request.limit),
-        },
-      });
       return;
     }
 
@@ -1028,29 +912,6 @@ export class PersonalAgentDaemon {
         `invalid=${summary.recoveryActions.invalid}`,
       ].join(' '),
     );
-  }
-
-  private pullGatewayNotifications(gateway: GatewayNotificationProvider, limit?: number): GatewayNotification[] {
-    const maxItems = normalizeNotificationPullLimit(limit);
-    const output: GatewayNotification[] = [];
-
-    for (let index = 0; index < this.pendingGatewayNotifications.length && output.length < maxItems;) {
-      const notification = this.pendingGatewayNotifications[index];
-      if (!notification) {
-        index += 1;
-        continue;
-      }
-
-      if (notification.gateway !== gateway) {
-        index += 1;
-        continue;
-      }
-
-      output.push(notification);
-      this.pendingGatewayNotifications.splice(index, 1);
-    }
-
-    return output;
   }
 
   private log(level: LogLevel, message: string): void {

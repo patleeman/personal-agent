@@ -19,12 +19,6 @@ pa tasks list
 pa tasks validate --all
 ```
 
-If the gateway is involved:
-
-```bash
-pa gateway service status telegram
-```
-
 ## `pa` cannot find Pi
 
 Typical message:
@@ -142,40 +136,6 @@ If needed, inspect daemon details:
 pa daemon status --json
 ```
 
-## Gateway setup fails
-
-Common causes:
-
-- missing saved Telegram bot token
-- missing access control settings
-- `op://...` secret resolution failure
-
-Best fix:
-
-```bash
-pa gateway setup telegram
-```
-
-If you use 1Password references, confirm:
-
-- `op` is installed
-- you are authenticated
-- `OP_SERVICE_ACCOUNT_TOKEN` is set if needed
-
-## Gateway service is installed but inactive
-
-Check:
-
-```bash
-pa gateway service status telegram
-pa daemon status
-```
-
-Useful logs:
-
-- macOS: `~/.local/state/personal-agent/gateway/logs/telegram.log`
-- Linux: `journalctl --user -u personal-agent-gateway-telegram.service -f`
-
 ## Scheduled task is missing
 
 Check that the file:
@@ -284,7 +244,6 @@ pa memory list --json
 Useful log locations:
 
 - daemon: `~/.local/state/personal-agent/daemon/logs/daemon.log`
-- gateway: `~/.local/state/personal-agent/gateway/logs/telegram.log`
 - web UI: `~/.local/state/personal-agent/web/logs/web.log`
 
 ## Still stuck?

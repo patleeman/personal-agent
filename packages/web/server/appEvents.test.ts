@@ -17,7 +17,6 @@ const ALL_TOPICS = [
   'runs',
   'automation',
   'daemon',
-  'gateway',
   'sync',
   'webUi',
   'executionTargets',

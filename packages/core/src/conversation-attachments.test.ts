@@ -95,7 +95,7 @@ describe('conversation attachment storage', () => {
       sourceName: 'api-sequence-v2.excalidraw',
       previewData: toBase64('png-v2'),
       previewName: 'api-sequence-v2.png',
-      note: 'Adjusted gateway flow',
+      note: 'Adjusted sync flow',
       updatedAt: '2026-03-14T10:05:00.000Z',
     });
 
@@ -107,7 +107,7 @@ describe('conversation attachment storage', () => {
       revision: 2,
       sourceName: 'api-sequence-v2.excalidraw',
       previewName: 'api-sequence-v2.png',
-      note: 'Adjusted gateway flow',
+      note: 'Adjusted sync flow',
     });
 
     const listed = listConversationAttachments({ stateRoot, profile: 'assistant', conversationId: 'conv-123' });
@@ -133,11 +133,11 @@ describe('conversation attachment storage', () => {
       stateRoot,
       profile: 'assistant',
       conversationId: 'conv-abc',
-      title: 'Gateway architecture',
+      title: 'System architecture',
       sourceData: toBase64('{"type":"excalidraw","elements":[]}'),
-      sourceName: 'gateway-architecture.excalidraw',
+      sourceName: 'system-architecture.excalidraw',
       previewData: toBase64('preview-image'),
-      previewName: 'gateway-architecture.png',
+      previewName: 'system-architecture.png',
     });
 
     const sourceDownload = readConversationAttachmentDownload({
@@ -148,7 +148,7 @@ describe('conversation attachment storage', () => {
       asset: 'source',
     });
 
-    expect(sourceDownload.fileName).toBe('gateway-architecture.excalidraw');
+    expect(sourceDownload.fileName).toBe('system-architecture.excalidraw');
     expect(sourceDownload.mimeType).toBe('application/vnd.excalidraw+json');
     expect(readFileSync(sourceDownload.filePath).toString('utf-8')).toBe('{"type":"excalidraw","elements":[]}');
 
@@ -160,7 +160,7 @@ describe('conversation attachment storage', () => {
       asset: 'preview',
     });
 
-    expect(previewDownload.fileName).toBe('gateway-architecture.png');
+    expect(previewDownload.fileName).toBe('system-architecture.png');
     expect(previewDownload.mimeType).toBe('image/png');
 
     const promptFiles = resolveConversationAttachmentPromptFiles({
@@ -174,8 +174,8 @@ describe('conversation attachment storage', () => {
     expect(promptFiles[0]).toMatchObject({
       attachmentId: saved.id,
       revision: saved.currentRevision,
-      sourceName: 'gateway-architecture.excalidraw',
-      previewName: 'gateway-architecture.png',
+      sourceName: 'system-architecture.excalidraw',
+      previewName: 'system-architecture.png',
     });
     expect(existsSync(promptFiles[0]!.sourcePath)).toBe(true);
     expect(existsSync(promptFiles[0]!.previewPath)).toBe(true);

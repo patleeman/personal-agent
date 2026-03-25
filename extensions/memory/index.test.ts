@@ -192,7 +192,7 @@ describe('memory extension', () => {
 
     const result = await beforeAgentStartHandler!(
       {
-        prompt: 'inspect the gateway prompt behavior',
+        prompt: 'inspect the sync prompt behavior',
         systemPrompt: 'BASE_SYSTEM_PROMPT',
       },
       { cwd: repoRoot },

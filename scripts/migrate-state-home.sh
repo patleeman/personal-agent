@@ -83,7 +83,6 @@ backup_path "$OLD_PI_AGENT_ROOT" "old-pi-agent"
 echo "==> Migrating config files"
 copy_file_if_exists "$OLD_CONFIG_ROOT/config.json" "$CONFIG_ROOT/config.json"
 copy_file_if_exists "$OLD_CONFIG_ROOT/daemon.json" "$CONFIG_ROOT/daemon.json"
-copy_file_if_exists "$OLD_CONFIG_ROOT/gateway.json" "$CONFIG_ROOT/gateway.json"
 copy_file_if_exists "$OLD_CONFIG_ROOT/web.json" "$CONFIG_ROOT/web.json"
 copy_dir_if_exists "$OLD_CONFIG_ROOT/local" "$CONFIG_ROOT/local"
 

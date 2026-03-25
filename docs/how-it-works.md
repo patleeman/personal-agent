@@ -45,7 +45,6 @@ Common examples:
 - `~/.local/state/personal-agent/pi-agent-runtime/AGENTS.md` (generated runtime prompt materialization, machine-local)
 - `~/.local/state/personal-agent/pi-agent/sessions/**` (optionally synced when sync is enabled)
 - `~/.local/state/personal-agent/daemon/**` (machine-local)
-- `~/.local/state/personal-agent/gateway/**` (machine-local)
 - inbox activity and read-state under `~/.local/state/personal-agent/pi-agent/state/inbox/**` (machine-local)
 - conversation-local link state such as conversation ↔ referenced project bindings
 
@@ -133,25 +132,10 @@ Examples:
 
 - morning reports
 - recurring checks
-- reminders delivered through the gateway
+- reminders surfaced in the inbox
 - background prompts that create inbox activity
 
 See [Scheduled Tasks](./scheduled-tasks.md).
-
-### Gateway
-
-The gateway is a transport layer for talking to the same agent through chat.
-
-Today, that means Telegram.
-
-It reuses:
-
-- the active profile
-- the same durable memory
-- the same projects
-- the same daemon integration
-
-See [Gateway Guide](./gateway.md).
 
 ### Daemon
 
@@ -164,7 +148,6 @@ Use it for:
 - scheduled tasks
 - deferred resume
 - background event handling
-- notification routing to the gateway
 
 See [Daemon and Background Automation](./daemon.md).
 
@@ -186,7 +169,6 @@ See [Sync Guide](./sync.md).
 | Notice async outcomes later | inbox/activity | attention surface, not a transcript |
 | Run something on a schedule | scheduled task | unattended automation |
 | Keep durable state aligned across devices | sync (`pa sync`) | git-backed state sharing under `~/.local/state/personal-agent/sync/**` |
-| Chat remotely | gateway | same agent through Telegram |
 
 ## A useful rule of thumb
 
@@ -199,7 +181,6 @@ Think about the system this way:
 - **scheduled task** = durable automation definition
 - **sync** = cross-machine durable-state replication
 - **daemon** = background runner
-- **gateway** = remote chat entry point
 
 ## Conversation locality boundary
 
@@ -227,7 +208,7 @@ Portable files should point to stable things such as:
 
 A common workflow looks like this:
 
-1. Start in a conversation through the web UI, TUI, or Telegram.
+1. Start in a conversation through the web UI or TUI.
 2. Create or reference a project if the work is ongoing.
 3. Use the active profile's AGENTS/skills plus shared memory packages to guide behavior and bring in durable knowledge.
 4. If the work should happen later, put it into a scheduled task.
@@ -244,4 +225,3 @@ That is the intended shape of the product.
 - [Profiles, Memory, and Skills](./profiles-memory-skills.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
 - [Sync Guide](./sync.md)
-- [Gateway Guide](./gateway.md)

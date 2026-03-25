@@ -10,7 +10,6 @@ It gives you one place to see:
 - projects
 - scheduled tasks
 - sync state
-- gateway state
 - daemon state
 - memory
 - profile and model settings
@@ -83,7 +82,7 @@ When installed, updates use blue/green staging: the next release is built into t
 
 The UI has a dedicated **System** page for:
 
-- consolidated daemon, sync, gateway, and managed web UI status
+- consolidated daemon, sync, and managed web UI status
 - quick visibility into the processes and background services the app depends on
 - `pa restart --rebuild` and `pa update` controls for the full managed application
 - recent log tails for each subsystem
@@ -111,7 +110,7 @@ Use the UI when you want:
 - easy conversation browsing and branching
 - a repo-aware workspace browser and editor
 - project management backed by `PROJECT.yaml`
-- visibility into daemon, sync, and gateway state
+- visibility into daemon and sync state
 - a visual memory browser
 - live updates without polling
 
@@ -228,25 +227,24 @@ See [Scheduled Tasks](./scheduled-tasks.md).
 
 ### System
 
-The System page consolidates the status surfaces for the daemon, sync, gateway, and managed web UI.
+The System page consolidates the status surfaces for the daemon, sync, and managed web UI.
 
 It gives you one place to:
 
 - check whether each service is healthy and running
 - inspect recent log tails for each subsystem
 - configure execution targets for remote conversation offload
-- run per-subsystem actions directly from the page (restart Web UI / daemon / gateway, or trigger sync now)
-- jump into the advanced Daemon, Sync, Gateway, or Web UI pages when you need deeper controls
+- run per-subsystem actions directly from the page (restart Web UI / daemon, or trigger sync now)
+- jump into the advanced Daemon, Sync, or Web UI pages when you need deeper controls
 - run **Update + restart** (`pa update`) or **Restart everything** (`pa restart --rebuild`) for the managed application
 
 The advanced pages still exist for subsystem-specific setup and controls:
 
-- **Gateway** — Telegram settings, access control, service management, tracked conversations, and logs
 - **Daemon** — managed daemon service controls, runtime status, and daemon logs
 - **Sync** — first-time setup, repo configuration, conflict visibility, and manual sync runs
 - **Web UI** — tailscale, blue/green release state, rollback, mark-bad, and advanced web UI service controls
 
-See [Gateway Guide](./gateway.md), [Daemon and Background Automation](./daemon.md), and [Sync Guide](./sync.md).
+See [Daemon and Background Automation](./daemon.md) and [Sync Guide](./sync.md).
 
 ### Memory
 
@@ -295,7 +293,6 @@ Switching the active profile affects:
 - inbox
 - projects
 - the AGENTS/skills lens used around memory
-- gateway state
 - new live sessions
 
 ## Prompt references in conversations
@@ -358,7 +355,7 @@ That means:
 
 If live updates are offline, refresh buttons remain available on each page.
 
-## Relationship to the CLI and gateway
+## Relationship to the CLI
 
 The web UI is not a separate system.
 
@@ -367,13 +364,11 @@ It uses the same underlying state as:
 - `pa tui`
 - `pa tasks`
 - `pa inbox`
-- `pa gateway`
 - `pa daemon`
 
 So, for example:
 
 - a scheduled task run can create an inbox item visible in the UI
-- a Telegram session can be resumed into a web conversation
 - a project created in the UI is the same durable project the agent can update in a conversation
 
 ## Related docs
@@ -383,5 +378,4 @@ So, for example:
 - [Inbox and Activity](./inbox.md)
 - [Scheduled Tasks](./scheduled-tasks.md)
 - [Sync Guide](./sync.md)
-- [Gateway Guide](./gateway.md)
 - [Daemon and Background Automation](./daemon.md)

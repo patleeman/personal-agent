@@ -16,7 +16,7 @@ Good fits:
 - recurring reviews
 - one-time reminders or check-ins
 - unattended background prompts
-- automation that should send output to Telegram or surface in the inbox
+- automation that should surface attention in the inbox
 
 Do not confuse scheduled tasks with:
 
@@ -46,11 +46,6 @@ profile: "assistant"
 model: "openai-codex/gpt-5.4"
 cwd: "~/agent-workspace"
 timeoutSeconds: 1800
-output:
-  when: success
-  targets:
-    - gateway: telegram
-      chatId: "123456789"
 ---
 Summarize yesterday's work and top priorities for today.
 ```
@@ -79,7 +74,6 @@ A task must define exactly one of:
 | `model` | no | full model ref, or combined with `provider` |
 | `cwd` | no | working directory for the run |
 | `timeoutSeconds` | no | per-run timeout |
-| `output` | no | optional gateway delivery routing |
 
 \* Exactly one of `cron` or `at` is required.
 
@@ -100,28 +94,6 @@ Examples:
 Use `at` when the task should run once.
 
 If the daemon is offline when the scheduled time passes, the run is marked skipped.
-
-## Output routing
-
-A task can route output to the gateway.
-
-Example:
-
-```yaml
-output:
-  when: success
-  targets:
-    - gateway: telegram
-      chatId: "123456789"
-```
-
-Useful values for `when`:
-
-- `success`
-- `failure`
-- `always`
-
-This is how scheduled task output can land in Telegram even when no conversation is active.
 
 ## Runtime behavior
 
@@ -213,7 +185,6 @@ Typical problems:
 - both `cron` and `at` set
 - neither `cron` nor `at` set
 - empty Markdown body
-- invalid `output.targets` structure
 
 Quick check:
 
@@ -233,5 +204,4 @@ pa tasks validate --all
 
 - [Daemon and Background Automation](./daemon.md)
 - [Inbox and Activity](./inbox.md)
-- [Gateway Guide](./gateway.md)
 - [Projects](./projects.md)

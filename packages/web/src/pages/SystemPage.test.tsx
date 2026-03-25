@@ -153,35 +153,6 @@ describe('SystemPage', () => {
                 lines: [],
               },
             },
-            gateway: {
-              provider: 'telegram',
-              currentProfile: 'assistant',
-              configuredProfile: 'assistant',
-              configFilePath: '/tmp/gateway.json',
-              envOverrideKeys: [],
-              warnings: [],
-              service: {
-                provider: 'telegram',
-                platform: 'launchd',
-                identifier: 'io.test.gateway',
-                manifestPath: '/tmp/io.test.gateway.plist',
-                installed: true,
-                running: true,
-              },
-              access: {
-                tokenConfigured: true,
-                tokenSource: 'plain',
-                allowlistChatIds: ['123'],
-                allowedUserIds: [],
-                blockedUserIds: [],
-              },
-              conversations: [],
-              pendingMessages: [],
-              gatewayLog: {
-                path: '/tmp/gateway.log',
-                lines: [],
-              },
-            },
             webUi: {
               warnings: [],
               service: {
@@ -219,7 +190,6 @@ describe('SystemPage', () => {
               },
             },
             setDaemon: vi.fn(),
-            setGateway: vi.fn(),
             setSync: vi.fn(),
             setWebUi: vi.fn(),
           }}>
@@ -237,7 +207,6 @@ describe('SystemPage', () => {
     expect(html).toContain('Services');
     expect(html).toContain('Web UI');
     expect(html).toContain('Daemon');
-    expect(html).toContain('Gateway');
     expect(html).toContain('Sync');
     expect(html).toContain('1 local file changed in the sync repo');
     expect(html).toContain('via SSE');

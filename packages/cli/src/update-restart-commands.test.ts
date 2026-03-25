@@ -4,10 +4,9 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { gatewayMocks, daemonMocks } = vi.hoisted(() => ({
-  gatewayMocks: {
+const { serviceMocks, daemonMocks } = vi.hoisted(() => ({
+  serviceMocks: {
     restartManagedDaemonServiceIfInstalled: vi.fn((): any => undefined),
-    restartGatewayServiceIfInstalled: vi.fn(() => undefined),
     restartWebUiServiceIfInstalled: vi.fn(() => undefined),
     getManagedDaemonServiceStatus: vi.fn(() => ({
       identifier: 'mock-daemon',
@@ -31,15 +30,14 @@ const { gatewayMocks, daemonMocks } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@personal-agent/gateway', async () => {
-  const actual = await vi.importActual<typeof import('@personal-agent/gateway')>('@personal-agent/gateway');
+vi.mock('@personal-agent/services', async () => {
+  const actual = await vi.importActual<typeof import('@personal-agent/services')>('@personal-agent/services');
   return {
     ...actual,
-    restartManagedDaemonServiceIfInstalled: gatewayMocks.restartManagedDaemonServiceIfInstalled,
-    restartGatewayServiceIfInstalled: gatewayMocks.restartGatewayServiceIfInstalled,
-    restartWebUiServiceIfInstalled: gatewayMocks.restartWebUiServiceIfInstalled,
-    getManagedDaemonServiceStatus: gatewayMocks.getManagedDaemonServiceStatus,
-    getWebUiServiceStatus: gatewayMocks.getWebUiServiceStatus,
+    restartManagedDaemonServiceIfInstalled: serviceMocks.restartManagedDaemonServiceIfInstalled,
+    restartWebUiServiceIfInstalled: serviceMocks.restartWebUiServiceIfInstalled,
+    getManagedDaemonServiceStatus: serviceMocks.getManagedDaemonServiceStatus,
+    getWebUiServiceStatus: serviceMocks.getWebUiServiceStatus,
   };
 });
 
@@ -70,21 +68,19 @@ beforeEach(() => {
     PI_SESSION_DIR: createTempDir('pi-session-'),
   };
 
-  gatewayMocks.restartManagedDaemonServiceIfInstalled.mockReset();
-  gatewayMocks.restartManagedDaemonServiceIfInstalled.mockImplementation(() => undefined);
-  gatewayMocks.restartGatewayServiceIfInstalled.mockReset();
-  gatewayMocks.restartGatewayServiceIfInstalled.mockImplementation(() => undefined);
-  gatewayMocks.restartWebUiServiceIfInstalled.mockReset();
-  gatewayMocks.restartWebUiServiceIfInstalled.mockImplementation(() => undefined);
-  gatewayMocks.getManagedDaemonServiceStatus.mockReset();
-  gatewayMocks.getManagedDaemonServiceStatus.mockImplementation(() => ({
+  serviceMocks.restartManagedDaemonServiceIfInstalled.mockReset();
+  serviceMocks.restartManagedDaemonServiceIfInstalled.mockImplementation(() => undefined);
+  serviceMocks.restartWebUiServiceIfInstalled.mockReset();
+  serviceMocks.restartWebUiServiceIfInstalled.mockImplementation(() => undefined);
+  serviceMocks.getManagedDaemonServiceStatus.mockReset();
+  serviceMocks.getManagedDaemonServiceStatus.mockImplementation(() => ({
     identifier: 'mock-daemon',
     manifestPath: '/tmp/mock-daemon',
     installed: false,
     running: false,
   }));
-  gatewayMocks.getWebUiServiceStatus.mockReset();
-  gatewayMocks.getWebUiServiceStatus.mockImplementation(() => ({
+  serviceMocks.getWebUiServiceStatus.mockReset();
+  serviceMocks.getWebUiServiceStatus.mockImplementation(() => ({
     identifier: 'mock-web-ui',
     manifestPath: '/tmp/mock-web-ui',
     installed: false,
@@ -128,13 +124,13 @@ describe('update and restart commands', () => {
     const stateRoot = createTempDir('personal-agent-cli-state-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
-    gatewayMocks.getManagedDaemonServiceStatus.mockReturnValue({
+    serviceMocks.getManagedDaemonServiceStatus.mockReturnValue({
       identifier: 'mock-daemon',
       manifestPath: '/tmp/mock-daemon',
       installed: true,
       running: true,
     });
-    gatewayMocks.restartManagedDaemonServiceIfInstalled.mockReturnValue({
+    serviceMocks.restartManagedDaemonServiceIfInstalled.mockReturnValue({
       identifier: 'mock-daemon',
       manifestPath: '/tmp/mock-daemon',
       installed: true,
@@ -146,7 +142,7 @@ describe('update and restart commands', () => {
     const exitCode = await runCli(['restart']);
 
     expect(exitCode).toBe(0);
-    expect(gatewayMocks.restartManagedDaemonServiceIfInstalled).toHaveBeenCalledTimes(1);
+    expect(serviceMocks.restartManagedDaemonServiceIfInstalled).toHaveBeenCalledTimes(1);
     expect(daemonMocks.stopDaemonGracefully).not.toHaveBeenCalled();
     expect(daemonMocks.startDaemonDetached).not.toHaveBeenCalled();
 

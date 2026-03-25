@@ -1,7 +1,7 @@
 {
-  "name": "@personal-agent/gateway",
+  "name": "@personal-agent/services",
   "version": "0.1.0",
-  "description": "Telegram gateway for personal agent",
+  "description": "Managed daemon and web UI services for personal agent",
   "type": "module",
   "exports": {
     ".": {
@@ -18,15 +18,11 @@
     "clean": "rm -rf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
-    "@mariozechner/pi-coding-agent": "^0.61.0",
     "@personal-agent/core": "*",
-    "@personal-agent/daemon": "*",
-    "@personal-agent/resources": "*",
-    "node-telegram-bot-api": "^0.66.0"
+    "@personal-agent/daemon": "*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "@types/node-telegram-bot-api": "^0.64.14",
     "vitest": "4.0.18"
   }
 }

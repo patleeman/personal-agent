@@ -18,8 +18,6 @@ async function createFinishedBackgroundRun(input: {
   runsRoot: string;
   taskSlug: string;
   sessionFile: string;
-  sourceType?: string;
-  taskPrompt?: string;
   endedAt: string;
 }): Promise<{ runId: string; outputLogPath: string; checkpointPath: string }> {
   const record = await createBackgroundRunRecord(input.runsRoot, {
@@ -27,13 +25,12 @@ async function createFinishedBackgroundRun(input: {
     cwd: createTempDir('bg-run-cwd-'),
     argv: [process.execPath, '-e', 'console.log("done")'],
     source: {
-      type: input.sourceType ?? 'tool',
+      type: 'tool',
       id: input.taskSlug,
       filePath: input.sessionFile,
     },
     checkpointPayload: {
       resumeParentOnExit: true,
-      ...(input.taskPrompt ? { taskPrompt: input.taskPrompt } : {}),
     },
     createdAt: '2026-03-22T19:00:00.000Z',
   });
@@ -162,29 +159,4 @@ describe('background run result surfacing', () => {
     expect((checkpoint?.payload?.backgroundRunResume as { deliveredAt?: string } | undefined)?.deliveredAt).toBe('2026-03-22T19:00:30.000Z');
   });
 
-  it('builds delegate-style pending prompts for gateway delegate runs', async () => {
-    const runsRoot = createTempDir('pa-background-run-results-');
-    const sessionFile = '/tmp/conversations/delegate.jsonl';
-
-    const run = await createFinishedBackgroundRun({
-      runsRoot,
-      taskSlug: 'delegate-review',
-      sessionFile,
-      sourceType: 'gateway-delegate',
-      taskPrompt: 'Review the failing build and summarize the fix.',
-      endedAt: '2026-03-22T19:00:05.000Z',
-    });
-
-    await surfaceBackgroundRunResultsIfReady({
-      runsRoot,
-      triggerRunId: run.runId,
-      now: new Date('2026-03-22T19:00:05.000Z'),
-    });
-
-    const pending = listPendingBackgroundRunResults({ runsRoot, sessionFile });
-    expect(pending).toHaveLength(1);
-    expect(pending[0]?.prompt).toContain('Original delegated task:');
-    expect(pending[0]?.prompt).toContain('Review the failing build and summarize the fix.');
-    expect(pending[0]?.prompt).toContain('Use delegate get/logs');
-  });
 });
