@@ -12,6 +12,7 @@ import {
   replaceConversationLayout,
   replaceOpenConversationTabs,
   replacePinnedConversationTabs,
+  setConversationArchivedState,
   unpinConversationTab,
 } from './sessionTabs';
 
@@ -198,5 +199,23 @@ describe('sessionTabs', () => {
     expect([...closeConversationTab('session-1')]).toEqual([]);
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
     expect([...readOpenSessionIds()]).toEqual([]);
+  });
+
+  it('can archive and reopen a conversation regardless of whether it was open or pinned', () => {
+    replaceConversationLayout({ sessionIds: ['session-1'], pinnedSessionIds: ['session-2'] });
+    dispatchEvent.mockReset();
+
+    expect(setConversationArchivedState('session-2', true)).toEqual({
+      sessionIds: ['session-1'],
+      pinnedSessionIds: [],
+    });
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
+
+    dispatchEvent.mockReset();
+    expect(setConversationArchivedState('session-2', false)).toEqual({
+      sessionIds: ['session-1', 'session-2'],
+      pinnedSessionIds: [],
+    });
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
   });
 });

@@ -4,6 +4,7 @@ import { api } from '../api';
 import { ChatView } from '../components/chat/ChatView';
 import { cx } from '../components/ui';
 import { useApi } from '../hooks';
+import { readConversationLayout, setConversationArchivedState } from '../sessionTabs';
 import { getConversationDisplayTitle } from '../conversationTitle';
 import { useAppData, useLiveTitles, useSseConnection } from '../contexts';
 import { useSessionDetail } from '../hooks/useSessions';
@@ -250,12 +251,14 @@ export function CompanionConversationPage() {
   const [draft, setDraft] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [takeoverBusy, setTakeoverBusy] = useState(false);
+  const [conversationAdminBusy, setConversationAdminBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [slashIdx, setSlashIdx] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const selectedPanel = getCompanionConversationPanel(location.search);
   const { data: memoryData } = useApi(api.memory, 'companion-conversation-memory');
+  const { data: openTabs, replaceData: replaceOpenTabs } = useApi(api.openConversationTabs, 'companion-conversation-open-tabs');
 
   const shouldSubscribeToLiveStream = Boolean(id) && confirmedLive !== false;
   const stream = useSessionStream(id ?? null, {
@@ -359,6 +362,14 @@ export function CompanionConversationPage() {
     && Boolean(slashInput)
     && draft === slashInput?.command
     && slashItems.length > 0;
+  const workspaceSessionIds = useMemo(() => {
+    if (!openTabs) {
+      return null;
+    }
+
+    return new Set([...openTabs.sessionIds, ...openTabs.pinnedSessionIds]);
+  }, [openTabs]);
+  const conversationInWorkspace = id ? (workspaceSessionIds?.has(id) ?? false) : false;
   const title = getConversationDisplayTitle(
     stream.title,
     titles.get(id ?? ''),
@@ -447,6 +458,24 @@ export function CompanionConversationPage() {
     setSlashIdx(0);
     requestAnimationFrame(() => textareaRef.current?.focus());
   }, []);
+
+  const handleConversationArchivedState = useCallback((archived: boolean) => {
+    if (!id || conversationAdminBusy) {
+      return;
+    }
+
+    setConversationAdminBusy(true);
+    setActionError(null);
+    try {
+      const nextLayout = setConversationArchivedState(id, archived);
+      replaceOpenTabs(nextLayout);
+    } catch (error) {
+      replaceOpenTabs(readConversationLayout());
+      setActionError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setConversationAdminBusy(false);
+    }
+  }, [conversationAdminBusy, id, replaceOpenTabs]);
 
   const handleTakeover = useCallback(async () => {
     if (!id || takeoverBusy) {
@@ -551,6 +580,16 @@ export function CompanionConversationPage() {
               </p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleConversationArchivedState(conversationInWorkspace)}
+                disabled={conversationAdminBusy}
+                aria-label={conversationInWorkspace ? 'Archive conversation' : 'Open conversation'}
+                title={conversationInWorkspace ? 'Archive conversation' : 'Open conversation'}
+                className="rounded-full border border-border-default px-3 py-1.5 text-[11px] font-medium text-secondary transition-colors hover:border-accent/35 hover:text-primary disabled:cursor-default disabled:opacity-45"
+              >
+                {conversationAdminBusy ? (conversationInWorkspace ? 'Archiving…' : 'Opening…') : (conversationInWorkspace ? 'Archive' : 'Open')}
+              </button>
               <button
                 type="button"
                 onClick={() => openPanel('todos')}

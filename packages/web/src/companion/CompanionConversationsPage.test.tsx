@@ -138,6 +138,8 @@ describe('CompanionConversationsPage', () => {
     expect(html).toContain('Review me');
     expect(html).toContain('Stored transcript');
     expect(html).toContain('Archived transcript');
+    expect(html).toContain('Archive');
+    expect(html).toContain('Open');
     expect(html.indexOf('Live title from stream')).toBeLessThan(html.indexOf('Review me'));
     expect(html.indexOf('Review me')).toBeLessThan(html.indexOf('Stored transcript'));
     expect(html.indexOf('Stored transcript')).toBeLessThan(html.indexOf('Archived transcript'));

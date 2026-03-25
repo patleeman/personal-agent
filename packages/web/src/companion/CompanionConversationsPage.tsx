@@ -5,6 +5,7 @@ import { getConversationDisplayTitle } from '../conversationTitle';
 import { useAppData, useLiveTitles, useSseConnection } from '../contexts';
 import { useApi } from '../hooks';
 import { fetchSessionsSnapshot } from '../sessionSnapshot';
+import { readConversationLayout, setConversationArchivedState } from '../sessionTabs';
 import type { SessionMeta, SseConnectionStatus } from '../types';
 import { useCompanionLayoutContext } from './CompanionLayout';
 import { buildCompanionConversationPath } from './routes';
@@ -230,9 +231,15 @@ function buildSessionFlags(session: SessionMeta): string[] {
 function SessionSection({
   title,
   sessions,
+  workspaceSessionIds,
+  actionBusyId,
+  onSetArchived,
 }: {
   title: string;
   sessions: SessionMeta[];
+  workspaceSessionIds: ReadonlySet<string> | null;
+  actionBusyId: string | null;
+  onSetArchived: (sessionId: string, archived: boolean) => void;
 }) {
   if (sessions.length === 0) {
     return null;
@@ -247,36 +254,51 @@ function SessionSection({
           const titleText = getConversationDisplayTitle(session.title);
           const locationLabel = session.cwdSlug || session.cwd || 'default workspace';
 
+          const inWorkspace = workspaceSessionIds?.has(session.id) ?? false;
+          const archiveActionLabel = inWorkspace ? 'Archive' : 'Open';
+          const archiveActionBusy = actionBusyId === session.id;
+
           return (
-            <Link
-              key={session.id}
-              to={buildCompanionConversationPath(session.id)}
-              className="block border-b border-border-subtle px-4 py-3.5 transition-colors last:border-b-0 hover:bg-surface/55"
-            >
+            <div key={session.id} className="border-b border-border-subtle px-4 py-3.5 last:border-b-0">
               <div className="flex items-start gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="truncate text-[15px] font-medium leading-tight text-primary">{titleText}</h3>
-                    {session.attentionUnreadMessageCount && session.attentionUnreadMessageCount > 0 ? (
-                      <span className="shrink-0 text-[11px] font-mono text-warning">+{session.attentionUnreadMessageCount}</span>
-                    ) : null}
+                <Link
+                  to={buildCompanionConversationPath(session.id)}
+                  className="min-w-0 flex-1 transition-colors hover:text-primary"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="truncate text-[15px] font-medium leading-tight text-primary">{titleText}</h3>
+                        {session.attentionUnreadMessageCount && session.attentionUnreadMessageCount > 0 ? (
+                          <span className="shrink-0 text-[11px] font-mono text-warning">+{session.attentionUnreadMessageCount}</span>
+                        ) : null}
+                      </div>
+                      <p className="mt-1 truncate text-[12px] text-secondary">{locationLabel}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-dim">
+                        {flags.map((flag) => (
+                          <span key={flag} className="uppercase tracking-[0.12em] text-dim/85">{flag}</span>
+                        ))}
+                        <span>{session.messageCount} {session.messageCount === 1 ? 'message' : 'messages'}</span>
+                        <span>{formatSessionActivityAt(session)}</span>
+                      </div>
+                    </div>
+                    <span className="pt-0.5 text-accent" aria-hidden="true">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="m9 6 6 6-6 6" />
+                      </svg>
+                    </span>
                   </div>
-                  <p className="mt-1 truncate text-[12px] text-secondary">{locationLabel}</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-dim">
-                    {flags.map((flag) => (
-                      <span key={flag} className="uppercase tracking-[0.12em] text-dim/85">{flag}</span>
-                    ))}
-                    <span>{session.messageCount} {session.messageCount === 1 ? 'message' : 'messages'}</span>
-                    <span>{formatSessionActivityAt(session)}</span>
-                  </div>
-                </div>
-                <span className="pt-0.5 text-accent" aria-hidden="true">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="m9 6 6 6-6 6" />
-                  </svg>
-                </span>
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => onSetArchived(session.id, inWorkspace)}
+                  disabled={archiveActionBusy}
+                  className="shrink-0 rounded-full border border-border-default px-3 py-1.5 text-[11px] font-medium text-secondary transition-colors hover:border-accent/35 hover:text-primary disabled:cursor-default disabled:opacity-45"
+                >
+                  {archiveActionBusy ? `${archiveActionLabel}…` : archiveActionLabel}
+                </button>
               </div>
-            </Link>
+            </div>
           );
         })}
       </div>
@@ -300,8 +322,12 @@ export function CompanionConversationsPage() {
     requestNotificationPermission,
   } = useCompanionLayoutContext();
   const [creating, setCreating] = useState(false);
+  const [actionBusyId, setActionBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { data: openTabs } = useApi(api.openConversationTabs, 'companion-open-conversation-tabs');
+  const {
+    data: openTabs,
+    replaceData: replaceOpenTabs,
+  } = useApi(api.openConversationTabs, 'companion-open-conversation-tabs');
 
   const visibleSessions = useMemo(() => {
     const source = sessions ?? [];
@@ -345,6 +371,25 @@ export function CompanionConversationsPage() {
     notificationsSupported,
     notificationPermission,
   });
+
+  const handleSetArchived = useCallback((sessionId: string, archived: boolean) => {
+    if (actionBusyId) {
+      return;
+    }
+
+    setActionBusyId(sessionId);
+    setError(null);
+    try {
+      const nextLayout = setConversationArchivedState(sessionId, archived);
+      replaceOpenTabs(nextLayout);
+    } catch (nextError) {
+      const fallbackLayout = readConversationLayout();
+      replaceOpenTabs(fallbackLayout);
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setActionBusyId(null);
+    }
+  }, [actionBusyId, replaceOpenTabs]);
 
   const handleCreateConversation = useCallback(async () => {
     if (creating) {
@@ -422,15 +467,15 @@ export function CompanionConversationsPage() {
             </div>
           ) : (
             <>
-              <SessionSection title="Live now" sessions={liveSessions} />
-              <SessionSection title="Needs review" sessions={needsReviewSessions} />
+              <SessionSection title="Live now" sessions={liveSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} onSetArchived={handleSetArchived} />
+              <SessionSection title="Needs review" sessions={needsReviewSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} onSetArchived={handleSetArchived} />
               {workspaceSectionsKnown ? (
                 <>
-                  <SessionSection title="Active workspace" sessions={activeSessions} />
-                  <SessionSection title="Archived" sessions={archivedSessions} />
+                  <SessionSection title="Active workspace" sessions={activeSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} onSetArchived={handleSetArchived} />
+                  <SessionSection title="Archived" sessions={archivedSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} onSetArchived={handleSetArchived} />
                 </>
               ) : (
-                <SessionSection title={liveSessions.length > 0 || needsReviewSessions.length > 0 ? 'Recent' : 'Conversations'} sessions={recentSessions} />
+                <SessionSection title={liveSessions.length > 0 || needsReviewSessions.length > 0 ? 'Recent' : 'Conversations'} sessions={recentSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} onSetArchived={handleSetArchived} />
               )}
             </>
           )}
