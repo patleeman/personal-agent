@@ -6,7 +6,7 @@ import { AppDataContext, SystemStatusContext } from '../contexts.js';
 import { useApi } from '../hooks.js';
 import { useConversations } from '../hooks/useConversations.js';
 import { useDurableRunStream } from '../hooks/useDurableRunStream.js';
-import type { DurableRunDetailResult, SessionMeta } from '../types.js';
+import type { DurableRunDetailResult, ProjectRecord, SessionMeta } from '../types.js';
 import { ContextRail } from './ContextRail.js';
 
 vi.mock('../hooks', () => ({
@@ -33,6 +33,29 @@ function createSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
     model: 'openai/gpt-5.4',
     title: 'Fix runs navigation',
     messageCount: 6,
+    ...overrides,
+  };
+}
+
+function createProject(overrides: Partial<ProjectRecord> = {}): ProjectRecord {
+  return {
+    id: 'personal-agent',
+    createdAt: '2026-03-18T00:00:00.000Z',
+    updatedAt: '2026-03-18T00:00:00.000Z',
+    title: 'Personal Agent',
+    description: 'Personal-agent work',
+    summary: 'Keep the web UI tidy.',
+    requirements: {
+      goal: 'Ship the requested UI change.',
+      acceptanceCriteria: [],
+    },
+    status: 'active',
+    blockers: [],
+    recentProgress: [],
+    plan: {
+      milestones: [],
+      tasks: [],
+    },
     ...overrides,
   };
 }
@@ -380,12 +403,12 @@ describe('ContextRail run detail', () => {
     expect(html).toContain('daemon ready');
   });
 
-  it('shows working directory before the todo list on the draft conversation rail', () => {
+  it('shows working directory, project references, and the todo list on the draft conversation rail', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/conversations/new']}>
         <AppDataContext.Provider value={{
           activity: null,
-          projects: null,
+          projects: [createProject()],
           sessions: [createSession()],
           tasks: null,
           runs: null,
@@ -401,8 +424,11 @@ describe('ContextRail run detail', () => {
     );
 
     expect(html.indexOf('Working Directory')).toBeGreaterThanOrEqual(0);
+    expect(html.indexOf('Referenced projects')).toBeGreaterThanOrEqual(0);
     expect(html.indexOf('Todo list')).toBeGreaterThanOrEqual(0);
-    expect(html.indexOf('Working Directory')).toBeLessThan(html.indexOf('Todo list'));
+    expect(html.indexOf('Working Directory')).toBeLessThan(html.indexOf('Referenced projects'));
+    expect(html.indexOf('Referenced projects')).toBeLessThan(html.indexOf('Todo list'));
+    expect(html).toContain('Add');
   });
 
   it('renders the conversations workspace in the rail on the conversations index page', () => {

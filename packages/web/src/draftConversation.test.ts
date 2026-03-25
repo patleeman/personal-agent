@@ -4,19 +4,23 @@ import {
   buildDraftConversationAttachmentsStorageKey,
   buildDraftConversationComposerStorageKey,
   buildDraftConversationCwdStorageKey,
+  buildDraftConversationProjectsStorageKey,
   buildDraftConversationSessionMeta,
   clearDraftConversationAttachments,
   clearDraftConversationComposer,
   clearDraftConversationCwd,
+  clearDraftConversationProjectIds,
   DRAFT_CONVERSATION_ID,
   DRAFT_CONVERSATION_ROUTE,
   hasDraftConversationAttachments,
   persistDraftConversationAttachments,
   persistDraftConversationComposer,
   persistDraftConversationCwd,
+  persistDraftConversationProjectIds,
   readDraftConversationAttachments,
   readDraftConversationComposer,
   readDraftConversationCwd,
+  readDraftConversationProjectIds,
   shouldShowDraftConversationTab,
 } from './draftConversation';
 
@@ -33,6 +37,7 @@ describe('draftConversation', () => {
   it('uses dedicated draft storage keys', () => {
     expect(buildDraftConversationComposerStorageKey()).toBe('pa:reload:conversation:draft:composer');
     expect(buildDraftConversationCwdStorageKey()).toBe('pa:reload:conversation:draft:cwd');
+    expect(buildDraftConversationProjectsStorageKey()).toBe('pa:reload:conversation:draft:projects');
     expect(buildDraftConversationAttachmentsStorageKey()).toBe('pa:reload:conversation:draft:attachments');
   });
 
@@ -72,6 +77,25 @@ describe('draftConversation', () => {
 
     expect(readDraftConversationCwd(storage)).toBe('');
     expect(storage.getItem(buildDraftConversationCwdStorageKey())).toBeNull();
+  });
+
+  it('persists and reads draft project ids', () => {
+    const storage = createStorage();
+
+    persistDraftConversationProjectIds(['personal-agent', ' web-ui ', 'personal-agent'], storage);
+
+    expect(readDraftConversationProjectIds(storage)).toEqual(['personal-agent', 'web-ui']);
+    expect(storage.getItem(buildDraftConversationProjectsStorageKey())).toBe(JSON.stringify(['personal-agent', 'web-ui']));
+  });
+
+  it('clears stored draft project ids', () => {
+    const storage = createStorage();
+
+    persistDraftConversationProjectIds(['personal-agent'], storage);
+    clearDraftConversationProjectIds(storage);
+
+    expect(readDraftConversationProjectIds(storage)).toEqual([]);
+    expect(storage.getItem(buildDraftConversationProjectsStorageKey())).toBeNull();
   });
 
   it('persists and reads draft attachments', () => {
@@ -132,6 +156,7 @@ describe('draftConversation', () => {
     expect(shouldShowDraftConversationTab('/inbox', 'Saved draft')).toBe(true);
     expect(shouldShowDraftConversationTab('/inbox', '', '~/workingdir/personal-agent')).toBe(true);
     expect(shouldShowDraftConversationTab('/inbox', '', '', true)).toBe(true);
+    expect(shouldShowDraftConversationTab('/inbox', '', '', false, ['personal-agent'])).toBe(true);
     expect(shouldShowDraftConversationTab('/inbox', '   ')).toBe(false);
   });
 
