@@ -2046,9 +2046,28 @@ function StreamingIndicator({ label }: { label: string }) {
   );
 }
 
-const CHAT_WINDOWING_THRESHOLD = 240;
-const CHAT_WINDOWING_CHUNK_SIZE = 80;
-const CHAT_WINDOWING_OVERSCAN_CHUNKS = 2;
+type ChatViewPerformanceMode = 'default' | 'aggressive';
+
+const CHAT_VIEW_RENDERING_PROFILE: Record<ChatViewPerformanceMode, {
+  contentVisibilityThreshold: number;
+  windowingThreshold: number;
+  windowingChunkSize: number;
+  windowingOverscanChunks: number;
+}> = {
+  default: {
+    contentVisibilityThreshold: 120,
+    windowingThreshold: 240,
+    windowingChunkSize: 80,
+    windowingOverscanChunks: 2,
+  },
+  aggressive: {
+    contentVisibilityThreshold: 48,
+    windowingThreshold: 96,
+    windowingChunkSize: 40,
+    windowingOverscanChunks: 1,
+  },
+};
+
 const CHAT_WINDOWING_FALLBACK_SPAN_HEIGHT = 96;
 
 interface ChatRenderChunk {
@@ -2075,11 +2094,15 @@ function getChatRenderItemAbsoluteRange(item: ChatRenderItem, messageIndexOffset
   };
 }
 
-function buildChatRenderChunks(renderItems: ChatRenderItem[], messageIndexOffset: number): ChatRenderChunk[] {
+function buildChatRenderChunks(
+  renderItems: ChatRenderItem[],
+  messageIndexOffset: number,
+  chunkSize: number,
+): ChatRenderChunk[] {
   const chunks: ChatRenderChunk[] = [];
 
-  for (let startItemIndex = 0; startItemIndex < renderItems.length; startItemIndex += CHAT_WINDOWING_CHUNK_SIZE) {
-    const items = renderItems.slice(startItemIndex, startItemIndex + CHAT_WINDOWING_CHUNK_SIZE);
+  for (let startItemIndex = 0; startItemIndex < renderItems.length; startItemIndex += chunkSize) {
+    const items = renderItems.slice(startItemIndex, startItemIndex + chunkSize);
     const startRange = getChatRenderItemAbsoluteRange(items[0], messageIndexOffset);
     const endRange = getChatRenderItemAbsoluteRange(items[items.length - 1], messageIndexOffset);
     const spanCount = items.reduce((count, item) => {
@@ -2171,6 +2194,7 @@ interface ChatViewProps {
   scrollContainerRef?: RefObject<HTMLDivElement>;
   focusMessageIndex?: number | null;
   isStreaming?: boolean;
+  performanceMode?: ChatViewPerformanceMode;
   onForkMessage?: (messageIndex: number) => Promise<void> | void;
   onRewindMessage?: (messageIndex: number) => Promise<void> | void;
   onCheckpointMessage?: (block: MessageBlock, messageIndex: number) => Promise<void> | void;
@@ -2195,6 +2219,7 @@ export const ChatView = memo(function ChatView({
   scrollContainerRef,
   focusMessageIndex = null,
   isStreaming = false,
+  performanceMode = 'default',
   onForkMessage,
   onRewindMessage,
   onCheckpointMessage,
@@ -2214,9 +2239,10 @@ export const ChatView = memo(function ChatView({
 }: ChatViewProps) {
   const renderItems = useMemo(() => buildChatRenderItems(messages), [messages]);
   const streamingStatusLabel = getStreamingStatusLabel(messages, isStreaming);
+  const renderingProfile = CHAT_VIEW_RENDERING_PROFILE[performanceMode];
   const lastBlock = messages[messages.length - 1];
   const showStreamingIndicator = !!streamingStatusLabel && (!lastBlock || lastBlock.type === 'user');
-  const shouldUseContentVisibility = renderItems.length >= 120;
+  const shouldUseContentVisibility = renderItems.length >= renderingProfile.contentVisibilityThreshold;
   const [contentVisibilityReady, setContentVisibilityReady] = useState(false);
 
   useEffect(() => {
@@ -2241,10 +2267,10 @@ export const ChatView = memo(function ChatView({
     [contentVisibilityReady, shouldUseContentVisibility],
   );
 
-  const shouldWindowTranscript = Boolean(scrollContainerRef) && renderItems.length >= CHAT_WINDOWING_THRESHOLD;
+  const shouldWindowTranscript = Boolean(scrollContainerRef) && renderItems.length >= renderingProfile.windowingThreshold;
   const renderChunks = useMemo(
-    () => (shouldWindowTranscript ? buildChatRenderChunks(renderItems, messageIndexOffset) : []),
-    [messageIndexOffset, renderItems, shouldWindowTranscript],
+    () => (shouldWindowTranscript ? buildChatRenderChunks(renderItems, messageIndexOffset, renderingProfile.windowingChunkSize) : []),
+    [messageIndexOffset, renderItems, renderingProfile.windowingChunkSize, shouldWindowTranscript],
   );
   const [viewport, setViewport] = useState<{ scrollTop: number; clientHeight: number } | null>(null);
   const [chunkHeights, setChunkHeights] = useState<Record<string, number>>({});
@@ -2466,19 +2492,19 @@ export const ChatView = memo(function ChatView({
 
     if (viewport === null) {
       const anchorChunkIndex = focusChunkIndex >= 0 ? focusChunkIndex : chunkLayouts.length - 1;
-      startChunkIndex = Math.max(0, anchorChunkIndex - CHAT_WINDOWING_OVERSCAN_CHUNKS);
-      endChunkIndex = Math.min(chunkLayouts.length - 1, anchorChunkIndex + CHAT_WINDOWING_OVERSCAN_CHUNKS);
+      startChunkIndex = Math.max(0, anchorChunkIndex - renderingProfile.windowingOverscanChunks);
+      endChunkIndex = Math.min(chunkLayouts.length - 1, anchorChunkIndex + renderingProfile.windowingOverscanChunks);
     } else {
       const viewportTop = Math.max(0, viewport.scrollTop);
       const viewportBottom = viewportTop + Math.max(1, viewport.clientHeight);
       const firstVisibleChunkIndex = resolveChunkIndexForOffset(viewportTop, tops, heights);
       const lastVisibleChunkIndex = resolveChunkIndexForOffset(viewportBottom, tops, heights);
-      startChunkIndex = Math.max(0, firstVisibleChunkIndex - CHAT_WINDOWING_OVERSCAN_CHUNKS);
-      endChunkIndex = Math.min(chunkLayouts.length - 1, lastVisibleChunkIndex + CHAT_WINDOWING_OVERSCAN_CHUNKS);
+      startChunkIndex = Math.max(0, firstVisibleChunkIndex - renderingProfile.windowingOverscanChunks);
+      endChunkIndex = Math.min(chunkLayouts.length - 1, lastVisibleChunkIndex + renderingProfile.windowingOverscanChunks);
 
       if (focusChunkIndex >= 0 && (focusChunkIndex < startChunkIndex || focusChunkIndex > endChunkIndex)) {
-        startChunkIndex = Math.max(0, focusChunkIndex - CHAT_WINDOWING_OVERSCAN_CHUNKS);
-        endChunkIndex = Math.min(chunkLayouts.length - 1, focusChunkIndex + CHAT_WINDOWING_OVERSCAN_CHUNKS);
+        startChunkIndex = Math.max(0, focusChunkIndex - renderingProfile.windowingOverscanChunks);
+        endChunkIndex = Math.min(chunkLayouts.length - 1, focusChunkIndex + renderingProfile.windowingOverscanChunks);
       }
     }
 
@@ -2492,7 +2518,7 @@ export const ChatView = memo(function ChatView({
       topSpacerHeight,
       bottomSpacerHeight,
     };
-  }, [chunkLayouts, focusMessageIndex, shouldWindowTranscript, viewport]);
+  }, [chunkLayouts, focusMessageIndex, renderingProfile.windowingOverscanChunks, shouldWindowTranscript, viewport]);
 
   const fullTranscript = (
     <div className="space-y-4">

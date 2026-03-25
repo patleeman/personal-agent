@@ -16,6 +16,7 @@ import type {
   ConversationExecutionState,
   LiveSessionPresenceState,
   LiveSessionSurfaceType,
+  MemoryData,
   MessageBlock,
 } from '../types';
 import { CompanionConversationArtifacts } from './CompanionConversationArtifacts';
@@ -256,7 +257,6 @@ export function CompanionConversationPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const selectedPanel = getCompanionConversationPanel(location.search);
-  const { data: memoryData } = useApi(api.memory, 'companion-conversation-memory');
   const { data: openTabs, replaceData: replaceOpenTabs } = useApi(api.openConversationTabs, 'companion-conversation-open-tabs');
 
   const shouldSubscribeToLiveStream = Boolean(id) && confirmedLive !== false;
@@ -346,6 +346,13 @@ export function CompanionConversationPage() {
       : null;
   const trimmedDraft = draft.trim();
   const slashInput = useMemo(() => parseSlashInput(draft), [draft]);
+  const shouldLoadMemoryData = isLiveSession
+    && !controlState.needsTakeover
+    && draft.trimStart().startsWith('/');
+  const { data: memoryData } = useApi<MemoryData | null>(
+    () => (shouldLoadMemoryData ? api.memory() : Promise.resolve(null)),
+    `companion-conversation-memory:${shouldLoadMemoryData ? 'on' : 'off'}`,
+  );
   const slashItems = useMemo(
     () => buildSlashMenuItems(draft, memoryData?.skills ?? [])
       .filter((item) => item.kind === 'skill'),
@@ -680,6 +687,7 @@ export function CompanionConversationPage() {
               messageIndexOffset={messageIndexOffset}
               scrollContainerRef={scrollRef}
               isStreaming={stream.isStreaming}
+              performanceMode="aggressive"
               askUserQuestionDisplayMode="composer"
               onOpenArtifact={openArtifact}
               activeArtifactId={selectedArtifactId}
