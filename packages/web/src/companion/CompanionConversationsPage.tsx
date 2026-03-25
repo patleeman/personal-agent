@@ -1,4 +1,4 @@
-import { memo, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type TouchEvent as ReactTouchEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { cx } from '../components/ui';
@@ -369,6 +369,17 @@ export function getCompanionConversationRowSwipeIntent(input: {
   return 'none';
 }
 
+function findTouchByIdentifier(touches: TouchList, identifier: number): Touch | null {
+  for (let index = 0; index < touches.length; index += 1) {
+    const touch = touches.item(index);
+    if (touch && touch.identifier === identifier) {
+      return touch;
+    }
+  }
+
+  return null;
+}
+
 const CompanionConversationRow = memo(function CompanionConversationRow({
   session,
   inWorkspace,
@@ -384,7 +395,11 @@ const CompanionConversationRow = memo(function CompanionConversationRow({
   onSetArchived: (sessionId: string, archived: boolean) => void;
   onRevealActions: (sessionId: string | null) => void;
 }) {
-  const gestureRef = useRef<{ pointerId: number; startX: number; startY: number } | null>(null);
+  const gestureRef = useRef<
+    | { kind: 'pointer'; pointerId: number; startX: number; startY: number }
+    | { kind: 'touch'; touchId: number; startX: number; startY: number }
+    | null
+  >(null);
   const suppressClickRef = useRef(false);
   const flags = buildSessionFlags(session);
   const titleText = getConversationDisplayTitle(session.title);
@@ -394,6 +409,25 @@ const CompanionConversationRow = memo(function CompanionConversationRow({
   const actionsId = `companion-conversation-actions-${session.id}`;
   const toggleActionsLabel = `${actionsRevealed ? 'Hide' : 'Show'} actions for ${titleText}`;
 
+  const handleGestureIntent = useCallback((deltaX: number, deltaY: number) => {
+    const intent = getCompanionConversationRowSwipeIntent({
+      deltaX,
+      deltaY,
+      actionsRevealed,
+    });
+
+    if (intent === 'reveal') {
+      suppressClickRef.current = true;
+      onRevealActions(session.id);
+      return;
+    }
+
+    if (intent === 'hide') {
+      suppressClickRef.current = true;
+      onRevealActions(null);
+    }
+  }, [actionsRevealed, onRevealActions, session.id]);
+
   const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLAnchorElement>) => {
     if (event.pointerType === 'mouse' || event.button !== 0) {
       return;
@@ -401,15 +435,17 @@ const CompanionConversationRow = memo(function CompanionConversationRow({
 
     suppressClickRef.current = false;
     gestureRef.current = {
+      kind: 'pointer',
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
     };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
   }, []);
 
   const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLAnchorElement>) => {
     const gesture = gestureRef.current;
-    if (!gesture || gesture.pointerId !== event.pointerId) {
+    if (!gesture || gesture.kind !== 'pointer' || gesture.pointerId !== event.pointerId) {
       return;
     }
 
@@ -422,28 +458,74 @@ const CompanionConversationRow = memo(function CompanionConversationRow({
 
   const handlePointerUp = useCallback((event: ReactPointerEvent<HTMLAnchorElement>) => {
     const gesture = gestureRef.current;
-    if (!gesture || gesture.pointerId !== event.pointerId) {
+    if (!gesture || gesture.kind !== 'pointer' || gesture.pointerId !== event.pointerId) {
       return;
     }
 
-    const intent = getCompanionConversationRowSwipeIntent({
-      deltaX: event.clientX - gesture.startX,
-      deltaY: event.clientY - gesture.startY,
-      actionsRevealed,
-    });
+    handleGestureIntent(event.clientX - gesture.startX, event.clientY - gesture.startY);
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    gestureRef.current = null;
+  }, [handleGestureIntent]);
 
-    if (intent === 'reveal') {
-      suppressClickRef.current = true;
-      onRevealActions(session.id);
-    } else if (intent === 'hide') {
-      suppressClickRef.current = true;
-      onRevealActions(null);
+  const handlePointerCancel = useCallback((event: ReactPointerEvent<HTMLAnchorElement>) => {
+    if (gestureRef.current?.kind === 'pointer' && gestureRef.current.pointerId === event.pointerId) {
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+    }
+    gestureRef.current = null;
+    suppressClickRef.current = false;
+  }, []);
+
+  const handleTouchStart = useCallback((event: ReactTouchEvent<HTMLAnchorElement>) => {
+    const touch = event.changedTouches.item(0);
+    if (!touch || gestureRef.current) {
+      return;
     }
 
-    gestureRef.current = null;
-  }, [actionsRevealed, onRevealActions, session.id]);
+    suppressClickRef.current = false;
+    gestureRef.current = {
+      kind: 'touch',
+      touchId: touch.identifier,
+      startX: touch.clientX,
+      startY: touch.clientY,
+    };
+  }, []);
 
-  const handlePointerCancel = useCallback(() => {
+  const handleTouchMove = useCallback((event: ReactTouchEvent<HTMLAnchorElement>) => {
+    const gesture = gestureRef.current;
+    if (!gesture || gesture.kind !== 'touch') {
+      return;
+    }
+
+    const touch = findTouchByIdentifier(event.changedTouches, gesture.touchId)
+      ?? findTouchByIdentifier(event.touches, gesture.touchId);
+    if (!touch) {
+      return;
+    }
+
+    const deltaX = touch.clientX - gesture.startX;
+    const deltaY = touch.clientY - gesture.startY;
+    if (Math.abs(deltaX) > COMPANION_ROW_SWIPE_SLOP && Math.abs(deltaX) > Math.abs(deltaY)) {
+      suppressClickRef.current = true;
+      event.preventDefault();
+    }
+  }, []);
+
+  const handleTouchEnd = useCallback((event: ReactTouchEvent<HTMLAnchorElement>) => {
+    const gesture = gestureRef.current;
+    if (!gesture || gesture.kind !== 'touch') {
+      return;
+    }
+
+    const touch = findTouchByIdentifier(event.changedTouches, gesture.touchId);
+    if (!touch) {
+      return;
+    }
+
+    handleGestureIntent(touch.clientX - gesture.startX, touch.clientY - gesture.startY);
+    gestureRef.current = null;
+  }, [handleGestureIntent]);
+
+  const handleTouchCancel = useCallback(() => {
     gestureRef.current = null;
     suppressClickRef.current = false;
   }, []);
@@ -512,6 +594,10 @@ const CompanionConversationRow = memo(function CompanionConversationRow({
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerCancel}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchCancel}
           onClick={handleConversationClick}
           className="min-w-0 flex-1 select-none rounded-[1.1rem] px-1 py-1 transition-[transform,color,background-color] duration-150 hover:text-primary active:scale-[0.99] active:bg-elevated/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45"
           style={COMPANION_TOUCH_ROW_STYLE}
