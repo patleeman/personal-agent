@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Outlet, useOutletContext } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useOutletContext } from 'react-router-dom';
 import { useAppData } from '../contexts';
 import { useCompanionNotifications } from './useCompanionNotifications';
 import {
@@ -10,6 +10,12 @@ import {
   isCompanionSecureContext,
   isCompanionStandalone,
 } from './pwa';
+import {
+  COMPANION_CONVERSATIONS_PATH,
+  COMPANION_MEMORIES_PATH,
+  COMPANION_PROJECTS_PATH,
+  COMPANION_SKILLS_PATH,
+} from './routes';
 
 export interface CompanionLayoutContextValue {
   secureContext: boolean;
@@ -47,6 +53,7 @@ export function useCompanionLayoutContext() {
 }
 
 export function CompanionLayout() {
+  const location = useLocation();
   const { activity, sessions } = useAppData();
   const [deferredPrompt, setDeferredPrompt] = useState<DeferredInstallPromptEvent | null>(null);
   const [installBusy, setInstallBusy] = useState(false);
@@ -190,6 +197,13 @@ export function CompanionLayout() {
     notificationPermission,
     requestNotificationPermission,
   }), [deferredPrompt, installBusy, notificationPermission, promptInstall, requestNotificationPermission, secureContext, standalone]);
+  const showPrimaryNav = !location.pathname.startsWith(`${COMPANION_CONVERSATIONS_PATH}/`);
+  const navItems = [
+    { to: COMPANION_CONVERSATIONS_PATH, label: 'Chats', end: false },
+    { to: COMPANION_PROJECTS_PATH, label: 'Projects', end: true },
+    { to: COMPANION_MEMORIES_PATH, label: 'Memories', end: true },
+    { to: COMPANION_SKILLS_PATH, label: 'Skills', end: true },
+  ];
 
   return (
     <div className="flex h-screen flex-col bg-base text-primary">
@@ -198,7 +212,27 @@ export function CompanionLayout() {
           Installability and notifications need HTTPS. Open the companion app through your Tailscale HTTPS host for the full PWA experience.
         </div>
       ) : null}
-      <Outlet context={contextValue} />
+      <div className="min-h-0 flex-1">
+        <Outlet context={contextValue} />
+      </div>
+      {showPrimaryNav ? (
+        <nav className="border-t border-border-subtle bg-base/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 backdrop-blur">
+          <div className="mx-auto flex w-full max-w-3xl items-center justify-around gap-1">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                className={({ isActive }) => (
+                  `flex min-w-0 flex-1 items-center justify-center rounded-xl px-2 py-2 text-[12px] font-medium transition-colors ${isActive ? 'bg-surface text-primary' : 'text-dim hover:text-primary'}`
+                )}
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </div>
+        </nav>
+      ) : null}
     </div>
   );
 }
