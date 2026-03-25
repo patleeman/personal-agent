@@ -110,10 +110,31 @@ describe('collectCompanionActivityNotifications', () => {
 
     expect(notifications).toEqual([]);
   });
+
+  it('does not notify for generic completed activity updates', () => {
+    const notifications = collectCompanionActivityNotifications(
+      createActivitySnapshot([]),
+      createActivitySnapshot([{
+        id: 'activity-1',
+        createdAt: '2026-03-25T00:00:00.000Z',
+        profile: 'assistant',
+        kind: 'note',
+        summary: 'Completed',
+        details: 'Finished the requested refactor.',
+        read: false,
+        relatedConversationIds: ['conv-123'],
+      }]),
+      {
+        conversationTitleById: new Map([['conv-123', 'Build companion app']]),
+      },
+    );
+
+    expect(notifications).toEqual([]);
+  });
 });
 
 describe('collectCompanionSessionNotifications', () => {
-  it('notifies when a running conversation finishes with new unread output', () => {
+  it('suppresses session-level companion notifications to avoid generic update spam', () => {
     const notifications = collectCompanionSessionNotifications(
       [createSession({ id: 'conv-123', title: 'Build companion app', isRunning: true, needsAttention: false })],
       [createSession({
@@ -123,47 +144,7 @@ describe('collectCompanionSessionNotifications', () => {
         needsAttention: true,
         attentionUpdatedAt: '2026-03-25T00:05:00.000Z',
         attentionUnreadMessageCount: 2,
-      })],
-    );
-
-    expect(notifications).toEqual([
-      expect.objectContaining({
-        conversationId: 'conv-123',
-        kind: 'completed',
-        title: 'Completed: Build companion app',
-      }),
-    ]);
-  });
-
-  it('falls back to needs-review when attention changes without a completion transition', () => {
-    const notifications = collectCompanionSessionNotifications(
-      [createSession({ id: 'conv-123', title: 'Build companion app', isRunning: false, needsAttention: false })],
-      [createSession({
-        id: 'conv-123',
-        title: 'Build companion app',
-        isRunning: false,
-        needsAttention: true,
-        attentionUpdatedAt: '2026-03-25T00:06:00.000Z',
-        attentionUnreadMessageCount: 1,
-      })],
-    );
-
-    expect(notifications).toEqual([
-      expect.objectContaining({
-        conversationId: 'conv-123',
-        kind: 'needs-review',
-        title: 'Needs review: Build companion app',
-      }),
-    ]);
-  });
-
-  it('suppresses generic session notifications when a conversation already has a new activity notification', () => {
-    const notifications = collectCompanionSessionNotifications(
-      [createSession({ id: 'conv-123', needsAttention: false })],
-      [createSession({
-        id: 'conv-123',
-        needsAttention: true,
-        attentionUpdatedAt: '2026-03-25T00:06:00.000Z',
+        attentionUnreadActivityCount: 1,
       })],
       { suppressConversationIds: new Set(['conv-123']) },
     );

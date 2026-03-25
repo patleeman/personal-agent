@@ -4,6 +4,10 @@ import { buildCompanionConversationPath } from './routes';
 
 export type CompanionNotificationKind = 'approval-needed' | 'blocked' | 'completed' | 'needs-review';
 
+function isActionableCompanionNotificationKind(kind: CompanionNotificationKind): boolean {
+  return kind === 'approval-needed' || kind === 'blocked';
+}
+
 export interface CompanionNotificationCandidate {
   id: string;
   conversationId: string;
@@ -88,47 +92,6 @@ function buildActivityNotificationBody(entry: Pick<ActivityEntry, 'summary' | 'd
   }
 }
 
-function buildSessionNotificationTitle(kind: CompanionNotificationKind, session: SessionMeta): string {
-  const conversationTitle = getConversationDisplayTitle(session.title);
-  switch (kind) {
-    case 'completed':
-      return `Completed: ${conversationTitle}`;
-    case 'blocked':
-      return `Blocked: ${conversationTitle}`;
-    case 'approval-needed':
-      return `Approval needed: ${conversationTitle}`;
-    default:
-      return `Needs review: ${conversationTitle}`;
-  }
-}
-
-function buildSessionNotificationBody(session: SessionMeta, kind: CompanionNotificationKind): string {
-  const unreadMessages = session.attentionUnreadMessageCount ?? 0;
-  const unreadActivities = session.attentionUnreadActivityCount ?? 0;
-
-  if (kind === 'completed') {
-    if (unreadMessages > 0) {
-      return `Conversation work completed with ${unreadMessages} unread message${unreadMessages === 1 ? '' : 's'} ready for review.`;
-    }
-
-    return 'Conversation work completed and is ready for review.';
-  }
-
-  if (unreadActivities > 0) {
-    return 'A new conversation update needs your attention.';
-  }
-
-  if (unreadMessages > 0) {
-    return `New output is ready${unreadMessages > 1 ? ` (${unreadMessages} unread messages)` : ''}.`;
-  }
-
-  return kind === 'blocked'
-    ? 'This conversation is blocked until something changes.'
-    : kind === 'approval-needed'
-      ? 'A reply or approval is needed in this conversation.'
-      : 'This conversation has a new update waiting for review.';
-}
-
 export function collectCompanionActivityNotifications(
   previous: ActivitySnapshot | null,
   next: ActivitySnapshot | null,
@@ -158,6 +121,9 @@ export function collectCompanionActivityNotifications(
 
     const conversationTitle = getConversationDisplayTitle(options?.conversationTitleById?.get(conversationId));
     const kind = classifyActivityNotificationKind(entry);
+    if (!isActionableCompanionNotificationKind(kind)) {
+      return [];
+    }
 
     return [{
       id: `activity:${entry.id}`,
@@ -176,43 +142,11 @@ export function collectCompanionSessionNotifications(
   next: SessionMeta[] | null,
   options?: { suppressConversationIds?: ReadonlySet<string> },
 ): CompanionNotificationCandidate[] {
-  if (!previous || !next) {
-    return [];
-  }
+  void previous;
+  void next;
+  void options;
 
-  const previousById = new Map(previous.map((session) => [session.id, session] as const));
-  const suppressConversationIds = options?.suppressConversationIds ?? new Set<string>();
-
-  return next.flatMap((session): CompanionNotificationCandidate[] => {
-    if (suppressConversationIds.has(session.id) || !session.needsAttention) {
-      return [];
-    }
-
-    const prior = previousById.get(session.id);
-    if (!prior) {
-      return [];
-    }
-
-    const attentionChanged = prior.attentionUpdatedAt !== session.attentionUpdatedAt
-      || prior.attentionUnreadMessageCount !== session.attentionUnreadMessageCount
-      || prior.attentionUnreadActivityCount !== session.attentionUnreadActivityCount
-      || prior.needsAttention !== session.needsAttention;
-    if (!attentionChanged) {
-      return [];
-    }
-
-    const kind: CompanionNotificationKind = prior.isRunning && !session.isRunning
-      ? 'completed'
-      : 'needs-review';
-
-    return [{
-      id: `session:${session.id}:${session.attentionUpdatedAt ?? session.timestamp}`,
-      conversationId: session.id,
-      title: buildSessionNotificationTitle(kind, session),
-      body: buildSessionNotificationBody(session, kind),
-      tag: `session:${session.id}`,
-      path: buildCompanionConversationPath(session.id),
-      kind,
-    }];
-  });
+  // Session-level state changes are too noisy for companion push alerts.
+  // Only explicit linked activity items should trigger notifications.
+  return [];
 }
