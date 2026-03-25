@@ -24,6 +24,10 @@ vi.mock('../hooks/useSessions', () => ({
   useSessionDetail: vi.fn(),
 }));
 
+vi.mock('./CompanionConversationTodos', () => ({
+  CompanionConversationTodos: ({ readOnly }: { readOnly?: boolean }) => <div>todos: {readOnly ? 'read-only' : 'editable'}</div>,
+}));
+
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
 function createSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
@@ -157,6 +161,8 @@ describe('CompanionConversationPage', () => {
 
     expect(html).toContain('Take over here');
     expect(html).toContain('Take over to reply from this device.');
+    expect(html).toContain('todos:');
+    expect(html).toContain('read-only');
     expect(html).toContain('messages:');
   });
 });

@@ -45,14 +45,16 @@ describe('sortCompanionSessions', () => {
 });
 
 describe('partitionCompanionSessions', () => {
-  it('splits stored conversations into active workspace and archived buckets when open-tab state is known', () => {
+  it('splits stored conversations into review, active workspace, and archived buckets when open-tab state is known', () => {
     const sections = partitionCompanionSessions([
       createSession({ id: 'live-1', isLive: true }),
+      createSession({ id: 'review-1', title: 'Needs review', needsAttention: true }),
       createSession({ id: 'active-1', title: 'Active workspace conversation' }),
       createSession({ id: 'archived-1', title: 'Archived conversation' }),
     ], new Set(['active-1']));
 
     expect(sections.live.map((session) => session.id)).toEqual(['live-1']);
+    expect(sections.needsReview.map((session) => session.id)).toEqual(['review-1']);
     expect(sections.active.map((session) => session.id)).toEqual(['active-1']);
     expect(sections.archived.map((session) => session.id)).toEqual(['archived-1']);
     expect(sections.recent).toEqual([]);
@@ -90,7 +92,7 @@ describe('CompanionConversationsPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders live, active workspace, and archived companion sections', () => {
+  it('renders live, review, active workspace, and archived companion sections', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/app/conversations']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
@@ -99,6 +101,7 @@ describe('CompanionConversationsPage', () => {
               activity: null,
               projects: null,
               sessions: [
+                createSession({ id: 'review-1', title: 'Review me', needsAttention: true, timestamp: '2026-03-24T14:00:00.000Z' }),
                 createSession({ id: 'active-1', title: 'Stored transcript', timestamp: '2026-03-24T12:00:00.000Z' }),
                 createSession({ id: 'archived-1', title: 'Archived transcript', timestamp: '2026-03-22T12:00:00.000Z' }),
                 createSession({ id: 'live-1', title: 'Old live title', isLive: true, timestamp: '2026-03-23T12:00:00.000Z' }),
@@ -124,12 +127,15 @@ describe('CompanionConversationsPage', () => {
 
     expect(html).toContain('Continue conversations');
     expect(html).toContain('Live now');
+    expect(html).toContain('Needs review');
     expect(html).toContain('Active workspace');
     expect(html).toContain('Archived');
     expect(html).toContain('Live title from stream');
+    expect(html).toContain('Review me');
     expect(html).toContain('Stored transcript');
     expect(html).toContain('Archived transcript');
-    expect(html.indexOf('Live title from stream')).toBeLessThan(html.indexOf('Stored transcript'));
+    expect(html.indexOf('Live title from stream')).toBeLessThan(html.indexOf('Review me'));
+    expect(html.indexOf('Review me')).toBeLessThan(html.indexOf('Stored transcript'));
     expect(html.indexOf('Stored transcript')).toBeLessThan(html.indexOf('Archived transcript'));
   });
 });
