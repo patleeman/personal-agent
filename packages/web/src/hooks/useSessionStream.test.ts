@@ -79,7 +79,7 @@ describe('pending queue optimistic updates', () => {
     });
   });
 
-  it('appends queued follow-up text immediately', () => {
+  it('tracks queued follow-up text in pending queue state immediately', () => {
     expect(appendPendingQueueItem(INITIAL_STREAM_STATE, 'followUp', 'queued follow-up').pendingQueue).toEqual({
       steering: [],
       followUp: [{ id: expect.any(String), text: 'queued follow-up', imageCount: 0 }],
