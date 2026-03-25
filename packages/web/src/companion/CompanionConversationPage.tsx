@@ -6,18 +6,18 @@ import { cx } from '../components/ui';
 import { useApi } from '../hooks';
 import { readConversationLayout, setConversationArchivedState } from '../sessionTabs';
 import { getConversationDisplayTitle } from '../conversationTitle';
-import { type SseConnectionStatus, useLiveTitles, useSseConnection } from '../contexts';
+import { useLiveTitles } from '../contexts';
 import { useSessionDetail } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversationArtifacts';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../slashMenu';
 import type {
-  ConversationExecutionState,
   LiveSessionPresenceState,
   LiveSessionSurfaceType,
   MemoryData,
   MessageBlock,
+  PromptImageInput,
 } from '../types';
 import { CompanionConversationArtifacts } from './CompanionConversationArtifacts';
 import { CompanionConversationTodos } from './CompanionConversationTodos';
@@ -71,37 +71,46 @@ export function shouldShowCompanionConversationStatusBanner(input: {
   return !input.isLiveSession;
 }
 
-function formatConnectionStatus(status: SseConnectionStatus): string {
-  switch (status) {
-    case 'open':
-      return 'live';
-    case 'reconnecting':
-      return 'reconnecting';
-    case 'offline':
-      return 'offline';
-    default:
-      return 'connecting';
-  }
-}
-
-function connectionStatusDotClass(status: SseConnectionStatus): string {
-  switch (status) {
-    case 'open':
-      return 'bg-success';
-    case 'reconnecting':
-      return 'bg-warning';
-    case 'offline':
-      return 'bg-danger';
-    default:
-      return 'bg-dim/70';
-  }
-}
-
 const COMPANION_TAP_HIGHLIGHT_COLOR = 'rgba(var(--color-accent) / 0.14)';
 const COMPANION_TOUCH_BUTTON_STYLE = {
   WebkitTapHighlightColor: COMPANION_TAP_HIGHLIGHT_COLOR,
   touchAction: 'manipulation',
 } as const;
+
+function readCompanionFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error(`Failed to read ${file.name || 'attachment'}.`));
+    reader.onload = () => {
+      const result = reader.result;
+      if (typeof result !== 'string') {
+        reject(new Error(`Failed to read ${file.name || 'attachment'}.`));
+        return;
+      }
+
+      resolve(result);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function filterCompanionImageFiles(files: File[]): File[] {
+  return files.filter((file) => file.type.startsWith('image/'));
+}
+
+async function buildCompanionPromptImages(files: File[]): Promise<PromptImageInput[]> {
+  const imageFiles = filterCompanionImageFiles(files);
+  return Promise.all(imageFiles.map(async (file) => {
+    const previewUrl = await readCompanionFileAsDataUrl(file);
+    const commaIndex = previewUrl.indexOf(',');
+    return {
+      name: file.name,
+      mimeType: file.type || 'image/png',
+      data: commaIndex >= 0 ? previewUrl.slice(commaIndex + 1) : previewUrl,
+      previewUrl,
+    } satisfies PromptImageInput;
+  }));
+}
 
 function formatSurfaceTypeLabel(surfaceType: LiveSessionSurfaceType | null | undefined): string {
   if (surfaceType === 'mobile_web') {
@@ -113,18 +122,6 @@ function formatSurfaceTypeLabel(surfaceType: LiveSessionSurfaceType | null | und
   }
 
   return 'another surface';
-}
-
-function buildExecutionLabel(execution: ConversationExecutionState | null): string {
-  if (!execution) {
-    return 'Local agent';
-  }
-
-  if (execution.location === 'remote') {
-    return execution.target?.label ?? 'Remote workspace';
-  }
-
-  return 'Local agent';
 }
 
 function buildBannerTitle(input: {
@@ -195,25 +192,30 @@ function setCompanionConversationPanel(search: string, panel: CompanionConversat
 function CompanionSlashMenu({
   items,
   index,
+  loading,
   onSelect,
 }: {
   items: SlashMenuItem[];
   index: number;
+  loading?: boolean;
   onSelect: (item: SlashMenuItem) => void;
 }) {
-  if (items.length === 0) {
+  if (items.length === 0 && !loading) {
     return null;
   }
 
   return (
     <div className="ui-menu-shell absolute inset-x-0 bottom-full z-10 mb-2 max-h-[18rem] overflow-y-auto py-1.5">
+      {loading && items.length === 0 ? (
+        <div className="px-3 py-3 text-[12px] text-dim">Loading skills…</div>
+      ) : null}
       {items.map((item, itemIndex) => {
         const active = itemIndex === index % items.length;
         return (
           <button
             key={item.key}
             type="button"
-            onMouseDown={(event) => {
+            onPointerDown={(event) => {
               event.preventDefault();
               onSelect(item);
             }}
@@ -245,10 +247,9 @@ export function CompanionConversationPage() {
   const navigate = useNavigate();
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
   const { titles } = useLiveTitles();
-  const { status } = useSseConnection();
   const [confirmedLive, setConfirmedLive] = useState<boolean | null>(null);
-  const [execution, setExecution] = useState<ConversationExecutionState | null>(null);
   const [draft, setDraft] = useState('');
+  const [attachments, setAttachments] = useState<File[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [takeoverBusy, setTakeoverBusy] = useState(false);
   const [conversationAdminBusy, setConversationAdminBusy] = useState(false);
@@ -256,6 +257,7 @@ export function CompanionConversationPage() {
   const [slashIdx, setSlashIdx] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const selectedPanel = getCompanionConversationPanel(location.search);
   const { data: openTabs, replaceData: replaceOpenTabs } = useApi(api.openConversationTabs, 'companion-conversation-open-tabs');
 
@@ -293,30 +295,6 @@ export function CompanionConversationPage() {
     };
   }, [id]);
 
-  useEffect(() => {
-    if (!id) {
-      setExecution(null);
-      return;
-    }
-
-    let cancelled = false;
-    api.conversationExecution(id)
-      .then((nextExecution) => {
-        if (!cancelled) {
-          setExecution(nextExecution);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setExecution(null);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [id]);
-
   const isLiveSession = resolveCompanionConversationLive({
     streamBlockCount: stream.blocks.length,
     isStreaming: stream.isStreaming,
@@ -345,11 +323,12 @@ export function CompanionConversationPage() {
       ? 'Wait for the current turn to finish before editing the todo list.'
       : null;
   const trimmedDraft = draft.trim();
+  const composerHasContent = trimmedDraft.length > 0 || attachments.length > 0;
   const slashInput = useMemo(() => parseSlashInput(draft), [draft]);
   const shouldLoadMemoryData = isLiveSession
     && !controlState.needsTakeover
     && draft.trimStart().startsWith('/');
-  const { data: memoryData } = useApi<MemoryData | null>(
+  const { data: memoryData, loading: memoryLoading } = useApi<MemoryData | null>(
     () => (shouldLoadMemoryData ? api.memory() : Promise.resolve(null)),
     `companion-conversation-memory:${shouldLoadMemoryData ? 'on' : 'off'}`,
   );
@@ -362,7 +341,7 @@ export function CompanionConversationPage() {
     && !stream.isStreaming
     && Boolean(slashInput)
     && draft === slashInput?.command
-    && slashItems.length > 0;
+    && (memoryLoading || slashItems.length > 0);
   const workspaceSessionIds = useMemo(() => {
     if (!openTabs) {
       return null;
@@ -376,7 +355,6 @@ export function CompanionConversationPage() {
     titles.get(id ?? ''),
     sessionDetail?.meta.title,
   );
-  const executionLabel = buildExecutionLabel(execution);
   const composerDisabled = !isLiveSession || controlState.needsTakeover || stream.isStreaming || submitting;
   const missingConversation = Boolean(id)
     && confirmedLive === false
@@ -414,6 +392,13 @@ export function CompanionConversationPage() {
     element.style.height = 'auto';
     element.style.height = `${Math.min(element.scrollHeight, 160)}px`;
   }, [draft]);
+
+  useEffect(() => {
+    setAttachments([]);
+    setDraft('');
+    setSlashIdx(0);
+    setActionError(null);
+  }, [id]);
 
   useEffect(() => {
     if (!selectedPanel || typeof document === 'undefined') {
@@ -457,6 +442,35 @@ export function CompanionConversationPage() {
     setSlashIdx(0);
     requestAnimationFrame(() => textareaRef.current?.focus());
   }, []);
+
+  const addImageAttachments = useCallback((files: File[]) => {
+    const imageFiles = filterCompanionImageFiles(files);
+    if (imageFiles.length === 0) {
+      setActionError('Companion currently supports image attachments only.');
+      return;
+    }
+
+    setActionError(null);
+    setAttachments((current) => [...current, ...imageFiles]);
+  }, []);
+
+  const openFilePicker = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const removeAttachment = useCallback((index: number) => {
+    setAttachments((current) => current.filter((_, currentIndex) => currentIndex !== index));
+  }, []);
+
+  const handlePaste = useCallback((event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(event.clipboardData.files ?? []);
+    if (files.length === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    addImageAttachments(files);
+  }, [addImageAttachments]);
 
   const handleConversationArchivedState = useCallback((archived: boolean) => {
     if (!id || conversationAdminBusy) {
@@ -516,7 +530,7 @@ export function CompanionConversationPage() {
 
   const handleSend = useCallback(async () => {
     const text = draft.trim();
-    if (!id || !text || composerDisabled) {
+    if (!id || (!text && attachments.length === 0) || composerDisabled) {
       if (controlState.needsTakeover) {
         setActionError('Take over this conversation to reply from this device.');
       }
@@ -527,14 +541,16 @@ export function CompanionConversationPage() {
     setActionError(null);
 
     try {
-      await stream.send(text);
+      const promptImages = await buildCompanionPromptImages(attachments);
+      await stream.send(text, undefined, promptImages);
       setDraft('');
+      setAttachments([]);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : String(error));
     } finally {
       setSubmitting(false);
     }
-  }, [composerDisabled, controlState.needsTakeover, draft, id, stream]);
+  }, [attachments, composerDisabled, controlState.needsTakeover, draft, id, stream]);
 
   if (!id) {
     return (
@@ -562,7 +578,7 @@ export function CompanionConversationPage() {
     <div className="flex h-full min-h-0 flex-col">
       <header className="border-b border-border-subtle bg-base/95 backdrop-blur">
         <div className="mx-auto flex w-full max-w-3xl flex-col px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.625rem)]">
-          <div className="flex items-center justify-between gap-3">
+          <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
             <Link
               to={COMPANION_CONVERSATIONS_PATH}
               aria-label="Back to conversations"
@@ -574,94 +590,10 @@ export function CompanionConversationPage() {
               </svg>
               <span>Chats</span>
             </Link>
-            <span className="inline-flex items-center gap-1 rounded-full border border-border-subtle bg-surface px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-dim/80">
-              <span className={`h-1.5 w-1.5 rounded-full ${connectionStatusDotClass(status)}`} />
-              {formatConnectionStatus(status)}
-            </span>
-          </div>
-          <div className="mt-3 min-w-0">
-            <h1 className="text-[20px] font-semibold leading-tight tracking-tight text-primary">{title}</h1>
-            <p className="mt-1 text-[11px] text-secondary">
-              {executionLabel} · {isLiveSession ? 'live conversation' : 'saved transcript'}
-            </p>
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => handleConversationArchivedState(conversationInWorkspace)}
-              disabled={conversationAdminBusy}
-              aria-label={conversationInWorkspace ? 'Archive conversation' : 'Open conversation'}
-              title={conversationInWorkspace ? 'Archive conversation' : 'Open conversation'}
-              className={cx(
-                'inline-flex h-10 min-w-[6.5rem] select-none items-center justify-center gap-2 rounded-2xl border px-3.5 text-[12px] font-medium transition-[transform,color,border-color,background-color] duration-150 active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45 disabled:cursor-default disabled:opacity-45',
-                conversationInWorkspace
-                  ? 'border-warning/25 bg-warning/10 text-warning hover:border-warning/35 hover:bg-warning/15'
-                  : 'border-success/25 bg-success/10 text-success hover:border-success/35 hover:bg-success/15',
-              )}
-              style={COMPANION_TOUCH_BUTTON_STYLE}
-            >
-              {conversationInWorkspace ? (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M3 6h18" />
-                  <path d="M6 10v8h12v-8" />
-                  <path d="m8 10 4 4 4-4" />
-                  <path d="M12 4v9" />
-                </svg>
-              ) : (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M3 18h18" />
-                  <path d="M6 6v8h12V6" />
-                  <path d="m8 10 4-4 4 4" />
-                  <path d="M12 20V7" />
-                </svg>
-              )}
-              <span>{conversationAdminBusy ? (conversationInWorkspace ? 'Archiving…' : 'Opening…') : (conversationInWorkspace ? 'Archive' : 'Open')}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => openPanel('todos')}
-              aria-label="Open todo panel"
-              aria-pressed={selectedPanel === 'todos'}
-              title="Open todo panel"
-              className={cx(
-                'inline-flex h-10 min-w-[5.5rem] select-none items-center justify-center gap-2 rounded-2xl border px-3.5 text-[12px] font-medium transition-[transform,color,border-color,background-color] duration-150 active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45',
-                selectedPanel === 'todos'
-                  ? 'border-accent/35 bg-accent/12 text-accent'
-                  : 'border-border-default bg-surface text-secondary hover:border-accent/30 hover:text-primary',
-              )}
-              style={COMPANION_TOUCH_BUTTON_STYLE}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M9 6h11" />
-                <path d="M9 12h11" />
-                <path d="M9 18h11" />
-                <path d="m4 6 1.5 1.5L7.5 5" />
-                <path d="m4 12 1.5 1.5L7.5 11" />
-                <path d="m4 18 1.5 1.5L7.5 17" />
-              </svg>
-              <span>Todo</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => openPanel('artifacts')}
-              aria-label="Open artifact panel"
-              aria-pressed={selectedPanel === 'artifacts'}
-              title="Open artifact panel"
-              className={cx(
-                'inline-flex h-10 min-w-[6.5rem] select-none items-center justify-center gap-2 rounded-2xl border px-3.5 text-[12px] font-medium transition-[transform,color,border-color,background-color] duration-150 active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45',
-                selectedPanel === 'artifacts'
-                  ? 'border-accent/35 bg-accent/12 text-accent'
-                  : 'border-border-default bg-surface text-secondary hover:border-accent/30 hover:text-primary',
-              )}
-              style={COMPANION_TOUCH_BUTTON_STYLE}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M12 3 4 7l8 4 8-4-8-4Z" />
-                <path d="m4 12 8 4 8-4" />
-                <path d="m4 17 8 4 8-4" />
-              </svg>
-              <span>Artifacts</span>
-            </button>
+            <div className="min-w-0 px-1 text-center">
+              <h1 className="truncate text-[16px] font-medium tracking-tight text-primary">{title}</h1>
+            </div>
+            <div className="h-10 w-[5.25rem]" aria-hidden="true" />
           </div>
           {showStatusBanner ? (
             <div className="mt-3 rounded-xl bg-surface px-3 py-2.5">
@@ -762,16 +694,99 @@ export function CompanionConversationPage() {
       ) : null}
 
       <footer className="border-t border-border-subtle bg-base/95 px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3 backdrop-blur">
-        <div className="mx-auto w-full max-w-3xl">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
+          <div className="grid grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => handleConversationArchivedState(conversationInWorkspace)}
+              disabled={conversationAdminBusy}
+              aria-label={conversationInWorkspace ? 'Archive conversation' : 'Open conversation'}
+              title={conversationInWorkspace ? 'Archive conversation' : 'Open conversation'}
+              className={cx(
+                'inline-flex h-10 min-w-0 select-none items-center justify-center gap-2 rounded-2xl border px-3 text-[12px] font-medium transition-[transform,color,border-color,background-color] duration-150 active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45 disabled:cursor-default disabled:opacity-45',
+                conversationInWorkspace
+                  ? 'border-warning/25 bg-warning/10 text-warning hover:border-warning/35 hover:bg-warning/15'
+                  : 'border-success/25 bg-success/10 text-success hover:border-success/35 hover:bg-success/15',
+              )}
+              style={COMPANION_TOUCH_BUTTON_STYLE}
+            >
+              <span>{conversationAdminBusy ? (conversationInWorkspace ? 'Archiving…' : 'Opening…') : (conversationInWorkspace ? 'Archive' : 'Open')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => openPanel('todos')}
+              aria-label="Open todo panel"
+              aria-pressed={selectedPanel === 'todos'}
+              title="Open todo panel"
+              className={cx(
+                'inline-flex h-10 min-w-0 select-none items-center justify-center gap-2 rounded-2xl border px-3 text-[12px] font-medium transition-[transform,color,border-color,background-color] duration-150 active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45',
+                selectedPanel === 'todos'
+                  ? 'border-accent/35 bg-accent/12 text-accent'
+                  : 'border-border-default bg-surface text-secondary hover:border-accent/30 hover:text-primary',
+              )}
+              style={COMPANION_TOUCH_BUTTON_STYLE}
+            >
+              <span>Todo</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => openPanel('artifacts')}
+              aria-label="Open artifact panel"
+              aria-pressed={selectedPanel === 'artifacts'}
+              title="Open artifact panel"
+              className={cx(
+                'inline-flex h-10 min-w-0 select-none items-center justify-center gap-2 rounded-2xl border px-3 text-[12px] font-medium transition-[transform,color,border-color,background-color] duration-150 active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45',
+                selectedPanel === 'artifacts'
+                  ? 'border-accent/35 bg-accent/12 text-accent'
+                  : 'border-border-default bg-surface text-secondary hover:border-accent/30 hover:text-primary',
+              )}
+              style={COMPANION_TOUCH_BUTTON_STYLE}
+            >
+              <span>Artifacts</span>
+            </button>
+          </div>
+
+          {attachments.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {attachments.map((file, index) => (
+                <div key={`${file.name}-${index}`} className="inline-flex max-w-full items-center gap-2 rounded-full border border-border-default bg-surface px-3 py-1.5 text-[11px] text-secondary">
+                  <span className="truncate">{file.name || `Image ${index + 1}`}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(index)}
+                    aria-label={`Remove ${file.name || `image ${index + 1}`}`}
+                    className="text-dim transition hover:text-primary"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
           {isLiveSession ? (
             <div className="relative">
               {showSlash ? (
-                <CompanionSlashMenu items={slashItems} index={slashIdx} onSelect={applySlashItem} />
+                <CompanionSlashMenu items={slashItems} index={slashIdx} loading={memoryLoading} onSelect={applySlashItem} />
               ) : null}
               <div className={cx(
                 'ui-input-shell overflow-hidden',
                 showSlash ? 'border-accent/40 ring-1 ring-accent/15' : 'border-border-subtle',
               )}>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={(event) => {
+                    const files = Array.from(event.target.files ?? []);
+                    if (files.length > 0) {
+                      addImageAttachments(files);
+                    }
+                    event.target.value = '';
+                  }}
+                />
                 {controlState.needsTakeover ? (
                   <div className="px-3 py-3">
                     <button
@@ -789,6 +804,19 @@ export function CompanionConversationPage() {
                   </div>
                 ) : (
                   <div className="flex items-end gap-2 px-3 py-2.5">
+                    <button
+                      type="button"
+                      onClick={openFilePicker}
+                      disabled={composerDisabled}
+                      aria-label="Attach image"
+                      title="Attach image"
+                      className="mb-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-default bg-surface text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/30 hover:text-primary active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45 disabled:cursor-default disabled:opacity-45"
+                      style={COMPANION_TOUCH_BUTTON_STYLE}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                      </svg>
+                    </button>
                     <textarea
                       ref={textareaRef}
                       value={draft}
@@ -796,8 +824,9 @@ export function CompanionConversationPage() {
                         setDraft(event.target.value);
                         setSlashIdx(0);
                       }}
+                      onPaste={handlePaste}
                       onKeyDown={(event) => {
-                        if (showSlash) {
+                        if (showSlash && slashItems.length > 0) {
                           if (event.key === 'ArrowDown') {
                             event.preventDefault();
                             setSlashIdx((current) => current + 1);
@@ -841,8 +870,8 @@ export function CompanionConversationPage() {
                       className="flex-1 bg-transparent text-sm leading-relaxed text-primary placeholder:text-dim outline-none resize-none disabled:cursor-default disabled:text-dim"
                       style={{ minHeight: '24px', maxHeight: '160px' }}
                     />
-                    {(stream.isStreaming || trimmedDraft.length > 0) && (
-                      <div className="shrink-0 mb-0.5 flex items-center gap-1.5">
+                    {(stream.isStreaming || composerHasContent) && (
+                      <div className="mb-0.5 flex shrink-0 items-center gap-1.5">
                         {stream.isStreaming ? (
                           <button
                             type="button"
@@ -856,7 +885,7 @@ export function CompanionConversationPage() {
                             Stop
                           </button>
                         ) : null}
-                        {trimmedDraft.length > 0 ? (
+                        {composerHasContent ? (
                           <button
                             type="button"
                             onClick={() => { void handleSend(); }}
@@ -873,7 +902,7 @@ export function CompanionConversationPage() {
               </div>
               {!controlState.needsTakeover ? (
                 <p className="mt-1.5 text-[11px] text-dim">
-                  {stream.isStreaming ? 'Agent responding…' : 'Use / to insert a skill command.'}
+                  {stream.isStreaming ? 'Agent responding…' : 'Use / for skills · attach images from your phone.'}
                 </p>
               ) : null}
             </div>
