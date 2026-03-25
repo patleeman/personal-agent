@@ -97,6 +97,12 @@ function connectionStatusDotClass(status: SseConnectionStatus): string {
   }
 }
 
+const COMPANION_TAP_HIGHLIGHT_COLOR = 'rgba(var(--color-accent) / 0.14)';
+const COMPANION_TOUCH_BUTTON_STYLE = {
+  WebkitTapHighlightColor: COMPANION_TAP_HIGHLIGHT_COLOR,
+  touchAction: 'manipulation',
+} as const;
+
 function formatSurfaceTypeLabel(surfaceType: LiveSessionSurfaceType | null | undefined): string {
   if (surfaceType === 'mobile_web') {
     return 'phone';
@@ -564,68 +570,105 @@ export function CompanionConversationPage() {
       <header className="border-b border-border-subtle bg-base/95 backdrop-blur">
         <div className="mx-auto flex w-full max-w-3xl flex-col px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.625rem)]">
           <div className="flex items-center justify-between gap-3">
-            <Link to={COMPANION_CONVERSATIONS_PATH} className="text-[12px] text-accent transition-colors hover:text-accent/80">
-              ← Chats
+            <Link
+              to={COMPANION_CONVERSATIONS_PATH}
+              aria-label="Back to conversations"
+              className="inline-flex h-10 select-none items-center gap-2 rounded-full border border-border-default bg-surface px-3 text-[12px] font-medium text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/35 hover:text-primary active:scale-[0.97] active:bg-elevated/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45"
+              style={COMPANION_TOUCH_BUTTON_STYLE}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="m15 18-6-6 6-6" />
+              </svg>
+              <span>Chats</span>
             </Link>
-            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-[0.16em] text-dim/80">
+            <span className="inline-flex items-center gap-1 rounded-full border border-border-subtle bg-surface px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-dim/80">
               <span className={`h-1.5 w-1.5 rounded-full ${connectionStatusDotClass(status)}`} />
               {formatConnectionStatus(status)}
             </span>
           </div>
-          <div className="mt-3 flex items-start gap-3">
-            <div className="min-w-0 flex-1">
-              <h1 className="text-[20px] font-semibold leading-tight tracking-tight text-primary">{title}</h1>
-              <p className="mt-1 text-[11px] text-secondary">
-                {executionLabel} · {isLiveSession ? 'live conversation' : 'saved transcript'}
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <button
-                type="button"
-                onClick={() => handleConversationArchivedState(conversationInWorkspace)}
-                disabled={conversationAdminBusy}
-                aria-label={conversationInWorkspace ? 'Archive conversation' : 'Open conversation'}
-                title={conversationInWorkspace ? 'Archive conversation' : 'Open conversation'}
-                className="rounded-full border border-border-default px-3 py-1.5 text-[11px] font-medium text-secondary transition-colors hover:border-accent/35 hover:text-primary disabled:cursor-default disabled:opacity-45"
-              >
-                {conversationAdminBusy ? (conversationInWorkspace ? 'Archiving…' : 'Opening…') : (conversationInWorkspace ? 'Archive' : 'Open')}
-              </button>
-              <button
-                type="button"
-                onClick={() => openPanel('todos')}
-                aria-label="Open todo panel"
-                title="Open todo panel"
-                className={cx(
-                  'flex h-9 w-9 items-center justify-center rounded-full border transition-colors',
-                  selectedPanel === 'todos' ? 'border-accent/30 bg-accent/10 text-accent' : 'border-border-default bg-surface text-secondary hover:text-primary',
-                )}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M9 6h11" />
-                  <path d="M9 12h11" />
-                  <path d="M9 18h11" />
-                  <path d="m4 6 1.5 1.5L7.5 5" />
-                  <path d="m4 12 1.5 1.5L7.5 11" />
-                  <path d="m4 18 1.5 1.5L7.5 17" />
+          <div className="mt-3 min-w-0">
+            <h1 className="text-[20px] font-semibold leading-tight tracking-tight text-primary">{title}</h1>
+            <p className="mt-1 text-[11px] text-secondary">
+              {executionLabel} · {isLiveSession ? 'live conversation' : 'saved transcript'}
+            </p>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleConversationArchivedState(conversationInWorkspace)}
+              disabled={conversationAdminBusy}
+              aria-label={conversationInWorkspace ? 'Archive conversation' : 'Open conversation'}
+              title={conversationInWorkspace ? 'Archive conversation' : 'Open conversation'}
+              className={cx(
+                'inline-flex h-10 min-w-[6.5rem] select-none items-center justify-center gap-2 rounded-2xl border px-3.5 text-[12px] font-medium transition-[transform,color,border-color,background-color] duration-150 active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45 disabled:cursor-default disabled:opacity-45',
+                conversationInWorkspace
+                  ? 'border-warning/25 bg-warning/10 text-warning hover:border-warning/35 hover:bg-warning/15'
+                  : 'border-success/25 bg-success/10 text-success hover:border-success/35 hover:bg-success/15',
+              )}
+              style={COMPANION_TOUCH_BUTTON_STYLE}
+            >
+              {conversationInWorkspace ? (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 6h18" />
+                  <path d="M6 10v8h12v-8" />
+                  <path d="m8 10 4 4 4-4" />
+                  <path d="M12 4v9" />
                 </svg>
-              </button>
-              <button
-                type="button"
-                onClick={() => openPanel('artifacts')}
-                aria-label="Open artifact panel"
-                title="Open artifact panel"
-                className={cx(
-                  'flex h-9 w-9 items-center justify-center rounded-full border transition-colors',
-                  selectedPanel === 'artifacts' ? 'border-accent/30 bg-accent/10 text-accent' : 'border-border-default bg-surface text-secondary hover:text-primary',
-                )}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <path d="M12 3 4 7l8 4 8-4-8-4Z" />
-                  <path d="m4 12 8 4 8-4" />
-                  <path d="m4 17 8 4 8-4" />
+              ) : (
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M3 18h18" />
+                  <path d="M6 6v8h12V6" />
+                  <path d="m8 10 4-4 4 4" />
+                  <path d="M12 20V7" />
                 </svg>
-              </button>
-            </div>
+              )}
+              <span>{conversationAdminBusy ? (conversationInWorkspace ? 'Archiving…' : 'Opening…') : (conversationInWorkspace ? 'Archive' : 'Open')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => openPanel('todos')}
+              aria-label="Open todo panel"
+              aria-pressed={selectedPanel === 'todos'}
+              title="Open todo panel"
+              className={cx(
+                'inline-flex h-10 min-w-[5.5rem] select-none items-center justify-center gap-2 rounded-2xl border px-3.5 text-[12px] font-medium transition-[transform,color,border-color,background-color] duration-150 active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45',
+                selectedPanel === 'todos'
+                  ? 'border-accent/35 bg-accent/12 text-accent'
+                  : 'border-border-default bg-surface text-secondary hover:border-accent/30 hover:text-primary',
+              )}
+              style={COMPANION_TOUCH_BUTTON_STYLE}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M9 6h11" />
+                <path d="M9 12h11" />
+                <path d="M9 18h11" />
+                <path d="m4 6 1.5 1.5L7.5 5" />
+                <path d="m4 12 1.5 1.5L7.5 11" />
+                <path d="m4 18 1.5 1.5L7.5 17" />
+              </svg>
+              <span>Todo</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => openPanel('artifacts')}
+              aria-label="Open artifact panel"
+              aria-pressed={selectedPanel === 'artifacts'}
+              title="Open artifact panel"
+              className={cx(
+                'inline-flex h-10 min-w-[6.5rem] select-none items-center justify-center gap-2 rounded-2xl border px-3.5 text-[12px] font-medium transition-[transform,color,border-color,background-color] duration-150 active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45',
+                selectedPanel === 'artifacts'
+                  ? 'border-accent/35 bg-accent/12 text-accent'
+                  : 'border-border-default bg-surface text-secondary hover:border-accent/30 hover:text-primary',
+              )}
+              style={COMPANION_TOUCH_BUTTON_STYLE}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 3 4 7l8 4 8-4-8-4Z" />
+                <path d="m4 12 8 4 8-4" />
+                <path d="m4 17 8 4 8-4" />
+              </svg>
+              <span>Artifacts</span>
+            </button>
           </div>
           {showStatusBanner ? (
             <div className="mt-3 rounded-xl bg-surface px-3 py-2.5">
@@ -667,16 +710,20 @@ export function CompanionConversationPage() {
             onClick={closePanel}
             className="absolute inset-0 bg-black/35"
           />
-          <aside className="absolute inset-y-0 right-0 flex w-[min(28rem,92vw)] max-w-full flex-col border-l border-border-subtle bg-base shadow-2xl">
-            <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-3 py-[calc(env(safe-area-inset-top)+0.75rem)]">
+          <aside className="absolute inset-y-0 right-0 flex w-full max-w-full flex-col border-l border-border-subtle bg-base shadow-2xl sm:w-[min(28rem,92vw)]" style={{ overscrollBehavior: 'contain' }}>
+            <div className="flex justify-center px-4 pt-[calc(env(safe-area-inset-top)+0.5rem)] sm:hidden">
+              <span className="h-1.5 w-10 rounded-full bg-border-default/80" aria-hidden="true" />
+            </div>
+            <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-3 pb-3 pt-2 sm:py-[calc(env(safe-area-inset-top)+0.75rem)]">
               <div className="flex min-w-0 items-center gap-1 rounded-full bg-surface p-1">
                 <button
                   type="button"
                   onClick={() => openPanel('todos')}
                   className={cx(
-                    'rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors',
+                    'inline-flex h-10 select-none items-center rounded-full px-3.5 text-[11px] font-medium transition-[transform,color,background-color] duration-150 active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45',
                     selectedPanel === 'todos' ? 'bg-accent text-white' : 'text-secondary hover:text-primary',
                   )}
+                  style={COMPANION_TOUCH_BUTTON_STYLE}
                 >
                   Todo
                 </button>
@@ -684,9 +731,10 @@ export function CompanionConversationPage() {
                   type="button"
                   onClick={() => openPanel('artifacts')}
                   className={cx(
-                    'rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors',
+                    'inline-flex h-10 select-none items-center rounded-full px-3.5 text-[11px] font-medium transition-[transform,color,background-color] duration-150 active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45',
                     selectedPanel === 'artifacts' ? 'bg-accent text-white' : 'text-secondary hover:text-primary',
                   )}
+                  style={COMPANION_TOUCH_BUTTON_STYLE}
                 >
                   Artifacts
                 </button>
@@ -695,7 +743,8 @@ export function CompanionConversationPage() {
                 type="button"
                 onClick={closePanel}
                 aria-label="Close side panel"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-default bg-surface text-secondary transition-colors hover:text-primary"
+                className="flex h-10 w-10 shrink-0 select-none items-center justify-center rounded-full border border-border-default bg-surface text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/30 hover:text-primary active:scale-[0.97] active:bg-elevated/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45"
+                style={COMPANION_TOUCH_BUTTON_STYLE}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="M18 6 6 18" />
@@ -703,7 +752,7 @@ export function CompanionConversationPage() {
                 </svg>
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3" style={{ overscrollBehavior: 'contain' }}>
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
               {selectedPanel === 'todos' ? (
                 <CompanionConversationTodos
                   conversationId={id}
