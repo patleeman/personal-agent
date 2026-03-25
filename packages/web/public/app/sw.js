@@ -98,7 +98,7 @@ async function handleStaticAsset(request) {
 async function focusNotificationConversation(data) {
   const path = typeof data?.url === 'string' && data.url.startsWith('/app/')
     ? data.url
-    : '/app/conversations';
+    : '/app/inbox';
   const targetUrl = new URL(path, self.location.origin).href;
   const clientsList = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
 

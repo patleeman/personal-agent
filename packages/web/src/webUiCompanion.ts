@@ -9,7 +9,7 @@ export interface WebUiCompanionAccessSummary {
 }
 
 function joinCompanionPath(baseUrl: string): string {
-  return `${baseUrl.replace(/\/+$/, '')}/app/conversations`;
+  return `${baseUrl.replace(/\/+$/, '')}/app/inbox`;
 }
 
 export function buildWebUiCompanionAccessSummary(

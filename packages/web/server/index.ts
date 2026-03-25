@@ -9810,6 +9810,23 @@ companionApp.get('/api/events', (req, res) => {
   });
 });
 
+companionApp.post('/api/inbox/clear', (_req, res) => {
+  try {
+    const result = clearInboxForCurrentProfile();
+    res.json({
+      ok: true,
+      deletedActivityIds: result.deletedActivityIds,
+      clearedConversationIds: result.clearedConversationIds,
+    });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 companionApp.get('/api/activity', (_req, res) => {
   try {
     res.json(listActivityForCurrentProfile());
@@ -9819,6 +9836,413 @@ companionApp.get('/api/activity', (_req, res) => {
       stack: err instanceof Error ? err.stack : undefined,
     });
     res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.get('/api/activity/:id', (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const match = findActivityRecord(profile, req.params.id);
+    if (!match) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    res.json({ ...match.entry, read: match.read });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.post('/api/activity/:id/start', async (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const match = findActivityRecord(profile, req.params.id);
+
+    if (!match) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    const entry = match.entry;
+    const requestedRelatedProjectIds = Array.isArray(entry.relatedProjectIds)
+      ? entry.relatedProjectIds.filter((projectId): projectId is string => typeof projectId === 'string' && projectId.trim().length > 0)
+      : [];
+    const availableProjectIds = new Set(listReferenceableProjectIds());
+    const relatedProjectIds = requestedRelatedProjectIds.filter((projectId) => availableProjectIds.has(projectId));
+    const cwd = resolveConversationCwd({
+      repoRoot: REPO_ROOT,
+      profile,
+      defaultCwd: getDefaultWebCwd(),
+      referencedProjectIds: relatedProjectIds,
+    });
+    const result = await createLocalSession(cwd, {
+      ...buildLiveSessionResourceOptions(),
+      extensionFactories: buildLiveSessionExtensionFactories(),
+    });
+
+    if (relatedProjectIds.length > 0) {
+      setConversationProjectLinks({
+        profile,
+        conversationId: result.id,
+        relatedProjectIds,
+      });
+    }
+
+    const relatedConversationIds = [...new Set([...(entry.relatedConversationIds ?? []), result.id])];
+    setActivityConversationLinks({
+      stateRoot: match.stateRoot,
+      profile,
+      activityId: entry.id,
+      relatedConversationIds,
+    });
+
+    await queuePromptContext(result.id, 'referenced_context', buildInboxActivityConversationContext({
+      ...entry,
+      relatedProjectIds,
+      relatedConversationIds,
+    }));
+
+    invalidateAppTopics('activity', 'projects', 'sessions');
+    res.json({
+      activityId: entry.id,
+      id: result.id,
+      sessionFile: result.sessionFile,
+      cwd,
+      relatedConversationIds,
+    });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.patch('/api/activity/:id', (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const { id } = req.params;
+    const { read } = req.body as { read?: boolean };
+    const changed = markActivityReadState(profile, id, read !== false);
+    if (!changed) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    invalidateAppTopics('activity');
+    res.json({ ok: true });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.get('/api/tasks', (_req, res) => {
+  try {
+    res.json(listTasksForCurrentProfile());
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.patch('/api/tasks/:id', (req, res) => {
+  try {
+    const body = req.body as {
+      enabled?: boolean;
+      cron?: string | null;
+      at?: string | null;
+      model?: string | null;
+      cwd?: string | null;
+      timeoutSeconds?: number | null;
+      prompt?: string;
+    };
+    const resolvedTask = findCurrentProfileTask(req.params.id);
+    if (!resolvedTask) {
+      res.status(404).json({ error: 'Task not found' });
+      return;
+    }
+
+    const requestedKeys = Object.keys(body).filter((key) => body[key as keyof typeof body] !== undefined);
+    const enabled = body.enabled;
+    const toggleOnly = requestedKeys.length === 1 && requestedKeys[0] === 'enabled' && typeof enabled === 'boolean';
+
+    if (toggleOnly) {
+      let content = readFileSync(resolvedTask.task.filePath, 'utf-8');
+      if (/enabled:\s*(true|false)/.test(content)) {
+        content = content.replace(/enabled:\s*(true|false)/, `enabled: ${enabled}`);
+      } else {
+        content = content.replace(/^---\n/, `---\nenabled: ${enabled}\n`);
+      }
+      writeFileSync(resolvedTask.task.filePath, content, 'utf-8');
+      invalidateAppTopics('tasks');
+
+      const updatedTask = resolveScheduledTaskForProfile(getCurrentProfile(), resolvedTask.task.id);
+      res.json({ ok: true, task: buildTaskDetailResponse(updatedTask.task, updatedTask.runtime) });
+      return;
+    }
+
+    const schedule = resolvedTask.task.schedule;
+    const nextContent = buildScheduledTaskMarkdown({
+      taskId: resolvedTask.task.id,
+      profile: resolvedTask.task.profile,
+      enabled: body.enabled ?? resolvedTask.task.enabled,
+      cron: body.cron !== undefined ? body.cron : schedule.type === 'cron' ? schedule.expression : undefined,
+      at: body.at !== undefined ? body.at : schedule.type === 'at' ? schedule.at : undefined,
+      model: body.model !== undefined ? body.model : resolvedTask.task.modelRef,
+      cwd: body.cwd !== undefined ? body.cwd : resolvedTask.task.cwd,
+      timeoutSeconds: body.timeoutSeconds !== undefined ? body.timeoutSeconds : resolvedTask.task.timeoutSeconds,
+      prompt: body.prompt ?? resolvedTask.task.prompt,
+    });
+
+    validateScheduledTaskDefinition(resolvedTask.task.filePath, nextContent);
+
+    writeFileSync(resolvedTask.task.filePath, nextContent, 'utf-8');
+    invalidateAppTopics('tasks');
+
+    const updatedTask = resolveScheduledTaskForProfile(getCurrentProfile(), resolvedTask.task.id);
+    res.json({ ok: true, task: buildTaskDetailResponse(updatedTask.task, updatedTask.runtime) });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.get('/api/tasks/:id/log', (req, res) => {
+  try {
+    const resolvedTask = findCurrentProfileTask(req.params.id);
+    if (!resolvedTask?.runtime?.lastLogPath || !existsSync(resolvedTask.runtime.lastLogPath)) {
+      res.status(404).json({ error: 'No log available' });
+      return;
+    }
+
+    const log = readFileSync(resolvedTask.runtime.lastLogPath, 'utf-8');
+    res.json({ log, path: resolvedTask.runtime.lastLogPath });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.get('/api/tasks/:id', (req, res) => {
+  try {
+    const resolvedTask = findCurrentProfileTask(req.params.id);
+    if (!resolvedTask) {
+      res.status(404).json({ error: 'Task not found' });
+      return;
+    }
+
+    res.json(buildTaskDetailResponse(resolvedTask.task, resolvedTask.runtime));
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.post('/api/tasks/:id/run', async (req, res) => {
+  try {
+    const resolvedTask = findCurrentProfileTask(req.params.id);
+    if (!resolvedTask) {
+      res.status(404).json({ error: 'Task not found' });
+      return;
+    }
+    if (!resolvedTask.task.prompt.trim()) {
+      res.status(400).json({ error: 'Task has no prompt body' });
+      return;
+    }
+
+    const result = await startScheduledTaskRun(resolvedTask.task.filePath);
+    if (!result.accepted) {
+      res.status(503).json({ error: result.reason ?? 'Could not start the task run.' });
+      return;
+    }
+
+    res.json({ ok: true, accepted: result.accepted, runId: result.runId });
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.get('/api/runs', async (_req, res) => {
+  try {
+    res.json(await listDurableRuns());
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.get('/api/runs/:id', async (req, res) => {
+  try {
+    const result = await getDurableRun(req.params.id);
+    if (!result) {
+      res.status(404).json({ error: 'Run not found' });
+      return;
+    }
+
+    res.json(result);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.get('/api/runs/:id/log', async (req, res) => {
+  try {
+    const tail = parseRunLogTail(req.query.tail);
+    const result = await getDurableRunLog(req.params.id, tail);
+    if (!result) {
+      res.status(404).json({ error: 'Run not found' });
+      return;
+    }
+
+    res.json(result);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.get('/api/daemon', async (_req, res) => {
+  try {
+    res.json(await readDaemonState());
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.post('/api/daemon/service/restart', async (_req, res) => {
+  try {
+    suppressMonitoredServiceAttention('daemon');
+    const state = await restartDaemonServiceAndReadState();
+    invalidateAppTopics('daemon', 'sync');
+    res.json(state);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.get('/api/sync', async (_req, res) => {
+  try {
+    res.json(await readSyncState());
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.post('/api/sync/run', async (_req, res) => {
+  try {
+    const state = await requestSyncRunAndReadState();
+    invalidateAppTopics('sync');
+    res.json(state);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.get('/api/web-ui/state', (_req, res) => {
+  try {
+    res.json(readWebUiState());
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.post('/api/web-ui/service/restart', (_req, res) => {
+  try {
+    res.status(202).json(requestWebUiServiceRestart({ repoRoot: REPO_ROOT }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.startsWith('Managed web UI restart already in progress')
+      || message.startsWith('Application restart already in progress')
+      || message.startsWith('Application update already in progress')
+      ? 409
+      : message.startsWith('Managed web UI service is not installed')
+        ? 400
+        : 500;
+    res.status(status).json({ error: message });
+  }
+});
+
+companionApp.post('/api/application/restart', (_req, res) => {
+  try {
+    res.status(202).json(requestApplicationRestart({ repoRoot: REPO_ROOT, profile: getCurrentProfile() }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.startsWith('Application restart already in progress') || message.startsWith('Application update already in progress')
+      ? 409
+      : message.startsWith('Managed web UI service is not installed')
+        ? 400
+        : 500;
+    res.status(status).json({ error: message });
+  }
+});
+
+companionApp.post('/api/application/update', (_req, res) => {
+  try {
+    res.status(202).json(requestApplicationUpdate({ repoRoot: REPO_ROOT, profile: getCurrentProfile() }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.startsWith('Application restart already in progress') || message.startsWith('Application update already in progress')
+      ? 409
+      : message.startsWith('Managed web UI service is not installed')
+        ? 400
+        : 500;
+    res.status(status).json({ error: message });
   }
 });
 
@@ -9897,6 +10321,43 @@ companionApp.get('/api/sessions/:id', async (req, res) => {
     });
 
     res.json(sessionRead.detail);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+companionApp.patch('/api/conversations/:id/attention', (req, res) => {
+  try {
+    const profile = getCurrentProfile();
+    const { id } = req.params;
+    const { read } = req.body as { read?: boolean };
+    const session = listConversationSessionsSnapshot().find((entry) => entry.id === id);
+
+    if (!session) {
+      res.status(404).json({ error: 'Conversation not found' });
+      return;
+    }
+
+    if (read === false) {
+      markConversationAttentionUnread({
+        profile,
+        conversationId: id,
+        messageCount: session.messageCount,
+      });
+    } else {
+      markConversationAttentionRead({
+        profile,
+        conversationId: id,
+        messageCount: session.messageCount,
+      });
+    }
+
+    invalidateAppTopics('sessions');
+    res.json({ ok: true });
   } catch (err) {
     logError('request handler error', {
       message: err instanceof Error ? err.message : String(err),
@@ -10514,7 +10975,7 @@ if (existsSync(DIST_DIR)) {
   companionApp.use('/assets', express.static(DIST_ASSETS_DIR));
   companionApp.use('/app', express.static(COMPANION_DIST_DIR));
   companionApp.get('/', (_req, res) => {
-    res.redirect('/app/conversations');
+    res.redirect('/app/inbox');
   });
   companionApp.use(express.static(COMPANION_DIST_DIR, { index: false }));
   companionApp.get('*', (req, res, next) => {

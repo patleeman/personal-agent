@@ -178,10 +178,10 @@ describe('CompanionConversationsPage', () => {
     );
 
     expect(html).toContain('Chats');
+    expect(html).toContain('Open inbox');
     expect(html).toContain('Open chats');
-    expect(html).toContain('Open projects');
-    expect(html).toContain('Open memories');
-    expect(html).toContain('Open skills');
+    expect(html).toContain('Open tasks');
+    expect(html).toContain('Open menu');
     expect(html).toContain('Live now');
     expect(html).toContain('Needs review');
     expect(html).toContain('Active workspace');
