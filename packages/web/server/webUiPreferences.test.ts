@@ -23,28 +23,31 @@ describe('readSavedWebUiPreferences', () => {
     expect(readSavedWebUiPreferences(join(dir, 'settings.json'))).toEqual({
       openConversationIds: [],
       pinnedConversationIds: [],
+      archivedConversationIds: [],
     });
   });
 
-  it('sanitizes stored conversation ids and removes pinned duplicates from open conversations', () => {
+  it('sanitizes stored conversation ids and removes workspace duplicates from archived conversations', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
     writeFileSync(file, JSON.stringify({
       webUi: {
         openConversationIds: [' session-1 ', '', 'session-2', null, 'session-1'],
         pinnedConversationIds: ['session-2', ' session-3 ', 'session-3'],
+        archivedConversationIds: ['session-3', ' session-4 ', '', 'session-1', 'session-4'],
       },
     }));
 
     expect(readSavedWebUiPreferences(file)).toEqual({
       openConversationIds: ['session-1'],
       pinnedConversationIds: ['session-2', 'session-3'],
+      archivedConversationIds: ['session-4'],
     });
   });
 });
 
 describe('writeSavedWebUiPreferences', () => {
-  it('writes the open and pinned conversation ids while preserving unrelated settings', () => {
+  it('writes the workspace and archived conversation ids while preserving unrelated settings', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
     writeFileSync(file, JSON.stringify({
@@ -57,6 +60,7 @@ describe('writeSavedWebUiPreferences', () => {
     writeSavedWebUiPreferences({
       openConversationIds: ['session-1', ' session-2 ', 'session-3'],
       pinnedConversationIds: ['session-3', 'session-4', 'session-4'],
+      archivedConversationIds: ['session-2', 'session-5', ' session-6 '],
     }, file);
 
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
@@ -65,25 +69,28 @@ describe('writeSavedWebUiPreferences', () => {
         sidebarCollapsed: true,
         openConversationIds: ['session-1', 'session-2'],
         pinnedConversationIds: ['session-3', 'session-4'],
+        archivedConversationIds: ['session-5', 'session-6'],
       },
     });
   });
 
-  it('preserves the other list when only one list is updated', () => {
+  it('preserves the other lists when only one list is updated', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
     writeFileSync(file, JSON.stringify({
       webUi: {
         openConversationIds: ['session-1'],
         pinnedConversationIds: ['session-2'],
+        archivedConversationIds: ['session-3'],
       },
     }));
 
-    writeSavedWebUiPreferences({ pinnedConversationIds: ['session-3'] }, file);
+    writeSavedWebUiPreferences({ pinnedConversationIds: ['session-4'] }, file);
 
     expect(readSavedWebUiPreferences(file)).toEqual({
       openConversationIds: ['session-1'],
-      pinnedConversationIds: ['session-3'],
+      pinnedConversationIds: ['session-4'],
+      archivedConversationIds: ['session-3'],
     });
   });
 
@@ -94,10 +101,11 @@ describe('writeSavedWebUiPreferences', () => {
       webUi: {
         openConversationIds: ['session-1'],
         pinnedConversationIds: ['session-2'],
+        archivedConversationIds: ['session-3'],
       },
     }));
 
-    writeSavedWebUiPreferences({ openConversationIds: [], pinnedConversationIds: [] }, file);
+    writeSavedWebUiPreferences({ openConversationIds: [], pinnedConversationIds: [], archivedConversationIds: [] }, file);
 
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({});
   });

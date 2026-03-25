@@ -1,4 +1,8 @@
-import { OPEN_SESSION_IDS_STORAGE_KEY, PINNED_SESSION_IDS_STORAGE_KEY } from './localSettings';
+import {
+  ARCHIVED_SESSION_IDS_STORAGE_KEY,
+  OPEN_SESSION_IDS_STORAGE_KEY,
+  PINNED_SESSION_IDS_STORAGE_KEY,
+} from './localSettings';
 
 export const CONVERSATION_LAYOUT_CHANGED_EVENT = 'pa:conversation-layout-changed';
 export const OPEN_SESSIONS_CHANGED_EVENT = CONVERSATION_LAYOUT_CHANGED_EVENT;
@@ -9,6 +13,13 @@ export type ConversationShelf = 'open' | 'pinned';
 export interface ConversationLayout {
   sessionIds: string[];
   pinnedSessionIds: string[];
+  archivedSessionIds: string[];
+}
+
+interface ConversationLayoutInput {
+  sessionIds?: Iterable<unknown>;
+  pinnedSessionIds?: Iterable<unknown>;
+  archivedSessionIds?: Iterable<unknown>;
 }
 
 function normalizeSessionId(value: unknown): string {
@@ -32,15 +43,52 @@ function normalizeSessionIds(values: Iterable<unknown>): string[] {
   return ids;
 }
 
-function normalizeConversationLayout(input: ConversationLayout): ConversationLayout {
-  const pinnedSessionIds = normalizeSessionIds(input.pinnedSessionIds);
+function normalizeConversationLayout(input: ConversationLayoutInput): ConversationLayout {
+  const pinnedSessionIds = normalizeSessionIds(input.pinnedSessionIds ?? []);
   const pinnedIdSet = new Set(pinnedSessionIds);
-  const sessionIds = normalizeSessionIds(input.sessionIds).filter((id) => !pinnedIdSet.has(id));
+  const sessionIds = normalizeSessionIds(input.sessionIds ?? []).filter((id) => !pinnedIdSet.has(id));
+  const workspaceIdSet = new Set([...sessionIds, ...pinnedSessionIds]);
+  const archivedSessionIds = normalizeSessionIds(input.archivedSessionIds ?? []).filter((id) => !workspaceIdSet.has(id));
 
   return {
     sessionIds,
     pinnedSessionIds,
+    archivedSessionIds,
   };
+}
+
+function mergeConversationLayout(current: ConversationLayout, input: ConversationLayoutInput): ConversationLayout {
+  return normalizeConversationLayout({
+    sessionIds: input.sessionIds ?? current.sessionIds,
+    pinnedSessionIds: input.pinnedSessionIds ?? current.pinnedSessionIds,
+    archivedSessionIds: input.archivedSessionIds ?? current.archivedSessionIds,
+  });
+}
+
+function listWorkspaceSessionIds(layout: ConversationLayout): string[] {
+  return [...layout.pinnedSessionIds, ...layout.sessionIds];
+}
+
+function applyArchiveTransitions(current: ConversationLayout, next: ConversationLayout): ConversationLayout {
+  const currentWorkspaceIdSet = new Set(listWorkspaceSessionIds(current));
+  const nextWorkspaceIdSet = new Set(listWorkspaceSessionIds(next));
+  const archivedSessionIds = new Set(next.archivedSessionIds);
+
+  for (const sessionId of nextWorkspaceIdSet) {
+    archivedSessionIds.delete(sessionId);
+  }
+
+  for (const sessionId of currentWorkspaceIdSet) {
+    if (!nextWorkspaceIdSet.has(sessionId)) {
+      archivedSessionIds.add(sessionId);
+    }
+  }
+
+  return normalizeConversationLayout({
+    sessionIds: next.sessionIds,
+    pinnedSessionIds: next.pinnedSessionIds,
+    archivedSessionIds: [...archivedSessionIds],
+  });
 }
 
 function sameSessionIds(left: readonly string[], right: readonly string[]): boolean {
@@ -53,7 +101,8 @@ function sameSessionIds(left: readonly string[], right: readonly string[]): bool
 
 function sameConversationLayout(left: ConversationLayout, right: ConversationLayout): boolean {
   return sameSessionIds(left.sessionIds, right.sessionIds)
-    && sameSessionIds(left.pinnedSessionIds, right.pinnedSessionIds);
+    && sameSessionIds(left.pinnedSessionIds, right.pinnedSessionIds)
+    && sameSessionIds(left.archivedSessionIds, right.archivedSessionIds);
 }
 
 function persistConversationLayoutToServer(layout: ConversationLayout): void {
@@ -73,10 +122,12 @@ function persistConversationLayoutToServer(layout: ConversationLayout): void {
 export function syncOpenConversationTabsToServer(
   sessionIds: Iterable<unknown>,
   pinnedSessionIds: Iterable<unknown> = readPinnedSessionIds(),
+  archivedSessionIds: Iterable<unknown> = readArchivedSessionIds(),
 ): void {
   persistConversationLayoutToServer(normalizeConversationLayout({
     sessionIds: normalizeSessionIds(sessionIds),
     pinnedSessionIds: normalizeSessionIds(pinnedSessionIds),
+    archivedSessionIds: normalizeSessionIds(archivedSessionIds),
   }));
 }
 
@@ -100,6 +151,7 @@ export function readConversationLayout(): ConversationLayout {
   return normalizeConversationLayout({
     sessionIds: readStoredSessionIds(OPEN_SESSION_IDS_STORAGE_KEY),
     pinnedSessionIds: readStoredSessionIds(PINNED_SESSION_IDS_STORAGE_KEY),
+    archivedSessionIds: readStoredSessionIds(ARCHIVED_SESSION_IDS_STORAGE_KEY),
   });
 }
 
@@ -109,6 +161,10 @@ export function readOpenSessionIds(): string[] {
 
 export function readPinnedSessionIds(): string[] {
   return readConversationLayout().pinnedSessionIds;
+}
+
+export function readArchivedSessionIds(): string[] {
+  return readConversationLayout().archivedSessionIds;
 }
 
 function writeStoredSessionIds(storageKey: string, sessionIds: readonly string[]): void {
@@ -128,6 +184,7 @@ function writeConversationLayout(layout: ConversationLayout): ConversationLayout
 
   writeStoredSessionIds(OPEN_SESSION_IDS_STORAGE_KEY, normalizedLayout.sessionIds);
   writeStoredSessionIds(PINNED_SESSION_IDS_STORAGE_KEY, normalizedLayout.pinnedSessionIds);
+  writeStoredSessionIds(ARCHIVED_SESSION_IDS_STORAGE_KEY, normalizedLayout.archivedSessionIds);
   persistConversationLayoutToServer(normalizedLayout);
   window.dispatchEvent(new CustomEvent(CONVERSATION_LAYOUT_CHANGED_EVENT, {
     detail: normalizedLayout,
@@ -136,9 +193,10 @@ function writeConversationLayout(layout: ConversationLayout): ConversationLayout
   return normalizedLayout;
 }
 
-export function replaceConversationLayout(layout: ConversationLayout): ConversationLayout {
-  const next = normalizeConversationLayout(layout);
+export function replaceConversationLayout(layout: ConversationLayoutInput): ConversationLayout {
   const current = readConversationLayout();
+  const merged = mergeConversationLayout(current, layout);
+  const next = applyArchiveTransitions(current, merged);
   if (sameConversationLayout(current, next)) {
     return current;
   }
@@ -185,7 +243,7 @@ export function closeConversationTab(sessionId: string): string[] {
     return current.sessionIds;
   }
 
-  return writeConversationLayout({
+  return replaceConversationLayout({
     sessionIds: nextSessionIds,
     pinnedSessionIds: current.pinnedSessionIds,
   }).sessionIds;
@@ -200,13 +258,18 @@ export function setConversationArchivedState(sessionId: string, archived: boolea
 
   const nextPinnedSessionIds = current.pinnedSessionIds.filter((id) => id !== normalizedSessionId);
   const openWithoutSession = current.sessionIds.filter((id) => id !== normalizedSessionId);
-  const nextSessionIds = archived || nextPinnedSessionIds.includes(normalizedSessionId)
+  const archivedWithoutSession = current.archivedSessionIds.filter((id) => id !== normalizedSessionId);
+  const nextSessionIds = archived
     ? openWithoutSession
     : [...openWithoutSession, normalizedSessionId];
+  const nextArchivedSessionIds = archived
+    ? [...archivedWithoutSession, normalizedSessionId]
+    : archivedWithoutSession;
 
   return replaceConversationLayout({
     sessionIds: nextSessionIds,
     pinnedSessionIds: nextPinnedSessionIds,
+    archivedSessionIds: nextArchivedSessionIds,
   });
 }
 
@@ -289,6 +352,7 @@ export function moveConversationToSection(
     return normalizeConversationLayout({
       sessionIds: nextSessionIds,
       pinnedSessionIds: nextPinnedSessionIds,
+      archivedSessionIds: normalizedLayout.archivedSessionIds,
     });
   }
 
@@ -298,6 +362,7 @@ export function moveConversationToSection(
     return normalizeConversationLayout({
       sessionIds: nextSessionIds,
       pinnedSessionIds: nextPinnedSessionIds,
+      archivedSessionIds: normalizedLayout.archivedSessionIds,
     });
   }
 
@@ -306,6 +371,7 @@ export function moveConversationToSection(
   return normalizeConversationLayout({
     sessionIds: nextSessionIds,
     pinnedSessionIds: nextPinnedSessionIds,
+    archivedSessionIds: normalizedLayout.archivedSessionIds,
   });
 }
 

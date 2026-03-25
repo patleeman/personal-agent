@@ -4,6 +4,7 @@ import { dirname } from 'node:path';
 export interface SavedWebUiPreferences {
   openConversationIds: string[];
   pinnedConversationIds: string[];
+  archivedConversationIds: string[];
 }
 
 function readNonEmptyString(value: unknown): string {
@@ -51,13 +52,19 @@ function normalizeConversationIds(value: unknown): string[] {
 function normalizeSavedWebUiPreferences(input: {
   openConversationIds?: unknown;
   pinnedConversationIds?: unknown;
+  archivedConversationIds?: unknown;
 }): SavedWebUiPreferences {
   const pinnedConversationIds = normalizeConversationIds(input.pinnedConversationIds);
   const pinnedIdSet = new Set(pinnedConversationIds);
+  const openConversationIds = normalizeConversationIds(input.openConversationIds)
+    .filter((id) => !pinnedIdSet.has(id));
+  const workspaceIdSet = new Set([...openConversationIds, ...pinnedConversationIds]);
 
   return {
-    openConversationIds: normalizeConversationIds(input.openConversationIds).filter((id) => !pinnedIdSet.has(id)),
+    openConversationIds,
     pinnedConversationIds,
+    archivedConversationIds: normalizeConversationIds(input.archivedConversationIds)
+      .filter((id) => !workspaceIdSet.has(id)),
   };
 }
 
@@ -72,11 +79,16 @@ export function readSavedWebUiPreferences(settingsFile: string): SavedWebUiPrefe
   return normalizeSavedWebUiPreferences({
     openConversationIds: webUi.openConversationIds,
     pinnedConversationIds: webUi.pinnedConversationIds,
+    archivedConversationIds: webUi.archivedConversationIds,
   });
 }
 
 export function writeSavedWebUiPreferences(
-  input: { openConversationIds?: string[] | null; pinnedConversationIds?: string[] | null },
+  input: {
+    openConversationIds?: string[] | null;
+    pinnedConversationIds?: string[] | null;
+    archivedConversationIds?: string[] | null;
+  },
   settingsFile: string,
 ): SavedWebUiPreferences {
   const settings = readSettingsObject(settingsFile);
@@ -84,11 +96,13 @@ export function writeSavedWebUiPreferences(
   const current = normalizeSavedWebUiPreferences({
     openConversationIds: webUi.openConversationIds,
     pinnedConversationIds: webUi.pinnedConversationIds,
+    archivedConversationIds: webUi.archivedConversationIds,
   });
 
   const next = normalizeSavedWebUiPreferences({
     openConversationIds: input.openConversationIds !== undefined ? (input.openConversationIds ?? []) : current.openConversationIds,
     pinnedConversationIds: input.pinnedConversationIds !== undefined ? (input.pinnedConversationIds ?? []) : current.pinnedConversationIds,
+    archivedConversationIds: input.archivedConversationIds !== undefined ? (input.archivedConversationIds ?? []) : current.archivedConversationIds,
   });
 
   if (next.openConversationIds.length > 0) {
@@ -101,6 +115,12 @@ export function writeSavedWebUiPreferences(
     webUi.pinnedConversationIds = next.pinnedConversationIds;
   } else {
     delete webUi.pinnedConversationIds;
+  }
+
+  if (next.archivedConversationIds.length > 0) {
+    webUi.archivedConversationIds = next.archivedConversationIds;
+  } else {
+    delete webUi.archivedConversationIds;
   }
 
   if (Object.keys(webUi).length > 0) {

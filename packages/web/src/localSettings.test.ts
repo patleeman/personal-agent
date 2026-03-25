@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildComposerHistoryStorageKey } from './composerHistory';
 import {
+  ARCHIVED_SESSION_IDS_STORAGE_KEY,
   CONVERSATION_SEEN_MESSAGE_COUNT_STORAGE_KEY,
   OPEN_SESSION_IDS_STORAGE_KEY,
   resetStoredConversationUiState,
@@ -39,6 +40,7 @@ describe('localSettings', () => {
 
   it('clears conversation ui state including composer history', () => {
     localStorage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['session-1']));
+    localStorage.setItem(ARCHIVED_SESSION_IDS_STORAGE_KEY, JSON.stringify(['session-1']));
     localStorage.setItem(CONVERSATION_SEEN_MESSAGE_COUNT_STORAGE_KEY, JSON.stringify({ 'session-1': 3 }));
     localStorage.setItem(buildComposerHistoryStorageKey('session-1'), JSON.stringify(['draft 1']));
     localStorage.setItem(buildComposerHistoryStorageKey(), JSON.stringify(['draft 2']));
@@ -47,6 +49,7 @@ describe('localSettings', () => {
     resetStoredConversationUiState();
 
     expect(localStorage.getItem(OPEN_SESSION_IDS_STORAGE_KEY)).toBeNull();
+    expect(localStorage.getItem(ARCHIVED_SESSION_IDS_STORAGE_KEY)).toBeNull();
     expect(localStorage.getItem(CONVERSATION_SEEN_MESSAGE_COUNT_STORAGE_KEY)).toBeNull();
     expect(localStorage.getItem(buildComposerHistoryStorageKey('session-1'))).toBeNull();
     expect(localStorage.getItem(buildComposerHistoryStorageKey())).toBeNull();

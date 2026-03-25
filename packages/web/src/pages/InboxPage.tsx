@@ -54,7 +54,7 @@ export function InboxPage() {
   const { id: selectedId } = useParams<{ id?: string }>();
   const { activity, setActivity } = useAppData();
   const { status: sseStatus } = useSseConnection();
-  const { tabs, archivedSessions, openSession, loading: conversationsLoading, refetch: refetchSessions } = useConversations();
+  const { tabs, archivedSessions, archivedConversationIds = [], openSession, loading: conversationsLoading, refetch: refetchSessions } = useConversations();
   const [filter, setFilter] = useState<'all' | 'unread'>('unread');
   const [markingAll, setMarkingAll] = useState(false);
   const [clearingInbox, setClearingInbox] = useState(false);
@@ -69,9 +69,13 @@ export function InboxPage() {
     });
   }, [activity?.entries, archivedSessions, tabs]);
 
+  const archivedConversationIdSet = useMemo(
+    () => new Set(archivedConversationIds),
+    [archivedConversationIds],
+  );
   const attentionConversations = useMemo(
-    () => archivedSessions.filter((session) => sessionNeedsAttention(session)),
-    [archivedSessions],
+    () => archivedSessions.filter((session) => sessionNeedsAttention(session) && !archivedConversationIdSet.has(session.id)),
+    [archivedConversationIdSet, archivedSessions],
   );
 
   const allItems = useMemo<InboxSurfaceItem[]>(() => {

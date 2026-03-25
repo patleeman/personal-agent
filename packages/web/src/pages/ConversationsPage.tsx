@@ -316,7 +316,13 @@ function filterConversationWorkItems(items: ConversationWorkItem[], filter: Conv
   return matched;
 }
 
-function filterSectionSessions(section: ConversationSection, items: SessionMeta[], filter: ConversationFilter, query: string): SessionMeta[] {
+function filterSectionSessions(
+  section: ConversationSection,
+  items: SessionMeta[],
+  filter: ConversationFilter,
+  query: string,
+  explicitlyArchivedIdSet: ReadonlySet<string> = new Set(),
+): SessionMeta[] {
   const matched = sortSessions(items).filter((session) => matchesConversation(session, query));
 
   if (filter === 'all') {
@@ -324,7 +330,13 @@ function filterSectionSessions(section: ConversationSection, items: SessionMeta[
   }
 
   if (filter === 'attention') {
-    return matched.filter((session) => sessionNeedsAttention(session));
+    return matched.filter((session) => {
+      if (!sessionNeedsAttention(session)) {
+        return false;
+      }
+
+      return section !== 'archived' || !explicitlyArchivedIdSet.has(session.id);
+    });
   }
 
   if (filter === 'archived') {
@@ -535,6 +547,7 @@ export function ConversationsPage() {
   const {
     pinnedIds,
     openIds,
+    archivedConversationIds = [],
     pinnedSessions,
     tabs,
     archivedSessions,
@@ -551,15 +564,26 @@ export function ConversationsPage() {
   const [busyConversationId, setBusyConversationId] = useState<string | null>(null);
   const [busyRunId, setBusyRunId] = useState<string | null>(null);
 
+  const archivedConversationIdSet = useMemo(
+    () => new Set(archivedConversationIds),
+    [archivedConversationIds],
+  );
   const pinned = useMemo(() => filterSectionSessions('pinned', pinnedSessions, filter, query), [filter, pinnedSessions, query]);
   const open = useMemo(() => filterSectionSessions('open', tabs, filter, query), [filter, query, tabs]);
-  const archived = useMemo(() => filterSectionSessions('archived', archivedSessions, filter, query), [archivedSessions, filter, query]);
+  const archived = useMemo(
+    () => filterSectionSessions('archived', archivedSessions, filter, query, archivedConversationIdSet),
+    [archivedConversationIdSet, archivedSessions, filter, query],
+  );
 
   const visibleSectionCount = [pinned, open, archived].filter((items) => items.length > 0).length;
   const totalVisible = pinned.length + open.length + archived.length;
   const totalAttention = useMemo(
-    () => [...pinnedSessions, ...tabs, ...archivedSessions].filter((session) => sessionNeedsAttention(session)).length,
-    [archivedSessions, pinnedSessions, tabs],
+    () => [
+      ...pinnedSessions,
+      ...tabs,
+      ...archivedSessions.filter((session) => !archivedConversationIdSet.has(session.id)),
+    ].filter((session) => sessionNeedsAttention(session)).length,
+    [archivedConversationIdSet, archivedSessions, pinnedSessions, tabs],
   );
   const lookups = useMemo<RunPresentationLookups>(() => ({ sessions }), [sessions]);
   const openIdSet = useMemo(() => new Set(openIds), [openIds]);
@@ -582,6 +606,10 @@ export function ConversationsPage() {
       }
 
       const session = sessionsById.get(conversationId) ?? null;
+      if (archivedConversationIdSet.has(conversationId)) {
+        continue;
+      }
+
       const headline = getRunHeadline(run, lookups);
       const workspace: ConversationWorkspaceState = pinnedIdSet.has(conversationId)
         ? 'pinned'
@@ -653,6 +681,7 @@ export function ConversationsPage() {
 
     const coveredConversationIds = new Set(sortedRunItems.filter((item) => item.active).map((item) => item.conversationId));
     const archivedRunningItems = sortSessions(archivedSessions)
+      .filter((session) => !archivedConversationIdSet.has(session.id))
       .filter((session) => session.isRunning && !coveredConversationIds.has(session.id))
       .map((session) => ({
         key: `session:${session.id}`,
@@ -670,7 +699,7 @@ export function ConversationsPage() {
       }));
 
     return [...sortedRunItems, ...archivedRunningItems];
-  }, [archivedSessions, lookups, openIdSet, pinnedIdSet, runs?.runs, sessionsById]);
+  }, [archivedConversationIdSet, archivedSessions, lookups, openIdSet, pinnedIdSet, runs?.runs, sessionsById]);
   const visibleConversationWorkItems = useMemo(
     () => filterConversationWorkItems(conversationWorkItems, filter, query),
     [conversationWorkItems, filter, query],
