@@ -1,6 +1,8 @@
 import { getConversationDisplayTitle } from '../conversationTitle';
-import type { ActivitySnapshot, SessionMeta } from '../types';
+import type { ActivityEntry, ActivitySnapshot, SessionMeta } from '../types';
 import { buildCompanionConversationPath } from './routes';
+
+export type CompanionNotificationKind = 'approval-needed' | 'blocked' | 'completed' | 'needs-review';
 
 export interface CompanionNotificationCandidate {
   id: string;
@@ -9,6 +11,7 @@ export interface CompanionNotificationCandidate {
   body: string;
   tag: string;
   path: string;
+  kind: CompanionNotificationKind;
 }
 
 function firstDetailLine(details: string | null | undefined): string | null {
@@ -24,28 +27,112 @@ function firstDetailLine(details: string | null | undefined): string | null {
   return line ?? null;
 }
 
-function buildActivityNotificationBody(details: string | null | undefined): string {
-  return firstDetailLine(details) ?? 'Open the conversation in Pi Companion.';
+const APPROVAL_NEEDED_PATTERN = /\b(approval needed|needs approval|approve|approval|confirm|confirmation)\b/i;
+const BLOCKED_PATTERN = /\b(blocked|waiting for user|waiting on you|offline|merge conflicts?|conflicts?|failed|failure|error|stuck)\b/i;
+const COMPLETED_PATTERN = /\b(completed|complete|finished|done|recovered|succeeded|successful|distilled)\b/i;
+
+function classifyActivityNotificationKind(entry: Pick<ActivityEntry, 'summary' | 'details'>): CompanionNotificationKind {
+  const haystack = [entry.summary, entry.details ?? '']
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0)
+    .join('\n');
+
+  if (APPROVAL_NEEDED_PATTERN.test(haystack)) {
+    return 'approval-needed';
+  }
+
+  if (BLOCKED_PATTERN.test(haystack)) {
+    return 'blocked';
+  }
+
+  if (COMPLETED_PATTERN.test(haystack)) {
+    return 'completed';
+  }
+
+  return 'needs-review';
 }
 
-function buildSessionNotificationBody(session: SessionMeta): string {
+function buildActivityNotificationTitle(kind: CompanionNotificationKind, conversationTitle: string): string {
+  switch (kind) {
+    case 'approval-needed':
+      return `Approval needed: ${conversationTitle}`;
+    case 'blocked':
+      return `Blocked: ${conversationTitle}`;
+    case 'completed':
+      return `Completed: ${conversationTitle}`;
+    default:
+      return `Needs review: ${conversationTitle}`;
+  }
+}
+
+function buildActivityNotificationBody(entry: Pick<ActivityEntry, 'summary' | 'details'>, kind: CompanionNotificationKind): string {
+  const detail = firstDetailLine(entry.details);
+  if (detail) {
+    return detail;
+  }
+
+  const summary = entry.summary.trim();
+  if (summary.length > 0 && !/^needs review$/i.test(summary)) {
+    return summary;
+  }
+
+  switch (kind) {
+    case 'approval-needed':
+      return 'A reply or approval is needed in this conversation.';
+    case 'blocked':
+      return 'This conversation is blocked until something changes.';
+    case 'completed':
+      return 'Conversation work completed and is ready for review.';
+    default:
+      return 'Open the conversation in Pi Companion.';
+  }
+}
+
+function buildSessionNotificationTitle(kind: CompanionNotificationKind, session: SessionMeta): string {
+  const conversationTitle = getConversationDisplayTitle(session.title);
+  switch (kind) {
+    case 'completed':
+      return `Completed: ${conversationTitle}`;
+    case 'blocked':
+      return `Blocked: ${conversationTitle}`;
+    case 'approval-needed':
+      return `Approval needed: ${conversationTitle}`;
+    default:
+      return `Needs review: ${conversationTitle}`;
+  }
+}
+
+function buildSessionNotificationBody(session: SessionMeta, kind: CompanionNotificationKind): string {
   const unreadMessages = session.attentionUnreadMessageCount ?? 0;
   const unreadActivities = session.attentionUnreadActivityCount ?? 0;
 
+  if (kind === 'completed') {
+    if (unreadMessages > 0) {
+      return `Conversation work completed with ${unreadMessages} unread message${unreadMessages === 1 ? '' : 's'} ready for review.`;
+    }
+
+    return 'Conversation work completed and is ready for review.';
+  }
+
   if (unreadActivities > 0) {
-    return 'A new attention-worthy update is waiting in this conversation.';
+    return 'A new conversation update needs your attention.';
   }
 
   if (unreadMessages > 0) {
     return `New output is ready${unreadMessages > 1 ? ` (${unreadMessages} unread messages)` : ''}.`;
   }
 
-  return 'This conversation has a new update waiting for review.';
+  return kind === 'blocked'
+    ? 'This conversation is blocked until something changes.'
+    : kind === 'approval-needed'
+      ? 'A reply or approval is needed in this conversation.'
+      : 'This conversation has a new update waiting for review.';
 }
 
 export function collectCompanionActivityNotifications(
   previous: ActivitySnapshot | null,
   next: ActivitySnapshot | null,
+  options?: { conversationTitleById?: ReadonlyMap<string, string> },
 ): CompanionNotificationCandidate[] {
   if (!previous || !next) {
     return [];
@@ -69,13 +156,17 @@ export function collectCompanionActivityNotifications(
       return [];
     }
 
+    const conversationTitle = getConversationDisplayTitle(options?.conversationTitleById?.get(conversationId));
+    const kind = classifyActivityNotificationKind(entry);
+
     return [{
       id: `activity:${entry.id}`,
       conversationId,
-      title: entry.summary,
-      body: buildActivityNotificationBody(entry.details),
+      title: buildActivityNotificationTitle(kind, conversationTitle),
+      body: buildActivityNotificationBody(entry, kind),
       tag: `activity:${entry.id}`,
       path: buildCompanionConversationPath(conversationId),
+      kind,
     }];
   });
 }
@@ -110,17 +201,18 @@ export function collectCompanionSessionNotifications(
       return [];
     }
 
-    const title = prior.isRunning && !session.isRunning
-      ? `Finished: ${getConversationDisplayTitle(session.title)}`
-      : `Needs review: ${getConversationDisplayTitle(session.title)}`;
+    const kind: CompanionNotificationKind = prior.isRunning && !session.isRunning
+      ? 'completed'
+      : 'needs-review';
 
     return [{
       id: `session:${session.id}:${session.attentionUpdatedAt ?? session.timestamp}`,
       conversationId: session.id,
-      title,
-      body: buildSessionNotificationBody(session),
+      title: buildSessionNotificationTitle(kind, session),
+      body: buildSessionNotificationBody(session, kind),
       tag: `session:${session.id}`,
       path: buildCompanionConversationPath(session.id),
+      kind,
     }];
   });
 }

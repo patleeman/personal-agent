@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { getConversationDisplayTitle } from '../conversationTitle';
 import type { ActivitySnapshot, SessionMeta } from '../types';
 import type { CompanionNotificationCandidate } from './notifications';
 import {
@@ -46,6 +47,9 @@ export function useCompanionNotifications(input: {
 }) {
   const previousActivityRef = useRef<ActivitySnapshot | null>(null);
   const previousSessionsRef = useRef<SessionMeta[] | null>(null);
+  const conversationTitleById = useMemo(() => new Map(
+    (input.sessions ?? []).map((session) => [session.id, getConversationDisplayTitle(session.title)] as const),
+  ), [input.sessions]);
 
   useEffect(() => {
     if (!input.enabled || typeof document === 'undefined') {
@@ -60,7 +64,9 @@ export function useCompanionNotifications(input: {
       return;
     }
 
-    const activityNotifications = collectCompanionActivityNotifications(previousActivityRef.current, input.activity);
+    const activityNotifications = collectCompanionActivityNotifications(previousActivityRef.current, input.activity, {
+      conversationTitleById,
+    });
     const suppressedConversationIds = new Set(activityNotifications.map((notification) => notification.conversationId));
     const sessionNotifications = collectCompanionSessionNotifications(previousSessionsRef.current, input.sessions, {
       suppressConversationIds: suppressedConversationIds,
@@ -72,5 +78,5 @@ export function useCompanionNotifications(input: {
     for (const candidate of [...activityNotifications, ...sessionNotifications]) {
       void showCompanionNotification(candidate);
     }
-  }, [input.activity, input.enabled, input.sessions]);
+  }, [conversationTitleById, input.activity, input.enabled, input.sessions]);
 }
