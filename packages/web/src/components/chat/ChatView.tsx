@@ -1835,6 +1835,7 @@ function UserMessage({
   onHydrateMessage,
   hydratingMessageBlockIds,
   onOpenFilePath,
+  layout = 'default',
 }: {
   block: Extract<MessageBlock, { type: 'user' }>;
   onCheckpoint?: () => Promise<void> | void;
@@ -1842,6 +1843,7 @@ function UserMessage({
   onHydrateMessage?: (blockId: string) => Promise<void> | void;
   hydratingMessageBlockIds?: ReadonlySet<string>;
   onOpenFilePath?: (path: string) => void;
+  layout?: ChatViewLayout;
 }) {
   const hasText = block.text.trim().length > 0;
   const skillBlock = hasText ? parseSkillBlock(block.text) : null;
@@ -1849,7 +1851,7 @@ function UserMessage({
   return (
     <div className="group flex flex-col items-end gap-1.5">
       <MsgActions isUser onCheckpoint={onCheckpoint} onRewind={onRewind} />
-      <div className="max-w-[86%]">
+      <div className={layout === 'companion' ? 'max-w-[92%] sm:max-w-[88%]' : 'max-w-[86%]'}>
         <div className="ui-message-card-user space-y-2">
           {block.images && block.images.length > 0 && (
             <div className="space-y-2">
@@ -1901,6 +1903,7 @@ function AssistantMessage({
   onCheckpoint,
   onOpenFilePath,
   showCursor = false,
+  layout = 'default',
 }: {
   block: Extract<MessageBlock, { type: 'text' }>;
   onFork?: () => Promise<void> | void;
@@ -1908,11 +1911,12 @@ function AssistantMessage({
   onCheckpoint?: () => Promise<void> | void;
   onOpenFilePath?: (path: string) => void;
   showCursor?: boolean;
+  layout?: ChatViewLayout;
 }) {
   const shouldShowCursor = showCursor || !!block.streaming;
 
   return (
-    <div className="group flex gap-3 items-start">
+    <div className={cx('group flex items-start', layout === 'companion' ? 'gap-2.5' : 'gap-3')}>
       <div className="ui-chat-avatar mt-0.5">
         <span className="ui-chat-avatar-mark">pa</span>
       </div>
@@ -2047,6 +2051,7 @@ function StreamingIndicator({ label }: { label: string }) {
 }
 
 type ChatViewPerformanceMode = 'default' | 'aggressive';
+type ChatViewLayout = 'default' | 'companion';
 
 const CHAT_VIEW_RENDERING_PROFILE: Record<ChatViewPerformanceMode, {
   contentVisibilityThreshold: number;
@@ -2195,6 +2200,7 @@ interface ChatViewProps {
   focusMessageIndex?: number | null;
   isStreaming?: boolean;
   performanceMode?: ChatViewPerformanceMode;
+  layout?: ChatViewLayout;
   onForkMessage?: (messageIndex: number) => Promise<void> | void;
   onRewindMessage?: (messageIndex: number) => Promise<void> | void;
   onCheckpointMessage?: (block: MessageBlock, messageIndex: number) => Promise<void> | void;
@@ -2220,6 +2226,7 @@ export const ChatView = memo(function ChatView({
   focusMessageIndex = null,
   isStreaming = false,
   performanceMode = 'default',
+  layout = 'default',
   onForkMessage,
   onRewindMessage,
   onCheckpointMessage,
@@ -2405,6 +2412,7 @@ export const ChatView = memo(function ChatView({
               onHydrateMessage={onHydrateMessage}
               hydratingMessageBlockIds={hydratingMessageBlockIds}
               onOpenFilePath={onOpenFilePath}
+              layout={layout}
             />
           );
         case 'text':
@@ -2416,6 +2424,7 @@ export const ChatView = memo(function ChatView({
               onRewind={onRewindMessage ? () => onRewindMessage(absoluteIndex) : undefined}
               onFork={onForkMessage ? () => onForkMessage(absoluteIndex) : undefined}
               onOpenFilePath={onOpenFilePath}
+              layout={layout}
             />
           );
         case 'context':
@@ -2473,7 +2482,7 @@ export const ChatView = memo(function ChatView({
         {el}
       </div>
     ) : null;
-  }, [activeArtifactId, activeRunId, askUserQuestionDisplayMode, contentVisibilityStyle, hydratingMessageBlockIds, isStreaming, messageIndexOffset, messages, messages.length, onCheckpointMessage, onForkMessage, onHydrateMessage, onOpenArtifact, onOpenFilePath, onOpenRun, onSubmitAskUserQuestion, onResumeConversation, onRewindMessage, renderItems.length, resumeConversationBusy, resumeConversationLabel, resumeConversationTitle]);
+  }, [activeArtifactId, activeRunId, askUserQuestionDisplayMode, contentVisibilityStyle, hydratingMessageBlockIds, isStreaming, layout, messageIndexOffset, messages, messages.length, onCheckpointMessage, onForkMessage, onHydrateMessage, onOpenArtifact, onOpenFilePath, onOpenRun, onSubmitAskUserQuestion, onResumeConversation, onRewindMessage, renderItems.length, resumeConversationBusy, resumeConversationLabel, resumeConversationTitle]);
 
   const visibleChunkRange = useMemo(() => {
     if (!shouldWindowTranscript || chunkLayouts.length === 0) {
@@ -2561,7 +2570,7 @@ export const ChatView = memo(function ChatView({
   return (
     <>
       <style>{`@keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
-      <div className="pl-6 pr-10 py-5">
+      <div className={layout === 'companion' ? 'px-2.5 py-3 sm:px-4 sm:py-4' : 'pl-6 pr-10 py-5'}>
         {windowingBadge}
         {shouldWindowTranscript ? windowedTranscript : fullTranscript}
         {showStreamingIndicator && (
