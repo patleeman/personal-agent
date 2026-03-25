@@ -182,8 +182,11 @@ describe('CompanionConversationPage', () => {
     );
 
     expect(html).toContain('Take over to reply');
+    expect(html).toContain('Back to conversations');
     expect(html).toContain('Open todo panel');
     expect(html).toContain('Open artifact panel');
+    expect(html).toContain('Todo');
+    expect(html).toContain('Artifacts');
     expect(html).not.toContain('todos:');
     expect(html).not.toContain('artifacts:');
     expect(html).toContain('artifact-action:');
