@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api';
 import { useApi } from '../hooks';
 import { formatUsageLabel, humanizeSkillName } from '../memoryOverview';
 import type { MemorySkillItem } from '../types';
+import { buildCompanionSkillPath } from './routes';
 
 function sortCompanionSkills(skills: MemorySkillItem[]): MemorySkillItem[] {
   return [...skills].sort((left, right) => {
@@ -49,13 +51,22 @@ export function CompanionSkillsPage() {
             <section>
               <div className="border-y border-border-subtle">
                 {skills.map((skill) => (
-                  <div key={skill.name} className="border-b border-border-subtle px-4 py-4 last:border-b-0">
-                    <h3 className="truncate text-[16px] font-medium leading-tight text-primary">{humanizeSkillName(skill.name)}</h3>
-                    <p className="mt-1 text-[13px] leading-relaxed text-secondary">{skill.description}</p>
-                    <p className="mt-2 break-words text-[11px] text-dim">
-                      {formatUsageLabel(skill.recentSessionCount, skill.lastUsedAt, skill.usedInLastSession, 'Not used recently')} · {skill.source}
-                    </p>
-                  </div>
+                  <Link
+                    key={skill.name}
+                    to={buildCompanionSkillPath(skill.name)}
+                    className="block border-b border-border-subtle px-4 py-4 transition-colors last:border-b-0 hover:bg-surface/55"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="truncate text-[16px] font-medium leading-tight text-primary">{humanizeSkillName(skill.name)}</h3>
+                        <p className="mt-1 text-[13px] leading-relaxed text-secondary">{skill.description}</p>
+                        <p className="mt-2 break-words text-[11px] text-dim">
+                          {formatUsageLabel(skill.recentSessionCount, skill.lastUsedAt, skill.usedInLastSession, 'Not used recently')} · {skill.source}
+                        </p>
+                      </div>
+                      <span className="pt-0.5 text-[12px] text-accent">open</span>
+                    </div>
+                  </Link>
                 ))}
               </div>
             </section>

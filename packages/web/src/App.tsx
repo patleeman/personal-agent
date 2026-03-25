@@ -71,8 +71,11 @@ const CompanionLayout = lazy(() => import('./companion/CompanionLayout').then((m
 const CompanionConversationsPage = lazy(() => import('./companion/CompanionConversationsPage').then((module) => ({ default: module.CompanionConversationsPage })));
 const CompanionConversationPage = lazy(() => import('./companion/CompanionConversationPage').then((module) => ({ default: module.CompanionConversationPage })));
 const CompanionProjectsPage = lazy(() => import('./companion/CompanionProjectsPage').then((module) => ({ default: module.CompanionProjectsPage })));
+const CompanionProjectDetailPage = lazy(() => import('./companion/CompanionProjectDetailPage').then((module) => ({ default: module.CompanionProjectDetailPage })));
 const CompanionMemoriesPage = lazy(() => import('./companion/CompanionMemoriesPage').then((module) => ({ default: module.CompanionMemoriesPage })));
+const CompanionMemoryDetailPage = lazy(() => import('./companion/CompanionMemoryDetailPage').then((module) => ({ default: module.CompanionMemoryDetailPage })));
 const CompanionSkillsPage = lazy(() => import('./companion/CompanionSkillsPage').then((module) => ({ default: module.CompanionSkillsPage })));
+const CompanionSkillDetailPage = lazy(() => import('./companion/CompanionSkillDetailPage').then((module) => ({ default: module.CompanionSkillDetailPage })));
 
 function suspendRoute(element: React.ReactNode) {
   return (
@@ -276,8 +279,11 @@ export function App() {
                       <Route path="conversations" element={suspendRoute(<CompanionConversationsPage />)} />
                       <Route path="conversations/:id" element={suspendRoute(<CompanionConversationPage />)} />
                       <Route path="projects" element={suspendRoute(<CompanionProjectsPage />)} />
+                      <Route path="projects/:id" element={suspendRoute(<CompanionProjectDetailPage />)} />
                       <Route path="memories" element={suspendRoute(<CompanionMemoriesPage />)} />
+                      <Route path="memories/:id" element={suspendRoute(<CompanionMemoryDetailPage />)} />
                       <Route path="skills" element={suspendRoute(<CompanionSkillsPage />)} />
+                      <Route path="skills/:name" element={suspendRoute(<CompanionSkillDetailPage />)} />
                     </Route>
                     <Route path="/" element={<Layout />}>
                       <Route index element={<Navigate to="/conversations" replace />} />

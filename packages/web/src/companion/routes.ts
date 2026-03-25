@@ -12,8 +12,24 @@ const COMPANION_TOP_LEVEL_PATHS = new Set([
   COMPANION_SKILLS_PATH,
 ]);
 
+function buildCompanionDetailPath(basePath: string, id: string): string {
+  return `${basePath}/${encodeURIComponent(id)}`;
+}
+
 export function buildCompanionConversationPath(id: string): string {
-  return `${COMPANION_CONVERSATIONS_PATH}/${encodeURIComponent(id)}`;
+  return buildCompanionDetailPath(COMPANION_CONVERSATIONS_PATH, id);
+}
+
+export function buildCompanionProjectPath(id: string): string {
+  return buildCompanionDetailPath(COMPANION_PROJECTS_PATH, id);
+}
+
+export function buildCompanionMemoryPath(id: string): string {
+  return buildCompanionDetailPath(COMPANION_MEMORIES_PATH, id);
+}
+
+export function buildCompanionSkillPath(name: string): string {
+  return buildCompanionDetailPath(COMPANION_SKILLS_PATH, name);
 }
 
 function normalizePathname(pathname: string): string {
@@ -22,6 +38,16 @@ function normalizePathname(pathname: string): string {
   }
 
   return pathname.replace(/\/+$/, '');
+}
+
+function isSupportedCompanionDetailPath(normalizedPath: string, basePath: string): boolean {
+  const detailPrefix = `${basePath}/`;
+  if (!normalizedPath.startsWith(detailPrefix)) {
+    return false;
+  }
+
+  const routeId = normalizedPath.slice(detailPrefix.length);
+  return routeId.length > 0 && !routeId.includes('/');
 }
 
 export function resolveCompanionRouteRedirect(pathname: string): string | null {
@@ -39,12 +65,13 @@ export function resolveCompanionRouteRedirect(pathname: string): string | null {
     return pathname === normalizedPath ? null : normalizedPath;
   }
 
-  const detailPrefix = `${COMPANION_CONVERSATIONS_PATH}/`;
-  if (normalizedPath.startsWith(detailPrefix)) {
-    const routeId = normalizedPath.slice(detailPrefix.length);
-    if (routeId.length > 0 && !routeId.includes('/')) {
-      return pathname === normalizedPath ? null : normalizedPath;
-    }
+  if (
+    isSupportedCompanionDetailPath(normalizedPath, COMPANION_CONVERSATIONS_PATH)
+    || isSupportedCompanionDetailPath(normalizedPath, COMPANION_PROJECTS_PATH)
+    || isSupportedCompanionDetailPath(normalizedPath, COMPANION_MEMORIES_PATH)
+    || isSupportedCompanionDetailPath(normalizedPath, COMPANION_SKILLS_PATH)
+  ) {
+    return pathname === normalizedPath ? null : normalizedPath;
   }
 
   return COMPANION_CONVERSATIONS_PATH;
