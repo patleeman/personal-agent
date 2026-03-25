@@ -74,28 +74,19 @@ const COMPANION_ARCHIVED_PAGE_SIZE = 30;
 const COMPANION_ARCHIVE_SYNC_DELAY_MS = 180;
 
 function buildCompanionOverviewLabel(input: {
-  total: number;
   live: number;
-  needsReview: number;
-  active: number;
-  archived: number;
+  openTabs: number;
 }): string {
-  if (input.total === 0) {
-    return 'No conversations yet.';
+  if (input.live === 0 && input.openTabs === 0) {
+    return 'No live conversations or open tabs.';
   }
 
-  const parts = [`${input.total} chats`];
+  const parts: string[] = [];
   if (input.live > 0) {
     parts.push(`${input.live} live`);
   }
-  if (input.needsReview > 0) {
-    parts.push(`${input.needsReview} review`);
-  }
-  if (input.active > 0) {
-    parts.push(`${input.active} active`);
-  }
-  if (input.archived > 0) {
-    parts.push(`${input.archived} archived`);
+  if (input.openTabs > 0) {
+    parts.push(`${input.openTabs} open tab${input.openTabs === 1 ? '' : 's'}`);
   }
 
   return parts.join(' · ');
@@ -722,6 +713,7 @@ export function CompanionConversationsPage() {
   const [revealedActionId, setRevealedActionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const syncTimerRef = useRef<number | null>(null);
   const fetchConversationList = useCallback(
     () => api.companionConversationList({ archivedOffset: 0, archivedLimit: COMPANION_ARCHIVED_PAGE_SIZE }),
@@ -774,15 +766,30 @@ export function CompanionConversationsPage() {
   const needsReviewSessions = titledSections?.needsReview ?? [];
   const activeSessions = titledSections?.active ?? [];
   const archivedSessions = titledSections?.archived ?? [];
+  const workspaceSessions = useMemo(() => {
+    const nextSessions = new Map<string, SessionMeta>();
+
+    for (const session of activeSessions) {
+      if (!session.isLive) {
+        nextSessions.set(session.id, session);
+      }
+    }
+
+    for (const session of needsReviewSessions) {
+      if (!session.isLive && workspaceSessionIds.has(session.id)) {
+        nextSessions.set(session.id, session);
+      }
+    }
+
+    return sortCompanionSessions(Array.from(nextSessions.values()));
+  }, [activeSessions, needsReviewSessions, workspaceSessionIds]);
   const totalConversationCount = titledSections
     ? liveSessions.length + needsReviewSessions.length + activeSessions.length + titledSections.archivedTotal
     : 0;
+  const focusedConversationCount = liveSessions.length + workspaceSessions.length;
   const overviewLabel = buildCompanionOverviewLabel({
-    total: totalConversationCount,
     live: liveSessions.length,
-    needsReview: needsReviewSessions.length,
-    active: activeSessions.length,
-    archived: titledSections?.archivedTotal ?? 0,
+    openTabs: workspaceSessions.length,
   });
   const stateNote = buildCompanionStateNote({
     standalone,
@@ -920,36 +927,66 @@ export function CompanionConversationsPage() {
             </div>
           ) : titledSections ? (
             <>
-              <SessionSection title="Live now" sessions={liveSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onRevealActions={setRevealedActionId} />
-              <SessionSection title="Needs review" sessions={needsReviewSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onRevealActions={setRevealedActionId} />
-              <SessionSection title="Active workspace" sessions={activeSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onRevealActions={setRevealedActionId} />
-              <SessionSection
-                title="Archived"
-                sessions={archivedSessions}
-                workspaceSessionIds={workspaceSessionIds}
-                actionBusyId={actionBusyId}
-                revealedActionId={revealedActionId}
-                onSetArchived={handleSetArchived}
-                onRevealActions={setRevealedActionId}
-                footer={titledSections.archivedTotal > 0 ? (
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-[11px] text-dim">
-                      Showing {archivedSessions.length} of {titledSections.archivedTotal} archived chats
-                    </p>
-                    {titledSections.hasMoreArchived ? (
-                      <button
-                        type="button"
-                        onClick={() => { void handleLoadMoreArchived(); }}
-                        disabled={loadingMore}
-                        className="inline-flex h-9 select-none items-center rounded-full border border-border-default bg-surface px-3 text-[12px] font-medium text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/30 hover:text-primary active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45 disabled:cursor-default disabled:opacity-50"
-                        style={COMPANION_TOUCH_BUTTON_STYLE}
-                      >
-                        {loadingMore ? 'Loading…' : 'Load more'}
-                      </button>
-                    ) : null}
+              {focusedConversationCount > 0 ? (
+                <>
+                  <SessionSection title="Live now" sessions={liveSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onRevealActions={setRevealedActionId} />
+                  <SessionSection title="Open tabs" sessions={workspaceSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onRevealActions={setRevealedActionId} />
+                </>
+              ) : (
+                <div className="px-4 pt-5">
+                  <p className="text-[15px] text-primary">No live conversations or open tabs right now.</p>
+                  <p className="mt-2 text-[13px] leading-relaxed text-secondary">
+                    This list stays focused on live work. Review items stay in Inbox, and saved transcripts stay tucked away until you need them.
+                  </p>
+                </div>
+              )}
+
+              {titledSections.archivedTotal > 0 ? (
+                <section className="pt-5">
+                  <div className="px-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowArchived((current) => !current)}
+                      className="inline-flex h-9 select-none items-center rounded-full border border-border-default bg-surface px-3 text-[12px] font-medium text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/30 hover:text-primary active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45"
+                      style={COMPANION_TOUCH_BUTTON_STYLE}
+                    >
+                      {showArchived
+                        ? 'Hide archived chats'
+                        : `Show ${titledSections.archivedTotal} archived chat${titledSections.archivedTotal === 1 ? '' : 's'}`}
+                    </button>
                   </div>
-                ) : undefined}
-              />
+                </section>
+              ) : null}
+
+              {showArchived ? (
+                <SessionSection
+                  title="Archived"
+                  sessions={archivedSessions}
+                  workspaceSessionIds={workspaceSessionIds}
+                  actionBusyId={actionBusyId}
+                  revealedActionId={revealedActionId}
+                  onSetArchived={handleSetArchived}
+                  onRevealActions={setRevealedActionId}
+                  footer={titledSections.archivedTotal > 0 ? (
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-[11px] text-dim">
+                        Showing {archivedSessions.length} of {titledSections.archivedTotal} archived chats
+                      </p>
+                      {titledSections.hasMoreArchived ? (
+                        <button
+                          type="button"
+                          onClick={() => { void handleLoadMoreArchived(); }}
+                          disabled={loadingMore}
+                          className="inline-flex h-9 select-none items-center rounded-full border border-border-default bg-surface px-3 text-[12px] font-medium text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/30 hover:text-primary active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45 disabled:cursor-default disabled:opacity-50"
+                          style={COMPANION_TOUCH_BUTTON_STYLE}
+                        >
+                          {loadingMore ? 'Loading…' : 'Load more'}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : undefined}
+                />
+              ) : null}
             </>
           ) : null}
         </div>

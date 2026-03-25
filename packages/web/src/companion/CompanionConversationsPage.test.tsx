@@ -149,7 +149,7 @@ describe('CompanionConversationsPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders live, review, active workspace, and archived companion sections', () => {
+  it('keeps the companion chats page focused on live conversations and open tabs', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/app/conversations']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
@@ -182,23 +182,22 @@ describe('CompanionConversationsPage', () => {
     expect(html).toContain('Open chats');
     expect(html).toContain('Open tasks');
     expect(html).toContain('Open menu');
+    expect(html).toContain('1 live · 1 open tab');
     expect(html).toContain('Live now');
-    expect(html).toContain('Needs review');
-    expect(html).toContain('Active workspace');
-    expect(html).toContain('Archived');
+    expect(html).toContain('Open tabs');
+    expect(html).not.toContain('Needs review');
+    expect(html).not.toContain('Active workspace');
     expect(html).toContain('Live title from stream');
-    expect(html).toContain('Review me');
+    expect(html).not.toContain('Review me');
     expect(html).toContain('Stored transcript');
-    expect(html).toContain('Archived transcript');
-    expect(html).toContain('archived chats');
-    expect(html).toContain('Load more');
+    expect(html).not.toContain('Archived transcript');
+    expect(html).toContain('Show 3 archived chats');
+    expect(html).not.toContain('Load more');
     expect(html).not.toContain('Signed in on Test companion');
     expect(html).toContain('aria-label="Archive conversation"');
     expect(html).toContain('aria-label="Open conversation"');
     expect(html).toContain('aria-label="Show actions for Stored transcript"');
     expect(html).not.toContain('--Users-patrick-workingdir-personal-agent--');
-    expect(html.indexOf('Live title from stream')).toBeLessThan(html.indexOf('Review me'));
-    expect(html.indexOf('Review me')).toBeLessThan(html.indexOf('Stored transcript'));
-    expect(html.indexOf('Stored transcript')).toBeLessThan(html.indexOf('Archived transcript'));
+    expect(html.indexOf('Live title from stream')).toBeLessThan(html.indexOf('Stored transcript'));
   });
 });
