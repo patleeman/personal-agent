@@ -14,6 +14,7 @@ import {
   writeFileSync,
 } from 'fs';
 import { dirname, join, relative, resolve } from 'path';
+import { fileURLToPath } from 'url';
 import {
   getPiAgentRuntimeDir,
   getStateRoot,
@@ -35,6 +36,7 @@ import { bullet, dim, keyValue, section, success, warning } from './ui.js';
 const DEFAULT_SYNC_BRANCH = 'main';
 const DEFAULT_SYNC_REMOTE = 'origin';
 const DEFAULT_PROFILE_CONFIG_JSON = '{\n  "defaultProfile": "shared"\n}\n';
+const CONVERSATION_ATTENTION_MERGE_DRIVER = 'personal-agent-conversation-attention';
 function syncUsageText(): string {
   return 'Usage: pa sync [status|run|setup|help] [args...]';
 }
@@ -291,19 +293,37 @@ function removeLegacySyncedDefaultProfileConfig(syncRoot: string): void {
 }
 
 function syncRepoGitignore(): string {
-  return `# personal-agent sync repo (managed by pa sync setup)\n\n*\n!.gitignore\n!.gitattributes\n!README.md\n\n# Durable profile definitions\n!profiles/\nprofiles/*\n!profiles/*.json\n\n# Durable kind-based resources\n!agents/\n!agents/**\n!settings/\n!settings/**\n!models/\n!models/**\n!skills/\n!skills/**\n!memory/\n!memory/**\n!tasks/\n!tasks/**\n!projects/\n!projects/**\n\n# Portable conversation transcripts\n!pi-agent/\npi-agent/*\n!pi-agent/sessions/\n!pi-agent/sessions/**\n\n# Never sync machine-local runtime leftovers\n.DS_Store\n**/.DS_Store\n`;
+  return `# personal-agent sync repo (managed by pa sync setup)\n\n*\n!.gitignore\n!.gitattributes\n!README.md\n\n# Durable profile definitions\n!profiles/\nprofiles/*\n!profiles/*.json\n\n# Durable kind-based resources\n!agents/\n!agents/**\n!settings/\n!settings/**\n!models/\n!models/**\n!skills/\n!skills/**\n!memory/\n!memory/**\n!tasks/\n!tasks/**\n!projects/\n!projects/**\n\n# Portable conversation state\n!pi-agent/\npi-agent/*\n!pi-agent/sessions/\n!pi-agent/sessions/**\n!pi-agent/state/\n!pi-agent/state/conversation-attention/\n!pi-agent/state/conversation-attention/**\n\n# Never sync machine-local runtime leftovers\n.DS_Store\n**/.DS_Store\n`;
 }
 
 export function syncRepoGitattributes(): string {
-  return `* text=auto\n\n# Append-only session JSONL transcripts merge best with union\npi-agent/sessions/**/*.jsonl text eol=lf merge=union\n`;
+  return `* text=auto\n\n# Append-only session JSONL transcripts merge best with union\npi-agent/sessions/**/*.jsonl text eol=lf merge=union\n\n# Conversation attention read-state merges semantically across machines\npi-agent/state/conversation-attention/*.json text eol=lf merge=${CONVERSATION_ATTENTION_MERGE_DRIVER}\n`;
 }
 
-function configureManagedMergeDrivers(_syncRoot: string): void {
-  // Session transcript merging uses git's built-in union driver only.
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'"'"'`)}'`;
+}
+
+function resolveCliMergeDriverEntrypoint(): string {
+  const entrypoint = resolve(fileURLToPath(new URL('../dist/index.js', import.meta.url)));
+  if (!existsSync(entrypoint)) {
+    throw new Error(`Cannot configure conversation attention merge driver; missing CLI entrypoint at ${entrypoint}`);
+  }
+
+  return entrypoint;
+}
+
+function conversationAttentionMergeDriverCommand(): string {
+  return `${shellQuote(process.execPath)} ${shellQuote(resolveCliMergeDriverEntrypoint())} sync merge-conversation-attention "%O" "%A" "%B"`;
+}
+
+function configureManagedMergeDrivers(syncRoot: string): void {
+  runGit(syncRoot, ['config', '--local', `merge.${CONVERSATION_ATTENTION_MERGE_DRIVER}.name`, 'personal-agent conversation attention']);
+  runGit(syncRoot, ['config', '--local', `merge.${CONVERSATION_ATTENTION_MERGE_DRIVER}.driver`, conversationAttentionMergeDriverCommand()]);
 }
 
 function syncRepoReadme(): string {
-  return `# personal-agent sync repo\n\nManaged by \`pa sync setup\`.\n\nThis repo tracks portable cross-machine state from sync roots:\n\n- \`profiles/*.json\`\n- \`agents/**\`\n- \`settings/**\`\n- \`models/**\`\n- \`skills/**\`\n- \`memory/**\`\n- \`tasks/**\`\n- \`projects/**\`\n- \`pi-agent/sessions/**\`\n\nBuilt-in merge handling is configured for:\n\n- append-only session transcripts under \`pi-agent/sessions/**/*.jsonl\`\n\nMachine-local runtime state such as inbox/read state, conversation attention, deferred resumes, checkpoints, auth, generated prompt materialization, daemon state, and package bins stays outside the synced surface. Machine-local config (including \`config/config.json\` default profile selection) is intentionally not synced.\n`;
+  return `# personal-agent sync repo\n\nManaged by \`pa sync setup\`.\n\nThis repo tracks portable cross-machine state from sync roots:\n\n- \`profiles/*.json\`\n- \`agents/**\`\n- \`settings/**\`\n- \`models/**\`\n- \`skills/**\`\n- \`memory/**\`\n- \`tasks/**\`\n- \`projects/**\`\n- \`pi-agent/sessions/**\`\n- \`pi-agent/state/conversation-attention/**\`\n\nBuilt-in merge handling is configured for:\n\n- append-only session transcripts under \`pi-agent/sessions/**/*.jsonl\`\n- semantic conversation attention merges under \`pi-agent/state/conversation-attention/*.json\`\n\nMachine-local runtime state such as inbox/read state, deferred resumes, checkpoints, auth, generated prompt materialization, daemon state, and package bins stays outside the synced surface. Machine-local config (including \`config/config.json\` default profile selection) is intentionally not synced.\n`;
 }
 
 function migrateLegacyPiAgentRuntimeArtifacts(stateRoot: string, syncRoot: string): void {

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { validateConversationId } from './conversation-project-links.js';
-import { getStateRoot } from './runtime/paths.js';
+import { getDurableConversationAttentionDir, getStateRoot } from './runtime/paths.js';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
 
@@ -51,6 +51,16 @@ export interface ConversationAttentionSummary {
 
 function getConversationAttentionStateRoot(stateRoot?: string): string {
   return resolve(stateRoot ?? getStateRoot());
+}
+
+function resolveLegacyConversationAttentionStatePath(options: ConversationAttentionStateOptions): string {
+  return join(
+    getConversationAttentionStateRoot(options.stateRoot),
+    'pi-agent',
+    'state',
+    'conversation-attention',
+    `${options.profile}.json`,
+  );
 }
 
 function validateProfileName(profile: string): void {
@@ -152,6 +162,18 @@ function normalizeDocument(value: unknown, fallbackProfile?: string): Conversati
   };
 }
 
+function readConversationAttentionStateFile(path: string, profile: string): ConversationAttentionStateDocument | null {
+  if (!existsSync(path)) {
+    return null;
+  }
+
+  try {
+    return normalizeDocument(JSON.parse(readFileSync(path, 'utf-8')) as unknown, profile);
+  } catch {
+    return null;
+  }
+}
+
 function mergeRecord(
   left: ConversationAttentionRecord,
   right: ConversationAttentionRecord,
@@ -163,13 +185,18 @@ function mergeRecord(
   const readAt = left.readAt >= right.readAt ? left.readAt : right.readAt;
   const newestUpdatedAt = left.updatedAt >= right.updatedAt ? left.updatedAt : right.updatedAt;
   const updatedAt = newestUpdatedAt >= readAt ? newestUpdatedAt : readAt;
+  const latestForcedUnreadAt = [left, right]
+    .filter((record) => record.forcedUnread)
+    .map((record) => record.updatedAt)
+    .sort((earlier, later) => later.localeCompare(earlier))[0];
+  const forcedUnread = Boolean(latestForcedUnreadAt && latestForcedUnreadAt > readAt);
 
   return {
     conversationId: left.conversationId,
     acknowledgedMessageCount: Math.max(left.acknowledgedMessageCount, right.acknowledgedMessageCount),
     readAt,
     updatedAt,
-    ...(left.forcedUnread || right.forcedUnread ? { forcedUnread: true } : {}),
+    ...(forcedUnread ? { forcedUnread: true } : {}),
   };
 }
 
@@ -182,47 +209,33 @@ function sortConversationIds(conversations: Record<string, ConversationAttention
 
 export function resolveConversationAttentionStatePath(options: ConversationAttentionStateOptions): string {
   validateProfileName(options.profile);
-  return join(
-    getConversationAttentionStateRoot(options.stateRoot),
-    'pi-agent',
-    'state',
-    'conversation-attention',
-    `${options.profile}.json`,
-  );
+  return join(getDurableConversationAttentionDir(options.stateRoot), `${options.profile}.json`);
 }
 
 export function loadConversationAttentionState(options: ConversationAttentionStateOptions): ConversationAttentionStateDocument {
   validateProfileName(options.profile);
   const path = resolveConversationAttentionStatePath(options);
+  const document = readConversationAttentionStateFile(path, options.profile);
+  if (document) {
+    return document;
+  }
 
-  if (!existsSync(path)) {
+  const legacyPath = resolveLegacyConversationAttentionStatePath(options);
+  if (legacyPath === path) {
     return emptyDocument(options.profile);
   }
 
-  try {
-    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as Partial<ConversationAttentionStateDocument>;
-    if (parsed.version !== 1 || parsed.profile !== options.profile || !parsed.conversations || typeof parsed.conversations !== 'object') {
-      return emptyDocument(options.profile);
-    }
-
-    const conversations: Record<string, ConversationAttentionRecord> = {};
-    for (const [conversationId, value] of Object.entries(parsed.conversations)) {
-      const normalized = normalizeRecord(value, conversationId);
-      if (!normalized) {
-        continue;
-      }
-
-      conversations[normalized.conversationId] = normalized;
-    }
-
-    return {
-      version: 1,
-      profile: options.profile,
-      conversations: sortConversationIds(conversations),
-    };
-  } catch {
+  const legacyDocument = readConversationAttentionStateFile(legacyPath, options.profile);
+  if (!legacyDocument) {
     return emptyDocument(options.profile);
   }
+
+  saveConversationAttentionState({
+    profile: options.profile,
+    stateRoot: options.stateRoot,
+    document: legacyDocument,
+  });
+  return legacyDocument;
 }
 
 export function saveConversationAttentionState(options: {
@@ -246,7 +259,7 @@ export function saveConversationAttentionState(options: {
   }
 
   const path = resolveConversationAttentionStatePath(options);
-  mkdirSync(join(getConversationAttentionStateRoot(options.stateRoot), 'pi-agent', 'state', 'conversation-attention'), { recursive: true });
+  mkdirSync(getDurableConversationAttentionDir(options.stateRoot), { recursive: true });
   writeFileSync(path, JSON.stringify({
     version: 1,
     profile: options.profile,

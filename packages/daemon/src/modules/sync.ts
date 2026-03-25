@@ -1,6 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { hostname } from 'os';
 import { join, resolve, sep } from 'path';
+import { fileURLToPath } from 'url';
 import {
   createProjectActivityEntry,
   getPiAgentRuntimeDir,
@@ -14,6 +15,7 @@ import type { DaemonModule, DaemonModuleContext } from './types.js';
 import { runCommand } from './command.js';
 
 const PROFILE_NAME_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/;
+const CONVERSATION_ATTENTION_MERGE_DRIVER = 'personal-agent-conversation-attention';
 
 interface SyncModuleState {
   running: boolean;
@@ -114,8 +116,12 @@ function buildErrorResolverPrompt(input: {
   ].join('\n');
 }
 
+function managedSyncRepoGitignore(): string {
+  return `# personal-agent sync repo (managed by pa sync setup)\n\n*\n!.gitignore\n!.gitattributes\n!README.md\n\n# Durable profile definitions\n!profiles/\nprofiles/*\n!profiles/*.json\n\n# Durable kind-based resources\n!agents/\n!agents/**\n!settings/\n!settings/**\n!models/\n!models/**\n!skills/\n!skills/**\n!memory/\n!memory/**\n!tasks/\n!tasks/**\n!projects/\n!projects/**\n\n# Portable conversation state\n!pi-agent/\npi-agent/*\n!pi-agent/sessions/\n!pi-agent/sessions/**\n!pi-agent/state/\n!pi-agent/state/conversation-attention/\n!pi-agent/state/conversation-attention/**\n\n# Never sync machine-local runtime leftovers\n.DS_Store\n**/.DS_Store\n`;
+}
+
 function managedSyncRepoGitattributes(): string {
-  return `* text=auto\n\n# Append-only session JSONL transcripts merge best with union\npi-agent/sessions/**/*.jsonl text eol=lf merge=union\n`;
+  return `* text=auto\n\n# Append-only session JSONL transcripts merge best with union\npi-agent/sessions/**/*.jsonl text eol=lf merge=union\n\n# Conversation attention read-state merges semantically across machines\npi-agent/state/conversation-attention/*.json text eol=lf merge=${CONVERSATION_ATTENTION_MERGE_DRIVER}\n`;
 }
 
 function readFileUtf8(path: string): string | undefined {
@@ -126,12 +132,56 @@ function readFileUtf8(path: string): string | undefined {
   }
 }
 
-async function ensureManagedMergeHandling(repoDir: string): Promise<void> {
-  const gitattributesPath = join(repoDir, '.gitattributes');
-  const managedAttributes = managedSyncRepoGitattributes();
-  if (readFileUtf8(gitattributesPath) !== managedAttributes) {
-    writeFileSync(gitattributesPath, managedAttributes);
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'"'"'`)}'`;
+}
+
+function resolveCliMergeDriverEntrypoint(): string {
+  const entrypoint = resolve(fileURLToPath(new URL('../../../cli/dist/index.js', import.meta.url)));
+  if (!existsSync(entrypoint)) {
+    throw new Error(`Cannot configure conversation attention merge driver; missing CLI entrypoint at ${entrypoint}`);
   }
+
+  return entrypoint;
+}
+
+function conversationAttentionMergeDriverCommand(): string {
+  return `${shellQuote(process.execPath)} ${shellQuote(resolveCliMergeDriverEntrypoint())} sync merge-conversation-attention "%O" "%A" "%B"`;
+}
+
+async function configureManagedMergeDrivers(repoDir: string): Promise<void> {
+  const mergeDriverCommand = conversationAttentionMergeDriverCommand();
+  const commands: Array<[string, string]> = [
+    [`merge.${CONVERSATION_ATTENTION_MERGE_DRIVER}.name`, 'personal-agent conversation attention'],
+    [`merge.${CONVERSATION_ATTENTION_MERGE_DRIVER}.driver`, mergeDriverCommand],
+  ];
+
+  for (const [key, value] of commands) {
+    const current = await runGit(repoDir, ['config', '--local', '--get', key], 30_000);
+    if (current.code === 0 && current.stdout.trim() === value) {
+      continue;
+    }
+
+    const result = await runGit(repoDir, ['config', '--local', key, value], 30_000);
+    if (result.code !== 0) {
+      throw new Error(result.stderr || result.stdout || `Failed to configure git merge driver ${key}`);
+    }
+  }
+}
+
+async function ensureManagedMergeHandling(repoDir: string): Promise<void> {
+  const managedFiles = [
+    { path: join(repoDir, '.gitignore'), content: managedSyncRepoGitignore() },
+    { path: join(repoDir, '.gitattributes'), content: managedSyncRepoGitattributes() },
+  ];
+
+  for (const file of managedFiles) {
+    if (readFileUtf8(file.path) !== file.content) {
+      writeFileSync(file.path, file.content);
+    }
+  }
+
+  await configureManagedMergeDrivers(repoDir);
 }
 
 async function runGit(repoDir: string, args: string[], timeoutMs = 120_000): Promise<{ code: number; stdout: string; stderr: string }> {

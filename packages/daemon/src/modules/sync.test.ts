@@ -196,13 +196,14 @@ describe('sync module', () => {
     expect(status.lastError).toBeUndefined();
   });
 
-  it('repairs managed merge handling before syncing', async () => {
+  it('repairs managed sync repo merge handling before syncing', async () => {
     const stateRoot = createTempDir('sync-module-repair-');
     const repoDir = stateRoot;
 
     runGit(repoDir, ['init', '-b', 'main']);
+    writeFileSync(join(repoDir, '.gitignore'), '*\n');
     writeFileSync(join(repoDir, '.gitattributes'), '* text=auto\n');
-    runGit(repoDir, ['add', '-A']);
+    runGit(repoDir, ['add', '-f', '.gitignore', '.gitattributes']);
     runGit(repoDir, ['commit', '-m', 'chore: initial']);
 
     const syncConfig = createSyncConfig(repoDir);
@@ -212,10 +213,16 @@ describe('sync module', () => {
     await module.start(context);
     await module.handleEvent(createEvent('sync.run.requested'), context);
 
+    const gitignore = readFileSync(join(repoDir, '.gitignore'), 'utf-8');
+    expect(gitignore).toContain('!pi-agent/state/conversation-attention/**');
+
     const gitattributes = readFileSync(join(repoDir, '.gitattributes'), 'utf-8');
     expect(gitattributes).toContain('pi-agent/sessions/**/*.jsonl text eol=lf merge=union');
-    expect(gitattributes).not.toContain('pi-agent/state/conversation-attention');
+    expect(gitattributes).toContain('pi-agent/state/conversation-attention/*.json text eol=lf merge=personal-agent-conversation-attention');
     expect(gitattributes).not.toContain('pi-agent/deferred-resumes-state.json');
+
+    expect(readGitOutput(repoDir, ['config', '--local', '--get', 'merge.personal-agent-conversation-attention.driver']))
+      .toContain('sync merge-conversation-attention');
 
     const commitCount = Number.parseInt(readGitOutput(repoDir, ['rev-list', '--count', 'HEAD']), 10);
     expect(commitCount).toBe(2);
