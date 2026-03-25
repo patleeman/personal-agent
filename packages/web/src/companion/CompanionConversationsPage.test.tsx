@@ -3,9 +3,18 @@ import { renderToString } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppDataContext, LiveTitlesContext, SseConnectionContext } from '../contexts.js';
+import { useApi } from '../hooks.js';
 import type { SessionMeta } from '../types.js';
-import { CompanionConversationsPage, sortCompanionSessions } from './CompanionConversationsPage.js';
+import {
+  CompanionConversationsPage,
+  partitionCompanionSessions,
+  sortCompanionSessions,
+} from './CompanionConversationsPage.js';
 import { CompanionLayout } from './CompanionLayout.js';
+
+vi.mock('../hooks', () => ({
+  useApi: vi.fn(),
+}));
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
@@ -35,11 +44,38 @@ describe('sortCompanionSessions', () => {
   });
 });
 
+describe('partitionCompanionSessions', () => {
+  it('splits stored conversations into active workspace and archived buckets when open-tab state is known', () => {
+    const sections = partitionCompanionSessions([
+      createSession({ id: 'live-1', isLive: true }),
+      createSession({ id: 'active-1', title: 'Active workspace conversation' }),
+      createSession({ id: 'archived-1', title: 'Archived conversation' }),
+    ], new Set(['active-1']));
+
+    expect(sections.live.map((session) => session.id)).toEqual(['live-1']);
+    expect(sections.active.map((session) => session.id)).toEqual(['active-1']);
+    expect(sections.archived.map((session) => session.id)).toEqual(['archived-1']);
+    expect(sections.recent).toEqual([]);
+  });
+});
+
 describe('CompanionConversationsPage', () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
   const originalConsoleError = console.error;
 
   beforeEach(() => {
+    vi.mocked(useApi).mockReturnValue({
+      data: {
+        sessionIds: ['active-1'],
+        pinnedSessionIds: [],
+      },
+      loading: false,
+      refreshing: false,
+      error: null,
+      refetch: vi.fn(),
+      replaceData: vi.fn(),
+    });
+
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((message?: unknown, ...args: unknown[]) => {
       if (typeof message === 'string' && message.includes('useLayoutEffect does nothing on the server')) {
         return;
@@ -54,7 +90,7 @@ describe('CompanionConversationsPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders live conversations before recent stored conversations', () => {
+  it('renders live, active workspace, and archived companion sections', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/app/conversations']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
@@ -63,7 +99,8 @@ describe('CompanionConversationsPage', () => {
               activity: null,
               projects: null,
               sessions: [
-                createSession({ id: 'recent-1', title: 'Stored transcript', timestamp: '2026-03-24T12:00:00.000Z' }),
+                createSession({ id: 'active-1', title: 'Stored transcript', timestamp: '2026-03-24T12:00:00.000Z' }),
+                createSession({ id: 'archived-1', title: 'Archived transcript', timestamp: '2026-03-22T12:00:00.000Z' }),
                 createSession({ id: 'live-1', title: 'Old live title', isLive: true, timestamp: '2026-03-23T12:00:00.000Z' }),
               ],
               tasks: null,
@@ -87,8 +124,12 @@ describe('CompanionConversationsPage', () => {
 
     expect(html).toContain('Continue conversations');
     expect(html).toContain('Live now');
-    expect(html).toContain('Recent');
+    expect(html).toContain('Active workspace');
+    expect(html).toContain('Archived');
     expect(html).toContain('Live title from stream');
+    expect(html).toContain('Stored transcript');
+    expect(html).toContain('Archived transcript');
     expect(html.indexOf('Live title from stream')).toBeLessThan(html.indexOf('Stored transcript'));
+    expect(html.indexOf('Stored transcript')).toBeLessThan(html.indexOf('Archived transcript'));
   });
 });
