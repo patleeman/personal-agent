@@ -8,6 +8,7 @@ import { SessionManager } from '@mariozechner/pi-coding-agent';
 import { listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, readSessionSearchText, readSessionTree, renameStoredSession, type SessionDetailReadTelemetry } from './sessions.js';
 import { invalidateAppTopics, startAppEventMonitor, subscribeAppEvents, type AppEventTopic } from './appEvents.js';
 import { notifyConversationAutomationChanged, subscribeConversationAutomation } from './conversationAutomationEvents.js';
+import { resolveSpaIndexRelativePath } from './spaIndex.js';
 import { resolveConversationCwd, resolveRequestedCwd } from './conversationCwd.js';
 import { pickFolder } from './folderPicker.js';
 import { readGitStatusSummaryWithTelemetry, type GitStatusReadTelemetry } from './gitStatus.js';
@@ -9402,8 +9403,10 @@ app.post('/api/memory/file', (req, res) => {
 
 if (existsSync(DIST_DIR)) {
   app.use(express.static(DIST_DIR));
-  app.get('*', (_req, res) => {
-    res.sendFile(join(DIST_DIR, 'index.html'));
+  app.get('*', (req, res) => {
+    const requestedIndexPath = join(DIST_DIR, resolveSpaIndexRelativePath(req.path));
+    const fallbackIndexPath = join(DIST_DIR, 'index.html');
+    res.sendFile(existsSync(requestedIndexPath) ? requestedIndexPath : fallbackIndexPath);
   });
 } else {
   app.get('/', (_req, res) => {

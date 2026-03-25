@@ -5,6 +5,7 @@ import { getConversationDisplayTitle } from '../conversationTitle';
 import { useAppData, useLiveTitles, useSseConnection } from '../contexts';
 import { fetchSessionsSnapshot } from '../sessionSnapshot';
 import type { SessionMeta, SseConnectionStatus } from '../types';
+import { useCompanionLayoutContext } from './CompanionLayout';
 import { buildCompanionConversationPath } from './routes';
 
 function parseSessionActivityAt(session: SessionMeta): number {
@@ -131,6 +132,7 @@ export function CompanionConversationsPage() {
   const { sessions, setSessions } = useAppData();
   const { titles } = useLiveTitles();
   const { status } = useSseConnection();
+  const { installAvailable, installBusy, promptInstall, secureContext, standalone } = useCompanionLayoutContext();
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -187,17 +189,38 @@ export function CompanionConversationsPage() {
             Live conversations stay mirrored here. Take over only when you want this device to become the active controller.
           </p>
           <div className="mt-4 flex items-center justify-between gap-3">
-            <p className="text-[12px] text-dim">
-              {visibleSessions.length === 0 ? 'No conversations yet.' : `${visibleSessions.length} conversation${visibleSessions.length === 1 ? '' : 's'} available.`}
-            </p>
-            <button
-              type="button"
-              onClick={() => { void handleCreateConversation(); }}
-              disabled={creating}
-              className="ui-action-button shrink-0"
-            >
-              {creating ? 'Starting…' : 'New conversation'}
-            </button>
+            <div>
+              <p className="text-[12px] text-dim">
+                {visibleSessions.length === 0 ? 'No conversations yet.' : `${visibleSessions.length} conversation${visibleSessions.length === 1 ? '' : 's'} available.`}
+              </p>
+              {standalone ? (
+                <p className="mt-1 text-[11px] text-success">Installed companion app</p>
+              ) : installAvailable ? (
+                <p className="mt-1 text-[11px] text-dim">Install this companion app for faster reopen and future notifications.</p>
+              ) : secureContext ? (
+                <p className="mt-1 text-[11px] text-dim">Use your browser’s install or add-to-home-screen action when you’re ready.</p>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2">
+              {installAvailable ? (
+                <button
+                  type="button"
+                  onClick={() => { void promptInstall(); }}
+                  disabled={installBusy}
+                  className="ui-action-button shrink-0"
+                >
+                  {installBusy ? 'Installing…' : 'Install app'}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => { void handleCreateConversation(); }}
+                disabled={creating}
+                className="ui-action-button shrink-0"
+              >
+                {creating ? 'Starting…' : 'New conversation'}
+              </button>
+            </div>
           </div>
           {error ? <p className="mt-3 text-[12px] text-danger">{error}</p> : null}
         </div>
