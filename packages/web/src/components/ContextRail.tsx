@@ -376,8 +376,12 @@ function runStatusText(detail: DurableRunDetailResult['run']): { text: string; c
   return { text: status ?? 'unknown', cls: 'text-dim' };
 }
 
-function compactRunCardSummary(summary: string | null | undefined, conversationId?: string): string | null {
-  const trimmed = summary?.trim();
+function compactRunCardSummary(
+  summary: string | null | undefined,
+  title?: string | null,
+  conversationId?: string,
+): string | null {
+  let trimmed = summary?.trim() ?? '';
   if (!trimmed) {
     return null;
   }
@@ -385,9 +389,16 @@ function compactRunCardSummary(summary: string | null | undefined, conversationI
   if (conversationId) {
     const suffix = ` · ${conversationId}`;
     if (trimmed.endsWith(suffix)) {
-      const withoutConversationId = trimmed.slice(0, -suffix.length).trim();
-      return withoutConversationId || null;
+      trimmed = trimmed.slice(0, -suffix.length).trim();
     }
+  }
+
+  if (!trimmed || (title && trimmed === title.trim())) {
+    return null;
+  }
+
+  if (/^(Live conversation|Conversation run|Background run|Deferred resume|Scheduled task|Shell run|Workflow|Conversation memory distillation)( · .+)?$/.test(trimmed)) {
+    return null;
   }
 
   return trimmed;
@@ -1647,6 +1658,14 @@ function LiveSessionContextPanel({ id }: { id: string }) {
       return 'Refreshing run metadata…';
     }
 
+    if (visibleRunCards.length === 0) {
+      return 'No runs';
+    }
+
+    if (activeRunCount === visibleRunCards.length && runIssueCount === 0 && unresolvedRunCount === 0) {
+      return `${activeRunCount} active ${activeRunCount === 1 ? 'run' : 'runs'}`;
+    }
+
     const parts = [`${visibleRunCards.length} ${visibleRunCards.length === 1 ? 'run' : 'runs'}`];
 
     if (activeRunCount > 0) {
@@ -2080,7 +2099,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
             <div className="flex items-center justify-between gap-2">
               <span className="text-[11px] text-secondary">{runSummary}</span>
               <span className={runsExpanded ? 'text-[10px] uppercase tracking-[0.14em] text-accent' : 'text-[10px] uppercase tracking-[0.14em] text-dim'}>
-                {runsExpanded ? 'hide' : 'inspect'}
+                {runsExpanded ? 'hide' : 'show'}
               </span>
             </div>
           </button>
@@ -2096,7 +2115,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
               {visibleRunCards.map(({ mention, record, headline, status, activityAt }) => {
                 const isSelected = mention.selected;
                 const title = headline?.title ?? mention.label;
-                const summary = compactRunCardSummary(headline?.summary ?? mention.meta, id);
+                const summary = compactRunCardSummary(headline?.summary ?? mention.meta, title, id);
                 const showSummary = Boolean(summary && summary !== title);
                 const issueCount = record?.problems.length ?? 0;
                 const showRecovery = record && record.recoveryAction !== 'none';
@@ -2108,7 +2127,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
                     type="button"
                     onClick={() => openRun(mention.runId)}
                     className={isSelected ? 'w-full rounded-lg border border-accent/30 bg-accent/10 px-3 py-2.5 text-left transition-colors' : 'w-full rounded-lg border border-border-subtle bg-surface px-3 py-2.5 text-left transition-colors hover:border-accent/25 hover:bg-elevated/70'}
-                    title={mention.runId}
                   >
                     <div className="min-w-0">
                       <p className="truncate text-[12px] font-medium text-primary">{title}</p>
