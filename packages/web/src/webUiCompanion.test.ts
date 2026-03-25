@@ -2,24 +2,24 @@ import { describe, expect, it } from 'vitest';
 import { buildWebUiCompanionAccessSummary } from './webUiCompanion';
 
 describe('buildWebUiCompanionAccessSummary', () => {
-  it('marks the companion app secure-ready when a tailnet https url exists', () => {
+  it('marks the companion app https-ready when a tailnet https url exists', () => {
     const summary = buildWebUiCompanionAccessSummary({
-      url: 'http://localhost:3741',
+      companionUrl: 'http://127.0.0.1:3742',
       tailscaleServe: true,
       tailscaleUrl: 'https://agent.tail.ts.net',
     });
 
     expect(summary).toEqual(expect.objectContaining({
-      localUrl: 'http://localhost:3741/app/conversations',
+      localUrl: 'http://127.0.0.1:3742/app/conversations',
       tailnetUrl: 'https://agent.tail.ts.net/app/conversations',
       secureOriginReady: true,
-      statusLabel: 'secure-ready',
+      statusLabel: 'https-ready',
     }));
   });
 
   it('marks the companion app local-only when tailscale serve is disabled', () => {
     const summary = buildWebUiCompanionAccessSummary({
-      url: 'http://localhost:3741',
+      companionUrl: 'http://127.0.0.1:3742',
       tailscaleServe: false,
       tailscaleUrl: undefined,
     });
@@ -33,7 +33,7 @@ describe('buildWebUiCompanionAccessSummary', () => {
 
   it('marks the companion app resolving when serve is enabled without a tailnet url', () => {
     const summary = buildWebUiCompanionAccessSummary({
-      url: 'http://localhost:3741',
+      companionUrl: 'http://127.0.0.1:3742',
       tailscaleServe: true,
       tailscaleUrl: undefined,
     });

@@ -192,7 +192,9 @@ describe('SystemPage', () => {
                 running: true,
                 repoRoot: '/repo',
                 port: 3741,
-                url: 'http://localhost:3741',
+                url: 'http://127.0.0.1:3741',
+                companionPort: 3742,
+                companionUrl: 'http://127.0.0.1:3742',
                 tailscaleServe: false,
                 resumeFallbackPrompt: 'Resume the conversation from the latest durable state.',
                 deployment: {

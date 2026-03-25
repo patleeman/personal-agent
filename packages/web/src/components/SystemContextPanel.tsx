@@ -5,6 +5,7 @@ import { getSystemComponentLabel, type SystemComponentId } from '../systemSelect
 import type { DaemonState, GatewayState, SyncState, WebUiState } from '../types';
 import { timeAgo } from '../utils';
 import { buildWebUiCompanionAccessSummary } from '../webUiCompanion';
+import { useApi } from '../hooks';
 import { ErrorState, LoadingState, Pill, ToolbarButton, type PillTone } from './ui';
 
 type SystemPanelData =
@@ -110,7 +111,8 @@ function buildPanel(selected: SystemPanelData) {
         details: [
           { label: 'Service', value: running ? 'running' : data.service.installed ? 'stopped' : 'not installed' },
           { label: 'Desktop URL', value: data.service.url },
-          { label: 'Companion', value: `${companion.statusLabel} · ${companion.localUrl}` },
+          { label: 'Companion service', value: `${companion.statusLabel} · ${companion.localUrl}` },
+          { label: 'Companion port', value: String(data.service.companionPort) },
           { label: 'Tailnet URL', value: data.service.tailscaleServe ? (data.service.tailscaleUrl ?? 'resolving…') : 'disabled' },
           { label: 'Tailnet companion', value: companion.tailnetUrl ?? 'Enable Tailscale Serve to expose /app over HTTPS.' },
           { label: 'Release', value: release },
@@ -206,6 +208,113 @@ function buildPanel(selected: SystemPanelData) {
       };
     }
   }
+}
+
+function CompanionPairingSection({ data }: { data: WebUiState }) {
+  const companion = buildWebUiCompanionAccessSummary(data.service);
+  const { data: authState, loading, error, refetch } = useApi(api.companionAuthState, 'system-companion-auth');
+  const [pairingCode, setPairingCode] = useState<string | null>(null);
+  const [pairingExpiresAt, setPairingExpiresAt] = useState<string | null>(null);
+  const [pairingBusy, setPairingBusy] = useState(false);
+  const [revokeBusyId, setRevokeBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const createPairingCode = useCallback(async () => {
+    if (pairingBusy) {
+      return;
+    }
+
+    setPairingBusy(true);
+    setActionError(null);
+    try {
+      const created = await api.createCompanionPairingCode();
+      setPairingCode(created.code);
+      setPairingExpiresAt(created.expiresAt);
+      await refetch({ resetLoading: false });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPairingBusy(false);
+    }
+  }, [pairingBusy, refetch]);
+
+  const revokeSession = useCallback(async (sessionId: string) => {
+    if (revokeBusyId) {
+      return;
+    }
+
+    setRevokeBusyId(sessionId);
+    setActionError(null);
+    try {
+      await api.revokeCompanionSession(sessionId);
+      await refetch({ resetLoading: false });
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setRevokeBusyId(null);
+    }
+  }, [refetch, revokeBusyId]);
+
+  return (
+    <div className="space-y-3 border-t border-border-subtle pt-4">
+      <div className="space-y-1">
+        <p className="ui-section-label">Companion pairing</p>
+        <p className="text-[12px] text-secondary leading-relaxed">Generate a short-lived pairing code here, then enter it on the phone companion to mint a revocable session.</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <ToolbarButton onClick={() => { void createPairingCode(); }} disabled={pairingBusy}>
+          {pairingBusy ? 'Generating…' : 'Generate pairing code'}
+        </ToolbarButton>
+        <a href={companion.localUrl} target="_blank" rel="noreferrer" className="ui-toolbar-button">
+          Open local companion
+        </a>
+        {companion.tailnetUrl && (
+          <a href={companion.tailnetUrl} target="_blank" rel="noreferrer" className="ui-toolbar-button">
+            Open tailnet companion
+          </a>
+        )}
+      </div>
+      {pairingCode && pairingExpiresAt && (
+        <div className="rounded-xl border border-border-subtle bg-surface/70 px-4 py-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-dim/70">Active pairing code</p>
+          <p className="mt-2 font-mono text-[18px] tracking-[0.22em] text-primary">{pairingCode}</p>
+          <p className="mt-2 text-[12px] text-secondary">Expires {new Date(pairingExpiresAt).toLocaleString()}</p>
+        </div>
+      )}
+      <div className="space-y-2">
+        <p className="ui-section-label">Paired devices</p>
+        {loading ? (
+          <LoadingState label="Loading paired devices…" className="justify-start px-0 py-2" />
+        ) : authState && authState.sessions.length > 0 ? (
+          <div className="space-y-2">
+            {authState.sessions.map((session) => (
+              <div key={session.id} className="flex items-start justify-between gap-3 rounded-xl border border-border-subtle bg-surface/70 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-medium text-primary">{session.deviceLabel}</p>
+                  <p className="mt-1 text-[11px] text-secondary">Last used {timeAgo(session.lastUsedAt)} · expires {new Date(session.expiresAt).toLocaleString()}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { void revokeSession(session.id); }}
+                  disabled={revokeBusyId === session.id}
+                  className="shrink-0 text-[11px] text-danger transition hover:text-danger/70 disabled:opacity-40"
+                >
+                  {revokeBusyId === session.id ? 'Revoking…' : 'Revoke'}
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[12px] text-secondary">No devices are paired yet.</p>
+        )}
+        {authState && authState.pendingPairings.length > 0 ? (
+          <p className="text-[11px] text-dim">{authState.pendingPairings.length} pairing code{authState.pendingPairings.length === 1 ? '' : 's'} waiting to be used.</p>
+        ) : null}
+      </div>
+      {error ? <ErrorState message={error} /> : null}
+      {actionError ? <ErrorState message={actionError} /> : null}
+    </div>
+  );
 }
 
 export function SystemContextPanel({ componentId }: { componentId: SystemComponentId }) {
@@ -395,25 +504,20 @@ export function SystemContextPanel({ componentId }: { componentId: SystemCompone
         </div>
 
         {selected.kind === 'web-ui' && companion && (
-          <div className="space-y-3 border-t border-border-subtle pt-4">
-            <div className="space-y-1">
-              <p className="ui-section-label">Companion access</p>
-              <p className="text-[12px] text-secondary leading-relaxed">{companion.detail}</p>
+          <>
+            <div className="space-y-3 border-t border-border-subtle pt-4">
+              <div className="space-y-1">
+                <p className="ui-section-label">Companion transport</p>
+                <p className="text-[12px] text-secondary leading-relaxed">{companion.detail}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <ToolbarButton onClick={() => { void handleToggleWebUiTailscale(); }} disabled={actionBusy}>
+                  {selected.data.service.tailscaleServe ? 'Disable Tailnet HTTPS' : 'Enable Tailnet HTTPS'}
+                </ToolbarButton>
+              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <ToolbarButton onClick={() => { void handleToggleWebUiTailscale(); }} disabled={actionBusy}>
-                {selected.data.service.tailscaleServe ? 'Disable Tailnet HTTPS' : 'Enable Tailnet HTTPS'}
-              </ToolbarButton>
-              <a href={companion.localUrl} target="_blank" rel="noreferrer" className="ui-toolbar-button">
-                Open local companion
-              </a>
-              {companion.tailnetUrl && (
-                <a href={companion.tailnetUrl} target="_blank" rel="noreferrer" className="ui-toolbar-button">
-                  Open tailnet companion
-                </a>
-              )}
-            </div>
-          </div>
+            <CompanionPairingSection data={selected.data} />
+          </>
         )}
       </div>
 

@@ -99,8 +99,8 @@ function buildWebUiItem(data: WebUiState | null): SystemRowItem {
     summary,
     meta: [
       `release ${release}`,
-      companion.statusLabel === 'secure-ready'
-        ? 'companion secure-ready'
+      companion.statusLabel === 'https-ready'
+        ? 'companion https-ready'
         : companion.statusLabel === 'resolving'
           ? 'companion resolving'
           : 'companion local-only',

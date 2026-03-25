@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NavLink, Outlet, useLocation, useOutletContext } from 'react-router-dom';
-import { cx } from '../components/ui';
+import { api } from '../api';
+import { ErrorState, ToolbarButton, cx } from '../components/ui';
 import { useAppData } from '../contexts';
+import { useApi } from '../hooks';
 import { useCompanionNotifications } from './useCompanionNotifications';
 import {
   canPromptCompanionInstall,
@@ -27,6 +29,15 @@ export interface CompanionLayoutContextValue {
   notificationsSupported: boolean;
   notificationPermission: NotificationPermission | 'unsupported';
   requestNotificationPermission: () => Promise<void>;
+}
+
+function readDefaultDeviceLabel(): string {
+  if (typeof navigator === 'undefined') {
+    return 'Paired companion';
+  }
+
+  const platform = typeof navigator.platform === 'string' ? navigator.platform.trim() : '';
+  return platform.length > 0 ? `${platform} companion` : 'Paired companion';
 }
 
 function readDisplayModeStandalone(): boolean {
@@ -91,6 +102,11 @@ export function useCompanionLayoutContext() {
 export function CompanionLayout() {
   const location = useLocation();
   const { activity, sessions } = useAppData();
+  const { data: companionSession, loading: companionSessionLoading } = useApi(api.companionSession, 'companion-auth-session');
+  const [pairingCode, setPairingCode] = useState('');
+  const [deviceLabel, setDeviceLabel] = useState(() => readDefaultDeviceLabel());
+  const [authBusy, setAuthBusy] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [deferredPrompt, setDeferredPrompt] = useState<DeferredInstallPromptEvent | null>(null);
   const [installBusy, setInstallBusy] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>(
@@ -216,7 +232,7 @@ export function CompanionLayout() {
   useCompanionNotifications({
     activity,
     sessions,
-    enabled: secureContext && notificationPermission === 'granted',
+    enabled: companionSession !== null && secureContext && notificationPermission === 'granted',
   });
 
   const contextValue = useMemo<CompanionLayoutContextValue>(() => ({
@@ -234,13 +250,45 @@ export function CompanionLayout() {
     requestNotificationPermission,
   }), [deferredPrompt, installBusy, notificationPermission, promptInstall, requestNotificationPermission, secureContext, standalone]);
 
-  const showPrimaryNav = !location.pathname.startsWith(`${COMPANION_CONVERSATIONS_PATH}/`);
+  const showPrimaryNav = companionSession !== null && !location.pathname.startsWith(`${COMPANION_CONVERSATIONS_PATH}/`);
   const navItems = [
     { to: COMPANION_CONVERSATIONS_PATH, label: 'Chats', end: false, ariaLabel: 'Open chats', Icon: ChatsIcon },
     { to: COMPANION_PROJECTS_PATH, label: 'Projects', end: true, ariaLabel: 'Open projects', Icon: ProjectsIcon },
     { to: COMPANION_MEMORIES_PATH, label: 'Memory', end: true, ariaLabel: 'Open memories', Icon: MemoriesIcon },
     { to: COMPANION_SKILLS_PATH, label: 'Skills', end: true, ariaLabel: 'Open skills', Icon: SkillsIcon },
   ];
+
+  const handlePairDevice = useCallback(async () => {
+    if (authBusy) {
+      return;
+    }
+
+    setAuthBusy(true);
+    setAuthError(null);
+    try {
+      await api.exchangeCompanionPairingCode(pairingCode, deviceLabel);
+      window.location.reload();
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : String(error));
+      setAuthBusy(false);
+    }
+  }, [authBusy, deviceLabel, pairingCode]);
+
+  const handleLogout = useCallback(async () => {
+    if (authBusy) {
+      return;
+    }
+
+    setAuthBusy(true);
+    setAuthError(null);
+    try {
+      await api.logoutCompanionSession();
+      window.location.reload();
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : String(error));
+      setAuthBusy(false);
+    }
+  }, [authBusy]);
 
   return (
     <div className="flex min-h-screen flex-col bg-base text-primary" style={{ minHeight: '100dvh', height: '100dvh' }}>
@@ -250,8 +298,64 @@ export function CompanionLayout() {
         </div>
       ) : null}
       <div className="min-h-0 flex-1">
-        <Outlet context={contextValue} />
+        {companionSession === null ? (
+          companionSessionLoading ? (
+            <div className="flex h-full items-center justify-center px-6">
+              <p className="text-[12px] text-dim">Checking companion session…</p>
+            </div>
+          ) : (
+            <div className="flex h-full items-center justify-center px-5 py-8">
+              <div className="w-full max-w-sm rounded-[28px] border border-border-subtle bg-surface/80 px-5 py-6 shadow-[0_18px_80px_rgba(15,23,42,0.18)]">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/70">Pi Companion</p>
+                <h1 className="mt-3 text-[24px] font-semibold tracking-tight text-primary">Pair this device</h1>
+                <p className="mt-2 text-[13px] leading-relaxed text-secondary">
+                  Generate a pairing code from the local desktop web UI, then enter it here to unlock the restricted companion service.
+                </p>
+                <label className="mt-5 block">
+                  <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-dim/70">Pairing code</span>
+                  <input
+                    value={pairingCode}
+                    onChange={(event) => setPairingCode(event.target.value.toUpperCase())}
+                    autoCapitalize="characters"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    placeholder="ABCD-EFGH-IJKL"
+                    className="mt-2 w-full rounded-2xl border border-border-subtle bg-base px-4 py-3 font-mono text-[16px] tracking-[0.18em] text-primary outline-none transition focus:border-accent"
+                  />
+                </label>
+                <label className="mt-4 block">
+                  <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-dim/70">Device label</span>
+                  <input
+                    value={deviceLabel}
+                    onChange={(event) => setDeviceLabel(event.target.value)}
+                    autoCorrect="off"
+                    spellCheck={false}
+                    className="mt-2 w-full rounded-2xl border border-border-subtle bg-base px-4 py-3 text-[14px] text-primary outline-none transition focus:border-accent"
+                  />
+                </label>
+                <div className="mt-5 flex flex-wrap items-center gap-2">
+                  <ToolbarButton onClick={() => { void handlePairDevice(); }} disabled={authBusy || pairingCode.trim().length === 0}>
+                    {authBusy ? 'Signing in…' : 'Pair device'}
+                  </ToolbarButton>
+                </div>
+                {authError ? <ErrorState message={authError} className="mt-4" /> : null}
+              </div>
+            </div>
+          )
+        ) : (
+          <Outlet context={contextValue} />
+        )}
       </div>
+      {companionSession !== null ? (
+        <div className="shrink-0 border-t border-border-subtle bg-base/95 px-4 py-2 text-[11px] text-dim backdrop-blur-xl">
+          <div className="mx-auto flex w-full max-w-sm items-center justify-between gap-3">
+            <span className="truncate">Signed in on {companionSession.session.deviceLabel}</span>
+            <button type="button" onClick={() => { void handleLogout(); }} className="text-dim transition hover:text-primary">
+              Sign out
+            </button>
+          </div>
+        </div>
+      ) : null}
       {showPrimaryNav ? (
         <nav className="shrink-0 border-t border-border-subtle bg-base/95 px-3 pb-[calc(env(safe-area-inset-bottom)+0.625rem)] pt-2 backdrop-blur-xl">
           <div className="mx-auto grid w-full max-w-sm grid-cols-4 gap-1.5">

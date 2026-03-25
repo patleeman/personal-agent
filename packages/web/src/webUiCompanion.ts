@@ -13,9 +13,9 @@ function joinCompanionPath(baseUrl: string): string {
 }
 
 export function buildWebUiCompanionAccessSummary(
-  service: Pick<WebUiServiceSummary, 'url' | 'tailscaleServe' | 'tailscaleUrl'>,
+  service: Pick<WebUiServiceSummary, 'companionUrl' | 'tailscaleServe' | 'tailscaleUrl'>,
 ): WebUiCompanionAccessSummary {
-  const localUrl = joinCompanionPath(service.url);
+  const localUrl = joinCompanionPath(service.companionUrl);
   const tailnetUrl = service.tailscaleUrl ? joinCompanionPath(service.tailscaleUrl) : null;
   const secureOriginReady = Boolean(service.tailscaleServe && tailnetUrl?.startsWith('https://'));
 
@@ -24,8 +24,8 @@ export function buildWebUiCompanionAccessSummary(
       localUrl,
       tailnetUrl,
       secureOriginReady: true,
-      statusLabel: 'secure-ready',
-      detail: 'Tailnet HTTPS is available for installability, notifications, and remote reopen.',
+      statusLabel: 'https-ready',
+      detail: 'Tailnet HTTPS is routing to the restricted companion service. Pair a device code to sign in from the phone companion.',
     };
   }
 
@@ -44,6 +44,6 @@ export function buildWebUiCompanionAccessSummary(
     tailnetUrl: null,
     secureOriginReady: false,
     statusLabel: 'local-only',
-    detail: 'The companion app works locally, but installability and remote notifications need Tailnet HTTPS.',
+    detail: 'The companion app works locally on the restricted companion service. Tailnet HTTPS is still required for encrypted remote access and mobile notifications.',
   };
 }

@@ -152,33 +152,55 @@ export function App() {
   }, []);
 
   const bootstrapSnapshots = useCallback(async () => {
-    try {
-      const [activityEntries, projectItems, sessionItems, taskItems, runResult, daemonState, gatewayState, syncState, webUiState] = await Promise.all([
-        api.activity(),
-        api.projects(),
-        fetchSessionsSnapshot(),
-        api.tasks(),
-        api.runs(),
-        api.daemon(),
-        api.gateway(),
-        api.sync(),
-        api.webUiState(),
-      ]);
+    const [activityEntries, projectItems, sessionItems, taskItems, runResult, daemonState, gatewayState, syncState, webUiState] = await Promise.allSettled([
+      api.activity(),
+      api.projects(),
+      fetchSessionsSnapshot(),
+      api.tasks(),
+      api.runs(),
+      api.daemon(),
+      api.gateway(),
+      api.sync(),
+      api.webUiState(),
+    ]);
 
+    if (activityEntries.status === 'fulfilled') {
       setActivity({
-        entries: activityEntries,
-        unreadCount: activityEntries.filter((entry) => !entry.read).length,
+        entries: activityEntries.value,
+        unreadCount: activityEntries.value.filter((entry) => !entry.read).length,
       });
-      setProjects(projectItems);
-      setSessions(sessionItems);
-      setTasks(taskItems);
-      setRuns(runResult);
-      setDaemon(daemonState);
-      setGateway(gatewayState);
-      setSync(syncState);
-      setWebUi(webUiState);
-    } catch {
-      // Ignore bootstrap failures — manual refresh + SSE reconnect remain available.
+    }
+
+    if (projectItems.status === 'fulfilled') {
+      setProjects(projectItems.value);
+    }
+
+    if (sessionItems.status === 'fulfilled') {
+      setSessions(sessionItems.value);
+    }
+
+    if (taskItems.status === 'fulfilled') {
+      setTasks(taskItems.value);
+    }
+
+    if (runResult.status === 'fulfilled') {
+      setRuns(runResult.value);
+    }
+
+    if (daemonState.status === 'fulfilled') {
+      setDaemon(daemonState.value);
+    }
+
+    if (gatewayState.status === 'fulfilled') {
+      setGateway(gatewayState.value);
+    }
+
+    if (syncState.status === 'fulfilled') {
+      setSync(syncState.value);
+    }
+
+    if (webUiState.status === 'fulfilled') {
+      setWebUi(webUiState.value);
     }
   }, [setActivity, setDaemon, setGateway, setProjects, setRuns, setSessions, setSync, setTasks, setWebUi]);
 
