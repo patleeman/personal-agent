@@ -409,7 +409,7 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
 
 // ── Event → block reducer ─────────────────────────────────────────────────────
 
-function applyEvent(
+export function applyEvent(
   prev: StreamState,
   blocksRef: React.MutableRefObject<MessageBlock[]>,
   streamingRef: React.MutableRefObject<boolean>,
@@ -420,6 +420,7 @@ function applyEvent(
   switch (event.type) {
     case 'snapshot': {
       const snapshotBlocks = event.blocks.map(displayBlockToMessageBlock);
+      streamingRef.current = false;
       blocksRef.current = snapshotBlocks;
       return {
         ...prev,
@@ -427,6 +428,7 @@ function applyEvent(
         blockOffset: event.blockOffset,
         totalBlocks: event.totalBlocks,
         hasSnapshot: true,
+        isStreaming: false,
         error: null,
       };
     }
