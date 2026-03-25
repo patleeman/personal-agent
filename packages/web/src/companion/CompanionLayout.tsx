@@ -116,6 +116,7 @@ export function CompanionLayout() {
     readDisplayModeStandalone(),
     readNavigatorStandalone(),
   ));
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
 
   const secureContext = useMemo(() => {
     if (typeof window === 'undefined') {
@@ -173,6 +174,28 @@ export function CompanionLayout() {
       } else {
         mediaQuery.removeListener(syncStandaloneState);
       }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const syncViewportHeight = () => {
+      const nextHeight = Math.round(window.visualViewport?.height ?? window.innerHeight);
+      setViewportHeight((current) => (current === nextHeight ? current : nextHeight));
+    };
+
+    syncViewportHeight();
+    window.addEventListener('resize', syncViewportHeight);
+    window.visualViewport?.addEventListener('resize', syncViewportHeight);
+    window.visualViewport?.addEventListener('scroll', syncViewportHeight);
+
+    return () => {
+      window.removeEventListener('resize', syncViewportHeight);
+      window.visualViewport?.removeEventListener('resize', syncViewportHeight);
+      window.visualViewport?.removeEventListener('scroll', syncViewportHeight);
     };
   }, []);
 
@@ -275,7 +298,12 @@ export function CompanionLayout() {
   }, [authBusy, deviceLabel, pairingCode]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-base text-primary" style={{ minHeight: '100dvh', height: '100dvh' }}>
+    <div
+      className="flex min-h-screen flex-col bg-base text-primary"
+      style={viewportHeight === null
+        ? { minHeight: '100dvh', height: '100dvh' }
+        : { minHeight: `${viewportHeight}px`, height: `${viewportHeight}px` }}
+    >
       {!secureContext ? (
         <div className="bg-warning/10 px-4 py-2 text-[12px] text-warning">
           Installability and notifications need HTTPS. Open the companion app through your Tailscale HTTPS host for the full PWA experience.
