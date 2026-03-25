@@ -274,22 +274,6 @@ export function CompanionLayout() {
     }
   }, [authBusy, deviceLabel, pairingCode]);
 
-  const handleLogout = useCallback(async () => {
-    if (authBusy) {
-      return;
-    }
-
-    setAuthBusy(true);
-    setAuthError(null);
-    try {
-      await api.logoutCompanionSession();
-      window.location.reload();
-    } catch (error) {
-      setAuthError(error instanceof Error ? error.message : String(error));
-      setAuthBusy(false);
-    }
-  }, [authBusy]);
-
   return (
     <div className="flex min-h-screen flex-col bg-base text-primary" style={{ minHeight: '100dvh', height: '100dvh' }}>
       {!secureContext ? (
@@ -346,16 +330,6 @@ export function CompanionLayout() {
           <Outlet context={contextValue} />
         )}
       </div>
-      {companionSession !== null ? (
-        <div className="shrink-0 border-t border-border-subtle bg-base/95 px-4 py-2 text-[11px] text-dim backdrop-blur-xl">
-          <div className="mx-auto flex w-full max-w-sm items-center justify-between gap-3">
-            <span className="truncate">Signed in on {companionSession.session.deviceLabel}</span>
-            <button type="button" onClick={() => { void handleLogout(); }} className="text-dim transition hover:text-primary">
-              Sign out
-            </button>
-          </div>
-        </div>
-      ) : null}
       {showPrimaryNav ? (
         <nav className="shrink-0 border-t border-border-subtle bg-base/95 px-3 pb-[calc(env(safe-area-inset-bottom)+0.625rem)] pt-2 backdrop-blur-xl">
           <div className="mx-auto grid w-full max-w-sm grid-cols-4 gap-1.5">

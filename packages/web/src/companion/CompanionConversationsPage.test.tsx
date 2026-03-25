@@ -192,6 +192,7 @@ describe('CompanionConversationsPage', () => {
     expect(html).toContain('Archived transcript');
     expect(html).toContain('archived chats');
     expect(html).toContain('Load more');
+    expect(html).not.toContain('Signed in on Test companion');
     expect(html).toContain('aria-label="Archive conversation"');
     expect(html).toContain('aria-label="Open conversation"');
     expect(html).toContain('aria-label="Show actions for Stored transcript"');
