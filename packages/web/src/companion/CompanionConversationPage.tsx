@@ -6,7 +6,7 @@ import { cx } from '../components/ui';
 import { useApi } from '../hooks';
 import { readConversationLayout, setConversationArchivedState } from '../sessionTabs';
 import { getConversationDisplayTitle } from '../conversationTitle';
-import { useLiveTitles, useSseConnection } from '../contexts';
+import { type SseConnectionStatus, useLiveTitles, useSseConnection } from '../contexts';
 import { useSessionDetail } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversationArtifacts';
@@ -17,7 +17,6 @@ import type {
   LiveSessionPresenceState,
   LiveSessionSurfaceType,
   MessageBlock,
-  SseConnectionStatus,
 } from '../types';
 import { CompanionConversationArtifacts } from './CompanionConversationArtifacts';
 import { CompanionConversationTodos } from './CompanionConversationTodos';

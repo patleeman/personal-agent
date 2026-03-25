@@ -3,10 +3,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { cx } from '../components/ui';
 import { getConversationDisplayTitle } from '../conversationTitle';
-import { useLiveTitles, useSseConnection } from '../contexts';
+import { type SseConnectionStatus, useLiveTitles, useSseConnection } from '../contexts';
 import { useApi } from '../hooks';
 import { setConversationArchivedState } from '../sessionTabs';
-import type { CompanionConversationListResult, SessionMeta, SseConnectionStatus } from '../types';
+import type { CompanionConversationListResult, SessionMeta } from '../types';
 import { useCompanionLayoutContext } from './CompanionLayout';
 import { buildCompanionConversationPath } from './routes';
 
@@ -571,7 +571,7 @@ const CompanionConversationRow = memo(function CompanionConversationRow({
       </div>
     </div>
   );
-}
+});
 
 function SessionSection({
   title,
@@ -581,14 +581,16 @@ function SessionSection({
   revealedActionId,
   onSetArchived,
   onRevealActions,
+  footer,
 }: {
   title: string;
   sessions: SessionMeta[];
-  workspaceSessionIds: ReadonlySet<string> | null;
+  workspaceSessionIds: ReadonlySet<string>;
   actionBusyId: string | null;
   revealedActionId: string | null;
   onSetArchived: (sessionId: string, archived: boolean) => void;
   onRevealActions: (sessionId: string | null) => void;
+  footer?: ReactNode;
 }) {
   if (sessions.length === 0) {
     return null;
@@ -602,13 +604,14 @@ function SessionSection({
           <CompanionConversationRow
             key={session.id}
             session={session}
-            inWorkspace={workspaceSessionIds?.has(session.id) ?? false}
+            inWorkspace={workspaceSessionIds.has(session.id)}
             actionBusy={actionBusyId === session.id}
             actionsRevealed={revealedActionId === session.id}
             onSetArchived={onSetArchived}
-            onToggleActions={(open) => onRevealActions(open ? session.id : null)}
+            onRevealActions={onRevealActions}
           />
         ))}
+        {footer ? <div className="border-t border-border-subtle px-4 py-3">{footer}</div> : null}
       </div>
     </section>
   );
@@ -616,7 +619,6 @@ function SessionSection({
 
 export function CompanionConversationsPage() {
   const navigate = useNavigate();
-  const { sessions, setSessions } = useAppData();
   const { titles } = useLiveTitles();
   const { status } = useSseConnection();
   const {
@@ -633,45 +635,68 @@ export function CompanionConversationsPage() {
   const [actionBusyId, setActionBusyId] = useState<string | null>(null);
   const [revealedActionId, setRevealedActionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const syncTimerRef = useRef<number | null>(null);
+  const fetchConversationList = useCallback(
+    () => api.companionConversationList({ archivedOffset: 0, archivedLimit: COMPANION_ARCHIVED_PAGE_SIZE }),
+    [],
+  );
   const {
-    data: openTabs,
-    replaceData: replaceOpenTabs,
-  } = useApi(api.openConversationTabs, 'companion-open-conversation-tabs');
+    data,
+    loading,
+    error: loadError,
+    replaceData,
+  } = useApi(fetchConversationList, 'companion-conversation-list');
+  const [sections, setSections] = useState<CompanionConversationListResult | null>(() => data);
 
-  const visibleSessions = useMemo(() => {
-    const source = sessions ?? [];
-    const withTitles = source.map((session) => {
-      const title = getConversationDisplayTitle(titles.get(session.id), session.title);
-      return title === session.title ? session : { ...session, title };
-    });
+  useEffect(() => {
+    if (data) {
+      setSections(data);
+    }
+  }, [data]);
 
-    return sortCompanionSessions(withTitles);
-  }, [sessions, titles]);
-  const workspaceSessionIds = useMemo(() => {
-    if (!openTabs) {
+  useEffect(() => () => {
+    if (syncTimerRef.current !== null) {
+      window.clearTimeout(syncTimerRef.current);
+    }
+  }, []);
+
+  const refreshSections = useCallback(async (archivedLimit: number) => {
+    try {
+      const next = await api.companionConversationList({
+        archivedOffset: 0,
+        archivedLimit: Math.max(COMPANION_ARCHIVED_PAGE_SIZE, archivedLimit),
+      });
+      replaceData(next);
+      setSections(next);
+      return next;
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
       return null;
     }
+  }, [replaceData]);
 
-    return new Set([...openTabs.sessionIds, ...openTabs.pinnedSessionIds]);
-  }, [openTabs]);
-  const workspaceSections = useMemo(
-    () => partitionCompanionSessions(visibleSessions, workspaceSessionIds),
-    [visibleSessions, workspaceSessionIds],
+  const titledSections = useMemo(
+    () => (sections ? applyCompanionConversationTitles(sections, titles) : null),
+    [sections, titles],
   );
-  const workspaceSectionsKnown = workspaceSessionIds !== null;
-  const {
-    live: liveSessions,
-    needsReview: needsReviewSessions,
-    active: activeSessions,
-    archived: archivedSessions,
-    recent: recentSessions,
-  } = workspaceSections;
+  const workspaceSessionIds = useMemo(
+    () => new Set(titledSections?.workspaceSessionIds ?? []),
+    [titledSections],
+  );
+  const liveSessions = titledSections?.live ?? [];
+  const needsReviewSessions = titledSections?.needsReview ?? [];
+  const activeSessions = titledSections?.active ?? [];
+  const archivedSessions = titledSections?.archived ?? [];
+  const totalConversationCount = titledSections
+    ? liveSessions.length + needsReviewSessions.length + activeSessions.length + titledSections.archivedTotal
+    : 0;
   const overviewLabel = buildCompanionOverviewLabel({
-    total: visibleSessions.length,
+    total: totalConversationCount,
     live: liveSessions.length,
     needsReview: needsReviewSessions.length,
     active: activeSessions.length,
-    archived: archivedSessions.length,
+    archived: titledSections?.archivedTotal ?? 0,
   });
   const stateNote = buildCompanionStateNote({
     standalone,
@@ -680,6 +705,7 @@ export function CompanionConversationsPage() {
     notificationsSupported,
     notificationPermission,
   });
+  const visibleError = error ?? loadError;
 
   const handleSetArchived = useCallback((sessionId: string, archived: boolean) => {
     if (actionBusyId) {
@@ -690,16 +716,48 @@ export function CompanionConversationsPage() {
     setActionBusyId(sessionId);
     setError(null);
     try {
-      const nextLayout = setConversationArchivedState(sessionId, archived);
-      replaceOpenTabs(nextLayout);
+      setConversationArchivedState(sessionId, archived);
+      setSections((current) => current ? setCompanionConversationArchivedStateInList(current, sessionId, archived) : current);
+
+      if (typeof window !== 'undefined') {
+        if (syncTimerRef.current !== null) {
+          window.clearTimeout(syncTimerRef.current);
+        }
+
+        const archivedLimit = Math.max(sections?.archived.length ?? COMPANION_ARCHIVED_PAGE_SIZE, COMPANION_ARCHIVED_PAGE_SIZE);
+        syncTimerRef.current = window.setTimeout(() => {
+          syncTimerRef.current = null;
+          void refreshSections(archivedLimit);
+        }, COMPANION_ARCHIVE_SYNC_DELAY_MS);
+      }
     } catch (nextError) {
-      const fallbackLayout = readConversationLayout();
-      replaceOpenTabs(fallbackLayout);
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
       setActionBusyId(null);
     }
-  }, [actionBusyId, replaceOpenTabs]);
+  }, [actionBusyId, refreshSections, sections?.archived.length]);
+
+  const handleLoadMoreArchived = useCallback(async () => {
+    if (!sections || loadingMore || !sections.hasMoreArchived) {
+      return;
+    }
+
+    setLoadingMore(true);
+    setError(null);
+    try {
+      const nextPage = await api.companionConversationList({
+        archivedOffset: sections.archived.length,
+        archivedLimit: COMPANION_ARCHIVED_PAGE_SIZE,
+      });
+      const next = mergeCompanionConversationLists(sections, nextPage);
+      setSections(next);
+      replaceData(next);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, replaceData, sections]);
 
   const handleCreateConversation = useCallback(async () => {
     if (creating) {
@@ -711,14 +769,13 @@ export function CompanionConversationsPage() {
 
     try {
       const { id } = await api.createLiveSession();
-      void fetchSessionsSnapshot().then(setSessions).catch(() => {});
       navigate(buildCompanionConversationPath(id));
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
       setCreating(false);
     }
-  }, [creating, navigate, setSessions]);
+  }, [creating, navigate]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -732,9 +789,9 @@ export function CompanionConversationsPage() {
                 {formatConnectionStatus(status)}
               </span>
             </div>
-            <p className="mt-1 text-[11px] text-dim">{workspaceSectionsKnown ? overviewLabel : `${visibleSessions.length} chats`}</p>
+            <p className="mt-1 text-[11px] text-dim">{titledSections ? overviewLabel : 'Loading conversations…'}</p>
             {stateNote ? <p className={`mt-1 text-[11px] ${stateNote.className}`}>{stateNote.text}</p> : null}
-            {error ? <p className="mt-2 text-[11px] text-danger">{error}</p> : null}
+            {visibleError ? <p className="mt-2 text-[11px] text-danger">{visibleError}</p> : null}
           </div>
           <div className="flex items-center gap-2">
             {notificationPermission === 'default' && notificationsSupported && secureContext ? (
@@ -766,29 +823,49 @@ export function CompanionConversationsPage() {
 
       <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)]">
         <div className="mx-auto flex w-full max-w-3xl flex-col px-0 py-4">
-          {sessions === null ? (
+          {loading && !titledSections ? (
             <p className="px-4 text-[13px] text-dim">Loading conversations…</p>
-          ) : visibleSessions.length === 0 ? (
+          ) : titledSections && totalConversationCount === 0 ? (
             <div className="px-4 pt-5">
               <p className="text-[15px] text-primary">Start a conversation to make the companion app useful.</p>
               <p className="mt-2 text-[13px] leading-relaxed text-secondary">
                 New live conversations and saved transcripts will appear here automatically, and archived conversations stay reachable from the same list.
               </p>
             </div>
-          ) : (
+          ) : titledSections ? (
             <>
               <SessionSection title="Live now" sessions={liveSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onRevealActions={setRevealedActionId} />
               <SessionSection title="Needs review" sessions={needsReviewSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onRevealActions={setRevealedActionId} />
-              {workspaceSectionsKnown ? (
-                <>
-                  <SessionSection title="Active workspace" sessions={activeSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onRevealActions={setRevealedActionId} />
-                  <SessionSection title="Archived" sessions={archivedSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onRevealActions={setRevealedActionId} />
-                </>
-              ) : (
-                <SessionSection title={liveSessions.length > 0 || needsReviewSessions.length > 0 ? 'Recent' : 'Conversations'} sessions={recentSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onRevealActions={setRevealedActionId} />
-              )}
+              <SessionSection title="Active workspace" sessions={activeSessions} workspaceSessionIds={workspaceSessionIds} actionBusyId={actionBusyId} revealedActionId={revealedActionId} onSetArchived={handleSetArchived} onRevealActions={setRevealedActionId} />
+              <SessionSection
+                title="Archived"
+                sessions={archivedSessions}
+                workspaceSessionIds={workspaceSessionIds}
+                actionBusyId={actionBusyId}
+                revealedActionId={revealedActionId}
+                onSetArchived={handleSetArchived}
+                onRevealActions={setRevealedActionId}
+                footer={titledSections.archivedTotal > 0 ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[11px] text-dim">
+                      Showing {archivedSessions.length} of {titledSections.archivedTotal} archived chats
+                    </p>
+                    {titledSections.hasMoreArchived ? (
+                      <button
+                        type="button"
+                        onClick={() => { void handleLoadMoreArchived(); }}
+                        disabled={loadingMore}
+                        className="inline-flex h-9 select-none items-center rounded-full border border-border-default bg-surface px-3 text-[12px] font-medium text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/30 hover:text-primary active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45 disabled:cursor-default disabled:opacity-50"
+                        style={COMPANION_TOUCH_BUTTON_STYLE}
+                      >
+                        {loadingMore ? 'Loading…' : 'Load more'}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : undefined}
+              />
             </>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

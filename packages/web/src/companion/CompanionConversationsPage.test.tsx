@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppDataContext, LiveTitlesContext, SseConnectionContext } from '../contexts.js';
 import { useApi } from '../hooks.js';
-import type { SessionMeta } from '../types.js';
+import type { CompanionConversationListResult, SessionMeta } from '../types.js';
 import {
   CompanionConversationsPage,
   getCompanionConversationRowSwipeIntent,
@@ -102,11 +102,31 @@ describe('CompanionConversationsPage', () => {
         };
       }
 
+      if (cacheKey === 'companion-conversation-list') {
+        const data: CompanionConversationListResult = {
+          live: [createSession({ id: 'live-1', title: 'Old live title', isLive: true, timestamp: '2026-03-23T12:00:00.000Z' })],
+          needsReview: [createSession({ id: 'review-1', title: 'Review me', needsAttention: true, timestamp: '2026-03-24T14:00:00.000Z' })],
+          active: [createSession({ id: 'active-1', title: 'Stored transcript', timestamp: '2026-03-24T12:00:00.000Z' })],
+          archived: [createSession({ id: 'archived-1', title: 'Archived transcript', timestamp: '2026-03-22T12:00:00.000Z' })],
+          archivedTotal: 3,
+          archivedOffset: 0,
+          archivedLimit: 1,
+          hasMoreArchived: true,
+          workspaceSessionIds: ['active-1'],
+        };
+
+        return {
+          data,
+          loading: false,
+          refreshing: false,
+          error: null,
+          refetch: vi.fn(),
+          replaceData: vi.fn(),
+        };
+      }
+
       return {
-        data: {
-          sessionIds: ['active-1'],
-          pinnedSessionIds: [],
-        },
+        data: null,
         loading: false,
         refreshing: false,
         error: null,
@@ -137,12 +157,7 @@ describe('CompanionConversationsPage', () => {
             <AppDataContext.Provider value={{
               activity: null,
               projects: null,
-              sessions: [
-                createSession({ id: 'review-1', title: 'Review me', needsAttention: true, timestamp: '2026-03-24T14:00:00.000Z' }),
-                createSession({ id: 'active-1', title: 'Stored transcript', timestamp: '2026-03-24T12:00:00.000Z' }),
-                createSession({ id: 'archived-1', title: 'Archived transcript', timestamp: '2026-03-22T12:00:00.000Z' }),
-                createSession({ id: 'live-1', title: 'Old live title', isLive: true, timestamp: '2026-03-23T12:00:00.000Z' }),
-              ],
+              sessions: null,
               tasks: null,
               runs: null,
               setActivity: vi.fn(),
@@ -175,6 +190,8 @@ describe('CompanionConversationsPage', () => {
     expect(html).toContain('Review me');
     expect(html).toContain('Stored transcript');
     expect(html).toContain('Archived transcript');
+    expect(html).toContain('archived chats');
+    expect(html).toContain('Load more');
     expect(html).toContain('aria-label="Archive conversation"');
     expect(html).toContain('aria-label="Open conversation"');
     expect(html).toContain('aria-label="Show actions for Stored transcript"');
