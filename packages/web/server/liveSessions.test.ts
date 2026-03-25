@@ -18,6 +18,8 @@ import {
   resolveStableSessionTitle,
   restoreQueuedMessage,
   subscribe,
+  takeOverSessionControl,
+  LiveSessionControlError,
   toSse,
   type SseEvent,
 } from './liveSessions.js';
@@ -260,6 +262,152 @@ describe('live session subscriptions', () => {
     });
 
     expect(events).not.toContainEqual({ type: 'agent_start' });
+  });
+
+  it('tracks mirrored surfaces and explicit takeover', () => {
+    setLiveEntry('session-control', {
+      sessionId: 'session-control',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Controlled conversation',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: {
+          messages: [],
+          streamMessage: null,
+        },
+        getContextUsage: () => null,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+        isStreaming: false,
+      },
+    });
+
+    const desktopEvents: SseEvent[] = [];
+    const mobileEvents: SseEvent[] = [];
+
+    subscribe('session-control', (event) => {
+      desktopEvents.push(event);
+    }, {
+      surface: {
+        surfaceId: 'desktop-1',
+        surfaceType: 'desktop_web',
+      },
+    });
+
+    expect(desktopEvents.at(-1)).toEqual({
+      type: 'presence_state',
+      state: {
+        surfaces: [{
+          surfaceId: 'desktop-1',
+          surfaceType: 'desktop_web',
+          connectedAt: expect.any(String),
+        }],
+        controllerSurfaceId: 'desktop-1',
+        controllerSurfaceType: 'desktop_web',
+        controllerAcquiredAt: expect.any(String),
+      },
+    });
+
+    subscribe('session-control', (event) => {
+      mobileEvents.push(event);
+    }, {
+      surface: {
+        surfaceId: 'mobile-1',
+        surfaceType: 'mobile_web',
+      },
+    });
+
+    expect(mobileEvents.at(-1)).toEqual({
+      type: 'presence_state',
+      state: {
+        surfaces: [
+          {
+            surfaceId: 'desktop-1',
+            surfaceType: 'desktop_web',
+            connectedAt: expect.any(String),
+          },
+          {
+            surfaceId: 'mobile-1',
+            surfaceType: 'mobile_web',
+            connectedAt: expect.any(String),
+          },
+        ],
+        controllerSurfaceId: 'desktop-1',
+        controllerSurfaceType: 'desktop_web',
+        controllerAcquiredAt: expect.any(String),
+      },
+    });
+
+    const takeoverState = takeOverSessionControl('session-control', 'mobile-1');
+    expect(takeoverState.controllerSurfaceId).toBe('mobile-1');
+    expect(takeoverState.controllerSurfaceType).toBe('mobile_web');
+    expect(desktopEvents.at(-1)).toEqual({
+      type: 'presence_state',
+      state: {
+        surfaces: [
+          {
+            surfaceId: 'desktop-1',
+            surfaceType: 'desktop_web',
+            connectedAt: expect.any(String),
+          },
+          {
+            surfaceId: 'mobile-1',
+            surfaceType: 'mobile_web',
+            connectedAt: expect.any(String),
+          },
+        ],
+        controllerSurfaceId: 'mobile-1',
+        controllerSurfaceType: 'mobile_web',
+        controllerAcquiredAt: expect.any(String),
+      },
+    });
+  });
+
+  it('rejects prompts from mirrored surfaces', async () => {
+    const prompt = vi.fn(async () => {});
+
+    setLiveEntry('session-prompt-control', {
+      sessionId: 'session-prompt-control',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Controlled prompt',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: {
+          messages: [],
+          streamMessage: null,
+        },
+        getContextUsage: () => null,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+        prompt,
+        isStreaming: false,
+      },
+    });
+
+    subscribe('session-prompt-control', () => {}, {
+      surface: {
+        surfaceId: 'desktop-1',
+        surfaceType: 'desktop_web',
+      },
+    });
+    subscribe('session-prompt-control', () => {}, {
+      surface: {
+        surfaceId: 'mobile-1',
+        surfaceType: 'mobile_web',
+      },
+    });
+
+    await expect(promptSession('session-prompt-control', 'blocked', undefined, undefined, 'mobile-1'))
+      .rejects.toBeInstanceOf(LiveSessionControlError);
+
+    await promptSession('session-prompt-control', 'allowed', undefined, undefined, 'desktop-1');
+    expect(prompt).toHaveBeenCalledWith('allowed');
   });
 
   it('merges persisted history into truncated live snapshots', () => {

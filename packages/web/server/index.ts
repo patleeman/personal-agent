@@ -159,6 +159,9 @@ import {
   branchSession,
   forkSession,
   registerLiveSessionLifecycleHandler,
+  LiveSessionControlError,
+  ensureSessionSurfaceCanControl,
+  takeOverSessionControl,
   registry as liveRegistry,
 } from './liveSessions.js';
 import {
@@ -383,10 +386,16 @@ function listAllLiveSessions() {
 function subscribeLiveSession(
   sessionId: string,
   listener: (event: unknown) => void,
-  options?: { tailBlocks?: number },
+  options?: {
+    tailBlocks?: number;
+    surface?: {
+      surfaceId: string;
+      surfaceType: 'desktop_web' | 'mobile_web';
+    };
+  },
 ): (() => void) | null {
   return subscribeLocal(sessionId, listener, options)
-    ?? subscribeRemoteLiveSession(sessionId, listener, options);
+    ?? subscribeRemoteLiveSession(sessionId, listener, options ? { tailBlocks: options.tailBlocks } : undefined);
 }
 
 async function abortLiveSession(sessionId: string): Promise<void> {
@@ -6051,6 +6060,30 @@ app.get('/api/live-sessions/:id', (req, res) => {
   res.json({ live: true, ...entry });
 });
 
+app.post('/api/live-sessions/:id/takeover', (req, res) => {
+  try {
+    const { id } = req.params;
+    const surfaceId = typeof req.body?.surfaceId === 'string' ? req.body.surfaceId.trim() : '';
+    if (!surfaceId) {
+      res.status(400).json({ error: 'surfaceId is required' });
+      return;
+    }
+    if (!isLocalLive(id)) {
+      res.status(400).json({ error: 'Takeover is only available for local live conversations right now.' });
+      return;
+    }
+
+    res.json(takeOverSessionControl(id, surfaceId));
+  } catch (error) {
+    if (error instanceof LiveSessionControlError) {
+      res.status(409).json({ error: error.message });
+      return;
+    }
+
+    res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 /** SSE stream for a live session */
 app.get('/api/live-sessions/:id/events', (req, res) => {
   const { id } = req.params;
@@ -6065,6 +6098,10 @@ app.get('/api/live-sessions/:id/events', (req, res) => {
   const tailBlocks = Number.isInteger(parsedTailBlocks) && (parsedTailBlocks as number) > 0
     ? parsedTailBlocks as number
     : undefined;
+  const rawSurfaceId = Array.isArray(req.query.surfaceId) ? req.query.surfaceId[0] : req.query.surfaceId;
+  const surfaceId = typeof rawSurfaceId === 'string' ? rawSurfaceId.trim() : '';
+  const rawSurfaceType = Array.isArray(req.query.surfaceType) ? req.query.surfaceType[0] : req.query.surfaceType;
+  const surfaceType = rawSurfaceType === 'mobile_web' ? 'mobile_web' : 'desktop_web';
 
   res.setHeader('Content-Type',  'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -6077,7 +6114,10 @@ app.get('/api/live-sessions/:id/events', (req, res) => {
 
   const unsubscribe = subscribeLiveSession(id, (event) => {
     res.write(`data: ${JSON.stringify(event)}\n\n`);
-  }, tailBlocks ? { tailBlocks } : undefined);
+  }, {
+    ...(tailBlocks ? { tailBlocks } : {}),
+    ...(surfaceId ? { surface: { surfaceId, surfaceType } } : {}),
+  });
 
   req.on('close', () => {
     clearInterval(heartbeat);
@@ -6250,16 +6290,22 @@ function buildConversationAttachmentsContext(
 app.post('/api/live-sessions/:id/prompt', async (req, res) => {
   try {
     const { id } = req.params;
-    const { text = '', behavior, images, attachmentRefs } = req.body as {
+    const { text = '', behavior, images, attachmentRefs, surfaceId } = req.body as {
       text?: string;
       behavior?: 'steer' | 'followUp';
       images?: Array<{ type?: 'image'; data: string; mimeType: string; name?: string }>;
       attachmentRefs?: unknown;
+      surfaceId?: string;
     };
     const normalizedAttachmentRefs = normalizePromptAttachmentRefs(attachmentRefs);
     if (!text && (!images || images.length === 0) && normalizedAttachmentRefs.length === 0) {
       res.status(400).json({ error: 'text, images, or attachmentRefs required' });
       return;
+    }
+
+    const isRemoteLive = isRemoteLiveSession(id);
+    if (!isRemoteLive) {
+      ensureSessionSurfaceCanControl(id, surfaceId);
     }
 
     const currentProfile = getCurrentProfile();
@@ -6300,7 +6346,6 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
       }
     }
 
-    const isRemoteLive = isRemoteLiveSession(id);
     const liveEntry = !isRemoteLive ? liveRegistry.get(id) : undefined;
     const remoteLive = isRemoteLive ? getRemoteLiveSessionMeta(id) : null;
     const sessionFile = liveEntry?.session.sessionFile ?? remoteLive?.sessionFile;
@@ -6392,7 +6437,7 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
           images: promptImages,
           ...(hiddenContext ? { hiddenContext } : {}),
         })
-      : await submitLocalPromptSession(id, text, behavior, promptImages);
+      : await submitLocalPromptSession(id, text, behavior, promptImages, surfaceId);
     const promptPromise = submittedPrompt.completion;
 
     void promptPromise.then(async () => {
@@ -6451,6 +6496,10 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
       message: err instanceof Error ? err.message : String(err),
       stack: err instanceof Error ? err.stack : undefined,
     });
+    if (err instanceof LiveSessionControlError) {
+      res.status(409).json({ error: err.message });
+      return;
+    }
     res.status(500).json({ error: String(err) });
   }
 });
