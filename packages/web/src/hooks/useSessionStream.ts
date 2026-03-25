@@ -323,8 +323,8 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
 
   const abort = useCallback(async () => {
     if (!sessionId) return;
-    await api.abortSession(sessionId);
-  }, [sessionId]);
+    await api.abortSession(sessionId, surfaceId);
+  }, [sessionId, surfaceId]);
 
   const takeover = useCallback(async () => {
     if (!sessionId) {

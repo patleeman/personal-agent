@@ -407,6 +407,43 @@ async function abortLiveSession(sessionId: string): Promise<void> {
   await abortLocalSession(sessionId);
 }
 
+function readRequestSurfaceId(body: unknown): string | undefined {
+  if (!body || typeof body !== 'object') {
+    return undefined;
+  }
+
+  const value = (body as { surfaceId?: unknown }).surfaceId;
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function ensureRequestControlsLocalLiveConversation(conversationId: string, body: unknown): string | undefined {
+  const surfaceId = readRequestSurfaceId(body);
+  if (!isLocalLive(conversationId)) {
+    return surfaceId;
+  }
+
+  if (!surfaceId) {
+    throw new Error('surfaceId is required for local live conversation control.');
+  }
+
+  ensureSessionSurfaceCanControl(conversationId, surfaceId);
+  return surfaceId;
+}
+
+function writeLiveConversationControlError(res: express.Response, error: unknown): boolean {
+  if (error instanceof LiveSessionControlError) {
+    res.status(409).json({ error: error.message });
+    return true;
+  }
+
+  if (error instanceof Error && error.message === 'surfaceId is required for local live conversation control.') {
+    res.status(400).json({ error: error.message });
+    return true;
+  }
+
+  return false;
+}
+
 function resolveDaemonRoot(): string {
   return resolveDaemonPaths(loadDaemonConfig().ipc.socketPath).root;
 }
@@ -6290,7 +6327,7 @@ function buildConversationAttachmentsContext(
 app.post('/api/live-sessions/:id/prompt', async (req, res) => {
   try {
     const { id } = req.params;
-    const { text = '', behavior, images, attachmentRefs, surfaceId } = req.body as {
+    const { text = '', behavior, images, attachmentRefs } = req.body as {
       text?: string;
       behavior?: 'steer' | 'followUp';
       images?: Array<{ type?: 'image'; data: string; mimeType: string; name?: string }>;
@@ -6303,10 +6340,8 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
       return;
     }
 
+    const surfaceId = ensureRequestControlsLocalLiveConversation(id, req.body);
     const isRemoteLive = isRemoteLiveSession(id);
-    if (!isRemoteLive) {
-      ensureSessionSurfaceCanControl(id, surfaceId);
-    }
 
     const currentProfile = getCurrentProfile();
     const tasks = listTasksForCurrentProfile();
@@ -6496,8 +6531,7 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
       message: err instanceof Error ? err.message : String(err),
       stack: err instanceof Error ? err.stack : undefined,
     });
-    if (err instanceof LiveSessionControlError) {
-      res.status(409).json({ error: err.message });
+    if (writeLiveConversationControlError(res, err)) {
       return;
     }
     res.status(500).json({ error: String(err) });
@@ -6506,9 +6540,12 @@ app.post('/api/live-sessions/:id/prompt', async (req, res) => {
 
 app.post('/api/live-sessions/:id/dequeue', (req, res) => {
   try {
+    ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
+
     const { behavior, index } = req.body as {
       behavior?: 'steer' | 'followUp';
       index?: number;
+      surfaceId?: string;
     };
 
     if (behavior !== 'steer' && behavior !== 'followUp') {
@@ -6529,6 +6566,9 @@ app.post('/api/live-sessions/:id/dequeue', (req, res) => {
       message,
       stack: err instanceof Error ? err.stack : undefined,
     });
+    if (writeLiveConversationControlError(res, err)) {
+      return;
+    }
     const status = message.includes('Queued prompt changed before it could be restored')
       || message.includes('Queued prompt restore is unavailable')
       ? 409
@@ -6539,7 +6579,8 @@ app.post('/api/live-sessions/:id/dequeue', (req, res) => {
 
 app.post('/api/live-sessions/:id/compact', async (req, res) => {
   try {
-    const { customInstructions } = req.body as { customInstructions?: string };
+    ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
+    const { customInstructions } = req.body as { customInstructions?: string; surfaceId?: string };
     const result = await compactSession(req.params.id, customInstructions?.trim() || undefined);
     res.json({ ok: true, result });
   } catch (err) {
@@ -6547,12 +6588,16 @@ app.post('/api/live-sessions/:id/compact', async (req, res) => {
       message: err instanceof Error ? err.message : String(err),
       stack: err instanceof Error ? err.stack : undefined,
     });
+    if (writeLiveConversationControlError(res, err)) {
+      return;
+    }
     res.status(500).json({ error: String(err) });
   }
 });
 
 app.post('/api/live-sessions/:id/reload', async (req, res) => {
   try {
+    ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
     await reloadSessionResources(req.params.id);
     res.json({ ok: true });
   } catch (err) {
@@ -6560,6 +6605,9 @@ app.post('/api/live-sessions/:id/reload', async (req, res) => {
       message: err instanceof Error ? err.message : String(err),
       stack: err instanceof Error ? err.stack : undefined,
     });
+    if (writeLiveConversationControlError(res, err)) {
+      return;
+    }
     res.status(500).json({ error: String(err) });
   }
 });
@@ -6580,7 +6628,8 @@ app.post('/api/live-sessions/:id/export', async (req, res) => {
 
 app.patch('/api/live-sessions/:id/name', async (req, res) => {
   try {
-    const { name } = req.body as { name?: string };
+    ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
+    const { name } = req.body as { name?: string; surfaceId?: string };
     const nextName = name?.trim();
     if (!nextName) {
       res.status(400).json({ error: 'name required' });
@@ -6594,6 +6643,9 @@ app.patch('/api/live-sessions/:id/name', async (req, res) => {
       message: err instanceof Error ? err.message : String(err),
       stack: err instanceof Error ? err.stack : undefined,
     });
+    if (writeLiveConversationControlError(res, err)) {
+      return;
+    }
     res.status(500).json({ error: String(err) });
   }
 });
@@ -6601,6 +6653,7 @@ app.patch('/api/live-sessions/:id/name', async (req, res) => {
 /** Abort a running agent */
 app.post('/api/live-sessions/:id/abort', async (req, res) => {
   try {
+    ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
     await abortLiveSession(req.params.id);
     res.json({ ok: true });
   } catch (err) {
@@ -6608,6 +6661,9 @@ app.post('/api/live-sessions/:id/abort', async (req, res) => {
       message: err instanceof Error ? err.message : String(err),
       stack: err instanceof Error ? err.stack : undefined,
     });
+    if (writeLiveConversationControlError(res, err)) {
+      return;
+    }
     res.status(500).json({ error: String(err) });
   }
 });
@@ -6994,6 +7050,8 @@ app.get('/api/conversations/:id/remote-connection/events', (req, res) => {
 
 app.patch('/api/conversations/:id/execution', async (req, res) => {
   try {
+    ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
+
     const targetId = req.body?.targetId === null
       ? null
       : typeof req.body?.targetId === 'string'
@@ -7036,13 +7094,17 @@ app.patch('/api/conversations/:id/execution', async (req, res) => {
     res.json(await readConversationExecutionState(req.params.id));
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    if (writeLiveConversationControlError(res, err)) {
+      return;
+    }
     res.status(message.startsWith('Invalid') ? 400 : 500).json({ error: message });
   }
 });
 
 app.patch('/api/conversations/:id/title', (req, res) => {
   try {
-    const { name } = req.body as { name?: string };
+    ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
+    const { name } = req.body as { name?: string; surfaceId?: string };
     const nextName = name?.trim();
     if (!nextName) {
       res.status(400).json({ error: 'name required' });
@@ -7070,6 +7132,9 @@ app.patch('/api/conversations/:id/title', (req, res) => {
       message,
       stack: err instanceof Error ? err.stack : undefined,
     });
+    if (writeLiveConversationControlError(res, err)) {
+      return;
+    }
     res.status(status).json({ error: message });
   }
 });
@@ -7716,7 +7781,8 @@ app.get('/api/live-sessions/:id/fork-entries', (req, res) => {
 
 app.post('/api/live-sessions/:id/branch', async (req, res) => {
   try {
-    const { entryId } = req.body as { entryId: string };
+    ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
+    const { entryId } = req.body as { entryId: string; surfaceId?: string };
     if (!entryId) { res.status(400).json({ error: 'entryId required' }); return; }
     res.json(await branchSession(req.params.id, entryId, {
       ...buildLiveSessionResourceOptions(),
@@ -7727,13 +7793,17 @@ app.post('/api/live-sessions/:id/branch', async (req, res) => {
       message: err instanceof Error ? err.message : String(err),
       stack: err instanceof Error ? err.stack : undefined,
     });
+    if (writeLiveConversationControlError(res, err)) {
+      return;
+    }
     res.status(500).json({ error: String(err) });
   }
 });
 
 app.post('/api/live-sessions/:id/fork', async (req, res) => {
   try {
-    const { entryId, preserveSource } = req.body as { entryId: string; preserveSource?: boolean };
+    ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
+    const { entryId, preserveSource } = req.body as { entryId: string; preserveSource?: boolean; surfaceId?: string };
     if (!entryId) { res.status(400).json({ error: 'entryId required' }); return; }
     res.json(await forkSession(req.params.id, entryId, {
       preserveSource,
@@ -7745,6 +7815,9 @@ app.post('/api/live-sessions/:id/fork', async (req, res) => {
       message: err instanceof Error ? err.message : String(err),
       stack: err instanceof Error ? err.stack : undefined,
     });
+    if (writeLiveConversationControlError(res, err)) {
+      return;
+    }
     res.status(500).json({ error: String(err) });
   }
 });
@@ -7768,14 +7841,25 @@ app.get('/api/live-sessions/:id/context-usage', (req, res) => {
 
 /** Destroy / close a live session */
 app.delete('/api/live-sessions/:id', async (req, res) => {
-  if (isRemoteLiveSession(req.params.id)) {
-    await stopRemoteLiveSession(req.params.id);
-    res.json({ ok: true });
-    return;
-  }
+  try {
+    ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
 
-  destroySession(req.params.id);
-  res.json({ ok: true });
+    if (isRemoteLiveSession(req.params.id)) {
+      await stopRemoteLiveSession(req.params.id);
+      res.json({ ok: true });
+      return;
+    }
+
+    destroySession(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    if (writeLiveConversationControlError(res, err)) {
+      return;
+    }
+
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(500).json({ error: message });
+  }
 });
 
 // ── Projects ─────────────────────────────────────────────────────────────────
