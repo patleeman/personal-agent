@@ -121,6 +121,10 @@ import {
   type DistilledConversationMemoryDraft,
 } from './conversationMemoryCuration.js';
 import {
+  writeConversationMemoryDistillActivity,
+  writeConversationMemoryDistillFailureActivity,
+} from './conversationMemoryActivity.js';
+import {
   buildConversationMemoryWorkItemsFromStates,
   listConversationMemoryMaintenanceStates,
   markConversationMemoryMaintenanceRunCompleted,
@@ -261,7 +265,6 @@ import {
   listProfileActivityEntries,
   listAllProjectIds,
   listProjectIds,
-  createProjectActivityEntry,
   listDeferredResumeRecords,
   loadDeferredResumeState,
   loadProfileActivityReadState,
@@ -286,7 +289,6 @@ import {
   setConversationExecutionTarget,
   setConversationProjectLinks,
   summarizeConversationAttention,
-  writeProfileActivityEntry,
   deleteExecutionTarget,
 } from '@personal-agent/core';
 import {
@@ -1057,10 +1059,34 @@ function getActivitySnapshotForCurrentProfile() {
   };
 }
 
-function createInboxActivityId(prefix: string): string {
-  const timestamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
-  const suffix = Math.random().toString(36).slice(2, 8);
-  return `${prefix}-${timestamp}-${suffix}`;
+function getConversationMemoryRelatedProjectIds(profile: string, conversationId: string): string[] {
+  return getConversationProjectLink({
+    profile,
+    conversationId,
+  })?.relatedProjectIds ?? [];
+}
+
+function tryWriteConversationMemoryDistillFailureActivity(options: {
+  profile: string;
+  conversationId: string;
+  error: string;
+  relatedProjectIds?: string[];
+}): string | undefined {
+  try {
+    return writeConversationMemoryDistillFailureActivity({
+      profile: options.profile,
+      conversationId: options.conversationId,
+      error: options.error,
+      relatedProjectIds: options.relatedProjectIds ?? getConversationMemoryRelatedProjectIds(options.profile, options.conversationId),
+    });
+  } catch (error) {
+    logWarn('failed to write conversation memory distill failure activity', {
+      profile: options.profile,
+      conversationId: options.conversationId,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
+  }
 }
 
 function buildInboxActivityConversationContext(entry: ActivityEntryWithConversationLinks): string {
@@ -1086,41 +1112,6 @@ function buildInboxActivityConversationContext(entry: ActivityEntryWithConversat
 
   lines.push('', 'Use this inbox item as durable context for follow-up in this conversation.');
   return lines.join('\n');
-}
-
-function writeConversationMemoryDistillActivity(options: {
-  profile: string;
-  conversationId: string;
-  kind: 'conversation-memory-distilled' | 'conversation-memory-distill-failed';
-  summary: string;
-  details: string;
-  relatedProjectIds: string[];
-}): string {
-  const activityId = createInboxActivityId(options.kind === 'conversation-memory-distilled' ? 'memory-distill' : 'memory-distill-fail');
-  const createdAt = new Date().toISOString();
-  const entry = createProjectActivityEntry({
-    id: activityId,
-    createdAt,
-    profile: options.profile,
-    kind: options.kind,
-    summary: options.summary,
-    details: options.details,
-    relatedProjectIds: options.relatedProjectIds,
-  });
-
-  writeProfileActivityEntry({
-    profile: options.profile,
-    entry,
-  });
-
-  setActivityConversationLinks({
-    profile: options.profile,
-    activityId,
-    relatedConversationIds: [options.conversationId],
-  });
-
-  invalidateAppTopics('activity', 'sessions');
-  return activityId;
 }
 
 interface ConversationMemoryDistillRunState {
@@ -1378,10 +1369,7 @@ async function maybeStartAutomaticConversationMemoryDistill(input: {
   trigger: Exclude<ConversationMemoryMaintenanceTrigger, 'manual'>;
 }): Promise<void> {
   const profile = getCurrentProfile();
-  const relatedProjectIds = getConversationProjectLink({
-    profile,
-    conversationId: input.conversationId,
-  })?.relatedProjectIds ?? [];
+  const relatedProjectIds = getConversationMemoryRelatedProjectIds(profile, input.conversationId);
   const prepared = prepareConversationMemoryMaintenance({
     profile,
     conversationId: input.conversationId,
@@ -1408,15 +1396,22 @@ async function maybeStartAutomaticConversationMemoryDistill(input: {
     checkpointId: prepared.checkpoint.checkpointId,
     mode: 'auto',
     trigger: input.trigger,
-    emitActivity: false,
+    emitActivity: true,
   });
 
   if (!result.accepted || !result.runId) {
+    const error = result.reason ?? 'Could not start conversation memory distillation.';
     markConversationMemoryMaintenanceRunFailed({
       profile,
       conversationId: input.conversationId,
       checkpointId: prepared.checkpoint.checkpointId,
-      error: result.reason ?? 'Could not start conversation memory distillation.',
+      error,
+    });
+    tryWriteConversationMemoryDistillFailureActivity({
+      profile,
+      conversationId: input.conversationId,
+      error,
+      relatedProjectIds,
     });
     return;
   }
@@ -1446,15 +1441,21 @@ async function maybeKickConversationMemoryFollowUp(profile: string, conversation
     checkpointId: state.latestCheckpointId,
     mode: state.latestMode,
     trigger: state.latestTrigger,
-    emitActivity: false,
+    emitActivity: true,
   });
 
   if (!result.accepted || !result.runId) {
+    const error = result.reason ?? 'Could not start conversation memory distillation.';
     markConversationMemoryMaintenanceRunFailed({
       profile,
       conversationId,
       checkpointId: state.latestCheckpointId,
-      error: result.reason ?? 'Could not start conversation memory distillation.',
+      error,
+    });
+    tryWriteConversationMemoryDistillFailureActivity({
+      profile,
+      conversationId,
+      error,
     });
     return;
   }
@@ -4909,13 +4910,21 @@ app.post('/api/runs/:id/memory-distill/retry', async (req, res) => {
     });
 
     if (!result.accepted || !result.runId) {
+      const error = result.reason ?? 'Could not retry conversation memory distillation.';
       markConversationMemoryMaintenanceRunFailed({
         profile,
         conversationId: distillInput.conversationId,
         checkpointId: distillInput.checkpointId,
-        error: result.reason ?? 'Could not retry conversation memory distillation.',
+        error,
       });
-      res.status(500).json({ error: result.reason ?? 'Could not retry conversation memory distillation.' });
+      if (distillInput.emitActivity) {
+        tryWriteConversationMemoryDistillFailureActivity({
+          profile,
+          conversationId: distillInput.conversationId,
+          error,
+        });
+      }
+      res.status(500).json({ error });
       return;
     }
 
@@ -5419,10 +5428,7 @@ app.post('/api/conversations/:id/memories', async (req, res) => {
       tags?: string[];
     };
     const sourceSession = listConversationSessionsSnapshot().find((session) => session.id === conversationId);
-    const relatedProjectIds = getConversationProjectLink({
-      profile,
-      conversationId,
-    })?.relatedProjectIds ?? [];
+    const relatedProjectIds = getConversationMemoryRelatedProjectIds(profile, conversationId);
     const prepared = prepareConversationMemoryMaintenance({
       profile,
       conversationId,
@@ -5448,14 +5454,21 @@ app.post('/api/conversations/:id/memories', async (req, res) => {
     });
 
     if (!result.accepted || !result.runId) {
+      const error = result.reason ?? 'Could not start conversation memory distillation.';
       markConversationMemoryMaintenanceRunFailed({
         profile,
         conversationId,
         checkpointId: prepared.checkpoint.checkpointId,
-        error: result.reason ?? 'Could not start conversation memory distillation.',
+        error,
+      });
+      tryWriteConversationMemoryDistillFailureActivity({
+        profile,
+        conversationId,
+        error,
+        relatedProjectIds,
       });
       res.status(503).json({
-        error: result.reason ?? 'Could not start conversation memory distillation.',
+        error,
         accepted: false,
         runId: result.runId,
       });
@@ -5619,22 +5632,11 @@ app.post('/api/conversations/:id/memories/distill-now', async (req, res) => {
     }
 
     if (emitActivity) {
-      try {
-        const relatedProjectIds = getConversationProjectLink({
-          profile,
-          conversationId,
-        })?.relatedProjectIds ?? [];
-        writeConversationMemoryDistillActivity({
-          profile,
-          conversationId,
-          kind: 'conversation-memory-distill-failed',
-          summary: 'Conversation memory distillation failed',
-          details: `Distillation failed for this conversation.\nError: ${message}`,
-          relatedProjectIds,
-        });
-      } catch {
-        // Ignore activity write errors in failure path.
-      }
+      tryWriteConversationMemoryDistillFailureActivity({
+        profile,
+        conversationId,
+        error: message,
+      });
     }
 
     const status = message.includes('not found')
