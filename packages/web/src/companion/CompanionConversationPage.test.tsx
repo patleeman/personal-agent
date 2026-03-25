@@ -155,7 +155,7 @@ describe('CompanionConversationPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders mirrored companion mode with takeover in the composer instead of the header', () => {
+  it('renders mirrored companion mode with takeover and a compact header action menu', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/app/conversations/conv-123?artifact=artifact-7']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
@@ -183,17 +183,50 @@ describe('CompanionConversationPage', () => {
 
     expect(html).toContain('Take over to reply');
     expect(html).toContain('Back to conversations');
-    expect(html).toContain('Open todo panel');
-    expect(html).toContain('Open artifact panel');
-    expect(html).toContain('Todo');
-    expect(html).toContain('Artifacts');
-    expect(html).not.toContain('todos:');
+    expect(html).toContain('Open conversation actions');
+    expect(html).not.toContain('Open todo panel');
+    expect(html).not.toContain('Open artifact panel');
+    expect(html).not.toContain('Todo list');
     expect(html).not.toContain('artifacts:');
+    expect(html).not.toContain('todos:');
     expect(html).toContain('artifact-action:');
     expect(html).toContain('enabled');
     expect(html).toContain('active-artifact:');
     expect(html).toContain('artifact-7');
     expect(html).toContain('messages:');
+  });
+
+  it('opens the conversation action shelf when requested in the URL', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/app/conversations/conv-123?panel=actions']}>
+        <SseConnectionContext.Provider value={{ status: 'open' }}>
+          <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: vi.fn() }}>
+            <AppDataContext.Provider value={{
+              activity: null,
+              projects: null,
+              sessions: [createSession({ id: 'conv-123', title: 'Companion conversation', isLive: true })],
+              tasks: null,
+              runs: null,
+              setActivity: vi.fn(),
+              setProjects: vi.fn(),
+              setSessions: vi.fn(),
+              setTasks: vi.fn(),
+              setRuns: vi.fn(),
+            }}>
+              <Routes>
+                <Route path="/app/conversations/:id" element={<CompanionConversationPage />} />
+              </Routes>
+            </AppDataContext.Provider>
+          </LiveTitlesContext.Provider>
+        </SseConnectionContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Actions');
+    expect(html).toContain('Open conversation');
+    expect(html).toContain('Todo list');
+    expect(html).toContain('Artifacts');
+    expect(html).not.toContain('todos:');
   });
 
   it('opens the side panel for conversation todos when requested in the URL', () => {
