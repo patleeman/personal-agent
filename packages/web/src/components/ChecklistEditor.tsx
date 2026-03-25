@@ -16,6 +16,11 @@ const COMPOSER_TEXTAREA_CLASS = 'min-w-0 flex-1 bg-transparent text-[13px] leadi
 const ITEM_PLACEHOLDER = 'Type anything the agent should do. You can use /skill:..., slash commands, or plain text.';
 const ITEM_PREVIEW_LINE_COUNT = 3;
 const ITEM_FALLBACK_LINE_HEIGHT_PX = 24;
+const CHECKED_ITEM_TEXT_STYLE = {
+  textDecorationColor: 'rgb(var(--color-primary) / 0.72)',
+  textDecorationThickness: '2px',
+  textDecorationSkipInk: 'none' as const,
+};
 
 interface TodoComposerMenuItem {
   key: string;
@@ -458,8 +463,9 @@ function ChecklistItemTextField({
         className={cx(
           ITEM_TEXTAREA_CLASS,
           !expanded && overflowing && 'overflow-hidden',
-          checked && 'text-dim line-through decoration-border-default/70',
+          checked && 'text-dim line-through',
         )}
+        style={checked ? CHECKED_ITEM_TEXT_STYLE : undefined}
         disabled={disabled}
       />
       {overflowing && (
