@@ -183,7 +183,10 @@ export function CompanionLayout() {
     }
 
     const syncViewportHeight = () => {
-      const nextHeight = Math.round(window.visualViewport?.height ?? window.innerHeight);
+      const visualViewport = window.visualViewport;
+      const nextHeight = Math.round(
+        (visualViewport?.height ?? window.innerHeight) + (visualViewport?.offsetTop ?? 0),
+      );
       setViewportHeight((current) => (current === nextHeight ? current : nextHeight));
     };
 
