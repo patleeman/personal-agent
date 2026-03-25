@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { getConversationDisplayTitle } from '../conversationTitle';
 import { useAppData, useLiveTitles, useSseConnection } from '../contexts';
+import { useApi } from '../hooks';
 import { fetchSessionsSnapshot } from '../sessionSnapshot';
 import type { SessionMeta, SseConnectionStatus } from '../types';
 import { useCompanionLayoutContext } from './CompanionLayout';
@@ -58,6 +59,42 @@ export function sortCompanionSessions(sessions: SessionMeta[]): SessionMeta[] {
 
     return parseSessionActivityAt(right) - parseSessionActivityAt(left);
   });
+}
+
+export function partitionCompanionSessions(
+  sessions: SessionMeta[],
+  workspaceSessionIds: ReadonlySet<string> | null,
+): {
+  live: SessionMeta[];
+  active: SessionMeta[];
+  archived: SessionMeta[];
+  recent: SessionMeta[];
+} {
+  const live: SessionMeta[] = [];
+  const active: SessionMeta[] = [];
+  const archived: SessionMeta[] = [];
+  const recent: SessionMeta[] = [];
+
+  for (const session of sessions) {
+    if (session.isLive) {
+      live.push(session);
+      continue;
+    }
+
+    if (workspaceSessionIds === null) {
+      recent.push(session);
+      continue;
+    }
+
+    if (workspaceSessionIds.has(session.id)) {
+      active.push(session);
+      continue;
+    }
+
+    archived.push(session);
+  }
+
+  return { live, active, archived, recent };
 }
 
 function buildSessionFlags(session: SessionMeta): string[] {
@@ -144,6 +181,7 @@ export function CompanionConversationsPage() {
   } = useCompanionLayoutContext();
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { data: openTabs } = useApi(api.openConversationTabs, 'companion-open-conversation-tabs');
 
   const visibleSessions = useMemo(() => {
     const source = sessions ?? [];
@@ -154,15 +192,19 @@ export function CompanionConversationsPage() {
 
     return sortCompanionSessions(withTitles);
   }, [sessions, titles]);
+  const workspaceSessionIds = useMemo(() => {
+    if (!openTabs) {
+      return null;
+    }
 
-  const liveSessions = useMemo(
-    () => visibleSessions.filter((session) => session.isLive),
-    [visibleSessions],
+    return new Set([...openTabs.sessionIds, ...openTabs.pinnedSessionIds]);
+  }, [openTabs]);
+  const workspaceSections = useMemo(
+    () => partitionCompanionSessions(visibleSessions, workspaceSessionIds),
+    [visibleSessions, workspaceSessionIds],
   );
-  const recentSessions = useMemo(
-    () => visibleSessions.filter((session) => !session.isLive),
-    [visibleSessions],
-  );
+  const workspaceSectionsKnown = workspaceSessionIds !== null;
+  const { live: liveSessions, active: activeSessions, archived: archivedSessions, recent: recentSessions } = workspaceSections;
 
   const handleCreateConversation = useCallback(async () => {
     if (creating) {
@@ -200,7 +242,11 @@ export function CompanionConversationsPage() {
           <div className="mt-4 flex items-center justify-between gap-3">
             <div>
               <p className="text-[12px] text-dim">
-                {visibleSessions.length === 0 ? 'No conversations yet.' : `${visibleSessions.length} conversation${visibleSessions.length === 1 ? '' : 's'} available.`}
+                {visibleSessions.length === 0
+                  ? 'No conversations yet.'
+                  : workspaceSectionsKnown
+                    ? `${visibleSessions.length} conversation${visibleSessions.length === 1 ? '' : 's'} available · ${activeSessions.length} active workspace · ${archivedSessions.length} archived.`
+                    : `${visibleSessions.length} conversation${visibleSessions.length === 1 ? '' : 's'} available.`}
               </p>
               {standalone ? (
                 <p className="mt-1 text-[11px] text-success">Installed companion app</p>
@@ -259,13 +305,20 @@ export function CompanionConversationsPage() {
             <div className="px-4 pt-6">
               <p className="text-[15px] text-primary">Start a conversation to make the companion app useful.</p>
               <p className="mt-2 text-[13px] leading-relaxed text-secondary">
-                New live conversations will appear here automatically, and existing live work can be reopened from the same list.
+                New live conversations and saved transcripts will appear here automatically, and archived conversations stay reachable from the same list.
               </p>
             </div>
           ) : (
             <>
               <SessionSection title="Live now" sessions={liveSessions} />
-              <SessionSection title={liveSessions.length > 0 ? 'Recent' : 'Conversations'} sessions={recentSessions} />
+              {workspaceSectionsKnown ? (
+                <>
+                  <SessionSection title="Active workspace" sessions={activeSessions} />
+                  <SessionSection title="Archived" sessions={archivedSessions} />
+                </>
+              ) : (
+                <SessionSection title={liveSessions.length > 0 ? 'Recent' : 'Conversations'} sessions={recentSessions} />
+              )}
             </>
           )}
         </div>
