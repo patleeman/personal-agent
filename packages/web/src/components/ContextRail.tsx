@@ -372,6 +372,23 @@ function runStatusText(detail: DurableRunDetailResult['run']): { text: string; c
   return { text: status ?? 'unknown', cls: 'text-dim' };
 }
 
+function compactRunCardSummary(summary: string | null | undefined, conversationId?: string): string | null {
+  const trimmed = summary?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (conversationId) {
+    const suffix = ` · ${conversationId}`;
+    if (trimmed.endsWith(suffix)) {
+      const withoutConversationId = trimmed.slice(0, -suffix.length).trim();
+      return withoutConversationId || null;
+    }
+  }
+
+  return trimmed;
+}
+
 const MEMORY_DISTILL_RUN_SOURCE_TYPE = 'conversation-memory-distill';
 
 function formatRecoveryAction(action: string): string {
@@ -1330,11 +1347,10 @@ function LiveSessionContextPanel({ id }: { id: string }) {
       label: string;
       meta: string;
       selected: boolean;
-      kind: 'conversation' | 'connected' | 'mentioned';
     }> = [];
     const seen = new Set<string>();
 
-    const push = (runId: string, label: string, meta: string, kind: 'conversation' | 'connected' | 'mentioned') => {
+    const push = (runId: string, label: string, meta: string) => {
       if (seen.has(runId)) {
         return;
       }
@@ -1345,21 +1361,20 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         label,
         meta,
         selected: selectedRunId === runId,
-        kind,
       });
     };
 
-    push(currentConversationRunId, 'Conversation run', 'Tracks this conversation state and recovery metadata.', 'conversation');
+    push(currentConversationRunId, 'Conversation run', 'Tracks this conversation state and recovery metadata.');
 
     for (const run of connectedBackgroundRuns) {
-      push(run.runId, run.runId, 'Started from this conversation.', 'connected');
+      push(run.runId, 'Background run', 'Started from this conversation.');
     }
 
     for (const mention of detectedRunMentions) {
       const mentionMeta = mention.mentionCount > 1
         ? `Mentioned ${mention.mentionCount} times · last seen ${timeAgo(mention.lastSeenAt)}`
         : `Mentioned ${timeAgo(mention.lastSeenAt)}`;
-      push(mention.runId, mention.runId, mentionMeta, 'mentioned');
+      push(mention.runId, 'Mentioned run', mentionMeta);
     }
 
     return next;
@@ -1369,8 +1384,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     return visibleRunMentions.map((mention) => {
       const record = runRecordsById.get(mention.runId);
       const headline = record ? getRunHeadline(record, runLookups) : null;
-      const connections = record ? getRunConnections(record, runLookups) : [];
-      const primaryConnection = connections.find((connection) => connection.label !== 'Source file');
       const status = record ? runStatusText(record) : { text: 'unresolved', cls: 'text-dim' };
       const activityAt = record?.status?.completedAt
         ?? record?.status?.updatedAt
@@ -1381,7 +1394,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         mention,
         record,
         headline,
-        primaryConnection,
         status,
         activityAt,
       };
@@ -1899,10 +1911,11 @@ function LiveSessionContextPanel({ id }: { id: string }) {
               {runsError && (
                 <p className="text-[11px] text-danger/80">{runsError}</p>
               )}
-              {visibleRunCards.map(({ mention, record, headline, primaryConnection, status, activityAt }) => {
+              {visibleRunCards.map(({ mention, record, headline, status, activityAt }) => {
                 const isSelected = mention.selected;
                 const title = headline?.title ?? mention.label;
-                const summary = headline?.summary ?? mention.meta;
+                const summary = compactRunCardSummary(headline?.summary ?? mention.meta, id);
+                const showSummary = Boolean(summary && summary !== title);
                 const issueCount = record?.problems.length ?? 0;
                 const showRecovery = record && record.recoveryAction !== 'none';
                 const timeLabel = activityAt ? timeAgo(activityAt) : null;
@@ -1915,47 +1928,32 @@ function LiveSessionContextPanel({ id }: { id: string }) {
                     className={isSelected ? 'w-full rounded-lg border border-accent/30 bg-accent/10 px-3 py-2.5 text-left transition-colors' : 'w-full rounded-lg border border-border-subtle bg-surface px-3 py-2.5 text-left transition-colors hover:border-accent/25 hover:bg-elevated/70'}
                     title={mention.runId}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <p className="truncate text-[12px] font-medium text-primary">{title}</p>
-                          {mention.kind === 'conversation' && (
-                            <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-dim">session</span>
-                          )}
-                          {mention.kind === 'connected' && (
-                            <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-dim">linked</span>
-                          )}
-                        </div>
-                        <p className="mt-0.5 text-[11px] text-secondary break-words">{summary}</p>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px]">
-                          <span className={status.cls}>{status.text}</span>
-                          {timeLabel && (
-                            <>
-                              <span className="opacity-35">·</span>
-                              <span className="text-dim">{timeLabel}</span>
-                            </>
-                          )}
-                          {showRecovery && record && (
-                            <>
-                              <span className="opacity-35">·</span>
-                              <span className="text-warning">{formatRecoveryAction(record.recoveryAction)}</span>
-                            </>
-                          )}
-                          {issueCount > 0 && (
-                            <>
-                              <span className="opacity-35">·</span>
-                              <span className="text-danger">{issueCount} issue{issueCount === 1 ? '' : 's'}</span>
-                            </>
-                          )}
-                        </div>
-                        {primaryConnection?.detail && (
-                          <p className="mt-1 text-[11px] text-dim break-words">{primaryConnection.detail}</p>
+                    <div className="min-w-0">
+                      <p className="truncate text-[12px] font-medium text-primary">{title}</p>
+                      {showSummary && (
+                        <p className="mt-0.5 truncate text-[11px] text-secondary">{summary}</p>
+                      )}
+                      <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px]">
+                        <span className={status.cls}>{status.text}</span>
+                        {timeLabel && (
+                          <>
+                            <span className="opacity-35">·</span>
+                            <span className="text-dim">{timeLabel}</span>
+                          </>
                         )}
-                        <p className="mt-1 break-all font-mono text-[10px] text-dim">{mention.runId}</p>
+                        {showRecovery && record && (
+                          <>
+                            <span className="opacity-35">·</span>
+                            <span className="text-warning">{formatRecoveryAction(record.recoveryAction)}</span>
+                          </>
+                        )}
+                        {issueCount > 0 && (
+                          <>
+                            <span className="opacity-35">·</span>
+                            <span className="text-danger">{issueCount} issue{issueCount === 1 ? '' : 's'}</span>
+                          </>
+                        )}
                       </div>
-                      <span className={isSelected ? 'shrink-0 text-[10px] uppercase tracking-[0.14em] text-accent' : 'shrink-0 text-[10px] uppercase tracking-[0.14em] text-dim'}>
-                        {isSelected ? 'open' : 'inspect'}
-                      </span>
                     </div>
                   </button>
                 );
