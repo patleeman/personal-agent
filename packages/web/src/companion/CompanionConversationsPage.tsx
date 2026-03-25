@@ -252,8 +252,6 @@ function SessionSection({
         {sessions.map((session) => {
           const flags = buildSessionFlags(session);
           const titleText = getConversationDisplayTitle(session.title);
-          const locationLabel = session.cwdSlug || session.cwd || 'default workspace';
-
           const inWorkspace = workspaceSessionIds?.has(session.id) ?? false;
           const archiveActionLabel = inWorkspace ? 'Archive' : 'Open';
           const archiveActionBusy = actionBusyId === session.id;
@@ -273,7 +271,6 @@ function SessionSection({
                           <span className="shrink-0 text-[11px] font-mono text-warning">+{session.attentionUnreadMessageCount}</span>
                         ) : null}
                       </div>
-                      <p className="mt-1 truncate text-[12px] text-secondary">{locationLabel}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-dim">
                         {flags.map((flag) => (
                           <span key={flag} className="uppercase tracking-[0.12em] text-dim/85">{flag}</span>
@@ -293,9 +290,25 @@ function SessionSection({
                   type="button"
                   onClick={() => onSetArchived(session.id, inWorkspace)}
                   disabled={archiveActionBusy}
-                  className="shrink-0 rounded-full border border-border-default px-3 py-1.5 text-[11px] font-medium text-secondary transition-colors hover:border-accent/35 hover:text-primary disabled:cursor-default disabled:opacity-45"
+                  aria-label={archiveActionBusy ? `${archiveActionLabel} conversation` : `${archiveActionLabel} conversation`}
+                  title={archiveActionBusy ? `${archiveActionLabel} conversation` : `${archiveActionLabel} conversation`}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border-default text-secondary transition-colors hover:border-accent/35 hover:text-primary disabled:cursor-default disabled:opacity-45"
                 >
-                  {archiveActionBusy ? `${archiveActionLabel}…` : archiveActionLabel}
+                  {inWorkspace ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M3 6h18" />
+                      <path d="M6 10v8h12v-8" />
+                      <path d="m8 10 4 4 4-4" />
+                      <path d="M12 4v9" />
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M3 18h18" />
+                      <path d="M6 6v8h12V6" />
+                      <path d="m8 10 4-4 4 4" />
+                      <path d="M12 20V7" />
+                    </svg>
+                  )}
                 </button>
               </div>
             </div>

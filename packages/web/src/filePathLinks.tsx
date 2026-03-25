@@ -171,7 +171,7 @@ function filePathButtonClassName(variant: FilePathButtonVariant): string {
 
   switch (variant) {
     case 'code':
-      return `${baseClassName} rounded bg-elevated px-1 py-0.5 font-mono text-[0.82em] text-accent hover:bg-elevated/80 hover:text-primary`;
+      return `${baseClassName} rounded bg-elevated px-1 py-0.5 font-mono text-[0.82em] text-accent whitespace-pre-wrap break-words [overflow-wrap:anywhere] hover:bg-elevated/80 hover:text-primary`;
     case 'pre':
       return `${baseClassName} text-accent hover:text-primary`;
     case 'text':
