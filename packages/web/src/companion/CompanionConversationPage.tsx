@@ -922,14 +922,14 @@ export function CompanionConversationPage() {
                         }
                       }}
                       placeholder={stream.isStreaming
-                        ? 'Stop the current turn or wait before sending.'
-                        : 'Message… (/ for skills)'}
+                        ? 'Agent responding… stop the current turn or wait before sending.'
+                        : 'Use / for skills · attach images from your phone.'}
                       disabled={composerDisabled}
                       rows={1}
                       autoComplete="off"
                       enterKeyHint="enter"
                       spellCheck={false}
-                      className="flex-1 bg-transparent text-[16px] leading-relaxed text-primary placeholder:text-dim outline-none resize-none disabled:cursor-default disabled:text-dim sm:text-sm"
+                      className="flex-1 bg-transparent text-[16px] leading-snug text-primary placeholder:text-dim outline-none resize-none disabled:cursor-default disabled:text-dim sm:text-sm"
                       style={{ minHeight: '24px', maxHeight: '160px' }}
                     />
                     {(stream.isStreaming || composerHasContent) && (
@@ -962,11 +962,6 @@ export function CompanionConversationPage() {
                   </div>
                 )}
               </div>
-              {!controlState.needsTakeover && !keyboardOpen ? (
-                <p className="mt-1 text-[11px] text-dim">
-                  {stream.isStreaming ? 'Agent responding…' : 'Use / for skills · attach images from your phone.'}
-                </p>
-              ) : null}
             </div>
           ) : (
             <p className="text-[12px] leading-relaxed text-secondary">
