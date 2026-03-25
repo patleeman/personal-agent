@@ -77,6 +77,35 @@ export interface QueuedPromptPreview {
   imageCount: number;
 }
 
+export type LiveSessionSurfaceType = 'desktop_web' | 'mobile_web';
+
+interface LiveSurfacePresenceRecord {
+  surfaceId: string;
+  surfaceType: LiveSessionSurfaceType;
+  connectedAt: string;
+  connections: number;
+}
+
+export interface LiveSessionPresence {
+  surfaceId: string;
+  surfaceType: LiveSessionSurfaceType;
+  connectedAt: string;
+}
+
+export interface LiveSessionPresenceState {
+  surfaces: LiveSessionPresence[];
+  controllerSurfaceId: string | null;
+  controllerSurfaceType: LiveSessionSurfaceType | null;
+  controllerAcquiredAt: string | null;
+}
+
+export class LiveSessionControlError extends Error {
+  constructor(message = 'This conversation is controlled by another surface. Take over here to continue.') {
+    super(message);
+    this.name = 'LiveSessionControlError';
+  }
+}
+
 export type SseEvent =
   | { type: 'snapshot';        blocks: DisplayBlock[]; blockOffset: number; totalBlocks: number }
   | { type: 'agent_start' }
@@ -84,6 +113,7 @@ export type SseEvent =
   | { type: 'turn_end' }
   | { type: 'user_message';    block: Extract<DisplayBlock, { type: 'user' }> }
   | { type: 'queue_state';     steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] }
+  | { type: 'presence_state';  state: LiveSessionPresenceState }
   | { type: 'text_delta';      delta: string }
   | { type: 'thinking_delta';  delta: string }
   | { type: 'tool_start';      toolCallId: string; toolName: string; args: unknown }
@@ -123,6 +153,9 @@ interface LiveEntry {
   pendingHiddenTurnCustomTypes: string[];
   activeHiddenTurnCustomType: string | null;
   lastHandledAutomationCompletionKey?: string | null;
+  presenceBySurfaceId?: Map<string, LiveSurfacePresenceRecord>;
+  controllerSurfaceId?: string | null;
+  controllerAcquiredAt?: string | null;
 }
 
 export interface LiveSessionLifecycleEvent {
@@ -1499,6 +1532,155 @@ function clearContextUsageTimer(entry: LiveEntry): void {
   entry.contextUsageTimer = undefined;
 }
 
+function ensurePresenceMap(entry: LiveEntry): Map<string, LiveSurfacePresenceRecord> {
+  entry.presenceBySurfaceId ??= new Map<string, LiveSurfacePresenceRecord>();
+  entry.controllerSurfaceId ??= null;
+  entry.controllerAcquiredAt ??= null;
+  return entry.presenceBySurfaceId;
+}
+
+function buildPresenceState(entry: LiveEntry): LiveSessionPresenceState {
+  const presenceBySurfaceId = ensurePresenceMap(entry);
+  const surfaces = [...presenceBySurfaceId.values()]
+    .sort((left, right) => {
+      const byConnectedAt = left.connectedAt.localeCompare(right.connectedAt);
+      return byConnectedAt !== 0 ? byConnectedAt : left.surfaceId.localeCompare(right.surfaceId);
+    })
+    .map((surface) => ({
+      surfaceId: surface.surfaceId,
+      surfaceType: surface.surfaceType,
+      connectedAt: surface.connectedAt,
+    }));
+  const controller = entry.controllerSurfaceId ? presenceBySurfaceId.get(entry.controllerSurfaceId) ?? null : null;
+
+  return {
+    surfaces,
+    controllerSurfaceId: controller?.surfaceId ?? null,
+    controllerSurfaceType: controller?.surfaceType ?? null,
+    controllerAcquiredAt: controller ? entry.controllerAcquiredAt ?? null : null,
+  };
+}
+
+function broadcastPresenceState(entry: LiveEntry, options?: { exclude?: LiveListener }): void {
+  broadcast(entry, { type: 'presence_state', state: buildPresenceState(entry) }, options);
+}
+
+function registerLiveSurface(entry: LiveEntry, input: {
+  surfaceId: string;
+  surfaceType: LiveSessionSurfaceType;
+}): boolean {
+  const surfaceId = input.surfaceId.trim();
+  if (!surfaceId) {
+    return false;
+  }
+
+  const presenceBySurfaceId = ensurePresenceMap(entry);
+  const existing = presenceBySurfaceId.get(surfaceId);
+  if (existing) {
+    existing.connections += 1;
+    if (existing.surfaceType !== input.surfaceType) {
+      existing.surfaceType = input.surfaceType;
+      return true;
+    }
+    return false;
+  }
+
+  presenceBySurfaceId.set(surfaceId, {
+    surfaceId,
+    surfaceType: input.surfaceType,
+    connectedAt: new Date().toISOString(),
+    connections: 1,
+  });
+
+  if (!entry.controllerSurfaceId) {
+    entry.controllerSurfaceId = surfaceId;
+    entry.controllerAcquiredAt = new Date().toISOString();
+  }
+
+  return true;
+}
+
+function removeLiveSurface(entry: LiveEntry, surfaceId: string): boolean {
+  const trimmedSurfaceId = surfaceId.trim();
+  if (!trimmedSurfaceId) {
+    return false;
+  }
+
+  const presenceBySurfaceId = ensurePresenceMap(entry);
+  const existing = presenceBySurfaceId.get(trimmedSurfaceId);
+  if (!existing) {
+    return false;
+  }
+
+  if (existing.connections > 1) {
+    existing.connections -= 1;
+    return false;
+  }
+
+  presenceBySurfaceId.delete(trimmedSurfaceId);
+
+  if (entry.controllerSurfaceId === trimmedSurfaceId) {
+    entry.controllerSurfaceId = null;
+    entry.controllerAcquiredAt = null;
+  }
+
+  return true;
+}
+
+function assertSurfaceCanControl(entry: LiveEntry, surfaceId?: string): void {
+  if (!surfaceId) {
+    return;
+  }
+
+  const trimmedSurfaceId = surfaceId.trim();
+  if (!trimmedSurfaceId) {
+    throw new LiveSessionControlError('Surface id is required to control this conversation.');
+  }
+
+  const presenceBySurfaceId = ensurePresenceMap(entry);
+  if (!presenceBySurfaceId.has(trimmedSurfaceId)) {
+    throw new LiveSessionControlError();
+  }
+
+  if (!entry.controllerSurfaceId) {
+    throw new LiveSessionControlError('No surface is currently controlling this conversation. Take over here to continue.');
+  }
+
+  if (entry.controllerSurfaceId !== trimmedSurfaceId) {
+    throw new LiveSessionControlError();
+  }
+}
+
+export function ensureSessionSurfaceCanControl(sessionId: string, surfaceId?: string): void {
+  const entry = registry.get(sessionId);
+  if (!entry) {
+    throw new Error(`Session ${sessionId} is not live`);
+  }
+
+  assertSurfaceCanControl(entry, surfaceId);
+}
+
+export function takeOverSessionControl(sessionId: string, surfaceId: string): LiveSessionPresenceState {
+  const entry = registry.get(sessionId);
+  if (!entry) {
+    throw new Error(`Session ${sessionId} is not live`);
+  }
+
+  const trimmedSurfaceId = surfaceId.trim();
+  const presenceBySurfaceId = ensurePresenceMap(entry);
+  if (!trimmedSurfaceId || !presenceBySurfaceId.has(trimmedSurfaceId)) {
+    throw new LiveSessionControlError('Open the conversation on this surface before taking control.');
+  }
+
+  if (entry.controllerSurfaceId !== trimmedSurfaceId) {
+    entry.controllerSurfaceId = trimmedSurfaceId;
+    entry.controllerAcquiredAt = new Date().toISOString();
+    broadcastPresenceState(entry);
+  }
+
+  return buildPresenceState(entry);
+}
+
 // ── Event wiring ──────────────────────────────────────────────────────────────
 
 function wireSession(
@@ -1520,6 +1702,9 @@ function wireSession(
     pendingHiddenTurnCustomTypes: [],
     activeHiddenTurnCustomType: null,
     lastHandledAutomationCompletionKey: null,
+    presenceBySurfaceId: new Map(),
+    controllerSurfaceId: null,
+    controllerAcquiredAt: null,
   };
   registry.set(id, entry);
   invalidateAppTopics('sessions');
@@ -1682,8 +1867,11 @@ export function toSse(event: AgentSessionEvent): SseEvent | null {
   }
 }
 
-function broadcast(entry: LiveEntry, event: SseEvent) {
+function broadcast(entry: LiveEntry, event: SseEvent, options?: { exclude?: LiveListener }) {
   for (const listener of entry.listeners) {
+    if (listener === options?.exclude) {
+      continue;
+    }
     listener.send(event);
   }
 }
@@ -1951,7 +2139,13 @@ export async function resumeSession(
 export function subscribe(
   sessionId: string,
   listener: (e: SseEvent) => void,
-  options?: { tailBlocks?: number },
+  options?: {
+    tailBlocks?: number;
+    surface?: {
+      surfaceId: string;
+      surfaceType: LiveSessionSurfaceType;
+    };
+  },
 ): (() => void) | null {
   const entry = registry.get(sessionId);
   if (!entry) return null;
@@ -1962,6 +2156,10 @@ export function subscribe(
   };
   entry.listeners.add(subscription);
 
+  const presenceChanged = options?.surface
+    ? registerLiveSurface(entry, options.surface)
+    : false;
+
   listener({ type: 'snapshot', ...buildLiveSnapshot(entry, options?.tailBlocks) });
   const title = resolveEntryTitle(entry);
   if (title) {
@@ -1969,11 +2167,23 @@ export function subscribe(
   }
   listener({ type: 'context_usage', usage: readContextUsagePayload(entry.session) });
   listener({ type: 'queue_state', ...readQueueState(entry.session) });
+  if (options?.surface || (entry.presenceBySurfaceId?.size ?? 0) > 0) {
+    listener({ type: 'presence_state', state: buildPresenceState(entry) });
+  }
   if (entry.session.isStreaming && !entry.activeHiddenTurnCustomType) {
     listener({ type: 'agent_start' });
   }
 
-  return () => entry.listeners.delete(subscription);
+  if (presenceChanged) {
+    broadcastPresenceState(entry, { exclude: subscription });
+  }
+
+  return () => {
+    entry.listeners.delete(subscription);
+    if (options?.surface && removeLiveSurface(entry, options.surface.surfaceId)) {
+      broadcastPresenceState(entry);
+    }
+  };
 }
 
 /** Append hidden context before the next user-visible prompt in a live session. */
@@ -2164,9 +2374,11 @@ export async function promptSession(
   text: string,
   behavior?: 'steer' | 'followUp',
   images?: PromptImageAttachment[],
+  surfaceId?: string,
 ): Promise<void> {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
+  assertSurfaceCanControl(entry, surfaceId);
   await runPromptOnLiveEntry(entry, text, resolvePromptBehavior(entry, behavior), images);
 }
 
@@ -2175,9 +2387,11 @@ export async function submitPromptSession(
   text: string,
   behavior?: 'steer' | 'followUp',
   images?: PromptImageAttachment[],
+  surfaceId?: string,
 ): Promise<{ acceptedAs: 'started' | 'queued'; completion: Promise<void> }> {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
+  assertSurfaceCanControl(entry, surfaceId);
 
   const normalizedBehavior = resolvePromptBehavior(entry, behavior);
   if (normalizedBehavior === 'steer' || normalizedBehavior === 'followUp') {

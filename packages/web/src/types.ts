@@ -885,6 +885,21 @@ export interface LiveSessionMeta {
   hasPendingHiddenTurn?: boolean;
 }
 
+export type LiveSessionSurfaceType = 'desktop_web' | 'mobile_web';
+
+export interface LiveSessionPresence {
+  surfaceId: string;
+  surfaceType: LiveSessionSurfaceType;
+  connectedAt: string;
+}
+
+export interface LiveSessionPresenceState {
+  surfaces: LiveSessionPresence[];
+  controllerSurfaceId: string | null;
+  controllerSurfaceType: LiveSessionSurfaceType | null;
+  controllerAcquiredAt: string | null;
+}
+
 export interface QueuedPromptPreview {
   id: string;
   text: string;
@@ -901,6 +916,7 @@ export type SseEvent =
   | { type: 'turn_end' }
   | { type: 'user_message';    block: Extract<DisplayBlock, { type: 'user' }> }
   | { type: 'queue_state';     steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] }
+  | { type: 'presence_state';  state: LiveSessionPresenceState }
   | { type: 'text_delta';      delta: string }
   | { type: 'thinking_delta';  delta: string }
   | { type: 'tool_start';      toolCallId: string; toolName: string; args: Record<string, unknown> }

@@ -3,7 +3,16 @@
  * a growing MessageBlock list in real time.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { MessageBlock, PromptAttachmentRefInput, PromptImageInput, QueuedPromptPreview, SessionContextUsage, SseEvent } from '../types';
+import type {
+  LiveSessionPresenceState,
+  LiveSessionSurfaceType,
+  MessageBlock,
+  PromptAttachmentRefInput,
+  PromptImageInput,
+  QueuedPromptPreview,
+  SessionContextUsage,
+  SseEvent,
+} from '../types';
 import { api } from '../api';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { parseSkillBlock } from '../skillBlock';
@@ -20,6 +29,16 @@ export interface StreamState {
   cost: number | null;
   contextUsage: SessionContextUsage | null;
   pendingQueue: { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] };
+  presence: LiveSessionPresenceState;
+}
+
+export function createEmptyLiveSessionPresenceState(): LiveSessionPresenceState {
+  return {
+    surfaces: [],
+    controllerSurfaceId: null,
+    controllerSurfaceType: null,
+    controllerAcquiredAt: null,
+  };
 }
 
 export const INITIAL_STREAM_STATE: StreamState = {
@@ -34,7 +53,52 @@ export const INITIAL_STREAM_STATE: StreamState = {
   cost: null,
   contextUsage: null,
   pendingQueue: { steering: [], followUp: [] },
+  presence: createEmptyLiveSessionPresenceState(),
 };
+
+const SURFACE_STORAGE_KEY = 'pa.live-session.surface-id';
+let fallbackSurfaceId: string | null = null;
+
+function createConversationSurfaceId(): string {
+  return `surface-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function getOrCreateConversationSurfaceId(): string {
+  if (typeof window === 'undefined') {
+    fallbackSurfaceId ??= createConversationSurfaceId();
+    return fallbackSurfaceId;
+  }
+
+  try {
+    const existing = window.sessionStorage.getItem(SURFACE_STORAGE_KEY)?.trim();
+    if (existing) {
+      return existing;
+    }
+
+    const created = createConversationSurfaceId();
+    window.sessionStorage.setItem(SURFACE_STORAGE_KEY, created);
+    return created;
+  } catch {
+    fallbackSurfaceId ??= createConversationSurfaceId();
+    return fallbackSurfaceId;
+  }
+}
+
+export function detectConversationSurfaceType(): LiveSessionSurfaceType {
+  if (typeof window === 'undefined') {
+    return 'desktop_web';
+  }
+
+  try {
+    if (window.matchMedia('(max-width: 768px)').matches || window.matchMedia('(pointer: coarse)').matches) {
+      return 'mobile_web';
+    }
+  } catch {
+    // Ignore media-query failures and fall back to desktop.
+  }
+
+  return 'desktop_web';
+}
 
 let optimisticPendingQueueItemCounter = 0;
 
@@ -203,6 +267,8 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
   const streamingRef = useRef(false);
   const requestedSessionId = resolveSessionStreamSubscriptionId(sessionId, options);
   const stateSessionIdRef = useRef<string | null>(requestedSessionId);
+  const surfaceId = useMemo(() => getOrCreateConversationSurfaceId(), []);
+  const surfaceType = useMemo(() => detectConversationSurfaceType(), []);
 
   const send = useCallback(async (
     text: string,
@@ -240,7 +306,7 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
     }
 
     try {
-      await api.promptSession(sessionId, text, behavior, images, attachmentRefs);
+      await api.promptSession(sessionId, text, behavior, images, attachmentRefs, surfaceId);
     } catch (error) {
       if (behavior) {
         setState((s) => removePendingQueueItem(s, behavior, text));
@@ -253,12 +319,20 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
       }
       throw error;
     }
-  }, [sessionId]);
+  }, [sessionId, surfaceId]);
 
   const abort = useCallback(async () => {
     if (!sessionId) return;
     await api.abortSession(sessionId);
   }, [sessionId]);
+
+  const takeover = useCallback(async () => {
+    if (!sessionId) {
+      return;
+    }
+
+    await api.takeoverLiveSession(sessionId, surfaceId);
+  }, [sessionId, surfaceId]);
 
   const reconnect = useCallback(() => {
     if (!sessionId) {
@@ -286,6 +360,8 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
       if (typeof options?.tailBlocks === 'number' && Number.isInteger(options.tailBlocks) && options.tailBlocks > 0) {
         params.set('tailBlocks', String(options.tailBlocks));
       }
+      params.set('surfaceId', surfaceId);
+      params.set('surfaceType', surfaceType);
       const query = params.toString();
       es = new EventSource(`/api/live-sessions/${requestedSessionId}/events${query ? `?${query}` : ''}`);
 
@@ -321,11 +397,14 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
       closed = true;
       es?.close();
     };
-  }, [connectVersion, options?.tailBlocks, requestedSessionId]);
+  }, [connectVersion, options?.tailBlocks, requestedSessionId, surfaceId, surfaceType]);
 
   const visibleState = selectVisibleStreamState(state, stateSessionIdRef.current, requestedSessionId);
 
-  return useMemo(() => ({ ...visibleState, send, abort, reconnect }), [visibleState, send, abort, reconnect]);
+  return useMemo(
+    () => ({ ...visibleState, surfaceId, takeover, send, abort, reconnect }),
+    [visibleState, surfaceId, takeover, send, abort, reconnect],
+  );
 }
 
 // ── Event → block reducer ─────────────────────────────────────────────────────
@@ -388,6 +467,10 @@ function applyEvent(
       const steering = normalizePendingQueueItems(event.steering);
       const followUp = normalizePendingQueueItems(event.followUp);
       return { ...prev, pendingQueue: { steering, followUp } };
+    }
+
+    case 'presence_state': {
+      return { ...prev, presence: event.state };
     }
 
     case 'text_delta': {
