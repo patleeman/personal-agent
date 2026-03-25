@@ -1,10 +1,11 @@
 import React from 'react';
 import { renderToString } from 'react-dom/server';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppDataContext, LiveTitlesContext, SseConnectionContext } from '../contexts.js';
 import type { SessionMeta } from '../types.js';
 import { CompanionConversationsPage, sortCompanionSessions } from './CompanionConversationsPage.js';
+import { CompanionLayout } from './CompanionLayout.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
@@ -55,7 +56,7 @@ describe('CompanionConversationsPage', () => {
 
   it('renders live conversations before recent stored conversations', () => {
     const html = renderToString(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/app/conversations']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
           <LiveTitlesContext.Provider value={{ titles: new Map([['live-1', 'Live title from stream']]), setTitle: vi.fn() }}>
             <AppDataContext.Provider value={{
@@ -73,7 +74,11 @@ describe('CompanionConversationsPage', () => {
               setTasks: vi.fn(),
               setRuns: vi.fn(),
             }}>
-              <CompanionConversationsPage />
+              <Routes>
+                <Route path="/app" element={<CompanionLayout />}>
+                  <Route path="conversations" element={<CompanionConversationsPage />} />
+                </Route>
+              </Routes>
             </AppDataContext.Provider>
           </LiveTitlesContext.Provider>
         </SseConnectionContext.Provider>

@@ -1,0 +1,19 @@
+{
+  "id": "/app/",
+  "name": "Pi Companion",
+  "short_name": "Pi",
+  "description": "Installable companion app for live personal-agent conversations.",
+  "start_url": "/app/conversations",
+  "scope": "/app/",
+  "display": "standalone",
+  "background_color": "#0b1020",
+  "theme_color": "#0b1020",
+  "icons": [
+    {
+      "src": "/app/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
