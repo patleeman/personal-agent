@@ -1,5 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
+import { resolveCompanionRouteRedirect } from './companion/routes';
 import { api } from './api';
 import { Layout } from './components/Layout';
 import { InboxPage } from './pages/InboxPage';
@@ -40,6 +41,17 @@ function LegacyRunsRoutesRedirect() {
 function WorkspaceRouteRedirect() {
   const location = useLocation();
   return <Navigate to={{ pathname: '/workspace/files', search: location.search }} replace />;
+}
+
+function CompanionRouteValidationBoundary() {
+  const location = useLocation();
+  const redirectPath = resolveCompanionRouteRedirect(location.pathname);
+
+  if (redirectPath) {
+    return <Navigate to={{ pathname: redirectPath, search: location.search }} replace />;
+  }
+
+  return <CompanionLayout />;
 }
 
 const TasksPage = lazy(() => import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })));
@@ -256,7 +268,7 @@ export function App() {
               <ThemeProvider>
                 <BrowserRouter>
                   <Routes>
-                    <Route path="app" element={suspendRoute(<CompanionLayout />)}>
+                    <Route path="app/*" element={suspendRoute(<CompanionRouteValidationBoundary />)}>
                       <Route index element={<Navigate to="/app/conversations" replace />} />
                       <Route path="conversations" element={suspendRoute(<CompanionConversationsPage />)} />
                       <Route path="conversations/:id" element={suspendRoute(<CompanionConversationPage />)} />

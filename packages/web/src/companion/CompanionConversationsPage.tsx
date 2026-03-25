@@ -5,6 +5,7 @@ import { getConversationDisplayTitle } from '../conversationTitle';
 import { useAppData, useLiveTitles, useSseConnection } from '../contexts';
 import { fetchSessionsSnapshot } from '../sessionSnapshot';
 import type { SessionMeta, SseConnectionStatus } from '../types';
+import { buildCompanionConversationPath } from './routes';
 
 function parseSessionActivityAt(session: SessionMeta): number {
   const timestamp = session.lastActivityAt ?? session.timestamp;
@@ -95,7 +96,7 @@ function SessionSection({
           return (
             <Link
               key={session.id}
-              to={`/app/conversations/${encodeURIComponent(session.id)}`}
+              to={buildCompanionConversationPath(session.id)}
               className="block border-b border-border-subtle px-4 py-4 transition-colors last:border-b-0 hover:bg-surface/55"
             >
               <div className="flex items-start gap-3">
@@ -163,7 +164,7 @@ export function CompanionConversationsPage() {
     try {
       const { id } = await api.createLiveSession();
       void fetchSessionsSnapshot().then(setSessions).catch(() => {});
-      navigate(`/app/conversations/${encodeURIComponent(id)}`);
+      navigate(buildCompanionConversationPath(id));
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
