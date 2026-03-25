@@ -870,14 +870,14 @@ export function CompanionConversationPage() {
                     </button>
                   </div>
                 ) : (
-                  <div className="flex items-end gap-2 px-3 py-2.5">
+                  <div className="flex items-center gap-2 px-3 py-2.5">
                     <button
                       type="button"
                       onClick={openFilePicker}
                       disabled={composerDisabled}
                       aria-label="Attach image"
                       title="Attach image"
-                      className="mb-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-default bg-surface text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/30 hover:text-primary active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45 disabled:cursor-default disabled:opacity-45"
+                      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border-default bg-surface text-secondary transition-[transform,color,border-color,background-color] duration-150 hover:border-accent/30 hover:text-primary active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent/45 disabled:cursor-default disabled:opacity-45"
                       style={COMPANION_TOUCH_BUTTON_STYLE}
                     >
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -933,7 +933,7 @@ export function CompanionConversationPage() {
                       style={{ minHeight: '24px', maxHeight: '160px' }}
                     />
                     {(stream.isStreaming || composerHasContent) && (
-                      <div className="mb-0.5 flex shrink-0 items-center gap-1.5">
+                      <div className="flex shrink-0 items-center gap-1.5">
                         {stream.isStreaming ? (
                           <button
                             type="button"

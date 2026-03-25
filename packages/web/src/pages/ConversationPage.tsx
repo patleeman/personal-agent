@@ -4524,7 +4524,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             )}
 
             {/* Textarea */}
-            <div className="flex items-end gap-2 px-3 py-2.5">
+            <div className="flex items-center gap-2 px-3 py-2.5">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -4565,7 +4565,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               ) : (
                 <>
                   <IconButton
-                    className="shrink-0 mb-0.5"
+                    className="shrink-0"
                     title="Attach image or Excalidraw file"
                     aria-label="Attach image or Excalidraw file"
                     onClick={openFilePicker}
@@ -4577,7 +4577,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   </IconButton>
 
                   <IconButton
-                    className="shrink-0 mb-0.5"
+                    className="shrink-0"
                     title="Create drawing"
                     aria-label="Create drawing"
                     onClick={openDrawingEditor}
@@ -4610,7 +4610,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   />
 
                   {(stream.isStreaming || composerHasContent) && (
-                    <div className="shrink-0 mb-0.5 flex items-center gap-1.5">
+                    <div className="shrink-0 flex items-center gap-1.5">
                       {stream.isStreaming && (
                         <button
                           type="button"
