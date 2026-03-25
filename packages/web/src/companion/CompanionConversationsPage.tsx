@@ -66,11 +66,13 @@ export function partitionCompanionSessions(
   workspaceSessionIds: ReadonlySet<string> | null,
 ): {
   live: SessionMeta[];
+  needsReview: SessionMeta[];
   active: SessionMeta[];
   archived: SessionMeta[];
   recent: SessionMeta[];
 } {
   const live: SessionMeta[] = [];
+  const needsReview: SessionMeta[] = [];
   const active: SessionMeta[] = [];
   const archived: SessionMeta[] = [];
   const recent: SessionMeta[] = [];
@@ -78,6 +80,11 @@ export function partitionCompanionSessions(
   for (const session of sessions) {
     if (session.isLive) {
       live.push(session);
+      continue;
+    }
+
+    if (session.needsAttention) {
+      needsReview.push(session);
       continue;
     }
 
@@ -94,7 +101,7 @@ export function partitionCompanionSessions(
     archived.push(session);
   }
 
-  return { live, active, archived, recent };
+  return { live, needsReview, active, archived, recent };
 }
 
 function buildSessionFlags(session: SessionMeta): string[] {
@@ -204,7 +211,13 @@ export function CompanionConversationsPage() {
     [visibleSessions, workspaceSessionIds],
   );
   const workspaceSectionsKnown = workspaceSessionIds !== null;
-  const { live: liveSessions, active: activeSessions, archived: archivedSessions, recent: recentSessions } = workspaceSections;
+  const {
+    live: liveSessions,
+    needsReview: needsReviewSessions,
+    active: activeSessions,
+    archived: archivedSessions,
+    recent: recentSessions,
+  } = workspaceSections;
 
   const handleCreateConversation = useCallback(async () => {
     if (creating) {
@@ -245,7 +258,7 @@ export function CompanionConversationsPage() {
                 {visibleSessions.length === 0
                   ? 'No conversations yet.'
                   : workspaceSectionsKnown
-                    ? `${visibleSessions.length} conversation${visibleSessions.length === 1 ? '' : 's'} available · ${activeSessions.length} active workspace · ${archivedSessions.length} archived.`
+                    ? `${visibleSessions.length} conversation${visibleSessions.length === 1 ? '' : 's'} available · ${needsReviewSessions.length} need review · ${activeSessions.length} active workspace · ${archivedSessions.length} archived.`
                     : `${visibleSessions.length} conversation${visibleSessions.length === 1 ? '' : 's'} available.`}
               </p>
               {standalone ? (
@@ -311,13 +324,14 @@ export function CompanionConversationsPage() {
           ) : (
             <>
               <SessionSection title="Live now" sessions={liveSessions} />
+              <SessionSection title="Needs review" sessions={needsReviewSessions} />
               {workspaceSectionsKnown ? (
                 <>
                   <SessionSection title="Active workspace" sessions={activeSessions} />
                   <SessionSection title="Archived" sessions={archivedSessions} />
                 </>
               ) : (
-                <SessionSection title={liveSessions.length > 0 ? 'Recent' : 'Conversations'} sessions={recentSessions} />
+                <SessionSection title={liveSessions.length > 0 || needsReviewSessions.length > 0 ? 'Recent' : 'Conversations'} sessions={recentSessions} />
               )}
             </>
           )}

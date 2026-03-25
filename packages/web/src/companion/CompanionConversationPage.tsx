@@ -14,6 +14,7 @@ import type {
   MessageBlock,
   SseConnectionStatus,
 } from '../types';
+import { CompanionConversationTodos } from './CompanionConversationTodos';
 import { COMPANION_CONVERSATIONS_PATH } from './routes';
 
 interface CompanionLiveStateInput {
@@ -244,6 +245,11 @@ export function CompanionConversationPage() {
   ), [sessionDetail]);
   const messages = stream.blocks.length > 0 ? stream.blocks : storedMessages;
   const messageIndexOffset = stream.blocks.length > 0 ? stream.blockOffset : sessionDetail?.blockOffset ?? 0;
+  const todoReadOnlyReason = controlState.needsTakeover
+    ? 'Take over to manage the todo list from this device.'
+    : stream.isStreaming
+      ? 'Wait for the current turn to finish before editing the todo list.'
+      : null;
   const title = getConversationDisplayTitle(
     stream.title,
     titles.get(id ?? ''),
@@ -400,7 +406,12 @@ export function CompanionConversationPage() {
       </header>
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
-        <div className="mx-auto w-full max-w-3xl">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+          <CompanionConversationTodos
+            conversationId={id}
+            readOnly={Boolean(todoReadOnlyReason)}
+            readOnlyReason={todoReadOnlyReason}
+          />
           {messages.length === 0 && (sessionLoading || confirmedLive === null) ? (
             <p className="text-[13px] text-dim">Loading conversation…</p>
           ) : messages.length === 0 ? (
