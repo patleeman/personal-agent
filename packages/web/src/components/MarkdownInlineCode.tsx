@@ -1,7 +1,7 @@
 import { Children, isValidElement, type ReactNode } from 'react';
 import { FilePathButton, normalizeDetectedFilePath } from '../filePathLinks';
 
-const DEFAULT_INLINE_CODE_CLASS = 'font-mono text-[0.82em] bg-elevated px-1 py-0.5 rounded text-accent';
+const DEFAULT_INLINE_CODE_CLASS = 'font-mono text-[0.82em] bg-elevated px-1 py-0.5 rounded text-accent whitespace-pre-wrap break-words [overflow-wrap:anywhere]';
 
 export function extractMarkdownTextContent(children: ReactNode): string {
   let text = '';

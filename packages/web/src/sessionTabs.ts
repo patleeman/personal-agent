@@ -191,6 +191,25 @@ export function closeConversationTab(sessionId: string): string[] {
   }).sessionIds;
 }
 
+export function setConversationArchivedState(sessionId: string, archived: boolean): ConversationLayout {
+  const normalizedSessionId = normalizeSessionId(sessionId);
+  const current = readConversationLayout();
+  if (!normalizedSessionId) {
+    return current;
+  }
+
+  const nextPinnedSessionIds = current.pinnedSessionIds.filter((id) => id !== normalizedSessionId);
+  const openWithoutSession = current.sessionIds.filter((id) => id !== normalizedSessionId);
+  const nextSessionIds = archived || nextPinnedSessionIds.includes(normalizedSessionId)
+    ? openWithoutSession
+    : [...openWithoutSession, normalizedSessionId];
+
+  return replaceConversationLayout({
+    sessionIds: nextSessionIds,
+    pinnedSessionIds: nextPinnedSessionIds,
+  });
+}
+
 export function pinConversationTab(sessionId: string): ConversationLayout {
   return moveConversationTab(sessionId, 'pinned');
 }
