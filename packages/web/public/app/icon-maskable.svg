@@ -1,6 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
-  <rect width="512" height="512" fill="#0B1020"/>
-  <rect x="96" y="96" width="320" height="320" rx="88" fill="#111936"/>
-  <path d="M176 320V192h72c52 0 88 24 88 64s-36 64-88 64h-72Zm52-38h17c23 0 37-8 37-26s-14-26-37-26h-17v52Z" fill="#E8ECFF"/>
-  <path d="M328 185 206 327" stroke="#7AA2FF" stroke-width="28" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="bg" x1="52" y1="44" x2="460" y2="468" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#08101F"/>
+      <stop offset="1" stop-color="#121D39"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(214 186) rotate(51.2) scale(255.598)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#20356C" stop-opacity="0.88"/>
+      <stop offset="1" stop-color="#20356C" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <rect width="512" height="512" fill="url(#glow)"/>
+  <text x="146" y="326" fill="#F3F6FF" font-family="Avenir Next, SF Pro Display, Helvetica Neue, sans-serif" font-size="196" font-weight="780" letter-spacing="-20">P</text>
+  <text x="255" y="326" fill="#7AA2FF" font-family="Avenir Next, SF Pro Display, Helvetica Neue, sans-serif" font-size="196" font-weight="780" letter-spacing="-24">A</text>
 </svg>
