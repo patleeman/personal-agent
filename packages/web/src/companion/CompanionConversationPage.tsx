@@ -4,7 +4,12 @@ import { api } from '../api';
 import { ChatView } from '../components/chat/ChatView';
 import { cx } from '../components/ui';
 import { useApi } from '../hooks';
-import { readConversationLayout, setConversationArchivedState } from '../sessionTabs';
+import {
+  ensureConversationTabOpen,
+  readConversationLayout,
+  setConversationArchivedState,
+  type ConversationLayout,
+} from '../sessionTabs';
 import { getConversationDisplayTitle } from '../conversationTitle';
 import { useLiveTitles } from '../contexts';
 import { useSessionDetail } from '../hooks/useSessions';
@@ -69,6 +74,14 @@ export function shouldShowCompanionConversationStatusBanner(input: {
   isLiveSession: boolean;
 }): boolean {
   return !input.isLiveSession;
+}
+
+export function syncCompanionConversationWorkspaceLayout(conversationId: string | null | undefined): ConversationLayout {
+  if (conversationId) {
+    ensureConversationTabOpen(conversationId);
+  }
+
+  return readConversationLayout();
 }
 
 const COMPANION_TAP_HIGHLIGHT_COLOR = 'rgba(var(--color-accent) / 0.14)';
@@ -268,6 +281,14 @@ export function CompanionConversationPage() {
   });
 
   const { detail: sessionDetail, loading: sessionLoading } = useSessionDetail(id, { tailBlocks: 200 });
+
+  useEffect(() => {
+    if (!id) {
+      return;
+    }
+
+    replaceOpenTabs(syncCompanionConversationWorkspaceLayout(id));
+  }, [id, replaceOpenTabs]);
 
   useEffect(() => {
     if (!id) {

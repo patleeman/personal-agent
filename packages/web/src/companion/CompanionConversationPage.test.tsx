@@ -9,6 +9,7 @@ import {
   resolveCompanionControlState,
   resolveCompanionConversationLive,
   shouldShowCompanionConversationStatusBanner,
+  syncCompanionConversationWorkspaceLayout,
 } from './CompanionConversationPage.js';
 import { useSessionStream } from '../hooks/useSessionStream.js';
 import { useSessionDetail } from '../hooks/useSessions.js';
@@ -46,6 +47,27 @@ vi.mock('./CompanionConversationArtifacts', () => ({
 }));
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
+
+interface MockStorage {
+  getItem: (key: string) => string | null;
+  setItem: (key: string, value: string) => void;
+  removeItem: (key: string) => void;
+}
+
+function createStorage(): MockStorage {
+  const map = new Map<string, string>();
+  return {
+    getItem(key) {
+      return map.has(key) ? map.get(key) ?? null : null;
+    },
+    setItem(key, value) {
+      map.set(key, value);
+    },
+    removeItem(key) {
+      map.delete(key);
+    },
+  };
+}
 
 function createSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
   return {
@@ -108,6 +130,51 @@ describe('companion conversation helpers', () => {
   it('shows the status banner only for saved transcripts', () => {
     expect(shouldShowCompanionConversationStatusBanner({ isLiveSession: false })).toBe(true);
     expect(shouldShowCompanionConversationStatusBanner({ isLiveSession: true })).toBe(false);
+  });
+});
+
+describe('syncCompanionConversationWorkspaceLayout', () => {
+  const dispatchEvent = vi.fn();
+  const fetchMock = vi.fn(() => Promise.resolve({ ok: true }));
+
+  beforeEach(() => {
+    vi.stubGlobal('localStorage', createStorage());
+    vi.stubGlobal('window', { dispatchEvent });
+    vi.stubGlobal('fetch', fetchMock);
+
+    if (typeof CustomEvent === 'undefined') {
+      vi.stubGlobal('CustomEvent', class CustomEvent<T = unknown> {
+        type: string;
+        detail: T | null;
+
+        constructor(type: string, init?: CustomEventInit<T>) {
+          this.type = type;
+          this.detail = init?.detail ?? null;
+        }
+      });
+    }
+  });
+
+  afterEach(() => {
+    dispatchEvent.mockReset();
+    fetchMock.mockReset();
+    fetchMock.mockImplementation(() => Promise.resolve({ ok: true }));
+    vi.unstubAllGlobals();
+  });
+
+  it('opens the companion conversation in the shared workspace layout snapshot', () => {
+    expect(syncCompanionConversationWorkspaceLayout(' conv-123 ')).toEqual({
+      sessionIds: ['conv-123'],
+      pinnedSessionIds: [],
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/web-ui/open-conversations', expect.objectContaining({
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionIds: ['conv-123'],
+        pinnedSessionIds: [],
+      }),
+    }));
   });
 });
 

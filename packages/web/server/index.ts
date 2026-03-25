@@ -4386,7 +4386,7 @@ app.get('/api/tools/mcp/servers/:server/tools/:tool', async (_req, res) => {
   }
 });
 
-app.get('/api/web-ui/open-conversations', (_req, res) => {
+function handleOpenConversationLayoutReadRequest(_req: express.Request, res: express.Response) {
   try {
     const saved = readSavedWebUiPreferences(SETTINGS_FILE);
     res.json({
@@ -4400,9 +4400,9 @@ app.get('/api/web-ui/open-conversations', (_req, res) => {
     });
     res.status(500).json({ error: String(err) });
   }
-});
+}
 
-app.patch('/api/web-ui/open-conversations', (req, res) => {
+function handleOpenConversationLayoutWriteRequest(req: express.Request, res: express.Response) {
   try {
     const { sessionIds, pinnedSessionIds } = req.body as {
       sessionIds?: string[];
@@ -4444,7 +4444,10 @@ app.patch('/api/web-ui/open-conversations', (req, res) => {
     });
     res.status(500).json({ error: String(err) });
   }
-});
+}
+
+app.get('/api/web-ui/open-conversations', handleOpenConversationLayoutReadRequest);
+app.patch('/api/web-ui/open-conversations', handleOpenConversationLayoutWriteRequest);
 
 app.patch('/api/web-ui/config', (req, res) => {
   try {
@@ -10412,21 +10415,8 @@ companionApp.get('/api/conversations/:id/artifacts/:artifactId', (req, res) => {
   }
 });
 
-companionApp.get('/api/web-ui/open-conversations', (_req, res) => {
-  try {
-    const saved = readSavedWebUiPreferences(SETTINGS_FILE);
-    res.json({
-      sessionIds: saved.openConversationIds,
-      pinnedSessionIds: saved.pinnedConversationIds,
-    });
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-});
+companionApp.get('/api/web-ui/open-conversations', handleOpenConversationLayoutReadRequest);
+companionApp.patch('/api/web-ui/open-conversations', handleOpenConversationLayoutWriteRequest);
 
 companionApp.get('/api/memory', (_req, res) => {
   try {
