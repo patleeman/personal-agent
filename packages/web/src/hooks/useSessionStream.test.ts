@@ -3,6 +3,7 @@ import type { MessageBlock } from '../types';
 import type { StreamState } from './useSessionStream';
 import {
   appendPendingQueueItem,
+  applyEvent,
   INITIAL_STREAM_STATE,
   normalizePendingQueueItems,
   removeOptimisticUserBlock,
@@ -54,6 +55,32 @@ describe('normalizePendingQueueItems', () => {
   it('falls back to an empty queue for non-array payloads', () => {
     expect(normalizePendingQueueItems(undefined)).toEqual([]);
     expect(normalizePendingQueueItems({ steering: ['bad-shape'] })).toEqual([]);
+  });
+});
+
+describe('applyEvent', () => {
+  it('clears stale streaming state when a fresh snapshot arrives after reconnect', () => {
+    const state: StreamState = {
+      ...INITIAL_STREAM_STATE,
+      blocks: [{ type: 'text', ts: '2026-03-25T00:00:00.000Z', text: 'partial response' }],
+      isStreaming: true,
+      error: 'stale error',
+    };
+    const blocksRef = { current: state.blocks };
+    const streamingRef = { current: true };
+
+    const next = applyEvent(state, blocksRef, streamingRef, {
+      type: 'snapshot',
+      blocks: [{ type: 'text', id: 'assistant-1', ts: '2026-03-25T00:00:01.000Z', text: 'finished response' }],
+      blockOffset: 0,
+      totalBlocks: 1,
+    });
+
+    expect(next.isStreaming).toBe(false);
+    expect(streamingRef.current).toBe(false);
+    expect(next.error).toBeNull();
+    expect(next.blocks).toEqual([{ type: 'text', id: 'assistant-1', ts: '2026-03-25T00:00:01.000Z', text: 'finished response' }]);
+    expect(blocksRef.current).toEqual(next.blocks);
   });
 });
 
