@@ -8,6 +8,7 @@ import {
   CompanionConversationPage,
   resolveCompanionControlState,
   resolveCompanionConversationLive,
+  shouldShowCompanionConversationStatusBanner,
 } from './CompanionConversationPage.js';
 import { useSessionStream } from '../hooks/useSessionStream.js';
 import { useSessionDetail } from '../hooks/useSessions.js';
@@ -103,6 +104,12 @@ describe('companion conversation helpers', () => {
     expect(state.controllingThisSurface).toBe(false);
     expect(state.needsTakeover).toBe(true);
   });
+
+  it('shows the status banner only for saved or mirrored read-only conversations', () => {
+    expect(shouldShowCompanionConversationStatusBanner({ isLiveSession: false, needsTakeover: false })).toBe(true);
+    expect(shouldShowCompanionConversationStatusBanner({ isLiveSession: true, needsTakeover: true })).toBe(true);
+    expect(shouldShowCompanionConversationStatusBanner({ isLiveSession: true, needsTakeover: false })).toBe(false);
+  });
 });
 
 describe('CompanionConversationPage', () => {
@@ -175,7 +182,7 @@ describe('CompanionConversationPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Take over here');
+    expect(html).toContain('Take over');
     expect(html).toContain('Take over to reply from this device.');
     expect(html).toContain('todos:');
     expect(html).toContain('read-only');

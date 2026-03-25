@@ -35,9 +35,9 @@ function ProjectsSection({
   }
 
   return (
-    <section className="pt-6 first:pt-0">
-      <h2 className="px-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/70">{title}</h2>
-      <div className="mt-3 border-y border-border-subtle">
+    <section className="pt-5 first:pt-0">
+      <h2 className="px-4 text-[10px] font-semibold uppercase tracking-[0.18em] text-dim/70">{title}</h2>
+      <div className="mt-2 border-y border-border-subtle">
         {projects.map((project) => {
           const archived = isProjectArchived(project);
           const preview = summarizeProjectPreview(project);
@@ -53,15 +53,19 @@ function ProjectsSection({
             <Link
               key={project.id}
               to={buildCompanionProjectPath(project.id)}
-              className="block border-b border-border-subtle px-4 py-4 transition-colors last:border-b-0 hover:bg-surface/55"
+              className="block border-b border-border-subtle px-4 py-3.5 transition-colors last:border-b-0 hover:bg-surface/55"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <h3 className="truncate text-[16px] font-medium leading-tight text-primary">{project.title}</h3>
-                  <p className="mt-1 text-[13px] leading-relaxed text-secondary">{preview}</p>
+                  <h3 className="truncate text-[15px] font-medium leading-tight text-primary">{project.title}</h3>
+                  <p className="mt-1 text-[12px] leading-relaxed text-secondary">{preview}</p>
                   <p className="mt-2 break-words text-[11px] text-dim">{meta.join(' · ')}</p>
                 </div>
-                <span className="pt-0.5 text-[12px] text-accent">open</span>
+                <span className="pt-0.5 text-accent" aria-hidden="true">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m9 6 6 6-6 6" />
+                  </svg>
+                </span>
               </div>
             </Link>
           );
@@ -86,26 +90,22 @@ export function CompanionProjectsPage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="border-b border-border-subtle bg-base/95 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-3xl flex-col px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)]">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/70">assistant companion</p>
-          <h1 className="mt-2 text-[28px] font-semibold tracking-tight text-primary">Projects</h1>
-          <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-secondary">
-            Read durable project state from the phone without leaving the companion surface.
-          </p>
-          <p className="mt-3 text-[12px] text-dim">
+        <div className="mx-auto flex w-full max-w-3xl flex-col px-4 pb-3 pt-[calc(env(safe-area-inset-top)+0.75rem)]">
+          <h1 className="text-[22px] font-semibold tracking-tight text-primary">Projects</h1>
+          <p className="mt-1 text-[11px] text-dim">
             {projects.length === 0
-              ? 'No projects available.'
-              : `${projects.length} project${projects.length === 1 ? '' : 's'} · ${archivedProjects.length} archived.`}
+              ? 'No projects yet.'
+              : `${projects.length} projects · ${archivedProjects.length} archived`}
           </p>
         </div>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-        <div className="mx-auto flex w-full max-w-3xl flex-col px-0 py-6">
+        <div className="mx-auto flex w-full max-w-3xl flex-col px-0 py-4">
           {loading ? <p className="px-4 text-[13px] text-dim">Loading projects…</p> : null}
           {!loading && error ? <p className="px-4 text-[13px] text-danger">Unable to load projects: {error}</p> : null}
           {!loading && !error && projects.length === 0 ? (
-            <div className="px-4 pt-6">
+            <div className="px-4 pt-5">
               <p className="text-[15px] text-primary">No projects yet.</p>
               <p className="mt-2 text-[13px] leading-relaxed text-secondary">
                 Create or sync a project in the main workspace and it will appear here automatically.

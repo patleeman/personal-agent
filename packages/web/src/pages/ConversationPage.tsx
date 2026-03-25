@@ -131,6 +131,14 @@ export function shouldShowMissingConversationState(input: {
     && !input.hasExecutionTarget;
 }
 
+export function shouldShowConversationTakeoverBanner(input: {
+  draft: boolean;
+  isLiveSession: boolean;
+  conversationNeedsTakeover: boolean;
+}): boolean {
+  return !input.draft && input.isLiveSession && input.conversationNeedsTakeover;
+}
+
 function formatConversationSurfaceTypeLabel(surfaceType: LiveSessionSurfaceType | null | undefined): string {
   return surfaceType === 'mobile_web' ? 'mobile companion' : 'desktop web';
 }
@@ -3803,24 +3811,21 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       : remoteConversationRequiresConnect
         ? 'Remote workspace disconnected. Click connect to resume.'
         : null);
-  const liveViewerCount = stream.presence.surfaces.length;
-  const companionViewerCount = Math.max(0, liveViewerCount - (presenceKnownForThisSurface ? 1 : 0));
   const controllerLabel = stream.presence.controllerSurfaceType
     ? formatConversationSurfaceTypeLabel(stream.presence.controllerSurfaceType)
     : null;
-  const controlBannerTitle = controllingThisSurface
-    ? 'You are controlling this conversation.'
-    : stream.presence.controllerSurfaceId
-      ? `Mirroring live while ${controllerLabel ?? 'another surface'} controls.`
-      : 'No surface is currently controlling this conversation.';
-  const controlBannerDetail = controllingThisSurface
-    ? companionViewerCount > 0
-      ? `${companionViewerCount} other ${companionViewerCount === 1 ? 'surface is' : 'surfaces are'} mirroring this conversation live.`
-      : 'Other surfaces will open in mirrored read-only mode until they explicitly take over.'
-    : stream.presence.controllerSurfaceId
-      ? 'This surface stays read-only until you explicitly take over.'
-      : 'Take over here to continue sending messages from this surface.';
+  const takeoverBannerTitle = stream.presence.controllerSurfaceId
+    ? `Mirroring live while ${controllerLabel ?? 'another surface'} controls.`
+    : 'This surface is read-only right now.';
+  const takeoverBannerDetail = stream.presence.controllerSurfaceId
+    ? 'Take over to continue sending messages from this surface.'
+    : 'Take over to make this surface the active controller.';
   const composerDisabled = remoteConnectionPending || remoteConversationRequiresConnect || conversationNeedsTakeover;
+  const showConversationTakeoverBanner = shouldShowConversationTakeoverBanner({
+    draft,
+    isLiveSession,
+    conversationNeedsTakeover,
+  });
   // Keep the rail off once transcripts are large enough to trigger windowing.
   // The rail continuously re-measures mounted message markers, which makes
   // composer-driven layout work scale with transcript size.
@@ -4150,29 +4155,27 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             {!draft && remoteConnectionStatusMessage && selectedExecutionTargetId && !isLiveSession && (
               <p className="mt-2 text-[11px] text-secondary">{remoteConnectionStatusMessage}</p>
             )}
-            {!draft && isLiveSession && presenceKnownForThisSurface && (
+            {showConversationTakeoverBanner && (
               <div className="mt-2 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border-subtle bg-surface px-3 py-2.5">
                 <div className="min-w-0">
-                  <p className="text-[12px] font-medium text-primary">{controlBannerTitle}</p>
-                  <p className="mt-0.5 text-[11px] text-secondary">{controlBannerDetail}</p>
+                  <p className="text-[12px] font-medium text-primary">{takeoverBannerTitle}</p>
+                  <p className="mt-0.5 text-[11px] text-secondary">{takeoverBannerDetail}</p>
                 </div>
-                {!controllingThisSurface && (
-                  <button
-                    type="button"
-                    className="ui-toolbar-button shrink-0"
-                    onClick={() => {
-                      void streamTakeover()
-                        .then(() => {
-                          showNotice('accent', 'This surface now controls the conversation.');
-                        })
-                        .catch((error) => {
-                          showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-                        });
-                    }}
-                  >
-                    Take over here
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="ui-toolbar-button shrink-0"
+                  onClick={() => {
+                    void streamTakeover()
+                      .then(() => {
+                        showNotice('accent', 'This surface now controls the conversation.');
+                      })
+                      .catch((error) => {
+                        showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+                      });
+                  }}
+                >
+                  Take over
+                </button>
               </div>
             )}
             {headerPreference && (

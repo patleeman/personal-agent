@@ -125,7 +125,11 @@ describe('CompanionConversationsPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Continue conversations');
+    expect(html).toContain('Chats');
+    expect(html).toContain('Open chats');
+    expect(html).toContain('Open projects');
+    expect(html).toContain('Open memories');
+    expect(html).toContain('Open skills');
     expect(html).toContain('Live now');
     expect(html).toContain('Needs review');
     expect(html).toContain('Active workspace');
