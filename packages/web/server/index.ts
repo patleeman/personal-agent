@@ -375,7 +375,10 @@ import {
 } from './deferredResumes.js';
 
 const PORT = parseInt(process.env.PA_WEB_PORT ?? '3741', 10);
-const COMPANION_PORT = parseInt(process.env.PA_WEB_COMPANION_PORT ?? String(readWebUiConfig().companionPort), 10);
+const COMPANION_DISABLED = process.env.PA_WEB_DISABLE_COMPANION === '1';
+const COMPANION_PORT = COMPANION_DISABLED
+  ? 0
+  : parseInt(process.env.PA_WEB_COMPANION_PORT ?? String(readWebUiConfig().companionPort), 10);
 const LOOPBACK_HOST = '127.0.0.1';
 const COMPANION_SESSION_COOKIE = 'pa_companion';
 const DEFAULT_REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
@@ -10428,10 +10431,16 @@ if (existsSync(DIST_DIR)) {
 // ── Static + SPA fallback ─────────────────────────────────────────────────────
 
 if (existsSync(DIST_DIR)) {
-  app.get('/app*', (req, res) => {
-    const search = typeof req.url === 'string' && req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
-    res.redirect(`http://${LOOPBACK_HOST}:${COMPANION_PORT}${req.path}${search}`);
-  });
+  if (COMPANION_DISABLED) {
+    app.get('/app*', (_req, res) => {
+      res.sendFile(join(COMPANION_DIST_DIR, 'index.html'));
+    });
+  } else {
+    app.get('/app*', (req, res) => {
+      const search = typeof req.url === 'string' && req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+      res.redirect(`http://${LOOPBACK_HOST}:${COMPANION_PORT}${req.path}${search}`);
+    });
+  }
   app.use(express.static(DIST_DIR));
   app.get('*', (_req, res) => {
     res.sendFile(join(DIST_DIR, 'index.html'));
@@ -10458,11 +10467,13 @@ app.listen(PORT, LOOPBACK_HOST, () => {
   });
 });
 
-companionApp.listen(COMPANION_PORT, LOOPBACK_HOST, () => {
-  logInfo('companion service started', {
-    url: `http://${LOOPBACK_HOST}:${COMPANION_PORT}`,
-    profile: getCurrentProfile(),
-    repoRoot: REPO_ROOT,
-    dist: COMPANION_DIST_DIR,
+if (!COMPANION_DISABLED) {
+  companionApp.listen(COMPANION_PORT, LOOPBACK_HOST, () => {
+    logInfo('companion service started', {
+      url: `http://${LOOPBACK_HOST}:${COMPANION_PORT}`,
+      profile: getCurrentProfile(),
+      repoRoot: REPO_ROOT,
+      dist: COMPANION_DIST_DIR,
+    });
   });
-});
+}

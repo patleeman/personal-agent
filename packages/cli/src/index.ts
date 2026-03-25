@@ -4158,6 +4158,7 @@ function startWebUiCandidateProcess(release: WebUiReleaseSummary, port: number):
     env: {
       ...process.env,
       PA_WEB_PORT: String(port),
+      PA_WEB_DISABLE_COMPANION: '1',
       PA_WEB_DIST: release.distDir,
       PERSONAL_AGENT_REPO_ROOT: release.sourceRepoRoot,
       PERSONAL_AGENT_WEB_SLOT: release.slot,
