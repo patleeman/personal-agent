@@ -3758,7 +3758,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     && !draft
     && !isLiveSession
     && !remoteConnectBusy
-    && !Boolean(pendingInitialPrompt)
+    && !pendingInitialPrompt
     && pendingInitialPromptSessionIdRef.current !== id;
   const remoteConnectionPending = Boolean(selectedExecutionTargetId)
     && !stream.isStreaming
@@ -4323,24 +4323,24 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               <div className="px-3 pt-2.5 pb-2 border-b border-border-subtle flex flex-col gap-1.5">
                 <span className="ui-section-label">Queued</span>
                 {pendingQueue.map(msg => (
-                  <div key={msg.id} className="flex items-center gap-2 min-w-0">
-                    <Pill tone={msg.type === 'steer' ? 'warning' : 'teal'}>
+                  <div key={msg.id} className="grid min-w-0 grid-cols-[auto,minmax(0,1fr),auto] items-start gap-x-2 gap-y-1">
+                    <Pill tone={msg.type === 'steer' ? 'warning' : 'teal'} className="mt-0.5">
                       {msg.type === 'steer' ? '⤵ steer' : '↷ followup'}
                     </Pill>
-                    <span className="flex-1 text-[11px] text-secondary truncate">{msg.text}</span>
+                    <p className="min-w-0 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-secondary">{msg.text}</p>
                     {msg.restorable !== false ? (
                       <button
                         type="button"
                         onClick={() => { void restoreQueuedPromptToComposer(msg.type, msg.queueIndex); }}
                         disabled={conversationNeedsTakeover}
-                        className="shrink-0 text-[11px] text-dim transition-colors hover:text-primary disabled:cursor-default disabled:opacity-50"
+                        className="shrink-0 pt-0.5 text-[11px] text-dim transition-colors hover:text-primary disabled:cursor-default disabled:opacity-50"
                         title={conversationNeedsTakeover ? 'Take over this conversation before restoring queued prompts' : 'Restore this queued prompt to the composer'}
                         aria-label="Restore queued prompt to the composer"
                       >
                         restore
                       </button>
                     ) : (
-                      <span className="shrink-0 text-[11px] text-dim/70">remote</span>
+                      <span className="shrink-0 pt-0.5 text-[11px] text-dim/70">remote</span>
                     )}
                   </div>
                 ))}
