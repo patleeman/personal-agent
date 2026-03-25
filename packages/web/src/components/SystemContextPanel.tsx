@@ -4,6 +4,7 @@ import { useSystemStatus } from '../contexts';
 import { getSystemComponentLabel, type SystemComponentId } from '../systemSelection';
 import type { DaemonState, GatewayState, SyncState, WebUiState } from '../types';
 import { timeAgo } from '../utils';
+import { buildWebUiCompanionAccessSummary } from '../webUiCompanion';
 import { ErrorState, LoadingState, Pill, ToolbarButton, type PillTone } from './ui';
 
 type SystemPanelData =
@@ -90,6 +91,7 @@ function buildPanel(selected: SystemPanelData) {
       const release = data.service.deployment?.activeRelease?.revision
         ?? data.service.deployment?.activeSlot
         ?? 'No active release';
+      const companion = buildWebUiCompanionAccessSummary(data.service);
 
       return {
         title: 'Web UI',
@@ -107,9 +109,11 @@ function buildPanel(selected: SystemPanelData) {
             : null,
         details: [
           { label: 'Service', value: running ? 'running' : data.service.installed ? 'stopped' : 'not installed' },
-          { label: 'URL', value: data.service.url },
+          { label: 'Desktop URL', value: data.service.url },
+          { label: 'Companion', value: `${companion.statusLabel} · ${companion.localUrl}` },
+          { label: 'Tailnet URL', value: data.service.tailscaleServe ? (data.service.tailscaleUrl ?? 'resolving…') : 'disabled' },
+          { label: 'Tailnet companion', value: companion.tailnetUrl ?? 'Enable Tailscale Serve to expose /app over HTTPS.' },
           { label: 'Release', value: release },
-          { label: 'Tailscale', value: data.service.tailscaleServe ? (data.service.tailscaleUrl ?? 'enabled') : 'disabled' },
         ],
         emptyLogLabel: 'No recent web UI log lines.',
       };
@@ -309,11 +313,34 @@ export function SystemContextPanel({ componentId }: { componentId: SystemCompone
     }
   }, [actionBusy, selected, setDaemon, setGateway, setSync]);
 
+  const handleToggleWebUiTailscale = useCallback(async () => {
+    if (actionBusy || !selected || selected.kind !== 'web-ui') {
+      return;
+    }
+
+    setActionBusy(true);
+    setMessage(null);
+    setError(null);
+
+    try {
+      const nextState = await api.setWebUiConfig({ useTailscaleServe: !selected.data.service.tailscaleServe });
+      setWebUi(nextState);
+      setMessage(nextState.service.tailscaleServe
+        ? 'Enabled Tailscale Serve for the web UI. Use the Tailnet companion URL to validate secure-origin mobile installability.'
+        : 'Disabled Tailscale Serve for the web UI. The companion app is back to local-only mode.');
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : String(actionError));
+    } finally {
+      setActionBusy(false);
+    }
+  }, [actionBusy, selected, setWebUi]);
+
   if (!selected || !panel) {
     return <LoadingState label={`Loading ${getSystemComponentLabel(componentId).toLowerCase()}…`} className="px-4 py-4" />;
   }
 
   const lines = panel.log.lines;
+  const companion = selected.kind === 'web-ui' ? buildWebUiCompanionAccessSummary(selected.data.service) : null;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -366,6 +393,28 @@ export function SystemContextPanel({ componentId }: { componentId: SystemCompone
             ))}
           </div>
         </div>
+
+        {selected.kind === 'web-ui' && companion && (
+          <div className="space-y-3 border-t border-border-subtle pt-4">
+            <div className="space-y-1">
+              <p className="ui-section-label">Companion access</p>
+              <p className="text-[12px] text-secondary leading-relaxed">{companion.detail}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <ToolbarButton onClick={() => { void handleToggleWebUiTailscale(); }} disabled={actionBusy}>
+                {selected.data.service.tailscaleServe ? 'Disable Tailnet HTTPS' : 'Enable Tailnet HTTPS'}
+              </ToolbarButton>
+              <a href={companion.localUrl} target="_blank" rel="noreferrer" className="ui-toolbar-button">
+                Open local companion
+              </a>
+              {companion.tailnetUrl && (
+                <a href={companion.tailnetUrl} target="_blank" rel="noreferrer" className="ui-toolbar-button">
+                  Open tailnet companion
+                </a>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 border-t border-border-subtle px-4 pt-4 pb-4 flex flex-col gap-2">
