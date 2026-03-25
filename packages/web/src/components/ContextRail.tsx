@@ -12,7 +12,11 @@ import {
 import {
   buildDraftConversationCwdStorageKey,
   buildDraftConversationExecutionTargetStorageKey,
+  clearDraftConversationProjectIds,
   DRAFT_CONVERSATION_ID,
+  DRAFT_CONVERSATION_STATE_CHANGED_EVENT,
+  persistDraftConversationProjectIds,
+  readDraftConversationProjectIds,
 } from '../draftConversation';
 import { persistForkPromptDraft } from '../forking';
 import { buildCapabilitiesSearch, getCapabilitiesPresetId, getCapabilitiesSection, getCapabilitiesTaskId, getCapabilitiesToolName } from '../capabilitiesSelection';
@@ -863,7 +867,108 @@ function ReferencedProjectModal({
   );
 }
 
+function ReferencedProjectsSectionContent({
+  relatedProjectIds,
+  allProjects,
+  attachProjectId,
+  onAttachProjectIdChange,
+  onAttachProject,
+  onOpenProject,
+  focusedProjectId,
+  projectModalOpen,
+  linkBusy = false,
+  projectsLoading = false,
+}: {
+  relatedProjectIds: string[];
+  allProjects: ProjectRecord[];
+  attachProjectId: string;
+  onAttachProjectIdChange: (projectId: string) => void;
+  onAttachProject: () => void;
+  onOpenProject: (projectId: string) => void;
+  focusedProjectId: string;
+  projectModalOpen: boolean;
+  linkBusy?: boolean;
+  projectsLoading?: boolean;
+}) {
+  const availableProjects = allProjects.filter((project) => !relatedProjectIds.includes(project.id) && !isProjectArchived(project));
+  const selectedAttachProject = availableProjects.find((project) => project.id === attachProjectId) ?? null;
+
+  return (
+    <div className="space-y-2.5">
+      {relatedProjectIds.length > 0 && (
+        <div className="space-y-1">
+          {relatedProjectIds.map((projectId) => {
+            const projectRecord = allProjects.find((project) => project.id === projectId) ?? null;
+            const isSelected = projectModalOpen && projectId === focusedProjectId;
+            return (
+              <button
+                key={projectId}
+                type="button"
+                onClick={() => onOpenProject(projectId)}
+                className={isSelected ? 'w-full rounded-md bg-elevated/80 px-2.5 py-2 text-left transition-colors' : 'w-full rounded-md px-2.5 py-2 text-left transition-colors hover:bg-elevated/50'}
+                title={projectRecord ? `Open ${projectRecord.title} (${projectId})` : `Open referenced project ${projectId}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[12px] font-medium text-primary">{projectRecord?.title ?? projectId}</p>
+                    <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-secondary">
+                      <span className="font-mono">@{projectId}</span>
+                      {projectRecord?.profile && (
+                        <>
+                          <span className="opacity-35">·</span>
+                          <span>profile {projectRecord.profile}</span>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                  <span className={isSelected ? 'shrink-0 text-[10px] uppercase tracking-[0.14em] text-accent' : 'shrink-0 text-[10px] uppercase tracking-[0.14em] text-dim'}>
+                    {isSelected ? 'open' : 'view'}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {availableProjects.length > 0 && (
+        <div className="flex min-w-0 items-center gap-2">
+          <select
+            value={attachProjectId}
+            onChange={(event) => onAttachProjectIdChange(event.target.value)}
+            className="min-w-0 flex-1 w-0 rounded-md border border-border-subtle bg-base/70 px-2.5 py-1.5 text-[12px] text-secondary focus:border-accent/60 focus:outline-none"
+            aria-label="Reference project"
+            title={selectedAttachProject ? `${selectedAttachProject.title} (${selectedAttachProject.id}${selectedAttachProject.profile ? ` · ${selectedAttachProject.profile}` : ''})${selectedAttachProject.description ? ` — ${selectedAttachProject.description}` : ''}` : ''}
+          >
+            {availableProjects.map((project) => (
+              <option key={`${project.profile ?? 'current'}:${project.id}`} value={project.id}>
+                {project.title} ({project.id}{project.profile ? ` · ${project.profile}` : ''})
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={onAttachProject}
+            disabled={!attachProjectId || linkBusy}
+            className="ui-toolbar-button shrink-0 text-accent disabled:opacity-40"
+          >
+            {linkBusy ? 'Saving…' : 'Add'}
+          </button>
+        </div>
+      )}
+
+      {projectsLoading && relatedProjectIds.length === 0 && availableProjects.length === 0 && (
+        <p className="text-[12px] text-dim animate-pulse">Loading projects…</p>
+      )}
+      {!projectsLoading && relatedProjectIds.length === 0 && availableProjects.length === 0 && (
+        <p className="text-[12px] text-dim">No projects available.</p>
+      )}
+    </div>
+  );
+}
+
 function DraftConversationContextPanel() {
+  const { projects: projectSnapshot } = useAppData();
   const [draftCwd, setDraftCwd, clearDraftCwd] = useReloadState<string>({
     storageKey: buildDraftConversationCwdStorageKey(),
     initialValue: '',
@@ -874,6 +979,12 @@ function DraftConversationContextPanel() {
     initialValue: null,
     shouldPersist: (value) => typeof value === 'string' && value.trim().length > 0,
   });
+  const [draftProjectIds, setDraftProjectIds] = useState<string[]>(() => readDraftConversationProjectIds());
+  const [focusedProjectId, setFocusedProjectId] = useState('');
+  const [attachProjectId, setAttachProjectId] = useState('');
+  const [focusedProject, setFocusedProject] = useState<ProjectDetail | null>(null);
+  const [focusedLoading, setFocusedLoading] = useState(false);
+  const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [changingCwd, setChangingCwd] = useState(false);
   const [requestedCwd, setRequestedCwd] = useState(draftCwd);
   const [pickCwdBusy, setPickCwdBusy] = useState(false);
@@ -882,6 +993,13 @@ function DraftConversationContextPanel() {
   const [remotePickerBusy, setRemotePickerBusy] = useState(false);
   const [remotePickerError, setRemotePickerError] = useState<string | null>(null);
   const [remotePickerListing, setRemotePickerListing] = useState<RemoteFolderListing | null>(null);
+
+  const allProjects = projectSnapshot ?? [];
+  const projectsLoading = projectSnapshot === null;
+  const availableProjectIds = allProjects
+    .filter((project) => !draftProjectIds.includes(project.id) && !isProjectArchived(project))
+    .map((project) => project.id);
+  const focusedProjectRecord = allProjects.find((project) => project.id === focusedProjectId) ?? null;
 
   useEffect(() => {
     if (!changingCwd) {
@@ -894,6 +1012,77 @@ function DraftConversationContextPanel() {
     setRemotePickerError(null);
     setRemotePickerListing(null);
   }, [draftTargetId]);
+
+  useEffect(() => {
+    const syncDraftProjects = () => {
+      setDraftProjectIds(readDraftConversationProjectIds());
+    };
+
+    syncDraftProjects();
+    window.addEventListener(DRAFT_CONVERSATION_STATE_CHANGED_EVENT, syncDraftProjects);
+    return () => {
+      window.removeEventListener(DRAFT_CONVERSATION_STATE_CHANGED_EVENT, syncDraftProjects);
+    };
+  }, []);
+
+  useEffect(() => {
+    const nextFocusedProjectId = pickFocusedProjectId(draftProjectIds, focusedProjectId);
+    if (nextFocusedProjectId !== focusedProjectId) {
+      setFocusedProjectId(nextFocusedProjectId);
+    }
+  }, [draftProjectIds, focusedProjectId]);
+
+  useEffect(() => {
+    if (!projectModalOpen) {
+      return;
+    }
+
+    if (!focusedProjectId || !draftProjectIds.includes(focusedProjectId)) {
+      setProjectModalOpen(false);
+    }
+  }, [draftProjectIds, focusedProjectId, projectModalOpen]);
+
+  useEffect(() => {
+    const nextAttachProjectId = pickAttachProjectId(availableProjectIds, attachProjectId);
+    if (nextAttachProjectId !== attachProjectId) {
+      setAttachProjectId(nextAttachProjectId);
+    }
+  }, [attachProjectId, availableProjectIds]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!focusedProjectId) {
+      setFocusedProject(null);
+      setFocusedLoading(false);
+      return () => { cancelled = true; };
+    }
+
+    setFocusedLoading(true);
+    setFocusedProject((current) => (current?.project.id === focusedProjectId ? current : null));
+    api.projectById(
+      focusedProjectId,
+      focusedProjectRecord?.profile ? { profile: focusedProjectRecord.profile } : undefined,
+    )
+      .then((detail) => {
+        if (cancelled) {
+          return;
+        }
+
+        setFocusedProject(detail);
+        setFocusedLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+
+        setFocusedProject(null);
+        setFocusedLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [focusedProjectId, focusedProjectRecord?.profile]);
 
   const hasExplicitCwd = draftCwd.trim().length > 0;
   const isRemoteDraft = typeof draftTargetId === 'string' && draftTargetId.length > 0;
@@ -985,6 +1174,26 @@ function DraftConversationContextPanel() {
     setRemotePickerOpen(false);
     setRemotePickerError(null);
     setChangingCwd(false);
+  }
+
+  function attachSelectedProject() {
+    if (!attachProjectId) {
+      return;
+    }
+
+    const nextProjectIds = [...draftProjectIds, attachProjectId];
+    persistDraftConversationProjectIds(nextProjectIds);
+    setDraftProjectIds(nextProjectIds);
+  }
+
+  function removeDraftProject(projectId: string) {
+    const nextProjectIds = draftProjectIds.filter((id) => id !== projectId);
+    if (nextProjectIds.length === 0) {
+      clearDraftConversationProjectIds();
+    } else {
+      persistDraftConversationProjectIds(nextProjectIds);
+    }
+    setDraftProjectIds(nextProjectIds);
   }
 
   return (
@@ -1100,9 +1309,39 @@ function DraftConversationContextPanel() {
         </SurfacePanel>
       </Section>
 
+      <Section title="Referenced projects">
+        <ReferencedProjectsSectionContent
+          relatedProjectIds={draftProjectIds}
+          allProjects={allProjects}
+          attachProjectId={attachProjectId}
+          onAttachProjectIdChange={setAttachProjectId}
+          onAttachProject={attachSelectedProject}
+          onOpenProject={(projectId) => {
+            setFocusedProjectId(projectId);
+            setProjectModalOpen(true);
+          }}
+          focusedProjectId={focusedProjectId}
+          projectModalOpen={projectModalOpen}
+          projectsLoading={projectsLoading}
+        />
+      </Section>
+
       <Section title="Todo list">
         <ConversationAutomationPanel conversationId={DRAFT_CONVERSATION_ID} />
       </Section>
+
+      {projectModalOpen && focusedProjectId && (
+        <ReferencedProjectModal
+          projectId={focusedProjectId}
+          project={focusedProject?.project.id === focusedProjectId ? focusedProject : null}
+          loading={focusedLoading}
+          onClose={() => setProjectModalOpen(false)}
+          onRemove={() => {
+            removeDraftProject(focusedProjectId);
+            setProjectModalOpen(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1320,10 +1559,10 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   const relatedProjectIds = data?.relatedProjectIds ?? [];
   const remoteTargetId = execution?.location === 'remote' ? execution.targetId : null;
   const isRemoteConversation = typeof remoteTargetId === 'string' && remoteTargetId.length > 0;
-  const availableProjects = allProjects.filter((project) => !relatedProjectIds.includes(project.id) && !isProjectArchived(project));
-  const availableProjectIds = availableProjects.map((project) => project.id);
+  const availableProjectIds = allProjects
+    .filter((project) => !relatedProjectIds.includes(project.id) && !isProjectArchived(project))
+    .map((project) => project.id);
   const focusedProjectRecord = allProjects.find((project) => project.id === focusedProjectId) ?? null;
-  const selectedAttachProject = availableProjects.find((project) => project.id === attachProjectId) ?? null;
   const selectedRunId = getConversationRunIdFromSearch(location.search);
   const currentConversationRunId = createConversationLiveRunId(id);
   const connectedBackgroundRuns = useMemo(() => {
@@ -1812,78 +2051,21 @@ function LiveSessionContextPanel({ id }: { id: string }) {
       </Section>
 
       <Section title="Referenced projects">
-        <div className="space-y-3">
-          {relatedProjectIds.length > 0 && (
-            <div className="space-y-2">
-              {relatedProjectIds.map((projectId) => {
-                const projectRecord = allProjects.find((project) => project.id === projectId) ?? null;
-                const isSelected = projectModalOpen && projectId === focusedProjectId;
-                return (
-                  <button
-                    key={projectId}
-                    type="button"
-                    onClick={() => {
-                      setFocusedProjectId(projectId);
-                      setProjectModalOpen(true);
-                    }}
-                    className={isSelected ? 'w-full rounded-lg border border-accent/25 bg-accent/10 px-3 py-2.5 text-left transition-colors' : 'w-full rounded-lg border border-border-subtle bg-surface px-3 py-2.5 text-left transition-colors hover:border-accent/25 hover:bg-elevated/70'}
-                    title={projectRecord ? `Open ${projectRecord.title} (${projectId})` : `Open referenced project ${projectId}`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[12px] font-medium text-primary">{projectRecord?.title ?? projectId}</p>
-                        <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] text-secondary">
-                          <span className="font-mono">@{projectId}</span>
-                          {projectRecord?.profile && (
-                            <>
-                              <span className="opacity-35">·</span>
-                              <span>profile {projectRecord.profile}</span>
-                            </>
-                          )}
-                        </p>
-                      </div>
-                      <span className={isSelected ? 'shrink-0 text-[10px] uppercase tracking-[0.14em] text-accent' : 'shrink-0 text-[10px] uppercase tracking-[0.14em] text-dim'}>
-                        {isSelected ? 'open' : 'view'}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {availableProjects.length > 0 && (
-            <SurfacePanel muted className="px-3 py-3 space-y-2.5">
-              <p className="ui-section-label">Reference project</p>
-              <div className="flex min-w-0 items-center gap-2">
-                <select
-                  value={attachProjectId}
-                  onChange={(event) => setAttachProjectId(event.target.value)}
-                  className="min-w-0 flex-1 w-0 truncate rounded-lg border border-border-subtle bg-base px-2.5 py-2 text-[12px] text-secondary focus:border-accent/60 focus:outline-none"
-                  aria-label="Reference project"
-                  title={selectedAttachProject ? `${selectedAttachProject.title} (${selectedAttachProject.id}${selectedAttachProject.profile ? ` · ${selectedAttachProject.profile}` : ''})${selectedAttachProject.description ? ` — ${selectedAttachProject.description}` : ''}` : ''}
-                >
-                  {availableProjects.map((project) => (
-                    <option key={`${project.profile ?? 'current'}:${project.id}`} value={project.id}>
-                      {project.title} ({project.id}{project.profile ? ` · ${project.profile}` : ''})
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => { void attachSelectedProject(); }}
-                  disabled={!attachProjectId || linkBusy}
-                  className="ui-pill ui-pill-accent shrink-0 disabled:opacity-40"
-                >
-                  {linkBusy ? 'Saving…' : 'Reference'}
-                </button>
-              </div>
-            </SurfacePanel>
-          )}
-
-          {!focusedProject && !focusedLoading && availableProjects.length === 0 && relatedProjectIds.length === 0 && (
-            <p className="text-[12px] text-dim">No projects available.</p>
-          )}
-        </div>
+        <ReferencedProjectsSectionContent
+          relatedProjectIds={relatedProjectIds}
+          allProjects={allProjects}
+          attachProjectId={attachProjectId}
+          onAttachProjectIdChange={setAttachProjectId}
+          onAttachProject={() => { void attachSelectedProject(); }}
+          onOpenProject={(projectId) => {
+            setFocusedProjectId(projectId);
+            setProjectModalOpen(true);
+          }}
+          focusedProjectId={focusedProjectId}
+          projectModalOpen={projectModalOpen}
+          linkBusy={linkBusy}
+          projectsLoading={referenceableProjects === null && projectSnapshot === null}
+        />
       </Section>
 
       <Section title="Runs">
@@ -2848,7 +3030,7 @@ function ConversationsWorkspaceContext() {
           <p className="ui-card-title">Overview</p>
           <p className="ui-card-meta">Browse pinned, open, and archived conversations in the main pane. Open one to switch this rail back into live session context.</p>
         </div>
-        <button type="button" onClick={() => { void refetch({ resetLoading: false }); }} className="ui-toolbar-button shrink-0">↻ Refresh</button>
+        <button type="button" onClick={() => { void refetch(); }} className="ui-toolbar-button shrink-0">↻ Refresh</button>
       </div>
 
       <div className="space-y-2">

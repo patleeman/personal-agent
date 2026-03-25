@@ -15,12 +15,14 @@ import {
   clearDraftConversationComposer,
   clearDraftConversationCwd,
   clearDraftConversationExecutionTarget,
+  clearDraftConversationProjectIds,
   DRAFT_CONVERSATION_ID,
   DRAFT_CONVERSATION_ROUTE,
   DRAFT_CONVERSATION_STATE_CHANGED_EVENT,
   hasDraftConversationAttachments,
   readDraftConversationComposer,
   readDraftConversationCwd,
+  readDraftConversationProjectIds,
   shouldShowDraftConversationTab,
 } from '../draftConversation';
 import { getSidebarBrandLabel } from '../sidebarBrand';
@@ -518,13 +520,14 @@ export function Sidebar() {
   const [draftComposer, setDraftComposer] = useState(() => readDraftConversationComposer());
   const [draftCwd, setDraftCwd] = useState(() => readDraftConversationCwd());
   const [draftHasAttachments, setDraftHasAttachments] = useState(() => hasDraftConversationAttachments());
+  const [draftReferencedProjectIds, setDraftReferencedProjectIds] = useState(() => readDraftConversationProjectIds());
   const draftTab = useMemo(() => {
-    if (!shouldShowDraftConversationTab(location.pathname, draftComposer, draftCwd, draftHasAttachments)) {
+    if (!shouldShowDraftConversationTab(location.pathname, draftComposer, draftCwd, draftHasAttachments, draftReferencedProjectIds)) {
       return null;
     }
 
     return buildDraftConversationSessionMeta(undefined, draftCwd);
-  }, [draftComposer, draftCwd, draftHasAttachments, location.pathname]);
+  }, [draftComposer, draftCwd, draftHasAttachments, draftReferencedProjectIds, location.pathname]);
   const visibleTabs = useMemo(
     () => draftTab ? [...tabs, draftTab] : tabs,
     [draftTab, tabs],
@@ -575,6 +578,7 @@ export function Sidebar() {
       setDraftComposer(readDraftConversationComposer());
       setDraftCwd(readDraftConversationCwd());
       setDraftHasAttachments(hasDraftConversationAttachments());
+      setDraftReferencedProjectIds(readDraftConversationProjectIds());
     }
 
     syncDraftState();
@@ -701,9 +705,11 @@ export function Sidebar() {
     clearDraftConversationComposer();
     clearDraftConversationCwd();
     clearDraftConversationExecutionTarget();
+    clearDraftConversationProjectIds();
     setDraftComposer('');
     setDraftCwd('');
     setDraftHasAttachments(false);
+    setDraftReferencedProjectIds([]);
 
     if (draggingSessionId === DRAFT_CONVERSATION_ID) {
       clearDragState();

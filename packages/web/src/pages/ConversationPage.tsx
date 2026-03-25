@@ -56,14 +56,18 @@ import {
   clearDraftConversationComposer,
   clearDraftConversationCwd,
   clearDraftConversationExecutionTarget,
+  clearDraftConversationProjectIds,
   DRAFT_CONVERSATION_ROUTE,
+  DRAFT_CONVERSATION_STATE_CHANGED_EVENT,
   isDraftConversationAttachmentsMutationCurrent,
   persistDraftConversationAttachments,
   persistDraftConversationComposer,
+  persistDraftConversationProjectIds,
   persistDraftConversationExecutionTarget,
   readDraftConversationAttachments,
   readDraftConversationCwd,
   readDraftConversationExecutionTarget,
+  readDraftConversationProjectIds,
   type DraftConversationDrawingAttachment,
 } from '../draftConversation';
 import {
@@ -1326,6 +1330,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [composerAltHeld, setComposerAltHeld] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [draftExecutionTargetId, setDraftExecutionTargetId] = useState<string | null>(() => readDraftConversationExecutionTarget());
+  const [draftAttachedProjectIds, setDraftAttachedProjectIds] = useState<string[]>(() => readDraftConversationProjectIds());
   const [executionTargetBusy, setExecutionTargetBusy] = useState(false);
   const composerHistoryScopeId = draft ? null : id ?? null;
   const [composerHistory, setComposerHistory] = useState<string[]>(() => readComposerHistory(composerHistoryScopeId));
@@ -1391,6 +1396,23 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         // Ignore draft attachment persistence failures.
       });
   }, [attachments, draft, drawingAttachments]);
+
+  useEffect(() => {
+    if (!draft) {
+      setDraftAttachedProjectIds([]);
+      return;
+    }
+
+    const syncDraftProjects = () => {
+      setDraftAttachedProjectIds(readDraftConversationProjectIds());
+    };
+
+    syncDraftProjects();
+    window.addEventListener(DRAFT_CONVERSATION_STATE_CHANGED_EVENT, syncDraftProjects);
+    return () => {
+      window.removeEventListener(DRAFT_CONVERSATION_STATE_CHANGED_EVENT, syncDraftProjects);
+    };
+  }, [draft]);
 
   useEffect(() => {
     function handleModifierChange(event: KeyboardEvent) {
@@ -1583,7 +1605,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     memoryDocs: memoryData?.memoryDocs ?? [],
     profiles: profileState?.profiles ?? [],
   }), [projects, tasks, memoryData, profileState]);
-  const referencedProjectIds = conversationProjects?.relatedProjectIds ?? [];
+  const referencedProjectIds = draft
+    ? draftAttachedProjectIds
+    : (conversationProjects?.relatedProjectIds ?? []);
   const currentSessionMeta = useMemo(() => {
     if (!id) {
       return null;
@@ -1631,8 +1655,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const draftMentionItems = useMemo(() => resolveMentionItems(input, mentionItems)
     .filter((item) => item.kind !== 'project' || !referencedProjectIds.includes(item.label)), [input, mentionItems, referencedProjectIds]);
   const draftReferencedProjectIds = useMemo(() => {
-    const ids: string[] = [];
-    const seen = new Set<string>();
+    const ids = [...referencedProjectIds];
+    const seen = new Set(referencedProjectIds);
 
     for (const item of draftMentionItems) {
       if (item.kind !== 'project' || seen.has(item.label)) {
@@ -1644,7 +1668,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     return ids;
-  }, [draftMentionItems]);
+  }, [draftMentionItems, referencedProjectIds]);
 
   useEffect(() => {
     if (!conversationRunId || draft) {
@@ -2999,6 +3023,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [draft, id, refetchMemoryData, showNotice]);
 
   async function removeReferencedProject(projectId: string) {
+    if (draft) {
+      const nextProjectIds = draftAttachedProjectIds.filter((id) => id !== projectId);
+      persistDraftConversationProjectIds(nextProjectIds);
+      setDraftAttachedProjectIds(nextProjectIds);
+      return;
+    }
+
     if (!id || conversationProjectsBusy) {
       return;
     }
@@ -3129,7 +3160,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     clearDraftConversationComposer();
     clearDraftConversationCwd();
     clearDraftConversationExecutionTarget();
+    clearDraftConversationProjectIds();
     setDraftExecutionTargetId(null);
+    setDraftAttachedProjectIds([]);
     setInput('');
     setAttachments([]);
     setDrawingAttachments([]);
@@ -3446,6 +3479,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           clearDraftConversationAttachments();
           clearDraftConversationCwd();
           clearDraftConversationExecutionTarget();
+          clearDraftConversationProjectIds();
           ensureConversationTabOpen(newId);
           navigate(`/conversations/${newId}`, { replace: true });
         } catch (error) {

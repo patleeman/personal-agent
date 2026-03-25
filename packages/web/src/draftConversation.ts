@@ -9,6 +9,7 @@ export const DRAFT_CONVERSATION_STATE_CHANGED_EVENT = 'pa:draft-conversation-sta
 
 const DRAFT_CONVERSATION_COMPOSER_STORAGE_KEY = 'pa:reload:conversation:draft:composer';
 const DRAFT_CONVERSATION_CWD_STORAGE_KEY = 'pa:reload:conversation:draft:cwd';
+const DRAFT_CONVERSATION_PROJECTS_STORAGE_KEY = 'pa:reload:conversation:draft:projects';
 const DRAFT_CONVERSATION_ATTACHMENTS_STORAGE_KEY = 'pa:reload:conversation:draft:attachments';
 const DRAFT_CONVERSATION_EXECUTION_TARGET_STORAGE_KEY = 'pa:reload:conversation:draft:execution-target';
 
@@ -43,6 +44,10 @@ export function buildDraftConversationCwdStorageKey(): string {
   return DRAFT_CONVERSATION_CWD_STORAGE_KEY;
 }
 
+export function buildDraftConversationProjectsStorageKey(): string {
+  return DRAFT_CONVERSATION_PROJECTS_STORAGE_KEY;
+}
+
 export function buildDraftConversationAttachmentsStorageKey(): string {
   return DRAFT_CONVERSATION_ATTACHMENTS_STORAGE_KEY;
 }
@@ -66,6 +71,31 @@ function normalizeDraftConversationExecutionTarget(value: unknown): string | nul
 
   const normalized = value.trim();
   return normalized.length > 0 ? normalized : null;
+}
+
+function normalizeDraftConversationProjectIds(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const ids: string[] = [];
+  const seen = new Set<string>();
+
+  for (const item of value) {
+    if (typeof item !== 'string') {
+      continue;
+    }
+
+    const normalized = item.trim();
+    if (normalized.length === 0 || seen.has(normalized)) {
+      continue;
+    }
+
+    seen.add(normalized);
+    ids.push(normalized);
+  }
+
+  return ids;
 }
 
 function normalizeDraftConversationImage(value: unknown): PromptImageInput | null {
@@ -220,6 +250,37 @@ export function clearDraftConversationCwd(
   emitDraftConversationStateChanged();
 }
 
+export function readDraftConversationProjectIds(
+  storage: StorageLike | null = getSessionStorage(),
+): string[] {
+  return readStoredState<string[]>({
+    key: buildDraftConversationProjectsStorageKey(),
+    fallback: [],
+    storage,
+    deserialize: (raw) => normalizeDraftConversationProjectIds(JSON.parse(raw) as unknown),
+  });
+}
+
+export function persistDraftConversationProjectIds(
+  projectIds: string[],
+  storage: StorageLike | null = getSessionStorage(),
+): void {
+  persistStoredState({
+    key: buildDraftConversationProjectsStorageKey(),
+    value: normalizeDraftConversationProjectIds(projectIds),
+    storage,
+    shouldPersist: (value) => value.length > 0,
+  });
+  emitDraftConversationStateChanged();
+}
+
+export function clearDraftConversationProjectIds(
+  storage: StorageLike | null = getSessionStorage(),
+): void {
+  clearStoredState(storage, buildDraftConversationProjectsStorageKey());
+  emitDraftConversationStateChanged();
+}
+
 export function readDraftConversationExecutionTarget(
   storage: StorageLike | null = getSessionStorage(),
 ): string | null {
@@ -308,11 +369,13 @@ export function shouldShowDraftConversationTab(
   composerText: string,
   cwd = '',
   hasAttachments = false,
+  referencedProjectIds: string[] = [],
 ): boolean {
   return isDraftConversationPath(pathname)
     || composerText.trim().length > 0
     || cwd.trim().length > 0
-    || hasAttachments;
+    || hasAttachments
+    || referencedProjectIds.length > 0;
 }
 
 export function buildDraftConversationSessionMeta(timestamp = new Date().toISOString(), cwd = ''): SessionMeta {
