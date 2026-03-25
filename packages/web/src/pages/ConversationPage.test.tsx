@@ -29,7 +29,7 @@ describe('conversation live state helpers', () => {
     expect(resolveConversationLiveSession({ streamBlockCount: 0, isStreaming: false, confirmedLive: true })).toBe(true);
   });
 
-  it('shows the takeover banner only while this surface is mirrored read-only', () => {
+  it('shows the takeover call-to-action only while this surface is mirrored read-only', () => {
     expect(shouldShowConversationTakeoverBanner({ draft: false, isLiveSession: true, conversationNeedsTakeover: true })).toBe(true);
     expect(shouldShowConversationTakeoverBanner({ draft: false, isLiveSession: true, conversationNeedsTakeover: false })).toBe(false);
     expect(shouldShowConversationTakeoverBanner({ draft: true, isLiveSession: true, conversationNeedsTakeover: true })).toBe(false);
