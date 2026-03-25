@@ -13,7 +13,6 @@ import {
 
 const SINGLE_RUN_LOG_TAIL_LINES = 60;
 const BATCH_RUN_LOG_TAIL_LINES = 20;
-const MAX_TASK_PROMPT_LENGTH = 2_000;
 const MAX_COMMAND_LENGTH = 500;
 
 export interface BackgroundRunResultSummary {
@@ -30,7 +29,6 @@ type EligibleBackgroundRun = {
   surfacedBatchId?: string;
   surfacedAt?: string;
   deliveredAt?: string;
-  taskPrompt?: string;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -83,7 +81,6 @@ function resolveEligibleBackgroundRun(run: ScannedDurableRun): EligibleBackgroun
     surfacedBatchId: readOptionalString(surfaced?.batchId),
     surfacedAt: readOptionalString(surfaced?.surfacedAt),
     deliveredAt: readOptionalString(surfaced?.deliveredAt),
-    taskPrompt: trimText(readOptionalString(payload.taskPrompt), MAX_TASK_PROMPT_LENGTH),
   };
 }
 
@@ -219,76 +216,14 @@ function buildGenericBatchPrompt(runs: EligibleBackgroundRun[]): string {
   return lines.join('\n');
 }
 
-function buildDelegateSingleRunPrompt(run: EligibleBackgroundRun): string {
-  const taskSlug = readOptionalString(run.run.manifest?.spec.taskSlug) ?? 'unknown';
-  const status = run.run.status?.status ?? 'unknown';
-  const logText = readRunLogTail(run.run.paths.outputLogPath, SINGLE_RUN_LOG_TAIL_LINES) || '(empty log)';
-
-  return [
-    `Delegated run ${run.run.runId} has finished.`,
-    `taskSlug=${taskSlug}`,
-    `status=${status}`,
-    `log=${run.run.paths.outputLogPath}`,
-    '',
-    'Original delegated task:',
-    run.taskPrompt ?? '(task prompt unavailable)',
-    '',
-    'Recent log tail:',
-    logText,
-    '',
-    'Use delegate get/logs if you need more detail. Then summarize the outcome for the user and continue with the next concrete step.',
-  ].join('\n');
-}
-
-function buildDelegateBatchPrompt(runs: EligibleBackgroundRun[]): string {
-  const orderedRuns = sortRuns(runs);
-  const lines = [
-    'Delegated runs have finished. Continue from this point.',
-    '',
-    'Completed delegated runs:',
-  ];
-
-  for (const run of orderedRuns) {
-    const taskSlug = readOptionalString(run.run.manifest?.spec.taskSlug) ?? 'unknown';
-    const status = run.run.status?.status ?? 'unknown';
-    const logText = readRunLogTail(run.run.paths.outputLogPath, BATCH_RUN_LOG_TAIL_LINES) || '(empty log)';
-
-    lines.push(
-      '',
-      `Run ${run.run.runId}`,
-      `taskSlug=${taskSlug}`,
-      `status=${status}`,
-      `log=${run.run.paths.outputLogPath}`,
-      '',
-      'Original delegated task:',
-      run.taskPrompt ?? '(task prompt unavailable)',
-      '',
-      'Recent log tail:',
-      logText,
-    );
-  }
-
-  lines.push(
-    '',
-    'Use delegate get/logs if you need more detail. Then summarize the combined outcome for the user and continue with the next concrete step.',
-  );
-
-  return lines.join('\n');
-}
-
 function buildBackgroundRunResultPrompt(runs: EligibleBackgroundRun[]): string {
   const orderedRuns = sortRuns(runs);
-  const allDelegates = orderedRuns.every((run) => run.run.manifest?.source?.type === 'gateway-delegate');
 
   if (orderedRuns.length === 1) {
-    return allDelegates
-      ? buildDelegateSingleRunPrompt(orderedRuns[0] as EligibleBackgroundRun)
-      : buildGenericSingleRunPrompt(orderedRuns[0] as EligibleBackgroundRun);
+    return buildGenericSingleRunPrompt(orderedRuns[0] as EligibleBackgroundRun);
   }
 
-  return allDelegates
-    ? buildDelegateBatchPrompt(orderedRuns)
-    : buildGenericBatchPrompt(orderedRuns);
+  return buildGenericBatchPrompt(orderedRuns);
 }
 
 function createBackgroundRunResultBatchId(sessionFile: string, runIds: string[]): string {

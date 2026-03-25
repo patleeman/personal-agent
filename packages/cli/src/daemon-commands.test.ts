@@ -10,8 +10,8 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { gatewayMocks, daemonMocks } = vi.hoisted(() => ({
-  gatewayMocks: {
+const { serviceMocks, daemonMocks } = vi.hoisted(() => ({
+  serviceMocks: {
     getManagedDaemonServiceStatus: vi.fn(() => ({
       identifier: 'mock-daemon',
       manifestPath: '/tmp/mock-daemon',
@@ -26,12 +26,12 @@ const { gatewayMocks, daemonMocks } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@personal-agent/gateway', async () => {
-  const actual = await vi.importActual<typeof import('@personal-agent/gateway')>('@personal-agent/gateway');
+vi.mock('@personal-agent/services', async () => {
+  const actual = await vi.importActual<typeof import('@personal-agent/services')>('@personal-agent/services');
   return {
     ...actual,
-    getManagedDaemonServiceStatus: gatewayMocks.getManagedDaemonServiceStatus,
-    restartManagedDaemonServiceIfInstalled: gatewayMocks.restartManagedDaemonServiceIfInstalled,
+    getManagedDaemonServiceStatus: serviceMocks.getManagedDaemonServiceStatus,
+    restartManagedDaemonServiceIfInstalled: serviceMocks.restartManagedDaemonServiceIfInstalled,
   };
 });
 
@@ -71,15 +71,15 @@ beforeEach(() => {
     PI_SESSION_DIR: createTempDir('pi-session-')
   };
 
-  gatewayMocks.getManagedDaemonServiceStatus.mockReset();
-  gatewayMocks.getManagedDaemonServiceStatus.mockImplementation(() => ({
+  serviceMocks.getManagedDaemonServiceStatus.mockReset();
+  serviceMocks.getManagedDaemonServiceStatus.mockImplementation(() => ({
     identifier: 'mock-daemon',
     manifestPath: '/tmp/mock-daemon',
     installed: false,
     running: false,
   }));
-  gatewayMocks.restartManagedDaemonServiceIfInstalled.mockReset();
-  gatewayMocks.restartManagedDaemonServiceIfInstalled.mockImplementation(() => undefined);
+  serviceMocks.restartManagedDaemonServiceIfInstalled.mockReset();
+  serviceMocks.restartManagedDaemonServiceIfInstalled.mockImplementation(() => undefined);
   daemonMocks.startDaemonDetached.mockReset();
   daemonMocks.startDaemonDetached.mockImplementation(async () => undefined);
   daemonMocks.stopDaemonGracefully.mockReset();
@@ -249,13 +249,13 @@ describe('daemon command matrix', () => {
     const stateRoot = createTempDir('personal-agent-cli-state-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
-    gatewayMocks.getManagedDaemonServiceStatus.mockReturnValue({
+    serviceMocks.getManagedDaemonServiceStatus.mockReturnValue({
       identifier: 'mock-daemon',
       manifestPath: '/tmp/mock-daemon',
       installed: true,
       running: true,
     });
-    gatewayMocks.restartManagedDaemonServiceIfInstalled.mockReturnValue({
+    serviceMocks.restartManagedDaemonServiceIfInstalled.mockReturnValue({
       identifier: 'mock-daemon',
       manifestPath: '/tmp/mock-daemon',
       installed: true,
@@ -267,7 +267,7 @@ describe('daemon command matrix', () => {
     const exitCode = await runCli(['daemon', 'restart']);
 
     expect(exitCode).toBe(0);
-    expect(gatewayMocks.restartManagedDaemonServiceIfInstalled).toHaveBeenCalledTimes(1);
+    expect(serviceMocks.restartManagedDaemonServiceIfInstalled).toHaveBeenCalledTimes(1);
     expect(daemonMocks.stopDaemonGracefully).not.toHaveBeenCalled();
     expect(daemonMocks.startDaemonDetached).not.toHaveBeenCalled();
 

@@ -34,7 +34,6 @@ export interface ScheduledTaskFileMetadata {
   timeoutSeconds?: number;
   prompt: string;
   promptBody: string;
-  output?: ParsedTaskDefinition['output'];
 }
 
 export interface ScheduledTaskParseError {
@@ -186,7 +185,6 @@ export function readScheduledTaskFileMetadata(filePath: string): ScheduledTaskFi
     timeoutSeconds: parsed.timeoutSeconds,
     prompt: parsed.prompt.split('\n')[0]?.slice(0, 120) ?? '',
     promptBody: parsed.prompt,
-    output: parsed.output,
   };
 }
 
@@ -267,7 +265,6 @@ export function buildScheduledTaskMarkdown(input: {
   cwd?: string | null;
   timeoutSeconds?: number | null;
   prompt: string;
-  output?: ParsedTaskDefinition['output'];
 }): string {
   const cron = readOptionalString(input.cron);
   const at = readOptionalString(input.at);
@@ -301,19 +298,6 @@ export function buildScheduledTaskMarkdown(input: {
 
   if (input.timeoutSeconds !== undefined && input.timeoutSeconds !== null) {
     lines.push(`timeoutSeconds: ${Math.max(1, Math.floor(input.timeoutSeconds))}`);
-  }
-
-  if (input.output && input.output.targets.length > 0) {
-    lines.push('output:');
-    lines.push(`  when: ${input.output.when}`);
-    lines.push('  targets:');
-    for (const target of input.output.targets) {
-      lines.push('    - gateway: telegram');
-      lines.push(`      chatId: ${yamlString(readRequiredString(target.chatId, 'output.targets[].chatId'))}`);
-      if (target.messageThreadId !== undefined) {
-        lines.push(`      messageThreadId: ${Math.floor(target.messageThreadId)}`);
-      }
-    }
   }
 
   lines.push('---');

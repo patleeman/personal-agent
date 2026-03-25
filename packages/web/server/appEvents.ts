@@ -12,10 +12,8 @@ import {
   resolveProfileConversationArtifactsDir,
   resolveProfileConversationLinksDir,
   resolveProfileProjectsDir,
-  resolveStatePaths,
 } from '@personal-agent/core';
 import { getDaemonConfigFilePath, loadDaemonConfig, resolveDaemonPaths, resolveDurableRunsRoot } from '@personal-agent/daemon';
-import { readGatewayConfigFilePath } from './gatewayConfig.js';
 import { logWarn } from './logging.js';
 import { resolveWebUiConfigFilePath } from './webUi.js';
 
@@ -27,7 +25,6 @@ export type AppEventTopic =
   | 'runs'
   | 'automation'
   | 'daemon'
-  | 'gateway'
   | 'sync'
   | 'webUi'
   | 'executionTargets'
@@ -72,7 +69,6 @@ const ALL_TOPICS: AppEventTopic[] = [
   'runs',
   'automation',
   'daemon',
-  'gateway',
   'sync',
   'webUi',
   'executionTargets',
@@ -164,7 +160,6 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
   const daemonConfig = loadDaemonConfig();
   const daemonPaths = resolveDaemonPaths(daemonConfig.ipc.socketPath);
   const daemonRoot = daemonPaths.root;
-  const statePaths = resolveStatePaths();
   const activityDirs = [
     resolveProfileActivityDir({ profile }),
     resolveProfileActivityDir({ stateRoot: daemonRoot, profile }),
@@ -184,8 +179,6 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
   const runsRoot = resolveDurableRunsRoot(dirname(options.taskStateFile));
   const conversationAttentionStateFile = resolveConversationAttentionStatePath({ profile });
   const deferredResumeStateFile = resolveDeferredResumeStateFile();
-  const gatewayStateDir = join(statePaths.root, 'gateway');
-  const gatewaySessionDir = join(statePaths.session, 'telegram');
   const syncRepoDir = daemonConfig.modules.sync?.repoDir;
   const webStateDir = join(getStateRoot(), 'web');
 
@@ -218,11 +211,6 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
     daemon: [
       { path: getDaemonConfigFilePath(), kind: 'file' },
       { path: daemonPaths.socketPath, kind: 'file' },
-    ],
-    gateway: [
-      { path: readGatewayConfigFilePath(), kind: 'file' },
-      { path: gatewayStateDir, kind: 'directory' },
-      { path: gatewaySessionDir, kind: 'directory' },
     ],
     sync: [
       { path: getDaemonConfigFilePath(), kind: 'file' },

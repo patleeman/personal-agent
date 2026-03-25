@@ -382,11 +382,9 @@ describe('ContextRail run detail', () => {
                 lines: ['daemon ready'],
               },
             },
-            gateway: null,
             sync: null,
             webUi: null,
             setDaemon: vi.fn(),
-            setGateway: vi.fn(),
             setSync: vi.fn(),
             setWebUi: vi.fn(),
           }}>

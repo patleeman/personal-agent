@@ -30,20 +30,12 @@ Summarize yesterday's progress.
     expect(task.prompt).toContain('Summarize yesterday');
   });
 
-  it('parses one-time at tasks with telegram output targets', () => {
+  it('parses one-time at tasks', () => {
     const task = parseTaskDefinition({
       filePath: '/tmp/tasks/taxes-reminder.task.md',
       rawContent: `---
 at: "2026-04-15T09:00:00-04:00"
 model: openai-codex/gpt-5.4
-output:
-  when: always
-  targets:
-    - gateway: telegram
-      chatIds:
-        - "123"
-        - "456"
-      messageThreadId: 22
 ---
 Prepare tax checklist.
 `,
@@ -55,13 +47,6 @@ Prepare tax checklist.
     expect(task.profile).toBe('shared');
     expect(task.modelRef).toBe('openai-codex/gpt-5.4');
     expect(task.timeoutSeconds).toBe(1800);
-    expect(task.output).toEqual({
-      when: 'always',
-      targets: [
-        { gateway: 'telegram', chatId: '123', messageThreadId: 22 },
-        { gateway: 'telegram', chatId: '456', messageThreadId: 22 },
-      ],
-    });
   });
 
   it('rejects tasks without cron or at schedule', () => {
@@ -74,39 +59,6 @@ hello
 `,
       defaultTimeoutSeconds: 1800,
     })).toThrow('must define one schedule key');
-  });
-
-  it('rejects unknown output gateway targets', () => {
-    expect(() => parseTaskDefinition({
-      filePath: '/tmp/tasks/bad-output.task.md',
-      rawContent: `---
-cron: "0 9 * * 1-5"
-output:
-  targets:
-    - gateway: sms
-      chatId: "123"
----
-hello
-`,
-      defaultTimeoutSeconds: 1800,
-    })).toThrow('Unsupported output target gateway');
-  });
-
-  it('rejects invalid telegram output messageThreadId values', () => {
-    expect(() => parseTaskDefinition({
-      filePath: '/tmp/tasks/bad-thread.task.md',
-      rawContent: `---
-cron: "0 9 * * 1-5"
-output:
-  targets:
-    - gateway: telegram
-      chatId: "123"
-      messageThreadId: nope
----
-hello
-`,
-      defaultTimeoutSeconds: 1800,
-    })).toThrow('Frontmatter key output.targets[].messageThreadId must be a positive integer');
   });
 
   it('matches cron expressions using cron day-of-month/day-of-week semantics', () => {

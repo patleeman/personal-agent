@@ -5,18 +5,13 @@ import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { getStateRoot } from '@personal-agent/core';
 import { loadDaemonConfig, resolveDaemonPaths } from '@personal-agent/daemon';
-import { readGatewayConfig, type TelegramStoredConfig } from './config.js';
 import {
   ensureActiveWebUiRelease,
   getWebUiDeploymentSummary,
   type WebUiDeploymentSummary,
 } from './web-ui-deploy.js';
 
-export type GatewayProvider = 'telegram';
-
-export const SUPPORTED_GATEWAY_PROVIDERS: readonly GatewayProvider[] = ['telegram'];
-
-export type GatewayServicePlatform = 'launchd' | 'systemd';
+export type ManagedServicePlatform = 'launchd' | 'systemd';
 
 export interface ManagedDaemonServiceInfo {
   identifier: string;
@@ -29,28 +24,13 @@ export interface ManagedDaemonServiceStatus extends ManagedDaemonServiceInfo {
   running: boolean;
 }
 
-export interface GatewayServiceInfo {
-  platform: GatewayServicePlatform;
-  provider: GatewayProvider;
-  identifier: string;
-  manifestPath: string;
-  logFile?: string;
-  daemonService?: ManagedDaemonServiceInfo;
-}
-
-export interface GatewayServiceStatus extends GatewayServiceInfo {
-  installed: boolean;
-  running: boolean;
-  daemonService?: ManagedDaemonServiceStatus;
-}
-
 export interface WebUiServiceOptions {
   repoRoot?: string;
   port?: number;
 }
 
 export interface WebUiServiceInfo {
-  platform: GatewayServicePlatform;
+  platform: ManagedServicePlatform;
   identifier: string;
   manifestPath: string;
   logFile?: string;
@@ -65,7 +45,7 @@ export interface WebUiServiceStatus extends WebUiServiceInfo {
   running: boolean;
 }
 
-function resolveServicePlatform(): GatewayServicePlatform {
+function resolveServicePlatform(): ManagedServicePlatform {
   if (process.platform === 'darwin') {
     return 'launchd';
   }
@@ -74,24 +54,7 @@ function resolveServicePlatform(): GatewayServicePlatform {
     return 'systemd';
   }
 
-  throw new Error('Gateway service management supports macOS (launchd) and Linux (systemd --user) only.');
-}
-
-function resolveGatewayEntryFile(): string {
-  const currentFile = fileURLToPath(import.meta.url);
-  const currentDir = dirname(currentFile);
-
-  const localCandidate = resolve(currentDir, 'index.js');
-  if (existsSync(localCandidate)) {
-    return localCandidate;
-  }
-
-  const workspaceCandidate = resolve(process.cwd(), 'packages', 'gateway', 'dist', 'index.js');
-  if (existsSync(workspaceCandidate)) {
-    return workspaceCandidate;
-  }
-
-  throw new Error('Could not locate gateway entrypoint (build packages/gateway first)');
+  throw new Error('Managed service support exists only on macOS (launchd) and Linux (systemd --user).');
 }
 
 function resolveDaemonEntryFile(): string {
@@ -159,32 +122,6 @@ function quoteSystemdValue(value: string): string {
   return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
-function validateProviderSetup(provider: GatewayProvider): string {
-  const stored = readGatewayConfig();
-  const providerConfig = stored.telegram;
-
-  if (!providerConfig?.token) {
-    throw new Error(`Gateway ${provider} token missing. Run \`pa gateway ${provider} setup\` first.`);
-  }
-
-  const telegramConfig = providerConfig as TelegramStoredConfig;
-  const hasAllowlist = Array.isArray(telegramConfig.allowlist) && telegramConfig.allowlist.length > 0;
-  const hasAllowedUsers = Array.isArray(telegramConfig.allowedUserIds) && telegramConfig.allowedUserIds.length > 0;
-
-  if (!hasAllowlist && !hasAllowedUsers) {
-    throw new Error(
-      'Gateway telegram allowlist or allowed user IDs missing. ' +
-      'Run `pa gateway telegram setup` first.',
-    );
-  }
-
-  return telegramConfig.workingDirectory ?? homedir();
-}
-
-function getGatewayLogFile(provider: GatewayProvider): string {
-  return join(getStateRoot(), 'gateway', 'logs', `${provider}.log`);
-}
-
 function getDaemonLogFile(): string {
   const config = loadDaemonConfig();
   return resolveDaemonPaths(config.ipc.socketPath).logFile;
@@ -192,30 +129,6 @@ function getDaemonLogFile(): string {
 
 function getWebUiLogFile(): string {
   return join(getStateRoot(), 'web', 'logs', 'web.log');
-}
-
-function buildServiceEnvironment(provider: GatewayProvider): Record<string, string> {
-  const environment: Record<string, string> = {
-    PERSONAL_AGENT_GATEWAY_PROVIDER: provider,
-  };
-
-  const passthroughKeys = [
-    'PATH',
-    'PERSONAL_AGENT_STATE_ROOT',
-    'PERSONAL_AGENT_GATEWAY_CONFIG_FILE',
-    'PERSONAL_AGENT_PI_TIMEOUT_MS',
-    'PERSONAL_AGENT_OP_BIN',
-    'OP_SERVICE_ACCOUNT_TOKEN',
-  ] as const;
-
-  for (const key of passthroughKeys) {
-    const value = process.env[key];
-    if (typeof value === 'string' && value.trim().length > 0) {
-      environment[key] = value;
-    }
-  }
-
-  return environment;
 }
 
 function buildDaemonServiceEnvironment(): Record<string, string> {
@@ -260,7 +173,6 @@ function buildWebUiServiceEnvironment(
     'PERSONAL_AGENT_CONFIG_FILE',
     'PERSONAL_AGENT_LOCAL_PROFILE_DIR',
     'PERSONAL_AGENT_DAEMON_CONFIG',
-    'PERSONAL_AGENT_GATEWAY_CONFIG_FILE',
     'PERSONAL_AGENT_DISABLE_DAEMON_EVENTS',
     'PERSONAL_AGENT_OP_BIN',
     'OP_SERVICE_ACCOUNT_TOKEN',
@@ -356,10 +268,6 @@ function isLaunchdServiceRunning(status: { status: number | null; stdout: string
 
   const output = `${status.stdout}\n${status.stderr}`;
   return /\bstate = running\b/.test(output) || /\bpid = \d+\b/.test(output);
-}
-
-function getLaunchdLabel(provider: GatewayProvider): string {
-  return `io.personal-agent.gateway.${provider}`;
 }
 
 function getLaunchdDaemonLabel(): string {
@@ -549,14 +457,6 @@ function uninstallLaunchdWebUiService(options: WebUiServiceOptions = {}): WebUiS
   };
 }
 
-interface SystemdUnitInput {
-  provider: GatewayProvider;
-  nodePath: string;
-  entryFile: string;
-  workingDirectory: string;
-  environment: Record<string, string>;
-}
-
 interface SystemdDaemonUnitInput {
   nodePath: string;
   entryFile: string;
@@ -576,35 +476,6 @@ function getSystemdDaemonUnitName(): string {
 
 function getSystemdWebUiUnitName(): string {
   return 'personal-agent-web-ui.service';
-}
-
-function buildSystemdUnitContent(input: SystemdUnitInput): string {
-  const environmentLines = Object.entries(input.environment)
-    .map(([key, value]) => `Environment=${key}=${quoteSystemdValue(value)}`)
-    .join('\n');
-
-  const daemonUnitName = getSystemdDaemonUnitName();
-  const lines = [
-    '[Unit]',
-    `Description=Personal Agent gateway (${input.provider})`,
-    `After=network-online.target ${daemonUnitName}`,
-    `Wants=network-online.target ${daemonUnitName}`,
-    '',
-    '[Service]',
-    'Type=simple',
-    `ExecStart=${quoteSystemdValue(input.nodePath)} ${quoteSystemdValue(input.entryFile)}`,
-    `WorkingDirectory=${quoteSystemdValue(input.workingDirectory)}`,
-    environmentLines,
-    'Restart=always',
-    'RestartSec=5',
-    '',
-    '[Install]',
-    'WantedBy=default.target',
-  ];
-
-  return lines
-    .filter((line) => line.length > 0)
-    .join('\n');
 }
 
 function buildSystemdDaemonUnitContent(input: SystemdDaemonUnitInput): string {
@@ -661,10 +532,6 @@ function buildSystemdWebUiUnitContent(input: SystemdWebUiUnitInput): string {
   return lines
     .filter((line) => line.length > 0)
     .join('\n');
-}
-
-function getSystemdUnitName(provider: GatewayProvider): string {
-  return `personal-agent-gateway-${provider}.service`;
 }
 
 function getSystemdUnitPath(unitName: string): string {
@@ -810,158 +677,6 @@ function uninstallSystemdWebUiService(options: WebUiServiceOptions = {}): WebUiS
   };
 }
 
-function installLaunchdGatewayService(provider: GatewayProvider): GatewayServiceInfo {
-  const daemonService = installLaunchdDaemonService();
-  const label = getLaunchdLabel(provider);
-  const manifestPath = getLaunchdPlistPath(label);
-  const logFile = getGatewayLogFile(provider);
-  const domain = getLaunchdDomain();
-  const serviceTarget = `${domain}/${label}`;
-
-  const workingDirectory = validateProviderSetup(provider);
-  const entryFile = resolveGatewayEntryFile();
-  const nodePath = process.execPath;
-  const environment = buildServiceEnvironment(provider);
-
-  mkdirSync(dirname(manifestPath), { recursive: true });
-  mkdirSync(dirname(logFile), { recursive: true });
-
-  const content = buildLaunchdPlistContent({
-    label,
-    nodePath,
-    entryFile,
-    workingDirectory,
-    logFile,
-    environment,
-  });
-
-  writeFileSync(manifestPath, `${content}\n`);
-
-  runCommand('launchctl', ['bootout', domain, manifestPath], { allowNonZero: true });
-  runCommand('launchctl', ['bootstrap', domain, manifestPath]);
-  runCommand('launchctl', ['kickstart', '-k', serviceTarget], { allowNonZero: true });
-
-  return {
-    platform: 'launchd',
-    provider,
-    identifier: label,
-    manifestPath,
-    logFile,
-    daemonService,
-  };
-}
-
-function uninstallLaunchdGatewayService(provider: GatewayProvider): GatewayServiceInfo {
-  const label = getLaunchdLabel(provider);
-  const manifestPath = getLaunchdPlistPath(label);
-  const domain = getLaunchdDomain();
-
-  runCommand('launchctl', ['bootout', domain, manifestPath], { allowNonZero: true });
-
-  if (existsSync(manifestPath)) {
-    rmSync(manifestPath, { force: true });
-  }
-
-  return {
-    platform: 'launchd',
-    provider,
-    identifier: label,
-    manifestPath,
-    logFile: getGatewayLogFile(provider),
-  };
-}
-
-function getLaunchdGatewayServiceStatus(provider: GatewayProvider): GatewayServiceStatus {
-  const label = getLaunchdLabel(provider);
-  const manifestPath = getLaunchdPlistPath(label);
-  const domain = getLaunchdDomain();
-  const serviceTarget = `${domain}/${label}`;
-  const status = runCommand('launchctl', ['print', serviceTarget], { allowNonZero: true });
-
-  return {
-    platform: 'launchd',
-    provider,
-    identifier: label,
-    manifestPath,
-    logFile: getGatewayLogFile(provider),
-    installed: existsSync(manifestPath),
-    running: isLaunchdServiceRunning(status),
-    daemonService: getLaunchdDaemonServiceStatus(),
-  };
-}
-
-function installSystemdGatewayService(provider: GatewayProvider): GatewayServiceInfo {
-  const daemonService = installSystemdDaemonService();
-  const unitName = getSystemdUnitName(provider);
-  const manifestPath = getSystemdUnitPath(unitName);
-
-  const workingDirectory = validateProviderSetup(provider);
-  const entryFile = resolveGatewayEntryFile();
-  const nodePath = process.execPath;
-  const environment = buildServiceEnvironment(provider);
-
-  mkdirSync(dirname(manifestPath), { recursive: true });
-
-  const content = buildSystemdUnitContent({
-    provider,
-    nodePath,
-    entryFile,
-    workingDirectory,
-    environment,
-  });
-
-  writeFileSync(manifestPath, `${content}\n`);
-
-  runCommand('systemctl', ['--user', 'daemon-reload']);
-  runCommand('systemctl', ['--user', 'enable', '--now', unitName]);
-
-  return {
-    platform: 'systemd',
-    provider,
-    identifier: unitName,
-    manifestPath,
-    daemonService,
-  };
-}
-
-function uninstallSystemdGatewayService(provider: GatewayProvider): GatewayServiceInfo {
-  const unitName = getSystemdUnitName(provider);
-  const manifestPath = getSystemdUnitPath(unitName);
-
-  runCommand('systemctl', ['--user', 'disable', '--now', unitName], { allowNonZero: true });
-
-  if (existsSync(manifestPath)) {
-    rmSync(manifestPath, { force: true });
-  }
-
-  runCommand('systemctl', ['--user', 'daemon-reload']);
-
-  return {
-    platform: 'systemd',
-    provider,
-    identifier: unitName,
-    manifestPath,
-  };
-}
-
-function getSystemdGatewayServiceStatus(provider: GatewayProvider): GatewayServiceStatus {
-  const unitName = getSystemdUnitName(provider);
-  const manifestPath = getSystemdUnitPath(unitName);
-
-  const status = runCommand('systemctl', ['--user', 'is-active', unitName], { allowNonZero: true });
-  const activeState = status.stdout.trim().toLowerCase();
-
-  return {
-    platform: 'systemd',
-    provider,
-    identifier: unitName,
-    manifestPath,
-    installed: existsSync(manifestPath),
-    running: (status.status ?? 1) === 0 && activeState === 'active',
-    daemonService: getSystemdDaemonServiceStatus(),
-  };
-}
-
 function startLaunchdService(label: string, manifestPath: string): void {
   const domain = getLaunchdDomain();
   const serviceTarget = `${domain}/${label}`;
@@ -995,17 +710,6 @@ function restartSystemdService(unitName: string): void {
   runCommand('systemctl', ['--user', 'restart', unitName]);
 }
 
-function restartLaunchdGatewayService(provider: GatewayProvider): void {
-  const label = getLaunchdLabel(provider);
-  const manifestPath = getLaunchdPlistPath(label);
-  restartLaunchdService(label, manifestPath);
-}
-
-function restartSystemdGatewayService(provider: GatewayProvider): void {
-  const unitName = getSystemdUnitName(provider);
-  restartSystemdService(unitName);
-}
-
 function restartLaunchdDaemonService(): void {
   const label = getLaunchdDaemonLabel();
   const manifestPath = getLaunchdPlistPath(label);
@@ -1015,27 +719,6 @@ function restartLaunchdDaemonService(): void {
 function restartSystemdDaemonService(): void {
   const unitName = getSystemdDaemonUnitName();
   restartSystemdService(unitName);
-}
-
-function startLaunchdGatewayService(provider: GatewayProvider): void {
-  const label = getLaunchdLabel(provider);
-  const manifestPath = getLaunchdPlistPath(label);
-  startLaunchdService(label, manifestPath);
-}
-
-function stopLaunchdGatewayService(provider: GatewayProvider): void {
-  const manifestPath = getLaunchdPlistPath(getLaunchdLabel(provider));
-  stopLaunchdService(manifestPath);
-}
-
-function startSystemdGatewayService(provider: GatewayProvider): void {
-  const unitName = getSystemdUnitName(provider);
-  startSystemdService(unitName);
-}
-
-function stopSystemdGatewayService(provider: GatewayProvider): void {
-  const unitName = getSystemdUnitName(provider);
-  stopSystemdService(unitName);
 }
 
 function startLaunchdDaemonService(): void {
@@ -1263,108 +946,6 @@ export function restartWebUiServiceIfInstalled(options: WebUiServiceOptions = {}
   }
 
   return getWebUiServiceStatus(options);
-}
-
-export function installGatewayService(provider: GatewayProvider): GatewayServiceInfo {
-  const platform = resolveServicePlatform();
-
-  if (platform === 'launchd') {
-    return installLaunchdGatewayService(provider);
-  }
-
-  return installSystemdGatewayService(provider);
-}
-
-export function uninstallGatewayService(provider: GatewayProvider): GatewayServiceInfo {
-  const platform = resolveServicePlatform();
-
-  if (platform === 'launchd') {
-    return uninstallLaunchdGatewayService(provider);
-  }
-
-  return uninstallSystemdGatewayService(provider);
-}
-
-export function getGatewayServiceStatus(provider: GatewayProvider): GatewayServiceStatus {
-  const platform = resolveServicePlatform();
-
-  if (platform === 'launchd') {
-    return getLaunchdGatewayServiceStatus(provider);
-  }
-
-  return getSystemdGatewayServiceStatus(provider);
-}
-
-export function startGatewayService(provider: GatewayProvider): GatewayServiceStatus {
-  const status = getGatewayServiceStatus(provider);
-
-  if (!status.installed) {
-    throw new Error(`Gateway service for ${provider} is not installed. Run \`pa gateway service install ${provider}\` first.`);
-  }
-
-  if (status.running) {
-    return status;
-  }
-
-  if (status.platform === 'launchd') {
-    startLaunchdGatewayService(provider);
-  } else {
-    startSystemdGatewayService(provider);
-  }
-
-  return getGatewayServiceStatus(provider);
-}
-
-export function stopGatewayService(provider: GatewayProvider): GatewayServiceStatus {
-  const status = getGatewayServiceStatus(provider);
-
-  if (!status.installed) {
-    throw new Error(`Gateway service for ${provider} is not installed. Run \`pa gateway service install ${provider}\` first.`);
-  }
-
-  if (!status.running) {
-    return status;
-  }
-
-  if (status.platform === 'launchd') {
-    stopLaunchdGatewayService(provider);
-  } else {
-    stopSystemdGatewayService(provider);
-  }
-
-  return getGatewayServiceStatus(provider);
-}
-
-export function restartGatewayService(provider: GatewayProvider): GatewayServiceStatus {
-  const status = getGatewayServiceStatus(provider);
-
-  if (!status.installed) {
-    throw new Error(`Gateway service for ${provider} is not installed. Run \`pa gateway service install ${provider}\` first.`);
-  }
-
-  if (status.platform === 'launchd') {
-    restartLaunchdGatewayService(provider);
-  } else {
-    restartSystemdGatewayService(provider);
-  }
-
-  return getGatewayServiceStatus(provider);
-}
-
-export function restartGatewayServiceIfInstalled(provider: GatewayProvider): GatewayServiceStatus | undefined {
-  const status = getGatewayServiceStatus(provider);
-
-  if (!status.installed) {
-    return undefined;
-  }
-
-  if (status.platform === 'launchd') {
-    restartLaunchdGatewayService(provider);
-  } else {
-    restartSystemdGatewayService(provider);
-  }
-
-  return getGatewayServiceStatus(provider);
 }
 
 export function restartManagedDaemonServiceIfInstalled(): ManagedDaemonServiceStatus | undefined {

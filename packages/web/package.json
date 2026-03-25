@@ -4,10 +4,10 @@
   "description": "Personal agent web UI",
   "type": "module",
   "scripts": {
-    "build:deps": "npm --prefix ../core run build && npm --prefix ../resources run build && npm --prefix ../daemon run build && npm --prefix ../gateway run build",
-    "build": "npm run build:deps && vite build && tsc -p tsconfig.server.json",
+    "build:deps": "npm --prefix ../core run build && npm --prefix ../resources run build && npm --prefix ../daemon run build && npm --prefix ../services run build",
+    "build": "npm run build:deps && vite build && rm -rf dist-server && tsc -p tsconfig.server.json",
     "build:client": "vite build",
-    "build:server": "npm run build:deps && tsc -p tsconfig.server.json",
+    "build:server": "npm run build:deps && rm -rf dist-server && tsc -p tsconfig.server.json",
     "dev:client": "vite",
     "start": "node dist-server/index.js"
   },
@@ -26,8 +26,8 @@
     "@fontsource/jetbrains-mono": "^5.2.8",
     "@mariozechner/pi-coding-agent": "*",
     "@personal-agent/core": "*",
-    "@personal-agent/gateway": "*",
     "@personal-agent/resources": "*",
+    "@personal-agent/services": "*",
     "@sinclair/typebox": "^0.34.48",
     "@uiw/react-codemirror": "^4.25.8",
     "diff": "^8.0.3",

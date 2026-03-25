@@ -41,7 +41,7 @@ describe('remote target install bundles', () => {
     writeFile(join(repoRoot, 'node_modules', 'chalk', 'index.js'), 'export default {}\n');
     writeFile(join(repoRoot, 'node_modules', '@personal-agent', 'placeholder.txt'), 'ignore me\n');
 
-    for (const packageName of ['cli', 'core', 'daemon', 'gateway', 'resources']) {
+    for (const packageName of ['cli', 'core', 'daemon', 'resources', 'services']) {
       writeFile(join(repoRoot, 'packages', packageName, 'package.json'), `{"name":"@personal-agent/${packageName}","type":"module"}\n`);
       writeFile(join(repoRoot, 'packages', packageName, 'dist', 'index.js'), `export const name = ${JSON.stringify(packageName)};\n`);
     }

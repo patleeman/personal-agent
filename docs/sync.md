@@ -25,9 +25,9 @@ The managed sync repo tracks these roots:
 - `pi-agent/sessions/**`
 
 Machine-local runtime files stay out of the synced surface.
-That includes inbox/read-state, conversation attention, deferred resumes, checkpoints, daemon state, gateway state, auth, generated `AGENTS.md` / `SYSTEM.md` / `APPEND_SYSTEM.md`, `bin/**`, and the session index.
+That includes inbox/read-state, conversation attention, deferred resumes, checkpoints, daemon state, auth, generated `AGENTS.md` / `SYSTEM.md` / `APPEND_SYSTEM.md`, `bin/**`, and the session index.
 
-`config/config.json`, `config/daemon.json`, `config/gateway.json`, and `config/web.json` remain machine-local by default.
+`config/config.json`, `config/daemon.json`, and `config/web.json` remain machine-local by default.
 
 ## First-time setup (first machine)
 

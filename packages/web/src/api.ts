@@ -1,4 +1,5 @@
-import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, CompanionAuthAdminState, CompanionAuthSessionState, CompanionPairingCodeResult, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationCwdChangeResult, ConversationExecutionState, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopAuthSessionState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, ExecutionTargetPathMapping, ExecutionTargetsState, FolderPickerResult, GatewayConfigUpdateInput, GatewayState, LiveSessionContext, LiveSessionMeta, LiveSessionPresenceState, McpServerDetail, McpToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, MemoryWorkItem, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectDiagnostics, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteConversationConnectionState, RemoteFolderListing, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SyncState, ToolsState, WebUiState, WorkspaceCommitDraftResult, WorkspaceFileDetail, WorkspaceGitCommitResult, WorkspaceGitDiffDetail, WorkspaceGitScope, WorkspaceGitStatusSummary, WorkspaceSnapshot } from './types';
+import type { ActivityEntry, ApplicationRestartRequestResult, AppStatus, CompanionAuthAdminState, CompanionAuthSessionState, CompanionConversationListResult, CompanionPairingCodeResult, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutomationPreferencesState, ConversationAutomationResponse, ConversationAutomationTemplateTodoItem, ConversationAutomationWorkflowPresetLibraryState, ConversationAutomationWorkspaceState, ConversationCwdChangeResult, ConversationExecutionState, ConversationProjectLinks, ConversationTitleSettingsState, ConversationTreeSnapshot, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopAuthSessionState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, ExecutionTargetPathMapping, ExecutionTargetsState, FolderPickerResult, LiveSessionContext, LiveSessionMeta, LiveSessionPresenceState, McpServerDetail, McpToolDetail, MemoryData, MemoryDocDetail, MemoryDocItem, MemoryWorkItem, ModelState, PackageInstallResult, ProfileState, ProjectDetail, ProjectDiagnostics, ProjectRecord, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteConversationConnectionState, RemoteFolderListing, ScheduledTaskDetail, ScheduledTaskSummary, SessionContextUsage, SessionDetail, SessionMeta, SyncState, ToolsState, WebUiState, WorkspaceCommitDraftResult, WorkspaceFileDetail, WorkspaceGitCommitResult, WorkspaceGitDiffDetail, WorkspaceGitScope, WorkspaceGitStatusSummary, WorkspaceSnapshot } from './types';
+import { buildApiPath } from './apiBase';
 import { recordApiTiming } from './perfDiagnostics';
 
 // ── Retry helpers for transient network errors (e.g. server restarts) ────────
@@ -39,37 +40,41 @@ async function fetchWithRetry(input: RequestInfo | URL, init?: RequestInit): Pro
 // ── API helpers ──────────────────────────────────────────────────────────────
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetchWithRetry('/api' + path, { cache: 'no-store' });
-  recordApiTiming('/api' + path, res);
+  const requestPath = buildApiPath(path);
+  const res = await fetchWithRetry(requestPath, { cache: 'no-store' });
+  recordApiTiming(requestPath, res);
   if (!res.ok) throw new Error(await readApiError(res));
   return res.json() as Promise<T>;
 }
 
 async function post<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetchWithRetry('/api' + path, {
+  const requestPath = buildApiPath(path);
+  const res = await fetchWithRetry(requestPath, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  recordApiTiming('/api' + path, res);
+  recordApiTiming(requestPath, res);
   if (!res.ok) throw new Error(await readApiError(res));
   return res.json() as Promise<T>;
 }
 
 async function patch<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetchWithRetry('/api' + path, {
+  const requestPath = buildApiPath(path);
+  const res = await fetchWithRetry(requestPath, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  recordApiTiming('/api' + path, res);
+  recordApiTiming(requestPath, res);
   if (!res.ok) throw new Error(await readApiError(res));
   return res.json() as Promise<T>;
 }
 
 async function del<T>(path: string): Promise<T> {
-  const res = await fetchWithRetry('/api' + path, { method: 'DELETE' });
-  recordApiTiming('/api' + path, res);
+  const requestPath = buildApiPath(path);
+  const res = await fetchWithRetry(requestPath, { method: 'DELETE' });
+  recordApiTiming(requestPath, res);
   if (!res.ok) throw new Error(await readApiError(res));
   return res.json() as Promise<T>;
 }
@@ -99,13 +104,6 @@ function withViewProfile(path: string, profile?: string): string {
 export const api = {
   // ── Core ──────────────────────────────────────────────────────────────────
   status:       () => get<AppStatus>('/status'),
-  gateway:      () => get<GatewayState>('/gateway'),
-  saveGatewayConfig: (input: GatewayConfigUpdateInput) => post<GatewayState>('/gateway/config', input),
-  restartGateway: () => post<GatewayState>('/gateway/restart'),
-  installGatewayService: () => post<GatewayState>('/gateway/service/install'),
-  startGatewayService: () => post<GatewayState>('/gateway/service/start'),
-  stopGatewayService: () => post<GatewayState>('/gateway/service/stop'),
-  uninstallGatewayService: () => post<GatewayState>('/gateway/service/uninstall'),
   daemon:       () => get<DaemonState>('/daemon'),
   installDaemonService: () => post<DaemonState>('/daemon/service/install'),
   startDaemonService: () => post<DaemonState>('/daemon/service/start'),
@@ -146,6 +144,18 @@ export const api = {
   activity:     () => get<ActivityEntry[]>('/activity'),
   activityById: (id: string) => get<ActivityEntry>(`/activity/${encodeURIComponent(id)}`),
   sessions:     () => get<SessionMeta[]>('/sessions'),
+  companionConversationList: (options?: { archivedOffset?: number; archivedLimit?: number }) => {
+    const params = new URLSearchParams();
+    if (typeof options?.archivedOffset === 'number' && Number.isInteger(options.archivedOffset) && options.archivedOffset >= 0) {
+      params.set('archivedOffset', String(options.archivedOffset));
+    }
+    if (typeof options?.archivedLimit === 'number' && Number.isInteger(options.archivedLimit) && options.archivedLimit > 0) {
+      params.set('archivedLimit', String(options.archivedLimit));
+    }
+
+    const query = params.toString();
+    return get<CompanionConversationListResult>(`/companion/conversations${query ? `?${query}` : ''}`);
+  },
   sessionDetail: (id: string, options?: { tailBlocks?: number }) => {
     const params = new URLSearchParams();
     if (typeof options?.tailBlocks === 'number' && Number.isInteger(options.tailBlocks) && options.tailBlocks > 0) {
@@ -321,7 +331,7 @@ export const api = {
   retryMemoryDistillRun: (id: string) => post<{ accepted: true; conversationId: string; runId: string; status: string }>(`/runs/${encodeURIComponent(id)}/memory-distill/retry`),
   recoverMemoryDistillRun: (id: string) => post<{ ok: true; runId: string; conversationId: string; sessionFile: string; cwd: string }>(`/runs/${encodeURIComponent(id)}/memory-distill/recover`),
   importRemoteRun: (id: string) => post<{ ok: true; runId: string; conversationId: string; summary: string; importedAt: string }>(`/runs/${encodeURIComponent(id)}/import`),
-  remoteRunTranscriptUrl: (id: string) => `/api/runs/${encodeURIComponent(id)}/remote-transcript`,
+  remoteRunTranscriptUrl: (id: string) => buildApiPath(`/runs/${encodeURIComponent(id)}/remote-transcript`),
 
   // ── Shell run ─────────────────────────────────────────────────────────────
   pickFolder: (cwd?: string) =>
@@ -434,7 +444,7 @@ export const api = {
   conversationArtifacts: (id: string) => get<{ conversationId: string; artifacts: ConversationArtifactSummary[] }>(`/conversations/${encodeURIComponent(id)}/artifacts`),
   conversationArtifact: (id: string, artifactId: string) => get<{ conversationId: string; artifact: ConversationArtifactRecord }>(`/conversations/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(artifactId)}`),
   deleteConversationArtifact: (id: string, artifactId: string) =>
-    fetch(`/api/conversations/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(artifactId)}`, { method: 'DELETE' }).then(async (res) => {
+    fetch(buildApiPath(`/conversations/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(artifactId)}`), { method: 'DELETE' }).then(async (res) => {
       if (!res.ok) {
         throw new Error(await readApiError(res));
       }
@@ -477,7 +487,7 @@ export const api = {
       attachments: ConversationAttachmentSummary[];
     }>(`/conversations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`, input),
   deleteConversationAttachment: (id: string, attachmentId: string) =>
-    fetch(`/api/conversations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`, { method: 'DELETE' }).then(async (res) => {
+    fetch(buildApiPath(`/conversations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}`), { method: 'DELETE' }).then(async (res) => {
       if (!res.ok) {
         throw new Error(await readApiError(res));
       }
@@ -492,7 +502,7 @@ export const api = {
   conversationProjects: (id: string) => get<ConversationProjectLinks>(`/conversations/${encodeURIComponent(id)}/projects`),
   deferredResumes: (id: string) => get<{ conversationId: string; resumes: DeferredResumeSummary[] }>(`/conversations/${encodeURIComponent(id)}/deferred-resumes`),
   scheduleDeferredResume: (id: string, input: { delay: string; prompt?: string }) =>
-    fetch(`/api/conversations/${encodeURIComponent(id)}/deferred-resumes`, {
+    fetch(buildApiPath(`/conversations/${encodeURIComponent(id)}/deferred-resumes`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
@@ -504,7 +514,7 @@ export const api = {
       return res.json() as Promise<{ conversationId: string; resume: DeferredResumeSummary; resumes: DeferredResumeSummary[] }>;
     }),
   fireDeferredResumeNow: (id: string, resumeId: string) =>
-    fetch(`/api/conversations/${encodeURIComponent(id)}/deferred-resumes/${encodeURIComponent(resumeId)}/fire`, { method: 'POST' }).then(async (res) => {
+    fetch(buildApiPath(`/conversations/${encodeURIComponent(id)}/deferred-resumes/${encodeURIComponent(resumeId)}/fire`), { method: 'POST' }).then(async (res) => {
       if (!res.ok) {
         throw new Error(await readApiError(res));
       }
@@ -512,7 +522,7 @@ export const api = {
       return res.json() as Promise<{ conversationId: string; resume: DeferredResumeSummary; resumes: DeferredResumeSummary[] }>;
     }),
   cancelDeferredResume: (id: string, resumeId: string) =>
-    fetch(`/api/conversations/${encodeURIComponent(id)}/deferred-resumes/${encodeURIComponent(resumeId)}`, { method: 'DELETE' }).then(async (res) => {
+    fetch(buildApiPath(`/conversations/${encodeURIComponent(id)}/deferred-resumes/${encodeURIComponent(resumeId)}`), { method: 'DELETE' }).then(async (res) => {
       if (!res.ok) {
         throw new Error(await readApiError(res));
       }
@@ -538,12 +548,12 @@ export const api = {
   addConversationProject: (id: string, projectId: string) =>
     post<ConversationProjectLinks>(`/conversations/${encodeURIComponent(id)}/projects`, { projectId }),
   removeConversationProject: (id: string, projectId: string) =>
-    fetch(`/api/conversations/${encodeURIComponent(id)}/projects/${encodeURIComponent(projectId)}`, { method: 'DELETE' }).then(r => {
+    fetch(buildApiPath(`/conversations/${encodeURIComponent(id)}/projects/${encodeURIComponent(projectId)}`), { method: 'DELETE' }).then(r => {
       if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
       return r.json() as Promise<ConversationProjectLinks>;
     }),
   changeConversationCwd: (id: string, cwd: string, surfaceId?: string) =>
-    fetch(`/api/conversations/${encodeURIComponent(id)}/cwd`, {
+    fetch(buildApiPath(`/conversations/${encodeURIComponent(id)}/cwd`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ cwd, ...(surfaceId ? { surfaceId } : {}) }),
@@ -613,18 +623,20 @@ export const api = {
   abortSession: (id: string, surfaceId?: string) =>
     post<{ ok: boolean }>(`/live-sessions/${id}/abort`, surfaceId ? { surfaceId } : {}),
 
-  destroySession: (id: string, surfaceId?: string) =>
-    fetchWithRetry(`/api/live-sessions/${id}`, {
+  destroySession: (id: string, surfaceId?: string) => {
+    const requestPath = buildApiPath(`/live-sessions/${id}`);
+    return fetchWithRetry(requestPath, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(surfaceId ? { surfaceId } : {}),
     }).then(async (r) => {
-      recordApiTiming(`/api/live-sessions/${id}`, r);
+      recordApiTiming(requestPath, r);
       if (!r.ok) {
         throw new Error(await readApiError(r));
       }
       return r.json() as Promise<{ ok: boolean }>;
-    }),
+    });
+  },
 
   forkEntries: (id: string) =>
     get<{ entryId: string; text: string }[]>(`/live-sessions/${id}/fork-entries`),

@@ -4,11 +4,10 @@ import {
   type ProjectActivityNotificationState,
 } from '@personal-agent/core';
 import type { DaemonStateSnapshot } from './daemon.js';
-import type { GatewayStateSnapshot } from './gateway.js';
 import { logWarn } from './logging.js';
 
 export type InternalAttentionKind = 'deployment' | 'service';
-export type MonitoredInternalService = 'daemon' | 'gateway';
+export type MonitoredInternalService = 'daemon';
 
 interface ClassifiedInternalServiceState {
   key: 'healthy' | 'inactive' | `issue:${string}`;
@@ -33,7 +32,6 @@ export interface ServiceAttentionMonitorOptions {
   stateRoot?: string;
   getCurrentProfile: () => string;
   readDaemonState: () => Promise<DaemonStateSnapshot>;
-  readGatewayState: (profile: string) => GatewayStateSnapshot;
   writeEntry?: (input: WriteInternalAttentionEntryInput) => void;
   logger?: {
     warn: (message: string, fields?: Record<string, unknown>) => void;
@@ -53,7 +51,6 @@ const DEFAULT_SUPPRESSION_MS = 20_000;
 
 const suppressedServiceAttentionUntilMs: Record<MonitoredInternalService, number> = {
   daemon: 0,
-  gateway: 0,
 };
 
 function sanitizeActivityIdSegment(value: string): string {
@@ -103,38 +100,16 @@ function summarizeDaemonIssue(state: ClassifiedInternalServiceState): string {
   return 'Daemon needs attention.';
 }
 
-function summarizeGatewayIssue(state: ClassifiedInternalServiceState): string {
-  if (state.key === 'issue:offline') {
-    return 'Gateway is offline.';
-  }
-
-  if (state.key === 'issue:misconfigured') {
-    return 'Gateway is not configured.';
-  }
-
-  if (state.key === 'issue:inspection') {
-    return 'Gateway status is degraded.';
-  }
-
-  return 'Gateway needs attention.';
+function summarizeIssue(_service: MonitoredInternalService, state: ClassifiedInternalServiceState): string {
+  return summarizeDaemonIssue(state);
 }
 
-function summarizeIssue(service: MonitoredInternalService, state: ClassifiedInternalServiceState): string {
-  return service === 'daemon'
-    ? summarizeDaemonIssue(state)
-    : summarizeGatewayIssue(state);
+function summarizeRecovery(_service: MonitoredInternalService): string {
+  return 'Daemon recovered.';
 }
 
-function summarizeRecovery(service: MonitoredInternalService): string {
-  return service === 'daemon'
-    ? 'Daemon recovered.'
-    : 'Gateway recovered.';
-}
-
-function supportHint(service: MonitoredInternalService): string {
-  return service === 'daemon'
-    ? 'Open the Daemon page for status, logs, and service controls.'
-    : 'Open the Gateway page for status, logs, and configuration.';
+function supportHint(_service: MonitoredInternalService): string {
+  return 'Open the Daemon page for status, logs, and service controls.';
 }
 
 function buildIssueDetails(
@@ -160,10 +135,6 @@ function buildRecoveryDetails(
     `Previous state: ${previousState.label}`,
     supportHint(service),
   ]);
-}
-
-function gatewayTokenMissing(snapshot: GatewayStateSnapshot): boolean {
-  return snapshot.warnings.some((warning) => warning.includes('Telegram bot token is not configured'));
 }
 
 export function writeInternalAttentionEntry(input: WriteInternalAttentionEntryInput): string {
@@ -195,7 +166,6 @@ export function suppressMonitoredServiceAttention(service: MonitoredInternalServ
 
 export function clearMonitoredServiceAttentionSuppression(): void {
   suppressedServiceAttentionUntilMs.daemon = 0;
-  suppressedServiceAttentionUntilMs.gateway = 0;
 }
 
 export function classifyDaemonAttentionState(snapshot: DaemonStateSnapshot): ClassifiedInternalServiceState {
@@ -225,44 +195,6 @@ export function classifyDaemonAttentionState(snapshot: DaemonStateSnapshot): Cla
   return {
     key: 'inactive',
     label: 'inactive',
-  };
-}
-
-export function classifyGatewayAttentionState(snapshot: GatewayStateSnapshot): ClassifiedInternalServiceState {
-  if (snapshot.service.error) {
-    return {
-      key: 'issue:inspection',
-      label: 'inspection error',
-      details: buildDetails(snapshot.warnings),
-    };
-  }
-
-  if (!snapshot.service.installed) {
-    return {
-      key: 'inactive',
-      label: 'inactive',
-    };
-  }
-
-  if (!snapshot.service.running) {
-    return {
-      key: 'issue:offline',
-      label: 'offline',
-      details: buildDetails(snapshot.warnings),
-    };
-  }
-
-  if (gatewayTokenMissing(snapshot)) {
-    return {
-      key: 'issue:misconfigured',
-      label: 'token missing',
-      details: buildDetails(snapshot.warnings),
-    };
-  }
-
-  return {
-    key: 'healthy',
-    label: 'healthy',
   };
 }
 
@@ -337,14 +269,6 @@ export function createServiceAttentionMonitor(options: ServiceAttentionMonitorOp
       });
     }
 
-    try {
-      const gatewayState = options.readGatewayState(profile);
-      handleTransition('gateway', classifyGatewayAttentionState(gatewayState), profile);
-    } catch (error) {
-      logger.warn('internal attention gateway poll failed', {
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
   };
 
   return {

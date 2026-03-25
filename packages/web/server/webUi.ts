@@ -25,9 +25,9 @@ import {
   uninstallWebUiService,
   type WebUiBadReleaseSummary,
   type WebUiDeploymentSummary,
-} from '@personal-agent/gateway';
+} from '@personal-agent/services';
 
-interface GatewayLogTail {
+interface LogTail {
   path?: string;
   lines: string[];
 }
@@ -73,7 +73,7 @@ interface WebUiServiceSummary {
 export interface WebUiStateSnapshot {
   warnings: string[];
   service: WebUiServiceSummary;
-  log: GatewayLogTail;
+  log: LogTail;
 }
 
 const WEB_REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? process.cwd();

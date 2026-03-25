@@ -67,7 +67,7 @@ describe('ask user questions', () => {
           {
             question: 'Select notifications',
             type: 'checkbox',
-            options: ['Email', 'Telegram'],
+            options: ['Email', 'SMS'],
           },
         ],
       },
@@ -91,7 +91,7 @@ describe('ask user questions', () => {
           style: 'check',
           options: [
             { value: 'Email', label: 'Email' },
-            { value: 'Telegram', label: 'Telegram' },
+            { value: 'SMS', label: 'SMS' },
           ],
         },
       ],
@@ -166,7 +166,7 @@ describe('ask user questions', () => {
           style: 'check' as const,
           options: [
             { value: 'email', label: 'Email' },
-            { value: 'telegram', label: 'Telegram' },
+            { value: 'sms', label: 'SMS' },
           ],
         },
       ],
@@ -175,11 +175,11 @@ describe('ask user questions', () => {
     expect(buildAskUserQuestionReplyText(singleQuestion, { target: ['prod'] })).toBe('Production');
     expect(buildAskUserQuestionReplyText(multiQuestion, {
       target: ['staging'],
-      notify: ['email', 'telegram'],
+      notify: ['email', 'sms'],
     })).toBe([
       'Answers:',
       '- Choose a target: Staging',
-      '- Select notifications: Email, Telegram',
+      '- Select notifications: Email, SMS',
     ].join('\n'));
   });
 
@@ -201,7 +201,7 @@ describe('ask user questions', () => {
           style: 'check' as const,
           options: [
             { value: 'email', label: 'Email' },
-            { value: 'telegram', label: 'Telegram' },
+            { value: 'sms', label: 'SMS' },
           ],
         },
       ],
@@ -212,7 +212,7 @@ describe('ask user questions', () => {
       target: ['prod'],
       notify: ['email'],
     })).toBe(true);
-    expect(resolveAskUserQuestionAnswerLabels(presentation.questions[1]!, ['telegram', 'email'])).toEqual(['Telegram', 'Email']);
+    expect(resolveAskUserQuestionAnswerLabels(presentation.questions[1]!, ['sms', 'email'])).toEqual(['SMS', 'Email']);
   });
 
   it('resolves default option indices and wraps navigation indices', () => {
@@ -249,13 +249,13 @@ describe('ask user questions', () => {
       style: 'check' as const,
       options: [
         { value: 'email', label: 'Email' },
-        { value: 'telegram', label: 'Telegram' },
+        { value: 'sms', label: 'SMS' },
       ],
     };
 
     expect(shouldAdvanceAskUserQuestionAfterSelection(radioQuestion, ['prod'])).toBe(true);
     expect(shouldAdvanceAskUserQuestionAfterSelection(checkQuestion, ['email'])).toBe(false);
-    expect(shouldAdvanceAskUserQuestionAfterSelection(checkQuestion, ['email', 'telegram'])).toBe(true);
+    expect(shouldAdvanceAskUserQuestionAfterSelection(checkQuestion, ['email', 'sms'])).toBe(true);
     expect(shouldAdvanceAskUserQuestionAfterSelection(checkQuestion, [])).toBe(false);
   });
 

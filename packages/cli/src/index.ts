@@ -59,7 +59,6 @@ import {
   type ParsedTaskDefinition,
 } from '@personal-agent/daemon';
 import {
-  SUPPORTED_GATEWAY_PROVIDERS,
   activateWebUiSlot,
   findBadWebUiRelease,
   getInactiveWebUiSlot,
@@ -71,8 +70,6 @@ import {
   installWebUiService,
   listBadWebUiReleases,
   markWebUiReleaseBad,
-  registerGatewayCliCommands,
-  restartGatewayServiceIfInstalled,
   restartManagedDaemonServiceIfInstalled,
   resolveWebUiTailscaleUrl,
   restartWebUiService,
@@ -84,11 +81,10 @@ import {
   syncWebUiTailscaleServe,
   uninstallManagedDaemonService,
   uninstallWebUiService,
-  type RegisteredCliCommand,
   type WebUiReleaseSummary,
   type WebUiServiceOptions,
   type WebUiServiceStatus,
-} from '@personal-agent/gateway';
+} from '@personal-agent/services';
 import { hasOption } from './args.js';
 import { readTailLines } from './file-utils.js';
 import { memoryCommand } from './memory.js';
@@ -1781,20 +1777,6 @@ function updateRepoPiPackage(repoRoot: string): RepoPiUpdateResult {
     ),
   );
 
-  outputs.push(
-    runNpmCommand(
-      repoRoot,
-      [
-        'install',
-        '--no-audit',
-        '--no-fund',
-        '--workspace',
-        '@personal-agent/gateway',
-        `${PI_PACKAGE_NAME}@latest`,
-      ],
-      `Unable to install latest ${PI_PACKAGE_NAME} in @personal-agent/gateway`,
-    ),
-  );
 
   const repoInvocation = resolveRepoPiCommand(repoRoot);
   if (!repoInvocation) {
@@ -1872,8 +1854,6 @@ async function restartDaemonWithManagedServiceFallback(): Promise<{
 }
 
 interface RestartSummary {
-  restartedGatewayServices: string[];
-  skippedGatewayServices: string[];
   daemonStatus: string;
   webUiStatus: string;
 }
@@ -1943,48 +1923,7 @@ async function restartBackgroundServices(options: {
     console.log(`  ${warning('Web UI service manager not found; skipping managed web UI restart')}`);
   }
 
-  const restartedGatewayServices: string[] = [];
-  const skippedGatewayServices: string[] = [];
-  const failedGatewayServices: string[] = [];
-
-  if (!serviceManagerAvailable) {
-    console.log(`  ${warning('Gateway service manager not found; skipping managed gateway restarts')}`);
-    skippedGatewayServices.push(...SUPPORTED_GATEWAY_PROVIDERS);
-  } else {
-    for (const provider of SUPPORTED_GATEWAY_PROVIDERS) {
-      const gatewaySpinner = spinner(`Restarting ${provider} gateway service`);
-      gatewaySpinner.start();
-
-      try {
-        const status = restartGatewayServiceIfInstalled(provider);
-
-        if (status) {
-          gatewaySpinner.succeed(`Restarted ${provider} gateway service`);
-          restartedGatewayServices.push(provider);
-        } else {
-          gatewaySpinner.succeed(`${provider} gateway service not installed (skipped)`);
-          skippedGatewayServices.push(provider);
-        }
-      } catch (error) {
-        if (isMissingServiceManagerError(error)) {
-          gatewaySpinner.succeed('Service manager not available (skipped)');
-          skippedGatewayServices.push(provider);
-          continue;
-        }
-
-        gatewaySpinner.fail(`Failed to restart ${provider} gateway service`);
-        failedGatewayServices.push(`${provider}: ${(error as Error).message}`);
-      }
-    }
-  }
-
-  if (failedGatewayServices.length > 0) {
-    throw new Error(`Failed to restart gateway services:\n${failedGatewayServices.map((detail) => `- ${detail}`).join('\n')}`);
-  }
-
   return {
-    restartedGatewayServices,
-    skippedGatewayServices,
     daemonStatus,
     webUiStatus,
   };
@@ -2033,8 +1972,6 @@ async function restartCommand(args: string[]): Promise<number> {
     console.log(keyValue('build', buildStatus));
     console.log(keyValue('daemon', summary.daemonStatus));
     console.log(keyValue('web ui', summary.webUiStatus));
-    console.log(keyValue('gateway services restarted', summary.restartedGatewayServices.length > 0 ? summary.restartedGatewayServices.join(', ') : 'none'));
-    console.log(keyValue('gateway services skipped', summary.skippedGatewayServices.length > 0 ? summary.skippedGatewayServices.join(', ') : 'none'));
 
     if (
       process.env.PERSONAL_AGENT_RESTART_NOTIFY_INBOX === '1'
@@ -2050,8 +1987,6 @@ async function restartCommand(args: string[]): Promise<number> {
             requestedAt: process.env.PERSONAL_AGENT_RESTART_REQUESTED_AT,
             daemonStatus: summary.daemonStatus,
             webUiStatus: summary.webUiStatus,
-            restartedGatewayServices: summary.restartedGatewayServices,
-            skippedGatewayServices: summary.skippedGatewayServices,
           });
         } catch (error) {
           console.log(`  ${warning(`Unable to write restart completion inbox entry: ${(error as Error).message}`)}`);
@@ -2166,8 +2101,6 @@ async function updateCommand(args: string[]): Promise<number> {
     console.log(keyValue('build', 'repo packages rebuilt'));
     console.log(keyValue('daemon', summary.daemonStatus));
     console.log(keyValue('web ui', summary.webUiStatus));
-    console.log(keyValue('gateway services restarted', summary.restartedGatewayServices.length > 0 ? summary.restartedGatewayServices.join(', ') : 'none'));
-    console.log(keyValue('gateway services skipped', summary.skippedGatewayServices.length > 0 ? summary.skippedGatewayServices.join(', ') : 'none'));
 
     if (
       process.env.PERSONAL_AGENT_UPDATE_NOTIFY_INBOX === '1'
@@ -2183,8 +2116,6 @@ async function updateCommand(args: string[]): Promise<number> {
             requestedAt: process.env.PERSONAL_AGENT_UPDATE_REQUESTED_AT,
             daemonStatus: summary.daemonStatus,
             webUiStatus: summary.webUiStatus,
-            restartedGatewayServices: summary.restartedGatewayServices,
-            skippedGatewayServices: summary.skippedGatewayServices,
           });
         } catch (error) {
           console.log(`  ${warning(`Unable to write update completion inbox entry: ${(error as Error).message}`)}`);
@@ -2391,21 +2322,6 @@ function formatTaskSchedule(task: ParsedTaskDefinition): string {
   return `at ${task.schedule.at}`;
 }
 
-function formatTaskOutputTargets(task: ParsedTaskDefinition): string {
-  if (!task.output || task.output.targets.length === 0) {
-    return 'none';
-  }
-
-  const parts = task.output.targets.map((target) => {
-    const threadSuffix = target.messageThreadId !== undefined
-      ? `#thread:${target.messageThreadId}`
-      : '';
-    return `telegram:${target.chatId}${threadSuffix}`;
-  });
-
-  return `${task.output.when} -> ${parts.join(', ')}`;
-}
-
 function resolveTaskListStatus(
   task: ParsedTaskDefinition,
   runtime: TaskRuntimeRecord | undefined,
@@ -2451,7 +2367,6 @@ function toTaskListPayload(entry: TaskListEntry): {
   model: string | null;
   cwd: string | null;
   timeoutSeconds: number;
-  output: ParsedTaskDefinition['output'] | null;
   filePath: string;
   runtime: TaskRuntimeRecord | null;
 } {
@@ -2466,7 +2381,6 @@ function toTaskListPayload(entry: TaskListEntry): {
     model: task.modelRef ?? null,
     cwd: task.cwd ?? null,
     timeoutSeconds: task.timeoutSeconds,
-    output: task.output ?? null,
     filePath: task.filePath,
     runtime: runtime ?? null,
   };
@@ -2702,7 +2616,6 @@ async function tasksCommand(args: string[]): Promise<number> {
       console.log(bullet(`${task.id}: ${status}`));
       console.log(keyValue('Schedule', formatTaskSchedule(task), 4));
       console.log(keyValue('Profile', task.profile, 4));
-      console.log(keyValue('Output', formatTaskOutputTargets(task), 4));
       console.log(keyValue('File', task.filePath, 4));
 
       if (runtime?.lastRunAt) {
@@ -2769,7 +2682,6 @@ async function tasksCommand(args: string[]): Promise<number> {
     }
 
     console.log(keyValue('Timeout', `${task.timeoutSeconds}s`));
-    console.log(keyValue('Output', formatTaskOutputTargets(task)));
 
     if (runtime) {
       console.log('');
@@ -4901,19 +4813,6 @@ interface CliCommandDefinition {
   run: CommandHandler;
 }
 
-function normalizeCommandUsage(command: Pick<RegisteredCliCommand, 'name' | 'usage'>): string {
-  const usage = command.usage.trim();
-  if (usage.startsWith('pa ')) {
-    return usage.slice(3);
-  }
-
-  if (usage.length > 0) {
-    return usage;
-  }
-
-  return `${command.name} [args...]`;
-}
-
 function buildCommandDefinitions(): CliCommandDefinition[] {
   const definitions: CliCommandDefinition[] = [
     {
@@ -4952,7 +4851,7 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
     {
       name: 'restart',
       usage: 'restart [--rebuild]',
-      description: 'Restart daemon, managed web UI, and managed gateway services (use --rebuild to rebuild packages and blue/green redeploy the web UI)',
+      description: 'Restart the daemon and managed web UI (use --rebuild to rebuild packages and blue/green redeploy the web UI)',
       run: restartCommand,
     },
     {
@@ -5028,20 +4927,6 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
 
   ];
 
-  registerGatewayCliCommands((command) => {
-    if (definitions.some((definition) => definition.name === command.name)) {
-      throw new Error(`Cannot register duplicate CLI command: ${command.name}`);
-    }
-
-    definitions.push({
-      name: command.name,
-      usage: normalizeCommandUsage(command),
-      description: command.description,
-      disableBuiltInHelp: command.name === 'gateway',
-      run: command.run,
-    });
-  });
-
   return definitions;
 }
 
@@ -5112,8 +4997,6 @@ Examples:
   pa restart
   pa update
   pa update --repo-only
-  pa gateway telegram start
-  pa gateway service install telegram
   pa daemon
   pa daemon status
   pa daemon service install

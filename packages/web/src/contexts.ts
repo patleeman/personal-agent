@@ -7,7 +7,6 @@ import type {
   AppEventTopic,
   DaemonState,
   DurableRunListResult,
-  GatewayState,
   ProjectRecord,
   ScheduledTaskSummary,
   SessionMeta,
@@ -42,7 +41,6 @@ export const INITIAL_APP_EVENT_VERSIONS: AppEventVersions = {
   runs: 0,
   automation: 0,
   daemon: 0,
-  gateway: 0,
   sync: 0,
   webUi: 0,
   executionTargets: 0,
@@ -107,22 +105,18 @@ export function useAppData() {
 
 export interface SystemStatusContextValue {
   daemon: DaemonState | null;
-  gateway: GatewayState | null;
   sync: SyncState | null;
   webUi: WebUiState | null;
   setDaemon: (value: DaemonState) => void;
-  setGateway: (value: GatewayState) => void;
   setSync: (value: SyncState) => void;
   setWebUi: (value: WebUiState) => void;
 }
 
 export const SystemStatusContext = createContext<SystemStatusContextValue>({
   daemon: null,
-  gateway: null,
   sync: null,
   webUi: null,
   setDaemon: () => {},
-  setGateway: () => {},
   setSync: () => {},
   setWebUi: () => {},
 });

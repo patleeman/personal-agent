@@ -1,5 +1,4 @@
 import type { ScannedDurableRun, ScannedDurableRunsSummary } from './runs/store.js';
-import type { BackgroundRunNotificationSpec } from './runs/background-runs.js';
 import type { BackgroundRunAgentSpec } from './background-run-agent.js';
 import type { RecoverableWebLiveConversationRun, WebLiveConversationPendingOperation, WebLiveConversationRunState } from './runs/web-live-conversations.js';
 
@@ -70,25 +69,6 @@ export interface EmitResult {
   reason?: string;
 }
 
-export type GatewayNotificationProvider = 'telegram';
-
-export interface GatewayNotification {
-  id: string;
-  createdAt: string;
-  source: string;
-  gateway: GatewayNotificationProvider;
-  destinationId: string;
-  messageThreadId?: number;
-  message: string;
-  taskId?: string;
-  status?: 'success' | 'failed';
-  logPath?: string;
-}
-
-export interface PullGatewayNotificationsResult {
-  notifications: GatewayNotification[];
-}
-
 export interface ListDurableRunsResult {
   scannedAt: string;
   runs: ScannedDurableRun[];
@@ -117,7 +97,6 @@ export interface StartBackgroundRunRequestInput {
     id?: string;
     filePath?: string;
   };
-  notification?: BackgroundRunNotificationSpec;
   manifestMetadata?: Record<string, unknown>;
   checkpointPayload?: Record<string, unknown>;
 }

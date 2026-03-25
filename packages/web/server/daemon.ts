@@ -18,9 +18,9 @@ import {
   startManagedDaemonService,
   stopManagedDaemonService,
   uninstallManagedDaemonService,
-} from '@personal-agent/gateway';
+} from '@personal-agent/services';
 
-interface GatewayLogTail {
+interface LogTail {
   path?: string;
   lines: string[];
 }
@@ -49,7 +49,7 @@ export interface DaemonStateSnapshot {
   warnings: string[];
   service: DaemonServiceSummary;
   runtime: DaemonRuntimeSummary;
-  log: GatewayLogTail;
+  log: LogTail;
 }
 
 function resolveDaemonServicePlatform(): string {

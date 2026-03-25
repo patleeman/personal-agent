@@ -303,7 +303,7 @@ function configureManagedMergeDrivers(_syncRoot: string): void {
 }
 
 function syncRepoReadme(): string {
-  return `# personal-agent sync repo\n\nManaged by \`pa sync setup\`.\n\nThis repo tracks portable cross-machine state from sync roots:\n\n- \`profiles/*.json\`\n- \`agents/**\`\n- \`settings/**\`\n- \`models/**\`\n- \`skills/**\`\n- \`memory/**\`\n- \`tasks/**\`\n- \`projects/**\`\n- \`pi-agent/sessions/**\`\n\nBuilt-in merge handling is configured for:\n\n- append-only session transcripts under \`pi-agent/sessions/**/*.jsonl\`\n\nMachine-local runtime state such as inbox/read state, conversation attention, deferred resumes, checkpoints, auth, generated prompt materialization, daemon state, gateway state, and package bins stays outside the synced surface. Machine-local config (including \`config/config.json\` default profile selection) is intentionally not synced.\n`;
+  return `# personal-agent sync repo\n\nManaged by \`pa sync setup\`.\n\nThis repo tracks portable cross-machine state from sync roots:\n\n- \`profiles/*.json\`\n- \`agents/**\`\n- \`settings/**\`\n- \`models/**\`\n- \`skills/**\`\n- \`memory/**\`\n- \`tasks/**\`\n- \`projects/**\`\n- \`pi-agent/sessions/**\`\n\nBuilt-in merge handling is configured for:\n\n- append-only session transcripts under \`pi-agent/sessions/**/*.jsonl\`\n\nMachine-local runtime state such as inbox/read state, conversation attention, deferred resumes, checkpoints, auth, generated prompt materialization, daemon state, and package bins stays outside the synced surface. Machine-local config (including \`config/config.json\` default profile selection) is intentionally not synced.\n`;
 }
 
 function migrateLegacyPiAgentRuntimeArtifacts(stateRoot: string, syncRoot: string): void {

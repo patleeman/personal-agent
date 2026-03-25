@@ -21,7 +21,7 @@ import {
   readSystemComponentFromSearch,
   type SystemComponentId,
 } from '../systemSelection';
-import type { DaemonState, DurableRunRecord, GatewayState, SyncState, WebUiState } from '../types';
+import type { DaemonState, DurableRunRecord, SyncState, WebUiState } from '../types';
 import { timeAgo } from '../utils';
 import { buildWebUiCompanionAccessSummary } from '../webUiCompanion';
 import { ListLinkRow, LoadingState, PageHeader, PageHeading, Pill, ToolbarButton, type PillTone } from '../components/ui';
@@ -140,37 +140,6 @@ function buildDaemonItem(data: DaemonState | null): SystemRowItem {
       data.warnings.length > 0 ? pluralize(data.warnings.length, 'warning') : '',
     ].filter(Boolean).join(' · '),
     attention: data.warnings[0] ?? (data.runtime.running ? null : summary),
-  };
-}
-
-function buildGatewayItem(data: GatewayState | null): SystemRowItem {
-  if (!data) {
-    return {
-      id: 'gateway',
-      label: 'Gateway',
-      state: 'loading',
-      tone: 'muted',
-      summary: 'Loading gateway state…',
-    };
-  }
-
-  const summary = data.service.running
-    ? `${data.currentProfile} profile · ${data.pendingMessages.length} pending · ${data.conversations.length} conversations`
-    : data.service.installed
-      ? 'Gateway stopped'
-      : 'Gateway not installed';
-
-  return {
-    id: 'gateway',
-    label: 'Gateway',
-    state: data.warnings.length > 0 ? 'issue' : data.service.running ? 'healthy' : 'offline',
-    tone: data.warnings.length > 0 ? 'warning' : data.service.running ? 'success' : 'muted',
-    summary,
-    meta: [
-      `${data.access.allowlistChatIds.length} allowlisted chat${data.access.allowlistChatIds.length === 1 ? '' : 's'}`,
-      data.warnings.length > 0 ? pluralize(data.warnings.length, 'warning') : '',
-    ].filter(Boolean).join(' · '),
-    attention: data.warnings[0] ?? (data.service.running ? null : summary),
   };
 }
 
@@ -327,11 +296,9 @@ export function SystemPage() {
   const { tasks, sessions, runs, setRuns } = useAppData();
   const {
     daemon,
-    gateway,
     sync,
     webUi,
     setDaemon,
-    setGateway,
     setSync,
     setWebUi,
   } = useSystemStatus();
@@ -362,9 +329,6 @@ export function SystemPage() {
         api.sync()
           .then((next) => setSync(next))
           .catch((error) => recordError('Sync', error)),
-        api.gateway()
-          .then((next) => setGateway(next))
-          .catch((error) => recordError('Gateway', error)),
         api.webUiState()
           .then((next) => setWebUi(next))
           .catch((error) => recordError('Web UI', error)),
@@ -379,7 +343,7 @@ export function SystemPage() {
     } finally {
       setRefreshing(false);
     }
-  }, [setDaemon, setGateway, setRuns, setSync, setWebUi]);
+  }, [setDaemon, setRuns, setSync, setWebUi]);
 
   function clearActionMonitor() {
     if (actionTimeoutRef.current !== null) {
@@ -466,9 +430,8 @@ export function SystemPage() {
   const items = useMemo<SystemRowItem[]>(() => [
     buildWebUiItem(webUi),
     buildDaemonItem(daemon),
-    buildGatewayItem(gateway),
     buildSyncItem(sync),
-  ], [daemon, gateway, sync, webUi]);
+  ], [daemon, sync, webUi]);
 
   const selectedRunId = getSystemRunIdFromSearch(location.search);
   const explicitComponent = readSystemComponentFromSearch(location.search);
@@ -520,7 +483,7 @@ export function SystemPage() {
           title="System"
           meta={(
             <>
-              4 services
+              3 services
               {!allReady
                 ? <span className="ml-2 text-secondary">· loading latest state</span>
                 : attentionCount > 0

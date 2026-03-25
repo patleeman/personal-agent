@@ -1,13 +1,12 @@
-import { type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useMemo, useRef, useState } from 'react';
+import { memo, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { cx } from '../components/ui';
 import { getConversationDisplayTitle } from '../conversationTitle';
-import { useAppData, useLiveTitles, useSseConnection } from '../contexts';
+import { useLiveTitles, useSseConnection } from '../contexts';
 import { useApi } from '../hooks';
-import { fetchSessionsSnapshot } from '../sessionSnapshot';
-import { readConversationLayout, setConversationArchivedState } from '../sessionTabs';
-import type { SessionMeta, SseConnectionStatus } from '../types';
+import { setConversationArchivedState } from '../sessionTabs';
+import type { CompanionConversationListResult, SessionMeta, SseConnectionStatus } from '../types';
 import { useCompanionLayoutContext } from './CompanionLayout';
 import { buildCompanionConversationPath } from './routes';
 
@@ -71,6 +70,8 @@ const SESSION_MESSAGE_COUNT_FORMATTER = new Intl.NumberFormat();
 const COMPANION_ROW_SWIPE_SLOP = 12;
 const COMPANION_ROW_SWIPE_REVEAL_THRESHOLD = 48;
 const COMPANION_ROW_SWIPE_HIDE_THRESHOLD = 28;
+const COMPANION_ARCHIVED_PAGE_SIZE = 30;
+const COMPANION_ARCHIVE_SYNC_DELAY_MS = 180;
 
 function buildCompanionOverviewLabel(input: {
   total: number;
@@ -230,6 +231,107 @@ export function partitionCompanionSessions(
   return { live, needsReview, active, archived, recent };
 }
 
+function applyCompanionConversationTitles(
+  result: CompanionConversationListResult,
+  liveTitles: ReadonlyMap<string, string>,
+): CompanionConversationListResult {
+  const applyTitles = (sessions: SessionMeta[]) => sessions.map((session) => {
+    const title = getConversationDisplayTitle(liveTitles.get(session.id), session.title);
+    return title === session.title ? session : { ...session, title };
+  });
+
+  return {
+    ...result,
+    live: applyTitles(result.live),
+    needsReview: applyTitles(result.needsReview),
+    active: applyTitles(result.active),
+    archived: applyTitles(result.archived),
+  };
+}
+
+function mergeCompanionConversationLists(
+  current: CompanionConversationListResult,
+  nextPage: CompanionConversationListResult,
+): CompanionConversationListResult {
+  const mergedArchived = [...current.archived];
+  const seenArchivedIds = new Set(mergedArchived.map((session) => session.id));
+
+  for (const session of nextPage.archived) {
+    if (seenArchivedIds.has(session.id)) {
+      continue;
+    }
+
+    seenArchivedIds.add(session.id);
+    mergedArchived.push(session);
+  }
+
+  return {
+    ...nextPage,
+    archived: mergedArchived,
+    archivedOffset: 0,
+    archivedLimit: mergedArchived.length,
+    hasMoreArchived: mergedArchived.length < nextPage.archivedTotal,
+  };
+}
+
+function setCompanionConversationArchivedStateInList(
+  current: CompanionConversationListResult,
+  sessionId: string,
+  archived: boolean,
+): CompanionConversationListResult {
+  const workspaceSessionIdSet = new Set(current.workspaceSessionIds);
+  const removeSession = (sessions: SessionMeta[]) => sessions.filter((session) => session.id !== sessionId);
+  const archivedWithoutSession = removeSession(current.archived);
+  const activeWithoutSession = removeSession(current.active);
+  const liveWithoutSession = removeSession(current.live);
+  const needsReviewWithoutSession = removeSession(current.needsReview);
+  const session = [
+    ...current.live,
+    ...current.needsReview,
+    ...current.active,
+    ...current.archived,
+  ].find((entry) => entry.id === sessionId);
+
+  if (!session) {
+    return current;
+  }
+
+  if (archived) {
+    workspaceSessionIdSet.delete(sessionId);
+  } else {
+    workspaceSessionIdSet.add(sessionId);
+  }
+
+  let nextArchived = archivedWithoutSession;
+  let nextActive = activeWithoutSession;
+
+  if (!session.isLive && !session.needsAttention) {
+    if (workspaceSessionIdSet.has(sessionId)) {
+      nextActive = sortCompanionSessions([...activeWithoutSession, session]);
+    } else {
+      nextArchived = sortCompanionSessions([...archivedWithoutSession, session]);
+      if (current.archived.length < current.archivedTotal) {
+        nextArchived = nextArchived.slice(0, current.archived.length);
+      }
+    }
+  }
+
+  const wasArchived = current.archived.some((entry) => entry.id === sessionId);
+  const willBeArchived = !session.isLive && !session.needsAttention && !workspaceSessionIdSet.has(sessionId);
+  const nextArchivedTotal = Math.max(0, current.archivedTotal + Number(willBeArchived) - Number(wasArchived));
+
+  return {
+    ...current,
+    live: liveWithoutSession.length === current.live.length ? current.live : sortCompanionSessions([...liveWithoutSession, session]),
+    needsReview: needsReviewWithoutSession.length === current.needsReview.length ? current.needsReview : sortCompanionSessions([...needsReviewWithoutSession, session]),
+    active: nextActive,
+    archived: nextArchived,
+    archivedTotal: nextArchivedTotal,
+    hasMoreArchived: nextArchived.length < nextArchivedTotal,
+    workspaceSessionIds: Array.from(workspaceSessionIdSet),
+  };
+}
+
 function buildSessionFlags(session: SessionMeta): string[] {
   const flags: string[] = [];
   if (session.isLive) {
@@ -267,20 +369,20 @@ export function getCompanionConversationRowSwipeIntent(input: {
   return 'none';
 }
 
-function CompanionConversationRow({
+const CompanionConversationRow = memo(function CompanionConversationRow({
   session,
   inWorkspace,
   actionBusy,
   actionsRevealed,
   onSetArchived,
-  onToggleActions,
+  onRevealActions,
 }: {
   session: SessionMeta;
   inWorkspace: boolean;
   actionBusy: boolean;
   actionsRevealed: boolean;
   onSetArchived: (sessionId: string, archived: boolean) => void;
-  onToggleActions: (open: boolean) => void;
+  onRevealActions: (sessionId: string | null) => void;
 }) {
   const gestureRef = useRef<{ pointerId: number; startX: number; startY: number } | null>(null);
   const suppressClickRef = useRef(false);
@@ -332,14 +434,14 @@ function CompanionConversationRow({
 
     if (intent === 'reveal') {
       suppressClickRef.current = true;
-      onToggleActions(true);
+      onRevealActions(session.id);
     } else if (intent === 'hide') {
       suppressClickRef.current = true;
-      onToggleActions(false);
+      onRevealActions(null);
     }
 
     gestureRef.current = null;
-  }, [actionsRevealed, onToggleActions]);
+  }, [actionsRevealed, onRevealActions, session.id]);
 
   const handlePointerCancel = useCallback(() => {
     gestureRef.current = null;
@@ -355,9 +457,9 @@ function CompanionConversationRow({
 
     if (actionsRevealed) {
       event.preventDefault();
-      onToggleActions(false);
+      onRevealActions(null);
     }
-  }, [actionsRevealed, onToggleActions]);
+  }, [actionsRevealed, onRevealActions]);
 
   return (
     <div className="relative overflow-hidden border-b border-border-subtle last:border-b-0">
@@ -366,7 +468,7 @@ function CompanionConversationRow({
           <button
             type="button"
             onClick={() => {
-              onToggleActions(false);
+              onRevealActions(null);
               onSetArchived(session.id, inWorkspace);
             }}
             disabled={!actionsRevealed || actionBusy}
@@ -445,7 +547,7 @@ function CompanionConversationRow({
 
         <button
           type="button"
-          onClick={() => onToggleActions(!actionsRevealed)}
+          onClick={() => onRevealActions(actionsRevealed ? null : session.id)}
           aria-label={toggleActionsLabel}
           aria-controls={actionsId}
           aria-expanded={actionsRevealed}

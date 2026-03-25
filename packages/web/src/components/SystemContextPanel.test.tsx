@@ -11,7 +11,6 @@ describe('SystemContextPanel', () => {
     const html = renderToString(
       <SystemStatusContext.Provider value={{
         daemon: null,
-        gateway: null,
         sync: null,
         webUi: {
           warnings: [],
@@ -36,7 +35,6 @@ describe('SystemContextPanel', () => {
           },
         },
         setDaemon: vi.fn(),
-        setGateway: vi.fn(),
         setSync: vi.fn(),
         setWebUi: vi.fn(),
       }}>

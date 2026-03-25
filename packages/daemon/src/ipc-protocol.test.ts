@@ -18,22 +18,6 @@ describe('parseRequest', () => {
     expect(parsed.type).toBe('emit');
   });
 
-  it('parses notifications.pull request', () => {
-    const parsed = parseRequest(JSON.stringify({
-      id: 'req_2',
-      type: 'notifications.pull',
-      gateway: 'telegram',
-      limit: 10,
-    }));
-
-    expect(parsed).toEqual({
-      id: 'req_2',
-      type: 'notifications.pull',
-      gateway: 'telegram',
-      limit: 10,
-    });
-  });
-
   it('parses runs.list request', () => {
     const parsed = parseRequest(JSON.stringify({
       id: 'req_3',

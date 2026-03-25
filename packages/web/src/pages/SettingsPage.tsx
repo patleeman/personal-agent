@@ -612,7 +612,7 @@ export function SettingsPage() {
                 <div className="space-y-1">
                   <h2 className="text-[15px] font-medium text-primary">Profile</h2>
                   <p className="ui-card-meta max-w-xl">
-                    Changes the active profile for inbox, projects, AGENTS/skills context, gateway, and new live sessions. The app reloads after switching.
+                    Changes the active profile for inbox, projects, AGENTS/skills context, and new live sessions. The app reloads after switching.
                   </p>
                 </div>
 

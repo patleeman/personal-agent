@@ -7,8 +7,6 @@ import { resolveDaemonPaths } from './paths.js';
 import type {
   DaemonEventInput,
   DaemonStatus,
-  GatewayNotification,
-  GatewayNotificationProvider,
   ListDurableRunsResult,
   GetDurableRunResult,
   StartScheduledTaskRunResult,
@@ -153,26 +151,6 @@ export async function stopDaemon(config?: DaemonConfig): Promise<void> {
     },
     config,
   );
-}
-
-export async function pullGatewayNotifications(
-  input: {
-    gateway: GatewayNotificationProvider;
-    limit?: number;
-  },
-  config?: DaemonConfig,
-): Promise<GatewayNotification[]> {
-  const result = await sendRequest<{ notifications: GatewayNotification[] }>(
-    {
-      id: `req_${randomUUID()}`,
-      type: 'notifications.pull',
-      gateway: input.gateway,
-      limit: input.limit,
-    },
-    config,
-  );
-
-  return result.notifications;
 }
 
 export async function listDurableRuns(config?: DaemonConfig): Promise<ListDurableRunsResult> {

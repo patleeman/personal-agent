@@ -9,7 +9,7 @@ const { getWebUiServiceStatusMock } = vi.hoisted(() => ({
   getWebUiServiceStatusMock: vi.fn(),
 }));
 
-vi.mock('@personal-agent/gateway', () => ({
+vi.mock('@personal-agent/services', () => ({
   getWebUiServiceStatus: getWebUiServiceStatusMock,
 }));
 
@@ -64,8 +64,6 @@ describe('restart notification inbox entries', () => {
       requestedAt: '2026-03-13T14:42:36.000Z',
       daemonStatus: 'restarted (mode: managed service mock-daemon)',
       webUiStatus: 'blue/green swapped blue → green (rev-123)',
-      restartedGatewayServices: ['telegram'],
-      skippedGatewayServices: [],
     });
 
     expect(existsSync(path)).toBe(true);
@@ -137,8 +135,6 @@ describe('restart notification inbox entries', () => {
       requestedAt: '2026-03-13T14:42:36.000Z',
       daemonStatus: 'restarted (mode: managed service mock-daemon)',
       webUiStatus: 'blue/green swapped green → blue (rev-777)',
-      restartedGatewayServices: ['telegram'],
-      skippedGatewayServices: [],
     });
 
     const entries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
@@ -260,14 +256,11 @@ describe('restart notification inbox entries', () => {
       requestedAt: '2026-03-13T14:42:36.000Z',
       daemonStatus: 'restarted (mode: detached)',
       webUiStatus: 'blue/green swapped blue → green',
-      restartedGatewayServices: [],
-      skippedGatewayServices: ['telegram'],
     });
 
     const entries = listProfileActivityEntries({ stateRoot, profile: 'datadog' });
     expect(entries).toHaveLength(1);
     expect(entries[0]?.entry.summary).toBe('Application restart complete');
     expect(entries[0]?.entry.details).toContain('- Service inspection: failed (service unavailable)');
-    expect(entries[0]?.entry.details).toContain('- Gateway services skipped: telegram');
   });
 });

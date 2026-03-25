@@ -620,7 +620,4 @@ describe('CLI command flows', () => {
     })).toBeNull();
   });
 
-  it('routes gateway commands through the CLI registry', async () => {
-    expect(await runCli(['gateway', 'help'])).toBe(0);
-  });
 });

@@ -8,7 +8,7 @@ import { getExecutionTarget, type ExecutionTargetRecord } from '@personal-agent/
 import { getRepoRoot } from '@personal-agent/resources';
 import { resolveStatePaths } from '@personal-agent/core';
 
-const RUNTIME_PACKAGE_NAMES = ['cli', 'core', 'daemon', 'gateway', 'resources'] as const;
+const RUNTIME_PACKAGE_NAMES = ['cli', 'core', 'daemon', 'resources', 'services'] as const;
 const REMOTE_INSTALL_LAYOUT_VERSION = 1;
 const REMOTE_MANIFEST_FILE_NAME = 'manifest.json';
 const REMOTE_RUNTIME_LAUNCHER_CONTENT = '#!/usr/bin/env sh\n'

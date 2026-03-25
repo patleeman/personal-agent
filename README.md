@@ -4,14 +4,14 @@ A personal application layer over Pi that keeps:
 
 - **product code and shared defaults in git** (`defaults/`, `extensions/`, `themes/`)
 - **mutable profile skills + runtime state local** (`~/.local/state/personal-agent`)
-- **chat gateways** (Telegram)
+- **web UI + daemon-backed automation** for daily use
 
 ## Features
 
 - **Profile system** - Layered configs (shared → profile → local) with skills, extensions, themes
 - **`pa tui`** - Launch Pi with layered profile resources and memory policy injection
 - **Daemon** - Background processing for maintenance + scheduled tasks
-- **Gateways** - Telegram bot integration with per-chat sessions
+- **Web UI** - Browser-based workspace, conversations, projects, and system controls
 - **Extensions** - Pi extensions auto-discovered from profiles with dependency auto-install
 
 ## Packages
@@ -20,7 +20,7 @@ A personal application layer over Pi that keeps:
 - `@personal-agent/resources` — profile discovery/materialization + Pi resource args
 - `@personal-agent/daemon` — shared background daemon (`personal-agentd`) with event bus + modules
 - `@personal-agent/cli` — `pa` wrapper command
-- `@personal-agent/gateway` — Telegram gateway (registered as `pa gateway` command)
+- `@personal-agent/services` — managed daemon/web UI service utilities and deployment helpers
 
 ## Documentation
 
@@ -33,7 +33,6 @@ Start here:
 - `docs/projects.md` - durable project tracking
 - `docs/profiles-memory-skills.md` - profiles, memory, and skills
 - `docs/scheduled-tasks.md` - scheduled tasks and daemon automation
-- `docs/gateway.md` - Telegram gateway setup and use
 - `docs/troubleshooting.md` - common failures and fixes
 
 ## Installation (from source)
@@ -98,12 +97,12 @@ pa tui -p "hello"           # Launch with initial prompt
 pa tui -- --model kimi-coding/k2p5    # Pass args to pi
 pa doctor                   # Validate setup
 pa doctor --json            # Machine-readable status
-pa restart                  # Restart daemon + managed web UI + managed gateways
+pa restart                  # Restart daemon + managed web UI
 pa update                   # Pull git changes + refresh repo dependencies + sync pi to latest + rebuild packages + restart services
 pa update --repo-only       # Pull git changes + skip dependency refresh + rebuild packages + restart services
 ```
 
-> `pa update` runs `npm install`, syncs `@mariozechner/pi-coding-agent@latest` in repo root + gateway workspace, verifies repo-local Pi, and runs `npm run build`.
+> `pa update` runs `npm install`, syncs `@mariozechner/pi-coding-agent@latest` in the repo root, verifies repo-local Pi, and runs `npm run build`.
 > If the managed web UI service is installed, `pa update` also stages and health-checks the inactive blue/green web UI slot before swapping the service to it.
 
 ### Profile management
@@ -126,7 +125,7 @@ pa daemon stop              # Stop daemon
 pa daemon restart           # Restart daemon only
 pa daemon logs              # View daemon log path + PID
 pa daemon service install   # Install daemon as managed user service
-pa restart                  # Restart daemon + managed gateways
+pa restart                  # Restart daemon + managed web UI
 ```
 
 ### Scheduled tasks
@@ -160,27 +159,12 @@ pa sync setup --repo git@github.com:<you>/personal-agent-state.git --bootstrap
 pa sync run
 ```
 
-### Gateway (Telegram)
-
-```bash
-# Setup and run Telegram gateway
-pa gateway setup telegram
-pa gateway telegram start
-pa gateway service install telegram
-
-# Service management
-pa gateway service status telegram
-pa gateway service uninstall telegram
-```
-
-`pa gateway service install ...` also provisions `personal-agentd` as a managed user service so gateway background events stay enabled.
-
 ## Daemon
 
 `personal-agentd` runs background modules behind a local event bus:
 
 - **maintenance** - Periodic cleanup and retention
-- **tasks** - Scheduled `*.task.md` runs with retries, logs, and gateway output routing
+- **tasks** - Scheduled `*.task.md` runs with retries and logs
 - **sync** - Periodic git sync for durable cross-machine state
 
 CLI surface:
@@ -213,9 +197,7 @@ Built-in extensions in this repo:
 
 See `docs/skills-and-capabilities.md` for a user-facing overview of skills and runtime capabilities.
 
-## Messaging gateways
-
-Gateway sessions automatically append a gateway-specific runtime block to the system prompt so the agent is aware of chat-gateway constraints, commands, provider capabilities, and concise chat-style response rules.
+## Runtime notes
 
 Optional runtime env vars:
 
@@ -230,59 +212,6 @@ TUI theme mapping is configured in profile `settings.json`:
 - `themeMode` (`system` | `dark` | `light`, default `system`)
 
 When both `themeDark` and `themeLight` are set, `pa` selects one on launch and writes it to runtime `settings.json` before starting Pi.
-
-### Telegram
-
-Required saved configuration (via `pa gateway telegram setup` or the web UI Gateway page):
-
-- Telegram bot token
-- at least one allowed Telegram user ID or allowlisted chat ID
-
-Saved token and list values may be plain strings or `op://...` 1Password references.
-
-Optional saved settings:
-
-- gateway profile
-- default gateway model
-- blocked Telegram user IDs
-- working directory for Pi calls
-- max pending messages per conversation
-- clear recent tracked messages when `/new` is used
-
-Optional runtime env vars:
-
-- `PERSONAL_AGENT_TELEGRAM_RETRY_ATTEMPTS` (default: `3`)
-- `PERSONAL_AGENT_TELEGRAM_RETRY_BASE_DELAY_MS` (default: `300`)
-
-Telegram gateway supports:
-
-- inbound text + document + photo + voice-note messages
-- rich formatted output (HTML rendering for code blocks/headings/links)
-- live streaming via message edits
-- long-output `.txt` file fallback
-- inline action buttons (Stop, New, Regenerate, Follow up)
-
-Run bridge:
-
-```bash
-pa gateway telegram setup
-pa gateway telegram start
-# or run as background service (recommended for long-running use)
-pa gateway service install telegram
-```
-
-Foreground gateway starts (`pa gateway ... start`) auto-start `personal-agentd` if needed.
-
-Gateway slash commands include:
-
-- `/status`, `/new` (resets session; on Telegram, optionally best-effort clears recent tracked messages), `/commands`
-- `/skills` (compatibility alias; Telegram menu hides it), `/skill <name>` (and `/skill:<name>`)
-- Telegram slash menu auto-registers `/skill_*` shortcuts for discovered profile skills (mapped to `/skill:<skill-name>`)
-- `/tasks [status]`
-- `/model` / `/models`
-- `/stop`, `/followup <text>`, `/cancel`
-- `/compact` (guidance only in gateway mode)
-- `/resume` (auto-resume behavior info)
 
 ## Profiles
 
@@ -307,5 +236,4 @@ See docs:
 - `docs/skills-and-capabilities.md` - skills and runtime capabilities
 - `docs/daemon.md` - daemon and background automation
 - `docs/scheduled-tasks.md` - scheduled tasks
-- `docs/gateway.md` - Telegram gateway guide
 - `docs/troubleshooting.md` - debugging and recovery

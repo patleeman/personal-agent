@@ -25,8 +25,6 @@ import {
   parseTaskDefinition,
   type ParsedCronExpression,
   type ParsedTaskDefinition,
-  type ParsedTaskOutput,
-  type ParsedTaskOutputTarget,
 } from './tasks-parser.js';
 import {
   createEmptyTaskState,
@@ -38,7 +36,6 @@ import {
 import { runTaskInIsolatedPi, type TaskRunRequest, type TaskRunResult } from './tasks-runner.js';
 
 const TASK_FILE_SUFFIX = '.task.md';
-const GATEWAY_NOTIFICATION_MAX_MESSAGE_CHARS = 12_000;
 const MISSED_RUN_EXAMPLE_LIMIT = 5;
 
 interface MissedTaskRunSummary {
@@ -68,16 +65,6 @@ interface TasksModuleState {
   lastError?: string;
 }
 
-function truncateGatewayNotificationMessage(message: string): string {
-  if (message.length <= GATEWAY_NOTIFICATION_MAX_MESSAGE_CHARS) {
-    return message;
-  }
-
-  const marker = '\n\n[message truncated]';
-  const budget = Math.max(0, GATEWAY_NOTIFICATION_MAX_MESSAGE_CHARS - marker.length);
-  return `${message.slice(0, budget)}${marker}`;
-}
-
 function normalizeTaskOutput(outputText?: string): string | undefined {
   if (!outputText) {
     return undefined;
@@ -85,57 +72,6 @@ function normalizeTaskOutput(outputText?: string): string | undefined {
 
   const normalized = outputText.split('\0').join('').trim();
   return normalized.length > 0 ? normalized : undefined;
-}
-
-function toTaskOutputMessage(input: {
-  taskId: string;
-  status: TaskRunOutcomeStatus;
-  outputText?: string;
-  error?: string;
-}): string {
-  const outputText = normalizeTaskOutput(input.outputText);
-
-  if (input.status === 'success') {
-    if (!outputText) {
-      return `🗓️ Scheduled task ${input.taskId} completed.`;
-    }
-
-    return truncateGatewayNotificationMessage(outputText);
-  }
-
-  const errorLine = input.error ? `Reason: ${input.error}` : 'Reason: task run failed.';
-
-  if (!outputText) {
-    return truncateGatewayNotificationMessage(`⚠️ Scheduled task ${input.taskId} failed.\n${errorLine}`);
-  }
-
-  return truncateGatewayNotificationMessage(
-    `⚠️ Scheduled task ${input.taskId} failed.\n${errorLine}\n\nOutput:\n${outputText}`,
-  );
-}
-
-function shouldPublishTaskOutput(output: ParsedTaskOutput, status: TaskRunOutcomeStatus): boolean {
-  if (output.when === 'always') {
-    return true;
-  }
-
-  if (output.when === 'success') {
-    return status === 'success';
-  }
-
-  return status === 'failed';
-}
-
-function toGatewayNotificationPayload(target: ParsedTaskOutputTarget): {
-  gateway: 'telegram';
-  destinationId: string;
-  messageThreadId?: number;
-} {
-  return {
-    gateway: 'telegram',
-    destinationId: target.chatId,
-    messageThreadId: target.messageThreadId,
-  };
 }
 
 export interface TasksModuleDependencies {
@@ -382,14 +318,6 @@ function ensureTaskRecord(taskState: TaskStateFile, task: ParsedTaskDefinition):
   return created;
 }
 
-function shouldQueueTaskNotification(task: ParsedTaskDefinition, status: TaskRunOutcomeStatus): boolean {
-  if (!task.output) {
-    return false;
-  }
-
-  return shouldPublishTaskOutput(task.output, status);
-}
-
 function toTaskActivitySummary(taskId: string, status: TaskRunOutcomeStatus): string {
   if (status === 'success') {
     return `Scheduled task ${taskId} completed.`;
@@ -466,53 +394,6 @@ export function createTasksModule(
     }
   };
 
-  const publishTaskOutputNotifications = (
-    task: ParsedTaskDefinition,
-    status: TaskRunOutcomeStatus,
-    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string; stateRoot: string } },
-    details: {
-      finishedAt: string;
-      outputText?: string;
-      error?: string;
-      logPath?: string;
-    },
-  ): void => {
-    if (!task.output) {
-      return;
-    }
-
-    if (!shouldPublishTaskOutput(task.output, status)) {
-      return;
-    }
-
-    const message = toTaskOutputMessage({
-      taskId: task.id,
-      status,
-      outputText: details.outputText,
-      error: details.error,
-    });
-
-    for (const target of task.output.targets) {
-      const routedTarget = toGatewayNotificationPayload(target);
-      const accepted = context.publish('gateway.notification', {
-        gateway: routedTarget.gateway,
-        destinationId: routedTarget.destinationId,
-        ...(typeof routedTarget.messageThreadId === 'number' ? { messageThreadId: routedTarget.messageThreadId } : {}),
-        message,
-        taskId: task.id,
-        status,
-        createdAt: details.finishedAt,
-        logPath: details.logPath,
-      });
-
-      if (!accepted) {
-        context.logger.warn(
-          `failed to enqueue gateway notification task=${task.id} gateway=${routedTarget.gateway} destination=${routedTarget.destinationId}`,
-        );
-      }
-    }
-  };
-
   const writeScheduledTaskActivityEntry = (
     task: ParsedTaskDefinition,
     context: { logger: { info: (message: string) => void; warn: (message: string) => void }; paths: { root: string; stateRoot: string } },
@@ -578,7 +459,7 @@ export function createTasksModule(
         createdAt: details.finishedAt,
         summary: toTaskActivitySummary(task.id, status),
         details: toTaskActivityDetails(details),
-        notificationState: shouldQueueTaskNotification(task, status) ? 'queued' : 'none',
+        notificationState: 'none',
         relatedConversationIds,
       });
     } catch (error) {
@@ -849,12 +730,6 @@ export function createTasksModule(
         outputText: finalResult.outputText,
         logPath: finalResult.logPath,
       });
-
-      publishTaskOutputNotifications(task, 'success', context, {
-        finishedAt,
-        outputText: finalResult.outputText,
-        logPath: finalResult.logPath,
-      });
     } else if (finalResult?.cancelled) {
       record.lastStatus = 'skipped';
       record.lastError = finalResult.error ?? 'Task run cancelled';
@@ -916,13 +791,6 @@ export function createTasksModule(
 
       writeTaskActivity(task, 'failed', context, {
         startedAt: finalResult?.startedAt,
-        finishedAt,
-        outputText: finalResult?.outputText,
-        error: record.lastError,
-        logPath: finalResult?.logPath,
-      });
-
-      publishTaskOutputNotifications(task, 'failed', context, {
         finishedAt,
         outputText: finalResult?.outputText,
         error: record.lastError,

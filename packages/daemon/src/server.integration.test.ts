@@ -373,42 +373,6 @@ describe('daemon IPC integration', () => {
     expect((payload?.backgroundRunResume as { batchId?: string } | undefined)?.batchId).toBe(results[0]?.id);
   });
 
-  it('surfaces a delegate-style pending result for gateway delegate runs', async () => {
-    daemon = new PersonalAgentDaemon(config);
-    await daemon.start();
-
-    const sessionFile = createSessionFile('conv-gateway-resume');
-    const response = await sendRequest(socketPath, {
-      id: `req_${randomUUID()}`,
-      type: 'runs.startBackground',
-      input: {
-        taskSlug: 'delegate-review',
-        cwd: createTempDir('bg-run-gateway-cwd-'),
-        argv: [process.execPath, '-e', "console.log('delegate-ready')"],
-        source: {
-          type: 'gateway-delegate',
-          id: 'telegram-1',
-          filePath: sessionFile,
-        },
-        checkpointPayload: {
-          resumeParentOnExit: true,
-          notifyMode: 'resume',
-          taskPrompt: 'Review the failing build and summarize the fix.',
-        },
-      },
-    });
-
-    expect(response.ok).toBe(true);
-    const runsRoot = resolveDurableRunsRoot(resolveDaemonPaths(config.ipc.socketPath).root);
-    await waitFor(() => listPendingBackgroundRunResults({ runsRoot, sessionFile }).length === 1);
-
-    const results = listPendingBackgroundRunResults({ runsRoot, sessionFile });
-    expect(results).toHaveLength(1);
-    expect(results[0]?.prompt).toContain('Original delegated task:');
-    expect(results[0]?.prompt).toContain('Review the failing build and summarize the fix.');
-    expect(results[0]?.prompt).toContain('Use delegate get/logs');
-  });
-
   it('batches resumable background runs until the last active run for the session stops', async () => {
     daemon = new PersonalAgentDaemon(config);
     await daemon.start();
@@ -634,70 +598,6 @@ describe('daemon IPC integration', () => {
 
     expect(response.ok).toBe(false);
     expect(response.error).toContain('Invalid event envelope');
-  });
-
-  it('pulls queued gateway notifications', async () => {
-    daemon = new PersonalAgentDaemon(config);
-    await daemon.start();
-
-    const emitResponse = await sendRequest(socketPath, {
-      id: `req_${randomUUID()}`,
-      type: 'emit',
-      event: {
-        id: `evt_${randomUUID()}`,
-        version: 1,
-        type: 'gateway.notification',
-        source: 'module:tasks',
-        timestamp: new Date().toISOString(),
-        payload: {
-          gateway: 'telegram',
-          destinationId: '123',
-          messageThreadId: 22,
-          message: 'Hello from task',
-          taskId: 'daily-status',
-          status: 'success',
-        },
-      },
-    });
-
-    expect(emitResponse.ok).toBe(true);
-
-    let pullResponse: ResponseEnvelope | undefined;
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      pullResponse = await sendRequest(socketPath, {
-        id: `req_${randomUUID()}`,
-        type: 'notifications.pull',
-        gateway: 'telegram',
-      });
-
-      const notifications = (pullResponse.result as { notifications?: unknown[] } | undefined)?.notifications ?? [];
-      if (notifications.length > 0) {
-        break;
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    }
-
-    expect(pullResponse?.ok).toBe(true);
-    const pulled = (pullResponse?.result as { notifications: Array<Record<string, unknown>> }).notifications;
-    expect(pulled.length).toBe(1);
-    expect(pulled[0]).toMatchObject({
-      gateway: 'telegram',
-      destinationId: '123',
-      messageThreadId: 22,
-      message: 'Hello from task',
-      taskId: 'daily-status',
-      status: 'success',
-    });
-
-    const secondPull = await sendRequest(socketPath, {
-      id: `req_${randomUUID()}`,
-      type: 'notifications.pull',
-      gateway: 'telegram',
-    });
-
-    expect(secondPull.ok).toBe(true);
-    expect((secondPull.result as { notifications: unknown[] }).notifications).toEqual([]);
   });
 
   it('handles malformed JSON gracefully', async () => {

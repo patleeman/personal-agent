@@ -19,7 +19,7 @@ type ExitCommand = {
 };
 
 describe('exit-alias shared extension', () => {
-  it('registers /exit outside gateway mode and shuts down cleanly', async () => {
+  it('registers /exit and shuts down cleanly', async () => {
     const commands: Record<string, ExitCommand> = {};
 
     const pi = {
@@ -37,18 +37,5 @@ describe('exit-alias shared extension', () => {
     await commands.exit?.handler('', { shutdown });
 
     expect(shutdown).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not register /exit in gateway mode', () => {
-    process.env = {
-      ...originalEnv,
-      PERSONAL_AGENT_GATEWAY_MODE: '1',
-    };
-
-    const registerCommand = vi.fn();
-
-    exitAliasExtension({ registerCommand } as never);
-
-    expect(registerCommand).not.toHaveBeenCalled();
   });
 });

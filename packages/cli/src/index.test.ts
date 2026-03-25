@@ -16,7 +16,6 @@ describe('parseCommand', () => {
     expect(parseCommand(['inbox', 'list'])).toEqual({ command: 'inbox', args: ['list'] });
     expect(parseCommand(['runs', 'list'])).toEqual({ command: 'runs', args: ['list'] });
     expect(parseCommand(['targets', 'list'])).toEqual({ command: 'targets', args: ['list'] });
-    expect(parseCommand(['gateway', 'start'])).toEqual({ command: 'gateway', args: ['start'] });
     expect(parseCommand(['tui', '--profile', 'shared'])).toEqual({
       command: 'tui',
       args: ['--profile', 'shared'],
@@ -31,8 +30,8 @@ describe('parseCommand', () => {
   });
 
   it('supports caller-provided commands for plugin registration', () => {
-    expect(parseCommand(['gateway', 'start'], ['tui', 'gateway'])).toEqual({
-      command: 'gateway',
+    expect(parseCommand(['custom', 'start'], ['tui', 'custom'])).toEqual({
+      command: 'custom',
       args: ['start'],
     });
   });

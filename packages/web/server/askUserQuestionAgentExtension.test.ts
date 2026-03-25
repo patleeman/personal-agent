@@ -86,7 +86,7 @@ describe('ask user question agent extension', () => {
             style: 'checkbox',
             options: [
               { value: 'email', label: 'Email' },
-              { value: 'telegram', label: 'Telegram' },
+              { value: 'sms', label: 'SMS' },
             ],
           },
         ],
@@ -119,7 +119,7 @@ describe('ask user question agent extension', () => {
           style: 'check',
           options: [
             { value: 'email', label: 'Email' },
-            { value: 'telegram', label: 'Telegram' },
+            { value: 'sms', label: 'SMS' },
           ],
         },
       ],

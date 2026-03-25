@@ -5,11 +5,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { childProcessMocks, gatewayMocks } = vi.hoisted(() => ({
+const { childProcessMocks, serviceMocks } = vi.hoisted(() => ({
   childProcessMocks: {
     spawnSync: vi.fn(),
   },
-  gatewayMocks: {
+  serviceMocks: {
     getWebUiServiceStatus: vi.fn(),
     syncWebUiTailscaleServe: vi.fn(),
   },
@@ -23,12 +23,12 @@ vi.mock('child_process', async () => {
   };
 });
 
-vi.mock('@personal-agent/gateway', async () => {
-  const actual = await vi.importActual<typeof import('@personal-agent/gateway')>('@personal-agent/gateway');
+vi.mock('@personal-agent/services', async () => {
+  const actual = await vi.importActual<typeof import('@personal-agent/services')>('@personal-agent/services');
   return {
     ...actual,
-    getWebUiServiceStatus: gatewayMocks.getWebUiServiceStatus,
-    syncWebUiTailscaleServe: gatewayMocks.syncWebUiTailscaleServe,
+    getWebUiServiceStatus: serviceMocks.getWebUiServiceStatus,
+    syncWebUiTailscaleServe: serviceMocks.syncWebUiTailscaleServe,
   };
 });
 
@@ -82,8 +82,8 @@ beforeEach(() => {
 
   childProcessMocks.spawnSync.mockReset();
   childProcessMocks.spawnSync.mockReturnValue({ status: 0, stdout: '', stderr: '' });
-  gatewayMocks.getWebUiServiceStatus.mockReset();
-  gatewayMocks.getWebUiServiceStatus.mockImplementation(({ port }: { port: number }) => ({
+  serviceMocks.getWebUiServiceStatus.mockReset();
+  serviceMocks.getWebUiServiceStatus.mockImplementation(({ port }: { port: number }) => ({
     identifier: 'mock-web-ui',
     manifestPath: '/tmp/mock-web-ui',
     installed: false,
@@ -92,8 +92,8 @@ beforeEach(() => {
     port,
     url: `http://localhost:${port}`,
   }));
-  gatewayMocks.syncWebUiTailscaleServe.mockReset();
-  gatewayMocks.syncWebUiTailscaleServe.mockImplementation(() => undefined);
+  serviceMocks.syncWebUiTailscaleServe.mockReset();
+  serviceMocks.syncWebUiTailscaleServe.mockImplementation(() => undefined);
 });
 
 afterEach(async () => {
@@ -112,7 +112,7 @@ describe('ui foreground launch', () => {
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
 
-    gatewayMocks.getWebUiServiceStatus.mockImplementation(() => ({
+    serviceMocks.getWebUiServiceStatus.mockImplementation(() => ({
       identifier: 'mock-web-ui',
       manifestPath: '/tmp/mock-web-ui',
       installed: true,
@@ -147,7 +147,7 @@ describe('ui foreground launch', () => {
     await new Promise<void>((resolve) => probe.server.close(() => resolve()));
     activeServers = activeServers.filter((server) => server !== probe.server);
 
-    gatewayMocks.getWebUiServiceStatus.mockImplementation(() => ({
+    serviceMocks.getWebUiServiceStatus.mockImplementation(() => ({
       identifier: 'mock-web-ui',
       manifestPath: '/tmp/mock-web-ui',
       installed: true,

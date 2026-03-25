@@ -82,9 +82,9 @@ describe('resolveConversationCwd', () => {
     const second = createProjectScaffold({
       repoRoot,
       profile: 'datadog',
-      projectId: 'gateway',
-      title: 'Ship the gateway',
-      description: 'Ship the gateway',
+      projectId: 'api',
+      title: 'Ship the API',
+      description: 'Ship the API',
     });
 
     writeProject(first.paths.projectFile, {
@@ -93,14 +93,14 @@ describe('resolveConversationCwd', () => {
     });
     writeProject(second.paths.projectFile, {
       ...readProject(second.paths.projectFile),
-      repoRoot: '../workspace/gateway',
+      repoRoot: '../workspace/api'
     });
 
     expect(resolveConversationCwd({
       repoRoot,
       profile: 'datadog',
       defaultCwd: '/tmp/default-cwd',
-      referencedProjectIds: ['web-ui', 'gateway'],
+      referencedProjectIds: ['web-ui', 'api'],
     })).toBe('/tmp/default-cwd');
   });
 

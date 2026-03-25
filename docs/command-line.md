@@ -44,7 +44,6 @@ These commands are handled by `personal-agent` itself:
 - `pa runs ...`
 - `pa targets ...`
 - `pa sync ...`
-- `pa gateway ...`
 - `pa restart`
 - `pa update`
 
@@ -90,15 +89,6 @@ pa targets list
 pa targets add gpu-box --label "GPU Box" --ssh gpu-box --default-cwd /srv/personal-agent --map /Users/patrickc.lee/personal/personal-agent=/srv/personal-agent
 pa targets install gpu-box
 pa targets show gpu-box
-```
-
-### Gateway
-
-```bash
-pa gateway setup telegram
-pa gateway telegram start
-pa gateway send "Ping from CLI"
-pa gateway service install telegram
 ```
 
 ## Top-level command reference
@@ -342,15 +332,9 @@ Machine-local runtime files such as auth, inbox state, conversation attention, d
 
 See [Sync Guide](./sync.md).
 
-### `pa gateway ...`
-
-Manage the Telegram gateway.
-
-See [Gateway Guide](./gateway.md).
-
 ### `pa restart [--rebuild]`
 
-Restart the daemon, managed web UI service, and any installed gateway services.
+Restart the daemon and managed web UI service.
 Use `--rebuild` to rebuild repo packages first and blue/green redeploy the managed web UI, similar to the restart phase of `pa update` without pulling git changes.
 
 ### `pa update [--repo-only]`

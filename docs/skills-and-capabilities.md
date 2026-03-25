@@ -38,7 +38,6 @@ Examples include:
 Skills are surfaced in user-facing places like:
 
 - the Memory page in the web UI
-- gateway skill shortcuts such as Telegram `/skill:<name>`
 - the agent's normal resource loading when a profile is active
 
 ## Extensions
@@ -85,11 +84,6 @@ Extension dependencies are auto-installed when needed, so users usually do not n
 - conversations can reference skills with `@`
 - live sessions use the active profile's runtime behavior
 
-### Gateway
-
-- Telegram exposes skill commands and slash shortcuts
-- background completions and notifications can be routed back into chat
-
 ### CLI / TUI
 
 - `pa tui` launches Pi with the resolved layered resources
@@ -100,4 +94,3 @@ Extension dependencies are auto-installed when needed, so users usually do not n
 - [Profiles, Memory, and Skills](./profiles-memory-skills.md)
 - [How personal-agent works](./how-it-works.md)
 - [Web UI Guide](./web-ui.md)
-- [Gateway Guide](./gateway.md)

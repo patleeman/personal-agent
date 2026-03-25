@@ -15,16 +15,6 @@ import {
   type DurableRunPaths,
 } from './store.js';
 
-export type BackgroundRunNotificationMode = 'none' | 'message' | 'resume';
-
-export interface BackgroundRunNotificationSpec {
-  gateway: 'telegram';
-  destinationId: string;
-  messageThreadId?: number;
-  mode: BackgroundRunNotificationMode;
-  resumeConversationId?: string;
-}
-
 export interface StartBackgroundRunInput {
   taskSlug: string;
   cwd: string;
@@ -36,7 +26,6 @@ export interface StartBackgroundRunInput {
     id?: string;
     filePath?: string;
   };
-  notification?: BackgroundRunNotificationSpec;
   manifestMetadata?: Record<string, unknown>;
   checkpointPayload?: Record<string, unknown>;
   createdAt?: string;
@@ -185,7 +174,6 @@ export async function createBackgroundRunRecord(
       ...(argv ? { argv } : {}),
       ...(shellCommand ? { shellCommand } : {}),
       ...(agent ? { agent } : {}),
-      ...(input.notification ? { notification: input.notification } : {}),
     },
     source: input.source
       ? {
