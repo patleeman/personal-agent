@@ -132,7 +132,16 @@ export function CompanionConversationsPage() {
   const { sessions, setSessions } = useAppData();
   const { titles } = useLiveTitles();
   const { status } = useSseConnection();
-  const { installAvailable, installBusy, promptInstall, secureContext, standalone } = useCompanionLayoutContext();
+  const {
+    installAvailable,
+    installBusy,
+    promptInstall,
+    secureContext,
+    standalone,
+    notificationsSupported,
+    notificationPermission,
+    requestNotificationPermission,
+  } = useCompanionLayoutContext();
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -200,8 +209,24 @@ export function CompanionConversationsPage() {
               ) : secureContext ? (
                 <p className="mt-1 text-[11px] text-dim">Use your browser’s install or add-to-home-screen action when you’re ready.</p>
               ) : null}
+              {notificationsSupported && notificationPermission === 'granted' ? (
+                <p className="mt-1 text-[11px] text-success">Notifications enabled</p>
+              ) : notificationsSupported && notificationPermission === 'default' && secureContext ? (
+                <p className="mt-1 text-[11px] text-dim">Enable notifications for blocked, approval-needed, and completed conversation updates.</p>
+              ) : notificationsSupported && notificationPermission === 'denied' ? (
+                <p className="mt-1 text-[11px] text-warning">Notifications are blocked in this browser. Re-enable them in site settings to get companion alerts.</p>
+              ) : null}
             </div>
             <div className="flex items-center gap-2">
+              {notificationPermission === 'default' && notificationsSupported && secureContext ? (
+                <button
+                  type="button"
+                  onClick={() => { void requestNotificationPermission(); }}
+                  className="ui-action-button shrink-0"
+                >
+                  Enable notifications
+                </button>
+              ) : null}
               {installAvailable ? (
                 <button
                   type="button"
