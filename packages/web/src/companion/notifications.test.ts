@@ -28,7 +28,7 @@ function createActivitySnapshot(entries: ActivitySnapshot['entries']): ActivityS
 }
 
 describe('collectCompanionActivityNotifications', () => {
-  it('notifies for new unread activity linked to exactly one conversation', () => {
+  it('notifies for new unread approval activity linked to exactly one conversation', () => {
     const notifications = collectCompanionActivityNotifications(
       createActivitySnapshot([]),
       createActivitySnapshot([{
@@ -41,14 +41,45 @@ describe('collectCompanionActivityNotifications', () => {
         read: false,
         relatedConversationIds: ['conv-123'],
       }]),
+      {
+        conversationTitleById: new Map([['conv-123', 'Build companion app']]),
+      },
     );
 
     expect(notifications).toEqual([
       expect.objectContaining({
         conversationId: 'conv-123',
-        title: 'Approval needed',
+        kind: 'approval-needed',
+        title: 'Approval needed: Build companion app',
         body: 'Pick a deployment target.',
         path: '/app/conversations/conv-123',
+      }),
+    ]);
+  });
+
+  it('classifies blocked activity notifications explicitly', () => {
+    const notifications = collectCompanionActivityNotifications(
+      createActivitySnapshot([]),
+      createActivitySnapshot([{
+        id: 'activity-1',
+        createdAt: '2026-03-25T00:00:00.000Z',
+        profile: 'assistant',
+        kind: 'service',
+        summary: 'Sync blocked by merge conflicts (2 files).',
+        read: false,
+        relatedConversationIds: ['conv-123'],
+      }]),
+      {
+        conversationTitleById: new Map([['conv-123', 'Sync repo']]),
+      },
+    );
+
+    expect(notifications).toEqual([
+      expect.objectContaining({
+        conversationId: 'conv-123',
+        kind: 'blocked',
+        title: 'Blocked: Sync repo',
+        body: 'Sync blocked by merge conflicts (2 files).',
       }),
     ]);
   });
@@ -98,7 +129,30 @@ describe('collectCompanionSessionNotifications', () => {
     expect(notifications).toEqual([
       expect.objectContaining({
         conversationId: 'conv-123',
-        title: 'Finished: Build companion app',
+        kind: 'completed',
+        title: 'Completed: Build companion app',
+      }),
+    ]);
+  });
+
+  it('falls back to needs-review when attention changes without a completion transition', () => {
+    const notifications = collectCompanionSessionNotifications(
+      [createSession({ id: 'conv-123', title: 'Build companion app', isRunning: false, needsAttention: false })],
+      [createSession({
+        id: 'conv-123',
+        title: 'Build companion app',
+        isRunning: false,
+        needsAttention: true,
+        attentionUpdatedAt: '2026-03-25T00:06:00.000Z',
+        attentionUnreadMessageCount: 1,
+      })],
+    );
+
+    expect(notifications).toEqual([
+      expect.objectContaining({
+        conversationId: 'conv-123',
+        kind: 'needs-review',
+        title: 'Needs review: Build companion app',
       }),
     ]);
   });
