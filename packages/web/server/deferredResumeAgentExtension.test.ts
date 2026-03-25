@@ -43,6 +43,15 @@ function registerDeferredResumeTool() {
 }
 
 describe('deferred resume agent extension', () => {
+  it('registers proactive follow-up guidance', () => {
+    const registeredTool = registerDeferredResumeTool();
+    const guidelines = registeredTool.promptGuidelines?.join('\n') ?? '';
+
+    expect(guidelines).toContain('check back later');
+    expect(guidelines).toContain('do not need user confirmation');
+    expect(guidelines).toContain('monitoring an external system again later');
+  });
+
   it('registers deferred_resume and schedules durable state for the current session', async () => {
     const stateRoot = createTempDir('pa-web-deferred-tool-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;

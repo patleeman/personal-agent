@@ -21,7 +21,9 @@ export function createDeferredResumeAgentExtension(): (pi: ExtensionAPI) => void
       promptSnippet: 'Schedule this same conversation to resume later.',
       promptGuidelines: [
         'Use this tool when you should pause now and continue later after waiting for time to pass or for background work to make progress.',
-        'Good uses: waiting before checking logs, retrying later, or staging unattended multi-step work.',
+        'Prefer this over asking the user to check back later or remind you when no user input is actually required.',
+        'Good uses: waiting before checking logs, monitoring an external system again later, retrying later, or staging unattended multi-step work.',
+        'You may schedule it proactively for lightweight follow-up or monitoring; you do not need user confirmation just because time needs to pass.',
         'Use delays like 30s, 10m, 2h, or 1d.',
         'Provide a concise future prompt describing exactly what to continue or check next.',
       ],

@@ -1666,6 +1666,7 @@ function buildBackgroundRunHiddenContext(entries: BackgroundRunResultSummary[]):
   const lines = [
     'Background run completions became available since the previous explicit user turn.',
     'Use this as hidden context only. Do not treat it as a standalone follow-up instruction.',
+    'If the only sensible next step is to wait and inspect again later, schedule deferred_resume yourself instead of asking the user to remind you.',
   ];
 
   for (let index = 0; index < entries.length; index += 1) {

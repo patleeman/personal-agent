@@ -26,7 +26,7 @@ export function createWaitForUserAgentExtension(options: {
       promptGuidelines: [
         'Use this tool when you need input, approval, or clarification from the user before you can continue checklist work.',
         'Provide a short reason describing exactly what you are waiting on.',
-        'Do not use this tool for background waiting; use deferred_resume for time-based retries.',
+        'Do not use this tool for background waiting or routine monitoring; use deferred_resume for time-based retries and later re-checks.',
       ],
       parameters: WaitForUserToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {

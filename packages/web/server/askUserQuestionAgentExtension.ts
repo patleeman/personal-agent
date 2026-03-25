@@ -271,6 +271,7 @@ export function createAskUserQuestionAgentExtension(): (pi: ExtensionAPI) => voi
       promptSnippet: 'Ask one or more focused questions in the web UI.',
       promptGuidelines: [
         'Use this tool when you need a specific answer, choice, or approval from the user before you can continue.',
+        'Do not use this for time-based follow-up; if no answer is needed and you just need to check again later, use deferred_resume.',
         'Use questions[] when you need multiple questions or radio/check layouts.',
         'Use radio style for one choice and check style for multi-select questions.',
         'After calling this tool, wait for the user response instead of continuing as if the answer is already known.',
