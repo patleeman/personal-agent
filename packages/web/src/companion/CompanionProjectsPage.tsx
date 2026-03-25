@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api';
 import {
   formatProjectStatus,
@@ -9,6 +10,7 @@ import {
 import { useApi } from '../hooks';
 import type { ProjectRecord } from '../types';
 import { timeAgo } from '../utils';
+import { buildCompanionProjectPath } from './routes';
 
 function sortCompanionProjects(projects: ProjectRecord[]): ProjectRecord[] {
   return [...projects].sort((left, right) => {
@@ -48,15 +50,20 @@ function ProjectsSection({
           ].filter((value): value is string => Boolean(value));
 
           return (
-            <div key={project.id} className="border-b border-border-subtle px-4 py-4 last:border-b-0">
+            <Link
+              key={project.id}
+              to={buildCompanionProjectPath(project.id)}
+              className="block border-b border-border-subtle px-4 py-4 transition-colors last:border-b-0 hover:bg-surface/55"
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <h3 className="truncate text-[16px] font-medium leading-tight text-primary">{project.title}</h3>
                   <p className="mt-1 text-[13px] leading-relaxed text-secondary">{preview}</p>
                   <p className="mt-2 break-words text-[11px] text-dim">{meta.join(' · ')}</p>
                 </div>
+                <span className="pt-0.5 text-[12px] text-accent">open</span>
               </div>
-            </div>
+            </Link>
           );
         })}
       </div>

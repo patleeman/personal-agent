@@ -1,5 +1,6 @@
 import React from 'react';
 import { renderToString } from 'react-dom/server';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useApi } from '../hooks.js';
 import { CompanionMemoriesPage } from './CompanionMemoriesPage.js';
@@ -11,6 +12,10 @@ vi.mock('../hooks', () => ({
 }));
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
+
+function renderWithRouter(node: React.ReactNode) {
+  return renderToString(<MemoryRouter>{node}</MemoryRouter>);
+}
 
 describe('companion resource pages', () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
@@ -31,7 +36,7 @@ describe('companion resource pages', () => {
     vi.clearAllMocks();
   });
 
-  it('renders active and archived projects in the companion project browser', () => {
+  it('renders linked active and archived projects in the companion project browser', () => {
     vi.mocked(useApi).mockReturnValue({
       data: [
         {
@@ -71,7 +76,7 @@ describe('companion resource pages', () => {
       replaceData: vi.fn(),
     });
 
-    const html = renderToString(<CompanionProjectsPage />);
+    const html = renderWithRouter(<CompanionProjectsPage />);
 
     expect(html).toContain('Projects');
     expect(html).toContain('Active');
@@ -79,9 +84,10 @@ describe('companion resource pages', () => {
     expect(html).toContain('Active project');
     expect(html).toContain('Archived project');
     expect(html).toContain('@active-project');
+    expect(html).toContain('/app/projects/active-project');
   });
 
-  it('renders active and archived memory packages in the companion memory browser', () => {
+  it('renders linked active and archived memory packages in the companion memory browser', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         profile: 'assistant',
@@ -121,7 +127,7 @@ describe('companion resource pages', () => {
       replaceData: vi.fn(),
     });
 
-    const html = renderToString(<CompanionMemoriesPage />);
+    const html = renderWithRouter(<CompanionMemoriesPage />);
 
     expect(html).toContain('Memories');
     expect(html).toContain('Memory index');
@@ -129,9 +135,10 @@ describe('companion resource pages', () => {
     expect(html).toContain('2 references');
     expect(html).toContain('@memory-index');
     expect(html).toContain('Archived');
+    expect(html).toContain('/app/memories/memory-index');
   });
 
-  it('renders humanized skills with recent-usage labels in the companion skill browser', () => {
+  it('renders linked humanized skills with recent-usage labels in the companion skill browser', () => {
     vi.mocked(useApi).mockReturnValue({
       data: {
         profile: 'assistant',
@@ -156,11 +163,12 @@ describe('companion resource pages', () => {
       replaceData: vi.fn(),
     });
 
-    const html = renderToString(<CompanionSkillsPage />);
+    const html = renderWithRouter(<CompanionSkillsPage />);
 
     expect(html).toContain('Skills');
     expect(html).toContain('Agent Browser');
     expect(html).toContain('Triggered in last session');
     expect(html).toContain('shared');
+    expect(html).toContain('/app/skills/tool-agent-browser');
   });
 });

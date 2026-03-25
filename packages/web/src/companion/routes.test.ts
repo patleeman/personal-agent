@@ -5,12 +5,18 @@ import {
   COMPANION_PROJECTS_PATH,
   COMPANION_SKILLS_PATH,
   buildCompanionConversationPath,
+  buildCompanionMemoryPath,
+  buildCompanionProjectPath,
+  buildCompanionSkillPath,
   resolveCompanionRouteRedirect,
 } from './routes.js';
 
-describe('buildCompanionConversationPath', () => {
-  it('encodes conversation ids for companion links', () => {
+describe('companion route builders', () => {
+  it('encodes detail ids for companion links', () => {
     expect(buildCompanionConversationPath('conv/123')).toBe('/app/conversations/conv%2F123');
+    expect(buildCompanionProjectPath('continuous conversations')).toBe('/app/projects/continuous%20conversations');
+    expect(buildCompanionMemoryPath('memory/123')).toBe('/app/memories/memory%2F123');
+    expect(buildCompanionSkillPath('tool-agent-browser')).toBe('/app/skills/tool-agent-browser');
   });
 });
 
@@ -22,6 +28,9 @@ describe('resolveCompanionRouteRedirect', () => {
     expect(resolveCompanionRouteRedirect(COMPANION_MEMORIES_PATH)).toBeNull();
     expect(resolveCompanionRouteRedirect(COMPANION_SKILLS_PATH)).toBeNull();
     expect(resolveCompanionRouteRedirect('/app/conversations/conv-123')).toBeNull();
+    expect(resolveCompanionRouteRedirect('/app/projects/continuous-conversations')).toBeNull();
+    expect(resolveCompanionRouteRedirect('/app/memories/memory-index')).toBeNull();
+    expect(resolveCompanionRouteRedirect('/app/skills/tool-agent-browser')).toBeNull();
   });
 
   it('canonicalizes trailing slashes to the supported companion routes', () => {
@@ -31,11 +40,17 @@ describe('resolveCompanionRouteRedirect', () => {
     expect(resolveCompanionRouteRedirect('/app/memories/')).toBe(COMPANION_MEMORIES_PATH);
     expect(resolveCompanionRouteRedirect('/app/skills/')).toBe(COMPANION_SKILLS_PATH);
     expect(resolveCompanionRouteRedirect('/app/conversations/conv-123/')).toBe('/app/conversations/conv-123');
+    expect(resolveCompanionRouteRedirect('/app/projects/continuous-conversations/')).toBe('/app/projects/continuous-conversations');
+    expect(resolveCompanionRouteRedirect('/app/memories/memory-index/')).toBe('/app/memories/memory-index');
+    expect(resolveCompanionRouteRedirect('/app/skills/tool-agent-browser/')).toBe('/app/skills/tool-agent-browser');
   });
 
   it('redirects unsupported companion paths back to the conversation list', () => {
     expect(resolveCompanionRouteRedirect('/app/unknown')).toBe(COMPANION_CONVERSATIONS_PATH);
     expect(resolveCompanionRouteRedirect('/app/conversations/conv-123/extra')).toBe(COMPANION_CONVERSATIONS_PATH);
+    expect(resolveCompanionRouteRedirect('/app/projects/continuous-conversations/extra')).toBe(COMPANION_CONVERSATIONS_PATH);
+    expect(resolveCompanionRouteRedirect('/app/memories/memory-index/extra')).toBe(COMPANION_CONVERSATIONS_PATH);
+    expect(resolveCompanionRouteRedirect('/app/skills/tool-agent-browser/extra')).toBe(COMPANION_CONVERSATIONS_PATH);
   });
 
   it('ignores non-companion paths', () => {
