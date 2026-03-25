@@ -1,9 +1,14 @@
-const SHELL_CACHE = 'pi-companion-shell-v1';
-const STATIC_CACHE = 'pi-companion-static-v1';
+const SHELL_CACHE = 'pi-companion-shell-v2';
+const STATIC_CACHE = 'pi-companion-static-v2';
 const PRECACHE_URLS = [
   '/app/index.html',
   '/app/manifest.webmanifest',
   '/app/icon.svg',
+  '/app/icon-maskable.svg',
+  '/app/icon-192.png',
+  '/app/icon-512.png',
+  '/app/icon-maskable-512.png',
+  '/app/apple-touch-icon.png',
 ];
 
 self.addEventListener('install', (event) => {
