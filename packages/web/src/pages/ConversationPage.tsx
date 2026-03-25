@@ -953,6 +953,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     isStreaming: stream.isStreaming,
     confirmedLive,
   });
+  const currentConversationSurface = findConversationSurface(stream.presence, currentSurfaceId);
+  const controllingThisSurface = isLiveSession
+    && Boolean(currentSurfaceId)
+    && stream.presence.controllerSurfaceId === currentSurfaceId;
+  const presenceKnownForThisSurface = Boolean(currentConversationSurface);
+  const conversationNeedsTakeover = isLiveSession && presenceKnownForThisSurface && !controllingThisSurface;
   const allowQueuedPrompts = stream.isStreaming || liveSessionHasPendingHiddenTurn;
   const defaultComposerBehavior = stream.isStreaming
     ? 'steer'
@@ -1278,6 +1284,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       noticeTimeoutRef.current = null;
     }, durationMs);
   }, []);
+  const ensureConversationCanControl = useCallback((action: string): boolean => {
+    if (!conversationNeedsTakeover) {
+      return true;
+    }
+
+    showNotice('danger', `Take over this conversation to ${action}.`, 4000);
+    return false;
+  }, [conversationNeedsTakeover, showNotice]);
   const headerPreferenceRef = useRef<HTMLDivElement>(null);
   const headerModelSelectRef = useRef<HTMLSelectElement>(null);
   const headerThinkingSelectRef = useRef<HTMLSelectElement>(null);
@@ -2337,9 +2351,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
+    if (conversationNeedsTakeover) {
+      showNotice('danger', 'Take over this conversation to rename it.', 4000);
+      return;
+    }
+
     setTitleDraft(title === NEW_CONVERSATION_TITLE ? '' : title);
     setIsEditingTitle(true);
-  }, [draft, id, title, titleSaving]);
+  }, [conversationNeedsTakeover, draft, id, title, titleSaving, showNotice]);
 
   const cancelTitleEdit = useCallback(() => {
     setIsEditingTitle(false);
@@ -2448,7 +2467,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         throw new Error('No forkable message found for that point in the conversation.');
       }
 
-      const { newSessionId } = await api.forkSession(liveConversationId, entry.entryId, { preserveSource: true });
+      if (!ensureConversationCanControl('rewind from this message')) {
+        return;
+      }
+
+      const { newSessionId } = await api.forkSession(liveConversationId, entry.entryId, { preserveSource: true }, currentSurfaceId);
       // Pi forks before the selected user turn, so prefill that prompt in the
       // destination composer and let the user edit or resend it manually.
       persistForkPromptDraft(newSessionId, entry.text);
@@ -2457,7 +2480,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } catch (error) {
       showNotice('danger', `Rewind failed: ${(error as Error).message}`);
     }
-  }, [ensureConversationIsLive, id, messageIndexOffset, navigate, realMessages, showNotice]);
+  }, [currentSurfaceId, ensureConversationCanControl, ensureConversationIsLive, id, messageIndexOffset, navigate, realMessages, showNotice]);
 
   const forkConversationFromMessage = useCallback(async (messageIndex: number) => {
     if (!id || !realMessages) {
@@ -2483,13 +2506,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         throw new Error('Unable to resolve the selected assistant message for branching.');
       }
 
-      const { newSessionId } = await api.branchSession(liveConversationId, entryId);
+      if (!ensureConversationCanControl('branch from this message')) {
+        return;
+      }
+
+      const { newSessionId } = await api.branchSession(liveConversationId, entryId, currentSurfaceId);
       ensureConversationTabOpen(newSessionId);
       navigate(`/conversations/${newSessionId}`);
     } catch (error) {
       showNotice('danger', `Fork failed: ${(error as Error).message}`);
     }
-  }, [ensureConversationIsLive, id, messageIndexOffset, navigate, realMessages, rewindConversationFromMessage, showNotice]);
+  }, [currentSurfaceId, ensureConversationCanControl, ensureConversationIsLive, id, messageIndexOffset, navigate, realMessages, rewindConversationFromMessage, showNotice]);
 
   function openHeaderPreference(preference: 'model' | 'thinking') {
     setHeaderPreference((current) => current === preference ? null : preference);
@@ -2542,12 +2569,22 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   // /clear — destroy current session, create new one in same cwd
   async function handleClear() {
     if (!id) return;
-    if (stream.isStreaming) await stream.abort();
-    await api.destroySession(id).catch(() => {});
-    const cwd = visibleSessionDetail?.meta.cwd ?? undefined;
-    const { id: newId } = await api.createLiveSession(cwd);
-    ensureConversationTabOpen(newId);
-    navigate(`/conversations/${newId}`);
+    if (!ensureConversationCanControl('clear it')) {
+      return;
+    }
+
+    try {
+      if (stream.isStreaming) {
+        await stream.abort();
+      }
+      await api.destroySession(id, currentSurfaceId).catch(() => {});
+      const cwd = visibleSessionDetail?.meta.cwd ?? undefined;
+      const { id: newId } = await api.createLiveSession(cwd);
+      ensureConversationTabOpen(newId);
+      navigate(`/conversations/${newId}`);
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    }
   }
 
   function addImageAttachments(files: File[]) {
@@ -2993,7 +3030,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         return;
       }
 
-      const next = await api.updateConversationExecution(id, targetId);
+      if (!ensureConversationCanControl('change the execution target')) {
+        return;
+      }
+
+      const next = await api.updateConversationExecution(id, targetId, currentSurfaceId);
       replaceConversationExecution(next);
       showNotice('accent', next.target ? `Remote execution set to ${next.target.label}.` : 'Execution target reset to local.', 3000);
     } catch (error) {
@@ -3001,7 +3042,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } finally {
       setExecutionTargetBusy(false);
     }
-  }, [draft, executionSelectionBusy, id, replaceConversationExecution, showNotice]);
+  }, [currentSurfaceId, draft, ensureConversationCanControl, executionSelectionBusy, id, replaceConversationExecution, showNotice]);
 
   async function handleProjectSlashCommand(command: ProjectSlashCommand) {
     try {
@@ -3060,7 +3101,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     setTitleSaving(true);
     try {
-      const result = await api.renameConversation(id, nextTitle);
+      if (!ensureConversationCanControl('rename it')) {
+        return;
+      }
+
+      const result = await api.renameConversation(id, nextTitle, currentSurfaceId);
       setTitleOverride(result.title);
       if (isLiveSession) {
         pushTitle(id, result.title);
@@ -3155,7 +3200,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         setInput('');
         try {
           const liveConversationId = await ensureConversationIsLive('be compacted');
-          await api.compactSession(liveConversationId, command.customInstructions);
+          if (!ensureConversationCanControl('compact it')) {
+            return { kind: 'handled' };
+          }
+          await api.compactSession(liveConversationId, command.customInstructions, currentSurfaceId);
           showNotice('accent', 'Context compacted.');
         } catch (error) {
           showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
@@ -3209,7 +3257,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             return { kind: 'handled' };
           }
 
-          const { newSessionId } = await api.forkSession(liveConversationId, entry.entryId, { preserveSource: true });
+          if (!ensureConversationCanControl('fork it')) {
+            return { kind: 'handled' };
+          }
+
+          const { newSessionId } = await api.forkSession(liveConversationId, entry.entryId, { preserveSource: true }, currentSurfaceId);
           persistForkPromptDraft(newSessionId, entry.text);
           ensureConversationTabOpen(newSessionId);
           navigate(`/conversations/${newSessionId}`);
@@ -3241,7 +3293,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         setInput('');
         try {
           const liveConversationId = await ensureConversationIsLive('reload its resources');
-          await api.reloadSession(liveConversationId);
+          if (!ensureConversationCanControl('reload its resources')) {
+            return { kind: 'handled' };
+          }
+          await api.reloadSession(liveConversationId, currentSurfaceId);
           showNotice('accent', 'Session resources reloaded.');
         } catch (error) {
           showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
@@ -3464,7 +3519,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     try {
-      const restored = await api.restoreQueuedMessage(id, { behavior, index: queueIndex });
+      if (!ensureConversationCanControl('restore queued prompts')) {
+        return;
+      }
+
+      const restored = await api.restoreQueuedMessage(id, { behavior, index: queueIndex }, currentSurfaceId);
       const restoredText = typeof restored.text === 'string' ? restored.text : '';
       const restoredFiles = restoreQueuedImageFiles(restored.images, behavior, queueIndex);
       const hasRestoredText = restoredText.trim().length > 0;
@@ -3712,12 +3771,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       : remoteConversationRequiresConnect
         ? 'Remote workspace disconnected. Click connect to resume.'
         : null);
-  const currentConversationSurface = findConversationSurface(stream.presence, currentSurfaceId);
-  const controllingThisSurface = isLiveSession
-    && Boolean(currentSurfaceId)
-    && stream.presence.controllerSurfaceId === currentSurfaceId;
-  const presenceKnownForThisSurface = Boolean(currentConversationSurface);
-  const conversationNeedsTakeover = isLiveSession && presenceKnownForThisSurface && !controllingThisSurface;
   const liveViewerCount = stream.presence.surfaces.length;
   const companionViewerCount = Math.max(0, liveViewerCount - (presenceKnownForThisSurface ? 1 : 0));
   const controllerLabel = stream.presence.controllerSurfaceType
@@ -4041,9 +4094,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             </form>
           ) : (
             <div className="flex min-w-0 items-center gap-2">
-              <h1 className="ui-page-title truncate" onDoubleClick={!draft ? beginTitleEdit : undefined}>{title}</h1>
+              <h1 className="ui-page-title truncate" onDoubleClick={!draft && !conversationNeedsTakeover ? beginTitleEdit : undefined}>{title}</h1>
               {!draft && id && (
-                <IconButton onClick={beginTitleEdit} title="Rename conversation" aria-label="Rename conversation" compact>
+                <IconButton onClick={beginTitleEdit} title={conversationNeedsTakeover ? 'Take over this conversation to rename it' : 'Rename conversation'} aria-label="Rename conversation" compact disabled={conversationNeedsTakeover}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M3 21h3.75L17.81 9.94l-3.75-3.75L3 17.25V21Zm14.06-13.06 1.69-1.69a1.5 1.5 0 0 0 0-2.12l-.88-.88a1.5 1.5 0 0 0-2.12 0l-1.69 1.69" />
                   </svg>

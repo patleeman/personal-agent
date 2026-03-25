@@ -404,7 +404,7 @@ export const api = {
   }) => post<{ accepted: true; conversationId: string; sessionFile: string; runId: string; remoteCwd: string; target: { id: string; label: string } }>(`/remote-runs`, input),
   conversationExecution: (id: string) => get<ConversationExecutionState>(`/conversations/${encodeURIComponent(id)}/execution`),
   remoteConversationConnection: (id: string) => get<RemoteConversationConnectionState>(`/conversations/${encodeURIComponent(id)}/remote-connection`),
-  updateConversationExecution: (id: string, targetId: string | null) => patch<ConversationExecutionState>(`/conversations/${encodeURIComponent(id)}/execution`, { targetId }),
+  updateConversationExecution: (id: string, targetId: string | null, surfaceId?: string) => patch<ConversationExecutionState>(`/conversations/${encodeURIComponent(id)}/execution`, { targetId, ...(surfaceId ? { surfaceId } : {}) }),
   conversationPlan: (id: string) => get<ConversationAutomationResponse>(`/conversations/${encodeURIComponent(id)}/plan`),
   updateConversationPlan: (id: string, input: {
     enabled?: boolean;
@@ -530,11 +530,11 @@ export const api = {
       if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
       return r.json() as Promise<ConversationProjectLinks>;
     }),
-  changeConversationCwd: (id: string, cwd: string) =>
+  changeConversationCwd: (id: string, cwd: string, surfaceId?: string) =>
     fetch(`/api/conversations/${encodeURIComponent(id)}/cwd`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cwd }),
+      body: JSON.stringify({ cwd, ...(surfaceId ? { surfaceId } : {}) }),
     }).then(async (res) => {
       if (!res.ok) {
         throw new Error(await readApiError(res));
@@ -542,8 +542,8 @@ export const api = {
 
       return res.json() as Promise<ConversationCwdChangeResult>;
     }),
-  renameConversation: (id: string, name: string) =>
-    patch<{ ok: boolean; title: string }>(`/conversations/${encodeURIComponent(id)}/title`, { name }),
+  renameConversation: (id: string, name: string, surfaceId?: string) =>
+    patch<{ ok: boolean; title: string }>(`/conversations/${encodeURIComponent(id)}/title`, { name, ...(surfaceId ? { surfaceId } : {}) }),
   recoverConversation: (id: string) =>
     post<{
       conversationId: string;
@@ -582,32 +582,46 @@ export const api = {
         ...(attachmentRef.revision ? { revision: attachmentRef.revision } : {}),
       })),
     }),
-  restoreQueuedMessage: (id: string, input: { behavior: 'steer' | 'followUp'; index: number }) =>
-    post<{ ok: boolean; text: string; images: PromptImageInput[] }>(`/live-sessions/${id}/dequeue`, input),
+  restoreQueuedMessage: (id: string, input: { behavior: 'steer' | 'followUp'; index: number }, surfaceId?: string) =>
+    post<{ ok: boolean; text: string; images: PromptImageInput[] }>(`/live-sessions/${id}/dequeue`, {
+      ...input,
+      ...(surfaceId ? { surfaceId } : {}),
+    }),
   takeoverLiveSession: (id: string, surfaceId: string) =>
     post<LiveSessionPresenceState>(`/live-sessions/${id}/takeover`, { surfaceId }),
-  compactSession: (id: string, customInstructions?: string) =>
-    post<{ ok: boolean; result: unknown }>(`/live-sessions/${id}/compact`, { customInstructions }),
-  reloadSession: (id: string) =>
-    post<{ ok: boolean }>(`/live-sessions/${id}/reload`),
+  compactSession: (id: string, customInstructions?: string, surfaceId?: string) =>
+    post<{ ok: boolean; result: unknown }>(`/live-sessions/${id}/compact`, { customInstructions, ...(surfaceId ? { surfaceId } : {}) }),
+  reloadSession: (id: string, surfaceId?: string) =>
+    post<{ ok: boolean }>(`/live-sessions/${id}/reload`, surfaceId ? { surfaceId } : {}),
   exportSession: (id: string, outputPath?: string) =>
     post<{ ok: boolean; path: string }>(`/live-sessions/${id}/export`, { outputPath }),
   renameSession: (id: string, name: string) =>
     patch<{ ok: boolean; name: string }>(`/live-sessions/${id}/name`, { name }),
 
-  abortSession: (id: string) =>
-    post<{ ok: boolean }>(`/live-sessions/${id}/abort`),
+  abortSession: (id: string, surfaceId?: string) =>
+    post<{ ok: boolean }>(`/live-sessions/${id}/abort`, surfaceId ? { surfaceId } : {}),
 
-  destroySession: (id: string) =>
-    fetch(`/api/live-sessions/${id}`, { method: 'DELETE' }).then(r => r.json()),
+  destroySession: (id: string, surfaceId?: string) =>
+    fetchWithRetry(`/api/live-sessions/${id}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(surfaceId ? { surfaceId } : {}),
+    }).then(async (r) => {
+      recordApiTiming(`/api/live-sessions/${id}`, r);
+      if (!r.ok) {
+        throw new Error(await readApiError(r));
+      }
+      return r.json() as Promise<{ ok: boolean }>;
+    }),
 
   forkEntries: (id: string) =>
     get<{ entryId: string; text: string }[]>(`/live-sessions/${id}/fork-entries`),
-  branchSession: (id: string, entryId: string) =>
-    post<{ newSessionId: string; sessionFile: string }>(`/live-sessions/${id}/branch`, { entryId }),
-  forkSession: (id: string, entryId: string, options?: { preserveSource?: boolean }) =>
+  branchSession: (id: string, entryId: string, surfaceId?: string) =>
+    post<{ newSessionId: string; sessionFile: string }>(`/live-sessions/${id}/branch`, { entryId, ...(surfaceId ? { surfaceId } : {}) }),
+  forkSession: (id: string, entryId: string, options?: { preserveSource?: boolean }, surfaceId?: string) =>
     post<{ newSessionId: string; sessionFile: string }>(`/live-sessions/${id}/fork`, {
       entryId,
       preserveSource: options?.preserveSource,
+      ...(surfaceId ? { surfaceId } : {}),
     }),
 };
