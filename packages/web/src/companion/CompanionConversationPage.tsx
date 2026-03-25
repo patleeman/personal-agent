@@ -268,6 +268,7 @@ export function CompanionConversationPage() {
   const [conversationAdminBusy, setConversationAdminBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [slashIdx, setSlashIdx] = useState(0);
+  const [keyboardInset, setKeyboardInset] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -394,6 +395,10 @@ export function CompanionConversationPage() {
     presence: stream.presence,
   });
   const showStatusBanner = shouldShowCompanionConversationStatusBanner({ isLiveSession });
+  const keyboardOpen = keyboardInset > 120;
+  const composerFooterPaddingBottom = keyboardOpen
+    ? '0.5rem'
+    : 'calc(env(safe-area-inset-bottom) + 0.75rem)';
 
   useEffect(() => {
     const scrollElement = scrollRef.current;
@@ -413,6 +418,37 @@ export function CompanionConversationPage() {
     element.style.height = 'auto';
     element.style.height = `${Math.min(element.scrollHeight, 160)}px`;
   }, [draft]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const syncKeyboardInset = () => {
+      const visualViewport = window.visualViewport;
+      if (!visualViewport) {
+        setKeyboardInset(0);
+        return;
+      }
+
+      const nextInset = Math.max(
+        0,
+        Math.round(window.innerHeight - (visualViewport.height + visualViewport.offsetTop)),
+      );
+      setKeyboardInset((current) => (current === nextInset ? current : nextInset));
+    };
+
+    syncKeyboardInset();
+    window.addEventListener('resize', syncKeyboardInset);
+    window.visualViewport?.addEventListener('resize', syncKeyboardInset);
+    window.visualViewport?.addEventListener('scroll', syncKeyboardInset);
+
+    return () => {
+      window.removeEventListener('resize', syncKeyboardInset);
+      window.visualViewport?.removeEventListener('resize', syncKeyboardInset);
+      window.visualViewport?.removeEventListener('scroll', syncKeyboardInset);
+    };
+  }, []);
 
   useEffect(() => {
     setAttachments([]);
@@ -773,7 +809,10 @@ export function CompanionConversationPage() {
         </div>
       ) : null}
 
-      <footer className="border-t border-border-subtle bg-base/95 px-3 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-3 backdrop-blur sm:px-4">
+      <footer
+        className="border-t border-border-subtle bg-base/95 px-3 pt-3 backdrop-blur sm:px-4"
+        style={{ paddingBottom: composerFooterPaddingBottom }}
+      >
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-2.5">
           {attachments.length > 0 ? (
             <div className="flex flex-wrap gap-2">
@@ -881,12 +920,6 @@ export function CompanionConversationPage() {
                         if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
                           event.preventDefault();
                           void handleSend();
-                          return;
-                        }
-
-                        if (event.key === 'Enter' && !event.shiftKey) {
-                          event.preventDefault();
-                          void handleSend();
                         }
                       }}
                       placeholder={stream.isStreaming
@@ -895,6 +928,7 @@ export function CompanionConversationPage() {
                       disabled={composerDisabled}
                       rows={1}
                       autoComplete="off"
+                      enterKeyHint="enter"
                       spellCheck={false}
                       className="flex-1 bg-transparent text-[16px] leading-relaxed text-primary placeholder:text-dim outline-none resize-none disabled:cursor-default disabled:text-dim sm:text-sm"
                       style={{ minHeight: '24px', maxHeight: '160px' }}
@@ -929,7 +963,7 @@ export function CompanionConversationPage() {
                   </div>
                 )}
               </div>
-              {!controlState.needsTakeover ? (
+              {!controlState.needsTakeover && !keyboardOpen ? (
                 <p className="mt-1 text-[11px] text-dim">
                   {stream.isStreaming ? 'Agent responding…' : 'Use / for skills · attach images from your phone.'}
                 </p>
