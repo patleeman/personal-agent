@@ -16,7 +16,7 @@ import { useSessionDetail } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversationArtifacts';
 import { displayBlockToMessageBlock } from '../messageBlocks';
-import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../slashMenu';
+import { buildCompanionSkillMenuItems, parseSlashInput, type SlashMenuItem } from '../slashMenu';
 import type {
   LiveSessionPresenceState,
   LiveSessionSurfaceType,
@@ -355,8 +355,7 @@ export function CompanionConversationPage() {
     `companion-conversation-memory:${shouldLoadMemoryData ? 'on' : 'off'}`,
   );
   const slashItems = useMemo(
-    () => buildSlashMenuItems(draft, memoryData?.skills ?? [])
-      .filter((item) => item.kind === 'skill'),
+    () => buildCompanionSkillMenuItems(draft, memoryData?.skills ?? []),
     [draft, memoryData?.skills],
   );
   const showSlash = !controlState.needsTakeover
