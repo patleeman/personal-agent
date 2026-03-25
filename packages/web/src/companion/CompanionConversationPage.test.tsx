@@ -13,7 +13,19 @@ import { useSessionStream } from '../hooks/useSessionStream.js';
 import { useSessionDetail } from '../hooks/useSessions.js';
 
 vi.mock('../components/chat/ChatView', () => ({
-  ChatView: ({ messages }: { messages: unknown[] }) => <div>messages: {messages.length}</div>,
+  ChatView: ({
+    messages,
+    onOpenArtifact,
+    activeArtifactId,
+  }: {
+    messages: unknown[];
+    onOpenArtifact?: (artifactId: string) => void;
+    activeArtifactId?: string | null;
+  }) => (
+    <div>
+      messages: {messages.length} · artifact-action: {onOpenArtifact ? 'enabled' : 'disabled'} · active-artifact: {activeArtifactId ?? 'none'}
+    </div>
+  ),
 }));
 
 vi.mock('../hooks/useSessionStream', () => ({
@@ -26,6 +38,10 @@ vi.mock('../hooks/useSessions', () => ({
 
 vi.mock('./CompanionConversationTodos', () => ({
   CompanionConversationTodos: ({ readOnly }: { readOnly?: boolean }) => <div>todos: {readOnly ? 'read-only' : 'editable'}</div>,
+}));
+
+vi.mock('./CompanionConversationArtifacts', () => ({
+  CompanionConversationArtifacts: ({ conversationId }: { conversationId: string }) => <div>artifacts: {conversationId}</div>,
 }));
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -133,9 +149,9 @@ describe('CompanionConversationPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders mirrored companion mode with an explicit takeover action', () => {
+  it('renders mirrored companion mode with artifact access and an explicit takeover action', () => {
     const html = renderToString(
-      <MemoryRouter initialEntries={['/app/conversations/conv-123']}>
+      <MemoryRouter initialEntries={['/app/conversations/conv-123?artifact=artifact-7']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
           <LiveTitlesContext.Provider value={{ titles: new Map(), setTitle: vi.fn() }}>
             <AppDataContext.Provider value={{
@@ -163,6 +179,12 @@ describe('CompanionConversationPage', () => {
     expect(html).toContain('Take over to reply from this device.');
     expect(html).toContain('todos:');
     expect(html).toContain('read-only');
+    expect(html).toContain('artifacts:');
+    expect(html).toContain('conv-123');
+    expect(html).toContain('artifact-action:');
+    expect(html).toContain('enabled');
+    expect(html).toContain('active-artifact:');
+    expect(html).toContain('artifact-7');
     expect(html).toContain('messages:');
   });
 });

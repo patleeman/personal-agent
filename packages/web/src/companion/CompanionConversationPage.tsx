@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { ChatView } from '../components/chat/ChatView';
 import { getConversationDisplayTitle } from '../conversationTitle';
 import { useAppData, useLiveTitles, useSseConnection } from '../contexts';
 import { useSessionDetail } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
+import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversationArtifacts';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import type {
   ConversationExecutionState,
@@ -14,6 +15,7 @@ import type {
   MessageBlock,
   SseConnectionStatus,
 } from '../types';
+import { CompanionConversationArtifacts } from './CompanionConversationArtifacts';
 import { CompanionConversationTodos } from './CompanionConversationTodos';
 import { COMPANION_CONVERSATIONS_PATH } from './routes';
 
@@ -144,7 +146,10 @@ function buildBannerDetail(input: {
 
 export function CompanionConversationPage() {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { sessions } = useAppData();
+  const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
   const { titles } = useLiveTitles();
   const { status } = useSseConnection();
   const sessionSnapshot = useMemo(
@@ -285,6 +290,17 @@ export function CompanionConversationPage() {
     scrollElement.scrollTop = scrollElement.scrollHeight;
   }, [id, messages, stream.isStreaming]);
 
+  const openArtifact = useCallback((artifactId: string) => {
+    if (selectedArtifactId === artifactId) {
+      return;
+    }
+
+    navigate({
+      pathname: location.pathname,
+      search: setConversationArtifactIdInSearch(location.search, artifactId),
+    });
+  }, [location.pathname, location.search, navigate, selectedArtifactId]);
+
   const handleTakeover = useCallback(async () => {
     if (!id || takeoverBusy) {
       return;
@@ -412,6 +428,7 @@ export function CompanionConversationPage() {
             readOnly={Boolean(todoReadOnlyReason)}
             readOnlyReason={todoReadOnlyReason}
           />
+          <CompanionConversationArtifacts conversationId={id} />
           {messages.length === 0 && (sessionLoading || confirmedLive === null) ? (
             <p className="text-[13px] text-dim">Loading conversation…</p>
           ) : messages.length === 0 ? (
@@ -423,6 +440,8 @@ export function CompanionConversationPage() {
               scrollContainerRef={scrollRef}
               isStreaming={stream.isStreaming}
               askUserQuestionDisplayMode="composer"
+              onOpenArtifact={openArtifact}
+              activeArtifactId={selectedArtifactId}
             />
           )}
         </div>
