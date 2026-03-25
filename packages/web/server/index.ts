@@ -63,6 +63,7 @@ import {
   writeWebUiConfig,
 } from './webUi.js';
 import { requestApplicationRestart, requestApplicationUpdate, requestWebUiServiceRestart } from './applicationRestart.js';
+import { shouldServeCompanionIndex } from './companionSpaIndex.js';
 import { buildContentDispositionHeader } from './httpHeaders.js';
 import { readSavedDefaultCwdPreferences, writeSavedDefaultCwdPreference } from './defaultCwdPreferences.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from './modelPreferences.js';
@@ -10531,9 +10532,20 @@ if (existsSync(DIST_DIR)) {
   companionApp.use('/assets', express.static(DIST_ASSETS_DIR));
   companionApp.use('/app', express.static(COMPANION_DIST_DIR));
   companionApp.get('/', (_req, res) => {
-    res.redirect('/app/conversations');
+    res.type('html').send(
+      '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>personal-agent companion</title></head><body><script>'
+      + 'const path=window.location.pathname==="/"?"/app":window.location.pathname.replace(/\\/+$/,"");'
+      + 'window.location.replace(`${path}/conversations${window.location.search}${window.location.hash}`);'
+      + '</script><noscript><meta http-equiv="refresh" content="0;url=/app/conversations"></noscript></body></html>',
+    );
   });
-  companionApp.get('/app*', (_req, res) => {
+  companionApp.use(express.static(COMPANION_DIST_DIR, { index: false }));
+  companionApp.get('*', (req, res, next) => {
+    if (!shouldServeCompanionIndex(req.path)) {
+      next();
+      return;
+    }
+
     res.sendFile(join(COMPANION_DIST_DIR, 'index.html'));
   });
 } else {
