@@ -70,6 +70,9 @@ const WorkspaceChangesPage = lazy(() => import('./pages/WorkspaceChangesPage').t
 const CompanionLayout = lazy(() => import('./companion/CompanionLayout').then((module) => ({ default: module.CompanionLayout })));
 const CompanionConversationsPage = lazy(() => import('./companion/CompanionConversationsPage').then((module) => ({ default: module.CompanionConversationsPage })));
 const CompanionConversationPage = lazy(() => import('./companion/CompanionConversationPage').then((module) => ({ default: module.CompanionConversationPage })));
+const CompanionProjectsPage = lazy(() => import('./companion/CompanionProjectsPage').then((module) => ({ default: module.CompanionProjectsPage })));
+const CompanionMemoriesPage = lazy(() => import('./companion/CompanionMemoriesPage').then((module) => ({ default: module.CompanionMemoriesPage })));
+const CompanionSkillsPage = lazy(() => import('./companion/CompanionSkillsPage').then((module) => ({ default: module.CompanionSkillsPage })));
 
 function suspendRoute(element: React.ReactNode) {
   return (
@@ -272,6 +275,9 @@ export function App() {
                       <Route index element={<Navigate to="/app/conversations" replace />} />
                       <Route path="conversations" element={suspendRoute(<CompanionConversationsPage />)} />
                       <Route path="conversations/:id" element={suspendRoute(<CompanionConversationPage />)} />
+                      <Route path="projects" element={suspendRoute(<CompanionProjectsPage />)} />
+                      <Route path="memories" element={suspendRoute(<CompanionMemoriesPage />)} />
+                      <Route path="skills" element={suspendRoute(<CompanionSkillsPage />)} />
                     </Route>
                     <Route path="/" element={<Layout />}>
                       <Route index element={<Navigate to="/conversations" replace />} />
